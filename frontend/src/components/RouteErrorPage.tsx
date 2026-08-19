@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useI18n } from "@/lib/i18n";
+import { logger } from "@/lib/logger";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle } from "lucide-react";
 
@@ -16,7 +17,7 @@ export default function RouteErrorPage({
 
   useEffect(() => {
     if (process.env.NODE_ENV === "development") {
-      console.error(error);
+      logger.error("route error", error);
     }
   }, [error]);
 

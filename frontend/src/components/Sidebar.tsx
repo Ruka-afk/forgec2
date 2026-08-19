@@ -9,6 +9,7 @@ import { useI18n } from "@/lib/i18n";
 import { useAppStore, initStatsWSListener } from "@/lib/store";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { logger } from "@/lib/logger";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { POLL } from "@/lib/polling";
 import type { DashboardStats } from "@/types/agent";
@@ -261,7 +262,7 @@ export default function Sidebar() {
       if (me?.username) setCurrentUsername(me.username);
       if (me?.role) setCurrentUserRole(me.role);
       if (Array.isArray(me?.permissions)) setCurrentPermissions(me.permissions as PermissionKey[]);
-    }).catch((e) => { if (process.env.NODE_ENV === "development") console.error("Sidebar: failed to fetch current user", e); });
+    }).catch((e) => { if (process.env.NODE_ENV === "development") logger.error("fetch current user failed", e); });
   }, [currentUsername, setCurrentUsername, setCurrentUserRole, setCurrentPermissions]);
 
   const collapsed = sidebarCollapsed;

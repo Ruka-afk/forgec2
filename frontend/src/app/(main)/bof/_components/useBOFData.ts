@@ -5,10 +5,13 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { fetchAgentListCached } from "@/lib/agents";
 import { useI18n } from "@/lib/i18n";
+import { logger } from "@/lib/logger";
 import { toast } from "sonner";
 import type { BOFFile, BOFLibraryItem, Execution, RepoItem } from "./types";
 
 const MAX_BOF_SIZE = 10 * 1024 * 1024; // 10MB client-side sanity cap for .o files
+
+const log = logger.withScope("bof");
 
 export function useBOFData() {
   const { t } = useI18n();
@@ -35,7 +38,7 @@ export function useBOFData() {
         }))
       );
     } catch (e) {
-      if (process.env.NODE_ENV === "development") console.error("BOF: load data failed", e);
+      if (process.env.NODE_ENV === "development") log.error("load data failed", e);
     } finally {
       setLoading(false);
     }
@@ -85,7 +88,7 @@ export function useBOFData() {
       try {
         await api.postFormData(paths.bof.upload, formData);
       } catch (e) {
-        if (process.env.NODE_ENV === "development") console.error("BOF: upload failed", e);
+        if (process.env.NODE_ENV === "development") log.error("upload failed", e);
         toast.error(t("bof.toast.upload_failed"));
       }
       loadFiles();
@@ -98,7 +101,7 @@ export function useBOFData() {
       try {
         await api.del(paths.bof.one(id));
       } catch (e) {
-        if (process.env.NODE_ENV === "development") console.error("BOF: delete failed", e);
+        if (process.env.NODE_ENV === "development") log.error("delete failed", e);
       }
       loadFiles();
     },
@@ -110,7 +113,7 @@ export function useBOFData() {
       try {
         await api.post(paths.bof.run(id), { agent_id: agentId, args });
       } catch (e) {
-        if (process.env.NODE_ENV === "development") console.error("BOF: run failed", e);
+        if (process.env.NODE_ENV === "development") log.error("run failed", e);
       }
       loadFiles();
     },
@@ -122,7 +125,7 @@ export function useBOFData() {
       try {
         await api.post(paths.bof.edit(id), { name, description });
       } catch (e) {
-        if (process.env.NODE_ENV === "development") console.error("BOF: edit failed", e);
+        if (process.env.NODE_ENV === "development") log.error("edit failed", e);
       }
       loadFiles();
     },
@@ -166,7 +169,7 @@ export function useBOFData() {
         await api.postJson(paths.bof.reposRate(itemId), { rating });
         loadRepo();
       } catch (e) {
-        if (process.env.NODE_ENV === "development") console.error("BOF Repo: rating failed", e);
+        if (process.env.NODE_ENV === "development") log.error("repo rating failed", e);
       }
     },
     [loadRepo]
@@ -187,7 +190,7 @@ export function useBOFData() {
       try {
         await api.postFormData(paths.bof.upload, formData);
       } catch (e) {
-        if (process.env.NODE_ENV === "development") console.error("BOFLibrary: upload failed", e);
+        if (process.env.NODE_ENV === "development") log.error("library upload failed", e);
         toast.error(t("bof.toast.upload_failed"));
       }
       loadLibrary();
@@ -200,7 +203,7 @@ export function useBOFData() {
       try {
         await api.post(paths.bof.run(id), { agent_id: agentId, args });
       } catch (e) {
-        if (process.env.NODE_ENV === "development") console.error("BOFLibrary: execute failed", e);
+        if (process.env.NODE_ENV === "development") log.error("library execute failed", e);
       }
     },
     []
@@ -211,7 +214,7 @@ export function useBOFData() {
       try {
         await api.del(paths.bof.one(id));
       } catch (e) {
-        if (process.env.NODE_ENV === "development") console.error("BOFLibrary: delete failed", e);
+        if (process.env.NODE_ENV === "development") log.error("library delete failed", e);
       }
       loadLibrary();
     },

@@ -3,6 +3,7 @@
 import type { StateCreator } from "zustand";
 import { api } from "../api";
 import { paths } from "../api-paths";
+import { logger } from "../logger";
 import type { DashboardStats } from "@/types/agent";
 import type { AppStore } from "./types";
 
@@ -24,7 +25,7 @@ export const createStatsSlice: StateCreator<AppStore, [], [], StatsSlice> = (set
         const stats = await api.get<DashboardStats>(paths.dashboard.v1);
         set({ stats, statsError: undefined });
       } catch (e) {
-        if (process.env.NODE_ENV === "development") console.error("[store] fetchStats failed", e);
+        if (process.env.NODE_ENV === "development") logger.error("fetchStats failed", e);
         set({ statsError: e instanceof Error ? e.message : "" });
       } finally {
         statsInFlight = null;

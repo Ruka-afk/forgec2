@@ -4,6 +4,7 @@ import { Component, ErrorInfo, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Bug } from "lucide-react";
 import { I18nProvider, useI18n } from "@/lib/i18n";
+import { logger } from "@/lib/logger";
 
 interface Props {
   children: ReactNode;
@@ -27,7 +28,7 @@ class ErrorBoundaryInner extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     if (process.env.NODE_ENV === "development") {
-      console.error("[ErrorBoundary]", error, info.componentStack);
+      logger.error("ErrorBoundary caught error", error, { componentStack: info.componentStack });
     }
   }
 

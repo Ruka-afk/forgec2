@@ -10,6 +10,7 @@ import { IconBadge } from "@/components/ui/icon-badge";
 import { Download, RefreshCw, AlertTriangle, type LucideIcon } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { useI18n } from "@/lib/i18n";
+import { logger } from "@/lib/logger";
 import type { Hue } from "@/lib/ui/statusStyles";
 
 interface ChartCardProps {
@@ -29,7 +30,7 @@ export function ChartCard({ title, icon: Icon, iconColor = "primary", children, 
   const chartRef = useRef<HTMLDivElement>(null);
   const handleExport = async () => {
     if (!chartRef.current || !exportFilename) return;
-    try { await exportElementPng(chartRef.current, exportFilename); } catch (e) { if (process.env.NODE_ENV === "development") console.warn("[ChartCard] export failed:", e); }
+    try { await exportElementPng(chartRef.current, exportFilename); } catch (e) { if (process.env.NODE_ENV === "development") logger.warn("ChartCard export failed", e); }
   };
   return (
     <Card role="region" aria-label={title} className={`p-5 sm:p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30 ${className || ""}`}>

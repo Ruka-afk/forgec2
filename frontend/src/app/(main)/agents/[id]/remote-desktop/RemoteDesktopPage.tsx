@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Clock, Compass, Expand, Keyboard, Maximize2, Mouse, Play, Square, TriangleAlert, Users, Wifi, Zap } from "lucide-react";
 import { IconBadge } from "@/components/ui/icon-badge";
 import { useI18n } from "@/lib/i18n";
+import { logger } from "@/lib/logger";
 import { safeImageSrc } from "@/lib/safeUrl";
 import { nowTime } from "@/lib/utils";
 import { isExperimentalDesktop } from "../_components/session-quality";
@@ -203,7 +204,7 @@ export default function RemoteDesktopPage() {
       if (frameRafRef.current !== null) cancelAnimationFrame(frameRafRef.current);
       if (cursorRafRef.current !== null) cancelAnimationFrame(cursorRafRef.current);
       if (!id) return;
-      api.post(paths.agents.screenStop(id)).catch((e) => { console.error("RemoteDesktop stop failed:", e); });
+      api.post(paths.agents.screenStop(id)).catch((e) => { logger.error("screenStop failed", e); });
     };
   }, [id]);
 

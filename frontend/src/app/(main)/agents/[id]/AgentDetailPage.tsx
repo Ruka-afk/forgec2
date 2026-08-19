@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PageContainer } from "@/components/ui/page-container";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
+import { logger } from "@/lib/logger";
 import { useInteractStore } from "@/lib/interact-store";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { Bug } from "lucide-react";
@@ -232,7 +233,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
         if (err instanceof ApiError && err.status === 409) {
           toast.warning(err.message);
         } else {
-          console.error("quickAction failed:", err);
+          logger.error("quickAction failed", err);
           toast.error(t("agents.detail_action_failed").replace("{label}", label));
         }
       } finally {
