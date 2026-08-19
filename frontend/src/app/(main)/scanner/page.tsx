@@ -330,7 +330,7 @@ export default function ScannerPage() {
             {loading ? (
               <Table>
                 <TableHeader><TableRow>
-                  {["IP", t("scanner.col_port"), t("scanner.col_protocol"), t("scanner.col_status"), t("scanner.col_service"), t("scanner.col_version"), "Banner"].map(h => (
+                  {["IP", t("scanner.col_port"), t("scanner.col_protocol"), t("scanner.col_status"), t("scanner.col_service"), t("scanner.col_version"), t("scanner.col_banner")].map(h => (
                     <TableHead key={h}>{h}</TableHead>
                   ))}
                 </TableRow></TableHeader>

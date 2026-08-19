@@ -91,16 +91,16 @@ export default function PrivescPage() {
   const CHECK_TYPES = [
     { value: "all", icon: "??", label: t("privesc.ct_all"), desc: t("privesc.ct_all_desc") },
     { value: "printnightmare", icon: "???", label: "PrintNightmare", desc: t("privesc.ct_printnightmare_desc") },
-    { value: "elevate", icon: "??", label: "Elevate", desc: t("privesc.ct_elevate_desc") },
-    { value: "uac_bypass", icon: "???", label: "UAC Bypass", desc: t("privesc.ct_uac_desc") },
-    { value: "amsi_bypass", icon: "???", label: "AMSI Bypass", desc: t("privesc.ct_amsi_desc") },
-    { value: "etw_bypass", icon: "??", label: "ETW Bypass", desc: t("privesc.ct_etw_desc") },
-    { value: "cvescan", icon: "??", label: "CVE Scan", desc: t("privesc.ct_cvescan_desc") },
-    { value: "binary_abuse", icon: "??", label: "Binary Abuse", desc: t("privesc.ct_binary_desc") },
-    { value: "service_exploit", icon: "??", label: "Service Exploit", desc: t("privesc.ct_service_desc") },
-    { value: "token_abuse", icon: "??", label: "Token Abuse", desc: t("privesc.ct_token_desc") },
-    { value: "kernel_exploit", icon: "??", label: "Kernel Exploit", desc: t("privesc.ct_kernel_desc") },
-    { value: "password_finder", icon: "??", label: "Password Finder", desc: t("privesc.ct_password_desc") },
+    { value: "elevate", icon: "??", label: t("privesc.ct_elevate"), desc: t("privesc.ct_elevate_desc") },
+    { value: "uac_bypass", icon: "???", label: t("privesc.ct_uac"), desc: t("privesc.ct_uac_desc") },
+    { value: "amsi_bypass", icon: "???", label: t("privesc.ct_amsi"), desc: t("privesc.ct_amsi_desc") },
+    { value: "etw_bypass", icon: "??", label: t("privesc.ct_etw"), desc: t("privesc.ct_etw_desc") },
+    { value: "cvescan", icon: "??", label: t("privesc.ct_cvescan"), desc: t("privesc.ct_cvescan_desc") },
+    { value: "binary_abuse", icon: "??", label: t("privesc.ct_binary"), desc: t("privesc.ct_binary_desc") },
+    { value: "service_exploit", icon: "??", label: t("privesc.ct_service"), desc: t("privesc.ct_service_desc") },
+    { value: "token_abuse", icon: "??", label: t("privesc.ct_token"), desc: t("privesc.ct_token_desc") },
+    { value: "kernel_exploit", icon: "??", label: t("privesc.ct_kernel"), desc: t("privesc.ct_kernel_desc") },
+    { value: "password_finder", icon: "??", label: t("privesc.ct_password"), desc: t("privesc.ct_password_desc") },
   ];
 
   const loadBusyRef = useRef(false);

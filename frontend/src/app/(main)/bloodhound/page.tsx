@@ -151,7 +151,7 @@ export default function BloodHoundPage() {
             <div className="text-xs text-muted-foreground">
               {binaryStatus.uploaded
                 ? `Uploaded ${binaryStatus.filename}`
-                : "SharpHound.exe not uploaded"}
+                : t("bloodhound.not_uploaded")}
             </div>
           </div>
         </div>
@@ -215,7 +215,7 @@ export default function BloodHoundPage() {
             <Button onClick={handleCollect} disabled={collecting || !selectedAgent}
               className="bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed">
               {collecting ? <Spinner size="xs" /> : <Play className="w-4 h-4" />}
-              <span>{collecting ? "Collecting..." : "Start Collection"}</span>
+              <span>{collecting ? t("bloodhound.collecting") : t("bloodhound.start_collection")}</span>
             </Button>
           </div>
         </div>

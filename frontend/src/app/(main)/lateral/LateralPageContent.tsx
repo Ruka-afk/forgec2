@@ -83,11 +83,11 @@ const defaultForm: FormData = {
 };
 
 const methods = [
-  { key: "smb", label: "SMB", desc: "PsExec / Service Creation", icon: <Share2 className="w-4 h-4" /> },
-  { key: "winrm", label: "WinRM", desc: "PowerShell Remoting", icon: <Terminal className="w-4 h-4" /> },
-  { key: "wmi", label: "WMI", desc: "Process Creation", icon: <Network className="w-4 h-4" /> },
-  { key: "ssh", label: "SSH", desc: "Linux/Unix Remote", icon: <Key className="w-4 h-4" /> },
-  { key: "pth", label: "Pass-the-Hash", desc: "NTLM Hash Auth", icon: <Ticket className="w-4 h-4" /> },
+  { key: "smb", label: "SMB", icon: <Share2 className="w-4 h-4" /> },
+  { key: "winrm", label: "WinRM", icon: <Terminal className="w-4 h-4" /> },
+  { key: "wmi", label: "WMI", icon: <Network className="w-4 h-4" /> },
+  { key: "ssh", label: "SSH", icon: <Key className="w-4 h-4" /> },
+  { key: "pth", label: "Pass-the-Hash", icon: <Ticket className="w-4 h-4" /> },
 ];
 
 export default function LateralPageContent() {

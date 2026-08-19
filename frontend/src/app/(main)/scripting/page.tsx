@@ -39,17 +39,17 @@ interface RunHistory {
 }
 
 interface ScriptTemplate {
-  name: string;
-  description: string;
+  labelKey: string;
+  descKey: string;
   code: string;
 }
 
 const defaultTemplates: ScriptTemplate[] = [
-  { name: "Agent Enumeration", description: "List all active agents", code: "forgec2.log('Enumerating agents...')\nlocal agents = forgec2.get_agents()\nfor i, a in ipairs(agents) do\n  forgec2.log(a.hostname .. ' @ ' .. a.ip)\nend\nforgec2.set_output('Found ' .. #agents .. ' agents')" },
-  { name: "Credential Harvest", description: "Extract credentials from vault", code: "forgec2.log('Harvesting credentials...')\nlocal creds = forgec2.get_credentials()\nfor i, c in ipairs(creds) do\n  forgec2.log(c.username .. '@' .. c.target)\nend\nforgec2.set_output('Found ' .. #creds .. ' credentials')" },
-  { name: "Bulk Task Creation", description: "Create tasks for all agents", code: "forgec2.log('Creating bulk tasks...')\nlocal agents = forgec2.get_agents()\nlocal cmd = 'whoami /all'\nfor i, a in ipairs(agents) do\n  forgec2.create_task(a.id, 'exec', cmd)\nend\nforgec2.set_output('Tasks created for ' .. #agents .. ' agents')" },
-  { name: "Sleep & Check", description: "Wait for agents to callback", code: "forgec2.log('Sleeping 30s for callbacks...')\nforgec2.sleep(30000)\nlocal agents = forgec2.get_agents()\nforgec2.log('Active after sleep: ' .. #agents)\nforgec2.set_output('Callback check complete')" },
-  { name: "Network Discovery", description: "Run network scan on all agents", code: "forgec2.log('Starting network discovery...')\nlocal agents = forgec2.get_agents()\nfor i, a in ipairs(agents) do\n  forgec2.create_task(a.id, 'powershell', 'Test-NetComputer -Port 445')\nend\nforgec2.set_output('Discovery tasks queued')" },
+  { labelKey: "scripting.tpl_agent_enum", descKey: "scripting.tpl_agent_enum_desc", code: "forgec2.log('Enumerating agents...')\nlocal agents = forgec2.get_agents()\nfor i, a in ipairs(agents) do\n  forgec2.log(a.hostname .. ' @ ' .. a.ip)\nend\nforgec2.set_output('Found ' .. #agents .. ' agents')" },
+  { labelKey: "scripting.tpl_cred_harvest", descKey: "scripting.tpl_cred_harvest_desc", code: "forgec2.log('Harvesting credentials...')\nlocal creds = forgec2.get_credentials()\nfor i, c in ipairs(creds) do\n  forgec2.log(c.username .. '@' .. c.target)\nend\nforgec2.set_output('Found ' .. #creds .. ' credentials')" },
+  { labelKey: "scripting.tpl_bulk_task", descKey: "scripting.tpl_bulk_task_desc", code: "forgec2.log('Creating bulk tasks...')\nlocal agents = forgec2.get_agents()\nlocal cmd = 'whoami /all'\nfor i, a in ipairs(agents) do\n  forgec2.create_task(a.id, 'exec', cmd)\nend\nforgec2.set_output('Tasks created for ' .. #agents .. ' agents')" },
+  { labelKey: "scripting.tpl_sleep_check", descKey: "scripting.tpl_sleep_check_desc", code: "forgec2.log('Sleeping 30s for callbacks...')\nforgec2.sleep(30000)\nlocal agents = forgec2.get_agents()\nforgec2.log('Active after sleep: ' .. #agents)\nforgec2.set_output('Callback check complete')" },
+  { labelKey: "scripting.tpl_net_discovery", descKey: "scripting.tpl_net_discovery_desc", code: "forgec2.log('Starting network discovery...')\nlocal agents = forgec2.get_agents()\nfor i, a in ipairs(agents) do\n  forgec2.create_task(a.id, 'powershell', 'Test-NetComputer -Port 445')\nend\nforgec2.set_output('Discovery tasks queued')" },
 ];
 
 export default function ScriptingPage() {
@@ -119,7 +119,7 @@ export default function ScriptingPage() {
   };
 
   const handleApplyTemplate = (template: ScriptTemplate) => {
-    setScriptName(template.name);
+    setScriptName(t(template.labelKey));
     setScriptCode(template.code);
     setShowTemplates(false);
   };
@@ -161,11 +161,11 @@ export default function ScriptingPage() {
             </Button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {defaultTemplates.map((t) => (
-              <Button key={t.name} variant="outline" onClick={() => handleApplyTemplate(t)}
+            {defaultTemplates.map((tpl) => (
+              <Button key={tpl.labelKey} variant="outline" onClick={() => handleApplyTemplate(tpl)}
                 className="text-left p-4 h-auto bg-muted hover:border-chart-6 dark:hover:border-chart-6 transition-colors">
-                <div className="text-sm font-medium text-foreground">{t.name}</div>
-                <div className="text-xs text-muted-foreground mt-1">{t.description}</div>
+                <div className="text-sm font-medium text-foreground">{t(tpl.labelKey)}</div>
+                <div className="text-xs text-muted-foreground mt-1">{t(tpl.descKey)}</div>
               </Button>
             ))}
           </div>

@@ -206,11 +206,11 @@ export default function AgentTokenPage() {
     };
     const icon = icons[type] || <BadgeInfo className="w-3 h-3" />;
     const labels: Record<string, string> = {
-      steal: "Named Pipe (Stolen)",
-      make: "Logon (Created)",
-      named_pipe: "Named Pipe",
-      impersonate: "Impersonation",
-      create: "Logon Create",
+      steal: t("agents.token_src_steal"),
+      make: t("agents.token_src_make"),
+      named_pipe: t("agents.token_src_named_pipe"),
+      impersonate: t("agents.token_src_impersonate"),
+      create: t("agents.token_src_create"),
     };
     const label = labels[type] || type;
     return (
@@ -300,7 +300,7 @@ export default function AgentTokenPage() {
             <RotateCcw className="w-4 h-4" />{t("agents.token_quick_actions")}          </h2>
           <div className="space-y-3">
             <Button onClick={handleRevert} disabled={activeAction === "revert"} className="w-full" variant="default">
-              {activeAction === "revert" ? <><Spinner size="sm" />Reverting...</> : <><RotateCcw className="w-4 h-4" />{t("agents.token_revert")}</>}
+              {activeAction === "revert" ? <><Spinner size="sm" />{t("agents.token_reverting")}</> : <><RotateCcw className="w-4 h-4" />{t("agents.token_revert")}</>}
             </Button>
             <Button onClick={handleWhoami} disabled={activeAction === "whoami"} className="w-full" variant="secondary">
               {activeAction === "whoami" ? <><Spinner size="sm" />{t("agents.token_querying")}</> : <><UserCheck className="w-4 h-4" />{t("agents.token_whoami")}</>}

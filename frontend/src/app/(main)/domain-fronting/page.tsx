@@ -106,10 +106,10 @@ export default function DomainFrontingPage() {
     <PageContainer title={t("domain_fronting.title")} icon={<Cloud className="w-4 h-4" />} subtitle={t("domain_fronting.subtitle")} contentClassName="space-y-6" actions={<>
         <Button onClick={handleCheck} disabled={checking || loading} size="sm">
           <HeartPulse className={`w-4 h-4 ${checking ? "animate-pulse" : ""}`} />
-          {checking ? "Checking..." : "Health Check"}
+          {checking ? t("domain_fronting.checking") : t("domain_fronting.health_check")}
         </Button>
         <Button onClick={fetchStatus} variant="ghost" size="sm">
-          <RotateCw className="w-4 h-4" /> Refresh
+          <RotateCw className="w-4 h-4" /> {t("common.refresh")}
         </Button>
       </>}>
 
@@ -118,7 +118,7 @@ export default function DomainFrontingPage() {
         <div>
           <div className="font-medium text-foreground">{t("domain_fronting.auto_failover")}</div>
           <div className="text-sm text-muted-foreground mt-0.5">
-            Automatically switch to a healthy domain when the active one becomes unreachable
+            {t("domain_fronting.auto_failover_desc")}
           </div>
         </div>
         <Switch checked={autoFailover} onCheckedChange={toggleAutoFailover} disabled={saving} />
@@ -136,8 +136,8 @@ export default function DomainFrontingPage() {
             <span className="text-sm text-muted-foreground">{t("domain_fronting.no_domain")}</span>
           )}
           {domains.filter((d) => d.active && d.healthy).length > 0 && (
-            <Badge variant="success">
-              Healthy
+<Badge variant="success">
+              {t("domain_fronting.healthy")}
             </Badge>
           )}
         </div>
@@ -145,11 +145,11 @@ export default function DomainFrontingPage() {
 
       {/* Domain list */}
       <Card className="overflow-hidden">
-        <CardHeaderRow accent={false} title={t("domain_fronting.front_domains")} action={<span className="text-xs text-muted-foreground">{domains.length} domains</span>} />
+        <CardHeaderRow accent={false} title={t("domain_fronting.front_domains")} action={<span className="text-xs text-muted-foreground">{t("domain_fronting.domains_count", { count: domains.length })}</span>} />
 
         {loading ? (
           <div className="p-(--card-spacing)">
-            <DataSpinner message="Loading..." />
+            <DataSpinner message={t("common.loading")} />
           </div>
         ) : domains.length === 0 ? (
           <EmptyState icon={Cloud} title={t("domain_fronting.empty_title")} message={t("domain_fronting.empty_message")} />
@@ -175,14 +175,13 @@ export default function DomainFrontingPage() {
                             } ${d.active ? "animate-pulse" : ""}`}
                           />
                         </TooltipTrigger>
-                        <TooltipContent>{d.healthy ? "Healthy" : "Unhealthy"}</TooltipContent>
+                        <TooltipContent>{d.healthy ? t("domain_fronting.healthy") : t("domain_fronting.unhealthy")}</TooltipContent>
                       </Tooltip>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-foreground truncate">{d.domain}</span>
                           {d.active && (
-                            <Badge variant="outline" className="text-(--fs-micro-sm) px-1.5 py-px font-medium">
-                              Active
+                            <Badge variant="outline" className="text-(--fs-micro-sm) px-1.5 py-px font-medium">{t("domain_fronting.active")}
                             </Badge>
                           )}
                         </div>
@@ -193,7 +192,7 @@ export default function DomainFrontingPage() {
                             t("domain_fronting.not_checked")
                           )}
                           {d.error && (
-                            <span className="text-destructive ml-2">Error: {d.error}</span>
+                            <span className="text-destructive ml-2">{t("domain_fronting.error_prefix")} {d.error}</span>
                           )}
                         </div>
                       </div>
@@ -205,7 +204,7 @@ export default function DomainFrontingPage() {
                         ? "bg-success/15 dark:bg-success/20 text-success dark:text-success border-success dark:border-success"
                         : "bg-destructive/10 text-destructive border-destructive/20"
                     }`}>
-                      {d.healthy ? "Healthy" : "Unhealthy"}
+                      {d.healthy ? t("domain_fronting.healthy") : t("domain_fronting.unhealthy")}
                     </Badge>
                   </TableCell>
                   <TableCell>

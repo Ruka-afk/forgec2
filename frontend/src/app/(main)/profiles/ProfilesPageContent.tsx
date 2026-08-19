@@ -230,7 +230,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                   <div className="text-xs text-muted-foreground mb-1">{t("profiles.malleable_enabled")}</div>
                   <div className="flex items-center gap-2">
                      <StatusDot tone={activeConfig.malleable_enabled ? "success" : "muted"} size="sm" />
-                    <span className="text-sm font-medium">{activeConfig.malleable_enabled ? "Enabled" : "Disabled"}</span>
+                    <span className="text-sm font-medium">{activeConfig.malleable_enabled ? t("profiles.enabled") : t("profiles.disabled")}</span>
                   </div>
                 </div>
                 <div className="bg-secondary rounded-lg p-3 border border-border">

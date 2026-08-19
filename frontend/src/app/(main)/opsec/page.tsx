@@ -105,11 +105,11 @@ export default function OpsecPage() {
 
   const testTypes = [
     { id: "mimikatz", label: "Mimikatz", icon: <Skull className="w-4 h-4" />, danger: true },
-    { id: "creds", label: "Creds", icon: <Key className="w-4 h-4" />, danger: false },
-    { id: "inject", label: "Inject", icon: <Syringe className="w-4 h-4" />, danger: false },
-    { id: "shell", label: "Shell", icon: <Terminal className="w-4 h-4" />, danger: false },
-    { id: "ldap_users", label: "LDAP Users", icon: <Users className="w-4 h-4" />, danger: false },
-    { id: "portscan", label: "Portscan", icon: <Network className="w-4 h-4" />, danger: false },
+    { id: "creds", label: t("opsec.tool_creds"), icon: <Key className="w-4 h-4" />, danger: false },
+    { id: "inject", label: t("opsec.tool_inject"), icon: <Syringe className="w-4 h-4" />, danger: false },
+    { id: "shell", label: t("opsec.tool_shell"), icon: <Terminal className="w-4 h-4" />, danger: false },
+    { id: "ldap_users", label: t("opsec.tool_ldap_users"), icon: <Users className="w-4 h-4" />, danger: false },
+    { id: "portscan", label: t("opsec.tool_portscan"), icon: <Network className="w-4 h-4" />, danger: false },
   ];
 
   const { data, loading, refresh: loadData } = useApiResource<{ rules: OpsecRule[]; history: OpsecHistoryItem[]; rekey: RekeyStats }>({

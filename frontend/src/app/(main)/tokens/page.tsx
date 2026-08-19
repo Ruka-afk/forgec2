@@ -80,6 +80,16 @@ export default function TokensPage() {
     } catch { toast.error(t("tokens.revert_failed")); }
   };
 
+  const integrityLabel = (integrity: string): string => {
+    const map: Record<string, string> = {
+      System: t("tokens.integrity_system"),
+      High: t("tokens.integrity_high"),
+      Medium: t("tokens.integrity_medium"),
+      Low: t("tokens.integrity_low"),
+    };
+    return map[integrity] || integrity;
+  };
+
   const getIntegrityVariant = (integrity: string): "destructive" | "warning" | "default" | "secondary" => {
     const map: Record<string, "destructive" | "warning" | "default" | "secondary"> = {
       System: "destructive",
@@ -148,10 +158,10 @@ export default function TokensPage() {
                 variant="ghost"
                 onClick={() => setIntegrityFilter(integrityFilter === level ? "" : level)}
                 aria-pressed={integrityFilter === level}
-                aria-label={level}
+                aria-label={integrityLabel(level)}
                 className="absolute inset-0 z-10 h-auto rounded-lg"
               />
-              <div className="text-xs text-muted-foreground">{level}</div>
+              <div className="text-xs text-muted-foreground">{integrityLabel(level)}</div>
               <div className="text-lg font-bold">{count}</div>
             </Card>
           );

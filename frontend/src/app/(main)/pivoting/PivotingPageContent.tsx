@@ -157,13 +157,13 @@ export default function PivotingPageContent() {
                          <StatusDot tone={s.active ? "success" : "muted"} size="md" pulse={s.active} />
                         <div>
                           <div className="font-medium text-sm text-foreground">{s.agent_id.substring(0, 12)}... {s.hostname && <span className="text-muted-foreground font-normal">({s.hostname})</span>}</div>
-                          <div className="text-xs text-muted-foreground">Port {s.listen_port} {s.active ? "Running" : "Stopped"}  {formatCreated(s.created_at)}</div>
+                          <div className="text-xs text-muted-foreground">{t("pivoting.port")} {s.listen_port} {s.active ? t("pivoting.running") : t("pivoting.stopped")}  {formatCreated(s.created_at)}</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-x-3">
                         <div className="text-xs text-muted-foreground flex items-center gap-1.5">
                           <Network className="w-4 h-4" />
-                          {s.active_conn || 0} active / {s.conn_count || 0} total                        </div>
+                          {s.active_conn || 0} {t("pivoting.active")} / {s.conn_count || 0} {t("pivoting.total")}                        </div>
                         <Button
                           variant={throughAgent === s.agent_id ? "default" : "outline"}
                           size="sm"
@@ -334,7 +334,7 @@ export default function PivotingPageContent() {
                             <span className="font-mono">localhost:{rf.local_port}</span>
                             <Badge variant="outline">{rf.protocol.toUpperCase()}</Badge>
                           </div>
-                          <div className="text-xs text-muted-foreground mt-0.5">Agent: {rf.agent_id.substring(0, 12)}... {rf.active ? `Up: ${formatUptime(rf.uptime)}` : "Stopped"}{rf.error && <span className="text-destructive ml-2">{rf.error}</span>}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">{t("pivoting.agent")}: {rf.agent_id.substring(0, 12)}... {rf.active ? `${t("pivoting.up")}: ${formatUptime(rf.uptime)}` : t("pivoting.stopped")}{rf.error && <span className="text-destructive ml-2">{rf.error}</span>}</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
