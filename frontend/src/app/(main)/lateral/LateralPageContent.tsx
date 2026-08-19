@@ -4,6 +4,7 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { useMutation } from "@/lib/hooks/useMutation";
 import { toast } from "sonner";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageSpinner, Spinner } from "@/components/ui/spinner";
@@ -91,8 +92,42 @@ const methods = [
 export default function LateralPageContent() {
   const [activeMethod, setActiveMethod] = useState("smb");
   const [form, setForm] = useState<FormData>(defaultForm);
-  const [submitting, setSubmitting] = useState(false);
   const { t } = useI18n();
+
+  const { mutate: runLateral, isPending: submitting } = useMutation({
+    fn: async () => {
+      const payload: Record<string, string> = {
+        source: form.source,
+        target: form.target,
+        method: activeMethod,
+      };
+      if (form.pivot) payload.pivot = form.pivot;
+      if (form.credential) payload.credential = form.credential;
+      if (form.username) payload.username = form.username;
+      if (form.command) payload.command = form.command;
+
+      if (activeMethod === "smb") {
+        if (form.password) payload.password = form.password;
+        payload.share = form.share;
+      } else if (activeMethod === "winrm") {
+        if (form.password) payload.password = form.password;
+        payload.port = form.port || "5985";
+      } else if (activeMethod === "wmi") {
+        if (form.password) payload.password = form.password;
+        payload.namespace = form.namespace;
+      } else if (activeMethod === "ssh") {
+        if (form.password) payload.password = form.password;
+        if (form.key_path) payload.key_path = form.key_path;
+        payload.port = form.port || "22";
+      } else if (activeMethod === "pth") {
+        if (form.hash) payload.hash = form.hash;
+      }
+
+      await api.postJson(paths.lateral.execute, payload);
+    },
+    onSuccess: () => loadData(),
+    onError: () => toast.error(t("lateral.toast.execute_failed")),
+  });
 
   const { data, loading, refresh: loadData } = useApiResource<{
     stats: LateralStats;
@@ -130,39 +165,7 @@ export default function LateralPageContent() {
 
   const handleSubmit = async () => {
     if (!form.source || !form.target) return;
-    setSubmitting(true);
-    try {
-      const payload: Record<string, string> = {
-        source: form.source,
-        target: form.target,
-        method: activeMethod,
-      };
-      if (form.pivot) payload.pivot = form.pivot;
-      if (form.credential) payload.credential = form.credential;
-      if (form.username) payload.username = form.username;
-      if (form.command) payload.command = form.command;
-
-      if (activeMethod === "smb") {
-        if (form.password) payload.password = form.password;
-        payload.share = form.share;
-      } else if (activeMethod === "winrm") {
-        if (form.password) payload.password = form.password;
-        payload.port = form.port || "5985";
-      } else if (activeMethod === "wmi") {
-        if (form.password) payload.password = form.password;
-        payload.namespace = form.namespace;
-      } else if (activeMethod === "ssh") {
-        if (form.password) payload.password = form.password;
-        if (form.key_path) payload.key_path = form.key_path;
-        payload.port = form.port || "22";
-      } else if (activeMethod === "pth") {
-        if (form.hash) payload.hash = form.hash;
-      }
-
-      await api.postJson(paths.lateral.execute, payload);
-      loadData();
-    } catch { toast.error(t("lateral.toast.execute_failed")); }
-    setSubmitting(false);
+    await runLateral();
   };
 
   const getStatusBadge = (status: string) => {

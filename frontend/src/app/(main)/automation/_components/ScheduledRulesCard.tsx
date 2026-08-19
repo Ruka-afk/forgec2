@@ -7,6 +7,7 @@ import { fetchAgentListCached } from "@/lib/agents";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FieldError } from "@/components/ui/field-error";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { useMutation } from "@/lib/hooks/useMutation";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { Button } from "@/components/ui/button";
 import type { Agent } from "@/types/agent";
@@ -54,8 +55,37 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
   const [schedule, setSchedule] = useState("");
   const [taskTypes, setTaskTypes] = useState<TaskTypeInfo[]>([]);
   const { confirm, modal } = useConfirm();
-  const [saving, setSaving] = useState(false);
   const [formErrors, setFormErrors] = useState<{ name?: string; agentId?: string; schedule?: string; command?: string }>({});
+
+  const { mutate: runSave, isPending: saving } = useMutation({
+    fn: async () => {
+      const payload = {
+        name,
+        event_type: "schedule",
+        conditions: [] as unknown[],
+        actions: buildAction(),
+        schedule,
+        agent_id: agentId,
+        task_type: taskType,
+        command,
+        params,
+        enabled: true,
+      };
+      if (editingId) {
+        await api.putJson(paths.automation.rule(editingId), payload);
+      } else {
+        await api.postJson(paths.automation.rules, payload);
+      }
+    },
+    onSuccess: () => {
+      resetForm();
+      setShowForm(false);
+      toast.success(t("scheduler.saved"));
+      fetchData();
+      onChanged?.();
+    },
+    onError: () => toast.error(t("scheduler.save_failed")),
+  });
 
   const { data, loading, refresh: fetchData } = useApiResource<{ tasks: ScheduledRule[]; agents: Agent[] }>({
     fetcher: async () => {
@@ -96,35 +126,7 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
     if (taskType === "shell" && !command.trim()) errors.command = t("scheduler.err_command_required");
     setFormErrors(errors);
     if (Object.keys(errors).length > 0) return;
-    setSaving(true);
-    const payload = {
-      name,
-      event_type: "schedule",
-      conditions: [] as unknown[],
-      actions: buildAction(),
-      schedule,
-      agent_id: agentId,
-      task_type: taskType,
-      command,
-      params,
-      enabled: true,
-    };
-    try {
-      if (editingId) {
-        await api.putJson(paths.automation.rule(editingId), payload);
-      } else {
-        await api.postJson(paths.automation.rules, payload);
-      }
-      resetForm();
-      setShowForm(false);
-      toast.success(t("scheduler.saved"));
-      fetchData();
-      onChanged?.();
-    } catch {
-      toast.error(t("scheduler.save_failed"));
-    } finally {
-      setSaving(false);
-    }
+    await runSave();
   }
 
   async function handleToggle(id: string) {
