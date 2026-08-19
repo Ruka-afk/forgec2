@@ -96,6 +96,37 @@ func (s *Server) handleListenerDetail(c *gin.Context) {
 	s.renderPageOrJSON(c, data)
 }
 
+// handleAPIGetListener returns listener detail JSON.
+// GET /api/listeners/:id
+func (s *Server) handleAPIGetListener(c *gin.Context) {
+	id := c.Param("id")
+	var listener db.Listener
+	if err := s.db.First(&listener, id).Error; err != nil {
+		respondError(c, http.StatusNotFound, "listener not found")
+		return
+	}
+
+	agents := make([]db.Implant, 0)
+	if err := s.db.Where("listener_id = ?", listener.ID).Order("last_seen desc").Limit(5000).Find(&agents).Error; err != nil {
+		slog.Error("Failed to query listener agents", "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to query listener agents")
+		return
+	}
+
+	var activeCount int64
+	if err := s.db.Model(&db.Implant{}).Where("listener_id = ? AND last_seen > ?", listener.ID, time.Now().Add(-ListenerActiveThreshold)).Count(&activeCount).Error; err != nil {
+		slog.Error("Failed to count active agents", "err", err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":  true,
+		"listener": listener,
+		"agents":   agents,
+		"total":    len(agents),
+		"active":   activeCount,
+	})
+}
+
 // listenerKey returns the key used to identify this listener in the extraListeners map.
 func listenerKey(l *db.Listener) string {
 	scheme := l.Scheme

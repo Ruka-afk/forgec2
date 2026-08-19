@@ -69,9 +69,13 @@ export default function TokensPage() {
     return true;
   });
 
-  const handleRevert = async (tokenId: string) => {
+  const handleRevert = async (token: Token) => {
     try {
-      await api.post(paths.agents.tokenRevert(tokenId));
+      if (!token.agent_id) {
+        toast.error(t("tokens.revert_failed"));
+        return;
+      }
+      await api.post(paths.agents.tokenRevert(token.agent_id));
       refresh();
     } catch { toast.error(t("tokens.revert_failed")); }
   };
@@ -200,7 +204,7 @@ export default function TokensPage() {
                     <TableCell className="text-xs font-mono text-muted-foreground">{createdAt ? formatTime(createdAt) : "-"}</TableCell>
                     <TableCell>
                       <Tooltip>
-                        <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => handleRevert(tid)} aria-label={t("tokens.revert")} />}>
+                        <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => handleRevert(token)} aria-label={t("tokens.revert")} />}>
                         <RotateCcw className="w-4 h-4" />
                         </TooltipTrigger>
                         <TooltipContent>{t("tokens.revert")}</TooltipContent>

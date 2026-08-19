@@ -1004,6 +1004,44 @@ paths:
           $ref: '#/components/responses/BadRequest'
 
   /api/listeners/{id}:
+    get:
+      tags: [Listeners]
+      summary: Get listener detail
+      description: Retrieve a single listener with its connected agents
+      operationId: getListener
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Listener detail with agents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  listener:
+                    $ref: '#/components/schemas/Listener'
+                  agents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Agent'
+                  total:
+                    type: integer
+                  active:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
     put:
       tags: [Listeners]
       summary: Update listener
@@ -1312,6 +1350,28 @@ paths:
       responses:
         '200':
           description: Status toggled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /credentials/{cred_id}/usage:
+    post:
+      tags: [Credentials]
+      summary: Record credential usage
+      description: Manually record that a credential was used
+      operationId: recordCredentialUsage
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: cred_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Usage recorded
           content:
             application/json:
               schema:
@@ -9017,6 +9077,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DashboardAttackPathData'
+  /api/dashboard/active-missions:
+    get:
+      tags: [Dashboard]
+      summary: Active missions
+      operationId: get__api_dashboard_active_missions
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Active missions data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  missions:
+                    type: array
+                    items:
+                      type: object
   /api/bof/repos:
     get:
       tags: [BOF]
@@ -9177,6 +9256,50 @@ paths:
       tags: [Credentials]
       summary: Request cred dump
       operationId: post__agents_id_creds
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+  /agents/{id}/cred_check:
+    post:
+      tags: [Credentials]
+      summary: Verify credential against an agent
+      description: Run a logon attempt with the supplied credential on the agent
+      operationId: post__agents_id_cred_check
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user:
+                  type: string
+                domain:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: OK
+  /agents/{id}/password_spray:
+    post:
+      tags: [Credentials]
+      summary: Password spray from an agent
+      description: Run a lockout-aware password spray from the agent against a user list
+      operationId: post__agents_id_password_spray
       security:
         - SessionCookie: []
       parameters:

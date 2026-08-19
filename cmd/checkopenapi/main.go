@@ -72,6 +72,7 @@ var coreRoutes = []string{
 	"get /api/automation/rules",
 	"get /api/webhooks",
 	"get /api/listeners",
+	"get /api/listeners/{id}",
 }
 
 func main() {

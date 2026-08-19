@@ -1,0 +1,1 @@
+import{r as t}from"./vendor-react-DlCUXxFX.js";import{ac as o}from"./index-MqbBPN9f.js";function n({tab:e}){const r=o();return t.useEffect(()=>{r.replace(`/generate?tab=${e}`)},[r,e]),null}export{n as R};

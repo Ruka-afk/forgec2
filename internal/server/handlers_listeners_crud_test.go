@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/forgec2/forgec2/internal/config"
 	"github.com/forgec2/forgec2/internal/db"
@@ -202,6 +203,78 @@ func TestHandleListenerDetail(t *testing.T) {
 		c.Request, _ = http.NewRequest(http.MethodGet, "/api/listeners/detail", nil)
 		c.Params = gin.Params{{Key: "id", Value: "99999"}}
 		s.handleListenerDetail(c)
+		if w.Code != http.StatusNotFound {
+			t.Errorf("expected 404, got %d; body=%s", w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestHandleAPIGetListener(t *testing.T) {
+	s := newListenerCRUDTestServer(t)
+
+	listener := db.Listener{
+		Name:   "api-detail-test",
+		Scheme: "http",
+		Host:   "127.0.0.1",
+		Port:   8443,
+		Status: "running",
+		Enabled: true,
+	}
+	if err := s.db.Create(&listener).Error; err != nil {
+		t.Fatalf("seed listener: %v", err)
+	}
+	agent := db.Implant{
+		ID:         "api-detail-agent-1",
+		Hostname:   "win-host",
+		IP:         "10.0.0.5",
+		OS:         "Windows 11 Pro",
+		Arch:       "amd64",
+		Status:     "online",
+		ListenerID: listener.ID,
+		LastSeen:   time.Now(),
+	}
+	if err := s.db.Create(&agent).Error; err != nil {
+		t.Fatalf("seed agent: %v", err)
+	}
+
+	t.Run("returns listener with agents", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request, _ = http.NewRequest(http.MethodGet, "/api/listeners/detail", nil)
+		c.Params = gin.Params{{Key: "id", Value: itoa(int(listener.ID))}}
+		s.handleAPIGetListener(c)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+		}
+		var resp struct {
+			Success  bool         `json:"success"`
+			Listener db.Listener  `json:"listener"`
+			Agents   []db.Implant `json:"agents"`
+			Total    int          `json:"total"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
+		}
+		if !resp.Success {
+			t.Error("expected success=true")
+		}
+		if resp.Listener.ID != listener.ID {
+			t.Errorf("expected listener id %d, got %d", listener.ID, resp.Listener.ID)
+		}
+		if resp.Total != 1 || len(resp.Agents) != 1 {
+			t.Fatalf("expected 1 agent, got total=%d len=%d", resp.Total, len(resp.Agents))
+		}
+		if resp.Agents[0].Hostname != "win-host" {
+			t.Errorf("expected hostname win-host, got %q", resp.Agents[0].Hostname)
+		}
+	})
+
+	t.Run("returns 404 for missing listener", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request, _ = http.NewRequest(http.MethodGet, "/api/listeners/detail", nil)
+		c.Params = gin.Params{{Key: "id", Value: "99999"}}
+		s.handleAPIGetListener(c)
 		if w.Code != http.StatusNotFound {
 			t.Errorf("expected 404, got %d; body=%s", w.Code, w.Body.String())
 		}

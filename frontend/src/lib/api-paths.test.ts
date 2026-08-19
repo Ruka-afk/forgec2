@@ -8,7 +8,6 @@ describe("api paths", () => {
   });
   it("listeners and credentials use /api prefix", () => {
     expect(paths.listeners.list).toMatch(/^\/api\//);
-    expect(paths.credentials.list()).toMatch(/^\/api\//);
     expect(paths.credentials.byAgent("abc", 1)).toBe("/credentials?agent_id=abc&limit=1");
   });
   it("agent detail and tasks are dual-use /agents/:id layout", () => {
@@ -58,8 +57,9 @@ describe("api paths", () => {
     expect(paths.report.history).toBe("/api/report/history");
     expect(paths.report.agents("start=1")).toBe("/api/report/agents?start=1");
   });
-  it("credentials mutations are dual-use /credentials while list is /api", () => {
-    expect(paths.credentials.list()).toMatch(/^\/api\/credentials/);
+  it("credentials list is dual-use /credentials while mutations stay /credentials", () => {
+    expect(paths.credentials.list()).toBe("/credentials?format=json");
+    expect(paths.credentials.list("")).toBe("/credentials");
     expect(paths.credentials.add).toBe("/credentials/add");
     expect(paths.credentials.one(9)).toBe("/credentials/9");
     expect(paths.credentials.batchTags).toBe("/credentials/batch/tags");

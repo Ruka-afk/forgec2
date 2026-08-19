@@ -198,9 +198,12 @@ export default function SettingsPage() {
 
   const handleCheckUpdate = async () => {
     try {
-      const d = await api.get(paths.updateCheck);
-      if (d.update_available) toast.success(t("settings.toast.update_new", { version: String(d.version) }));
-      else toast.success(t("settings.toast.update_latest"));
+      const d = await api.get<{ update_available?: boolean; latest_version?: string }>(paths.updateCheck);
+      if (d.update_available && d.latest_version) {
+        toast.success(t("settings.toast.update_new", { version: String(d.latest_version) }));
+      } else {
+        toast.success(t("settings.toast.update_latest"));
+      }
     } catch { toast.error(t("settings.toast.update_failed")); }
   };
 

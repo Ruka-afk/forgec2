@@ -100,8 +100,9 @@ export const paths = {
     disable: (id: string) => `/api/listeners/${id}/disable`,
   },
   credentials: {
-    /** JSON list under /api/credentials */
-    list: (query = "format=json") => `/api/credentials?${query}`,
+    /** Vault + agents/agents-scoped lists come from the dual-use /credentials
+     *  page route (JSON via Accept, snake aliases like vault_entries). */
+    list: (query = "format=json") => (query ? `/credentials?${query}` : "/credentials"),
     /** Agent-scoped lookup goes through the dual-use /credentials page route,
      *  which supports agent_id filtering and returns a `total` count. */
     byAgent: (agentId: string, limit = 1) =>

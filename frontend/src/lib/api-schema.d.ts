@@ -561,7 +561,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get listener detail
+         * @description Retrieve a single listener with its connected agents
+         */
+        get: operations["getListener"];
         /**
          * Update listener
          * @description Update an existing listener configuration
@@ -740,6 +744,26 @@ export interface paths {
          * @description Toggle credential confirmed/verified status
          */
         post: operations["toggleConfirmed"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/credentials/{cred_id}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record credential usage
+         * @description Manually record that a credential was used
+         */
+        post: operations["recordCredentialUsage"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8461,6 +8485,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/dashboard/active-missions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Active missions */
+        get: operations["get__api_dashboard_active_missions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/bof/repos": {
         parameters: {
             query?: never;
@@ -8676,6 +8717,46 @@ export interface paths {
         put?: never;
         /** Request cred dump */
         post: operations["post__agents_id_creds"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{id}/cred_check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify credential against an agent
+         * @description Run a logon attempt with the supplied credential on the agent
+         */
+        post: operations["post__agents_id_cred_check"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{id}/password_spray": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Password spray from an agent
+         * @description Run a lockout-aware password spray from the agent against a user list
+         */
+        post: operations["post__agents_id_password_spray"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10390,6 +10471,36 @@ export interface operations {
             400: components["responses"]["BadRequest"];
         };
     };
+    getListener: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Listener detail with agents */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success?: boolean;
+                        listener?: components["schemas"]["Listener"];
+                        agents?: components["schemas"]["Agent"][];
+                        total?: number;
+                        active?: number;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     updateListener: {
         parameters: {
             query?: never;
@@ -10681,6 +10792,28 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Status toggled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse"];
+                };
+            };
+        };
+    };
+    recordCredentialUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cred_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Usage recorded */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -20627,6 +20760,28 @@ export interface operations {
             };
         };
     };
+    get__api_dashboard_active_missions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active missions data */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        missions?: Record<string, never>[];
+                    };
+                };
+            };
+        };
+    };
     get__api_bof_repos: {
         parameters: {
             query?: never;
@@ -20858,6 +21013,54 @@ export interface operations {
         };
     };
     post__agents_id_creds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    post__agents_id_cred_check: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    user?: string;
+                    domain?: string;
+                    password?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    post__agents_id_password_spray: {
         parameters: {
             query?: never;
             header?: never;
