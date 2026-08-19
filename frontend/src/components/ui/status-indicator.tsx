@@ -2,6 +2,7 @@
 
 import { memo } from "react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 import { toneForStatus, toneStyles } from "@/lib/ui/statusStyles";
 import type { AgentStatus, TaskStatus } from "@/lib/status";
 
@@ -23,30 +24,6 @@ interface StatusIndicatorProps {
   className?: string;
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  online: "Online",
-  offline: "Offline",
-  stale: "Stale",
-  pending: "Pending",
-  running: "Running",
-  completed: "Completed",
-  failed: "Failed",
-  cancelled: "Cancelled",
-  pending_approval: "Pending Approval",
-  connected: "Connected",
-  disconnected: "Disconnected",
-  reconnecting: "Reconnecting",
-  active: "Active",
-  inactive: "Inactive",
-  locked: "Locked",
-  warning: "Warning",
-  error: "Error",
-  healthy: "Healthy",
-  unstable: "Unstable",
-  burned: "Burned",
-  unknown: "Unknown",
-};
-
 const DOT_SIZES = {
   sm: "w-1.5 h-1.5",
   md: "w-2 h-2",
@@ -62,8 +39,32 @@ export const StatusIndicator = memo(function StatusIndicator({
   ariaLabel,
   className,
 }: StatusIndicatorProps) {
+  const { t } = useI18n();
+  const statusLabels: Record<string, string> = {
+    online: t("status.online"),
+    offline: t("status.offline"),
+    stale: t("status.stale"),
+    pending: t("status.pending"),
+    running: t("status.running"),
+    completed: t("status.completed"),
+    failed: t("status.failed"),
+    cancelled: t("status.cancelled"),
+    pending_approval: t("status.pending_approval"),
+    connected: t("status.connected"),
+    disconnected: t("status.disconnected"),
+    reconnecting: t("status.reconnecting"),
+    active: t("status.active"),
+    inactive: t("status.inactive"),
+    locked: t("status.locked"),
+    warning: t("status.warning"),
+    error: t("status.error"),
+    healthy: t("status.healthy"),
+    unstable: t("status.unstable"),
+    burned: t("status.burned"),
+    unknown: t("status.unknown"),
+  };
   const cfg = toneStyles[toneForStatus(status)];
-  const displayLabel = label ?? STATUS_LABELS[status] ?? status;
+  const displayLabel = label ?? statusLabels[status] ?? status;
   const accessibleLabel = ariaLabel ?? displayLabel;
   const dotSize = DOT_SIZES[size];
 

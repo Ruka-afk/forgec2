@@ -80,7 +80,7 @@ export default function DashboardPage() {
 
       {statsError && (
         <DataError
-          message={statsError}
+          message={statsError || t("dashboard.load_failed")}
           onRetry={() => { fetchStats(); }}
           onDismiss={() => useAppStore.setState({ statsError: undefined })}
           className="mb-4"

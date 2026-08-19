@@ -3,18 +3,17 @@ export interface ShortcutDef {
   ctrl?: boolean;
   shift?: boolean;
   alt?: boolean;
-  label: string;
-  description: string;
+  descKey: string;
 }
 
 export const DEFAULT_SHORTCUTS: Record<string, ShortcutDef> = {
-  new_item: { key: "n", ctrl: true, label: "New", description: "Create new item on current page" },
-  save: { key: "s", ctrl: true, label: "Save", description: "Save current content" },
-  show_shortcuts: { key: "/", ctrl: true, label: "Shortcuts", description: "Show keyboard shortcuts" },
-  close_modal: { key: "Escape", label: "Close", description: "Close modal or dropdown" },
-  refresh: { key: "F5", label: "Refresh", description: "Refresh current page" },
-  toggle_lock: { key: "l", ctrl: true, shift: true, label: "Lock Agent", description: "Lock or unlock current agent" },
-  global_search: { key: "k", ctrl: true, label: "Command Palette", description: "Open the command palette" },
+  new_item: { key: "n", ctrl: true, descKey: "shortcuts.new_item_desc" },
+  save: { key: "s", ctrl: true, descKey: "shortcuts.save_desc" },
+  show_shortcuts: { key: "/", ctrl: true, descKey: "shortcuts.show_shortcuts_desc" },
+  close_modal: { key: "Escape", descKey: "shortcuts.close_modal_desc" },
+  refresh: { key: "F5", descKey: "shortcuts.refresh_desc" },
+  toggle_lock: { key: "l", ctrl: true, shift: true, descKey: "shortcuts.toggle_lock_desc" },
+  global_search: { key: "k", ctrl: true, descKey: "shortcuts.global_search_desc" },
 };
 
 const STORAGE_KEY = "forgec2_shortcuts";

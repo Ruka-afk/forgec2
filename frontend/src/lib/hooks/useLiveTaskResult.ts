@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { runTask, type TaskStatus } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 
 export type LiveTaskStatus = "idle" | "pending" | "running" | "completed" | "failed" | "timeout";
 
@@ -16,6 +17,7 @@ interface UseLiveTaskResultOptions {
  * Resolves with the final TaskStatus (full result fetched once completed).
  */
 export function useLiveTaskResult(opts: UseLiveTaskResultOptions = {}) {
+  const { t } = useI18n();
   const [status, setStatus] = useState<LiveTaskStatus>("idle");
   const [result, setResult] = useState("");
   const [error, setError] = useState("");
@@ -64,14 +66,14 @@ export function useLiveTaskResult(opts: UseLiveTaskResultOptions = {}) {
             setTaskId(st.id);
             setStatus(st.status);
             if (st.result) setResult(st.result);
-            if (st.status === "failed") setError(st.error ?? "Task failed");
+            if (st.status === "failed") setError(st.error ?? t("common.task_failed"));
           },
         });
         if (seqRef.current !== seq) return null;
         setTaskId(final.id);
         setStatus(final.status);
         if (final.result) setResult(final.result);
-        if (final.status === "failed") setError(final.error ?? "Task failed");
+        if (final.status === "failed") setError(final.error ?? t("common.task_failed"));
         return final;
       } catch (e) {
         if (seqRef.current !== seq) return null;
@@ -83,7 +85,7 @@ export function useLiveTaskResult(opts: UseLiveTaskResultOptions = {}) {
         if (seqRef.current === seq) cancelRef.current = null;
       }
     },
-    [opts.timeoutMs, cancel],
+    [opts.timeoutMs, cancel, t],
   );
 
   return { taskId, status, result, error, run, reset, running: status === "pending" || status === "running" };

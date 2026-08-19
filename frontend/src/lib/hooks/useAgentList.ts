@@ -2,6 +2,7 @@
 
 import { fetchAgentListCached, AGENTS_CACHE_KEY } from "@/lib/agents";
 import { useCachedData } from "@/lib/hooks/useCachedData";
+import { useI18n } from "@/lib/i18n";
 import type { Agent } from "@/types/agent";
 
 /**
@@ -11,6 +12,7 @@ import type { Agent } from "@/types/agent";
  * force revalidation for chatty views.
  */
 export function useAgentList() {
+  const { t } = useI18n();
   const { data, loading, error, refresh } = useCachedData<Agent[]>(AGENTS_CACHE_KEY, {
     fetcher: fetchAgentListCached,
     ttlMs: 60_000,
@@ -19,7 +21,7 @@ export function useAgentList() {
   return {
     agents: data ?? [],
     loading,
-    error: error ? "Failed to load agents" : null,
+    error: error ? t("agents.load_agents_failed") : null,
     refresh,
   };
 }

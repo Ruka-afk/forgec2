@@ -25,7 +25,7 @@ export const createStatsSlice: StateCreator<AppStore, [], [], StatsSlice> = (set
         set({ stats, statsError: undefined });
       } catch (e) {
         if (process.env.NODE_ENV === "development") console.error("[store] fetchStats failed", e);
-        set({ statsError: e instanceof Error ? e.message : "Failed to load stats" });
+        set({ statsError: e instanceof Error ? e.message : "" });
       } finally {
         statsInFlight = null;
       }

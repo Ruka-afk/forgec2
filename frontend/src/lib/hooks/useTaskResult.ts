@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { useI18n } from "@/lib/i18n";
 
 export type TaskPollStatus = "idle" | "pending" | "running" | "completed" | "failed" | "timeout";
 
@@ -15,6 +16,7 @@ interface TaskStatusResponse {
 }
 
 export function useTaskResult(agentId: string, pollMs = 2000, maxAttempts = 45) {
+  const { t } = useI18n();
   const [taskId, setTaskId] = useState<string | null>(null);
   const [status, setStatus] = useState<TaskPollStatus>("idle");
   const [result, setResult] = useState<string>("");
@@ -81,7 +83,7 @@ export function useTaskResult(agentId: string, pollMs = 2000, maxAttempts = 45) 
         }
         if (st === "failed" || st === "error" || st === "cancelled") {
           setStatus("failed");
-          setResult(data.error || data.result || "Task failed");
+          setResult(data.error || data.result || t("common.task_failed"));
           return;
         }
         if (st === "running" || st === "sent") {
@@ -111,7 +113,7 @@ export function useTaskResult(agentId: string, pollMs = 2000, maxAttempts = 45) 
       document.removeEventListener("visibilitychange", handleVisibility);
       stop();
     };
-  }, [agentId, taskId, pollMs, maxAttempts, stop]);
+  }, [agentId, taskId, pollMs, maxAttempts, stop, t]);
 
   return { taskId, status, result, start, reset, polling: status === "pending" || status === "running" };
 }

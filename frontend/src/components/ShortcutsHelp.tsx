@@ -44,7 +44,7 @@ function ShortcutsHelpPanel({ open, onOpenChange }: { open: boolean; onOpenChang
                   if (!s) return null;
                   return (
                     <div key={key} className="flex items-center justify-between gap-3 text-sm">
-                      <span className="text-muted-foreground">{s.description}</span>
+                      <span className="text-muted-foreground">{t(s.descKey)}</span>
                       <kbd className="px-2 py-1 bg-secondary rounded-lg text-xs font-mono text-muted-foreground border border-border shrink-0">
                         {formatShortcut(s, isMac)}
                       </kbd>
@@ -56,9 +56,9 @@ function ShortcutsHelpPanel({ open, onOpenChange }: { open: boolean; onOpenChang
           ))}
           <p className="text-xs text-muted-foreground pt-2 border-t border-border">
             <Link href="/settings#section-shortcuts" className="text-primary hover:underline">
-              Customize shortcuts
+              {t("shortcuts.customize")}
             </Link>{" "}
-            in Settings
+            {t("shortcuts.in_settings")}
           </p>
         </ScrollArea>
       </DialogContent>
