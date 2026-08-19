@@ -9,6 +9,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Banner } from "@/components/ui/banner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -107,20 +108,14 @@ export default function PivotingPageContent() {
   return (
     <PageContainer title={t("pivoting.title")} icon={<Route className="w-4 h-4" />} subtitle={t("pivoting.subtitle")} contentClassName="space-y-6" actions={<>
         <Button variant="outline" onClick={loadData}>
-          <RotateCw className="w-4 h-4" /> Refresh
+          <RotateCw className="w-4 h-4" /> {t("pivoting.refresh")}
         </Button>
       </>}>
 
       {throughAgent && (
-        <div className="bg-info/8 border border-info/20 rounded-lg px-4 py-2.5 flex items-center gap-2 animate-fade-in">
-          <Route className="w-4 h-4 text-info" />
-          <span className="text-sm text-info">
-            Traffic routing via agent: <strong>{throughAgent.substring(0, 12)}</strong>
-          </span>
-          <Button variant="ghost" size="icon" onClick={() => setThroughAgent("")} className="ml-auto text-info hover:text-primary" aria-label={t("common.clear")}>
-            <X className="w-4 h-4" />
-          </Button>
-        </div>
+        <Banner tone="info" icon={<Route className="w-4 h-4" />} className="animate-fade-in" action={<Button variant="ghost" size="icon" onClick={() => setThroughAgent("")} className="text-info hover:text-primary" aria-label={t("common.clear")}><X className="w-4 h-4" /></Button>}>
+          {t("pivoting.routing_strip")}: <strong className="font-mono">{throughAgent.substring(0, 12)}</strong>
+        </Banner>
       )}
 
       <Tabs defaultValue="relay">

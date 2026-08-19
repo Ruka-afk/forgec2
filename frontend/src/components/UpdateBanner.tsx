@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ArrowUpCircle, X } from "lucide-react";
 import { safeHref } from "@/lib/safeUrl";
+import { bannerSurface } from "@/components/ui/banner";
+import { cn } from "@/lib/utils";
 
 const DISMISS_KEY = "forgec2_update_dismissed";
 
@@ -54,12 +56,12 @@ export default function UpdateBanner({ currentVersion }: { currentVersion?: stri
   const downloadHref = info.downloadUrl ?? "https://github.com/forgec2/forgec2/releases";
 
   return (
-    <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-2.5 rounded-lg border border-info/25 bg-info/8 dark:bg-info/[0.10] mx-2 sm:mx-3 mb-2 animate-fade-in" aria-live="polite">
+    <div className={cn(bannerSurface("info"), "flex items-center justify-between gap-3 px-4 sm:px-5 py-2.5 mx-2 sm:mx-3 mb-2 animate-fade-in")} aria-live="polite">
       <div className="flex items-center gap-2 min-w-0">
         <ArrowUpCircle className="w-4 h-4 text-info shrink-0" />
         <span className="mono-cell text-(--fs-compact) text-foreground/90 truncate">
-          Update available: <strong className="font-mono">{info.latest}</strong>
-          {currentVersion && <span className="text-muted-foreground/70"> (current: {currentVersion})</span>}
+          {t("update_banner.available")}: <strong className="font-mono">{info.latest}</strong>
+          {currentVersion && <span className="text-muted-foreground/70"> {t("update_banner.current", { current: currentVersion })}</span>}
         </span>
       </div>
       <div className="flex items-center gap-3 shrink-0 ml-3">
@@ -69,7 +71,7 @@ export default function UpdateBanner({ currentVersion }: { currentVersion?: stri
           rel="noopener noreferrer"
           className="text-sm text-info-foreground font-medium underline-offset-2 hover:underline transition-colors hidden sm:inline"
         >
-          Download
+          {t("update_banner.download")}
         </a>
         <Button variant="ghost" size="icon-sm" onClick={dismiss} className="text-muted-foreground hover:text-foreground" aria-label={t("common.dismiss")}>
           <X className="w-4 h-4" />

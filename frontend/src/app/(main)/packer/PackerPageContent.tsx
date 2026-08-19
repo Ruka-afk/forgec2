@@ -7,6 +7,7 @@ import { downloadBase64 } from "@/lib/download";
 import { Spinner } from "@/components/ui/spinner";
 import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { useTransientMessage } from "@/lib/hooks/useTransientMessage";
 import { POLL } from "@/lib/polling";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
@@ -70,7 +71,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
   const [resultSize, setResultSize] = useState(0);
   const [resultFilename, setResultFilename] = useState("");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  const { message, showMessage, clearMessage } = useTransientMessage();
 
   const { data } = useApiResource<{ templates: ArtifactTemplate[]; info: PackerInfo }>({
     fetcher: async () => {
@@ -115,7 +116,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
   }
 
   async function handleBuildArtifact() {
-    setLoading(true); setMessage("");
+    setLoading(true); clearMessage();
     try {
       const res = await api.postJson<{ data: string; filename: string; size: number }>("/packer/artifact", {
         template_name: selectedTemplate,
@@ -135,9 +136,9 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
       setResultB64(res.data);
       setResultSize(res.size);
       setResultFilename(res.filename);
-      setMessage("Artifact built successfully!");
+      showMessage(t("packer.built"), { tone: "success" });
     } catch (e: unknown) {
-      setMessage("Failed: " + (e instanceof Error ? e.message : "Unknown error"));
+      showMessage(`${t("packer.build_failed")}: ${e instanceof Error ? e.message : t("packer.build_failed")}`, { tone: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -166,8 +167,8 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
   }
 
   async function handleBundle() {
-    if (!exeB64) { setMessage("Select an EXE file first"); return; }
-    setLoading(true); setMessage("");
+    if (!exeB64) { showMessage(t("packer.select_exe_first"), { tone: "warning" }); return; }
+    setLoading(true); clearMessage();
     try {
       const res = await api.postJson<{ data: string; size: number }>("/payload/bundle", {
         agent_exe: exeB64,
@@ -194,9 +195,9 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
       setResultB64(res.data);
       setResultSize(res.size);
       setResultFilename(originalFilename || "bundled.exe");
-      setMessage("Bundle created successfully!");
+      showMessage(t("packer.bundle_created"), { tone: "success" });
     } catch (e: unknown) {
-      setMessage("Failed: " + (e instanceof Error ? e.message : "Unknown error"));
+      showMessage(`${t("packer.build_failed")}: ${e instanceof Error ? e.message : t("packer.build_failed")}`, { tone: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -221,8 +222,8 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
         </TabsList>
 
       {message && (
-        <Banner tone={message.startsWith("Failed") ? "destructive" : "success"} className="mb-4" action={<Button variant="ghost" size="icon-sm" onClick={() => setMessage("")} className="opacity-60 hover:opacity-100" aria-label={t("common.dismiss")}><X className="w-4 h-4" /></Button>}>
-          {message}
+        <Banner tone={message.tone} className="mb-4" action={<Button variant="ghost" size="icon-sm" onClick={clearMessage} className="opacity-60 hover:opacity-100" aria-label={t("common.dismiss")}><X className="w-4 h-4" /></Button>}>
+          {message.text}
         </Banner>
       )}
 
