@@ -19,6 +19,11 @@ const KEY_RE = /"([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)":/g;
 // silently rendered raw keys in the UI (time.ago.* etc.).
 const USE_DOUBLE = /\bt\?*\.?\(\s*"([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)"\s*[),]/g;
 const USE_TICK = /\bt\?*\.?\(\s*`([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)`\s*[),]/g;
+// Stale-closure-safe calls via a ref, e.g. tRef.current("shell.banner").
+// (ShellTerminal keeps t in a ref so the xterm init/error paths can translate
+// without re-subscribing; the plain t() regex above cannot see those.)
+const USE_REF_DOUBLE = /\bt[A-Za-z]*\.current\(\s*"([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)"\s*[),]/g;
+const USE_REF_TICK = /\bt[A-Za-z]*\.current\(\s*`([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)`\s*[),]/g;
 // Keys referenced indirectly as data (labelKey/descKey/…: "x.y") are used
 // but would otherwise look dead. Fold them into the used set.
 const USE_KEYFIELD = /(?:labelKey|descKey|titleKey|subtitleKey|valueKey|inputLabel|btnKey)\s*[:=]\s*"([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)"/g;
@@ -60,7 +65,7 @@ function main() {
     } catch {
       continue;
     }
-    for (const re of [USE_DOUBLE, USE_TICK, USE_KEYFIELD]) {
+    for (const re of [USE_DOUBLE, USE_TICK, USE_KEYFIELD, USE_REF_DOUBLE, USE_REF_TICK]) {
       re.lastIndex = 0;
       let m;
       while ((m = re.exec(src)) !== null) used.add(m[1]);
