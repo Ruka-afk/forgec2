@@ -1,1 +1,0 @@
-import{_ as i}from"./index-CgY6ZQM8.js";async function d(o,a){const{toPng:e}=await i(async()=>{const{toPng:r}=await import("./vendor-misc-BJX4Yuat.js").then(c=>c.L);return{toPng:r}},[]),n=await e(o,{cacheBust:!0,pixelRatio:2,backgroundColor:getComputedStyle(o).backgroundColor||"#ffffff"}),t=document.createElement("a");t.download=a,t.href=n,t.click()}export{d as e};

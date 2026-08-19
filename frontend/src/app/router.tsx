@@ -1,6 +1,8 @@
-import { lazy, type ComponentType } from "react";
-import { Outlet, Route, Routes, Navigate, useLocation } from "react-router-dom";
+import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
+import { createBrowserRouter, Outlet, Navigate, useLocation } from "react-router-dom";
+import { PageSpinner } from "@/components/ui/spinner";
 import AppLayout from "@/components/AppLayout";
+import RouterErrorView from "@/components/framework/RouterErrorView";
 import NotFound from "@/app/not-found";
 import Forbidden from "@/app/forbidden/page";
 import HomePage from "@/app/page";
@@ -84,6 +86,13 @@ const AgentTokenPage = lazyPage(() => import("@/app/(main)/agents/[id]/token/pag
 const AgentTrafficPage = lazyPage(() => import("@/app/(main)/agents/[id]/traffic/page"));
 const ListenerDetailPage = lazyPage(() => import("@/app/(main)/listeners/[id]/page"));
 
+/** Route-local suspense: each lazy page shows the standard spinner while its
+ *  chunk loads (replaces the single Root-level Suspense from the declarative
+ *  router). */
+function withSuspense(node: ReactNode): ReactNode {
+  return <Suspense fallback={<PageSpinner />}>{node}</Suspense>;
+}
+
 function MainLayout() {
   return (
     <AppLayout>
@@ -116,28 +125,94 @@ function PermissionRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-export function AppRoutes() {
-  return (
-    <Routes>
-      <Route path="/" element={<HomePage />} />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/forbidden" element={<Forbidden />} />
-      <Route element={<MainLayout />}>
-        {Object.entries(MAIN_PAGES).map(([name, Comp]) => (
-          <Route key={name} path={`/${name}`} element={<PermissionRoute><Comp /></PermissionRoute>} />
-        ))}
-        <Route path="/agents/:id" element={<PermissionRoute><AgentDetailPage /></PermissionRoute>} />
-        <Route path="/agents/:id/config" element={<PermissionRoute><AgentConfigPage /></PermissionRoute>} />
-        <Route path="/agents/:id/files" element={<PermissionRoute><AgentFilesPage /></PermissionRoute>} />
-        <Route path="/agents/:id/persistence" element={<PermissionRoute><AgentPersistencePage /></PermissionRoute>} />
-        <Route path="/agents/:id/remote-desktop" element={<PermissionRoute><AgentRemoteDesktopPage /></PermissionRoute>} />
-        <Route path="/agents/:id/screen" element={<PermissionRoute><AgentScreenPage /></PermissionRoute>} />
-        <Route path="/agents/:id/shell" element={<PermissionRoute><AgentShellPage /></PermissionRoute>} />
-        <Route path="/agents/:id/token" element={<PermissionRoute><AgentTokenPage /></PermissionRoute>} />
-        <Route path="/agents/:id/traffic" element={<PermissionRoute><AgentTrafficPage /></PermissionRoute>} />
-        <Route path="/listeners/:id" element={<PermissionRoute><ListenerDetailPage /></PermissionRoute>} />
-      </Route>
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+function guard(name: string, Comp: ComponentType): ReactNode {
+  return withSuspense(
+    <PermissionRoute key={name}>
+      <Comp />
+    </PermissionRoute>,
   );
 }
+
+export const router = createBrowserRouter([
+  {
+    path: "/",
+    element: withSuspense(<HomePage />),
+    errorElement: <RouterErrorView />,
+  },
+  {
+    path: "/login",
+    element: withSuspense(<LoginPage />),
+    errorElement: <RouterErrorView />,
+  },
+  {
+    path: "/forbidden",
+    element: withSuspense(<Forbidden />),
+    errorElement: <RouterErrorView />,
+  },
+  {
+    element: <MainLayout />,
+    errorElement: <RouterErrorView />,
+    children: [
+      ...Object.entries(MAIN_PAGES).map(([name, Comp]) => ({
+        path: `/${name}`,
+        element: guard(name, Comp),
+        errorElement: <RouterErrorView />,
+      })),
+      {
+        path: "/agents/:id",
+        element: guard("agents/:id", AgentDetailPage),
+        errorElement: <RouterErrorView />,
+      },
+      {
+        path: "/agents/:id/config",
+        element: guard("agents/:id/config", AgentConfigPage),
+        errorElement: <RouterErrorView />,
+      },
+      {
+        path: "/agents/:id/files",
+        element: guard("agents/:id/files", AgentFilesPage),
+        errorElement: <RouterErrorView />,
+      },
+      {
+        path: "/agents/:id/persistence",
+        element: guard("agents/:id/persistence", AgentPersistencePage),
+        errorElement: <RouterErrorView />,
+      },
+      {
+        path: "/agents/:id/remote-desktop",
+        element: guard("agents/:id/remote-desktop", AgentRemoteDesktopPage),
+        errorElement: <RouterErrorView />,
+      },
+      {
+        path: "/agents/:id/screen",
+        element: guard("agents/:id/screen", AgentScreenPage),
+        errorElement: <RouterErrorView />,
+      },
+      {
+        path: "/agents/:id/shell",
+        element: guard("agents/:id/shell", AgentShellPage),
+        errorElement: <RouterErrorView />,
+      },
+      {
+        path: "/agents/:id/token",
+        element: guard("agents/:id/token", AgentTokenPage),
+        errorElement: <RouterErrorView />,
+      },
+      {
+        path: "/agents/:id/traffic",
+        element: guard("agents/:id/traffic", AgentTrafficPage),
+        errorElement: <RouterErrorView />,
+      },
+      {
+        path: "/listeners/:id",
+        element: guard("listeners/:id", ListenerDetailPage),
+        errorElement: <RouterErrorView />,
+      },
+    ],
+  },
+  {
+    path: "*",
+    element: withSuspense(<NotFound />),
+    errorElement: <RouterErrorView />,
+  },
+]);
