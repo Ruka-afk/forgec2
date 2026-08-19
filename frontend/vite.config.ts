@@ -1,10 +1,43 @@
 import { fileURLToPath, URL } from "node:url";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import { staticExportPlugin } from "./src/lib/vite/staticExport";
 
+// Inject <link rel="preload" as="font"> for the hashed woff2 assets emitted
+// during the build. The hashed filename is only known after bundling, so the
+// tags are appended in transformIndexHtml (build mode) from ctx.bundle.
+function fontPreloadPlugin(): Plugin {
+  return {
+    name: "forgec2:font-preload",
+    apply: "build",
+    transformIndexHtml: {
+      order: "post",
+      handler(_html, ctx) {
+        const bundle = ctx.bundle;
+        if (!bundle) return [];
+        return Object.keys(bundle)
+          .filter((f) => f.endsWith(".woff2"))
+          .map((f) => ({
+            tag: "link",
+            attrs: {
+              rel: "preload",
+              as: "font",
+              type: "font/woff2",
+              crossorigin: "",
+              href: "/" + f,
+            },
+          }));
+      },
+    },
+  };
+}
+
 export default defineConfig(({ command, mode }) => ({
-  plugins: [react(), ...(command === "build" ? [staticExportPlugin()] : [])],
+  plugins: [
+    react(),
+    fontPreloadPlugin(),
+    ...(command === "build" ? [staticExportPlugin()] : []),
+  ],
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
@@ -27,6 +60,23 @@ export default defineConfig(({ command, mode }) => ({
     assetsDir: "assets",
     target: "es2020",
     chunkSizeWarningLimit: 1200,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          // Order matters: react-router is a react lib too.
+          if (id.includes("react-router")) return "vendor-router";
+          if (id.includes("@xterm")) return "vendor-xterm";
+          if (id.includes("@base-ui")) return "vendor-baseui";
+          if (id.includes("lucide-react")) return "vendor-icons";
+          if (id.includes("dompurify")) return "vendor-dompurify";
+          if (id.includes("zod")) return "vendor-zod";
+          if (id.includes("sonner")) return "vendor-sonner";
+          if (id.includes("react") || id.includes("scheduler")) return "vendor-react";
+          return "vendor-misc";
+        },
+      },
+    },
   },
   server: {
     proxy: {
