@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { useI18n } from "@/lib/i18n";
 
 export interface UseApiResourceOptions<T> {
   fetcher: (signal?: AbortSignal) => Promise<T>;
@@ -45,8 +46,10 @@ export function useApiResource<T>({
   retainOnError = true,
   onError,
   toastThrottleMs = 0,
-  errorMessage = "Failed to load",
+  errorMessage: errorMessageOpt,
 }: UseApiResourceOptions<T>): UseApiResourceResult<T> {
+  const { t } = useI18n();
+  const errorMessage = errorMessageOpt ?? t("common.load_failed");
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);

@@ -61,7 +61,7 @@ export default function ActiveMissions({ className = "" }: { className?: string 
       return { missions: data?.missions || [] };
     },
     pollMs: POLL.missions,
-    errorMessage: "Failed to load missions",
+    errorMessage: t("dashboard.missions_load_failed"),
   });
 
   // WS task_update events (status transitions to/from pending/running) change

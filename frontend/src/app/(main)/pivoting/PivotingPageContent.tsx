@@ -121,9 +121,9 @@ export default function PivotingPageContent() {
       <Tabs defaultValue="relay">
         <TabsList className="mb-6">
           {[
-            { key: "relay", label: "SOCKS Relay", Icon: Radio },
-            { key: "local", label: "Local Proxy", Icon: Network },
-            { key: "rport", label: "Reverse Port", Icon: ArrowLeftRight },
+            { key: "relay", label: t("pivoting.tab_relay"), Icon: Radio },
+            { key: "local", label: t("pivoting.tab_local"), Icon: Network },
+            { key: "rport", label: t("pivoting.tab_rport"), Icon: ArrowLeftRight },
           ].map((tab) => (
             <TabsTrigger key={tab.key} value={tab.key} className="gap-2">
               <tab.Icon className="w-4 h-4" />
@@ -216,7 +216,7 @@ export default function PivotingPageContent() {
                 </div>
               </div>
             </div>            <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4 items-end">
-              <div>                <Label className="text-xs font-medium mb-1 block">Protocol</Label>                <Select value={relayProtocol} onValueChange={v => setRelayProtocol(v as "socks" | "http")}>
+              <div>                <Label className="text-xs font-medium mb-1 block">{t("pivoting.protocol")}</Label>                <Select value={relayProtocol} onValueChange={v => setRelayProtocol(v as "socks" | "http")}>
                   <SelectTrigger className="w-full"><SelectValue placeholder={t("pivoting.protocol_ph")} /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="socks">SOCKS5</SelectItem>
@@ -404,10 +404,9 @@ export default function PivotingPageContent() {
                 <RotateCw className="w-4 h-4" /> {t("pivoting.refresh_status")}
               </Button>
             </div>
-            <div className="mt-3 p-3 bg-primary/10 rounded-lg text-xs text-primary flex items-start gap-1.5">
-              <Info className="w-4 h-4" />
-              <span>Connect to localhost:{rportLocalPort} to reach {rportRemoteHost || "[target]"}:{rportRemotePort} via the agent. The agent establishes the outbound connection.</span>
-            </div>
+            <Banner tone="info" icon={<Info className="w-4 h-4" />} className="items-start">
+              {t("pivoting.rport_hint", { local: rportLocalPort, host: rportRemoteHost || "[target]", remote: rportRemotePort })}
+            </Banner>
           </Card>        </>
       </TabsContent>
       </Tabs>

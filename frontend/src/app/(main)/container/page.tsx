@@ -138,7 +138,7 @@ export default function ContainerPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="generic">Generic</SelectItem>
+                <SelectItem value="generic">{t("container.mode_generic")}</SelectItem>
                 <SelectItem value="docker">Docker</SelectItem>
                 <SelectItem value="k8s">Kubernetes</SelectItem>
               </SelectContent>

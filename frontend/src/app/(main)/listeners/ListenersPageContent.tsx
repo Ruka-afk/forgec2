@@ -448,11 +448,11 @@ export default function ListenersPageContent() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">{t("listeners.color_none")}</SelectItem>
-                    <SelectItem value="red">Red</SelectItem>
-                    <SelectItem value="orange">Orange</SelectItem>
-                    <SelectItem value="yellow">Yellow</SelectItem>
-                    <SelectItem value="green">Green</SelectItem>
-                    <SelectItem value="blue">Blue</SelectItem>
+                    <SelectItem value="red">{t("listeners.color_red")}</SelectItem>
+                    <SelectItem value="orange">{t("listeners.color_orange")}</SelectItem>
+                    <SelectItem value="yellow">{t("listeners.color_yellow")}</SelectItem>
+                    <SelectItem value="green">{t("listeners.color_green")}</SelectItem>
+                    <SelectItem value="blue">{t("listeners.color_blue")}</SelectItem>
                     <SelectItem value="purple">Purple</SelectItem>
                     <SelectItem value="pink">Pink</SelectItem>
                   </SelectContent>
@@ -533,11 +533,11 @@ export default function ListenersPageContent() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">{t("listeners.color_none")}</SelectItem>
-                    <SelectItem value="red">Red</SelectItem>
-                    <SelectItem value="orange">Orange</SelectItem>
-                    <SelectItem value="yellow">Yellow</SelectItem>
-                    <SelectItem value="green">Green</SelectItem>
-                    <SelectItem value="blue">Blue</SelectItem>
+                    <SelectItem value="red">{t("listeners.color_red")}</SelectItem>
+                    <SelectItem value="orange">{t("listeners.color_orange")}</SelectItem>
+                    <SelectItem value="yellow">{t("listeners.color_yellow")}</SelectItem>
+                    <SelectItem value="green">{t("listeners.color_green")}</SelectItem>
+                    <SelectItem value="blue">{t("listeners.color_blue")}</SelectItem>
                     <SelectItem value="purple">Purple</SelectItem>
                     <SelectItem value="pink">Pink</SelectItem>
                   </SelectContent>

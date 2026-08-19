@@ -53,7 +53,7 @@ export default function TokensPage() {
         agents: (agentData.agents || agentData.data || agentData || []) as Agent[],
       };
     },
-    errorMessage: "Failed to load tokens",
+    errorMessage: t("tokens.load_failed"),
   });
   const tokens = data?.tokens ?? [];
   const agents = data?.agents ?? [];
@@ -114,10 +114,10 @@ export default function TokensPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t("tokens.all_integrity")}</SelectItem>
-                <SelectItem value="System">System</SelectItem>
-                <SelectItem value="High">High</SelectItem>
-                <SelectItem value="Medium">Medium</SelectItem>
-                <SelectItem value="Low">Low</SelectItem>
+                <SelectItem value="System">{t("tokens.integrity_system")}</SelectItem>
+                <SelectItem value="High">{t("tokens.integrity_high")}</SelectItem>
+                <SelectItem value="Medium">{t("tokens.integrity_medium")}</SelectItem>
+                <SelectItem value="Low">{t("tokens.integrity_low")}</SelectItem>
               </SelectContent>
             </Select>
             <Select value={sourceFilter || "all"} onValueChange={(v) => setSourceFilter(v === "all" ? "" : v ?? "")}>

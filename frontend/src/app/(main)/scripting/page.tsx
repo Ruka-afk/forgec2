@@ -57,7 +57,7 @@ export default function ScriptingPage() {
   const [selectedAgent, setSelectedAgent] = useState("");
   const [scriptName, setScriptName] = useState("");
   const [scriptCode, setScriptCode] = useState("-- Lua Script Example\nforgec2.log('Starting batch operation')\n\nlocal agents = forgec2.get_agents()\nforgec2.log('Agents: ' .. tostring(#agents))\n\nforgec2.set_output('Script execution complete')");
-  const [scriptOutput, setScriptOutput] = useState("Waiting for execution...");
+  const [scriptOutput, setScriptOutput] = useState(t("scripting.waiting"));
   const [running, setRunning] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
 
@@ -278,7 +278,7 @@ export default function ScriptingPage() {
                     <span>
                       <Terminal className="w-4 h-4" />{t("scripting.output")}
                     </span>
-                    <Button variant="ghost" size="sm" onClick={() => setScriptOutput("Waiting for execution...")} className="text-xs text-muted-foreground hover:text-foreground h-auto p-0">
+                    <Button variant="ghost" size="sm" onClick={() => setScriptOutput(t("scripting.waiting"))} className="text-xs text-muted-foreground hover:text-foreground h-auto p-0">
                       <Eraser className="w-4 h-4" />{t("scripting.clear")}
                     </Button>
                   </div>

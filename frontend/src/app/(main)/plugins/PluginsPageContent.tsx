@@ -144,7 +144,7 @@ export default function PluginsPage() {
       setExecuteResult(JSON.stringify(result, null, 2));
       toast.success(t("plugins.toast.executed"));
     } catch {
-      setExecuteResult("Execution failed");
+      setExecuteResult(t("plugins.execution_failed"));
       toast.error(t("plugins.toast.execute_failed"));
     }
   };

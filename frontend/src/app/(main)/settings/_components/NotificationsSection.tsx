@@ -134,10 +134,10 @@ export default function NotificationsSection() {
                     <SelectValue placeholder={t("settings.notifications.select_type")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="generic">Generic</SelectItem>
+                    <SelectItem value="generic">{t("settings.notifications.mode_generic")}</SelectItem>
                     <SelectItem value="slack">Slack</SelectItem>
                     <SelectItem value="discord">Discord</SelectItem>
-                    <SelectItem value="email">Email</SelectItem>
+                    <SelectItem value="email">{t("settings.notifications.mode_email")}</SelectItem>
                   </SelectContent>
                 </Select>
                 <span className="text-(--fs-micro-sm) text-muted-foreground font-mono">{target.type}</span>

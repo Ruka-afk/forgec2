@@ -2,6 +2,7 @@
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
+import { useI18n } from "@/lib/i18n";
 
 export interface InfraListener {
   id: string;
@@ -26,6 +27,7 @@ export interface Redirector {
 }
 
 export function useInfrastructureData() {
+  const { t } = useI18n();
   const [listeners, setListeners] = useState<InfraListener[]>([]);
   const [redirectors, setRedirectors] = useState<Redirector[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,12 +41,12 @@ export function useInfrastructureData() {
       setListeners((data.listeners || []) as InfraListener[]);
     } catch {
       setListeners([]);
-      setError("Failed to load listeners");
-      toast.error("Failed to load listeners");
+      setError(t("infrastructure.toast.load_listeners_failed"));
+      toast.error(t("infrastructure.toast.load_listeners_failed"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const loadRedirectors = useCallback(async () => {
     setLoading(true);
@@ -54,12 +56,12 @@ export function useInfrastructureData() {
       setRedirectors((data.redirectors || []) as Redirector[]);
     } catch {
       setRedirectors([]);
-      setError("Failed to load redirectors");
-      toast.error("Failed to load redirectors");
+      setError(t("infrastructure.toast.load_redirectors_failed"));
+      toast.error(t("infrastructure.toast.load_redirectors_failed"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   return { listeners, redirectors, loading, error, loadListeners, loadRedirectors };
 }

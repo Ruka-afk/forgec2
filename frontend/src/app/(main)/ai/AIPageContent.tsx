@@ -481,7 +481,7 @@ export default function AIPage() {
       <Dialog open={!!renameTarget} onOpenChange={() => setRenameTarget(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t("ai.rename") || "Rename conversation"}</DialogTitle>
+            <DialogTitle>{t("ai.rename")}</DialogTitle>
           </DialogHeader>
           <Input
             type="text"

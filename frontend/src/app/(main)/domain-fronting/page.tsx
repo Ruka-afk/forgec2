@@ -188,9 +188,9 @@ export default function DomainFrontingPage() {
                         </div>
                         <div className="text-xs text-muted-foreground mt-0.5">
                           {d.last_check ? (
-                            <>Last checked: {formatTime(d.last_check)}</>
+                            <>{t("domain_fronting.last_checked")}: {formatTime(d.last_check)}</>
                           ) : (
-                            "Not checked yet"
+                            t("domain_fronting.not_checked")
                           )}
                           {d.error && (
                             <span className="text-destructive ml-2">Error: {d.error}</span>

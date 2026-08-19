@@ -149,7 +149,7 @@ export default function OpsecPage() {
       });
       setTestResult(data);
     } catch {
-      setTestResult({ allowed: false, blocked: true, messages: "Test failed" });
+      setTestResult({ allowed: false, blocked: true, messages: t("opsec.test_failed") });
     }
   };
 

@@ -52,7 +52,7 @@ export default function ReportPage() {
 
   const SECTIONS = [
     { key: "overview", label: t("report.sec_overview"), icon: <PieChart className="w-5 h-5" /> },
-    { key: "agents", label: "Implant", icon: <Bot className="w-5 h-5" /> },
+    { key: "agents", label: t("report.sec_agents"), icon: <Bot className="w-5 h-5" /> },
     { key: "tasks", label: t("report.sec_tasks"), icon: <ListChecks className="w-5 h-5" /> },
     { key: "credentials", label: t("report.sec_credentials"), icon: <Key className="w-5 h-5" /> },
     { key: "network", label: t("report.sec_network"), icon: <Radio className="w-5 h-5" /> },

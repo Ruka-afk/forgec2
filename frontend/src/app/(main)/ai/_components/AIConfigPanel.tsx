@@ -66,7 +66,7 @@ export function AIConfigPanel(props: AIConfigPanelProps) {
                 <SelectItem value="claude">Claude</SelectItem>
                 <SelectItem value="qianwen">Qianwen</SelectItem>
                 <SelectItem value="longcat">LongCat</SelectItem>
-                <SelectItem value="custom">Custom</SelectItem>
+                <SelectItem value="custom">{t("ai.model_custom")}</SelectItem>
               </SelectContent>
             </Select>
           </div>

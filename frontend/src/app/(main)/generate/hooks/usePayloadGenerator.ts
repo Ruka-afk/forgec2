@@ -278,16 +278,16 @@ export function usePayloadGenerator() {
       // build still completes if the WS is unavailable.
       const startData = await res.json();
       const buildId = startData.build_id;
-      if (!buildId) return { error: startData.error || "No build ID returned" };
+      if (!buildId) return { error: startData.error || t("generate.toast.no_build_id") };
 
       asyncAbortRef.current?.abort();
       const ac = new AbortController();
       asyncAbortRef.current = ac;
 
       const outcome = await waitForBuildResult(buildId, ac.signal);
-      if (outcome.status === "aborted" || ac.signal.aborted) return { error: "Build cancelled" };
-      if (outcome.status === "failed") return { error: outcome.error || "Build failed" };
-      if (outcome.status === "timeout") return { error: "Build timed out after 10 minutes" };
+      if (outcome.status === "aborted" || ac.signal.aborted) return { error: t("generate.toast.build_cancelled") };
+      if (outcome.status === "failed") return { error: outcome.error || t("generate.toast.build_failed") };
+      if (outcome.status === "timeout") return { error: t("generate.toast.build_timed_out") };
 
       // 3) Download the result
       const { blob, filename } = await api.downloadGet(paths.generate.buildDownload(buildId), formName);
@@ -295,7 +295,7 @@ export function usePayloadGenerator() {
       return { success: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("abort")) return { error: "Request timed out" };
+      if (msg.includes("abort")) return { error: t("generate.toast.request_timed_out") };
       return { error: msg };
     }
   }, [shared.listener_id, shared.dns_doh_url, shared.dns_dot_addr, shared.ssh_user, shared.ssh_password, shared.ssh_key, shared.ssh_host_key, buildC2URL, getProtocol, getBeaconTransport, buildFormData, t, waitForBuildResult]);

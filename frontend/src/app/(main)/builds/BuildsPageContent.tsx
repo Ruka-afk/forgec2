@@ -94,12 +94,12 @@ function getDuration(start?: string, end?: string): string {
   } catch { return "-"; }
 }
 
-function getStatusInfo(status: string) {
+function getStatusInfo(status: string, t: (key: string, vars?: Record<string, string | number>) => string) {
   switch (status) {
-    case "success": return { icon: <CheckCircle className="w-4 h-4 text-primary" />, label: "Success", bg: "bg-success" };
-    case "failed": return { icon: <XCircle className="w-4 h-4 text-destructive" />, label: "Failed", bg: "bg-destructive" };
-    case "building": return { icon: <Spinner size="sm" />, label: "Building", bg: "bg-primary" };
-    default: return { icon: <Clock className="w-4 h-4 text-muted-foreground" />, label: "Pending", bg: "bg-muted-foreground" };
+    case "success": return { icon: <CheckCircle className="w-4 h-4 text-primary" />, label: t("builds.success"), bg: "bg-success" };
+    case "failed": return { icon: <XCircle className="w-4 h-4 text-destructive" />, label: t("builds.failed"), bg: "bg-destructive" };
+    case "building": return { icon: <Spinner size="sm" />, label: t("builds.building"), bg: "bg-primary" };
+    default: return { icon: <Clock className="w-4 h-4 text-muted-foreground" />, label: t("builds.pending"), bg: "bg-muted-foreground" };
   }
 }
 
@@ -352,7 +352,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
             const id = build.id || String(idx);
             const status = build.status || "unknown";
             const platform = build.platform || "";
-            const info = getStatusInfo(status);
+            const info = getStatusInfo(status, t);
             const startedAt = build.started_at || build.created_at || "";
             const completedAt = build.completed_at || "";
             const stderr = build.stderr || "";

@@ -206,7 +206,7 @@ export default function BloodHoundPage() {
               <SelectContent>
                 <SelectItem value="DCOnly">DCOnly</SelectItem>
                 <SelectItem value="All">{t("bloodhound.collect_all")}</SelectItem>
-                <SelectItem value="Session">Session</SelectItem>
+                <SelectItem value="Session">{t("bloodhound.session")}</SelectItem>
                 <SelectItem value="LDAP">LDAP</SelectItem>
               </SelectContent>
             </Select>

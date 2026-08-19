@@ -368,7 +368,7 @@ export default function TopologyPage() {
             </div>
             <div className="bg-background border-t border-border px-4 py-1.5 flex items-center justify-between">
               <span className="text-(--fs-micro-sm) text-muted-foreground font-mono">
-                {loading ? t("common.loading") : useMeshSource ? "Mesh topology from DB" : "C2 topology from agent data"}
+                {loading ? t("common.loading") : useMeshSource ? t("topology.p2p_view") : t("topology.c2_view")}
               </span>
               <span className="text-(--fs-micro-sm) text-muted-foreground font-mono">{now || "--:--:--"}</span>
             </div>

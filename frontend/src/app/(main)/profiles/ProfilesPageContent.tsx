@@ -446,19 +446,19 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
             ) : (
               <div className="space-y-5">
                 <Card className="overflow-hidden">
-                  <CardHeaderRow icon={FileCode} tone="primary" title={`Editing: ${editing.name || "untitled"}`} description={editing.description || "No description"} action={
+                  <CardHeaderRow icon={FileCode} tone="primary" title={`${t("profiles.editing")}: ${editing.name || t("common.untitled")}`} description={editing.description || t("common.no_description")} action={
                     <div className="flex gap-2">
                       <Button onClick={handleSaveProfile}                         className="h-9 px-4 text-xs font-medium transition-colors flex items-center gap-1.5">
                         <Download className="w-4 h-4" />Save (Export JSON)
                       </Button>
                       <Button onClick={handleDuplicateProfile} variant="secondary"                         className="h-9 px-4 text-xs font-medium transition-colors flex items-center gap-1.5">
-                        <Copy className="w-4 h-4" />Duplicate
+                        <Copy className="w-4 h-4" />{t("common.duplicate")}
                       </Button>
                       <Button onClick={handleDeleteProfile} className="h-9 px-4 bg-destructive hover:bg-destructive/90 text-destructive-foreground text-xs font-medium transition-colors flex items-center gap-1.5">
-                        <Trash2 className="w-4 h-4" />Delete
+                        <Trash2 className="w-4 h-4" />{t("common.delete")}
                       </Button>
                       <Button onClick={() => setShowPushModal(true)}                         className="h-9 px-4 text-xs font-medium transition-colors flex items-center gap-1.5">
-                        <Send className="w-4 h-4" />Push to Agent
+                        <Send className="w-4 h-4" />{t("profiles.push_to_agent")}
                         </Button>
                       </div>
                       } />
