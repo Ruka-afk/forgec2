@@ -72,6 +72,11 @@ export default defineConfig(({ command, mode }) => ({
           if (id.includes("dompurify")) return "vendor-dompurify";
           if (id.includes("zod")) return "vendor-zod";
           if (id.includes("sonner")) return "vendor-sonner";
+          // react-interop CJS packages (use-sync-external-store etc.) do a
+          // top-level require("react"); they MUST live in the same chunk as
+          // react itself or the circular chunk import crashes at boot
+          // ("Cannot set properties of undefined (setting 'Activity')").
+          if (id.includes("use-sync-external-store") || id.includes("react-is")) return "vendor-react";
           if (id.includes("react") || id.includes("scheduler")) return "vendor-react";
           return "vendor-misc";
         },

@@ -1,1 +1,0 @@
-import{r as t}from"./vendor-react-gxa0FIDe.js";import{ab as o}from"./index-DeAiT3_m.js";function s({tab:e}){const r=o();return t.useEffect(()=>{r.replace(`/generate?tab=${e}`)},[r,e]),null}export{s as R};
