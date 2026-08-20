@@ -13,6 +13,27 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// reportSuccessRate computes the real task success rate (completed /
+// completed+failed) within a time range. It returns "N/A" when no terminal
+// task exists in range — a nominal "100%" would be a fabricated statistic.
+func (s *Server) reportSuccessRate(start, end time.Time) string {
+	var completed, failed int64
+	if err := s.db.Model(&db.Task{}).
+		Where("created_at BETWEEN ? AND ? AND status = ?", start, end, "completed").
+		Count(&completed).Error; err != nil {
+		slog.Error("Report: failed to count completed tasks", "err", err)
+	}
+	if err := s.db.Model(&db.Task{}).
+		Where("created_at BETWEEN ? AND ? AND status = ?", start, end, "failed").
+		Count(&failed).Error; err != nil {
+		slog.Error("Report: failed to count failed tasks", "err", err)
+	}
+	if completed+failed == 0 {
+		return "N/A"
+	}
+	return fmt.Sprintf("%.1f%%", float64(completed)/float64(completed+failed)*100)
+}
+
 // handleReportPage renders the report generator page
 func (s *Server) handleReportPage(c *gin.Context) {
 	stats := s.getNavStats(c)
@@ -164,7 +185,7 @@ func (s *Server) handleGenerateReport(c *gin.Context) {
 		"total_tasks":  taskCount,
 		"total_creds":  credCount,
 		"total_audits": auditCount,
-		"success_rate": fmt.Sprintf("%.1f%%", float64(taskCount)/float64(agentCount+1)*100),
+		"success_rate": s.reportSuccessRate(startDate, endDate),
 	}
 
 	// Agents
@@ -684,7 +705,7 @@ func (s *Server) buildReportData(startDate, endDate string, sections []string) g
 		"total_tasks":  taskCount,
 		"total_creds":  credCount,
 		"total_audits": auditCount,
-		"success_rate": fmt.Sprintf("%.1f%%", float64(taskCount)/float64(agentCount+1)*100),
+		"success_rate": s.reportSuccessRate(start, end),
 	}
 
 	if sectionSet["agents"] {

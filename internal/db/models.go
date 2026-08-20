@@ -1208,6 +1208,7 @@ type PhishingCampaign struct {
 	SMTPPass   string    `gorm:"size:255" json:"smtp_pass"`
 	Status     string    `gorm:"size:50;default:draft" json:"status"`
 	SentCount  int       `json:"sent_count"`
+	FailedCount int     `json:"failed_count"`
 	OpenCount  int       `json:"open_count"`
 	CredCount  int       `json:"cred_count"`
 	CreatedBy  string    `gorm:"size:255" json:"created_by"`

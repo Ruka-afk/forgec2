@@ -353,6 +353,7 @@ func (s *Server) handleAPILaunchPhishingCampaign(c *gin.Context) {
 
 	camp.Status = "running"
 	camp.SentCount = 0
+	camp.FailedCount = 0
 	camp.OpenCount = 0
 	camp.CredCount = 0
 	camp.UpdatedAt = time.Now()
@@ -382,6 +383,7 @@ func (s *Server) handleAPILaunchPhishingCampaign(c *gin.Context) {
 
 func (s *Server) runPhishingCampaign(campID uint, tpl db.PhishingTemplate, targets []string, smtpHost string, smtpPort int, smtpUser, smtpPass, from string, isHTML bool, baseURL string) {
 	sent := 0
+	failed := 0
 	for i, email := range targets {
 		// stop if campaign was stopped (re-check periodically to avoid a query per recipient)
 		if i == 0 || i%50 == 0 {
@@ -430,6 +432,13 @@ func (s *Server) runPhishingCampaign(campID uint, tpl db.PhishingTemplate, targe
 				slog.Error("Failed to update phishing campaign sent_count", "campaign_id", campID, "err", err)
 			}
 		}
+		if evt.EventType == "send_failed" {
+			failed++
+			if err := s.db.Model(&db.PhishingCampaign{}).Where("id = ?", campID).
+				Updates(map[string]interface{}{"failed_count": failed, "updated_at": time.Now()}).Error; err != nil {
+				slog.Error("Failed to update phishing campaign failed_count", "campaign_id", campID, "err", err)
+			}
+		}
 		if err := s.db.Create(&evt).Error; err != nil {
 			slog.Error("Failed to log phishing event", "campaign", campID, "type", evt.EventType, "err", err)
 		}
@@ -442,7 +451,7 @@ func (s *Server) runPhishingCampaign(campID uint, tpl db.PhishingTemplate, targe
 		Updates(map[string]interface{}{"status": "completed", "updated_at": time.Now()}).Error; err != nil {
 		slog.Error("Failed to complete phishing campaign", "campaign_id", campID, "err", err)
 	}
-	slog.Info("Phishing campaign finished", "campaign", campID, "sent", sent, "total", len(targets))
+	slog.Info("Phishing campaign finished", "campaign", campID, "sent", sent, "failed", failed, "total", len(targets))
 }
 
 func (s *Server) handleAPIStopPhishingCampaign(c *gin.Context) {
@@ -451,7 +460,7 @@ func (s *Server) handleAPIStopPhishingCampaign(c *gin.Context) {
 	if !s.findOrFail(c, &camp, id, "campaign") {
 		return
 	}
-	camp.Status = "completed"
+	camp.Status = "stopped"
 	camp.UpdatedAt = time.Now()
 	if err := s.db.Save(&camp).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Phishing operation"))

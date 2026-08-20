@@ -42,15 +42,28 @@ func NewMonitorCollector(s *Server) *MonitorCollector {
 func (m *MonitorCollector) Start() {
 	// Collect initial metrics immediately
 	metrics := m.collectSystemMetrics()
-	m.mu.Lock()
-	m.lastMetrics = metrics
-	m.metricsHistory = append(m.metricsHistory, metrics)
-	m.mu.Unlock()
+	m.acceptMetrics(metrics)
 
 	// Start periodic collection
 	m.server.wg.Add(2)
 	go m.collectMetrics()
 	go m.checkAlerts()
+}
+
+// acceptMetrics records a sample in lastMetrics/history only when it contains
+// at least one real reading; a tick where every OS-backed syscall failed is
+// discarded so a hardware read failure never looks like a healthy 0%.
+func (m *MonitorCollector) acceptMetrics(metrics db.SystemMetric) {
+	if math.IsNaN(metrics.CPULoad) && math.IsNaN(metrics.DiskUsed) {
+		return
+	}
+	m.mu.Lock()
+	m.lastMetrics = metrics
+	m.metricsHistory = append(m.metricsHistory, metrics)
+	if len(m.metricsHistory) > 60 {
+		m.metricsHistory = m.metricsHistory[len(m.metricsHistory)-60:]
+	}
+	m.mu.Unlock()
 }
 
 func (m *MonitorCollector) collectMetrics() {
@@ -64,14 +77,11 @@ func (m *MonitorCollector) collectMetrics() {
 			return
 		case <-ticker.C:
 			metrics := m.collectSystemMetrics()
-			m.mu.Lock()
-			m.lastMetrics = metrics
-			m.metricsHistory = append(m.metricsHistory, metrics)
-			if len(m.metricsHistory) > 60 {
-				m.metricsHistory = m.metricsHistory[len(m.metricsHistory)-60:]
+			m.acceptMetrics(metrics)
+			if math.IsNaN(metrics.CPULoad) && math.IsNaN(metrics.DiskUsed) {
+				slog.Warn("Monitor: skipping metrics persistence (all OS probes failed)")
+				continue
 			}
-			m.mu.Unlock()
-
 			if err := m.server.db.Create(&metrics).Error; err != nil {
 				slog.Error("Failed to persist system metrics", "error", err)
 			}
@@ -82,13 +92,21 @@ func (m *MonitorCollector) collectMetrics() {
 func (m *MonitorCollector) collectSystemMetrics() db.SystemMetric {
 	var metrics db.SystemMetric
 
-	metrics.CPULoad = m.getCPULoad()
+	if cpu, ok := m.getCPULoad(); ok {
+		metrics.CPULoad = cpu
+	} else {
+		metrics.CPULoad = math.NaN()
+	}
 	memStats := m.getMemoryStats()
 	metrics.MemoryUsed = memStats.used
 	metrics.MemoryTotal = memStats.total
-	diskStats := m.getDiskStats()
-	metrics.DiskUsed = diskStats.used
-	metrics.DiskTotal = diskStats.total
+	if used, total, ok := m.getDiskStats(); ok {
+		metrics.DiskUsed = used
+		metrics.DiskTotal = total
+	} else {
+		metrics.DiskUsed = math.NaN()
+		metrics.DiskTotal = math.NaN()
+	}
 
 	hostname, _ := os.Hostname()
 	metrics.Hostname = hostname
@@ -136,14 +154,16 @@ func (m *MonitorCollector) checkSystemAlerts() {
 		switch rule.Type {
 		case "cpu_high":
 			value = metrics.CPULoad
-			trigger = value > rule.Threshold
+			// A NaN reading means the OS probe failed; never evaluate (or
+			// silently pass) an alert against fabricated data.
+			trigger = !math.IsNaN(value) && value > rule.Threshold
 		case "memory_high":
 			if metrics.MemoryTotal > 0 {
 				value = (metrics.MemoryUsed / metrics.MemoryTotal) * 100
 				trigger = value > rule.Threshold
 			}
 		case "disk_high":
-			if metrics.DiskTotal > 0 {
+			if metrics.DiskTotal > 0 && !math.IsNaN(metrics.DiskUsed) {
 				value = (metrics.DiskUsed / metrics.DiskTotal) * 100
 				trigger = value > rule.Threshold
 			}
@@ -312,26 +332,34 @@ func (s *Server) handleGetSystemMetrics(c *gin.Context) {
 		memPercent = math.Max(0, math.Min(100, (metrics.MemoryUsed/metrics.MemoryTotal)*100))
 	}
 
-	diskPercent := 0.0
-	if metrics.DiskTotal > 0 {
-		diskPercent = math.Max(0, math.Min(100, (metrics.DiskUsed/metrics.DiskTotal)*100))
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"cpu": metrics.CPULoad,
+	resp := gin.H{
 		"memory": map[string]float64{
 			"used":    metrics.MemoryUsed,
 			"total":   metrics.MemoryTotal,
 			"percent": memPercent,
 		},
-		"disk": map[string]float64{
+		"hostname":  metrics.Hostname,
+		"timestamp": metrics.CreatedAt,
+	}
+
+	// Omit OS-backed readings that failed to collect (NaN) so a probe failure
+	// is visible as missing data instead of a fabricated healthy 0%.
+	if !math.IsNaN(metrics.CPULoad) {
+		resp["cpu"] = metrics.CPULoad
+	}
+	if !math.IsNaN(metrics.DiskUsed) && !math.IsNaN(metrics.DiskTotal) {
+		diskPercent := 0.0
+		if metrics.DiskTotal > 0 {
+			diskPercent = math.Max(0, math.Min(100, (metrics.DiskUsed/metrics.DiskTotal)*100))
+		}
+		resp["disk"] = map[string]float64{
 			"used":    metrics.DiskUsed,
 			"total":   metrics.DiskTotal,
 			"percent": diskPercent,
-		},
-		"hostname":  metrics.Hostname,
-		"timestamp": metrics.CreatedAt,
-	})
+		}
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
 func (s *Server) handleGetMetricsHistory(c *gin.Context) {

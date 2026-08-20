@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -136,11 +138,20 @@ func (s *Server) handleACMECertProvision(c *gin.Context) {
 		return
 	}
 
+	// Parse the actual certificate to report its real NotAfter expiry instead
+	// of an invented "now + 80 days" estimate.
+	expires := ""
+	if block, _ := pem.Decode(certPEM); block != nil {
+		if cert, err := x509.ParseCertificate(block.Bytes); err == nil {
+			expires = cert.NotAfter.Format(time.RFC3339)
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success":   true,
 		"cert_file": certFile,
 		"key_file":  keyFile,
-		"expires":   time.Now().Add(CertExpiryEstimate).Format(time.RFC3339),
+		"expires":   expires,
 	})
 }
 

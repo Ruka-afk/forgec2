@@ -131,7 +131,6 @@ const (
 	GRPCMaxRecvMsgSize        = 10 * 1024 * 1024 // 10 MB
 	PluginUpdateCheckInterval = 6 * time.Hour
 	ACMEProvisionTimeout      = 5 * time.Minute
-	CertExpiryEstimate        = 80 * 24 * time.Hour
 	PeriodicCleanupInterval   = 24 * time.Hour
 	RPortFwdCleanupInterval   = 5 * time.Minute
 

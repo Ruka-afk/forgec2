@@ -145,15 +145,31 @@ func (s *Server) handleCampaignMitre(c *gin.Context) {
 	}
 
 	phaseCounts := map[string]int{}
+	phaseDone := map[string]int{}
+	phaseFailed := map[string]int{}
 	for _, t := range tasks {
-		phaseCounts[taskPhase(t.Type)]++
+		p := taskPhase(t.Type)
+		phaseCounts[p]++
+		switch t.Status {
+		case "completed":
+			phaseDone[p]++
+		case "failed":
+			phaseFailed[p]++
+		}
 	}
 
 	phases := make([]map[string]interface{}, 0, len(PHASE_ORDER))
 	for _, p := range PHASE_ORDER {
+		// A phase is only "completed" when a task of that phase actually
+		// completed; a phase with only failed/pending tasks must not be
+		// advertised as done.
 		status := "pending"
-		if phaseCounts[p] > 0 {
+		if phaseDone[p] > 0 {
 			status = "completed"
+		} else if phaseCounts[p] > 0 && phaseFailed[p] == phaseCounts[p] {
+			status = "failed"
+		} else if phaseCounts[p] > 0 {
+			status = "in_progress"
 		}
 		phases = append(phases, map[string]interface{}{
 			"phase":      p,

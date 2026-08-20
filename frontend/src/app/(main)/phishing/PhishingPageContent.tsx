@@ -50,6 +50,7 @@ interface PhishingCampaign {
   smtp_pass: string;
   status: string;
   sent_count: number;
+  failed_count: number;
   open_count: number;
   cred_count: number;
   created_by: string;
@@ -290,8 +291,9 @@ export default function PhishingPageContent() {
 
   function renderCampaigns() {
     const statusBadge = (s: string) => {
-      const variant = s === "running" ? "warning" as const : s === "completed" ? "success" as const : "secondary" as const;
-      return <Badge variant={variant}>{s}</Badge>;
+      const label = s === "stopped" ? t("phishing.stopped") : s;
+      const variant = s === "running" ? "warning" as const : s === "completed" ? "success" as const : s === "stopped" ? "destructive" as const : "secondary" as const;
+      return <Badge variant={variant}>{label}</Badge>;
     };
     return (
       <div>
@@ -324,13 +326,13 @@ export default function PhishingPageContent() {
                     <TableRow key={cid}>
                       <TableCell className="px-4 py-3 sm:py-3.5 font-medium text-foreground">{c.name}</TableCell>
                       <TableCell className="px-4 py-3 sm:py-3.5">{statusBadge(c.status)}</TableCell>
-                      <TableCell className="px-4 py-3 sm:py-3.5 text-right text-muted-foreground">{c.sent_count}</TableCell>
+                      <TableCell className="px-4 py-3 sm:py-3.5 text-right text-muted-foreground">{c.sent_count}{c.failed_count > 0 && <span className="text-destructive"> ({t("phishing.sends_failed", { n: c.failed_count })})</span>}</TableCell>
                       <TableCell className="px-4 py-3 sm:py-3.5 text-right text-muted-foreground">{c.open_count}</TableCell>
                       <TableCell className="px-4 py-3 sm:py-3.5 text-right text-muted-foreground">{c.cred_count}</TableCell>
                       <TableCell className="px-4 py-3 sm:py-3.5 text-right">
                         {c.status === "draft" && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleLaunch(cid)} className="text-primary hover:text-primary dark:hover:text-primary mr-3" aria-label={t("phishing.launch")} />}><Play className="w-4 h-4" /></TooltipTrigger><TooltipContent>{t("phishing.launch")}</TooltipContent></Tooltip>}
                         {c.status === "running" && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleStop(cid)} className="text-warning hover:text-warning-foreground mr-3" aria-label={t("phishing.stop")} />}><Square className="w-4 h-4" /></TooltipTrigger><TooltipContent>{t("phishing.stop")}</TooltipContent></Tooltip>}
-                        {(c.status === "draft" || c.status === "completed") && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleDeleteCamp(cid)} className="text-muted-foreground hover:text-destructive" aria-label={t("phishing.delete")} />}><Trash2 className="w-4 h-4" /></TooltipTrigger><TooltipContent>{t("phishing.delete")}</TooltipContent></Tooltip>}
+                        {(c.status === "draft" || c.status === "completed" || c.status === "stopped") && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleDeleteCamp(cid)} className="text-muted-foreground hover:text-destructive" aria-label={t("phishing.delete")} />}><Trash2 className="w-4 h-4" /></TooltipTrigger><TooltipContent>{t("phishing.delete")}</TooltipContent></Tooltip>}
                       </TableCell>
                     </TableRow>
                   );

