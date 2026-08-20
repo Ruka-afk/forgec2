@@ -221,6 +221,23 @@
   display: none !important;
 }
 
+/* ── Enterprise light console: subtle grid + radial highlight (keeps light default) ── */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.45;
+  background:
+    radial-gradient(900px 500px at 85% -10%, color-mix(in oklch, var(--primary) 6%, transparent) 0%, transparent 60%),
+    linear-gradient(to right, color-mix(in oklch, var(--border) 45%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklch, var(--border) 35%, transparent) 1px, transparent 1px);
+  background-size: auto, 32px 32px, 32px 32px;
+  mask-image: linear-gradient(to bottom, black 0%, transparent 85%);
+}
+.dark body::before { opacity: 0.18; }
+
 /* ════════════════════════════════════════════════════════════════
    MODERNIZATION UTILITIES (command-center surface language)
    ════════════════════════════════════════════════════════════════ */
