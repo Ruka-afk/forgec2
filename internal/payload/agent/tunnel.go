@@ -5,69 +5,38 @@ package main
 
 import (
 	"fmt"
-	"sync"
+	"strings"
 )
 
-type TunnelRoute struct {
-	Subnet string
-	Active bool
-}
-
-var tunnelRoutes = map[string]*TunnelRoute{}
-var tunnelRoutesMu sync.RWMutex
-
+// handleTunnelAddRoute and handleTunnelRemoveRoute are honest rejections of the
+// legacy "dynamic subnet routing" task surface. The former implementation kept
+// a tunnelRoutes map and reported "tunnel route added" success — but nothing in
+// the agent or server ever consumed those routes: the SOCKS relay dials targets
+// directly, and no frame source on either side drives tunnel_add/tunnel_remove.
+// A feature that has no effect must not claim success, so the dead store was
+// removed and the tasks now state exactly that.
 func handleTunnelAddRoute(task Task, res *TaskResult) {
-	subnet := task.Command
+	subnet := strings.TrimSpace(task.Command)
 	if subnet == "" {
 		res.Error = "subnet is required (e.g. 10.10.0.0/16)"
 		return
 	}
-	tunnelRoutesMu.Lock()
-	tunnelRoutes[subnet] = &TunnelRoute{Subnet: subnet, Active: true}
-	tunnelRoutesMu.Unlock()
-	res.Output = fmt.Sprintf("tunnel route added: %s", subnet)
+	res.Error = fmt.Sprintf(
+		"dynamic subnet routing is not implemented: the SOCKS relay dials targets directly and no routing layer consumes routes (route %q was NOT added)", subnet)
 	if Debug {
-		fmt.Printf("[tunnel] added route %s\n", subnet)
+		fmt.Printf("[tunnel] add route %s rejected (feature not implemented)\n", subnet)
 	}
 }
 
 func handleTunnelRemoveRoute(task Task, res *TaskResult) {
-	subnet := task.Command
+	subnet := strings.TrimSpace(task.Command)
 	if subnet == "" {
 		res.Error = "subnet is required"
 		return
 	}
-	tunnelRoutesMu.Lock()
-	delete(tunnelRoutes, subnet)
-	tunnelRoutesMu.Unlock()
-	res.Output = fmt.Sprintf("tunnel route removed: %s", subnet)
+	res.Error = fmt.Sprintf(
+		"dynamic subnet routing is not implemented; nothing to remove (route %q was never added)", subnet)
 	if Debug {
-		fmt.Printf("[tunnel] removed route %s\n", subnet)
-	}
-}
-
-// tunnelAddRouteFromFrame handles a "tunnel_add" SOCKS frame.
-func tunnelAddRouteFromFrame(subnet string) {
-	if subnet == "" {
-		return
-	}
-	tunnelRoutesMu.Lock()
-	tunnelRoutes[subnet] = &TunnelRoute{Subnet: subnet, Active: true}
-	tunnelRoutesMu.Unlock()
-	if Debug {
-		fmt.Printf("[tunnel] frame added route %s\n", subnet)
-	}
-}
-
-// tunnelRemoveRouteFromFrame handles a "tunnel_remove" SOCKS frame.
-func tunnelRemoveRouteFromFrame(subnet string) {
-	if subnet == "" {
-		return
-	}
-	tunnelRoutesMu.Lock()
-	delete(tunnelRoutes, subnet)
-	tunnelRoutesMu.Unlock()
-	if Debug {
-		fmt.Printf("[tunnel] frame removed route %s\n", subnet)
+		fmt.Printf("[tunnel] remove route %s rejected (feature not implemented)\n", subnet)
 	}
 }

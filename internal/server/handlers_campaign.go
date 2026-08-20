@@ -1,14 +1,16 @@
 package server
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
-	"github.com/gin-gonic/gin"
 	"github.com/forgec2/forgec2/internal/util"
+	"github.com/forgec2/forgec2/pkg/protocol"
+	"github.com/gin-gonic/gin"
 )
 
 // handleCampaignsList returns all campaign-wizard campaigns.
@@ -171,47 +173,195 @@ func (s *Server) handleCampaignMitre(c *gin.Context) {
 	})
 }
 
-// handleCampaignKillChain seeds a campaign's kill chain from a template.
+// ── Kill chain templates ────────────────────────────────────────────────────
+// Built-in templates are the source of truth for both the template listing and
+// the kill-chain seeding endpoint. Every task_type referenced by a template is
+// a real agent task (validated at seed time), and the phase label is advisory:
+// after seeding, the campaign timeline derives phases from the actual task
+// types via taskPhase().
+
+type killChainStep struct {
+	Phase    string            `json:"phase"`
+	TaskType string            `json:"task_type"`
+	Params   map[string]string `json:"params"`
+	WaitTime int               `json:"wait_time"`
+}
+
+type killChainTemplate struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Steps       []killChainStep `json:"steps"`
+}
+
+func builtinKillChainTemplates() []killChainTemplate {
+	return []killChainTemplate{
+		{
+			Name:        "Standard Intrusion",
+			Description: "Recon through impact kill chain (uses safe default steps; replace with your own operations where offensive action is intended).",
+			Steps: []killChainStep{
+				{Phase: "Reconnaissance", TaskType: "ps", WaitTime: 0},
+				{Phase: "Initial Access", TaskType: "shell", Params: map[string]string{"command": "whoami"}, WaitTime: 30},
+				{Phase: "Execution", TaskType: "shell", Params: map[string]string{"command": "whoami"}, WaitTime: 0},
+				{Phase: "Persistence", TaskType: "persistence_list", WaitTime: 0},
+				{Phase: "Credential Access", TaskType: "keylogger_start", WaitTime: 0},
+				{Phase: "Lateral Movement", TaskType: "lateral_list", WaitTime: 60},
+				{Phase: "Impact", TaskType: "shell", Params: map[string]string{"command": "whoami"}, WaitTime: 0},
+			},
+		},
+		{
+			Name:        "Stealth Operations",
+			Description: "Low-and-slow discovery focused chain.",
+			Steps: []killChainStep{
+				{Phase: "Discovery", TaskType: "ps", WaitTime: 120},
+				{Phase: "Discovery", TaskType: "ls", WaitTime: 120},
+				{Phase: "Defense Evasion", TaskType: "av", WaitTime: 60},
+				{Phase: "Command and Control", TaskType: "beacon_now", WaitTime: 0},
+			},
+		},
+	}
+}
+
+// splitStepParams maps a template step's params onto the task columns the agent
+// dispatcher reads (command/path/data). Unknown keys are ignored so templates
+// stay readable without naming internal columns.
+func splitStepParams(params map[string]string) (command, path, data string) {
+	if v, ok := params["command"]; ok {
+		command = v
+	}
+	if v, ok := params["path"]; ok {
+		path = v
+	}
+	if v, ok := params["data"]; ok {
+		data = v
+	}
+	return command, path, data
+}
+
+func findKillChainTemplate(name string) *killChainTemplate {
+	for i := range builtinKillChainTemplates() {
+		if builtinKillChainTemplates()[i].Name == name {
+			return &builtinKillChainTemplates()[i]
+		}
+	}
+	return nil
+}
+
+// handleCampaignKillChain seeds a campaign's kill chain: it creates one real
+// pending task per template step per campaign agent, so the campaign timeline
+// and phase stats reflect actual queued operations. Previously this endpoint
+// merely acknowledged the request and created nothing.
 // POST /v1/campaigns/:id/killchain
 func (s *Server) handleCampaignKillChain(c *gin.Context) {
 	id := c.Param("id")
+	var req struct {
+		Template string `json:"template"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.Template == "" {
+		respondError(c, http.StatusBadRequest, `request body requires {"template": "<template name>"}`)
+		return
+	}
+
 	var campaign db.Campaign
 	if !s.findOrFail(c, &campaign, id, "campaign") {
 		return
 	}
-	// Templates are advisory; we simply acknowledge acceptance.
-	respond(c, gin.H{"success": true, "campaign_id": id})
+
+	var agents []db.Implant
+	if err := s.db.Model(&campaign).Association("Agents").Find(&agents); err != nil {
+		slog.Error("Failed to load campaign agents", "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to load campaign agents")
+		return
+	}
+	if len(agents) == 0 {
+		respondError(c, http.StatusBadRequest, "campaign has no agents: add agents to the campaign before seeding its kill chain")
+		return
+	}
+
+	tpl := findKillChainTemplate(req.Template)
+	if tpl == nil {
+		respondError(c, http.StatusBadRequest, "unknown kill chain template: "+req.Template)
+		return
+	}
+
+	// Reject templates referencing task types no agent can execute; seeding a
+	// ghost task type would fabricate queue entries that can never run.
+	for _, st := range tpl.Steps {
+		if !IsKnownTaskType(st.TaskType) && !protocol.ValidTaskType(st.TaskType) {
+			respondError(c, http.StatusBadRequest,
+				fmt.Sprintf("template %q step references unknown task type %q", tpl.Name, st.TaskType))
+			return
+		}
+	}
+
+	operator := "operator"
+	if u, ok := c.Get("user"); ok {
+		if s, ok := u.(string); ok && s != "" {
+			operator = s
+		}
+	}
+
+	// Respect the same per-agent pending ceiling and status resolution as the
+	// single/batch task paths, so seeding can't silently bypass queue limits.
+	var tasks []db.Task
+	skippedAgents := 0
+	s.agentPendingTasksMu.Lock()
+	for _, a := range agents {
+		if s.agentPendingTasks[a.ID]+len(tpl.Steps) > MaxPendingTasksPerAgent {
+			skippedAgents++
+			continue
+		}
+		for _, st := range tpl.Steps {
+			command, path, data := splitStepParams(st.Params)
+			if len(command) > MaxCommandLength {
+				continue
+			}
+			tasks = append(tasks, db.Task{
+				AgentID:   a.ID,
+				Type:      st.TaskType,
+				Command:   command,
+				Path:      path,
+				Data:      data,
+				Status:    s.resolveInitialTaskStatus(st.TaskType),
+				CreatedBy: operator,
+			})
+			s.agentPendingTasks[a.ID]++
+		}
+	}
+	s.agentPendingTasksMu.Unlock()
+
+	if len(tasks) == 0 {
+		respondError(c, http.StatusBadRequest, "no tasks created: all campaign agents are at the pending-task ceiling")
+		return
+	}
+	if err := s.db.CreateInBatches(tasks, 100).Error; err != nil {
+		for i := range tasks {
+			s.decPendingTasks(tasks[i].AgentID)
+		}
+		slog.Error("Failed to seed campaign kill chain", "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to create tasks")
+		return
+	}
+	for _, t := range tasks {
+		s.broadcastTaskUpdate(t.AgentID, t)
+	}
+
+	slog.Info("Campaign kill chain seeded",
+		"campaign_id", id, "template", tpl.Name,
+		"tasks", len(tasks), "agents", len(agents), "skipped", skippedAgents)
+	respond(c, gin.H{
+		"success":        true,
+		"campaign_id":    id,
+		"template":       tpl.Name,
+		"tasks_created":  len(tasks),
+		"agents":         len(agents),
+		"agents_skipped": skippedAgents,
+	})
 }
 
 // handleMitreTemplates returns the built-in kill chain templates.
 // GET /mitre/templates
 func (s *Server) handleMitreTemplates(c *gin.Context) {
-	templates := []map[string]interface{}{
-		{
-			"name":        "Standard Intrusion",
-			"description": "Recon through impact kill chain",
-			"steps": []map[string]interface{}{
-				{"phase": "Reconnaissance", "task_type": "ps", "params": map[string]string{}, "wait_time": 0},
-				{"phase": "Initial Access", "task_type": "shell", "params": map[string]string{}, "wait_time": 30},
-				{"phase": "Execution", "task_type": "shell", "params": map[string]string{}, "wait_time": 0},
-				{"phase": "Persistence", "task_type": "reg_add", "params": map[string]string{}, "wait_time": 0},
-				{"phase": "Credential Access", "task_type": "keylogger_start", "params": map[string]string{}, "wait_time": 0},
-				{"phase": "Lateral Movement", "task_type": "shell", "params": map[string]string{}, "wait_time": 60},
-				{"phase": "Impact", "task_type": "shell", "params": map[string]string{}, "wait_time": 0},
-			},
-		},
-		{
-			"name":        "Stealth Operations",
-			"description": "Low-and-slow discovery focused chain",
-			"steps": []map[string]interface{}{
-				{"phase": "Discovery", "task_type": "ps", "params": map[string]string{}, "wait_time": 120},
-				{"phase": "Discovery", "task_type": "ls", "params": map[string]string{}, "wait_time": 120},
-				{"phase": "Defense Evasion", "task_type": "shell", "params": map[string]string{}, "wait_time": 60},
-				{"phase": "Command and Control", "task_type": "shell", "params": map[string]string{}, "wait_time": 0},
-			},
-		},
-	}
-	respond(c, gin.H{"success": true, "data": templates})
+	respond(c, gin.H{"success": true, "data": builtinKillChainTemplates()})
 }
 
 // handleMitreTimeline returns the phase timeline for a campaign (or all tasks).

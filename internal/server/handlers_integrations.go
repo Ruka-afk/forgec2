@@ -57,14 +57,18 @@ func integrationToMap(wh db.WebhookConfig) map[string]interface{} {
 	if !wh.Enabled {
 		status = "disabled"
 	}
+	lastTrigger := ""
+	if wh.LastTrigger != nil {
+		lastTrigger = wh.LastTrigger.UTC().Format(time.RFC3339)
+	}
 	return map[string]interface{}{
 		"id":           wh.ID,
 		"type":         typ,
 		"name":         wh.Name,
 		"enabled":      wh.Enabled,
 		"endpoint":     wh.URL,
-		"event_count":  0,
-		"last_trigger": "",
+		"event_count":  wh.EventCount,
+		"last_trigger": lastTrigger,
 		"status":       status,
 		"event_type":   wh.EventType,
 		"method":       wh.Method,

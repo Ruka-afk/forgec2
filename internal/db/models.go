@@ -810,8 +810,12 @@ type WebhookConfig struct {
 	Method    string    `gorm:"size:16;default:'POST'" json:"method"`
 	Headers   string    `gorm:"type:text" json:"headers"`
 	Enabled   bool      `gorm:"default:true" json:"enabled"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	// EventCount/LastTrigger track real deliveries (incremented only after a
+	// webhook push returns 2xx). Formerly fabricated as constant 0/"".
+	EventCount  int64      `gorm:"default:0" json:"event_count"`
+	LastTrigger *time.Time `json:"last_trigger"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
 func (WebhookConfig) TableName() string { return "webhook_configs" }
@@ -1103,7 +1107,7 @@ type Campaign struct {
 	Status      string    `gorm:"size:32;default:active" json:"status"` // active, completed, archived
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
-	Agents      []Implant `gorm:"many2many:campaign_agents;" json:"agents,omitempty"`
+Agents []Implant `gorm:"many2many:campaign_agents;foreignKey:ID;joinForeignKey:campaign_id;References:ID;joinReferences:agent_id" json:"agents,omitempty"`
 }
 
 func (Campaign) TableName() string { return "campaigns" }

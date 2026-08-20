@@ -4750,7 +4750,7 @@ paths:
   /campaigns/{id}/killchain:
     post:
       tags: [Intel]
-      summary: Campaign killchain
+      summary: Seed campaign kill chain from a built-in template (creates a pending task per step per agent)
       operationId: campaignsKillchain
       security:
         - SessionCookie: []
@@ -4759,9 +4759,22 @@ paths:
           in: path
           required: true
           schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [template]
+              properties:
+                template:
+                  type: string
+                  description: Built-in kill chain template name (GET /mitre/templates)
       responses:
         '200':
-          description: OK
+          description: Tasks seeded
+        '400':
+          description: Unknown template, empty campaign, or pending-task ceiling reached
 
   /token/revert:
     post:

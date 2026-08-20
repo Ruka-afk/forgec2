@@ -26,9 +26,10 @@ func socksProcessFrames(frames []socksFrame) {
 		case "rportfwd_close":
 			rportfwdClose(f.ConnID)
 		case "tunnel_add":
-			tunnelAddRouteFromFrame(string(f.Data))
+			// Legacy dynamic-routing frames: the route store was removed with
+			// the tunnel_add_route task (never consumed by the SOCKS relay).
 		case "tunnel_remove":
-			tunnelRemoveRouteFromFrame(string(f.Data))
+			// Legacy dynamic-routing frames: see tunnel_add.
 
 		// UDP ASSOCIATE
 		case "udp_associate":

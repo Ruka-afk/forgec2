@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
+	"gorm.io/gorm"
 )
 
 const webhookMaxRetries = 3
@@ -88,6 +89,17 @@ func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) {
 				Success: true,
 				Details: fmt.Sprintf("Webhook %s -> %s: %d", wh.Name, wh.URL, resp.StatusCode),
 			}})
+			// Record the real delivery so the integrations list can show
+			// truthful event_count/last_trigger instead of fabricated zeroes.
+			now := time.Now()
+			if err := s.db.Model(&db.WebhookConfig{}).
+				Where("id = ?", wh.ID).
+				Updates(map[string]interface{}{
+					"event_count":  gorm.Expr("event_count + 1"),
+					"last_trigger": now,
+				}).Error; err != nil {
+				slog.Error("Failed to update webhook delivery stats", "name", wh.Name, "error", err)
+			}
 			return
 		}
 		if attempt < webhookMaxRetries && resp.StatusCode >= 500 {

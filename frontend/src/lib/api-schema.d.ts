@@ -3683,7 +3683,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Campaign killchain */
+        /** Seed campaign kill chain from a built-in template (creates a pending task per step per agent) */
         post: operations["campaignsKillchain"];
         delete?: never;
         options?: never;
@@ -14758,10 +14758,24 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Built-in kill chain template name (GET /mitre/templates) */
+                    template: string;
+                };
+            };
+        };
         responses: {
-            /** @description OK */
+            /** @description Tasks seeded */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown template, empty campaign, or pending-task ceiling reached */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
