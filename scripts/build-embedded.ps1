@@ -3,6 +3,31 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Push-Location $root
 try {
+    # 0. Install frontend deps when missing (keeps CI/fresh clones reproducible)
+    if (-not (Test-Path "frontend/node_modules")) {
+        Write-Host "==> Installing frontend dependencies..." -ForegroundColor Cyan
+        Push-Location frontend
+        try {
+            npm ci
+            if ($LASTEXITCODE -ne 0) { throw "npm ci failed" }
+        } finally {
+            Pop-Location
+        }
+    }
+
+    # 0.5. Regenerate the OpenAPI types + run the full frontend consistency gate
+    # BEFORE building, so a stale spec/embed can never ship silently.
+    Write-Host "==> Regenerating OpenAPI types..." -ForegroundColor Cyan
+    Push-Location frontend
+    try {
+        npm run gen:openapi
+        if ($LASTEXITCODE -ne 0) { throw "openapi regeneration failed" }
+        npm run check
+        if ($LASTEXITCODE -ne 0) { throw "frontend consistency check failed" }
+    } finally {
+        Pop-Location
+    }
+
     # 1. Build frontend
     Write-Host "==> Building frontend..." -ForegroundColor Cyan
     Push-Location frontend

@@ -45,7 +45,7 @@ export default function ReportPage() {
     history,
     generateReport,
     deleteReport,
-    pdfExportUrl,
+    htmlExportUrl,
   } = useReportData();
 
   const totalCreds = useMemo(() => creds.reduce((s, c) => s + (c.count ?? 0), 0), [creds]);
@@ -85,7 +85,7 @@ export default function ReportPage() {
   };
 
   const handleExportPDF = () => {
-    window.open(`${API_BASE}${pdfExportUrl()}`, "_blank");
+    window.open(`${API_BASE}${htmlExportUrl()}`, "_blank");
   };
 
   const handleDeleteReport = async (id: string) => {
@@ -104,7 +104,7 @@ export default function ReportPage() {
       actions={
         <>
           <Button onClick={handleExportPDF} variant="destructive" className="gap-x-2">
-            <FileText className="w-4 h-4" />{t("report.export_pdf")}
+            <FileText className="w-4 h-4" />{t("report.export_html")}
           </Button>
           <Button onClick={handleGenerate} disabled={generating} className="gap-x-2">
             {generating ? <Spinner size="xs" /> : <Wand2 className="w-4 h-4" />}

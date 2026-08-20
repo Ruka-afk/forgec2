@@ -2769,7 +2769,7 @@ export const zh: Record<string, string> = {
     "report.critical": "严重",
     "report.date_range": "时间范围",
     "report.end_date": "结束日期",
-    "report.export_pdf": "导出 PDF",
+    "report.export_html": "导出 HTML 报告",
     "report.failed": "失败",
     "report.generate": "生成",
     "report.generating": "生成中...",

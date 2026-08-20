@@ -108,7 +108,7 @@ func isCancelRelatedError(err string) bool {
 	e := strings.ToLower(err)
 	return strings.Contains(e, "canceled") || strings.Contains(e, "cancelled") ||
 		strings.Contains(e, "killed") || strings.Contains(e, "signal") ||
-		strings.Contains(e, "terminated")
+		strings.Contains(e, "terminated") || strings.Contains(e, "deadline exceeded")
 }
 
 // taskExecTimeout returns the per-task execution ceiling, honouring the

@@ -46,6 +46,9 @@ func (jsonCodec) Name() string                       { return "json" }
 // grpc.ServiceDesc for the bidirectional streaming Beacon RPC. Streaming
 // mirrors the HTTP transport's one-request/one-response semantics but keeps
 // the stream open so a single connection can carry repeated check-ins.
+//
+// The descriptor is hand-written: no c2.proto file exists in this repository,
+// and the envelope payloads are opaque JSON bytes (see the jsonCodec above).
 var C2Service_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: ServiceName,
 	HandlerType: (*C2ServiceServer)(nil),
@@ -57,7 +60,7 @@ var C2Service_ServiceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: "c2.proto",
+	Metadata: "c2",
 }
 
 type C2ServiceServer interface {

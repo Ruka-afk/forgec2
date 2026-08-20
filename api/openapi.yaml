@@ -4914,11 +4914,11 @@ paths:
         '200':
           description: OK
 
-  /api/report/export/pdf:
+  /api/report/export/html:
     get:
       tags: [Report]
-      summary: Export report PDF
-      operationId: reportExportPdf
+      summary: Export operation report as HTML
+      operationId: reportExportHtml
       security:
         - SessionCookie: []
       responses:

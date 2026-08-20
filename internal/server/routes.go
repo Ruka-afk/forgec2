@@ -294,7 +294,7 @@ func (s *Server) registerReconRoutes(auth *gin.RouterGroup) {
 		reconRead.GET("/api/report/network", s.handleAPIGetReportNetwork)
 		reconRead.GET("/api/report/findings", s.handleAPIGetReportFindings)
 		reconRead.GET("/api/report/history", s.handleAPIGetReportHistory)
-		reconRead.GET("/api/report/export/pdf", s.handleAPIExportReportPDF)
+		reconRead.GET("/api/report/export/html", s.handleAPIExportReportHTML)
 		reconRead.GET("/lateral", s.handleLateralPage)
 		reconRead.GET("/api/lateral/history/:id", s.handleLateralHistory)
 		reconRead.GET("/templates", s.handleTemplatesPage)

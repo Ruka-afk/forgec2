@@ -307,7 +307,7 @@ export const paths = {
     history: "/api/report/history",
     generate: "/api/report/generate",
     one: (id: string) => `/api/report/${id}`,
-    exportPdf: (query: string) => `/api/report/export/pdf?${query}`,
+    exportHtml: (query: string) => `/api/report/export/html?${query}`,
   },
   dashboard: {
     /** REST under /api/v1 group */

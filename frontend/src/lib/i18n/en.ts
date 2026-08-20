@@ -2755,7 +2755,7 @@ export const en: Record<string, string> = {
     "report.critical": "Critical",
     "report.date_range": "Date Range",
     "report.end_date": "End Date",
-    "report.export_pdf": "Export PDF",
+    "report.export_html": "Export HTML Report",
     "report.failed": "Failed",
     "report.generate": "Generate",
     "report.generating": "Generating...",

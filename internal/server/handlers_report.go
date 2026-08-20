@@ -581,7 +581,11 @@ func (s *Server) handleAPIGetReportHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"reports": reportList})
 }
 
-func (s *Server) handleAPIExportReportPDF(c *gin.Context) {
+// handleAPIExportReportHTML renders the operation report as a self-contained
+// HTML document. Named "html" (not "pdf") so the endpoint's contract matches
+// what it actually returns: a printable HTML report an operator can save to
+// PDF via the browser.
+func (s *Server) handleAPIExportReportHTML(c *gin.Context) {
 	startDate, endDate, err := parseReportDates(c)
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err.Error())

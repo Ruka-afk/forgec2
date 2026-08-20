@@ -3846,15 +3846,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/report/export/pdf": {
+    "/api/report/export/html": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Export report PDF */
-        get: operations["reportExportPdf"];
+        /** Export operation report as HTML */
+        get: operations["reportExportHtml"];
         put?: never;
         post?: never;
         delete?: never;
@@ -14980,7 +14980,7 @@ export interface operations {
             };
         };
     };
-    reportExportPdf: {
+    reportExportHtml: {
         parameters: {
             query?: never;
             header?: never;

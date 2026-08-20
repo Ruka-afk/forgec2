@@ -69,6 +69,7 @@ func InitSleepMask() bool {
 	if advancedMaskFactory != nil {
 		if m := advancedMaskFactory(); m != nil {
 			activeSleepMask = m
+			fullImageMaskActive = true
 		}
 	}
 

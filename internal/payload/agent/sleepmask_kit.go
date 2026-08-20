@@ -24,6 +24,10 @@ var (
 	// InitSleepMask so the agent's own code pages are encrypted during sleep
 	// (not just the 4096-byte config buffer).
 	advancedMaskFactory func() SleepMasker
+	// fullImageMaskActive tracks whether the ACTIVE mask is the advanced
+	// full-image implementation as opposed to the config-buffer-only mask, so
+	// Name() can report the honest capability.
+	fullImageMaskActive bool
 )
 
 type basicMask struct{}
@@ -46,7 +50,15 @@ func (m *basicMask) BeforeSleep(durationMs uintptr) {
 
 func (m *basicMask) AfterWake() {}
 
-func (m *basicMask) Name() string { return "ekko" }
+// Name is honest about capability: full-image ekko requires the advanced
+// windows factory to be active; everywhere else the mask only obfuscates the
+// in-memory config buffer, so it is reported as "config-xor" rather than a lie.
+func (m *basicMask) Name() string {
+	if fullImageMaskActive {
+		return "ekko"
+	}
+	return "config-xor"
+}
 
 type xorOnlyMask struct{}
 
@@ -98,6 +110,9 @@ func setActiveSleepMask(technique string) bool {
 		return false
 	}
 	activeSleepMask = m
+	// An explicit operator switch selects the registry masks (config-buffer or
+	// xor); none of them is the full-image implementation.
+	fullImageMaskActive = false
 	return true
 }
 
