@@ -1,6 +1,9 @@
 syntax = "proto3";
 package c2;
-option go_package = "github.com/forgec2/forgec2/internal/c2pb";
+option go_package = "github.com/forgec2/forgec2/pkg/c2pb";
+// Note: pkg/c2pb is currently a hand-written JSON codec (no protoc generation).
+// This proto is the contract documentation; go_package matches the actual
+// implementation location so future protoc generation will not drift.
 
 service C2Service {
   rpc Beacon(stream BeaconRequest) returns (stream BeaconResponse);

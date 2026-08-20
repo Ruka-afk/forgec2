@@ -189,10 +189,10 @@ func buildGoMod(goos string, isDLL bool) string {
 	replaceDir := forgeC2ModuleReplace()
 
 	deps := []string{}
-	deps = append(deps, "\tgolang.org/x/sys v0.42.0")
+	deps = append(deps, "\tgolang.org/x/sys v0.46.0")
 
 	if !isDLL {
-		deps = append(deps, "\tgolang.org/x/net v0.42.0")
+		deps = append(deps, "\tgolang.org/x/net v0.56.0")
 	}
 
 	if goos == "windows" {
@@ -201,7 +201,7 @@ func buildGoMod(goos string, isDLL bool) string {
 	}
 
 	if goos == "windows" && !isDLL {
-		deps = append(deps, "\tgoogle.golang.org/grpc v1.71.0")
+		deps = append(deps, "\tgoogle.golang.org/grpc v1.82.0")
 		deps = append(deps, "\tnhooyr.io/websocket v1.8.17")
 	}
 
