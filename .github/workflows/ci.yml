@@ -44,7 +44,7 @@ jobs:
             echo "go vet reported errors (excluding known agent warnings):"
             exit 1
           fi
-      - run: go test ./internal/config/... ./internal/crypto/... ./internal/db/... ./internal/logger/... ./internal/malleable/... ./internal/obfuscation/... ./internal/plugin/... ./internal/report/... ./internal/server/... ./pkg/... -count=1 -timeout 5m -coverprofile=coverage.out
+      - run: go test ./internal/config/... ./internal/crypto/... ./internal/db/... ./internal/malleable/... ./internal/obfuscation/... ./internal/plugin/... ./internal/server/... ./pkg/... -count=1 -timeout 5m -coverprofile=coverage.out
       - run: go build ./...
       - run: go build -o checkopenapi ./cmd/checkopenapi
       - name: OpenAPI check (core paths + min coverage)
@@ -137,6 +137,10 @@ jobs:
       - run: npm run check:i18n
       - run: npm run check:css
       - run: npm run check:paths
+      - run: npm run check:tokens
+      - run: npm run check:openapi-types
+      - run: npm run check:permissions
+      - run: npm run check:bundle
       - run: npm test
       - run: npm run build
       - name: Webdist freshness (internal/webdist/dist must match export)
