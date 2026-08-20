@@ -100,7 +100,10 @@ func (s *Server) handleDashboardActivityHeatmap(c *gin.Context) {
 		Count int64
 	}
 	var buckets []hourBucket
-	s.db.Raw(`SELECT CAST((julianday('now') - julianday(created_at)) AS INTEGER) as day, strftime('%H', created_at) as hour, COUNT(*) as count FROM tasks WHERE created_at >= ? GROUP BY day, hour`, startTime).Scan(&buckets)
+	if err := s.db.Raw(`SELECT CAST((julianday('now') - julianday(created_at)) AS INTEGER) as day, strftime('%H', created_at) as hour, COUNT(*) as count FROM tasks WHERE created_at >= ? GROUP BY day, hour`, startTime).Scan(&buckets).Error; err != nil {
+		handleQueryError(c, err, "Failed to query activity heatmap")
+		return
+	}
 
 	// Build a map for O(1) lookup
 	bucketMap := make(map[[2]int]int64, len(buckets))
@@ -129,11 +132,14 @@ func (s *Server) handleDashboardOSDistribution(c *gin.Context) {
 	}
 
 	var results []osCount
-	s.db.Model(&db.Implant{}).
+	if err := s.db.Model(&db.Implant{}).
 		Select("os, COUNT(*) as count").
 		Group("os").
 		Order("count DESC").
-		Scan(&results)
+		Scan(&results).Error; err != nil {
+		handleQueryError(c, err, "Failed to query OS distribution")
+		return
+	}
 
 	distribution := make([]OSDistribution, 0)
 	for _, r := range results {
@@ -244,11 +250,14 @@ func (s *Server) handleDashboardCredentialTypes(c *gin.Context) {
 	}
 
 	var results []typeCount
-	s.db.Model(&db.CredentialEntry{}).
+	if err := s.db.Model(&db.CredentialEntry{}).
 		Select("type, COUNT(*) as count").
 		Group("type").
 		Order("count DESC").
-		Scan(&results)
+		Scan(&results).Error; err != nil {
+		handleQueryError(c, err, "Failed to query credential types")
+		return
+	}
 
 	colorMap := map[string]string{
 		"cleartext": "#8b5cf6",
@@ -302,13 +311,16 @@ func (s *Server) handleDashboardAgentGeo(c *gin.Context) {
 	}
 
 	var results []countryCount
-	s.db.Model(&db.Implant{}).
+	if err := s.db.Model(&db.Implant{}).
 		Select("country, COUNT(*) as count").
 		Where("country != ''").
 		Group("country").
 		Order("count DESC").
 		Limit(10).
-		Scan(&results)
+		Scan(&results).Error; err != nil {
+		handleQueryError(c, err, "Failed to query agent geo")
+		return
+	}
 
 	latLngMap := map[string][]float64{
 		"China":   {35.8617, 104.1954},
@@ -356,11 +368,14 @@ func (s *Server) handleDashboardTaskGantt(c *gin.Context) {
 	}
 
 	var tasks []db.Task
-	s.db.Preload("Agent").
+	if err := s.db.Preload("Agent").
 		Where("created_at >= ?", startTime).
 		Order("created_at ASC").
 		Limit(20).
-		Find(&tasks)
+		Find(&tasks).Error; err != nil {
+		handleQueryError(c, err, "Failed to query task gantt")
+		return
+	}
 
 	ganttData := make([]TaskGanttItem, 0)
 

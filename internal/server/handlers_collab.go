@@ -79,8 +79,13 @@ func (s *Server) handleCollabUnlock(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
-	if err := s.db.Where("agent_id = ?", id).Delete(&db.AgentLock{}).Error; err != nil {
+	res := s.db.Where("agent_id = ?", id).Delete(&db.AgentLock{})
+	if res.Error != nil {
 		respondError(c, http.StatusInternalServerError, "failed to release collaboration lock")
+		return
+	}
+	if res.RowsAffected == 0 {
+		respond(c, gin.H{"success": true, "already_unlocked": true})
 		return
 	}
 	s.broadcastCollabEvent("agent_unlocked", id, s.currentUsername(c))

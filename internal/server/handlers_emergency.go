@@ -73,9 +73,13 @@ func (s *Server) handleEmergencyStop(c *gin.Context) {
 		"scope", scope,
 		"agents_affected", result.RowsAffected)
 
+	msg := "Emergency stop activated"
+	if result.RowsAffected == 0 {
+		msg = "No online agents to stop (fleet already idle)"
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success":       true,
-		"message":       "Emergency stop activated",
+		"message":       msg,
 		"scope":         scope,
 		"agents_killed": result.RowsAffected,
 	})

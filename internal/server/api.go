@@ -232,10 +232,11 @@ func (s *Server) apiDashboardStats(c *gin.Context) {
 		Offline int64
 	}
 	type taskCounts struct {
-		Total   int64
-		Today   int64
-		Pending int64
-		Failed  int64
+		Total     int64
+		Today     int64
+		Pending   int64
+		Completed int64
+		Failed    int64
 	}
 
 	g, ctx := errgroup.WithContext(c.Request.Context())
@@ -259,6 +260,7 @@ func (s *Server) apiDashboardStats(c *gin.Context) {
 				COUNT(*) as total,
 				COALESCE(SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END), 0) as today,
 				COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) as pending,
+				COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) as completed,
 				COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as failed
 			FROM tasks`, todayStart,
 		).Scan(&tc).Error
@@ -329,7 +331,7 @@ func (s *Server) apiDashboardStats(c *gin.Context) {
 		"listener_count":  totalListeners,
 		"pending_count":   tc.Pending,
 		"online_users":    onlineUsers,
-		"completed_tasks": tc.Total - tc.Failed - tc.Pending,
+		"completed_tasks": tc.Completed,
 		"server_version":  ServerVersion,
 		"recent_tasks":    recentTasks,
 	}

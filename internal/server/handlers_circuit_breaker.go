@@ -90,13 +90,19 @@ func (s *Server) handleAPICircuitBreakerSaveConfig(c *gin.Context) {
 		return
 	}
 	cfg := db.CircuitBreakerConfig{ID: 1}
-	s.db.FirstOrCreate(&cfg, db.CircuitBreakerConfig{ID: 1})
-	s.db.Model(&cfg).Updates(map[string]interface{}{
+	if err := s.db.FirstOrCreate(&cfg, db.CircuitBreakerConfig{ID: 1}).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to load config")
+		return
+	}
+	if err := s.db.Model(&cfg).Updates(map[string]interface{}{
 		"failure_threshold":    req.FailureThreshold,
 		"cooldown_seconds":     req.CooldownSeconds,
 		"half_open_max_reqs":   req.HalfOpenMaxReqs,
 		"health_check_seconds": req.HealthCheckSeconds,
-	})
+	}).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to save config")
+		return
+	}
 	respond(c, gin.H{"success": true})
 }
 

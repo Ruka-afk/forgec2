@@ -95,8 +95,13 @@ func (s *Server) handleAutoTagToggle(c *gin.Context) {
 // DELETE /api/autotag/rules/:id
 func (s *Server) handleAutoTagDelete(c *gin.Context) {
 	id := c.Param("id")
-	if err := s.db.Delete(&db.AutoTagRule{}, "id = ?", id).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Auto tag"))
+	res := s.db.Delete(&db.AutoTagRule{}, "id = ?", id)
+	if res.Error != nil {
+		respondError(c, http.StatusInternalServerError, sanitizeError(res.Error, "Auto tag"))
+		return
+	}
+	if res.RowsAffected == 0 {
+		respondError(c, http.StatusNotFound, "rule not found")
 		return
 	}
 	respond(c, gin.H{"success": true})

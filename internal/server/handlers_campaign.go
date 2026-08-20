@@ -18,7 +18,8 @@ import (
 func (s *Server) handleCampaignsList(c *gin.Context) {
 	var campaigns []db.Campaign
 	if err := s.db.Preload("Agents").Order("created_at desc").Limit(200).Find(&campaigns).Error; err != nil {
-		slog.Error("Failed to list campaigns", "err", err)
+		handleQueryError(c, err, "Failed to list campaigns")
+		return
 	}
 	respond(c, gin.H{"success": true, "data": campaigns})
 }
@@ -40,7 +41,8 @@ func (s *Server) handleCampaignGet(c *gin.Context) {
 	var tasks []db.Task
 	if len(agentIDs) > 0 {
 		if err := s.db.Where("agent_id IN ?", agentIDs).Limit(CampaignTaskLimit).Find(&tasks).Error; err != nil {
-			slog.Error("Failed to query campaign tasks", "err", err)
+			handleQueryError(c, err, "Failed to query campaign tasks")
+			return
 		}
 	}
 
@@ -117,8 +119,13 @@ func (s *Server) handleCampaignUpdate(c *gin.Context) {
 // DELETE /v1/campaigns/:id
 func (s *Server) handleCampaignDelete(c *gin.Context) {
 	id := c.Param("id")
-	if err := s.db.Delete(&db.Campaign{}, "id = ?", id).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Campaign operation"))
+	res := s.db.Delete(&db.Campaign{}, "id = ?", id)
+	if res.Error != nil {
+		respondError(c, http.StatusInternalServerError, sanitizeError(res.Error, "Campaign operation"))
+		return
+	}
+	if res.RowsAffected == 0 {
+		respondError(c, http.StatusNotFound, "campaign not found")
 		return
 	}
 	respond(c, gin.H{"success": true})
@@ -140,7 +147,8 @@ func (s *Server) handleCampaignMitre(c *gin.Context) {
 	var tasks []db.Task
 	if len(agentIDs) > 0 {
 		if err := s.db.Where("agent_id IN ?", agentIDs).Limit(CampaignTaskLimit).Find(&tasks).Error; err != nil {
-			slog.Error("Failed to query campaign MITRE tasks", "err", err)
+			handleQueryError(c, err, "Failed to query campaign MITRE tasks")
+			return
 		}
 	}
 
@@ -398,11 +406,13 @@ func (s *Server) handleMitreTimeline(c *gin.Context) {
 	var tasks []db.Task
 	if len(agentIDs) > 0 {
 		if err := s.db.Where("agent_id IN ?", agentIDs).Order("created_at asc").Limit(CampaignTaskLimit).Find(&tasks).Error; err != nil {
-			slog.Error("Failed to query campaign timeline tasks", "err", err)
+			handleQueryError(c, err, "Failed to query campaign timeline tasks")
+			return
 		}
 	} else {
 		if err := s.db.Order("created_at asc").Limit(MITRETimelineLimit).Find(&tasks).Error; err != nil {
-			slog.Error("Failed to query MITRE timeline tasks", "err", err)
+			handleQueryError(c, err, "Failed to query MITRE timeline tasks")
+			return
 		}
 	}
 

@@ -187,11 +187,13 @@ func (s *Server) handleLootBulkDelete(c *gin.Context) {
 				}
 			}
 		case "keylog":
-			if err := s.db.Delete(&db.Task{}, "id = ? AND type IN ?", id, []string{"keylogger_dump", "keylogger_start"}).Error; err == nil {
+			res := s.db.Delete(&db.Task{}, "id = ? AND type IN ?", id, []string{"keylogger_dump", "keylogger_start"})
+			if res.Error == nil && res.RowsAffected > 0 {
 				deleted++
 			}
 		case "download":
-			if err := s.db.Delete(&db.Task{}, "id = ? AND type IN ?", id, []string{"download", "upload"}).Error; err == nil {
+			res := s.db.Delete(&db.Task{}, "id = ? AND type IN ?", id, []string{"download", "upload"})
+			if res.Error == nil && res.RowsAffected > 0 {
 				deleted++
 			}
 		}

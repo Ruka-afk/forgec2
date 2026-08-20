@@ -184,8 +184,8 @@ func (s *Server) executeAction(action RuleAction, evt Event) {
 				task, err := s.createTask(targetAgent, params.Type, expanded, "", "", "", 0, 0)
 				if err != nil {
 					slog.Error("Automation: failed to create task", "error", err)
-				} else {
-					s.db.Model(task).Update("created_by", "automation")
+				} else if err := s.db.Model(task).Update("created_by", "automation").Error; err != nil {
+					slog.Error("Automation: failed to mark task as automation", "task_id", task.ID, "error", err)
 				}
 			}
 		}

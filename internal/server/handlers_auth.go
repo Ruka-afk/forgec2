@@ -139,6 +139,8 @@ func (s *Server) handleLogin(c *gin.Context) {
 			"last_ip":       c.ClientIP(),
 		}).Error; err != nil {
 			slog.Error("Failed to update password hash", "username", username, "err", err)
+			respondError(c, http.StatusInternalServerError, "failed to set password")
+			return
 		}
 		user.PasswordHash = hash
 		slog.Info("Password set for user", "username", username)

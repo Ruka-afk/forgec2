@@ -46,8 +46,13 @@ func (s *Server) handleListNotifications(c *gin.Context) {
 // PUT /notifications/:id/read
 func (s *Server) handleMarkNotificationRead(c *gin.Context) {
 	id := c.Param("id")
-	if err := s.db.Model(&db.Notification{}).Where("id = ?", id).Update("read", true).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Notification operation"))
+	res := s.db.Model(&db.Notification{}).Where("id = ?", id).Update("read", true)
+	if res.Error != nil {
+		respondError(c, http.StatusInternalServerError, sanitizeError(res.Error, "Notification operation"))
+		return
+	}
+	if res.RowsAffected == 0 {
+		respondError(c, http.StatusNotFound, "notification not found")
 		return
 	}
 	respond(c, gin.H{"success": true})
@@ -67,8 +72,13 @@ func (s *Server) handleMarkAllNotificationsRead(c *gin.Context) {
 // DELETE /notifications/:id
 func (s *Server) handleDeleteNotification(c *gin.Context) {
 	id := c.Param("id")
-	if err := s.db.Delete(&db.Notification{}, "id = ?", id).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Notification operation"))
+	res := s.db.Delete(&db.Notification{}, "id = ?", id)
+	if res.Error != nil {
+		respondError(c, http.StatusInternalServerError, sanitizeError(res.Error, "Notification operation"))
+		return
+	}
+	if res.RowsAffected == 0 {
+		respondError(c, http.StatusNotFound, "notification not found")
 		return
 	}
 	respond(c, gin.H{"success": true})

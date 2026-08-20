@@ -177,12 +177,21 @@ func (s *Server) handleDeleteAutomationRule(c *gin.Context) {
 func (s *Server) handleToggleAutomationRule(c *gin.Context) {
 	ruleID := c.Param("id")
 	rules := s.loadAutomationRules()
+	found := false
 	for i, r := range rules {
 		if r.ID == ruleID {
 			rules[i].Enabled = !r.Enabled
-			s.saveAutomationRule(rules[i])
+			if err := s.saveAutomationRule(rules[i]); err != nil {
+				respondError(c, http.StatusInternalServerError, sanitizeError(err, "Rule operation"))
+				return
+			}
+			found = true
 			break
 		}
+	}
+	if !found {
+		respondError(c, http.StatusNotFound, "rule not found")
+		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
@@ -215,9 +224,14 @@ func (s *Server) handleCreateWebhook(c *gin.Context) {
 
 func (s *Server) handleDeleteWebhook(c *gin.Context) {
 	id := c.Param("id")
-	if err := s.db.Delete(&db.WebhookConfig{}, id).Error; err != nil {
-		slog.Error("Failed to delete webhook", "id", id, "err", err)
+	res := s.db.Delete(&db.WebhookConfig{}, id)
+	if res.Error != nil {
+		slog.Error("Failed to delete webhook", "id", id, "err", res.Error)
 		respondError(c, http.StatusInternalServerError, "failed to delete webhook")
+		return
+	}
+	if res.RowsAffected == 0 {
+		respondError(c, http.StatusNotFound, "webhook not found")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})

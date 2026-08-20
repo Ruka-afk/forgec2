@@ -206,23 +206,29 @@ func (s *Server) handleToolkitAgentInfo(c *gin.Context) {
 		return
 	}
 
-	var taskCount, completedCount int64
-	if err := s.db.Model(&db.Task{}).Where("agent_id = ?", agentID).Count(&taskCount).Error; err != nil {
-		slog.Error("Failed to count agent tasks", "agent_id", agentID, "err", err)
-	}
+	var completedCount, failedCount int64
 	if err := s.db.Model(&db.Task{}).Where("agent_id = ? AND status = 'completed'", agentID).Count(&completedCount).Error; err != nil {
 		slog.Error("Failed to count completed tasks", "agent_id", agentID, "err", err)
 	}
-
-	successRate := 0.0
-	if taskCount > 0 {
-		successRate = float64(completedCount) / float64(taskCount) * 100
+	if err := s.db.Model(&db.Task{}).Where("agent_id = ? AND status = 'failed'", agentID).Count(&failedCount).Error; err != nil {
+		slog.Error("Failed to count failed tasks", "agent_id", agentID, "err", err)
+	}
+	terminal := completedCount + failedCount
+	var successRateStr string
+	if terminal == 0 {
+		successRateStr = "N/A"
+	} else {
+		successRateStr = fmt.Sprintf("%.1f", float64(completedCount)/float64(terminal)*100)
+	}
+	var taskCount int64
+	if err := s.db.Model(&db.Task{}).Where("agent_id = ?", agentID).Count(&taskCount).Error; err != nil {
+		slog.Error("Failed to count agent tasks", "agent_id", agentID, "err", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"agent":        agent,
 		"task_count":   taskCount,
-		"success_rate": fmt.Sprintf("%.1f", successRate),
+		"success_rate": successRateStr,
 	})
 }
 
