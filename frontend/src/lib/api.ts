@@ -221,6 +221,10 @@ async function request<T>(path: string, options: RequestOptions & { body?: unkno
       }
 
       const respBody = await res.json();
+      if (respBody && typeof respBody === "object" && "success" in respBody && (respBody as Record<string, unknown>).success === false) {
+        const msg = (respBody as Record<string, unknown>).error ? String((respBody as Record<string, unknown>).error) : "operation failed";
+        throw new ApiError(msg, res.status);
+      }
       return options.unwrap === false ? (respBody as T) : unwrapBody<T>(respBody);
     } catch (e) {
       if (externalSignal?.aborted) throw e;

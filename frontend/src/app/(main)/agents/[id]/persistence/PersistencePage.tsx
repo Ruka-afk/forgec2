@@ -47,7 +47,7 @@ export default function AgentPersistencePage() {
   const id = params?.id as string;
   const [agent, setAgent] = useState<AgentDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [installedMethods, setInstalledMethods] = useState<string[]>([]);
+  const [queuedMethods, setQueuedMethods] = useState<string[]>([]);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [listOutput, setListOutput] = useState<string | null>(null);
   const [listLoading, setListLoading] = useState(false);
@@ -111,7 +111,7 @@ export default function AgentPersistencePage() {
     try {
       const data = await api.post(paths.agents.persistence(id), { action: "add", method });
       if (data.success) {
-        setInstalledMethods((prev) => (prev.includes(method) ? prev : [...prev, method]));
+        setQueuedMethods((prev) => (prev.includes(method) ? prev : [...prev, method]));
         toast.success(t("agents.persistence_task_queued", { id: String(data.task_id ?? "") }));
       } else {
         toast.error((data.error as string) || t("agents.persistence_install_failed"));
@@ -131,7 +131,7 @@ export default function AgentPersistencePage() {
     try {
       const data = await api.post(paths.agents.persistence(id), { action: "remove", method });
       if (data.success) {
-        setInstalledMethods((prev) => prev.filter((m) => m !== method));
+        setQueuedMethods((prev) => prev.filter((m) => m !== method));
         toast.success(t("agents.persistence_task_queued", { id: String(data.task_id ?? "") }));
       } else {
         toast.error((data.error as string) || t("agents.persistence_remove_failed"));
@@ -239,18 +239,19 @@ export default function AgentPersistencePage() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <ListChecks className="w-4 h-4" aria-hidden="true" />
-              <h3 className="text-sm font-semibold text-foreground">{t("agents.persistence_installed")}</h3>
+              <h3 className="text-sm font-semibold text-foreground">{t("agents.persistence_installed")} <span className="text-xs font-normal text-muted-foreground">(queued)</span></h3>
             </div>
-            <Badge variant="secondary" className="text-(--fs-micro-sm)">{installedMethods.length}</Badge>
+            <Badge variant="secondary" className="text-(--fs-micro-sm)">{queuedMethods.length}</Badge>
           </div>
-          {installedMethods.length === 0 ? (
+          {queuedMethods.length === 0 ? (
             <div className="text-center py-8">
               <Info className="w-4 h-4 mb-2" />
               <p className="text-xs text-muted-foreground">{t("agents.persistence_no_methods")}</p>
+              <p className="text-[10px] text-muted-foreground mt-1">Queued methods show tasks awaiting beacon; not confirmed on-host.</p>
             </div>
           ) : (
             <div className="space-y-2 max-h-[400px] overflow-y-auto">
-              {installedMethods.map((method) => {
+              {queuedMethods.map((method) => {
                 const info = PERSISTENCE_METHODS.find((m) => m.key === method);
                 const isLoading = actionLoading === `remove_${method}`;
                 return (
