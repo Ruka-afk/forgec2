@@ -4,6 +4,7 @@
 package main
 
 import (
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -148,8 +149,26 @@ func setSleepModeFromTask(modeStr string) {
 }
 
 func handleSetSleepMode(task Task, res *TaskResult) {
-	setSleepModeFromTask(task.Command)
-	res.Output = "sleep mode set to: " + task.Command
+	modeStr := strings.TrimSpace(strings.ToLower(task.Command))
+	valid := map[string]bool{
+		"interactive": true, "teams": true, "outlook": true,
+		"onedrive": true, "windows_update": true, "idle": true,
+		"backoff": true, "default": true,
+	}
+	if modeStr == "" {
+		res.Error = "sleep mode required: interactive|teams|outlook|onedrive|windows_update|idle|backoff|default"
+		return
+	}
+	if !valid[modeStr] {
+		res.Error = "invalid sleep mode: " + task.Command
+		return
+	}
+	if modeStr == "default" {
+		setSleepMode(SleepModeDefault)
+	} else {
+		setSleepModeFromTask(modeStr)
+	}
+	res.Output = "sleep mode set to: " + modeStr
 }
 
 func handleGetSleepMode(task Task, res *TaskResult) {

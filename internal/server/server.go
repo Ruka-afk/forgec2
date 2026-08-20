@@ -61,8 +61,9 @@ type Server struct {
 	rportfwdListeners map[string]*rportfwdRelay
 	rportfwdMu        sync.Mutex
 
-	trafficLog  *trafficRing
-	updateState updateCheckState
+	trafficLog   *trafficRing
+	trafficBytes *trafficByteAccumulator
+	updateState  updateCheckState
 
 	// Server-side traffic auto-adapt loop: last set_sleep trigger per agent
 	autoAdaptMu   sync.Mutex
@@ -323,6 +324,7 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		screenMonitorImplants: make(map[string]time.Time),
 		rportfwdListeners:     make(map[string]*rportfwdRelay),
 		trafficLog:            newTrafficRing(),
+		trafficBytes:          newTrafficByteAccumulator(),
 		autoAdaptLast:         make(map[string]time.Time),
 		eventManager:          NewEventManager(database),
 		operatorSessions:      &operatorSessionTracker{sessions: make(map[uint]*WSOperatorSession)},

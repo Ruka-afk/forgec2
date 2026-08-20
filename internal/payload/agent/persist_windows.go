@@ -14,8 +14,8 @@ import (
 	"unsafe"
 )
 
-func addPersistenceLinux()  {}
-func addPersistenceDarwin() {}
+func addPersistenceLinux() error  { return nil }
+func addPersistenceDarwin() error { return nil }
 
 func addPersistenceWindows() {
 	srcPath, err := os.Executable()

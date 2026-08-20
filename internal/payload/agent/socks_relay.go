@@ -17,13 +17,12 @@ import (
 // tunnel itself is already authenticated. External client auth is handled
 // by the server side.
 
-func startSocksServer(addr string) {
+func startSocksServer(addr string) error {
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
 	go func() {
-		ln, err := net.Listen("tcp", addr)
-		if err != nil {
-			debugLog("SOCKS listen failed: " + err.Error())
-			return
-		}
 		debugLog("SOCKS5 listening on " + addr)
 		for {
 			conn, err := ln.Accept()
@@ -33,6 +32,7 @@ func startSocksServer(addr string) {
 			go handleSocksConn(conn)
 		}
 	}()
+	return nil
 }
 
 // socksReadAddr reads a SOCKS5 address from a connection.

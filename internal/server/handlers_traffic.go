@@ -28,6 +28,68 @@ type trafficRing struct {
 	count int
 }
 
+// trafficByteBucket accumulates real request/response byte counts for one
+// hour. The dashboard listener-traffic chart is fed from these counters
+// instead of deriving fake sizes from task rows.
+type trafficByteBucket struct {
+	in  int64
+	out int64
+}
+
+// trafficByteAccumulator keeps hourly in/out byte counters for the last 31
+// days in memory. It is updated from the traffic middleware where the real
+// request Content-Length and response body size are known.
+type trafficByteAccumulator struct {
+	mu     sync.Mutex
+	hourly map[int64]*trafficByteBucket // key = hour-truncated unix time
+}
+
+const trafficAccumulatorWindowHours = 31 * 24
+
+func newTrafficByteAccumulator() *trafficByteAccumulator {
+	return &trafficByteAccumulator{
+		hourly: make(map[int64]*trafficByteBucket),
+	}
+}
+
+func (a *trafficByteAccumulator) add(t time.Time, in, out int64) {
+	key := t.Truncate(time.Hour).Unix()
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	b, ok := a.hourly[key]
+	if !ok {
+		b = &trafficByteBucket{}
+		a.hourly[key] = b
+	}
+	b.in += in
+	b.out += out
+
+	// Prune stale buckets (only when the map grows past the window) so a
+	// long-running server does not accumulate unbounded memory.
+	if prune := time.Now().Add(-trafficAccumulatorWindowHours * time.Hour).Unix(); len(a.hourly) > trafficAccumulatorWindowHours {
+		for k := range a.hourly {
+			if k < prune {
+				delete(a.hourly, k)
+			}
+		}
+	}
+}
+
+// sumRange returns total in/out bytes for hourly buckets in [start, end).
+func (a *trafficByteAccumulator) sumRange(start, end time.Time) (in, out int64) {
+	startKey := start.Truncate(time.Hour).Unix()
+	endKey := end.Truncate(time.Hour).Unix()
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for k, b := range a.hourly {
+		if k >= startKey && k < endKey {
+			in += b.in
+			out += b.out
+		}
+	}
+	return in, out
+}
+
 func newTrafficRing() *trafficRing {
 	return &trafficRing{
 		logs: make([]TrafficEntry, maxTrafficLogs),
@@ -82,6 +144,13 @@ func (s *Server) trafficMiddleware() gin.HandlerFunc {
 			Latency:  time.Since(start).Round(time.Millisecond).String(),
 		}
 		s.trafficLog.add(entry)
+		// Feed the listener-traffic chart with real wire sizes: the request
+		// Content-Length (as received) and the actual response body written.
+		reqBytes := c.Request.ContentLength
+		if reqBytes < 0 {
+			reqBytes = 0
+		}
+		s.trafficBytes.add(start, reqBytes, int64(entry.Size))
 	}
 }
 

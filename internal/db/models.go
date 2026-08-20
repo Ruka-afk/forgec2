@@ -139,10 +139,10 @@ type Implant struct {
 	Elevated        bool   `json:"elevated"`         // running as admin/root
 	Domain          string `json:"domain"`           // AD domain or workgroup
 	// Per-agent sleep config (server-side tracking)
-	CurrentInterval int    `json:"current_interval"` // current sleep interval (seconds)
-	CurrentJitter   int    `json:"current_jitter"`   // current jitter percentage
+	CurrentInterval int    `json:"current_interval"`                // current sleep interval (seconds)
+	CurrentJitter   int    `json:"current_jitter"`                  // current jitter percentage
 	AutoAdapt       bool   `gorm:"default:false" json:"auto_adapt"` // operator-enabled traffic auto-adaptation
-	ActiveWindow    string `json:"active_window"`    // foreground window title (reported each beacon)
+	ActiveWindow    string `json:"active_window"`                   // foreground window title (reported each beacon)
 	// Working hours (server-side tracking)
 	WorkingHoursStart string `gorm:"size:5" json:"working_hours_start"` // HH:MM
 	WorkingHoursEnd   string `gorm:"size:5" json:"working_hours_end"`   // HH:MM
@@ -199,16 +199,16 @@ type Task struct {
 	TenantID uint   `gorm:"index" json:"tenant_id"` // multi-tenant isolation (0 = legacy/unscoped)
 	AgentID  string `gorm:"index" json:"agent_id"`
 	Type     string `json:"type"`
-	Command string `json:"command"`
-	Shell   string `json:"shell"`
-	Path    string `json:"path,omitempty"`
-	Data    string `json:"data,omitempty"`
-	Offset  int64  `json:"offset,omitempty"`
-	Size    int64  `json:"size,omitempty"`
+	Command  string `json:"command"`
+	Shell    string `json:"shell"`
+	Path     string `json:"path,omitempty"`
+	Data     string `json:"data,omitempty"`
+	Offset   int64  `json:"offset,omitempty"`
+	Size     int64  `json:"size,omitempty"`
 	// PrevMAC/MAC carry the chunked file-transfer HMAC integrity chain on
 	// push-upload tasks (hex); the agent verifies Data against them.
-	PrevMAC  string `json:"prev_mac,omitempty"`
-	MAC      string `json:"mac,omitempty"`
+	PrevMAC string `json:"prev_mac,omitempty"`
+	MAC     string `json:"mac,omitempty"`
 	// TaskKey is the operator-issued per-task AES-256-GCM key (base64) used to
 	// seal this task's result independently of the session key (P2). Empty when
 	// the task uses the normal channel encryption.
@@ -231,16 +231,16 @@ type Task struct {
 	ClaimedAt      time.Time  `json:"claimed_at"`
 	AcknowledgedAt *time.Time `gorm:"index" json:"acknowledged_at,omitempty"`
 	// Task callbacks: optional URL to POST results to when task completes
-	CallbackURL    string    `gorm:"size:1024" json:"callback_url,omitempty"`
-	CallbackMethod string    `gorm:"size:10;default:'POST'" json:"callback_method,omitempty"`
-	CallbackSent   bool      `gorm:"default:false" json:"callback_sent"`
+	CallbackURL    string `gorm:"size:1024" json:"callback_url,omitempty"`
+	CallbackMethod string `gorm:"size:10;default:'POST'" json:"callback_method,omitempty"`
+	CallbackSent   bool   `gorm:"default:false" json:"callback_sent"`
 	// LastResultID is the agent-side id of the most recently applied result.
 	// It gives durable idempotency for results re-resent after a dropped frame
 	// (survives server restarts, unlike the in-memory dedup cache).
 	LastResultID string    `gorm:"size:64;index" json:"last_result_id,omitempty"`
 	CreatedAt    time.Time `gorm:"index" json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
-	Agent          Implant   `gorm:"foreignKey:AgentID" json:"-"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Agent        Implant   `gorm:"foreignKey:AgentID" json:"-"`
 }
 
 // SensitiveTaskTypes are task types whose Command/Data fields carry secrets
@@ -601,7 +601,7 @@ type User struct {
 	ID                  uint      `gorm:"primaryKey" json:"id"`
 	Username            string    `gorm:"uniqueIndex;size:64" json:"username"`
 	PasswordHash        string    `json:"-"`
-	Role                string    `json:"role"` // "admin" or "user"
+	Role                string    `json:"role"`                   // "admin" or "user"
 	TenantID            uint      `gorm:"index" json:"tenant_id"` // multi-tenant isolation (0 = legacy/unscoped)
 	IsActive            bool      `json:"is_active"`
 	ForcePasswordChange bool      `gorm:"default:false" json:"force_password_change"`
@@ -803,13 +803,13 @@ func (ServerConfig) TableName() string { return "server_configs" }
 
 // WebhookConfig stores webhook endpoint configuration
 type WebhookConfig struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	Name      string    `gorm:"size:255;not null" json:"name"`
-	URL       string    `gorm:"size:1024;not null" json:"url"`
-	EventType string    `gorm:"size:255;not null" json:"event_type"`
-	Method    string    `gorm:"size:16;default:'POST'" json:"method"`
-	Headers   string    `gorm:"type:text" json:"headers"`
-	Enabled   bool      `gorm:"default:true" json:"enabled"`
+	ID        uint   `gorm:"primaryKey" json:"id"`
+	Name      string `gorm:"size:255;not null" json:"name"`
+	URL       string `gorm:"size:1024;not null" json:"url"`
+	EventType string `gorm:"size:255;not null" json:"event_type"`
+	Method    string `gorm:"size:16;default:'POST'" json:"method"`
+	Headers   string `gorm:"type:text" json:"headers"`
+	Enabled   bool   `gorm:"default:true" json:"enabled"`
 	// EventCount/LastTrigger track real deliveries (incremented only after a
 	// webhook push returns 2xx). Formerly fabricated as constant 0/"".
 	EventCount  int64      `gorm:"default:0" json:"event_count"`
@@ -949,8 +949,6 @@ type SystemMetric struct {
 	MemoryTotal float64   `json:"memory_total"`
 	DiskUsed    float64   `json:"disk_used"`
 	DiskTotal   float64   `json:"disk_total"`
-	NetIn       float64   `json:"net_in"`
-	NetOut      float64   `json:"net_out"`
 	Hostname    string    `json:"hostname"`
 	CreatedAt   time.Time `json:"created_at"`
 }
@@ -1107,7 +1105,7 @@ type Campaign struct {
 	Status      string    `gorm:"size:32;default:active" json:"status"` // active, completed, archived
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
-Agents []Implant `gorm:"many2many:campaign_agents;foreignKey:ID;joinForeignKey:campaign_id;References:ID;joinReferences:agent_id" json:"agents,omitempty"`
+	Agents      []Implant `gorm:"many2many:campaign_agents;foreignKey:ID;joinForeignKey:campaign_id;References:ID;joinReferences:agent_id" json:"agents,omitempty"`
 }
 
 func (Campaign) TableName() string { return "campaigns" }

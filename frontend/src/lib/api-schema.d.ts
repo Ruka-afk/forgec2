@@ -1531,7 +1531,7 @@ export interface paths {
         };
         /**
          * Get system metrics
-         * @description Get current system metrics (CPU, memory, disk, network)
+         * @description Get current system metrics (CPU, memory, disk)
          */
         get: operations["getSystemMetrics"];
         put?: never;
@@ -9428,8 +9428,6 @@ export interface components {
             memory_total?: number;
             disk_used?: number;
             disk_total?: number;
-            net_in?: number;
-            net_out?: number;
             hostname?: string;
             /** Format: date-time */
             created_at?: string;

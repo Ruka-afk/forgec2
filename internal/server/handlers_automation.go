@@ -246,12 +246,15 @@ func (s *Server) handleTestWebhook(c *gin.Context) {
 		Timestamp: time.Now(),
 		Data:      map[string]interface{}{"test": true},
 	}
-	s.fireWebhook(db.WebhookConfig{
+	if err := s.fireWebhook(db.WebhookConfig{
 		Name:   "test",
 		URL:    req.URL,
 		Method: req.Method,
-	}, evt)
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "webhook test sent"})
+	}, evt); err != nil {
+		respondError(c, http.StatusBadGateway, sanitizeError(err, "Webhook delivery"))
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "webhook test delivered"})
 }
 
 func (s *Server) handlePluginList(c *gin.Context) {

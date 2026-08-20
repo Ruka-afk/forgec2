@@ -2393,7 +2393,7 @@ paths:
     get:
       tags: [Monitor]
       summary: Get system metrics
-      description: Get current system metrics (CPU, memory, disk, network)
+      description: Get current system metrics (CPU, memory, disk)
       operationId: getSystemMetrics
       security:
         - SessionCookie: []
@@ -10285,10 +10285,6 @@ components:
         disk_used:
           type: number
         disk_total:
-          type: number
-        net_in:
-          type: number
-        net_out:
           type: number
         hostname:
           type: string

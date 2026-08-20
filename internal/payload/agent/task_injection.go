@@ -219,7 +219,10 @@ func handleSocks(task Task, res *TaskResult) {
 	if port == "" {
 		port = "1080"
 	}
-	go startSocksServer("0.0.0.0:" + port)
+	if err := startSocksServer("0.0.0.0:" + port); err != nil {
+		res.Error = "SOCKS5 failed to start: " + err.Error()
+		return
+	}
 	res.Output = "SOCKS5 started on " + port
 }
 

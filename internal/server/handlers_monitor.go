@@ -329,10 +329,6 @@ func (s *Server) handleGetSystemMetrics(c *gin.Context) {
 			"total":   metrics.DiskTotal,
 			"percent": diskPercent,
 		},
-		"network": map[string]float64{
-			"in":  metrics.NetIn,
-			"out": metrics.NetOut,
-		},
 		"hostname":  metrics.Hostname,
 		"timestamp": metrics.CreatedAt,
 	})

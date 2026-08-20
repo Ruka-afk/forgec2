@@ -25,10 +25,10 @@ func (s *Server) triggerWebhooks(evt Event) {
 	}
 }
 
-func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) {
+func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) error {
 	if err := validateWebhookURL(wh.URL); err != nil {
 		slog.Error("Webhook URL rejected", "name", wh.Name, "url", wh.URL, "error", err)
-		return
+		return fmt.Errorf("webhook URL rejected: %w", err)
 	}
 	payload, err := json.Marshal(map[string]interface{}{
 		"event":     evt.Type,
@@ -39,20 +39,20 @@ func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) {
 	})
 	if err != nil {
 		slog.Error("Webhook marshal payload failed", "error", err)
-		return
+		return fmt.Errorf("webhook payload marshal failed: %w", err)
 	}
 
 	backoff := []time.Duration{time.Second, 3 * time.Second, 7 * time.Second}
 	for attempt := 0; attempt <= webhookMaxRetries; attempt++ {
 		select {
 		case <-s.ctx.Done():
-			return
+			return fmt.Errorf("webhook delivery aborted: server shutting down")
 		default:
 		}
 
 		req, err := http.NewRequestWithContext(s.ctx, wh.Method, wh.URL, bytes.NewReader(payload))
 		if err != nil {
-			return
+			return fmt.Errorf("webhook request build failed: %w", err)
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("User-Agent", "ForgeC2-Webhook/1.0")
@@ -72,15 +72,15 @@ func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) {
 				slog.Warn("Webhook delivery failed, retrying", "name", wh.Name, "attempt", attempt+1, "error", err)
 				select {
 				case <-s.ctx.Done():
-					return
+					return fmt.Errorf("webhook delivery aborted: server shutting down")
 				case <-time.After(backoff[attempt]):
 				}
 				continue
 			}
 			slog.Error("Webhook delivery failed, exhausted retries", "name", wh.Name, "error", err)
-			return
+			return err
 		}
-		defer resp.Body.Close()
+		resp.Body.Close()
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			s.flushAuditEntries([]db.AuditLog{{
@@ -100,13 +100,13 @@ func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) {
 				}).Error; err != nil {
 				slog.Error("Failed to update webhook delivery stats", "name", wh.Name, "error", err)
 			}
-			return
+			return nil
 		}
 		if attempt < webhookMaxRetries && resp.StatusCode >= 500 {
 			slog.Warn("Webhook delivery got server error, retrying", "name", wh.Name, "status", resp.StatusCode, "attempt", attempt+1)
 			select {
 			case <-s.ctx.Done():
-				return
+				return fmt.Errorf("webhook delivery aborted: server shutting down")
 			case <-time.After(backoff[attempt]):
 			}
 			continue
@@ -119,6 +119,7 @@ func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) {
 			Success: false,
 			Details: fmt.Sprintf("Webhook %s -> %s: %d", wh.Name, wh.URL, resp.StatusCode),
 		}})
-		return
+		return fmt.Errorf("webhook delivery failed with status %d", resp.StatusCode)
 	}
+	return fmt.Errorf("webhook delivery failed")
 }

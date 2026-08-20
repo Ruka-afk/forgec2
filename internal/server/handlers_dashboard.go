@@ -179,51 +179,52 @@ func (s *Server) handleDashboardListenerTraffic(c *gin.Context) {
 
 	var points int
 	var labels []string
-	var startTime time.Time
+	var bucketStarts []time.Time
 
 	switch rangeParam {
 	case "7d":
 		points = 7
-		startTime = time.Now().AddDate(0, 0, -7)
+		dayStart := time.Now().Truncate(24 * time.Hour)
 		for i := 6; i >= 0; i-- {
-			day := time.Now().AddDate(0, 0, -i)
-			labels = append(labels, day.Format("01-02"))
+			d := time.Now().AddDate(0, 0, -i)
+			labels = append(labels, d.Format("01-02"))
+			bucketStarts = append(bucketStarts, dayStart.AddDate(0, 0, -i))
 		}
 	case "30d":
 		points = 30
-		startTime = time.Now().AddDate(0, 0, -30)
+		dayStart := time.Now().Truncate(24 * time.Hour)
 		for i := 29; i >= 0; i-- {
-			day := time.Now().AddDate(0, 0, -i)
-			labels = append(labels, day.Format("01-02"))
+			d := time.Now().AddDate(0, 0, -i)
+			labels = append(labels, d.Format("01-02"))
+			bucketStarts = append(bucketStarts, dayStart.AddDate(0, 0, -i))
 		}
 	default:
 		points = 24
-		startTime = time.Now().Add(-24 * time.Hour)
+		hourStart := time.Now().Truncate(time.Hour)
 		for i := 23; i >= 0; i-- {
-			hour := time.Now().Add(-time.Duration(i) * time.Hour)
-			labels = append(labels, hour.Format("15:00"))
+			h := time.Now().Add(-time.Duration(i) * time.Hour)
+			labels = append(labels, h.Format("15:00"))
+			bucketStarts = append(bucketStarts, hourStart.Add(-time.Duration(i)*time.Hour))
 		}
 	}
 
 	bytesIn := make([]int64, points)
 	bytesOut := make([]int64, points)
 
-	var tasks []db.Task
-	if err := s.db.Select("created_at").Where("created_at >= ?", startTime).Limit(DashboardTrafficLimit).Find(&tasks).Error; err != nil {
-		slog.Error("Dashboard: failed to query traffic tasks", "err", err)
-	}
-
-	now := time.Now()
-	for _, task := range tasks {
-		var idx int
-		if rangeParam == "24h" {
-			idx = 23 - int(now.Sub(task.CreatedAt).Hours())
-		} else {
-			idx = points - 1 - int(now.Sub(task.CreatedAt).Hours()/24)
-		}
-		if idx >= 0 && idx < points {
-			bytesIn[idx] += 100 + int64(len(task.Command))*10
-			bytesOut[idx] += 200 + int64(len(task.Result))*5
+	// Bucket sovereignty: each point covers [bucketStart, nextBucketStart),
+	// which keeps label and value boundaries aligned.
+	if s.trafficBytes != nil {
+		for i := 0; i < points; i++ {
+			end := bucketStarts[i].Add(time.Hour)
+			if rangeParam != "24h" {
+				end = bucketStarts[i].Add(24 * time.Hour)
+			}
+			if i+1 < points {
+				end = bucketStarts[i+1]
+			}
+			in, out := s.trafficBytes.sumRange(bucketStarts[i], end)
+			bytesIn[i] = in
+			bytesOut[i] = out
 		}
 	}
 
@@ -414,15 +415,8 @@ func (s *Server) handleDashboardAttackPath(c *gin.Context) {
 		slog.Error("Dashboard: failed to query attack path agents", "err", err)
 	}
 
-	var creds []db.CredentialEntry
-	if err := s.db.Select("agent_id, domain, username, type").Limit(20).Find(&creds).Error; err != nil {
-		slog.Error("Dashboard: failed to query attack path creds", "err", err)
-	}
-
 	nodes := make([]AttackPathNode, 0)
 	edges := make([]AttackPathEdge, 0)
-
-	nodeMap := make(map[string]bool)
 
 	entryID := "entry"
 	nodes = append(nodes, AttackPathNode{
@@ -432,11 +426,6 @@ func (s *Server) handleDashboardAttackPath(c *gin.Context) {
 		X:     50,
 		Y:     150,
 	})
-	nodeMap[entryID] = true
-
-	agentCount := 0
-	serverCount := 0
-	dcCount := 0
 
 	for i, agent := range agents {
 		agentID := "agent-" + strconv.Itoa(i)
@@ -446,13 +435,9 @@ func (s *Server) handleDashboardAttackPath(c *gin.Context) {
 			strings.Contains(strings.ToLower(agent.Hostname), "srv") ||
 			strings.Contains(strings.ToLower(agent.Hostname), "server") {
 			nodeType = "server"
-			serverCount++
 		} else if strings.Contains(strings.ToLower(agent.Hostname), "dc") ||
 			strings.Contains(strings.ToLower(agent.Hostname), "domain") {
 			nodeType = "dc"
-			dcCount++
-		} else {
-			agentCount++
 		}
 
 		x := 200 + (i/3)*200
@@ -465,8 +450,11 @@ func (s *Server) handleDashboardAttackPath(c *gin.Context) {
 			X:     x,
 			Y:     y,
 		})
-		nodeMap[agentID] = true
 
+		// Only graph relationships the server actually knows about: a real
+		// parent->child beacon relationship (SMB), or initial-access for the
+		// first tier. Invented "DCSync"/"DC-Target" pivots and credential-based
+		// lateral edges are not rendered because they were never observed.
 		if agent.ParentID != "" {
 			parentIdx := -1
 			for j, a := range agents {
@@ -492,66 +480,6 @@ func (s *Server) handleDashboardAttackPath(c *gin.Context) {
 				Type:  "initial",
 			})
 		}
-	}
-
-	credCountByAgent := make(map[string]int)
-	for _, cred := range creds {
-		credCountByAgent[cred.AgentID]++
-	}
-
-	for i, agent := range agents {
-		if credCountByAgent[agent.ID] > 0 {
-			for j := range agents {
-				if i != j && j > i {
-					if j < len(agents) && len(edges) < 15 {
-						agentID := "agent-" + strconv.Itoa(i)
-						targetID := "agent-" + strconv.Itoa(j)
-
-						exists := false
-						for _, e := range edges {
-							if (e.From == agentID && e.To == targetID) ||
-								(e.From == targetID && e.To == agentID) {
-								exists = true
-								break
-							}
-						}
-						if !exists {
-							edgeType := "lateral"
-							edgeLabel := "Lateral Movement"
-							if credCountByAgent[agent.ID] > 3 {
-								edgeType = "privesc"
-								edgeLabel = "Credential Passing"
-							}
-							edges = append(edges, AttackPathEdge{
-								From:  agentID,
-								To:    targetID,
-								Label: edgeLabel,
-								Type:  edgeType,
-							})
-						}
-					}
-				}
-			}
-		}
-	}
-
-	if len(agents) > 0 && dcCount == 0 {
-		dcID := "dc-target"
-		nodes = append(nodes, AttackPathNode{
-			ID:    dcID,
-			Label: "DC-Target",
-			Type:  "dc",
-			X:     600,
-			Y:     150,
-		})
-
-		lastAgentID := "agent-" + strconv.Itoa(len(agents)-1)
-		edges = append(edges, AttackPathEdge{
-			From:  lastAgentID,
-			To:    dcID,
-			Label: "DCSync",
-			Type:  "privesc",
-		})
 	}
 
 	attackPath := AttackPathData{

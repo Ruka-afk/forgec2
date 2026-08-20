@@ -75,7 +75,7 @@ func (s *Server) handleListenerDetail(c *gin.Context) {
 	if err := s.db.Where("listener_id = ?", listener.ID).Order("last_seen desc").Limit(5000).Find(&agents).Error; err != nil {
 		slog.Error("Failed to query listener agents", "err", err)
 	}
-	
+
 	var activeCount int64
 	if err := s.db.Model(&db.Implant{}).Where("listener_id = ? AND last_seen > ?", listener.ID, time.Now().Add(-ListenerActiveThreshold)).Count(&activeCount).Error; err != nil {
 		slog.Error("Failed to count active agents", "err", err)
@@ -146,13 +146,15 @@ func listenerKey(l *db.Listener) string {
 
 // startListenerForRecord creates a real network listener for a DB listener record.
 // Handles HTTP/HTTPS/TCP/TLS/DNS/ICMP schemes, port conflict detection, and main server port skip.
-func (s *Server) startListenerForRecord(l *db.Listener, context string) {
+// It reports whether the listener is actually being served (bound, or already
+// served by the main server) so callers never assert a false "running" status.
+func (s *Server) startListenerForRecord(l *db.Listener, context string) bool {
 	scheme := l.Scheme
 	if scheme == "" {
 		scheme = l.Type
 	}
 	if scheme != "http" && scheme != "https" && scheme != "tcp" && scheme != "tls" && scheme != "dns" && scheme != "icmp" && scheme != "ssh" && scheme != "h2c" {
-		return
+		return false
 	}
 
 	// DNS/ICMP listeners use port-less keys
@@ -172,21 +174,23 @@ func (s *Server) startListenerForRecord(l *db.Listener, context string) {
 		if addr == mainAddr && (scheme == "http" || scheme == "https") {
 			slog.Debug("Listener matches main server address, no extra listener needed",
 				"key", key, "context", context)
-			return
+			return true
 		}
 
 		// Check port availability
 		if !isPortAvailable(l.Host, l.Port) {
 			slog.Warn("Port not available for listener, skipping",
 				"key", key, "context", context)
-			return
+			return false
 		}
 	}
 
 	if err := s.startExtraListener(key, scheme); err != nil {
 		slog.Error("Failed to start listener",
 			"key", key, "context", context, "err", err)
+		return false
 	}
+	return true
 }
 
 // supportedListenerSchemes is the authoritative set of listener schemes the
@@ -325,8 +329,13 @@ func (s *Server) handleCreateListener(c *gin.Context) {
 		return
 	}
 
-	// Start a real listener for the requested port/type.
-	s.startListenerForRecord(&l, "created")
+	// Start a real listener for the requested port/type. The row is only
+	// reported as "running" if the bind actually happened (or the address is
+	// already served by the main HTTP server); otherwise it is marked stopped
+	// so the operator sees a truthful status instead of a dead "running" row.
+	if !s.startListenerForRecord(&l, "created") {
+		s.db.Model(&l).Update("status", "stopped")
+	}
 	s.syncListenerProbe(&l)
 
 	s.broadcastListenerUpdate("created", &l)
@@ -501,12 +510,19 @@ func (s *Server) handleEnableListener(c *gin.Context) {
 		return
 	}
 	l.Enabled = true
-	l.Status = "running"
 	if err := s.db.Save(&l).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Listener enable"))
 		return
 	}
-	s.startListenerForRecord(&l, "enabled")
+	if s.startListenerForRecord(&l, "enabled") {
+		l.Status = "running"
+	} else {
+		l.Status = "stopped"
+	}
+	if err := s.db.Save(&l).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Listener enable"))
+		return
+	}
 	s.syncListenerProbe(&l)
 	s.broadcastListenerUpdate("enabled", &l)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Listener enabled"})

