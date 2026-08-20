@@ -354,7 +354,12 @@ func handleRemoteInput(task Task, res *TaskResult) {
 	if payload == "" {
 		payload = task.Command
 	}
-	res.Output = remoteInputDispatch(payload)
+	out, err := remoteInputDispatch(payload)
+	if err != nil {
+		res.Error = err.Error()
+		return
+	}
+	res.Output = out
 }
 
 func handleLDAPUsers(task Task, res *TaskResult) {

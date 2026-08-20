@@ -42,8 +42,11 @@ func doQueueUserAPC(hProc uintptr, pid uint32, sc []byte) error {
 		if te.th32OwnerProcessID == pid {
 			hThread, _, _ := procOpenThread.Call(THREAD_SUSPEND_RESUME|0x0010, 0, uintptr(te.th32ThreadID))
 			if hThread != 0 {
-				procQueueUserAPC.Call(addr, hThread, 0)
+				queued, _, _ := procQueueUserAPC.Call(addr, hThread, 0)
 				procCloseHandle.Call(hThread)
+				if queued == 0 {
+					return fmt.Errorf("QueueUserAPC failed")
+				}
 				return nil
 			}
 		}

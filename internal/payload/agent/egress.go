@@ -62,12 +62,16 @@ func runEgressDetection(c2Host string, c2Ports []int) *EgressReport {
 		resp, err := client.Do(req)
 		if err == nil {
 			resp.Body.Close()
-			results = append(results, EgressResult{
-				Protocol: fmt.Sprintf("http/%d", port),
-				Target:   url,
-				Success:  true,
-				Latency:  time.Since(start).Milliseconds(),
-			})
+			// A captive portal or proxy can answer with 4xx/5xx — that proves
+			// nothing about egress. Only a real C2 response (2xx/3xx) counts.
+			if resp.StatusCode >= 200 && resp.StatusCode < 400 {
+				results = append(results, EgressResult{
+					Protocol: fmt.Sprintf("http/%d", port),
+					Target:   url,
+					Success:  true,
+					Latency:  time.Since(start).Milliseconds(),
+				})
+			}
 		}
 	}
 

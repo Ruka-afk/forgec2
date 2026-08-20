@@ -494,10 +494,16 @@ func removePersistence(method string, args string) string {
 			{"sc", "stop", persistencePrefix + "Svc"},
 			{"sc", "delete", persistencePrefix + "Svc"},
 		}
+		var errs []string
 		for _, c := range cmds {
 			rc := exec.Command(c[0], c[1:]...)
 			applyHideWindow(rc)
-			rc.CombinedOutput()
+			if out, err := rc.CombinedOutput(); err != nil {
+				errs = append(errs, fmt.Sprintf("%s: %v %s", strings.Join(c, " "), err, string(out)))
+			}
+		}
+		if len(errs) > 0 {
+			return fmt.Sprintf("service remove failed: %s", strings.Join(errs, "; "))
 		}
 		return "service: removed " + persistencePrefix + "Svc"
 

@@ -112,8 +112,11 @@ func elevate(cmd string) (string, error) {
 	}
 
 	// Fallback: try to request admin via shell (will prompt)
-	out, _ := runShell("powershell -Command \"Start-Process -Verb runAs -FilePath cmd -ArgumentList '/c "+cmd+" '\"", "cmd.exe")
-	return "attempted runAs (may have UAC prompt): " + out, nil
+	out, err := runShell("powershell -Command \"Start-Process -Verb runAs -FilePath cmd -ArgumentList '/c "+cmd+" '\"", "cmd.exe")
+	if err != nil {
+		return "", fmt.Errorf("runAs fallback failed (no UAC prompt could be confirmed): %v (%s)", err, out)
+	}
+	return "runAs fallback invoked (may have UAC prompt): " + out, nil
 }
 
 func tryUACBypass(method, cmd string) error {

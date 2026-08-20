@@ -30,31 +30,45 @@ const (
 	keyEventKeyUp      = 0x0002
 )
 
-func remoteInputDispatch(payload string) string {
+func remoteInputDispatch(payload string) (string, error) {
 	var ev remoteInputEvent
 	if err := json.Unmarshal([]byte(payload), &ev); err != nil {
-		return "remote_input: invalid json: " + err.Error()
+		return "", fmt.Errorf("remote_input: invalid json: %w", err)
 	}
 
 	switch strings.ToLower(ev.Type) {
 	case "move":
-		procSetCursorPos.Call(uintptr(ev.X), uintptr(ev.Y))
-		return fmt.Sprintf("remote_input: move to (%d,%d)", ev.X, ev.Y)
+		r1, _, lastErr := procSetCursorPos.Call(uintptr(ev.X), uintptr(ev.Y))
+		if r1 == 0 {
+			return "", fmt.Errorf("remote_input: SetCursorPos failed: %v", lastErr)
+		}
+		return fmt.Sprintf("remote_input: move to (%d,%d)", ev.X, ev.Y), nil
 	case "click":
-		procSetCursorPos.Call(uintptr(ev.X), uintptr(ev.Y))
-		procMouseEvent.Call(uintptr(mouseEventLeftDown), 0, 0, 0, 0)
-		procMouseEvent.Call(uintptr(mouseEventLeftUp), 0, 0, 0, 0)
-		return fmt.Sprintf("remote_input: click at (%d,%d)", ev.X, ev.Y)
+		r1, _, lastErr := procSetCursorPos.Call(uintptr(ev.X), uintptr(ev.Y))
+		if r1 == 0 {
+			return "", fmt.Errorf("remote_input: click failed at (%d,%d): SetCursorPos error: %v", ev.X, ev.Y, lastErr)
+		}
+		if r1, _, lastErr = procMouseEvent.Call(uintptr(mouseEventLeftDown), 0, 0, 0, 0); r1 == 0 {
+			return "", fmt.Errorf("remote_input: left-down injection failed: %v", lastErr)
+		}
+		if r1, _, lastErr = procMouseEvent.Call(uintptr(mouseEventLeftUp), 0, 0, 0, 0); r1 == 0 {
+			return "", fmt.Errorf("remote_input: left-up injection failed: %v", lastErr)
+		}
+		return fmt.Sprintf("remote_input: click at (%d,%d) injected", ev.X, ev.Y), nil
 	case "key":
 		vk, ok := keyToVK(ev.Key)
 		if !ok {
-			return "remote_input: unknown key: " + ev.Key
+			return "", fmt.Errorf("remote_input: unknown key: %s", ev.Key)
 		}
-		procKeybdEvent.Call(uintptr(vk), 0, 0, 0)
-		procKeybdEvent.Call(uintptr(vk), 0, uintptr(keyEventKeyUp), 0)
-		return fmt.Sprintf("remote_input: key %s (vk=%d)", ev.Key, vk)
+		if r1, _, lastErr := procKeybdEvent.Call(uintptr(vk), 0, 0, 0); r1 == 0 {
+			return "", fmt.Errorf("remote_input: keydown %s failed: %v", ev.Key, lastErr)
+		}
+		if r1, _, lastErr := procKeybdEvent.Call(uintptr(vk), 0, uintptr(keyEventKeyUp), 0); r1 == 0 {
+			return "", fmt.Errorf("remote_input: keyup %s failed: %v", ev.Key, lastErr)
+		}
+		return fmt.Sprintf("remote_input: key %s (vk=%d) injected", ev.Key, vk), nil
 	default:
-		return "remote_input: unknown type: " + ev.Type
+		return "", fmt.Errorf("remote_input: unknown type: %s", ev.Type)
 	}
 }
 
