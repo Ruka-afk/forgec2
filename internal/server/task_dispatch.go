@@ -24,6 +24,17 @@ func (s *Server) getAgentOrFail(c *gin.Context, id string) (db.Implant, bool) {
 	return agent, true
 }
 
+// isChromeAgentKind reports whether the target implant is a browser-extension
+// (Chrome) agent, i.e. tagged "chrome". Used to keep chrome_* task types away
+// from standard Go implants.
+func (s *Server) isChromeAgentKind(agentID string) bool {
+	var agent db.Implant
+	if err := s.db.Select("tags").First(&agent, "id = ?", agentID).Error; err != nil {
+		return false
+	}
+	return strings.Contains(agent.Tags, "chrome")
+}
+
 // TaskOption configures optional createTask behaviour.
 type TaskOption func(*taskOptions)
 type taskOptions struct {
@@ -60,6 +71,13 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 
 	if !IsKnownTaskType(taskType) && !protocol.ValidTaskType(taskType) {
 		return nil, fmt.Errorf("unknown task type: %s", taskType)
+	}
+
+	// Chrome-extension-only task types must never be queued onto a standard Go
+	// implant: they would sit "pending" until the next beacon and then be
+	// rejected as unknown. Restrict them to implants tagged "chrome".
+	if chromeTaskTypes[taskType] && !s.isChromeAgentKind(agentID) {
+		return nil, fmt.Errorf("task type %s requires a chrome-tagged agent (browser extension)", taskType)
 	}
 
 	// Adaptive OPSEC gate: agents at critical threat level cannot launch

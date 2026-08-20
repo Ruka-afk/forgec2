@@ -17,6 +17,14 @@ type attackTechnique struct {
 
 // attackTacticMap maps each MITRE tactic to representative techniques and the
 // ForgeC2 task types that satisfy them.
+//
+// IMPORTANT (batch-5 honesty): every entry in TaskTypes MUST be a task type the
+// Go implant actually executes (see internal/payload/agent/task_registry.go).
+// Earlier versions advertised fantasy names (exec, schtasks_add, reg_add,
+// steal_token, clear_logs, beacon, sleep, ...) which no agent handler
+// implements, making techniques appear "covered" by operations nobody could
+// run. Techniques with no honest mapping keep an empty list: the UI renders
+// them as uncovered rather than claiming a capability.
 var attackTacticMap = []struct {
 	Tactic     string
 	Techniques []attackTechnique
@@ -24,73 +32,73 @@ var attackTacticMap = []struct {
 	{
 		Tactic: "Execution",
 		Techniques: []attackTechnique{
-			{ID: "T1059", Name: "Command and Scripting Interpreter", Tactic: "Execution", TaskTypes: []string{"shell", "exec"}},
-			{ID: "T1053", Name: "Scheduled Task/Job", Tactic: "Execution", TaskTypes: []string{"schtasks_add"}},
-			{ID: "T1569", Name: "System Services", Tactic: "Execution", TaskTypes: []string{"run", "service_start"}},
+			{ID: "T1059", Name: "Command and Scripting Interpreter", Tactic: "Execution", TaskTypes: []string{"shell", "powerpick", "execute_assembly", "clr_powershell", "bof"}},
+			{ID: "T1053", Name: "Scheduled Task/Job", Tactic: "Execution", TaskTypes: []string{}},
+			{ID: "T1569", Name: "System Services", Tactic: "Execution", TaskTypes: []string{"services", "killproc"}},
 		},
 	},
 	{
 		Tactic: "Persistence",
 		Techniques: []attackTechnique{
-			{ID: "T1547", Name: "Boot or Logon Autostart", Tactic: "Persistence", TaskTypes: []string{"persist", "reg_add"}},
-			{ID: "T1053", Name: "Scheduled Task/Job", Tactic: "Persistence", TaskTypes: []string{"schtasks_add"}},
-			{ID: "T1543", Name: "Create or Modify System Process", Tactic: "Persistence", TaskTypes: []string{"service_create"}},
+			{ID: "T1547", Name: "Boot or Logon Autostart", Tactic: "Persistence", TaskTypes: []string{"persistence_add", "persistence_list", "reg_set"}},
+			{ID: "T1053", Name: "Scheduled Task/Job", Tactic: "Persistence", TaskTypes: []string{}},
+			{ID: "T1543", Name: "Create or Modify System Process", Tactic: "Persistence", TaskTypes: []string{"persistence_add"}},
 		},
 	},
 	{
 		Tactic: "Privilege Escalation",
 		Techniques: []attackTechnique{
-			{ID: "T1134", Name: "Access Token Manipulation", Tactic: "Privilege Escalation", TaskTypes: []string{"elevate", "steal_token"}},
-			{ID: "T1547", Name: "Boot or Logon Autostart", Tactic: "Privilege Escalation", TaskTypes: []string{"persist"}},
-			{ID: "T1068", Name: "Exploitation for Privilege Escalation", Tactic: "Privilege Escalation", TaskTypes: []string{"exploit"}},
+			{ID: "T1134", Name: "Access Token Manipulation", Tactic: "Privilege Escalation", TaskTypes: []string{"elevate", "token_steal", "token_make", "uac_bypass"}},
+			{ID: "T1547", Name: "Boot or Logon Autostart", Tactic: "Privilege Escalation", TaskTypes: []string{"persistence_add"}},
+			{ID: "T1068", Name: "Exploitation for Privilege Escalation", Tactic: "Privilege Escalation", TaskTypes: []string{"elevate_printnightmare"}},
 		},
 	},
 	{
 		Tactic: "Defense Evasion",
 		Techniques: []attackTechnique{
-			{ID: "T1562", Name: "Impair Defenses", Tactic: "Defense Evasion", TaskTypes: []string{"disable_av", "killproc"}},
-			{ID: "T1070", Name: "Indicator Removal", Tactic: "Defense Evasion", TaskTypes: []string{"clear_logs"}},
-			{ID: "T1055", Name: "Process Injection", Tactic: "Defense Evasion", TaskTypes: []string{"inject"}},
-			{ID: "T1547", Name: "Masquerading", Tactic: "Defense Evasion", TaskTypes: []string{"spoof"}},
+			{ID: "T1562", Name: "Impair Defenses", Tactic: "Defense Evasion", TaskTypes: []string{"kill_av", "killproc", "amsi_bypass", "etw_bypass", "unhook_ntdll", "blockdlls"}},
+			{ID: "T1070", Name: "Indicator Removal", Tactic: "Defense Evasion", TaskTypes: []string{"log_wipe", "track_wipe"}},
+			{ID: "T1055", Name: "Process Injection", Tactic: "Defense Evasion", TaskTypes: []string{"inject", "spawn", "shinject", "shspawn", "migrate", "reflectdll_inject"}},
+			{ID: "T1547", Name: "Masquerading", Tactic: "Defense Evasion", TaskTypes: []string{}},
 		},
 	},
 	{
 		Tactic: "Credential Access",
 		Techniques: []attackTechnique{
-			{ID: "T1003", Name: "OS Credential Dumping", Tactic: "Credential Access", TaskTypes: []string{"lsass", "mimikatz", "wdigest", "lsa_dump"}},
-			{ID: "T1056", Name: "Input Capture", Tactic: "Credential Access", TaskTypes: []string{"keylogger_start", "clipboard_start"}},
-			{ID: "T1110", Name: "Brute Force", Tactic: "Credential Access", TaskTypes: []string{"bruteforce"}},
+			{ID: "T1003", Name: "OS Credential Dumping", Tactic: "Credential Access", TaskTypes: []string{"mimikatz", "creds", "cert_store_list", "browser_steal", "vpn_creds", "wifi_creds"}},
+			{ID: "T1056", Name: "Input Capture", Tactic: "Credential Access", TaskTypes: []string{"keylogger_start", "clipboard_get", "webcam", "mic"}},
+			{ID: "T1110", Name: "Brute Force", Tactic: "Credential Access", TaskTypes: []string{"password_spray", "cred_check"}},
 		},
 	},
 	{
 		Tactic: "Discovery",
 		Techniques: []attackTechnique{
 			{ID: "T1057", Name: "Process Discovery", Tactic: "Discovery", TaskTypes: []string{"ps", "process_tree"}},
-			{ID: "T1083", Name: "File and Directory Discovery", Tactic: "Discovery", TaskTypes: []string{"ls", "find"}},
-			{ID: "T1016", Name: "System Network Configuration Discovery", Tactic: "Discovery", TaskTypes: []string{"ipconfig", "arp", "net"}},
-			{ID: "T1033", Name: "System Owner/User Discovery", Tactic: "Discovery", TaskTypes: []string{"whoami"}},
+			{ID: "T1083", Name: "File and Directory Discovery", Tactic: "Discovery", TaskTypes: []string{"ls", "find", "drives"}},
+			{ID: "T1016", Name: "System Network Configuration Discovery", Tactic: "Discovery", TaskTypes: []string{"net", "netstat", "portscan", "run_egress"}},
+			{ID: "T1033", Name: "System Owner/User Discovery", Tactic: "Discovery", TaskTypes: []string{"users", "token_whoami", "ldap_users", "ldap_groups", "ldap_computers"}},
 		},
 	},
 	{
 		Tactic: "Collection",
 		Techniques: []attackTechnique{
-			{ID: "T1113", Name: "Screen Capture", Tactic: "Collection", TaskTypes: []string{"screenshot", "screen_stream_start"}},
-			{ID: "T1056", Name: "Input Capture", Tactic: "Collection", TaskTypes: []string{"keylogger_start", "clipboard_start"}},
+			{ID: "T1113", Name: "Screen Capture", Tactic: "Collection", TaskTypes: []string{"screenshot", "screenshot_window", "screen_stream_start", "webcam"}},
+			{ID: "T1056", Name: "Input Capture", Tactic: "Collection", TaskTypes: []string{"keylogger_start", "clipboard_get"}},
 		},
 	},
 	{
 		Tactic: "Lateral Movement",
 		Techniques: []attackTechnique{
-			{ID: "T1021", Name: "Remote Services", Tactic: "Lateral Movement", TaskTypes: []string{"wmi", "psexec", "winrm", "ssh"}},
-			{ID: "T1570", Name: "Lateral Tool Transfer", Tactic: "Lateral Movement", TaskTypes: []string{"pivot_upload"}},
+			{ID: "T1021", Name: "Remote Services", Tactic: "Lateral Movement", TaskTypes: []string{"lateral", "lateral_wmi", "lateral_psexec", "lateral_winrm", "lateral_dcom", "lateral_scf", "ssh_lateral"}},
+			{ID: "T1570", Name: "Lateral Tool Transfer", Tactic: "Lateral Movement", TaskTypes: []string{"upload", "scp_upload", "download_url"}},
 		},
 	},
 	{
 		Tactic: "Command and Control",
 		Techniques: []attackTechnique{
-			{ID: "T1071", Name: "Application Layer Protocol", Tactic: "Command and Control", TaskTypes: []string{"beacon", "sleep", "profile_rotate"}},
-			{ID: "T1573", Name: "Encrypted Channel", Tactic: "Command and Control", TaskTypes: []string{"beacon"}},
-			{ID: "T1095", Name: "Non-Application Layer Protocol", Tactic: "Command and Control", TaskTypes: []string{"beacon"}},
+			{ID: "T1071", Name: "Application Layer Protocol", Tactic: "Command and Control", TaskTypes: []string{"beacon_now", "set_sleep", "profile_rotate", "set_c2_mode", "set_sleep_mode"}},
+			{ID: "T1573", Name: "Encrypted Channel", Tactic: "Command and Control", TaskTypes: []string{}},
+			{ID: "T1095", Name: "Non-Application Layer Protocol", Tactic: "Command and Control", TaskTypes: []string{"gossip_discover"}},
 		},
 	},
 }

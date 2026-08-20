@@ -26,10 +26,10 @@ const WINDOWS_COMMANDS = [
   "beacon_now", "set_sleep", "config_push",
   "portscan", "netstat", "drives", "users", "services", "av",
   "persistence_add", "persistence_list", "persistence_remove",
-  "token_list", "token_steal", "token_make", "token_revert",
-  "socks_start", "rportfwd_start", "lateral",
-  "upload", "download", "find_files",
-  "shell", "powershell_pickup",
+  "token_list_procs", "token_steal", "token_make", "token_revert",
+  "socks", "rportfwd_start", "lateral",
+  "upload", "download", "find",
+  "shell", "powerpick",
   "bof", "net",
 ];
 

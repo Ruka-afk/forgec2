@@ -375,7 +375,11 @@ func AllTaskTypes() []string {
 		TaskTypeInteractiveShellStart,
 		TaskTypeInteractiveShellWrite,
 		TaskTypeInteractiveShellStop,
-		TaskTypeShellOutput,
+		// Deliberately NOT included: shell_output is a RESULT type emitted by
+		// the implant's interactive shell (see shell_interactive.go), not a
+		// dispatchable task. Keeping it out of AllTaskTypes (and therefore
+		// ValidTaskType) prevents operators/scripts from queuing a task that
+		// no agent handler can execute.
 		TaskTypeTunnelAddRoute,
 		TaskTypeTunnelRemoveRoute,
 		TaskTypeGossipDiscover,
