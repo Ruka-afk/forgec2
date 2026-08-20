@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"encoding/binary"
 	"testing"
 
 	"github.com/forgec2/forgec2/internal/config"
@@ -63,5 +64,44 @@ func TestApplyMalleableWrapping(t *testing.T) {
 	s.cfg.Malleable.Append = ""
 	if got := s.applyMalleableWrapping(body); !bytes.Equal(got, body) {
 		t.Fatalf("enabled-but-empty wrap changed body: %s", got)
+	}
+}
+
+// TestStripBodyPadding verifies the server undoes the agent's
+// ContentLengthJitter framing (8-byte big-endian length + random padding) and
+// that plain envelope bodies are never mis-stripped.
+func TestStripBodyPadding(t *testing.T) {
+	s := &Server{cfg: &config.Config{}}
+	envelope := []byte(`{"uuid":"abc","c":"encrypted"}`)
+	envelope = append(envelope, make([]byte, 200)...) // realistic envelope size
+
+	// No padding configured on the agent side: the raw JSON body passes
+	// through untouched (its leading bytes decode to an absurd length).
+	if got := s.stripBodyPadding(envelope); !bytes.Equal(got, envelope) {
+		t.Fatalf("unpadded body was modified: %s", got)
+	}
+
+	padBeaconBody := func(body []byte, pad int) []byte {
+		out := make([]byte, 8, 8+len(body)+pad)
+		binary.BigEndian.PutUint64(out, uint64(len(body)))
+		out = append(out, body...)
+		out = append(out, make([]byte, pad)...)
+		return out
+	}
+
+	for _, pad := range []int{0, 1, 128, 1024} {
+		padded := padBeaconBody(envelope, pad)
+		got := s.stripBodyPadding(padded)
+		if !bytes.Equal(got, envelope) {
+			t.Fatalf("pad=%d: strip mismatch: got %d bytes, want %d", pad, len(got), len(envelope))
+		}
+	}
+
+	// A malicious prefix claiming a length beyond the body must not slice
+	// out of range: the strip must leave the body untouched.
+	corrupt := padBeaconBody(envelope, 0)
+	corrupt[0] = 0xff
+	if got := s.stripBodyPadding(corrupt); !bytes.Equal(got, corrupt) {
+		t.Fatalf("corrupt prefix was stripped instead of preserved")
 	}
 }

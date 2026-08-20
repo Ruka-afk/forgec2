@@ -53,6 +53,8 @@ type binaryGenForm struct {
 	ExpiryDate      string `form:"expiry_date"`   // "YYYY-MM-DD"; implant auto-exits after this date
 	SelfCheck       bool   `form:"self_check"`    // embed + verify a SHA-256 self-integrity hash
 	NetCfgOverWire  bool   `form:"network_config_over_wire"` // bootstrap-only compile; server delivers full config at registration
+	// Max random bytes appended to the HTTP/WS beacon body (0=disabled).
+	ContentLengthJitter int `form:"content_length_jitter"`
 }
 
 // parseBinaryForm validates a binary generation request and returns the resolved form.
@@ -217,6 +219,7 @@ func (s *Server) buildImplantConfig(form *binaryGenForm) (payload.ImplantConfig,
 		PinnedCertSHA256: form.PinnedCertSHA256,
 		ExpiryDate:       form.ExpiryDate,
 		SelfCheck:        form.SelfCheck,
+		ContentLengthJitter: form.ContentLengthJitter,
 	}, nil
 }
 

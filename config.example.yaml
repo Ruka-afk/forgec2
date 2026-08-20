@@ -67,7 +67,7 @@ password_policy:
   max_age_days: 0
 
 crypto:
-  key: "ecdh:"                 # "ecdh:" enables ECDH+AES-256-GCM (default/recommended); or a 32-byte hex key for legacy XOR (not recommended)
+  key: "ecdh:"                 # REQUIRED: "ecdh:" enables ECDH+AES-256-GCM beacon encryption. The legacy XOR/plaintext modes were removed from the v2/v3 beacon protocol — the server refuses to start with any other value (built implants cannot authenticate).
   force_ecdh: true             # reject plaintext beacons when ECDH is enabled
   loot_key: ""                 # REQUIRED: 64-char hex (32-byte) AES-256-GCM key for loot encryption (FC2ENC:); fresh installs auto-generate. NO longer derived from server.jwt_secret — set it (or FORGEC2_LOOT_KEY) or startup fails. Existing FC2ENC: data encrypted with the legacy derived key cannot be decrypted after upgrade.
   extc2_key: ""                # REQUIRED: 64-char hex (32-byte) AES-256-GCM key for ExtC2 channels (FC2EXT:); fresh installs auto-generate. NO longer derived from server.jwt_secret (or FORGEC2_EXTC2_KEY).

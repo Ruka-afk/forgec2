@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -188,6 +189,40 @@ func (s *Server) startListenerForRecord(l *db.Listener, context string) {
 	}
 }
 
+// supportedListenerSchemes is the authoritative set of listener schemes the
+// server actually binds. Anything outside it fails validation at the API
+// boundary instead of silently creating a listener row that never binds
+// (previously "wss"/"grpc"/"mtls"/"smb" etc. were coerced to TCP or skipped by
+// startListenerForRecord, leaving the operator with a dead "running" listener).
+var supportedListenerSchemes = map[string]bool{
+	"http": true, "https": true, "tcp": true, "tls": true,
+	"dns": true, "icmp": true, "ssh": true, "h2c": true,
+}
+
+// validateListenerScheme reports whether the scheme is one the server can bind.
+func validateListenerScheme(scheme string) bool {
+	if scheme == "" {
+		return false
+	}
+	return supportedListenerSchemes[strings.ToLower(scheme)]
+}
+
+// listenerSchemeHint returns an actionable error message for a scheme the
+// server does not bind, so the operator learns where the feature actually
+// lives instead of staring at a dead listener row.
+func listenerSchemeHint(scheme string) string {
+	switch strings.ToLower(scheme) {
+	case "wss", "ws":
+		return "listener scheme \"" + scheme + "\" is not a bindable listener type: WebSocket beacons ride an HTTPS listener — create an https listener and pick the wss transport in the payload builder"
+	case "smb":
+		return "listener scheme \"smb\" is not a bindable listener type: SMB links are configured via server.smb_enabled/smb_pipe for p2p parents"
+	case "grpc", "grpcs":
+		return "listener scheme \"" + scheme + "\" is not a bindable listener type: gRPC beacons are configured via server.grpc_addr"
+	default:
+		return "unsupported listener scheme \"" + scheme + "\" (supported: http, https, tcp, tls, dns, icmp, ssh, h2c)"
+	}
+}
+
 // normalizeListenerProtocol derives all protocol fields from whichever one the user provided.
 func normalizeListenerProtocol(l *db.Listener) {
 	if l.Scheme != "" {
@@ -256,6 +291,22 @@ func (s *Server) handleCreateListener(c *gin.Context) {
 		l.Name = "Listener " + fmt.Sprintf("%d", l.Port)
 	}
 
+	// Reject schemes the server never binds (wss/ws, grpc, mtls, udp, smb as
+	// a DB listener, ...) with a clear error instead of silently coercing
+	// them to TCP or skipping the bind — a listener row that cannot run must
+	// never be reported as "running".
+	scheme := l.Scheme
+	if scheme == "" {
+		scheme = l.Protocol
+	}
+	if scheme == "" {
+		scheme = l.Type
+	}
+	if !validateListenerScheme(scheme) {
+		respondError(c, http.StatusBadRequest, listenerSchemeHint(scheme))
+		return
+	}
+
 	normalizeListenerProtocol(&l)
 
 	if l.Port != 0 && (l.Port < 1 || l.Port > 65535) {
@@ -315,10 +366,22 @@ func (s *Server) handleUpdateListener(c *gin.Context) {
 	}
 	needsNormalize := updates.Scheme != "" || updates.Protocol != "" || updates.Type != ""
 	if updates.Scheme != "" {
+		if !validateListenerScheme(updates.Scheme) {
+			respondError(c, http.StatusBadRequest, listenerSchemeHint(updates.Scheme))
+			return
+		}
 		l.Scheme = updates.Scheme
 	} else if updates.Protocol != "" {
+		if !validateListenerScheme(updates.Protocol) {
+			respondError(c, http.StatusBadRequest, listenerSchemeHint(updates.Protocol))
+			return
+		}
 		l.Protocol = updates.Protocol
 	} else if updates.Type != "" {
+		if !validateListenerScheme(updates.Type) {
+			respondError(c, http.StatusBadRequest, listenerSchemeHint(updates.Type))
+			return
+		}
 		l.Type = updates.Type
 	}
 	if needsNormalize {

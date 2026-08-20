@@ -736,9 +736,14 @@ if c.Listeners.H2C.Enabled && c.Listeners.H2C.Addr == "" {
 		errs = append(errs, errors.New("listeners.h2c.addr is required when listeners.h2c.enabled is true"))
 	}
 
-	// Crypto validation
-	if c.Crypto.ForceECDH && !strings.HasPrefix(c.Crypto.Key, "ecdh:") {
-		errs = append(errs, errors.New("crypto.force_ecdh requires crypto.key to start with \"ecdh:\""))
+	// Crypto validation — the v2/v3 beacon stack implements ONLY the ECDH
+	// chain (HKDF+X25519+AES-256-GCM+MAC+replay window). A legacy XOR key or
+	// a disabled (empty) mode cannot authenticate any built implant:
+	// registration requires the per-implant v3 secret which only the ECDH
+	// session manager issues, and plaintext frames are rejected by the
+	// protocol. Refuse to boot rather than run silently-broken beacons.
+	if c.Crypto.Key == "" || !strings.HasPrefix(c.Crypto.Key, "ecdh:") {
+		errs = append(errs, errors.New("crypto.key must be \"ecdh:\" (ECDH beacon encryption) — the v2/v3 beacon protocol does not implement the legacy XOR/plaintext modes, so any other value leaves every built implant unable to authenticate"))
 	}
 	if c.Crypto.MaxDecryptedPayloadSize < 0 {
 		errs = append(errs, errors.New("crypto.max_decrypted_payload_size must be >= 0 (0 = default 10MB)"))

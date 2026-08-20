@@ -11,6 +11,7 @@ var taskHandlers = map[string]taskHandler{}
 
 func init() {
 	taskHandlers = map[string]taskHandler{
+		"abort":                    handleAbort,
 		"shell":                    handleShell,
 		"screenshot":               handleScreenshot,
 		"screen_stream_start":      handleScreenStreamStart,

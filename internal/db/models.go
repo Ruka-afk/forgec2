@@ -234,7 +234,11 @@ type Task struct {
 	CallbackURL    string    `gorm:"size:1024" json:"callback_url,omitempty"`
 	CallbackMethod string    `gorm:"size:10;default:'POST'" json:"callback_method,omitempty"`
 	CallbackSent   bool      `gorm:"default:false" json:"callback_sent"`
-	CreatedAt      time.Time `gorm:"index" json:"created_at"`
+	// LastResultID is the agent-side id of the most recently applied result.
+	// It gives durable idempotency for results re-resent after a dropped frame
+	// (survives server restarts, unlike the in-memory dedup cache).
+	LastResultID string    `gorm:"size:64;index" json:"last_result_id,omitempty"`
+	CreatedAt    time.Time `gorm:"index" json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 	Agent          Implant   `gorm:"foreignKey:AgentID" json:"-"`
 }

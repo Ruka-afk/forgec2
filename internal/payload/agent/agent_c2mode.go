@@ -311,13 +311,3 @@ func maybeRotateTransport() {
 func noteTransportSuccess() {
 	atomic.StoreInt32(&transportFailStreak, 0)
 }
-
-func addRandomParam(uri string) string {
-	params := []string{"id", "token", "session", "t", "nonce", "cb", "_"}
-	name := params[mathRand.Intn(len(params))]
-	val := fmt.Sprintf("%x", mathRand.Uint64())
-	if strings.Contains(uri, "?") {
-		return uri + "&" + name + "=" + val
-	}
-	return uri + "?" + name + "=" + val
-}

@@ -181,6 +181,30 @@ func getActiveBeaconURIFromConfig() string {
 	return getActiveBeaconURI()
 }
 
+// beaconWSURI returns the WebSocket beacon path for the configured URI. The
+// HTTP beacon endpoint (POST /api/v1/beacon) and the WebSocket beacon endpoint
+// (GET /ws/beacon) are the same logical contract on different server routes;
+// a URI authored for one transport is mapped to the other so a WSS primary
+// transport never dials the HTTP path (handshake fails) and the HTTP fallback
+// never posts to the WS-only path (404).
+func beaconWSURI() string {
+	uri := getActiveBeaconURIFromConfig()
+	if uri == "" || uri == "/api/v1/beacon" {
+		return "/ws/beacon"
+	}
+	return uri
+}
+
+// beaconHTTPURI is the inverse of beaconWSURI: it maps a WebSocket-authored
+// URI back to the HTTP POST route for the HTTPS fallback transport.
+func beaconHTTPURI() string {
+	uri := getActiveBeaconURIFromConfig()
+	if uri == "/ws/beacon" {
+		return "/api/v1/beacon"
+	}
+	return uri
+}
+
 func getActiveBeaconMethodFromConfig() string {
 	configOverrides.RLock()
 	method := configOverrides.method

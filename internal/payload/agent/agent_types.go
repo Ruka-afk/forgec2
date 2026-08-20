@@ -42,7 +42,7 @@ var (
 	pendingMu       sync.Mutex
 	pendingResults  []TaskResult
 	pendingTaskAcks []uint
-	taskQueue       = make(chan Task, 32)
+	taskQueue       = make(chan Task, maxQueuedTasks)
 	taskWorkerOnce  sync.Once
 	beaconWake      = make(chan struct{}, 1)
 	screenStreaming int32 // atomic: 0=false, 1=true

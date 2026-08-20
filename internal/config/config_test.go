@@ -317,6 +317,10 @@ func TestValidate(t *testing.T) {
 		{"csrf_key missing", func(c *Config) { c.Crypto.CsrfKey = "" }, true, "crypto.csrf_key"},
 		{"csrf_key too short", func(c *Config) { c.Crypto.CsrfKey = "aabb" }, true, "crypto.csrf_key"},
 		{"csrf_key not hex", func(c *Config) { c.Crypto.CsrfKey = strings.Repeat("zz", 32) }, true, "crypto.csrf_key"},
+		{"crypto.key empty (legacy disabled mode is dead)", func(c *Config) { c.Crypto.Key = "" }, true, "crypto.key"},
+		{"crypto.key legacy xor hex is rejected", func(c *Config) { c.Crypto.Key = strings.Repeat("ab", 32) }, true, "crypto.key"},
+		{"crypto.key ecdh accepted", func(c *Config) { c.Crypto.Key = "ecdh:" }, false, ""},
+		{"crypto.key ecdh with suffix accepted", func(c *Config) { c.Crypto.Key = "ecdh:anything" }, false, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

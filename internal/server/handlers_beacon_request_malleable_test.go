@@ -1,6 +1,8 @@
 package server
 
 import (
+	"encoding/binary"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -66,5 +68,49 @@ func TestBeaconRequestMalleableDisabledPassthrough(t *testing.T) {
 	w := postJSON(r, "/beacon", agent.registerFrame())
 	if w.Code != http.StatusOK {
 		t.Fatalf("unwrapped register failed: status=%d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestBeaconContentLengthJitter exercises the HTTP beacon path with the
+// agent's body-length padding: a real v3 register frame wrapped in the
+// 8-byte big-endian length prefix + random trailing bytes (the exact framing
+// padBeaconBody produces when ContentLengthJitter > 0) must register
+// successfully — proving handleBeacon strips the padding before envelope
+// decode. A negative control with a corrupted prefix must be rejected.
+func TestBeaconContentLengthJitter(t *testing.T) {
+	ginSetTestMode(t)
+	database := testutil.SetupTestDB(t)
+	s, r := initBeaconTestServer(t, database)
+
+	agent := v3TestAgent(t, s, "dddddddd-2222-4333-8444-eeeeeeeeeeee")
+	frame := []byte(agent.registerFrame())
+
+	pad := func(body []byte, extra int) []byte {
+		out := make([]byte, 8, 8+len(body)+extra)
+		binary.BigEndian.PutUint64(out, uint64(len(body)))
+		out = append(out, body...)
+		for i := 0; i < extra; i++ {
+			out = append(out, byte(i*31+7))
+		}
+		return out
+	}
+
+	// Registration is single-use, so each padded frame below needs its own
+	// agent identity.
+	for i, extra := range []int{0, 1, 512} {
+		a := v3TestAgent(t, s, fmt.Sprintf("%08x-2222-4333-8444-eeeeeeeeeeee", i))
+		w := postJSON(r, "/beacon", string(pad([]byte(a.registerFrame()), extra)))
+		if w.Code != http.StatusOK {
+			t.Fatalf("padded register failed (extra=%d): status=%d body=%s", extra, w.Code, w.Body.String())
+		}
+	}
+
+	// Negative control: a corrupt length prefix must not be stripped; the
+	// handler rejects the frame instead of crashing or slicing out of range.
+	corrupt := pad(frame, 0)
+	corrupt[0] = 0xff
+	w := postJSON(r, "/beacon", string(corrupt))
+	if w.Code == http.StatusOK {
+		t.Fatalf("expected rejection for corrupt length prefix, got 200: %s", w.Body.String())
 	}
 }

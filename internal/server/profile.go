@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"encoding/binary"
 	"net/http"
 
 	"github.com/forgec2/forgec2/internal/malleable"
@@ -76,6 +77,28 @@ func (s *Server) stripMalleableRequest(raw []byte) []byte {
 		raw = bytes.TrimPrefix(raw, []byte(prepend))
 		return bytes.TrimSuffix(raw, []byte(appendStr))
 	}
+}
+
+// stripBodyPadding removes the agent's ContentLengthJitter padding (8-byte
+// big-endian length prefix + random trailing bytes, see padBeaconBody on the
+// agent) from an HTTP/WS beacon body. Bodies without the prefix — plain
+// envelopes and any future transport that does not pad — decode the prefix to
+// an absurd length and are returned untouched, so the strip is safe to apply
+// unconditionally on every inbound beacon.
+func (s *Server) stripBodyPadding(raw []byte) []byte {
+	const prefixLen = 8
+	if len(raw) < prefixLen+16 {
+		return raw
+	}
+	n := binary.BigEndian.Uint64(raw[:prefixLen])
+	// Plausibility bounds: the enclosed envelope is at least 16 bytes and at
+	// most the whole body minus the prefix. A raw JSON envelope starts with
+	// '{' (0x7b) whose uint64 interpretation is ~8.8e18 — far outside these
+	// bounds — so valid unpadded frames are never mis-stripped.
+	if n < 16 || n > uint64(len(raw)-prefixLen) {
+		return raw
+	}
+	return raw[prefixLen : prefixLen+int(n)]
 }
 
 // applyMalleableWrapping wraps a raw (non-HTTP) beacon response body with the

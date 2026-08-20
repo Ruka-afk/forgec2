@@ -348,6 +348,11 @@ func (s *Server) wsReadPump(beacon *WebSocketBeacon) {
 			break
 		}
 
+		// Mirror the HTTP beacon path: strip request-side malleable wrapping
+		// (no-op when the agent does not wrap) and the ContentLengthJitter
+		// length-prefixed padding before decoding the envelope.
+		message = s.stripMalleableRequest(message)
+		message = s.stripBodyPadding(message)
 		env, req, kind := s.decodeBeaconEnvelope(message)
 		if kind == frameRejected {
 			slog.Warn("WebSocket beacon envelope rejected", "agent_id", beacon.AgentID)
