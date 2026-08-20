@@ -9,7 +9,7 @@ import { useI18n } from "@/lib/i18n";
 import type { AgentDetail, AgentStatus } from "@/types/agent";
 import { ArrowUp, FolderOpen, Monitor, Terminal } from "lucide-react";
 
-export interface AgentStatusBarProps {
+interface AgentStatusBarProps {
   agent: Partial<AgentDetail>;
   agentId: string;
   status: AgentStatus;

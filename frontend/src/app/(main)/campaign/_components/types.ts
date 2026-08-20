@@ -35,7 +35,7 @@ export interface CampaignStats {
   agent_breakdown: AgentStat[];
 }
 
-export interface KillChainPhaseStatus {
+interface KillChainPhaseStatus {
   phase: string;
   status: "pending" | "completed";
   task_count: number;
@@ -54,7 +54,7 @@ export interface KillChainTemplate {
   steps: KillChainStepDef[];
 }
 
-export interface KillChainStepDef {
+interface KillChainStepDef {
   phase: string;
   task_type: string;
   params: Record<string, string>;

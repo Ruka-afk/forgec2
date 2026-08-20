@@ -34,7 +34,7 @@ export function extractImmediateListing(data: unknown): FileEntry[] | null {
   return null;
 }
 
-export function decodeLsResult(result: string): string {
+function decodeLsResult(result: string): string {
   const raw = result || "";
   const trimmed = raw.trim();
   if (!trimmed) return "";

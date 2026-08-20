@@ -11,14 +11,14 @@ import { timeAgo } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { Send, Terminal } from "lucide-react";
 
-export interface QuickShellEntry {
+interface QuickShellEntry {
   command: string;
   shell: string;
   result: string;
   timestamp: string;
 }
 
-export interface QuickShellSectionProps {
+interface QuickShellSectionProps {
   expanded: boolean;
   onExpandedChange: (v: boolean) => void;
   shellInterpreter: string;

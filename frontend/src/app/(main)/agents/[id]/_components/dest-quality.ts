@@ -1,6 +1,6 @@
 export type DestQuality = "core" | "hardened" | "scripted" | "experimental";
 
-export interface TokenActionDef {
+interface TokenActionDef {
   action: string;
   quality: DestQuality;
   /** Never true: steal/impersonate queue a Windows token task, they do not guarantee a CS-style store. */
@@ -8,7 +8,7 @@ export interface TokenActionDef {
   windowsPrimary: boolean;
 }
 
-export interface PersistenceMethodDef {
+interface PersistenceMethodDef {
   key: string;
   quality: DestQuality;
   windowsPrimary: boolean;
@@ -33,7 +33,7 @@ export const PERSISTENCE_METHOD_QUALITY: PersistenceMethodDef[] = [
   { key: "dll_search_order", quality: "experimental", windowsPrimary: true },
 ];
 
-export function tokenActionDef(action: string): TokenActionDef | undefined {
+function tokenActionDef(action: string): TokenActionDef | undefined {
   return TOKEN_ACTIONS.find((a) => a.action === action);
 }
 
@@ -45,7 +45,7 @@ export function tokenActionQuality(action: string): DestQuality | undefined {
   return tokenActionDef(action)?.quality;
 }
 
-export function persistenceMethodDef(key: string): PersistenceMethodDef | undefined {
+function persistenceMethodDef(key: string): PersistenceMethodDef | undefined {
   return PERSISTENCE_METHOD_QUALITY.find((m) => m.key === key);
 }
 

@@ -1,4 +1,4 @@
-export type ListenerHealthStatus = "healthy" | "unstable" | "burned" | "unknown";
+type ListenerHealthStatus = "healthy" | "unstable" | "burned" | "unknown";
 
 export interface ListenerHealth {
   target: string;

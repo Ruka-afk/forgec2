@@ -1,6 +1,6 @@
 export type TransportQuality = "core" | "hardened" | "experimental";
 
-export interface TransportOption {
+interface TransportOption {
   value: string;
   label: string;
   quality: TransportQuality;

@@ -6,7 +6,7 @@ import { isProblemHealth, type ListenerHealth } from "../../listeners/_component
 export const DASHBOARD_VIEWS = ["ops", "analytics"] as const;
 export type DashboardView = (typeof DASHBOARD_VIEWS)[number];
 
-export function byCreatedDesc<T extends { created_at?: string }>(a: T, b: T): number {
+function byCreatedDesc<T extends { created_at?: string }>(a: T, b: T): number {
   return Date.parse(b.created_at || "") - Date.parse(a.created_at || "");
 }
 
@@ -35,9 +35,9 @@ export function mergeAttention(failed: Task[], pending: Task[], approvals: Task[
     .slice(0, limit);
 }
 
-export type LootInboxKind = "screenshot" | "keylog" | "download";
+type LootInboxKind = "screenshot" | "keylog" | "download";
 
-export interface LootInboxItem {
+interface LootInboxItem {
   id: string;
   kind: LootInboxKind;
   created_at: string;

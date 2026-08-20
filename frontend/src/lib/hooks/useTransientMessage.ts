@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export type TransientTone = "info" | "success" | "warning" | "destructive" | "muted";
+type TransientTone = "info" | "success" | "warning" | "destructive" | "muted";
 
-export interface TransientMessage {
+interface TransientMessage {
   text: string;
   tone: TransientTone;
 }

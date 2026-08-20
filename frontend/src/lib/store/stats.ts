@@ -7,7 +7,7 @@ import { logger } from "../logger";
 import type { DashboardStats } from "@/types/agent";
 import type { AppStore } from "./types";
 
-export interface StatsSlice {
+interface StatsSlice {
   stats: DashboardStats | null;
   statsError?: string;
   fetchStats: () => Promise<void>;

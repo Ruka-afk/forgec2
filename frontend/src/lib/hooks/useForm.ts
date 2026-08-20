@@ -4,13 +4,13 @@ import { useState, useCallback, useMemo } from "react";
 import type { ZodSchema, ZodError } from "zod";
 import { useErrorToast } from "@/lib/hooks/useErrorToast";
 
-export interface UseFormOptions<T extends Record<string, unknown>> {
+interface UseFormOptions<T extends Record<string, unknown>> {
   initialValues: T;
   schema: ZodSchema<T>;
   onSubmit: (values: T) => Promise<void>;
 }
 
-export interface UseFormReturn<T extends Record<string, unknown>> {
+interface UseFormReturn<T extends Record<string, unknown>> {
   values: T;
   errors: Partial<Record<keyof T, string>>;
   touched: Partial<Record<keyof T, boolean>>;

@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 
-export type TaskPollStatus = "idle" | "pending" | "running" | "completed" | "failed" | "timeout";
+type TaskPollStatus = "idle" | "pending" | "running" | "completed" | "failed" | "timeout";
 
 interface TaskStatusResponse {
   id?: number | string;

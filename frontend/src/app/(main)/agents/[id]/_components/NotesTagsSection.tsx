@@ -11,7 +11,7 @@ import { SectionCard } from "@/components/ui/section-card";
 import { useI18n } from "@/lib/i18n";
 import { Check, Pencil, Tag, X } from "lucide-react";
 
-export interface NotesTagsSectionProps {
+interface NotesTagsSectionProps {
   editing: boolean;
   tags: string;
   onTagsChange: (v: string) => void;

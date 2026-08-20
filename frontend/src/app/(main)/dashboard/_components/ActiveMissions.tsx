@@ -15,7 +15,7 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Target } from "lucide-react";
 
-export interface Mission {
+interface Mission {
   id: number;
   agent_id: string;
   hostname?: string;

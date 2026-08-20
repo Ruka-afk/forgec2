@@ -3,7 +3,7 @@
 import type { StateCreator } from "zustand";
 import type { AppStore, Density } from "./types";
 
-export interface UiSlice {
+interface UiSlice {
   sidebarCollapsed: boolean;
   isMobile: boolean;
   mobileMenuOpen: boolean;

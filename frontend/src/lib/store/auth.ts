@@ -4,7 +4,7 @@ import type { StateCreator } from "zustand";
 import type { AppStore, OnlineUser } from "./types";
 import type { PermissionKey } from "@/lib/permission-keys";
 
-export interface AuthSlice {
+interface AuthSlice {
   onlineUsers: OnlineUser[];
   setOnlineUsers: (users: OnlineUser[]) => void;
   currentUsername: string;

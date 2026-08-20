@@ -13,7 +13,7 @@ import { getRateLimitRetryAfter } from "@/lib/api";
  * validation text) and for headless call sites.
  */
 
-export type ErrorKind =
+type ErrorKind =
   | "network"
   | "timeout"
   | "session"

@@ -4,8 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import type { Beacon } from "./types";
 
-export type SortKey = "hostname" | "username" | "os" | "ip" | "last_seen" | "status";
-export type LinkedFilter = "" | "direct" | "chained";
+type SortKey = "hostname" | "username" | "os" | "ip" | "last_seen" | "status";
+type LinkedFilter = "" | "direct" | "chained";
 
 export function useAgentFilters(beacons: Beacon[]) {
   const [searchInput, setSearchInput] = useState("");

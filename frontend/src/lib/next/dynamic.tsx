@@ -5,7 +5,7 @@ type DynamicOptions = {
   loading?: (() => ReactNode) | ReactNode;
 };
 
-export function dynamic<T extends ComponentType<never>>(
+function dynamic<T extends ComponentType<never>>(
   factory: () => Promise<{ default: T }>,
   options?: DynamicOptions
 ): T {

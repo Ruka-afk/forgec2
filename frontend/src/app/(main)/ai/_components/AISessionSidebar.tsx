@@ -4,7 +4,7 @@ import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Plus, MessageSquare, Pencil, Trash2 } from "lucide-react";
 
-export interface AISession {
+interface AISession {
   id: number;
   title: string;
   updated_at: string;

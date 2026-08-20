@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo, type ReactNode } from "react";
 import { en } from "./en";
 
-export type Locale = "en" | "zh";
+type Locale = "en" | "zh";
 
 interface I18nContextType {
   locale: Locale;

@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { FlaskConical } from "lucide-react";
 import type { WebhookActionParams, WebhookType } from "./types";
 
-export interface RuleFormState {
+interface RuleFormState {
   name: string;
   event_type: string;
   action_type: string;

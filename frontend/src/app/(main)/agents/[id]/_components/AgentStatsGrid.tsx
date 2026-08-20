@@ -48,7 +48,7 @@ function InfoRow({ label, value, mono, title, copyValue, copyLabel, isSelect }: 
   );
 }
 
-export interface AgentStatsGridProps {
+interface AgentStatsGridProps {
   agent: Partial<AgentDetail>;
   uptime?: string;
   timeSinceLastSeen?: string;

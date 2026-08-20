@@ -3,7 +3,7 @@
 import { useReducer, useCallback } from "react";
 import type { Beacon } from "./types";
 
-export type ConfirmType = "kill" | "delete" | "uninstall" | "batch-delete" | "bulk-kill" | "bulk-uninstall";
+type ConfirmType = "kill" | "delete" | "uninstall" | "batch-delete" | "bulk-kill" | "bulk-uninstall";
 
 interface ModalState {
   confirm: { type: ConfirmType; id?: string; hostname?: string } | null;

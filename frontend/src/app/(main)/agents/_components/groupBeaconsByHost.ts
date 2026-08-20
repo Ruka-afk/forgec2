@@ -1,7 +1,7 @@
 import type { AgentStatus } from "@/types/agent";
 import type { Beacon } from "./types";
 
-export interface HostGroup {
+interface HostGroup {
   key: string;
   hostname: string;
   os: string;

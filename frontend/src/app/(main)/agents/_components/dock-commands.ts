@@ -1,8 +1,7 @@
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 
-export const DOCK_COMMANDS = ["ps", "screenshot", "sleep"] as const;
-export type DockCommandKind = (typeof DOCK_COMMANDS)[number];
+export type DockCommandKind = "ps" | "screenshot" | "sleep";
 
 export function parseSleepArgs(raw: string): { interval: number; jitter: number } | null {
   const parts = raw.trim().split(/[\s,]+/).filter(Boolean);

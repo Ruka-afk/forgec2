@@ -12,19 +12,13 @@ import { firstArray, firstNumber } from "./envelope";
  * it; `npm run check:openapi-types` fails if it drifts from the spec.
  */
 
-export type AgentDTO = components["schemas"]["Agent"];
-export type ListenerDTO = components["schemas"]["Listener"];
-export type CredentialDTO = components["schemas"]["Credential"];
-export type TaskDTO = components["schemas"]["Task"];
-export type UserDTO = components["schemas"]["User"];
-export type AuditLogDTO = components["schemas"]["AuditLog"];
-export type TokenEntryDTO = components["schemas"]["TokenEntry"];
+type AgentDTO = components["schemas"]["Agent"];
 
 /**
  * Wire query for GET /api/agents. Field names match what the backend parses
  * (page_size, not the spec's pageSize); values mirror the spec's enums.
  */
-export interface AgentsListQuery {
+interface AgentsListQuery {
   page?: number;
   page_size?: number;
   search?: string;
@@ -37,7 +31,7 @@ export interface AgentsListQuery {
   sort_dir?: "asc" | "desc";
 }
 
-export interface AgentsPage {
+interface AgentsPage {
   agents: AgentDTO[];
   total: number;
 }

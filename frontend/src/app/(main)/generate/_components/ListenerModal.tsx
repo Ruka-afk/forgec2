@@ -18,7 +18,7 @@ export type ListenerForm = {
   proto: string;
 };
 
-export const emptyListenerForm = (): ListenerForm => ({
+const emptyListenerForm = (): ListenerForm => ({
   name: "",
   ltype: "http",
   host: "",

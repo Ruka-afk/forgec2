@@ -13,7 +13,7 @@ interface ShellHistoryEntry {
   timestamp: string;
 }
 
-export function defaultShellForOS(os: string | undefined): string {
+function defaultShellForOS(os: string | undefined): string {
   return os && !/^win/i.test(os) ? "/bin/sh" : "cmd.exe";
 }
 

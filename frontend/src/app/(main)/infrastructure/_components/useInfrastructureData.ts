@@ -12,7 +12,7 @@ export interface InfraListener {
   protocol: string;
 }
 
-export interface Redirector {
+interface Redirector {
   id: number;
   name: string;
   host: string;

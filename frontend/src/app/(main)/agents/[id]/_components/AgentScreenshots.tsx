@@ -9,7 +9,7 @@ import Link from "next/link";
 import { Camera, ChevronLeft, ChevronRight, Maximize2, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
-export interface AgentScreenshotsProps {
+interface AgentScreenshotsProps {
   screenshots: string[];
   newScreenshots?: string[];
   agentId: string;

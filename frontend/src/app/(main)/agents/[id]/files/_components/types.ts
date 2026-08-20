@@ -9,14 +9,14 @@ export interface FileEntry {
   mod_time: string;
 }
 
-export interface DriveInfo {
+interface DriveInfo {
   letter: string;
   label: string;
   total: number;
   free: number;
 }
 
-export type RawDrive =
+type RawDrive =
   | string
   | {
       letter?: string;
@@ -29,21 +29,6 @@ export type RawDrive =
       free?: number;
       free_space?: number;
     };
-
-export function getFileIcon(entry: FileEntry): string {
-  if (entry.is_dir) return "📁";
-  const ext = entry.name.split(".").pop()?.toLowerCase() || "";
-  if (["txt", "log", "json", "xml", "ini", "conf", "yaml", "yml", "md", "cfg", "env"].includes(ext)) return "📄";
-  if (["jpg", "jpeg", "png", "gif", "bmp", "ico", "svg", "webp", "tiff"].includes(ext)) return "🖼️";
-  if (["exe", "dll", "sys", "bat", "ps1", "vbs", "msi", "com", "scr"].includes(ext)) return "⚙️";
-  if (["zip", "rar", "7z", "tar", "gz", "bz2", "xz"].includes(ext)) return "📦";
-  if (["doc", "docx", "xls", "xlsx", "ppt", "pptx", "pdf", "rtf", "odt"].includes(ext)) return "📄";
-  if (["mp3", "wav", "flac", "ogg", "aac"].includes(ext)) return "🎵";
-  if (["mp4", "avi", "mkv", "mov", "wmv", "flv"].includes(ext)) return "🎬";
-  if (["iso", "img", "vmdk", "vhd"].includes(ext)) return "💿";
-  if (["db", "sqlite", "sql", "mdb"].includes(ext)) return "🗄️";
-  return "📄";
-}
 
 export function isImageFile(name: string): boolean {
   const ext = name.split(".").pop()?.toLowerCase() || "";

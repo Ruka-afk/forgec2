@@ -86,7 +86,7 @@ function useFullTaskResults() {
   return { results, load, invalidate };
 }
 
-export interface AgentTaskListProps {
+interface AgentTaskListProps {
   tasks: AgentTaskRecord[];
   agentId: string;
   expandedTaskId: number | null;

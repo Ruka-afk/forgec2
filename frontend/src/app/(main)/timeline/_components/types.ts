@@ -9,8 +9,6 @@ export interface TimelineEvent {
   url?: string;
 }
 
-export const EVENT_TYPES = ["agent_online", "task", "credential", "user", "system", "alert"] as const;
-
 export const EVENT_COLORS: Record<string, { dot: string; bg: string; text: string }> = {
   agent_online: { dot: "bg-success", bg: "bg-success/15", text: "text-success" },
   task: { dot: "bg-info", bg: "bg-info/15", text: "text-info" },

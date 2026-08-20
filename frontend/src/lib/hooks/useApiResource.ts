@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { useI18n } from "@/lib/i18n";
 
-export interface UseApiResourceOptions<T> {
+interface UseApiResourceOptions<T> {
   fetcher: (signal?: AbortSignal) => Promise<T>;
   /** Poll interval in ms; 0 (default) disables. Pauses when tab hidden. */
   pollMs?: number;
@@ -21,7 +21,7 @@ export interface UseApiResourceOptions<T> {
   errorMessage?: string;
 }
 
-export interface UseApiResourceResult<T> {
+interface UseApiResourceResult<T> {
   data: T | null;
   loading: boolean;
   error: string | null;

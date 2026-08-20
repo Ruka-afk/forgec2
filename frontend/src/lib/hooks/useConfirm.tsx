@@ -4,7 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { useI18n } from "@/lib/i18n";
 
-export interface ConfirmOptions {
+interface ConfirmOptions {
   title?: string;
   message: string;
   confirmText?: string;

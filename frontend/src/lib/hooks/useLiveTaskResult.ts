@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { runTask, type TaskStatus } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
-export type LiveTaskStatus = "idle" | "pending" | "running" | "completed" | "failed" | "timeout";
+type LiveTaskStatus = "idle" | "pending" | "running" | "completed" | "failed" | "timeout";
 
 interface UseLiveTaskResultOptions {
   /** Max time to wait for a task result before failing with the timeout status. */

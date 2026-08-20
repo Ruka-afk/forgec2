@@ -5,18 +5,6 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 
-export interface TOTPState {
-  totpStatus: boolean | null;
-  totpSecret: string;
-  totpQR: string;
-  totpBackupCodes: string;
-  totpCode: string;
-  showTotpSetup: boolean;
-  totpEnablePassword: string;
-  totpDisablePassword: string;
-  totpDisableCode: string;
-}
-
 export function useTOTP(t: (key: string) => string, setSaving: (v: boolean) => void, activeSection: string) {
   const [totpStatus, setTotpStatus] = useState<boolean | null>(null);
   const [totpSecret, setTotpSecret] = useState("");

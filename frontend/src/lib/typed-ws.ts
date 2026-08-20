@@ -6,7 +6,7 @@ import { useWebSocket } from "@/lib/useWebSocket";
 import type { WSEventMap, WSEventName } from "@/lib/ws-events";
 
 /** A typed WS frame: the wire message (with `type`) carrying a registered payload. */
-export type TypedWSMessage<N extends WSEventName> = WSMessage & WSEventMap[N];
+type TypedWSMessage<N extends WSEventName> = WSMessage & WSEventMap[N];
 
 function matchSet<N extends WSEventName>(names: N | readonly N[]): ReadonlySet<string> {
   return new Set(Array.isArray(names) ? names : [names]);

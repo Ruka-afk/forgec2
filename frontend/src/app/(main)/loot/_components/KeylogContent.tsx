@@ -41,18 +41,6 @@ function highlightKeylog(text: string): string {
   return out;
 }
 
-export function countSensitiveMatches(text: string): number {
-  const seen = new Set<string>();
-  for (const { re, cls } of SENSITIVE_PATTERNS) {
-    const m = re.exec(text);
-    if (m) {
-      seen.add(cls);
-      re.lastIndex = 0;
-    }
-  }
-  return seen.size;
-}
-
 export default function KeylogContent({ text, className = "" }: { text: string; className?: string }) {
   const html = useMemo(() => highlightKeylog(text || ""), [text]);
   return <div className={className} dangerouslySetInnerHTML={{ __html: html }} />;

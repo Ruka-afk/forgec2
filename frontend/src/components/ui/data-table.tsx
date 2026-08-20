@@ -10,7 +10,7 @@ import { DataState } from "@/components/ui/data-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { computeVirtualRange, VIRTUAL_THRESHOLD } from "@/lib/virtual";
 
-export type SortDirection = "asc" | "desc";
+type SortDirection = "asc" | "desc";
 
 export interface DataTableColumn<T> {
   /** Stable id — used as the React key and sort column identifier. */
@@ -28,12 +28,12 @@ export interface DataTableColumn<T> {
   hidden?: string;
 }
 
-export type SortState = { column: string; dir: SortDirection };
+type SortState = { column: string; dir: SortDirection };
 
 /** Default row height used by the virtualizer (override via rowHeight). */
-export const DEFAULT_ROW_HEIGHT = 40;
+const DEFAULT_ROW_HEIGHT = 40;
 
-export interface DataTableProps<T> {
+interface DataTableProps<T> {
   data: T[];
   columns: DataTableColumn<T>[];
   rowKey: (row: T, index: number) => string;

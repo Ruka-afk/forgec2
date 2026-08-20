@@ -1,19 +1,19 @@
 "use client";
 
-export const INTERACT_TABS = ["shell", "files", "tasks"] as const;
+const INTERACT_TABS = ["shell", "files", "tasks"] as const;
 export type InteractTab = (typeof INTERACT_TABS)[number];
 
 export const DOCK_HEIGHT_MIN = 180;
 export const DOCK_HEIGHT_MAX = 640;
 export const DOCK_HEIGHT_DEFAULT = 360;
-export const INTERACT_STORAGE_KEY = "forgec2_interact_dock";
+const INTERACT_STORAGE_KEY = "forgec2_interact_dock";
 
 export function clampDockHeight(height: number, max = DOCK_HEIGHT_MAX): number {
   if (!Number.isFinite(height)) return DOCK_HEIGHT_DEFAULT;
   return Math.min(max, Math.max(DOCK_HEIGHT_MIN, Math.round(height)));
 }
 
-export interface InteractPrefs {
+interface InteractPrefs {
   agentId: string | null;
   height: number;
   tab: InteractTab;

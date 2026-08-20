@@ -31,7 +31,7 @@ function asAgent(row: Record<string, unknown>): NormalizedAgent {
   };
 }
 
-export interface OpsHomeData {
+interface OpsHomeData {
   agents: NormalizedAgent[];
   healthByTarget: Record<string, ListenerHealth>;
   failedTasks: Task[];

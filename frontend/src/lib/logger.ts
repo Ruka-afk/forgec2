@@ -10,7 +10,7 @@
  *   even redaction is a last line of defense, not a license to log them.
  */
 
-export type LogLevel = "debug" | "info" | "warn" | "error";
+type LogLevel = "debug" | "info" | "warn" | "error";
 
 const LEVEL_ORDER: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3 };
 
@@ -46,7 +46,7 @@ export function redact(value: unknown): unknown {
   return redactValue(value, 0);
 }
 
-export interface Logger {
+interface Logger {
   debug(fmt: string, ...args: unknown[]): void;
   info(fmt: string, ...args: unknown[]): void;
   warn(fmt: string, ...args: unknown[]): void;

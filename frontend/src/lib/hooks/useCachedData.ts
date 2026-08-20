@@ -37,7 +37,7 @@ export async function fetchCached<T>(key: string, fetcher: () => Promise<T>, ttl
   return run;
 }
 
-export interface UseCachedDataOptions<T> {
+interface UseCachedDataOptions<T> {
   fetcher: () => Promise<T>;
   /** Freshness window in ms. Default 60_000 (1 min). */
   ttlMs?: number;
@@ -51,7 +51,7 @@ export interface UseCachedDataOptions<T> {
   onError?: (err: unknown) => void;
 }
 
-export interface UseCachedDataResult<T> {
+interface UseCachedDataResult<T> {
   data: T | null;
   loading: boolean;
   error: boolean;

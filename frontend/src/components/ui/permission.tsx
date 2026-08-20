@@ -15,7 +15,7 @@ import type { PermissionKey } from "@/lib/permission-keys";
  * When children is a function it receives the resolved boolean, letting a
  * single element adapt its rendering without duplicating the gate.
  */
-export interface PermissionProps {
+interface PermissionProps {
   /** any = at least one (default), all = every required permission. */
   mode?: "any" | "all";
   /** Shown in place of children when not allowed. */

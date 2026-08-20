@@ -1,4 +1,4 @@
-export interface EvasionTechnique {
+interface EvasionTechnique {
   value: string;
   labelKey: string;
   group: string;

@@ -34,7 +34,7 @@ function getOSIcon(os: string): React.ReactNode {
   }
 }
 
-export interface AgentHeaderProps {
+interface AgentHeaderProps {
   agent: Partial<AgentDetail>;
   agentId: string;
   status: AgentStatus;

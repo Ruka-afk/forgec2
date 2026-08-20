@@ -12,7 +12,7 @@
  * `{ type: string; [key: string]: unknown }` in component code again.
  */
 
-export interface TaskUpdateEvent {
+interface TaskUpdateEvent {
   task_id: number | string;
   status: string;
   task_type?: string;
@@ -22,14 +22,14 @@ export interface TaskUpdateEvent {
   agent_id?: number | string;
 }
 
-export interface TaskOutputEvent {
+interface TaskOutputEvent {
   task_id: number | string;
   chunk?: string;
   done?: boolean;
   agent_id?: number | string;
 }
 
-export interface TaskCreatedEvent {
+interface TaskCreatedEvent {
   task_id?: number | string;
   id?: number | string;
   task_type?: string;
@@ -40,34 +40,34 @@ export interface TaskCreatedEvent {
   agent_id?: number | string;
 }
 
-export interface AgentOnlineEvent {
+interface AgentOnlineEvent {
   agent_id?: number | string;
   hostname?: string;
   username?: string;
   ip?: string;
 }
 
-export interface AgentOfflineEvent {
+interface AgentOfflineEvent {
   agent_id?: number | string;
   hostname?: string;
   username?: string;
   ip?: string;
 }
 
-export interface AgentLockedEvent {
+interface AgentLockedEvent {
   agent_id?: number | string;
 }
 
-export interface AgentUnlockedEvent {
+interface AgentUnlockedEvent {
   agent_id?: number | string;
 }
 
-export interface AgentDataUpdateEvent {
+interface AgentDataUpdateEvent {
   agent_id?: number | string;
   [key: string]: unknown;
 }
 
-export interface NotificationEvent {
+interface NotificationEvent {
   id?: number | string;
   message?: string;
   title?: string;
@@ -77,23 +77,23 @@ export interface NotificationEvent {
   read?: boolean;
 }
 
-export interface CredentialFoundEvent {
+interface CredentialFoundEvent {
   message?: string;
   title?: string;
 }
 
-export interface SystemAlertEvent {
+interface SystemAlertEvent {
   message?: string;
   title?: string;
   alert_type?: string;
 }
 
-export interface UpdateAvailableEvent {
+interface UpdateAvailableEvent {
   latest?: string;
 }
 
 /** Payloads not yet modeled: widen as consumers migrate to typed access. */
-export interface UnmodeledEvent {
+interface UnmodeledEvent {
   [key: string]: unknown;
 }
 

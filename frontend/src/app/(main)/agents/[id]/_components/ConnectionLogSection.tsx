@@ -7,7 +7,7 @@ import { useI18n } from "@/lib/i18n";
 import type { LogEntry } from "./agent-detail-utils";
 import { Circle, History } from "lucide-react";
 
-export interface ConnectionLogSectionProps {
+interface ConnectionLogSectionProps {
   logs: LogEntry[];
 }
 

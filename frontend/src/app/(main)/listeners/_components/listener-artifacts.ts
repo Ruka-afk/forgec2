@@ -1,4 +1,4 @@
-export interface ListenerArtifact {
+interface ListenerArtifact {
   id: string;
   filename: string;
   format: string;

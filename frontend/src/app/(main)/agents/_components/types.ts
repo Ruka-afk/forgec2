@@ -1,7 +1,7 @@
 import type { AgentBase, AgentStatus } from "@/types/agent";
 import { Monitor, Terminal, Apple, Laptop, type LucideIcon } from "lucide-react";
 
-export interface TaskStats {
+interface TaskStats {
   pending: number;
   running: number;
   completed: number;

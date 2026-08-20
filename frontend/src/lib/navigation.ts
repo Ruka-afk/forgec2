@@ -12,7 +12,7 @@ import {
   Plug, Users, Settings, Search,
 } from "lucide-react";
 
-export interface NavItemDef {
+interface NavItemDef {
   href: string;
   labelKey: string;
   icon: LucideIcon;
@@ -27,7 +27,7 @@ export interface NavItemDef {
   perms?: PermissionKey[];
 }
 
-export interface NavSectionDef {
+interface NavSectionDef {
   titleKey: string;
   /** Always visible in the sidebar; cannot be collapsed. */
   pinned?: boolean;
@@ -154,7 +154,7 @@ export const NAV_SEGMENT_LABELS: Record<string, string> = Object.fromEntries(
 );
 
 /** Sub-route segment -> labelKey for per-page document.title. */
-export const SUB_ROUTE_TITLE_KEYS: Record<string, string> = {
+const SUB_ROUTE_TITLE_KEYS: Record<string, string> = {
   config: "agents.config_title",
   shell: "agents.shell",
   files: "nav.files",

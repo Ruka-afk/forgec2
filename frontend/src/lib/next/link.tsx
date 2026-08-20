@@ -8,7 +8,7 @@ type LinkProps = Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href"> & {
   replace?: boolean;
 };
 
-export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
+const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
   { href, className, children, prefetch, replace, ...rest },
   ref
 ) {

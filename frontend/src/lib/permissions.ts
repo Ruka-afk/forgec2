@@ -11,7 +11,7 @@ import type { PermissionKey } from "./permission-keys";
 
 export type { PermissionKey };
 
-export type Permissions = readonly PermissionKey[] | null | undefined;
+type Permissions = readonly PermissionKey[] | null | undefined;
 
 /** True when the user holds the exact permission. */
 export function can(permissions: Permissions, perm: PermissionKey): boolean {

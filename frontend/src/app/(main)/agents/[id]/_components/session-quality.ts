@@ -1,13 +1,13 @@
 export type SessionActionQuality = "core" | "hardened" | "scripted" | "experimental";
 
-export interface SessionActionDef {
+interface SessionActionDef {
   action: string;
   quality: SessionActionQuality;
   /** True only for an actual elevate/bypass attempt, never for a recon check. */
   isElevate: boolean;
 }
 
-export const SESSION_POSTEX_ACTIONS: SessionActionDef[] = [
+const SESSION_POSTEX_ACTIONS: SessionActionDef[] = [
   { action: "shell", quality: "core", isElevate: false },
   { action: "ps", quality: "core", isElevate: false },
   { action: "screenshot", quality: "hardened", isElevate: false },
@@ -25,7 +25,7 @@ export const SESSION_POSTEX_ACTIONS: SessionActionDef[] = [
   { action: "uac_bypass", quality: "hardened", isElevate: true },
 ];
 
-export function sessionActionDef(action: string): SessionActionDef | undefined {
+function sessionActionDef(action: string): SessionActionDef | undefined {
   return SESSION_POSTEX_ACTIONS.find((a) => a.action === action);
 }
 

@@ -1,11 +1,11 @@
-export type DiffKind = "same" | "add" | "del";
+type DiffKind = "same" | "add" | "del";
 
-export interface DiffLine {
+interface DiffLine {
   kind: DiffKind;
   text: string;
 }
 
-export interface ResultDiff {
+interface ResultDiff {
   lines: DiffLine[];
   added: number;
   removed: number;
@@ -17,7 +17,7 @@ const SEQ_LINE_CAP = 400;
 const SEQ_CELL_CAP = 160_000;
 const OUT_LINE_CAP = 800;
 
-export function splitResultLines(text: string): string[] {
+function splitResultLines(text: string): string[] {
   return (text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
 }
 

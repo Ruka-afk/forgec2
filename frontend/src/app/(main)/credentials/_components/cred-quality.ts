@@ -1,9 +1,6 @@
-/** Matches server loadMimikatzModuleB64 candidates. */
-export const MIMIKATZ_MODULE_NAMES = ["Invoke-Mimikatz.ps1", "invoke-mimikatz.ps1", "mimikatz.ps1"];
-
 export type CredActionQuality = "core" | "hardened" | "scripted" | "experimental";
 
-export interface CredDumpAction {
+interface CredDumpAction {
   action: string;
   quality: CredActionQuality;
   requiresMimikatzModule: boolean;
@@ -11,7 +8,7 @@ export interface CredDumpAction {
   endpoint: string;
 }
 
-export const CRED_DUMP_ACTIONS: CredDumpAction[] = [
+const CRED_DUMP_ACTIONS: CredDumpAction[] = [
   { action: "creds", quality: "scripted", requiresMimikatzModule: false, endpoint: "creds" },
   { action: "creds_dump", quality: "scripted", requiresMimikatzModule: false, endpoint: "creds" },
   { action: "hashdump", quality: "scripted", requiresMimikatzModule: false, endpoint: "creds" },

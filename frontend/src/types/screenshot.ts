@@ -5,8 +5,3 @@ export interface Screenshot {
   path: string;
   created_at: string;
 }
-
-export interface Resolution {
-  w: number;
-  h: number;
-}

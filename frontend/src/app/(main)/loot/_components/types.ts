@@ -23,7 +23,7 @@ function asList(v: unknown): unknown[] {
   return Array.isArray(v) ? v : [];
 }
 
-export function normalizeScreenshot(raw: unknown): Screenshot | null {
+function normalizeScreenshot(raw: unknown): Screenshot | null {
   const o = asRecord(raw);
   if (!o) return null;
   const agentId = firstStr(o, ["agent_id", "AgentID"]);

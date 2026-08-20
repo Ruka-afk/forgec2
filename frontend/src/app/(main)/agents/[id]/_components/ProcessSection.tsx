@@ -7,7 +7,7 @@ import { SectionCard } from "@/components/ui/section-card";
 import { useI18n } from "@/lib/i18n";
 import { RefreshCw, Terminal } from "lucide-react";
 
-export interface ProcessSectionProps {
+interface ProcessSectionProps {
   processList: string | null;
   loading: boolean;
   loadFailed: boolean;

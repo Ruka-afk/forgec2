@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export interface BreakerConfig {
+interface BreakerConfig {
   failure_threshold: number;
   cooldown_seconds: number;
   half_open_max_reqs: number;

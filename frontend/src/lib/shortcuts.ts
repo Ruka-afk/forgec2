@@ -1,4 +1,4 @@
-export interface ShortcutDef {
+interface ShortcutDef {
   key: string;
   ctrl?: boolean;
   shift?: boolean;
