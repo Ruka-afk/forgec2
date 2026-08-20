@@ -29,6 +29,7 @@ interface AgentRowProps {
   lockUser: string | null;
   presenceUsers: string[] | null;
   visibleCols: Record<string, boolean>;
+  tags?: { id: string; name: string; color: string }[];
 }
 
 export const AgentRow = memo(function AgentRow({
@@ -44,6 +45,7 @@ export const AgentRow = memo(function AgentRow({
   lockUser,
   presenceUsers,
   visibleCols,
+  tags,
 }: AgentRowProps) {
   const id = beacon.id || "";
   const { t } = useI18n();
@@ -79,7 +81,7 @@ export const AgentRow = memo(function AgentRow({
           onInteract(id);
         }
       }}
-      className={`group cursor-default hover:bg-secondary/50 ${borderLeft}`}
+      className={`group cursor-default hover:bg-secondary/60 hover:shadow-sm transition-colors ${borderLeft} ${isSelected ? "bg-primary/5" : ""}`}
     >
       <TableCell className="py-1 px-2">
         <Checkbox aria-label={t("common.select_item")} name={`select-${id}`}
@@ -233,6 +235,14 @@ export const AgentRow = memo(function AgentRow({
       )}
       <TableCell className="py-1 px-2 text-right">
         <div className="flex items-center justify-end gap-0.5">
+          {tags && tags.length > 0 && (
+            <span className="hidden xl:inline-flex items-center gap-1 mr-1">
+              {tags.slice(0, 3).map((tag) => (
+                <span key={tag.id} className="w-2 h-2 rounded-full ring-1 ring-white dark:ring-border shadow-sm" style={{ backgroundColor: tag.color }} title={tag.name} />
+              ))}
+              {tags.length > 3 && <span className="text-(--fs-micro) text-muted-foreground">+{tags.length - 3}</span>}
+            </span>
+          )}
           <Button
             variant="ghost"
             size="icon-xs"

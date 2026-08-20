@@ -724,6 +724,7 @@ export default function AgentsPageContent() {
                 lockUser={agentLocks[beacon.id || ""] || null}
                 presenceUsers={operatorPresence[beacon.id || ""] || null}
                 visibleCols={visibleCols}
+                tags={tagsByAgent[beacon.id || ""] || []}
               />
             ))}
             {!loading && agentVirtualized && agentTotalHeight - agentOffsetTop - visibleBeacons.length * rowHeight > 0 && (

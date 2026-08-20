@@ -22,6 +22,7 @@ export default function TopBar({ onMenuToggle }: { onMenuToggle?: () => void }) 
   const storeSidebarWidth = useAppStore(selectSidebarWidth);
   const focusMode = useAppStore((s) => s.focusMode);
   const toggleFocusMode = useAppStore((s) => s.toggleFocusMode);
+  const stats = useAppStore((s) => s.stats);
 
   return (
     <>
@@ -38,16 +39,21 @@ export default function TopBar({ onMenuToggle }: { onMenuToggle?: () => void }) 
       </div>
 
       <div className="flex items-center gap-1">
-        {/* WS Status */}
+        {/* WS + Live Agents */}
         <div className="flex items-center gap-2 px-2.5 py-1 mr-2 shrink-0 rounded-full bg-secondary/60 dark:bg-secondary/40 border border-border/50">
           <Tooltip>
             <TooltipTrigger>
               <span role="status" aria-live="polite" className="flex items-center gap-2">
                 <ConnectionDot connected={connected} reconnectFailed={reconnectFailed} />
                 <span className="text-(--fs-micro-sm) text-muted-foreground/70 hidden lg:inline">{connected ? t("common.live") : reconnectFailed ? t("common.offline") : t("topbar.reconnecting")}</span>
+                {stats && (stats.online_agents ?? 0) > 0 && (
+                  <span className="hidden xl:inline-flex items-center gap-1 text-(--fs-micro-sm) font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
+                    {stats.online_agents} {t("agents.online_label")}
+                  </span>
+                )}
               </span>
             </TooltipTrigger>
-            <TooltipContent>{connected ? t("topbar.ws_connected") : reconnectFailed ? t("topbar.ws_lost") : t("topbar.reconnecting")}</TooltipContent>
+            <TooltipContent>{connected ? t("topbar.ws_connected") : reconnectFailed ? t("topbar.ws_lost") : t("topbar.reconnecting")}{stats ? ` · ${stats.online_agents ?? 0} ${t("agents.online_label")}` : ""}</TooltipContent>
           </Tooltip>
         </div>
 

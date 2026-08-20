@@ -1,1 +1,0 @@
-import{j as s}from"./vendor-react-CasLP3f6.js";import{f as o}from"./index-D6qVsziy.js";function a({id:r,children:t,className:e}){return t?s.jsx("p",{id:r,role:"alert",className:o("text-xs text-destructive mt-1",e),children:t}):null}export{a as F};
