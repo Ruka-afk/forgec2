@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Clock, Type, Trash2, Keyboard } from "lucide-react";
+import { Clock, Type, Trash2, Keyboard, Copy, Check } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
 
@@ -25,13 +25,19 @@ function buildTerminalTheme() {
   const cs = typeof window === "undefined" ? null : getComputedStyle(document.documentElement);
   const v = (name: string, fallback: string) => cs?.getPropertyValue(name).trim() || fallback;
   const primary = v("--primary", "#4f46e5");
+  const isDark = typeof document !== "undefined" && document.documentElement.classList.contains("dark");
   return {
-    background: v("--background", "#020617"),
-    foreground: v("--foreground", "#e2e8f0"),
+    background: isDark ? v("--card", "#0f172a") : v("--background", "#f8fafc"),
+    foreground: v("--foreground", "#0f172a"),
     cursor: primary,
     cursorAccent: v("--background", "#020617"),
-    selectionBackground: `color-mix(in oklch, ${primary} 35%, transparent)`,
+    selectionBackground: `color-mix(in oklch, ${primary} 28%, transparent)`,
+    selectionForeground: v("--foreground", "#e2e8f0"),
   };
+}
+
+function fmtTime(d = new Date()) {
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
 }
 
 function clearCommandHistory() {
@@ -69,6 +75,8 @@ export default function ShellTerminal({
   const osTypeRef = useRef(osType);
   osTypeRef.current = osType;
   const [beaconHint, setBeaconHint] = useState("");
+  const [lastOutput, setLastOutput] = useState("");
+  const [copyFlash, setCopyFlash] = useState(false);
   const a11yLogRef = useRef<HTMLDivElement>(null);
 
   // xterm renders to canvas, which screen readers cannot see. Mirror plain-text
@@ -115,13 +123,15 @@ export default function ShellTerminal({
       setLoading(true);
       lastCommandRef.current = cmd;
       waitingWrittenRef.current = false;
-      // Bytes already rendered from streaming task_output frames; the final
-      // poll result only appends the remainder.
+      // Header line with timestamp — separates commands visually and gives operator timeline.
+      termRef.current?.writeln(`\x1b[90m─ ${fmtTime()}  ${promptChar} ${cmd}\x1b[0m`);
       let rendered = 0;
+      let fullOut = "";
       const appendOutput = (text: string, announceText: string) => {
         if (text.length <= rendered) return;
         const fresh = text.slice(rendered);
         rendered = text.length;
+        fullOut += fresh;
         const highlighted = highlightOutput(fresh, lastCommandRef.current);
         termRef.current?.write(highlighted.replace(/\n/g, "\r\n"));
         if (announceText) announce(announceText);
@@ -139,26 +149,32 @@ export default function ShellTerminal({
             onStatus: (s) => {
               if ((s.status === "pending" || s.status === "running") && !waitingWrittenRef.current) {
                 waitingWrittenRef.current = true;
-                writeln(t("shell.waiting_output"), "90");
+                writeln(`◷ ${t("shell.waiting_output")}`, "90");
               }
               if (s.result) appendOutput(s.result, "");
             },
           },
         );
         if (st.status === "failed") {
-          writeln(st.error || t("shell.command_failed"), "31");
+          const msg = st.error || t("shell.command_failed");
+          writeln(`✕ ${msg}`, "31");
+          setLastOutput(fullOut || msg);
         } else if (st.result) {
           appendOutput(st.result, st.result);
           termRef.current?.write("\r\n");
+          // success tick with duration hint
+          termRef.current?.writeln(`\x1b[32m✓\x1b[0m \x1b[90m${fmtTime()}\x1b[0m`);
+          setLastOutput(st.result);
         } else {
-          writeln(t("shell.no_output"), "33");
+          writeln(`○ ${t("shell.no_output")}`, "33");
+          setLastOutput("");
         }
       } catch (e) {
         if (!ac.signal.aborted) {
           if (e instanceof ApiError && e.status === 409) {
-            writeln(String(e.message), "33");
+            writeln(`⚠ ${String(e.message)}`, "33");
           } else {
-            writeln(String(e), "31");
+            writeln(`✕ ${String(e)}`, "31");
           }
         }
       } finally {
@@ -170,7 +186,7 @@ export default function ShellTerminal({
         }
       }
     },
-    [agentId, shellType, t, writeln, writePrompt, announce],
+    [agentId, shellType, t, writeln, writePrompt, announce, promptChar],
   );
 
   useEffect(() => { execRef.current = executeCommand; }, [executeCommand]);
@@ -378,37 +394,58 @@ export default function ShellTerminal({
   const runQuick = (cmd: string) => {
     if (loadingRef.current) return;
     inputRef.current = "";
-    termRef.current?.write(`\r\n\x1b[33m${promptRef.current}\x1b[37m${cmd}\x1b[0m\r\n`);
-    executeCommand(cmd);
+    termRef.current?.write(`\r\n\x1b[90m${fmtTime()} \x1b[33m${promptChar} ${cmd}\x1b[0m\r\n`);
+    void executeCommand(cmd);
+  };
+
+  const handleCopyLast = async () => {
+    if (!lastOutput) return;
+    try { await navigator.clipboard.writeText(lastOutput); setCopyFlash(true); setTimeout(() => setCopyFlash(false), 1200); } catch { /* ignore */ }
+  };
+
+  const handleClear = () => {
+    historyRef.current = [];
+    // keep persisted history but clear session view; persisted stays for Up/Down
+    termRef.current?.clear();
+    termRef.current?.writeln(`\x1b[90m${t("shell.banner")}\x1b[0m`);
+    writePromptRef.current();
   };
 
   return (
-    <div className={className || "h-[calc(100vh-9rem)] flex flex-col bg-background text-foreground rounded-xl overflow-hidden border border-border relative"}>
+    <div className={className || "h-[calc(100vh-9rem)] flex flex-col bg-card text-foreground rounded-xl overflow-hidden border border-border shadow-sm relative"}>
       {showHeader && (
-        <div className="shrink-0 bg-card border-b border-border px-4 py-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <StatusDot tone="success" />
-            <span className="font-semibold text-sm text-foreground truncate">{t("shell.title")}</span>
-            <span className="text-xs text-muted-foreground font-mono uppercase">{shellType}</span>
-            <Tooltip>
-              <TooltipTrigger>
-                <span className="text-xs text-muted-foreground/70">
-                   <Clock className="w-3 h-3 mr-1 inline" />
+        <div className="shrink-0 bg-card/90 backdrop-blur supports-[backdrop-filter]:bg-card/80 border-b border-border px-3 py-2.5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 ring-1 ring-primary/15">
+              <Keyboard className="w-4 h-4" />
+            </span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-sm tracking-tight truncate">{t("shell.title")}</span>
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded bg-secondary text-muted-foreground ring-1 ring-border/50">{shellType}</span>
+                <span className="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-foreground/80 font-mono">
+                  <StatusDot tone="success" size="sm" pulse />
+                  <span className="truncate max-w-[10rem]">{agentId.slice(0, 8)}…</span>
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground/70">
+                  <Clock className="w-3 h-3" />
                   {beaconHint || t("shell.beacon_loading")}
                 </span>
-              </TooltipTrigger>
-              <TooltipContent>{t("shell.beacon_timing")}</TooltipContent>
-            </Tooltip>
+                {loading && <span className="inline-flex items-center gap-1 text-xs text-chart-1"><Spinner size="xs" />{t("shell.executing")}</span>}
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <div className="flex items-center gap-1 text-xs text-muted-foreground mr-2">
-               <Type className="w-4 h-4" />
+          <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+            <div className="hidden md:flex items-center gap-1 text-xs text-muted-foreground mr-1">
+              <Type className="w-3.5 h-3.5" />
               <Select value={String(fontSize)} onValueChange={(v) => {
                   const val = Number(v ?? 14);
                   setFontSize(val);
                   localStorage.setItem(KEY, String(val));
                 }}>
-                <SelectTrigger className="w-auto" aria-label={t("shell.font_size")}>
+                <SelectTrigger className="h-7 w-auto text-xs" aria-label={t("shell.font_size")}>
                   <SelectValue placeholder="14" />
                 </SelectTrigger>
                 <SelectContent>
@@ -418,22 +455,36 @@ export default function ShellTerminal({
                   <SelectItem value="16">16</SelectItem>
                 </SelectContent>
               </Select>
-              </div>
-            {quickCommands.map((cmd) => (
+            </div>
+            <div className="hidden lg:flex items-center gap-1">
+            {quickCommands.slice(0, 4).map((cmd) => (
               <Button
                 key={cmd}
                 variant="outline"
                 size="sm"
                 onClick={() => runQuick(cmd)}
                 disabled={loading}
-                className="whitespace-nowrap"
+                className="whitespace-nowrap h-7 text-xs"
               >
                 {cmd}
               </Button>
             ))}
+            </div>
             <Tooltip>
               <TooltipTrigger render={<Button
-                  variant="outline"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={handleCopyLast}
+                  disabled={!lastOutput}
+                  aria-label={t("shell.copy_last_output")}
+                />}>
+                {copyFlash ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
+              </TooltipTrigger>
+              <TooltipContent>{t("shell.copy_last_output")}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger render={<Button
+                  variant="ghost"
                   size="icon-sm"
                   onClick={() => { clearCommandHistory(); historyRef.current = []; histIdxRef.current = 0; termRef.current?.clear(); writeln(t("shell.history_cleared"), "33"); }}
                   aria-label={t("common.clear_history")}
@@ -441,6 +492,12 @@ export default function ShellTerminal({
                 <Trash2 className="w-4 h-4" />
               </TooltipTrigger>
               <TooltipContent>{t("common.clear_history")}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={handleClear} aria-label={t("shell.clear_screen")} />}>
+                <span className="text-xs font-mono">⌧</span>
+              </TooltipTrigger>
+              <TooltipContent>{t("shell.clear_screen")}</TooltipContent>
             </Tooltip>
           </div>
         </div>

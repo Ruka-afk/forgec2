@@ -15,7 +15,7 @@ import { StatTile } from "@/components/ui/stat-tile";
 import { DataError } from "@/components/ui/data-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Archive, Bug, Radio, ListChecks, Search, Terminal, Wand2 } from "lucide-react";
+import { Archive, Bug, Radio, Clock, ListChecks, Search, Terminal, Wand2 } from "lucide-react";
 import type { DashboardStats } from "@/types/agent";
 import { useOpsHomeData } from "./useOpsHomeData";
 import {
@@ -243,32 +243,33 @@ const DashboardStatTiles = memo(function DashboardStatTiles({ loading, unhealthy
   const s: Partial<DashboardStats> = stats ?? {};
   const pending = s.pending_tasks ?? 0;
   const failed = s.failed_tasks ?? 0;
+  const totalTasks = s.total_tasks ?? 0;
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
       <Link href="/agents">
-        <Card className="surface-raised rounded-lg p-4 transition-all duration-200 hover:-translate-y-0.5 hover:ring-accent-glow focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-          <StatTile label={t("dashboard.beacons")} value={loading && !stats ? "…" : `${online}/${total}`} sub={t("dashboard.online_suffix")} tone="success" />
+        <Card className="surface-raised rounded-xl p-4 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:ring-accent-glow group focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+          <StatTile label={t("dashboard.beacons")} value={loading && !stats ? "…" : `${online}/${total}`} sub={online === total && total > 0 ? t("dashboard.all_online") : t("dashboard.online_suffix")} tone="success" icon={<Radio className="w-5 h-5" />} trend={total > 0 ? <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />{t("dashboard.live_agents")}</span> : undefined} />
         </Card>
       </Link>
       <Link href="/timeline?tab=tasks">
-        <Card className="surface-raised rounded-lg p-4 transition-all duration-200 hover:-translate-y-0.5 hover:ring-accent-glow focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-          <StatTile label={t("dashboard.pending_tasks_label")} value={loading && !stats ? "…" : pending} tone={pending > 0 ? "warning" : undefined} />
+        <Card className="surface-raised rounded-xl p-4 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:ring-accent-glow group focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+          <StatTile label={t("dashboard.pending_tasks_label")} value={loading && !stats ? "…" : pending} tone={pending > 0 ? "warning" : "muted"} icon={<Clock className="w-5 h-5" />} trend={totalTasks > 0 ? `${Math.round((pending/totalTasks)*100)}% ${t("dashboard.queue_share")}` : undefined} />
         </Card>
       </Link>
       <Link href="/timeline?tab=tasks">
-        <Card className="surface-raised rounded-lg p-4 transition-all duration-200 hover:-translate-y-0.5 hover:ring-accent-glow focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-          <StatTile label={t("dashboard.failed_tasks")} value={loading && !stats ? "…" : failed} tone={failed > 0 ? "destructive" : undefined} />
+        <Card className="surface-raised rounded-xl p-4 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:ring-accent-glow group focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+          <StatTile label={t("dashboard.failed_tasks")} value={loading && !stats ? "…" : failed} tone={failed > 0 ? "destructive" : "muted"} icon={<Bug className="w-5 h-5" />} trend={failed > 0 ? t("dashboard.needs_attention") : t("dashboard.all_clear")} />
         </Card>
       </Link>
       <Link href="/listeners">
-        <Card className="surface-raised rounded-lg p-4 transition-all duration-200 hover:-translate-y-0.5 hover:ring-accent-glow focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-          <StatTile label={t("dashboard.unhealthy_count")} value={loading ? "…" : unhealthyCount} tone={unhealthyCount > 0 ? "destructive" : "success"} />
+        <Card className="surface-raised rounded-xl p-4 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:ring-accent-glow group focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+          <StatTile label={t("dashboard.unhealthy_count")} value={loading ? "…" : unhealthyCount} tone={unhealthyCount > 0 ? "destructive" : "success"} icon={<Radio className="w-5 h-5" />} trend={unhealthyCount === 0 ? t("dashboard.all_healthy") : undefined} />
         </Card>
       </Link>
       <Link href="/loot">
-        <Card className="surface-raised rounded-lg p-4 transition-all duration-200 hover:-translate-y-0.5 hover:ring-accent-glow focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-          <StatTile label={t("dashboard.loot_inbox")} value={loading ? "…" : lootCount} sub={t("dashboard.loot_recent")} tone={lootCount > 0 ? "info" : undefined} />
+        <Card className="surface-raised rounded-xl p-4 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:ring-accent-glow group focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+          <StatTile label={t("dashboard.loot_inbox")} value={loading ? "…" : lootCount} sub={t("dashboard.loot_recent")} tone={lootCount > 0 ? "info" : "muted"} icon={<Archive className="w-5 h-5" />} />
         </Card>
       </Link>
     </div>
