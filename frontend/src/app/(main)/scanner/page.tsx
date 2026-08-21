@@ -341,9 +341,9 @@ export default function ScannerPage() {
                 ))}</TableBody>
               </Table>
             ) : data?.results && data.results.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
+              <Table className="text-sm">
+                <TableHeader className="bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90 sticky top-0 z-10 border-b border-border">
+                  <TableRow className="hover:bg-transparent">
                     <TableHead>IP</TableHead>
                     <TableHead>{t("scanner.col_port")}</TableHead>
                     <TableHead>{t("scanner.col_protocol")}</TableHead>
