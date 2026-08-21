@@ -254,11 +254,11 @@ export default function AutomationPage() {
 
         <TabsContent value="rules" className="mt-0">
           <div className="flex gap-4 flex-wrap">
-            <Card className="overflow-hidden flex-1 min-w-0">
+            <Card className="overflow-hidden flex-1 min-w-0 shadow-sm hover:shadow-md transition-shadow duration-200">
               <CardHeaderRow accent={false} icon={Zap} tone="warning" title={t("auto.event_listeners")} description={t("auto.event_listeners_desc")} />
               <div className="p-(--card-spacing) space-y-3">
                 {events.map((e) => (
-                  <div key={e.type} className="flex items-center gap-3 p-3 bg-secondary border border-border rounded-lg">
+                  <div key={e.type} className="flex items-center gap-3 p-3 bg-secondary border border-border rounded-lg hover:bg-secondary/80 transition-colors">
                     <span className={`w-2 h-2 ${e.color} rounded-full`}></span>
                     <span className="font-mono text-xs text-foreground">{e.type}</span>
                     <span className="text-muted-foreground">-</span>
@@ -268,7 +268,7 @@ export default function AutomationPage() {
               </div>
             </Card>
 
-            <Card className="overflow-hidden flex-1 min-w-0">
+            <Card className="overflow-hidden flex-1 min-w-0 shadow-sm hover:shadow-md transition-shadow duration-200">
               <CardHeaderRow accent={false} icon={Link} tone="success" title={t("auto.task_chain_rules")} description={t("auto.task_chain_desc")} />
               <div className="p-(--card-spacing)">
                 <div className="flex items-center justify-between mb-4">
