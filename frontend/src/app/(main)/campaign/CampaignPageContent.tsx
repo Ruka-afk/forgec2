@@ -141,10 +141,10 @@ export default function CampaignPageContent() {
           formatTime={formatTime}
         />
       ) : (
-        <Card className="p-0 overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
-          <Table>
-            <TableHeader>
-              <TableRow>
+        <Card className="p-0 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
+          <Table className="text-sm">
+            <TableHeader className="bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90 sticky top-0 z-10 border-b border-border">
+              <TableRow className="hover:bg-transparent">
                 <TableHead className="py-3 px-4 sm:py-3.5 sm:px-5">{t("campaign.col_name")}</TableHead>
                 <TableHead className="py-3 px-4 sm:py-3.5 sm:px-5">{t("campaign.col_status")}</TableHead>
                 <TableHead className="py-3 px-4 sm:py-3.5 sm:px-5">{t("campaign.col_agents")}</TableHead>
@@ -287,7 +287,7 @@ function CampaignDetailView({
           </div>
 
           {/* Kill Chain Phase Progress Bar */}
-<Card className="mb-6">
+<Card className="mb-6 shadow-sm hover:shadow-md transition-shadow duration-200">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-lg font-semibold">{t("campaign.kill_chain")}</h3>
               <Button variant="ghost" size="sm" onClick={() => setShowTimeline(!showTimeline)}>
@@ -376,7 +376,7 @@ function CampaignDetailView({
           </Card>
 
           {/* Kill Chain Template Executor */}
-<Card className="mb-6">
+<Card className="mb-6 shadow-sm hover:shadow-md transition-shadow duration-200">
             <h3 className="text-lg font-semibold mb-3">
               <Zap className="w-4 h-4" />
               {t("campaign.templates")}
@@ -421,7 +421,7 @@ function CampaignDetailView({
           </Card>
 
           {/* Phase Timeline (legacy) */}
-<Card className="mb-6">
+<Card className="mb-6 shadow-sm hover:shadow-md transition-shadow duration-200">
             <h3 className="text-lg font-semibold mb-3">{t("campaign.timeline")}</h3>
             {stats.phase_timeline.length === 0 ? (
               <p className="text-muted-foreground">{t("campaign.empty_timeline")}</p>
