@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeftRight, Check, Copy, Info, Pencil, Plug, Plus, Power, SlidersHorizontal, Trash2 } from "lucide-react";
+import { ArrowLeftRight, Check, Copy, Info, Pencil, Plug, Plus, Power, SlidersHorizontal, Trash2, Radio, Globe, Network, Flame } from "lucide-react";
 import type { Listener } from "./_components/types";
 import { emptyCreateForm, emptyEditForm } from "./_components/types";
 import { useListenersData } from "./_components/useListenersData";
@@ -219,12 +219,12 @@ export default function ListenersPageContent() {
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 sm:gap-4 mb-4 sm:mb-6">
-        <Card className="p-(--card-spacing)"><StatTile label={t("listeners.total")} value={loading ? "..." : total} /></Card>
-        <Card className="p-(--card-spacing)"><StatTile label={t("listeners.running")} value={loading ? "..." : enabledCount} tone="success" /></Card>
-        <Card className="p-(--card-spacing)"><StatTile label={t("listeners.burned")} value={loading ? "..." : burnedCount} tone={burnedCount > 0 ? "destructive" : undefined} /></Card>
-        <Card className="p-(--card-spacing)"><StatTile label={t("listeners.http")} value={loading ? "..." : httpCount} /></Card>
-        <Card className="p-(--card-spacing)"><StatTile label={t("listeners.tcp")} value={loading ? "..." : tcpCount} /></Card>
-        <Card className="p-(--card-spacing)"><StatTile label={t("listeners.dns")} value={loading ? "..." : dnsCount} tone="primary" /></Card>
+        <Card className="p-(--card-spacing) hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"><StatTile label={t("listeners.total")} value={loading ? "…" : total} icon={<Plug className="w-5 h-5" />} /></Card>
+        <Card className="p-(--card-spacing) hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"><StatTile label={t("listeners.running")} value={loading ? "…" : enabledCount} tone="success" icon={<Power className="w-5 h-5" />} trend={enabledCount === total && total > 0 ? t("dashboard.all_online") : undefined} /></Card>
+        <Card className="p-(--card-spacing) hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"><StatTile label={t("listeners.burned")} value={loading ? "…" : burnedCount} tone={burnedCount > 0 ? "destructive" : "muted"} icon={<Flame className="w-5 h-5" />} /></Card>
+        <Card className="p-(--card-spacing) hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"><StatTile label={t("listeners.http")} value={loading ? "…" : httpCount} icon={<Globe className="w-5 h-5" />} /></Card>
+        <Card className="p-(--card-spacing) hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"><StatTile label={t("listeners.tcp")} value={loading ? "…" : tcpCount} icon={<Network className="w-5 h-5" />} /></Card>
+        <Card className="p-(--card-spacing) hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"><StatTile label={t("listeners.dns")} value={loading ? "…" : dnsCount} tone="primary" icon={<Radio className="w-5 h-5" />} /></Card>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
@@ -268,11 +268,11 @@ export default function ListenersPageContent() {
         </div>
       </div>
 
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
+      <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
+        <div className="overflow-x-auto scrollbar-thin">
         <Table>
-          <TableHeader>
-            <TableRow>
+          <TableHeader className="bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90 sticky top-0 z-10 border-b border-border">
+            <TableRow className="hover:bg-transparent">
               <TableHead className="text-left py-3 px-4 sm:py-4 sm:px-6 font-medium text-muted-foreground min-w-[120px]">{t("listeners.col_name")}</TableHead>
               <TableHead className="max-sm:hidden text-left py-3 px-3 sm:py-4 sm:px-4 font-medium text-muted-foreground min-w-[80px]">{t("listeners.col_type")}</TableHead>
               <TableHead className="max-sm:hidden text-left py-3 px-3 sm:py-4 sm:px-4 font-medium text-muted-foreground min-w-[100px]">{t("listeners.col_tags")}</TableHead>

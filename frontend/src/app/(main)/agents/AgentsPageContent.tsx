@@ -635,15 +635,15 @@ export default function AgentsPageContent() {
       />
 
       {viewMode === "table" && (
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
         <div
           ref={agentScrollRef}
           onScroll={onAgentScroll}
-          className={agentVirtualized ? "overflow-auto max-h-[min(70vh,720px)]" : "overflow-auto"}
+          className={agentVirtualized ? "overflow-auto max-h-[min(70vh,720px)] scrollbar-thin" : "overflow-auto scrollbar-thin"}
         >
         <Table className="text-sm min-w-[850px]">
-          <TableHeader className="sticky top-0 z-10">
-            <TableRow>
+          <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90 border-b border-border">
+            <TableRow className="hover:bg-transparent">
               <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5 w-10">
                 <Checkbox aria-label={t("agents.select_all")} name="input-4"
                   checked={allVisibleSelected || someVisibleSelected}
