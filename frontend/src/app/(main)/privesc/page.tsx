@@ -198,19 +198,19 @@ export default function PrivescPage() {
       </Banner>
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-        <Card className="p-4">
+        <Card className="p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <StatTile label={t("privesc.stat_total_checks")} value={totalChecks} tone="primary" />
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <StatTile label={t("privesc.stat_critical")} value={criticalCount} tone="destructive" />
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <StatTile label={t("privesc.stat_high")} value={highCount} tone="warning" />
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <StatTile label={t("privesc.stat_medium")} value={mediumCount} tone="warning" />
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <StatTile label={t("privesc.stat_low")} value={lowCount} tone="primary" />
         </Card>
       </div>
@@ -345,9 +345,9 @@ export default function PrivescPage() {
               <p className="text-sm">{t("privesc.no_history")}</p>
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
+          <Table className="text-sm">
+            <TableHeader className="bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90 sticky top-0 z-10 border-b border-border">
+              <TableRow className="hover:bg-transparent">
                 <TableHead className="text-xs">{t("privesc.col_time")}</TableHead>
                 <TableHead className="text-xs">{t("privesc.col_agent")}</TableHead>
                 <TableHead className="text-xs">{t("privesc.check_type_label")}</TableHead>
