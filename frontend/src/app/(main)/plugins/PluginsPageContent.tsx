@@ -252,7 +252,7 @@ export default function PluginsPage() {
         </div>
       </>}>
 
-      <Card className="p-(--card-spacing) mb-4">
+      <Card className="p-(--card-spacing) mb-4 shadow-sm hover:shadow-md transition-shadow duration-200">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1">
             <SearchInput value={search} onChange={handleSearchChange} placeholder={t("plugins.search_ph")} className="max-w-md" label={t("common.search")} />
