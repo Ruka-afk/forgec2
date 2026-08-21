@@ -28,7 +28,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
-import { Download, Filter, Lock, Plus, Tag } from "lucide-react";
+import { Download, Filter, Lock, Plus, Tag, ShieldCheck, AlertTriangle } from "lucide-react";
 import { CRED_TYPES, TYPE_BADGE_VARIANT, type VaultEntry } from "./_components/types";
 import { useCredentialsData } from "./_components/useCredentialsData";
 import { CredentialRow } from "./_components/CredentialRow";
@@ -365,24 +365,28 @@ export default function CredentialsPage() {
       <CredHarvestCard />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-5">
-        <Card className="p-(--card-spacing) transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
-          <StatTile labelBelow label={t("cred.stat_total")} value={stats.total} />
+        <Card className="p-(--card-spacing) rounded-xl hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+          <StatTile label={t("cred.stat_total")} value={loading ? "…" : stats.total} icon={<Lock className="w-5 h-5" />} />
         </Card>
-        <Card className="p-(--card-spacing) transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
-          <StatTile labelBelow label={t("cred.stat_confirmed")} value={stats.confirmed} tone="primary" />
+        <Card className="p-(--card-spacing) rounded-xl hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+          <StatTile label={t("cred.stat_confirmed")} value={loading ? "…" : stats.confirmed} tone="success" icon={<ShieldCheck className="w-5 h-5" />} />
         </Card>
-        <Card className="p-(--card-spacing) transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
-          <StatTile labelBelow label={t("cred.stat_unconfirmed")} value={stats.unconfirmed} tone="warning" />
+        <Card className="p-(--card-spacing) rounded-xl hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+          <StatTile label={t("cred.stat_unconfirmed")} value={loading ? "…" : stats.unconfirmed} tone="warning" icon={<AlertTriangle className="w-5 h-5" />} />
         </Card>
-        <Card className="p-(--card-spacing) transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
-          <div className="flex flex-wrap gap-1 mt-1">
-            {stats.byType.map(s => s.count > 0 && (
-              <Badge key={s.type} variant={TYPE_BADGE_VARIANT[s.type] || "outline"}>
-                {s.type}: {s.count}
-              </Badge>
-            ))}
+        <Card className="p-(--card-spacing) rounded-xl hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("cred.stat_by_type")}</div>
+              <div className="flex flex-wrap gap-1 mt-2">
+                {stats.byType.map(s => s.count > 0 && (
+                  <Badge key={s.type} variant={TYPE_BADGE_VARIANT[s.type] || "outline"} className="text-(--fs-micro-sm)">{s.type}: {s.count}</Badge>
+                ))}
+                {stats.byType.every(s => s.count === 0) && <span className="text-xs text-muted-foreground">—</span>}
+              </div>
+            </div>
+            <span className="shrink-0 rounded-xl p-2.5 bg-primary/10 text-primary ring-1 ring-border/50"><Tag className="w-5 h-5" /></span>
           </div>
-          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mt-1">{t("cred.stat_by_type")}</div>
         </Card>
       </div>
 
@@ -475,7 +479,7 @@ export default function CredentialsPage() {
         </Card>
       )}
 
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
         <CardHeaderRow accent={false} icon={Lock} tone="primary" title={t("cred.vault_title")} action={filteredEntries.length > 0 ? <Badge variant="outline" className="font-mono">{filteredEntries.length}</Badge> : undefined} />
 
         <DataState
@@ -494,10 +498,10 @@ export default function CredentialsPage() {
             </div>
           }
         >
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto scrollbar-thin">
             <Table className="w-full text-sm">
-              <TableHeader>
-                <TableRow className="text-xs text-muted-foreground">
+              <TableHeader className="bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90 sticky top-0 z-10 border-b border-border">
+                <TableRow className="text-xs text-muted-foreground hover:bg-transparent">
                   <TableHead className="text-left py-3 px-2 font-normal">
                     <Checkbox
                       checked={selectedIds.size === filteredEntries.length && filteredEntries.length > 0}

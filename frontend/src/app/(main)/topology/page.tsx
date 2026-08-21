@@ -58,7 +58,7 @@ function TopologySidebar({
   const { t } = useI18n();
   return (
     <>
-      <Card className="overflow-hidden p-0">
+      <Card className="overflow-hidden p-0 shadow-sm hover:shadow-md transition-shadow duration-200">
         <div className="bg-primary/10 border border-primary/20 px-4 py-2.5">
           <div className="flex items-center gap-2">
             <Info className="w-4 h-4" />
@@ -120,7 +120,7 @@ function TopologySidebar({
         </div>
       </Card>
 
-      <Card className="overflow-hidden p-0">
+      <Card className="overflow-hidden p-0 shadow-sm hover:shadow-md transition-shadow duration-200">
         <div className="bg-secondary/60 border border-border px-4 py-2.5">
           <div className="flex items-center gap-2">
             <List className="w-4 h-4" />
@@ -175,7 +175,7 @@ function TopologySidebar({
         </div>
       </Card>
 
-      <Card className="overflow-hidden p-0">
+      <Card className="overflow-hidden p-0 shadow-sm hover:shadow-md transition-shadow duration-200">
         <div className="bg-success/10 border border-success/20 px-4 py-2.5">
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4" />
@@ -338,8 +338,8 @@ export default function TopologyPage() {
 
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
         <div className="xl:col-span-3">
-          <Card className="overflow-hidden p-0">
-            <div className="bg-card border-b border-border px-4 py-2.5 flex items-center justify-between border-b border-border">
+          <Card className="overflow-hidden p-0 shadow-sm hover:shadow-md transition-shadow duration-200">
+            <div className="bg-card border-b border-border px-4 py-2.5 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="flex gap-1">
                   <span className="w-2.5 h-2.5 rounded-full bg-destructive"></span>

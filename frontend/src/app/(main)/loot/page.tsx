@@ -241,7 +241,7 @@ function LootPage() {
         </TabsList>
 
       <TabsContent value="screenshots">
-        <Card className="p-(--card-spacing)">
+        <Card className="p-(--card-spacing) shadow-sm hover:shadow-md transition-shadow duration-200">
           <div className="flex items-center justify-between mb-4">
             <div className="font-semibold flex items-center gap-x-2">
               <Images aria-hidden="true" className="w-4 h-4" />
@@ -287,7 +287,7 @@ function LootPage() {
       </TabsContent>
 
       <TabsContent value="keylogs">
-        <Card className="p-(--card-spacing)">
+        <Card className="p-(--card-spacing) shadow-sm hover:shadow-md transition-shadow duration-200">
           <div className="flex items-center justify-between mb-4 gap-2">
             <div className="font-semibold flex items-center gap-x-2">
               <Keyboard aria-hidden="true" className="w-4 h-4" />
@@ -351,7 +351,7 @@ function LootPage() {
       </TabsContent>
 
       <TabsContent value="downloads">
-        <Card className="p-(--card-spacing)">
+        <Card className="p-(--card-spacing) shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden">
           <div className="flex items-center justify-between mb-4">
             <div className="font-semibold flex items-center gap-x-2">
               <Download aria-hidden="true" className="w-4 h-4" />
@@ -361,9 +361,9 @@ function LootPage() {
           </div>
           {filteredDownloads.length > 0 ? (
             <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
+            <Table className="text-sm">
+              <TableHeader className="bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90 sticky top-0 z-10 border-b border-border">
+                <TableRow className="hover:bg-transparent">
                   <TableHead className="w-8">
                     <Checkbox
                       checked={filteredDownloads.length > 0 && filteredDownloads.every((d) => selectedItems.has(lootDeleteId("download", d)))}
