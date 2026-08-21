@@ -3340,7 +3340,6 @@ export const zh: Record<string, string> = {
     "shell.beacon_interval": "{interval} 秒 ±{jitter}%",
     "shell.beacon_loading": "加载中...",
     "shell.beacon_rt": "实时 ±{jitter}%",
-    "shell.beacon_timing": "Beacon 时间",
     "shell.command_failed": "命令失败",
     "shell.drop_file": "拖放文件以上传",
     "shell.drop_upload_read_failed": "拖放上传读取失败",

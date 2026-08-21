@@ -3326,7 +3326,6 @@ export const en: Record<string, string> = {
     "shell.beacon_interval": "{interval}s ±{jitter}%",
     "shell.beacon_loading": "loading...",
     "shell.beacon_rt": "Real-time ±{jitter}%",
-    "shell.beacon_timing": "Beacon timing",
     "shell.command_failed": "Command failed",
     "shell.drop_file": "Drop file to upload",
     "shell.drop_upload_read_failed": "Drop upload read failed",
