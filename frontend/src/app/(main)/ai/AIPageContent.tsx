@@ -378,7 +378,7 @@ export default function AIPage() {
   return (
     <div className="animate-fade-slide-up h-full min-h-0 flex w-full gap-3 pb-20 md:pb-0">
       {/* Desktop session sidebar */}
-      <aside className="hidden md:flex w-56 shrink-0 flex-col border border-border rounded-xl p-2">
+      <aside className="hidden md:flex w-56 shrink-0 flex-col border border-border rounded-xl p-2 shadow-sm bg-card/50 backdrop-blur">
         <AISessionSidebar
           sessions={sessions}
           activeSessionId={activeSessionId}

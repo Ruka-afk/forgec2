@@ -1,1 +1,0 @@
-import{W as t}from"./index-Cc2_ztfw.js";import"./vendor-react-CasLP3f6.js";import"./vendor-misc-BJX4Yuat.js";import"./vendor-router-bjcp5fWE.js";import"./vendor-sonner-CY3mybMB.js";import"./vendor-baseui-Czj7WBuQ.js";import"./vendor-icons-S1B4oS9R.js";import"./vendor-zod-BAGC-vYU.js";function a(){t("/loot?tab=screenshots")}export{a as default};
