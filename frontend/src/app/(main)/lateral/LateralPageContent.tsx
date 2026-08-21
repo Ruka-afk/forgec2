@@ -324,7 +324,7 @@ export default function LateralPageContent() {
         <StatCard label={t("lateral.history_tasks")} value={stats.total_tasks || 0} color="primary" icon={<Network className="w-4 h-4" />} sub={t("lateral.lateral_records")} />
       </div>
 
-      <Card className=" px-4">
+      <Card className="px-4 shadow-sm hover:shadow-md transition-shadow duration-200">
         <div className="flex items-center gap-x-3 mb-5">
           <IconBadge icon={GitBranch} color="primary" size="xl" className="dark:bg-primary/15" />
           <div>
@@ -437,7 +437,7 @@ export default function LateralPageContent() {
         </div>
       </Card>
 
-      <Card className=" overflow-hidden">
+      <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
         <div className="flex items-center justify-between p-5 border-b border-border">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
@@ -448,9 +448,9 @@ export default function LateralPageContent() {
           <span className="text-xs text-muted-foreground">{history.length} {t("lateral.records")}</span>
         </div>
         {history.length > 0 ? (
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted">
+          <Table className="text-sm">
+            <TableHeader className="bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90 sticky top-0 z-10 border-b border-border">
+              <TableRow className="hover:bg-transparent">
                 <TableHead className="font-semibold"></TableHead>
                 <TableHead className="font-semibold">{t("lateral.target")}</TableHead>
                 <TableHead className="font-semibold">{t("lateral.method")}</TableHead>
