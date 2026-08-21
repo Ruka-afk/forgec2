@@ -206,7 +206,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
     <PageContainer embedded={embedded} title={!embedded ? t("profiles.title") : undefined} subtitle={!embedded ? t("profiles.subtitle") : undefined}>
 
       {/* Active Config Hot-Reload Card */}
-      <Card className="overflow-hidden mb-6">
+      <Card className="overflow-hidden mb-6 shadow-sm hover:shadow-md transition-shadow duration-200">
         <CardHeaderRow icon={RotateCw} tone="success" title={t("profiles.active_config")} description={t("profiles.active_config_desc")} action={
           <Button
             onClick={handleReloadConfig}
@@ -315,7 +315,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
         </TabsList>
 
       <TabsContent value="server">
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
           <CardHeaderRow icon={Shield} tone="violet" title={t("profiles.card_title")} description={t("profiles.card_desc")} />
           <CardContent className="p-(--card-spacing)">
             <form onSubmit={handleSaveMalleable} className="space-y-4">

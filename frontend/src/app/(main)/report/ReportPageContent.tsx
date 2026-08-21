@@ -213,14 +213,14 @@ export default function ReportPage() {
           </TabsContent>
 
           <TabsContent value="agents" className="mt-0">
-            <Card className="overflow-hidden">
+            <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
               <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-border">
                 <h2 className="text-lg font-semibold text-foreground">{t("report.agents_detail")} <span className="text-sm font-normal text-muted-foreground ml-2">{t("report.total")} {agents.length} {t("report.units")}</span></h2>
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto scrollbar-thin">
                 <Table>
-                  <TableHeader>
-                    <TableRow className="text-xs">
+                  <TableHeader className="bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90 sticky top-0 z-10 border-b border-border">
+                    <TableRow className="text-xs hover:bg-transparent">
                       <TableHead className="font-medium">{t("report.col_hostname")}</TableHead>
                       <TableHead className="font-medium">{t("report.col_ip")}</TableHead>
                       <TableHead className="font-medium">{t("report.col_os")}</TableHead>
