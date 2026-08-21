@@ -362,7 +362,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
             const isBuilding = status === "building";
 
             return (
-              <Card key={id} className="overflow-hidden">
+              <Card key={id} className="overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
                 <div className="p-(--card-spacing)">
                   <div className="flex items-center gap-4">
                     <div className={`w-10 h-10 rounded-xl ring-1 ring-border/50 flex items-center justify-center ${status === "success" ? "bg-success/10" : status === "failed" ? "bg-destructive/10" : status === "building" ? "bg-primary/10" : "bg-secondary"}`}>

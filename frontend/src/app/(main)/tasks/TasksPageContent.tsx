@@ -315,7 +315,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
         </div>
       </Card>
 
-      <Card>
+      <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
         <DataState
           loading={loading}
           error={error}
@@ -337,8 +337,8 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
             onScroll={onScroll}
             className={virtualized ? "overflow-auto max-h-[min(70vh,720px)]" : "overflow-x-auto"}
           >
-          <Table>
-            <TableHeader className="sticky top-0 z-10">
+          <Table className="text-sm">
+            <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90 border-b border-border">
               <TableRow>
                 <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal min-w-[140px] cursor-pointer select-none" tabIndex={0} role="columnheader" aria-sort={sortKey === "created_at" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} onClick={() => toggleSort("created_at")} onKeyDown={handleSortKeyDown("created_at")}>
                   {t("tasks.col_time")} {sortIcon("created_at")}
