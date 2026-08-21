@@ -86,7 +86,7 @@ export default function InfrastructurePage() {
         </TabsList>
 
         <TabsContent value="config" className="mt-0">
-          <Card className="overflow-hidden">
+          <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
             <CardHeader className="px-(--card-spacing) py-(--card-spacing) border-b">
               <div className="w-8 h-8 bg-primary/10 dark:bg-primary/20 rounded-lg flex items-center justify-center text-primary"><Plug className="w-4 h-4" /></div>
               <div><CardTitle>{t("infra.select")} Listener</CardTitle><CardDescription>{t("infra.select_listener_hint")}</CardDescription></div>
