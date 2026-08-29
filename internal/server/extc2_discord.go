@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -48,6 +49,11 @@ func (d *DiscordExternalC2) Start() error {
 
 	channelID := "extc2-discord-" + d.channelID
 	slog.Info("Discord External C2 starting", "channel_id", d.channelID)
+	if d.server.cfg == nil || strings.TrimSpace(d.server.cfg.Crypto.ExtC2Key) == "" {
+		// Without extc2_key the relayed-result HMAC gate is disabled and
+		// anyone who can post in the channel can forge task output.
+		slog.Warn("Discord ExtC2 running WITHOUT result HMAC: set crypto.extc2_key to require signed results")
+	}
 
 	d.server.extC2ChannelsMu.Lock()
 	d.server.extC2Channels[channelID] = &extC2WSChannel{
@@ -311,7 +317,13 @@ func (d *DiscordExternalC2) processMessage(content, channelID string) {
 		return
 	}
 	if extMsg.Type == "result" {
-		d.server.processExternalC2Result(extMsg.AgentID, extMsg.TaskID, extMsg.Result)
+		// Channel membership is not authentication: gate relayed results on
+		// the extc2_key HMAC so any channel member cannot forge task output.
+		if !d.server.verifyExtC2ResultHMAC(extMsg.AgentID, extMsg.TaskID, extMsg.ResultID, extMsg.Result, extMsg.HMAC) {
+			slog.Warn("Discord ExtC2 result dropped: HMAC verification failed", "agent_id", extMsg.AgentID, "task_id", extMsg.TaskID)
+			return
+		}
+		d.server.processExternalC2Result(extMsg.AgentID, extMsg.TaskID, extMsg.ResultID, extMsg.Result)
 	}
 }
 

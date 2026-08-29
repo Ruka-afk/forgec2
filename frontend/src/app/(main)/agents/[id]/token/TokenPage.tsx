@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Spinner } from "@/components/ui/spinner";
 import { PageContainer } from "@/components/ui/page-container";
 import { AlertCircle, BadgeInfo, Check, CircleDot, Info, Key, List, Pencil, Plus, PlusCircle, RotateCcw, RotateCw, Trash2, User, UserCheck, UserCog, X } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Card } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useI18n } from "@/lib/i18n";
@@ -73,8 +74,11 @@ export default function AgentTokenPage() {
 
   const loadTokens = useCallback(async () => {
     try {
-      const data = await api.get<{ Tokens?: Token[]; tokens?: Token[] }>(paths.agents.tokenList(agentId));
-      setTokens(data.tokens || []);
+      // B1 fix: backend returns a raw array, not {tokens: [...]}. Handle both
+      // formats for forward compatibility.
+      const res = await api.get(paths.agents.tokenList(agentId));
+      const list = Array.isArray(res) ? res : ((res as Record<string, unknown>)?.tokens || (res as Record<string, unknown>)?.Tokens || []) as Token[];
+      setTokens(list as Token[]);
     } catch { toast.error(t("agents.token_load_failed")); }
   }, [agentId, t]);
 
@@ -99,8 +103,9 @@ export default function AgentTokenPage() {
       body.append("pid", stealPid);
       await api.post(paths.agents.tokenSteal(agentId), Object.fromEntries(body.entries()));
       setStealPid("");
-      toast.success(t("agents.token_steal_success"));
-      await loadTokens();
+      // B7 fix: task accepted, poll later
+      toast.info(t("agents.token_task_queued"));
+      setTimeout(() => loadTokens(), 3000);
     } catch {
       toast.error(t("agents.token_steal_failed"));
     } finally {
@@ -110,13 +115,16 @@ export default function AgentTokenPage() {
     if (!makeUser) return;
     setActiveAction("make");
     try {
-      const body = new URLSearchParams();      body.append("username", makeUser);
+      const body = new URLSearchParams();      // B2 fix: backend reads "user" not "username"
+      body.append("user", makeUser);
       body.append("domain", makeDomain);
       body.append("password", makePass);
       await api.post(paths.agents.tokenMake(agentId), Object.fromEntries(body.entries()));
       setMakeUser(""); setMakeDomain(""); setMakePass("");
-      toast.success(t("agents.token_make_success"));
-      await loadTokens();
+      // B7 fix: token operations only return task_id, the actual token appears
+      // later via agent callback. Show "task accepted" instead of false success.
+      toast.info(t("agents.token_task_queued"));
+      setTimeout(() => loadTokens(), 3000);
     } catch {
       toast.error(t("agents.token_make_failed"));    } finally {
       setActiveAction(null);
@@ -127,9 +135,9 @@ export default function AgentTokenPage() {
     setActiveAction("revert");
     try {
       await api.post(paths.agents.tokenRevert(agentId));
-      toast.success(t("agents.token_revert_success"));
+      toast.info(t("agents.token_task_queued"));
       setWhoamiResult(null);
-      await loadTokens();
+      setTimeout(() => loadTokens(), 3000);
     } catch {
       toast.error(t("agents.token_revert_failed"));    } finally {
       setActiveAction(null);
@@ -174,12 +182,13 @@ export default function AgentTokenPage() {
     const noteText = tokenNotes[tokenId];    setActiveAction(`note-${tokenId}`);
     try {
       const body = new URLSearchParams();
-      body.append("note", noteText || "");
+      // B3 fix: backend reads "notes" not "note"
+      body.append("notes", noteText || "");
       await api.post(paths.agents.tokenNote(agentId, tokenId), Object.fromEntries(body.entries()));
-      toast.success(noteText ? t("agents.token_notes") : t("agents.token_notes"));
+      toast.success(noteText ? t("agents.token_notes_saved") : t("agents.token_notes_cleared"));
       await loadTokens();
     } catch {
-      toast.error(t("agents.token_notes"));
+      toast.error(t("agents.token_notes_error"));
     } finally {
       setActiveAction(null);
       setNoteTargetId(null);
@@ -198,13 +207,13 @@ export default function AgentTokenPage() {
   const getTokenTypeBadge = (source: string, tokenType?: string, protocol?: string) => {
     const type = tokenType || protocol || source;
     const icons: Record<string, React.ReactNode> = {
-      steal: <UserCog className="w-3 h-3" />,
-      make: <PlusCircle className="w-3 h-3" />,
-      named_pipe: <CircleDot className="w-3 h-3" />,
-      impersonate: <UserCog className="w-3 h-3" />,
-      create: <Key className="w-3 h-3" />,
+      steal: <UserCog className="size-3" />,
+      make: <PlusCircle className="size-3" />,
+      named_pipe: <CircleDot className="size-3" />,
+      impersonate: <UserCog className="size-3" />,
+      create: <Key className="size-3" />,
     };
-    const icon = icons[type] || <BadgeInfo className="w-3 h-3" />;
+    const icon = icons[type] || <BadgeInfo className="size-3" />;
     const labels: Record<string, string> = {
       steal: t("agents.token_src_steal"),
       make: t("agents.token_src_make"),
@@ -222,18 +231,18 @@ export default function AgentTokenPage() {
     <PageContainer
       title={t("agents.token_title")}
       subtitle={t("agents.token_subtitle", { hostname: agentId.substring(0, 12) })}
-      icon={<BadgeInfo className="w-4 h-4" />}
+      icon={<BadgeInfo className="size-4" />}
       actions={
         <>
           <Button variant="outline" size="sm" onClick={handleWhoami} disabled={activeAction === "whoami"}>
             {activeAction === "whoami" ? (
               <><Spinner size="sm" /> {t("agents.token_checking")}</>
             ) : (
-              <><UserCheck className="w-4 h-4" /> {t("agents.token_whoami")}</>
+              <><UserCheck className="size-4" /> {t("agents.token_whoami")}</>
             )}
           </Button>
           <Button variant="outline" size="sm" onClick={() => { setLoading(true); Promise.all([loadTokens(), loadProcesses()]).finally(() => setLoading(false)); }}>
-            <RotateCw className="w-4 h-4" /> {t("common.refresh")}
+            <RotateCw className="size-4" /> {t("common.refresh")}
           </Button>
         </>
       }
@@ -244,17 +253,17 @@ export default function AgentTokenPage() {
           whoamiResult.startsWith("Error")            ? "border-destructive/30 bg-destructive/10 text-destructive"
             : "border-primary/20 bg-primary/10 dark:border-primary/40 dark:bg-primary/20 text-primary"
         }`}>
-          {whoamiResult.startsWith("Error") ? <AlertCircle className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+          {whoamiResult.startsWith("Error") ? <AlertCircle className="size-4" /> : <UserCheck className="size-4" />}
           <span>{t("agents.token_current_context")} <strong>{whoamiResult}</strong></span>
           <Button variant="ghost" size="sm" onClick={() => setWhoamiResult(null)} className="ml-auto opacity-60 hover:opacity-100">
-            <X className="w-4 h-4" />
+            <X className="size-4" />
           </Button>
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="p-5">
-          <h2 className="text-sm font-semibold text-foreground mb-3">            <User className="w-4 h-4" />{t("agents.token_steal")}
+          <h2 className="text-sm font-semibold text-foreground mb-3">            <User className="size-4" />{t("agents.token_steal")}
           </h2>
           <form onSubmit={handleStealToken} className="space-y-3">
             <div>
@@ -271,12 +280,12 @@ export default function AgentTokenPage() {
               </Select>
             </div>
             <Button type="submit" disabled={!stealPid || activeAction === "steal"} className="w-full" variant="default">
-              {activeAction === "steal" ? <><Spinner size="sm" />{t("agents.token_stealing")}</> : <><User className="w-4 h-4" />{t("agents.token_steal")}</>}
+              {activeAction === "steal" ? <><Spinner size="sm" />{t("agents.token_stealing")}</> : <><User className="size-4" />{t("agents.token_steal")}</>}
             </Button>
           </form>
         </Card>
 
-        <Card className="p-5">          <h2 className="text-sm font-semibold text-foreground mb-3">            <PlusCircle className="w-4 h-4" />{t("agents.token_make")}
+        <Card className="p-5">          <h2 className="text-sm font-semibold text-foreground mb-3">            <PlusCircle className="size-4" />{t("agents.token_make")}
           </h2>
           <form onSubmit={handleMakeToken} className="space-y-3">
             <div>
@@ -292,21 +301,21 @@ export default function AgentTokenPage() {
               <Input id="make-pass" type="password" value={makePass} onChange={(e) => setMakePass(e.target.value)} placeholder={t("agents.token_password")} />
             </div>
             <Button type="submit" disabled={!makeUser || activeAction === "make"} className="w-full" variant="default">
-              {activeAction === "make" ? <><Spinner size="sm" />{t("agents.token_creating")}</> : <><Plus className="w-4 h-4" />{t("agents.token_make")}</>}
+              {activeAction === "make" ? <><Spinner size="sm" />{t("agents.token_creating")}</> : <><Plus className="size-4" />{t("agents.token_make")}</>}
             </Button>
           </form>
         </Card>        <Card className="p-5">
           <h2 className="text-sm font-semibold text-foreground mb-3">
-            <RotateCcw className="w-4 h-4" />{t("agents.token_quick_actions")}          </h2>
+            <RotateCcw className="size-4" />{t("agents.token_quick_actions")}          </h2>
           <div className="space-y-3">
             <Button onClick={handleRevert} disabled={activeAction === "revert"} className="w-full" variant="default">
-              {activeAction === "revert" ? <><Spinner size="sm" />{t("agents.token_reverting")}</> : <><RotateCcw className="w-4 h-4" />{t("agents.token_revert")}</>}
+              {activeAction === "revert" ? <><Spinner size="sm" />{t("agents.token_reverting")}</> : <><RotateCcw className="size-4" />{t("agents.token_revert")}</>}
             </Button>
             <Button onClick={handleWhoami} disabled={activeAction === "whoami"} className="w-full" variant="secondary">
-              {activeAction === "whoami" ? <><Spinner size="sm" />{t("agents.token_querying")}</> : <><UserCheck className="w-4 h-4" />{t("agents.token_whoami")}</>}
+              {activeAction === "whoami" ? <><Spinner size="sm" />{t("agents.token_querying")}</> : <><UserCheck className="size-4" />{t("agents.token_whoami")}</>}
             </Button>
             <div className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-3 flex items-start gap-2">
-              <Info className="w-4 h-4" />
+              <Info className="size-4" />
               <span>{t("agents.token_impersonate_hint")}</span>
             </div>
           </div>        </Card>
@@ -315,11 +324,11 @@ export default function AgentTokenPage() {
       <Card className="overflow-hidden">
         <div className="px-5 py-3 border-b border-border flex items-center justify-between">
           <h2 className="text-sm font-semibold text-foreground">
-            <List className="w-4 h-4" />{t("agents.token_title")} ({tokens.length})
+            <List className="size-4" />{t("agents.token_title")} ({tokens.length})
           </h2>          <div className="flex items-center gap-2">
             <div className="text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 bg-warning rounded-full animate-pulse"></span>                {tokens.filter(t => t.active).length} active
+                <span className="size-2 bg-warning rounded-full animate-pulse"></span>                {tokens.filter(t => t.active).length} active
               </span>
             </div>
           </div>
@@ -369,9 +378,9 @@ export default function AgentTokenPage() {
                     <TableCell className="px-4 py-3 text-xs font-mono text-muted-foreground">{pid ? `[${pid}]` : ""} {procName || ""}</TableCell>
                     <TableCell className="px-4 py-3">
                       {active ? (
-                        <Badge variant="secondary" className="text-xs gap-1.5"><span className="w-2 h-2 bg-warning rounded-full animate-pulse"></span>{t("agents.token_active")}</Badge>
+                        <Badge variant="secondary" className="text-xs gap-1.5"><span className="size-2 bg-warning rounded-full animate-pulse"></span>{t("agents.token_active")}</Badge>
                       ) : (
-                        <Badge variant="secondary" className="text-xs gap-1.5"><span className="w-2 h-2 bg-muted rounded-full"></span>{t("agents.token_inactive")}</Badge>
+                        <Badge variant="secondary" className="text-xs gap-1.5"><span className="size-2 bg-muted rounded-full"></span>{t("agents.token_inactive")}</Badge>
                       )}
                     </TableCell>
                     <TableCell className="px-4 py-3">
@@ -385,11 +394,11 @@ export default function AgentTokenPage() {
                             placeholder={t("agents.token_note_ph")}
                             autoFocus
                           />
-                          <Button variant="ghost" size="sm" onClick={() => handleNote(tid)} className="h-7 w-7 p-0 text-success hover:text-success">
-                            <Check className="w-4 h-4" />
+                          <Button variant="ghost" size="sm" onClick={() => handleNote(tid)} className="size-7 p-0 text-success hover:text-success">
+                            <Check className="size-4" />
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => setNoteTargetId(null)} className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground">
-                            <X className="w-4 h-4" />
+                          <Button variant="ghost" size="sm" onClick={() => setNoteTargetId(null)} className="size-7 p-0 text-muted-foreground hover:text-foreground">
+                            <X className="size-4" />
                           </Button>
                         </div>
                       ) : (
@@ -400,7 +409,7 @@ export default function AgentTokenPage() {
                               onClick={() => { setNoteTargetId(tid); setTokenNotes(prev => ({ ...prev, [tid]: noteText })); }}
                               className="text-xs text-muted-foreground hover:text-primary"
                             />}>
-                              <Pencil className="w-4 h-4" />
+                              <Pencil className="size-4" />
                               {noteText ? <span className="truncate max-w-20">{noteText}</span> : <span className="text-muted-foreground">{t("agents.token_add_note")}</span>}
                           </TooltipTrigger>
                           <TooltipContent>{t("agents.token_edit_note")}</TooltipContent>
@@ -411,14 +420,14 @@ export default function AgentTokenPage() {
                     <TableCell className="px-4 py-3">
                       <div className="flex items-center gap-1">
                         <Tooltip>
-                          <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => handleImpersonate(tid)} disabled={!active || activeAction === `impersonate-${tid}`} className={`h-8 w-8 p-0 ${active ? "" : "cursor-not-allowed"}`} />}>
-                            {activeAction === `impersonate-${tid}` ? <Spinner size="sm" /> : <User className="w-4 h-4" />}
+                          <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => handleImpersonate(tid)} disabled={!active || activeAction === `impersonate-${tid}`} className={`size-8 p-0 ${active ? "" : "cursor-not-allowed"}`} />}>
+                            {activeAction === `impersonate-${tid}` ? <Spinner size="sm" /> : <User className="size-4" />}
                           </TooltipTrigger>
                           <TooltipContent>{t("agents.token_impersonate")}</TooltipContent>
                         </Tooltip>
                         <Tooltip>
-                          <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => handleDrop(tid)} disabled={activeAction === `drop-${tid}`} className={`h-8 w-8 p-0 text-destructive hover:text-destructive/80 hover:bg-destructive/5`} />}>
-                            {activeAction === `drop-${tid}` ? <Spinner size="xs" /> : <Trash2 className="w-3 h-3" />}
+                          <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => handleDrop(tid)} disabled={activeAction === `drop-${tid}`} className={`size-8 p-0 text-destructive hover:text-destructive/80 hover:bg-destructive/5`} />}>
+                            {activeAction === `drop-${tid}` ? <Spinner size="xs" /> : <Trash2 className="size-3" />}
                           </TooltipTrigger>
                           <TooltipContent>{t("agents.token_drop")}</TooltipContent>
                         </Tooltip>
@@ -427,8 +436,8 @@ export default function AgentTokenPage() {
                   </TableRow>
                 );
               })}
-              {loading && Array.from({ length: 3 }).map((_, i) => (<TableRow key={i}><TableCell colSpan={8} className="py-3 px-4"><Skeleton className="h-8 w-full" /></TableCell></TableRow>))}
-              {!loading && tokens.length === 0 && (<TableRow><TableCell colSpan={8} className="py-16 text-center text-muted-foreground"><BadgeInfo className="w-4 h-4" /><p className="text-sm">{t("agents.token_no_tokens")}</p></TableCell></TableRow>)}
+              {loading && Array.from({ length: 3 }).map((_, i) => (<TableRow key={i}><TableCell colSpan={9} className="py-3 px-4"><Skeleton className="h-8 w-full" /></TableCell></TableRow>))}
+              {!loading && tokens.length === 0 && (<TableRow><TableCell colSpan={9}><EmptyState compact icon={BadgeInfo} title={t("agents.token_no_tokens")} /></TableCell></TableRow>)}
             </TableBody>
           </Table>
         </div>      </Card>

@@ -1,7 +1,7 @@
 "use client";
 import { PageContainer } from "@/components/ui/page-container";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
@@ -88,14 +88,15 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
       }>("/stager/register", {
         listener_id: parseInt(listenerId),
         arch, os, format,
-        ttl_minutes: parseInt(ttl),
+        // Cleared input must not serialize NaN → null into an int field.
+        ttl_minutes: Number.isFinite(parseInt(ttl)) ? parseInt(ttl) : 0,
         user_agent: userAgent,
         profile: profile,
         skip_tls_verify: skipTls,
         dns_domain: dnsDomain,
         dns_server: dnsServer,
       });
-      if (res.success) {
+      if (res.token && res.stager_url) {
         setCreatedToken(res);
         showMessage(t("stager.toast.created"), { tone: "success" });
         loadData();
@@ -116,8 +117,17 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
     } catch { showMessage(t("stager.toast.delete_failed"), { tone: "destructive" }); }
   }
 
+  // Purity-safe "now": Date.now() cannot run during render, so capture it in
+  // an effect. Tokens load async anyway, so rows never render before this.
+  const [expiryNowMs, setExpiryNowMs] = useState<number | null>(null);
+  useEffect(() => { setExpiryNowMs(Date.now()); }, []);
+
   function isExpired(t: StagerToken) {
-    return new Date(t.expires_at) < new Date();
+    if (expiryNowMs === null) return false;
+    const d = new Date(t.expires_at).getTime();
+    // Invalid/missing expires_at counts as expired: `Invalid < x` is false,
+    // which used to keep malformed rows on the green "Active" badge forever.
+    return Number.isNaN(d) || d <= expiryNowMs;
   }
 
   function downloadToken(token: string, filename: string) {
@@ -152,13 +162,13 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
             <CopyButton text={createdToken.token} className="mt-0">
               {(copied) => (
                 <>
-                  {copied ? <CircleCheck className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {copied ? <CircleCheck className="size-4" /> : <Copy className="size-4" />}
                   {t("stager.copy_token")}
                 </>
               )}
             </CopyButton>
             <Button variant="outline" size="sm" onClick={() => downloadToken(createdToken.token, `stager_token_${Date.now()}.txt`)}>
-              <Download className="w-4 h-4" />{t("stager.download")}
+              <Download className="size-4" />{t("stager.download")}
             </Button>
           </div>
         </div>
@@ -308,11 +318,11 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
                       <TableCell className="py-3 px-4 sm:py-3.5 text-right">
                         <Button variant="ghost" size="icon-xs" onClick={() => downloadToken(tk.token, `stager_token_${tk.id}.txt`)}
                           title={t("stager.download")} aria-label={t("stager.download")}>
-                          <Download className="w-4 h-4" />
+                          <Download className="size-4" />
                         </Button>
                         <Button variant="destructive" size="icon-xs" onClick={() => handleDelete(tk.id)}
                           title={t("stager.col_actions")} aria-label={t("stager.col_actions")}>
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="size-4" />
                         </Button>
                       </TableCell>
                     </TableRow>

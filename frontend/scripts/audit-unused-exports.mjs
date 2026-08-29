@@ -11,10 +11,13 @@ const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, root);
 const program = ts.createProgram(parsed.fileNames, parsed.options);
 
 const norm = (p) => p.replace(/\\/g, "/");
-const sourceFiles = program
+// Inspect imports from every project TypeScript file (including vite.config.ts),
+// while limiting the final unused-export report to application source files.
+const projectFiles = program
   .getSourceFiles()
-  .filter((f) => norm(f.fileName).includes("/src/") && !f.isDeclarationFile)
+  .filter((f) => norm(f.fileName).startsWith(`${norm(root)}/`) && !f.isDeclarationFile)
   .map((f) => ({ path: norm(f.fileName), sf: f }));
+const sourceFiles = projectFiles.filter(({ path: fp }) => fp.includes("/src/"));
 
 const existsFile = (p) => program.getSourceFile(p) !== undefined;
 // Vite alias map (mirrors vite.config.ts) so next/* shim imports resolve.
@@ -55,7 +58,7 @@ function modFlags(stmt) {
   }
 }
 
-for (const { path: fp, sf } of sourceFiles) {
+for (const { path: fp, sf } of projectFiles) {
   const ne = new Set();
   namedExports.set(fp, ne);
   reexportFrom.set(fp, new Set());
@@ -178,17 +181,17 @@ function expandedNames(fp, seen = new Set()) {
 // from a path resolving directly to M, OR imports any name from a barrel that
 // re-exports M's N, OR namespace-imports M / a barrel of M.
 const used = new Map(); // path -> Set(name)
-for (const { path: fp } of sourceFiles) {
+for (const { path: fp } of projectFiles) {
   used.set(fp, new Set());
   if (defaultExportByFile.has(fp)) used.get(fp).add("__default__");
 }
 const nameToFiles = new Map(); // name -> Set(filePath)
-for (const { path: fp } of sourceFiles) for (const n of namedExports.get(fp) || []) {
+for (const { path: fp } of projectFiles) for (const n of namedExports.get(fp) || []) {
   if (!nameToFiles.has(n)) nameToFiles.set(n, new Set());
   nameToFiles.get(n).add(fp);
 }
 
-for (const { path: fp } of sourceFiles) {
+for (const { path: fp } of projectFiles) {
   const rec = importsByFile.get(fp);
   for (const [name, modules] of rec.specs) {
     for (const m of modules) {

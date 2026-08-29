@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -191,6 +192,17 @@ func (s *Server) handleAPIStagerRegister(c *gin.Context) {
 	}
 	if req.Format == "" {
 		req.Format = "exe"
+	}
+	// Whitelist the formats the lazy stage-2 builder can actually produce so a
+	// token that could never build cannot be registered (it would only fail on
+	// first fetch, leaving the operator with a dead stager URL).
+	switch f := strings.ToLower(req.Format); f {
+	case "exe", "dll":
+		req.Format = f
+	default:
+		respondError(c, http.StatusBadRequest,
+			fmt.Sprintf("unsupported stager format %q (supported: exe, dll)", req.Format))
+		return
 	}
 	if req.TTLMinutes <= 0 {
 		req.TTLMinutes = 60

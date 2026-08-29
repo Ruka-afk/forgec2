@@ -28,5 +28,10 @@ export function loadCommandHistory(): string[] {
 export function saveCommandHistory(cmd: string) {
   const hist = loadCommandHistory().filter((c) => c !== cmd);
   hist.unshift(cmd);
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(hist.slice(0, MAX_HISTORY)));
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(hist.slice(0, MAX_HISTORY)));
+  } catch {
+    // Storage blocked/quota-exceeded (Safari lockdown, webviews): history is
+    // best-effort — never let it break command execution.
+  }
 }

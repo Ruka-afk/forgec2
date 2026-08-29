@@ -9,9 +9,9 @@ function AlertBody({ data }: { data: { message?: string; severity?: string; titl
   const { t } = useI18n();
   return (
     <div className="space-y-2 max-h-40 overflow-y-auto">
-      {data.length === 0 ? <p className="text-xs text-muted-foreground/70 text-center py-6">{t("dashboard.no_active_alerts")}</p> : data.map((a, i) => (
+      {data.length === 0 ? <p className="text-xs text-muted-foreground/100 text-center py-6">{t("dashboard.no_active_alerts")}</p> : data.map((a, i) => (
         <div key={i} className="flex items-start gap-2 text-xs px-2 py-1.5 bg-warning/15 rounded-lg">
-          <Bell className="w-4 h-4" />
+          <Bell className="size-4" />
           <span className="text-foreground">{a.message || a.title || t("dashboard.alert")}</span>
         </div>
       ))}

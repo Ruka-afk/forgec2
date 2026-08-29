@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -19,9 +20,14 @@ import (
 )
 
 // sshMaxEnvelopeBytes caps the beacon envelope accepted over one SSH session.
-// It mirrors BeaconMaxBodySize so oversized (or malicious) sessions cannot
-// exhaust server memory via an unbounded io.ReadAll.
-const sshMaxEnvelopeBytes = 64 * 1024 * 1024
+// Aligned with the 16 MiB frame cap used by the TCP/SMB transports so an
+// anonymous client cannot drive disproportionate memory growth per session.
+const sshMaxEnvelopeBytes = 16 * 1024 * 1024
+
+// sshMaxConcurrentSessions bounds simultaneously open SSH sessions. Each
+// session can buffer up to sshMaxEnvelopeBytes while reading, so the cap also
+// bounds worst-case heap use from unauthenticated connections.
+const sshMaxConcurrentSessions = 32
 
 // sshBanner mimics a stock OpenSSH banner so the listener is not trivially
 // fingerprinted as a bespoke C2 transport.
@@ -84,6 +90,13 @@ func (l *SSHBeaconListener) Start() error {
 	l.ln = ln
 	l.running = true
 
+	if l.cfg.Password == "" {
+		// Documented lab semantics, but too dangerous to stay silent: with no
+		// password pinned, ANY username/password/key combination authenticates.
+		slog.Error("SSH beacon listener has NO password configured: authentication is open to anyone. Set server.ssh_password for anything beyond a lab.",
+			"addr", l.cfg.Addr)
+	}
+
 	slog.Info("SSH beacon listener starting", "addr", ln.Addr().String(), "user", l.cfg.User, "key_auth", l.cfg.KeyAuth)
 	go l.serve(ln)
 	return nil
@@ -125,6 +138,11 @@ func (l *SSHBeaconListener) IsRunning() bool {
 }
 
 func (l *SSHBeaconListener) serve(ln net.Listener) {
+	// Bounded session semaphore: each in-flight session may buffer up to
+	// sshMaxEnvelopeBytes, so unauthenticated connection floods must not
+	// translate into unbounded heap growth.
+	sessions := make(chan struct{}, sshMaxConcurrentSessions)
+	consecutiveErrors := 0
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -134,10 +152,43 @@ func (l *SSHBeaconListener) serve(ln net.Listener) {
 			if !running {
 				return
 			}
+			// Back off transient accept failures (EMFILE etc.) instead of
+			// hot-spinning at full CPU while the process is resource-starved.
+			consecutiveErrors++
+			time.Sleep(time.Duration(consecutiveErrors) * 50 * time.Millisecond)
+			if consecutiveErrors > 20 {
+				slog.Error("SSH listener accept failing repeatedly, stopping listener", "addr", l.cfg.Addr)
+				l.mu.Lock()
+				l.running = false
+				l.mu.Unlock()
+				ln.Close()
+				return
+			}
 			slog.Error("SSH listener accept error", "addr", l.cfg.Addr, "err", err)
 			continue
 		}
-		go l.handleConnection(conn)
+		consecutiveErrors = 0
+
+		select {
+		case sessions <- struct{}{}:
+		default:
+			// At capacity: reject immediately instead of queueing memory-hungry
+			// handshakes.
+			slog.Warn("SSH listener at session cap, rejecting connection", "addr", conn.RemoteAddr())
+			conn.Close()
+			continue
+		}
+		go func() {
+			defer func() { <-sessions }()
+			defer func() {
+				if r := recover(); r != nil {
+					// Handshake/channel code parses hostile peer bytes in a
+					// bare goroutine: one panic must not kill the server.
+					slog.Error("Panic in SSH connection handler", "remote", conn.RemoteAddr(), "recover", r)
+				}
+			}()
+			l.handleConnection(conn)
+		}()
 	}
 }
 
@@ -159,9 +210,19 @@ func (l *SSHBeaconListener) handleConnection(conn net.Conn) {
 	defer sshConn.Close()
 	conn.SetDeadline(time.Time{})
 
+	// Idle-session bound (P2): after handshake all deadlines were cleared and
+	// nothing else limits how long an authenticated client can park its
+	// semaphore slot doing nothing. With open auth, 32 idle TCP connections
+	// could permanently disable this transport. Re-arm an absolute idle
+	// deadline; the beacon protocol's request/response cycle refreshes it via
+	// the reads below.
+	idle := 5 * time.Minute
+	conn.SetDeadline(time.Now().Add(idle))
 	go ssh.DiscardRequests(reqs)
 
 	for newCh := range chans {
+		// Any channel activity counts as progress; extend the window.
+		conn.SetDeadline(time.Now().Add(idle))
 		if newCh.ChannelType() != "session" {
 			newCh.Reject(ssh.UnknownChannelType, "only session channels are supported")
 			continue
@@ -179,6 +240,11 @@ func (l *SSHBeaconListener) handleConnection(conn net.Conn) {
 // and writes the response to stdout before closing the channel.
 func (l *SSHBeaconListener) handleSession(user string, ch ssh.Channel, requests <-chan *ssh.Request) {
 	defer ch.Close()
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("SSH session panic", "user", user, "err", r, "stack", string(debug.Stack()))
+		}
+	}()
 
 	for req := range requests {
 		switch req.Type {
@@ -187,6 +253,8 @@ func (l *SSHBeaconListener) handleSession(user string, ch ssh.Channel, requests 
 			ssh.Unmarshal(req.Payload, &payload)
 			req.Reply(true, nil)
 
+			// Bounded read: the idle deadline set in handleConnection covers
+			// this too, but keep the session loop honest about activity.
 			body, err := io.ReadAll(io.LimitReader(ch, sshMaxEnvelopeBytes))
 			if err == nil && len(body) > 0 {
 				l.dispatch(user, body, ch)

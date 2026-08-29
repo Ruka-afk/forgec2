@@ -35,6 +35,10 @@ export function useAgentScreenshots(agentId: string, online: boolean) {
     knownRef.current = new Set();
     initializedRef.current = false;
     lastListRef.current = "";
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
     if (badgeTimerRef.current) clearTimeout(badgeTimerRef.current);
     badgeTimerRef.current = null;
     setScreenshots([]);

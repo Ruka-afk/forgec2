@@ -121,7 +121,7 @@ export default function GroupsPage() {
 
   return (
     <PageContainer title={t("groups.title")} subtitle={t("groups.subtitle")} actions={<>
-        <Button onClick={openCreate}><Plus className="w-4 h-4" /> {t("groups.new")}</Button>
+        <Button onClick={openCreate}><Plus className="size-4" /> {t("groups.new")}</Button>
       </>}>
       <DataState
         loading={loading}

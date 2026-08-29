@@ -74,15 +74,22 @@ export default function SessionTimeoutWarning() {
     };
   }, [check]);
 
+  // G5 fix: only redirect on 401 (actual session expiry); transient network
+  // errors, 429 rate limits, or 5xx should not kick a valid session.
   const handleExtend = useCallback(async () => {
     try {
       await api.post(paths.auth.extend);
       toastShownRef.current = false;
       check();
-    } catch {
-      window.location.href = "/login";
+    } catch (err: unknown) {
+      const status = (err as { status?: number })?.status;
+      if (status === 401) {
+        window.location.href = "/login";
+      } else {
+        toast.error(t("session.extend_failed"));
+      }
     }
-  }, [check]);
+  }, [check, t]);
 
   const handleLogout = useCallback(() => {
     window.location.href = "/login";
@@ -96,7 +103,7 @@ export default function SessionTimeoutWarning() {
   return (
     <div className="fixed bottom-4 right-4 z-50 max-w-sm">
       <div
-        className={cn(bannerSurface(urgent ? "destructive" : "warning", "rounded-xl p-4 shadow-lg backdrop-blur-sm"))}
+        className={cn(bannerSurface(urgent ? "destructive" : "warning", "rounded-lg p-4 shadow-lg backdrop-blur-sm"))}
       >
         <p
           className={`text-sm font-medium ${

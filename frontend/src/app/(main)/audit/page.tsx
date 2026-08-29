@@ -156,9 +156,9 @@ export default function AuditPage() {
   };
 
   return (
-    <PageContainer title={t("audit.title")} subtitle={t("audit.subtitle")} contentClassName="space-y-6" actions={<>
+    <PageContainer title={t("audit.title")} subtitle={t("audit.subtitle")} actions={<>
         <Button onClick={handleExport}>
-          <Download className="w-4 h-4" />
+          <Download className="size-4" />
           <span>{t("audit.export")} CSV</span>
         </Button>
       </>}>
@@ -200,7 +200,7 @@ export default function AuditPage() {
             </SelectContent>
           </Select>
           <Button onClick={applyFilters}>
-            <Filter className="w-4 h-4" />
+            <Filter className="size-4" />
             <span>{t("audit.apply")}</span>
           </Button>
           <Button variant="outline" onClick={resetFilters}>
@@ -297,7 +297,7 @@ export default function AuditPage() {
                       openSession(sessionId);
                     }}
                   >
-                    <Terminal aria-hidden="true" className="w-3.5 h-3.5" />
+                    <Terminal aria-hidden="true" className="size-3.5" />
                     {t("audit.interact")}
                   </Button>
                 ) : null;
@@ -325,7 +325,7 @@ export default function AuditPage() {
                   setSelectedLog(null);
                 }}
               >
-                <Terminal aria-hidden="true" className="w-4 h-4" />
+                <Terminal aria-hidden="true" className="size-4" />
                 {t("audit.interact")}
               </Button>
             )}

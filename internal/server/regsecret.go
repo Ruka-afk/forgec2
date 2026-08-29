@@ -91,11 +91,12 @@ func (s *Server) regSecretForAuth(id, agentID string) ([]byte, bool) {
 // A creation failure is fatal: with v2 master-key auth deprecated and rejected
 // server-side, silently falling back to the master key would build an implant
 // that can never register. Callers must abort the build when err is non-nil.
-// When beaconKey is empty (no master key configured) there is nothing to
-// replace, so it is returned unchanged and the caller's own auth checks apply.
+// When beaconKey is empty there is no auth material at all — processAuthFrame
+// rejects any frame without a SecretID — so generation must FAIL instead of
+// handing the operator a payload that can never register (P2-4).
 func (s *Server) ensureV3RegSecret(beaconKey string) (id, secretB64, clearedKey string, err error) {
 	if s == nil || beaconKey == "" {
-		return "", "", beaconKey, nil
+		return "", "", "", fmt.Errorf("server.beacon_key is not configured: generated payloads could never register (v2 master-key auth is deprecated)")
 	}
 	id, secretB64, err = s.createRegSecret()
 	if err != nil {

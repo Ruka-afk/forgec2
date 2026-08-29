@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -178,6 +180,56 @@ func TestWaitForTaskResult_TimeoutPending(t *testing.T) {
 	result := s.waitForTaskResult(task.ID, "agent-1")
 	if !containsStr(result, `"status":"pending"`) || !containsStr(result, "wait timeout") {
 		t.Fatalf("expected pending timeout payload, got %s", result)
+	}
+}
+
+func TestAIBuildChatURL(t *testing.T) {
+	cases := []struct {
+		name     string
+		base     string
+		provider string
+		want     string
+	}{
+		{"openai base appends chat/completions", "https://api.openai.com/v1", "", "https://api.openai.com/v1/chat/completions"},
+		{"deepseek base appends chat/completions", "https://api.deepseek.com/v1", "deepseek", "https://api.deepseek.com/v1/chat/completions"},
+		{"zhipu base appends chat/completions", "https://open.bigmodel.cn/api/paas/v4", "zhipu", "https://open.bigmodel.cn/api/paas/v4/chat/completions"},
+		{"full openrouter url used as-is", "https://openrouter.ai/api/v1/chat/completions", "custom", "https://openrouter.ai/api/v1/chat/completions"},
+		{"claude base appends messages", "https://api.anthropic.com/v1", "claude", "https://api.anthropic.com/v1/messages"},
+		{"claude full messages url used as-is", "https://api.anthropic.com/v1/messages", "claude", "https://api.anthropic.com/v1/messages"},
+	}
+	for _, tc := range cases {
+		if got := aiBuildChatURL(tc.base, tc.provider); got != tc.want {
+			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestAIEndpointDefaults(t *testing.T) {
+	cfg := &config.Config{}
+	cases := map[string]string{
+		"openai": "https://api.openai.com/v1",
+		"deepseek": "https://api.deepseek.com/v1",
+		"zhipu":   "https://open.bigmodel.cn/api/paas/v4",
+	}
+	for provider, want := range cases {
+		cfg.AI.Provider = provider
+		if got := cfg.AIEndpoint(); got != want {
+			t.Errorf("AIEndpoint(%s): got %q, want %q", provider, got, want)
+		}
+	}
+}
+
+func TestAIFlattenError(t *testing.T) {
+	if aiFlattenError(nil) != "AI request failed" {
+		t.Fatal("nil error should yield generic message")
+	}
+	got := aiFlattenError(fmt.Errorf("API 402 from https://openrouter.ai/api/v1/chat/completions: insufficient balance"))
+	if !containsStr(got, "AI request failed: API 402") {
+		t.Fatalf("detail should be surfaced, got %q", got)
+	}
+	long := aiFlattenError(fmt.Errorf("%s", strings.Repeat("x", AIErrorBodyTruncLen+50)))
+	if len(long) > AIErrorBodyTruncLen+len("AI request failed: ")+3 {
+		t.Fatalf("error message not trimmed to safe length: %d", len(long))
 	}
 }
 

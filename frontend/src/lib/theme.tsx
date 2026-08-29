@@ -14,7 +14,7 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType>({
   theme: DEFAULT_THEME,
   setTheme: () => {},
-  resolved: "dark",
+  resolved: "light",
 });
 
 function applyTheme(theme: Theme) {
@@ -27,7 +27,7 @@ function applyTheme(theme: Theme) {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(DEFAULT_THEME);
-  const [resolved, setResolved] = useState<"light" | "dark">("dark");
+  const [resolved, setResolved] = useState<"light" | "dark">("light");
 
   useEffect(() => {
     const initial = resolveStoredTheme(localStorage.getItem("forgec2_theme"));

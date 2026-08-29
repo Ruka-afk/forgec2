@@ -131,24 +131,24 @@ export default function NotificationsPage({ embedded = false }: { embedded?: boo
   return (
     <PageContainer embedded={embedded} title={!embedded ? t("notifications.title") : undefined} subtitle={!embedded ? `${total} ${t("notifications.total")}` : undefined} actions={<>
         <Button onClick={handleMarkAllRead} className="gap-2">
-          <CheckCheck className="w-4 h-4" /> {t("notifications.mark_all_read")}
+          <CheckCheck className="size-4" /> {t("notifications.mark_all_read")}
         </Button>
         {selectedIds.size > 0 && (
           <Button onClick={handleBulkMarkRead} className="gap-2">
-            <Check className="w-4 h-4" /> {t("notifications.mark_n_read", { count: selectedIds.size })}
+            <Check className="size-4" /> {t("notifications.mark_n_read", { count: selectedIds.size })}
           </Button>
         )}
         <Button variant="destructive" onClick={() => setConfirmClearAll(true)} className="gap-2">
-          <Trash2 className="w-4 h-4" /> {t("notifications.clear_all")}
+          <Trash2 className="size-4" /> {t("notifications.clear_all")}
         </Button>
       </>}>
       {embedded && (
         <div className="mb-4 flex flex-wrap justify-end gap-2">
           <Button onClick={handleMarkAllRead} size="sm" className="gap-2">
-            <CheckCheck className="w-4 h-4" /> {t("notifications.mark_all_read")}
+            <CheckCheck className="size-4" /> {t("notifications.mark_all_read")}
           </Button>
           <Button variant="destructive" size="sm" onClick={() => setConfirmClearAll(true)} className="gap-2">
-            <Trash2 className="w-4 h-4" /> {t("notifications.clear_all")}
+            <Trash2 className="size-4" /> {t("notifications.clear_all")}
           </Button>
         </div>
       )}
@@ -188,8 +188,8 @@ export default function NotificationsPage({ embedded = false }: { embedded?: boo
           <div className="divide-y divide-border">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="flex items-start gap-3 px-4 sm:px-6 py-4">
-                <Skeleton className="w-4 h-4 mt-1 shrink-0 rounded" />
-                <Skeleton className="w-8 h-8 shrink-0 rounded-full" />
+                <Skeleton className="size-4 mt-1 shrink-0 rounded" />
+                <Skeleton className="size-8 shrink-0 rounded-full" />
                 <div className="flex-1 space-y-2">
                   <Skeleton className="h-4 w-3/4" />
                   <Skeleton className="h-3 w-1/2" />
@@ -198,7 +198,7 @@ export default function NotificationsPage({ embedded = false }: { embedded?: boo
                     <Skeleton className="h-3 w-16" />
                   </div>
                 </div>
-                <Skeleton className="w-8 h-8 shrink-0 rounded" />
+                <Skeleton className="size-8 shrink-0 rounded" />
               </div>
             ))}
           </div>

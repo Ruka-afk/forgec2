@@ -17,10 +17,10 @@ interface StatusDotProps {
 }
 
 const DOT_SIZES: Record<StatusDotSize, string> = {
-  xs: "w-1.5 h-1.5",
-  sm: "w-2 h-2",
-  md: "w-2.5 h-2.5",
-  lg: "w-3 h-3",
+  xs: "size-1.5",
+  sm: "size-2",
+  md: "size-2.5",
+  lg: "size-3",
 };
 
 /**

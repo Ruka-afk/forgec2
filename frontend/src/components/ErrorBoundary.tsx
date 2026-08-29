@@ -26,10 +26,10 @@ class ErrorBoundaryInner extends Component<Props, State> {
     return { hasError: true, error };
   }
 
+  // G12 fix: always log caught errors (not only in dev) so that the
+  // TelemetryCollector's window.error handler can capture them in production.
   componentDidCatch(error: Error, info: ErrorInfo) {
-    if (process.env.NODE_ENV === "development") {
-      logger.error("ErrorBoundary caught error", error, { componentStack: info.componentStack });
-    }
+    logger.error("ErrorBoundary caught error", error, { componentStack: info.componentStack });
   }
 
   render() {
@@ -45,8 +45,8 @@ function ErrorFallbackUI({ error, onReset }: { error: Error | null; onReset: () 
   const { t } = useI18n();
   return (
     <div className="flex flex-col items-center justify-center min-h-[300px] p-8 text-center">
-      <div className="w-14 h-14 rounded-xl bg-destructive/10 flex items-center justify-center mb-4">
-        <Bug className="w-7 h-7 text-destructive" />
+      <div className="mb-4 flex size-14 items-center justify-center rounded-lg bg-destructive/10">
+        <Bug className="size-7 text-destructive" />
       </div>
       <h2 className="text-lg font-semibold text-foreground mb-2">{t("error.boundary_title")}</h2>
       <p className="text-sm text-muted-foreground mb-4 max-w-md">

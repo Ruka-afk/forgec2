@@ -1,0 +1,1 @@
+import{r as s,j as o}from"./vendor-react-CKkpQyv7.js";function i({onError:l,onLoad:n,...e}){const[r,t]=s.useState(!1);s.useEffect(()=>{t(!1)},[e.src]);const c=s.useCallback(a=>{t(!0),l?.(a)},[l]),d=s.useCallback(a=>{t(!1),n?.(a)},[n]);return o.jsx("img",{...e,onError:c,onLoad:d,style:{...e.style,display:r?"none":e.style?.display}})}export{i as S};

@@ -40,7 +40,7 @@ function AuditStrip() {
     <Card className="overflow-hidden mb-4">
       <CardHeader className="px-5 py-3 border-b border-border">
         <CardTitle className="text-sm font-semibold text-foreground">
-          <Shield className="w-4 h-4" />{t("dashboard.recent_audit")}
+          <Shield className="size-4" />{t("dashboard.recent_audit")}
         </CardTitle>
         <Link href="/audit" className="text-xs text-primary hover:underline">{t("dashboard.view_all")}</Link>
       </CardHeader>
@@ -51,7 +51,7 @@ function AuditStrip() {
               <Badge variant="secondary" className="text-(--fs-micro-sm) font-mono shrink-0">{log.action || "-"}</Badge>
               <span className="text-foreground truncate">{log.details || log.username || ""}</span>
             </div>
-            <span className="text-muted-foreground/70 shrink-0 ml-2">
+            <span className="text-muted-foreground/100 shrink-0 ml-2">
               {log.created_at ? formatTime(log.created_at) : ""}
             </span>
           </div>
@@ -117,9 +117,9 @@ export default function AnalyticsView({
                   {task.status === "completed" ? t("tasks.completed") : task.status === "failed" ? t("tasks.failed") : task.status === "pending" ? t("tasks.pending") : task.status === "cancelled" ? t("tasks.cancelled") : t("tasks.running")}
                 </span>
                 <span className="text-xs font-mono text-foreground">{task.type}</span>
-                <span className="text-xs text-muted-foreground/70 truncate max-w-xs">{task.command}</span>
+                <span className="text-xs text-muted-foreground/100 truncate max-w-xs">{task.command}</span>
               </div>
-              <span className="text-xs text-muted-foreground/70">{task.created_at ? formatTime(task.created_at) : ""}</span>
+              <span className="text-xs text-muted-foreground/100">{task.created_at ? formatTime(task.created_at) : ""}</span>
             </div>
           ))}
         </div>

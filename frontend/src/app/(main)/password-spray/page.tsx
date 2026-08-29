@@ -143,10 +143,10 @@ export default function PasswordSprayPage() {
 
   const statusIcon = (status: string) => {
     switch (status) {
-      case "valid": return <CheckCircle2 className="w-4 h-4 text-success" />;
-      case "locked": return <Lock className="w-4 h-4 text-warning" />;
-      case "error": return <AlertTriangle className="w-4 h-4 text-warning" />;
-      default: return <XCircle className="w-4 h-4 text-destructive" />;
+      case "valid": return <CheckCircle2 className="size-4 text-success" />;
+      case "locked": return <Lock className="size-4 text-warning" />;
+      case "error": return <AlertTriangle className="size-4 text-warning" />;
+      default: return <XCircle className="size-4 text-destructive" />;
     }
   };
 
@@ -172,7 +172,7 @@ export default function PasswordSprayPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="p-6 space-y-4">
           <h3 className="text-lg font-semibold flex items-center gap-2">
-            <Shield className="w-5 h-5 text-primary" />
+            <Shield className="size-5 text-primary" />
             {t("spray.config_title")}
           </h3>
 
@@ -189,7 +189,7 @@ export default function PasswordSprayPage() {
 
           <div className="space-y-1.5">
             <Label className="flex items-center gap-1.5">
-              <Key className="w-3.5 h-3.5" />
+              <Key className="size-3.5" />
               {t("spray.vault_pick")}
             </Label>
             <Select
@@ -240,7 +240,7 @@ export default function PasswordSprayPage() {
           </div>
 
           <Button onClick={handleSpray} disabled={!canSubmit} variant="gradient" className="w-full">
-            <Play className="w-4 h-4" />
+            <Play className="size-4" />
             {running ? t("spray.sending") : t("spray.execute")}
           </Button>
         </Card>
@@ -250,13 +250,13 @@ export default function PasswordSprayPage() {
 
           {!lastResult ? (
             <div className="flex items-center justify-center gap-3 h-64 text-muted-foreground">
-              {running && <Spinner className="w-5 h-5" />}
+              {running && <Spinner className="size-5" />}
               {running ? t("spray.waiting_result") : t("spray.no_results")}
             </div>
           ) : (
             <div className="space-y-4">
               {lastResult.summary && lastResult.summary.valid > 0 && (
-                <Banner tone="success" icon={<Database className="w-4 h-4" />}>
+                <Banner tone="success" icon={<Database className="size-4" />}>
                   {t("spray.creds_imported")}
                 </Banner>
               )}

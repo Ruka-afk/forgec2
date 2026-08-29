@@ -13,12 +13,13 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   ArrowLeft, ArrowRight, CloudUpload, Download, Eye, File, FileText, Folder,
-  FolderOpen, FolderTree, HardDrive, ImageIcon, RotateCw, Search, Trash2, X,
+  FolderOpen, FolderTree, HardDrive, ImageIcon, RotateCw, Search, Trash2, Usb, X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { PageContainer } from "@/components/ui/page-container";
 import { Progress } from "@/components/ui/progress";
+import { SafeImg } from "@/components/ui/safe-img";
 import { useI18n } from "@/lib/i18n";
 import { formatSize, formatTimestamp, isImageFile, joinPath, parentPath, type FileEntry } from "./_components/types";
 import { transferPercent } from "./_components/file-task";
@@ -58,6 +59,11 @@ export default function FilesPage() {
     setFindPattern,
     findResults,
     setFindResults,
+    huntDownload,
+    setHuntDownload,
+    usbOutput,
+    showUsb,
+    setShowUsb,
     osType,
     quickPaths,
     loadDirectory,
@@ -67,7 +73,9 @@ export default function FilesPage() {
     deleteFile,
     uploadFile,
     loadDrives,
+    loadUsb,
     findFiles,
+    huntFiles,
   } = useAgentFiles(id);
 
   const goUp = () => navigateTo(parentPath(currentPath, osType));
@@ -76,10 +84,18 @@ export default function FilesPage() {
     const sep = osType === "linux" ? "/" : "\\";
     const parts = currentPath.split(/[\\/]/).filter(Boolean);
     if (index === 0) {
-      navigateTo(osType === "linux" ? "/" : "C:\\");
+      // C12 fix: derive root from current path's drive letter instead of
+      // hardcoding "C:\\" — browsing D:\foo now roots at D:\ not C:\.
+      const driveMatch = currentPath.match(/^([A-Za-z]:)/);
+      navigateTo(osType === "linux" ? "/" : (driveMatch ? driveMatch[1] + "\\" : "C:\\"));
     } else {
       const sliced = parts.slice(0, index);
-      navigateTo(osType === "linux" ? "/" + sliced.join("/") : sliced.join(sep));
+      // C13 fix: for Windows, the first part is the drive letter (e.g. "C:").
+      // Slicing just the drive gives "C:" — append trailing backslash so it
+      // resolves to the root of that drive (e.g. "C:\\") instead of "C:".
+      const joined = sliced.join(sep);
+      const needsSlash = osType !== "linux" && sliced.length === 1 && !joined.endsWith("\\");
+      navigateTo(osType === "linux" ? "/" + joined : (needsSlash ? joined + "\\" : joined));
     }
   };
 
@@ -104,12 +120,14 @@ export default function FilesPage() {
   };
 
   const sep = osType === "linux" ? "/" : "\\";
-  const rootPath = osType === "linux" ? "/" : "C:\\";
+  // C12 fix: derive root from current path instead of hardcoding "C:\\".
+  const driveMatch = currentPath.match(/^([A-Za-z]:)/);
+  const rootPath = osType === "linux" ? "/" : (driveMatch ? driveMatch[1] + "\\" : "C:\\");
   const pathParts = currentPath.split(/[\\/]/).filter(Boolean);
 
   return (
-    <PageContainer>
-      <div className="mb-4 flex items-center justify-between gap-3">
+    <PageContainer className="h-full gap-3 px-4 py-3 sm:px-6">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <h1 className="flex items-center gap-2 text-2xl font-bold">
             <FolderTree className="size-5" />
@@ -130,6 +148,10 @@ export default function FilesPage() {
             <HardDrive className="size-4" />
             {t("agents.files_drives")}
           </Button>
+          <Button variant="secondary" size="sm" onClick={() => void loadUsb()}>
+            <Usb className="size-4" />
+            {t("agents.files_usb")}
+          </Button>
           <Button variant="secondary" size="sm" onClick={() => void loadDirectory(currentPath)}>
             <RotateCw className="size-4" />
             {t("agents.files_refresh")}
@@ -137,9 +159,9 @@ export default function FilesPage() {
         </div>
       </div>
 
-      <p className="mb-4 text-xs text-muted-foreground">{t("agents.files_channel_hint")}</p>
+      <p className="text-xs text-muted-foreground">{t("agents.files_channel_hint")}</p>
 
-      <div className="mb-4 rounded-lg border border-border bg-muted/40 p-4">
+      <div className="rounded-lg border border-border bg-muted/40 p-4">
         <div className="mb-3 flex items-center gap-2">
           <FolderOpen className="size-4 shrink-0 text-muted-foreground" />
           <Input
@@ -208,12 +230,25 @@ export default function FilesPage() {
             <Button onClick={() => void findFiles()}>
               <Search className="size-4" /> {t("common.search")}
             </Button>
+            <Button variant="secondary" onClick={() => void huntFiles()}>
+              <Search className="size-4" /> {t("agents.files_hunt")}
+            </Button>
             {findResults.length > 0 && (
               <Button variant="secondary" onClick={() => { setFindResults([]); setFindPattern(""); }}>
                 <X className="size-4" /> {t("agents.files_clear")}
               </Button>
             )}
           </div>
+          <p className="mt-2 text-xs text-muted-foreground">{t("agents.files_hunt_hint")}</p>
+          <Button
+            type="button"
+            variant={huntDownload ? "secondary" : "outline"}
+            size="sm"
+            className="mt-2"
+            onClick={() => setHuntDownload((v) => !v)}
+          >
+            {t("agents.files_hunt_download")}
+          </Button>
           {findResults.length > 0 && (
             <div className="mt-3 max-h-48 overflow-y-auto rounded-lg border border-border bg-muted/50">
               {findResults.map((result) => (
@@ -237,6 +272,24 @@ export default function FilesPage() {
           )}
         </Card>
       )}
+
+      <Dialog open={showUsb} onOpenChange={setShowUsb}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Usb className="size-4" />
+              {t("agents.files_usb_output")}
+            </DialogTitle>
+          </DialogHeader>
+          {usbOutput ? (
+            <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg bg-muted/50 p-3 font-mono text-xs">
+              {usbOutput}
+            </pre>
+          ) : (
+            <p className="py-4 text-center text-sm text-muted-foreground">{t("agents.files_usb_failed")}</p>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showDrives} onOpenChange={setShowDrives}>
         <DialogContent className="max-w-lg">
@@ -287,7 +340,7 @@ export default function FilesPage() {
       )}
 
       {!loading && entries.length > 0 && (
-        <Card className="overflow-hidden">
+        <Card className="min-h-0 flex-1 overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50">
@@ -437,12 +490,11 @@ export default function FilesPage() {
           </DialogHeader>
           {previewIsImage ? (
             <div className="flex flex-1 items-center justify-center overflow-auto bg-muted/50 p-4">
-                <img
+                <SafeImg
                 src={safeImageSrc(previewContent)}
                 alt={selectedFile || t("agents.files_preview_btn")}
                 className="max-h-[70vh] max-w-full rounded-lg object-contain"
                 loading="lazy"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
               />
             </div>
           ) : (

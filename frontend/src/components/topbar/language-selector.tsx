@@ -16,7 +16,7 @@ export function LanguageSelector() {
   return (
     <Select value={locale} onValueChange={(v) => setLocale(v as "en" | "zh")}>
       <Tooltip>
-        <TooltipTrigger render={<SelectTrigger size="sm" className="w-8 h-8 p-0 justify-center" aria-label={t("common.language")}>
+        <TooltipTrigger render={<SelectTrigger size="sm" className="size-8 p-0 justify-center" aria-label={t("common.language")}>
             <SelectValue>
               <span className="text-sm">{currentLang.flag}</span>
             </SelectValue>

@@ -1,7 +1,7 @@
 "use client";
 
 import { toast } from "sonner";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { z } from "zod";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
@@ -32,7 +32,9 @@ import { Download, Filter, Lock, Plus, Tag, ShieldCheck, AlertTriangle } from "l
 import { CRED_TYPES, TYPE_BADGE_VARIANT, type VaultEntry } from "./_components/types";
 import { useCredentialsData } from "./_components/useCredentialsData";
 import { CredentialRow } from "./_components/CredentialRow";
+import { csvCell } from "@/lib/csv";
 import { CredHarvestCard } from "./_components/CredHarvestCard";
+import { CookieProxyCard } from "./_components/CookieProxyCard";
 
 const PAGE_SIZE = 20;
 
@@ -49,6 +51,7 @@ export default function CredentialsPage() {
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<VaultEntry | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
   const [page, setPage] = useState(1);
 
   const [showPasswords, setShowPasswords] = useState<Set<string>>(new Set());
@@ -138,9 +141,10 @@ export default function CredentialsPage() {
   const handleEdit = async () => {
     if (!editTarget) return;
     try {
+      setSavingEdit(true);
       const body: Record<string, string> = {};
-      if (form.tags) body.tags = form.tags;
-      if (form.notes) body.notes = form.notes;
+      body.tags = form.tags || "";
+      body.notes = form.notes || "";
       await api.put(paths.credentials.one(editTarget.id), body);
       showToastNotify(t("cred.toast.updated"), "success");
       setShowEditModal(false);
@@ -149,6 +153,8 @@ export default function CredentialsPage() {
       loadData();
     } catch (err) {
       showToastNotify(String(err), "error");
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -222,7 +228,7 @@ export default function CredentialsPage() {
   };
 
   const exportCSV = () => {
-    const headers = ["Type", "Domain", "Username", "Password", "Hash", "Source", "Tags", "Confirmed", "Notes"];
+    const headers = ["Type", "Domain", "Username", "Password", "Hash", "Source", "Tags", "Confirmed", "Notes"].map(csvCell);
     const rows = filteredEntries.map(e => [
       e.type,
       e.domain || "",
@@ -233,8 +239,8 @@ export default function CredentialsPage() {
       e.tags || "",
       e.confirmed ? "Yes" : "No",
       e.notes || "",
-    ]);
-    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    ].map(csvCell));
+    const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
     downloadText(csv, `credentials_${new Date().toISOString().slice(0, 10)}.csv`, "text/csv");
     showToastNotify(t("cred.toast.csv_exported"), "success");
   };
@@ -262,11 +268,47 @@ export default function CredentialsPage() {
     });
   }, []);
 
+  const [verifying, setVerifying] = useState(false);
+
+  // Batch-verify selected credentials: queues one cred_check task per entry
+  // on its harvesting agent; results flip verify_status via the beacon path.
+  const handleBatchVerify = async () => {
+    if (selectedIds.size === 0 || verifying) return;
+    setVerifying(true);
+    try {
+      const d = await api.postJson<{ queued: number; results: Array<{ status: string }> }>(
+        paths.credentials.batchVerify,
+        { ids: [...selectedIds] },
+      );
+      toast.success(t("cred.toast.verify_queued", { queued: String(d.queued) }));
+      const skipped = d.results.filter(r => r.status.startsWith("skipped")).length;
+      if (skipped > 0) {
+        toast.info(t("cred.toast.verify_skipped", { skipped: String(skipped) }));
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("cred.toast.verify_failed"));
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   const toggleSelectAll = () => {
-    if (selectedIds.size === filteredEntries.length) {
-      setSelectedIds(new Set());
+    // Decide from the CURRENT view, not set size: a selection spanning other
+    // filters/pages could make size match while none of this view is picked,
+    // inverting the expected toggle.
+    const allSelected = filteredEntries.length > 0 && filteredEntries.every(e => selectedIds.has(String(e.id)));
+    if (allSelected) {
+      setSelectedIds(prev => {
+        const currentView = new Set(filteredEntries.map(e => String(e.id)));
+        const next = new Set([...prev].filter(id => !currentView.has(id)));
+        return next;
+      });
     } else {
-      setSelectedIds(new Set(filteredEntries.map(e => e.id)));
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        for (const e of filteredEntries) next.add(String(e.id));
+        return next;
+      });
     }
   };
 
@@ -287,6 +329,18 @@ export default function CredentialsPage() {
   }, []);
 
   const entries = useMemo(() => data?.VaultEntries || [], [data?.VaultEntries]);
+
+  // Reconcile selection with reality: deleted/refreshed-away entries must not
+  // linger as ghosts that inflate the "N selected" count and get swept into
+  // batch operations.
+  useEffect(() => {
+    setSelectedIds(prev => {
+      if (prev.size === 0) return prev;
+      const valid = new Set(entries.map(e => String(e.id)));
+      const next = new Set([...prev].filter(id => valid.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [entries]);
 
   const filteredEntries = entries.filter(entry => {
     if (searchQuery) {
@@ -332,7 +386,6 @@ export default function CredentialsPage() {
       <PageContainer
         title={t("cred.title")}
         subtitle={t("cred.subtitle")}
-        contentClassName="space-y-6"
         actions={
           <>
             {filteredEntries.length > 0 && (
@@ -341,7 +394,7 @@ export default function CredentialsPage() {
                 size="lg"
                 className="gap-x-2"
               >
-                <Download className="w-4 h-4" />
+                <Download className="size-4" />
                 <span>{t("cred.export_csv")}</span>
               </Button>
             )}
@@ -350,7 +403,7 @@ export default function CredentialsPage() {
               size="lg"
               className="gap-x-2"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="size-4" />
               <span>{t("cred.add")}</span>
             </Button>
           </>
@@ -363,18 +416,19 @@ export default function CredentialsPage() {
       </Banner>
 
       <CredHarvestCard />
+      <CookieProxyCard />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-5">
-        <Card className="p-(--card-spacing) rounded-xl hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-          <StatTile label={t("cred.stat_total")} value={loading ? "…" : stats.total} icon={<Lock className="w-5 h-5" />} />
+        <Card interactive className="p-(--card-spacing)">
+          <StatTile label={t("cred.stat_total")} value={loading ? "…" : stats.total} icon={<Lock className="size-5" />} />
         </Card>
-        <Card className="p-(--card-spacing) rounded-xl hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-          <StatTile label={t("cred.stat_confirmed")} value={loading ? "…" : stats.confirmed} tone="success" icon={<ShieldCheck className="w-5 h-5" />} />
+        <Card interactive className="p-(--card-spacing)">
+          <StatTile label={t("cred.stat_confirmed")} value={loading ? "…" : stats.confirmed} tone="success" icon={<ShieldCheck className="size-5" />} />
         </Card>
-        <Card className="p-(--card-spacing) rounded-xl hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-          <StatTile label={t("cred.stat_unconfirmed")} value={loading ? "…" : stats.unconfirmed} tone="warning" icon={<AlertTriangle className="w-5 h-5" />} />
+        <Card interactive className="p-(--card-spacing)">
+          <StatTile label={t("cred.stat_unconfirmed")} value={loading ? "…" : stats.unconfirmed} tone="warning" icon={<AlertTriangle className="size-5" />} />
         </Card>
-        <Card className="p-(--card-spacing) rounded-xl hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+        <Card interactive className="p-(--card-spacing)">
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("cred.stat_by_type")}</div>
@@ -385,7 +439,7 @@ export default function CredentialsPage() {
                 {stats.byType.every(s => s.count === 0) && <span className="text-xs text-muted-foreground">—</span>}
               </div>
             </div>
-            <span className="shrink-0 rounded-xl p-2.5 bg-primary/10 text-primary ring-1 ring-border/50"><Tag className="w-5 h-5" /></span>
+            <span className="shrink-0 rounded-xl p-2.5 bg-primary/10 text-primary ring-1 ring-border/50"><Tag className="size-5" /></span>
           </div>
         </Card>
       </div>
@@ -436,7 +490,7 @@ export default function CredentialsPage() {
             onClick={() => reload()}
             size="lg"
           >
-            <Filter className="w-4 h-4" />{t("cred.filter")}
+            <Filter className="size-4" />{t("cred.filter")}
           </Button>
           <Button
             onClick={handleClearFilters}
@@ -451,8 +505,20 @@ export default function CredentialsPage() {
               size="lg"
               className="gap-x-2"
             >
-              <Tag className="w-4 h-4" />
+              <Tag className="size-4" />
               <span>{t("cred.batch_tags")} ({selectedIds.size})</span>
+            </Button>
+          )}
+          {selectedIds.size > 0 && (
+            <Button
+              onClick={handleBatchVerify}
+              size="lg"
+              variant="secondary"
+              disabled={verifying}
+              className="gap-x-2"
+            >
+              <ShieldCheck className={`size-4 ${verifying ? "animate-pulse" : ""}`} />
+              <span>{verifying ? t("cred.verifying") : `${t("cred.batch_verify")} (${selectedIds.size})`}</span>
             </Button>
           )}
         </div>
@@ -461,7 +527,7 @@ export default function CredentialsPage() {
       {data?.AllTags && data.AllTags.length > 0 && (
         <Card className="p-(--card-spacing)">
           <div className="font-medium text-sm text-foreground flex items-center gap-2 mb-3">
-            <Tag className="w-4 h-4" />
+            <Tag className="size-4" />
             <span>{t("cred.tags")}</span>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -492,7 +558,7 @@ export default function CredentialsPage() {
           loadingSkeleton={
             <div className="p-(--card-spacing) text-center text-muted-foreground">
               <div className="flex flex-col items-center gap-2">
-                <Skeleton className="h-8 w-8 rounded-full" />
+                <Skeleton className="size-8 rounded-full" />
                 <Skeleton className="h-4 w-20" />
               </div>
             </div>
@@ -722,7 +788,7 @@ export default function CredentialsPage() {
             <Button variant="outline" onClick={() => { setShowEditModal(false); setEditTarget(null); }} className="flex-1">
               {t("common.cancel")}
             </Button>
-            <Button onClick={handleEdit} className="flex-1">
+            <Button onClick={handleEdit} disabled={savingEdit} className="flex-1">
               {t("common.save")}
             </Button>
           </DialogFooter>

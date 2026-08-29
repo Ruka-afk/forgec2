@@ -50,8 +50,8 @@ def score_agent_security(agents: list) -> tuple:
                 dt = datetime.fromisoformat(ls.replace("Z", "+00:00")).replace(tzinfo=None)
                 if dt < stale_cutoff and status != "online":
                     stale_count += 1
-            except (ValueError, TypeError):
-                pass
+            except (ValueError, TypeError) as exc:
+                print(json.dumps({"level": "error", "message": f"Plugin error: invalid agent last_seen timestamp '{ls}': {exc}"}), file=sys.stderr)
 
         os_name = (a.get("os") or "").lower()
         for kw in legacy_keywords:

@@ -36,6 +36,7 @@ func p2pCleanupStaleChildren() {
 				delete(p2pChildTasks, uuid)
 				delete(p2pChildLastSeen, uuid)
 				delete(p2pChildFrames, uuid)
+				delete(p2pChildReplies, uuid)
 			}
 		}
 		p2pChildUUIDs = keep
@@ -426,7 +427,7 @@ func sendP2PBeacon(body []byte) []byte {
 
 func sendP2PTCPBeacon(body []byte) []byte {
 	addr := strings.TrimPrefix(P2PParent, "tcp://")
-	conn, err := net.Dial("tcp", addr)
+	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
 	if err != nil {
 		if Debug {
 			fmt.Printf("[!] P2P TCP dial to %s failed: %v\n", addr, err)
@@ -439,6 +440,9 @@ func sendP2PTCPBeacon(body []byte) []byte {
 	if !p2pClientAuth(conn) {
 		return nil
 	}
+	// p2pClientAuth resets deadlines when it runs; set the I/O deadline after
+	// it so the whole envelope exchange is bounded even if the parent stalls.
+	conn.SetDeadline(time.Now().Add(30 * time.Second))
 
 	if err := binary.Write(conn, binary.BigEndian, uint32(len(body))); err != nil {
 		return nil

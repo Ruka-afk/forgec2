@@ -6,6 +6,7 @@ import { NAV_SECTIONS, filterNavByPermissions } from "@/lib/navigation";
 import { useI18n } from "@/lib/i18n";
 import { useAppStore } from "@/lib/store";
 import { useAgentList } from "@/lib/hooks/useAgentList";
+import { isEditableTarget } from "@/app/(main)/agents/_components/interact-workspace";
 import { Search, CornerDownLeft, Server } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -107,8 +108,12 @@ export default function CommandPalette() {
     router.push(`/search?q=${encodeURIComponent(q)}`);
   }, [query, close, router]);
 
+  // G10 fix: skip e.repeat (held key auto-repeat) and skip editable targets
+  // so Ctrl+K does not hijack xterm's native kill-line shortcut.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return;
+      if (isEditableTarget(e.target)) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setOpen(!useAppStore.getState().commandPaletteOpen);
@@ -170,7 +175,7 @@ export default function CommandPalette() {
       >
         <DialogTitle className="sr-only">{t("palette.title")}</DialogTitle>
         <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
-          <Search className="w-4 h-4 shrink-0 text-muted-foreground" />
+          <Search className="size-4 shrink-0 text-muted-foreground" />
           <Input
             ref={inputRef}
             value={query}
@@ -200,9 +205,9 @@ export default function CommandPalette() {
                   onClick={handleSubmitSearch}
                   className={`h-auto w-full justify-start gap-3 rounded-none px-4 py-2.5 text-left text-sm ${activeIndex === 0 ? "bg-primary/10" : ""}`}
                 >
-                <Search className="w-4 h-4 text-muted-foreground" />
+                <Search className="size-4 text-muted-foreground" />
                 <span className="text-primary">{t("palette.search_for", { query: query.trim() })}</span>
-                <CornerDownLeft className="ml-auto w-3.5 h-3.5 text-muted-foreground/60" />
+                <CornerDownLeft className="ml-auto size-3.5 text-muted-foreground/85" />
               </Button>
             )}
             {filtered.length === 0 ? (
@@ -210,7 +215,7 @@ export default function CommandPalette() {
             ) : (
               [...groups.entries()].map(([section, group]) => (
                 <div key={section}>
-                  <div className="px-4 pt-3 pb-1.5 text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground/70">
+                  <div className="px-4 pt-3 pb-1.5 text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground/100">
                     {section}
                   </div>
                   {group.map((item) => {
@@ -229,15 +234,15 @@ export default function CommandPalette() {
                         className={`h-auto w-full justify-start gap-3 rounded-none px-4 py-2.5 text-left text-sm ${activeIndex === globalIndex ? "bg-primary/10" : ""}`}
                       >
                         <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-secondary/70">
-                          <Icon className="w-3.5 h-3.5 text-muted-foreground" />
+                          <Icon className="size-3.5 text-muted-foreground" />
                         </span>
                         <span className="flex min-w-0 flex-col">
                           <span className="truncate text-foreground">{item.label}</span>
                           {item.subtitle && (
-                            <span className="truncate text-xs text-muted-foreground/70">{item.subtitle}</span>
+                            <span className="truncate text-xs text-muted-foreground/100">{item.subtitle}</span>
                           )}
                         </span>
-                        <span className="ml-auto max-w-40 truncate font-mono text-xs text-muted-foreground/70">{item.href}</span>
+                        <span className="ml-auto max-w-40 truncate font-mono text-xs text-muted-foreground/100">{item.href}</span>
                       </Button>
                     );
                   })}

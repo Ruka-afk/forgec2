@@ -50,7 +50,7 @@ export default memo(function QuickShellSection({
     <SectionCard
       className="mb-4"
       title={t("agents.detail_quick_shell")}
-      icon={<Terminal className="w-3.5 h-3.5" />}
+      icon={<Terminal className="size-3.5" />}
       collapsible
       defaultOpen={expanded}
       onOpenChange={onExpandedChange}
@@ -85,7 +85,7 @@ export default memo(function QuickShellSection({
             className="flex-1 h-8 font-mono text-xs"
           />
           <Button size="sm" onClick={onSend} disabled={sending || !command.trim()} className="h-8 px-4 text-xs gap-1.5 shrink-0">
-            {sending ? <Spinner size="xs" color="white" /> : <Send className="w-4 h-4" />} {t("agents.detail_send")}
+            {sending ? <Spinner size="xs" color="white" /> : <Send className="size-4" />} {t("agents.detail_send")}
           </Button>
         </div>
         {history.length > 0 && (
@@ -95,7 +95,7 @@ export default memo(function QuickShellSection({
                 <div className="flex items-center gap-2 mb-1">
                   <Badge variant="secondary" className="text-(--fs-micro-sm) font-mono">{entry.shell}</Badge>
                   <span className="text-xs font-mono text-foreground">{entry.command}</span>
-                  <span className="text-(--fs-micro-sm) text-muted-foreground/70 ml-auto">{timeAgo(entry.timestamp, t)}</span>
+                  <span className="text-(--fs-micro-sm) text-muted-foreground/100 ml-auto">{timeAgo(entry.timestamp, t)}</span>
                 </div>
                 <pre className="font-mono text-(--fs-micro-sm) text-muted-foreground whitespace-pre-wrap break-all max-h-20 overflow-y-auto">{entry.result}</pre>
               </div>

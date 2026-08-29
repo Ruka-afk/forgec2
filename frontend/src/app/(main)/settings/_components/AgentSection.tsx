@@ -64,7 +64,7 @@ export default function AgentSection({
             <p className="text-(--fs-micro-sm) text-muted-foreground mt-2">{t("settings.agent.working_hint")}</p>
           </div>
           <Button type="submit" size="lg" disabled={saving} className="px-6 text-sm font-medium transition-colors disabled:opacity-50">
-            <Save className="w-4 h-4" />{t("settings.agent.save")}
+            <Save className="size-4" />{t("settings.agent.save")}
           </Button>
         </form>
       </div>

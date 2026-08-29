@@ -103,13 +103,13 @@ export default function DomainFrontingPage() {
   };
 
   return (
-    <PageContainer title={t("domain_fronting.title")} icon={<Cloud className="w-4 h-4" />} subtitle={t("domain_fronting.subtitle")} contentClassName="space-y-6" actions={<>
+    <PageContainer title={t("domain_fronting.title")} icon={<Cloud className="size-4" />} subtitle={t("domain_fronting.subtitle")} actions={<>
         <Button onClick={handleCheck} disabled={checking || loading} size="sm">
-          <HeartPulse className={`w-4 h-4 ${checking ? "animate-pulse" : ""}`} />
+          <HeartPulse className={`size-4 ${checking ? "animate-pulse" : ""}`} />
           {checking ? t("domain_fronting.checking") : t("domain_fronting.health_check")}
         </Button>
         <Button onClick={fetchStatus} variant="ghost" size="sm">
-          <RotateCw className="w-4 h-4" /> {t("common.refresh")}
+          <RotateCw className="size-4" /> {t("common.refresh")}
         </Button>
       </>}>
 
@@ -170,7 +170,7 @@ export default function DomainFrontingPage() {
                       <Tooltip>
                         <TooltipTrigger>
                           <span
-                            className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                            className={`size-2.5 rounded-full shrink-0 ${
                               d.healthy ? "bg-success" : "bg-destructive"
                             } ${d.active ? "animate-pulse" : ""}`}
                           />
@@ -215,7 +215,7 @@ export default function DomainFrontingPage() {
                           onClick={() => removeDomain(d.domain)}
                           className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                         />}>
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="size-4" />
                       </TooltipTrigger>
                       <TooltipContent>{t("domain_fronting.remove_tooltip")}</TooltipContent>
                     </Tooltip>
@@ -243,7 +243,7 @@ export default function DomainFrontingPage() {
               onClick={addDomain}
               disabled={!newDomain.trim() || saving}
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="size-4" />
               {t("domain_fronting.add")}
             </Button>
           </div>
@@ -257,7 +257,7 @@ export default function DomainFrontingPage() {
       {/* Info card */}
       <div className="mt-6 p-4 bg-warning/10 border border-warning/30 rounded-xl">
         <div className="flex items-start gap-3">
-          <Info className="w-4 h-4" />
+          <Info className="size-4" />
           <div className="text-sm text-warning dark:text-warning">
             <strong>{t("domain_fronting.how_it_works")}</strong> {t("domain_fronting.monitor_head")}{" "}
             <code className="text-warning dark:text-warning">/api/v1/beacon</code>{t("domain_fronting.monitor_tail")}

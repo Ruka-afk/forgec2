@@ -146,7 +146,7 @@ export default function AttackPage() {
   }
 
   return (
-    <PageContainer title={t("attack.title")} subtitle={t("attack.subtitle")} contentClassName="space-y-6" actions={<>
+    <PageContainer title={t("attack.title")} subtitle={t("attack.subtitle")} actions={<>
         <Select value={selectedAgent || "all"} onValueChange={(v) => setSelectedAgent(v === "all" ? "" : v ?? "")}>
           <SelectTrigger className="max-w-[250px]">
             <SelectValue placeholder={t("attack.all_agents")} />
@@ -185,8 +185,8 @@ export default function AttackPage() {
             </div>
           </div>
           <div className="flex flex-col items-center">
-            <div className="relative w-24 h-24">
-              <svg className="w-24 h-24 -rotate-90" viewBox="0 0 36 36" role="img" aria-label={t("attack.progress_ring")}>
+            <div className="relative size-24">
+              <svg className="size-24 -rotate-90" viewBox="0 0 36 36" role="img" aria-label={t("attack.progress_ring")}>
                 <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="3"
                   className="text-border" />
                 <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="3"
@@ -206,6 +206,9 @@ export default function AttackPage() {
       {/* Kill Chain Phase Coverage */}
       <PhaseCoverageCard />
 
+      {/* Technique Usage Heatmap */}
+      <UsageHeatmapCard />
+
       {/* Tactic Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {sortedTactics.map((tactic) => {
@@ -222,7 +225,7 @@ export default function AttackPage() {
               <Collapsible open={isExpanded} onOpenChange={(open) => setExpandedTactic(open ? tactic.tactic : null)}>
               <CollapsibleTrigger className="flex items-center justify-between px-4 py-3 cursor-pointer hover:text-muted-foreground transition-opacity w-full">
                 <div className="flex items-center gap-3">
-                  <div className={`w-3 h-3 rounded-full ${headerColor}`}></div>
+                  <div className={`size-3 rounded-full ${headerColor}`}></div>
                   <div>
                     <div className="text-sm font-semibold text-foreground">
                       {tactic.tactic}
@@ -242,7 +245,7 @@ export default function AttackPage() {
                       {tacticPct}%
                     </span>
                   </div>
-                   <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                   <ChevronDown className="size-3 text-muted-foreground" />
                 </div>
               </CollapsibleTrigger>
 
@@ -262,9 +265,9 @@ export default function AttackPage() {
                         <div className="flex items-center gap-2.5 min-w-0">
                           {/* Covered indicator */}
                           {covered ? (
-                            <CheckCircle className="w-4 h-4" />
+                            <CheckCircle className="size-4" />
                           ) : (
-                            <CircleX className="w-4 h-4 text-muted-foreground shrink-0" />
+                            <CircleX className="size-4 text-muted-foreground shrink-0" />
                           )}
                           <code className="text-xs font-mono text-primary shrink-0 w-20">
                             {tech.id}
@@ -326,7 +329,7 @@ function PhaseCoverageCard() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-lg font-semibold text-foreground">
-            <Zap className="w-4 h-4" />{t("attack.kill_chain_title")}
+            <Zap className="size-4" />{t("attack.kill_chain_title")}
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5">
             {t("attack.kill_chain_subtitle")}
@@ -342,10 +345,10 @@ function PhaseCoverageCard() {
             <div key={phase} className={`p-3 rounded-lg border text-center transition-colors ${
               isCovered ? "border-success/30 bg-success/10" : "border-border bg-card"
             }`}>
-              <div className="w-6 h-6 rounded-full mx-auto mb-1.5 flex items-center justify-center"
+              <div className="size-6 rounded-full mx-auto mb-1.5 flex items-center justify-center"
                 style={{ background: phaseColor(phase) }}>
                 {isCovered ? (
-                  <Check className="w-4 h-4" />
+                  <Check className="size-4" />
                 ) : (
                   <span className="text-white text-(--fs-micro-sm) font-bold">-</span>
                 )}
@@ -365,6 +368,139 @@ function PhaseCoverageCard() {
             </div>
           );
         })}
+      </div>
+    </Card>
+  );
+}
+
+// ── Technique usage heatmap ─────────────────────────────────────────────────
+
+interface HeatmapCell {
+  date: string;
+  tactic: string;
+  count: number;
+}
+
+interface HeatmapData {
+  days: string[];
+  tactics: string[];
+  cells: HeatmapCell[];
+  range: string;
+  total_tasks: number;
+}
+
+function heatmapShade(count: number): string {
+  if (count <= 0) return "bg-secondary";
+  if (count < 3) return "bg-primary/25";
+  if (count < 8) return "bg-primary/45";
+  if (count < 20) return "bg-primary/70";
+  return "bg-primary";
+}
+
+const HEATMAP_TACTIC_COLORS: Record<string, string> = {
+  Execution: "text-chart-1",
+  Persistence: "text-chart-2",
+  "Privilege Escalation": "text-chart-3",
+  "Defense Evasion": "text-chart-4",
+  "Credential Access": "text-destructive",
+  Discovery: "text-info",
+  Collection: "text-warning",
+  "Lateral Movement": "text-chart-5",
+  "Command and Control": "text-primary",
+};
+
+function UsageHeatmapCard() {
+  const { t } = useI18n();
+  const [range, setRange] = useState("30d");
+  const [data, setData] = useState<HeatmapData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    api.get<{ data?: HeatmapData }>(paths.mitre.heatmap(range))
+      .then((d) => { if (!cancelled) setData(d.data || null); })
+      .catch(() => { if (!cancelled) setData(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [range]);
+
+  const lookup = new Map<string, number>();
+  (data?.cells || []).forEach((c) => lookup.set(`${c.date}|${c.tactic}`, c.count));
+
+  return (
+    <Card>
+      <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2 flex-wrap">
+        <h3 className="text-sm font-semibold text-foreground">{t("attack.heatmap_title")}</h3>
+        <Select value={range} onValueChange={(v) => v && setRange(v)}>
+          <SelectTrigger className="w-28" aria-label={t("attack.heatmap_range")}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="7d">7d</SelectItem>
+            <SelectItem value="30d">30d</SelectItem>
+            <SelectItem value="90d">90d</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="p-4">
+        {loading ? (
+          <PageSpinner />
+        ) : !data || data.total_tasks === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-6">{t("attack.heatmap_empty")}</p>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <div className="inline-block min-w-full">
+                {/* Tactic rows */}
+                <div className="space-y-1">
+                  {data.tactics.map((tactic) => (
+                    <div key={tactic} className="flex items-center gap-1">
+                      <span className={`text-(--fs-micro-sm) w-36 shrink-0 truncate ${HEATMAP_TACTIC_COLORS[tactic] || "text-foreground"}`}>
+                        {tactic}
+                      </span>
+                      <div className="flex gap-[2px] flex-1">
+                        {data.days.map((day) => {
+                          const count = lookup.get(`${day}|${tactic}`) || 0;
+                          return (
+                            <div
+                              key={day}
+                              title={`${tactic} · ${day}: ${count}`}
+                              className={`h-3.5 flex-1 min-w-[6px] rounded-[2px] ${heatmapShade(count)}`}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {/* Day axis labels */}
+                <div className="flex items-center gap-1 mt-1.5">
+                  <span className="w-36 shrink-0" />
+                  <div className="flex gap-[2px] flex-1">
+                    {data.days.map((day, i) => (
+                      <span key={day} className="flex-1 min-w-[6px] text-center text-(--fs-micro) text-muted-foreground/70">
+                        {(i % Math.ceil(data.days.length / 10)) === 0 ? day.slice(8) : ""}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-between mt-3 text-(--fs-micro-sm) text-muted-foreground">
+              <span>{t("attack.heatmap_total", { count: data.total_tasks })}</span>
+              <span className="flex items-center gap-1">
+                {t("attack.heatmap_less")}
+                <span className="size-3 rounded-[2px] bg-secondary inline-block" />
+                <span className="size-3 rounded-[2px] bg-primary/25 inline-block" />
+                <span className="size-3 rounded-[2px] bg-primary/45 inline-block" />
+                <span className="size-3 rounded-[2px] bg-primary/70 inline-block" />
+                <span className="size-3 rounded-[2px] bg-primary inline-block" />
+                {t("attack.heatmap_more")}
+              </span>
+            </div>
+          </>
+        )}
       </div>
     </Card>
   );

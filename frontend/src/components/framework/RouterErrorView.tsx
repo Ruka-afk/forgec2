@@ -18,8 +18,8 @@ export default function RouterErrorView() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center">
-      <div className="w-14 h-14 rounded-xl bg-destructive/10 flex items-center justify-center mb-4">
-        <Bug className="w-7 h-7 text-destructive" />
+      <div className="mb-4 flex size-14 items-center justify-center rounded-lg bg-destructive/10">
+        <Bug className="size-7 text-destructive" />
       </div>
       <h2 className="text-lg font-semibold text-foreground mb-2">{t("error.boundary_title")}</h2>
       <p className="text-sm text-muted-foreground mb-4 max-w-md break-words">

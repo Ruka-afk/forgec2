@@ -86,7 +86,7 @@ export default function ActiveMissions({ className = "" }: { className?: string 
     <Card className={className}>
       <CardHeader className="px-5 py-3.5 border-b border-border flex-row items-center justify-between">
         <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <Target className="w-4 h-4 text-primary" aria-hidden="true" />
+          <Target className="size-4 text-primary" aria-hidden="true" />
           {t("dashboard.missions")}
         </CardTitle>
         <Badge variant={active.length > 0 ? "success" : "secondary"}>{active.length}</Badge>
@@ -114,7 +114,7 @@ export default function ActiveMissions({ className = "" }: { className?: string 
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs font-mono font-medium text-foreground truncate">{m.hostname || m.agent_id.slice(0, 8)}</span>
-                    {m.ip && <span className="text-(--fs-micro-sm) text-muted-foreground/70 truncate hidden sm:inline">{m.ip}</span>}
+                    {m.ip && <span className="text-(--fs-micro-sm) text-muted-foreground/100 truncate hidden sm:inline">{m.ip}</span>}
                   </div>
                   <div className="text-(--fs-micro-sm) text-muted-foreground/80 truncate max-w-[28rem]">{missionLabel(m)}</div>
                 </div>
@@ -124,7 +124,7 @@ export default function ActiveMissions({ className = "" }: { className?: string 
                   <Badge variant="info">{Math.round(((m.transferred || 0) / m.total_bytes) * 100)}%</Badge>
                 ) : null}
                 <Badge variant="secondary" className="font-mono">{m.type}</Badge>
-                <span className="text-(--fs-micro-sm) text-muted-foreground/70 whitespace-nowrap" title={m.created_by ? `${t("dashboard.missions_by")} ${m.created_by}` : undefined}>
+                <span className="text-(--fs-micro-sm) text-muted-foreground/100 whitespace-nowrap" title={m.created_by ? `${t("dashboard.missions_by")} ${m.created_by}` : undefined}>
                   {formatDuration(now - new Date(m.created_at).getTime())}
                 </span>
               </div>

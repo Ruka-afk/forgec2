@@ -53,11 +53,11 @@ export default function MalleableSection({
             </div>
           </div>
           <div className="p-3 bg-warning/10 rounded-lg border border-warning/20 text-xs text-warning-foreground">
-            <AlertTriangle className="w-4 h-4" />
+            <AlertTriangle className="size-4" />
             {t("settings.malleable.warning")}
           </div>
           <Button type="submit" size="lg" disabled={saving} className="px-6 text-sm font-medium transition-colors disabled:opacity-50">
-            <Save className="w-4 h-4" />{t("settings.malleable.save")}
+            <Save className="size-4" />{t("settings.malleable.save")}
           </Button>
         </form>
       </div>

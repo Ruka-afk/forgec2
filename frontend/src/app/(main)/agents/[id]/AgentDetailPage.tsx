@@ -28,10 +28,14 @@ import AgentScreenshots from "./_components/AgentScreenshots";
 import AgentChildList from "./_components/AgentChildList";
 import AgentStatusBar from "./_components/AgentStatusBar";
 import QuickShellSection from "./_components/QuickShellSection";
+import { AISuggestCard } from "./_components/AISuggestCard";
 import NotesTagsSection from "./_components/NotesTagsSection";
 import ProcessSection from "./_components/ProcessSection";
 import ConnectionLogSection from "./_components/ConnectionLogSection";
 import EvasionSection from "./_components/EvasionSection";
+import InjectSection from "./_components/InjectSection";
+import TimelineSection from "./_components/TimelineSection";
+import { HostInfoCard } from "./_components/HostInfoCard";
 import {
   buildAgentCopyText,
   buildAgentMarkdown,
@@ -73,7 +77,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   const [confirmMigrate, setConfirmMigrate] = useState(false);
   const [migratePath, setMigratePath] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [expandedTask, setExpandedTask] = useState<number | null>(null);
+  const [expandedTask, setExpandedTask] = useState<string | number | null>(null);
   const [lbOpen, setLbOpen] = useState(false);
   const [lbIndex, setLbIndex] = useState(0);
   const lbOpenRef = useRef(false);
@@ -104,6 +108,29 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   const [jitterValue, setJitterValue] = useState(0);
   const [sleepSaving, setSleepSaving] = useState(false);
   const sleepDirtyRef = useRef(false);
+
+  // Route reuse: /agents/[id] keeps the same component instance when
+  // navigating parent → child, so per-agent editor state (dirty flag,
+  // expanded task, etc.) must reset on id change — otherwise agent A's
+  // unsent sleep edits get POSTed to agent B.
+  useEffect(() => {
+    sleepDirtyRef.current = false;
+    setExpandedTask(null);
+  }, [id]);
+
+  // Lightbox index clamp: screenshots refresh (WS push / deletion) can
+  // shrink the array while the viewer is open — without this, lbIndex
+  // pointed past the end and rendered a blank stage with a wrong counter.
+  useEffect(() => {
+    if (!lbOpen || lbIndex === null) return;
+    if (!lbOpen) return;
+    const count = screenshots.length;
+    if (count === 0) {
+      setLbOpen(false);
+    } else if (lbIndex > count - 1) {
+      setLbIndex(count - 1);
+    }
+  }, [lbOpen, lbIndex, screenshots.length]);
 
   const [credCount, setCredCount] = useState<number | null>(null);
   const [mimikatzReady, setMimikatzReady] = useState(false);
@@ -244,9 +271,19 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   );
 
   const handleApplySleep = useCallback(async () => {
+    // Same bounds as the agents-list quick-sleep path: HTML min/max don't
+    // stop typing, and Number("") === 0 would silently flip a beacon toward
+    // real-time cadence.
+    const interval = Number(sleepValue);
+    const jitter = Number(jitterValue);
+    if (!Number.isFinite(interval) || interval < 1 || interval > 86400 ||
+        !Number.isFinite(jitter) || jitter < 0 || jitter > 100) {
+      toast.error(t("agents.sleep_invalid"));
+      return;
+    }
     setSleepSaving(true);
     try {
-      await api.postJson(paths.agents.setSleep(id), { interval: Number(sleepValue), jitter: Number(jitterValue) });
+      await api.postJson(paths.agents.setSleep(id), { interval, jitter });
       toast.success(t("agents.sleep_updated").replace("{name}", agent?.hostname || ""));
       sleepDirtyRef.current = false;
       loadDetail();
@@ -276,8 +313,8 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     }
   }, [data, t]);
 
-  const onToggleExpand = useCallback((taskId: number) => {
-    setExpandedTask((cur) => (cur === taskId ? null : taskId));
+  const onToggleExpand = useCallback((taskId: string | number) => {
+    setExpandedTask((cur) => (String(cur ?? "") === String(taskId) ? null : taskId));
   }, []);
 
   const onOpenLightbox = useCallback((idx: number) => {
@@ -333,7 +370,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
         <div className="space-y-4">
           <Skeleton className="h-4 w-24" />
           <Card className="p-(--card-spacing)"><div className="flex items-center gap-4">
-            <Skeleton className="w-14 h-14 rounded-lg" />
+            <Skeleton className="size-14 rounded-lg" />
             <div className="space-y-2"><Skeleton className="h-5 w-40" /><Skeleton className="h-3 w-60" /></div>
           </div></Card>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{[1,2,3,4].map((n) => (<Card key={n} className="p-4"><Skeleton className="h-3 w-16 mb-2" /><Skeleton className="h-4 w-24" /></Card>))}</div>
@@ -346,7 +383,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     return (
       <PageContainer>
         <div className="text-center py-20">
-          <Bug className="w-4 h-4" />
+          <Bug className="size-4" />
           <h2 className="text-xl font-semibold tracking-tight text-foreground leading-tight mb-2">{loadError ? t("agents.detail_load_failed") : t("agents.detail_not_found")}</h2>
           <p className="text-sm text-muted-foreground mb-6">{loadError ? t("agents.detail_load_error_msg") : t("agents.detail_not_found_msg")}</p>
           <div className="flex items-center justify-center gap-3">
@@ -384,7 +421,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
         onPopOut={handlePopOut}
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-5">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         {/* ── Main column: live sections ── */}
         <div className="min-w-0">
           <AgentTaskList
@@ -419,10 +456,17 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
           />
 
           <EvasionSection agentId={id} online={status === "online"} />
+
+          <InjectSection agentId={id} online={status === "online"} osType={agent.os} />
+
+          <TimelineSection agentId={id} online={status === "online"} />
+
+          <HostInfoCard agentId={id} online={status === "online"} />
         </div>
 
         {/* ── Right rail: reference + quick controls ── */}
-        <div className="min-w-0 lg:sticky lg:top-[96px] lg:max-h-[calc(100vh-112px)] lg:overflow-y-auto lg:pr-0.5">
+        <div className="min-w-0 lg:sticky lg:top-12 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-0.5">
+          <AISuggestCard agentId={id} online={status === "online"} />
           <AgentStatsGrid
             agent={agent as Partial<AgentDetailExt>}
             uptime={data?.uptime}

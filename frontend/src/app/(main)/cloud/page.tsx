@@ -110,7 +110,7 @@ export default function CloudPage() {
   const getHostname = (a: Agent) => a.hostname || "";
   const getIP = (a: Agent) => a.ip || "";
   return (
-    <PageContainer title={t("cloud.title")} subtitle={t("cloud.subtitle")} contentClassName="space-y-6">
+    <PageContainer title={t("cloud.title")} subtitle={t("cloud.subtitle")}>
       <Banner tone="warning" className="items-start">
         <div className="font-semibold">{t("cloud.experimental_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("cloud.experimental_desc")}</div>
@@ -159,7 +159,7 @@ export default function CloudPage() {
           </div>
           <div className="flex flex-col justify-end gap-1">
             <Button onClick={handleSteal} disabled={stealing || !selectedAgent}>
-              {stealing ? <Spinner size="xs" /> : <CloudUpload className="w-4 h-4" />}
+              {stealing ? <Spinner size="xs" /> : <CloudUpload className="size-4" />}
               <span>{stealing ? t("cloud.dispatching") : t("cloud.steal_btn")}</span>
             </Button>
             {pollNote && <span className="text-(--fs-xs-sm) text-muted-foreground">{pollNote}</span>}
@@ -226,7 +226,7 @@ export default function CloudPage() {
                     >
                       {(copied) => (
                         <>
-                          {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                          {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
                           {t("cloud.copy")}
                         </>
                       )}
@@ -237,9 +237,7 @@ export default function CloudPage() {
             </TableBody>
           </Table>
           ) : (
-            <div className="text-center py-16 sm:py-20 text-muted-foreground">
               <EmptyState icon={Cloud} title={t("cloud.empty_title")} message={t("cloud.empty_message")} />
-            </div>
           )}
       </Card>
     </PageContainer>

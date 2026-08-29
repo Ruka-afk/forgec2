@@ -17,7 +17,7 @@ const (
 	EventTaskComplete      EventType = "task.complete"
 	EventTaskFail          EventType = "task.fail"
 	EventCredentialFound   EventType = "credential.found"
-	_                      EventType = "alert.triggered" // reserved
+	EventAlertTriggered    EventType = "alert.triggered"
 )
 
 type Event struct {

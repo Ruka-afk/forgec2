@@ -30,12 +30,15 @@ import { useAgentSelection } from "./_components/useAgentSelection";
 import { useAgentData } from "./_components/useAgentData";
 import { useAgentModals } from "./_components/useAgentModals";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import SavedViewPicker from "@/components/SavedViewPicker";
 import AgentDetailPage from "./[id]/AgentDetailPage";
 import type { Beacon, BulkResult } from "./_components/types";
 import type { AgentMenuAction, AgentMenuPoint } from "./_components/agent-menu-actions";
 import { useVirtualWindow } from "@/lib/hooks/useVirtualWindow";
 import { useInteractStore } from "@/lib/interact-store";
 import { toast } from "sonner";
+import { useAppStore } from "@/lib/store";
 
 export type { Beacon };
 import { Checkbox } from "@/components/ui/checkbox";
@@ -48,6 +51,7 @@ import { ArrowDown, ArrowLeftRight, ArrowUp, ArrowUpDown, Download, Grip, Histor
 
 export default function AgentsPageContent() {
   const { t } = useI18n();
+  const isMobile = useAppStore((state) => state.isMobile);
   const router = useRouter();
   const { subscribe } = useWS();
   const mountedRef = useRef(true);
@@ -86,7 +90,7 @@ export default function AgentsPageContent() {
   const {
     searchInput, setSearchInput, searchQuery,
     statusFilter, setStatusFilter, osFilter, setOsFilter,
-    page, setPage, sortKey, sortDir, toggleSort,
+    page, setPage, sortKey, sortDir, toggleSort, setSortKey, setSortDir,
     linkedFilter, setLinkedFilter, tagFilter, setTagFilter,
     autoRefresh, setAutoRefresh, viewMode, setViewMode,
     visibleCols, setVisibleCols,
@@ -217,8 +221,8 @@ export default function AgentsPageContent() {
   }, [subscribe, setAgentLocks, setBeacons, setOperatorPresence]);
 
   const sortIcon = (field: typeof sortKey) => {
-    if (sortKey !== field) return <ArrowUpDown className="w-3 h-3 text-muted-foreground" />;
-    return sortDir === "asc" ? <ArrowUp className="w-3 h-3 text-primary" /> : <ArrowDown className="w-3 h-3 text-primary" />;
+    if (sortKey !== field) return <ArrowUpDown className="size-3 text-muted-foreground" />;
+    return sortDir === "asc" ? <ArrowUp className="size-3 text-primary" /> : <ArrowDown className="size-3 text-primary" />;
   };
 
   const handleSortKeyDown = useCallback(
@@ -506,6 +510,7 @@ export default function AgentsPageContent() {
   }, [beacons]);
 
   const { onlineCount, staleCount, offlineCount, windowsCount, linuxCount, darwinCount } = counts;
+  const effectiveViewMode = isMobile ? "grid" : viewMode;
 
   const emptyColSpan = Object.values(visibleCols).filter(Boolean).length + 2;
   const allVisibleSelected = beacons.length > 0 && beacons.every((b) => b.id && selected.has(b.id));
@@ -515,18 +520,18 @@ export default function AgentsPageContent() {
     <PageContainer
       title={t("agents.title")}
       subtitle={`${total} ${t("agents.total_label")} · ${onlineCount} ${t("agents.online_label")}${staleCount > 0 ? `, ${staleCount} ${t("agents.stale_label")}` : ""}${offlineCount > 0 ? `, ${offlineCount} ${t("agents.offline_label")}` : ""}`}
-      className="animate-fade-slide-up"
       actions={<>
         <Button
           variant="outline"
           onClick={() => { setBulkMode((p) => !p); if (!bulkMode) setSelected(new Set()); }}
+          aria-label={t("agents.bulk_ops")}
           className={`h-9 sm:h-10 px-3 rounded-lg gap-2 min-w-[2.75rem] min-h-[2.75rem] transition-all ${
             bulkMode
               ? "bg-primary text-primary-foreground border-primary hover:bg-primary/80"
               : "text-muted-foreground"
           }`}
         >
-          <ListChecks className="w-4 h-4" />
+          <ListChecks className="size-4" />
           <span className="hidden sm:inline text-sm">{t("agents.bulk_ops")}</span>
         </Button>
         <Button
@@ -539,7 +544,7 @@ export default function AgentsPageContent() {
           }`}
           title={t("agents.bulk_results_title")}
         >
-          <History className="w-4 h-4" />
+          <History className="size-4" />
           <span className="hidden sm:inline text-sm">{t("agents.results")}</span>
         </Button>
         <Button
@@ -549,7 +554,7 @@ export default function AgentsPageContent() {
           className="h-9 sm:h-10 px-3 rounded-lg gap-2 min-w-[2.75rem] min-h-[2.75rem]"
           title={t("agents.export_csv_title")}
         >
-          <Download className="w-4 h-4" />
+          <Download className="size-4" />
           <span className="hidden sm:inline text-foreground text-sm">{t("agents.export")}</span>
         </Button>
         <Button
@@ -562,27 +567,28 @@ export default function AgentsPageContent() {
           }`}
           title={autoRefresh ? t("agents.auto_refresh_on") : t("agents.auto_refresh_off")}
         >
-          {autoRefresh ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+          {autoRefresh ? <Pause className="size-4" /> : <Play className="size-4" />}
           <span className="hidden sm:inline text-sm">{autoRefresh ? t("agents.live") : t("agents.auto")}</span>
         </Button>
         <Button
           variant="outline"
           onClick={() => setViewMode((p) => p === "table" ? "grid" : "table")}
-          className="h-9 sm:h-10 px-3 rounded-lg gap-2 min-w-[2.75rem] min-h-[2.75rem]"
-          title={viewMode === "table" ? t("agents.switch_grid") : t("agents.switch_table")}
+          className="hidden h-9 min-h-[2.75rem] min-w-[2.75rem] gap-2 rounded-lg px-3 sm:inline-flex sm:h-10"
+          title={effectiveViewMode === "table" ? t("agents.switch_grid") : t("agents.switch_table")}
         >
-          {viewMode === "table" ? <Grip className="w-4 h-4" /> : <ListOrdered className="w-4 h-4" />}
+          {effectiveViewMode === "table" ? <Grip className="size-4" /> : <ListOrdered className="size-4" />}
         </Button>
         <Button
           variant="outline"
           onClick={() => { setPage(1); loadBeacons(); }}
+          aria-label={t("agents.refresh")}
           className="h-9 sm:h-10 px-3 rounded-lg gap-2 min-w-[2.75rem] min-h-[2.75rem]"
         >
-          <RefreshCw className="w-4 h-4" />
+          <RefreshCw className="size-4" />
           <span className="hidden sm:inline text-foreground text-sm">{t("agents.refresh")}</span>
         </Button>
         <Button render={<Link href="/generate" />}>
-          <Plus className="w-4 h-4" />
+          <Plus className="size-4" />
           <span className="hidden sm:inline">{t("agents.generate_implant")}</span>
           <span className="sm:hidden">{t("agents.new")}</span>
         </Button>
@@ -634,7 +640,35 @@ export default function AgentsPageContent() {
         darwinCount={darwinCount}
       />
 
-      {viewMode === "table" && (
+      <SavedViewPicker
+        page="agents"
+        getState={() => ({
+          search: searchInput,
+          status: statusFilter,
+          os: osFilter,
+          tag: tagFilter,
+          linked: linkedFilter,
+          sortKey,
+          sortDir,
+          viewMode,
+          page_size_page: page,
+        })}
+        applyState={(s) => {
+          if (typeof s.search === "string") setSearchInput(s.search);
+          if (typeof s.status === "string") setStatusFilter(s.status);
+          if (typeof s.os === "string") setOsFilter(s.os);
+          if (typeof s.tag === "string") setTagFilter(s.tag);
+          if (typeof s.linked === "string") setLinkedFilter(s.linked as "" | "direct" | "chained");
+          if (s.sortKey === "hostname" || s.sortKey === "username" || s.sortKey === "os" || s.sortKey === "ip" || s.sortKey === "last_seen" || s.sortKey === "status") {
+            setSortKey(s.sortKey);
+          }
+          if (s.sortDir === "asc" || s.sortDir === "desc") setSortDir(s.sortDir);
+          if (s.viewMode === "table" || s.viewMode === "grid") setViewMode(s.viewMode);
+          setPage(1);
+        }}
+      />
+
+      {effectiveViewMode === "table" && (
       <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
         <div
           ref={agentScrollRef}
@@ -741,7 +775,7 @@ export default function AgentsPageContent() {
                     message={statusFilter || osFilter ? t("agents.no_beacons_filtered") : t("agents.no_beacons_hint")}
                     action={!statusFilter && !osFilter ? (
                       <Button render={<Link href="/generate" />}>
-                        <Plus className="w-4 h-4" />
+                        <Plus className="size-4" />
                         <span>{t("agents.generate_implant")}</span>
                       </Button>
                     ) : undefined}
@@ -753,19 +787,19 @@ export default function AgentsPageContent() {
         </Table>
         </div>
         <div className="sm:hidden px-4 py-2 text-center text-xs text-muted-foreground border-t border-border bg-muted">
-          <ArrowLeftRight className="w-4 h-4" /> {t("agents.swipe_hint")}
+          <ArrowLeftRight className="size-4" /> {t("agents.swipe_hint")}
         </div>
 
         <Pagination page={page} pageSize={50} total={total} onPageChange={setPage} />
       </Card>
       )}
 
-      {viewMode === "grid" && loading && (
+      {effectiveViewMode === "grid" && loading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 p-4">
           {Array.from({ length: 8 }).map((_, i) => (
             <Card key={`gskel-${i}`} className="p-4 space-y-3">
               <div className="flex items-center gap-2.5">
-                <Skeleton className="w-10 h-10 rounded-xl" />
+                <Skeleton className="size-10 rounded-xl" />
                 <div className="space-y-1.5 flex-1"><Skeleton className="h-4 w-24" /><Skeleton className="h-3 w-16" /></div>
               </div>
               <Skeleton className="h-3 w-full" />
@@ -776,7 +810,7 @@ export default function AgentsPageContent() {
         </div>
       )}
 
-      {viewMode === "grid" && !loading && beacons.length === 0 && (
+      {effectiveViewMode === "grid" && !loading && beacons.length === 0 && (
         <Card className="overflow-hidden">
           <EmptyState
             icon={Radio}
@@ -784,7 +818,7 @@ export default function AgentsPageContent() {
             message={statusFilter || osFilter ? t("agents.no_beacons_filtered") : t("agents.no_beacons_hint")}
             action={!statusFilter && !osFilter ? (
               <Button render={<Link href="/generate" />}>
-                <Plus className="w-4 h-4" />
+                <Plus className="size-4" />
                 <span>{t("agents.generate_implant")}</span>
               </Button>
             ) : undefined}
@@ -792,7 +826,7 @@ export default function AgentsPageContent() {
         </Card>
       )}
 
-      {viewMode === "grid" && !loading && beacons.length > 0 && (
+      {effectiveViewMode === "grid" && !loading && beacons.length > 0 && (
         <>
           <AgentGrid
             beacons={sortedBeacons}
@@ -922,7 +956,9 @@ export default function AgentsPageContent() {
 
       <Sheet open={!!selectedAgentId} onOpenChange={(open) => { if (!open) setSelectedAgentId(null); }}>
         <SheetContent side="right" className="w-full sm:w-[800px] lg:w-[1000px] sm:max-w-none p-0 overflow-auto" showCloseButton={false}>
-          {selectedAgentId && <AgentDetailPage key={selectedAgentId} agentId={selectedAgentId} onClose={handleCloseDetail} />}
+          <ErrorBoundary>
+            {selectedAgentId && <AgentDetailPage key={selectedAgentId} agentId={selectedAgentId} onClose={handleCloseDetail} />}
+          </ErrorBoundary>
         </SheetContent>
       </Sheet>
 

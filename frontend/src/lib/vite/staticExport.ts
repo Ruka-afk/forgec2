@@ -10,7 +10,7 @@ import type { Plugin } from "vite";
  * sibling <name>.html, a dynamic segment (e.g. /agents/<id>) falls
  * through to the root index.html exactly like the Next export did.
  */
-export const STATIC_ROUTES: string[] = [
+const STATIC_ROUTES: string[] = [
   "login",
   "agents",
   "ai",
@@ -43,6 +43,7 @@ export const STATIC_ROUTES: string[] = [
   "lateral",
   "listeners",
   "loot",
+  "macros",
   "notifications",
   "ntlm",
   "opsec",

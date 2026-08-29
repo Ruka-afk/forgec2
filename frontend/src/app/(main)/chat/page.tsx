@@ -5,6 +5,7 @@ import { paths } from "@/lib/api-paths";
 import { useWS } from "@/lib/wsContext";
 import { formatTime } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
+import { WorkspaceShell } from "@/components/ui/workspace-shell";
 import { DataState } from "@/components/ui/data-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -54,6 +55,7 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [connected, setConnected] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const historyAbortRef = useRef<AbortController | null>(null);
   const { connected: wsConnected, subscribe } = useWS();
 
   const loadHistory = useCallback(async (silent = false, signal?: AbortSignal) => {
@@ -83,7 +85,7 @@ export default function ChatPage() {
     setConnected(wsConnected);
     const unsub = subscribe((msg: { type: string; channel?: string }) => {
       if (msg.type === "chat_message" && (msg.channel === currentChannel || !msg.channel)) {
-        loadHistory(true);
+        loadHistory(true, historyAbortRef.current?.signal);
       }
     });
     return unsub;
@@ -91,6 +93,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     const controller = new AbortController();
+    historyAbortRef.current = controller;
     loadHistory(false, controller.signal);
     loadChannels(controller.signal);
     return () => controller.abort();
@@ -117,13 +120,17 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up flex flex-col h-[calc(100vh-100px)]">
-      <PageHeader title={t("chat.title")} subtitle={t("chat.subtitle")}>
-        <Badge variant={connected ? "success" : "destructive"}>
-          {connected ? t("chat.connected") : t("chat.disconnected")}
-        </Badge>
-      </PageHeader>
-      <div className="flex flex-1 gap-0 rounded-lg border border-border overflow-hidden">
+    <WorkspaceShell
+      className="h-full"
+      header={
+        <PageHeader title={t("chat.title")} subtitle={t("chat.subtitle")} className="border-0 pb-0">
+          <Badge variant={connected ? "success" : "destructive"}>
+            {connected ? t("chat.connected") : t("chat.disconnected")}
+          </Badge>
+        </PageHeader>
+      }
+    >
+      <div className="flex h-full min-h-0 flex-1 overflow-hidden">
         <aside className="hidden md:flex w-[200px] shrink-0 flex-col bg-card p-3 border-r border-border overflow-y-auto">
           <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2 m-0">{t("chat.channels")}</h4>
           {channels.map(c => (
@@ -143,7 +150,7 @@ export default function ChatPage() {
         <div className="flex-1 flex flex-col">
           <div className="px-4 py-2.5 border-b border-border bg-card flex items-center gap-2">
             <Button variant="ghost" size="icon-sm" onClick={() => setSidebarOpen(true)} className="md:hidden shrink-0" aria-label={t("chat.toggle_channels")}>
-              <Menu className="w-4 h-4" />
+              <Menu className="size-4" />
             </Button>
             <h3 className="text-sm font-semibold text-foreground m-0"># {currentChannel}</h3>
           </div>
@@ -158,7 +165,7 @@ export default function ChatPage() {
                 {[1, 2, 3].map(i => (
                   <div key={i} className="px-2.5 py-1.5 rounded-lg bg-card">
                     <Skeleton className="h-3 w-24 mb-2" />
-                    <Skeleton className="h-3 w-3/4" />
+                    <Skeleton className="size-3/4" />
                   </div>
                 ))}
               </div>
@@ -184,7 +191,7 @@ export default function ChatPage() {
           </div>
         </div>
       </div>
-    </div>
+    </WorkspaceShell>
   );
 }
 

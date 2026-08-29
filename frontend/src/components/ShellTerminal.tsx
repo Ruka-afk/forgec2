@@ -77,6 +77,7 @@ export default function ShellTerminal({
   const [beaconHint, setBeaconHint] = useState("");
   const [lastOutput, setLastOutput] = useState("");
   const [copyFlash, setCopyFlash] = useState(false);
+  const copyFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const a11yLogRef = useRef<HTMLDivElement>(null);
 
   // xterm renders to canvas, which screen readers cannot see. Mirror plain-text
@@ -124,7 +125,10 @@ export default function ShellTerminal({
       lastCommandRef.current = cmd;
       waitingWrittenRef.current = false;
       // Header line with timestamp — separates commands visually and gives operator timeline.
-      termRef.current?.writeln(`\x1b[90m─ ${fmtTime()}  ${promptChar} ${cmd}\x1b[0m`);
+      // C11 fix: for upload commands, truncate the displayed command to just the
+      // filename so the header line doesn't contain thousands of base64 characters.
+      const displayCmd = cmd.length > 200 && cmd.startsWith("upload ") ? `upload ${cmd.slice(7, cmd.indexOf(" ", 7))}` : cmd;
+      termRef.current?.writeln(`\x1b[90m─ ${fmtTime()}  ${promptChar} ${displayCmd}\x1b[0m`);
       let rendered = 0;
       let fullOut = "";
       const appendOutput = (text: string, announceText: string) => {
@@ -264,6 +268,10 @@ export default function ShellTerminal({
           if (cmd) {
             saveCommandHistory(cmd);
             historyRef.current = loadCommandHistory();
+            // C10 fix: sync histIdxRef so Up-arrow works immediately on fresh
+            // mount. Without this, Up does nothing until the first Enter press
+            // of the session because histIdxRef remains at -1 while the Up
+            // handler requires > 0.
             histIdxRef.current = historyRef.current.length;
             execRef.current(cmd);
           } else {
@@ -292,13 +300,15 @@ export default function ShellTerminal({
         }
 
         if (data === "\x1b[B") {
-          if (histIdxRef.current < historyRef.current.length - 1) {
+          // histIdxRef -1 means "fresh prompt" (nothing browsed yet) — Down
+          // must be a no-op, not jump to the OLDEST saved entry.
+          if (histIdxRef.current >= 0 && histIdxRef.current < historyRef.current.length - 1) {
             histIdxRef.current++;
             const cmd = historyRef.current[histIdxRef.current];
             for (let i = inputRef.current.length; i > 0; i--) t.write("\b \b");
             inputRef.current = cmd;
             t.write(cmd);
-          } else {
+          } else if (histIdxRef.current >= 0) {
             histIdxRef.current = historyRef.current.length;
             for (let i = inputRef.current.length; i > 0; i--) t.write("\b \b");
             inputRef.current = "";
@@ -314,20 +324,29 @@ export default function ShellTerminal({
         }
 
         if (data === "\x09") {
-          const currentInput = inputRef.current.trim();
-          const matches = getCompletions(currentInput, osTypeRef.current || "windows");
+          // C5 fix: only append the suffix delta between the completion and
+          // the current input. Previously Tab replaced the entire input with
+          // the first match which cased e.g. "dir C:\Windows" → "dir" (the
+          // raw completion without the original path prefix).
+          // C17 fix: trim for completion lookup but use the untrimmed length
+          // for suffix calculation to preserve leading whitespace in input.
+          const currentInput = inputRef.current;
+          const trimmed = currentInput.trim();
+          const matches = getCompletions(trimmed, osTypeRef.current || "windows");
 
           if (matches.length === 1) {
             const completed = matches[0];
-            for (let i = inputRef.current.length; i > 0; i--) t.write("\b \b");
-            inputRef.current = completed;
-            t.write(completed);
+            const suffix = completed.slice(trimmed.length);
+            if (suffix) {
+              inputRef.current = currentInput + suffix;
+              t.write(suffix);
+            }
           } else if (matches.length > 1) {
             t.write("\r\n");
             t.write(matches.join("  "));
             t.write("\r\n");
             t.write(promptRef.current);
-            t.write(inputRef.current);
+            t.write(currentInput);
           }
           return;
         }
@@ -355,6 +374,8 @@ export default function ShellTerminal({
       disposed = true;
       abortRef.current?.abort();
       abortRef.current = null;
+      inputRef.current = "";
+      if (copyFlashTimerRef.current) clearTimeout(copyFlashTimerRef.current);
       termCleanupRef.current();
       termRef.current = null;
       fitRef.current = null;
@@ -394,13 +415,14 @@ export default function ShellTerminal({
   const runQuick = (cmd: string) => {
     if (loadingRef.current) return;
     inputRef.current = "";
-    termRef.current?.write(`\r\n\x1b[90m${fmtTime()} \x1b[33m${promptChar} ${cmd}\x1b[0m\r\n`);
+    // No manual echo here: executeCommand writes its own timestamped header —
+    // writing both printed the command twice per quick click.
     void executeCommand(cmd);
   };
 
   const handleCopyLast = async () => {
     if (!lastOutput) return;
-    try { await navigator.clipboard.writeText(lastOutput); setCopyFlash(true); setTimeout(() => setCopyFlash(false), 1200); } catch { /* ignore */ }
+    try { await navigator.clipboard.writeText(lastOutput); setCopyFlash(true); if (copyFlashTimerRef.current) clearTimeout(copyFlashTimerRef.current); copyFlashTimerRef.current = setTimeout(() => setCopyFlash(false), 1200); } catch { /* ignore */ }
   };
 
   const handleClear = () => {
@@ -412,25 +434,25 @@ export default function ShellTerminal({
   };
 
   return (
-    <div className={className || "h-[calc(100vh-9rem)] flex flex-col bg-card text-foreground rounded-xl overflow-hidden border border-border shadow-sm relative"}>
+    <div className={className || "relative flex h-full min-h-[20rem] flex-col overflow-hidden rounded-lg border border-border bg-card text-foreground shadow-sm"}>
       {showHeader && (
         <div className="shrink-0 bg-card/90 backdrop-blur supports-[backdrop-filter]:bg-card/80 border-b border-border px-3 py-2.5 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 ring-1 ring-primary/15">
-              <Keyboard className="w-4 h-4" />
+            <span className="size-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 ring-1 ring-primary/15">
+              <Keyboard className="size-4" />
             </span>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-sm tracking-tight truncate">{t("shell.title")}</span>
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded bg-secondary text-muted-foreground ring-1 ring-border/50">{shellType}</span>
+                <span className="inline-flex items-center gap-1 text-(--fs-micro-sm) font-bold tracking-widest uppercase px-1.5 py-0.5 rounded bg-secondary text-muted-foreground ring-1 ring-border/50">{shellType}</span>
                 <span className="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-foreground/80 font-mono">
                   <StatusDot tone="success" size="sm" pulse />
                   <span className="truncate max-w-[10rem]">{agentId.slice(0, 8)}…</span>
                 </span>
               </div>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground/70">
-                  <Clock className="w-3 h-3" />
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground/100">
+                  <Clock className="size-3" />
                   {beaconHint || t("shell.beacon_loading")}
                 </span>
                 {loading && <span className="inline-flex items-center gap-1 text-xs text-chart-1"><Spinner size="xs" />{t("shell.executing")}</span>}
@@ -439,7 +461,7 @@ export default function ShellTerminal({
           </div>
           <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
             <div className="hidden md:flex items-center gap-1 text-xs text-muted-foreground mr-1">
-              <Type className="w-3.5 h-3.5" />
+              <Type className="size-3.5" />
               <Select value={String(fontSize)} onValueChange={(v) => {
                   const val = Number(v ?? 14);
                   setFontSize(val);
@@ -478,7 +500,7 @@ export default function ShellTerminal({
                   disabled={!lastOutput}
                   aria-label={t("shell.copy_last_output")}
                 />}>
-                {copyFlash ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
+                {copyFlash ? <Check className="size-4 text-success" /> : <Copy className="size-4" />}
               </TooltipTrigger>
               <TooltipContent>{t("shell.copy_last_output")}</TooltipContent>
             </Tooltip>
@@ -489,7 +511,7 @@ export default function ShellTerminal({
                   onClick={() => { clearCommandHistory(); historyRef.current = []; histIdxRef.current = 0; termRef.current?.clear(); writeln(t("shell.history_cleared"), "33"); }}
                   aria-label={t("common.clear_history")}
                 />}>
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="size-4" />
               </TooltipTrigger>
               <TooltipContent>{t("common.clear_history")}</TooltipContent>
             </Tooltip>
@@ -512,6 +534,10 @@ export default function ShellTerminal({
           setIsDragging(false);
           const files = Array.from(e.dataTransfer.files);
           if (files.length === 0) return;
+          // C4 fix: serialize drag-drop uploads instead of firing them all in
+          // parallel. Concurrent upload commands race the agent task queue and
+          // cause partial/truncated transfers. We now wait for each upload to
+          // finish before starting the next one.
           for (const file of files) {
             if (file.size > MAX_DRAG_UPLOAD_BYTES) {
               writeln(
@@ -521,14 +547,32 @@ export default function ShellTerminal({
               continue;
             }
             const reader = new FileReader();
-            reader.onerror = () => writeln(`${t("shell.drop_upload_read_failed")}: ${file.name}`, "31");
-            reader.onload = () => {
-              const b64 = (reader.result as string).split(",")[1];
-              const cmd = `upload ${file.name} ${b64}`;
-              inputRef.current = "";
-              if (execRef.current) execRef.current(cmd);
-            };
-            reader.readAsDataURL(file);
+            await new Promise<void>((resolve) => {
+              // onerror MUST resolve too: an unsettled promise would wedge
+              // the whole upload queue and silently skip remaining files.
+              reader.onerror = () => {
+                writeln(`${t("shell.drop_upload_read_failed")}: ${file.name}`, "31");
+                resolve();
+              };
+              reader.onload = () => {
+                const b64 = (reader.result as string).split(",")[1];
+                const cmd = `upload ${file.name} ${b64}`;
+                // C4 fix: only show filename in the input area, not the raw
+                // base64 payload. The full command (with b64) is sent to the
+                // agent via execRef; echoing base64 into the visible input
+                // spams the terminal with thousands of garbage characters.
+                inputRef.current = `upload ${file.name}`;
+                termRef.current?.write(`upload ${file.name}\r\n`);
+                // AWAIT the execution: executeCommand refuses concurrent runs
+                // (loadingRef guard), so firing without awaiting made every
+                // file after the first silently vanish — the echo above still
+                // showed it as typed. Serializing honors the "wait for each"
+                // contract the loop was written for.
+                const run = execRef.current ? execRef.current(cmd) : Promise.resolve();
+                Promise.resolve(run).catch(() => {}).finally(resolve);
+              };
+              reader.readAsDataURL(file);
+            });
           }
         }}
       />
@@ -543,9 +587,9 @@ export default function ShellTerminal({
            <Spinner size="xs" /> {t("shell.executing")}
         </div>
       )}
-      <div className="shrink-0 bg-background border-t border-border px-4 py-1.5 text-(--fs-micro-sm) text-muted-foreground/70 flex items-center justify-between">
+      <div className="shrink-0 bg-background border-t border-border px-4 py-1.5 text-(--fs-micro-sm) text-muted-foreground/100 flex items-center justify-between">
         <span>
-           <Keyboard className="w-3 h-3 mr-1 inline" />
+           <Keyboard className="size-3 mr-1 inline" />
           {t("shell.footer_shortcuts", { exitKey: osType === "linux" ? "Ctrl+D" : "Ctrl+Z" })}
         </span>
         <span>

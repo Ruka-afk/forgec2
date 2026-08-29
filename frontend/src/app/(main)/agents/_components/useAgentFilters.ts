@@ -45,7 +45,7 @@ export function useAgentFilters(beacons: Beacon[]) {
     statusFilter, setStatusFilter,
     osFilter, setOsFilter,
     page, setPage,
-    sortKey, sortDir, toggleSort,
+    sortKey, sortDir, toggleSort, setSortKey: setSortKey as (k: SortKey) => void, setSortDir,
     linkedFilter, setLinkedFilter,
     tagFilter, setTagFilter,
     autoRefresh, setAutoRefresh,

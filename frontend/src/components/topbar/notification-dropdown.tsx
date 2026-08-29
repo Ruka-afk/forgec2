@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useTypedWS, isWSEvent } from "@/lib/typed-ws";
 import { useI18n } from "@/lib/i18n";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { nowTime } from "@/lib/utils";
@@ -14,7 +15,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Bell, BellOff } from "lucide-react";
 
 interface Notification {
-  id: number;
+  // Render key: server rows use "db-<id>", client pushes use "ws-<seq>" —
+  // raw numeric ids collided across the two sources (duplicate React keys).
+  id: string;
   type: "info" | "warning" | "error" | "success";
   message: string;
   time: string;
@@ -37,8 +40,10 @@ export function NotificationDropdown() {
     api.get(paths.notifications.list("page=1&pageSize=20"))
       .then((data) => {
         const list = (data.notifications || data.data || []) as Array<Record<string, unknown>>;
-        const mapped: Notification[] = list.slice(0, 20).map((n) => ({
-          id: Number(n.id) || 0,
+        const mapped: Notification[] = list.slice(0, 20).map((n, i) => ({
+          // Missing/unparseable ids fall back to an index-namespaced key
+          // instead of all collapsing onto 0.
+          id: `db-${n.id ?? i}-${i}`,
           type: (["info", "warning", "error", "success"].includes(String(n.severity || n.type || "info"))
             ? String(n.severity || n.type || "info")
             : "info") as Notification["type"],
@@ -56,7 +61,7 @@ export function NotificationDropdown() {
   }, [loadNotifications]);
 
   const pushNotification = useCallback((type: Notification["type"], message: string) => {
-    const id = notifSeq++;
+    const id = `ws-${notifSeq++}`;
     setNotifications((prev) => [
       { id, type, message, time: nowTime(), read: false },
       ...prev.slice(0, 49),
@@ -150,10 +155,25 @@ export function NotificationDropdown() {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
   const markAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    api.put(paths.notifications.readAll).catch(() => { /* silent */ });
+    // Optimistic with rollback: on failure the badge must not lie about
+    // server-side unread state until the next reload. Rollback restores the
+    // read flag ONLY on the items that were already present, so any WS
+    // notification that arrives during the await is preserved rather than
+    // being wiped by a full-state replace.
+    const idsPresent = new Set<string>();
+    setNotifications((prev) => {
+      for (const n of prev) idsPresent.add(n.id);
+      return prev.map((n) => ({ ...n, read: true }));
+    });
+    api.put(paths.notifications.readAll).catch(() => {
+      setNotifications((prev) =>
+        prev.map((n) =>
+          idsPresent.has(n.id) && !n.read ? { ...n, read: false } : n,
+        ),
+      );
+      toast.error(t("topbar.notif.mark_read_failed"));
+    });
   };
-
   const typeColors: Record<string, string> = {
     success: "bg-success",
     warning: "bg-warning",
@@ -166,9 +186,9 @@ export function NotificationDropdown() {
       <DropdownMenuTrigger render={
         <Tooltip>
           <TooltipTrigger render={<Button variant="ghost" size="icon" className="relative" aria-label={t("topbar.notifications")} />}>
-            <Bell className="w-5 h-5 text-muted-foreground" />
+            <Bell className="size-5 text-muted-foreground" />
             {unreadCount > 0 && (
-              <Badge variant="destructive" className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-0.5 text-(--fs-micro) font-bold rounded-full flex items-center justify-center animate-scale-in">
+              <Badge variant="destructive" className="absolute -top-0.5 -right-0.5 min-size-4 px-0.5 text-(--fs-micro) font-bold rounded-full flex items-center justify-center animate-scale-in">
                 {unreadCount > 99 ? "99+" : String(unreadCount)}
               </Badge>
             )}
@@ -190,18 +210,18 @@ export function NotificationDropdown() {
         </div>
         <ScrollArea className="max-h-64">
           {notifications.length === 0 ? (
-            <div className="p-6 text-center text-muted-foreground/70 text-sm">
-              <BellOff className="w-6 h-6 mx-auto mb-2" />
+            <div className="p-6 text-center text-muted-foreground/100 text-sm">
+              <BellOff className="size-6 mx-auto mb-2" />
               {t("topbar.no_notifications")}
             </div>
           ) : (
             notifications.map((n) => (
               <div key={n.id} className={`px-4 py-3 border-b border-border last:border-0 ${!n.read ? "bg-primary/5" : ""}`}>
                 <div className="flex items-start gap-2">
-                  <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${typeColors[n.type] || typeColors.info}`} />
+                  <span className={`size-2 rounded-full mt-1.5 shrink-0 ${typeColors[n.type] || typeColors.info}`} />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-foreground truncate">{n.message}</p>
-                    <p className="text-(--fs-micro-sm) text-muted-foreground/70 mt-0.5">{n.time}</p>
+                    <p className="text-(--fs-micro-sm) text-muted-foreground/100 mt-0.5">{n.time}</p>
                   </div>
                 </div>
               </div>

@@ -58,10 +58,10 @@ export default function UpdateBanner({ currentVersion }: { currentVersion?: stri
   return (
     <div className={cn(bannerSurface("info"), "flex items-center justify-between gap-3 px-4 sm:px-5 py-2.5 mx-2 sm:mx-3 mb-2 animate-fade-in")} aria-live="polite">
       <div className="flex items-center gap-2 min-w-0">
-        <ArrowUpCircle className="w-4 h-4 text-info shrink-0" />
+        <ArrowUpCircle className="size-4 text-info shrink-0" />
         <span className="mono-cell text-(--fs-compact) text-foreground/90 truncate">
           {t("update_banner.available")}: <strong className="font-mono">{info.latest}</strong>
-          {currentVersion && <span className="text-muted-foreground/70"> {t("update_banner.current", { current: currentVersion })}</span>}
+          {currentVersion && <span className="text-muted-foreground/100"> {t("update_banner.current", { current: currentVersion })}</span>}
         </span>
       </div>
       <div className="flex items-center gap-3 shrink-0 ml-3">
@@ -74,7 +74,7 @@ export default function UpdateBanner({ currentVersion }: { currentVersion?: stri
           {t("update_banner.download")}
         </a>
         <Button variant="ghost" size="icon-sm" onClick={dismiss} className="text-muted-foreground hover:text-foreground" aria-label={t("common.dismiss")}>
-          <X className="w-4 h-4" />
+          <X className="size-4" />
         </Button>
       </div>
     </div>

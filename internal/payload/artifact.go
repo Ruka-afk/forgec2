@@ -102,8 +102,8 @@ func DefaultArtifactTemplate(name string) ArtifactTemplate {
 
 // BuiltinTemplates lists the packer templates the UI can apply. Every option
 // advertised here must be fully implemented by BuildArtifact: the loaders
-// produce real executables/scripts, and certificate signing / DLL generation
-// (both toolchain-dependent) are deliberately absent.
+// produce real executables/scripts, self_signed embeds a real Authenticode
+// table, and DLL generation (toolchain-dependent) is deliberately absent.
 func BuiltinTemplates() []ArtifactTemplate {
 	return []ArtifactTemplate{
 		{

@@ -15,7 +15,7 @@ const BANNER_SURFACE: Record<BannerTone, string> = {
 
 /** Shared banner surface classes (rounded border + tone tint). Reuse directly. */
 export function bannerSurface(tone: BannerTone, className?: string): string {
-  return cn("rounded-lg border overflow-hidden", BANNER_SURFACE[tone], className);
+  return cn("rounded-lg border overflow-hidden shadow-sm", BANNER_SURFACE[tone], className);
 }
 
 interface BannerProps {

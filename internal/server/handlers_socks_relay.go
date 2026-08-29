@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"log/slog"
@@ -52,6 +53,9 @@ type socksRelaySession struct {
 type socksRelayConn struct {
 	connID     uint64
 	tcpConn    net.Conn
+	udpConn    *net.UDPConn
+	udpClient  *net.UDPAddr
+	isUDP      bool
 	agentID    string
 	destAddr   string
 	mu         sync.Mutex
@@ -168,8 +172,13 @@ func (e *socksRelayEngine) acceptLoop(s *Server, sess *socksRelaySession) {
 			case <-sess.ctx.Done():
 				return
 			default:
+			}
+			if ne, ok := err.(net.Error); ok && ne.Temporary() {
+				time.Sleep(50 * time.Millisecond)
 				continue
 			}
+			slog.Error("SOCKS relay accept error", "agent_id", sess.agentID, "err", err)
+			return
 		}
 		go e.handleOperatorConn(s, sess, conn)
 	}
@@ -202,10 +211,11 @@ func (e *socksRelayEngine) handleOperatorConn(s *Server, sess *socksRelaySession
 	if _, err := io.ReadFull(conn, reqHeader); err != nil {
 		return
 	}
-	if reqHeader[0] != 0x05 || reqHeader[1] != 0x01 { // CONNECT only
+	if reqHeader[0] != 0x05 || (reqHeader[1] != 0x01 && reqHeader[1] != 0x03) {
 		conn.Write([]byte{0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
 		return
 	}
+	udpAssociate := reqHeader[1] == 0x03
 
 	var destAddr string
 	readAddr := func(b []byte) error {
@@ -276,6 +286,7 @@ func (e *socksRelayEngine) handleOperatorConn(s *Server, sess *socksRelaySession
 		agentID:    sess.agentID,
 		destAddr:   destAddr,
 		lastActive: time.Now(),
+		isUDP:      udpAssociate,
 	}
 	e.connections[connID] = rc
 	e.mu.Unlock()
@@ -291,6 +302,11 @@ func (e *socksRelayEngine) handleOperatorConn(s *Server, sess *socksRelaySession
 		"updated_at": time.Now(),
 	}).Error; err != nil {
 		slog.Error("Failed to update SOCKS conn_count", "session_id", sess.dbID, "err", err)
+	}
+
+	if udpAssociate {
+		e.startUDPAssociate(s, sess, rc, conn)
+		return
 	}
 
 	// Send connect frame to agent
@@ -446,12 +462,21 @@ func (e *socksRelayEngine) collectPendingFrames(agentID string) []socksFrame {
 
 func (e *socksRelayEngine) processAgentData(s *Server, agentID string, frames []socksFrame) {
 	for _, f := range frames {
+		// Ownership check (P1): ConnID is agent-controlled and the map is
+		// global. Without this, implant B could write data into / close
+		// implant A's live operator socket by replaying A's conn id.
+		e.mu.Lock()
+		conn, owned := e.connections[f.ConnID]
+		if owned && conn.agentID != agentID {
+			e.mu.Unlock()
+			slog.Warn("SOCKS relay: dropped frame for foreign conn id",
+				"agent_id", agentID, "conn", f.ConnID, "action", f.Action)
+			continue
+		}
+		e.mu.Unlock()
 		switch f.Action {
 		case "data":
-			e.mu.Lock()
-			conn, ok := e.connections[f.ConnID]
-			e.mu.Unlock()
-			if ok && len(f.Data) > 0 {
+			if owned && len(f.Data) > 0 {
 				conn.mu.Lock()
 				conn.tcpConn.SetWriteDeadline(time.Now().Add(SOCKSRelayWriteTimeout))
 				if _, err := conn.tcpConn.Write(f.Data); err != nil {
@@ -473,6 +498,19 @@ func (e *socksRelayEngine) processAgentData(s *Server, agentID string, frames []
 			}
 		case "connected":
 			slog.Info("SOCKS relay: agent connected to target", "conn_id", f.ConnID)
+		case "udp_data":
+			if !owned || !conn.isUDP || conn.udpConn == nil || conn.udpClient == nil {
+				continue
+			}
+			_, port, payload, err := decodeSocksUDPFrame(f.Data)
+			if err != nil {
+				continue
+			}
+			_ = port
+			conn.mu.Lock()
+			_, _ = conn.udpConn.WriteToUDP(payload, conn.udpClient)
+			conn.lastActive = time.Now()
+			conn.mu.Unlock()
 		case "close":
 			e.mu.Lock()
 			conn, ok := e.connections[f.ConnID]
@@ -484,6 +522,10 @@ func (e *socksRelayEngine) processAgentData(s *Server, agentID string, frames []
 				conn.close()
 			}
 			slog.Info("SOCKS relay: agent closed connection", "conn_id", f.ConnID)
+		case "tun_up", "tun_data", "tun_down":
+			if s != nil && s.tunEngine != nil {
+				s.tunEngine.handleAgentFrame(agentID, f.Action, f.Data)
+			}
 		}
 	}
 }
@@ -518,6 +560,129 @@ func (c *socksRelayConn) close() {
 	if !c.closed {
 		c.closed = true
 		c.tcpConn.Close()
+		if c.udpConn != nil {
+			c.udpConn.Close()
+		}
+	}
+}
+
+func (e *socksRelayEngine) startUDPAssociate(s *Server, sess *socksRelaySession, rc *socksRelayConn, ctrl net.Conn) {
+	udpConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
+	if err != nil {
+		ctrl.Write([]byte{0x05, 0x01, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
+		return
+	}
+	port := udpConn.LocalAddr().(*net.UDPAddr).Port
+	rc.mu.Lock()
+	rc.udpConn = udpConn
+	rc.mu.Unlock()
+
+	e.enqueueFrame(sess.agentID, socksFrame{ConnID: rc.connID, Action: "udp_associate"})
+
+	// Bind IPv4 0.0.0.0:port
+	reply := []byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, byte(port >> 8), byte(port)}
+	_, _ = ctrl.Write(reply)
+	_ = ctrl.SetDeadline(time.Time{})
+
+	go func() {
+		buf := make([]byte, 65535)
+		for {
+			n, src, err := udpConn.ReadFromUDP(buf)
+			if err != nil {
+				return
+			}
+			rc.mu.Lock()
+			if rc.udpClient == nil {
+				rc.udpClient = src
+			}
+			client := rc.udpClient
+			rc.lastActive = time.Now()
+			rc.mu.Unlock()
+			if client == nil || src.Port != client.Port || !src.IP.Equal(client.IP) {
+				// First datagram sets the client; ignore others.
+				if client != nil {
+					continue
+				}
+			}
+			// SOCKS UDP header: RSV RSV FRAG ATYP DST.ADDR DST.PORT DATA
+			if n < 10 || buf[0] != 0 || buf[1] != 0 {
+				continue
+			}
+			dst, payload, err := parseOperatorUDPHeader(buf[:n])
+			if err != nil {
+				continue
+			}
+			host, portStr, _ := net.SplitHostPort(dst)
+			p, _ := strconv.Atoi(portStr)
+			e.enqueueFrame(sess.agentID, socksFrame{
+				ConnID: rc.connID,
+				Action: "udp_data",
+				Data:   encodeSocksUDPFrame(host, p, payload),
+			})
+		}
+	}()
+
+	// Hold the TCP control connection until the client disconnects.
+	tmp := make([]byte, 1)
+	_, _ = ctrl.Read(tmp)
+	udpConn.Close()
+	e.enqueueFrame(sess.agentID, socksFrame{ConnID: rc.connID, Action: "close"})
+}
+
+func encodeSocksUDPFrame(addr string, port int, payload []byte) []byte {
+	ab := []byte(addr)
+	out := make([]byte, 2+len(ab)+2+len(payload))
+	binary.BigEndian.PutUint16(out[0:2], uint16(len(ab)))
+	copy(out[2:], ab)
+	binary.BigEndian.PutUint16(out[2+len(ab):], uint16(port))
+	copy(out[4+len(ab):], payload)
+	return out
+}
+
+func decodeSocksUDPFrame(data []byte) (addr string, port int, payload []byte, err error) {
+	if len(data) < 4 {
+		return "", 0, nil, fmt.Errorf("short")
+	}
+	n := int(binary.BigEndian.Uint16(data[0:2]))
+	if len(data) < 2+n+2 {
+		return "", 0, nil, fmt.Errorf("truncated")
+	}
+	addr = string(data[2 : 2+n])
+	port = int(binary.BigEndian.Uint16(data[2+n : 4+n]))
+	payload = data[4+n:]
+	return
+}
+
+func parseOperatorUDPHeader(b []byte) (dst string, payload []byte, err error) {
+	if len(b) < 7 {
+		return "", nil, fmt.Errorf("short")
+	}
+	atyp := b[3]
+	switch atyp {
+	case 0x01:
+		if len(b) < 10 {
+			return "", nil, fmt.Errorf("short ipv4")
+		}
+		ip := net.IP(b[4:8])
+		port := int(b[8])<<8 | int(b[9])
+		return net.JoinHostPort(ip.String(), strconv.Itoa(port)), b[10:], nil
+	case 0x03:
+		l := int(b[4])
+		if len(b) < 5+l+2 {
+			return "", nil, fmt.Errorf("short domain")
+		}
+		host := string(b[5 : 5+l])
+		port := int(b[5+l])<<8 | int(b[6+l])
+		return net.JoinHostPort(host, strconv.Itoa(port)), b[7+l:], nil
+	case 0x04:
+		if len(b) < 22 {
+			return "", nil, fmt.Errorf("short ipv6")
+		}
+		ip := net.IP(b[4:20])
+		port := int(b[20])<<8 | int(b[21])
+		return net.JoinHostPort(ip.String(), strconv.Itoa(port)), b[22:], nil
+	default:
+		return "", nil, fmt.Errorf("bad atyp")
 	}
 }
 
@@ -659,7 +824,11 @@ func (s *Server) processAgentSocksData(agentID string, frames []socksFrame) {
 
 // collectSocksFrames gathers pending frames for an agent (called from processBeacon).
 func (s *Server) collectSocksFrames(agentID string) []socksFrame {
-	return s.socksEngine.collectPendingFrames(agentID)
+	frames := s.socksEngine.collectPendingFrames(agentID)
+	if s.tunEngine != nil {
+		frames = append(frames, s.tunEngine.drain(agentID)...)
+	}
+	return frames
 }
 
 // hasActiveSocks checks if an agent has an active SOCKS relay session.

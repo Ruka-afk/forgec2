@@ -241,6 +241,47 @@ func diffConfig(old, new *config.Config) (hotReloadable []string, staticOnly []s
 	if old.Server.GRPCEnabled != new.Server.GRPCEnabled {
 		staticOnly = append(staticOnly, "server.grpc")
 	}
+	// Malleable profile rotation and other operator-tunable fields were
+	// previously not in the whitelist at all, so edits like rotating the
+	// profile were silently ignored ("no values differ, skipping" → C2 profile
+	// rotation never took effect). Treat them as hot-reloadable.
+	if old.Malleable.Enabled != new.Malleable.Enabled || old.Malleable.Prepend != new.Malleable.Prepend || old.Malleable.Append != new.Malleable.Append || old.Malleable.ProfileName != new.Malleable.ProfileName {
+		hotReloadable = append(hotReloadable, "malleable")
+	}
+	if old.Server.GeoIPEnabled != new.Server.GeoIPEnabled {
+		hotReloadable = append(hotReloadable, "server.geoip_enabled")
+	}
+	if old.Server.CleanupRetentionDays != new.Server.CleanupRetentionDays {
+		hotReloadable = append(hotReloadable, "server.cleanup_retention_days")
+	}
+	// --- Static-only fields not yet tracked above ---
+	if old.Server.Host != new.Server.Host {
+		staticOnly = append(staticOnly, "server.host")
+	}
+	if old.Server.OfflineThreshold != new.Server.OfflineThreshold {
+		staticOnly = append(staticOnly, "server.offline_threshold")
+	}
+	if old.Server.SessionMaxAgeHours != new.Server.SessionMaxAgeHours {
+		staticOnly = append(staticOnly, "server.session_max_age_hours")
+	}
+	if old.Server.TCPEnabled != new.Server.TCPEnabled || old.Server.TCPAddr != new.Server.TCPAddr {
+		staticOnly = append(staticOnly, "server.tcp")
+	}
+	if old.Server.SMBEnabled != new.Server.SMBEnabled || old.Server.SMBPipe != new.Server.SMBPipe {
+		staticOnly = append(staticOnly, "server.smb")
+	}
+	if old.Server.ICMPEnabled != new.Server.ICMPEnabled || old.Server.ICMPAddr != new.Server.ICMPAddr {
+		staticOnly = append(staticOnly, "server.icmp")
+	}
+	if old.Server.UDPEnabled != new.Server.UDPEnabled || old.Server.UDPAddr != new.Server.UDPAddr {
+		staticOnly = append(staticOnly, "server.udp")
+	}
+	if old.Server.QUICEnabled != new.Server.QUICEnabled || old.Server.QUICAddr != new.Server.QUICAddr {
+		staticOnly = append(staticOnly, "server.quic")
+	}
+	if old.Server.SSHEnabled != new.Server.SSHEnabled || old.Server.SSHPort != new.Server.SSHPort {
+		staticOnly = append(staticOnly, "server.ssh")
+	}
 	if len(staticOnly) > 0 {
 		slog.Warn("Config file changed with non-hot-reloadable fields (restart required)", "fields", staticOnly)
 	}

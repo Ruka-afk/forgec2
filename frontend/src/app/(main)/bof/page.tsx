@@ -68,20 +68,20 @@ export default function BOFPage() {
     <PageContainer title={t("bof.title")} subtitle={t("bof.subtitle")}>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-5 mb-6">
-        <StatCard label={t("bof.stat_uploaded")} value={files.length} color="primary" icon={<Box className="w-4 h-4" />} iconSide="left" />
-        <StatCard label={t("bof.stat_executions")} value={executions.length} color="success" icon={<Check className="w-4 h-4" />} iconSide="left" />
+        <StatCard label={t("bof.stat_uploaded")} value={files.length} color="primary" icon={<Box className="size-4" />} iconSide="left" />
+        <StatCard label={t("bof.stat_executions")} value={executions.length} color="success" icon={<Check className="size-4" />} iconSide="left" />
         <StatCard
           label={t("bof.stat_success_rate")}
           value={executions.length > 0 ? `${Math.round((executions.filter((e) => (e.status) === "success").length / executions.length) * 100)}%` : "N/A"}
           color="warning"
-          icon={<PieChart className="w-4 h-4" />}
+          icon={<PieChart className="size-4" />}
           iconSide="left"
         />
-        <StatCard label={t("bof.stat_available_agents")} value={agents.length} color="primary" icon={<BookOpen className="w-4 h-4" />} iconSide="left" />
+        <StatCard label={t("bof.stat_available_agents")} value={agents.length} color="primary" icon={<BookOpen className="size-4" />} iconSide="left" />
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-        <TabsList className="mb-6">
+        <TabsList>
           {[
             { key: "bof", Icon: Box, label: t("bof.tab_library") },
             { key: "exec", Icon: Terminal, label: t("bof.tab_exec") },
@@ -90,7 +90,7 @@ export default function BOFPage() {
             { key: "library", Icon: Layers, label: t("bof.tab_lib") },
           ].map((tab) => (
             <TabsTrigger key={tab.key} value={tab.key} className="gap-1.5">
-              <tab.Icon className="w-3 h-3" />
+              <tab.Icon className="size-3" />
               {tab.label}
             </TabsTrigger>
           ))}
@@ -115,7 +115,7 @@ export default function BOFPage() {
           {quickBOFLibrary.map((bof) => {
             const isUploaded = files.some((f) => (f.name || "").toLowerCase() === bof.name.toLowerCase());
             return (
-              <Card key={bof.name} className="p-(--card-spacing) hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
+              <Card key={bof.name} className="p-(--card-spacing) hover:shadow-lg dark:hover:shadow-xl transition-shadow">
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-sm font-medium text-foreground font-mono">{bof.name}</div>
                   <Badge variant={isUploaded ? "default" : "secondary"} className="text-(--fs-micro-sm)">
@@ -126,7 +126,7 @@ export default function BOFPage() {
                 <div className="flex items-center justify-between mt-3">
                   <Badge variant="secondary" className="text-(--fs-micro-sm) font-mono">{bof.arch}</Badge>
                   <Button size="sm" onClick={() => handleQuickRun(bof)} disabled={!isUploaded}>
-                    <Zap className="w-4 h-4" />{t("bof.quick_run")}
+                    <Zap className="size-4" />{t("bof.quick_run")}
                   </Button>
                 </div>
               </Card>

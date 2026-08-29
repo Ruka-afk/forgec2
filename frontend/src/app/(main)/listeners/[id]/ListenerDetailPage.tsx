@@ -12,7 +12,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plug } from "lucide-react";
+import { Activity, Plug } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface ListenerDetail {
   ID?: string;
@@ -83,7 +84,7 @@ export default function ListenerDetailPage() {
     return (
       <PageContainer>
         <div className="text-center py-20 text-muted-foreground">
-          <Plug className="w-4 h-4 mx-auto" />
+          <Plug className="size-4 mx-auto" />
           <p className="mt-2">{t("listeners.not_found")}</p>
         </div>
       </PageContainer>
@@ -192,7 +193,7 @@ export default function ListenerDetailPage() {
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">{t("listener.empty")}</TableCell>
+                  <TableCell colSpan={6}><EmptyState compact icon={Activity} title={t("listener.empty")} /></TableCell>
                 </TableRow>
               )}
             </TableBody>

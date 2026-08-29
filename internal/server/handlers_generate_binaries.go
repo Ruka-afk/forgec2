@@ -220,6 +220,7 @@ func (s *Server) buildImplantConfig(form *binaryGenForm) (payload.ImplantConfig,
 		ExpiryDate:       form.ExpiryDate,
 		SelfCheck:        form.SelfCheck,
 		ContentLengthJitter: form.ContentLengthJitter,
+		DNSObscure:          s.cfg != nil && s.cfg.Server.DNSObscure,
 	}, nil
 }
 

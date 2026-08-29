@@ -38,7 +38,8 @@ export default function EmergencySection() {
     if (!password) { toast.error(t("settings.emergency.password_required")); return; }
     setSaving(true);
     try {
-      await api.post(paths.settings.killSwitch, { action, password });
+      // Handler binds ShouldBindJSON — urlencoded api.post would 400.
+      await api.postJson(paths.settings.killSwitch, { action, password });
       toast.success(action === "arm"
         ? t("settings.emergency.armed_toast")
         : t("settings.emergency.disarmed_toast"));
@@ -94,7 +95,7 @@ export default function EmergencySection() {
               variant="destructive"
               className="flex-1"
             >
-              <Power className="w-4 h-4" />{t("settings.emergency.arm")}
+              <Power className="size-4" />{t("settings.emergency.arm")}
             </Button>
             <Button
               onClick={() => send("disarm")}
@@ -102,7 +103,7 @@ export default function EmergencySection() {
               variant="outline"
               className="flex-1"
             >
-              <ShieldCheck className="w-4 h-4" />{t("settings.emergency.disarm")}
+              <ShieldCheck className="size-4" />{t("settings.emergency.disarm")}
             </Button>
           </div>
           <div className="text-xs text-muted-foreground">{t("settings.emergency.hint")}</div>

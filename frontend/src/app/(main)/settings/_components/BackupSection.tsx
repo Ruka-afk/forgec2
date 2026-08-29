@@ -104,16 +104,16 @@ export default function BackupSection() {
       <div className="p-(--card-spacing) space-y-5">
         <div className="flex flex-wrap gap-3">
           <Button onClick={handleCreateBackup} size="lg" disabled={creating} className="px-4 bg-primary/10 hover:bg-primary/20 text-primary text-sm font-medium transition-colors disabled:opacity-50">
-            {creating ? <Spinner size="xs" /> : <Archive className="w-4 h-4" />}
+            {creating ? <Spinner size="xs" /> : <Archive className="size-4" />}
             {t("settings.backup.create")}
           </Button>
           <Button onClick={() => fileInputRef.current?.click()} size="lg" disabled={uploading} className="px-4 bg-success/15 hover:bg-success/20 dark:hover:bg-success/60 text-success text-sm font-medium transition-colors disabled:opacity-50">
-            {uploading ? <Spinner size="xs" /> : <Upload className="w-4 h-4" />}
+            {uploading ? <Spinner size="xs" /> : <Upload className="size-4" />}
             {t("settings.backup.upload_restore")}
           </Button>
           <Input ref={fileInputRef} type="file" accept=".db,.fbk" onChange={handleUploadRestore} className="hidden" />
           <Button onClick={loadBackups} size="lg" disabled={loading} variant="ghost" className="px-3 text-sm text-muted-foreground">
-            {loading ? <Spinner size="xs" /> : <RefreshCw className="w-4 h-4" />}
+            {loading ? <Spinner size="xs" /> : <RefreshCw className="size-4" />}
           </Button>
         </div>
 
@@ -130,11 +130,11 @@ export default function BackupSection() {
             {backups.map((b) => (
               <div key={b.name} className="flex items-center justify-between bg-muted rounded-lg px-4 py-3 border border-border hover:border-primary/20 transition-colors">
                 <div className="flex items-center gap-3 min-w-0">
-                  <Archive className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <Archive className="size-4 text-muted-foreground shrink-0" />
                   <div className="min-w-0">
                     <div className="text-sm font-medium text-foreground truncate">{b.name}</div>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Clock className="w-3 h-3" />
+                      <Clock className="size-3" />
                       <span>{formatTime(b.mod_time)}</span>
                       <span>·</span>
                       <span>{formatSize(b.size)}</span>
@@ -145,7 +145,7 @@ export default function BackupSection() {
                   <Button variant="ghost" size="sm" onClick={() => {
                     window.open(paths.settings.dbBackupsDownload(b.name), "_blank");
                   }} className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground">
-                    <Download className="w-3.5 h-3.5" />
+                    <Download className="size-3.5" />
                   </Button>
                   <Button variant="ghost" size="sm" disabled={restoring === b.name} onClick={() => setConfirmRestore(b)} className="h-8 px-3 text-xs text-warning hover:text-warning hover:bg-warning/15">
                     {restoring === b.name ? <Spinner size="xs" /> : t("settings.backup.restore")}

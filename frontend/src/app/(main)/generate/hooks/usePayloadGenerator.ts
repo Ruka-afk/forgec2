@@ -62,13 +62,20 @@ export function usePayloadGenerator() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const donutFileRef = useRef<HTMLInputElement>(null);
-  const asyncAbortRef = useRef<AbortController | null>(null);
+  // One controller per in-flight build waiter. A shared single ref made
+  // concurrent builds kill each other ("build_cancelled" for the older one
+  // even though it still runs server-side); a set lets each finish while
+  // unmount can still cancel everything.
+  const asyncAbortsRef = useRef<Set<AbortController>>(new Set());
 
   // Stop any in-flight async build poll when leaving the page.
   useEffect(() => {
+    // The Set instance itself never changes (only its contents), so
+    // capturing it here is equivalent to reading the ref at cleanup time.
+    const pending = asyncAbortsRef.current;
     return () => {
-      asyncAbortRef.current?.abort();
-      asyncAbortRef.current = null;
+      for (const ac of pending) ac.abort();
+      pending.clear();
     };
   }, []);
 
@@ -101,7 +108,9 @@ export function usePayloadGenerator() {
   }, [subscribe, loadData]);
 
   // Consume ?listener_id= (deep link from the listener detail page) once
-  // listeners are loaded, then preselect that listener.
+  // listeners are loaded, then preselect that listener. The id must EXIST in
+  // the loaded list — a stale/deleted deep link otherwise produced a blank
+  // C2 URL and an opaque server-side build failure.
   const queryListenerApplied = useRef(false);
   useEffect(() => {
     if (loading || queryListenerApplied.current) return;
@@ -109,9 +118,16 @@ export function usePayloadGenerator() {
     try {
       const params = new URLSearchParams(window.location.search);
       const lid = params.get("listener_id");
-      if (lid) setShared((s) => ({ ...s, listener_id: lid }));
+      if (lid) {
+        const exists = listeners.some((x) => String(x.id) === lid);
+        if (exists) {
+          setShared((s) => ({ ...s, listener_id: lid }));
+        } else {
+          toast.warning(t("generate.toast.listener_gone"));
+        }
+      }
     } catch { /* ignore */ }
-  }, [loading]);
+  }, [loading, listeners, t]);
 
   const getListenerInfo = useCallback((listenerId: string) => {
     const l = listeners.find((x) => String(x.id) === String(listenerId));
@@ -132,8 +148,8 @@ export function usePayloadGenerator() {
     let jitter = shared.jitter;
     let ua = shared.ua;
     if (prevProfileRef.current !== "default" && prevProfileRef.current !== "" && preset) {
-      interval = String(preset.sleep && preset.sleep > 0 ? preset.sleep : 10);
-      jitter = String(preset.jitter && preset.jitter >= 0 ? preset.jitter : 20);
+      interval = String(preset.sleep != null && preset.sleep > 0 ? preset.sleep : 10);
+      jitter = String(preset.jitter != null && preset.jitter >= 0 ? preset.jitter : 20);
       ua = preset.user_agent || ua;
     }
     return { profile: prevProfileRef.current, interval, jitter, user_agent: ua, proxy: shared.proxy, crypto_key: shared.crypto_key, beacon_key: shared.beacon_key };
@@ -155,10 +171,15 @@ export function usePayloadGenerator() {
   const buildC2URL = useCallback(() => {
     const info = getListenerInfo(shared.listener_id);
     if (!info) return "";
-    let c2url = `${info.scheme}://${info.host}:${info.port}`;
+    const transport = (shared.beacon_transport || "").toLowerCase();
+    let scheme = info.scheme || "http";
+    if (transport === "udp" || transport === "quic") {
+      scheme = transport;
+    }
+    let c2url = `${scheme}://${info.host}:${info.port}`;
     if (shared.failover.trim()) c2url += "," + shared.failover.trim();
     return c2url;
-  }, [shared.listener_id, shared.failover, getListenerInfo]);
+  }, [shared.listener_id, shared.failover, shared.beacon_transport, getListenerInfo]);
 
   const getProtocol = useCallback(() => {
     if (shared.protocol && shared.protocol !== "http") return shared.protocol;
@@ -167,6 +188,8 @@ export function usePayloadGenerator() {
     if (info.scheme === "tcp" || info.scheme === "tls") return "tcp";
     if (info.scheme === "dns" || info.type === "dns") return "dns";
     if (info.scheme === "icmp") return "icmp";
+    if (info.scheme === "udp") return "udp";
+    if (info.scheme === "quic") return "quic";
     return "http";
   }, [shared.listener_id, shared.protocol, getListenerInfo]);
 
@@ -183,6 +206,8 @@ export function usePayloadGenerator() {
     if (scheme === "icmp") return "icmp";
     if (scheme === "mtls") return "mtls";
     if (scheme === "h2c") return "h2c";
+    if (scheme === "udp") return "udp";
+    if (scheme === "quic") return "quic";
     return "http";
   }, [shared.listener_id, shared.beacon_transport, getListenerInfo]);
 
@@ -280,19 +305,21 @@ export function usePayloadGenerator() {
       const buildId = startData.build_id;
       if (!buildId) return { error: startData.error || t("generate.toast.no_build_id") };
 
-      asyncAbortRef.current?.abort();
       const ac = new AbortController();
-      asyncAbortRef.current = ac;
+      asyncAbortsRef.current.add(ac);
+      try {
+        const outcome = await waitForBuildResult(buildId, ac.signal);
+        if (outcome.status === "aborted" || ac.signal.aborted) return { error: t("generate.toast.build_cancelled") };
+        if (outcome.status === "failed") return { error: outcome.error || t("generate.toast.build_failed") };
+        if (outcome.status === "timeout") return { error: t("generate.toast.build_timed_out") };
 
-      const outcome = await waitForBuildResult(buildId, ac.signal);
-      if (outcome.status === "aborted" || ac.signal.aborted) return { error: t("generate.toast.build_cancelled") };
-      if (outcome.status === "failed") return { error: outcome.error || t("generate.toast.build_failed") };
-      if (outcome.status === "timeout") return { error: t("generate.toast.build_timed_out") };
-
-      // 3) Download the result
-      const { blob, filename } = await api.downloadGet(paths.generate.buildDownload(buildId), formName);
-      downloadBlob(blob, filename);
-      return { success: true };
+        // 3) Download the result
+        const { blob, filename } = await api.downloadGet(paths.generate.buildDownload(buildId), formName);
+        downloadBlob(blob, filename);
+        return { success: true };
+      } finally {
+        asyncAbortsRef.current.delete(ac);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("abort")) return { error: t("generate.toast.request_timed_out") };
@@ -476,7 +503,12 @@ export function usePayloadGenerator() {
     }
   }, [forms.oneliner, getListenerInfo, getSharedSettings, t]);
 
-  // Profile management
+  const sharedRef = useRef(shared);
+  useEffect(() => { sharedRef.current = shared; }, [shared]);
+
+  // Profile management — reads latest shared via ref to avoid stale closure
+  // (shared changes every keystroke; the callback is passed to memoized
+  // children and must not churn or capture outdated interval/jitter/ua).
   const changeProfile = useCallback((profile: string) => {
     if (profile === "__import__") {
       if (fileInputRef.current) fileInputRef.current.click();
@@ -484,18 +516,32 @@ export function usePayloadGenerator() {
     }
     if (profile === "default" || profile === "") {
       setProfileLocked(false);
-      if (savedManualRef.current) {
-        setShared((s) => ({ ...s, interval: savedManualRef.current!.interval, jitter: savedManualRef.current!.jitter, ua: savedManualRef.current!.ua }));
+      const saved = savedManualRef.current;
+      if (saved) {
+        setShared((s) => ({ ...s, interval: saved.interval, jitter: saved.jitter, ua: saved.ua, profile }));
+      } else {
+        setShared((s) => ({ ...s, profile }));
       }
+      prevProfileRef.current = profile;
     } else {
-      if (!profileLocked) savedManualRef.current = { interval: shared.interval, jitter: shared.jitter, ua: shared.ua };
+      const cur = sharedRef.current;
+      if (!profileLocked) savedManualRef.current = { interval: cur.interval, jitter: cur.jitter, ua: cur.ua };
       const preset = profilePresets.find((p) => p.name === profile);
-      if (preset) setShared((s) => ({ ...s, interval: String(preset.sleep && preset.sleep > 0 ? preset.sleep : 10), jitter: String(preset.jitter && preset.jitter >= 0 ? preset.jitter : 20), ua: preset.user_agent || s.ua }));
+      if (preset) {
+        setShared((s) => ({
+          ...s,
+          interval: String(preset.sleep && preset.sleep > 0 ? preset.sleep : 10),
+          jitter: String(preset.jitter && preset.jitter >= 0 ? preset.jitter : 20),
+          ua: preset.user_agent || s.ua,
+          profile,
+        }));
+      } else {
+        setShared((s) => ({ ...s, profile }));
+      }
       setProfileLocked(true);
+      prevProfileRef.current = profile;
     }
-    prevProfileRef.current = profile;
-    setShared((s) => ({ ...s, profile }));
-  }, [shared, profilePresets, profileLocked]);
+  }, [profilePresets, profileLocked]);
 
   const handleProfileImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

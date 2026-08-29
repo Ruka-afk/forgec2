@@ -1,13 +1,17 @@
 package server
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -196,10 +200,12 @@ type extC2ChannelInfo struct {
 }
 
 type extC2WSMessage struct {
-	AgentID string `json:"agent_id"`
-	Type    string `json:"type"` // "task" or "result"
-	TaskID  uint   `json:"task_id,omitempty"`
-	Result  string `json:"result,omitempty"`
+	AgentID  string `json:"agent_id"`
+	Type     string `json:"type"` // "task" or "result"
+	TaskID   uint   `json:"task_id,omitempty"`
+	ResultID string `json:"result_id,omitempty"`
+	Result   string `json:"result,omitempty"`
+	HMAC     string `json:"hmac,omitempty"` // hex HMAC-SHA256(extc2_key, agent|task|rid|result) for relayed results
 }
 
 type extC2Task struct {
@@ -293,7 +299,7 @@ func (s *Server) handleExternalC2WebSocket(c *gin.Context) {
 		}
 
 		if extMsg.Type == "result" {
-			s.processExternalC2Result(extMsg.AgentID, extMsg.TaskID, extMsg.Result)
+			s.processExternalC2Result(extMsg.AgentID, extMsg.TaskID, extMsg.ResultID, extMsg.Result)
 		} else if extMsg.Type == "task_request" {
 			// Agent is requesting its next task — respond immediately
 			s.extC2TaskMu.Lock()
@@ -311,20 +317,85 @@ func (s *Server) handleExternalC2WebSocket(c *gin.Context) {
 	close(done)
 }
 
-func (s *Server) processExternalC2Result(agentID string, taskID uint, result string) {
+// extC2ResultMAC computes the hex HMAC-SHA256 that must accompany task
+// results relayed through third-party channels (Discord/Slack). Binding:
+// agentID|taskID|resultID|result, keyed by crypto.extc2_key.
+func extC2ResultMAC(key, agentID string, taskID uint, resultID, result string) string {
+	mac := hmac.New(sha256.New, []byte(key))
+	fmt.Fprintf(mac, "%s|%d|%s|%s", agentID, taskID, resultID, result)
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// verifyExtC2ResultHMAC gates relayed results: with extc2_key configured,
+// only messages carrying a valid tag are accepted, so anyone who can post in
+// the channel cannot forge operator-visible task output. Empty key keeps the
+// legacy open behaviour (a startup warning is emitted by the listeners).
+func (s *Server) verifyExtC2ResultHMAC(agentID string, taskID uint, resultID, result, macHex string) bool {
+	key := ""
+	if s.cfg != nil {
+		// Hot reload writes cfg fields under configMu; read under the same
+		// lock to avoid a data race with a live channel verifying results.
+		s.configMu.RLock()
+		key = s.cfg.Crypto.ExtC2Key
+		s.configMu.RUnlock()
+	}
+	if strings.TrimSpace(key) == "" {
+		return true
+	}
+	expected := extC2ResultMAC(key, agentID, taskID, resultID, result)
+	return subtle.ConstantTimeCompare([]byte(expected), []byte(strings.ToLower(strings.TrimSpace(macHex)))) == 1
+}
+
+// processExternalC2Result applies a result delivered over an ExtC2 WebSocket
+// channel. It mirrors the guards enforced by processTaskResults on the beacon
+// path: the task must exist and belong to the claimed agent, cancelled tasks
+// are terminal, already-finalised results are dropped (durable idempotency via
+// last_result_id when the channel supplies one), and only pending/running
+// tasks may be completed.
+func (s *Server) processExternalC2Result(agentID string, taskID uint, resultID string, result string) {
 	if taskID == 0 {
+		return
+	}
+	var task db.Task
+	if err := s.db.Where("id = ? AND agent_id = ?", taskID, agentID).First(&task).Error; err != nil {
+		slog.Warn("ExtC2 result for unknown task or wrong agent dropped", "task_id", taskID, "agent_id", agentID)
+		return
+	}
+	// Finality guard: a cancelled task is terminal. The result must not
+	// resurrect the task row.
+	if task.Status == "cancelled" {
+		slog.Warn("ExtC2 result for cancelled task dropped", "task_id", taskID, "agent_id", agentID)
+		return
+	}
+	// Durable idempotency: skip results already applied to a finalised task.
+	if task.Status == "completed" || task.Status == "failed" {
+		slog.Warn("Duplicate extc2 result dropped for finalised task", "task_id", taskID, "agent_id", agentID, "status", task.Status)
+		return
+	}
+	// Only claimed work can be completed by a result.
+	if task.Status != "pending" && task.Status != "running" {
+		slog.Warn("ExtC2 result skipped, task not in claimable state", "task_id", taskID, "agent_id", agentID, "status", task.Status)
 		return
 	}
 	// Encrypt result at rest (H3) so command output is not stored as plaintext.
 	if enc, err := crypto.EncryptLoot(result); err == nil {
 		result = enc
 	}
-	if err := s.db.Model(&db.Task{}).Where("id = ? AND agent_id = ?", taskID, agentID).Updates(map[string]interface{}{
+	updates := map[string]interface{}{
 		"status":     "completed",
 		"result":     result,
 		"updated_at": time.Now(),
-	}).Error; err != nil {
-		slog.Error("Failed to update task result from extc2", "task_id", taskID, "agent_id", agentID, "err", err)
+	}
+	if resultID != "" {
+		updates["last_result_id"] = resultID
+	}
+	res := s.db.Model(&db.Task{}).Where("id = ? AND agent_id = ? AND status IN ?", task.ID, agentID, []string{"pending", "running"}).Updates(updates)
+	if res.Error != nil {
+		slog.Error("Failed to update task result from extc2", "task_id", taskID, "agent_id", agentID, "err", res.Error)
+		return
+	}
+	if res.RowsAffected == 0 {
+		slog.Warn("ExtC2 result skipped, task state changed concurrently", "task_id", taskID, "agent_id", agentID)
 		return
 	}
 	slog.Info("External C2 result processed", "agent_id", agentID, "task_id", taskID)

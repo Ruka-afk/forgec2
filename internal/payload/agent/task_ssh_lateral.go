@@ -312,8 +312,12 @@ func handleSSHTunnelImpl(task Task, res *TaskResult) {
 
 	target := parts[0]
 	user := "root"
+	password := strings.TrimSpace(task.Shell)
 	if len(parts) > 1 {
 		user = parts[1]
+	}
+	if len(parts) > 2 && password == "" {
+		password = parts[2]
 	}
 
 	colonParts := strings.Split(target, ":")
@@ -322,7 +326,7 @@ func handleSSHTunnelImpl(task Task, res *TaskResult) {
 		return
 	}
 
-	msg, err := startSSHTunnel(colonParts[0], colonParts[1], colonParts[2], user)
+	msg, err := startSSHTunnel(colonParts[0], colonParts[1], colonParts[2], user, password, task.Path)
 	if err != nil {
 		res.Error = err.Error()
 		return
@@ -356,7 +360,7 @@ func (t *sshTunnel) key() string { return net.JoinHostPort(t.host, t.remotePort)
 
 // startSSHTunnel dials the target and registers a live remote port forward.
 // Returns an honest status message once the listener is actually bound.
-func startSSHTunnel(host, remotePort, localPort, user string) (string, error) {
+func startSSHTunnel(host, remotePort, localPort, user, password, keyPEM string) (string, error) {
 	if _, err := strconv.Atoi(remotePort); err != nil {
 		return "", fmt.Errorf("invalid remote_port %q", remotePort)
 	}
@@ -373,11 +377,30 @@ func startSSHTunnel(host, remotePort, localPort, user string) (string, error) {
 	sshTunMu.Unlock()
 
 	addr := net.JoinHostPort(host, "22")
+	var auth []ssh.AuthMethod
+	if keyPEM != "" {
+		signer, err := ssh.ParsePrivateKey([]byte(keyPEM))
+		if err != nil {
+			if data, rerr := os.ReadFile(keyPEM); rerr == nil {
+				signer, err = ssh.ParsePrivateKey(data)
+			}
+		}
+		if err != nil {
+			return "", fmt.Errorf("ssh private key: %w", err)
+		}
+		auth = append(auth, ssh.PublicKeys(signer))
+	}
+	if password != "" {
+		auth = append(auth, ssh.Password(password))
+	}
+	if len(auth) == 0 {
+		return "", fmt.Errorf("ssh_tunnel requires a password (command extra arg or task shell) or a private key (task path)")
+	}
 	config := &ssh.ClientConfig{
 		User:            user,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // lab default; pin host keys in production via ssh_lateral
 		Timeout:         10 * time.Second,
-		Auth:            []ssh.AuthMethod{ssh.Password("")},
+		Auth:            auth,
 	}
 
 	client, err := ssh.Dial("tcp", addr, config)

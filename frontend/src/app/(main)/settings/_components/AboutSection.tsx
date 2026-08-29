@@ -42,7 +42,7 @@ export default function AboutSection({
         </div>
         <div className="mt-6 flex flex-wrap gap-3">
           <Button onClick={onCheckUpdate} size="lg" className="px-4 bg-primary/10 dark:bg-primary/20 hover:bg-chart-3/20 dark:hover:bg-chart-3 text-primary dark:text-primary text-xs font-medium transition-colors">
-            <RotateCw className="w-4 h-4" />{t("settings.about.check_updates")}
+            <RotateCw className="size-4" />{t("settings.about.check_updates")}
           </Button>
             <Button
               variant="outline"
@@ -52,7 +52,7 @@ export default function AboutSection({
               <a href={`${API_BASE}/docs/`} target="_blank" rel="noopener noreferrer" />
             }
           >
-            <BookOpen className="w-4 h-4" />{t("settings.about.api_docs")}
+            <BookOpen className="size-4" />{t("settings.about.api_docs")}
           </Button>
             <Button
               variant="outline"
@@ -62,7 +62,7 @@ export default function AboutSection({
               <a href={`${API_BASE}/docs/openapi.yaml`} target="_blank" rel="noopener noreferrer" />
             }
           >
-            <Download className="w-4 h-4" />{t("settings.about.openapi_yaml")}
+            <Download className="size-4" />{t("settings.about.openapi_yaml")}
           </Button>
         </div>
         <div className="mt-6 text-center text-xs text-muted-foreground">

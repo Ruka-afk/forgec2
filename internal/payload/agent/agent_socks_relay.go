@@ -25,6 +25,10 @@ func socksProcessFrames(frames []socksFrame) {
 			rportfwdWrite(f.ConnID, f.Data)
 		case "rportfwd_close":
 			rportfwdClose(f.ConnID)
+		case "lportfwd_data":
+			lpfWrite(f.ConnID, f.Data)
+		case "lportfwd_close":
+			lpfCloseLocal(f.ConnID)
 		case "tunnel_add":
 			// Legacy dynamic-routing frames: the route store was removed with
 			// the tunnel_add_route task (never consumed by the SOCKS relay).
@@ -36,6 +40,10 @@ func socksProcessFrames(frames []socksFrame) {
 			go socksHandleUDPAssociate(f.ConnID)
 		case "udp_data":
 			socksHandleUDPData(f.ConnID, f.Data)
+
+		// Linux TUN framed over the same SOCKS beacon channel.
+		case "tun_data":
+			tunWritePacket(f.Data)
 		}
 	}
 }
@@ -82,13 +90,16 @@ func socksHandleConnect(connID uint64, destAddr string) {
 		}
 	}
 
-	// Target disconnected
+	// Target disconnected. Mark closed but KEEP the entry: bytes enqueued
+	// since the last beacon must still be drained by the next
+	// socksCollectOutbound() pass — deleting here silently truncated every
+	// transfer that ended between beacons. The collector reaps entries once
+	// they are closed and fully drained.
 	socksRelayMu.Lock()
 	if rc2, ok := socksRelayConns[connID]; ok {
 		rc2.mu.Lock()
 		rc2.closed = true
 		rc2.mu.Unlock()
-		delete(socksRelayConns, connID)
 	}
 	socksRelayMu.Unlock()
 	socksEnqueueOut(connID, "close", nil)
@@ -344,11 +355,16 @@ func socksCollectOutbound() []socksFrame {
 
 	// Collect from active connections (direct struct copy, no marshal/unmarshal)
 	socksRelayMu.Lock()
-	for _, conn := range socksRelayConns {
+	for connID, conn := range socksRelayConns {
 		conn.mu.Lock()
 		if len(conn.outbound) > 0 {
 			frames = append(frames, conn.outbound...)
 			conn.outbound = conn.outbound[:0]
+		}
+		// Reap closed legs only after full drain so residual tail data
+		// always reaches the server before the entry disappears.
+		if conn.closed && len(conn.outbound) == 0 {
+			delete(socksRelayConns, connID)
 		}
 		conn.mu.Unlock()
 	}

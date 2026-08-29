@@ -22,7 +22,9 @@ export function applyUrlState<T extends string>(key: string, value: T, initial: 
     const url = new URL(window.location.href);
     if (value === initial) url.searchParams.delete(key);
     else url.searchParams.set(key, value);
-    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    // G7 fix: preserve react-router's own history.state (which it uses
+    // internally for POP navigation bookkeeping — idx, key, usr).
+    window.history.replaceState({ ...window.history.state }, "", `${url.pathname}${url.search}${url.hash}`);
   } catch {
     // ignore
   }
@@ -38,12 +40,18 @@ export function useUrlState<T extends string>(
 ): [T, (v: T) => void] {
   const [value, setValue] = useState<T>(initial);
 
+  // G7 fix: normalize allowed array to a stable string key to avoid
+  // re-registering the popstate listener on every render (when callers
+  // pass an inline array literal like `["all","online","offline"]`).
+  const allowedKey = (allowed as readonly string[]).join(",");
+
   useEffect(() => {
     const sync = () => setValue(readUrlState(key, initial, allowed));
     sync();
     window.addEventListener("popstate", sync);
     return () => window.removeEventListener("popstate", sync);
-  }, [key, initial, allowed]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, initial, allowedKey]);
 
   const set = useCallback(
     (v: T) => {

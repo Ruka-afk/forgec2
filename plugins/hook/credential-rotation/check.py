@@ -107,8 +107,8 @@ def main():
         try:
             with open(log_file, "a") as f:
                 f.write(json.dumps(result_data, default=str) + "\n")
-        except OSError:
-            pass
+        except OSError as exc:
+            print(json.dumps({"level": "error", "message": f"Plugin error: failed to write rotation results to log file '{log_file}': {exc}"}), file=sys.stderr)
 
     write_result(True, output=output, data=result_data)
 

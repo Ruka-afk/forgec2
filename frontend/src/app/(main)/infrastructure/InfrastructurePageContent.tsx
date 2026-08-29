@@ -64,14 +64,14 @@ export default function InfrastructurePage() {
   const currentListener = listeners.find(l => l.id === selectedListener);
 
   const sections = [
-    { key: "config" as const, label: t("infra.reverse_proxy_config"), icon: <Code className="w-4 h-4" /> },
-    { key: "redirectors" as const, label: t("infra.redirectors"), icon: <Share2 className="w-4 h-4" /> },
-    { key: "acme" as const, label: t("infra.acme_cert"), icon: <ShieldCheck className="w-4 h-4" /> },
-    { key: "export" as const, label: t("infra.c2_profile_tab"), icon: <FileDown className="w-4 h-4" /> },
+    { key: "config" as const, label: t("infra.reverse_proxy_config"), icon: <Code className="size-4" /> },
+    { key: "redirectors" as const, label: t("infra.redirectors"), icon: <Share2 className="size-4" /> },
+    { key: "acme" as const, label: t("infra.acme_cert"), icon: <ShieldCheck className="size-4" /> },
+    { key: "export" as const, label: t("infra.c2_profile_tab"), icon: <FileDown className="size-4" /> },
   ];
 
   return (
-    <PageContainer title={t("infra.title")} icon={<Server className="w-4 h-4" />} subtitle={t("infra.subtitle")}>
+    <PageContainer title={t("infra.title")} icon={<Server className="size-4" />} subtitle={t("infra.subtitle")}>
 
       <DataState loading={loading} error={error} onRetry={() => { loadListeners(); if (activeSection === "redirectors") loadRedirectors(); }} loadingSkeleton={<PageSkeleton />}>
       <Tabs value={activeSection} onValueChange={setActiveSection}>
@@ -88,7 +88,7 @@ export default function InfrastructurePage() {
         <TabsContent value="config" className="mt-0">
           <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
             <CardHeader className="px-(--card-spacing) py-(--card-spacing) border-b">
-              <div className="w-8 h-8 bg-primary/10 dark:bg-primary/20 rounded-lg flex items-center justify-center text-primary"><Plug className="w-4 h-4" /></div>
+              <div className="size-8 bg-primary/10 dark:bg-primary/20 rounded-lg flex items-center justify-center text-primary"><Plug className="size-4" /></div>
               <div><CardTitle>{t("infra.select")} Listener</CardTitle><CardDescription>{t("infra.select_listener_hint")}</CardDescription></div>
             </CardHeader>
             <CardContent className="p-(--card-spacing)">
@@ -104,7 +104,7 @@ export default function InfrastructurePage() {
               </Select>
               {currentListener && (
                 <div className="mt-3 text-xs text-muted-foreground">
-                  <Info className="w-4 h-4" />
+                  <Info className="size-4" />
                   {t("infra.forwarding_to")} {currentListener.protocol}://{currentListener.host}:{currentListener.port}
                 </div>
               )}
@@ -113,7 +113,7 @@ export default function InfrastructurePage() {
 
           <Card className="overflow-hidden">
             <CardHeader className="px-(--card-spacing) py-(--card-spacing) border-b">
-              <div className="w-8 h-8 bg-success/15 rounded-lg flex items-center justify-center text-success"><Globe className="w-4 h-4" /></div>
+              <div className="size-8 bg-success/15 rounded-lg flex items-center justify-center text-success"><Globe className="size-4" /></div>
               <div><CardTitle>{t("infra.domain_params")}</CardTitle><CardDescription>{t("infra.domain_desc")}</CardDescription></div>
             </CardHeader>
             <CardContent className="p-(--card-spacing) space-y-4">
@@ -152,19 +152,19 @@ export default function InfrastructurePage() {
 
           <Card className="overflow-hidden">
             <CardHeader className="px-(--card-spacing) py-(--card-spacing) border-b">
-              <div className="w-8 h-8 bg-warning/15 rounded-lg flex items-center justify-center text-warning"><FileUp className="w-4 h-4" /></div>
+              <div className="size-8 bg-warning/15 rounded-lg flex items-center justify-center text-warning"><FileUp className="size-4" /></div>
               <div><CardTitle>{t("infra.generate_config")}</CardTitle><CardDescription>{t("infra.generate_desc")}</CardDescription></div>
             </CardHeader>
             <CardContent className="p-(--card-spacing)">
               <div className="flex flex-wrap gap-2 mb-4">
                 <Button onClick={() => generateConfig("nginx")} className="bg-success hover:bg-success text-success-foreground">
-                  <Server className="w-4 h-4" /> Nginx
+                  <Server className="size-4" /> Nginx
                 </Button>
                 <Button onClick={() => generateConfig("apache")} className="bg-warning hover:bg-warning text-warning-foreground">
-                  <Server className="w-4 h-4" /> Apache
+                  <Server className="size-4" /> Apache
                 </Button>
                 <Button onClick={() => generateConfig("haproxy")} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
-                  <Server className="w-4 h-4" /> HAProxy
+                  <Server className="size-4" /> HAProxy
                 </Button>
               </div>
               {generating && <div className="text-muted-foreground text-sm"><Spinner size="sm" /> {t("infra.generating")}</div>}
@@ -174,10 +174,10 @@ export default function InfrastructurePage() {
                     <span className="text-xs font-medium text-muted-foreground">{t("infra.generated_config")} ({configType.toUpperCase()})</span>
                     <div className="flex gap-2">
                       <Button onClick={copyConfig} variant="outline" size="sm">
-                        <Copy className="w-4 h-4" /> {copied ? t("infra.copied") : t("common.copy")}
+                        <Copy className="size-4" /> {copied ? t("infra.copied") : t("common.copy")}
                       </Button>
                       <Button onClick={downloadConfig} variant="outline" size="sm">
-                        <Download className="w-4 h-4" /> {t("common.download")}
+                        <Download className="size-4" /> {t("common.download")}
                       </Button>
                     </div>
                   </div>
@@ -193,17 +193,15 @@ export default function InfrastructurePage() {
             <div className="lg:col-span-2">
               <Card className="overflow-hidden">
                 <CardHeader className="px-(--card-spacing) py-(--card-spacing) border-b">
-                  <div className="w-8 h-8 bg-primary/10 dark:bg-primary/20 rounded-lg flex items-center justify-center text-primary"><Share2 className="w-4 h-4" /></div>
+                  <div className="size-8 bg-primary/10 dark:bg-primary/20 rounded-lg flex items-center justify-center text-primary"><Share2 className="size-4" /></div>
                   <div><CardTitle>{t("infra.redirectors")}</CardTitle><CardDescription>{t("infra.redirectors_desc")}</CardDescription></div>
                   <Button onClick={() => { setEditingRd(null); setRdName(""); setRdHost(""); setRdType("nginx"); setRdSSHUser("root"); setRdSSHPort(22); setRdSSHKey(""); setRdSSHPassword(""); setRdConfig(""); }} className="ml-auto">
-                    <Plus className="w-4 h-4" /> {t("infra.add_redirector")}
+                    <Plus className="size-4" /> {t("infra.add_redirector")}
                   </Button>
                 </CardHeader>
                 <CardContent className="p-(--card-spacing)">
                   {redirectors.length === 0 ? (
-                    <div className="text-center py-12 text-muted-foreground">
                       <EmptyState icon={Share2} title={t("infra.no_redirectors")} message={t("infra.no_redirectors_hint")} />
-                    </div>
                   ) : (
                     <div className="space-y-3">
                       {redirectors.map(rd => (
@@ -227,7 +225,7 @@ export default function InfrastructurePage() {
                                     setRdSSHUser(rd.ssh_user || "root"); setRdSSHPort(rd.ssh_port || 22);
                                     setRdConfig(rd.config || "");
                                   }} variant="outline" size="sm">
-                                    <Pencil className="w-4 h-4" />{t("common.edit")}
+                                    <Pencil className="size-4" />{t("common.edit")}
                                   </Button>
                                   <Button onClick={async () => {
                                     if (!(await confirm({ message: t("infra.delete_redirector_confirm") }))) return;
@@ -235,10 +233,10 @@ export default function InfrastructurePage() {
                                     try { await api.del(paths.redirectors.one(rd.id)); loadRedirectors(); } catch { toast.error(t("infrastructure.toast.delete_redirector_failed")); }
                                     setDeleting(null);
                                   }} variant="destructive" size="sm">
-                                    {deleting === rd.id ? <Spinner size="sm" className="mr-1" /> : <Trash2 className="w-4 h-4 mr-1" />}{deleting === rd.id ? t("infra.deleting") : t("common.delete")}
+                                    {deleting === rd.id ? <Spinner size="sm" className="mr-1" /> : <Trash2 className="size-4 mr-1" />}{deleting === rd.id ? t("infra.deleting") : t("common.delete")}
                                   </Button>
                                   <Button onClick={() => { setRdGenerateHost(rd.host); setDeployResult(null); setShowGenModal(true); }} size="sm">
-                                    <Rocket className="w-4 h-4" />{t("infra.deploy")}
+                                    <Rocket className="size-4" />{t("infra.deploy")}
                                   </Button>
                                 </div>
                               </div>
@@ -255,7 +253,7 @@ export default function InfrastructurePage() {
             <div>
               <Card className="overflow-hidden">
                 <CardHeader className="px-(--card-spacing) py-(--card-spacing) border-b">
-                  <div className="w-8 h-8 bg-success/15 rounded-lg flex items-center justify-center text-success"><Server className="w-4 h-4" /></div>
+                  <div className="size-8 bg-success/15 rounded-lg flex items-center justify-center text-success"><Server className="size-4" /></div>
                   <div><CardTitle>{editingRd ? t("infra.edit_redirector") : t("infra.new_redirector")}</CardTitle></div>
                 </CardHeader>
                 <CardContent className="p-(--card-spacing) space-y-4">
@@ -316,7 +314,7 @@ export default function InfrastructurePage() {
                       } catch { toast.error(t("infrastructure.toast.save_redirector_failed")); }
                       setSaving(false);
                     }} disabled={saving} className="flex-1">
-                      <Save className="w-4 h-4" /> {saving ? t("infra.saving") : editingRd ? t("infra.update") : t("common.save")}
+                      <Save className="size-4" /> {saving ? t("infra.saving") : editingRd ? t("infra.update") : t("common.save")}
                     </Button>
                     <Button onClick={async () => {
                       setTestingSSH(true);
@@ -326,7 +324,7 @@ export default function InfrastructurePage() {
                       } catch { toast.error(t("infrastructure.toast.ssh_test_failed")); }
                       setTestingSSH(false);
                     }} disabled={testingSSH} variant="outline" aria-label={t("infra.test_ssh")}>
-                      {testingSSH ? <Spinner size="sm" /> : <Plug className="w-4 h-4" />}
+                      {testingSSH ? <Spinner size="sm" /> : <Plug className="size-4" />}
                     </Button>
                   </div>
                 </CardContent>
@@ -396,7 +394,7 @@ export default function InfrastructurePage() {
                   } catch { toast.error(t("infrastructure.toast.generate_config_failed")); }
                   setGeneratingModal(false);
                 }} disabled={generatingModal}>
-                  {generatingModal ? <Spinner size="sm" className="mr-1" /> : <WandSparkles className="w-4 h-4 mr-1" />} {generatingModal ? t("infra.generating") : t("infra.generate_config")}
+                  {generatingModal ? <Spinner size="sm" className="mr-1" /> : <WandSparkles className="size-4 mr-1" />} {generatingModal ? t("infra.generating") : t("infra.generate_config")}
                 </Button>
                 <Button disabled={!rdConfig || deploying} onClick={async () => {
                   setDeploying(true);
@@ -418,7 +416,7 @@ export default function InfrastructurePage() {
                   }
                   setDeploying(false);
                 }}>
-                  {deploying ? <Spinner size="xs" className="mr-1" /> : <Rocket className="w-4 h-4" />} {deploying ? t("infra.deploying") : t("infra.deploy_via_ssh")}
+                  {deploying ? <Spinner size="xs" className="mr-1" /> : <Rocket className="size-4" />} {deploying ? t("infra.deploying") : t("infra.deploy_via_ssh")}
                 </Button>
               </div>
 
@@ -430,7 +428,7 @@ export default function InfrastructurePage() {
               )}
 
               {deployResult && (
-                <Banner tone={deployResult.success ? "success" : "destructive"} icon={deployResult.success ? <CheckCircle className="w-4 h-4" /> : <CircleAlert className="w-4 h-4" />} className="mb-4">
+                <Banner tone={deployResult.success ? "success" : "destructive"} icon={deployResult.success ? <CheckCircle className="size-4" /> : <CircleAlert className="size-4" />} className="mb-4">
                   <div className="font-medium">{deployResult.message}</div>
                   {deployResult.stdout && <pre className="text-xs mt-1 text-muted-foreground whitespace-pre-wrap">{deployResult.stdout}</pre>}
                   {deployResult.stderr && <pre className="text-xs mt-1 text-muted-foreground whitespace-pre-wrap">{deployResult.stderr}</pre>}
@@ -443,21 +441,21 @@ export default function InfrastructurePage() {
         <TabsContent value="acme" className="mt-0">
         <Card className="overflow-hidden">
           <CardHeader className="px-(--card-spacing) py-(--card-spacing) border-b">
-            <div className="w-8 h-8 bg-info/15 rounded-lg flex items-center justify-center text-info"><Award className="w-4 h-4" /></div>
+            <div className="size-8 bg-info/15 rounded-lg flex items-center justify-center text-info"><Award className="size-4" /></div>
             <div><CardTitle>{t("infra.acme_title")}</CardTitle><CardDescription>{t("infra.acme_desc")}</CardDescription></div>
           </CardHeader>
           <CardContent className="p-(--card-spacing) space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <Label className="text-xs"><Globe className="w-4 h-4" />{t("infra.domain")}</Label>
+                <Label className="text-xs"><Globe className="size-4" />{t("infra.domain")}</Label>
                 <Input aria-label="c2.example.com" name="input-19" type="text" value={acmeDomain} onChange={e => setAcmeDomain(e.target.value)} placeholder="c2.example.com" />
               </div>
               <div>
-                <Label className="text-xs"><Mail className="w-4 h-4" />{t("infra.email")}</Label>
+                <Label className="text-xs"><Mail className="size-4" />{t("infra.email")}</Label>
                 <Input aria-label="admin@example.com" name="input-20" type="email" value={acmeEmail} onChange={e => setAcmeEmail(e.target.value)} placeholder="admin@example.com" />
               </div>
               <div>
-                <Label className="text-xs"><Plug className="w-4 h-4" />{t("infra.http01_port")}</Label>
+                <Label className="text-xs"><Plug className="size-4" />{t("infra.http01_port")}</Label>
                 <Input aria-label={t("infra.http01_port")} name="input-21" type="number" value={acmePort} onChange={e => setAcmePort(Number(e.target.value))} />
               </div>
             </div>
@@ -467,12 +465,12 @@ export default function InfrastructurePage() {
                 <span className="text-xs text-muted-foreground">{t("infra.use_staging")}</span>
               </Label>
               <Button onClick={provisionCert} disabled={acmeProvisioning}>
-                {acmeProvisioning ? <Spinner size="xs" /> : <Award className="w-4 h-4" />} {acmeProvisioning ? t("infra.provisioning") : t("infra.auto_provision")}
+                {acmeProvisioning ? <Spinner size="xs" /> : <Award className="size-4" />} {acmeProvisioning ? t("infra.provisioning") : t("infra.auto_provision")}
               </Button>
             </div>
             {certPath && keyPath && (
               <div className="p-3 bg-success/15 rounded-lg text-xs text-success">
-                <CheckCircle className="w-4 h-4" />
+                <CheckCircle className="size-4" />
                 <b>{t("infra.cert_success")}</b> {t("infra.cert_set_to")} {certPath}
               </div>
             )}
@@ -483,7 +481,7 @@ export default function InfrastructurePage() {
       <TabsContent value="export" className="mt-0">
         <Card className="overflow-hidden">
           <CardHeader className="px-(--card-spacing) py-(--card-spacing) border-b">
-            <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center text-primary"><FileUp className="w-4 h-4" /></div>
+            <div className="size-8 bg-primary/10 rounded-lg flex items-center justify-center text-primary"><FileUp className="size-4" /></div>
             <div><CardTitle>{t("infra.c2_profile_export")}</CardTitle><CardDescription>{t("infra.c2_profile_export_desc")}</CardDescription></div>
           </CardHeader>
           <CardContent className="p-(--card-spacing) space-y-4">
@@ -491,9 +489,9 @@ export default function InfrastructurePage() {
               <Label className="text-xs mb-2 block">{t("infra.export_format")}</Label>
               <div className="flex gap-3">
                 {([
-                  { value: "json", label: "JSON", icon: <Code className="w-4 h-4" />, active: "border-primary bg-primary/10 text-primary" },
-                  { value: "nginx", label: "Nginx", icon: <Server className="w-4 h-4" />, active: "border-success bg-success/15 text-success" },
-                  { value: "env", label: "ENV", icon: <Terminal className="w-4 h-4" />, active: "border-secondary bg-secondary/50 text-muted-foreground" },
+                  { value: "json", label: "JSON", icon: <Code className="size-4" />, active: "border-primary bg-primary/10 text-primary" },
+                  { value: "nginx", label: "Nginx", icon: <Server className="size-4" />, active: "border-success bg-success/15 text-success" },
+                  { value: "env", label: "ENV", icon: <Terminal className="size-4" />, active: "border-secondary bg-secondary/50 text-muted-foreground" },
                 ] as const).map((opt) => (
                   <Button key={opt.value} onClick={() => setExportFormat(opt.value)}
                     variant={exportFormat === opt.value ? "default" : "outline"}
@@ -504,11 +502,11 @@ export default function InfrastructurePage() {
               </div>
             </div>
             <Button onClick={async () => { setExporting(true); await exportProfile(); setExporting(false); }} disabled={exporting} className="bg-primary hover:bg-primary/90 text-primary-foreground">
-              {exporting ? <Spinner size="sm" /> : <Download className="w-4 h-4" />} {exporting ? t("infra.exporting") : `${t("infra.export_as")} ${exportFormat.toUpperCase()}`}
+              {exporting ? <Spinner size="sm" /> : <Download className="size-4" />} {exporting ? t("infra.exporting") : `${t("infra.export_as")} ${exportFormat.toUpperCase()}`}
             </Button>
             <Card className="bg-muted">
               <CardContent>
-                <Info className="w-4 h-4" />
+                <Info className="size-4" />
                 <b>{t("infra.about")}</b> {t("infra.about_desc")}
               </CardContent>
             </Card>

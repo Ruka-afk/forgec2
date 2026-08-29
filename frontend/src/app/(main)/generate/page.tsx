@@ -41,7 +41,7 @@ export default function GeneratePage() {
           if (v && (GENERATE_TABS as readonly string[]).includes(v)) setTab(v as GenerateTab);
         }}
       >
-        <TabsList className="mb-4">
+        <TabsList>
           <TabsTrigger value="payload">{t("generate.tab_payload")}</TabsTrigger>
           <TabsTrigger value="profiles">{t("generate.tab_profiles")}</TabsTrigger>
           <TabsTrigger value="stager">{t("generate.tab_stager")}</TabsTrigger>

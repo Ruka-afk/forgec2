@@ -201,8 +201,8 @@ def recommend_timing(agents: list) -> dict:
                 dt = datetime.fromisoformat(ls.replace("Z", "+00:00"))
                 h = dt.hour
                 activity_hours[h] = activity_hours.get(h, 0) + 1
-            except (ValueError, TypeError):
-                pass
+            except (ValueError, TypeError) as exc:
+                print(json.dumps({"level": "error", "message": f"Plugin error: invalid agent last_seen timestamp '{ls}': {exc}"}), file=sys.stderr)
 
     low_activity = sorted(
         [h for h in range(24) if activity_hours.get(h, 0) <= 1],

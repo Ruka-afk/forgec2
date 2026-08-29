@@ -39,7 +39,7 @@ export function SearchInput({
   return (
     <div className={cn("relative min-w-0", className)}>
       <Search
-        className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60"
+        className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/85"
         aria-hidden="true"
       />
       <Label htmlFor={id} className="sr-only">
@@ -54,7 +54,7 @@ export function SearchInput({
         spellCheck={false}
         autoComplete="off"
         className={cn(
-          "h-9 rounded-lg border-transparent bg-secondary/40 pl-8 pr-8 text-(--fs-compact) placeholder:text-muted-foreground/60 focus:bg-background dark:bg-secondary/30",
+          "h-9 rounded-lg border-transparent bg-secondary/40 pl-8 pr-8 text-(--fs-compact) placeholder:text-muted-foreground/85 focus:bg-background dark:bg-secondary/30",
           inputClassName
         )}
       />
@@ -65,9 +65,9 @@ export function SearchInput({
           size="icon-xs"
           onClick={clear}
           aria-label={t("search.clear")}
-          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/60 hover:text-foreground"
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/85 hover:text-foreground"
         >
-          <X className="h-3.5 w-3.5" />
+          <X className="size-3.5" />
         </Button>
       )}
     </div>

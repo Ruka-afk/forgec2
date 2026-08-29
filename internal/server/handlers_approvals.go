@@ -54,9 +54,19 @@ func (s *Server) handleApproveTask(c *gin.Context) {
 		"approved_by": approver,
 		"approved_at": time.Now(),
 	}
-	if err := s.db.Model(&task).Updates(updates).Error; err != nil {
-		slog.Error("Failed to approve task", "task", taskID, "err", err)
+	// Conditional flip, mirroring handleRejectTask/handleCancelTask: a stale
+	// read here let approve resurrect a task another operator had just
+	// rejected or cancelled (dangerous types would then execute).
+	res := s.db.Model(&db.Task{}).
+		Where("id = ? AND status IN ?", taskID, []string{TaskStatusPendingApproval}).
+		Updates(updates)
+	if res.Error != nil {
+		slog.Error("Failed to approve task", "task", taskID, "err", res.Error)
 		respondError(c, http.StatusInternalServerError, "failed to approve task")
+		return
+	}
+	if res.RowsAffected == 0 {
+		respondError(c, http.StatusConflict, "task is no longer awaiting approval")
 		return
 	}
 	task.Status = "pending"
@@ -91,13 +101,38 @@ func (s *Server) handleRejectTask(c *gin.Context) {
 		return
 	}
 
-	if err := s.db.Model(&task).Updates(map[string]interface{}{
-		"status": "cancelled",
-		"error":  "rejected by operator",
-	}).Error; err != nil {
-		slog.Error("Failed to reject task", "task", taskID, "err", err)
+	// Snapshot the pre-reject status, then flip to cancelled with a
+	// conditional update so a concurrent approve/cancel cannot race us.
+	priorStatus := task.Status
+
+	result := s.db.Model(&db.Task{}).
+		Where("id = ? AND status IN ?", taskID, []string{"pending", TaskStatusPendingApproval}).
+		Updates(map[string]interface{}{
+			"status": "cancelled",
+			"error":  "rejected by operator",
+		})
+	if result.Error != nil {
+		slog.Error("Failed to reject task", "task", taskID, "err", result.Error)
 		respondError(c, http.StatusInternalServerError, "failed to reject task")
 		return
+	}
+	if result.RowsAffected == 0 {
+		currentStatus := priorStatus
+		var fresh db.Task
+		if err := s.db.First(&fresh, "id = ?", taskID).Error; err == nil {
+			currentStatus = fresh.Status
+		}
+		respondError(c, http.StatusConflict, fmt.Sprintf("task is now %s, cannot reject", currentStatus))
+		return
+	}
+
+	task.Status = "cancelled"
+	task.Error = "rejected by operator"
+
+	// The task occupied a pending-counter slot since creation (pending_approval
+	// tasks are counted); release it now that it will never be claimed.
+	if priorStatus == "pending" || priorStatus == TaskStatusPendingApproval {
+		s.decPendingTasks(task.AgentID)
 	}
 
 	slog.Info("Task rejected", "agent_id", task.AgentID, "task", taskID, "type", task.Type)

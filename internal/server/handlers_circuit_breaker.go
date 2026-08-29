@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -175,19 +176,25 @@ func (s *Server) handleAPICircuitBreakerToggle(c *gin.Context) {
 		oldState = "unknown"
 	}
 
-	if req.State == "disabled" {
+	newState := "healthy"
+	switch strings.ToLower(strings.TrimSpace(req.State)) {
+	case "disabled", "open", "burned":
 		th.Status = HealthBurned
-	} else {
+		newState = "burned"
+	case "half-open", "half_open", "unstable":
+		th.Status = HealthUnstable
+		newState = "unstable"
+	case "enabled", "closed", "healthy":
 		th.ConsecutiveFails = 0
 		th.FailReasons = nil
 		th.Status = HealthHealthy
+		newState = "healthy"
+	default:
+		cb.mu.Unlock()
+		respondError(c, http.StatusBadRequest, "state must be enabled/disabled or closed/half-open/open")
+		return
 	}
 	cb.mu.Unlock()
-
-	newState := "healthy"
-	if req.State == "disabled" {
-		newState = "burned"
-	}
 
 	if err := s.db.Create(&db.CircuitBreakerEvent{
 		ListenerID: listenerID,

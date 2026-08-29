@@ -65,11 +65,14 @@ export default function AgentTrafficPage() {
   const loadReport = useCallback(async () => {
     if (!id) return;
     try {
-      const data = await api.get(paths.agents.trafficProfile(id));
-      setReport((data.data as BaselineReport) || null);
+      // B4 fix: api.get already strips one layer of the {success,data} envelope,
+      // so `data` IS the report object. The previous code did `data.data` which
+      // was always undefined → report always null.
+      const reportData = await api.get(paths.agents.trafficProfile(id));
+      setReport((reportData as unknown as BaselineReport) || null);
       setLoadError(false);
-      if (data.data) {
-        setAutoAdapt((data.data as BaselineReport).auto_adapt);
+      if (reportData) {
+        setAutoAdapt((reportData as unknown as BaselineReport).auto_adapt);
       }
     } catch {
       setLoadError(true);
@@ -119,7 +122,7 @@ export default function AgentTrafficPage() {
 
   if (loadError) {
     return (
-      <PageContainer className="space-y-6">
+      <PageContainer>
         <Card className="p-(--card-spacing)">
           <ErrorState
             title={t("agents.traffic_load_failed")}
@@ -133,7 +136,7 @@ export default function AgentTrafficPage() {
   }
 
   return (
-    <PageContainer className="space-y-6">
+    <PageContainer>
       <Card className="p-(--card-spacing)">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold text-foreground">{t("agents.traffic_title")}</h2>
@@ -153,7 +156,7 @@ export default function AgentTrafficPage() {
               {adapting ? (
                 <Spinner size="xs" color="white" />
               ) : (
-                <Wand2 className="w-4 h-4" />
+                <Wand2 className="size-4" />
               )}
               {t("agents.traffic_adapt")}
             </Button>

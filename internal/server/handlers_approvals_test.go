@@ -221,7 +221,7 @@ func TestExpandedDangerousTypesRequireApproval(t *testing.T) {
 	dangerous := []string{
 		"creds", "mimikatz", "kerberoast",
 		"dpapi_masterkey", "dpapi_blob", "dpapi_browser",
-		"cookie_export", "chrome_cookies", "delete",
+		"cookie_export", "chrome_cookies", "delete", "usb_drop",
 	}
 	for _, tt := range dangerous {
 		// chrome_cookies is a browser-extension-only type; since batch-5 the
@@ -235,7 +235,11 @@ func TestExpandedDangerousTypesRequireApproval(t *testing.T) {
 				t.Fatalf("seed chrome agent: %v", err)
 			}
 		}
-		task, err := s.createTask("agent-"+tt, tt, "op", "", "", "", 0, 0)
+		path := ""
+		if tt == "usb_drop" {
+			path = `C:\temp\payload.exe`
+		}
+		task, err := s.createTask("agent-"+tt, tt, "op", "", path, "", 0, 0)
 		if err != nil {
 			t.Fatalf("createTask(%s): %v", tt, err)
 		}

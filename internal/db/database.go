@@ -67,12 +67,41 @@ func execMigration(db *gorm.DB, sql, label string) {
 
 func isMigrationIgnorable(err error) bool {
 	s := err.Error()
-	for _, kw := range []string{"duplicate column", "already exists", "no such table"} {
+	// "no such table" is deliberately NOT ignorable: swallowing it masked
+	// genuinely mis-ordered DDL and let broken migrations "pass".
+	for _, kw := range []string{"duplicate column", "already exists"} {
 		if strings.Contains(s, kw) {
 			return true
 		}
 	}
 	return false
+}
+
+// withMigrationTx wraps a data-migration body in one transaction. gormigrate
+// runs with UseTransaction:false, so a mid-loop failure previously persisted
+// half the rows without recording the migration ID; the next startup replayed
+// the step, hit duplicate-key errors on the already-inserted rows, and the
+// server could never boot.
+func withMigrationTx(tx *gorm.DB, fn func(*gorm.DB) error) error {
+	t := tx.Begin()
+	if t.Error != nil {
+		return t.Error
+	}
+	if err := fn(t); err != nil {
+		_ = t.Rollback()
+		return err
+	}
+	return t.Commit().Error
+}
+
+// migrationRowExists gives data migrations rerun idempotency: rows imported
+// by an earlier partially-committed attempt are skipped instead of crashing
+// on primary-key conflicts. Uses GORM-escaped identifier to stay portable
+// across MySQL backticks and Postgres double-quotes.
+func migrationRowExists(tx *gorm.DB, table, column, value string) bool {
+	var count int64
+	tx.Table(table).Where(tx.Statement.Quote(column)+" = ?", value).Count(&count)
+	return count > 0
 }
 
 // generateRandomPassword creates a random alphanumeric password of the given length.
@@ -186,7 +215,7 @@ func InitDBWithDriver(driver, dsn, fallbackPath string, logLevel slog.Level, dbM
 
 	// Auto-migrate all models (creates any tables/columns still missing on
 	// fresh installs and after historical migrations)
-	if err := db.AutoMigrate(&Implant{}, &Task{}, &AuditLog{}, &Listener{}, &TokenEntry{}, &SocksSession{}, &CredentialEntry{}, &User{}, &BuildLog{}, &ScanResult{}, &NetworkHost{}, &CommandTemplate{}, &BOFFile{}, &BOFLibrary{}, &ServerConfig{}, &WebhookConfig{}, &Plugin{}, &PluginReview{}, &PluginDependency{}, &PluginUpdateStatus{}, &RolePermission{}, &AutomationRule{}, &AlertRule{}, &Alert{}, &SystemMetric{}, &GeneratedReport{}, &Campaign{}, &CampaignAgent{}, &MeshPeer{}, &BloodHoundResult{}, &BloodHoundFile{}, &OpsecHistory{}, &OpsecRule{}, &CircuitBreakerConfig{}, &CircuitBreakerEvent{}, &CustomRole{}, &PhishingTemplate{}, &PhishingCampaign{}, &PhishingEvent{}, &AgentTag{}, &AgentTagAssignment{}, &AutoTagRule{}, &Notification{}, &AgentGroup{}, &AgentGroupAssignment{}, &Workflow{}, &WorkflowStep{}, &ExecutionLog{}, &ChatMessage{}, &StagerToken{}, &Redirector{}, &AgentLock{}, &CloudCred{}, &AIChatSession{}, &AIChatMessage{}, &ExtC2Channel{}, &AgentStatusEvent{}, &BackupCode{}, &UserSession{}, &PasswordHistory{}, &ApiKey{}, &Script{}, 	&RegSecret{}, &KillSwitch{}, &Tenant{}, &CredentialUsage{}); err != nil {
+	if err := db.AutoMigrate(&Implant{}, &Task{}, &AuditLog{}, &Listener{}, &TokenEntry{}, &SocksSession{}, &CredentialEntry{}, &User{}, &BuildLog{}, &ScanResult{}, &NetworkHost{}, &CommandTemplate{}, &BOFFile{}, &BOFLibrary{}, &ServerConfig{}, &WebhookConfig{}, &Plugin{}, &PluginReview{}, &PluginDependency{}, &PluginUpdateStatus{}, &RolePermission{}, &AutomationRule{}, &AlertRule{}, &Alert{}, &SystemMetric{}, &GeneratedReport{}, &Campaign{}, &CampaignAgent{}, &MeshPeer{}, &BloodHoundResult{}, &BloodHoundFile{}, &OpsecHistory{}, &OpsecRule{}, &CircuitBreakerConfig{}, &CircuitBreakerEvent{}, &CustomRole{}, &PhishingTemplate{}, &PhishingCampaign{}, &PhishingEvent{}, &AgentTag{}, &AgentTagAssignment{}, &AutoTagRule{}, &Notification{}, &AgentGroup{}, &AgentGroupAssignment{}, &Workflow{}, &WorkflowStep{}, &ExecutionLog{}, &ChatMessage{}, &StagerToken{}, &Redirector{}, &AgentLock{}, &CloudCred{}, &AIChatSession{}, &AIChatMessage{}, &ExtC2Channel{}, &AgentStatusEvent{}, &BackupCode{}, &SIEMRule{}, &UserSession{}, &PasswordHistory{}, &ApiKey{}, &Script{}, 	&RegSecret{}, &KillSwitch{}, &Tenant{}, &CredentialUsage{}, &CommandMacro{}, &MacroRun{}, &NotificationRoute{}, &SavedView{}, &OneShotTask{}); err != nil {
 		return nil, err
 	}
 

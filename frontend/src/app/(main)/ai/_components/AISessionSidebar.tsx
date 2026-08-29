@@ -23,47 +23,62 @@ export default function AISessionSidebar({ sessions, activeSessionId, onSelect, 
   const { t } = useI18n();
 
   return (
-    <div className="flex flex-col h-full">
-      <Button onClick={onNewChat} className="h-9 text-xs mb-2 shrink-0">
-        <Plus className="w-4 h-4" /> {t("ai.new_chat")}
+    <div className="flex h-full flex-col bg-muted/20 p-3">
+      <div className="mb-3 flex items-center justify-between px-1">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">{t("ai.sessions")}</h2>
+          <p className="text-(--fs-micro-sm) text-muted-foreground">{sessions.length} / 100</p>
+        </div>
+        <Button variant="ghost" size="icon-sm" onClick={onNewChat} aria-label={t("ai.new_chat")} title={t("ai.new_chat")}>
+          <Plus className="size-4" />
+        </Button>
+      </div>
+      <Button onClick={onNewChat} variant="outline" className="mb-3 h-10 shrink-0 justify-start bg-card text-xs shadow-xs">
+        <Plus className="size-4" /> {t("ai.new_chat")}
       </Button>
-      <div className="flex-1 min-h-0 overflow-y-auto space-y-1 pr-1">
+      <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
         {sessions.length === 0 ? (
-          <p className="text-xs text-muted-foreground px-2 py-3">{t("ai.no_sessions")}</p>
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/80 px-4 py-10 text-center">
+            <div className="mb-3 flex size-9 items-center justify-center rounded-xl bg-card text-muted-foreground shadow-xs">
+              <MessageSquare className="size-4" />
+            </div>
+            <p className="text-xs leading-5 text-muted-foreground">{t("ai.no_sessions")}</p>
+          </div>
         ) : (
           sessions.map((s) => (
             <div
               key={s.id}
-              className={`group flex items-center gap-1 rounded-lg px-1.5 py-1 cursor-pointer text-sm ${
+              className={`group relative flex min-h-11 items-center gap-1 rounded-xl border px-1.5 py-1 text-sm transition-colors ${
                 activeSessionId === s.id
-                  ? "bg-primary/10 text-primary dark:text-primary"
-                  : "hover:bg-muted transition-colors text-muted-foreground"
+                  ? "border-primary/20 bg-primary/8 text-foreground"
+                  : "border-transparent text-muted-foreground hover:border-border/75 hover:bg-card"
               }`}
             >
+              {activeSessionId === s.id && <span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-primary" aria-hidden="true" />}
               <Button
                 type="button"
                 variant="ghost"
                 onClick={() => onSelect(s.id)}
-                className="h-auto flex-1 min-w-0 justify-start gap-2 px-1.5 py-1 text-left font-normal"
+                className="h-auto min-w-0 flex-1 justify-start gap-2 px-1.5 py-1 text-left font-normal"
               >
-                <MessageSquare className="w-4 h-4 shrink-0" aria-hidden="true" />
+                <MessageSquare className="size-4 shrink-0" aria-hidden="true" />
                 <span className="flex-1 truncate">{s.title}</span>
               </Button>
               <Button
                 variant="ghost" size="icon-xs"
                 onClick={() => onRename(s.id, s.title)}
-                className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 text-muted-foreground hover:text-primary transition-opacity shrink-0"
+                className="shrink-0 text-muted-foreground opacity-100 transition-opacity hover:text-primary sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
                 aria-label={t("ai.rename")}
               >
-                <Pencil className="w-4 h-4" />
+                <Pencil className="size-4" />
               </Button>
               <Button
                 variant="ghost" size="icon-xs"
                 onClick={() => onDelete(s.id)}
-                className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 text-muted-foreground hover:text-destructive transition-opacity shrink-0"
+                className="shrink-0 text-muted-foreground opacity-100 transition-opacity hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
                 aria-label={t("ai.delete_session")}
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="size-4" />
               </Button>
             </div>
           ))

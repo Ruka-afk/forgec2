@@ -2,6 +2,7 @@ package db
 
 import (
 	"encoding/json"
+	"log"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/crypto"
@@ -103,24 +104,31 @@ type TaskStats struct {
 
 // Implant represents a connected implant (agent)
 type Implant struct {
-	ID         string    `gorm:"primaryKey" json:"id"`
-	TenantID   uint      `gorm:"index" json:"tenant_id"` // multi-tenant isolation (0 = legacy/unscoped)
-	Hostname   string    `json:"hostname"`
-	Username   string    `json:"username"`
-	OS         string    `json:"os"`
-	Arch       string    `json:"arch"`
-	IP         string    `json:"ip"`
-	PublicIP   string    `json:"public_ip"` // public IP from beacon connection
-	Country    string    `json:"country"`   // GeoIP country
-	City       string    `json:"city"`      // GeoIP city
-	Latitude   float64   `json:"latitude"`  // GeoIP latitude
-	Longitude  float64   `json:"longitude"` // GeoIP longitude
-	LastSeen   time.Time `gorm:"index" json:"last_seen"`
-	Status     string    `gorm:"index" json:"status"`          // online, offline
-	Trusted    bool      `gorm:"default:false" json:"trusted"` // operator-approved agent
-	Notes      string    `json:"notes"`
-	Tags       string    `json:"tags"` // comma separated
-	ListenerID uint      `json:"listener_id"`
+	ID        string    `gorm:"primaryKey" json:"id"`
+	TenantID  uint      `gorm:"index" json:"tenant_id"` // multi-tenant isolation (0 = legacy/unscoped)
+	Hostname  string    `json:"hostname"`
+	Username  string    `json:"username"`
+	OS        string    `json:"os"`
+	Arch      string    `json:"arch"`
+	IP        string    `json:"ip"`
+	PublicIP  string    `json:"public_ip"` // public IP from beacon connection
+	Country   string    `json:"country"`   // GeoIP country
+	City      string    `json:"city"`      // GeoIP city
+	Latitude  float64   `json:"latitude"`  // GeoIP latitude
+	Longitude float64   `json:"longitude"` // GeoIP longitude
+	LastSeen  time.Time `gorm:"index" json:"last_seen"`
+	Status    string    `gorm:"index" json:"status"`          // online, offline
+	Trusted   bool      `gorm:"default:false" json:"trusted"` // operator-approved agent
+	// Force-offline: server-side service denial. A blocked implant's check-ins
+	// are refused (well-formed but taskless replies), its status pinned
+	// offline, and every attempt audited. Distinct from soft-delete:
+	// tombstoned agents are restored when they beacon again, blocked ones stay
+	// locked out until explicitly unblocked.
+	Blocked       bool   `gorm:"default:false;index" json:"blocked"`
+	BlockedReason string `gorm:"size:255;default:''" json:"blocked_reason,omitempty"`
+	Notes         string `json:"notes"`
+	Tags          string `json:"tags"` // comma separated
+	ListenerID    uint   `json:"listener_id"`
 	// Multi-hop Proxy Chain (ParentAgentID is the next-hop toward C2, distinct from P2P parent_id)
 	ParentAgentID string `gorm:"size:36;default:''" json:"parent_agent_id,omitempty"`
 	// P2P Beacon Chaining
@@ -230,6 +238,9 @@ type Task struct {
 	ClaimedBy      string     `gorm:"size:255" json:"claimed_by"`
 	ClaimedAt      time.Time  `json:"claimed_at"`
 	AcknowledgedAt *time.Time `gorm:"index" json:"acknowledged_at,omitempty"`
+	// DeliveryAttempts counts how many times a stale running task has been
+	// requeued without ever being acknowledged; at 3 it is failed outright.
+	DeliveryAttempts int `gorm:"default:0" json:"delivery_attempts"`
 	// Task callbacks: optional URL to POST results to when task completes
 	CallbackURL    string `gorm:"size:1024" json:"callback_url,omitempty"`
 	CallbackMethod string `gorm:"size:10;default:'POST'" json:"callback_method,omitempty"`
@@ -420,26 +431,39 @@ func (a *Implant) BeforeCreate(tx *gorm.DB) (err error) {
 }
 
 // encryptField encrypts a single field value using loot encryption.
+//
+// Failure contract (mirrors Task.encryptSensitiveFields): when encryption is
+// unavailable (key unset / key rotation mismatch), the PLAINTEXT is kept so
+// harvested secrets are never silently dropped. Returning the error made
+// CreateInBatches abort the whole harvest batch — credentials permanently
+// lost on a config hiccup.
 func encryptField(val *string) error {
 	if *val == "" {
 		return nil
 	}
 	enc, err := crypto.EncryptLoot(*val)
 	if err != nil {
-		return err
+		// Keep plaintext; log so operators notice the vault is unencrypted.
+		log.Printf("[vault] loot encryption unavailable (%v) — storing plaintext", err)
+		return nil
 	}
 	*val = enc
 	return nil
 }
 
 // decryptField decrypts a single field value using loot encryption.
+//
+// Failure contract: values that fail decryption are passed through as-is.
+// They are either legacy plaintext rows or rows written under a previous
+// loot_key — either way returning an error would make AfterFind fail and
+// 404/500 every credential read after a key rotation.
 func decryptField(val *string) error {
 	if *val == "" {
 		return nil
 	}
 	dec, err := crypto.DecryptLoot(*val)
 	if err != nil {
-		return err
+		return nil // passthrough legacy/unencrypted value
 	}
 	*val = dec
 	return nil
@@ -628,21 +652,24 @@ type Tenant struct {
 // CredentialEntry stores a parsed credential harvested from an agent.
 // Auto-populated when "creds" task results arrive, or manually added.
 type CredentialEntry struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	AgentID   string    `gorm:"index" json:"agent_id"`
-	Domain    string    `json:"domain"`
-	Username  string    `json:"username"`
-	Password  string    `json:"password"`
-	Hash      string    `json:"hash"`   // NTLM / SHA etc.
-	Source    string    `json:"source"` // lsass, sam, mimikatz, manual
-	Type      string    `json:"type"`   // cleartext, ntlm, aes, kerberos
-	Notes     string    `json:"notes"`
-	Tags      string    `json:"tags"` // comma separated tags
-	ExpiresAt time.Time `gorm:"index" json:"expires_at"`
-	Confirmed bool      `json:"confirmed"` // whether credential has been verified
-	TaskID    uint      `json:"task_id"`   // originating task (0 = manual)
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID       uint   `gorm:"primaryKey" json:"id"`
+	AgentID  string `gorm:"index" json:"agent_id"`
+	Domain   string `json:"domain"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Hash     string `json:"hash"`   // NTLM / SHA etc.
+	Source   string `json:"source"` // lsass, sam, mimikatz, manual
+	Type     string `json:"type"`   // cleartext, ntlm, aes, kerberos
+	Notes    string `json:"notes"`
+	Tags     string `json:"tags"` // comma separated tags
+	// Lifecycle: VerifyStatus "" (never checked) / "pending" / "valid" / "invalid".
+	VerifyStatus   string     `gorm:"size:16;default:'';index" json:"verify_status"`
+	LastVerifiedAt *time.Time `json:"last_verified_at,omitempty"`
+	ExpiresAt      time.Time  `gorm:"index" json:"expires_at"`
+	Confirmed      bool       `json:"confirmed"` // whether credential has been verified
+	TaskID         uint       `json:"task_id"`   // originating task (0 = manual)
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 // TableName overrides
@@ -885,6 +912,87 @@ type PluginUpdateStatus struct {
 
 func (PluginUpdateStatus) TableName() string { return "plugin_update_status" }
 
+// CommandMacro stores a recorded sequence of shell commands that can be
+// replayed against one or more agents. Steps is a JSON array of
+// [{"command":"whoami","delay_ms":500,"wait":true,"timeout_s":60}, ...].
+type CommandMacro struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	Name        string    `gorm:"uniqueIndex;size:128" json:"name"`
+	Description string    `json:"description"`
+	Steps       string    `gorm:"type:text" json:"steps"`
+	CreatedBy   string    `json:"created_by"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+func (CommandMacro) TableName() string { return "command_macros" }
+
+// MacroRun tracks one execution of a macro against a single agent so the UI
+// can show live progress and a per-step result log.
+type MacroRun struct {
+	ID          uint       `gorm:"primaryKey" json:"id"`
+	MacroID     uint       `json:"macro_id"`
+	MacroName   string     `gorm:"size:128" json:"macro_name"`
+	AgentID     string     `gorm:"index;size:64" json:"agent_id"`
+	Status      string     `gorm:"size:16" json:"status"` // running, completed, failed, stopped
+	CurrentStep int        `json:"current_step"`
+	TotalSteps  int        `json:"total_steps"`
+	Log         string     `gorm:"type:text" json:"log"` // JSON array of step entries
+	CreatedBy   string     `json:"created_by"`
+	StartedAt   time.Time  `json:"started_at"`
+	FinishedAt  *time.Time `json:"finished_at"`
+}
+
+func (MacroRun) TableName() string { return "macro_runs" }
+
+// NotificationRoute delivers matching-severity notifications to an external
+// channel (Discord, Telegram, or a generic webhook).
+type NotificationRoute struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	Name        string    `gorm:"size:128" json:"name"`
+	Channel     string    `gorm:"size:32" json:"channel"`                     // discord, telegram, webhook
+	Target      string    `gorm:"size:512" json:"target"`                     // discord/generic: webhook URL; telegram: chat id
+	Secret      string    `gorm:"size:512" json:"secret"`                     // telegram bot token
+	MinSeverity string    `gorm:"size:16;default:'info'" json:"min_severity"` // info, warning, critical
+	Enabled     bool      `gorm:"default:true" json:"enabled"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+func (NotificationRoute) TableName() string { return "notification_routes" }
+
+// SavedView stores a per-user, per-page snapshot of list filters/sorting so
+// operators can switch between named views (e.g. "online windows boxes")
+// without re-applying filters by hand.
+type SavedView struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	UserID    uint      `gorm:"index;not null" json:"user_id"`
+	Page      string    `gorm:"size:64;index" json:"page"` // agents, tasks, ...
+	Name      string    `gorm:"size:128" json:"name"`
+	State     string    `gorm:"type:text" json:"state"` // JSON object of filter values
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (SavedView) TableName() string { return "saved_views" }
+
+// OneShotTask is a single future-dated command dispatch ("at 02:00 run X on
+// agent Y"). Unlike AutomationRule this is one-shot and operator-facing.
+type OneShotTask struct {
+	ID         uint       `gorm:"primaryKey" json:"id"`
+	AgentID    string     `gorm:"index;size:36" json:"agent_id"`
+	Type       string     `gorm:"size:50;default:'shell'" json:"type"`
+	Command    string     `gorm:"type:text" json:"command"`
+	RunAt      time.Time  `gorm:"index" json:"run_at"`
+	Status     string     `gorm:"size:16;default:'pending'" json:"status"` // pending, done, cancelled, error
+	TaskID     uint       `json:"task_id"`
+	CreatedBy  string     `gorm:"size:100" json:"created_by"`
+	CreatedAt  time.Time  `json:"created_at"`
+	FinishedAt *time.Time `json:"finished_at,omitempty"`
+}
+
+func (OneShotTask) TableName() string { return "one_shot_tasks" }
+
 func (ScanResult) TableName() string      { return "scan_results" }
 func (NetworkHost) TableName() string     { return "network_hosts" }
 func (CommandTemplate) TableName() string { return "command_templates" }
@@ -904,9 +1012,13 @@ type AutomationRule struct {
 	LastRun    time.Time `json:"last_run"`
 	NextRun    time.Time `json:"next_run"`
 	RunCount   int       `gorm:"default:0" json:"run_count"`
-	CreatedBy  string    `gorm:"size:100" json:"created_by"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	// Event-trigger throttle: minimum seconds between two firings of this
+	// rule. Persisted so a restart does not reset the cooldown window.
+	CooldownSeconds int       `gorm:"default:0" json:"cooldown_seconds"`
+	LastTriggered   time.Time `json:"last_triggered"`
+	CreatedBy       string    `gorm:"size:100" json:"created_by"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 func (AutomationRule) TableName() string { return "automation_rules" }
@@ -1198,22 +1310,22 @@ type PhishingTemplate struct {
 func (PhishingTemplate) TableName() string { return "phishing_templates" }
 
 type PhishingCampaign struct {
-	ID         uint      `gorm:"primaryKey" json:"id"`
-	Name       string    `gorm:"size:255;not null" json:"name"`
-	TemplateID uint      `json:"template_id"`
-	TargetList string    `gorm:"type:text" json:"target_list"`
-	SMTPHost   string    `gorm:"size:255" json:"smtp_host"`
-	SMTPPort   int       `json:"smtp_port"`
-	SMTPUser   string    `gorm:"size:255" json:"smtp_user"`
-	SMTPPass   string    `gorm:"size:255" json:"smtp_pass"`
-	Status     string    `gorm:"size:50;default:draft" json:"status"`
-	SentCount  int       `json:"sent_count"`
-	FailedCount int     `json:"failed_count"`
-	OpenCount  int       `json:"open_count"`
-	CredCount  int       `json:"cred_count"`
-	CreatedBy  string    `gorm:"size:255" json:"created_by"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	Name        string    `gorm:"size:255;not null" json:"name"`
+	TemplateID  uint      `json:"template_id"`
+	TargetList  string    `gorm:"type:text" json:"target_list"`
+	SMTPHost    string    `gorm:"size:255" json:"smtp_host"`
+	SMTPPort    int       `json:"smtp_port"`
+	SMTPUser    string    `gorm:"size:255" json:"smtp_user"`
+	SMTPPass    string    `gorm:"size:255" json:"smtp_pass"`
+	Status      string    `gorm:"size:50;default:draft" json:"status"`
+	SentCount   int       `json:"sent_count"`
+	FailedCount int       `json:"failed_count"`
+	OpenCount   int       `json:"open_count"`
+	CredCount   int       `json:"cred_count"`
+	CreatedBy   string    `gorm:"size:255" json:"created_by"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 func (PhishingCampaign) TableName() string { return "phishing_campaigns" }
@@ -1505,7 +1617,7 @@ func (CloudCred) TableName() string { return "cloud_creds" }
 // ExtC2Channel stores configuration for External C2 channels (Discord, Slack).
 type ExtC2Channel struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
-	Type      string    `gorm:"size:20;not null" json:"type"` // "discord" or "slack"
+	Type      string    `gorm:"size:20;not null" json:"type"` // "discord", "slack", or "telegram"
 	BotToken  string    `gorm:"size:500" json:"bot_token"`
 	ChannelID string    `gorm:"size:100" json:"channel_id"`
 	Enabled   bool      `gorm:"default:true" json:"enabled"`
@@ -1513,6 +1625,24 @@ type ExtC2Channel struct {
 }
 
 func (ExtC2Channel) TableName() string { return "extc2_channels" }
+
+// SIEMRule is a user-defined correlation rule evaluated against SIEM events.
+// Rules are stored in the DB so operators can author detection without code
+// changes; the runtime EventCorrelator hot-reloads them.
+type SIEMRule struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	Name         string    `gorm:"size:128;not null;uniqueIndex" json:"name"`
+	Enabled      bool      `gorm:"default:true" json:"enabled"`
+	Action       string    `gorm:"size:128;not null;index" json:"action"`      // SIEM event action to match (e.g. login_failed, implant_checkin)
+	WindowSec    int       `gorm:"not null;default:300" json:"window_sec"`     // correlation window in seconds
+	Threshold    int       `gorm:"not null;default:5" json:"threshold"`        // events required within the window to alert
+	AlertAction  string    `gorm:"size:128;not null;default:siem_alert" json:"alert_action"`
+	AlertDetails string    `gorm:"size:512" json:"alert_details"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+func (SIEMRule) TableName() string { return "siem_rules" }
 
 // AgentStatusEvent records when an agent changes online/offline status.
 type AgentStatusEvent struct {

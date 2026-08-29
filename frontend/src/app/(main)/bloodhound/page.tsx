@@ -69,12 +69,21 @@ export default function BloodHoundPage() {
     setError(null);
     try {
       let failed = 0;
+      // /bloodhound/list responds {results,total} (no success envelope);
+      // /bloodhound/status responds {total_collections,last_collection,...}.
       const [resultsRes, statusRes] = await Promise.all([
-        api.get(paths.bloodhound.list).catch(() => { failed++; return null; }),
-        api.get<{ uploaded: boolean; filename: string }>("/bloodhound/status").catch(() => { failed++; return null; }),
+        api.get<{ results?: BHResult[]; total?: number }>(paths.bloodhound.list).catch(() => { failed++; return null; }),
+        api.get<{ total_collections?: number; last_collection?: string; last_agent_id?: string }>("/bloodhound/status").catch(() => { failed++; return null; }),
       ]);
-      if (resultsRes) setResults((resultsRes.data || []) as BHResult[]);
-      if (statusRes) setBinaryStatus(statusRes);
+      if (resultsRes) setResults((resultsRes.results || []) as BHResult[]);
+      if (statusRes) {
+        setBinaryStatus({
+          uploaded: (statusRes.total_collections ?? 0) > 0,
+          filename: statusRes.last_agent_id
+            ? `${statusRes.total_collections ?? 0} collections · latest via ${String(statusRes.last_agent_id).slice(0, 8)}`
+            : "",
+        });
+      }
       if (failed === 2) {
         setError(t("bloodhound.toast.load_failed"));
         toast.error(t("bloodhound.toast.load_failed"));
@@ -90,6 +99,8 @@ export default function BloodHoundPage() {
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    // Reset BEFORE any await: re-selecting the same file must re-fire onChange.
+    e.target.value = "";
     if (!file) return;
     setUploading(true);
     try {
@@ -106,7 +117,8 @@ export default function BloodHoundPage() {
     if (!selectedAgent) return;
     setCollecting(true);
     try {
-      await api.post(paths.bloodhound.collect, { agent_id: selectedAgent, method });
+      // Handler uses ShouldBindJSON — urlencoded api.post always 400'd here.
+      await api.postJson(paths.bloodhound.collect, { agent_id: selectedAgent, method });
       toast.success(t("bloodhound.toast.collection_started"));
       loadData();
     } catch { toast.error(t("bloodhound.toast.start_collection_failed")); }
@@ -141,9 +153,9 @@ export default function BloodHoundPage() {
   const paginatedResults = results.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
-    <PageContainer title={t("bloodhound.title")} subtitle={t("bloodhound.subtitle")} contentClassName="space-y-6">
+    <PageContainer title={t("bloodhound.title")} subtitle={t("bloodhound.subtitle")}>
 
-      <Card className="px-4 sm:px-5 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
+      <Card className="px-4 sm:px-5 hover:shadow-lg dark:hover:shadow-xl transition-shadow">
         <div className="flex items-center gap-x-3 mb-5">
           <IconBadge icon={binaryStatus.uploaded ? CheckCircle : CircleAlert} color={binaryStatus.uploaded ? "success" : "warning"} size="lg" />
           <div>
@@ -159,19 +171,19 @@ export default function BloodHoundPage() {
           <Label className="relative cursor-pointer">
             <Input aria-label={t("bloodhound.upload_exe")} name="input-0" type="file" accept=".exe" onChange={handleUpload} className="sr-only" />
             <span className="inline-flex shrink-0 items-center justify-center rounded-lg bg-primary px-2.5 py-1.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/80 disabled:pointer-events-none disabled:opacity-50 gap-1.5 cursor-pointer">
-              {uploading ? <Spinner size="xs" /> : <Upload className="w-4 h-4" />}
+              {uploading ? <Spinner size="xs" /> : <Upload className="size-4" />}
               <span>{uploading ? t("bloodhound.uploading") : t("bloodhound.upload_btn")}</span>
             </span>
           </Label>
           {binaryStatus.uploaded && (
             <span className="text-xs text-success">
-              <CheckCircle className="w-4 h-4" />{binaryStatus.filename}
+              <CheckCircle className="size-4" />{binaryStatus.filename}
             </span>
           )}
         </div>
       </Card>
 
-      <Card className="px-4 sm:px-5 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
+      <Card className="px-4 sm:px-5 hover:shadow-lg dark:hover:shadow-xl transition-shadow">
         <div className="flex items-center gap-x-3 mb-5">
           <IconBadge icon={PawPrint} color="primary" size="xl" />
           <div>
@@ -214,24 +226,24 @@ export default function BloodHoundPage() {
           <div className="flex items-end">
             <Button onClick={handleCollect} disabled={collecting || !selectedAgent}
               className="bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed">
-              {collecting ? <Spinner size="xs" /> : <Play className="w-4 h-4" />}
+              {collecting ? <Spinner size="xs" /> : <Play className="size-4" />}
               <span>{collecting ? t("bloodhound.collecting") : t("bloodhound.start_collection")}</span>
             </Button>
           </div>
         </div>
       </Card>
 
-      <Card className="px-0 mb-0 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
+      <Card className="px-0 mb-0 hover:shadow-lg dark:hover:shadow-xl transition-shadow">
         <div className="flex items-center justify-between px-4 py-3 sm:px-5 sm:py-3.5 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-secondary rounded-lg flex items-center justify-center">
-              <Table2 className="w-4 h-4" />
+            <div className="size-8 bg-secondary rounded-lg flex items-center justify-center">
+              <Table2 className="size-4" />
             </div>
             <h2 className="text-sm font-semibold text-foreground">{t("bloodhound.collection_results")}</h2>
             <span className="text-xs text-muted-foreground">({results.length})</span>
           </div>
           <Button variant="ghost" size="sm" onClick={() => loadData()}>
-            <RefreshCw className="w-4 h-4" />Refresh
+            <RefreshCw className="size-4" />Refresh
           </Button>
         </div>
         <DataState loading={loading} error={error} onRetry={loadData} empty={!loading && !error && results.length === 0} emptyIcon={PawPrint} emptyTitle={t("bloodhound.empty_title")} emptyMessage={t("bloodhound.empty_message")}>
@@ -281,12 +293,12 @@ export default function BloodHoundPage() {
                           <Button variant="ghost" size="icon-xs" onClick={() => handleDownload(id)}
                             className="bg-success/15 hover:bg-success/25 text-success rounded-lg transition-colors"
                             aria-label={t("bloodhound.download_report")}>
-                            <Download className="w-4 h-4" />
+                            <Download className="size-4" />
                           </Button>
                           <Button variant="ghost" size="icon-xs" onClick={() => handleDelete(id)}
                             className="bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-lg transition-colors"
                             aria-label={t("bloodhound.a11y_delete_report")}>
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="size-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -296,9 +308,7 @@ export default function BloodHoundPage() {
               </TableBody>
             </Table>
           ) : (
-            <div className="text-center py-12 text-muted-foreground">
-              <EmptyState icon={PawPrint} title={t("bloodhound.empty_title")} message={t("bloodhound.empty_message")} />
-            </div>
+            <EmptyState icon={PawPrint} title={t("bloodhound.empty_title")} message={t("bloodhound.empty_message")} />
           )}
         </div>
         </DataState>

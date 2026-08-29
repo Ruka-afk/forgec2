@@ -27,6 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { SafeImg } from "@/components/ui/safe-img";
 import { Download, FileUp, Images, Keyboard, Terminal, Trash2, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Accordion, AccordionItem, AccordionHeader, AccordionTrigger, AccordionPanel } from "@/components/ui/accordion";
 import { LootScreenshotCard } from "./_components/LootScreenshotCard";
@@ -137,15 +138,19 @@ function LootPage() {
       downloads: filteredDownloads,
     };
     if (format === "csv") {
+      const esc = (v: unknown) => {
+        const s = String(v ?? "");
+        return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
       const rows: string[] = ["Type,Agent,Filename,Path,Created"];
       for (const s of filteredScreenshots) {
-        rows.push(`screenshot,${s.agent_id},"${s.filename}","${s.path}",${s.created_at}`);
+        rows.push([esc("screenshot"), esc(s.agent_id), esc(s.filename), esc(s.path), esc(s.created_at)].join(","));
       }
       for (const k of filteredKeylogs) {
-        rows.push(`keylog,${k.agent_id},"","","${k.created_at}"`);
+        rows.push([esc("keylog"), esc(k.agent_id), "", "", esc(k.created_at)].join(","));
       }
       for (const d of filteredDownloads) {
-        rows.push(`download,${d.agent_id},"${d.command}","${d.result}",${d.created_at}`);
+        rows.push([esc("download"), esc(d.agent_id), esc(d.command), esc(d.result), esc(d.created_at)].join(","));
       }
       downloadText(rows.join("\n"), `loot-export-${new Date().toISOString().slice(0, 10)}.csv`, "text/csv");
     } else {
@@ -184,9 +189,9 @@ function LootPage() {
   }, [lbIndex, lbScreenshots.length]);
 
   const tabs: { key: LootTab; label: string; icon: React.ReactNode; count: number }[] = [
-    { key: "screenshots", label: t("loot.screenshots_tab"), icon: <Images aria-hidden="true" className="w-4 h-4" />, count: filteredScreenshots.length },
-    { key: "keylogs", label: t("loot.keylogs_tab"), icon: <Keyboard aria-hidden="true" className="w-4 h-4" />, count: filteredKeylogs.length },
-    { key: "downloads", label: t("loot.downloads_tab"), icon: <Download aria-hidden="true" className="w-4 h-4" />, count: filteredDownloads.length },
+    { key: "screenshots", label: t("loot.screenshots_tab"), icon: <Images aria-hidden="true" className="size-4" />, count: filteredScreenshots.length },
+    { key: "keylogs", label: t("loot.keylogs_tab"), icon: <Keyboard aria-hidden="true" className="size-4" />, count: filteredKeylogs.length },
+    { key: "downloads", label: t("loot.downloads_tab"), icon: <Download aria-hidden="true" className="size-4" />, count: filteredDownloads.length },
   ];
 
   return (
@@ -203,14 +208,14 @@ function LootPage() {
             </SelectContent>
           </Select>
           <Button onClick={() => exportAll("json")} className="gap-1">
-            <FileUp aria-hidden="true" className="w-4 h-4" /> {t("loot.export_json")}
+            <FileUp aria-hidden="true" className="size-4" /> {t("loot.export_json")}
           </Button>
           <Button variant="outline" onClick={() => exportAll("csv")} className="gap-1">
-            <FileUp aria-hidden="true" className="w-4 h-4" /> {t("loot.export_csv")}
+            <FileUp aria-hidden="true" className="size-4" /> {t("loot.export_csv")}
           </Button>
           {selectedItems.size > 0 && (
             <Button variant="destructive" onClick={deleteSelected} className="gap-1">
-              <Trash2 aria-hidden="true" className="w-4 h-4" /> {t("loot.delete_selected", { count: selectedItems.size })}
+              <Trash2 aria-hidden="true" className="size-4" /> {t("loot.delete_selected", { count: selectedItems.size })}
             </Button>
           )}
         </div>
@@ -230,7 +235,7 @@ function LootPage() {
         }
       >
       <Tabs value={curTab} onValueChange={(v) => { setActiveTab(v as LootTab); setSelectedItems(new Set()); setScreenshotPage(1); setKeylogPage(1); setDownloadPage(1); }}>
-        <TabsList className="mb-4">
+        <TabsList>
           {tabs.map(tab => (
             <TabsTrigger key={tab.key} value={tab.key} className="gap-2">
               {tab.icon}
@@ -244,7 +249,7 @@ function LootPage() {
         <Card className="p-(--card-spacing) shadow-sm hover:shadow-md transition-shadow duration-200">
           <div className="flex items-center justify-between mb-4">
             <div className="font-semibold flex items-center gap-x-2">
-              <Images aria-hidden="true" className="w-4 h-4" />
+              <Images aria-hidden="true" className="size-4" />
               <span>{t("loot.screenshots_title")}</span>
             </div>
             <div className="flex items-center gap-3">
@@ -271,9 +276,7 @@ function LootPage() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-12 text-muted-foreground">
               <EmptyState icon={Images} title={t("loot.empty_screenshots")} />
-            </div>
           )}
           {filteredScreenshots.length > SCREENSHOT_PAGE_SIZE && (
             <Pagination
@@ -290,7 +293,7 @@ function LootPage() {
         <Card className="p-(--card-spacing) shadow-sm hover:shadow-md transition-shadow duration-200">
           <div className="flex items-center justify-between mb-4 gap-2">
             <div className="font-semibold flex items-center gap-x-2">
-              <Keyboard aria-hidden="true" className="w-4 h-4" />
+              <Keyboard aria-hidden="true" className="size-4" />
               <span>{t("loot.keylogs_title")}</span>
             </div>
             <div className="flex items-center gap-2">
@@ -310,7 +313,7 @@ function LootPage() {
                       <AccordionHeader className="bg-muted/50">
                         <AccordionTrigger className="px-4 py-2 hover:bg-muted/80 flex-1">
                           <div className="flex items-center gap-x-3 w-full min-w-0">
-                            <Terminal aria-hidden="true" className="w-4 h-4 shrink-0" />
+                            <Terminal aria-hidden="true" className="size-4 shrink-0" />
                             <span className="font-medium text-sm truncate">{agentName}</span>
                             <span className="font-mono text-xs text-muted-foreground truncate hidden md:inline">{preview}</span>
                             <span className="ml-auto text-xs text-muted-foreground shrink-0">{formatTime(k.created_at)}</span>
@@ -322,7 +325,7 @@ function LootPage() {
                           <span className="text-xs text-muted-foreground">{t("loot.keylog")}</span>
                           <div className="flex items-center gap-1">
                             <CopyButton text={full} label={t("loot.keylog_copy")} size="icon-xs" />
-                            <Button variant="ghost" size="sm" onClick={() => downloadText(full, `keylog-${agentName}-${k.id}.txt`)} className="text-xs h-auto p-1 text-primary" aria-label={t("common.download")}><Download aria-hidden="true" className="w-4 h-4" /></Button>
+                            <Button variant="ghost" size="sm" onClick={() => downloadText(full, `keylog-${agentName}-${k.id}.txt`)} className="text-xs h-auto p-1 text-primary" aria-label={t("common.download")}><Download aria-hidden="true" className="size-4" /></Button>
                           </div>
                         </div>
                         <div className="bg-background text-success font-mono text-xs p-4 max-h-[500px] overflow-y-auto whitespace-pre-wrap break-all">
@@ -335,9 +338,7 @@ function LootPage() {
               </Accordion>
             </div>
           ) : (
-            <div className="text-center py-12 text-muted-foreground">
               <EmptyState icon={Keyboard} title={t("loot.empty_keylogs")} />
-            </div>
           )}
           {filteredKeylogs.length > KEYLOG_PAGE_SIZE && (
             <Pagination
@@ -354,7 +355,7 @@ function LootPage() {
         <Card className="p-(--card-spacing) shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden">
           <div className="flex items-center justify-between mb-4">
             <div className="font-semibold flex items-center gap-x-2">
-              <Download aria-hidden="true" className="w-4 h-4" />
+              <Download aria-hidden="true" className="size-4" />
               <span>{t("loot.downloads_title")}</span>
             </div>
             <span className="text-xs text-muted-foreground">{filteredDownloads.length}</span>
@@ -410,7 +411,7 @@ function LootPage() {
                             className="gap-1"
                             onClick={() => { void downloadExfil(d); }}
                           >
-                            <Download aria-hidden="true" className="w-3.5 h-3.5" />
+                            <Download aria-hidden="true" className="size-3.5" />
                             {t("loot.download_file")}
                           </Button>
                         ) : isLootUrlFetch(d.command) ? (
@@ -446,26 +447,26 @@ function LootPage() {
           <DialogContent className="max-w-5xl bg-transparent border-0 p-0" showCloseButton={false}>
             <div className="absolute top-4 right-4 flex gap-2 z-10">
               <a href={safeHref(lbUrl)} download className="inline-flex items-center gap-1">
-                <Button variant="secondary" className="gap-1"><Download aria-hidden="true" className="w-4 h-4" />{t("common.download")}</Button>
+                <Button variant="secondary" className="gap-1"><Download aria-hidden="true" className="size-4" />{t("common.download")}</Button>
               </a>
-              <Button variant="secondary" onClick={() => setLbIndex(-1)} className="w-10 h-10 p-0" aria-label={t("loot.close_screenshot")}>
-                <X aria-hidden="true" className="w-4 h-4" />
+              <Button variant="secondary" onClick={() => setLbIndex(-1)} className="size-10 p-0" aria-label={t("loot.close_screenshot")}>
+                <X aria-hidden="true" className="size-4" />
               </Button>
             </div>
             {lbIndex > 0 && (
-              <Button variant="secondary" onClick={() => setLbIndex((i) => Math.max(0, i - 1))} className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 p-0 rounded-full" aria-label={t("loot.lb_previous")}>
-                <ChevronLeft aria-hidden="true" className="w-4 h-4" />
+              <Button variant="secondary" onClick={() => setLbIndex((i) => Math.max(0, i - 1))} className="absolute left-3 top-1/2 -translate-y-1/2 size-10 p-0 rounded-full" aria-label={t("loot.lb_previous")}>
+                <ChevronLeft aria-hidden="true" className="size-4" />
               </Button>
             )}
             {lbIndex < lbScreenshots.length - 1 && (
-              <Button variant="secondary" onClick={() => setLbIndex((i) => Math.min(lbScreenshots.length - 1, i + 1))} className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 p-0 rounded-full" aria-label={t("loot.lb_next")}>
-                <ChevronRight aria-hidden="true" className="w-4 h-4" />
+              <Button variant="secondary" onClick={() => setLbIndex((i) => Math.min(lbScreenshots.length - 1, i + 1))} className="absolute right-3 top-1/2 -translate-y-1/2 size-10 p-0 rounded-full" aria-label={t("loot.lb_next")}>
+                <ChevronRight aria-hidden="true" className="size-4" />
               </Button>
             )}
             <div className="text-center text-xs text-white/80 bg-black/60 rounded-lg px-3 py-1.5 mb-2">
               {lbIndex + 1} / {lbScreenshots.length} · {lbCurrent.filename} · {formatTime(lbCurrent.created_at)}
             </div>
-            <img src={safeImageSrc(lbUrl)} alt={lbCurrent.filename} className="max-w-[95vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            <SafeImg src={safeImageSrc(lbUrl)} alt={lbCurrent.filename} className="max-w-[95vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" loading="lazy" />
           </DialogContent>
         </Dialog>
       )}

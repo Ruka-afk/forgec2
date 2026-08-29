@@ -153,16 +153,16 @@ export default function AutoTagPage() {
   return (
     <PageContainer title={t("autotag.title")} subtitle={t("autotag.subtitle")} actions={<>
         <Button onClick={handleApplyAll}>
-          <Play className="w-4 h-4" /> {t("autotag.apply_all")}
+          <Play className="size-4" /> {t("autotag.apply_all")}
         </Button>
         <Button onClick={() => { resetForm(); setShowForm(true); }}>
-          <Plus className="w-4 h-4" /> {t("autotag.new_rule")}
+          <Plus className="size-4" /> {t("autotag.new_rule")}
         </Button>
       </>}>
       {message && (
         <Banner tone={message.tone} className="mb-4 animate-fade-in" action={
           <Button variant="ghost" size="icon-sm" onClick={clearMessage} aria-label={t("common.dismiss")}>
-            <X className="w-4 h-4" />
+            <X className="size-4" />
           </Button>
         }>
           {message.text}
@@ -230,12 +230,12 @@ export default function AutoTagPage() {
                   className="flex-1"
                 />
                 <Button variant="ghost" size="icon-sm" onClick={() => removeCondition(i)} className="text-destructive hover:text-destructive hover:bg-destructive/10" aria-label={t("common.remove")}>
-                  <X className="w-4 h-4" />
+                  <X className="size-4" />
                 </Button>
               </div>
             ))}
             <Button variant="ghost" size="sm" onClick={addCondition} className="text-primary mt-1">
-              <Plus className="w-4 h-4" /> {t("autotag.add_condition")}
+              <Plus className="size-4" /> {t("autotag.add_condition")}
             </Button>
           </div>
 
@@ -265,13 +265,11 @@ export default function AutoTagPage() {
           ))}
         </div>
       ) : rules.length === 0 ? (
-        <div className="text-center py-16 sm:py-20 text-muted-foreground">
           <EmptyState icon={Wand2} title={t("autotag.empty_title")} message={t("autotag.empty_message")} />
-        </div>
       ) : (
         <div className="space-y-2">
           {rules.map((rule) => (
-            <Card key={rule.id} className="p-4 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
+            <Card key={rule.id} className="p-4 hover:shadow-lg dark:hover:shadow-xl transition-shadow">
               <div className="flex items-center gap-4">
                 <Switch checked={rule.enabled} onCheckedChange={() => handleToggle(rule.id)} aria-label={t("autotag.toggle_rule")} />
                 <div className="flex-1 min-w-0">
@@ -290,10 +288,10 @@ export default function AutoTagPage() {
                 </div>
                 <div className="flex gap-1 shrink-0">
                   <Button variant="outline" size="icon" onClick={() => editRule(rule)} aria-label={t("common.edit")}>
-                    <Pencil className="w-4 h-4" />
+                    <Pencil className="size-4" />
                   </Button>
                   <Button variant="destructive" size="icon" onClick={() => handleDelete(rule.id)} aria-label={t("common.delete")}>
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="size-4" />
                   </Button>
                 </div>
               </div>

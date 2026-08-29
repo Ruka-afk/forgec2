@@ -128,9 +128,24 @@ func (s *Server) handlePluginReport(c *gin.Context) {
 }
 
 func (s *Server) handlePluginInstall(c *gin.Context) {
+	id := c.Param("id")
+
 	manifestFile, err := c.FormFile("manifest")
 	if err != nil {
-		respondError(c, http.StatusBadRequest, "manifest file is required")
+		manifestFile = nil
+	}
+	if manifestFile == nil {
+		p, err := s.resolvePluginRecord(id)
+		if err != nil {
+			respondErrorSafe(c, http.StatusNotFound, err, "")
+			return
+		}
+		s.tryRegisterPluginFromDisk(p.Name)
+		if err := s.db.Model(&db.Plugin{}).Where("name = ?", p.Name).Update("enabled", true).Error; err != nil {
+			slog.Error("Failed to enable plugin record", "plugin", p.Name, "err", err)
+		}
+		s.LogAuditRecord(c, "plugin_install", "plugin", p.Name, fmt.Sprintf("enabled plugin %s", p.Name), true, nil)
+		c.JSON(http.StatusOK, gin.H{"success": true, "plugin": p.Name})
 		return
 	}
 	if manifestFile.Size > MaxUploadSize {
@@ -157,7 +172,6 @@ func (s *Server) handlePluginInstall(c *gin.Context) {
 		return
 	}
 
-	// Sanitize plugin name and entry to prevent path traversal
 	if strings.ContainsAny(manifest.Name, `/\..`) || manifest.Name == "" {
 		respondError(c, http.StatusBadRequest, "invalid plugin name: must not contain path separators or dots")
 		return

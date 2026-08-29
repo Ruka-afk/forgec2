@@ -40,8 +40,12 @@ export function exfilBasename(remotePath: string): string {
 }
 
 export function pullPlan(fileSize: number): { total: number; chunk: number; partial: boolean } {
+  // C7 fix: when file size is unknown (≤0), mark as partial so the pull loop
+  // keeps fetching until a short chunk arrives (length < chunk size), rather
+  // than assuming the file is exactly one EXFIL_CHUNK and showing 100% after
+  // the first chunk is received.
   if (!Number.isFinite(fileSize) || fileSize <= 0) {
-    return { total: EXFIL_CHUNK, chunk: EXFIL_CHUNK, partial: false };
+    return { total: EXFIL_CHUNK, chunk: EXFIL_CHUNK, partial: true };
   }
   if (fileSize > EXFIL_CAP) {
     return { total: EXFIL_CAP, chunk: EXFIL_CHUNK, partial: true };
@@ -79,12 +83,18 @@ export function transferPercent(p: Pick<TransferProgress, "offset" | "total">): 
 
 export function parseFindResult(result: string): string[] {
   if (!result || looksLikeFileTaskAckJson(result)) return [];
-  return result
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => line.split("\t")[0]?.trim() || "")
-    .filter(Boolean);
+  const out: string[] = [];
+  for (const raw of result.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith("=== downloaded")) break;
+    if (line.startsWith("#") || line.startsWith("===") || line === "path\tsize\tmtime\tstatus" || line.startsWith("path\t")) {
+      continue;
+    }
+    const path = line.split("\t")[0]?.trim() || "";
+    if (path) out.push(path);
+  }
+  return out;
 }
 
 export function fileReadPreview(result: string, isImage: boolean): { content: string; isImage: boolean } {

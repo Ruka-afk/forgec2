@@ -9,7 +9,7 @@ import {
   Radio, Server, Cloud, Box, Wrench, Code, Key,
   Route, IdCard, Archive, SatelliteDish, ArrowLeftRight,
   FileCode, Globe, Puzzle, Network, Crosshair, ClipboardList,
-  Plug, Users, Settings, Search,
+  Plug, Users, Settings, Search, ListOrdered,
 } from "lucide-react";
 
 interface NavItemDef {
@@ -25,6 +25,8 @@ interface NavItemDef {
    * authenticated operator. UI-only: backend stays authoritative.
    */
   perms?: PermissionKey[];
+  /** Page shell contract used by AppLayout and page-level containers. */
+  layout?: "standard" | "wide" | "workspace";
 }
 
 interface NavSectionDef {
@@ -36,7 +38,7 @@ interface NavSectionDef {
   items: NavItemDef[];
 }
 
-/** Primary console: 8 items. Everything else stays reachable via More + Ctrl+K. */
+/** Light-first command-center navigation. Low-frequency routes remain in More + Ctrl+K. */
 export const NAV_SECTIONS: NavSectionDef[] = [
   {
     titleKey: "operations",
@@ -45,18 +47,15 @@ export const NAV_SECTIONS: NavSectionDef[] = [
       { href: "/dashboard", labelKey: "nav.dashboard", icon: Activity, perms: ["agents.read"] },
       { href: "/agents", labelKey: "nav.beacons", icon: Bug, badge: "agents", perms: ["agents.read"] },
       { href: "/listeners", labelKey: "nav.listeners", icon: Radio, badge: "listeners", perms: ["listeners.read"] },
-      { href: "/generate", labelKey: "nav.generate", icon: Boxes, perms: ["agents.read"] },
-      { href: "/loot", labelKey: "nav.loot", icon: Archive, perms: ["agents.read"] },
-      { href: "/credentials", labelKey: "nav.credentials", icon: Key, perms: ["credentials.read"] },
       { href: "/timeline", labelKey: "nav.events", icon: Clock, perms: ["agents.read"] },
-      { href: "/settings", labelKey: "nav.settings", icon: Settings, perms: ["settings.read"] },
     ],
   },
   {
     titleKey: "build-deploy",
     items: [
-      { href: "/dns", labelKey: "nav.dns", icon: Network },
+      { href: "/generate", labelKey: "nav.generate", icon: Boxes, perms: ["agents.read"] },
       { href: "/infrastructure", labelKey: "nav.infrastructure", icon: Server },
+      { href: "/dns", labelKey: "nav.dns", icon: Network },
       { href: "/domain-fronting", labelKey: "nav.domain_fronting", icon: Cloud, perms: ["agents.read"] },
     ],
   },
@@ -64,6 +63,7 @@ export const NAV_SECTIONS: NavSectionDef[] = [
     titleKey: "post-exploitation",
     items: [
       { href: "/automation", labelKey: "nav.automation", icon: Bot, perms: ["automation.read"] },
+      { href: "/macros", labelKey: "nav.macros", icon: ListOrdered, perms: ["agents.read"] },
       { href: "/bof", labelKey: "nav.bof", icon: FileCode, perms: ["agents.read"] },
       { href: "/plugins", labelKey: "nav.plugins", icon: Puzzle, perms: ["plugins.read"] },
       { href: "/opsec", labelKey: "nav.opsec", icon: Shield, sidebar: false, perms: ["opsec.read"] },
@@ -80,16 +80,18 @@ export const NAV_SECTIONS: NavSectionDef[] = [
   {
     titleKey: "intel-analysis",
     items: [
+      { href: "/loot", labelKey: "nav.loot", icon: Archive, perms: ["agents.read"] },
+      { href: "/credentials", labelKey: "nav.credentials", icon: Key, perms: ["credentials.read"] },
       { href: "/search", labelKey: "nav.search", icon: Search },
       { href: "/audit", labelKey: "nav.audit", icon: Shield, perms: ["audit.read"] },
       { href: "/traffic", labelKey: "nav.traffic", icon: Network, perms: ["agents.read"] },
       { href: "/report", labelKey: "nav.report", icon: ClipboardList, perms: ["agents.read"] },
-      { href: "/ai", labelKey: "nav.ai", icon: Bot, perms: ["settings.read"] },
+      { href: "/ai", labelKey: "nav.ai", icon: Bot, layout: "workspace", perms: ["settings.read"] },
       { href: "/integrations", labelKey: "nav.integrations", icon: Plug, perms: ["settings.read"] },
       { href: "/campaign", labelKey: "nav.campaign", icon: Crosshair, sidebar: false, perms: ["campaigns.read"] },
       { href: "/attack", labelKey: "nav.attack", icon: Shield, sidebar: false, perms: ["campaigns.read"] },
       { href: "/bloodhound", labelKey: "nav.bloodhound", icon: Network, sidebar: false, perms: ["intel.read"] },
-      { href: "/chat", labelKey: "nav.chat", icon: MessageSquare, sidebar: false, perms: ["agents.read"] },
+      { href: "/chat", labelKey: "nav.chat", icon: MessageSquare, sidebar: false, layout: "workspace", perms: ["agents.read"] },
     ],
   },
   {
@@ -110,6 +112,7 @@ export const NAV_SECTIONS: NavSectionDef[] = [
     titleKey: "system",
     sidebar: false,
     items: [
+      { href: "/settings", labelKey: "nav.settings", icon: Settings, perms: ["settings.read"] },
       { href: "/users", labelKey: "nav.users", icon: Users, perms: ["users.read"] },
       { href: "/roles", labelKey: "nav.roles", icon: Shield, perms: ["roles.read"] },
       { href: "/tags", labelKey: "nav.tags", icon: Tags, perms: ["agents.write"] },
@@ -146,6 +149,10 @@ export const NAV_ITEMS: NavItemDef[] = NAV_SECTIONS.flatMap((s) => s.items);
 /** href -> labelKey for every top-level page. */
 export const NAV_BY_HREF: Record<string, string> = Object.fromEntries(
   NAV_ITEMS.map((i) => [i.href, i.labelKey]),
+);
+
+export const NAV_LAYOUT_BY_HREF: Record<string, "standard" | "wide" | "workspace"> = Object.fromEntries(
+  NAV_ITEMS.map((i) => [i.href, i.layout ?? "wide"]),
 );
 
 /** breadcrumb segment (dashes normalized to underscores) -> labelKey. */

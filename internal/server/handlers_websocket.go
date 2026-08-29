@@ -9,11 +9,12 @@ import (
 	"net/url"
 	"runtime/debug"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/server/middleware"
-	"github.com/gin-gonic/gin"
 	"github.com/forgec2/forgec2/internal/util"
+	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
 
@@ -56,7 +57,9 @@ var upgrader = websocket.Upgrader{
 type WebSocketBeacon struct {
 	Conn       *websocket.Conn
 	AgentID    string
-	LastSeen   time.Time
+	// lastSeenNano is atomic: written from the read pump's pong handler,
+	// read by duplicate-connection checks on other goroutines (P3-10).
+	lastSeenNano atomic.Int64
 	Send       chan []byte
 	BatchQueue [][]byte
 	BatchMutex sync.Mutex
@@ -64,6 +67,11 @@ type WebSocketBeacon struct {
 	flush      chan struct{}
 	closeOnce  sync.Once
 	compress   bool
+}
+
+func (b *WebSocketBeacon) touchLastSeen() { b.lastSeenNano.Store(time.Now().UnixNano()) }
+func (b *WebSocketBeacon) lastSeenAt() time.Time {
+	return time.Unix(0, b.lastSeenNano.Load())
 }
 
 // WebSocketHub manages all active WebSocket beacon connections
@@ -143,12 +151,12 @@ func (s *Server) handleWebSocketBeacon(c *gin.Context) {
 		return
 	}
 
-	// Allow agent to pass its persistent UUID via query parameter
 	agentID := c.Query("agent_id")
 	if agentID == "" {
 		agentID = util.NewString()
 	} else if !isValidAgentID(agentID) {
-		c.AbortWithStatus(http.StatusBadRequest)
+		conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseProtocolError, "invalid agent_id"))
+		conn.Close()
 		return
 	}
 
@@ -157,19 +165,27 @@ func (s *Server) handleWebSocketBeacon(c *gin.Context) {
 	beacon := &WebSocketBeacon{
 		Conn:       conn,
 		AgentID:    agentID,
-		LastSeen:   time.Now(),
 		Send:       make(chan []byte, 256),
 		BatchQueue: make([][]byte, 0, 16),
 		flush:      make(chan struct{}, 1),
 		compress:   true,
 	}
+	beacon.touchLastSeen()
 
-	// Initialize WebSocket hub if not exists
 	s.wsHubOnce.Do(func() {
 		if s.wsHub == nil {
 			s.wsHub = NewWebSocketHub()
 		}
 	})
+	if existing := s.wsHub.Get(agentID); existing != nil && existing != beacon {
+		existingLastSeen := existing.lastSeenAt()
+		if time.Since(existingLastSeen) < 30*time.Second {
+			slog.Warn("WebSocket hub: rejecting duplicate connection (recently active)", "agent_id", agentID)
+			conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "agent already connected"))
+			conn.Close()
+			return
+		}
+	}
 	s.wsHub.Register(agentID, beacon)
 
 	// Start read and write pumps
@@ -279,43 +295,94 @@ func (s *Server) flushBatchQueue(beacon *WebSocketBeacon) {
 	beacon.BatchQueue = beacon.BatchQueue[:0]
 	beacon.BatchMutex.Unlock()
 
+	// Keep the uncompressed form for retry: a gzip frame pushed back into the
+	// queue would be double-compressed on the next flush.
+	raw := data
+
 	if beacon.compress && len(data) > 256 {
 		var err error
 		data, err = gzipCompress(data)
 		if err != nil {
 			slog.Warn("WebSocket gzip compress failed, sending uncompressed", "agent_id", beacon.AgentID, "err", err)
 		} else {
-			s.sendCompressedMessage(beacon, data)
+			if serr := s.sendCompressedMessage(beacon, data); serr != nil {
+				s.requeueBatch(beacon, raw)
+			}
 			return
 		}
 	}
-	s.sendTextMessage(beacon, data)
+	if serr := s.sendTextMessage(beacon, data); serr != nil {
+		// A transient write failure must not silently drop the batch: the
+		// agent would wait forever on results that were never delivered.
+		s.requeueBatch(beacon, raw)
+	}
 }
 
-func (s *Server) sendTextMessage(beacon *WebSocketBeacon, data []byte) {
+// requeueBatch pushes an undelivered (uncompressed) batch back to the FRONT of
+// the queue so the next flush retries it. The retained backlog is bounded:
+// oversize batches are trimmed message-by-message from the front, and once
+// individual messages are exhausted a single oversized payload is kept as-is
+// (already bounded upstream by the per-result size caps).
+func (s *Server) requeueBatch(beacon *WebSocketBeacon, data []byte) {
+	const maxRetained = 8 * 1024 * 1024
+	beacon.BatchMutex.Lock()
+	defer beacon.BatchMutex.Unlock()
+
+	payload := data
+	for len(payload) > maxRetained {
+		var bm batchedMessage
+		if err := json.Unmarshal(payload, &bm); err != nil || len(bm.Messages) <= 1 {
+			break // cannot trim further without losing everything
+		}
+		out, err := json.Marshal(batchedMessage{Messages: bm.Messages[1:]})
+		if err != nil {
+			break
+		}
+		payload = out
+	}
+
+	queue := append([][]byte{payload}, beacon.BatchQueue...)
+	total := 0
+	kept := make([][]byte, 0, len(queue))
+	for _, b := range queue {
+		if total+len(b) > maxRetained {
+			slog.Warn("WebSocket requeue dropping backlog over retention cap", "agent_id", beacon.AgentID, "dropped_bytes", total+len(b))
+			continue
+		}
+		total += len(b)
+		kept = append(kept, b)
+	}
+	beacon.BatchQueue = kept
+}
+
+func (s *Server) sendTextMessage(beacon *WebSocketBeacon, data []byte) error {
 	beacon.Conn.SetWriteDeadline(time.Now().Add(BeaconWriteDeadline))
-	w, err := beacon.Conn.NextWriter(websocket.TextMessage)
+	w, err := beacon.Conn.NextWriter(websocket.BinaryMessage)
 	if err != nil {
 		slog.Error("WebSocket write error", "agent_id", beacon.AgentID, "error", err)
-		return
+		return err
 	}
 	w.Write(data)
 	if err := w.Close(); err != nil {
 		slog.Error("WebSocket close writer error", "agent_id", beacon.AgentID, "error", err)
+		return err
 	}
+	return nil
 }
 
-func (s *Server) sendCompressedMessage(beacon *WebSocketBeacon, data []byte) {
+func (s *Server) sendCompressedMessage(beacon *WebSocketBeacon, data []byte) error {
 	beacon.Conn.SetWriteDeadline(time.Now().Add(BeaconWriteDeadline))
 	w, err := beacon.Conn.NextWriter(websocket.BinaryMessage)
 	if err != nil {
 		slog.Error("WebSocket compressed write error", "agent_id", beacon.AgentID, "error", err)
-		return
+		return err
 	}
 	w.Write(data)
 	if err := w.Close(); err != nil {
 		slog.Error("WebSocket compressed close writer error", "agent_id", beacon.AgentID, "error", err)
+		return err
 	}
+	return nil
 }
 
 func (s *Server) wsReadPump(beacon *WebSocketBeacon) {
@@ -335,7 +402,7 @@ func (s *Server) wsReadPump(beacon *WebSocketBeacon) {
 	beacon.Conn.SetReadDeadline(time.Now().Add(BeaconReadDeadline))
 	beacon.Conn.SetPongHandler(func(string) error {
 		beacon.Conn.SetReadDeadline(time.Now().Add(BeaconReadDeadline))
-		beacon.LastSeen = time.Now()
+		beacon.touchLastSeen()
 		return nil
 	})
 
@@ -395,7 +462,8 @@ func (s *Server) wsReadPump(beacon *WebSocketBeacon) {
 			select {
 			case beacon.Send <- respJSON:
 			default:
-				slog.Warn("WebSocket send channel full", "agent_id", beacon.AgentID)
+				slog.Warn("WebSocket send channel full, closing connection", "agent_id", beacon.AgentID)
+				beacon.Conn.Close()
 			}
 		}()
 	}
@@ -408,7 +476,62 @@ type WSOperatorSession struct {
 	Username  string
 	Page      string
 	AgentView string
-	LastSeen  time.Time
+	// lastSeenNano is atomic: the read pump writes it on every frame while
+	// presence scans read it concurrently (P3-10 data race fix).
+	lastSeenNano atomic.Int64
+	writeMu      sync.Mutex // guards Conn.WriteMessage (gorilla requires single-writer)
+	// Outbound queue + dedicated writer goroutine: broadcasts must never do a
+	// synchronous socket write per session, or one wedged browser stalls every
+	// event-producing path (head-of-line blocking for ALL operators).
+	send     chan []byte
+	closeOnce sync.Once
+	done     chan struct{}
+}
+
+func (s *WSOperatorSession) touchLastSeen() { s.lastSeenNano.Store(time.Now().UnixNano()) }
+func (s *WSOperatorSession) lastSeenAt() time.Time {
+	return time.Unix(0, s.lastSeenNano.Load())
+}
+
+// enqueue delivers msg to the session's writer without blocking; a client
+// that falls a full buffer behind is disconnected instead of stalling the hub.
+func (s *WSOperatorSession) enqueue(msg []byte) {
+	select {
+	case s.send <- msg:
+	case <-s.done:
+	default:
+		// Buffer full: this operator cannot keep up. Drop the connection so
+		// the reader unblocks and cleanup runs.
+		s.closeOnce.Do(func() { close(s.done) })
+		s.Conn.Close()
+	}
+}
+
+// writePump drains the send queue onto the socket until done is closed.
+func (s *WSOperatorSession) writePump() {
+	for {
+		// Prefer exit when done is closed even if a queued message remains.
+		select {
+		case <-s.done:
+			return
+		default:
+		}
+		select {
+		case <-s.done:
+			return
+		case msg := <-s.send:
+			s.writeMu.Lock()
+			s.Conn.SetWriteDeadline(time.Now().Add(OperatorWriteDeadline))
+			err := s.Conn.WriteMessage(websocket.TextMessage, msg)
+			s.writeMu.Unlock()
+			if err != nil {
+				slog.Warn("Operator WS writer failed, dropping connection", "user", s.Username, "error", err)
+				s.closeOnce.Do(func() { close(s.done) })
+				s.Conn.Close()
+				return
+			}
+		}
+	}
 }
 
 // operatorSessions tracks connected operator WebSocket sessions.
@@ -434,8 +557,9 @@ func (t *operatorSessionTracker) remove(userID uint, s *WSOperatorSession) {
 	}
 }
 
-// BroadcastToOperators sends a message to all connected operator sessions.
-// Takes a snapshot of sessions under the lock, then writes without holding it.
+// BroadcastToOperators queues a message for all connected operator sessions.
+// Non-blocking by design: the per-session writer goroutine performs the
+// socket write, so a wedged client can never stall event producers.
 func (t *operatorSessionTracker) BroadcastToOperators(msg []byte) {
 	t.mu.Lock()
 	sessions := make([]*WSOperatorSession, 0, len(t.sessions))
@@ -445,12 +569,7 @@ func (t *operatorSessionTracker) BroadcastToOperators(msg []byte) {
 	t.mu.Unlock()
 
 	for _, session := range sessions {
-		session.Conn.SetWriteDeadline(time.Now().Add(OperatorWriteDeadline))
-		if err := session.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-			slog.Warn("Failed to send to operator, dropping connection", "user", session.Username, "error", err)
-			session.Conn.Close()
-			t.remove(session.UserID, session)
-		}
+		session.enqueue(msg)
 	}
 }
 
@@ -470,7 +589,7 @@ func (t *operatorSessionTracker) ActiveOperatorsForAgent(agentID string, exclude
 		if uid == excludeUserID {
 			continue
 		}
-		if s.AgentView == agentID && !s.LastSeen.Before(cutoff) {
+		if s.AgentView == agentID && !s.lastSeenAt().Before(cutoff) {
 			names = append(names, s.Username)
 		}
 	}
@@ -485,7 +604,7 @@ func (t *operatorSessionTracker) ActiveOperatorCount() int {
 	cutoff := time.Now().Add(-operatorHeartbeatTimeout)
 	count := 0
 	for _, s := range t.sessions {
-		if !s.LastSeen.Before(cutoff) {
+		if !s.lastSeenAt().Before(cutoff) {
 			count++
 		}
 	}
@@ -500,7 +619,7 @@ func (t *operatorSessionTracker) OperatorPresenceSnapshot() []map[string]interfa
 	cutoff := time.Now().Add(-operatorHeartbeatTimeout)
 	var ops []map[string]interface{}
 	for _, s := range t.sessions {
-		if !s.LastSeen.Before(cutoff) {
+		if !s.lastSeenAt().Before(cutoff) {
 			entry := map[string]interface{}{
 				"user": s.Username,
 			}
@@ -537,7 +656,7 @@ func (s *Server) broadcastOperatorPresence() {
 	}
 	ops := s.operatorSessions.OperatorPresenceSnapshot()
 	s.broadcastOperatorEvent(map[string]interface{}{
-		"type":     "operator_presence",
+		"type":      "operator_presence",
 		"operators": ops,
 	})
 }
@@ -585,22 +704,33 @@ func (s *Server) handleOperatorWS(c *gin.Context) {
 		Conn:     conn,
 		UserID:   claims.UserID,
 		Username: claims.Username,
-		LastSeen: time.Now(),
+		send:     make(chan []byte, 256),
+		done:     make(chan struct{}),
 	}
+	session.touchLastSeen()
 
 	s.wsHubOnce.Do(func() {
 		if s.wsHub == nil {
 			s.wsHub = NewWebSocketHub()
 		}
 	})
-	s.operatorSessions.add(session)
-
 	// Reconnect sync: every connect (fresh or re-established) receives the
 	// current build snapshot so a client that dropped events while offline
-	// converges immediately.
+	// converges immediately. Sent before registering the session so no
+	// broadcast can interleave with (and corrupt ordering of) the snapshot.
 	s.sendOperatorSyncSnapshot(conn)
 
+	s.operatorSessions.add(session)
+
+	// Dedicated outbound writer: all broadcasts flow through session.send.
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		session.writePump()
+	}()
+
 	defer func() {
+		session.closeOnce.Do(func() { close(session.done) })
 		s.operatorSessions.remove(session.UserID, session)
 		s.broadcastOperatorPresence()
 		conn.Close()
@@ -613,6 +743,35 @@ func (s *Server) handleOperatorWS(c *gin.Context) {
 		conn.SetReadDeadline(time.Now().Add(readDeadline))
 		return nil
 	})
+
+	// Protocol-level pings are what keep the session alive: the pong handler
+	// is the only code that refreshes the read deadline, so without a ping
+	// ticker the absolute 90s deadline expired and every operator session was
+	// force-disconnected exactly 90s after connect. The application-level
+	// JSON "ping" below does NOT refresh it.
+	//
+	// The ticker is owned INSIDE the goroutine and exits via session.done:
+	// time.Ticker.Stop() does not close its channel, so a `for range` loop
+	// parked on it leaked one goroutine per operator connect/disconnect.
+	go func() {
+		pingTicker := time.NewTicker(BeaconPingInterval)
+		defer pingTicker.Stop()
+		for {
+			select {
+			case <-session.done:
+				return
+			case <-pingTicker.C:
+			}
+			session.writeMu.Lock()
+			err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(OperatorWriteDeadline))
+			session.writeMu.Unlock()
+			if err != nil {
+				// Write failed: close so the blocked ReadJSON unblocks.
+				conn.Close()
+				return
+			}
+		}
+	}()
 
 	for {
 		var msg map[string]interface{}
@@ -629,12 +788,14 @@ func (s *Server) handleOperatorWS(c *gin.Context) {
 		case "agent_view":
 			if agentID, ok := msg["agent_id"].(string); ok {
 				session.AgentView = agentID
-				session.LastSeen = time.Now()
+				session.touchLastSeen()
 				s.broadcastOperatorPresence()
 			}
 		case "ping":
-			session.LastSeen = time.Now()
-			conn.WriteJSON(map[string]string{"type": "pong"})
+			session.touchLastSeen()
+			session.writeMu.Lock()
+			_ = conn.WriteJSON(map[string]string{"type": "pong"})
+			session.writeMu.Unlock()
 			s.broadcastOperatorPresence()
 		}
 	}

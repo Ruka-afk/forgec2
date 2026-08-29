@@ -14,9 +14,11 @@ export function useAIConfig() {
   const [apiKey, setApiKey] = useState("");
   const [endpoint, setEndpoint] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
+  const [engagementNotes, setEngagementNotes] = useState("");
   const [allowExecute, setAllowExecute] = useState(false);
   const [configSaving, setConfigSaving] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState(false);
 
   const loadConfig = useCallback(async () => {
     try {
@@ -27,7 +29,9 @@ export function useAIConfig() {
         if (cfg.model) setModel(cfg.model);
         if (cfg.endpoint) setEndpoint(cfg.endpoint);
         if (cfg.system_prompt) setSystemPrompt(cfg.system_prompt);
+        setEngagementNotes(typeof cfg.engagement_notes === "string" ? cfg.engagement_notes : "");
         setAllowExecute(Boolean(cfg.allow_execute));
+        setHasApiKey(Boolean(cfg.has_api_key));
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("ai.toast.load_config_failed"));
@@ -48,6 +52,7 @@ export function useAIConfig() {
         api_key: apiKey,
         endpoint,
         system_prompt: systemPrompt,
+        engagement_notes: engagementNotes,
         allow_execute: allowExecute,
       });
       if (data.success) {
@@ -71,6 +76,8 @@ export function useAIConfig() {
     setEndpoint,
     systemPrompt,
     setSystemPrompt,
+    engagementNotes,
+    setEngagementNotes,
     allowExecute,
     setAllowExecute,
     configSaving,
@@ -78,5 +85,6 @@ export function useAIConfig() {
     setShowSettings,
     loadConfig,
     handleSaveConfig,
+    hasApiKey,
   };
 }

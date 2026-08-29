@@ -26,9 +26,9 @@ export function ThemeSelector() {
   return (
     <Select value={theme} onValueChange={(v) => setTheme(v as Theme)}>
       <Tooltip>
-        <TooltipTrigger render={<SelectTrigger size="sm" className="w-8 h-8 p-0 justify-center" aria-label={t("topbar.theme")}>
+        <TooltipTrigger render={<SelectTrigger size="sm" className="size-8 p-0 justify-center" aria-label={t("topbar.theme")}>
             <SelectValue>
-              <ThemeIcon className="w-4 h-4" />
+              <ThemeIcon className="size-4" />
             </SelectValue>
           </SelectTrigger>} />
         <TooltipContent>{t("topbar.theme")}</TooltipContent>
@@ -38,7 +38,7 @@ export function ThemeSelector() {
           const Icon = THEME_ICONS[opt.value];
           return (
             <SelectItem key={opt.value} value={opt.value}>
-              <Icon className="w-4 h-4" />
+              <Icon className="size-4" />
               <span>{t(opt.labelKey)}</span>
             </SelectItem>
           );

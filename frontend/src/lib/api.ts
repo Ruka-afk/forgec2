@@ -19,7 +19,15 @@ export function getRateLimitRetryAfter(): number {
 function readCsrfCookie(): string {
   if (typeof document === "undefined") return "";
   const match = document.cookie.match(/(?:^|;\s*)forgec2_csrf=([^;]*)/);
-  return match ? decodeURIComponent(match[1]) : "";
+  if (!match) return "";
+  // A malformed cookie value ("%zz") must not throw URIError here — this
+  // runs synchronously before EVERY mutation request, and an uncaught throw
+  // would break all writes app-wide.
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
 }
 
 export function getCsrfToken(): string {
@@ -231,9 +239,20 @@ async function request<T>(path: string, options: RequestOptions & { body?: unkno
       if (timedOut) throw e;
       if (process.env.NODE_ENV === "development") logger.debug("api request failed", { path }, e);
       if (attempt >= retries) throw e;
-      return new Promise<T>((resolve) =>
-        setTimeout(() => resolve(doFetch(attempt + 1)), 800 * Math.pow(2, attempt))
-      );
+      return new Promise<T>((resolve, reject) => {
+        const onAbort = () => {
+          clearTimeout(delay);
+          reject(e instanceof Error ? e : new DOMException("Aborted", "AbortError"));
+        };
+        const delay = setTimeout(() => {
+          externalSignal?.removeEventListener("abort", onAbort);
+          resolve(doFetch(attempt + 1));
+        }, 800 * Math.pow(2, attempt));
+        // An abort during the backoff window must not fire the next attempt
+        // — and must settle this promise: clearTimeout alone would leave the
+        // caller awaiting forever (stuck spinner).
+        externalSignal?.addEventListener("abort", onAbort, { once: true });
+      });
     } finally {
       if (timer) clearTimeout(timer);
       externalSignal?.removeEventListener("abort", onExternalAbort);
@@ -434,7 +453,7 @@ function pollTaskWithCancel(
       if (signal.aborted) return fail(new Error("cancelled"));
       if (Date.now() > deadline) return fail(new Error("Agent did not respond within the timeout (is it online?)"));
       try {
-        const st = await api.get<TaskStatus>(paths.agents.task(agentId, taskId));
+        const st = await api.get<TaskStatus>(paths.agents.task(agentId, taskId), { signal });
         opts.onStatus?.(st);
         if (st.status === "completed" || st.status === "failed") return finish(st);
       } catch (err) {

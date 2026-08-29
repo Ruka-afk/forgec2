@@ -116,6 +116,8 @@ export function useCachedData<T>(
   const refresh = useCallback((): Promise<T> => {
     setLoading(true);
     setError(false);
+    cache.delete(key);
+    inflight.delete(key);
     const run = fetchCached<T>(key, fetcherRef.current, ttlRef.current)
       .then((value) => {
         setData(value);

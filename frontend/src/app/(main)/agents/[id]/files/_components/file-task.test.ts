@@ -43,7 +43,7 @@ describe("exfil helpers", () => {
   });
 
   it("caps a pull at 50 MiB and defaults unknown size to one chunk", () => {
-    expect(pullPlan(0)).toEqual({ total: EXFIL_CHUNK, chunk: EXFIL_CHUNK, partial: false });
+    expect(pullPlan(0)).toEqual({ total: EXFIL_CHUNK, chunk: EXFIL_CHUNK, partial: true });
     expect(pullPlan(128)).toEqual({ total: 128, chunk: EXFIL_CHUNK, partial: false });
     expect(pullPlan(EXFIL_CAP + 1)).toEqual({ total: EXFIL_CAP, chunk: EXFIL_CHUNK, partial: true });
   });
@@ -62,5 +62,8 @@ describe("exfil helpers", () => {
       "C:\\b.log",
     ]);
     expect(parseFindResult(JSON.stringify({ success: true, task_id: 9 }))).toEqual([]);
+    expect(parseFindResult("# file_hunt root=/tmp\npath\tsize\tmtime\tstatus\n/tmp/a.txt\t1\t2026-01-01 00:00\tlisted\n=== downloaded ===\n=== file path=/tmp/a.txt ===\n")).toEqual([
+      "/tmp/a.txt",
+    ]);
   });
 });

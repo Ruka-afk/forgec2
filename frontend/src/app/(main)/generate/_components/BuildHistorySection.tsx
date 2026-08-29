@@ -17,9 +17,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import type { BuildHistoryEntry } from "@/types/generate";
 
 const FORMAT_ICONS: Record<string, React.ReactNode> = {
-  exe: <AppWindow className="w-4 h-4" />, dll: <Puzzle className="w-4 h-4" />, ps1: <Terminal className="w-4 h-4" />,
-  linux: <HardDrive className="w-4 h-4" />, macos: <Apple className="w-4 h-4" />,
-  stager: <PackageOpen className="w-4 h-4" />, shellcode: <Binary className="w-4 h-4" />, donut: <Disc className="w-4 h-4" />,
+  exe: <AppWindow className="size-4" />, dll: <Puzzle className="size-4" />, ps1: <Terminal className="size-4" />,
+  linux: <HardDrive className="size-4" />, macos: <Apple className="size-4" />,
+  stager: <PackageOpen className="size-4" />, shellcode: <Binary className="size-4" />, donut: <Disc className="size-4" />,
 };
 
 export default function BuildHistorySection({ refreshKey }: { refreshKey?: number }) {
@@ -45,12 +45,12 @@ export default function BuildHistorySection({ refreshKey }: { refreshKey?: numbe
       <Collapsible open={expanded} onOpenChange={setExpanded}>
         <CollapsibleTrigger>
           <Button type="button" variant="ghost" className="flex items-center gap-x-3 mb-5 w-full text-left justify-start h-auto py-0">
-            <div className="w-10 h-10 bg-card ring-1 ring-border/50 rounded-lg flex items-center justify-center text-muted-foreground"><History className="w-4 h-4" /></div>
+            <div className="size-10 bg-card ring-1 ring-border/50 rounded-lg flex items-center justify-center text-muted-foreground"><History className="size-4" /></div>
             <div className="flex-1">
               <div className="text-sm font-semibold text-foreground">{t("builds.history_title")}</div>
               <div className="text-xs text-muted-foreground">{t("generate.history_recent", { count: builds.length })}</div>
             </div>
-            <ChevronDown className="w-3 h-3 text-muted-foreground transition-transform" data-rotate={expanded ? "180" : undefined} />
+            <ChevronDown className="size-3 text-muted-foreground transition-transform" data-rotate={expanded ? "180" : undefined} />
           </Button>
         </CollapsibleTrigger>
         <CollapsibleContent>
@@ -80,18 +80,18 @@ export default function BuildHistorySection({ refreshKey }: { refreshKey?: numbe
                       <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatTime(b.created_at)}</TableCell>
                       <TableCell>
                         <span className="inline-flex items-center gap-x-1.5 text-xs font-medium text-muted-foreground">
-                          <span className="text-muted-foreground/70">{FORMAT_ICONS[b.format]}</span>
+                          <span className="text-muted-foreground/100">{FORMAT_ICONS[b.format]}</span>
                           <span className="uppercase">{b.format}</span>
                         </span>
                       </TableCell>
                       <TableCell className="text-xs font-mono text-muted-foreground">{b.filename || "\u2014"}</TableCell>
                       <TableCell>
                         {b.status === "success" ? (
-                          <Badge variant="success" className="text-xs gap-1"><CheckCircle2 className="w-4 h-4" /> {t("builds.success")}</Badge>
+                          <Badge variant="success" className="text-xs gap-1"><CheckCircle2 className="size-4" /> {t("builds.success")}</Badge>
                         ) : (
                           <Tooltip>
                             <TooltipTrigger>
-                              <Badge variant="destructive" className="text-xs gap-1"><XCircle className="w-4 h-4" /> {t("builds.error")}</Badge>
+                              <Badge variant="destructive" className="text-xs gap-1"><XCircle className="size-4" /> {t("builds.error")}</Badge>
                             </TooltipTrigger>
                             <TooltipContent>{b.error}</TooltipContent>
                           </Tooltip>

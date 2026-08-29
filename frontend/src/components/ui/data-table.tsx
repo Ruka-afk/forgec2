@@ -125,9 +125,8 @@ export function DataTable<T>({
     return [...data].sort((a, b) => {
       const va = col.sortValue!(a);
       const vb = col.sortValue!(b);
-      if (va < vb) return -1 * dir;
-      if (va > vb) return 1 * dir;
-      return 0;
+      if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
+      return String(va).localeCompare(String(vb), undefined, { numeric: true }) * dir;
     });
   }, [data, sort, columns]);
 
@@ -138,6 +137,9 @@ export function DataTable<T>({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
+  const [measuredRowHeight, setMeasuredRowHeight] = useState(rowHeight);
+  const rowHeightRef = useRef(rowHeight);
+  useEffect(() => { rowHeightRef.current = rowHeight; setMeasuredRowHeight(rowHeight); }, [rowHeight]);
 
   const shouldVirtualize = virtualize && !pagination && rows.length > VIRTUAL_THRESHOLD;
 
@@ -152,15 +154,34 @@ export function DataTable<T>({
     return () => ro.disconnect();
   }, [shouldVirtualize]);
 
+  useEffect(() => {
+    if (!shouldVirtualize) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    const probe = () => {
+      const tr = el.querySelector<HTMLElement>("tbody tr[data-row-key]");
+      if (tr && tr.offsetHeight > 0 && Math.abs(tr.offsetHeight - rowHeightRef.current) > 1) {
+        rowHeightRef.current = tr.offsetHeight;
+        setMeasuredRowHeight(tr.offsetHeight);
+      }
+    };
+    probe();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(probe);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [shouldVirtualize]);
+
+  const effRowHeight = shouldVirtualize ? measuredRowHeight : rowHeight;
   const range = useMemo(
-    () => computeVirtualRange(rows.length, rowHeight, scrollTop, viewportHeight, overscan),
-    [rows.length, rowHeight, scrollTop, viewportHeight, overscan],
+    () => computeVirtualRange(rows.length, effRowHeight, scrollTop, viewportHeight, overscan),
+    [rows.length, effRowHeight, scrollTop, viewportHeight, overscan],
   );
 
   const visibleRows = shouldVirtualize ? rows.slice(range.start, range.end) : rows;
   const spacerTop = shouldVirtualize ? range.offsetTop : 0;
   const spacerBottom = shouldVirtualize
-    ? range.totalHeight - range.offsetTop - visibleRows.length * rowHeight
+    ? range.totalHeight - range.offsetTop - visibleRows.length * effRowHeight
     : 0;
 
   return (
@@ -211,7 +232,7 @@ export function DataTable<T>({
           ref={scrollRef}
           onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
           className={cn(
-            "relative overflow-auto",
+            "relative overflow-auto scrollbar-thin [scrollbar-gutter:stable]",
             shouldVirtualize && "border rounded-lg border-border bg-background",
           )}
           style={shouldVirtualize ? { maxHeight } : undefined}
@@ -269,10 +290,13 @@ export function DataTable<T>({
                 return (
                   <TableRow
                     key={rowKey(row, index)}
+                    data-row-key={rowKey(row, index)}
                     className={cn(onRowClick && "cursor-pointer")}
-                    style={shouldVirtualize ? { height: rowHeight } : undefined}
+                    style={shouldVirtualize ? { height: effRowHeight } : undefined}
                     onClick={onRowClick ? () => onRowClick(row) : undefined}
                     tabIndex={onRowClick ? 0 : undefined}
+                    role={onRowClick ? "button" : undefined}
+                    aria-label={onRowClick ? `Open ${String(columns[0]?.id ?? "row")}` : undefined}
                     onKeyDown={
                       onRowClick
                         ? (e) => {

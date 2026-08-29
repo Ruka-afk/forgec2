@@ -70,6 +70,7 @@ export default defineConfig(({ command, mode }) => ({
           if (id.includes("@base-ui")) return "vendor-baseui";
           if (id.includes("lucide-react")) return "vendor-icons";
           if (id.includes("dompurify")) return "vendor-dompurify";
+          if (id.includes("html-to-image")) return "vendor-html2image";
           if (id.includes("zod")) return "vendor-zod";
           if (id.includes("sonner")) return "vendor-sonner";
           // react-interop CJS packages (use-sync-external-store etc.) do a

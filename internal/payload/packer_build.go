@@ -127,12 +127,15 @@ func BuildArtifact(req BuildArtifactRequest, dataDir string) ([]byte, string, er
 		tmpl.BenignImports = strings.Split(req.ImportDLLs, ",")
 	}
 
-	// Certificate signing is not implemented; offering it as an option and
-	// then producing an unsigned binary would be a silent fake.
+	// Certificate options: "none" leaves the image unsigned; "self_signed"
+	// embeds an Authenticode signature generated with a throwaway self-signed
+	// certificate (applied below once payloadData exists). Anything else would
+	// silently produce an unsigned binary and is refused.
 	switch tmpl.CertOption {
 	case "", CertNone:
+	case CertSelfSigned:
 	default:
-		return nil, "", artifactValidationError("certificate option %q is not implemented; only \"none\" is supported", tmpl.CertOption)
+		return nil, "", artifactValidationError("certificate option %q is not supported; use \"none\" or \"self_signed\"", tmpl.CertOption)
 	}
 
 	entry, err := normalizeEntryPoint(req.EntryPoint, tmpl.EntryPointTechnique)
@@ -231,10 +234,24 @@ func BuildArtifact(req BuildArtifactRequest, dataDir string) ([]byte, string, er
 			ApplyPESectionNames(payloadData, tmpl.PESections)
 		}
 		if tmpl.ImportManipulation && len(tmpl.BenignImports) > 0 {
-			if err := AddBenignImports(payloadData, tmpl.BenignImports); err != nil {
+			patched, err := AddBenignImports(payloadData, tmpl.BenignImports)
+			if err != nil {
 				return nil, "", artifactValidationError("%s", err)
 			}
+			payloadData = patched
 		}
+		// Authenticode signing runs last: the signature covers every byte of
+		// the final image (modulo the checksum/security-directory fields the
+		// digest zeroes), so any later mutation would invalidate it.
+		if tmpl.CertOption == CertSelfSigned {
+			signed, err := SignPESelfSigned(payloadData, tmpl.CertOrg)
+			if err != nil {
+				return nil, "", artifactValidationError("self-signed signing: %v", err)
+			}
+			payloadData = signed
+		}
+	} else if tmpl.CertOption == CertSelfSigned {
+		return nil, "", artifactValidationError("cert_option self_signed requires a PE output type; shellcode blobs cannot carry a certificate table")
 	}
 
 	ext := ".bin"

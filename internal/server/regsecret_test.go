@@ -49,14 +49,18 @@ func TestEnsureV3RegSecretCreatesAndClearsKey(t *testing.T) {
 	}
 }
 
+// TestEnsureV3RegSecretEmptyKeyFails pins the P2-4 fix: an empty
+// server.beacon_key must REFUSE generation — processAuthFrame rejects any
+// frame without a SecretID, so a passthrough produced implants that could
+// never register while the build endpoints returned success.
 func TestEnsureV3RegSecretEmptyKeyPassthrough(t *testing.T) {
 	s := newRegSecretServer(t, make([]byte, 32))
 	id, secret, cleared, err := s.ensureV3RegSecret("")
-	if err != nil {
-		t.Fatalf("ensureV3RegSecret: %v", err)
+	if err == nil {
+		t.Fatal("empty beacon_key must fail generation (dead payload otherwise)")
 	}
 	if id != "" || secret != "" || cleared != "" {
-		t.Fatalf("empty master key must be returned unchanged, got id=%q secret=%q cleared=%q", id, secret, cleared)
+		t.Fatalf("no secret material should be returned on failure, got id=%q secret=%q cleared=%q", id, secret, cleared)
 	}
 }
 

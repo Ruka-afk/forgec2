@@ -68,9 +68,17 @@ func (s *Server) handleLateralHistory(c *gin.Context) {
 	}
 	q.Order("created_at desc").Limit(50).Find(&tasks)
 
+	// Real total: the 50-row cap made the stats card report ≤50 forever.
+	var total int64
+	countQ := s.db.Model(&db.Task{}).Where("type = 'lateral'")
+	if agentID != "all" {
+		countQ = countQ.Where("agent_id = ?", agentID)
+	}
+	countQ.Count(&total)
+
 	c.JSON(http.StatusOK, gin.H{
 		"tasks": tasks,
-		"total": len(tasks),
+		"total": total,
 	})
 }
 

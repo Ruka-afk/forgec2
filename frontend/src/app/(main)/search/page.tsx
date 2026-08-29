@@ -92,7 +92,7 @@ function SearchContent() {
                 "rounded-lg border border-transparent hover:border-primary/30 hover:bg-muted/50 dark:hover:bg-muted/30 hover:shadow-sm",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
               )}>
-              <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold shrink-0", typeColors[r.type] || "bg-muted/50 text-muted-foreground")}>
+              <div className={cn("size-10 rounded-lg flex items-center justify-center text-sm font-bold shrink-0", typeColors[r.type] || "bg-muted/50 text-muted-foreground")}>
                 {r.icon}
               </div>
               <div className="flex-1 min-w-0">
@@ -102,7 +102,7 @@ function SearchContent() {
                 </div>
                 <p className="text-xs text-muted-foreground truncate">{r.subtitle}</p>
               </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+              <ChevronRight className="size-4 text-muted-foreground shrink-0" />
             </Link>
           ))}
         </div>

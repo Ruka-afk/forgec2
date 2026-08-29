@@ -34,8 +34,8 @@ func (s *Server) handleDashboard(c *gin.Context) {
 	// second placeholder, preserving pre-multi-tenant counts.
 	s.db.Raw(`
 		SELECT
-			(SELECT COUNT(*) FROM implants WHERE (tenant_id = ? OR ? = 0)) AS total_agents,
-			(SELECT COUNT(*) FROM implants WHERE last_seen > ? AND (tenant_id = ? OR ? = 0)) AS online_agents,
+			(SELECT COUNT(*) FROM implants WHERE (tenant_id = ? OR ? = 0) AND deleted_at IS NULL) AS total_agents,
+			(SELECT COUNT(*) FROM implants WHERE last_seen > ? AND (tenant_id = ? OR ? = 0) AND deleted_at IS NULL) AS online_agents,
 			(SELECT COUNT(*) FROM tasks WHERE created_at >= ? AND (tenant_id = ? OR ? = 0)) AS today_tasks,
 			(SELECT COUNT(*) FROM tasks WHERE status = 'pending' AND (tenant_id = ? OR ? = 0)) AS pending_tasks,
 			(SELECT COUNT(*) FROM tasks WHERE status = 'failed' AND (tenant_id = ? OR ? = 0)) AS failed_tasks,
@@ -124,7 +124,7 @@ func (s *Server) getNavStats(c *gin.Context) gin.H {
 			COALESCE(SUM(CASE WHEN last_seen > ? THEN 1 ELSE 0 END), 0) as online,
 			COALESCE(SUM(CASE WHEN last_seen > ? AND last_seen <= ? THEN 1 ELSE 0 END), 0) as stale,
 			COALESCE(SUM(CASE WHEN last_seen <= ? THEN 1 ELSE 0 END), 0) as offline
-		FROM implants WHERE (tenant_id = ? OR ? = 0)`, offlineCutoff, offlineCutoff, staleCutoff, offlineCutoff, tid, tid,
+		FROM implants WHERE (tenant_id = ? OR ? = 0) AND deleted_at IS NULL`, offlineCutoff, offlineCutoff, staleCutoff, offlineCutoff, tid, tid,
 	).Scan(&as)
 	online = as.Online
 	stale = as.Stale

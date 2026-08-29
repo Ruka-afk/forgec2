@@ -44,7 +44,7 @@ export function useSettingsData() {
   const [serverForm, setServerForm] = useState<ServerForm>(defaultServerForm);
   const [malleableForm, setMalleableForm] = useState<MalleableForm>(defaultMalleableForm);
   const [passwordForm, setPasswordForm] = useState<PasswordForm>({ current: "", next: "", confirm: "" });
-  const [theme, setTheme] = useState("dark");
+  const [theme, setTheme] = useState("light");
   const [language, setLanguage] = useState("zh");
 
   const loadSettings = useCallback(async () => {

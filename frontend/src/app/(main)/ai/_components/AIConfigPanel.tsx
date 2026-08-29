@@ -2,7 +2,6 @@
 
 import { useI18n } from "@/lib/i18n";
 import { Spinner } from "@/components/ui/spinner";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,6 +22,8 @@ interface AIConfigPanelProps {
   setEndpoint: (v: string) => void;
   systemPrompt: string;
   setSystemPrompt: (v: string) => void;
+  engagementNotes: string;
+  setEngagementNotes: (v: string) => void;
   allowExecute: boolean;
   setAllowExecute: (v: boolean) => void;
   configSaving: boolean;
@@ -35,22 +36,26 @@ export function AIConfigPanel(props: AIConfigPanelProps) {
   const {
     provider, setProvider, model, setModel, apiKey, setApiKey,
     endpoint, setEndpoint, systemPrompt, setSystemPrompt,
+    engagementNotes, setEngagementNotes,
     allowExecute, setAllowExecute, configSaving, onClose, onSave,
   } = props;
 
   return (
-    <Card className="shrink-0 mb-3 p-(--card-spacing)">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-foreground">{t("ai.config_title")}</h2>
+    <div className="min-h-full bg-card">
+      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border/75 bg-card/95 px-5 py-4 backdrop-blur">
+        <div>
+          <h2 className="text-base font-semibold text-foreground">{t("ai.config_title")}</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">{provider} · {model || t("ai.model_custom")}</p>
+        </div>
         <Button variant="ghost" size="icon" onClick={onClose} aria-label={t("ai.close_settings")}>
-          <X className="w-4 h-4" />
+          <X className="size-4" />
         </Button>
       </div>
-      <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-2 cursor-pointer">
+      <div className="space-y-5 p-5">
+        <div className="flex items-center gap-3 rounded-xl border border-success/20 bg-success/8 px-3 py-2.5">
+          <span className="flex items-center gap-2">
             <StatusDot tone="success" size="sm" />
-            <span className="text-sm text-muted-foreground">{t("ai.enable_ai")}</span>
+            <span className="text-sm font-medium text-foreground">{t("ai.enable_ai")}</span>
           </span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -65,6 +70,7 @@ export function AIConfigPanel(props: AIConfigPanelProps) {
                 <SelectItem value="openai">OpenAI</SelectItem>
                 <SelectItem value="claude">Claude</SelectItem>
                 <SelectItem value="qianwen">Qianwen</SelectItem>
+                <SelectItem value="zhipu">Zhipu (GLM)</SelectItem>
                 <SelectItem value="longcat">LongCat</SelectItem>
                 <SelectItem value="custom">{t("ai.model_custom")}</SelectItem>
               </SelectContent>
@@ -88,6 +94,11 @@ export function AIConfigPanel(props: AIConfigPanelProps) {
           <span className="block text-xs text-muted-foreground mb-1">{t("ai.system_prompt")}</span>
           <Textarea aria-label={t("ai.system_prompt")} value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} rows={3} className="w-full text-xs resize-y" />
         </div>
+        <div>
+          <span className="block text-xs text-muted-foreground mb-1">{t("ai.engagement_notes")}</span>
+          <Textarea aria-label={t("ai.engagement_notes")} value={engagementNotes} onChange={(e) => setEngagementNotes(e.target.value)} rows={4} className="w-full text-xs resize-y font-mono" />
+          <span className="block text-(--fs-xs-sm) text-muted-foreground mt-0.5">{t("ai.engagement_notes_hint")}</span>
+        </div>
         <Label className="flex items-start gap-3 cursor-pointer select-none">
           <Checkbox checked={allowExecute} onCheckedChange={(v) => setAllowExecute(v === true)} className="mt-1" />
           <span>
@@ -95,10 +106,10 @@ export function AIConfigPanel(props: AIConfigPanelProps) {
             <span className="block text-(--fs-xs-sm) text-warning mt-0.5">{t("ai.allow_execute_warn")}</span>
           </span>
         </Label>
-        <Button type="button" onClick={onSave} size="lg" disabled={configSaving} className="w-full">
+        <Button type="button" onClick={onSave} size="lg" disabled={configSaving} className="sticky bottom-4 w-full shadow-lg">
           {configSaving ? <><Spinner size="xs" className="mr-2" />{t("common.saving")}</> : t("common.save")}
         </Button>
       </div>
-    </Card>
+    </div>
   );
 }

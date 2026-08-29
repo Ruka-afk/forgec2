@@ -110,17 +110,17 @@ export default function RolesPage() {
     return perms.includes(perm) ? perms.filter(p => p !== perm) : [...perms, perm];
   };
 
-  if (loading) return <PageContainer title={t("roles.title")} icon={<ShieldUser className="w-4 h-4" />} subtitle={t("roles.subtitle")}><PageSpinner /></PageContainer>;
+  if (loading) return <PageContainer title={t("roles.title")} icon={<ShieldUser className="size-4" />} subtitle={t("roles.subtitle")}><PageSpinner /></PageContainer>;
 
   return (
     <Permission perms="roles.read" fallback={
-      <PageContainer title={t("roles.title")} icon={<ShieldUser className="w-4 h-4" />} subtitle={t("roles.subtitle")}>
+      <PageContainer title={t("roles.title")} icon={<ShieldUser className="size-4" />} subtitle={t("roles.subtitle")}>
         <ErrorState title={t("common.denied_title")} message={t("common.denied_desc")} />
       </PageContainer>
     }>
-      <PageContainer title={t("roles.title")} icon={<ShieldUser className="w-4 h-4" />} subtitle={t("roles.subtitle")} actions={<>
+      <PageContainer title={t("roles.title")} icon={<ShieldUser className="size-4" />} subtitle={t("roles.subtitle")} actions={<>
           <Button onClick={() => setShowCreate(true)}>
-            <Plus className="w-4 h-4" />{t("roles.new_role")}
+            <Plus className="size-4" />{t("roles.new_role")}
           </Button>
         </>}>
 
@@ -148,7 +148,7 @@ export default function RolesPage() {
             <EmptyState title={t("roles.empty")} />
           )}
           {roles.map((role) => (
-            <Card key={role.id} className="p-4 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30 transition-all cursor-pointer">
+            <Card key={role.id} interactive className="p-4">
               {editRole?.id === role.id ? (
                 <div className="space-y-3">
                   <Input aria-label={t("roles.a11y_name")} value={editRole.name}
@@ -173,10 +173,10 @@ export default function RolesPage() {
                       <Button variant="outline" size="sm" onClick={() => {
                         setEditRole({ ...role, permissions: [...role.permissions] });
                       }}>
-                        <Pencil className="w-4 h-4" />
+                        <Pencil className="size-4" />
                       </Button>
                       <Button variant="destructive" size="sm" onClick={() => handleDelete(role.id)}>
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="size-4" />
                       </Button>
                     </div>
                   </div>

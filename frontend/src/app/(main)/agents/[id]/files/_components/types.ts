@@ -52,7 +52,11 @@ export function parentPath(currentPath: string, osType: "windows" | "linux"): st
   parts.pop();
   if (osType === "linux") return "/" + parts.join("/");
   const parent = parts.join("\\");
-  return parent ? parent + "\\" : "C:\\";
+  // C14 fix: derive the drive letter root from the original path instead of
+  // hardcoding "C:\\". This ensures "Up" from "D:\foo" goes to "D:\", not "C:\\".
+  const driveMatch = cleaned.match(/^([A-Za-z]:)/);
+  const fallback = driveMatch ? driveMatch[1] + "\\" : "C:\\";
+  return parent ? parent + "\\" : fallback;
 }
 
 export function parseDrives(raw: RawDrive[]): DriveInfo[] {

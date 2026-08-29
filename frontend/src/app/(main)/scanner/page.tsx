@@ -22,6 +22,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Crosshair, FileCode, FileSpreadsheet, History, Inbox, Info, Play, Radar } from "lucide-react";
 
 interface ScanAgent {
@@ -180,13 +181,13 @@ export default function ScannerPage() {
   };
 
   return (
-    <PageContainer title={t("scanner.title")} icon={<Radar className="w-4 h-4" />} subtitle={t("scanner.subtitle")} contentClassName="space-y-6">
+    <PageContainer title={t("scanner.title")} icon={<Radar className="size-4" />} subtitle={t("scanner.subtitle")}>
       <Banner tone="warning" className="items-start">
         <div className="font-semibold">{t("scanner.honesty_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("scanner.honesty_desc")}</div>
       </Banner>
 
-      <Card className="p-(--card-spacing) gap-0 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
+      <Card className="p-(--card-spacing) gap-0 hover:shadow-lg dark:hover:shadow-xl transition-shadow">
         <div className="flex items-center gap-x-3 mb-5">
           <IconBadge icon={Radar} color="info" size="lg" />
           <div>
@@ -255,20 +256,20 @@ export default function ScannerPage() {
 
           <div className="flex items-center gap-3 pt-2">
             <Button onClick={handleStartScan} disabled={scanning || !selectedAgent || !targetAddr}>
-              {scanning ? <Spinner size="xs" className="mr-1" /> : <Play className="w-4 h-4" />}
+              {scanning ? <Spinner size="xs" className="mr-1" /> : <Play className="size-4" />}
               <span>{scanning ? t("scanner.scanning") : t("scanner.start_scan")}</span>
             </Button>
             <span className="text-xs text-muted-foreground">
-              <Info className="w-4 h-4" />
+              <Info className="size-4" />
                {t("scanner.scan_bg_hint")}            </span>
           </div>
         </div>
       </Card>
 
       {(data?.active_scans?.length ?? 0) > 0 && (
-        <Card className="p-(--card-spacing) gap-0 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
+        <Card className="p-(--card-spacing) gap-0 hover:shadow-lg dark:hover:shadow-xl transition-shadow">
           <div className="flex items-center gap-x-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-warning/10 ring-1 ring-warning/10 flex items-center justify-center shrink-0">
+            <div className="size-10 rounded-xl bg-warning/10 ring-1 ring-warning/10 flex items-center justify-center shrink-0">
               <Spinner size="xs" />
             </div>
             <div>
@@ -288,7 +289,7 @@ export default function ScannerPage() {
                 <div key={scanId} className="bg-muted rounded-lg p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <Crosshair className="w-4 h-4" />
+                      <Crosshair className="size-4" />
                       <span className="text-sm font-medium text-foreground font-mono">{target}</span>
                        <Badge variant="outline">{type}</Badge>
                     </div>
@@ -303,7 +304,7 @@ export default function ScannerPage() {
         </Card>
       )}
 
-      <Card className="py-0 gap-0 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
+      <Card className="py-0 gap-0 hover:shadow-lg dark:hover:shadow-xl transition-shadow">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
         <div className="flex items-center justify-between px-4 py-3 sm:px-5 sm:py-3.5 border-b border-border">
             <TabsList>
@@ -316,10 +317,10 @@ export default function ScannerPage() {
           {activeTab === "results" && (
             <div className="flex items-center gap-2">
               <Button variant="secondary" size="sm" onClick={() => handleExport("csv")} className="text-muted-foreground">
-                <FileSpreadsheet className="w-4 h-4" />CSV
+                <FileSpreadsheet className="size-4" />CSV
               </Button>
               <Button variant="secondary" size="sm" onClick={() => handleExport("json")} className="text-muted-foreground">
-                <FileCode className="w-4 h-4" />JSON
+                <FileCode className="size-4" />JSON
               </Button>
             </div>
           )}
@@ -368,10 +369,7 @@ export default function ScannerPage() {
                 </TableBody>
               </Table>
             ) : (
-              <div className="text-center py-16 sm:py-20 text-muted-foreground dark:text-muted-foreground">
-                <Inbox className="w-4 h-4" />
-                <p>{t("scanner.no_results")}</p>
-              </div>
+              <EmptyState icon={Inbox} title={t("scanner.no_results")} />
             )}
           </TabsContent>
 
@@ -398,7 +396,7 @@ export default function ScannerPage() {
               </div>
             ) : (
               <div className="text-center py-16 sm:py-20 text-muted-foreground dark:text-muted-foreground">
-                <Inbox className="w-4 h-4" />
+                <Inbox className="size-4" />
                 <p>{t("scanner.no_active")}</p>
               </div>
             )}
@@ -436,7 +434,7 @@ export default function ScannerPage() {
               </Table>
             ) : (
               <div className="text-center py-16 sm:py-20 text-muted-foreground dark:text-muted-foreground">
-                <History className="w-4 h-4" />
+                <History className="size-4" />
                 <p>{t("scanner.no_history")}</p>
               </div>
             )}

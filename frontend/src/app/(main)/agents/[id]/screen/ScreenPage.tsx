@@ -10,12 +10,14 @@ import { Spinner } from "@/components/ui/spinner";
 import { Card } from "@/components/ui/card";
 import { PageContainer } from "@/components/ui/page-container";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { SafeImg } from "@/components/ui/safe-img";
 import { toast } from "sonner";
 import { Camera, Clock, Download, ImageIcon, Images, Maximize2, Monitor, Play, RotateCw, Square, TriangleAlert, X, Zap } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
@@ -38,6 +40,8 @@ interface ScreenshotItem {
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [screenshotGallery, setScreenshotGallery] = useState<ScreenshotItem[]>([]);
   const [lastUpdate, setLastUpdate] = useState<string>("-");  const [interval, setInterval_] = useState(3);
+  const [triggerMatch, setTriggerMatch] = useState("");
+  const [triggerOn, setTriggerOn] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [modalImage, setModalImage] = useState<string>("");  const [resolution, setResolution] = useState<{ width: number; height: number } | null>(null);  const [status, setStatus] = useState<"waiting" | "capturing" | "error">("waiting");
@@ -48,6 +52,26 @@ interface ScreenshotItem {
   const pendingFrameRef = useRef<{ data: string; width?: number; height?: number; windowName: string } | null>(null);
   const [wsLive, setWsLive] = useState(false);
   const { subscribe } = useWS();
+
+  // C3 fix: reset monitoring state when agent id changes (Next.js reuses
+  // the component instance when only the [id] param changes).
+  const prevIdRef = useRef(id);
+  useEffect(() => {
+    if (prevIdRef.current !== id) {
+      if (monitoringRef.current) {
+        monitoringRef.current = false;
+        setMonitoring(false);
+        setMonitoringStatus("waiting");
+        setWsLive(false);
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        api.post(paths.agents.screenStop(prevIdRef.current)).catch(() => {});
+      }
+      setScreenshot(null);
+      setScreenshotGallery([]);
+      lastFrameRef.current = null;
+      prevIdRef.current = id;
+    }
+  }, [id]);
 
   // Cap the in-memory gallery: each entry is a full-size base64 frame, so
   // keeping dozens of them pinned in React state costs real memory.
@@ -149,6 +173,33 @@ interface ScreenshotItem {
     }
   };
 
+  const startTitleTrigger = async () => {
+    if (!id) return;
+    const match = triggerMatch.trim();
+    if (!match) {
+      toast.error(t("agents.screen_trigger_need_match"));
+      return;
+    }
+    try {
+      await api.post(paths.agents.screenTriggerStart(id), { match, interval: String(interval) });
+      setTriggerOn(true);
+      toast.success(t("agents.screen_trigger_started"));
+    } catch (err) {
+      toast.error(String(err));
+    }
+  };
+
+  const stopTitleTrigger = async () => {
+    if (!id) return;
+    try {
+      await api.post(paths.agents.screenTriggerStop(id), {});
+      setTriggerOn(false);
+      toast.success(t("agents.screen_trigger_stopped"));
+    } catch (err) {
+      toast.error(String(err));
+    }
+  };
+
   const handleWindowScreenshot = async () => {
     if (!id) return;
     setStatus("capturing");
@@ -217,71 +268,72 @@ interface ScreenshotItem {
 
   const statusIndicator = () => {
     if (status === "capturing") return { color: "bg-warning animate-pulse", text: t("screen.capturing"), icon: <Spinner size="xs" /> };
-    if (status === "error") return { color: "bg-destructive", text: t("screen.error"), icon: <TriangleAlert className="w-3 h-3" /> };
-    if (monitoring && monitoringStatus === "connected") return { color: "bg-success/60 animate-pulse", text: t("agents.rdp_connected"), icon: <span className="w-1.5 h-1.5 rounded-full bg-current" /> };
-    return { color: "bg-muted-foreground", text: t("agents.rdp_standby"), icon: <span className="w-1.5 h-1.5 rounded-full bg-current" /> };
+    if (status === "error") return { color: "bg-destructive", text: t("screen.error"), icon: <TriangleAlert className="size-3" /> };
+    if (monitoring && monitoringStatus === "connected") return { color: "bg-success/60 animate-pulse", text: t("agents.rdp_connected"), icon: <span className="size-1.5 rounded-full bg-current" /> };
+    return { color: "bg-muted-foreground", text: t("agents.rdp_standby"), icon: <span className="size-1.5 rounded-full bg-current" /> };
   };
 
   const indicator = statusIndicator();
 
   return (
-    <PageContainer>
-      <div className="flex flex-col h-[calc(100vh-4rem)]">        <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+    <PageContainer className="h-full px-4 py-3 sm:px-6">
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-bold text-foreground flex items-center gap-2">
-              <Monitor className="w-4 h-4" />
+              <Monitor className="size-4" />
               {t("agents.screen_title")}
             </h1>
             <Badge variant="secondary" className="text-xs font-mono">{id}</Badge>
             {resolution && (
               <Badge variant="outline" className="text-xs flex items-center gap-1">
-                <Maximize2 className="w-4 h-4" />{resolution.width} x {resolution.height}
+                <Maximize2 className="size-4" />{resolution.width} x {resolution.height}
               </Badge>
             )}          </div>
           <div className="flex items-center gap-2 flex-wrap">
             {!monitoring ? (              <Button onClick={startMonitoring}
                 className="disabled:opacity-50 text-sm px-4 h-9 rounded-lg transition-colors flex items-center gap-1.5 font-medium shadow-sm">
-                <Play className="w-4 h-4" />
+                <Play className="size-4" />
                 {t("agents.screen_start")}
               </Button>
             ) : (
               <Button onClick={stopMonitoring}
                 className="bg-destructive hover:bg-destructive/90 text-destructive-foreground text-sm px-4 h-9 rounded-lg transition-colors flex items-center gap-1.5 font-medium shadow-sm">
-                <Square className="w-4 h-4" />                {t("agents.screen_stop")}
+                <Square className="size-4" />                {t("agents.screen_stop")}
               </Button>
             )}
             <Button onClick={handleManualCapture} disabled={status === "capturing"}
               className="bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground text-sm px-4 h-9 rounded-lg transition-colors flex items-center gap-1.5 font-medium shadow-sm">
-              <Camera className="w-4 h-4" />
+              <Camera className="size-4" />
               {t("agents.screen_capture")}
             </Button>
             <Button onClick={handleWindowScreenshot} disabled={status === "capturing"}
               className="bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground text-sm px-4 h-9 rounded-lg transition-colors flex items-center gap-1.5 font-medium shadow-sm">
-              <Maximize2 className="w-4 h-4" />              {t("agents.screen_window_capture")}            </Button>
+              <Maximize2 className="size-4" />              {t("agents.screen_window_capture")}            </Button>
             <Button onClick={() => screenshot && handleDownloadScreenshot()} disabled={!screenshot}
               className="bg-muted hover:bg-border disabled:opacity-50 disabled:cursor-not-allowed text-foreground text-sm px-4 h-9 rounded-lg transition-colors flex items-center gap-1.5 font-medium shadow-sm">
-              <Download className="w-4 h-4" />              {t("agents.screen_download")}
+              <Download className="size-4" />              {t("agents.screen_download")}
             </Button>          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 min-h-0">          <div className="lg:col-span-3 flex flex-col min-h-0">
             <Card className="overflow-hidden flex-1 flex flex-col min-h-0">
               <div className="bg-muted px-4 py-2.5 flex items-center justify-between border-b border-border shrink-0">                <div className="flex items-center gap-2">
-                  <Monitor className="w-4 h-4" />
+                  <Monitor className="size-4" />
                   <span className="text-sm font-medium text-foreground">{t("agents.screen_live_view")}</span>                </div>
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   <span className={`flex items-center gap-1.5 ${status === "error" ? "text-destructive" : ""}`}>
-                    <span className={`w-2 h-2 rounded-full ${indicator.color}`}></span>
+                    <span className={`size-2 rounded-full ${indicator.color}`}></span>
                     {indicator.icon}
                     {indicator.text}                  </span>
-                   <span className="hidden sm:inline text-muted-foreground/70">
-                     <Clock className="w-4 h-4" />
+                   <span className="hidden sm:inline text-muted-foreground/100">
+                     <Clock className="size-4" />
                      {lastUpdate}
                    </span>
                   {monitoring && (
                     <Tooltip>
                       <TooltipTrigger>
-                        <span className="ml-1 w-2 h-2 bg-success rounded-full animate-pulse"></span>
+                        <span className="ml-1 size-2 bg-success rounded-full animate-pulse"></span>
                       </TooltipTrigger>
                       <TooltipContent>{t("agents.screen_monitoring_active")}</TooltipContent>
                     </Tooltip>
@@ -290,7 +342,7 @@ interface ScreenshotItem {
                     <Tooltip>
                       <TooltipTrigger>
                         <span className="text-(--fs-micro-sm) text-chart-1 flex items-center gap-1">
-                          <Zap className="w-4 h-4" /> WS
+                          <Zap className="size-4" /> WS
                         </span>
                       </TooltipTrigger>
                       <TooltipContent>{t("agents.screen_ws_live")}</TooltipContent>
@@ -300,11 +352,9 @@ interface ScreenshotItem {
               </div>              <div className="relative bg-background flex-1 flex items-center justify-center cursor-pointer overflow-hidden"
                 onClick={() => screenshot && openModal(screenshot)}>
                 {screenshot ? (
-                  <img src={safeImageSrc(screenshot)} alt={t("agents.screenshot")} width={resolution?.width || undefined} height={resolution?.height || undefined} style={{ aspectRatio: resolution ? `${resolution.width} / ${resolution.height}` : undefined }} className="max-w-full max-h-full object-contain" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  <SafeImg src={safeImageSrc(screenshot)} alt={t("agents.screenshot")} width={resolution?.width || undefined} height={resolution?.height || undefined} style={{ aspectRatio: resolution ? `${resolution.width} / ${resolution.height}` : undefined }} className="max-w-full max-h-full object-contain" loading="lazy" />
                 ) : (
-                  <div className="text-center text-muted-foreground/70 py-20">
-                    <EmptyState icon={Monitor} title={t("agents.screen_no_screenshots")} message={`${t("agents.screen_start")} / ${t("agents.screen_capture")}`} />
-                  </div>
+                  <EmptyState icon={Monitor} title={t("agents.screen_no_screenshots")} message={`${t("agents.screen_start")} / ${t("agents.screen_capture")}`} />
                 )}
                 {status === "capturing" && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
@@ -319,13 +369,13 @@ interface ScreenshotItem {
             <Card className="p-4 shrink-0">
               <div className="text-xs text-muted-foreground mb-3 font-semibold uppercase tracking-wider flex items-center justify-between">
                 <span>{t("agents.screen_controls")}</span>
-                 <span className={`flex items-center gap-1.5 text-(--fs-micro-sm) font-normal ${monitoring ? "text-success" : "text-muted-foreground/70"}`}>                  <StatusDot tone={monitoring ? "success" : "muted"} size="xs" pulse={monitoring} />                  {monitoring ? t("screen.live") : t("screen.off")}
+                 <span className={`flex items-center gap-1.5 text-(--fs-micro-sm) font-normal ${monitoring ? "text-success" : "text-muted-foreground/100"}`}>                  <StatusDot tone={monitoring ? "success" : "muted"} size="xs" pulse={monitoring} />                  {monitoring ? t("screen.live") : t("screen.off")}
                 </span>
               </div>
               <div className="space-y-3">
                 <div>
                   <span className="block text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
-                    <Clock className="w-4 h-4" />
+                    <Clock className="size-4" />
                     {t("agents.screen_interval")}
                   </span>
                   <Select value={String(interval)} onValueChange={(v) => { if (v !== null) setInterval_(Number(v)); }}>
@@ -341,27 +391,45 @@ interface ScreenshotItem {
                   </Select>
                 </div>                <div className="flex items-center justify-between">
                   <span className="text-xs text-muted-foreground flex items-center gap-1">
-                    <RotateCw className="w-4 h-4" />
+                    <RotateCw className="size-4" />
                     {t("agents.screen_auto_refresh")}
                   </span>
                   <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} />
                 </div>
                 <div className="border-t border-border pt-3">
+                  <span className="block text-xs text-muted-foreground mb-1.5">{t("agents.screen_trigger")}</span>
+                  <Input
+                    value={triggerMatch}
+                    onChange={(e) => setTriggerMatch(e.target.value)}
+                    placeholder={t("agents.screen_trigger_placeholder")}
+                    className="mb-2"
+                  />
+                  {!triggerOn ? (
+                    <Button size="sm" className="w-full" onClick={() => void startTitleTrigger()}>
+                      {t("agents.screen_trigger_start")}
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="destructive" className="w-full" onClick={() => void stopTitleTrigger()}>
+                      {t("agents.screen_trigger_stop")}
+                    </Button>
+                  )}
+                </div>
+                <div className="border-t border-border pt-3">
                   <span className="block text-xs text-muted-foreground mb-2 flex items-center gap-1">
-                    <ImageIcon className="w-4 h-4" aria-hidden="true" /> {t("screen.quick_capture")}                  </span>
+                    <ImageIcon className="size-4" aria-hidden="true" /> {t("screen.quick_capture")}                  </span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">                    <Button onClick={handleManualCapture} disabled={status === "capturing"}
                       className="px-2 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs transition-colors flex items-center justify-center gap-1 disabled:opacity-50">
-                      <Camera className="w-4 h-4" /> {t("agents.screen_capture")}                    </Button>
+                      <Camera className="size-4" /> {t("agents.screen_capture")}                    </Button>
                     <Button onClick={handleWindowScreenshot} disabled={status === "capturing"}
                       className="px-2 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs transition-colors flex items-center justify-center gap-1 disabled:opacity-50">
-                      <Maximize2 className="w-4 h-4" /> {t("agents.screen_window_capture")}
+                      <Maximize2 className="size-4" /> {t("agents.screen_window_capture")}
                     </Button>
                   </div>
                 </div>
                 {resolution && (
                   <div className="border-t border-border pt-3">
                     <span className="block text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
-                      <Maximize2 className="w-4 h-4" /> {t("screen.resolution")}                    </span>
+                      <Maximize2 className="size-4" /> {t("screen.resolution")}                    </span>
                      <div className="bg-muted rounded-lg px-3 py-2 text-sm font-mono text-foreground">
                       {resolution.width} &times; {resolution.height}
                     </div>
@@ -373,7 +441,7 @@ interface ScreenshotItem {
             <Card className="p-4 flex-1 min-h-0 flex flex-col">
               <div className="flex items-center justify-between mb-3 shrink-0">
                 <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1">
-                  <Images className="w-4 h-4" aria-hidden="true" /> {t("agents.screen_gallery")}
+                  <Images className="size-4" aria-hidden="true" /> {t("agents.screen_gallery")}
                 </div>
                 <Badge variant="secondary" className="text-(--fs-micro-sm)">{screenshotGallery.length}</Badge>
               </div>
@@ -382,7 +450,7 @@ interface ScreenshotItem {
                   {screenshotGallery.map((item) => (
                     <div key={item.id} className="relative group cursor-pointer rounded-lg overflow-hidden border-2 border-transparent hover:border-primary transition-colors bg-muted"
                       onClick={() => openModal(item.data || "")}>
-                      <img src={safeImageSrc(item.data)} alt={t("agents.screen_alt_thumb")} className="w-full h-auto aspect-video object-cover" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 py-1 text-(--fs-micro) text-white opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                      <SafeImg src={safeImageSrc(item.data)} alt={t("agents.screen_alt_thumb")} className="w-full h-auto aspect-video object-cover" loading="lazy" />                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 py-1 text-(--fs-micro) text-white opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                         {item.timestamp}
                       </div>
                       <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
@@ -390,13 +458,13 @@ interface ScreenshotItem {
                           onClick={(e) => { e.stopPropagation(); handleDownloadScreenshot(item.data, `screen_${id}_${item.timestamp?.replace(/[:\s/]/g, "_")}.png`); }}
                           className="bg-black/60 hover:bg-black/80 text-white p-1 rounded text-(--fs-micro) transition-colors h-auto"
                         >
-                          <Download className="w-4 h-4" />
+                          <Download className="size-4" />
                         </Button>
                       </div>
                     </div>
                   ))}
                 </div>              ) : (
-                <div className="text-center py-6 text-muted-foreground/70 text-xs flex-1 flex flex-col items-center justify-center">                  <ImageIcon className="w-4 h-4" aria-hidden="true" />                  <p>{t("agents.screen_no_screenshots")}</p>
+                <div className="text-center py-6 text-muted-foreground/100 text-xs flex-1 flex flex-col items-center justify-center">                  <ImageIcon className="size-4" aria-hidden="true" />                  <p>{t("agents.screen_no_screenshots")}</p>
                 </div>
               )}            </Card>
           </div>        </div>
@@ -409,7 +477,7 @@ interface ScreenshotItem {
                     onClick={() => handleDownloadScreenshot(modalImage)}
                     className="text-white/80 hover:text-white p-2 rounded-full bg-black/30 hover:bg-black/50 transition-colors h-auto"
                   />}>
-                  <Download className="w-4 h-4" />
+                  <Download className="size-4" />
                 </TooltipTrigger>
                 <TooltipContent>{t("agents.screen_download")}</TooltipContent>
               </Tooltip>
@@ -418,12 +486,12 @@ interface ScreenshotItem {
                     onClick={() => setShowModal(false)}
                     className="text-white/80 hover:text-white p-2 rounded-full bg-black/30 hover:bg-black/50 transition-colors h-auto"
                   />}>
-                  <X className="w-4 h-4" />
+                  <X className="size-4" />
                 </TooltipTrigger>
                 <TooltipContent>{t("common.close")}</TooltipContent>
               </Tooltip>
             </div>
-            <img src={safeImageSrc(modalImage)} alt={t("agents.screen_alt_full")} className="max-w-full max-h-[90vh] rounded-lg shadow-2xl" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            <SafeImg src={safeImageSrc(modalImage)} alt={t("agents.screen_alt_full")} className="max-w-full max-h-[90vh] rounded-lg shadow-2xl" loading="lazy" />
           </div>
         </DialogContent>
       </Dialog>

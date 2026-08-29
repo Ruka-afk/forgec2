@@ -39,6 +39,9 @@ export function useAgentFiles(agentId: string) {
   const [showDrives, setShowDrives] = useState(false);
   const [findPattern, setFindPattern] = useState("");
   const [findResults, setFindResults] = useState<string[]>([]);
+  const [huntDownload, setHuntDownload] = useState(false);
+  const [usbOutput, setUsbOutput] = useState("");
+  const [showUsb, setShowUsb] = useState(false);
   const [osType, setOsType] = useState<"windows" | "linux">("windows");
   const uploadAbortRef = useRef<AbortController | null>(null);
   const lsAbortRef = useRef<AbortController | null>(null);
@@ -113,6 +116,10 @@ export function useAgentFiles(agentId: string) {
       const os = await detectOs();
       if (cancelled) return;
       const initialPath = os === "linux" ? "/" : "C:\\";
+      // Sync the visible path immediately: if the first ls fails (agent
+      // offline), the input would otherwise keep showing "C:\" on Linux.
+      setCurrentPath(initialPath);
+      setCurrentPathInput(initialPath);
       void loadDirectory(initialPath);
     })();
     return () => {
@@ -287,6 +294,42 @@ export function useAgentFiles(agentId: string) {
     }
   }, [agentId, findPattern, currentPath, showToast, t]);
 
+  const huntFiles = useCallback(async () => {
+    if (!findPattern.trim()) return;
+    try {
+      showToast(t("agents.files_find_queued"), "info");
+      const data = await api.post(paths.agents.fileHunt(agentId), {
+        pattern: findPattern,
+        path: currentPath,
+        download: huntDownload ? "1" : "0",
+      });
+      const taskId = fileTaskId(data);
+      if (!taskId) throw new Error(t("agents.files_find_failed"));
+      const st = await pollTask(agentId, taskId, { timeoutMs: 180_000 });
+      if (st.status === "failed") throw new Error(st.error || t("agents.files_find_failed"));
+      const results = parseFindResult(st.result || "");
+      setFindResults(results);
+      showToast(t("agents.files_found_results", { n: results.length }), results.length > 0 ? "success" : "info");
+    } catch (err) {
+      showToast(String(err), "error");
+    }
+  }, [agentId, findPattern, currentPath, huntDownload, showToast, t]);
+
+  const loadUsb = useCallback(async () => {
+    try {
+      showToast(t("agents.files_usb_waiting"), "info");
+      const data = await api.post(paths.agents.usbEnum(agentId));
+      const taskId = fileTaskId(data);
+      if (!taskId) throw new Error(t("agents.files_usb_failed"));
+      const st = await pollTask(agentId, taskId, { timeoutMs: 90_000 });
+      if (st.status === "failed") throw new Error(st.error || t("agents.files_usb_failed"));
+      setUsbOutput(st.result || "");
+      setShowUsb(true);
+    } catch (err) {
+      showToast(String(err), "error");
+    }
+  }, [agentId, showToast, t]);
+
   const quickPaths = useMemo(
     () =>
       osType === "linux"
@@ -332,6 +375,11 @@ export function useAgentFiles(agentId: string) {
     setFindPattern,
     findResults,
     setFindResults,
+    huntDownload,
+    setHuntDownload,
+    usbOutput,
+    showUsb,
+    setShowUsb,
     osType,
     quickPaths,
     loadDirectory,
@@ -341,6 +389,8 @@ export function useAgentFiles(agentId: string) {
     deleteFile,
     uploadFile,
     loadDrives,
+    loadUsb,
     findFiles,
+    huntFiles,
   };
 }

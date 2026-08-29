@@ -4,9 +4,9 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 const AVATAR_SIZES = {
-  sm: "w-7 h-7 text-xs",
-  md: "w-9 h-9 text-sm",
-  lg: "w-12 h-12 text-base",
+  sm: "size-7 text-xs",
+  md: "size-9 text-sm",
+  lg: "size-12 text-base",
 } as const;
 
 const AVATAR_SHAPES = {

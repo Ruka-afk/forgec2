@@ -100,6 +100,66 @@ func getProcessList() (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+// procNode is one row of a process-tree listing (PID + parent PID).
+type procNode struct {
+	PID  int
+	PPID int
+	User string
+	Name string
+}
+
+func getProcessTree() (string, error) {
+	nodes, err := listProcessesForTree()
+	if err != nil {
+		return "", err
+	}
+	if len(nodes) == 0 {
+		return "", fmt.Errorf("no processes enumerated")
+	}
+	return formatProcessTree(nodes), nil
+}
+
+func formatProcessTree(nodes []procNode) string {
+	children := make(map[int][]procNode, len(nodes))
+	byPID := make(map[int]procNode, len(nodes))
+	for _, n := range nodes {
+		byPID[n.PID] = n
+		if n.PPID != n.PID {
+			children[n.PPID] = append(children[n.PPID], n)
+		}
+	}
+	var roots []procNode
+	for _, n := range nodes {
+		if _, ok := byPID[n.PPID]; !ok || n.PPID == n.PID || n.PPID == 0 {
+			roots = append(roots, n)
+		}
+	}
+	var b strings.Builder
+	b.WriteString("PID\tPPID\tUSER\tNAME\n")
+	seen := make(map[int]bool, len(nodes))
+	var walk func(procNode, int)
+	walk = func(n procNode, depth int) {
+		if seen[n.PID] {
+			return
+		}
+		seen[n.PID] = true
+		indent := strings.Repeat("  ", depth)
+		b.WriteString(fmt.Sprintf("%s%d\t%d\t%s\t%s\n", indent, n.PID, n.PPID, n.User, n.Name))
+		for _, c := range children[n.PID] {
+			walk(c, depth+1)
+		}
+	}
+	for _, r := range roots {
+		walk(r, 0)
+	}
+	for _, n := range nodes {
+		if !seen[n.PID] {
+			walk(n, 0)
+		}
+	}
+	return b.String()
+}
+
 // listDirectory lists a directory with simple tabular output (Type Name Size Modified)
 func listDirectory(path string) (string, error) {
 	if path == "" {
@@ -198,9 +258,13 @@ func listServices() (string, error) {
 	return string(out), nil
 }
 
-func portScan(target string) (string, error) {
+func portScan(target string, network ...string) (string, error) {
 	// target like "192.168.1.1:80,443" or "10.0.0.1-10:22"
-	parts := strings.Split(target, ":")
+	netw := "tcp"
+	if len(network) > 0 && network[0] != "" {
+		netw = network[0]
+	}
+	parts := strings.SplitN(target, ":", 2)
 	if len(parts) != 2 {
 		return "", fmt.Errorf("format: ip:ports or ip:port1,port2")
 	}
@@ -211,7 +275,7 @@ func portScan(target string) (string, error) {
 	for _, ip := range ips {
 		for _, port := range ports {
 			addr := net.JoinHostPort(strings.TrimSpace(ip), strings.TrimSpace(port))
-			conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+			conn, err := net.DialTimeout(netw, addr, 2*time.Second)
 			if err == nil {
 				results = append(results, addr+" open")
 				conn.Close()

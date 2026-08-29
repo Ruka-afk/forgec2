@@ -32,12 +32,16 @@ export const StatCard = memo(function StatCard({
 }) {
   const [displayValue, setDisplayValue] = useState<number | string>(typeof value === "number" ? 0 : value);
   const animatedRef = useRef<number>(0);
+  const rafRef = useRef<number>(0);
 
   useEffect(() => {
     if (typeof value !== "number") {
       setDisplayValue(value);
       return;
     }
+    // Cancel any in-flight chain: rapid value updates would otherwise stack
+    // competing animations, and unmount would leave rAF running forever.
+    cancelAnimationFrame(rafRef.current);
     const target = value;
     const duration = 600;
     const start = performance.now();
@@ -50,9 +54,10 @@ export const StatCard = memo(function StatCard({
       const current = Math.round(startVal + (target - startVal) * eased);
       animatedRef.current = current;
       setDisplayValue(current);
-      if (progress < 1) requestAnimationFrame(animate);
+      if (progress < 1) rafRef.current = requestAnimationFrame(animate);
     };
-    requestAnimationFrame(animate);
+    rafRef.current = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(rafRef.current);
   }, [value]);
 
   const colors = hueStyles[resolveHue(color)];
@@ -61,19 +66,17 @@ export const StatCard = memo(function StatCard({
 
   return (
     <Card
+      interactive
       style={style}
-      className={cn(
-        "p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30",
-        className
-      )}
+      className={cn("p-5", className)}
     >
       <div className={cn("flex items-start justify-between", iconSide === "left" && "flex-row-reverse")}>
         <div className="flex-1 min-w-0">
-          <p className="mono-eyebrow text-muted-foreground/70">{label}</p>
+          <p className="mono-eyebrow text-muted-foreground/100">{label}</p>
           <p className="mt-1.5 text-(--fs-stat-value) font-bold leading-none text-foreground font-mono font-variant-numeric tabular-nums" aria-live="polite">{displayValue}</p>
           <div className={cn("flex items-center gap-1.5 mt-2 min-h-4", iconSide === "left" && "justify-start")}>
             {dot && (
-              <span className={cn("w-1.5 h-1.5 rounded-full", dotClasses, "animate-pulse")} />
+              <span className={cn("size-1.5 rounded-full", dotClasses, "animate-pulse")} />
             )}
             {sub && <p className={cn("text-xs", subColor || colors.text)}>{sub}</p>}
           </div>
@@ -81,7 +84,7 @@ export const StatCard = memo(function StatCard({
         {icon && (
           <div
             className={cn(
-              "w-9 h-9 rounded-lg flex items-center justify-center shrink-0 shadow-sm ring-1 ring-border/50",
+              "size-9 rounded-lg flex items-center justify-center shrink-0 shadow-sm ring-1 ring-border/50",
               colors.bg,
               colors.glow
             )}

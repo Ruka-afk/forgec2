@@ -55,6 +55,8 @@ export default function ChromeC2Page() {
     { value: "chrome_storage", label: t("chrome.task_storage") },
     { value: "chrome_clipboard", label: t("chrome.task_clipboard") },
     { value: "chrome_idle", label: t("chrome.task_idle") },
+    { value: "chrome_screenshot", label: t("chrome.task_screenshot") },
+    { value: "chrome_c2", label: t("chrome.task_status") },
   ];
 
   const { data, loading, error, refresh: fetchAgents } = useApiResource<{ agents: ChromeAgent[] }>({
@@ -95,19 +97,19 @@ export default function ChromeC2Page() {
       : "bg-destructive";
     return (
       <Badge variant={variant} className="gap-1.5">
-        <span className={`w-1.5 h-1.5 rounded-full ${dot}`}></span>
+        <span className={`size-1.5 rounded-full ${dot}`}></span>
         {status}
       </Badge>
     );
   };
 
   return (
-      <PageContainer title={t("chrome.title")} icon={<Globe className="w-4 h-4 text-primary" />} subtitle={`${agents.length} extension agent${agents.length !== 1 ? "s" : ""} ${t("chrome.connected")}`} actions={<>
+      <PageContainer title={t("chrome.title")} icon={<Globe className="size-4 text-primary" />} subtitle={`${agents.length} extension agent${agents.length !== 1 ? "s" : ""} ${t("chrome.connected")}`} actions={<>
         <a
           href="/forgec2-chrome-c2.zip"
         >
           <Button size="sm">
-            <Download className="w-4 h-4" />{t("chrome.download_ext")}
+            <Download className="size-4" />{t("chrome.download_ext")}
           </Button>
         </a>
       </>}>
@@ -126,9 +128,7 @@ export default function ChromeC2Page() {
                 <h3 className="text-sm font-semibold text-foreground">{t("chrome.agents")}</h3>
               </div>
               {agents.length === 0 ? (
-                <div className="py-16 sm:py-20 text-center text-muted-foreground/70 text-sm">
-                  <EmptyState icon={Globe} title={t("chrome.empty")} message={t("chrome.empty_desc")} />
-                </div>
+                <EmptyState icon={Globe} title={t("chrome.empty")} message={t("chrome.empty_desc")} />
               ) : (
                 <div className="divide-y divide-border">
                   {agents.map((a) => (
@@ -138,15 +138,15 @@ export default function ChromeC2Page() {
                       className={`px-5 py-3 flex items-center justify-between cursor-pointer hover:bg-muted transition-colors ${selectedAgent === a.uuid ? "bg-primary/10" : ""}`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <Globe className="w-4 h-4 text-primary" />
+                        <Globe className="size-4 text-primary" />
                         <div>
-                          <p className="text-sm font-medium text-foreground">{a.hostname || a.uuid.substring(0, 8)}</p>
-                          <p className="text-xs text-muted-foreground/70">{a.uuid.substring(0, 8)}... &middot; {a.platform || "?"}</p>
+                          <p className="text-sm font-medium text-foreground">{a.hostname || (a.uuid || "").substring(0, 8)}</p>
+                          <p className="text-xs text-muted-foreground/100">{(a.uuid || "").substring(0, 8)}... &middot; {a.platform || "?"}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         {statusBadge(a.status)}
-                        <span className="text-(--fs-micro-sm) text-muted-foreground/70">
+                        <span className="text-(--fs-micro-sm) text-muted-foreground/100">
                           {a.last_seen ? timeAgo(a.last_seen) : ""}
                         </span>
                       </div>
@@ -161,7 +161,7 @@ export default function ChromeC2Page() {
           <div>
             <Card className=" p-(--card-spacing)">
               <h3 className="text-sm font-semibold text-foreground mb-4">
-                <Send className="w-4 h-4" />{t("chrome.dispatch")}
+                <Send className="size-4" />{t("chrome.dispatch")}
               </h3>
 
               <div className="space-y-3">

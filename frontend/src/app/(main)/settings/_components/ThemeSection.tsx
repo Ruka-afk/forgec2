@@ -27,7 +27,7 @@ export default function ThemeSection({ theme, onApplyTheme }: { theme: string; o
       <div className="p-(--card-spacing)">
         <div className="mb-6">
           <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-            <Moon className="w-4 h-4 text-muted-foreground" />
+            <Moon className="size-4 text-muted-foreground" />
             {t("settings.theme_mode")}
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -35,7 +35,7 @@ export default function ThemeSection({ theme, onApplyTheme }: { theme: string; o
               <Button key={id} onClick={() => onApplyTheme(id)} variant="ghost"
                 className={`p-4 border rounded-lg transition-colors capitalize ${theme === id ? "border-primary bg-primary/10 dark:bg-primary/20" : "bg-muted border-border hover:border-primary hover:bg-primary/10 dark:hover:bg-primary/20"}`}>
                 <div className={`text-2xl mb-2 ${id === "light" ? "text-warning" : id === "dark" ? "text-chart-3" : "text-muted-foreground"}`}>
-                  <Icon className="w-6 h-6" />
+                  <Icon className="size-6" />
                 </div>
                 <div className="text-sm font-medium text-muted-foreground">{t(`settings.theme_${id}`)}</div>
                 <div className="text-xs text-muted-foreground mt-1">{t(descKey)}</div>
@@ -45,14 +45,14 @@ export default function ThemeSection({ theme, onApplyTheme }: { theme: string; o
         </div>
         <div className="bg-muted rounded-lg p-4 mb-6">
           <div className="flex items-center gap-3">
-            <Info className="w-4 h-4" />
+            <Info className="size-4" />
             <div className="text-xs text-muted-foreground">{t("settings.theme_storage_hint")}</div>
           </div>
         </div>
 
         <div>
           <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-            <Rows2 className="w-4 h-4 text-muted-foreground" />
+            <Rows2 className="size-4 text-muted-foreground" />
             {t("settings.density")}
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -60,7 +60,7 @@ export default function ThemeSection({ theme, onApplyTheme }: { theme: string; o
               <Button key={id} onClick={() => setDensity(id)} variant="ghost"
                 className={`p-4 border rounded-lg transition-colors capitalize ${density === id ? "border-primary bg-primary/10 dark:bg-primary/20" : "bg-muted border-border hover:border-primary hover:bg-primary/10 dark:hover:bg-primary/20"}`}>
                 <div className="text-2xl mb-2 text-chart-3">
-                  <Icon className="w-6 h-6" />
+                  <Icon className="size-6" />
                 </div>
                 <div className="text-sm font-medium text-muted-foreground">{t(`settings.density_${id}`)}</div>
                 <div className="text-xs text-muted-foreground mt-1">{t(descKey)}</div>

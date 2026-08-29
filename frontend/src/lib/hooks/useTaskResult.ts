@@ -58,7 +58,8 @@ export function useTaskResult(agentId: string, pollMs = 2000, maxAttempts = 45) 
 
   useEffect(() => {
     if (!agentId || !taskId) return;
-    stop();
+    // Invalidate any prior chain (cleanup also clears the timer); bumping the
+    // sequence here guarantees stale ticks never reschedule after re-subscribe.
     seqRef.current += 1;
     const seq = seqRef.current;
 

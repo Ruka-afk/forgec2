@@ -32,6 +32,9 @@ function harvestLabel(action: string, t: (k: string) => string): string {
   if (action === "mimikatz") return t("cred.harvest_mimikatz");
   if (action === "kerberoast") return t("cred.harvest_kerberoast");
   if (action === "wifi_creds") return t("cred.harvest_wifi");
+  if (action === "cookie_export") return t("cred.harvest_cookies");
+  if (action === "sccm_recon") return t("cred.harvest_sccm");
+  if (action === "entra_prt") return t("cred.harvest_entra");
   return action;
 }
 
@@ -86,7 +89,7 @@ export function CredHarvestCard() {
   };
 
   return (
-    <Card className="p-(--card-spacing) mb-6">
+    <Card className="p-(--card-spacing)">
       <div className="mb-3">
         <div className="text-sm font-semibold">{t("cred.harvest_title")}</div>
         <p className="text-xs text-muted-foreground mt-0.5">{t("cred.harvest_hint")}</p>

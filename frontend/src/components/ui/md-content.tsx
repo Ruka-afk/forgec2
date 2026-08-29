@@ -18,7 +18,7 @@ export function MdContent({ children, className, dangerouslySetInnerHTML }: { ch
       "[&>blockquote]:my-2 [&>blockquote]:py-1 [&>blockquote]:px-3 [&>blockquote]:border-l-[3px] [&>blockquote]:border-primary [&>blockquote]:text-muted-foreground [&>blockquote]:bg-primary/5 [&>blockquote]:rounded-r-md",
       "[&>hr]:my-3 [&>hr]:border-0 [&>hr]:border-t [&>hr]:border-border",
       "[&>code]:font-mono [&>code]:text-(--fs-compact) [&>code]:bg-primary/10 [&>code]:text-[var(--code-accent)] [&>code]:py-0.5 [&>code]:px-1.5 [&>code]:rounded-sm",
-      "[&>pre]:my-2.5 [&>pre]:p-3 [&>pre]:bg-[var(--code-bg)] [&>pre]:text-[var(--code-text)] [&>pre]:rounded-xl [&>pre]:overflow-x-auto [&>pre]:border [&>pre]:border-border",
+      "[&>pre]:my-2.5 [&>pre]:p-3 [&>pre]:bg-[var(--code-bg)] [&>pre]:text-[var(--code-text)] [&>pre]:rounded-lg [&>pre]:overflow-x-auto [&>pre]:border [&>pre]:border-border",
       "[&>pre>code]:bg-transparent [&>pre>code]:text-inherit [&>pre>code]:p-0 [&>pre>code]:text-(--fs-compact) [&>pre>code]:leading-relaxed",
       className
     )} dangerouslySetInnerHTML={dangerouslySetInnerHTML}>

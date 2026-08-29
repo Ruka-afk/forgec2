@@ -147,9 +147,14 @@ func (s *Server) handleNTLMRelayStart(c *gin.Context) {
 		return
 	}
 
-	cmd := target
-	if listener != "" {
-		cmd = target + " " + listener
+	// Implant: relay_ntlm_start <listenAddr> [forwardTarget]
+	listenAddr := listener
+	if listenAddr == "" {
+		listenAddr = "0.0.0.0:445"
+	}
+	cmd := listenAddr
+	if target != "" {
+		cmd += " " + target
 	}
 	if flags != "" {
 		cmd += " " + flags

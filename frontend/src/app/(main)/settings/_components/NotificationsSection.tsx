@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Bell, FlaskConical, Plus, Save, Trash2 } from "lucide-react";
+import NotificationRoutesCard from "./NotificationRoutesCard";
 
 interface NotificationTarget {
   type: "generic" | "slack" | "discord" | "email";
@@ -142,7 +143,7 @@ export default function NotificationsSection() {
                 </Select>
                 <span className="text-(--fs-micro-sm) text-muted-foreground font-mono">{target.type}</span>
               </div>
-              <Button onClick={() => removeTarget(i)} className="text-xs px-2 py-1 bg-destructive/10 text-destructive rounded-lg hover:bg-destructive/20" aria-label={t("settings.notifications.remove")}><Trash2 className="w-4 h-4" /></Button>
+              <Button onClick={() => removeTarget(i)} className="text-xs px-2 py-1 bg-destructive/10 text-destructive rounded-lg hover:bg-destructive/20" aria-label={t("settings.notifications.remove")}><Trash2 className="size-4" /></Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -219,7 +220,7 @@ export default function NotificationsSection() {
                 disabled={testingIdx === i}
                 className="text-xs px-3 py-1.5 rounded-lg bg-info/15 hover:bg-info/20 text-info dark:bg-info/20 dark:hover:bg-info/40 dark:text-info flex items-center gap-1.5"
               >
-                {testingIdx === i ? <Spinner size="xs" /> : <FlaskConical className="w-4 h-4" />}
+                {testingIdx === i ? <Spinner size="xs" /> : <FlaskConical className="size-4" />}
                 {testingIdx === i ? t("settings.notifications.sending") : t("settings.notifications.test")}
               </Button>
             </div>
@@ -228,17 +229,18 @@ export default function NotificationsSection() {
 
         <div className="flex items-center justify-between pt-2">
           <Button onClick={addTarget} className="px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5">
-            <Plus className="w-4 h-4" /> {t("settings.notifications.add_target")}
+            <Plus className="size-4" /> {t("settings.notifications.add_target")}
           </Button>
           {targets.length > 0 && (
             <Button onClick={handleSave} disabled={saving} className="px-4 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5">
-              {saving ? <Spinner size="xs" /> : <Save className="w-4 h-4" />}
+              {saving ? <Spinner size="xs" /> : <Save className="size-4" />}
               {saving ? t("settings.notifications.saving") : t("settings.notifications.save_all")}
             </Button>
           )}
         </div>
       </div>
       </>)}
+      <NotificationRoutesCard />
     </Card>
   );
 }

@@ -29,12 +29,12 @@ function HeatmapBody({ data, range }: { data: HeatmapPoint[]; range: string }) {
   }, [data]);
   return (
     <div className="space-y-1 overflow-x-auto">
-      <div className="grid grid-cols-12 gap-0.5 text-(--fs-micro) text-center text-muted-foreground/70 mb-1">
+      <div className="grid grid-cols-12 gap-0.5 text-(--fs-micro) text-center text-muted-foreground/100 mb-1">
         {Array.from({ length: 12 }, (_, h) => <span key={h * 2}>{(h * 2) % 4 === 0 ? h * 2 : ""}</span>)}
       </div>
       {dayLabels.map((day, di) => (
         <div key={di} className="flex items-center gap-1">
-          <span className="text-(--fs-micro-sm) text-muted-foreground/70 w-6 text-right shrink-0">{day.slice(0, 2)}</span>
+          <span className="text-(--fs-micro-sm) text-muted-foreground/100 w-6 text-right shrink-0">{day.slice(0, 2)}</span>
           <div className="flex-1 grid grid-cols-12 gap-0.5">
             {Array.from({ length: 12 }, (_, hi) => {
               const h1 = hi * 2, h2 = hi * 2 + 1;
@@ -52,7 +52,11 @@ function HeatmapBody({ data, range }: { data: HeatmapPoint[]; range: string }) {
 const HeatmapWithData = withChartData<HeatmapPoint[], { range: string }>(
   ({ data, range }) => <HeatmapBody data={data} range={range} />,
   paths.dashboard.activityHeatmap,
-  (raw) => (raw as { data: HeatmapPoint[] }).data || [],
+  (raw) => {
+    if (Array.isArray(raw)) return raw as HeatmapPoint[];
+    const d = (raw as { data?: unknown }).data;
+    return Array.isArray(d) ? (d as HeatmapPoint[]) : [];
+  },
 );
 
 export default function HeatmapGrid({ range }: { range: string }) {

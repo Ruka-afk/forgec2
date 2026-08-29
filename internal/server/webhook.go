@@ -27,7 +27,8 @@ func (s *Server) triggerWebhooks(evt Event) {
 
 func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) error {
 	if err := validateWebhookURL(wh.URL); err != nil {
-		slog.Error("Webhook URL rejected", "name", wh.Name, "url", wh.URL, "error", err)
+		// No URL in the log: webhook targets may embed secret tokens.
+		slog.Error("Webhook URL rejected", "name", wh.Name, "error", err)
 		return fmt.Errorf("webhook URL rejected: %w", err)
 	}
 	payload, err := json.Marshal(map[string]interface{}{

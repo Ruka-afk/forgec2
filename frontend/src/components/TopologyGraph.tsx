@@ -27,16 +27,36 @@ declare global {
 interface TopologyGraphProps {
   data: TopoData;
   meshData: TopoData;
+  /** Auto-discovered network view data (GET /api/topology/network). */
+  netData?: TopoData;
   useMeshSource: boolean;
+  useNetSource?: boolean;
   physicsEnabled: boolean;
   loading: boolean;
   onNodeClick: (node: TopoNode | null) => void;
 }
 
+// Per-group node palette for the auto-discovered network view.
+const NET_GROUP_COLORS: Record<string, string> = {
+  "agent-online": "#22c55e",
+  "agent-offline": "#64748b",
+  "host-lateral": "#ef4444",
+  "host-discovered": "#38bdf8",
+};
+
+// Relation-kind edge styling; kinds only exist on the network source.
+const NET_EDGE_STYLE: Record<string, { color: string; dashes?: number[] }> = {
+  p2p: { color: "#eab308", dashes: [5, 5] },
+  proxy: { color: "#f97316", dashes: [2, 3] },
+  discovered: { color: "#475569", dashes: [8, 6] },
+};
+
 export default function TopologyGraph({
   data,
   meshData,
+  netData,
   useMeshSource,
+  useNetSource = false,
   physicsEnabled,
   loading,
   onNodeClick,
@@ -45,14 +65,18 @@ export default function TopologyGraph({
   const networkRef = useRef<HTMLDivElement>(null);
   const netInstanceRef = useRef<InstanceType<NonNullable<typeof window.vis>["Network"]> | null>(null);
 
-  const nodes = useMemo(() => (useMeshSource
-    ? (meshData?.nodes || [])
-    : (data?.nodes || [])),
-  [useMeshSource, meshData?.nodes, data?.nodes]);
-  const edges = useMemo(() => (useMeshSource
-    ? (meshData?.edges || [])
-    : (data?.edges || [])),
-  [useMeshSource, meshData?.edges, data?.edges]);
+  const nodes = useMemo(() => (useNetSource
+    ? (netData?.nodes || [])
+    : useMeshSource
+      ? (meshData?.nodes || [])
+      : (data?.nodes || [])),
+  [useNetSource, useMeshSource, netData?.nodes, meshData?.nodes, data?.nodes]);
+  const edges = useMemo(() => (useNetSource
+    ? (netData?.edges || [])
+    : useMeshSource
+      ? (meshData?.edges || [])
+      : (data?.edges || [])),
+  [useNetSource, useMeshSource, netData?.edges, meshData?.edges, data?.edges]);
 
   // Refs mirror the latest props so the vis instance never needs re-creation
   // for data/callback/physics changes (re-creation resets zoom/pan/selection).
@@ -65,6 +89,10 @@ export default function TopologyGraph({
   const physicsRef = useRef(physicsEnabled);
   physicsRef.current = physicsEnabled;
 
+  // Ref mirrors for callbacks used inside the vis init closure.
+  const useNetSourceRef = useRef(useNetSource);
+  useNetSourceRef.current = useNetSource;
+
   const buildVisData = () => {
     const textColor =
       getComputedStyle(document.documentElement)
@@ -76,8 +104,27 @@ export default function TopologyGraph({
       label: n.label || n.id || "?",
       group: n.group || "default",
       title: n.title,
+      // Network view: per-group colors so controlled vs discovered vs
+      // lateral-touched hosts are readable at a glance.
+      color: useNetSourceRef.current
+        ? {
+            background: NET_GROUP_COLORS[n.group || ""] || "#64748b",
+            border: NET_GROUP_COLORS[n.group || ""] || "#64748b",
+          }
+        : undefined,
+      shape: useNetSourceRef.current && n.group?.startsWith("host") ? "dot" : undefined,
+      size: useNetSourceRef.current && n.group?.startsWith("host") ? 14 : undefined,
     }));
-    const visEdges = edgesRef.current.map((e, i) => ({ id: i, from: e.from, to: e.to }));
+    const visEdges = edgesRef.current.map((e, i) => {
+      const style = useNetSourceRef.current && e.kind ? NET_EDGE_STYLE[e.kind] : undefined;
+      return {
+        id: i,
+        from: e.from,
+        to: e.to,
+        color: style?.color ? { color: style.color } : undefined,
+        dashes: style?.dashes,
+      };
+    });
     return { visNodes, visEdges, textColor };
   };
 
@@ -179,7 +226,7 @@ export default function TopologyGraph({
     return (
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="text-center">
-          <Network className="w-4 h-4 mx-auto mb-2" />
+          <Network className="size-4 mx-auto mb-2" />
           <p className="text-muted-foreground text-sm">{t("topology.empty")}</p>
           <p className="text-muted-foreground text-xs mt-1">{t("topology.empty_hint")}</p>
         </div>

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"net"
 	"os"
 	"runtime/debug"
+	"time"
 
 	"github.com/forgec2/forgec2/pkg/c2pb"
 	"github.com/forgec2/forgec2/internal/util"
@@ -76,7 +78,21 @@ func (l *GRPCListener) Start() error {
 
 func (l *GRPCListener) Stop() error {
 	if l.server != nil {
-		l.server.GracefulStop()
+		// GracefulStop blocks until all streams finish; cap it so the
+		// overall shutdown isn't held hostage by a long-lived agent.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		done := make(chan struct{})
+		go func() {
+			l.server.GracefulStop()
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-ctx.Done():
+			slog.Warn("gRPC GracefulStop timed out, forcing hard stop")
+			l.server.Stop()
+		}
 	}
 	return nil
 }

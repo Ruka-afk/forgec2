@@ -94,10 +94,11 @@ func TestDebugAddBenignImportsGoBinary(t *testing.T) {
 	data := buildDebugGoEXE(t)
 	before := parseImportViewForTest(t, data)
 	descBefore := before.descCount
-	if err := AddBenignImports(data, []string{"user32.dll"}); err != nil {
+	out2, err := AddBenignImports(data, []string{"user32.dll"})
+	if err != nil {
 		t.Fatalf("AddBenignImports: %v", err)
 	}
-	after := parseImportViewForTest(t, data)
+	after := parseImportViewForTest(t, out2)
 	names := after.importedDLLs()
 	found := false
 	for _, n := range names {
@@ -113,8 +114,24 @@ func TestDebugAddBenignImportsGoBinary(t *testing.T) {
 	}
 
 	excess := buildDebugGoEXE(t)
-	if err := AddBenignImports(excess, []string{"user32.dll", "ws2_32.dll", "bcrypt.dll", "shell32.dll", "wininet.dll", "advapi32.dll", "ole32.dll", "crypt32.dll", "winmm.dll", "version.dll"}); err == nil {
-		t.Fatal("expected error when demand exceeds .idata padding")
+	// Ten benign imports exceed any realistic padding, but the growth
+	// fallback satisfies even that demand — assert success AND that key DLLs
+	// landed in the import table.
+	out3, err := AddBenignImports(excess, []string{"user32.dll", "ws2_32.dll", "bcrypt.dll", "shell32.dll", "wininet.dll", "advapi32.dll", "ole32.dll", "crypt32.dll", "winmm.dll", "version.dll"})
+	if err != nil {
+		t.Fatalf("growth fallback should satisfy heavy demand: %v", err)
+	}
+	grown := parseImportViewForTest(t, out3)
+	for _, want := range []string{"user32.dll", "ws2_32.dll", "bcrypt.dll", "winmm.dll"} {
+		found := false
+		for _, n := range grown.importedDLLs() {
+			if n == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("%s missing after growth injection; imports = %v", want, grown.importedDLLs())
+		}
 	}
 }
 
@@ -123,7 +140,10 @@ func TestDebugAddBenignImportsGoBinary(t *testing.T) {
 // ends in a null thunk, and a null descriptor terminates the array.
 func TestDebugInjectedImportsPreservedByGo(t *testing.T) {
 	data := buildDebugGoEXE(t)
-	if err := AddBenignImports(data, []string{"user32.dll"}); err != nil {
+	data, err := func() ([]byte, error) {
+		return AddBenignImports(data, []string{"user32.dll"})
+	}()
+	if err != nil {
 		t.Fatalf("AddBenignImports: %v", err)
 	}
 	view := parseImportViewForTest(t, data)

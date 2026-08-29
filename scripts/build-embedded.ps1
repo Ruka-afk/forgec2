@@ -15,15 +15,14 @@ try {
         }
     }
 
-    # 0.5. Regenerate the OpenAPI types + run the full frontend consistency gate
-    # BEFORE building, so a stale spec/embed can never ship silently.
+    # 0.5. Regenerate OpenAPI types before building. The full consistency gate
+    # runs after dist has been refreshed; check:webdist would otherwise reject
+    # every legitimate frontend change before this script had a chance to copy it.
     Write-Host "==> Regenerating OpenAPI types..." -ForegroundColor Cyan
     Push-Location frontend
     try {
         npm run gen:openapi
         if ($LASTEXITCODE -ne 0) { throw "openapi regeneration failed" }
-        npm run check
-        if ($LASTEXITCODE -ne 0) { throw "frontend consistency check failed" }
     } finally {
         Pop-Location
     }
@@ -48,6 +47,17 @@ try {
     }
     New-Item -ItemType Directory -Path "internal/webdist/dist" | Out-Null
     Copy-Item -Recurse -Path "frontend/out/*" -Destination "internal/webdist/dist/"
+
+    # 2.5. Validate source contracts, the freshly-built bundle and the embedded
+    # copy together before compiling or restarting the backend.
+    Write-Host "==> Checking frontend consistency..." -ForegroundColor Cyan
+    Push-Location frontend
+    try {
+        npm run check
+        if ($LASTEXITCODE -ne 0) { throw "frontend consistency check failed" }
+    } finally {
+        Pop-Location
+    }
 
     # 3. Build backend
     Write-Host "==> Building Go backend..." -ForegroundColor Cyan

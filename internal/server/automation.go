@@ -14,6 +14,7 @@ import (
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/scripting"
+	"gorm.io/gorm"
 )
 
 type AutomationRule struct {
@@ -50,6 +51,7 @@ const (
 	ActionRunScript  = "script"
 	ActionCreateTask = "create_task"
 	ActionSetSleep   = "set_sleep"
+	ActionRunMacro   = "run_macro"
 )
 
 type RuleCondition struct {
@@ -69,9 +71,23 @@ func (s *Server) evaluateRule(evt Event, rule AutomationRule) {
 			return
 		}
 	}
+	// Cooldown throttle: without it a rule on agent.checkin fires on EVERY
+	// beacon, and a task.complete+run_macro rule re-triggers itself forever
+	// (macro step → new task → completion event → macro step ...). The
+	// last-triggered stamp is persisted so restarts honor the window too.
+	if rule.Cooldown > 0 && !rule.LastTriggered.IsZero() &&
+		time.Since(rule.LastTriggered) < time.Duration(rule.Cooldown)*time.Second {
+		return
+	}
 	for _, action := range rule.Actions {
 		s.executeAction(action, evt)
 	}
+	// Stamp the firing unconditionally: run_count is operator-visible stats,
+	// last_triggered powers the cooldown window above (survives restarts).
+	s.persistScheduleState(rule.ID, map[string]interface{}{
+		"last_triggered": time.Now(),
+		"run_count":      gorm.Expr("run_count + 1"),
+	})
 }
 
 func (s *Server) matchCondition(cond RuleCondition, evt Event) bool {
@@ -144,7 +160,11 @@ func (s *Server) executeAction(action RuleAction, evt Event) {
 		}
 		if err := json.Unmarshal(action.Params, &params); err == nil {
 			msg := s.expandTemplate(params.Message, evt)
-			s.broadcastToClients([]byte(fmt.Sprintf(`{"type":"notification","message":"%s","source":"automation"}`, msg)))
+			// Structured marshal: the previous fmt.Sprintf template produced
+			// invalid JSON frames whenever the message contained a quote.
+			if frame, ok := marshalJSONSafe(map[string]interface{}{"type": "notification", "message": msg, "source": "automation"}); ok {
+				s.broadcastToClients(frame)
+			}
 		}
 	case ActionRunScript:
 		var params struct {
@@ -153,8 +173,18 @@ func (s *Server) executeAction(action RuleAction, evt Event) {
 		}
 		if err := json.Unmarshal(action.Params, &params); err == nil {
 			engine := scripting.GetEngine()
+			// Deep-copy the event handed to the VM: goja exposes evt.Data as
+			// a MUTABLE Go map, and a script writing event.Data[x] would race
+			// the concurrently spawned webhook marshalers (fatal concurrent
+			// map write). Scripts get a snapshot.
+			dataCopy := make(map[string]interface{}, len(evt.Data))
+			for k, v := range evt.Data {
+				dataCopy[k] = v
+			}
+			scriptEvt := evt
+			scriptEvt.Data = dataCopy
 			context := map[string]interface{}{
-				"event":    evt,
+				"event":    scriptEvt,
 				"agent_id": evt.AgentID,
 			}
 			// Automation-triggered scripts run with the standard user role
@@ -213,6 +243,33 @@ func (s *Server) executeAction(action RuleAction, evt Event) {
 				}
 			}
 		}
+	case ActionRunMacro:
+		var params struct {
+			MacroID     uint `json:"macro_id"`
+			StopOnError bool `json:"stop_on_error"`
+		}
+		if err := json.Unmarshal(action.Params, &params); err != nil || params.MacroID == 0 {
+			slog.Error("Automation: invalid run_macro params")
+			return
+		}
+		var macro db.CommandMacro
+		if err := s.db.First(&macro, params.MacroID).Error; err != nil {
+			slog.Error("Automation: macro not found for run_macro action", "macro_id", params.MacroID, "error", err)
+			return
+		}
+		targetAgent := evt.AgentID
+		if targetAgent == "" {
+			slog.Warn("Automation: run_macro skipped, event has no agent context", "macro", macro.Name)
+			return
+		}
+		// Run against the triggering agent so playbooks like "on connect,
+		// auto-recon" work without pinning a specific host.
+		macroCopy := macro
+		if err := s.startMacroRun(&macroCopy, targetAgent, "automation", params.StopOnError); err != nil {
+			slog.Error("Automation: failed to start macro run", "macro", macro.Name, "agent_id", targetAgent, "error", err)
+		} else {
+			slog.Info("Automation: macro dispatched", "macro", macro.Name, "agent_id", targetAgent)
+		}
 	}
 }
 
@@ -236,7 +293,7 @@ func (s *Server) executeWebhook(params struct {
 	Secret  string            `json:"secret"`
 }, evt Event) {
 	if err := validateWebhookURL(params.URL); err != nil {
-		slog.Error("Automation: webhook URL rejected", "url", params.URL, "error", err)
+		slog.Error("Automation: webhook URL rejected", "error", err)
 		return
 	}
 	body, err := json.Marshal(evt)
@@ -270,7 +327,8 @@ func (s *Server) executeWebhook(params struct {
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		slog.Error("Automation: webhook request failed", "url", params.URL, "error", err)
+		// *url.Error embeds the full URL (may carry a webhook secret): log cause only.
+		slog.Error("Automation: webhook request failed", "error", err)
 		return
 	}
 	defer resp.Body.Close()
@@ -288,6 +346,13 @@ func (s *Server) loadAutomationRules() []AutomationRule {
 	var dbRules []db.AutomationRule
 	if err := s.db.Limit(AutomationRuleLimit).Find(&dbRules).Error; err != nil {
 		slog.Error("Automation: failed to load rules", "error", err)
+		// Do NOT cache the empty result: a transient SQLite lock would
+		// otherwise blind all event automation for the full 30s TTL. Return
+		// the previous snapshot when one exists.
+		s.automationRulesMu.RLock()
+		stale := s.automationRules
+		s.automationRulesMu.RUnlock()
+		return stale
 	}
 
 	var rules []AutomationRule
@@ -295,7 +360,11 @@ func (s *Server) loadAutomationRules() []AutomationRule {
 		var conditions []RuleCondition
 		if dr.Conditions != "" {
 			if err := json.Unmarshal([]byte(dr.Conditions), &conditions); err != nil {
-				slog.Warn("Automation: unmarshal conditions", "rule", dr.Name, "error", err)
+				// Corrupt conditions must NOT degrade to match-all: evaluateRule
+				// treats a nil condition list as pass-through, so a partially
+				// corrupt row would fire every action on every event. Skip it.
+				slog.Warn("Automation: skipping rule with corrupt conditions", "rule", dr.Name, "error", err)
+				continue
 			}
 		}
 		var actions []RuleAction
@@ -304,23 +373,28 @@ func (s *Server) loadAutomationRules() []AutomationRule {
 				slog.Warn("Automation: unmarshal actions", "rule", dr.Name, "error", err)
 			}
 		}
+		if len(actions) == 0 {
+			continue // nothing to do; don't even keep it for schedule state churn
+		}
 		rules = append(rules, AutomationRule{
-			ID:         dr.ID,
-			Name:       dr.Name,
-			Enabled:    dr.Enabled,
-			EventType:  dr.EventType,
-			Conditions: conditions,
-			Actions:    actions,
-			Schedule:   dr.Schedule,
-			AgentID:    dr.AgentID,
-			TaskType:   dr.TaskType,
-			Command:    dr.Command,
-			Params:     dr.Params,
-			LastRun:    dr.LastRun,
-			NextRun:    dr.NextRun,
-			RunCount:   dr.RunCount,
-			CreatedBy:  dr.CreatedBy,
-			CreatedAt:  dr.CreatedAt.Format(time.RFC3339),
+			ID:            dr.ID,
+			Name:          dr.Name,
+			Enabled:       dr.Enabled,
+			EventType:     dr.EventType,
+			Conditions:    conditions,
+			Actions:       actions,
+			Cooldown:      dr.CooldownSeconds,
+			Schedule:      dr.Schedule,
+			AgentID:       dr.AgentID,
+			TaskType:      dr.TaskType,
+			Command:       dr.Command,
+			Params:        dr.Params,
+			LastRun:       dr.LastRun,
+			NextRun:       dr.NextRun,
+			RunCount:      dr.RunCount,
+			LastTriggered: dr.LastTriggered,
+			CreatedBy:     dr.CreatedBy,
+			CreatedAt:     dr.CreatedAt.Format(time.RFC3339),
 		})
 	}
 
@@ -350,26 +424,40 @@ func (s *Server) saveAutomationRule(rule AutomationRule) error {
 	}
 
 	dbRule := db.AutomationRule{
-		ID:         rule.ID,
-		Name:       rule.Name,
-		Enabled:    rule.Enabled,
-		EventType:  rule.EventType,
-		Conditions: string(conditionsData),
-		Actions:    string(actionsData),
-		Schedule:   rule.Schedule,
-		AgentID:    rule.AgentID,
-		TaskType:   rule.TaskType,
-		Command:    rule.Command,
-		Params:     rule.Params,
-		LastRun:    rule.LastRun,
-		NextRun:    rule.NextRun,
-		RunCount:   rule.RunCount,
-		CreatedBy:  rule.CreatedBy,
+		ID:              rule.ID,
+		Name:            rule.Name,
+		Enabled:         rule.Enabled,
+		EventType:       rule.EventType,
+		Conditions:      string(conditionsData),
+		Actions:         string(actionsData),
+		Schedule:        rule.Schedule,
+		AgentID:         rule.AgentID,
+		TaskType:        rule.TaskType,
+		Command:         rule.Command,
+		Params:          rule.Params,
+		LastRun:         rule.LastRun,
+		NextRun:         rule.NextRun,
+		RunCount:        rule.RunCount,
+		CooldownSeconds: rule.Cooldown,
+		CreatedBy:       rule.CreatedBy,
+	}
+	if rule.LastTriggered.After(dbRule.LastTriggered) {
+		dbRule.LastTriggered = rule.LastTriggered
 	}
 
 	if rule.CreatedAt != "" {
 		if t, err := time.Parse(time.RFC3339, rule.CreatedAt); err == nil {
 			dbRule.CreatedAt = t
+		}
+	}
+	// Save() writes every column: when the caller's snapshot carries no
+	// last_triggered (e.g. the toggle handler re-saving a cached rule),
+	// carry the persisted stamp over so a toggle never resets an active
+	// cooldown window.
+	if rule.LastTriggered.IsZero() {
+		var existing db.AutomationRule
+		if err := s.db.Select("last_triggered").First(&existing, "id = ?", rule.ID).Error; err == nil {
+			dbRule.LastTriggered = existing.LastTriggered
 		}
 	}
 
@@ -462,6 +550,19 @@ func (s *Server) registerBuiltinAutomations() {
 	}
 }
 
+// persistScheduleState writes ONLY the scheduler bookkeeping columns for a
+// rule. The previous full-row saveAutomationRule() path rewrote command/
+// actions/enabled from a cache snapshot up to 30s stale, silently reverting
+// concurrent operator edits.
+func (s *Server) persistScheduleState(ruleID string, updates map[string]interface{}) {
+	if len(updates) == 0 {
+		return
+	}
+	if err := s.db.Model(&db.AutomationRule{}).Where("id = ?", ruleID).Updates(updates).Error; err != nil {
+		slog.Error("Automation: persist schedule state failed", "id", ruleID, "error", err)
+	}
+}
+
 // schedulerLoop periodically dispatches schedule-driven automation rules
 // (event_type="schedule"). It runs every 30s and only touches rules whose
 // next_run is due, so interval and cron expressions both work.
@@ -493,9 +594,9 @@ func (s *Server) dispatchScheduledRules() {
 				continue
 			}
 			rule.NextRun = computed
-			if err := s.saveAutomationRule(rule); err != nil {
-				slog.Error("Automation: persist next_run failed", "rule", rule.Name, "error", err)
-			}
+			// Targeted write: a full-row Save here rewrote the rule from a
+			// possibly stale cache snapshot and reverted operator edits.
+			s.persistScheduleState(rule.ID, map[string]interface{}{"next_run": computed})
 			continue
 		}
 		if next.After(now) {
@@ -520,15 +621,18 @@ func (s *Server) dispatchScheduledRules() {
 		rule.LastRun = now
 		rule.RunCount++
 		computed, err := nextScheduleTime(rule.Schedule, now)
+		stateUpdates := map[string]interface{}{
+			"last_run":  now,
+			"run_count": rule.RunCount,
+			"next_run":  computed,
+		}
 		if err != nil {
-			slog.Warn("Automation: schedule broken after run", "rule", rule.Name, "error", err)
+			slog.Warn("Automation: schedule broken after run, disabling rule", "rule", rule.Name, "error", err)
 			rule.Enabled = false
-			computed = time.Time{}
+			stateUpdates["enabled"] = false
+			stateUpdates["next_run"] = time.Time{}
 		}
-		rule.NextRun = computed
-		if err := s.saveAutomationRule(rule); err != nil {
-			slog.Error("Automation: persist run state failed", "rule", rule.Name, "error", err)
-		}
+		s.persistScheduleState(rule.ID, stateUpdates)
 	}
 }
 
@@ -725,8 +829,20 @@ func nextCronTime(expr string, from time.Time) (time.Time, error) {
 	}
 
 	t := from.Add(time.Minute).Truncate(time.Minute)
+	// Standard cron semantics: if BOTH day-of-month and day-of-week are
+	// restricted (non-`*`), a match on EITHER field satisfies the schedule.
+	// Using AND here would make e.g. "0 9 15 * mon" never fire unless the
+	// 15th happens to be a Monday.
+	domWild := fields[2] == "*"
+	dowWild := fields[4] == "*"
 	for i := 0; i < 366*25; i++ {
-		if cronMatches(monF, int(t.Month())) && cronMatches(domF, t.Day()) && cronMatches(dowF, int(t.Weekday())) &&
+		domOK := cronMatches(domF, t.Day())
+		dowOK := cronMatches(dowF, int(t.Weekday()))
+		dayOK := domOK
+		if !domWild || !dowWild {
+			dayOK = domOK || dowOK
+		}
+		if cronMatches(monF, int(t.Month())) && dayOK &&
 			cronMatches(hourF, t.Hour()) && cronMatches(minuteF, t.Minute()) {
 			return t, nil
 		}

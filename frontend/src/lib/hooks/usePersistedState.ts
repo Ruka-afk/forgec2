@@ -18,6 +18,19 @@ export function usePersistedState<T>(key: string, initial: T) {
     }
   });
 
+  // Resync when key changes (SPA navigation A→B reuses hook instance;
+  // without this, B would keep A's value and then clobber B's storage).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(key);
+      setValue(raw === null ? initial : (JSON.parse(raw) as T));
+    } catch {
+      setValue(initial);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
   useEffect(() => {
     try {
       window.localStorage.setItem(key, JSON.stringify(value));

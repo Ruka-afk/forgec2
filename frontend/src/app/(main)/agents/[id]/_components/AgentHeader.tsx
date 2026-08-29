@@ -8,7 +8,7 @@ import { CopyButton } from "@/components/ui/copy-button";
 import { StatusBadge } from "@/components/ui/status-indicator";
 import { Spinner } from "@/components/ui/spinner";
 import type { AgentDetail, AgentStatus } from "@/types/agent";
-import { Activity, Apple, Camera, Clipboard, Crown, Database, FolderOpen, Key, Keyboard, Link as LinkIcon, ListChecks, MapPin, Monitor, MoreHorizontal, PictureInPicture2, RefreshCw, Shield, Skull, SlidersHorizontal, Terminal, Trash2 } from "lucide-react";
+import { Activity, Apple, Bot, Camera, Clipboard, Crown, Database, FolderOpen, Key, Keyboard, Link as LinkIcon, ListChecks, MapPin, Monitor, MoreHorizontal, PictureInPicture2, RefreshCw, Shield, Skull, SlidersHorizontal, Terminal, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -25,7 +25,7 @@ function QualityMark({ quality }: { quality: SessionActionQuality }) {
 }
 
 function getOSIcon(os: string): React.ReactNode {
-  const cls = "w-7 h-7 text-primary";
+  const cls = "size-7 text-primary";
   switch (os.toLowerCase()) {
     case "windows": return <Monitor className={cls} />;
     case "linux": return <Terminal className={cls} />;
@@ -68,16 +68,16 @@ export default memo(function AgentHeader({
 
   const quickActions = useMemo(
     () => [
-      { action: "screenshot", label: t("agents.header_screenshot"), icon: <Camera className="w-5 h-5" /> },
-      { action: "ps", label: t("agents.header_processes"), icon: <ListChecks className="w-5 h-5" /> },
-      { action: "hashdump", label: t("agents.header_hashdump"), icon: <Database className="w-5 h-5" />, quality: "scripted" as const },
-      { action: "creds_dump", label: t("agents.header_creds_dump"), icon: <Database className="w-5 h-5" />, badge: credCount, quality: "scripted" as const },
-      { action: "mimikatz", label: t("agents.header_mimikatz"), icon: <Key className="w-5 h-5" />, quality: "scripted" as const, needsModule: true },
-      { action: "clipboard_get", label: t("agents.header_clipboard"), icon: <Clipboard className="w-5 h-5" /> },
-      { action: "privesc_check", label: t("agents.header_privesc"), icon: <Shield className="w-5 h-5" /> },
-      { action: "keylogger_start", label: t("agents.header_key_start"), icon: <Terminal className="w-5 h-5" /> },
-      { action: "keylogger_stop", label: t("agents.header_key_stop"), icon: <Keyboard className="w-5 h-5" /> },
-      { action: "keylogger_dump", label: t("agents.header_key_dump"), icon: <Database className="w-5 h-5" /> },
+      { action: "screenshot", label: t("agents.header_screenshot"), icon: <Camera className="size-5" /> },
+      { action: "ps", label: t("agents.header_processes"), icon: <ListChecks className="size-5" /> },
+      { action: "hashdump", label: t("agents.header_hashdump"), icon: <Database className="size-5" />, quality: "scripted" as const },
+      { action: "creds_dump", label: t("agents.header_creds_dump"), icon: <Database className="size-5" />, badge: credCount, quality: "scripted" as const },
+      { action: "mimikatz", label: t("agents.header_mimikatz"), icon: <Key className="size-5" />, quality: "scripted" as const, needsModule: true },
+      { action: "clipboard_get", label: t("agents.header_clipboard"), icon: <Clipboard className="size-5" /> },
+      { action: "privesc_check", label: t("agents.header_privesc"), icon: <Shield className="size-5" /> },
+      { action: "keylogger_start", label: t("agents.header_key_start"), icon: <Terminal className="size-5" /> },
+      { action: "keylogger_stop", label: t("agents.header_key_stop"), icon: <Keyboard className="size-5" /> },
+      { action: "keylogger_dump", label: t("agents.header_key_dump"), icon: <Database className="size-5" /> },
     ],
     [t, credCount],
   );
@@ -90,7 +90,7 @@ export default memo(function AgentHeader({
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="flex min-w-0 flex-1 items-start gap-4">
               <div
-                className="w-14 h-14 rounded-2xl bg-primary/10 ring-1 ring-primary/10 flex items-center justify-center shrink-0 select-none shadow-sm"
+                className="size-14 rounded-2xl bg-primary/10 ring-1 ring-primary/10 flex items-center justify-center shrink-0 select-none shadow-sm"
               >
                 {getOSIcon(os)}
               </div>
@@ -105,7 +105,7 @@ export default memo(function AgentHeader({
                   )}
                   {elevated && (
                     <Badge variant="warning" className="text-(--fs-micro-sm)">
-                      <Crown className="w-4 h-4" />
+                      <Crown className="size-4" />
                       {t("agents.header_elevated")}
                     </Badge>
                   )}
@@ -119,72 +119,73 @@ export default memo(function AgentHeader({
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
-                    <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/70">{t("agents.col_ip")}</span>
+                    <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/100">{t("agents.col_ip")}</span>
                     <span className="font-mono text-foreground">{ip}</span>
                     <CopyButton text={ip} label={t("agents.col_ip")} />
                   </span>
                   {publicIP && (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
-                      <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/70">{t("agents.header_wan")}</span>
+                      <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/100">{t("agents.header_wan")}</span>
                       <span className="font-mono text-foreground">{publicIP}</span>
                       <CopyButton text={publicIP} label={t("agents.stats_public_ip")} />
                     </span>
                   )}
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
-                    <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/70">{t("agents.header_user")}</span>
+                    <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/100">{t("agents.header_user")}</span>
                     <span className="text-foreground">{username}</span>
                   </span>
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
-                    <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/70">{t("agents.col_os")}</span>
+                    <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/100">{t("agents.col_os")}</span>
                     <span className="text-foreground">{os} {arch}</span>
                   </span>
                   {domain && (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
-                      <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/70">{t("agents.header_domain")}</span>
+                      <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/100">{t("agents.header_domain")}</span>
                       <span className="text-foreground">{domain}</span>
                     </span>
                   )}
                 </div>
                 {country && (
-                  <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground/70">
-                    <MapPin className="w-4 h-4" />
+                  <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground/100">
+                    <MapPin className="size-4" />
                     {[country, city].filter(Boolean).join(", ")}
                   </p>
                 )}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:w-[34rem]">
-              <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/shell`} />}><Terminal className="w-4 h-4" /> {t("agents.shell_title")} <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">S</kbd></Button>
-              <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/files`} />}><FolderOpen className="w-4 h-4" /> {t("agents.files_title")} <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">F</kbd></Button>
-              <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/screen`} />}><Monitor className="w-4 h-4" /> {t("agents.screen_title")} <span className="text-(--fs-micro) opacity-70"><QualityMark quality="hardened" /></span> <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">D</kbd></Button>
+              <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/shell`} />}><Terminal className="size-4" /> {t("agents.shell_title")} <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">S</kbd></Button>
+              <Button variant="outline" size="sm" render={<Link href={`/ai?agent=${encodeURIComponent(agentId)}`} />}><Bot className="size-4" /> {t("ai.open_for_agent")}</Button>
+              <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/files`} />}><FolderOpen className="size-4" /> {t("agents.files_title")} <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">F</kbd></Button>
+              <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/screen`} />}><Monitor className="size-4" /> {t("agents.screen_title")} <span className="text-(--fs-micro) opacity-70"><QualityMark quality="hardened" /></span> <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">D</kbd></Button>
               <Button variant="outline" size="sm" onClick={onPopOut} aria-label={t("agents.popout_console")}>
-                <PictureInPicture2 className="w-4 h-4" /> {t("agents.popout_console")}
+                <PictureInPicture2 className="size-4" /> {t("agents.popout_console")}
               </Button>
               <DropdownMenu>
-                <DropdownMenuTrigger render={<Button variant="secondary" size="sm" className="gap-1.5"><MoreHorizontal className="w-4 h-4" /> {t("agents.header_more")}</Button>} />
+                <DropdownMenuTrigger render={<Button variant="secondary" size="sm" className="gap-1.5"><MoreHorizontal className="size-4" /> {t("agents.header_more")}</Button>} />
                 <DropdownMenuContent className="w-48">
                   <DropdownMenuItem render={<Link href={`/agents/${agentId}/token`} />}>
-                    <Key className="w-4 h-4" /> {t("agents.token_title")}
+                    <Key className="size-4" /> {t("agents.token_title")}
                     <span className="ml-auto text-(--fs-micro) text-muted-foreground"><QualityMark quality="hardened" /></span>
                   </DropdownMenuItem>
                   <DropdownMenuItem render={<Link href={`/agents/${agentId}/persistence`} />}>
-                    <LinkIcon className="w-4 h-4" /> {t("agents.persistence_title")}
+                    <LinkIcon className="size-4" /> {t("agents.persistence_title")}
                     <span className="ml-auto text-(--fs-micro) text-muted-foreground"><QualityMark quality="hardened" /></span>
                   </DropdownMenuItem>
                   <DropdownMenuItem render={<Link href={`/agents/${agentId}/remote-desktop`} />}>
-                    <Monitor className="w-4 h-4" /> {t("agents.rdp_title")}
+                    <Monitor className="size-4" /> {t("agents.rdp_title")}
                     {isExperimentalDesktop("remote-desktop") ? (
                       <span className="ml-auto text-(--fs-micro) text-warning"><QualityMark quality="experimental" /></span>
                     ) : null}
                   </DropdownMenuItem>
-                  <DropdownMenuItem render={<Link href={`/agents/${agentId}/config`} />}><SlidersHorizontal className="w-4 h-4" /> {t("agents.config_hot_config")}</DropdownMenuItem>
-                  <DropdownMenuItem render={<Link href={`/agents/${agentId}/traffic`} />}><Activity className="w-4 h-4" /> {t("agents.traffic_title")}</DropdownMenuItem>
+                  <DropdownMenuItem render={<Link href={`/agents/${agentId}/config`} />}><SlidersHorizontal className="size-4" /> {t("agents.config_hot_config")}</DropdownMenuItem>
+                  <DropdownMenuItem render={<Link href={`/agents/${agentId}/traffic`} />}><Activity className="size-4" /> {t("agents.traffic_title")}</DropdownMenuItem>
                   {onMigrate && (
-                    <DropdownMenuItem onClick={onMigrate}><RefreshCw className="w-4 h-4" /> {t("agents.header_migrate")}</DropdownMenuItem>
+                    <DropdownMenuItem onClick={onMigrate}><RefreshCw className="size-4" /> {t("agents.header_migrate")}</DropdownMenuItem>
                   )}
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem variant="destructive" onClick={onKill}><Skull className="w-4 h-4" /> {t("agents.kill_agent")}</DropdownMenuItem>
-                  <DropdownMenuItem variant="destructive" onClick={onUninstall}><Trash2 className="w-4 h-4" /> {t("agents.uninstall")}</DropdownMenuItem>
+                  <DropdownMenuItem variant="destructive" onClick={onKill}><Skull className="size-4" /> {t("agents.kill_agent")}</DropdownMenuItem>
+                  <DropdownMenuItem variant="destructive" onClick={onUninstall}><Trash2 className="size-4" /> {t("agents.uninstall")}</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -208,7 +209,7 @@ export default memo(function AgentHeader({
                 className={`group relative overflow-hidden rounded-lg border border-border/70 bg-card/90 p-3.5 flex flex-col items-center gap-2.5 text-center transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:border-primary/20 ${disabled ? "opacity-40" : ""}`}
               />
             }>
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary transition-transform group-hover:scale-105">
+              <span className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary transition-transform group-hover:scale-105">
                 {actionLoading === item.action ? <Spinner size="sm" /> : item.icon}
               </span>
               <span className="text-(--fs-micro-sm) font-medium text-foreground leading-tight text-center">{item.label}</span>

@@ -33,8 +33,11 @@ export function useConfirm() {
   const [state, setState] = useState<ConfirmState | null>(null);
   const stateRef = useRef<ConfirmState | null>(null);
 
+  // G3 fix: when a second confirm() is called while one is already open,
+  // resolve the pending promise as false before overwriting, preventing hangs.
   const confirm = useCallback((opts: ConfirmOptions) => {
     return new Promise<boolean>((resolve) => {
+      if (stateRef.current) stateRef.current.resolve(false);
       stateRef.current = { opts, resolve };
       setState(stateRef.current);
     });

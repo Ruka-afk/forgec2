@@ -3,11 +3,11 @@
 type SpinnerSize = "xs" | "sm" | "md" | "lg" | "xl";
 
 const SPINNER_SIZES: Record<SpinnerSize, string> = {
-  xs: "w-3 h-3 border",
-  sm: "w-4 h-4 border-2",
-  md: "w-8 h-8 border-2",
-  lg: "w-10 h-10 border-[3px]",
-  xl: "w-12 h-12 border-[3px]",
+  xs: "size-3 border",
+  sm: "size-4 border-2",
+  md: "size-8 border-2",
+  lg: "size-10 border-[3px]",
+  xl: "size-12 border-[3px]",
 };
 
 const SPINNER_COLORS: Record<string, string> = {

@@ -258,7 +258,14 @@ func handleRegDelete(task Task, res *TaskResult) {
 // ── Recon ───────────────────────────────────────────────────────────────
 
 func handlePortscan(task Task, res *TaskResult) {
-	out, err := portScan(task.Command)
+	network := "tcp"
+	switch strings.ToLower(strings.TrimSpace(task.Shell)) {
+	case "udp":
+		network = "udp"
+	case "tcp_syn", "tcp_connect", "tcp", "":
+		network = "tcp"
+	}
+	out, err := portScan(task.Command, network)
 	if err != nil {
 		res.Error = err.Error()
 	} else {

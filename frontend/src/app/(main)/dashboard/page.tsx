@@ -6,6 +6,7 @@ import { useUrlState } from "@/lib/hooks/useUrlState";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/shallow";
 import { PageContainer } from "@/components/ui/page-container";
+import { PageToolbar } from "@/components/ui/page-toolbar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -31,8 +32,8 @@ export default function DashboardPage() {
     <PageContainer
       title={t("dashboard.title")}
       subtitle={view === "ops" ? t("dashboard.subtitle_ops") : t("dashboard.subtitle")}
-      actions={
-        <>
+      toolbar={
+        <PageToolbar>
           <div className="inline-flex items-center gap-0.5 rounded-lg bg-secondary/70 p-0.5 ring-1 ring-border/50">
             {DASHBOARD_VIEWS.map((v) => (
               <Button
@@ -74,7 +75,7 @@ export default function DashboardPage() {
               v{stats.server_version}
             </Badge>
           )}
-        </>
+        </PageToolbar>
       }
     >
 

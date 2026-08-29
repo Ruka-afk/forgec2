@@ -91,8 +91,8 @@ def _score_task_health(tasks, now):
                 dt = _parse_dt(created)
                 if dt:
                     dates.add(dt.date())
-            except Exception:
-                pass
+            except Exception as exc:
+                print(json.dumps({"level": "error", "message": f"Plugin error: invalid task created_at '{created}': {exc}"}), file=sys.stderr)
     span_days = max(len(dates), 1)
     tasks_per_day = round(total / span_days, 1)
 

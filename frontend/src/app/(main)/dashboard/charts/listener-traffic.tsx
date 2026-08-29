@@ -18,7 +18,7 @@ function TrafficBody({ data }: { data: TrafficPoint[] }) {
   return (
     <div className="space-y-2">
       <div className="flex items-end gap-0.5 h-16">
-        {data.length === 0 ? <span className="text-xs text-muted-foreground/70">{t("dashboard.no_traffic_data")}</span> : data.slice(0, 30).map((d, i) => (
+        {data.length === 0 ? <span className="text-xs text-muted-foreground/100">{t("dashboard.no_traffic_data")}</span> : data.slice(0, 30).map((d, i) => (
           <Tooltip key={d.time ?? i}><TooltipTrigger><div className="flex-1 bg-primary rounded-t-sm min-h-[2px] transition-all" style={{ height: `${Math.max(2, ((Number(d.value) || 0) / maxVal) * 100)}%` }}></div></TooltipTrigger><TooltipContent>{String(d.time ?? i)}</TooltipContent></Tooltip>
         ))}
       </div>
@@ -36,8 +36,10 @@ function ListenerTrafficInner({ range }: { range: string }) {
     setLoading(true);
     setLoadError(false);
     const endpoint = paths.dashboard.listenerTraffic(range);
+    // No signal inside the cached fetcher — see task-gantt.tsx (shared
+    // cache entries must not be poisoned by an unmount abort).
     fetchCached<TrafficPoint[]>(`traffic:${endpoint}`, async () => {
-      const d = await api.get<TrafficPoint[] | { data: TrafficPoint[] } | { labels?: string[]; bytes_in?: number[]; bytes_out?: number[] }>(endpoint, { signal: controller.signal });
+      const d = await api.get<TrafficPoint[] | { data: TrafficPoint[] } | { labels?: string[]; bytes_in?: number[]; bytes_out?: number[] }>(endpoint);
       const o = (d as { data?: { labels?: string[]; bytes_in?: number[]; bytes_out?: number[] } })?.data ?? d;
       const obj = (o as { labels?: string[]; bytes_in?: number[]; bytes_out?: number[] }) || {};
       const labels = obj.labels || [];
@@ -59,9 +61,9 @@ function ListenerTrafficInner({ range }: { range: string }) {
       });
     return () => controller.abort();
   }, [range]);
-  if (loading) return <div className="h-24 flex items-center justify-center text-muted-foreground/70 text-xs"><Spinner size="sm" /></div>;
+  if (loading) return <div className="h-24 flex items-center justify-center text-muted-foreground/100 text-xs"><Spinner size="sm" /></div>;
   if (loadError && data.length === 0) {
-    return <div className="h-24 flex items-center justify-center text-muted-foreground/70 text-xs">{t("dashboard.traffic_load_failed")}</div>;
+    return <div className="h-24 flex items-center justify-center text-muted-foreground/100 text-xs">{t("dashboard.traffic_load_failed")}</div>;
   }
   return (
     <div className="space-y-2">

@@ -7,6 +7,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Card } from "@/components/ui/card";
 import { Terminal } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface BOFExecutionsTabProps {
   executions: Execution[];
@@ -33,13 +34,13 @@ export default function BOFExecutionsTab({ executions, loading }: BOFExecutionsT
             <div key={ex.id || i} className="px-5 py-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-success/15 rounded-lg flex items-center justify-center text-success">
-                    <Terminal className="w-4 h-4" />
+                  <div className="size-8 bg-success/15 rounded-lg flex items-center justify-center text-success">
+                    <Terminal className="size-4" />
                   </div>
                   <div>
-                    <div className="text-sm font-medium text-foreground">{ex.bof_name || t("bof.unknown")}</div>
+                    <div className="text-sm font-medium text-foreground">{ex.bof_name || ex.args?.split(/\s+/)[0] || t("bof.unknown")}</div>
                     <div className="text-xs text-muted-foreground">
-                      {ex.agent_hostname || t("bof.unknown")} {ex.args ? `· args: ${ex.args}` : ""}
+                      {ex.agent_name || ex.agent_hostname || t("bof.unknown")} {ex.args ? `· args: ${ex.args}` : ""}
                     </div>
                   </div>
                 </div>
@@ -59,10 +60,7 @@ export default function BOFExecutionsTab({ executions, loading }: BOFExecutionsT
           ))}
         </div>
       ) : (
-        <div className="text-center py-12 text-muted-foreground">
-          <Terminal className="w-4 h-4" />
-          <p>{t("bof.no_executions")}</p>
-        </div>
+        <EmptyState icon={Terminal} title={t("bof.no_executions")} />
       )}
     </Card>
   );

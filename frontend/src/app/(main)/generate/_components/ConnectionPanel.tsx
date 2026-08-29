@@ -68,7 +68,7 @@ export default function ConnectionPanel({
   handleCreateListener: () => void;
   submitListener: (form: { name: string; ltype: string; host: string; port: string; proto: string }) => void;
   setShowListenerModal: React.Dispatch<React.SetStateAction<boolean>>;
-  onProfileDeleted?: (name: string) => void;
+  onProfileDeleted?: (name: string) => boolean | void | Promise<boolean | void>;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   onProfileImport?: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }) {
@@ -87,7 +87,11 @@ export default function ConnectionPanel({
     if (!(await confirm({ message: t("generate.confirm_delete_profile", { name: shared.profile }) }))) return;
     setDeleting(true);
     try {
-      await onProfileDeleted?.(shared.profile);
+      // deleteProfile swallows API errors and returns success as a boolean —
+      // on failure we must NOT flip the selection to default while the
+      // profile still exists server-side.
+      const ok = await onProfileDeleted?.(shared.profile);
+      if (ok === false) return;
       changeProfile("default");
     } catch { toast.error(t("generate.toast.delete_profile_failed")); }
     setDeleting(false);
@@ -113,9 +117,9 @@ export default function ConnectionPanel({
       }
     >
       {/* ── Listener & C2 ── */}
-      <ConfigSection title={t("generate.connection_listener")} icon={<Radio className="h-4 w-4" />} actions={
+      <ConfigSection title={t("generate.connection_listener")} icon={<Radio className="size-4" />} actions={
         <Button type="button" size="sm" variant="outline" onClick={handleCreateListener} className="gap-1 text-xs">
-          <Plus className="h-3.5 w-3.5" /> {t("generate.create_listener")}
+          <Plus className="size-3.5" /> {t("generate.create_listener")}
         </Button>
       }>
         <div className="space-y-3">
@@ -152,7 +156,7 @@ export default function ConnectionPanel({
       </ConfigSection>
 
       {/* ── Transport ── */}
-      <ConfigSection title={t("generate.beacon_transport")} icon={<Network className="h-4 w-4" />}>
+      <ConfigSection title={t("generate.beacon_transport")} icon={<Network className="size-4" />}>
         <div className="space-y-3">
           <div className="grid grid-cols-3 gap-1.5">
             {visibleBeaconTransports(showExperimental).map((tr) => {
@@ -164,7 +168,7 @@ export default function ConnectionPanel({
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const proto = ["tcp", "dns", "icmp"].includes(tr.value) ? tr.value : "http";
+                    const proto = ["tcp", "dns", "icmp", "udp", "quic"].includes(tr.value) ? tr.value : "http";
                     setShared(s => ({ ...s, beacon_transport: tr.value, protocol: proto }));
                   }}
                   aria-pressed={active}
@@ -246,7 +250,7 @@ export default function ConnectionPanel({
       </ConfigSection>
 
       {/* ── Profile ── */}
-      <ConfigSection title={t("generate.malleable_profile")} icon={<FileCode2 className="h-4 w-4" />}>
+      <ConfigSection title={t("generate.malleable_profile")} icon={<FileCode2 className="size-4" />}>
         <div className="space-y-2">
           <div className="flex gap-1.5">
             <Select value={shared.profile || "default"} onValueChange={(val) => val != null && changeProfile(val)}>
@@ -263,7 +267,7 @@ export default function ConnectionPanel({
             {!isBuiltin && (
               <Tooltip>
                 <TooltipTrigger render={<Button type="button" variant="destructive" size="icon" onClick={handleDeleteProfile} disabled={deleting} aria-label={t("generate.delete_profile")} />}>
-                  {deleting ? <Spinner size="xs" /> : <Trash2 className="h-4 w-4" />}
+                  {deleting ? <Spinner size="xs" /> : <Trash2 className="size-4" />}
                 </TooltipTrigger>
                 <TooltipContent>{t("generate.delete_profile")}</TooltipContent>
               </Tooltip>
@@ -271,7 +275,7 @@ export default function ConnectionPanel({
           </div>
           {profileLocked && (
             <p className="flex items-center gap-1 text-(--fs-xs-sm) text-warning">
-              <Lock className="h-3.5 w-3.5" />{t("generate.profile_locked")}
+              <Lock className="size-3.5" />{t("generate.profile_locked")}
             </p>
           )}
           {currentProfile?.description && (
@@ -281,7 +285,7 @@ export default function ConnectionPanel({
       </ConfigSection>
 
       {/* ── Timing ── */}
-      <ConfigSection title={t("generate.connection_timing")} icon={<Timer className="h-4 w-4" />}>
+      <ConfigSection title={t("generate.connection_timing")} icon={<Timer className="size-4" />}>
         <div className="grid grid-cols-2 gap-2">
           <div>
             <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">{t("generate.heartbeat_sec")}</span>
@@ -296,7 +300,7 @@ export default function ConnectionPanel({
       </ConfigSection>
 
       {/* ── Keys & OPSEC ── */}
-      <ConfigSection title={t("generate.connection_keys")} icon={<KeyRound className="h-4 w-4" />}>
+      <ConfigSection title={t("generate.connection_keys")} icon={<KeyRound className="size-4" />}>
         <div className="space-y-3">
           <div>
             <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">{t("generate.user_agent")}</span>
@@ -325,7 +329,7 @@ export default function ConnectionPanel({
                   toast.error(t("generate.beacon_key_load_failed"));
                 }
               }}>
-                <Import className="h-3.5 w-3.5" /> {t("generate.beacon_key_fill")}
+                <Import className="size-3.5" /> {t("generate.beacon_key_fill")}
               </Button>
             </div>
           </div>

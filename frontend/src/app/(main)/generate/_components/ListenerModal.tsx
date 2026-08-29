@@ -86,6 +86,12 @@ export default function ListenerModal({
   const onLTypeChange = (val: string | null) => {
     const v = val ?? "http";
     setFieldValue("ltype", v);
+    // Protocol must stay consistent with the chosen type or the backend
+    // normalizes on `protocol`/`scheme` and silently creates an HTTP listener
+    // even when tcp/dns was selected (scheme wins over type in normalize). DNS
+    // has no separate protocol on the wire — keep its default so it binds as
+    // a DNS listener.
+    setFieldValue("proto", v === "dns" ? "dns" : v === "tcp" ? "tcp" : "http");
   };
 
   return (

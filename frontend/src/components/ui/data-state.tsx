@@ -97,15 +97,15 @@ export function DataError({ message, onRetry, onDismiss, className }: DataErrorP
         className
       )}
     >
-      <div className="w-14 h-14 rounded-xl bg-destructive/10 flex items-center justify-center mb-4">
-        <AlertCircle className="w-7 h-7 text-destructive" aria-hidden="true" />
+      <div className="size-14 rounded-lg bg-destructive/10 flex items-center justify-center mb-4">
+        <AlertCircle className="size-7 text-destructive" aria-hidden="true" />
       </div>
       <p className="text-sm font-semibold text-foreground mb-1">{message || t("common.error")}</p>
       <p className="text-xs text-muted-foreground mb-4 max-w-xs">{t("common.error_hint")}</p>
       <div className="flex items-center gap-2">
         {onRetry && (
           <Button onClick={onRetry} size="sm" variant="outline">
-            <RefreshCw className="w-3 h-3 mr-1.5" aria-hidden="true" />
+            <RefreshCw className="size-3 mr-1.5" aria-hidden="true" />
             {t("common.try_again")}
           </Button>
         )}

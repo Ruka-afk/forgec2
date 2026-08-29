@@ -27,7 +27,7 @@ export default function LanguageSection({ language, onSetLanguage }: { language:
         </div>
         <div className="mt-6 bg-muted rounded-lg p-4">
           <div className="flex items-center gap-3">
-            <Info className="w-4 h-4" />
+            <Info className="size-4" />
             <div className="text-xs text-muted-foreground">{t("settings.language.cookie_hint")}</div>
           </div>
         </div>

@@ -97,7 +97,7 @@ func TestHandlePackerInfo_AdvertisesOnlyRealOptions(t *testing.T) {
 		t.Fatalf("entry_points = %v", entryPts)
 	}
 	certs := strSlice(t, m["cert_options"])
-	if strings.Join(certs, ",") != "none" {
+	if strings.Join(certs, ",") != "none,self_signed" {
 		t.Fatalf("cert_options = %v; unsupported certificate options must not be advertised", certs)
 	}
 	outputs := strSlice(t, m["output_types"])
@@ -188,6 +188,9 @@ func TestHandlePackerBundle_AppliesTransformations(t *testing.T) {
 // The import section of Go-built binaries (the worst realistic case) has
 // limited trailing zero slack: one new import fits, two do not. The endpoint
 // must fail loudly instead of silently dropping the request.
+// TestHandlePackerBundle_OverflowGrowsSection upgrades the old fail-loudly
+// contract: import demand beyond existing slack now grows the host section
+// (raw+virtual, aligned) and the bundle succeeds with both DLLs present.
 func TestHandlePackerBundle_OverflowFailsLoudly(t *testing.T) {
 	s, _ := packerTestServer(t)
 	pe := buildTestPEFixture(t)
@@ -200,11 +203,24 @@ func TestHandlePackerBundle_OverflowFailsLoudly(t *testing.T) {
 		"import_dlls": "advapi32.dll, user32.dll",
 	})
 	s.handlePackerBundle(c)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d; body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 after section growth, got %d; body=%s", w.Code, w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), "no zero slack space") {
-		t.Fatalf("error body %q does not explain the capacity failure", w.Body.String())
+	var resp struct {
+		Data string `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil || resp.Data == "" {
+		t.Fatalf("bundle response missing data: %v", err)
+	}
+	out, err := base64.StdEncoding.DecodeString(resp.Data)
+	if err != nil {
+		t.Fatalf("decode bundle: %v", err)
+	}
+	// Growth signature: the bundled image extends past the original fixture
+	// (aligned zeros added to the import host section). Injection correctness
+	// itself is covered exhaustively in internal/payload tests.
+	if len(out) <= len(pe) {
+		t.Fatalf("expected section growth to extend image: in=%d out=%d", len(pe), len(out))
 	}
 }
 
@@ -250,7 +266,8 @@ func TestHandlePackerArtifact_ValidationErrors(t *testing.T) {
 	}{
 		{"no_payload", map[string]any{}, "either shellcode_b64 or raw_exe_b64 is required"},
 		{"dll_output", map[string]any{"shellcode_b64": b64(t, tinyShellcode), "output_type": "dll", "encode_type": "xor"}, "dll output is not supported"},
-		{"fake_cert", map[string]any{"shellcode_b64": b64(t, tinyShellcode), "cert_option": "self_signed"}, "certificate option"},
+		{"fake_cert", map[string]any{"shellcode_b64": b64(t, tinyShellcode), "cert_option": "authenticode"}, "certificate option"},
+		{"self_signed_needs_pe", map[string]any{"shellcode_b64": b64(t, tinyShellcode), "output_type": "raw", "cert_option": "self_signed"}, "requires a PE output type"},
 		{"fake_entry", map[string]any{"shellcode_b64": b64(t, tinyShellcode), "entry_point": "tls"}, "tls entry point is not implemented"},
 		{"bad_key", map[string]any{"shellcode_b64": b64(t, tinyShellcode), "encode_key_hex": "zz"}, "invalid encode key hex"},
 	}

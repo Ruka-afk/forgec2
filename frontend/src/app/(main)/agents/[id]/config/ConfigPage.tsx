@@ -160,17 +160,17 @@ export default function AgentConfigPage() {
   }
 
   return (
-    <PageContainer className="space-y-6">
+    <PageContainer>
       {hasPending && (
         <div className="bg-warning/15 border border-warning/30 rounded-lg px-4 py-3 text-sm text-warning-foreground flex items-center gap-2">
-          <Clock className="w-4 h-4" />
+          <Clock className="size-4" />
           {t("agents.config_pending_push")}
         </div>
       )}
 
       <Card className="p-(--card-spacing) bg-primary/[0.04]">
         <h3 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
-          <SlidersHorizontal className="w-4 h-4" /> {t("agents.config_hot_config")}
+          <SlidersHorizontal className="size-4" /> {t("agents.config_hot_config")}
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
@@ -181,7 +181,7 @@ export default function AgentConfigPage() {
                 className="flex-1" />
               <Tooltip>
                 <TooltipTrigger render={<Button variant="outline" size="sm" onClick={() => resetField("sleep")} aria-label={t("agents.config.reset_sleep")} />}>
-                  <RotateCcw className="w-4 h-4" />
+                  <RotateCcw className="size-4" />
                 </TooltipTrigger>
                 <TooltipContent>{t("agents.config_reset_default")}</TooltipContent>
               </Tooltip>
@@ -194,7 +194,7 @@ export default function AgentConfigPage() {
                 className="flex-1" />
               <Tooltip>
                 <TooltipTrigger render={<Button variant="outline" size="sm" onClick={() => resetField("jitter")} aria-label={t("agents.config.reset_jitter")} />}>
-                  <RotateCcw className="w-4 h-4" />
+                  <RotateCcw className="size-4" />
                 </TooltipTrigger>
                 <TooltipContent>{t("agents.config_reset_default")}</TooltipContent>
               </Tooltip>
@@ -221,7 +221,7 @@ export default function AgentConfigPage() {
             </div>
               <Tooltip>
                 <TooltipTrigger render={<Button variant="outline" size="sm" onClick={() => resetField("ua")} aria-label={t("agents.config.reset_ua")} />}>
-                  <RotateCcw className="w-4 h-4" />
+                  <RotateCcw className="size-4" />
                 </TooltipTrigger>
                 <TooltipContent>{t("agents.config_reset_default")}</TooltipContent>
               </Tooltip>
@@ -236,7 +236,7 @@ export default function AgentConfigPage() {
                 className="flex-1 font-mono" />
               <Tooltip>
                 <TooltipTrigger render={<Button variant="outline" size="sm" onClick={() => resetField("uri")} aria-label={t("agents.config.reset_uri")} />}>
-                  <RotateCcw className="w-4 h-4" />
+                  <RotateCcw className="size-4" />
                 </TooltipTrigger>
                 <TooltipContent>{t("agents.config_reset_default")}</TooltipContent>
               </Tooltip>
@@ -256,7 +256,7 @@ export default function AgentConfigPage() {
               </Select>
               <Tooltip>
                 <TooltipTrigger render={<Button variant="outline" size="sm" onClick={() => resetField("method")} aria-label={t("agents.config.reset_method")} />}>
-                  <RotateCcw className="w-4 h-4" />
+                  <RotateCcw className="size-4" />
                 </TooltipTrigger>
                 <TooltipContent>{t("agents.config_reset_default")}</TooltipContent>
               </Tooltip>
@@ -269,11 +269,11 @@ export default function AgentConfigPage() {
             <Label className="text-xs">{t("agents.config_custom_headers")}</Label>
             <div className="flex gap-2">
               <Button variant="ghost" size="sm" onClick={addHeader}>
-                <Plus className="w-4 h-4" /> {t("agents.config_add")}
+                <Plus className="size-4" /> {t("agents.config_add")}
               </Button>
               <Tooltip>
                 <TooltipTrigger render={<Button variant="outline" size="sm" onClick={() => resetField("headers")} aria-label={t("agents.config.reset_headers")} />}>
-                  <RotateCcw className="w-4 h-4" />
+                  <RotateCcw className="size-4" />
                 </TooltipTrigger>
                 <TooltipContent>{t("agents.config_reset_default")}</TooltipContent>
               </Tooltip>
@@ -281,7 +281,7 @@ export default function AgentConfigPage() {
           </div>
           <div className="space-y-2">
             {editHeaders.length === 0 ? (
-              <p className="text-xs text-muted-foreground/70 italic px-1">{t("agents.config_no_headers")}</p>
+              <p className="text-xs text-muted-foreground/100 italic px-1">{t("agents.config_no_headers")}</p>
             ) : (
               editHeaders.map((h, i) => (
                 <div key={h.key} className="flex gap-2 items-center">
@@ -290,7 +290,7 @@ export default function AgentConfigPage() {
                   <Input aria-label={t("agents.config.header_value")} name="value-7" type="text" placeholder={t("agents.config_header_value")} value={h.value} onChange={(e) => updateHeader(i, "value", e.target.value)}
                     className="flex-[2] font-mono" />
                   <Button variant="ghost" size="sm" onClick={() => removeHeader(i)} aria-label={t("agents.config.remove_header")}>
-                    <X className="w-4 h-4" />
+                    <X className="size-4" />
                   </Button>
                 </div>
               ))
@@ -304,19 +304,19 @@ export default function AgentConfigPage() {
             {pushing ? (
               <Spinner size="sm" color="white" />
             ) : (
-              <Send className="w-4 h-4" />
+              <Send className="size-4" />
             )}
             {t("agents.config_push")}
           </Button>
           <Button variant="outline" onClick={resetAll} className="gap-1.5">
-            <RotateCcw className="w-4 h-4" /> {t("agents.config_reset_all")}
+            <RotateCcw className="size-4" /> {t("agents.config_reset_all")}
           </Button>
         </div>
       </Card>
 
       <Card className="p-(--card-spacing)">
         <h3 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
-          <Info className="w-4 h-4" /> {t("agents.config_current_config")}
+          <Info className="size-4" /> {t("agents.config_current_config")}
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="p-3 bg-card border border-border rounded-lg">
@@ -350,7 +350,7 @@ export default function AgentConfigPage() {
                 ))}
               </div>
             ) : (
-              <span className="text-xs text-muted-foreground/70">{t("agents.config.none")}</span>
+              <span className="text-xs text-muted-foreground/100">{t("agents.config.none")}</span>
             )}
           </div>
         </div>

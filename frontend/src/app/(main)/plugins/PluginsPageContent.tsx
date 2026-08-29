@@ -93,7 +93,7 @@ export default function PluginsPage() {
   const handleUninstall = async (pluginId: string) => {
     setAction(pluginId, "uninstalling");
     try {
-      await api.post(paths.plugins.toggle(pluginId), { enabled: "false" });
+      await api.postJson(paths.plugins.toggle(pluginId), { enabled: false });
       toast.success(t("plugins.toast.uninstalled"));
       loadPlugins();
     } catch { toast.error(t("plugins.toast.uninstall_failed")); }
@@ -114,7 +114,7 @@ export default function PluginsPage() {
   const handleToggle = async (pluginId: string, enabled: boolean) => {
     setAction(pluginId, "toggling");
     try {
-      await api.post(paths.plugins.toggle(pluginId), { enabled: String(enabled) });
+      await api.postJson(paths.plugins.toggle(pluginId), { enabled });
       toast.success(enabled ? t("plugins.toast.enabled") : t("plugins.toast.disabled"));
       loadPlugins();
     } catch { toast.error(t("plugins.toast.toggle_failed")); }
@@ -126,7 +126,7 @@ export default function PluginsPage() {
     try {
       const body: Record<string, string> = {};
       Object.entries(createForm).forEach(([k, v]) => { if (v) body[k] = v; });
-      await api.post(paths.plugins.create, body);
+      await api.postJson(paths.plugins.create, body);
       toast.success(t("plugins.toast.created"));
       setShowCreate(false);
       setCreateForm({ name: "", description: "", author: "", category: "", version: "1.0.0" });
@@ -135,17 +135,32 @@ export default function PluginsPage() {
   };
 
   const [executeLoading, setExecuteLoading] = useState(false);
+  const [executeAgentId, setExecuteAgentId] = useState("");
+  const [executeAgents, setExecuteAgents] = useState<{ id: string; hostname?: string }[]>([]);
+
+  const loadExecuteAgents = async () => {
+    try {
+      const d = await api.get<{ agents?: { id: string; hostname?: string }[] }>(paths.agents.list("page=1&page_size=200"));
+      const list = Array.isArray(d) ? d : d.agents || [];
+      setExecuteAgents(list);
+    } catch { setExecuteAgents([]); }
+  };
 
   const handleExecute = async (pluginId: string) => {
     setExecuteResult(null);
     setExecuteLoading(true);
     try {
-      const result = await api.post(paths.plugins.execute(pluginId));
+      const result = await api.postJson(paths.plugins.execute(pluginId), {
+        agent_id: executeAgentId || undefined,
+        params: {},
+      });
       setExecuteResult(JSON.stringify(result, null, 2));
       toast.success(t("plugins.toast.executed"));
     } catch {
       setExecuteResult(t("plugins.execution_failed"));
       toast.error(t("plugins.toast.execute_failed"));
+    } finally {
+      setExecuteLoading(false);
     }
   };
 
@@ -193,9 +208,9 @@ export default function PluginsPage() {
     setReviewsPlugin(plugin);
     setShowReviews(true);
     try {
-      const apiData = await api.get<{ reviews?: Review[]; Reviews?: Review[] } | Review[]>(paths.plugins.reviews(pid));
-      const d = apiData as { reviews?: Review[]; Reviews?: Review[] };
-      setReviews(d.reviews || (Array.isArray(apiData) ? apiData : []));
+      const apiData = await api.get<{ reviews?: Review[]; data?: Review[] } | Review[]>(paths.plugins.reviews(pid));
+      const d = apiData as { reviews?: Review[]; data?: Review[] };
+      setReviews(d.data || d.reviews || (Array.isArray(apiData) ? apiData : []));
     } catch {
       setReviews([]);
       toast.error(t("plugins.toast.reviews_load_failed"));
@@ -204,8 +219,8 @@ export default function PluginsPage() {
 
   const handlePostReview = async (pluginId: string, rating: number, content: string) => {
     try {
-      const body = { rating: String(rating), content };
-      await api.post(paths.plugins.reviews(pluginId), body);
+      // Backend binds JSON {rating:int, comment:string} via ShouldBindJSON.
+      await api.postJson(paths.plugins.reviews(pluginId), { rating, comment: content });
       toast.success(t("plugins.toast.review_posted"));
       if (reviewsPlugin) handleLoadReviews(reviewsPlugin);
     } catch { toast.error(t("plugins.toast.review_post_failed")); }
@@ -213,7 +228,7 @@ export default function PluginsPage() {
 
   const handleRating = async (pluginId: string, rating: number) => {
     try {
-      await api.post(paths.plugins.rating(pluginId), { rating: String(rating) });
+      await api.postJson(paths.plugins.rating(pluginId), { rating });
       toast.success(t("plugins.toast.rating_submitted"));
       loadPlugins();
     } catch { toast.error(t("plugins.toast.rating_submit_failed")); }
@@ -222,31 +237,31 @@ export default function PluginsPage() {
   const handleLoadDependencies = async (plugin: Plugin) => {
     const pid = plugin.id || "";
     try {
-      const apiData = await api.get<{ dependencies?: string[]; Dependencies?: string[] } | string[]>(paths.plugins.dependencies(pid));
-      const d = apiData as { dependencies?: string[]; Dependencies?: string[] };
-      const deps = d.dependencies || (Array.isArray(apiData) ? apiData : []);
+      const apiData = await api.get<{ dependencies?: string[]; data?: string[] } | string[]>(paths.plugins.dependencies(pid));
+      const d = apiData as { dependencies?: string[]; data?: string[] };
+      const deps = d.data || d.dependencies || (Array.isArray(apiData) ? apiData : []);
       setDetailPlugin({ ...plugin, Dependencies: Array.isArray(deps) ? deps : [] });
     } catch { toast.error(t("plugins.toast.load_deps_failed")); }
   };
 
   return (
-    <PageContainer title={t("plugins.title")} icon={<Puzzle className="w-4 h-4" />} subtitle={t("plugins.subtitle", { count: String(plugins.length) })} actions={<>
+    <PageContainer title={t("plugins.title")} icon={<Puzzle className="size-4" />} subtitle={t("plugins.subtitle", { count: String(plugins.length) })} actions={<>
         <div className="flex items-center gap-2 flex-wrap">
           <Button variant="outline" size="lg" onClick={handleUpdateCheck}>
-            <CheckCircle className="w-4 h-4" /> {t("plugins.check_updates")}
+            <CheckCircle className="size-4" /> {t("plugins.check_updates")}
           </Button>
           <Button onClick={() => setShowCreate(true)}>
-            <Plus className="w-4 h-4" /> {t("plugins.create")}
+            <Plus className="size-4" /> {t("plugins.create")}
           </Button>
           <Button variant="secondary" onClick={() => setShowImport(true)}>
-            <FileDown className="w-4 h-4" /> {t("plugins.import")}
+            <FileDown className="size-4" /> {t("plugins.import")}
           </Button>
           <div className="flex bg-secondary rounded-lg p-0.5">
             <Button variant={viewMode === "grid" ? "secondary" : "ghost"} size="icon-sm" onClick={() => setViewMode("grid")} aria-label={t("plugins.grid_view")}>
-              <LayoutGrid className="w-4 h-4" />
+              <LayoutGrid className="size-4" />
             </Button>
             <Button variant={viewMode === "list" ? "secondary" : "ghost"} size="icon-sm" onClick={() => setViewMode("list")} aria-label={t("plugins.list_view")}>
-              <List className="w-4 h-4" />
+              <List className="size-4" />
             </Button>
           </div>
         </div>
@@ -320,7 +335,7 @@ export default function PluginsPage() {
           </DialogHeader>
           <Card className="border-2 border-dashed hover:border-primary transition-colors">
             <CardContent className="p-(--card-spacing) text-center">
-              <CloudUpload className="w-4 h-4" />
+              <CloudUpload className="size-4" />
               <p className="text-sm text-muted-foreground mb-3">{t("plugins.upload_desc")}</p>
               <input aria-label={t("plugins.upload_file")} name="input-6" type="file" accept=".json,.zip" onChange={(e) => setImportFile(e.target.files?.[0] || null)} className="text-sm text-muted-foreground file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/15" />
               {importFile && <p className="text-xs text-muted-foreground mt-2">{importFile.name}</p>}
@@ -333,13 +348,26 @@ export default function PluginsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showExecute} onOpenChange={setShowExecute}>
+      <Dialog open={showExecute} onOpenChange={(open) => { setShowExecute(open); if (open) loadExecuteAgents(); }}>
         <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t("plugins.execute_title")} {executePlugin?.Name || executePlugin?.name}</DialogTitle>
           </DialogHeader>
+          <div className="space-y-3 mb-4">
+            <label className="text-sm font-medium">{t("plugins.execute_agent") || "Target Agent"}</label>
+            <Select value={executeAgentId} onValueChange={(v) => setExecuteAgentId(v ?? "")}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={t("plugins.execute_agent_ph") || "Select an agent (optional)"} />
+              </SelectTrigger>
+              <SelectContent>
+                {executeAgents.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>{a.id}{a.hostname ? ` (${a.hostname})` : ""}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <Button onClick={() => handleExecute(executePlugin?.ID || executePlugin?.id || "")} disabled={executeLoading} className="w-full mb-4">
-            {executeLoading ? <><Spinner className="mr-2" />{t("plugins.running")}</> : <><Play className="w-4 h-4" />{t("plugins.run_plugin")}</>}
+            {executeLoading ? <><Spinner className="mr-2" />{t("plugins.running")}</> : <><Play className="size-4" />{t("plugins.run_plugin")}</>}
           </Button>
           {executeResult && (
             <div className="bg-card rounded-lg p-4 max-h-96 overflow-y-auto">

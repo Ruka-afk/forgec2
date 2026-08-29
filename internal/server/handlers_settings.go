@@ -39,8 +39,8 @@ func (s *Server) handleSettingsPage(c *gin.Context) {
 	offlineCutoff := time.Now().Add(-s.offlineThreshold())
 	s.db.Raw(`
 		SELECT
-			(SELECT COUNT(*) FROM implants) AS total_agents,
-			(SELECT COUNT(*) FROM implants WHERE last_seen > ?) AS online_agents,
+			(SELECT COUNT(*) FROM implants WHERE deleted_at IS NULL) AS total_agents,
+			(SELECT COUNT(*) FROM implants WHERE last_seen > ? AND deleted_at IS NULL) AS online_agents,
 			(SELECT COUNT(*) FROM tasks WHERE status = 'pending') AS pending_tasks,
 			(SELECT COUNT(*) FROM tasks WHERE status = 'completed') AS completed_tasks,
 			(SELECT COUNT(*) FROM tasks WHERE status = 'failed') AS failed_tasks,

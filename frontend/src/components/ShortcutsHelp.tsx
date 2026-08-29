@@ -30,7 +30,7 @@ function ShortcutsHelpPanel({ open, onOpenChange }: { open: boolean; onOpenChang
       <DialogContent className="max-w-lg" aria-label={t("a11y.shortcuts")}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Keyboard aria-hidden="true" className="w-4 h-4" />
+            <Keyboard aria-hidden="true" className="size-4" />
             {t("a11y.shortcuts")}
           </DialogTitle>
         </DialogHeader>
@@ -69,10 +69,13 @@ function ShortcutsHelpPanel({ open, onOpenChange }: { open: boolean; onOpenChang
 export default function ShortcutsHelp() {
   const [open, setOpen] = useState(false);
 
+  // G10 fix: load shortcuts once outside the handler (avoid per-keystroke
+  // localStorage read) and skip keyboard auto-repeat events.
   useEffect(() => {
+    const shortcuts = loadShortcuts();
     const onKey = (e: KeyboardEvent) => {
-      const s = loadShortcuts();
-      if (matchShortcut(e, s.show_shortcuts)) {
+      if (e.repeat) return;
+      if (matchShortcut(e, shortcuts.show_shortcuts)) {
         e.preventDefault();
         setOpen((v) => !v);
       }
@@ -92,7 +95,7 @@ export function ShortcutsHelpButton() {
     <>
       <Tooltip>
         <TooltipTrigger render={<Button onClick={() => setOpen(true)} variant="ghost" size="sm" className="hidden md:flex text-xs" />}>
-          <Keyboard aria-hidden="true" className="w-4 h-4" />
+          <Keyboard aria-hidden="true" className="size-4" />
           <span>{t("common.shortcuts")}</span>
         </TooltipTrigger>
         <TooltipContent>{t("common.shortcuts_hint")}</TooltipContent>

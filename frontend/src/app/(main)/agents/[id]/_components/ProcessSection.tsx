@@ -25,15 +25,18 @@ export default memo(function ProcessSection({ processList, loading, loadFailed, 
     <SectionCard
       className="mb-4"
       title={t("agents.detail_process_list")}
-      icon={<Terminal className="w-3.5 h-3.5" />}
+      icon={<Terminal className="size-3.5" />}
       description={t("agents.detail_process_snapshot_hint")}
       collapsible
-      defaultOpen={expanded}
+      // Controlled: the "Load"/"Retry" action button drives onToggle(true),
+      // which an uncontrolled defaultOpen panel would ignore (data loaded
+      // invisibly behind a closed card).
+      open={expanded}
       onOpenChange={onToggle}
       action={
         expanded && processList && !loading ? (
           <Button variant="ghost" size="sm" className="text-xs h-auto p-0 text-primary hover:bg-transparent hover:underline" onClick={onRefresh}>
-            <RefreshCw className="w-3 h-3" />{t("agents.detail_refresh")}
+            <RefreshCw className="size-3" />{t("agents.detail_refresh")}
           </Button>
         ) : (
           <Button variant="ghost" size="sm" className="text-xs h-auto p-0 text-primary hover:bg-transparent hover:underline" onClick={() => onToggle(!expanded)}>

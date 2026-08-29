@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -305,7 +307,15 @@ func (s *Server) handlePluginToggle(c *gin.Context) {
 		respondError(c, http.StatusNotFound, "plugin not found")
 		return
 	}
-	p.Enabled = !p.Enabled
+	var body struct {
+		Enabled *bool `json:"enabled"`
+	}
+	_ = c.ShouldBindJSON(&body)
+	if body.Enabled != nil {
+		p.Enabled = *body.Enabled
+	} else {
+		p.Enabled = !p.Enabled
+	}
 	if err := s.db.Save(p).Error; err != nil {
 		slog.Error("Failed to save plugin toggle", "plugin_id", p.ID, "err", err)
 		respondError(c, http.StatusInternalServerError, "failed to toggle plugin")
@@ -316,7 +326,7 @@ func (s *Server) handlePluginToggle(c *gin.Context) {
 			slog.Error("Automation: failed to set plugin enabled state", "plugin_name", p.Name, "enabled", p.Enabled, "error", err)
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	c.JSON(http.StatusOK, gin.H{"success": true, "enabled": p.Enabled})
 }
 
 func (s *Server) handlePluginDelete(c *gin.Context) {
@@ -325,7 +335,22 @@ func (s *Server) handlePluginDelete(c *gin.Context) {
 		respondError(c, http.StatusNotFound, "plugin not found")
 		return
 	}
+
 	if p.Name != "" {
+		pluginDir := s.pluginManager.PluginDir(p.Name)
+		quarantineDir := filepath.Join("data", "quarantine", "plugins", p.Name)
+		if pluginDir != "" {
+			if _, statErr := os.Stat(pluginDir); statErr == nil {
+				if mkErr := os.MkdirAll(filepath.Dir(quarantineDir), 0o755); mkErr != nil {
+					slog.Error("Failed to create quarantine directory", "dir", quarantineDir, "err", mkErr)
+				} else if mvErr := os.Rename(pluginDir, quarantineDir); mvErr != nil {
+					slog.Warn("Failed to quarantine plugin source, removing instead", "dir", pluginDir, "err", mvErr)
+					_ = os.RemoveAll(pluginDir)
+				} else {
+					slog.Info("Plugin source quarantined", "name", p.Name, "quarantine", quarantineDir)
+				}
+			}
+		}
 		if err := s.pluginManager.Unregister(p.Name); err != nil {
 			slog.Error("Automation: failed to unregister plugin", "plugin_name", p.Name, "error", err)
 		}

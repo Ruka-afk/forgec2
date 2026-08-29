@@ -128,7 +128,7 @@ export default function CircuitBreakerPage() {
   return (
     <>
 
-      <PageContainer title={t("cb.title")} subtitle={t("cb.subtitle")} contentClassName="space-y-6" actions={<>
+      <PageContainer title={t("cb.title")} subtitle={t("cb.subtitle")} actions={<>
         <div className="flex items-center gap-3">
           <StatusIndicator status="healthy" variant="dot" label={`${healthyCount} ${t("cb.closed")}`} />
           {unstableCount > 0 && (
@@ -146,10 +146,10 @@ export default function CircuitBreakerPage() {
         </Banner>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-5">
-          <StatCard label={t("cb.closed")} value={healthyCount} color="emerald" icon={<ShieldCheck className="w-4 h-4" />} sub={t("cb.closed_desc")} />
-          <StatCard label={t("cb.half_open")} value={unstableCount} color="amber" icon={<AlertTriangle className="w-4 h-4" />} sub={t("cb.half_open_desc")} />
-          <StatCard label={t("cb.open")} value={burnedCount} color="destructive" icon={<Radio className="w-4 h-4" />} sub={t("cb.open_desc")} />
-          <StatCard label={t("cb.check_interval")} value={`${config.health_check_seconds}s`} color="indigo" icon={<Gauge className="w-4 h-4" />} sub={t("cb.probes_every", { seconds: config.health_check_seconds })} />
+          <StatCard label={t("cb.closed")} value={healthyCount} color="emerald" icon={<ShieldCheck className="size-4" />} sub={t("cb.closed_desc")} />
+          <StatCard label={t("cb.half_open")} value={unstableCount} color="amber" icon={<AlertTriangle className="size-4" />} sub={t("cb.half_open_desc")} />
+          <StatCard label={t("cb.open")} value={burnedCount} color="destructive" icon={<Radio className="size-4" />} sub={t("cb.open_desc")} />
+          <StatCard label={t("cb.check_interval")} value={`${config.health_check_seconds}s`} color="indigo" icon={<Gauge className="size-4" />} sub={t("cb.probes_every", { seconds: config.health_check_seconds })} />
         </div>
 
         <Card>
@@ -157,7 +157,7 @@ export default function CircuitBreakerPage() {
             <div className="flex items-center justify-between mb-4">
               <span className="text-sm font-semibold text-foreground">{t("cb.monitored_listeners")}</span>
               <Button variant="ghost" size="sm" onClick={() => { setConfigForm(config); setShowConfigModal(true); }}>
-                <SlidersHorizontal className="w-4 h-4" />{t("cb.config")}
+                <SlidersHorizontal className="size-4" />{t("cb.config")}
               </Button>
             </div>
             <Table>
@@ -206,13 +206,13 @@ export default function CircuitBreakerPage() {
                       <div className="flex items-center justify-end gap-1">
                         <Tooltip>
                           <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => handleReset(idStr)} aria-label={t("circuit_breaker.reset_healthy")} />}>
-                            <RotateCw className="w-4 h-4" />
+                            <RotateCw className="size-4" />
                           </TooltipTrigger>
                           <TooltipContent>{t("circuit_breaker.reset_healthy")}</TooltipContent>
                         </Tooltip>
                         <Popover>
                           <PopoverTrigger render={<Button variant="ghost" size="icon-sm" aria-label={t("circuit_breaker.force_state")} />}>
-                            <MoreHorizontal className="w-4 h-4" />
+                            <MoreHorizontal className="size-4" />
                           </PopoverTrigger>
                           <PopoverContent align="end" sideOffset={4} className="w-[120px] p-1">
                             <Button variant="ghost" size="xs" onClick={() => handleToggle(idStr, "closed")} className="w-full justify-start text-xs">
@@ -244,7 +244,7 @@ export default function CircuitBreakerPage() {
               {listeners.filter(l => l.fail_reasons.length > 0).map(l => (
               l.fail_reasons.map((reason, idx) => (
                 <div key={`${l.target}-${idx}`} className="flex items-start gap-2 p-3 bg-muted border border-border rounded-lg">
-                  <AlertCircle className="w-4 h-4" />
+                  <AlertCircle className="size-4" />
                   <div className="min-w-0">
                     <code className="text-xs font-semibold text-foreground">{l.target}</code>
                     <p className="text-xs text-muted-foreground">{reason}</p>
@@ -257,7 +257,7 @@ export default function CircuitBreakerPage() {
 
         <Card className="p-(--card-spacing)">
           <h3 className="text-sm font-semibold text-foreground mb-3">
-            <History className="w-4 h-4" />
+            <History className="size-4" />
             {t("cb.state_history")}
           </h3>
           {events.length === 0 ? (
@@ -266,12 +266,12 @@ export default function CircuitBreakerPage() {
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {events.map((e) => (
                 <div key={e.id} className="flex items-start gap-3 p-3 bg-muted border border-border rounded-lg">
-                  <ArrowLeftRight className="w-4 h-4" />
+                  <ArrowLeftRight className="size-4" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 text-xs">
                       <code className="font-semibold text-foreground">{e.listener_id}</code>
                       <span className="text-muted-foreground">{e.old_state}</span>
-                      <ArrowRight className="w-4 h-4" />
+                      <ArrowRight className="size-4" />
                       <StatusIndicator
                         status={e.new_state === "healthy" ? "healthy" : e.new_state === "open" || e.new_state === "burned" ? "burned" : "unstable"}
                         variant="dot"

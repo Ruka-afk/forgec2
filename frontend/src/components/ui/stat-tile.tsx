@@ -41,7 +41,7 @@ export function StatTile({
           {labelBelow && <div className={cn(labelClass, "mt-1")}>{label}</div>}
           {sub && <div className="text-xs text-muted-foreground mt-1">{sub}</div>}
         </div>
-        {icon && <span className={cn("shrink-0 rounded-xl p-2.5 ring-1", iconTone ? `${iconTone.bg} ${iconTone.text} ring-border/50` : "bg-secondary text-muted-foreground ring-border/30")}>{icon}</span>}
+        {icon && <span className={cn("shrink-0 rounded-lg p-2.5 ring-1", iconTone ? `${iconTone.bg} ${iconTone.text} ring-border/50` : "bg-secondary text-muted-foreground ring-border/30")}>{icon}</span>}
       </div>
       {trend && <div className="mt-2.5 flex items-center gap-1.5 text-xs text-muted-foreground/80 border-t border-border/40 pt-2">{trend}</div>}
     </div>

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,6 +43,9 @@ func (sc *SlackExternalC2) Start() error {
 
 	channelID := "extc2-slack-" + sc.channelID
 	slog.Info("Slack External C2 starting", "channel_id", sc.channelID)
+	if sc.server.cfg == nil || strings.TrimSpace(sc.server.cfg.Crypto.ExtC2Key) == "" {
+		slog.Warn("Slack ExtC2 running WITHOUT result HMAC: set crypto.extc2_key to require signed results")
+	}
 
 	sc.client = slack.New(sc.botToken, slack.OptionHTTPClient(&http.Client{Timeout: 10 * time.Second}))
 
@@ -169,7 +173,13 @@ func (sc *SlackExternalC2) processMessage(text, channelID string) {
 		return
 	}
 	if extMsg.Type == "result" {
-		sc.server.processExternalC2Result(extMsg.AgentID, extMsg.TaskID, extMsg.Result)
+		// Channel membership is not authentication: gate relayed results on
+		// the extc2_key HMAC (mirrors the Discord path).
+		if !sc.server.verifyExtC2ResultHMAC(extMsg.AgentID, extMsg.TaskID, extMsg.ResultID, extMsg.Result, extMsg.HMAC) {
+			slog.Warn("Slack ExtC2 result dropped: HMAC verification failed", "agent_id", extMsg.AgentID, "task_id", extMsg.TaskID)
+			return
+		}
+		sc.server.processExternalC2Result(extMsg.AgentID, extMsg.TaskID, extMsg.ResultID, extMsg.Result)
 	}
 }
 

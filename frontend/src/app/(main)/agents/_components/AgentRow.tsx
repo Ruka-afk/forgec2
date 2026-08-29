@@ -76,12 +76,13 @@ export const AgentRow = memo(function AgentRow({
         onMenu({ x: e.clientX, y: e.clientY, beacon });
       }}
       onKeyDown={(e) => {
-        if (e.key === "Enter") {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onInteract(id);
         }
       }}
-      className={`group cursor-default hover:bg-secondary/60 hover:shadow-sm transition-colors ${borderLeft} ${isSelected ? "bg-primary/5" : ""}`}
+      className={`group cursor-default hover:bg-secondary/60 hover:shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${borderLeft} ${isSelected ? "bg-primary/5" : ""}`}
     >
       <TableCell className="py-1 px-2">
         <Checkbox aria-label={t("common.select_item")} name={`select-${id}`}
@@ -109,7 +110,7 @@ export const AgentRow = memo(function AgentRow({
               className="ml-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
               aria-label={t("agents.copy_hostname")}
             >
-              {copiedField === `host-${id}` ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
+              {copiedField === `host-${id}` ? <Check className="size-3 text-success" /> : <Copy className="size-3" />}
             </Button>
             <Button
               type="button"
@@ -123,11 +124,11 @@ export const AgentRow = memo(function AgentRow({
                 onEditNotes?.(beacon);
               }}
             >
-              <StickyNote className={`w-3.5 h-3.5 ${notes ? "text-primary" : "text-muted-foreground"}`} />
+              <StickyNote className={`size-3.5 ${notes ? "text-primary" : "text-muted-foreground"}`} />
             </Button>
             {beacon.parent_id && (
               <span className="ml-1 text-(--fs-micro-sm) text-chart-6" title={t("agents.p2p_chained")}>
-                <LinkIcon className="w-4 h-4" />
+                <LinkIcon className="size-4" />
               </span>
             )}
           </div>
@@ -141,13 +142,13 @@ export const AgentRow = memo(function AgentRow({
       <TableCell className="py-1 px-2">
         <div className="flex items-center gap-1.5 flex-wrap">
           <Badge variant="secondary" className="text-(--fs-xs-sm) gap-1.5 whitespace-nowrap bg-secondary/60">
-            <OsIcon className="w-3 h-3 text-muted-foreground" />
+            <OsIcon className="size-3 text-muted-foreground" />
             {os}{arch ? ` ${arch}` : ""}
           </Badge>
           {integrity && (
             <Badge variant={integrityTone(integrity)} className="text-(--fs-micro-sm) font-medium">{integrity}</Badge>
           )}
-          {elevated && <Badge variant="destructive" className="text-(--fs-micro-sm) font-bold" title={t("agents.elevated")}><Shield className="w-3 h-3" /></Badge>}
+          {elevated && <Badge variant="destructive" className="text-(--fs-micro-sm) font-bold" title={t("agents.elevated")}><Shield className="size-3" /></Badge>}
         </div>
       </TableCell>
       )}
@@ -161,7 +162,7 @@ export const AgentRow = memo(function AgentRow({
           className="ml-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
           aria-label={t("agents.copy_ip")}
         >
-          {copiedField === `ip-${id}` ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
+          {copiedField === `ip-${id}` ? <Check className="size-3 text-success" /> : <Copy className="size-3" />}
         </Button>
       </TableCell>
       )}
@@ -174,27 +175,27 @@ export const AgentRow = memo(function AgentRow({
       <TableCell className="py-1 px-2 text-xs text-foreground max-w-[140px] max-sm:hidden">
         {activeWindow ? (
           <span className="inline-flex items-center gap-1 truncate" title={activeWindow}>
-            <Maximize2 className="w-4 h-4" />
+            <Maximize2 className="size-4" />
             <span className="truncate">{activeWindow}</span>
           </span>
-        ) : <span className="text-muted-foreground/70 dark:text-muted-foreground"></span>}
+        ) : <span className="text-muted-foreground/100 dark:text-muted-foreground"></span>}
       </TableCell>
       )}
       {visibleCols.lock && (
       <TableCell className="py-1 px-2 text-center max-sm:hidden">
         {lockUser ? (
           <span className="inline-flex items-center gap-1 text-xs" title={t("agents.locked_by").replace("{user}", lockUser)}>
-            <Lock className="w-4 h-4" />
+            <Lock className="size-4" />
             <span className="text-(--fs-micro-sm) text-warning font-medium truncate max-w-[80px]">{lockUser}</span>
           </span>
         ) : (
-          <span className="text-muted-foreground/70 text-(--fs-xs-sm)">
-            <Unlock className="w-4 h-4" />
+          <span className="text-muted-foreground/100 text-(--fs-xs-sm)">
+            <Unlock className="size-4" />
           </span>
         )}
         {presenceUsers && presenceUsers.length > 0 && (
           <span className="inline-flex items-center gap-1 text-xs ml-1" title={t("agents.active_operator").replace("{user}", presenceUsers.join(", "))}>
-            <Users className="w-3.5 h-3.5 text-info" />
+            <Users className="size-3.5 text-info" />
             <span className="text-(--fs-micro-sm) text-info truncate max-w-[80px]">{presenceUsers.length}</span>
           </span>
         )}
@@ -220,7 +221,7 @@ export const AgentRow = memo(function AgentRow({
       </TableCell>
       )}
       {visibleCols.version && (
-      <TableCell className="py-1 px-2 text-xs font-mono text-muted-foreground/70 max-sm:hidden">
+      <TableCell className="py-1 px-2 text-xs font-mono text-muted-foreground/100 max-sm:hidden">
         {version ? (
           version
         ) : (
@@ -238,7 +239,7 @@ export const AgentRow = memo(function AgentRow({
           {tags && tags.length > 0 && (
             <span className="hidden xl:inline-flex items-center gap-1 mr-1">
               {tags.slice(0, 3).map((tag) => (
-                <span key={tag.id} className="w-2 h-2 rounded-full ring-1 ring-white dark:ring-border shadow-sm" style={{ backgroundColor: tag.color }} title={tag.name} />
+                <span key={tag.id} className="size-2 rounded-full ring-1 ring-white dark:ring-border shadow-sm" style={{ backgroundColor: tag.color }} title={tag.name} />
               ))}
               {tags.length > 3 && <span className="text-(--fs-micro) text-muted-foreground">+{tags.length - 3}</span>}
             </span>
@@ -250,7 +251,7 @@ export const AgentRow = memo(function AgentRow({
             aria-label={t("agents.shell_title")}
             onClick={(e) => { e.stopPropagation(); onQuickNav?.(beacon, "shell"); }}
           >
-            <Terminal className="w-4 h-4" />
+            <Terminal className="size-4" />
           </Button>
           <Button
             variant="ghost"
@@ -259,7 +260,7 @@ export const AgentRow = memo(function AgentRow({
             aria-label={t("agents.files_title")}
             onClick={(e) => { e.stopPropagation(); onQuickNav?.(beacon, "files"); }}
           >
-            <FolderOpen className="w-4 h-4" />
+            <FolderOpen className="size-4" />
           </Button>
           <Button
             variant="ghost"
@@ -268,7 +269,7 @@ export const AgentRow = memo(function AgentRow({
             aria-label={t("agents.screen_title")}
             onClick={(e) => { e.stopPropagation(); onQuickNav?.(beacon, "screen"); }}
           >
-            <Monitor className="w-4 h-4" />
+            <Monitor className="size-4" />
           </Button>
           <Tooltip>
           <TooltipTrigger render={
@@ -282,7 +283,7 @@ export const AgentRow = memo(function AgentRow({
                 onMenu({ x: rect.right, y: rect.bottom, beacon });
               }}
             >
-              <MoreHorizontal className="w-4 h-4" />
+              <MoreHorizontal className="size-4" />
             </Button>
           } />
           <TooltipContent side="top">{t("agents.context_menu")}</TooltipContent>

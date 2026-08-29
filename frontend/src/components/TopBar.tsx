@@ -27,25 +27,25 @@ export default function TopBar({ onMenuToggle }: { onMenuToggle?: () => void }) 
   return (
     <>
     <header
-      className="h-14 bg-card/80 backdrop-blur-xl border-b border-border/60 shadow-sm flex items-center justify-between px-3 fixed top-0 right-0 z-30 transition-[left] duration-200 ease-in-out"
+      className="fixed top-0 right-0 z-30 flex h-(--shell-topbar-height) items-center justify-between border-b border-border/80 bg-card px-3 shadow-sm transition-[left] duration-200 ease-in-out sm:px-4"
       style={{ left: focusMode ? 0 : storeSidebarWidth }}
     >
       <div className="flex items-center gap-3 flex-1 min-w-0">
         <Button onClick={onMenuToggle}
           variant="ghost" size="icon" className="lg:hidden" aria-label={t("common.toggle_menu")}>
-          <Menu className="w-5 h-5" />
+          <Menu className="size-5" />
         </Button>
         <SearchBox />
       </div>
 
       <div className="flex items-center gap-1">
         {/* WS + Live Agents */}
-        <div className="flex items-center gap-2 px-2.5 py-1 mr-2 shrink-0 rounded-full bg-secondary/60 dark:bg-secondary/40 border border-border/50">
+        <div className="mr-1 flex shrink-0 items-center gap-2 rounded-lg border border-border/70 bg-muted/65 px-2.5 py-1 sm:mr-2">
           <Tooltip>
             <TooltipTrigger>
               <span role="status" aria-live="polite" className="flex items-center gap-2">
                 <ConnectionDot connected={connected} reconnectFailed={reconnectFailed} />
-                <span className="text-(--fs-micro-sm) text-muted-foreground/70 hidden lg:inline">{connected ? t("common.live") : reconnectFailed ? t("common.offline") : t("topbar.reconnecting")}</span>
+                <span className="text-(--fs-micro-sm) text-muted-foreground/100 hidden lg:inline">{connected ? t("common.live") : reconnectFailed ? t("common.offline") : t("topbar.reconnecting")}</span>
                 {stats && (stats.online_agents ?? 0) > 0 && (
                   <span className="hidden xl:inline-flex items-center gap-1 text-(--fs-micro-sm) font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
                     {stats.online_agents} {t("agents.online_label")}
@@ -60,7 +60,7 @@ export default function TopBar({ onMenuToggle }: { onMenuToggle?: () => void }) 
         <span className="hidden md:inline-flex">
           <Tooltip>
             <TooltipTrigger render={<Button variant="ghost" size="icon" onClick={toggleFocusMode} aria-label={focusMode ? t("topbar.focus_mode_exit") : t("topbar.focus_mode")} />}>
-              {focusMode ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+              {focusMode ? <Minimize2 className="size-5" /> : <Maximize2 className="size-5" />}
             </TooltipTrigger>
             <TooltipContent>{focusMode ? t("topbar.focus_mode_exit") : t("topbar.focus_mode")}</TooltipContent>
           </Tooltip>
@@ -79,7 +79,7 @@ export default function TopBar({ onMenuToggle }: { onMenuToggle?: () => void }) 
         className="fixed top-14 right-0 z-20 flex items-center gap-2 px-4 py-2 bg-destructive/10 border-b border-destructive/30 text-destructive text-sm"
         style={{ left: focusMode ? 0 : storeSidebarWidth }}
       >
-        <AlertTriangle className="w-4 h-4 shrink-0" />
+        <AlertTriangle className="size-4 shrink-0" />
         <span>{t("topbar.ws_disconnected_banner")}</span>
         <Button variant="outline" size="sm" className="ml-auto h-7 text-xs border-destructive/30 text-destructive hover:bg-destructive/10" onClick={reconnect}>
           {t("topbar.reconnect")}

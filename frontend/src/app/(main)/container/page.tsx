@@ -79,7 +79,7 @@ export default function ContainerPage() {
   };
 
   return (
-    <PageContainer title={t("container.title")} subtitle={t("container.subtitle")} contentClassName="space-y-6">
+    <PageContainer title={t("container.title")} subtitle={t("container.subtitle")}>
       <Banner tone="warning" className="items-start">
         <div className="font-semibold">{t("container.experimental_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("container.experimental_desc")}</div>
@@ -121,13 +121,13 @@ export default function ContainerPage() {
         </div>
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
-            <TabsTrigger value="detect"><Search className="w-3.5 h-3.5" />{t("container.detection")}</TabsTrigger>
-            <TabsTrigger value="escape"><PersonStanding className="w-3.5 h-3.5" />{t("container.escape")}</TabsTrigger>
+            <TabsTrigger value="detect"><Search className="size-3.5" />{t("container.detection")}</TabsTrigger>
+            <TabsTrigger value="escape"><PersonStanding className="size-3.5" />{t("container.escape")}</TabsTrigger>
           </TabsList>
           <TabsContent value="detect" className="space-y-3 mt-4">
             <p className="text-xs text-muted-foreground">{t("container.detect_desc")}</p>
             <Button onClick={handleDetect} disabled={loading || !selectedAgent || taskPoll.polling}>
-              {loading || taskPoll.polling ? <Spinner size="xs" /> : <Check className="w-4 h-4" />}
+              {loading || taskPoll.polling ? <Spinner size="xs" /> : <Check className="size-4" />}
               {loading || taskPoll.polling ? t("container.dispatching") : t("container.detect_btn")}
             </Button>
           </TabsContent>
@@ -144,7 +144,7 @@ export default function ContainerPage() {
               </SelectContent>
             </Select>
             <Button onClick={handleEscape} disabled={loading || !selectedAgent || taskPoll.polling}>
-              {loading || taskPoll.polling ? <Spinner size="xs" /> : <PersonStanding className="w-4 h-4" />}
+              {loading || taskPoll.polling ? <Spinner size="xs" /> : <PersonStanding className="size-4" />}
               {loading || taskPoll.polling ? t("container.dispatching") : t("container.escape_btn")}
             </Button>
           </TabsContent>

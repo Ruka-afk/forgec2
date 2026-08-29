@@ -25,6 +25,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Bot, ChevronDown, CircleAlert, Info, CircleQuestionMark, Eye, FileCode, FileSpreadsheet, History, Lightbulb, Play, ShieldAlert, ShieldCheck, TriangleAlert, TrendingUp, Zap } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface PrivescAgent {
   id?: string;
@@ -65,11 +66,11 @@ function severityBadge(severity: string) {
 
 function severityIcon(severity: string): React.ReactNode {
   switch (severity) {
-    case "critical": return <CircleAlert className="w-4 h-4 text-destructive" />;
-    case "high": return <TriangleAlert className="w-4 h-4 text-warning" />;
-    case "medium": return <CircleAlert className="w-4 h-4 text-warning" />;
-    case "low": return <Info className="w-4 h-4 text-primary" />;
-    default: return <CircleQuestionMark className="w-4 h-4 text-muted-foreground" />;
+    case "critical": return <CircleAlert className="size-4 text-destructive" />;
+    case "high": return <TriangleAlert className="size-4 text-warning" />;
+    case "medium": return <CircleAlert className="size-4 text-warning" />;
+    case "low": return <Info className="size-4 text-primary" />;
+    default: return <CircleQuestionMark className="size-4 text-muted-foreground" />;
   }
 }
 
@@ -181,13 +182,13 @@ export default function PrivescPage() {
   const lowCount = findings.filter((f) => f.severity === "low").length;
 
   return (
-    <PageContainer title={t("privesc.title")} icon={<TrendingUp className="w-4 h-4" />} subtitle={t("privesc.subtitle")} contentClassName="space-y-6" actions={<>
+    <PageContainer title={t("privesc.title")} icon={<TrendingUp className="size-4" />} subtitle={t("privesc.subtitle")} actions={<>
         <div className="flex items-center gap-2">
           <Button variant="secondary" size="sm" onClick={handleExportJSON}>
-            <FileCode className="w-4 h-4" /> JSON
+            <FileCode className="size-4" /> JSON
           </Button>
           <Button variant="secondary" size="sm" onClick={handleExportCSV}>
-            <FileSpreadsheet className="w-4 h-4" /> CSV
+            <FileSpreadsheet className="size-4" /> CSV
           </Button>
         </div>
       </>}>
@@ -198,19 +199,19 @@ export default function PrivescPage() {
       </Banner>
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-        <Card className="p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+        <Card interactive className="p-4">
           <StatTile label={t("privesc.stat_total_checks")} value={totalChecks} tone="primary" />
         </Card>
-        <Card className="p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+        <Card interactive className="p-4">
           <StatTile label={t("privesc.stat_critical")} value={criticalCount} tone="destructive" />
         </Card>
-        <Card className="p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+        <Card interactive className="p-4">
           <StatTile label={t("privesc.stat_high")} value={highCount} tone="warning" />
         </Card>
-        <Card className="p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+        <Card interactive className="p-4">
           <StatTile label={t("privesc.stat_medium")} value={mediumCount} tone="warning" />
         </Card>
-        <Card className="p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+        <Card interactive className="p-4">
           <StatTile label={t("privesc.stat_low")} value={lowCount} tone="primary" />
         </Card>
       </div>
@@ -227,7 +228,7 @@ export default function PrivescPage() {
         <div className="space-y-5">
           <div>
             <Label className="text-sm font-medium mb-2 block">
-              <Bot className="w-4 h-4" />{t("privesc.target_agent")}
+              <Bot className="size-4" />{t("privesc.target_agent")}
             </Label>
             <Select value={selectedAgent || "placeholder"} onValueChange={(v) => setSelectedAgent(v === "placeholder" ? "" : v ?? "")}>
               <SelectTrigger className="w-full">
@@ -263,7 +264,7 @@ export default function PrivescPage() {
 
           <div className="flex gap-3 pt-3 border-t border-border">
             <Button onClick={handleRun} disabled={running} className="flex-1 h-11">
-              {running ? <><Spinner size="xs" className="mr-2" />{t("privesc.running")}</> : <><Play className="w-4 h-4" />{t("privesc.exec_privesc")}</>}
+              {running ? <><Spinner size="xs" className="mr-2" />{t("privesc.running")}</> : <><Play className="size-4" />{t("privesc.exec_privesc")}</>}
             </Button>
           </div>
         </div>
@@ -282,11 +283,7 @@ export default function PrivescPage() {
         </div>
         <div className="divide-y divide-border max-h-[400px] overflow-y-auto">
           {findings.length === 0 ? (
-            <div className="py-16 sm:py-20 text-center text-muted-foreground">
-              <ShieldCheck className="w-4 h-4" />
-              <p className="text-sm">{t("privesc.no_findings")}</p>
-              <p className="text-xs mt-1 text-muted-foreground">{t("privesc.no_findings_hint")}</p>
-            </div>
+            <EmptyState icon={ShieldCheck} title={t("privesc.no_findings")} message={t("privesc.no_findings_hint")} />
           ) : findings.filter((f) => statusFilter === "all" || f.severity === statusFilter).map((f, i) => {
             const fid = f.id || String(i);
             const isExpanded = expandedFinding === fid;
@@ -309,14 +306,14 @@ export default function PrivescPage() {
                             {f.description && <p className="text-sm text-muted-foreground">{f.description}</p>}
                             {f.recommendation && (
                               <p className="text-sm text-primary">
-                                <Lightbulb className="w-4 h-4" />{t("privesc.recommendation_label")} {f.recommendation}
+                                <Lightbulb className="size-4" />{t("privesc.recommendation_label")} {f.recommendation}
                               </p>
                             )}
                             {f.exploit_command && (
                               <div className="flex items-center gap-2">
                                 <code className="text-xs font-mono bg-card text-success px-3 py-1.5 rounded-lg flex-1 overflow-x-auto">{f.exploit_command}</code>
                                 <Button variant="destructive" size="sm" onClick={() => handleExecuteExploit(f)} className="shrink-0">
-                                  <Zap className="w-4 h-4" /> {t("privesc.execute")}
+                                  <Zap className="size-4" /> {t("privesc.execute")}
                                 </Button>
                               </div>
                             )}
@@ -325,7 +322,7 @@ export default function PrivescPage() {
                       </div>
                     </div>
                     <CollapsibleTrigger render={<Button variant="ghost" size="icon-xs" aria-label={t("common.expand")} />}>
-                      <ChevronDown className="w-4 h-4" />
+                      <ChevronDown className="size-4" />
                     </CollapsibleTrigger>
                   </div>
                 </Collapsible>
@@ -340,10 +337,7 @@ export default function PrivescPage() {
           <h2 className="text-lg font-semibold">{t("privesc.history_title")} <span className="text-sm font-normal text-muted-foreground ml-2">{history.length} </span></h2>
         </div>
         {history.length === 0 ? (
-          <div className="py-16 sm:py-20 text-center text-muted-foreground">
-            <History className="w-4 h-4" />
-              <p className="text-sm">{t("privesc.no_history")}</p>
-          </div>
+          <EmptyState icon={History} title={t("privesc.no_history")} />
         ) : (
           <Table className="text-sm">
             <TableHeader className="bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90 sticky top-0 z-10 border-b border-border">
@@ -378,7 +372,7 @@ export default function PrivescPage() {
                       <div className="flex items-center gap-1">
                          <Tooltip>
                            <TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleViewHistory(hid)} aria-label={t("privesc.view_history")} />}>
-                              <Eye className="w-4 h-4" />
+                              <Eye className="size-4" />
                             </TooltipTrigger>
                            <TooltipContent>{t("privesc.view_result")}</TooltipContent>
                          </Tooltip>

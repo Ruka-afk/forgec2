@@ -234,8 +234,8 @@ def evaluate_cis(agents, tasks, creds, listeners, hosts):
         db_ref = Database()
         audit_logs = db_ref.all_audit_logs()
         db_ref.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        print(json.dumps({"level": "error", "message": f"Plugin error: failed to read audit logs for CIS 8 evaluation: {exc}"}), file=sys.stderr)
     if audit_logs:
         findings.append(f"Audit log entries present: {len(audit_logs)}")
         actions = {}

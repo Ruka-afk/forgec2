@@ -32,11 +32,12 @@ export interface BOFLibraryItem {
 
 export interface Execution {
   ID?: string;
-  id?: string;
+  id?: string | number;
   BofName?: string;
   bof_name?: string;
   AgentHostname?: string;
   agent_hostname?: string;
+  agent_name?: string;
   Status?: string;
   status?: string;
   Result?: string;
@@ -45,6 +46,8 @@ export interface Execution {
   args?: string;
   CreatedAt?: string;
   created_at?: string;
+  Elapsed?: string;
+  elapsed?: string;
 }
 
 export interface RepoItem {

@@ -20,7 +20,7 @@ export function ListenerCallbackStrip({
   const id = listener?.id != null ? String(listener.id) : "";
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
-      <Radio className="h-4 w-4 shrink-0 text-primary" />
+      <Radio className="size-4 shrink-0 text-primary" />
       {listener && callback ? (
         <>
           <span className="text-sm font-medium">{listener.name || t("generate.unknown_listener")}</span>

@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Switch } from "@/components/ui/switch";
 import { ArrowUp, CheckCircle, Clock, Download, Info, Link, Play, Puzzle, Star, Trash2 } from "lucide-react";
 import type { Plugin, Review } from "./types";
+import { normalizePluginDeps, pluginRating } from "./types";
 import { PLUGIN_CATEGORIES } from "./categories";
 export function ReviewsModal({ plugin, reviews, open, onOpenChange, onPost }: { plugin: Plugin; reviews: Review[]; open: boolean; onOpenChange: (open: boolean) => void; onPost: (id: string, rating: number, content: string) => void }) {
   const { t } = useI18n();
@@ -34,7 +35,7 @@ export function ReviewsModal({ plugin, reviews, open, onOpenChange, onPost }: { 
           <div className="flex items-center gap-1 mb-2">
             {[1, 2, 3, 4, 5].map((s) => (
               <Button key={s} variant="ghost" size="icon-xs" onClick={() => setRating(s)} className="text-lg" aria-label={`${s} star`}>
-                <Star className={`w-4 h-4 ${s <= rating ? "text-warning fill-warning" : "text-muted-foreground"}`} />
+                <Star className={`size-4 ${s <= rating ? "text-warning fill-warning" : "text-muted-foreground"}`} />
               </Button>
             ))}
           </div>
@@ -49,11 +50,11 @@ export function ReviewsModal({ plugin, reviews, open, onOpenChange, onPost }: { 
                 <span className="text-xs font-medium text-muted-foreground">{r.user || t("plugins.anonymous")}</span>
                 <div className="flex items-center gap-0.5">
                   {[1, 2, 3, 4, 5].map((s) => (
-                    <Star key={s} className={`w-2.5 h-2.5 ${s <= (r.rating || 0) ? "text-warning fill-warning" : "text-muted-foreground"}`} />
+                    <Star key={s} className={`size-2.5 ${s <= (r.rating || 0) ? "text-warning fill-warning" : "text-muted-foreground"}`} />
                   ))}
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">{r.content}</p>
+              <p className="text-xs text-muted-foreground">{r.comment || r.content}</p>
             </div>
           ))}
         </div>
@@ -84,16 +85,18 @@ export function PluginCard({ plugin, actionState, onInstall, onUninstall, onDele
   const author = plugin.author || "-";
   const cat = plugin.category || "";
   const enabled = plugin.Enabled !== undefined ? plugin.Enabled : plugin.enabled;
-  const rating = plugin.Rating !== undefined ? plugin.Rating : plugin.rating || 0;
-  const deps = plugin.dependencies || [];
-  const installed = plugin.Installed !== undefined ? plugin.Installed : plugin.installed;
+  const rating = pluginRating(plugin);
+  const deps = normalizePluginDeps(plugin.dependencies ?? plugin.Dependencies);
+  // Plugins listed by /api/plugins are registered in the DB, i.e. installed;
+  // the backend has no explicit "installed" column so absent means true.
+  const installed = plugin.Installed !== undefined ? plugin.Installed : (plugin.installed !== undefined ? Boolean(plugin.installed) : true);
   const updateAvail = plugin.UpdateAvailable !== undefined ? plugin.UpdateAvailable : plugin.update_available;
-  const downloads = plugin.downloads || 0;
+  const downloads = Number(plugin.downloads) || 0;
   const [hoverRating, setHoverRating] = useState(0);
   const catInfo = PLUGIN_CATEGORIES.find((c) => c.key === cat);
 
   return (
-    <Card className="p-(--card-spacing) hover:shadow-lg dark:hover:shadow-black/30 transition-all group">
+    <Card className="p-(--card-spacing) hover:shadow-lg dark:hover:shadow-xl transition-all group">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
 <IconBadge icon={Puzzle} color="primary" size="xl" className="dark:bg-primary/20" />
@@ -104,7 +107,7 @@ export function PluginCard({ plugin, actionState, onInstall, onUninstall, onDele
         </div>
         {updateAvail && (
           <Button size="xs" onClick={(e) => { e.stopPropagation(); onUpdate(); }} className="shrink-0 px-2 py-0.5 bg-warning/15 text-warning text-(--fs-micro-sm) font-medium rounded-lg hover:bg-warning/15 transition-colors" title={t("plugins.update_available")}>
-            <ArrowUp className="w-4 h-4" />{t("plugins.update")}
+            <ArrowUp className="size-4" />{t("plugins.update")}
           </Button>
         )}
       </div>
@@ -122,7 +125,7 @@ export function PluginCard({ plugin, actionState, onInstall, onUninstall, onDele
       <div className="flex items-center gap-0.5 mb-1">
         {[1, 2, 3, 4, 5].map((s) => (
           <Button key={s} variant="ghost" size="icon-xs" onClick={() => onRating(s)} onMouseEnter={() => setHoverRating(s)} onMouseLeave={() => setHoverRating(0)} className="p-0.5" aria-label={`${s} star`}>
-            <Star className={`w-2.5 h-2.5 transition-colors ${s <= (hoverRating || rating) ? "text-warning fill-warning" : "text-muted-foreground"}`} />
+            <Star className={`size-2.5 transition-colors ${s <= (hoverRating || rating) ? "text-warning fill-warning" : "text-muted-foreground"}`} />
           </Button>
         ))}
         <span className="text-(--fs-micro-sm) text-muted-foreground ml-1">{(hoverRating || rating).toFixed(1)}</span>
@@ -132,7 +135,7 @@ export function PluginCard({ plugin, actionState, onInstall, onUninstall, onDele
 
       {deps.length > 0 && (
         <div className="mb-3 text-(--fs-micro-sm) text-muted-foreground">
-          <Link className="w-4 h-4" />{t("plugins.deps")} {deps.join(", ")}
+          <Link className="size-4" />{t("plugins.deps")} {deps.join(", ")}
         </div>
       )}
 
@@ -146,17 +149,17 @@ export function PluginCard({ plugin, actionState, onInstall, onUninstall, onDele
           <span className="text-(--fs-micro-sm) text-muted-foreground">{t("plugins.not_installed")}</span>
         )}
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon-xs" onClick={onExecute} disabled={!installed} className="text-muted-foreground hover:text-success hover:bg-success/15 disabled:opacity-30" aria-label={t("plugins.execute")}><Play className="w-4 h-4" /></Button>
-          <Button variant="ghost" size="icon-xs" onClick={onExport} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-primary/20" aria-label={t("plugins.export")}><Download className="w-4 h-4" /></Button>
+          <Button variant="ghost" size="icon-xs" onClick={onExecute} disabled={!installed} className="text-muted-foreground hover:text-success hover:bg-success/15 disabled:opacity-30" aria-label={t("plugins.execute")}><Play className="size-4" /></Button>
+          <Button variant="ghost" size="icon-xs" onClick={onExport} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-primary/20" aria-label={t("plugins.export")}><Download className="size-4" /></Button>
           {installed ? (
             <>
               <Button size="xs" onClick={() => onUninstall(id)} disabled={actionState === "uninstalling"} className="px-2 py-1 text-(--fs-micro-sm) font-medium text-warning bg-warning/15 hover:bg-warning/15 transition-colors disabled:opacity-50">{actionState === "uninstalling" ? <Spinner /> : t("plugins.uninstall")}</Button>
-              <Button variant="ghost" size="icon-xs" onClick={() => onDelete(id)} disabled={actionState === "deleting"} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50" aria-label={t("plugins.delete")}><Trash2 className="w-4 h-4" /></Button>
+              <Button variant="ghost" size="icon-xs" onClick={() => onDelete(id)} disabled={actionState === "deleting"} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50" aria-label={t("plugins.delete")}><Trash2 className="size-4" /></Button>
             </>
           ) : (
             <Button size="xs" onClick={() => onInstall(id)} disabled={actionState === "installing"} className="px-2.5 py-1 text-(--fs-micro-sm) font-medium text-primary bg-primary/10 dark:bg-primary/20 hover:bg-primary/10 dark:hover:bg-chart-3/20 transition-colors disabled:opacity-50">{actionState === "installing" ? <><Spinner className="mr-1" />...</> : t("plugins.install")}</Button>
           )}
-          <Button variant="ghost" size="icon-xs" onClick={onDetail} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-chart-3/20" aria-label={t("plugins.details")}><Info className="w-4 h-4" /></Button>
+          <Button variant="ghost" size="icon-xs" onClick={onDetail} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-chart-3/20" aria-label={t("plugins.details")}><Info className="size-4" /></Button>
         </div>
       </div>
     </Card>
@@ -184,14 +187,14 @@ export function PluginListItem({ plugin, actionState, onInstall, onUninstall, on
   const desc = plugin.description || "";
   const cat = plugin.category || "";
   const enabled = plugin.Enabled !== undefined ? plugin.Enabled : plugin.enabled;
-  const rating = plugin.Rating !== undefined ? plugin.Rating : plugin.rating || 0;
-  const deps = plugin.dependencies || [];
-  const installed = plugin.Installed !== undefined ? plugin.Installed : plugin.installed;
+  const rating = pluginRating(plugin);
+  const deps = normalizePluginDeps(plugin.dependencies ?? plugin.Dependencies);
+  const installed = plugin.Installed !== undefined ? plugin.Installed : (plugin.installed !== undefined ? Boolean(plugin.installed) : true);
   const updateAvail = plugin.UpdateAvailable !== undefined ? plugin.UpdateAvailable : plugin.update_available;
   const catInfo = PLUGIN_CATEGORIES.find((c) => c.key === cat);
 
   return (
-    <Card className="p-(--card-spacing) hover:shadow-lg dark:hover:shadow-black/30 transition-all">
+    <Card className="p-(--card-spacing) hover:shadow-lg dark:hover:shadow-xl transition-all">
       <div className="flex items-center gap-4">
 <IconBadge icon={Puzzle} color="primary" size="xl" className="dark:bg-primary/20" />
         <div className="flex-1 min-w-0">
@@ -199,32 +202,32 @@ export function PluginListItem({ plugin, actionState, onInstall, onUninstall, on
             <h3 className="text-sm font-semibold text-foreground truncate cursor-pointer hover:text-primary dark:hover:text-primary transition-colors" onClick={onDetail}>{name}</h3>
             <span className="text-(--fs-micro-sm) text-muted-foreground">v{version}</span>
             {catInfo && <span className={`text-(--fs-micro-sm) px-1.5 py-0.5 rounded ${catInfo.color}`}>{t(catInfo.labelKey)}</span>}
-            {updateAvail && <Button size="xs" onClick={onUpdate} className="text-(--fs-micro-sm) px-1.5 py-0.5 rounded bg-warning/15 text-warning hover:bg-warning/20"><ArrowUp className="w-4 h-4" />{t("plugins.update")}</Button>}
+            {updateAvail && <Button size="xs" onClick={onUpdate} className="text-(--fs-micro-sm) px-1.5 py-0.5 rounded bg-warning/15 text-warning hover:bg-warning/20"><ArrowUp className="size-4" />{t("plugins.update")}</Button>}
           </div>
           <p className="text-xs text-muted-foreground truncate">{desc || t("plugins.no_desc_short")}</p>
         </div>
         <div className="flex items-center gap-0.5 shrink-0">
-          {[1, 2, 3, 4, 5].map((s) => <Button key={s} variant="ghost" size="icon-xs" onClick={() => onRating(s)} aria-label={`${s} star`}><Star className={`w-2.5 h-2.5 hover:text-warning transition-colors ${s <= rating ? "text-warning fill-warning" : "text-muted-foreground"}`} /></Button>)}
+          {[1, 2, 3, 4, 5].map((s) => <Button key={s} variant="ghost" size="icon-xs" onClick={() => onRating(s)} aria-label={`${s} star`}><Star className={`size-2.5 hover:text-warning transition-colors ${s <= rating ? "text-warning fill-warning" : "text-muted-foreground"}`} /></Button>)}
         <Button variant="ghost" size="xs" onClick={onReviews} className="text-(--fs-micro-sm) text-primary ml-1 hover:underline">{t("plugins.reviews")}</Button>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <Button variant="ghost" size="icon-xs" onClick={onExecute} disabled={!installed} className="text-muted-foreground hover:text-success hover:bg-success/15 disabled:opacity-30" aria-label={t("plugins.execute")}><Play className="w-4 h-4" /></Button>
-          <Button variant="ghost" size="icon-xs" onClick={onExport} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-primary/20" aria-label={t("plugins.export")}><Download className="w-4 h-4" /></Button>
+          <Button variant="ghost" size="icon-xs" onClick={onExecute} disabled={!installed} className="text-muted-foreground hover:text-success hover:bg-success/15 disabled:opacity-30" aria-label={t("plugins.execute")}><Play className="size-4" /></Button>
+          <Button variant="ghost" size="icon-xs" onClick={onExport} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-primary/20" aria-label={t("plugins.export")}><Download className="size-4" /></Button>
           {installed ? (
             <>
               <Switch checked={enabled} onCheckedChange={() => onToggle(id, !enabled)} disabled={actionState === "toggling"} className="shrink-0" />
               <Button size="xs" onClick={() => onUninstall(id)} disabled={actionState === "uninstalling"} className="px-2 py-1 text-(--fs-micro-sm) font-medium text-warning bg-warning/15 hover:bg-warning/15 transition-colors disabled:opacity-50">{actionState === "uninstalling" ? <Spinner /> : t("plugins.uninstall")}</Button>
-              <Button variant="ghost" size="icon-xs" onClick={() => onDelete(id)} disabled={actionState === "deleting"} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50" aria-label={t("plugins.delete")}><Trash2 className="w-4 h-4" /></Button>
+              <Button variant="ghost" size="icon-xs" onClick={() => onDelete(id)} disabled={actionState === "deleting"} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50" aria-label={t("plugins.delete")}><Trash2 className="size-4" /></Button>
             </>
           ) : (
             <Button onClick={() => onInstall(id)} disabled={actionState === "installing"} className="px-2.5 py-1 text-(--fs-micro-sm) font-medium text-primary bg-primary/10 dark:bg-primary/20 hover:bg-primary/10 dark:hover:bg-chart-3/20 transition-colors disabled:opacity-50">{actionState === "installing" ? <><Spinner className="mr-1" />{t("plugins.installing")}</> : t("plugins.install")}</Button>
           )}
-          <Button variant="ghost" size="icon-xs" onClick={onDetail} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-chart-3/20" aria-label={t("plugins.details")}><Info className="w-4 h-4" /></Button>
+          <Button variant="ghost" size="icon-xs" onClick={onDetail} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-chart-3/20" aria-label={t("plugins.details")}><Info className="size-4" /></Button>
         </div>
       </div>
       {deps.length > 0 && (
         <div className="mt-2 ml-14 text-(--fs-micro-sm) text-muted-foreground">
-          <Link className="w-4 h-4" />{t("plugins.dependencies")} {deps.join(", ")}
+          <Link className="size-4" />{t("plugins.dependencies")} {deps.join(", ")}
         </div>
       )}
     </Card>
@@ -243,12 +246,12 @@ export function PluginDetailModal({ plugin, open, onOpenChange }: {
   const author = plugin.author || "-";
   const cat = plugin.category || "";
   const enabled = plugin.Enabled !== undefined ? plugin.Enabled : plugin.enabled;
-  const rating = plugin.Rating !== undefined ? plugin.Rating : plugin.rating || 0;
-  const deps = plugin.dependencies || [];
-  const installed = plugin.Installed !== undefined ? plugin.Installed : plugin.installed;
+  const rating = pluginRating(plugin);
+  const deps = normalizePluginDeps(plugin.dependencies ?? plugin.Dependencies);
+  const installed = plugin.Installed !== undefined ? plugin.Installed : (plugin.installed !== undefined ? Boolean(plugin.installed) : true);
   const updateAvail = plugin.UpdateAvailable !== undefined ? plugin.UpdateAvailable : plugin.update_available;
   const readme = plugin.readme || "";
-  const downloads = plugin.downloads || 0;
+  const downloads = Number(plugin.downloads) || 0;
   const lastUpdated = plugin.last_updated || "-";
 
   const catInfo = PLUGIN_CATEGORIES.find((c) => c.key === cat);
@@ -275,14 +278,14 @@ export function PluginDetailModal({ plugin, open, onOpenChange }: {
             )}
             {installed ? (
               <Badge variant={enabled ? "success" : "secondary"} className="text-xs">
-                {enabled ? <CheckCircle className="w-3 h-3 mr-1" /> : <span className="w-2 h-2 rounded-full bg-current inline-block mr-1" />}{enabled ? t("plugins.enabled") : t("plugins.disabled")}
+                {enabled ? <CheckCircle className="size-3 mr-1" /> : <span className="size-2 rounded-full bg-current inline-block mr-1" />}{enabled ? t("plugins.enabled") : t("plugins.disabled")}
               </Badge>
             ) : (
               <Badge variant="secondary" className="text-xs">{t("plugins.not_installed")}</Badge>
             )}
             {updateAvail && (
               <Badge variant="warning" className="text-xs">
-                <ArrowUp className="w-4 h-4" />{t("plugins.update_available")}
+                <ArrowUp className="size-4" />{t("plugins.update_available")}
               </Badge>
             )}
           </div>
@@ -290,12 +293,12 @@ export function PluginDetailModal({ plugin, open, onOpenChange }: {
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-0.5">
               {[1, 2, 3, 4, 5].map((s) => (
-                <Star key={s} className={`w-3 h-3 ${s <= rating ? "text-warning fill-warning" : "text-muted-foreground"}`} />
+                <Star key={s} className={`size-3 ${s <= rating ? "text-warning fill-warning" : "text-muted-foreground"}`} />
               ))}
               <span className="text-xs text-muted-foreground ml-1">{rating.toFixed(1)}</span>
             </div>
-            <span className="text-xs text-muted-foreground"><Download className="w-4 h-4" />{downloads.toLocaleString()} {t("plugins.downloads")}</span>
-            <span className="text-xs text-muted-foreground"><Clock className="w-4 h-4" />{t("plugins.updated")}: {lastUpdated}</span>
+            <span className="text-xs text-muted-foreground"><Download className="size-4" />{downloads.toLocaleString()} {t("plugins.downloads")}</span>
+            <span className="text-xs text-muted-foreground"><Clock className="size-4" />{t("plugins.updated")}: {lastUpdated}</span>
           </div>
 
           <div>

@@ -27,6 +27,10 @@ server:
   dns_enabled: false
   grpc_enabled: false
   icmp_enabled: false
+  udp_enabled: false
+  udp_addr: ":8899"
+  quic_enabled: false          # QUIC/HTTP3-like beacon (TLS 1.3, ALPN h3/fc2); requires cert_file/key_file
+  quic_addr: ":4433"
   ssh_enabled: false
   ssh_port: 2222
   ssh_addr: ""                # bind addr for the SSH beacon listener (default ":ssh_port")
@@ -34,6 +38,16 @@ server:
   ssh_password: ""            # SSH password (empty = accept any password or public key / key-only)
   ssh_key_auth: true          # allow public key authentication
   ssh_host_key: data/ssh_host_key   # SSH host key path (auto-generated if missing)
+  lportfwd_enabled: true      # allow agents to open tunneled local port forwards
+                              # (agent binds 127.0.0.1:lport, traffic egresses from the teamserver)
+  dns_obscure: false          # XOR-obscure DNS C2 fragments (must match generated implants)
+  auto_recon: []              # e.g. [hostinfo, process_tree] queued on first check-in
+
+# Rules of engagement: refuse tasks whose command IPs fall outside allow or inside deny.
+roe:
+  enabled: false
+  allow_cidrs: []             # e.g. ["10.0.0.0/8", "192.168.0.0/16"]
+  deny_cidrs: []              # e.g. ["10.0.0.1/32"] hospital / ICS exclusions
 
 listeners:
   h2c:
@@ -122,3 +136,12 @@ security:
   # state and require an operator DIFFERENT from the task creator to approve
   # them before the agent executes them.
   require_approval: false
+
+monitoring:
+  # Metric alert bridge (OPT-IN): threshold checks over the Prometheus gauges
+  # that fire a notification, an alert.triggered event and webhooks.
+  alerts_enabled: false
+  agents_online_min: 0     # alert when online agents <= this while any are registered
+  tasks_pending_max: 100   # alert when the pending-task backlog exceeds this
+  cooldown_seconds: 600    # per-rule silence window between repeat alerts
+  eval_seconds: 30         # evaluation cadence

@@ -93,8 +93,8 @@ def main():
             }
             with open(log_file, "a") as f:
                 f.write(json.dumps(log_entry) + "\n")
-        except OSError:
-            pass
+        except OSError as exc:
+            print(json.dumps({"level": "error", "message": f"Plugin error: failed to write webhook log entry to log file '{log_file}': {exc}"}), file=sys.stderr)
 
     output = f"Forwarded {event_type} to {webhook_type} | Status: {status}"
     if detail_msg:

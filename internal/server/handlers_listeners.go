@@ -153,7 +153,7 @@ func (s *Server) startListenerForRecord(l *db.Listener, context string) bool {
 	if scheme == "" {
 		scheme = l.Type
 	}
-	if scheme != "http" && scheme != "https" && scheme != "tcp" && scheme != "tls" && scheme != "dns" && scheme != "icmp" && scheme != "ssh" && scheme != "h2c" {
+	if scheme != "http" && scheme != "https" && scheme != "tcp" && scheme != "tls" && scheme != "dns" && scheme != "icmp" && scheme != "ssh" && scheme != "h2c" && scheme != "udp" && scheme != "quic" {
 		return false
 	}
 
@@ -201,6 +201,7 @@ func (s *Server) startListenerForRecord(l *db.Listener, context string) bool {
 var supportedListenerSchemes = map[string]bool{
 	"http": true, "https": true, "tcp": true, "tls": true,
 	"dns": true, "icmp": true, "ssh": true, "h2c": true,
+	"udp": true, "quic": true,
 }
 
 // validateListenerScheme reports whether the scheme is one the server can bind.
@@ -223,7 +224,7 @@ func listenerSchemeHint(scheme string) string {
 	case "grpc", "grpcs":
 		return "listener scheme \"" + scheme + "\" is not a bindable listener type: gRPC beacons are configured via server.grpc_addr"
 	default:
-		return "unsupported listener scheme \"" + scheme + "\" (supported: http, https, tcp, tls, dns, icmp, ssh, h2c)"
+		return "unsupported listener scheme \"" + scheme + "\" (supported: http, https, tcp, tls, dns, icmp, ssh, h2c, udp, quic)"
 	}
 }
 
@@ -242,6 +243,10 @@ func normalizeListenerProtocol(l *db.Listener) {
 			l.Type = "ssh"
 		case "h2c":
 			l.Type = "h2c"
+		case "udp":
+			l.Type = "udp"
+		case "quic":
+			l.Type = "quic"
 		default:
 			l.Type = "tcp"
 		}
@@ -258,6 +263,10 @@ func normalizeListenerProtocol(l *db.Listener) {
 			l.Type = "ssh"
 		case "h2c":
 			l.Type = "h2c"
+		case "udp":
+			l.Type = "udp"
+		case "quic":
+			l.Type = "quic"
 		default:
 			l.Type = "tcp"
 		}
@@ -278,6 +287,12 @@ func normalizeListenerProtocol(l *db.Listener) {
 		case "h2c":
 			l.Scheme = "h2c"
 			l.Protocol = "h2c"
+		case "udp":
+			l.Scheme = "udp"
+			l.Protocol = "udp"
+		case "quic":
+			l.Scheme = "quic"
+			l.Protocol = "quic"
 		default:
 			l.Scheme = "tcp"
 			l.Protocol = "tcp"
@@ -295,7 +310,7 @@ func (s *Server) handleCreateListener(c *gin.Context) {
 		l.Name = "Listener " + fmt.Sprintf("%d", l.Port)
 	}
 
-	// Reject schemes the server never binds (wss/ws, grpc, mtls, udp, smb as
+	// Reject schemes the server never binds (wss/ws, grpc, mtls, smb as
 	// a DB listener, ...) with a clear error instead of silently coercing
 	// them to TCP or skipping the bind — a listener row that cannot run must
 	// never be reported as "running".
@@ -312,6 +327,26 @@ func (s *Server) handleCreateListener(c *gin.Context) {
 	}
 
 	normalizeListenerProtocol(&l)
+
+	// For port-less listener schemes the operator supplies the domain / bind
+	// host through the shared Host field (both the UI and API create path only
+	// expose host/port). Persist it into the protocol-specific field that
+	// startListenerForRecord and listenerKey actually use, so a DNS/ICMP
+	// listener is not born with an empty DNSDomain/ICMPAddr (key "dns://",
+	// dead bind, mismatch with resolveListener which reads Host).
+	switch l.Scheme {
+	case "dns":
+		if l.DNSDomain == "" {
+			l.DNSDomain = l.Host
+		}
+	case "icmp":
+		if l.ICMPAddr == "" {
+			l.ICMPAddr = l.Host
+			if l.Host == "" {
+				l.ICMPAddr = "0.0.0.0"
+			}
+		}
+	}
 
 	if l.Port != 0 && (l.Port < 1 || l.Port > 65535) {
 		respondError(c, http.StatusBadRequest, "port must be between 1 and 65535")
@@ -434,6 +469,21 @@ func (s *Server) handleUpdateListener(c *gin.Context) {
 	if updates.ICMPAddr != "" {
 		l.ICMPAddr = updates.ICMPAddr
 	}
+	// Keep protocol-specific fields consistent with Host for port-less schemes
+	// when the operator edited only host (UI exposes Host for DNS/ICMP too).
+	switch l.Scheme {
+	case "dns":
+		if l.DNSDomain == "" {
+			l.DNSDomain = l.Host
+		}
+	case "icmp":
+		if l.ICMPAddr == "" {
+			l.ICMPAddr = l.Host
+			if l.Host == "" {
+				l.ICMPAddr = "0.0.0.0"
+			}
+		}
+	}
 	// Capture the old listener key BEFORE Save mutates l, so we stop the
 	// previously-running listener (not the new one) when its bind address
 	// changes. GORM's Save writes back all fields, so computing the key
@@ -451,7 +501,10 @@ func (s *Server) handleUpdateListener(c *gin.Context) {
 		s.stopExtraListener(oldKey)
 	}
 	if l.Enabled {
-		s.startListenerForRecord(&l, "updated")
+		if !s.startListenerForRecord(&l, "updated") {
+			l.Status = "stopped"
+			s.db.Model(&l).Update("status", "stopped")
+		}
 	} else if updates.Enabled != nil && !*updates.Enabled {
 		s.stopExtraListener(oldKey)
 	}

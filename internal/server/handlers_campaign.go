@@ -11,6 +11,7 @@ import (
 	"github.com/forgec2/forgec2/internal/util"
 	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // handleCampaignsList returns all campaign-wizard campaigns.
@@ -357,7 +358,11 @@ func (s *Server) handleCampaignKillChain(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "no tasks created: all campaign agents are at the pending-task ceiling")
 		return
 	}
-	if err := s.db.CreateInBatches(tasks, 100).Error; err != nil {
+	// Atomic insert (see handlers_agent_batch.go): partial chunk failure
+	// would otherwise leave rows behind while counters roll back everything.
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		return tx.CreateInBatches(tasks, 100).Error
+	}); err != nil {
 		for i := range tasks {
 			s.decPendingTasks(tasks[i].AgentID)
 		}

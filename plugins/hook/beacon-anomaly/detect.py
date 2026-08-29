@@ -61,10 +61,10 @@ def _db_history(db, agent_id):
                         delta = (d1 - d0).total_seconds()
                         if delta > 0:
                             timings.append(delta)
-                    except (ValueError, TypeError):
-                        pass
-    except Exception:
-        pass
+                    except (ValueError, TypeError) as exc:
+                        print(json.dumps({"level": "error", "message": f"Plugin error: invalid beacon timestamp pair: {exc}"}), file=sys.stderr)
+    except Exception as exc:
+        print(json.dumps({"level": "error", "message": f"Plugin error: failed to load beacon history for agent '{agent_id}': {exc}"}), file=sys.stderr)
     return timings, sizes
 
 
@@ -286,8 +286,8 @@ def main():
         try:
             with open(log_file, "a") as f:
                 f.write(json.dumps(summary, default=str) + "\n")
-        except OSError:
-            pass
+        except OSError as exc:
+            print(json.dumps({"level": "error", "message": f"Plugin error: failed to write anomaly summary to log file '{log_file}': {exc}"}), file=sys.stderr)
 
     write_result(True, output=output, data=summary)
 

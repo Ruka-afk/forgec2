@@ -90,8 +90,8 @@ def main():
             with open(log_file, "a") as f:
                 for cred in credentials:
                     f.write(json.dumps(cred, default=str) + "\n")
-        except OSError:
-            pass
+        except OSError as exc:
+            print(json.dumps({"level": "error", "message": f"Plugin error: failed to write scraped credentials to log file '{log_file}': {exc}"}), file=sys.stderr)
 
     write_result(True, output=output, data={"found": credentials, "summary": summary})
 

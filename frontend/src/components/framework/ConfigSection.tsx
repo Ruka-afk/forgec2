@@ -32,7 +32,7 @@ export function ConfigSection({
       <CardHeader className="border-b">
         <div className="flex items-start gap-3">
           {icon && (
-            <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/10">
+            <div className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/10">
               {icon}
             </div>
           )}

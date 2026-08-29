@@ -27,12 +27,19 @@ const enDict: Dict = en;
 const zhRef: { current: Dict | null } = { current: null };
 let zhPromise: Promise<Dict> | null = null;
 
+// G4 fix: on chunk load failure, reset the cached rejected promise so the
+// user can retry by switching language again (rather than being stuck).
 function loadZh(): Promise<Dict> {
   if (zhRef.current) return Promise.resolve(zhRef.current);
-  zhPromise ??= import("./zh").then((m) => {
-    zhRef.current = m.zh;
-    return m.zh;
-  });
+  if (!zhPromise) {
+    zhPromise = import("./zh").then((m) => {
+      zhRef.current = m.zh;
+      return m.zh;
+    }).catch((err) => {
+      zhPromise = null;
+      throw err;
+    });
+  }
   return zhPromise;
 }
 
@@ -79,6 +86,9 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     document.documentElement.dir = "ltr";
   }, []);
 
+  // G2 fix: include locale in deps so `t` identity changes on language switch,
+  // causing memoized children (Sidebar, CommandPalette items, document.title
+  // effect) to re-render correctly.
   const t = useCallback((key: string, params?: Record<string, string | number>): string => {
     const l = localeRef.current;
     const dict = l === "zh" && zhRef.current ? zhRef.current : enDict;
@@ -89,7 +99,8 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       });
     }
     return val;
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- locale is read via localeRef; the dep is intentional (G2): it rotates t's identity on language switch so memoized children re-render.
+  }, [locale]);
   const dir: "ltr" | "rtl" = "ltr";
   const value = useMemo(() => ({ locale, setLocale, t, dir }), [locale, setLocale, t, dir]);
 

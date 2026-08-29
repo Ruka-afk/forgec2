@@ -641,6 +641,30 @@ func (s *Server) handleAPIExportReportHTML(c *gin.Context) {
 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
 }
 
+// handleAPIGetGeneratedReport returns the full content of one generated
+// report row (used by the AI-report viewer on the Report page).
+func (s *Server) handleAPIGetGeneratedReport(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, "invalid report id")
+		return
+	}
+	var r db.GeneratedReport
+	if err := s.db.First(&r, id).Error; err != nil {
+		respondError(c, http.StatusNotFound, "report not found")
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"report": gin.H{
+		"id":      r.ID,
+		"name":    r.Name,
+		"template": r.Template,
+		"format":  r.Format,
+		"content": r.Content,
+		"created": r.CreatedAt.Format("2006-01-02 15:04:05"),
+	}})
+}
+
 func (s *Server) handleAPIDeleteReport(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)

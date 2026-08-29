@@ -47,7 +47,7 @@ export const toneStyles: Record<Tone, ToneStyle> = {
     dot: "bg-muted-foreground",
     bg: "bg-muted/50",
     text: "text-muted-foreground",
-    ring: "ring-muted-foreground/30",
+    ring: "ring-muted-foreground/85",
   },
   primary: {
     dot: "bg-primary",

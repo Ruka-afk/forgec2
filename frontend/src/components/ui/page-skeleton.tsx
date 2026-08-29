@@ -20,10 +20,10 @@ export function PageSkeleton({
       {Array.from({ length: rows }, (_, i) => (
         <div
           key={i}
-          className="rounded-xl border border-border/60 bg-card/60 p-(--card-spacing)"
+          className="rounded-lg border border-border/60 bg-card/60 p-(--card-spacing)"
         >
           <div className="flex items-center gap-3 mb-4">
-            <Skeleton className="w-9 h-9 rounded-lg" />
+            <Skeleton className="size-9 rounded-lg" />
             <div className="space-y-1.5">
               <Skeleton className="h-3.5 w-44" />
               <Skeleton className="h-2.5 w-28" />

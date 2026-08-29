@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -55,6 +56,16 @@ func (b *scriptingBridge) SendTask(caller scripting.Caller, agentID, taskType, p
 	task, err := b.s.createTask(agentID, taskType, params, "", "", "", 0, 0)
 	if err != nil {
 		return 0, err
+	}
+	// Attribute the task to the scripting caller: the approval flow treats an
+	// empty CreatedBy as "system task approvable by anyone", which let a lone
+	// operator create AND self-approve a dangerous task via a script.
+	if caller.Username != "" {
+		if err := b.s.db.Model(task).Update("created_by", caller.Username).Error; err != nil {
+			slog.Warn("Script task attribution failed", "task_id", task.ID, "err", err)
+		} else {
+			task.CreatedBy = caller.Username
+		}
 	}
 	b.s.broadcastTaskUpdate(agentID, *task)
 	return uint64(task.ID), nil

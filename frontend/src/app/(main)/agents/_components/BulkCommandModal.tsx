@@ -125,7 +125,7 @@ export function BulkCommandModal({
             </div>
           )}
           {cmdType === "screenshot" && (
-            <p className="text-xs text-muted-foreground/70">{t("agents.no_params_needed")}</p>
+            <p className="text-xs text-muted-foreground/100">{t("agents.no_params_needed")}</p>
           )}
         </div>
         <DialogFooter>

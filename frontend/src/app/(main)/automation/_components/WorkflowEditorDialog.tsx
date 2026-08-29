@@ -45,7 +45,9 @@ interface WorkflowEditorDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editWf: Workflow | null;
-  onSave: (payload: { name: string; description: string; scope_type: string; scope_ids: string[]; steps: WorkflowStep[] }) => void;
+  // scope_ids is a STRING on the wire (backend binds ScopeIDs string) —
+  // sending an array failed ShouldBindJSON on every create/update.
+  onSave: (payload: { name: string; description: string; scope_type: string; scope_ids: string; steps: WorkflowStep[] }) => void;
 }
 
 export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSave }: WorkflowEditorDialogProps) {
@@ -104,7 +106,17 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
 
   function handleSave() {
     if (!formName.trim()) return;
-    onSave({ name: formName.trim(), description: formDesc, scope_type: formScope, scope_ids: [], steps: formSteps });
+    onSave({
+      name: formName.trim(),
+      description: formDesc,
+      scope_type: formScope,
+      // Preserve the edited workflow's existing scope_ids verbatim — the
+      // editor has no id picker, and the backend assigns unconditionally
+      // (a hardcoded "[]" used to wipe all targets on every edit).
+      scope_ids: editWf?.scope_ids || "",
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      steps: formSteps.map(({ _key, ...s }) => s),
+    });
   }
 
   return (
@@ -139,15 +151,15 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
           <div>
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-sm font-semibold text-foreground m-0">{t("workflows.steps")}</h4>
-              <Button variant="outline" size="xs" onClick={addStep}><Plus className="w-4 h-4" />{t("workflows.add_step")}</Button>
+              <Button variant="outline" size="xs" onClick={addStep}><Plus className="size-4" />{t("workflows.add_step")}</Button>
             </div>
             <div className="space-y-2">
               {formSteps.map((step, idx) => (
                 <div key={step.id ?? step._key ?? idx} className="p-2 rounded-lg bg-muted space-y-2">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-xs text-muted-foreground min-w-[20px]">#{step.step_order}</span>
-                    <Button variant="ghost" size="icon-xs" onClick={() => moveStep(idx, "up")} disabled={idx === 0} aria-label={t("workflows.move_up")}><ChevronUp className="w-3 h-3" /></Button>
-                    <Button variant="ghost" size="icon-xs" onClick={() => moveStep(idx, "down")} disabled={idx === formSteps.length - 1} aria-label={t("workflows.move_down")}><ChevronDown className="w-3 h-3" /></Button>
+                    <Button variant="ghost" size="icon-xs" onClick={() => moveStep(idx, "up")} disabled={idx === 0} aria-label={t("workflows.move_up")}><ChevronUp className="size-3" /></Button>
+                    <Button variant="ghost" size="icon-xs" onClick={() => moveStep(idx, "down")} disabled={idx === formSteps.length - 1} aria-label={t("workflows.move_down")}><ChevronDown className="size-3" /></Button>
                     <Select value={step.task_type} onValueChange={v => { if (v !== null) updateStep(idx, "task_type", v); }}>
                       <SelectTrigger className="w-32"><SelectValue placeholder={t("common.type")} /></SelectTrigger>
                       <SelectContent>

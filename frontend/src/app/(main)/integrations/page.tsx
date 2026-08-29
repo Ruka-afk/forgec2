@@ -147,21 +147,21 @@ export default function IntegrationsPage() {
 
   function getIcon(type: string): React.ReactNode {
     switch (type) {
-      case "webhook": return <Link2 className="w-4 h-4" />;
-      case "notification": return <Bell className="w-4 h-4" />;
-      case "slack": return <MessageCircle className="w-4 h-4" />;
-      case "discord": return <MessageCircle className="w-4 h-4" />;
-      case "email": return <Mail className="w-4 h-4" />;
-      case "telegram": return <Send className="w-4 h-4" />;
-      case "jira": return <Shield className="w-4 h-4" />;
-      case "thehive": return <Shield className="w-4 h-4" />;
-      default: return <Plug className="w-4 h-4" />;
+      case "webhook": return <Link2 className="size-4" />;
+      case "notification": return <Bell className="size-4" />;
+      case "slack": return <MessageCircle className="size-4" />;
+      case "discord": return <MessageCircle className="size-4" />;
+      case "email": return <Mail className="size-4" />;
+      case "telegram": return <Send className="size-4" />;
+      case "jira": return <Shield className="size-4" />;
+      case "thehive": return <Shield className="size-4" />;
+      default: return <Plug className="size-4" />;
     }
   }
 
   return (
     <PageContainer title={t("integrations.title")} subtitle={t("integrations.subtitle")} actions={<>
-        <Button variant="ghost" onClick={fetchIntegrations}><RefreshCw className="w-4 h-4" /> {t("integrations.refresh")}</Button>
+        <Button variant="ghost" onClick={fetchIntegrations}><RefreshCw className="size-4" /> {t("integrations.refresh")}</Button>
       </>}>
       {loading ? (
         <div className="flex items-center justify-center py-16">
@@ -180,7 +180,7 @@ export default function IntegrationsPage() {
             ) : (
               integrations.map((intg, i) => (
                 <Card key={intg.id ?? `ro-${i}`} className="p-3.5 flex items-center gap-3">
-                  <div className="w-10 h-10 flex items-center justify-center rounded-xl bg-secondary ring-1 ring-border/50 text-primary">{getIcon(intg.type)}</div>
+                  <div className="size-10 flex items-center justify-center rounded-xl bg-secondary ring-1 ring-border/50 text-primary">{getIcon(intg.type)}</div>
                   <div className="flex-1 flex flex-col min-w-0">
                     <span className="text-sm font-semibold text-foreground">{intg.name}</span>
                     <span className="text-(--fs-xs-sm) uppercase text-muted-foreground">{intg.type}</span>
@@ -193,10 +193,10 @@ export default function IntegrationsPage() {
                     {!intg.readonly && intg.id ? (
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon-sm" onClick={() => toggleIntegration(intg.id)} aria-label={t("integrations.a11y_toggle")}>
-                          <Power className="w-3.5 h-3.5" />
+                          <Power className="size-3.5" />
                         </Button>
                         <Button variant="ghost" size="icon-sm" onClick={() => deleteIntegration(intg.id)} aria-label={t("common.delete")}>
-                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                          <Trash2 className="size-3.5 text-destructive" />
                         </Button>
                       </div>
                     ) : null}

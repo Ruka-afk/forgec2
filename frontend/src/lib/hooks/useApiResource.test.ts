@@ -59,9 +59,11 @@ describe("useApiResource", () => {
     const { result } = renderHook(() => useApiResource<number[]>({ fetcher }));
     await waitFor(() => expect(result.current.data).toEqual([0]));
 
-    const p1 = result.current.refresh();
-    const p2 = result.current.refresh();
+    let p1: Promise<void>;
+    let p2: Promise<void>;
     await act(async () => {
+      p1 = result.current.refresh();
+      p2 = result.current.refresh();
       resolveFirst([1]);
       resolveSecond([2]);
       await Promise.all([p1, p2]);
@@ -76,7 +78,9 @@ describe("useApiResource", () => {
     const fetcher = vi.fn().mockResolvedValue([1]);
     renderHook(() => useApiResource<number[]>({ fetcher, pollMs: 5000 }));
 
-    await vi.advanceTimersByTimeAsync(6000);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000);
+    });
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 });

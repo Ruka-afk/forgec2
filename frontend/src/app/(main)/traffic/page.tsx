@@ -100,7 +100,7 @@ export default function TrafficPage() {
   };
 
   return (
-    <PageContainer title={t("traffic.title")} subtitle={`${t("traffic.request_log")} · C2 Beacon ${t("traffic.comm_record")}`} contentClassName="space-y-6" actions={<>
+    <PageContainer title={t("traffic.title")} subtitle={`${t("traffic.request_log")} · C2 Beacon ${t("traffic.comm_record")}`} actions={<>
         <div className="flex items-center gap-2 flex-wrap">
           <Label className="flex items-center gap-x-2 text-sm text-muted-foreground cursor-pointer">
             <Checkbox checked={autoRefresh} onCheckedChange={setAutoRefresh} />
@@ -120,11 +120,11 @@ export default function TrafficPage() {
             </SelectContent>
           </Select>
           <Button onClick={loadTraffic} size="lg" className="">
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="size-4" />
             <span>{t("traffic.refresh")}</span>
           </Button>
           <Button onClick={clearLog} size="lg" className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="size-4" />
             <span>{t("traffic.clear")}</span>
           </Button>
         </div>

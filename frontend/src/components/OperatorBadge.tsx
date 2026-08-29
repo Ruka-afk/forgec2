@@ -21,7 +21,7 @@ function OperatorBadgeInner({ username, isCurrentUser, size = "sm", showDot = tr
       }`}
     >
       {showDot && (
-        <span className={`w-1.5 h-1.5 rounded-full ${
+        <span className={`size-1.5 rounded-full ${
           isCurrentUser ? "bg-primary" : "bg-success"
         } ${!isCurrentUser ? "animate-pulse-glow" : ""}`} />
       )}

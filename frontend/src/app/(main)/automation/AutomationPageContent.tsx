@@ -23,6 +23,7 @@ import { RuleDialog } from "./_components/RuleDialog";
 import { WebhookDialog } from "./_components/WebhookDialog";
 import { AlertRuleDialog } from "./_components/AlertRuleDialog";
 import { ScheduledRulesCard } from "./_components/ScheduledRulesCard";
+import { OneShotTasksCard } from "./_components/OneShotTasksCard";
 import { WorkflowsTab } from "./_components/WorkflowsTab";
 
 const TAB_KEYS = ["rules", "scheduled", "workflows", "webhooks", "alerts"] as const;
@@ -60,6 +61,8 @@ export default function AutomationPage() {
     action_type: "command",
     action_config: "",
     webhook: { ...defaultWebhookParams },
+    macro_id: null as number | null,
+    macro_stop_on_error: true,
   });
   const [webhookForm, setWebhookForm] = useState({ name: "", url: "", event_type: "agent.checkin", method: "POST" });
 
@@ -94,21 +97,27 @@ export default function AutomationPage() {
     if (ruleForm.action_type === "notify") {
       return { type: "notify", params: { message: ruleForm.action_config, channel: "all" } };
     }
+    if (ruleForm.action_type === "run_macro") {
+      if (ruleForm.macro_id == null) return null;
+      return { type: "run_macro", params: { macro_id: ruleForm.macro_id, stop_on_error: ruleForm.macro_stop_on_error } };
+    }
     return { type: ruleForm.action_type, params: {} };
   };
 
   const handleSaveRule = async () => {
     try {
+      const action = buildAction();
+      if (!action) { toast.error(t("auto.macro_required")); return; }
       const payload = {
         name: ruleForm.name,
         event_type: ruleForm.event_type,
-        actions: [buildAction()],
+        actions: [action],
         conditions: [] as unknown[],
         enabled: true,
       };
       await api.postJson(paths.automation.rules, payload);
       setShowRuleModal(false);
-      setRuleForm({ name: "", event_type: "agent.checkin", action_type: "command", action_config: "", webhook: { ...defaultWebhookParams } });
+      setRuleForm({ name: "", event_type: "agent.checkin", action_type: "command", action_config: "", webhook: { ...defaultWebhookParams }, macro_id: null, macro_stop_on_error: true });
       loadData();
     } catch { toast.error(t("automation.toast.save_rule_failed")); }
   };
@@ -240,13 +249,13 @@ export default function AutomationPage() {
     <PageContainer title={t("auto.title")} subtitle={t("auto.subtitle")}>
 
       <Tabs value={tab} onValueChange={onTabChange}>
-        <TabsList className="mb-4 overflow-x-auto flex gap-1 bg-transparent p-0 h-auto">
+        <TabsList className="h-auto gap-1 overflow-x-auto bg-transparent p-0">
           {tabItems.map((item) => {
             const Icon = item.icon;
             return (
               <TabsTrigger key={item.key} value={item.key}
                 className="data-[state=active]:bg-secondary data-[state=active]:text-foreground gap-1.5">
-                <Icon className="w-3.5 h-3.5" /> {item.label}
+                <Icon className="size-3.5" /> {item.label}
               </TabsTrigger>
             );
           })}
@@ -259,7 +268,7 @@ export default function AutomationPage() {
               <div className="p-(--card-spacing) space-y-3">
                 {events.map((e) => (
                   <div key={e.type} className="flex items-center gap-3 p-3 bg-secondary border border-border rounded-lg hover:bg-secondary/80 transition-colors">
-                    <span className={`w-2 h-2 ${e.color} rounded-full`}></span>
+                    <span className={`size-2 ${e.color} rounded-full`}></span>
                     <span className="font-mono text-xs text-foreground">{e.type}</span>
                     <span className="text-muted-foreground">-</span>
                     <span className="text-muted-foreground">{e.desc}</span>
@@ -274,7 +283,7 @@ export default function AutomationPage() {
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-xs text-muted-foreground">{t("auto.rules_count", { count: eventRules.length })}</span>
                   <Button onClick={() => setShowRuleModal(true)} size="sm">
-                    <Plus className="w-4 h-4" /> {t("auto.new_rule")}
+                    <Plus className="size-4" /> {t("auto.new_rule")}
                   </Button>
                 </div>
                 <div className="space-y-2">
@@ -304,7 +313,7 @@ export default function AutomationPage() {
                               {enabled ? t("auto.disable") : t("auto.enable")}
                             </Button>
                             <Button onClick={() => handleDeleteRule(rid)} variant="destructive" size="icon-sm" aria-label={t("automation.delete_rule")}>
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="size-4" />
                             </Button>
                           </div>
                         </div>
@@ -319,6 +328,7 @@ export default function AutomationPage() {
 
         <TabsContent value="scheduled" className="mt-0">
           <ScheduledRulesCard onChanged={loadData} />
+          <OneShotTasksCard />
         </TabsContent>
 
         <TabsContent value="workflows" className="mt-0">
@@ -336,7 +346,7 @@ export default function AutomationPage() {
               <div className="flex items-center justify-between mb-4">
                 <span className="text-xs text-muted-foreground">{t("auto.webhooks_count", { count: webhooks.length })}</span>
                 <Button onClick={() => setShowWebhookModal(true)} size="sm">
-                  <Plus className="w-4 h-4" /> {t("auto.new_webhook")}
+                  <Plus className="size-4" /> {t("auto.new_webhook")}
                 </Button>
               </div>
               <div className="space-y-2">
@@ -375,13 +385,13 @@ export default function AutomationPage() {
                           >
                             <Tooltip>
                               <TooltipTrigger>
-                                <span><FlaskConical className="w-4 h-4" /></span>
+                                <span><FlaskConical className="size-4" /></span>
                               </TooltipTrigger>
                               <TooltipContent>{t("auto.test_webhook")}</TooltipContent>
                             </Tooltip>
                           </Button>
                           <Button onClick={() => handleDeleteWebhook(Number(wid))} variant="destructive" size="icon-sm" aria-label={t("automation.delete_webhook")}>
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="size-4" />
                           </Button>
                         </div>
                       </div>
@@ -398,7 +408,7 @@ export default function AutomationPage() {
             <Card className="overflow-hidden">
               <CardHeaderRow accent={false} icon={Bell} tone="destructive" title={t("auto.alert_rules")} description={t("auto.alert_rules_desc")} action={
                 <Button onClick={() => setShowAlertRuleModal(true)} size="sm">
-                  <Plus className="w-4 h-4" />{t("auto.new")}
+                  <Plus className="size-4" />{t("auto.new")}
                 </Button>
               } />
               <div className="p-(--card-spacing) space-y-2">
@@ -414,7 +424,7 @@ export default function AutomationPage() {
                       <Button onClick={() => handleToggleAlertRule(r)} variant="ghost" size="sm">
                         {r.enabled ? t("auto.on") : t("auto.off")}
                       </Button>
-                      <Button onClick={() => r.id && handleDeleteAlertRule(r.id)} variant="destructive" size="icon-sm" aria-label={t("automation.delete_alert_rule")}><Trash2 className="w-4 h-4" /></Button>
+                      <Button onClick={() => r.id && handleDeleteAlertRule(r.id)} variant="destructive" size="icon-sm" aria-label={t("automation.delete_alert_rule")}><Trash2 className="size-4" /></Button>
                     </div>
                   </div>
                 ))}

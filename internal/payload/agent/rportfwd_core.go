@@ -33,11 +33,17 @@ func rportfwdCollectOutbound() []socksFrame {
 	rportfwdMu.Lock()
 	defer rportfwdMu.Unlock()
 	var frames []socksFrame
-	for _, rc := range rportfwdConns {
+	for connID, rc := range rportfwdConns {
 		rc.mu.Lock()
 		if len(rc.outbound) > 0 {
 			frames = append(frames, rc.outbound...)
 			rc.outbound = nil
+		}
+		// Reap closed legs only AFTER their residual bytes have been drained
+		// (covers both peer-close and dial-failure tombstones; previously the
+		// tombstones were never removed and grew the map without bound).
+		if rc.closed && len(rc.outbound) == 0 {
+			delete(rportfwdConns, connID)
 		}
 		rc.mu.Unlock()
 	}
@@ -100,30 +106,42 @@ func rportfwdDial(connID uint64, target string) {
 }
 
 func rportfwdWrite(connID uint64, data []byte) {
+	// Read closed under the map lock (it is written under the same lock in
+	// rportfwdClose) — reading it after unlocking was a data race.
 	rportfwdMu.Lock()
 	rc, ok := rportfwdConns[connID]
+	closed := !ok || rc.closed
 	rportfwdMu.Unlock()
-	if !ok || rc.closed {
+	if closed {
 		return
 	}
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	if rc.tcpConn != nil {
 		rc.tcpConn.SetWriteDeadline(time.Now().Add(30 * time.Second))
-		rc.tcpConn.Write(data)
+		if _, err := rc.tcpConn.Write(data); err != nil {
+			// A dead target leg must not linger: without this the entry
+			// stays live, keeps buffering frames and silently drops them.
+			rc.closed = true
+			rc.tcpConn.Close()
+			go rportfwdClose(connID)
+		}
 	}
 }
 
+// rportfwdClose marks the leg closed. The entry and any still-buffered
+// outbound bytes are kept until rportfwdCollectOutbound has drained them —
+// deleting here silently dropped the final window of target->server data.
 func rportfwdClose(connID uint64) {
 	rportfwdMu.Lock()
-	rc, ok := rportfwdConns[connID]
-	if ok {
+	if rc, ok := rportfwdConns[connID]; ok {
+		rc.mu.Lock()
 		rc.closed = true
 		if rc.tcpConn != nil {
 			rc.tcpConn.Close()
+			rc.tcpConn = nil
 		}
-		rc.outbound = nil
-		delete(rportfwdConns, connID)
+		rc.mu.Unlock()
 	}
 	rportfwdMu.Unlock()
 }

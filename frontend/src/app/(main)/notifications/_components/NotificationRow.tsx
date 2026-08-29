@@ -29,10 +29,10 @@ const SEVERITY_VARIANT: Record<string, "success" | "destructive" | "warning" | "
 };
 
 const SEVERITY_ICONS: Record<string, React.ReactNode> = {
-  success: <CheckCircle className="w-4 h-4" />,
-  error: <XCircle className="w-4 h-4" />,
-  warning: <CircleAlert className="w-4 h-4" />,
-  info: <Info className="w-4 h-4" />,
+  success: <CheckCircle className="size-4" />,
+  error: <XCircle className="size-4" />,
+  warning: <CircleAlert className="size-4" />,
+  info: <Info className="size-4" />,
 };
 
 interface NotificationRowProps {
@@ -61,8 +61,8 @@ function NotificationRowInner({
         aria-label={`Select notification ${n.title}`}
         className="mt-1 shrink-0"
       />
-      <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs ${SEVERITY_VARIANT[n.severity] === "success" ? "bg-success/15 text-success" : SEVERITY_VARIANT[n.severity] === "destructive" ? "bg-destructive/15 text-destructive" : SEVERITY_VARIANT[n.severity] === "warning" ? "bg-warning/15 text-warning dark:bg-warning/20 dark:text-warning" : "bg-info/15 text-info"}`}>
-        {SEVERITY_ICONS[n.severity] || <Info className="w-4 h-4" />}
+      <div className={`shrink-0 size-8 rounded-full flex items-center justify-center text-xs ${SEVERITY_VARIANT[n.severity] === "success" ? "bg-success/15 text-success" : SEVERITY_VARIANT[n.severity] === "destructive" ? "bg-destructive/15 text-destructive" : SEVERITY_VARIANT[n.severity] === "warning" ? "bg-warning/15 text-warning dark:bg-warning/20 dark:text-warning" : "bg-info/15 text-info"}`}>
+        {SEVERITY_ICONS[n.severity] || <Info className="size-4" />}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
@@ -80,15 +80,15 @@ function NotificationRowInner({
       <div className="flex items-center gap-1 shrink-0">
         {!n.read && (
           <Tooltip>
-            <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => onMarkRead(n.id)} className="w-8 h-8 p-0" aria-label={t("notifications.mark_read")} />}>
-              <Check className="w-4 h-4" />
+            <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => onMarkRead(n.id)} className="size-8 p-0" aria-label={t("notifications.mark_read")} />}>
+              <Check className="size-4" />
             </TooltipTrigger>
             <TooltipContent>{t("notifications.mark_read")}</TooltipContent>
           </Tooltip>
         )}
         <Tooltip>
-          <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => onDelete(n.id)} className="w-8 h-8 p-0 text-muted-foreground hover:text-destructive" aria-label={t("notifications.delete")} />}>
-            <Trash2 className="w-4 h-4" />
+          <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => onDelete(n.id)} className="size-8 p-0 text-muted-foreground hover:text-destructive" aria-label={t("notifications.delete")} />}>
+            <Trash2 className="size-4" />
           </TooltipTrigger>
           <TooltipContent>{t("notifications.delete")}</TooltipContent>
         </Tooltip>

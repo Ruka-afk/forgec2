@@ -45,9 +45,24 @@ func (s *Server) handleToolkitPage(c *gin.Context) {
 
 func (s *Server) handleToolkitQuickAction(c *gin.Context) {
 	agentID := c.Param("id")
-	action := c.PostForm("action")
-	param := c.PostForm("param")
-	shell := c.PostForm("shell")
+	var req struct {
+		Action string `json:"action" form:"action"`
+		Param  string `json:"param" form:"param"`
+		Shell  string `json:"shell" form:"shell"`
+	}
+	_ = c.ShouldBind(&req)
+	action := req.Action
+	if action == "" {
+		action = c.PostForm("action")
+	}
+	param := req.Param
+	if param == "" {
+		param = c.PostForm("param")
+	}
+	shell := req.Shell
+	if shell == "" {
+		shell = c.PostForm("shell")
+	}
 	user := c.GetString("username")
 
 	taskType, command := buildQuickActionCommand(action, param, shell)
@@ -61,6 +76,10 @@ func (s *Server) handleToolkitQuickAction(c *gin.Context) {
 		CreatedBy: user,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
+	}
+	if taskType == "usb_drop" {
+		task.Path = command
+		task.Command = ""
 	}
 
 	if err := s.db.Create(&task).Error; err != nil {
@@ -172,6 +191,14 @@ func buildQuickActionCommand(action, param, shell string) (string, string) {
 		return "browser_steal", ""
 	case "cookie_export":
 		return "cookie_export", "all"
+	case "sccm_recon":
+		return "sccm_recon", ""
+	case "entra_prt":
+		return "entra_prt", ""
+	case "tun_start":
+		return "tun_start", param
+	case "tun_stop":
+		return "tun_stop", ""
 	case "vpn_creds":
 		return "vpn_creds", ""
 	case "wifi_creds":
@@ -182,6 +209,23 @@ func buildQuickActionCommand(action, param, shell string) (string, string) {
 		return "dcsync", param
 	case "privesc_check":
 		return "privesc_check", "all"
+	case "file_hunt":
+		return "file_hunt", param
+	case "screen_trigger_start":
+		return "screen_trigger_start", param
+	case "screen_trigger_stop":
+		return "screen_trigger_stop", ""
+	case "usb_enum":
+		return "usb_enum", ""
+	case "usb_drop":
+		return "usb_drop", param
+	case "browser_history":
+		if param == "" {
+			param = "all"
+		}
+		return "browser_history", param
+	case "session_recon":
+		return "session_recon", ""
 	default:
 		return "shell", action
 	}

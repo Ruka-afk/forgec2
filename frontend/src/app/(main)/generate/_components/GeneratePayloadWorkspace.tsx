@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 
 const ConnectionPanel = dynamic(() => import("./ConnectionPanel"), { ssr: false });
 const OneLinerPanel = dynamic(() => import("./OneLinerPanel"), { ssr: false });
+const DeliveryPanel = dynamic(() => import("./DeliveryPanel"), { ssr: false });
 const QuickPresets = dynamic(() => import("./QuickPresets"), { ssr: false });
 const BuildHistorySection = dynamic(() => import("./BuildHistorySection"), { ssr: false });
 
@@ -29,7 +30,7 @@ const FORMAT_KEY = "forgec2_gen_format";
 function SectionHeading({ icon, tint, title, desc, className }: { icon: ReactNode; tint: string; title: string; desc: string; className?: string }) {
   return (
     <div className={cn("flex items-center gap-x-3 mb-5", className)}>
-      <div className={cn("w-10 h-10 rounded-lg ring-1 ring-border/50 flex items-center justify-center", tint)}>{icon}</div>
+      <div className={cn("size-10 rounded-lg ring-1 ring-border/50 flex items-center justify-center", tint)}>{icon}</div>
       <div>
         <div className="text-sm font-semibold text-foreground">{title}</div>
         <div className="text-xs text-muted-foreground">{desc}</div>
@@ -147,11 +148,11 @@ export default function GeneratePayloadWorkspace() {
       />
       {showBanner && (
         <div className="mt-3 flex items-center gap-2 px-4 py-2 bg-warning/10 border border-warning/20 rounded-lg">
-          <Info className="w-4 h-4" />
-          <span className="flex-1 text-xs text-warning-foreground">{t("generate.banner_text")} <a href="https://go.dev/dl/" target="_blank" className="underline hover:text-warning-foreground transition-colors">{t("generate.banner_download")}</a></span>
+          <Info className="size-4" />
+          <span className="flex-1 text-xs text-warning-foreground">{t("generate.banner_text")} <a href="https://go.dev/dl/" target="_blank" rel="noopener noreferrer" className="underline hover:text-warning-foreground transition-colors">{t("generate.banner_download")}</a></span>
           <Tooltip>
             <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={dismissBanner} className="text-warning hover:text-warning" aria-label={t("generate.dismiss")} />}>
-            <X className="w-4 h-4" />
+            <X className="size-4" />
             </TooltipTrigger>
             <TooltipContent>{t("generate.dismiss")}</TooltipContent>
           </Tooltip>
@@ -160,7 +161,7 @@ export default function GeneratePayloadWorkspace() {
 
       <div className="mt-5 grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-5 items-start">
         {/* ── Left rail: connection (sticky) ── */}
-        <div className="min-w-0 lg:sticky lg:top-24 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
+        <div className="min-w-0 lg:sticky lg:top-12 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
           <ConnectionPanel
             listeners={g.listeners}
             shared={g.shared}
@@ -183,7 +184,7 @@ export default function GeneratePayloadWorkspace() {
         <div className="min-w-0 space-y-8">
           <section className="animate-fade-slide-up">
             <SectionHeading
-              icon={<AppWindow className="w-4 h-4" />}
+              icon={<AppWindow className="size-4" />}
               tint="bg-primary/10 text-primary"
               title={t("generate.agents_title")}
               desc={t("generate.build_one_desc")}
@@ -225,7 +226,7 @@ export default function GeneratePayloadWorkspace() {
               <div className="mt-4 space-y-6">
                 <div>
                   <SectionHeading
-                    icon={<PackageOpen className="w-4 h-4" />}
+                    icon={<PackageOpen className="size-4" />}
                     tint="bg-chart-6/violet text-chart-6"
                     title={t("generate.artifact_kit")}
                     desc={t("generate.artifact_kit_desc")}
@@ -237,7 +238,7 @@ export default function GeneratePayloadWorkspace() {
                 </div>
                 <div>
                   <SectionHeading
-                    icon={<Cpu className="w-4 h-4" />}
+                    icon={<Cpu className="size-4" />}
                     tint="bg-warning/10 text-warning"
                     title={t("generate.shellcode_donut")}
                     desc={t("generate.shellcode_donut_desc")}
@@ -247,6 +248,7 @@ export default function GeneratePayloadWorkspace() {
                     <DonutPanel form={g.forms.donut} setForm={makeDispatch("donut")} busy={g.states.donut.busy} result={g.states.donut.result} onGenerate={g.handlerMap.donut} fileRef={g.donutFileRef} canGenerate={canGenerate} />
                   </div>
                 </div>
+                <DeliveryPanel />
               </div>
             )}
           </section>

@@ -109,6 +109,10 @@ export default function ToolkitPage() {
       { cmd: "systeminfo", desc: t("toolkit.desc_systeminfo") },
       { cmd: "env", desc: t("toolkit.desc_env") },
       { cmd: "uptime", desc: t("toolkit.desc_uptime") },
+      { cmd: "session_recon", desc: t("toolkit.desc_session_recon") },
+      { cmd: "file_hunt", desc: t("toolkit.desc_file_hunt") },
+      { cmd: "usb_enum", desc: t("toolkit.desc_usb_enum") },
+      { cmd: "browser_history", desc: t("toolkit.desc_browser_history") },
     ]},
     { name: t("toolkit.cat_process_service"), color: "emerald", commands: [
       { cmd: "ps", desc: t("toolkit.desc_ps") },
@@ -125,12 +129,16 @@ export default function ToolkitPage() {
       { cmd: "net user", desc: t("toolkit.desc_net_user") },
       { cmd: "net localgroup", desc: t("toolkit.desc_net_localgroup") },
       { cmd: "av", desc: t("toolkit.desc_av") },
+      { cmd: "tun_start", desc: t("toolkit.desc_tun_start") },
+      { cmd: "tun_stop", desc: t("toolkit.desc_tun_stop") },
     ]},
     { name: t("toolkit.cat_credential_access"), color: "rose", commands: [
       { cmd: "mimikatz", desc: t("toolkit.desc_mimikatz") },
       { cmd: "creds_dump", desc: t("toolkit.desc_creds_dump") },
       { cmd: "browser_steal", desc: t("toolkit.desc_browser_steal") },
       { cmd: "cookie_export", desc: t("toolkit.desc_cookie_export") },
+      { cmd: "entra_prt", desc: t("toolkit.desc_entra_prt") },
+      { cmd: "sccm_recon", desc: t("toolkit.desc_sccm_recon") },
       { cmd: "vpn_creds", desc: t("toolkit.desc_vpn_creds") },
       { cmd: "wifi_creds", desc: t("toolkit.desc_wifi_creds") },
       { cmd: "kerberoast", desc: t("toolkit.desc_kerberoast") },
@@ -149,10 +157,13 @@ export default function ToolkitPage() {
       { cmd: "keylogger_stop", desc: t("toolkit.desc_keylogger_stop") },
       { cmd: "keylogger_dump", desc: t("toolkit.desc_keylogger_dump") },
       { cmd: "clipboard_get", desc: t("toolkit.desc_clipboard_get") },
+      { cmd: "screen_trigger_start", desc: t("toolkit.desc_screen_trigger_start") },
+      { cmd: "screen_trigger_stop", desc: t("toolkit.desc_screen_trigger_stop") },
     ]},
     { name: t("toolkit.cat_lateral_persist"), color: "teal", commands: [
       { cmd: "lateral", desc: t("toolkit.desc_lateral") },
       { cmd: "persistence", desc: t("toolkit.desc_persistence") },
+      { cmd: "usb_drop", desc: t("toolkit.desc_usb_drop") },
     ]},
   ];
 
@@ -209,7 +220,7 @@ export default function ToolkitPage() {
               <Card key={cat.name} className="overflow-hidden">
                 <div className="flex items-center justify-between px-5 py-3.5 cursor-pointer hover:bg-muted transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${colorMap[cat.color]}`}>
+                    <div className={`size-8 rounded-lg flex items-center justify-center border ${colorMap[cat.color]}`}>
                       <span className="text-xs font-bold">{cat.name[0]}</span>
                     </div>
                     <span className="font-semibold text-sm text-foreground">{cat.name}</span>

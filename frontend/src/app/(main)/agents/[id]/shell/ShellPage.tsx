@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import Link from "next/link";
 import dynamic from "next/dynamic";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
@@ -10,7 +9,6 @@ import { fetchAgentList, type AgentSummary } from "@/lib/agents";
 import { useI18n } from "@/lib/i18n";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ChevronRight } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { PageContainer } from "@/components/ui/page-container";
 const ShellTerminal = dynamic(() => import("@/components/ShellTerminal"), {
@@ -50,29 +48,20 @@ export default function AgentShellPage() {
   };
 
   return (
-    <PageContainer>
-      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
-        <Link href="/agents" className="hover:text-foreground transition-colors">{t("agents.header_agents")}</Link>
-        <ChevronRight className="w-4 h-4" />
-        <Link href={`/agents/${agentId}`} className="hover:text-foreground transition-colors">{agentId.slice(0, 8)}</Link>
-        <ChevronRight className="w-4 h-4" />
-        <span className="text-foreground">{t("agents.shell_title")}</span>
-      </div>
-      <div className="mb-4 flex flex-col gap-2">
-        <div className="flex items-center gap-3">
-          <Select value={agentId} onValueChange={(v) => { if (v !== null) handleAgentChange(v); }}>
-            <SelectTrigger className="min-w-[240px]">
-              <SelectValue placeholder={t("agents.shell_select_agent")} />
-            </SelectTrigger>
-            <SelectContent>
-              {agents.map((a) => (
-                <SelectItem key={a.id} value={a.id}>
-                  {a.hostname} ({a.ip}) - {t(`agents.${a.status}_label`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+    <PageContainer className="h-full gap-3 px-4 py-3 sm:px-6">
+      <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
+        <Select value={agentId} onValueChange={(v) => { if (v !== null) handleAgentChange(v); }}>
+          <SelectTrigger className="w-full sm:min-w-[240px] sm:w-auto">
+            <SelectValue placeholder={t("agents.shell_select_agent")} />
+          </SelectTrigger>
+          <SelectContent>
+            {agents.map((a) => (
+              <SelectItem key={a.id} value={a.id}>
+                {a.hostname} ({a.ip}) - {t(`agents.${a.status}_label`)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {listError && (
           <p className="text-xs text-destructive" role="alert">
             {listError}
@@ -82,7 +71,7 @@ export default function AgentShellPage() {
           <p className="text-xs text-muted-foreground">{t("agents.no_beacons")}</p>
         )}
       </div>
-      {agentId && <ShellTerminal agentId={agentId} osType={osType} />}
+      {agentId && <div className="min-h-0 flex-1"><ShellTerminal agentId={agentId} osType={osType} /></div>}
     </PageContainer>
   );
 }

@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Box, Info, Pencil, Play, Trash2, Upload } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
@@ -75,7 +76,7 @@ export default function BOFListTab({ files, loading, onUpload, onDelete, onRun, 
     <>
       <div className="flex justify-end mb-4">
         <Button onClick={() => setShowUpload(true)}>
-          <Upload className="w-4 h-4" />
+          <Upload className="size-4" />
           {t("bof.upload_title")}
         </Button>
       </div>
@@ -93,8 +94,8 @@ export default function BOFListTab({ files, loading, onUpload, onDelete, onRun, 
                 <div key={bid} className="px-5 py-4 hover:bg-muted transition-colors">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="w-8 h-8 bg-primary/10 dark:bg-primary/15 rounded-lg flex items-center justify-center text-primary text-xs font-bold shrink-0">
-                        <Box className="w-4 h-4" />
+                      <div className="size-8 bg-primary/10 dark:bg-primary/15 rounded-lg flex items-center justify-center text-primary text-xs font-bold shrink-0">
+                        <Box className="size-4" />
                       </div>
                       <div className="min-w-0">
                         <div className="text-sm font-medium text-foreground truncate">{bname}</div>
@@ -113,28 +114,28 @@ export default function BOFListTab({ files, loading, onUpload, onDelete, onRun, 
                         }}
                         className="px-3 py-1.5 text-xs bg-success/15 text-success rounded-lg border border-success/30 hover:bg-success/15 transition-colors"
                       >
-                        <Play className="w-4 h-4" />{t("bof.run")}
+                        <Play className="size-4" />{t("bof.run")}
                       </Button>
                       <Button
                         onClick={() => setShowInfo(b)}
                         aria-label={t("bof.info_title")}
                         className="px-3 py-1.5 text-xs bg-secondary text-muted-foreground rounded-lg border border-border hover:bg-secondary transition-colors"
                       >
-                        <Info className="w-4 h-4" />
+                        <Info className="size-4" />
                       </Button>
                       <Button
                         onClick={() => setEditTarget(b)}
                         aria-label={t("bof.edit_title")}
                         className="px-3 py-1.5 text-xs bg-secondary text-muted-foreground rounded-lg border border-border hover:bg-secondary transition-colors"
                       >
-                        <Pencil className="w-4 h-4" />
+                        <Pencil className="size-4" />
                       </Button>
                       <Button
                         onClick={() => onDelete(Number(bid) || 0)}
                         aria-label={t("common.delete")}
                         className="px-3 py-1.5 text-xs bg-destructive/10 text-destructive rounded-lg border border-destructive/20 hover:bg-destructive/10 transition-colors"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="size-4" />
                       </Button>
                     </div>
                   </div>
@@ -143,11 +144,7 @@ export default function BOFListTab({ files, loading, onUpload, onDelete, onRun, 
             })}
           </div>
         ) : (
-          <div className="text-center py-12 text-muted-foreground">
-            <Box className="w-4 h-4" />
-            <p>{t("bof.no_files")}</p>
-            <p className="text-xs mt-1">{t("bof.no_files_hint")}</p>
-          </div>
+          <EmptyState icon={Box} title={t("bof.no_files")} message={t("bof.no_files_hint")} />
         )}
       </Card>
 
@@ -289,7 +286,7 @@ export default function BOFListTab({ files, loading, onUpload, onDelete, onRun, 
               </div>
               <div>
                 <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bof.description")}</span>
-                <Input aria-label={t("bof.description")} value={editTarget.description || ""} onChange={(e) => setEditTarget({ ...editTarget, Description: e.target.value })} className="w-full h-9" />
+                <Input aria-label={t("bof.description")} value={editTarget.description || ""} onChange={(e) => setEditTarget({ ...editTarget, description: e.target.value })} className="w-full h-9" />
               </div>
               <DialogFooter>
                 <Button type="submit" size="lg" className="w-full text-sm font-medium transition-colors">

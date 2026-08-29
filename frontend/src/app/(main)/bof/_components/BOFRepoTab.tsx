@@ -34,7 +34,7 @@ function renderStars(rating: number | undefined, interactive: boolean, onRate?: 
           className={`${interactive ? "cursor-pointer hover:scale-110 transition-transform" : "cursor-default"} text-xs ${star <= r ? "text-warning" : "text-muted-foreground"}`}
           aria-label={`${rateLabel} ${star}`}
         >
-          <Star className="w-4 h-4" />
+          <Star className="size-4" />
         </Button>
       ))}
     </div>
@@ -112,8 +112,8 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
 
       <Card className="p-(--card-spacing) mb-6">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-8 h-8 bg-primary/10 dark:bg-primary/15 rounded-lg flex items-center justify-center text-primary">
-            <Link className="w-4 h-4" />
+          <div className="size-8 bg-primary/10 dark:bg-primary/15 rounded-lg flex items-center justify-center text-primary">
+            <Link className="size-4" />
           </div>
           <span className="text-sm font-semibold text-foreground">{t("bof.import_from_url")}</span>
         </div>
@@ -135,7 +135,7 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
             className="w-52 h-9 text-foreground"
           />
           <Button type="submit" size="lg" className="px-5 text-sm font-medium transition-colors">
-            <Download className="w-4 h-4" />{t("bof.import")}
+            <Download className="size-4" />{t("bof.import")}
           </Button>
         </form>
         {importStatus && (
@@ -148,7 +148,7 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
                   : "bg-destructive/10 text-destructive"
             }`}
           >
-            {importStatus.loading ? <Spinner size="xs" /> : importStatus.success ? <CheckCircle className="w-4 h-4" /> : <TriangleAlert className="w-4 h-4" />}
+            {importStatus.loading ? <Spinner size="xs" /> : importStatus.success ? <CheckCircle className="size-4" /> : <TriangleAlert className="size-4" />}
             {importStatus.message}
           </div>
         )}
@@ -228,7 +228,7 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
             const itemId = item.id || String(i);
             const imported = item.imported;
             return (
-              <Card key={itemId} className="p-(--card-spacing) hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
+              <Card key={itemId} className="p-(--card-spacing) hover:shadow-lg dark:hover:shadow-xl transition-shadow">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
 <IconBadge icon={Box} color={imported ? "success" : "primary"} size="lg" />
@@ -249,17 +249,17 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
                   <div className="flex items-center gap-4 text-xs text-muted-foreground">
                     {renderStars(item.rating, true, (rating) => onRate(itemId, rating), t("bof.rate"))}
                     <span className="flex items-center gap-1">
-                      <Star className="w-4 h-4" />
+                      <Star className="size-4" />
                       {item.reviews ?? 0}
                     </span>
                     <span className="flex items-center gap-1">
-                      <Download className="w-4 h-4" />
+                      <Download className="size-4" />
                       {item.downloads ?? 0}
                     </span>
                     <Badge variant="secondary" className="font-mono">{item.architecture || "x64"}</Badge>
                   </div>
                   <Button onClick={() => handleImportFromRepo(item)} disabled={!!imported} size="sm">
-                    {imported ? <Check className="w-4 h-4 mr-1" /> : <DownloadCloud className="w-4 h-4 mr-1" />}
+                    {imported ? <Check className="size-4 mr-1" /> : <DownloadCloud className="size-4 mr-1" />}
                     {imported ? t("bof.imported") : t("bof.import")}
                   </Button>
                 </div>

@@ -110,13 +110,13 @@ export default function NtlmPage() {
   };
 
   const tabs: { key: TabType; label: string; icon: React.ReactNode }[] = [
-    { key: "coerce", label: t("ntlm.tab_coerce"), icon: <Megaphone className="w-4 h-4" /> },
-    { key: "relay", label: t("ntlm.tab_relay"), icon: <ArrowLeftRight className="w-4 h-4" /> },
-    { key: "status", label: t("ntlm.tab_status"), icon: <BarChart2 className="w-4 h-4" /> },
+    { key: "coerce", label: t("ntlm.tab_coerce"), icon: <Megaphone className="size-4" /> },
+    { key: "relay", label: t("ntlm.tab_relay"), icon: <ArrowLeftRight className="size-4" /> },
+    { key: "status", label: t("ntlm.tab_status"), icon: <BarChart2 className="size-4" /> },
   ];
 
   return (
-    <PageContainer title={t("ntlm.title")} icon={<Zap className="w-4 h-4" />} subtitle={t("ntlm.subtitle")} contentClassName="space-y-6">
+    <PageContainer title={t("ntlm.title")} icon={<Zap className="size-4" />} subtitle={t("ntlm.subtitle")}>
 
       <Banner tone="warning" className="items-start">
         <div className="font-semibold">{t("ntlm.experimental_title")}</div>
@@ -203,7 +203,7 @@ export default function NtlmPage() {
             disabled={loading || !selectedAgent || !target}
             className="disabled:opacity-50"
           >
-            {loading ? <><Spinner size="sm" className="mr-2" />{t("ntlm.dispatching")}</> : <><Play className="w-4 h-4" />{t("ntlm.execute_coercion")}</>}
+            {loading ? <><Spinner size="sm" className="mr-2" />{t("ntlm.dispatching")}</> : <><Play className="size-4" />{t("ntlm.execute_coercion")}</>}
           </Button>
         </Card>
       </TabsContent>
@@ -253,14 +253,14 @@ export default function NtlmPage() {
                 disabled={loading || !selectedAgent || !relayTarget}
                 className="disabled:opacity-50"
               >
-                {loading ? <><Spinner size="sm" className="mr-2" />{t("ntlm.starting")}</> : <><Play className="w-4 h-4" />{t("ntlm.start_relay")}</>}
+                {loading ? <><Spinner size="sm" className="mr-2" />{t("ntlm.starting")}</> : <><Play className="size-4" />{t("ntlm.start_relay")}</>}
               </Button>
               <Button
                 variant="destructive"
                 onClick={handleRelayStop}
                 disabled={loading || !selectedAgent}
               >
-                <Square className="w-4 h-4" />{t("ntlm.stop_relay")}
+                <Square className="size-4" />{t("ntlm.stop_relay")}
               </Button>
             </div>
           </Card>
@@ -284,7 +284,7 @@ export default function NtlmPage() {
               {relayStatus.running ? `${relayStatus.count} ${t("ntlm.sessions_active")}` : t("ntlm.sessions_inactive")}
             </span>
               <Button variant="outline" size="sm" onClick={loadRelayStatus} className="ml-auto">
-              <RefreshCw className="w-4 h-4 mr-1" />{t("ntlm.refresh")}
+              <RefreshCw className="size-4 mr-1" />{t("ntlm.refresh")}
             </Button>
           </div>
 

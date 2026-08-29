@@ -82,6 +82,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   const listenersRef = useRef<Set<WSListener>>(new Set());
   const reconnectAttemptRef = useRef(0);
   const sendBufferRef = useRef<string[]>([]);
+  const connectRef = useRef<() => void>(() => {});
 
   const subscribe = useCallback((listener: WSListener) => {
     listenersRef.current.add(listener);
@@ -189,6 +190,10 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       };
     };
 
+    // Expose connect to the reconnect() callback which lives outside the
+    // useEffect closure.
+    connectRef.current = connect;
+
     // Hidden tabs throttle intervals (down to ~1/min), so heartbeat checks
     // can go stale. On return to the foreground, probe immediately: a dead
     // socket is closed here and the reconnect path takes over.
@@ -215,11 +220,21 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // G1 fix: directly call connect() instead of closing a potentially-CLOSED
+  // socket (which is a no-op that never re-enters the onclose→connect path).
   const reconnect = useCallback(() => {
     setReconnectFailed(false);
     reconnectAttemptRef.current = 0;
     if (reconnectRef.current) { clearTimeout(reconnectRef.current); reconnectRef.current = null; }
-    if (wsRef.current) wsRef.current.close();
+    // If socket is still OPEN, close it so connect() can create a fresh one.
+    // If already CLOSED/CLOSING, just call connect() — it creates a new socket.
+    const ws = wsRef.current;
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      ws.close();
+    } else {
+      wsRef.current = null;
+      connectRef.current();
+    }
   }, []);
 
   return (

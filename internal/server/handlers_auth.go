@@ -117,33 +117,25 @@ func (s *Server) handleLogin(c *gin.Context) {
 		if h := dummyHash(); h != "" {
 			middleware.CheckPassword(h, password)
 		}
-		slog.Warn("Login failed: invalid credentials", "ip", c.ClientIP())
+		slog.Warn("Login failed: account disabled", "username", username, "ip", c.ClientIP())
 		s.LogAuditRecord(c, "login_failed", "auth", username, "Account disabled", false, nil)
+		s.recordLoginFailure(clientIP, username)
 		s.renderLoginError(c, "Invalid username or password")
 		return
 	}
 
 	if user.PasswordHash == "" {
-		if err := s.validatePasswordComplexity(password); err != nil {
-			s.renderLoginError(c, err.Error())
+		slog.Warn("Login failed: user has no password hash (admin reset required)", "username", username, "ip", c.ClientIP())
+		s.LogAuditRecord(c, "login_failed", "auth", username, "Empty password hash", false, nil)
+		if h := dummyHash(); h != "" {
+			middleware.CheckPassword(h, password)
+		}
+		if locked, retryAfter := s.recordLoginFailure(clientIP, username); locked {
+			s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter))
 			return
 		}
-		hash, err := middleware.HashPassword(password)
-		if err != nil {
-			s.renderLoginError(c, "Failed to set password")
-			return
-		}
-		if err := s.db.Model(&user).Updates(map[string]interface{}{
-			"password_hash": hash,
-			"last_login":    time.Now(),
-			"last_ip":       c.ClientIP(),
-		}).Error; err != nil {
-			slog.Error("Failed to update password hash", "username", username, "err", err)
-			respondError(c, http.StatusInternalServerError, "failed to set password")
-			return
-		}
-		user.PasswordHash = hash
-		slog.Info("Password set for user", "username", username)
+		s.renderLoginError(c, "Invalid username or password")
+		return
 	} else if !middleware.CheckPassword(user.PasswordHash, password) {
 		slog.Warn("Login failed: invalid credentials", "ip", c.ClientIP())
 		s.LogAuditRecord(c, "login_failed", "auth", username, "Wrong password", false, nil)
@@ -293,7 +285,7 @@ func (s *Server) handleLogin(c *gin.Context) {
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
-			s.pluginManager.ExecuteHook(s.ctx, plugin.Event{
+			if err := s.pluginManager.ExecuteHook(s.ctx, plugin.Event{
 				Type:      plugin.EventUserLogin,
 				Timestamp: time.Now(),
 				UserID:    user.ID,
@@ -302,7 +294,9 @@ func (s *Server) handleLogin(c *gin.Context) {
 					"role":     user.Role,
 					"ip":       c.ClientIP(),
 				},
-			})
+			}); err != nil {
+				slog.Warn("Hook errors on user_login event", "user_id", user.ID, "err", err)
+			}
 		}()
 	}
 
@@ -331,7 +325,7 @@ func (s *Server) handleLogout(c *gin.Context) {
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
-			s.pluginManager.ExecuteHook(s.ctx, plugin.Event{
+			if err := s.pluginManager.ExecuteHook(s.ctx, plugin.Event{
 				Type:      plugin.EventUserLogout,
 				Timestamp: time.Now(),
 				UserID:    userID,
@@ -339,7 +333,9 @@ func (s *Server) handleLogout(c *gin.Context) {
 					"username": username,
 					"ip":       c.ClientIP(),
 				},
-			})
+			}); err != nil {
+				slog.Warn("Hook errors on user_logout event", "username", username, "err", err)
+			}
 		}()
 	}
 

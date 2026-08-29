@@ -84,10 +84,14 @@ func TestCancelledTaskResultNotApplied(t *testing.T) {
 	if reloaded.LastResultID != "" {
 		t.Errorf("cancelled task picked up last_result_id=%q", reloaded.LastResultID)
 	}
-	// The agent's task slot must still be released so the pending counter can
-	// never leak, but only once.
-	if n := s.agentPendingTasks[uuid]; n != 0 {
-		t.Errorf("pending counter not decremented for cancelled result: %d", n)
+	// The cancelled task's pending slot is NOT released here: terminal-state
+	// transitions own the decrement (cancel endpoint / kill-switch disarm /
+	// reject all release the slot at flip time, guarded by status conditions).
+	// A result arriving for an already-cancelled task is a pure no-op —
+	// decrementing again double-counted the release and could zero the
+	// per-agent gate early.
+	if n := s.agentPendingTasks[uuid]; n != 1 {
+		t.Errorf("cancelled result must not touch the pending counter: %d", n)
 	}
 }
 

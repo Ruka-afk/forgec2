@@ -24,6 +24,10 @@ type Manifest struct {
 	Params      []ManifestParam        `yaml:"params" json:"params"`                     // command/report params
 	Events      []string               `yaml:"events,omitempty" json:"events,omitempty"` // for hooks
 	Config      map[string]interface{} `yaml:"config,omitempty" json:"config,omitempty"` // default config
+	// Requires lists plugin names that must be registered before this one.
+	// LoadFromDisk topologically sorts a directory batch by these and refuses
+	// plugins whose dependencies are missing or cyclic.
+	Requires []string `yaml:"requires,omitempty" json:"requires,omitempty"`
 }
 
 // ManifestParam defines a user-configurable parameter for a plugin.

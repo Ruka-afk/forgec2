@@ -53,26 +53,47 @@ export function withChartData<T, P extends Record<string, unknown> = Record<stri
     const transformRef = useRef(transform);
     transformRef.current = transform;
 
-    // IntersectionObserver: only fetch when visible
+    // IntersectionObserver: only fetch when visible; fallback for hidden
+    // containers (Collapsible/tab with display:none → never intersects).
     useEffect(() => {
       const el = ref.current;
       if (!el) return;
+      if (!("IntersectionObserver" in window)) {
+        setVisible(true);
+        return;
+      }
       const obs = new IntersectionObserver(
         ([entry]) => { if (entry.isIntersecting) { setVisible(true); obs.disconnect(); } },
         { rootMargin: "100px" },
       );
       obs.observe(el);
-      return () => obs.disconnect();
+      // Fallback: hidden charts never intersect — force visible after 500ms
+      const fallback = setTimeout(() => setVisible(true), 500);
+      return () => {
+        obs.disconnect();
+        clearTimeout(fallback);
+      };
     }, []);
 
+    const genRef = useRef(0);
     const load = useCallback(() => {
+      const gen = ++genRef.current;
       const ep = endpointProp ?? endpoint;
       setLoading(true);
       setError(false);
       fetchChartData<T>(ep, (e) => api.get<unknown>(e), transformRef.current)
-        .then((value) => setData(value))
-        .catch(() => setError(true))
-        .finally(() => setLoading(false));
+        .then((value) => {
+          if (gen !== genRef.current) return; // stale
+          setData(value);
+        })
+        .catch(() => {
+          if (gen !== genRef.current) return;
+          setError(true);
+        })
+        .finally(() => {
+          if (gen !== genRef.current) return;
+          setLoading(false);
+        });
     }, [endpointProp]);
 
     useEffect(() => { if (visible) load(); }, [visible, load]);
@@ -80,12 +101,12 @@ export function withChartData<T, P extends Record<string, unknown> = Record<stri
     return (
       <div ref={ref}>
         {loading ? (
-          <div className="h-24 flex items-center justify-center text-muted-foreground/70 text-xs">
+          <div className="h-24 flex items-center justify-center text-muted-foreground/100 text-xs">
             <Spinner size="sm" />{t("common.loading")}
           </div>
         ) : error ? (
           <div className="h-24 flex items-center justify-center text-destructive text-xs" role="alert">
-            <AlertTriangle className="w-4 h-4 mr-2 inline" />{t("common.load_failed")}
+            <AlertTriangle className="size-4 mr-2 inline" />{t("common.load_failed")}
             <Button variant="link" size="sm" onClick={load} className="ml-2">{t("common.retry")}</Button>
           </div>
         ) : data != null ? (

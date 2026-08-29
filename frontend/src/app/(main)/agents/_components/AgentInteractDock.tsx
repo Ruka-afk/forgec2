@@ -241,7 +241,7 @@ export function AgentInteractDock({
             </span>
           )}
           {beacon.ip && (
-            <span className="hidden font-mono text-xs text-muted-foreground/70 md:inline">{beacon.ip}</span>
+            <span className="hidden font-mono text-xs text-muted-foreground/100 md:inline">{beacon.ip}</span>
           )}
           <div className="ml-auto flex items-center gap-1">
             <Button
@@ -281,13 +281,13 @@ export function AgentInteractDock({
           />
         )}
         {id && <AgentDockShot agentId={id} refreshKey={shotKey} />}
-        <Tabs value={tab} onValueChange={(v) => { if (v === "shell" || v === "files" || v === "tasks") onTabChange(v); }} className="flex min-h-0 flex-1 flex-col">
-          <TabsList className="h-8 w-full justify-start rounded-none border-b bg-transparent px-2">
-            <TabsTrigger value="shell" className="h-7 text-xs">{t("agents.dock_tab_shell")} <span className="ml-1 text-muted-foreground/60">1</span></TabsTrigger>
-            <TabsTrigger value="files" className="h-7 text-xs">{t("agents.dock_tab_files")} <span className="ml-1 text-muted-foreground/60">2</span></TabsTrigger>
-            <TabsTrigger value="tasks" className="h-7 text-xs">{t("agents.dock_tab_tasks")} <span className="ml-1 text-muted-foreground/60">3</span></TabsTrigger>
+        <Tabs value={tab} onValueChange={(v) => { if (v === "shell" || v === "files" || v === "tasks") onTabChange(v); }} className="flex min-h-0 flex-1 flex-col gap-0">
+          <TabsList className="mb-0 h-8 w-full justify-start rounded-none border-b bg-transparent px-2">
+            <TabsTrigger value="shell" className="h-7 text-xs">{t("agents.dock_tab_shell")} <span className="ml-1 text-muted-foreground/85">1</span></TabsTrigger>
+            <TabsTrigger value="files" className="h-7 text-xs">{t("agents.dock_tab_files")} <span className="ml-1 text-muted-foreground/85">2</span></TabsTrigger>
+            <TabsTrigger value="tasks" className="h-7 text-xs">{t("agents.dock_tab_tasks")} <span className="ml-1 text-muted-foreground/85">3</span></TabsTrigger>
           </TabsList>
-          <TabsContent value="shell" className="mt-0 min-h-0 flex-1 p-0">
+          <TabsContent value="shell" keepMounted className="mt-0 min-h-0 flex-1 p-0">
             {id && (
               <ShellTerminal
                 agentId={id}
@@ -297,7 +297,7 @@ export function AgentInteractDock({
               />
             )}
           </TabsContent>
-          <TabsContent value="files" className="mt-0 min-h-0 flex-1 p-0">
+          <TabsContent value="files" keepMounted className="mt-0 min-h-0 flex-1 p-0">
             {id && <AgentDockFiles agentId={id} osType={osType} />}
           </TabsContent>
           <TabsContent value="tasks" className="mt-0 min-h-0 flex-1 p-0">
@@ -321,7 +321,7 @@ export function AgentInteractDock({
                           <StatusBadge status={task.status} />
                           <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground">{task.command}</span>
                           {task.created_by && (
-                            <span className="hidden shrink-0 font-mono text-muted-foreground/70 sm:inline">{task.created_by}</span>
+                            <span className="hidden shrink-0 font-mono text-muted-foreground/100 sm:inline">{task.created_by}</span>
                           )}
                         </button>
                         {open && (

@@ -165,11 +165,11 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
     <Card id="scheduled" className="overflow-hidden scroll-mt-20">
       <CardHeaderRow accent={false} icon={CalendarClock} tone="warning" title={t("auto.scheduled_tasks")} description={t("auto.scheduled_tasks_desc")} action={<>        {showForm && (
           <Button variant="outline" size="sm" onClick={() => { setShowForm(false); resetForm(); }}>
-            <X className="w-4 h-4" /> {t("common.cancel")}
+            <X className="size-4" /> {t("common.cancel")}
           </Button>
         )}
         <Button size="sm" onClick={() => { resetForm(); setShowForm(true); }} className="gap-2">
-          <Plus className="w-4 h-4" /> {t("scheduler.new_schedule")}
+          <Plus className="size-4" /> {t("scheduler.new_schedule")}
         </Button>
       </>} />
 
@@ -247,9 +247,7 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
             ))}
           </div>
         ) : tasks.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
             <EmptyState icon={Clock} title={t("scheduler.empty_title")} />
-          </div>
         ) : (
           <div className="space-y-2">
             {tasks.map(task => (
@@ -262,18 +260,18 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
                     <span className="text-(--fs-xs-sm) text-muted-foreground">{t("scheduler.run_count")} {task.run_count}x</span>
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-(--fs-compact) text-muted-foreground mt-0.5">
-                    <span className="inline-flex items-center gap-1"><Bug className="w-3.5 h-3.5" />{agents.find(a => a.id === task.agent_id)?.hostname || task.agent_id?.slice(0, 8)}</span>
-                    <span className="inline-flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{task.schedule}</span>
-                    {task.next_run && <span className="inline-flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{t("scheduler.next")}: {formatTime(task.next_run)}</span>}
-                    {task.last_run && <span className="text-muted-foreground/70">{t("scheduler.last")}: {formatTime(task.last_run)}</span>}
+                    <span className="inline-flex items-center gap-1"><Bug className="size-3.5" />{agents.find(a => a.id === task.agent_id)?.hostname || task.agent_id?.slice(0, 8)}</span>
+                    <span className="inline-flex items-center gap-1"><Calendar className="size-3.5" />{task.schedule}</span>
+                    {task.next_run && <span className="inline-flex items-center gap-1"><Clock className="size-3.5" />{t("scheduler.next")}: {formatTime(task.next_run)}</span>}
+                    {task.last_run && <span className="text-muted-foreground/100">{t("scheduler.last")}: {formatTime(task.last_run)}</span>}
                   </div>
                 </div>
                 <div className="flex gap-1 shrink-0">
-                  <Button variant="outline" size="sm" onClick={() => editTask(task)} className="w-8 h-8 p-0" aria-label={t("scheduler.a11y_edit")}>
-                    <Pencil className="w-4 h-4" />
+                  <Button variant="outline" size="sm" onClick={() => editTask(task)} className="size-8 p-0" aria-label={t("scheduler.a11y_edit")}>
+                    <Pencil className="size-4" />
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleDelete(task.id)} className="w-8 h-8 p-0 border-destructive/20 text-destructive hover:bg-destructive/10" aria-label={t("scheduler.a11y_delete")}>
-                    <Trash2 className="w-4 h-4" />
+                  <Button variant="outline" size="sm" onClick={() => handleDelete(task.id)} className="size-8 p-0 border-destructive/20 text-destructive hover:bg-destructive/10" aria-label={t("scheduler.a11y_delete")}>
+                    <Trash2 className="size-4" />
                   </Button>
                 </div>
               </div>

@@ -30,7 +30,7 @@ export default function ExtC2Section() {
   const [channels, setChannels] = useState<ExtC2Channel[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [formType, setFormType] = useState<"discord" | "slack">("discord");
+  const [formType, setFormType] = useState<"discord" | "slack" | "telegram">("discord");
   const [botToken, setBotToken] = useState("");
   const [channelId, setChannelId] = useState("");
   const [saving, setSaving] = useState(false);
@@ -53,8 +53,11 @@ export default function ExtC2Section() {
     }
     setSaving(true);
     try {
-      const endpoint = formType === "discord" ? "/extc2/discord" : "/extc2/slack";
-      await api.postJson(endpoint, { bot_token: botToken, channel_id: channelId });
+      const endpoint = formType === "discord" ? "/extc2/discord" : formType === "slack" ? "/extc2/slack" : "/extc2/telegram";
+      const payload = formType === "telegram"
+        ? { bot_token: botToken, chat_id: channelId }
+        : { bot_token: botToken, channel_id: channelId };
+      await api.postJson(endpoint, payload);
       toast.success(t("settings.toast.extc2_configured", { type: formType.charAt(0).toUpperCase() + formType.slice(1) }));
       setBotToken("");
       setChannelId("");
@@ -84,7 +87,7 @@ export default function ExtC2Section() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={fetchChannels} className="rounded-lg">
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="size-4" />
           </Button>
           <Button size="sm" onClick={() => setShowForm(!showForm)} className="rounded-lg">
             + {t("settings.extc2.addChannel")}
@@ -101,7 +104,7 @@ export default function ExtC2Section() {
       {channels.map(ch => (
         <div key={ch.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
           <div className="flex items-center gap-3">
-            {ch.enabled ? <Wifi className="w-4 h-4 text-success" /> : <WifiOff className="w-4 h-4 text-muted-foreground" />}
+            {ch.enabled ? <Wifi className="size-4 text-success" /> : <WifiOff className="size-4 text-muted-foreground" />}
             <div>
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="text-xs">{ch.type}</Badge>
@@ -111,7 +114,7 @@ export default function ExtC2Section() {
             </div>
           </div>
           <Button variant="ghost" size="sm" onClick={() => handleDelete(ch.id)} className="rounded-lg text-destructive hover:text-destructive">
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="size-4" />
           </Button>
         </div>
       ))}
@@ -135,25 +138,33 @@ export default function ExtC2Section() {
             >
               Slack
             </Button>
+            <Button
+              variant={formType === "telegram" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFormType("telegram")}
+              className="rounded-lg"
+            >
+              Telegram
+            </Button>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="extc2-bot-token" className="text-xs">{t("settings.extc2.botToken")}</Label>
+            <Label required htmlFor="extc2-bot-token" className="text-xs">{t("settings.extc2.botToken")}</Label>
             <Input
               id="extc2-bot-token"
               type="password"
               value={botToken}
               onChange={e => setBotToken(e.target.value)}
-              placeholder={t("settings.extc2.botTokenPlaceholder", { type: formType === "discord" ? "Discord" : "Slack" })}
+              placeholder={t("settings.extc2.botTokenPlaceholder", { type: formType === "telegram" ? "Telegram" : formType === "discord" ? "Discord" : "Slack" })}
               className="h-8 text-xs"
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="extc2-channel-id" className="text-xs">{t("settings.extc2.channelId")}</Label>
+            <Label htmlFor="extc2-channel-id" className="text-xs">{formType === "telegram" ? t("settings.extc2.chatId") : t("settings.extc2.channelId")}</Label>
             <Input
               id="extc2-channel-id"
               value={channelId}
               onChange={e => setChannelId(e.target.value)}
-              placeholder={t("settings.extc2.channelId")}
+              placeholder={formType === "telegram" ? t("settings.extc2.chatIdPlaceholder") : t("settings.extc2.channelId")}
               className="h-8 text-xs"
             />
           </div>

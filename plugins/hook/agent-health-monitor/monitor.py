@@ -55,8 +55,8 @@ def main():
         try:
             with open(log_file, "a") as f:
                 f.write(json.dumps(metrics) + "\n")
-        except OSError:
-            pass
+        except OSError as exc:
+            print(json.dumps({"level": "error", "message": f"Plugin error: failed to write health metrics to log file '{log_file}': {exc}"}), file=sys.stderr)
 
     write_result(True, output=output, data=metrics)
 

@@ -76,7 +76,7 @@ function CredentialRowInner({
               onClick={() => togglePasswordVisibility(entry.id)}
               aria-label={showPassword ? t("cred.hide_password") : t("cred.show_password")}
             >
-              {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+              {showPassword ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
             </Button>
             <CopyButton
               text={entry.password}
@@ -104,7 +104,7 @@ function CredentialRowInner({
               onClick={() => toggleHashVisibility(entry.id)}
               aria-label={showHash ? t("cred.hide_hash") : t("cred.show_hash")}
             >
-              {showHash ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+              {showHash ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
             </Button>
             <CopyButton
               text={entry.hash}
@@ -119,7 +119,7 @@ function CredentialRowInner({
       </TableCell>
       <TableCell className="max-sm:hidden py-3 px-4 text-muted-foreground">{entry.domain || "-"}</TableCell>
       <TableCell className="max-sm:hidden py-3 px-4 text-xs text-muted-foreground">
-        {entry.source === "mimikatz" ? <WandSparkles className="w-3 h-3 text-warning mr-1" /> : entry.source === "sam" ? <Database className="w-3 h-3 text-info mr-1" /> : entry.source === "kerberoast" ? <Shield className="w-3 h-3 text-warning mr-1" /> : <PenLine className="w-3 h-3 text-muted-foreground mr-1" />}
+        {entry.source === "mimikatz" ? <WandSparkles className="size-3 text-warning mr-1" /> : entry.source === "sam" ? <Database className="size-3 text-info mr-1" /> : entry.source === "kerberoast" ? <Shield className="size-3 text-warning mr-1" /> : <PenLine className="size-3 text-muted-foreground mr-1" />}
         {entry.source || "manual"}
       </TableCell>
       <TableCell className="max-sm:hidden py-3 px-4">
@@ -129,7 +129,7 @@ function CredentialRowInner({
           onClick={() => onToggleConfirm(entry)}
           className={entry.confirmed ? "text-primary hover:bg-success/10 dark:text-chart-1 dark:hover:bg-success/20" : "text-muted-foreground hover:bg-muted"}
         >
-          {entry.confirmed ? <CircleCheck className="w-4 h-4" /> : <CircleQuestionMark className="w-4 h-4" />}
+          {entry.confirmed ? <CircleCheck className="size-4" /> : <CircleQuestionMark className="size-4" />}
           {entry.confirmed ? t("cred.confirmed") : t("cred.unconfirmed")}
         </Button>
         {entry.lifecycle && (
@@ -157,7 +157,7 @@ function CredentialRowInner({
         {entry.password && onVerify && (
           <Tooltip>
             <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => onVerify(entry)} aria-label={t("cred.verify")} />}>
-              <ShieldCheck className="w-4 h-4" />
+              <ShieldCheck className="size-4" />
             </TooltipTrigger>
             <TooltipContent>{t("cred.verify")}</TooltipContent>
           </Tooltip>
@@ -165,20 +165,20 @@ function CredentialRowInner({
         {onMarkUsed && (
           <Tooltip>
             <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => onMarkUsed(entry.id)} aria-label={t("cred.mark_used")} />}>
-              <ShieldCheck className="w-4 h-4 text-warning" />
+              <ShieldCheck className="size-4 text-warning" />
             </TooltipTrigger>
             <TooltipContent>{t("cred.mark_used")}</TooltipContent>
           </Tooltip>
         )}
         <Tooltip>
           <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => onEdit(entry)} aria-label={t("cred.edit_title")} />}>
-            <Pencil className="w-4 h-4" />
+            <Pencil className="size-4" />
           </TooltipTrigger>
           <TooltipContent>{t("common.edit")}</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => onDelete(entry.id)} className="text-destructive hover:text-destructive/80 hover:bg-destructive/5" aria-label={t("cred.delete_title")} />}>
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="size-4" />
           </TooltipTrigger>
           <TooltipContent>{t("common.delete")}</TooltipContent>
         </Tooltip>

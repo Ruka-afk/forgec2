@@ -10,8 +10,8 @@ export default function ProfileSection({ data }: { data: SettingsData }) {
   const currentUsername = data.current_username || "";
   const currentRole = data.current_user_role || "user";
   const getRoleBadge = () => {
-    if (currentRole === "admin") return { icon: <Crown className="w-2.5 h-2.5" />, text: t("settings.profile.admin"), cls: "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary" };
-    return { icon: <User className="w-2.5 h-2.5" />, text: t("settings.profile.user"), cls: "bg-info/15 text-info" };
+    if (currentRole === "admin") return { icon: <Crown className="size-2.5" />, text: t("settings.profile.admin"), cls: "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary" };
+    return { icon: <User className="size-2.5" />, text: t("settings.profile.user"), cls: "bg-info/15 text-info" };
   };
   const roleBadge = getRoleBadge();
 
@@ -20,8 +20,8 @@ export default function ProfileSection({ data }: { data: SettingsData }) {
       <CardHeaderRow icon={User} tone="primary" title={t("settings.profile.title")} description={t("settings.profile.subtitle")} />
       <div className="p-(--card-spacing)">
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 bg-primary/10 text-primary ring-1 ring-border/50 rounded-lg flex items-center justify-center text-2xl font-bold">
-            <User className="w-4 h-4" />
+          <div className="size-16 bg-primary/10 text-primary ring-1 ring-border/50 rounded-lg flex items-center justify-center text-2xl font-bold">
+            <User className="size-4" />
           </div>
           <div className="space-y-1.5">
             <div className="text-lg font-semibold text-foreground">{currentUsername}</div>

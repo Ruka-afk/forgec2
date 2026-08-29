@@ -208,18 +208,20 @@ func (m *MonitorCollector) checkAgentAlerts() {
 								slog.Error("Plugin hook panicked (agent offline)", "agent", a.ID, "recover", r)
 							}
 						}()
-						ctx, cancel := context.WithTimeout(context.Background(), offlineHookTimeout)
-						defer cancel()
-						m.server.pluginManager.ExecuteHook(ctx, plugin.Event{
-							Type:      plugin.EventAgentDisconnect,
-							Timestamp: time.Now(),
-							AgentID:   a.ID,
-							Payload: map[string]interface{}{
-								"hostname":            a.Hostname,
-								"ip":                  a.IP,
-								"offline_for_seconds": now.Sub(a.LastSeen).Seconds(),
-							},
-						})
+					ctx, cancel := context.WithTimeout(context.Background(), offlineHookTimeout)
+					defer cancel()
+					if err := m.server.pluginManager.ExecuteHook(ctx, plugin.Event{
+						Type:      plugin.EventAgentDisconnect,
+						Timestamp: time.Now(),
+						AgentID:   a.ID,
+						Payload: map[string]interface{}{
+							"hostname":            a.Hostname,
+							"ip":                  a.IP,
+							"offline_for_seconds": now.Sub(a.LastSeen).Seconds(),
+						},
+					}); err != nil {
+						slog.Warn("Hook errors on agent_disconnect event", "agent_id", a.ID, "err", err)
+					}
 					}(agent)
 				default:
 					slog.Warn("Monitor: offline hook backlog full, skipping agent", "agent", agent.ID)
@@ -283,6 +285,16 @@ func (m *MonitorCollector) triggerAlert(rule *db.AlertRule, source, sourceName, 
 		slog.Error("Failed to create alert", "err", err)
 		return
 	}
+
+	// Fan the alert out as a notification too (persisted + routed to any
+	// configured Discord/Telegram/webhook channels).
+	m.server.DispatchNotification(&db.Notification{
+		Type:     rule.Type,
+		Title:    rule.Name,
+		Message:  alert.Message,
+		AgentID:  source,
+		Severity: alert.Severity,
+	})
 
 	m.server.triggerWebhooks(Event{
 		Type:      EventType("alert." + rule.Type),
@@ -568,7 +580,7 @@ func (s *Server) handleGetAgentStatus(c *gin.Context) {
 			COALESCE(SUM(CASE WHEN last_seen > ? THEN 1 ELSE 0 END), 0) as online,
 			COALESCE(SUM(CASE WHEN last_seen > ? AND last_seen <= ? THEN 1 ELSE 0 END), 0) as stale,
 			COALESCE(SUM(CASE WHEN last_seen <= ? THEN 1 ELSE 0 END), 0) as offline
-		FROM implants`, offlineCutoff, offlineCutoff, staleCutoff, offlineCutoff,
+		FROM implants WHERE deleted_at IS NULL`, offlineCutoff, offlineCutoff, staleCutoff, offlineCutoff,
 	).Scan(&stats).Error; err != nil {
 		slog.Error("Failed to query agent status stats", "err", err)
 		respondError(c, http.StatusInternalServerError, "Failed to query agent status stats")

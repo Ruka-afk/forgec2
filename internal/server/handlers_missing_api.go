@@ -31,7 +31,7 @@ func (s *Server) handleAPIPackerInfo(c *gin.Context) {
 		"encode_types": []string{"none", "xor", "aes", "sgn"},
 		"entry_points": []string{"direct", "thread", "callback"},
 		"timestamps":   []string{"random", "keep", "custom"},
-		"cert_options": []string{"none"},
+		"cert_options": []string{"none", "self_signed"},
 		"output_types": []string{"exe", "ps1", "raw", "shellcode"},
 	})
 }
@@ -453,57 +453,88 @@ func (s *Server) handleAgentChainGet(c *gin.Context) {
 }
 
 func (s *Server) handleAgentChainSet(c *gin.Context) {
+	// The agent comes from the PATH param (:id) — the UI and OpenAPI spec
+	// never send a body agent_id, so the body-only read 400'd every call
+	// (feature dead end-to-end). The body may still carry parent_id.
 	var req struct {
-		AgentID  string `json:"agent_id"`
 		ParentID string `json:"parent_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, "invalid request")
 		return
 	}
-	if req.AgentID == "" {
+	agentID := c.Param("id")
+	if agentID == "" {
 		respondError(c, http.StatusBadRequest, "agent_id is required")
 		return
 	}
-	if req.AgentID == req.ParentID {
+	if agentID == req.ParentID {
 		respondError(c, http.StatusBadRequest, "agent cannot be its own parent")
 		return
 	}
-	if err := s.db.Model(&db.Implant{}).Where("id = ?", req.AgentID).Update("parent_agent_id", req.ParentID).Error; err != nil {
+	// Ancestor-cycle guard: walking parent_agent_id from the new parent must
+	// never reach the child, or proxy chains loop forever.
+	if req.ParentID != "" {
+		seen := map[string]bool{agentID: true}
+		cur := req.ParentID
+		for depth := 0; cur != "" && depth < 64; depth++ {
+			if seen[cur] {
+				respondError(c, http.StatusBadRequest, "chain cycle detected: parent already routes through this agent")
+				return
+			}
+			seen[cur] = true
+			var parent db.Implant
+			if err := s.db.Select("id, parent_agent_id").First(&parent, "id = ?", cur).Error; err != nil {
+				break // unknown parent id — allow, agent may register later
+			}
+			cur = parent.ParentAgentID
+		}
+	}
+	if err := s.db.Model(&db.Implant{}).Where("id = ?", agentID).Update("parent_agent_id", req.ParentID).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Update agent chain"))
 		return
 	}
-	s.LogAuditRecord(c, "agent_chain_set", "agents", req.AgentID, fmt.Sprintf("Parent set to %s", req.ParentID), true, nil)
+	s.LogAuditRecord(c, "agent_chain_set", "agents", agentID, fmt.Sprintf("Parent set to %s", req.ParentID), true, nil)
 	respond(c, gin.H{"success": true})
 }
 
 func (s *Server) handleAgentChainClear(c *gin.Context) {
-	var req struct {
-		AgentID string `json:"agent_id"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid request")
-		return
-	}
-	if req.AgentID == "" {
+	// Path param is the source of truth (see handleAgentChainSet).
+	agentID := c.Param("id")
+	if agentID == "" {
 		respondError(c, http.StatusBadRequest, "agent_id is required")
 		return
 	}
-	if err := s.db.Model(&db.Implant{}).Where("id = ?", req.AgentID).Update("parent_agent_id", "").Error; err != nil {
+	if err := s.db.Model(&db.Implant{}).Where("id = ?", agentID).Update("parent_agent_id", "").Error; err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Clear agent chain"))
 		return
 	}
-	s.LogAuditRecord(c, "agent_chain_clear", "agents", req.AgentID, "Chain cleared", true, nil)
+	s.LogAuditRecord(c, "agent_chain_clear", "agents", agentID, "Chain cleared", true, nil)
 	respond(c, gin.H{"success": true})
 }
 
 // ── Mesh Route ───────────────────────────────────────────────────────
 
 func (s *Server) handleMeshRoute(c *gin.Context) {
-	agentID := c.Query("agent_id")
+	// :agentId path param (the UI posts to /mesh/route/<id> with a body;
+	// the old c.Query read made this endpoint an unconditional 400).
+	agentID := c.Param("agentId")
 	if agentID == "" {
 		respondError(c, http.StatusBadRequest, "agent_id is required")
 		return
+	}
+	var req struct {
+		ParentID string `json:"parent_id"`
+	}
+	_ = c.ShouldBindJSON(&req)
+	if req.ParentID != "" && req.ParentID != agentID {
+		// Persist the requested mesh route on the implant record.
+		if err := s.db.Model(&db.Implant{}).Where("id = ?", agentID).
+			Update("parent_id", req.ParentID).Error; err != nil {
+			respondError(c, http.StatusInternalServerError, sanitizeError(err, "Set mesh route"))
+			return
+		}
+		s.LogAuditRecord(nil, "mesh_route_set", "agents", agentID, fmt.Sprintf("Mesh parent set to %s", req.ParentID), true, nil)
 	}
 	var peers []db.MeshPeer
 	if err := s.db.Where("agent_id = ? OR peer_id = ?", agentID, agentID).Limit(500).Find(&peers).Error; err != nil {
@@ -580,7 +611,8 @@ func (s *Server) handlePackerBundle(c *gin.Context) {
 		for i := range dlls {
 			dlls[i] = strings.TrimSpace(dlls[i])
 		}
-		if err := payload.AddBenignImports(artifact, dlls); err != nil {
+		patched, err := payload.AddBenignImports(artifact, dlls)
+		if err != nil {
 			var verr *payload.ArtifactValidationError
 			if errors.As(err, &verr) {
 				respondError(c, http.StatusBadRequest, verr.Msg)
@@ -589,6 +621,7 @@ func (s *Server) handlePackerBundle(c *gin.Context) {
 			respondErrorSafe(c, http.StatusBadRequest, err, "import manipulation failed")
 			return
 		}
+		artifact = patched
 	}
 
 	s.LogAuditRecord(c, "packer_bundle", "packer", "", fmt.Sprintf("Bundled payload (%d bytes)", len(artifact)), true, nil)

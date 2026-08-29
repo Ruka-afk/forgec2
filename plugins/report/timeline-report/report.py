@@ -83,8 +83,8 @@ def main():
                     dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
                     if dt < datetime.now(dt.tzinfo) - timedelta(hours=hours):
                         continue
-                except Exception:
-                    pass
+                except Exception as exc:
+                    print(json.dumps({"level": "error", "message": f"Plugin error: invalid audit log timestamp '{ts}': {exc}"}), file=sys.stderr)
             action = a.get("action", "")
             category = "audit"
             if "login" in action:
@@ -107,8 +107,8 @@ def main():
                     dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
                     if dt < datetime.now(dt.tzinfo) - timedelta(hours=hours):
                         continue
-                except Exception:
-                    pass
+                except Exception as exc:
+                    print(json.dumps({"level": "error", "message": f"Plugin error: invalid task timestamp '{ts}': {exc}"}), file=sys.stderr)
             events.append({
                 "timestamp": ts,
                 "type": f"task:{t.get('type', '?')}",

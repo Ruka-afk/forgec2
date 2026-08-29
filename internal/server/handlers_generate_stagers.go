@@ -41,6 +41,10 @@ func (s *Server) bindStagerForm(c *gin.Context) (*stagerGenerateForm, error) {
 		return nil, fmt.Errorf("invalid request parameters")
 	}
 
+	if strings.EqualFold(form.BeaconTransport, "raw") || strings.EqualFold(form.BeaconTransport, "shellcode") {
+		return nil, fmt.Errorf("raw/shellcode stager format is not implemented; use exe or dll")
+	}
+
 	// Sanitize filename to block path traversal and build collisions.
 	if form.Filename != "" {
 		form.Filename = sanitizeFilename(form.Filename)

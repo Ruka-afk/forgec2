@@ -25,9 +25,9 @@ interface StatusIndicatorProps {
 }
 
 const DOT_SIZES = {
-  sm: "w-1.5 h-1.5",
-  md: "w-2 h-2",
-  lg: "w-2.5 h-2.5",
+  sm: "size-1.5",
+  md: "size-2",
+  lg: "size-2.5",
 };
 
 export const StatusIndicator = memo(function StatusIndicator({

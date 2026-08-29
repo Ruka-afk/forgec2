@@ -1,0 +1,10 @@
+name: base
+version: 1.0.0
+type: command
+description: ""
+author: ""
+category: ""
+entry: main.py
+interpreter: python
+timeout: 0
+params: []

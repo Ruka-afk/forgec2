@@ -18,12 +18,16 @@ export function useCampaignData() {
   const loadCampaigns = useCallback(
     async (signal?: AbortSignal) => {
       try {
-        const data = await api.get<{ success: boolean; data?: Campaign[] }>(paths.campaigns.list, {
+        // api.get auto-unwraps {success,data} — the value IS the array.
+        const data = await api.get<Campaign[] | { success: boolean; data?: Campaign[] }>(paths.campaigns.list, {
           signal,
         });
-        if (data.success) setCampaigns(data.data || []);
-        else if (Array.isArray((data as { data?: Campaign[] }).data)) {
+        if (Array.isArray(data)) {
+          setCampaigns(data);
+        } else if (Array.isArray((data as { data?: Campaign[] }).data)) {
           setCampaigns((data as { data: Campaign[] }).data);
+        } else {
+          setCampaigns([]);
         }
       } catch {
         if (!signal?.aborted) toast.error(t("campaign.toast.load_failed"));
@@ -54,8 +58,14 @@ export function useCampaignData() {
 
   useEffect(() => {
     const controller = new AbortController();
-    if (selectedCampaign) void loadCampaignDetail(selectedCampaign, controller.signal);
-    else setCampaignStats(null);
+    if (selectedCampaign) {
+      // Clear immediately so switching campaigns never shows the previous
+      // campaign's stats under the new selection while loading.
+      setCampaignStats(null);
+      void loadCampaignDetail(selectedCampaign, controller.signal);
+    } else {
+      setCampaignStats(null);
+    }
     return () => controller.abort();
   }, [selectedCampaign, loadCampaignDetail]);
 
@@ -100,7 +110,7 @@ export function useCampaignData() {
         if (selectedCampaign === id) void loadCampaignDetail(id);
         toast.success(t("campaign.toast.status_updated"));
       } catch {
-        toast.error(t("campaign.toast.status_updated"));
+        toast.error(t("campaign.toast.status_update_failed"));
       }
     },
     [selectedCampaign, loadCampaigns, loadCampaignDetail, t],

@@ -15,4 +15,7 @@ export const DYNAMIC_PREFIXES = [
   "notifications.severity_", // notification badge severities: t(`notifications.severity_${n.severity}`)
   "search.type_", // search result types: t(`search.type_${r.type}`)
   "generate.format_", // payload format picker: t(PAYLOAD_FORMAT_LABEL[key])
+  "agents.timeline_kind_", // agent timeline event kind: t(`agents.timeline_kind_${kind}`)
+  "ai.risk_", // AI suggestion risk badge: t(`ai.risk_${suggestion.risk}`)
+  "events.source_", // merged timeline source label selected before t(labelKey)
 ];

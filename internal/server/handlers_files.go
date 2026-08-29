@@ -250,11 +250,14 @@ func (s *Server) handleUploadFile(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	// chunked support
+	// chunked support — validate offset to prevent negative seek corruption and sparse file bomb
 	if offsetStr := c.PostForm("offset"); offsetStr != "" {
-		if off, err := strconv.ParseInt(offsetStr, 10, 64); err == nil {
-			task.Offset = off
+		off, err := strconv.ParseInt(offsetStr, 10, 64)
+		if err != nil || off < 0 || off > 8<<30 {
+			respondError(c, http.StatusBadRequest, "invalid offset")
+			return
 		}
+		task.Offset = off
 	}
 	// HMAC integrity chain: the agent refuses to write the chunk unless the
 	// recomputed MAC matches, so tampering with a pushed chunk is detected
@@ -276,6 +279,7 @@ func (s *Server) handleUploadFile(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to save upload offset")
 		return
 	}
+	s.broadcastTaskUpdate(id, *task)
 	s.LogAuditRecord(c, "file_upload_push", "agent", id, targetPath, true, nil)
 
 	slog.Info("File push requested", "agent_id", id, "path", targetPath, "offset", task.Offset)

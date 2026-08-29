@@ -34,7 +34,7 @@ export default function TelemetrySection() {
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0">
           <CardTitle className="flex items-center gap-2">
-            <Activity className="w-4 h-4 text-primary" />
+            <Activity className="size-4 text-primary" />
             {t("settings.telemetry_title")}
           </CardTitle>
           <Button
@@ -44,7 +44,7 @@ export default function TelemetrySection() {
             disabled={entries.length === 0}
             className="gap-1.5"
           >
-            <Eraser className="w-3.5 h-3.5" />
+            <Eraser className="size-3.5" />
             {t("settings.telemetry_clear")}
           </Button>
         </CardHeader>

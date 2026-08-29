@@ -39,10 +39,12 @@ type Config struct {
 		DNSAddr              string        `yaml:"dns_addr"`
 		GRPCEnabled          bool          `yaml:"grpc_enabled"`
 		GRPCAddr             string        `yaml:"grpc_addr"`
-		ICMPEnabled           bool          `yaml:"icmp_enabled"`
+		ICMPEnabled          bool          `yaml:"icmp_enabled"`
 		ICMPAddr             string        `yaml:"icmp_addr"`
 		UDPEnabled           bool          `yaml:"udp_enabled"`
 		UDPAddr              string        `yaml:"udp_addr"`
+		QUICEnabled          bool          `yaml:"quic_enabled"`
+		QUICAddr             string        `yaml:"quic_addr"`
 		OfflineThreshold     int           `yaml:"offline_threshold"`      // seconds
 		SessionMaxAgeHours   int           `yaml:"session_max_age_hours"`  // JWT expiry
 		CleanupRetentionDays int           `yaml:"cleanup_retention_days"` // auto-purge cutoff
@@ -51,6 +53,7 @@ type Config struct {
 		VantagePoints        []string      `yaml:"vantage_points"`         // external proxy URLs for circuit breaker probing
 		SSHEnabled           bool          `yaml:"ssh_enabled"`            // enable SSH transport listener
 		SSHPort              int           `yaml:"ssh_port"`               // SSH listener port (default 2222)
+		LPortFwdEnabled      bool          `yaml:"lportfwd_enabled"`       // allow agents to open tunneled local port forwards (default true, set below)
 		SSHAddr              string        `yaml:"ssh_addr"`               // SSH listener addr (default :ssh_port)
 		SSHHostKey           string        `yaml:"ssh_host_key"`           // path to SSH host key (auto-generated if missing)
 		SSHUser              string        `yaml:"ssh_user"`               // SSH user for agent auth
@@ -68,7 +71,17 @@ type Config struct {
 		DBMaxOpenConns       int           `yaml:"db_max_open_conns"`      // max open connections for PostgreSQL pool (default 25)
 		DBMaxIdleConns       int           `yaml:"db_max_idle_conns"`      // max idle connections for PostgreSQL pool (default 5)
 		DBConnMaxLifetime    time.Duration `yaml:"db_conn_max_lifetime"`   // max connection lifetime for PostgreSQL pool (default 30m)
+		DNSObscure           bool          `yaml:"dns_obscure"`            // XOR-obscure DNS C2 fragments (must match implant DNSObscure)
+		AutoRecon            []string      `yaml:"auto_recon"`             // task types queued on first check-in (empty = disabled)
 	} `yaml:"server"`
+
+	// Roe is the rules-of-engagement gate: tasks whose command contains an IP
+	// outside AllowCIDRs (when set) or inside DenyCIDRs are refused.
+	Roe struct {
+		Enabled    bool     `yaml:"enabled"`
+		AllowCIDRs []string `yaml:"allow_cidrs"`
+		DenyCIDRs  []string `yaml:"deny_cidrs"`
+	} `yaml:"roe"`
 
 	Database struct {
 		Path   string `yaml:"path"`
@@ -130,18 +143,19 @@ type Config struct {
 		// Kept separate from the response-side Prepend/Append so operators can
 		// shape upload and download traffic independently (Cobalt-Strike-style
 		// http-get/http-post prepend/append).
-		RequestPrepend  string            `yaml:"request_prepend"`
-		RequestAppend   string            `yaml:"request_append"`
-		RequestHeaders  map[string]string `yaml:"request_headers"`
+		RequestPrepend string            `yaml:"request_prepend"`
+		RequestAppend  string            `yaml:"request_append"`
+		RequestHeaders map[string]string `yaml:"request_headers"`
 	} `yaml:"malleable"`
 
 	AI struct {
 		Enabled               bool   `yaml:"enabled"`
-		Provider              string `yaml:"provider"` // deepseek, openai, claude, qianwen, custom
+		Provider              string `yaml:"provider"` // deepseek, openai, claude, qianwen, zhipu, longcat, custom
 		APIKey                string `yaml:"api_key"`
 		Model                 string `yaml:"model"`
 		Endpoint              string `yaml:"endpoint"` // optional, override default
 		SystemPrompt          string `yaml:"system_prompt"`
+		EngagementNotes       string `yaml:"engagement_notes"`         // persistent engagement memory injected into the system prompt
 		MaxConversationTurns  int    `yaml:"max_conversation_turns"`   // 0 = unlimited (default)
 		MaxToolRounds         int    `yaml:"max_tool_rounds"`          // 0 = unlimited (default)
 		MaxDuplicateToolCalls int    `yaml:"max_duplicate_tool_calls"` // 0 = unlimited; else cap identical tool+args repeats
@@ -208,6 +222,22 @@ type Config struct {
 		// DIFFERENT from the task creator before the beacon claims them.
 		RequireApproval bool `yaml:"require_approval"`
 	} `yaml:"security"`
+
+	// Monitoring drives the metric alert bridge: threshold checks over the
+	// Prometheus gauges that fire notifications + webhooks. Off by default —
+	// alerting is an outbound-sensitive capability the operator opts into.
+	Monitoring struct {
+		AlertsEnabled   bool `yaml:"alerts_enabled"`    // master switch (default false)
+		AgentsOnlineMin int  `yaml:"agents_online_min"` // alert when online <= this while agents exist
+		TasksPendingMax int  `yaml:"tasks_pending_max"` // alert when pending tasks exceed this
+		CooldownSeconds int  `yaml:"cooldown_seconds"`  // per-rule silence window (default 600)
+		EvalSeconds     int  `yaml:"eval_seconds"`      // evaluation cadence (default 30)
+		// Task-failure-rate rule: percentage of terminal tasks that failed
+		// inside the look-back window. Requires min samples to avoid noise.
+		TaskFailureRateMaxPct float64 `yaml:"task_failure_rate_max_pct"` // default 25
+		FailureWindowMinutes  int     `yaml:"failure_window_minutes"`    // default 10
+		FailureMinSamples     int     `yaml:"failure_min_samples"`       // default 20
+	} `yaml:"monitoring"`
 }
 
 // DefaultConfig returns sensible defaults
@@ -228,6 +258,8 @@ func DefaultConfig() *Config {
 	cfg.Server.ICMPAddr = "0.0.0.0"
 	cfg.Server.UDPEnabled = false
 	cfg.Server.UDPAddr = ":8899"
+	cfg.Server.QUICEnabled = false
+	cfg.Server.QUICAddr = ":4433"
 	cfg.Server.SSHEnabled = false
 	cfg.Server.SSHPort = 2222
 	cfg.Server.SSHAddr = ""
@@ -247,6 +279,20 @@ func DefaultConfig() *Config {
 	cfg.Server.DBMaxOpenConns = 25
 	cfg.Server.DBMaxIdleConns = 5
 	cfg.Server.DBConnMaxLifetime = 30 * time.Minute
+	// lportfwd tunnels agent-local connections out through the teamserver.
+	// On by default (mirrors rportfwd/socks availability); operators can set
+	// server.lportfwd_enabled: false to refuse the task at creation time.
+	cfg.Server.LPortFwdEnabled = true
+
+	// Metric alert bridge: opt-in, conservative defaults.
+	cfg.Monitoring.AlertsEnabled = false
+	cfg.Monitoring.AgentsOnlineMin = 0
+	cfg.Monitoring.TasksPendingMax = 100
+	cfg.Monitoring.CooldownSeconds = 600
+	cfg.Monitoring.EvalSeconds = 30
+	cfg.Monitoring.TaskFailureRateMaxPct = 25
+	cfg.Monitoring.FailureWindowMinutes = 10
+	cfg.Monitoring.FailureMinSamples = 20
 
 	// Secure by default: enforce the two-man rule for all task types flagged
 	// dangerous (see server/tasktypes.go dangerousTaskTypes). Solo operators
@@ -552,6 +598,8 @@ func (c *Config) AIEndpoint() string {
 		return "https://api.deepseek.com/v1"
 	case "qianwen":
 		return "https://dashscope.aliyuncs.com/compatible-mode/v1"
+	case "zhipu":
+		return "https://open.bigmodel.cn/api/paas/v4"
 	case "claude":
 		return "https://api.anthropic.com/v1"
 	case "longcat":
@@ -666,9 +714,9 @@ func (c *Config) Validate() error {
 		errs = append(errs, errors.New("ai.max_duplicate_tool_calls must be >= 0 (0 = unlimited)"))
 	}
 	if c.AI.Enabled && c.AI.Provider != "" {
-		validProviders := map[string]bool{"openai": true, "anthropic": true, "claude": true, "google": true, "deepseek": true, "qianwen": true, "longcat": true, "local": true, "custom": true}
+		validProviders := map[string]bool{"openai": true, "anthropic": true, "claude": true, "google": true, "deepseek": true, "qianwen": true, "zhipu": true, "longcat": true, "local": true, "custom": true}
 		if !validProviders[c.AI.Provider] {
-			errs = append(errs, errors.New("ai.provider must be one of: openai, anthropic, claude, google, deepseek, qianwen, longcat, local, custom"))
+			errs = append(errs, errors.New("ai.provider must be one of: openai, anthropic, claude, google, deepseek, qianwen, zhipu, longcat, local, custom"))
 		}
 	}
 
@@ -732,8 +780,11 @@ func (c *Config) Validate() error {
 		}
 	}
 
-if c.Listeners.H2C.Enabled && c.Listeners.H2C.Addr == "" {
+	if c.Listeners.H2C.Enabled && c.Listeners.H2C.Addr == "" {
 		errs = append(errs, errors.New("listeners.h2c.addr is required when listeners.h2c.enabled is true"))
+	}
+	if c.Server.QUICEnabled && c.Server.QUICAddr == "" {
+		errs = append(errs, errors.New("server.quic_addr is required when server.quic_enabled is true"))
 	}
 
 	// Crypto validation — the v2/v3 beacon stack implements ONLY the ECDH
@@ -759,8 +810,8 @@ if c.Listeners.H2C.Enabled && c.Listeners.H2C.Addr == "" {
 		name string
 		val  string
 	}{
-		{"crypto.loot_key", c.Crypto.LootKey},    // loot credentials (FC2ENC:)
-		{"crypto.extc2_key", c.Crypto.ExtC2Key},  // ExtC2 channel (FC2EXT:)
+		{"crypto.loot_key", c.Crypto.LootKey},     // loot credentials (FC2ENC:)
+		{"crypto.extc2_key", c.Crypto.ExtC2Key},   // ExtC2 channel (FC2EXT:)
 		{"crypto.backup_key", c.Crypto.BackupKey}, // .fbk backups
 		{"crypto.totp_key", c.Crypto.TotpKey},     // TOTP secrets / SMTP / SSH redirector credentials
 		{"crypto.csrf_key", c.Crypto.CsrfKey},     // CSRF token binding

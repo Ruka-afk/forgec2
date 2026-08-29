@@ -26,6 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Activity, AlertCircle, AlertTriangle, Apple, Calendar, CheckCircle, Clock, Cpu, Download, File, Filter, Hammer, Monitor, Plus, RefreshCw, Terminal, Timer, User, X, XCircle } from "lucide-react";
+import EffectivenessCard from "./_components/EffectivenessCard";
 
 interface BuildLog {
   id?: string;
@@ -83,23 +84,24 @@ function dedupeBuilds(logs: BuildLog[]): BuildLog[] {
 
 function getDuration(start?: string, end?: string): string {
   if (!start) return "-";
-  try {
-    const s = new Date(start).getTime();
-    const e = end ? new Date(end).getTime() : Date.now();
-    const diff = Math.max(0, e - s);
-    const min = Math.floor(diff / 60000);
-    const sec = Math.floor((diff % 60000) / 1000);
-    if (min > 0) return `${min}m ${sec}s`;
-    return `${sec}s`;
-  } catch { return "-"; }
+  const s = new Date(start).getTime();
+  const e = end ? new Date(end).getTime() : Date.now();
+  // new Date(garbage) yields NaN without throwing — the old try/catch never
+  // fired and the render produced "NaNs"/"NaNm NaNs".
+  if (!Number.isFinite(s) || !Number.isFinite(e)) return "-";
+  const diff = Math.max(0, e - s);
+  const min = Math.floor(diff / 60000);
+  const sec = Math.floor((diff % 60000) / 1000);
+  if (min > 0) return `${min}m ${sec}s`;
+  return `${sec}s`;
 }
 
 function getStatusInfo(status: string, t: (key: string, vars?: Record<string, string | number>) => string) {
   switch (status) {
-    case "success": return { icon: <CheckCircle className="w-4 h-4 text-primary" />, label: t("builds.success"), bg: "bg-success" };
-    case "failed": return { icon: <XCircle className="w-4 h-4 text-destructive" />, label: t("builds.failed"), bg: "bg-destructive" };
+    case "success": return { icon: <CheckCircle className="size-4 text-primary" />, label: t("builds.success"), bg: "bg-success" };
+    case "failed": return { icon: <XCircle className="size-4 text-destructive" />, label: t("builds.failed"), bg: "bg-destructive" };
     case "building": return { icon: <Spinner size="sm" />, label: t("builds.building"), bg: "bg-primary" };
-    default: return { icon: <Clock className="w-4 h-4 text-muted-foreground" />, label: t("builds.pending"), bg: "bg-muted-foreground" };
+    default: return { icon: <Clock className="size-4 text-muted-foreground" />, label: t("builds.pending"), bg: "bg-muted-foreground" };
   }
 }
 
@@ -118,7 +120,14 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
   const [page, setPage] = useState(1);
   const { t } = useI18n();
 
+  // Generation counter: rapid filter changes must not let a stale slower
+  // response overwrite the fresh one. Also throttles error toasts so WS
+  // reconnect bursts don't spam one toast per failed refresh.
+  const loadGenRef = useRef(0);
+  const lastErrorToastRef = useRef(0);
+
   const loadBuilds = useCallback(async () => {
+    const gen = ++loadGenRef.current;
     setLoading(true);
     setError(null);
     try {
@@ -129,6 +138,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
         api.get(paths.builds.list(params.toString())),
         fetchAgentListCached().catch(() => []),
       ]);
+      if (gen !== loadGenRef.current) return;
       const logs = dedupeBuilds(normalizeListEnvelope(data, ["logs", "Logs", "builds", "data"]) as BuildLog[]);
       setBuilds(logs);
       setTotal(firstNumber(data, ["total", "Total"], logs.length));
@@ -155,6 +165,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
         setVersionDist(Object.entries(counts).map(([version, count]) => ({ version, count })).sort((a, b) => b.count - a.count));
       }
     } catch (e) {
+      if (gen !== loadGenRef.current) return;
       setBuilds([]);
       setTotal(0);
       setSuccessCount(0);
@@ -162,9 +173,12 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
       setAvgDuration(0);
       const msg = e instanceof Error ? e.message : t("builds.toast.load_failed");
       setError(msg);
-      toast.error(msg);
+      if (Date.now() - lastErrorToastRef.current > 30_000) {
+        lastErrorToastRef.current = Date.now();
+        toast.error(msg);
+      }
     } finally {
-      setLoading(false);
+      if (gen === loadGenRef.current) setLoading(false);
     }
   }, [filterPlatform, filterStatus, t]);
 
@@ -219,10 +233,10 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
 
   const platformIcon = (p: string) => {
     switch (p) {
-      case "windows": return <Monitor className="w-3 h-3 text-muted-foreground" />;
-      case "linux": return <Terminal className="w-3 h-3 text-muted-foreground" />;
-      case "macos": return <Apple className="w-3 h-3 text-muted-foreground" />;
-      default: return <Cpu className="w-3 h-3 text-muted-foreground" />;
+      case "windows": return <Monitor className="size-3 text-muted-foreground" />;
+      case "linux": return <Terminal className="size-3 text-muted-foreground" />;
+      case "macos": return <Apple className="size-3 text-muted-foreground" />;
+      default: return <Cpu className="size-3 text-muted-foreground" />;
     }
   };
 
@@ -240,26 +254,28 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
         {!embedded && (
           <div className={`flex items-center gap-2 ${embedded ? "ml-auto" : ""}`}>
             <Button render={<Link href="/generate" />}>
-              <Plus className="w-4 h-4" /> {t("builds.new_build")}
+              <Plus className="size-4" /> {t("builds.new_build")}
             </Button>
             <Button variant="secondary" onClick={loadBuilds}>
-              <RefreshCw className="w-4 h-4" /> {t("builds.refresh")}
+              <RefreshCw className="size-4" /> {t("builds.refresh")}
             </Button>
           </div>
         )}
 
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-4">
-        <StatCard label={t("builds.total_builds")} value={total} color="primary" icon={<Hammer className="w-4 h-4" />} />
-        <StatCard label={t("builds.success")} value={successCount} color="emerald" icon={<CheckCircle className="w-4 h-4" />} />
-        <StatCard label={t("builds.failed")} value={failedCount} color="destructive" icon={<AlertCircle className="w-4 h-4" />} />
-        <StatCard label={t("builds.success_rate")} value={total > 0 ? `${Math.round((successCount / total) * 100)}%` : "0%"} color="warning" icon={<Activity className="w-4 h-4" />} />
+        <StatCard label={t("builds.total_builds")} value={total} color="primary" icon={<Hammer className="size-4" />} />
+        <StatCard label={t("builds.success")} value={successCount} color="emerald" icon={<CheckCircle className="size-4" />} />
+        <StatCard label={t("builds.failed")} value={failedCount} color="destructive" icon={<AlertCircle className="size-4" />} />
+        <StatCard label={t("builds.success_rate")} value={total > 0 ? `${Math.round((successCount / total) * 100)}%` : "0%"} color="warning" icon={<Activity className="size-4" />} />
       </div>
+
+      <EffectivenessCard />
 
       {versionDist.length > 0 && (
         <Card className="p-(--card-spacing) mb-4">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-semibold text-foreground flex items-center gap-2">
-              <Cpu className="w-4 h-4" /> {t("builds.version_dist")}
+              <Cpu className="size-4" /> {t("builds.version_dist")}
             </span>
             <span className="text-xs text-muted-foreground">{versionDist.reduce((s, v) => s + v.count, 0)} {t("builds.agents_unit")}</span>
           </div>
@@ -285,7 +301,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
 
       <Card className="p-(--card-spacing) mb-4">
         <div className="flex flex-wrap items-center gap-3">
-          <Filter className="w-4 h-4" />
+          <Filter className="size-4" />
           <span className="text-sm font-semibold text-muted-foreground">{t("builds.platform")}</span>
           <div className="flex flex-wrap gap-2">
             {PLATFORMS.map((p) => (
@@ -312,7 +328,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
           {(filterStatus || filterPlatform !== "all") && (
             <Button variant="outline" size="sm" onClick={clearFilters}
               className="rounded-lg">
-              <X className="w-4 h-4" /> {t("builds.clear")}
+              <X className="size-4" /> {t("builds.clear")}
             </Button>
           )}
         </div>
@@ -328,7 +344,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
         emptyMessage={t("builds.generate_new_implant")}
         emptyAction={
           <Button render={<Link href="/generate" />}>
-            <Plus className="w-4 h-4" /> {t("builds.go_generate")}
+            <Plus className="size-4" /> {t("builds.go_generate")}
           </Button>
         }
         loadingSkeleton={
@@ -336,7 +352,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
             {[1, 2, 3].map((i) => (
               <Card key={i} className="p-(--card-spacing)">
                 <div className="flex items-center gap-4">
-                  <Skeleton className="w-10 h-10 rounded-lg" />
+                  <Skeleton className="size-10 rounded-lg" />
                   <div className="flex-1 space-y-2">
                     <Skeleton className="h-3 w-40" />
                     <Skeleton className="h-2 w-60" />
@@ -365,7 +381,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
               <Card key={id} className="overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
                 <div className="p-(--card-spacing)">
                   <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-xl ring-1 ring-border/50 flex items-center justify-center ${status === "success" ? "bg-success/10" : status === "failed" ? "bg-destructive/10" : status === "building" ? "bg-primary/10" : "bg-secondary"}`}>
+                    <div className={`size-10 rounded-xl ring-1 ring-border/50 flex items-center justify-center ${status === "success" ? "bg-success/10" : status === "failed" ? "bg-destructive/10" : status === "building" ? "bg-primary/10" : "bg-secondary"}`}>
                       {isBuilding ? <Spinner size="xs" /> : info.icon}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -377,22 +393,22 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
                         <Badge variant="outline" className="px-2 py-0.5 text-(--fs-micro-sm) rounded-lg">{build.format || "-"}</Badge>
                         <Badge variant={status === "success" ? "success" : status === "failed" ? "destructive" : "outline"}
                           className="px-2 py-0.5 text-(--fs-micro-sm) rounded-full">
-                          <span className={`w-1.5 h-1.5 rounded-full inline-block mr-1 ${info.bg} ${isBuilding ? "animate-pulse" : ""}`}></span>
+                          <span className={`size-1.5 rounded-full inline-block mr-1 ${info.bg} ${isBuilding ? "animate-pulse" : ""}`}></span>
                           {info.label}
                         </Badge>
                       </div>
                       <div className="flex items-center gap-4 mt-1.5 text-xs text-muted-foreground">
-                        <span><Calendar className="w-4 h-4" />{formatTime(startedAt)}</span>
-                        <span><Timer className="w-4 h-4" />{getDuration(startedAt, completedAt || (isBuilding ? undefined : completedAt))}</span>
-                        {build.user ? <span><User className="w-4 h-4" />{build.user}</span> : null}
-                        {build.filename ? <span className="truncate max-w-[200px]"><File className="w-4 h-4" />{build.filename}</span> : null}
+                        <span><Calendar className="size-4" />{formatTime(startedAt)}</span>
+                        <span><Timer className="size-4" />{getDuration(startedAt, completedAt || (isBuilding ? undefined : completedAt))}</span>
+                        {build.user ? <span><User className="size-4" />{build.user}</span> : null}
+                        {build.filename ? <span className="truncate max-w-[200px]"><File className="size-4" />{build.filename}</span> : null}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <Tooltip>
                         <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => setExpandedBuild(isExpanded ? null : id)}
                             aria-label={t("builds.toggle_logs")} />}>
-                          <Terminal className="w-4 h-4" />
+                          <Terminal className="size-4" />
                         </TooltipTrigger>
                         <TooltipContent>{t("builds.logs")}</TooltipContent>
                       </Tooltip>
@@ -401,7 +417,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
                           <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => handleDownload(build)}
                               className="text-primary hover:bg-primary/10 dark:hover:bg-primary/20"
                               aria-label={t("builds.download_artifact")} />}>
-                            <Download className="w-4 h-4" />
+                            <Download className="size-4" />
                           </TooltipTrigger>
                           <TooltipContent>{t("builds.download_artifact")}</TooltipContent>
                         </Tooltip>
@@ -420,7 +436,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
                     <div className="bg-card p-4 max-h-[400px] overflow-y-auto">
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-                          <Terminal className="w-4 h-4" /> {t("builds.log_title")}
+                          <Terminal className="size-4" /> {t("builds.log_title")}
                         </span>
                         <span className="text-(--fs-micro-sm) text-muted-foreground font-mono">{stdout.split("\n").length} {t("builds.lines")}</span>
                       </div>

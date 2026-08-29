@@ -14,7 +14,7 @@ interface QuickPresetsProps {
 const PRESETS = [
   {
     key: "opsec" as const,
-    icon: <ShieldCheck className="w-4 h-4" />,
+    icon: <ShieldCheck className="size-4" />,
     iconBg: "bg-success/10",
     iconColor: "text-success",
     labelKey: "generate.preset_opsec",
@@ -22,7 +22,7 @@ const PRESETS = [
   },
   {
     key: "evasion" as const,
-    icon: <Eye className="w-4 h-4" />,
+    icon: <Eye className="size-4" />,
     iconBg: "bg-destructive/10",
     iconColor: "text-destructive",
     labelKey: "generate.preset_evasion",
@@ -30,7 +30,7 @@ const PRESETS = [
   },
   {
     key: "blend" as const,
-    icon: <EyeOff className="w-4 h-4" />,
+    icon: <EyeOff className="size-4" />,
     iconBg: "bg-info/10",
     iconColor: "text-info",
     labelKey: "generate.preset_blend",
@@ -51,7 +51,7 @@ export default React.memo(function QuickPresets({ onApply }: QuickPresetsProps) 
       </div>
       <div className="flex flex-1 flex-wrap gap-3 min-w-0">
         {PRESETS.map((p) => (
-          <Card key={p.key} className="relative flex-1 min-w-[180px] p-4 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
+          <Card key={p.key} className="relative flex-1 min-w-[180px] p-4 hover:shadow-lg dark:hover:shadow-xl transition-shadow">
             <Button
               type="button"
               variant="ghost"
@@ -60,7 +60,7 @@ export default React.memo(function QuickPresets({ onApply }: QuickPresetsProps) 
               aria-label={t(p.labelKey)}
             />
             <div className="flex items-center gap-2.5">
-              <div className={`w-8 h-8 ${p.iconBg} rounded-lg flex items-center justify-center`}><span className={p.iconColor}>{p.icon}</span></div>
+              <div className={`size-8 ${p.iconBg} rounded-lg flex items-center justify-center`}><span className={p.iconColor}>{p.icon}</span></div>
               <div className="min-w-0">
                 <div className="text-sm font-semibold text-foreground">{t(p.labelKey)}</div>
                 <p className="truncate text-xs text-muted-foreground">{t(p.descKey)}</p>

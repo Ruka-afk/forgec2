@@ -11,6 +11,7 @@ import { Download, RefreshCw, AlertTriangle, type LucideIcon } from "lucide-reac
 import { Spinner } from "@/components/ui/spinner";
 import { useI18n } from "@/lib/i18n";
 import { logger } from "@/lib/logger";
+import { cn } from "@/lib/utils";
 import type { Hue } from "@/lib/ui/statusStyles";
 
 interface ChartCardProps {
@@ -33,7 +34,7 @@ export function ChartCard({ title, icon: Icon, iconColor = "primary", children, 
     try { await exportElementPng(chartRef.current, exportFilename); } catch (e) { if (process.env.NODE_ENV === "development") logger.warn("ChartCard export failed", e); }
   };
   return (
-    <Card role="region" aria-label={title} className={`p-5 sm:p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30 ${className || ""}`}>
+    <Card role="region" aria-label={title} className={cn("px-(--card-spacing)", className)}>
       <div className="flex items-center justify-between mb-4 pb-4 border-b border-border/50">
         <div className="font-semibold text-foreground flex items-center gap-x-2.5 text-sm">
           <IconBadge icon={Icon} color={iconColor} size="md" />
@@ -43,7 +44,7 @@ export function ChartCard({ title, icon: Icon, iconColor = "primary", children, 
           {exportFilename && (
             <Tooltip>
               <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={handleExport} aria-label={t("common.export_png")} className="text-muted-foreground hover:text-foreground" />}>
-                <Download className="w-4 h-4" />
+                <Download className="size-4" />
               </TooltipTrigger>
               <TooltipContent>{t("common.export_png")}</TooltipContent>
             </Tooltip>
@@ -51,7 +52,7 @@ export function ChartCard({ title, icon: Icon, iconColor = "primary", children, 
           {onRefresh && (
             <Tooltip>
               <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={onRefresh} disabled={loading} aria-label={t("common.refresh")} className="text-muted-foreground hover:text-foreground" />}>
-                {loading ? <Spinner size="xs" /> : <RefreshCw className="w-4 h-4" />}
+                {loading ? <Spinner size="xs" /> : <RefreshCw className="size-4" />}
               </TooltipTrigger>
               <TooltipContent>{t("common.refresh")}</TooltipContent>
             </Tooltip>
@@ -60,14 +61,14 @@ export function ChartCard({ title, icon: Icon, iconColor = "primary", children, 
       </div>
       {error ? (
         <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-          <div className="w-12 h-12 rounded-xl bg-warning/10 flex items-center justify-center mb-3">
-            <AlertTriangle className="w-6 h-6 text-warning" />
+          <div className="size-12 rounded-lg bg-warning/10 flex items-center justify-center mb-3">
+            <AlertTriangle className="size-6 text-warning" />
           </div>
           <span className="text-sm font-medium">{t("chart.load_failed")}</span>
-          <span className="text-xs text-muted-foreground/70 mt-1">{t("chart.try_later")}</span>
+          <span className="text-xs text-muted-foreground/100 mt-1">{t("chart.try_later")}</span>
           {onRefresh && (
             <Button variant="outline" size="sm" onClick={onRefresh} className="mt-3">
-              <RefreshCw className="w-3 h-3 mr-1.5" />{t("common.try_again")}
+              <RefreshCw className="size-3 mr-1.5" />{t("common.try_again")}
             </Button>
           )}
         </div>

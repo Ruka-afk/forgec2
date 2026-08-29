@@ -45,12 +45,12 @@ export default memo(function EvasionSection({ agentId, online }: EvasionSectionP
   return (
     <Card className="mb-4 gap-0">
       <div className="px-4 py-3 border-b border-border">
-        <h3 className="text-sm font-semibold text-foreground"><Shield className="w-3.5 h-3.5" />{t("agents.evasion_title")}</h3>
+        <h3 className="text-sm font-semibold text-foreground"><Shield className="size-3.5" />{t("agents.evasion_title")}</h3>
       </div>
       <div className="p-3">
         <p className="text-xs text-muted-foreground mb-3">{t("agents.evasion_desc")}</p>
         {confirmStep && (
-          <Banner tone="destructive" icon={<AlertTriangle className="w-3.5 h-3.5" />} className="mb-3 text-xs">
+          <Banner tone="destructive" icon={<AlertTriangle className="size-3.5" />} className="mb-3 text-xs">
             {t("agents.evasion_confirm_msg").replace("{technique}", t(EVASION_TECHNIQUES.find(tech => tech.value === selectedTechnique)?.labelKey || ""))}
           </Banner>
         )}
@@ -76,7 +76,7 @@ export default memo(function EvasionSection({ agentId, online }: EvasionSectionP
             variant={confirmStep ? "destructive" : "default"}
             className="shrink-0"
           >
-            <Zap className="w-4 h-4" />
+            <Zap className="size-4" />
             {sending ? t("agents.evasion_executing") : confirmStep ? t("agents.evasion_confirm") : t("agents.evasion_execute")}
           </Button>
         </div>

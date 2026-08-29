@@ -1,8 +1,9 @@
 "use client";
 import { PageContainer } from "@/components/ui/page-container";
+import { PageToolbar } from "@/components/ui/page-toolbar";
 import { ErrorState } from "@/components/ui/error-state";
 
-import { Suspense, useState, useCallback, useEffect, memo, useMemo, useRef } from "react";
+import { Suspense, useState, useCallback, useEffect, memo, useMemo, useRef, createElement } from "react";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { downloadText } from "@/lib/download";
@@ -17,6 +18,7 @@ import OperatorBadge from "@/components/OperatorBadge";
 import { useAppStore } from "@/lib/store";
 import { paths } from "@/lib/api-paths";
 import { firstArray, firstNumber } from "@/lib/envelope";
+import { csvCell } from "@/lib/csv";
 import { formatTime } from "@/lib/utils";
 import { useVirtualWindow } from "@/lib/hooks/useVirtualWindow";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
@@ -44,6 +46,9 @@ import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Ban, Check, ChevronDown, ChevronUp, FileSpreadsheet, Hand, Inbox, Maximize2, RotateCw, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import type { Task } from "@/types/task";
+import { getTaskRenderer } from "@/lib/taskRenderers";
+import AIAnalysisButton from "./_components/AIAnalysisPanel";
+import NLQueryDialog from "./_components/NLQueryDialog";
 
 type SortKey = "created_at" | "type" | "command" | "status";
 
@@ -70,10 +75,10 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
   }, [sortKey]);
 
   const sortIcon = (col: SortKey) => {
-    if (sortKey !== col) return <ArrowUpDown className="w-3 h-3 inline-block ml-1 text-muted-foreground/50" />;
+    if (sortKey !== col) return <ArrowUpDown className="size-3 inline-block ml-1 text-muted-foreground/100" />;
     return sortDir === "asc"
-      ? <ArrowUp className="w-3 h-3 inline-block ml-1 text-primary" />
-      : <ArrowDown className="w-3 h-3 inline-block ml-1 text-primary" />;
+      ? <ArrowUp className="size-3 inline-block ml-1 text-primary" />
+      : <ArrowDown className="size-3 inline-block ml-1 text-primary" />;
   };
 
   const handleSortKeyDown = useCallback(
@@ -112,6 +117,10 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
       })
       .catch((e) => {
         if (ac.signal.aborted) return;
+        if (background) {
+          // Keep existing data on background poll failure — don't blank the table or spam toasts.
+          return;
+        }
         setTasks([]);
         setTotal(0);
         const msg = e instanceof Error ? e.message : t("tasks.toast_load_failed");
@@ -147,16 +156,16 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
   useVisibleInterval(pollTasks, POLL.tasks);
 
   const handleExportCSV = () => {
-    const headers = ["Time", "Agent", "Type", "Command", "Status", "Result", "Duration"];
+    const headers = ["Time", "Agent", "Type", "Command", "Status", "Result", "Duration"].map(csvCell);
     const rows = tasks.map((t) => [
       t.created_at || "",
       getAgentName(t.agent_id) || t.agent_id || String(t.id).substring(0, 8) || "",
       t.type || "",
-      `"${(t.command || "").replace(/"/g, '""')}"`,
+      t.command || "",
       t.status || "",
-      `"${(t.result || "").replace(/"/g, '""').replace(/\n/g, " ")}"`,
+      (t.result || "").replace(/\n/g, " "),
       calcDuration(t.created_at, t.updated_at),
-    ]);
+    ].map(csvCell));
     const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
     downloadText(csv, `tasks_export_${Date.now()}.csv`, "text/csv");
   };
@@ -222,6 +231,10 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
     offsetTop,
     totalHeight,
   } = useVirtualWindow({ count: tasks.length, rowHeight: TASK_ROW_H, threshold: 25 });
+  // Windowing assumes fixed-height rows; an expanded detail row breaks the
+  // scrollTop→index math (skipped rows / dead scroll area). Render fully
+  // while any row is expanded.
+  const windowingActive = virtualized && expandedRows.size === 0;
 
   const sortedTasks = useMemo(() => {
     const list = [...tasks];
@@ -240,8 +253,8 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
   }, [tasks, sortKey, sortDir]);
 
   const visibleTasks = useMemo(
-    () => (virtualized ? sortedTasks.slice(virtStart, virtEnd) : sortedTasks),
-    [sortedTasks, virtualized, virtStart, virtEnd],
+    () => (windowingActive ? sortedTasks.slice(virtStart, virtEnd) : sortedTasks),
+    [sortedTasks, windowingActive, virtStart, virtEnd],
   );
 
   const getStatusBadge = useCallback((status: string): React.ReactNode => {
@@ -259,19 +272,20 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
 
   return (
     <PageContainer embedded={embedded} title={!embedded ? t("tasks.title") : undefined} subtitle={!embedded ? `${t("tasks.subtitle_prefix")} \u00b7 ${total} total` : undefined} actions={<>
+        <NLQueryDialog />
         <Button onClick={handleExportCSV} variant="secondary">
-          <FileSpreadsheet className="w-4 h-4" /> {t("tasks.export_csv")}
+          <FileSpreadsheet className="size-4" /> {t("tasks.export_csv")}
         </Button>
       </>}>
       {embedded && (
         <div className="mb-4 flex justify-end">
           <Button onClick={handleExportCSV} variant="secondary" size="sm">
-            <FileSpreadsheet className="w-4 h-4" /> {t("tasks.export_csv")}
+            <FileSpreadsheet className="size-4" /> {t("tasks.export_csv")}
           </Button>
         </div>
       )}
 
-      <Card className="p-(--card-spacing) mb-4">
+      <PageToolbar>
         <div className="flex flex-col sm:flex-row gap-3">
           <Select value={statusFilter || "all"} onValueChange={(val) => { setStatusFilter(val === "all" ? "" : val ?? ""); setPage(1); }}>
             <SelectTrigger aria-label={t("tasks.status_filter")}>
@@ -313,9 +327,9 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
             </SelectContent>
           </Select>
         </div>
-      </Card>
+      </PageToolbar>
 
-      <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
+      <Card className="overflow-hidden">
         <DataState
           loading={loading}
           error={error}
@@ -335,7 +349,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
           <div
             ref={scrollRef}
             onScroll={onScroll}
-            className={virtualized ? "overflow-auto max-h-[min(70vh,720px)]" : "overflow-x-auto"}
+            className={windowingActive ? "overflow-auto max-h-[min(70vh,720px)]" : "overflow-x-auto"}
           >
           <Table className="text-sm">
             <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90 border-b border-border">
@@ -360,7 +374,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-border">
-              {virtualized && offsetTop > 0 && (
+              {windowingActive && offsetTop > 0 && (
                 <TableRow aria-hidden className="hover:bg-transparent">
                   <TableCell colSpan={9} style={{ height: offsetTop, padding: 0, border: 0 }} />
                 </TableRow>
@@ -368,7 +382,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
               {visibleTasks.map((task) => (
                 <TaskRow key={task.id} task={task} expanded={expandedRows.has(task.id)} onToggle={toggleRow} onDetail={setDetailTask} onCancel={handleCancel} onRerun={handleRerun} onApprove={handleApprove} onReject={handleReject} onClaim={handleClaim} onRelease={handleRelease} getAgentName={getAgentName} getTypeBadge={getTypeBadge} getStatusBadge={getStatusBadge} />
               ))}
-              {virtualized && totalHeight - offsetTop - visibleTasks.length * TASK_ROW_H > 0 && (
+              {windowingActive && totalHeight - offsetTop - visibleTasks.length * TASK_ROW_H > 0 && (
                 <TableRow aria-hidden className="hover:bg-transparent">
                   <TableCell colSpan={9} style={{ height: totalHeight - offsetTop - visibleTasks.length * TASK_ROW_H, padding: 0, border: 0 }} />
                 </TableRow>
@@ -438,7 +452,7 @@ const TaskRow = memo(function TaskRow({ task, expanded, onToggle, onDetail, onCa
               aria-label={expanded ? t("tasks.collapse") : t("tasks.expand")}
               className="text-xs text-primary hover:underline flex items-center gap-1 p-0 h-auto justify-start"
             >
-              {expanded ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />} {t("tasks.expand")}
+              {expanded ? <ChevronUp className="size-2.5" /> : <ChevronDown className="size-2.5" />} {t("tasks.expand")}
             </Button>
           ) : "-"}
         </TableCell>
@@ -457,32 +471,32 @@ const TaskRow = memo(function TaskRow({ task, expanded, onToggle, onDetail, onCa
               <>
                 {task.claimed_by !== currentUsername ? (
                    <Button variant="ghost" size="icon-xs" onClick={() => onClaim(task.id)} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-chart-3/20" title={t("tasks.claim")} aria-label={t("tasks.claim")}>
-                     <Hand className="w-4 h-4" />
+                     <Hand className="size-4" />
                    </Button>
                  ) : (
                    <Button variant="ghost" size="icon-xs" onClick={() => onRelease(task.id)} className="text-muted-foreground hover:text-warning hover:bg-warning/15" title={t("tasks.release")} aria-label={t("tasks.release")}>
-                    <Hand className="w-4 h-4" />
+                    <Hand className="size-4" />
                   </Button>
                 )}
               </>
             )}
             {(task.status === "pending" || task.status === "running") && !task.claimed_by && (
                <Button variant="ghost" size="icon-xs" onClick={() => onCancel(task)} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10" title={t("tasks.cancel")} aria-label={t("tasks.cancel")}>
-                <Ban className="w-3 h-3" />
+                <Ban className="size-3" />
               </Button>
             )}
             {(task.status === "completed" || task.status === "failed" || task.status === "cancelled") && (
                <Button variant="ghost" size="icon-xs" onClick={() => onRerun(task)} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-chart-3/20" title={t("tasks.rerun")} aria-label={t("tasks.rerun")}>
-                <RotateCw className="w-4 h-4" />
+                <RotateCw className="size-4" />
               </Button>
             )}
             {task.status === "pending_approval" && (
               <>
                  <Button variant="ghost" size="icon-xs" onClick={() => onApprove(task)} className="text-muted-foreground hover:text-success hover:bg-success/15" title={t("tasks.approve")} aria-label={t("tasks.approve")}>
-                  <Check className="w-4 h-4" />
+                  <Check className="size-4" />
                 </Button>
                  <Button variant="ghost" size="icon-xs" onClick={() => onReject(task)} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10" title={t("tasks.reject")} aria-label={t("tasks.reject")}>
-                  <X className="w-4 h-4" />
+                  <X className="size-4" />
                 </Button>
               </>
             )}
@@ -494,9 +508,10 @@ const TaskRow = memo(function TaskRow({ task, expanded, onToggle, onDetail, onCa
           <TableCell colSpan={9} className="px-4 py-3 bg-card">
             <div className="relative">
                <Button variant="ghost" size="xs" onClick={() => onDetail(task)} className="absolute top-2 right-2 text-xs text-muted-foreground hover:text-foreground bg-secondary px-2 py-1 rounded">
-                <Maximize2 className="w-4 h-4" />{t("tasks.full_view")}
+                <Maximize2 className="size-4" />{t("tasks.full_view")}
               </Button>
-              <pre className="text-xs text-success font-mono overflow-x-auto max-h-60 p-2 whitespace-pre-wrap break-all">{task.result}</pre>
+              <TaskResultView type={task.type} result={task.result} />
+              <AIAnalysisButton taskId={Number(task.id) || 0} />
             </div>
           </TableCell>
         </TableRow>
@@ -504,6 +519,14 @@ const TaskRow = memo(function TaskRow({ task, expanded, onToggle, onDetail, onCa
     </>
   );
 });
+
+// TaskResultView routes structured payloads through the pluggable renderer
+// registry and keeps the classic text view for everything unregistered.
+function TaskResultView({ type, result }: { type: string; result: string }) {
+  const renderer = getTaskRenderer(type);
+  if (renderer) return createElement(renderer, { result, taskType: type });
+  return <pre className="text-xs text-success font-mono overflow-x-auto max-h-60 p-2 whitespace-pre-wrap break-all">{result}</pre>;
+}
 
 function TaskDetailModal({ task, onClose, getAgentName, getStatusBadge, getTypeBadge }: {
   task: Task;
@@ -540,7 +563,10 @@ function TaskDetailModal({ task, onClose, getAgentName, getStatusBadge, getTypeB
           {task.result && (
             <div>
               <h3 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">{t("tasks.detail_output")}</h3>
-              <pre className="bg-card text-success font-mono text-xs rounded-lg p-4 overflow-x-auto whitespace-pre-wrap break-all max-h-96">{task.result}</pre>
+              <div className="bg-card rounded-lg p-4 max-h-96 overflow-y-auto">
+                <TaskResultView type={task.type} result={task.result} />
+              </div>
+              <AIAnalysisButton taskId={Number(task.id) || 0} />
             </div>
           )}
           {task.error && (

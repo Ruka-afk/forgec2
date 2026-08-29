@@ -40,7 +40,13 @@ function decodeLsResult(result: string): string {
   if (!trimmed) return "";
   if (looksLikeLsTable(raw)) return raw;
   try {
-    const dec = atob(trimmed);
+    // C8 fix: atob decodes to a Latin-1 byte string. For non-ASCII filenames
+    // (Chinese, Japanese, accented characters, etc.) this mangles the output.
+    // Decode base64 → Uint8Array → UTF-8 via TextDecoder to preserve encoding.
+    const binary = atob(trimmed);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const dec = new TextDecoder("utf-8").decode(bytes);
     if (looksLikeLsTable(dec)) return dec;
   } catch {
     /* not base64 */

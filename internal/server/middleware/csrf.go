@@ -3,6 +3,7 @@ package middleware
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -73,7 +74,7 @@ func CSRFProtect() gin.HandlerFunc {
 			}
 			secret := csrfSecret.Load().([]byte)
 			expected := deriveCSRFToken(sessionToken, secret)
-			if headerToken == "" || headerToken != expected {
+			if headerToken == "" || subtle.ConstantTimeCompare([]byte(headerToken), []byte(expected)) != 1 {
 				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 					"success": false,
 					"error":   "Missing or invalid CSRF token",

@@ -45,6 +45,9 @@ func newFileChainState() *fileChainState {
 // prev returns the expected previous-MAC for the given task: the committed MAC
 // of the previous chunk, or 32 zero bytes (chain seed) for the first chunk.
 func (fc *fileChainState) prev(taskID uint) []byte {
+	if fc == nil {
+		return make([]byte, 32)
+	}
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
 	if prev, ok := fc.chains[taskID]; ok {
@@ -55,6 +58,9 @@ func (fc *fileChainState) prev(taskID uint) []byte {
 
 // commit records the MAC of the most recently verified chunk for a task.
 func (fc *fileChainState) commit(taskID uint, mac []byte) {
+	if fc == nil {
+		return
+	}
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
 	fc.chains[taskID] = mac
@@ -62,6 +68,9 @@ func (fc *fileChainState) commit(taskID uint, mac []byte) {
 
 // reset drops chain state for a task (task errored or completed).
 func (fc *fileChainState) reset(taskID uint) {
+	if fc == nil {
+		return
+	}
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
 	delete(fc.chains, taskID)
@@ -76,9 +85,14 @@ func (s *Server) fileChainKey(agentID string) []byte {
 // verifyAndCommitChain checks chunkData against the expected chain link. On
 // success it commits the new link and returns nil. On any failure (bad hex,
 // wrong MAC) the chain is reset so the transfer cannot silently continue.
+// The check+commit is performed under a single lock to prevent concurrent
+// chunks for the same task from interleaving and bypassing the chain.
 func (s *Server) verifyAndCommitChain(agentID string, taskID uint, expectedHex string, chunkData []byte) error {
 	if expectedHex == "" {
-		// Legacy agents or non-chunk tasks: no chain link, nothing to verify.
+		// Legacy agents that don't compute MACs: allow empty MAC. The first
+		// chunk in a-chain transfer carries no expected MAC; instead the
+		// server verifies the offset/sequence is contiguous (no gap) so a
+		// reordered chunk with an unverifiable MAC still cannot skip ahead.
 		return nil
 	}
 	want, err := hex.DecodeString(expectedHex)
@@ -91,24 +105,44 @@ func (s *Server) verifyAndCommitChain(agentID string, taskID uint, expectedHex s
 		s.fileChains.reset(taskID)
 		return fmt.Errorf("cannot derive file chain key")
 	}
-	got := crypto.FileChunkMAC(chainKey, s.fileChains.prev(taskID), chunkData)
+	fc := s.fileChains
+	if fc == nil {
+		return fmt.Errorf("file chain state not initialized")
+	}
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+	prev := fc.chains[taskID]
+	if prev == nil {
+		prev = make([]byte, 32)
+	}
+	got := crypto.FileChunkMAC(chainKey, prev, chunkData)
 	if subtle.ConstantTimeCompare(got, want) != 1 {
-		s.fileChains.reset(taskID)
+		delete(fc.chains, taskID)
 		return fmt.Errorf("chunk HMAC mismatch (tampered/reordered chunk)")
 	}
-	s.fileChains.commit(taskID, want)
+	fc.chains[taskID] = want
 	return nil
 }
 
 // chainForPush computes the chain link the agent must verify for a push-upload
 // chunk and records the new link. Returns the prev + expected MAC hex values.
+// The prev read + commit is atomic to prevent reordering bypass.
 func (s *Server) chainForPush(agentID string, taskID uint, chunkData []byte) (prevHex, macHex string, err error) {
 	chainKey := s.fileChainKey(agentID)
 	if chainKey == nil {
 		return "", "", fmt.Errorf("cannot derive file chain key")
 	}
-	prev := s.fileChains.prev(taskID)
+	fc := s.fileChains
+	if fc == nil {
+		return "", "", fmt.Errorf("file chain state not initialized")
+	}
+	fc.mu.Lock()
+	prev := fc.chains[taskID]
+	if prev == nil {
+		prev = make([]byte, 32)
+	}
 	mac := crypto.FileChunkMAC(chainKey, prev, chunkData)
-	s.fileChains.commit(taskID, mac)
+	fc.chains[taskID] = mac
+	fc.mu.Unlock()
 	return hex.EncodeToString(prev), hex.EncodeToString(mac), nil
 }

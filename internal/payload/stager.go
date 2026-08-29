@@ -20,7 +20,7 @@ type StagerTokenData struct {
 	ListenerID uint      `json:"listener_id"`
 	Arch       string    `json:"arch"`
 	OS         string    `json:"os"`
-	Format     string    `json:"format"` // exe, dll, shellcode
+	Format     string    `json:"format"` // exe or dll
 	CreatedAt  time.Time `json:"created_at"`
 	Nonce      string    `json:"nonce"`
 }
@@ -31,7 +31,7 @@ type StagerConfig struct {
 	Protocol      string // http, tcp, p2p (default "http")
 	Architecture  string
 	OS            string
-	Format        string // exe, dll, shellcode
+	Format        string // exe or dll (raw shellcode is not a Go-buildable artifact)
 	UserAgent     string
 	Profile       string
 	SkipTLSVerify bool

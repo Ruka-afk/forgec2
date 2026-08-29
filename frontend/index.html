@@ -14,7 +14,7 @@
           if (t === "dark") dark = true;
           else if (t === "light") dark = false;
           else if (t === "system") dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-          else dark = true;
+          else dark = false;
           if (dark) document.documentElement.classList.add("dark");
         } catch (e) {
           /* silent */

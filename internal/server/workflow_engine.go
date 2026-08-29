@@ -41,6 +41,14 @@ func (we *WorkflowEngine) ExecuteWorkflow(wf db.Workflow, agentIDs []string) (in
 			step := steps[i]
 
 			repeatCount := 0
+			// Bounded repeat: RepeatCount<=0 previously meant "repeat forever"
+			// whenever RepeatDelay was set — one API call flooded the agent
+			// with tasks until process restart. Treat <=0 as a single run.
+			maxRepeats := step.RepeatCount
+			if maxRepeats < 1 {
+				maxRepeats = 1
+			}
+			jumpBudget := len(steps) // bounded self/backward jumps (P2)
 			for {
 				created, jumpTarget, abort := we.executeStep(wf, step, agentID, executionID, stepResults)
 				taskCount += created
@@ -51,18 +59,22 @@ func (we *WorkflowEngine) ExecuteWorkflow(wf db.Workflow, agentIDs []string) (in
 				}
 				if jumpTarget != "" {
 					nextIdx := we.findStepIndex(steps, jumpTarget)
-					if nextIdx >= 0 {
+					if nextIdx >= 0 && jumpBudget > 0 {
+						// Self/backward jumps are allowed only within a small
+						// budget; unbounded loops re-created tasks endlessly.
+						jumpBudget--
 						i = nextIdx - 1 // loop will increment
 						slog.Info("Workflow jump", "workflow_id", wf.ID, "step", step.StepOrder, "target", jumpTarget)
-					} else if jumpTarget == "abort" {
-						lastErr = fmt.Sprintf("aborted at step %d", step.StepOrder)
-						i = len(steps)
+					} else {
+						if nextIdx >= 0 {
+							slog.Warn("Workflow jump budget exhausted, continuing", "workflow_id", wf.ID, "step", step.StepOrder)
+						}
 					}
 					break
 				}
 				// Step completed normally (no jump)
 				repeatCount++
-				if step.RepeatCount > 0 && repeatCount >= step.RepeatCount {
+				if repeatCount >= maxRepeats {
 					break
 				}
 				if step.RepeatDelay > 0 {
@@ -141,6 +153,12 @@ func (we *WorkflowEngine) executeStep(wf db.Workflow, step db.WorkflowStep, agen
 	if err != nil {
 		slog.Error("Workflow: failed to create task", "step", step.StepOrder, "agent", agentID, "error", err)
 		finish("failed", err.Error(), "", "")
+		// Dispatch failure must honor StopOnFailure like any other step
+		// failure — offline agents / RoE blocks silently let the workflow
+		// continue before (P2).
+		if step.StopOnFailure {
+			return 0, "", true
+		}
 		return 0, "", false
 	}
 	if err := we.server.db.Model(&task).Update("created_by", "workflow").Error; err != nil {
@@ -179,6 +197,16 @@ func (we *WorkflowEngine) executeStep(wf db.Workflow, step db.WorkflowStep, agen
 
 	result := stepResults[step.ID]
 
+	// StopOnFailure is evaluated independently of Condition: previously the
+	// else-if meant setting both fields silently disabled stop-on-failure.
+	if step.StopOnFailure {
+		var t db.Task
+		if we.server.db.First(&t, task.ID).Error == nil && t.Status == "failed" {
+			finish("aborted", result, "abort", "stop_on_failure")
+			slog.Info("Workflow stopped on failure", "workflow_id", wf.ID, "step", step.StepOrder)
+			return 1, "", true
+		}
+	}
 	if step.Condition != "" {
 		matched := we.EvaluateCondition(step.Condition, result)
 		if !matched && step.OnFailure != "" {
@@ -193,13 +221,6 @@ func (we *WorkflowEngine) executeStep(wf db.Workflow, step db.WorkflowStep, agen
 			finish("completed", result, "jump", step.OnSuccess)
 			slog.Info("Workflow branch (success)", "workflow_id", wf.ID, "step", step.StepOrder, "jump_to", step.OnSuccess)
 			return 1, step.OnSuccess, false
-		}
-	} else if step.StopOnFailure {
-		var t db.Task
-		if we.server.db.First(&t, task.ID).Error == nil && t.Status == "failed" {
-			finish("aborted", result, "abort", "stop_on_failure")
-			slog.Info("Workflow stopped on failure", "workflow_id", wf.ID, "step", step.StepOrder)
-			return 1, "", true
 		}
 	}
 

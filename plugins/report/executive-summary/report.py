@@ -64,8 +64,8 @@ def build_metrics(agents, tasks, creds, listeners, audit, hours):
                 try:
                     if datetime.fromisoformat(ls.replace("Z", "+00:00")).replace(tzinfo=None) < cutoff:
                         continue
-                except (ValueError, TypeError):
-                    pass
+                except (ValueError, TypeError) as exc:
+                    print(json.dumps({"level": "error", "message": f"Plugin error: invalid agent last_seen timestamp '{ls}': {exc}"}), file=sys.stderr)
 
         s = a.get("status", "unknown")
         if s == "online":
@@ -81,8 +81,8 @@ def build_metrics(agents, tasks, creds, listeners, audit, hours):
                 last = datetime.fromisoformat(ls.replace("Z", "+00:00")).replace(tzinfo=None)
                 if (now - last) > timedelta(hours=24):
                     burned += 1
-            except (ValueError, TypeError):
-                pass
+            except (ValueError, TypeError) as exc:
+                print(json.dumps({"level": "error", "message": f"Plugin error: cannot compute offline duration from last_seen '{ls}': {exc}"}), file=sys.stderr)
 
         o = a.get("os") or "unknown"
         os_counts[o] = os_counts.get(o, 0) + 1
@@ -122,15 +122,15 @@ def build_metrics(agents, tasks, creds, listeners, audit, hours):
                 dt = datetime.fromisoformat(fs.replace("Z", "+00:00")).replace(tzinfo=None)
                 if first_seen is None or dt < first_seen:
                     first_seen = dt
-        except (ValueError, TypeError):
-            pass
+        except (ValueError, TypeError) as exc:
+            print(json.dumps({"level": "error", "message": f"Plugin error: invalid agent first_seen timestamp '{fs}': {exc}"}), file=sys.stderr)
         try:
             if ls:
                 dt = datetime.fromisoformat(ls.replace("Z", "+00:00")).replace(tzinfo=None)
                 if last_seen is None or dt > last_seen:
                     last_seen = dt
-        except (ValueError, TypeError):
-            pass
+        except (ValueError, TypeError) as exc:
+            print(json.dumps({"level": "error", "message": f"Plugin error: invalid agent last_seen timestamp '{ls}': {exc}"}), file=sys.stderr)
 
     stale_pct = ((stale + burned) / total_agents * 100) if total_agents else 0
 

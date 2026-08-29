@@ -112,10 +112,10 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
       <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <History className="w-4 h-4" /> Execution History
+            <History className="size-4" /> Execution History
             {selectedExec !== null && (
               <Button variant="ghost" size="icon-xs" onClick={() => { setSelectedExec(null); setExecLogs([]); }} aria-label={t("workflows.back_to_list")}>
-                <X className="w-3 h-3" />
+                <X className="size-3" />
               </Button>
             )}
           </DialogTitle>
@@ -135,7 +135,7 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
                     <div className="text-xs text-muted-foreground">{ex.agents_count} agent(s), {ex.tasks_created} task(s) &middot; {formatTime(ex.started_at)}</div>
                     {ex.error_msg && <div className="text-xs text-destructive truncate">{ex.error_msg}</div>}
                   </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <ChevronRight className="size-4 text-muted-foreground shrink-0" />
                 </div>
               ))}
             </div>
@@ -145,7 +145,7 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
             {execLogs.map(log => (
               <div key={log.id} className="p-3 rounded-lg bg-muted border-l-2 border-l-primary">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-(--fs-micro-sm) font-semibold">{log.step_order}</span>
+                  <span className="size-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-(--fs-micro-sm) font-semibold">{log.step_order}</span>
                   <span className="font-semibold text-xs text-primary">{log.task_type}</span>
                   <Badge variant={log.status === "completed" ? "default" : log.status === "failed" ? "destructive" : "secondary"} className="text-(--fs-micro-sm)">{enumLabel(t, "tasks", log.status)}</Badge>
                   {log.branch_action && log.branch_action !== "continue" && (

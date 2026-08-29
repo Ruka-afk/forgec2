@@ -55,24 +55,24 @@ export default memo(function AgentStatusBar({ agent, agentId, status }: AgentSta
             <div className="ml-auto flex items-center gap-1.5 shrink-0">
               <Tooltip>
                 <TooltipTrigger>
-                  <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/shell`} />} className="h-7 gap-1.5 text-xs"><Terminal className="w-3.5 h-3.5" /> {t("agents.shell_title")}</Button>
+                  <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/shell`} />} className="h-7 gap-1.5 text-xs"><Terminal className="size-3.5" /> {t("agents.shell_title")}</Button>
                 </TooltipTrigger>
                 <TooltipContent>{t("agents.shortcut_hint", { key: "S" })}</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger>
-                  <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/files`} />} className="h-7 gap-1.5 text-xs"><FolderOpen className="w-3.5 h-3.5" /> {t("agents.files_title")}</Button>
+                  <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/files`} />} className="h-7 gap-1.5 text-xs"><FolderOpen className="size-3.5" /> {t("agents.files_title")}</Button>
                 </TooltipTrigger>
                 <TooltipContent>{t("agents.shortcut_hint", { key: "F" })}</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger>
-                  <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/screen`} />} className="h-7 gap-1.5 text-xs"><Monitor className="w-3.5 h-3.5" /> {t("agents.screen_title")}</Button>
+                  <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/screen`} />} className="h-7 gap-1.5 text-xs"><Monitor className="size-3.5" /> {t("agents.screen_title")}</Button>
                 </TooltipTrigger>
                 <TooltipContent>{t("agents.shortcut_hint", { key: "D" })}</TooltipContent>
               </Tooltip>
               <Button variant="ghost" size="sm" onClick={scrollToTop} className="h-7 px-2 text-xs text-muted-foreground" aria-label={t("agents.back_to_top")}>
-                <ArrowUp className="w-3.5 h-3.5" />
+                <ArrowUp className="size-3.5" />
               </Button>
             </div>
           </div>

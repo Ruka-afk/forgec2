@@ -45,6 +45,27 @@ func (s *Server) handleListProfiles(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "profiles": payload.ListProfilePresets(s.implantDataDir())})
 }
 
+// handleSaveProfile persists a profile JSON (create or overwrite a custom
+// profile in data/profiles/) so editor/duplicate changes survive restarts
+// instead of living only in the browser tab.
+func (s *Server) handleSaveProfile(c *gin.Context) {
+	raw, err := io.ReadAll(io.LimitReader(c.Request.Body, MaxUploadSize+1))
+	if err != nil {
+		respondError(c, http.StatusBadRequest, "failed to read request body")
+		return
+	}
+	if len(raw) > MaxUploadSize {
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("profile too large (max %d bytes)", MaxUploadSize))
+		return
+	}
+	profile, err := payload.SaveImportedProfile(s.implantDataDir(), raw)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, sanitizeError(err, "Profile save"))
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "profile": profile})
+}
+
 func (s *Server) handleDeleteProfile(c *gin.Context) {
 	name, _ := url.PathUnescape(c.Param("name"))
 	if name == "" || name == "default" {

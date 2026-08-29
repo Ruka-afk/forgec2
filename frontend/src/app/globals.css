@@ -32,7 +32,7 @@
   --code-text: oklch(0.24 0.02 265);
   --code-bg: oklch(0.975 0.003 265);
 
-  --background: oklch(0.972 0.004 265);
+  --background: oklch(0.978 0.005 265);
   --foreground: oklch(0.215 0.022 265);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.215 0.022 265);
@@ -40,16 +40,16 @@
   --popover-foreground: oklch(0.215 0.022 265);
   --primary: oklch(0.53 0.225 265);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.955 0.005 265);
+  --secondary: oklch(0.956 0.008 265);
   --secondary-foreground: oklch(0.24 0.024 265);
-  --muted: oklch(0.955 0.005 265);
-  --muted-foreground: oklch(0.47 0.02 262);
+  --muted: oklch(0.958 0.006 265);
+  --muted-foreground: oklch(0.44 0.025 262);
   --accent: oklch(0.955 0.005 265);
   --accent-foreground: oklch(0.215 0.022 265);
   --destructive: oklch(0.577 0.245 27.325);
-  --input: oklch(0.922 0.004 265);
+  --input: oklch(0.91 0.008 265);
   --ring: oklch(0.53 0.225 265);
-  --border: oklch(0.918 0.005 265);
+  --border: oklch(0.90 0.009 265);
   --warning: oklch(0.72 0.145 72);
   --warning-foreground: oklch(0.33 0.1 70);
   --info: oklch(0.62 0.13 245);
@@ -62,13 +62,13 @@
   --radius-control-xs: calc(var(--radius) * 0.55);
   --radius-control-sm: calc(var(--radius) * 0.7);
 
-  /* layered surfaces (dark-optimized, used in .dark) */
-  --surface-1: oklch(0.145 0.016 265);
-  --surface-2: oklch(0.175 0.018 265);
-  --surface-3: oklch(0.20 0.019 265);
-  --surface-4: oklch(0.225 0.02 265);
+  /* Layered light surfaces. Dark values are mapped in .dark below. */
+  --surface-1: oklch(0.978 0.005 265);
+  --surface-2: oklch(0.995 0.002 265);
+  --surface-3: oklch(0.958 0.008 265);
+  --surface-4: oklch(0.932 0.012 265);
 
-  --sidebar: oklch(0.975 0.004 265);
+  --sidebar: oklch(0.987 0.004 265);
   --sidebar-foreground: oklch(0.215 0.022 265);
   --sidebar-accent: oklch(0.945 0.008 265);
   --sidebar-accent-foreground: oklch(0.215 0.022 265);
@@ -89,7 +89,7 @@
   --fs-5xl: 3rem;             /* 48px */
   --fs-6xl: 3.75rem;          /* 60px */
   --fs-7xl: 4.5rem;           /* 72px — error pages */
-  --fs-page-title: 1.375rem;  /* 22px — PageHeader h1 */
+  --fs-page-title: 1.5rem;    /* 24px — PageHeader h1 */
   --fs-section: var(--fs-lg); /* 18px — section titles (CardHeaderRow / SectionCard) */
   --fs-stat-value: 1.625rem;  /* 26px — StatCard value */
   --fs-prose: 1.05rem;        /* 16.8px — markdown body */
@@ -136,7 +136,13 @@
   --chart-5: oklch(0.61 0.19 20);    /* rose */
   --chart-6: oklch(0.60 0.17 300);   /* violet */
 
-  --content-width: 90rem;
+  --content-standard: 80rem;
+  --content-wide: 96rem;
+  --content-width: var(--content-wide);
+  --shell-sidebar-expanded: 14rem;
+  --shell-sidebar-collapsed: 4rem;
+  --shell-topbar-height: 3.5rem;
+  --shell-breadcrumb-height: 2rem;
   --z-scroll-to-top: 70;
   --z-skip-link: 100;
   --tracking-wide: 0.08em;
@@ -228,12 +234,12 @@ body::before {
   inset: 0;
   pointer-events: none;
   z-index: -1;
-  opacity: 0.45;
+  opacity: 0.22;
   background:
     radial-gradient(900px 500px at 85% -10%, color-mix(in oklch, var(--primary) 6%, transparent) 0%, transparent 60%),
     linear-gradient(to right, color-mix(in oklch, var(--border) 45%, transparent) 1px, transparent 1px),
     linear-gradient(to bottom, color-mix(in oklch, var(--border) 35%, transparent) 1px, transparent 1px);
-  background-size: auto, 32px 32px, 32px 32px;
+  background-size: auto, 40px 40px, 40px 40px;
   mask-image: linear-gradient(to bottom, black 0%, transparent 85%);
 }
 .dark body::before { opacity: 0.18; }
@@ -264,6 +270,33 @@ body::before {
     background-image: linear-gradient(to right, color-mix(in oklch, var(--primary) 14%, transparent), transparent 70%);
     border-left: 2px solid var(--primary);
   }
+
+  /* Shared icon well — page headers, empty states, stat tiles */
+  .icon-well {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: var(--radius);
+    box-shadow: var(--elevation-1);
+  }
+
+  /* Active sidebar item — inset primary bar without layout shift */
+  .nav-item-active {
+    box-shadow: inset 2px 0 0 0 var(--primary);
+  }
+}
+
+/* Data cards wrapping tables stay planted — no hover lift */
+[data-slot="card"]:has([data-slot="table-container"]):hover {
+  transform: none;
+  box-shadow: var(--elevation-1);
+}
+
+/* Light mode uses solid working surfaces; translucent cards look muddy over
+   the command-center background and weaken table/form hierarchy. */
+:root:not(.dark) [data-slot="card"] {
+  background-color: var(--card);
 }
 
 /* ── Base ── */
@@ -503,7 +536,13 @@ body {
   --tracking-label: 0.12em;
   --tracking-sublabel: 0.08em;
   --blur-orb: 60px;
-  --content-width: 90rem;
+  --content-standard: 80rem;
+  --content-wide: 96rem;
+  --content-width: var(--content-wide);
+  --shell-sidebar-expanded: 14rem;
+  --shell-sidebar-collapsed: 4rem;
+  --shell-topbar-height: 3.5rem;
+  --shell-breadcrumb-height: 2rem;
 }
 
 @layer base {

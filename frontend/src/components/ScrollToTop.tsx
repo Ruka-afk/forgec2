@@ -24,10 +24,10 @@ export default React.memo(function ScrollToTop() {
       variant="outline"
       size="icon"
       onClick={() => document.querySelector("main")?.scrollTo({ top: 0, behavior: "smooth" })}
-      className="fixed bottom-6 right-6 z-(--z-scroll-to-top) w-11 h-11 rounded-full shadow-lg backdrop-blur-sm bg-background/80 hover:text-foreground hover:shadow-xl transition-all animate-scale-in"
+      className="fixed bottom-6 right-6 z-(--z-scroll-to-top) size-11 rounded-full shadow-lg backdrop-blur-sm bg-background/80 hover:text-foreground hover:shadow-xl transition-all animate-scale-in"
       aria-label={t("common.scroll_to_top")}
     >
-      <ChevronUp className="w-4 h-4" />
+      <ChevronUp className="size-4" />
     </Button>
   );
 });

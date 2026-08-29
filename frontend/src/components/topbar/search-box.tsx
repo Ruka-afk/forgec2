@@ -23,26 +23,26 @@ export function SearchBox() {
     <>
       {/* Desktop search */}
       <form onSubmit={handleSubmit} className="relative flex-1 max-w-sm hidden sm:flex">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/70" />
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground/100" />
         <Input id="global-search" type="text" value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t("topbar.search_placeholder")}
-          className="h-9 pl-8 pr-4 text-(--fs-compact) placeholder:text-muted-foreground/70 bg-secondary/50 border-transparent focus:bg-card focus:border-border rounded-xl" />
+          className="h-9 rounded-lg border-transparent bg-secondary/50 pl-8 pr-4 text-(--fs-compact) placeholder:text-muted-foreground/100 focus:border-border focus:bg-card" />
         {query && (
           <Button type="button" onClick={() => setQuery("")}
             variant="ghost" size="icon-xs" className="absolute right-2 top-1/2 -translate-y-1/2" aria-label={t("common.clear_search")}>
-            <X className="w-3 h-3" />
+            <X className="size-3" />
           </Button>
         )}
       </form>
       {/* Mobile search toggle */}
       <Button variant="ghost" size="icon" className="sm:hidden" onClick={() => setMobileOpen(!mobileOpen)} aria-label={t("nav.search")}>
-        <Search className="w-5 h-5" />
+        <Search className="size-5" />
       </Button>
       {mobileOpen && (
         <form onSubmit={handleSubmit} className="sm:hidden absolute top-full left-0 right-0 z-50 p-3 bg-card border-b border-border shadow-lg animate-fade-in">
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/70" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground/100" />
             <Input type="text" value={query} autoFocus
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t("topbar.search_placeholder")}
@@ -50,7 +50,7 @@ export function SearchBox() {
             {query && (
               <Button type="button" onClick={() => setQuery("")} variant="ghost" size="icon-xs"
                 className="absolute right-2 top-1/2 -translate-y-1/2" aria-label={t("common.clear_search")}>
-                <X className="w-3 h-3" />
+                <X className="size-3" />
               </Button>
             )}
           </div>

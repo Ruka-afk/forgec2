@@ -115,29 +115,50 @@ function LoginForm() {
   }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-gradient-to-br from-background via-muted/30 to-primary/5 dark:from-background dark:via-primary/[0.03] dark:to-primary/8">
-      <div className="absolute rounded-full blur-(--blur-orb) opacity-15 dark:opacity-10 w-72 h-72 bg-primary/30 top-[-10%] left-[-5%] animate-orb-float" style={{ animationDelay: "0s" }} />
-      <div className="absolute rounded-full blur-(--blur-orb) opacity-15 dark:opacity-10 w-56 h-56 bg-primary/20 bottom-[-5%] right-[-3%] animate-orb-float" style={{ animationDelay: "2s" }} />
-      <div className="absolute rounded-full blur-(--blur-orb) opacity-15 dark:opacity-10 w-40 h-40 bg-chart-6/15 top-[40%] right-[20%] animate-orb-float" style={{ animationDelay: "4s" }} />
-
-      <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.04] [background-image:linear-gradient(var(--border)_1px,transparent_1px),linear-gradient(90deg,var(--border)_1px,transparent_1px)] [background-size:40px_40px]" />
-
-      <div className="relative z-10 w-full max-w-[22rem] mx-4 animate-fade-slide-up">
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-xl shadow-primary/25 ring-1 ring-primary/20 animate-float">
-            <Shield className="w-7 h-7 text-primary-foreground" aria-hidden="true" />
+    <div className="grid min-h-screen overflow-hidden bg-background lg:grid-cols-[minmax(0,1.08fr)_minmax(28rem,0.92fr)]">
+      <section className="relative hidden overflow-hidden border-r border-border bg-[linear-gradient(145deg,var(--surface-2),var(--surface-3))] p-12 lg:flex lg:flex-col lg:justify-between xl:p-16">
+        <div aria-hidden="true" className="absolute inset-0 opacity-[0.3] [background-image:linear-gradient(var(--border)_1px,transparent_1px),linear-gradient(90deg,var(--border)_1px,transparent_1px)] [background-size:48px_48px] [mask-image:linear-gradient(to_bottom,black,transparent_90%)]" />
+        <div aria-hidden="true" className="absolute -right-28 top-20 size-80 rounded-full bg-primary/8 blur-(--blur-orb)" />
+        <div className="relative flex items-center gap-3">
+          <div className="flex size-11 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/15">
+            <Shield className="size-5" aria-hidden="true" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            Forge<span className="text-primary">C2</span>
-          </h1>
-          <p className="text-sm mt-1.5 text-muted-foreground/70">{t("login.subtitle")}</p>
+          <div>
+            <div className="text-lg font-bold tracking-tight">Forge<span className="text-primary">C2</span></div>
+            <div className="mono-eyebrow text-muted-foreground">Command platform</div>
+          </div>
         </div>
+        <div className="relative max-w-xl animate-fade-slide-up">
+          <div className="mono-eyebrow mb-4 text-primary">{t("login.hero_eyebrow")}</div>
+          <h1 className="max-w-lg text-4xl font-semibold leading-tight tracking-tight text-foreground xl:text-5xl">{t("login.hero_title")}</h1>
+          <p className="mt-5 max-w-lg text-base leading-7 text-muted-foreground">{t("login.hero_description")}</p>
+          <div className="mt-9 grid gap-3 sm:grid-cols-3">
+            {[t("login.feature_operations"), t("login.feature_visibility"), t("login.feature_control")].map((feature) => (
+              <div key={feature} className="flex items-center gap-2 rounded-lg border border-border/80 bg-card/75 px-3 py-2.5 text-sm font-medium shadow-sm">
+                <span className="size-1.5 rounded-full bg-primary" />{feature}
+              </div>
+            ))}
+          </div>
+        </div>
+        <p className="relative text-xs text-muted-foreground">{t("login.footer")}</p>
+      </section>
 
-        <Card className="bg-card/80 backdrop-blur-xl border-border/60 shadow-2xl shadow-black/5 dark:shadow-black/20">
-          <CardContent className="p-7">
+      <section className="relative flex min-h-screen items-center justify-center px-5 py-10 sm:px-10">
+        <div aria-hidden="true" className="absolute right-0 top-0 size-64 rounded-full bg-primary/5 blur-(--blur-orb)" />
+        <div className="relative z-10 w-full max-w-[25rem] animate-fade-slide-up">
+          <div className="mb-7 lg:hidden">
+            <div className="mb-4 flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/15">
+              <Shield className="size-5" aria-hidden="true" />
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Forge<span className="text-primary">C2</span></h1>
+            <p className="mt-1 text-sm text-muted-foreground">{t("login.subtitle")}</p>
+          </div>
+
+        <Card className="border-border bg-card shadow-xl">
+          <CardContent className="px-6 sm:px-7">
           {error && (
             <Alert variant="destructive" className="mb-5 animate-scale-in" role="alert">
-              <AlertCircle className="w-4 h-4" aria-hidden="true" />
+              <AlertCircle className="size-4" aria-hidden="true" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
@@ -146,7 +167,7 @@ function LoginForm() {
             <div>
               <Label htmlFor="login-username" className="text-xs font-medium text-muted-foreground mb-1.5 block">{t("login.username")}</Label>
               <div className="relative group">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" aria-hidden="true" />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" aria-hidden="true" />
                 <Input
                   id="login-username"
                   type="text"
@@ -168,7 +189,7 @@ function LoginForm() {
             <div>
               <Label htmlFor="login-password" className="text-xs font-medium text-muted-foreground mb-1.5 block">{t("login.password")}</Label>
               <div className="relative group">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" aria-hidden="true" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" aria-hidden="true" />
                 <Input
                   id="login-password"
                   type="password"
@@ -188,10 +209,10 @@ function LoginForm() {
 
             <div>
               <Label htmlFor="login-totp" className="text-xs font-medium text-muted-foreground mb-1.5 block">
-                {t("login.totp")} <span className="text-muted-foreground/70">({t("login.totp_optional")})</span>
+                {t("login.totp")} <span className="text-muted-foreground/100">({t("login.totp_optional")})</span>
               </Label>
               <div className="relative group">
-                <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" aria-hidden="true" />
+                <Shield className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" aria-hidden="true" />
                 <Input
                   id="login-totp"
                   type="text"
@@ -224,7 +245,7 @@ function LoginForm() {
 
             <Button
               type="submit"
-              variant="gradient"
+              variant="default"
               size="lg"
               disabled={isSubmitting}
               className="w-full font-semibold"
@@ -240,12 +261,13 @@ function LoginForm() {
           </CardContent>
         </Card>
 
-        <p className="text-center text-xs mt-6 text-muted-foreground/70">
+        <p className="mt-6 text-center text-xs text-muted-foreground lg:hidden">
           {version
             ? t("login.footer_version", { version })
             : t("login.footer")}
         </p>
-      </div>
+        </div>
+      </section>
     </div>
   );
 }

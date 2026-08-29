@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import type { ZodSchema, ZodError } from "zod";
 import { useErrorToast } from "@/lib/hooks/useErrorToast";
 
@@ -32,6 +32,7 @@ export function useForm<T extends Record<string, unknown>>({
   const [errors, setErrors] = useState<Partial<Record<keyof T, string>>>({});
   const [touched, setTouched] = useState<Partial<Record<keyof T, boolean>>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const { toastError } = useErrorToast();
 
   const validate = useCallback(
@@ -57,9 +58,11 @@ export function useForm<T extends Record<string, unknown>>({
         let newVal: unknown;
         if (input instanceof HTMLInputElement && input.type === "checkbox") {
           newVal = input.checked;
-        } else if (input instanceof HTMLInputElement && input.type === "number") {
-          newVal = input.value === "" ? "" : Number(input.value) || input.value;
         } else {
+          // Keep raw strings for all inputs (including type="number"): zod
+          // schemas declare string fields and coerce at submit time via
+          // Number()/parseInt(). Coercing here broke z.string() validation
+          // ("Expected string, received number") on every number input.
           newVal = input.value;
         }
         setValues((prev) => ({ ...prev, [field]: newVal }));
@@ -86,6 +89,8 @@ export function useForm<T extends Record<string, unknown>>({
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
+      if (submittingRef.current) return;
+      submittingRef.current = true;
       const allErrors = validate(values);
       setErrors(allErrors);
       setTouched(
@@ -94,7 +99,10 @@ export function useForm<T extends Record<string, unknown>>({
           {} as Partial<Record<keyof T, boolean>>,
         ),
       );
-      if (Object.keys(allErrors).length > 0) return;
+      if (Object.keys(allErrors).length > 0) {
+        submittingRef.current = false;
+        return;
+      }
       setIsSubmitting(true);
       try {
         await onSubmit(values);
@@ -102,6 +110,7 @@ export function useForm<T extends Record<string, unknown>>({
         toastError(err, "common.submit_failed");
       } finally {
         setIsSubmitting(false);
+        submittingRef.current = false;
       }
     },
     [validate, values, onSubmit, toastError],

@@ -14,13 +14,13 @@ import { Card } from "@/components/ui/card";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { Download, Info, List, Menu, MousePointerClick, RotateCw, Snowflake, Zap } from "lucide-react";
-import type { TopoNode, TopoEdge, TopoData } from "@/types/topology";
+import { Download, Globe2, Info, List, Menu, MousePointerClick, RotateCw, Snowflake, Zap } from "lucide-react";
+import type { TopoNode, TopoEdge, TopoData, NetTopologyData } from "@/types/topology";
 
 const TopologyGraph = dynamic(() => import("@/components/TopologyGraph"), { ssr: false });
+
+type TopoViewMode = "c2" | "mesh" | "net";
 
 interface TopologySidebarProps {
   selectedTopoNode: TopoNode | null;
@@ -34,6 +34,8 @@ interface TopologySidebarProps {
   listenerCount: number;
   meshNodeCount: number;
   useMeshSource: boolean;
+  useNetSource?: boolean;
+  netStats?: NetTopologyData["stats"];
   physicsEnabled: boolean;
   togglePhysics: () => void;
   exportPng: () => void;
@@ -51,6 +53,8 @@ function TopologySidebar({
   listenerCount,
   meshNodeCount,
   useMeshSource,
+  useNetSource = false,
+  netStats,
   physicsEnabled,
   togglePhysics,
   exportPng,
@@ -61,7 +65,7 @@ function TopologySidebar({
       <Card className="overflow-hidden p-0 shadow-sm hover:shadow-md transition-shadow duration-200">
         <div className="bg-primary/10 border border-primary/20 px-4 py-2.5">
           <div className="flex items-center gap-2">
-            <Info className="w-4 h-4" />
+            <Info className="size-4" />
             <span className="text-xs font-semibold text-foreground">{t("topology.node_details")}</span>
           </div>
         </div>
@@ -113,7 +117,7 @@ function TopologySidebar({
             </div>
           ) : (
             <div className="text-center py-6 text-muted-foreground">
-              <MousePointerClick className="w-4 h-4 mx-auto" />
+              <MousePointerClick className="size-4 mx-auto" />
               <p className="text-xs">{t("topology.click_hint")}</p>
             </div>
           )}
@@ -123,7 +127,7 @@ function TopologySidebar({
       <Card className="overflow-hidden p-0 shadow-sm hover:shadow-md transition-shadow duration-200">
         <div className="bg-secondary/60 border border-border px-4 py-2.5">
           <div className="flex items-center gap-2">
-            <List className="w-4 h-4" />
+            <List className="size-4" />
             <span className="text-xs font-semibold text-foreground">{t("topology.legend")}</span>
           </div>
         </div>
@@ -144,7 +148,7 @@ function TopologySidebar({
           </div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="w-4 h-4 rounded bg-primary/100 shadow-lg shadow-primary/50 rotate-45"></span>
+              <span className="size-4 rounded bg-primary/100 shadow-lg shadow-primary/50 rotate-45"></span>
               <span className="text-xs text-muted-foreground">{t("topology.legend_listener")}</span>
             </div>
             <span className="text-xs font-mono text-muted-foreground">{listenerCount}</span>
@@ -152,11 +156,48 @@ function TopologySidebar({
           {useMeshSource && (
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-chart-6"></span>
+                <span className="size-3 rounded-full bg-chart-6"></span>
                 <span className="text-xs text-muted-foreground">{t("topology.legend_peer")}</span>
               </div>
               <span className="text-xs font-mono text-muted-foreground">{meshNodeCount}</span>
             </div>
+          )}
+          {useNetSource && (
+            <>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="size-3 rounded-full bg-chart-5"></span>
+                  <span className="text-xs text-muted-foreground">{t("topology.legend_host_lateral")}</span>
+                </div>
+                <span className="text-xs font-mono text-muted-foreground">{netStats?.hosts_lateral ?? 0}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="size-3 rounded-full bg-chart-2"></span>
+                  <span className="text-xs text-muted-foreground">{t("topology.legend_host_discovered")}</span>
+                </div>
+                <span className="text-xs font-mono text-muted-foreground">{netStats?.hosts_discovered ?? 0}</span>
+              </div>
+              {!!netStats?.merged_into_agent && (
+                <p className="text-(--fs-micro-sm) text-muted-foreground">
+                  {t("topology.legend_merged", { n: String(netStats.merged_into_agent) })}
+                </p>
+              )}
+              <div className="border-t border-border pt-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-0.5 border-t-2 border-dashed border-warning"></span>
+                  <span className="text-xs text-muted-foreground">{t("topology.edge_p2p")}</span>
+                </div>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="w-6 h-0.5 border-t-2 border-dotted border-orange-400"></span>
+                  <span className="text-xs text-muted-foreground">{t("topology.edge_proxy")}</span>
+                </div>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="w-6 h-0.5 border-t-2 border-dashed border-slate-500"></span>
+                  <span className="text-xs text-muted-foreground">{t("topology.edge_discovered")}</span>
+                </div>
+              </div>
+            </>
           )}
           <div className="border-t border-border pt-3">
             <div className="flex items-center gap-2 mb-2">
@@ -178,17 +219,17 @@ function TopologySidebar({
       <Card className="overflow-hidden p-0 shadow-sm hover:shadow-md transition-shadow duration-200">
         <div className="bg-success/10 border border-success/20 px-4 py-2.5">
           <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4" />
+            <Zap className="size-4" />
             <span className="text-xs font-semibold text-foreground">{t("topology.quick_actions")}</span>
           </div>
         </div>
         <div className="p-4 space-y-2">
           <Button variant="ghost" size="sm" onClick={togglePhysics} className="w-full justify-between">
-            <span><Snowflake className="w-4 h-4" />{t("topology.physics")}</span>
+            <span><Snowflake className="size-4" />{t("topology.physics")}</span>
             <span className={`font-mono ${physicsEnabled ? "text-success" : "text-muted-foreground"}`}>{physicsEnabled ? t("topology.on") : t("topology.off")}</span>
           </Button>
           <Button variant="ghost" size="sm" onClick={exportPng} className="w-full justify-between">
-            <span><Download className="w-4 h-4" />{t("topology.export_png")}</span>
+            <span><Download className="size-4" />{t("topology.export_png")}</span>
           </Button>
         </div>
       </Card>
@@ -200,23 +241,37 @@ export default function TopologyPage() {
   const { t } = useI18n();
   const [data, setData] = useState<TopoData | null>(null);
   const [meshData, setMeshData] = useState<TopoData | null>(null);
+  const [netData, setNetData] = useState<NetTopologyData | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedNode, setSelectedNode] = useState<TopoNode | null>(null);
   const [selectedTopoNode, setSelectedTopoNode] = useState<TopoNode | null>(null);
   const physicsRef = useRef(true);
   const [physicsEnabled, setPhysicsEnabled] = useState(true);
-  const [useMeshSource, setUseMeshSource] = useState(true);
+  const [viewMode, setViewMode] = useState<TopoViewMode>("mesh");
+  const useMeshSource = viewMode === "mesh";
+  const useNetSource = viewMode === "net";
   const [setParentId, setSetParentId] = useState("");
   const [routeMsg, setRouteMsg] = useState("");
   const [now, setNow] = useState("");
   const [mobileSidebar, setMobileSidebar] = useState(false);
 
-  const loadedOnceRef = useRef(false);
+  // Per-view loaded flags: switching to a never-loaded mode must show a
+  // spinner (not the previous mode's graph or an empty-state flash), while
+  // repeat polls of an already-loaded mode keep the graph mounted.
+  const loadedRef = useRef<Partial<Record<TopoViewMode, boolean>>>({});
 
   const loadTopology = useCallback(async (signal?: AbortSignal) => {
-    if (!loadedOnceRef.current) setLoading(true);
+    const firstLoad = !loadedRef.current[viewMode];
+    if (firstLoad) setLoading(true);
     try {
-      if (useMeshSource) {
+      if (viewMode === "net") {
+        const result = await api.get<NetTopologyData & { success?: boolean }>(paths.topology.network, { signal });
+        setNetData({
+          nodes: (result.nodes || []) as TopoNode[],
+          edges: (result.edges || []) as TopoEdge[],
+          stats: result.stats,
+        });
+      } else if (viewMode === "mesh") {
         const result = await api.get<{ success?: boolean; nodes?: TopoNode[]; edges?: TopoEdge[] }>("/mesh/topology", { signal });
         if (result.success) {
           setMeshData({ nodes: (result.nodes || []) as TopoNode[], edges: (result.edges || []) as TopoEdge[] });
@@ -235,10 +290,13 @@ export default function TopologyPage() {
       // Keep the last good graph on transient poll failures — wiping the
       // data here would destroy/recreate the vis instance (zoom/pan reset).
       // Only a first-load failure surfaces the empty state (data stays null).
+      // A failed first load stays "unloaded" so the retry shows a spinner.
+      setLoading(false);
+      return;
     }
-    loadedOnceRef.current = true;
+    loadedRef.current[viewMode] = true;
     setLoading(false);
-  }, [useMeshSource]);
+  }, [viewMode]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -270,14 +328,14 @@ export default function TopologyPage() {
       setSelectedTopoNode(null);
       return;
     }
-    if (useMeshSource) {
+    if (viewMode === "mesh") {
       setSelectedTopoNode(node);
       setSetParentId("");
       setRouteMsg("");
     } else {
       setSelectedNode(node);
     }
-  }, [useMeshSource]);
+  }, [viewMode]);
 
   const handleSetRoute = async () => {
     if (!selectedTopoNode?.id || !setParentId) return;
@@ -296,17 +354,23 @@ export default function TopologyPage() {
     }
   };
 
-  const nodes = useMeshSource
-    ? (meshData?.nodes || [])
-    : (data?.nodes || []);
+  const nodes = useNetSource
+    ? (netData?.nodes || [])
+    : useMeshSource
+      ? (meshData?.nodes || [])
+      : (data?.nodes || []);
   const onlineCount = nodes.filter((n) => n.group === "agent-online").length;
   const offlineCount = nodes.filter((n) => n.group === "agent-offline").length;
   const listenerCount = nodes.filter((n) => n.group === "listener").length;
   const meshNodeCount = useMeshSource ? (meshData?.nodes || []).length : 0;
   const meshEdgeCount = useMeshSource ? (meshData?.edges || []).length : 0;
+  const netStats = netData?.stats;
+  const subtitle = viewMode === "net"
+    ? t("topology.net_view")
+    : useMeshSource ? t("topology.p2p_view") : t("topology.c2_view");
 
   return (
-    <PageContainer title={t("topology.title")} subtitle={useMeshSource ? t("topology.p2p_view") : t("topology.c2_view")} actions={<>
+    <PageContainer title={t("topology.title")} subtitle={subtitle} actions={<>
         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-lg">
           <StatusDot tone="success" size="sm" pulse />
           <span className="text-xs font-medium text-muted-foreground">{onlineCount} {t("topology.online")}</span>
@@ -315,10 +379,29 @@ export default function TopologyPage() {
           <StatusDot tone="muted" size="sm" />
           <span className="text-xs font-medium text-muted-foreground">{offlineCount} {t("topology.offline")}</span>
         </div>
-        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-lg">
-          <StatusDot tone="primary" size="sm" />
-          <span className="text-xs font-medium text-muted-foreground">{listenerCount} {t("topology.listeners")}</span>
-        </div>
+        {useNetSource ? (
+          <>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-lg">
+              <Globe2 className="size-4 text-info" />
+              <span className="text-xs font-medium text-muted-foreground">
+                {netStats?.hosts ?? 0} {t("topology.hosts")}
+              </span>
+            </div>
+            {!!netStats?.hosts_lateral && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-destructive/10 rounded-lg">
+                <span className="size-2 rounded-full bg-destructive" />
+                <span className="text-xs font-medium text-destructive">
+                  {netStats.hosts_lateral} {t("topology.hosts_lateral")}
+                </span>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-lg">
+            <StatusDot tone="primary" size="sm" />
+            <span className="text-xs font-medium text-muted-foreground">{listenerCount} {t("topology.listeners")}</span>
+          </div>
+        )}
         {useMeshSource && (
           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-lg">
             <span className="text-xs font-medium text-muted-foreground">
@@ -328,11 +411,11 @@ export default function TopologyPage() {
         )}
         <div className="xl:hidden">
           <Button variant="ghost" size="icon" aria-label={t("topology.open_sidebar")} className="min-w-[44px] min-h-[44px]" onClick={() => setMobileSidebar(true)}>
-            <Menu className="w-5 h-5" />
+            <Menu className="size-5" />
           </Button>
         </div>
         <Button variant="ghost" size="xs" onClick={() => loadTopology()} className="flex items-center gap-1.5">
-          <RotateCw className="w-4 h-4" /> {t("topology.refresh")}
+          <RotateCw className="size-4" /> {t("topology.refresh")}
         </Button>
       </>}>
 
@@ -342,17 +425,31 @@ export default function TopologyPage() {
             <div className="bg-card border-b border-border px-4 py-2.5 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="flex gap-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-destructive"></span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-chart-4"></span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-success"></span>
+                  <span className="size-2.5 rounded-full bg-destructive"></span>
+                  <span className="size-2.5 rounded-full bg-chart-4"></span>
+                  <span className="size-2.5 rounded-full bg-success"></span>
                 </div>
                 <span className="text-xs text-muted-foreground font-mono ml-2">network-topology://view</span>
               </div>
               <div className="flex items-center gap-2">
-                <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Checkbox aria-label={t("topology.use_mesh")} checked={useMeshSource} onCheckedChange={() => setUseMeshSource(!useMeshSource)} />
-                  Mesh DB
-                </Label>
+                <div className="flex rounded-lg bg-muted p-0.5 gap-0.5" role="tablist" aria-label={t("topology.view_mode")}>
+                  {([
+                    ["c2", t("topology.mode_c2")],
+                    ["mesh", t("topology.mode_mesh")],
+                    ["net", t("topology.mode_net")],
+                  ] as Array<[TopoViewMode, string]>).map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      role="tab"
+                      aria-selected={viewMode === mode}
+                      onClick={() => setViewMode(mode)}
+                      className={`px-2.5 py-1 text-xs rounded-md transition-colors ${viewMode === mode ? "bg-background shadow-sm font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
                 <span className="text-(--fs-micro-sm) text-muted-foreground font-mono">NODES: {nodes.length}</span>
               </div>
             </div>
@@ -360,7 +457,9 @@ export default function TopologyPage() {
               <TopologyGraph
                 data={data || { nodes: [], edges: [] }}
                 meshData={meshData || { nodes: [], edges: [] }}
+                netData={netData || { nodes: [], edges: [] }}
                 useMeshSource={useMeshSource}
+                useNetSource={useNetSource}
                 physicsEnabled={physicsEnabled}
                 loading={loading}
                 onNodeClick={handleNodeClick}
@@ -368,7 +467,7 @@ export default function TopologyPage() {
             </div>
             <div className="bg-background border-t border-border px-4 py-1.5 flex items-center justify-between">
               <span className="text-(--fs-micro-sm) text-muted-foreground font-mono">
-                {loading ? t("common.loading") : useMeshSource ? t("topology.p2p_view") : t("topology.c2_view")}
+                {loading ? t("common.loading") : subtitle}
               </span>
               <span className="text-(--fs-micro-sm) text-muted-foreground font-mono">{now || "--:--:--"}</span>
             </div>
@@ -388,6 +487,8 @@ export default function TopologyPage() {
             listenerCount={listenerCount}
             meshNodeCount={meshNodeCount}
             useMeshSource={useMeshSource}
+            useNetSource={useNetSource}
+            netStats={netStats}
             physicsEnabled={physicsEnabled}
             togglePhysics={togglePhysics}
             exportPng={exportPng}
@@ -410,6 +511,8 @@ export default function TopologyPage() {
               listenerCount={listenerCount}
               meshNodeCount={meshNodeCount}
               useMeshSource={useMeshSource}
+              useNetSource={useNetSource}
+              netStats={netStats}
               physicsEnabled={physicsEnabled}
               togglePhysics={togglePhysics}
               exportPng={exportPng}

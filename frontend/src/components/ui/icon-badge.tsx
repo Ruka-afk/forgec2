@@ -10,12 +10,12 @@ type IconBadgeSize = "xs" | "sm" | "md" | "lg" | "xl" | "2xl";
 
 // Monotonic ramp (smaller → larger) with a consistent radius per tier.
 const ICON_BADGE_SIZES: Record<IconBadgeSize, { container: string; icon: string }> = {
-  xs: { container: "w-6 h-6 rounded-lg", icon: "w-3 h-3" },
-  sm: { container: "w-8 h-8 rounded-lg", icon: "w-4 h-4" },
-  md: { container: "w-9 h-9 rounded-xl", icon: "w-4 h-4" },
-  lg: { container: "w-10 h-10 rounded-xl", icon: "w-5 h-5" },
-  xl: { container: "w-12 h-12 rounded-xl", icon: "w-6 h-6" },
-  "2xl": { container: "w-14 h-14 rounded-xl", icon: "w-7 h-7" },
+  xs: { container: "size-6 rounded-lg", icon: "size-3" },
+  sm: { container: "size-8 rounded-lg", icon: "size-4" },
+  md: { container: "size-9 rounded-lg", icon: "size-4" },
+  lg: { container: "size-10 rounded-lg", icon: "size-5" },
+  xl: { container: "size-12 rounded-lg", icon: "size-6" },
+  "2xl": { container: "size-14 rounded-lg", icon: "size-7" },
 };
 
 interface IconBadgeProps {

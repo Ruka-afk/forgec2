@@ -153,9 +153,9 @@ func downloadFileChunk(path string, offset, size int64) ([]byte, error) {
 		size = maxDownloadChunkSize
 	}
 	buf := make([]byte, size)
-	n, err := f.Read(buf)
-	if err != nil && err != io.EOF {
-		return nil, fmt.Errorf("read chunk failed: %w", err)
+	n, err := io.ReadFull(f, buf)
+	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		return nil, err
 	}
 	return buf[:n], nil
 }
@@ -185,7 +185,11 @@ func uploadFileChunk(taskID uint, path string, offset int64, b64Content string, 
 	if err != nil {
 		return err
 	}
-	f, err := os.OpenFile(cleanPath, os.O_CREATE|os.O_WRONLY, 0644)
+	openFlags := os.O_CREATE | os.O_WRONLY
+	if offset == 0 {
+		openFlags |= os.O_TRUNC
+	}
+	f, err := os.OpenFile(cleanPath, openFlags, 0644)
 	if err != nil {
 		return fmt.Errorf("open file for write failed: %w", err)
 	}

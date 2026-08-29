@@ -42,8 +42,17 @@ export default function GlobalInteractDock() {
     if (agentId) prevFocus.current = document.activeElement as HTMLElement | null;
   }, [agentId]);
 
+  // G6 fix: track whether we've already fetched for the current agentId
+  // to prevent infinite refetch loops when hostname is an empty string.
+  const fetchedAgentRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!agentId || beacon?.hostname) return;
+    if (!agentId || beacon?.hostname) {
+      if (agentId) fetchedAgentRef.current = agentId;
+      return;
+    }
+    if (fetchedAgentRef.current === agentId) return;
+    fetchedAgentRef.current = agentId;
     const ac = new AbortController();
     api
       .get(paths.agents.one(agentId), { signal: ac.signal })
@@ -68,15 +77,18 @@ export default function GlobalInteractDock() {
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
       if (isEditableTarget(e.target)) return;
        if (e.key === "Escape") {
-         if (document.querySelector('[role="menu"]')) return;
-         handleClose();
-         return;
+          if (document.querySelector('[role="menu"]') || document.querySelector('[role="dialog"][data-state="open"]')) return;
+          handleClose();
+          return;
+        }
+       // Don't steal digit keys when a dialog is open — they would switch
+       // dock tabs invisibly behind the modal (e.g. confirm dialogs).
+       if (document.querySelector('[role="dialog"][data-state="open"]')) return;
+       const next = tabFromDigit(e.key);
+       if (next) {
+         e.preventDefault();
+         setTab(next);
        }
-      const next = tabFromDigit(e.key);
-      if (next) {
-        e.preventDefault();
-        setTab(next);
-      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -86,6 +98,10 @@ export default function GlobalInteractDock() {
 
   return (
     <AgentInteractDock
+      // key forces a full remount per agent: internal task list / expanded
+      // row state otherwise leaked across switches (agent B's header above
+      // agent A's tasks, cross-agent approve/cancel posts).
+      key={agentId}
       beacon={beacon || { id: agentId }}
       height={height}
       pinned={pinned}

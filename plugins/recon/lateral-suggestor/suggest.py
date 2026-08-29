@@ -50,8 +50,8 @@ def _parse_services(raw):
         data = json.loads(raw)
         if isinstance(data, list):
             return data
-    except (json.JSONDecodeError, TypeError):
-        pass
+    except (json.JSONDecodeError, TypeError) as exc:
+        print(json.dumps({"level": "error", "message": f"Plugin error: could not parse services JSON: {exc}"}), file=sys.stderr)
     return []
 
 

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/internal/payload"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -402,7 +404,7 @@ func (s *Server) handleDeleteAgent(c *gin.Context) {
 }
 
 // deleteAgentRecordTx deletes an agent and all of its dependent rows within the
-// given transaction. It does not commit or roll back — the caller owns the
+// given transaction. It does not commit or roll back -- the caller owns the
 // transaction lifecycle (single-agent or whole-batch atomicity).
 func (s *Server) deleteAgentRecordTx(tx *gorm.DB, id string) error {
 	if err := tx.Where("agent_id = ?", id).Delete(&db.Task{}).Error; err != nil {
@@ -441,11 +443,20 @@ func (s *Server) deleteAgentRecordTx(tx *gorm.DB, id string) error {
 	if err := tx.Where("agent_id = ?", id).Delete(&db.BloodHoundResult{}).Error; err != nil {
 		return fmt.Errorf("delete bloodhound results: %w", err)
 	}
-	if err := tx.Delete(&db.Implant{}, "id = ?", id).Error; err != nil {
+	// Mesh peer rows: without this a deleted agent lived forever in the mesh
+	// topology graph (nodes/edges built straight from mesh_peers).
+	if err := tx.Where("agent_id = ? OR peer_id = ?", id, id).Delete(&db.MeshPeer{}).Error; err != nil {
+		return fmt.Errorf("delete mesh peers: %w", err)
+	}
+	// Hard delete the implant (Unscoped) so a removed beacon is physically
+	// purged and never resurrects via the soft-delete/reconcile path.
+	if err := tx.Unscoped().Delete(&db.Implant{}, "id = ?", id).Error; err != nil {
 		return fmt.Errorf("delete agent: %w", err)
 	}
-	// Drop the in-memory pending-task counter for the purged agent.
+	// Drop the in-memory pending-task counter and the ECDH session key —
+	// the key must not outlive the implant row it authenticated.
 	s.decPendingTasks(id)
+	s.sessionManager.RemoveSession(id)
 	return nil
 }
 
@@ -693,13 +704,15 @@ func (s *Server) handleToggleAgentTrust(c *gin.Context) {
 		respondError(c, http.StatusNotFound, "agent not found")
 		return
 	}
-	agent.Trusted = !agent.Trusted
-	if err := s.db.Save(&agent).Error; err != nil {
+	newTrusted := !agent.Trusted
+	// Targeted update: Save() here rewrote every column from a stale read and
+	// reverted concurrent beacon writes (last_seen/status/sleep settings).
+	if err := s.db.Model(&db.Implant{}).Where("id = ?", id).Update("trusted", newTrusted).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to update agent trust status")
 		return
 	}
-	slog.Info("Agent trust toggled", "agent_id", id, "trusted", agent.Trusted)
-	respond(c, gin.H{"success": true, "trusted": agent.Trusted})
+	slog.Info("Agent trust toggled", "agent_id", id, "trusted", newTrusted)
+	respond(c, gin.H{"success": true, "trusted": newTrusted})
 }
 
 // handleGetAgentConfig returns the effective config for a specific agent.
@@ -759,6 +772,9 @@ func (s *Server) handlePushAgentConfig(c *gin.Context) {
 		Headers   map[string]string `json:"headers"`
 		BeaconURI string            `json:"beacon_uri"`
 		Method    string            `json:"method"`
+		// PushUpdateKey injects the server's update-signing public key into the
+		// pushed config so the agent can verify signed self_update envelopes.
+		PushUpdateKey bool `json:"push_update_key,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, "invalid request body")
@@ -794,6 +810,27 @@ func (s *Server) handlePushAgentConfig(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to marshal request")
 		return
 	}
+	if req.PushUpdateKey {
+		pubHex, err := payload.UpdateSigningPublicKeyHex()
+		if err != nil {
+			respondError(c, http.StatusInternalServerError, sanitizeError(err, "update signing"))
+			return
+		}
+		var cfg map[string]interface{}
+		if err := json.Unmarshal(taskData, &cfg); err != nil {
+			respondError(c, http.StatusInternalServerError, "failed to encode config push")
+			return
+		}
+		cfg["update_pub_key"] = pubHex
+		newData, merr := json.Marshal(cfg)
+		if merr != nil {
+			respondError(c, http.StatusInternalServerError, "failed to encode config push")
+			return
+		}
+		taskData = newData
+		s.LogAuditRecord(c, "push_update_key", "agent", id,
+			"update signing key pushed (fingerprint "+pubHex[:16]+")", true, nil)
+	}
 	task := db.Task{
 		AgentID:   id,
 		Type:      "config_push",
@@ -817,8 +854,7 @@ func (s *Server) handleSetKillDate(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
-	agent, ok := s.getAgentOrFail(c, id)
-	if !ok {
+	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
 
@@ -836,8 +872,9 @@ func (s *Server) handleSetKillDate(c *gin.Context) {
 		return
 	}
 
-	agent.KillDate = &kt
-	if err := s.db.Save(&agent).Error; err != nil {
+	// Targeted update only -- a full-row Save() reverted concurrent beacon
+	// writes on this hot row.
+	if err := s.db.Model(&db.Implant{}).Where("id = ?", id).Update("kill_date", &kt).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to save kill date")
 		return
 	}
@@ -858,13 +895,13 @@ func (s *Server) handleClearKillDate(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
-	agent, ok := s.getAgentOrFail(c, id)
-	if !ok {
+	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
 
-	agent.KillDate = nil
-	if err := s.db.Save(&agent).Error; err != nil {
+	// Targeted update only -- a full-row Save() reverted concurrent beacon
+	// writes on this hot row.
+	if err := s.db.Model(&db.Implant{}).Where("id = ?", id).Update("kill_date", nil).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to clear kill date")
 		return
 	}

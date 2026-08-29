@@ -25,6 +25,10 @@ interface SectionCardProps {
   /** Make the header a collapse trigger. */
   collapsible?: boolean;
   defaultOpen?: boolean;
+  /** Controlled open state: when defined, Base UI ignores defaultOpen —
+   * required for parent-driven toggles (e.g. a "Load" action button that
+   * must open the panel programmatically). */
+  open?: boolean;
   onOpenChange?: (open: boolean) => void;
   className?: string;
   children: ReactNode;
@@ -46,6 +50,7 @@ export function SectionCard({
   headerAccent = true,
   collapsible = false,
   defaultOpen = true,
+  open,
   onOpenChange,
   className,
   children,
@@ -73,7 +78,7 @@ export function SectionCard({
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {action}
-        {collapsible && <ChevronDown className="w-2.5 h-2.5 text-muted-foreground/70" />}
+        {collapsible && <ChevronDown className="size-2.5 text-muted-foreground/100" />}
         {href && linkLabel && (
           <Link href={href} className="text-xs text-primary hover:underline">
             {linkLabel}
@@ -84,9 +89,13 @@ export function SectionCard({
   );
 
   if (collapsible) {
+    // Pass `open` only when the caller controls it: Base UI flips to
+    // controlled mode the moment the prop is defined (even undefined via
+    // spread), so conditionally include it.
+    const collapsibleProps = open !== undefined ? { open, onOpenChange } : { defaultOpen, onOpenChange };
     return (
       <Card className={cn("overflow-hidden", className)}>
-        <Collapsible defaultOpen={defaultOpen} onOpenChange={onOpenChange}>
+        <Collapsible {...collapsibleProps}>
           <CollapsibleTrigger className="w-full text-left">{header}</CollapsibleTrigger>
           <CollapsibleContent>{children}</CollapsibleContent>
         </Collapsible>

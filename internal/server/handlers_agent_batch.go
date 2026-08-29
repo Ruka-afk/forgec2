@@ -10,6 +10,7 @@ import (
 	"github.com/forgec2/forgec2/internal/plugin"
 	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func (s *Server) handleBulkDeleteAgents(c *gin.Context) {
@@ -104,6 +105,14 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 	// Operator identity for audit attribution on every batched task.
 	user, _ := c.Get("user")
 	operator, _ := user.(string)
+	// Same caller id the single-task path uses, so the operator soft-lock
+	// (agent-conflict guard) applies to bulk operations too (P2-4).
+	var callerUID uint
+	if uid, exists := c.Get("user_id"); exists {
+		if u, ok := uid.(uint); ok {
+			callerUID = u
+		}
+	}
 
 	uniqueIDs := make([]string, 0, len(req.AgentIDs))
 	seen := make(map[string]struct{}, len(req.AgentIDs))
@@ -151,7 +160,15 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		}
 	}
 
-	s.agentPendingTasksMu.Lock()
+	// Phase 1 (NO lock): per-agent validation performs DB I/O (RoE lookups,
+	// chrome-kind checks). Doing it under agentPendingTasksMu — the same mutex
+	// every beacon result ingestion and createTask acquires — stalled the whole
+	// task pipeline for up to MaxBatchAgentLimit sequential queries.
+	type batchCandidate struct {
+		agentID string
+		task    db.Task
+	}
+	candidates := make([]batchCandidate, 0, len(uniqueIDs))
 	for _, agentID := range uniqueIDs {
 		if !existingSet[agentID] {
 			continue
@@ -169,29 +186,46 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 			continue
 		}
 
-		if s.agentPendingTasks[agentID] >= MaxPendingTasksPerAgent {
-			slog.Warn("Batch command: agent pending queue full, skipping",
-				"agent_id", agentID, "pending", s.agentPendingTasks[agentID], "limit", MaxPendingTasksPerAgent)
+		if err := s.validateTaskCreation(agentID, req.TaskType, req.Command, callerUID); err != nil {
+			slog.Warn("Batch command: validation failed", "agent_id", agentID, "err", err)
 			continue
 		}
-		s.agentPendingTasks[agentID]++
+
+		candidates = append(candidates, batchCandidate{agentID: agentID})
+	}
+
+	// Phase 2 (locked): counter accounting only — pure memory operations.
+	s.agentPendingTasksMu.Lock()
+	for _, cand := range candidates {
+		if s.agentPendingTasks[cand.agentID] >= MaxPendingTasksPerAgent {
+			slog.Warn("Batch command: agent pending queue full, skipping",
+				"agent_id", cand.agentID, "pending", s.agentPendingTasks[cand.agentID], "limit", MaxPendingTasksPerAgent)
+			continue
+		}
+		s.agentPendingTasks[cand.agentID]++
 
 		tasks = append(tasks, db.Task{
-			AgentID:  agentID,
-			Type:     req.TaskType,
-			Command:  req.Command,
-			Shell:    req.Shell,
-			Path:     req.File,
-			Data:     req.Args,
-			Status:   s.resolveInitialTaskStatus(req.TaskType),
+			AgentID:   cand.agentID,
+			Type:      req.TaskType,
+			Command:   req.Command,
+			Shell:     req.Shell,
+			Path:      req.File,
+			Data:      req.Args,
+			Status:    s.resolveInitialTaskStatus(req.TaskType),
 			CreatedBy: operator,
 		})
-		validAgentIDs = append(validAgentIDs, agentID)
+		validAgentIDs = append(validAgentIDs, cand.agentID)
 	}
 	s.agentPendingTasksMu.Unlock()
 
-	// Batch-insert all tasks in one DB round-trip
-	if err := s.db.CreateInBatches(tasks, 100).Error; err != nil {
+	// Batch-insert atomically: CreateInBatches commits per chunk, so a
+	// mid-way failure would otherwise leave earlier chunks durably inserted
+	// while the code decrements ALL pending counters and reports failure —
+	// counters drift low and created tasks go unreported. One transaction
+	// makes failure all-or-nothing, matching the counter rollback below.
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		return tx.CreateInBatches(tasks, 100).Error
+	}); err != nil {
 		for i := range tasks {
 			s.decPendingTasks(tasks[i].AgentID)
 		}
@@ -205,16 +239,27 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 	for i := range tasks {
 		if s.pluginManager != nil {
 			taskCopy := tasks[i]
-			go s.pluginManager.ExecuteHook(s.ctx, plugin.Event{
-				Type:      plugin.EventTaskCreated,
-				Timestamp: time.Now(),
-				AgentID:   taskCopy.AgentID,
-				Payload: map[string]interface{}{
-					"task_id":   taskCopy.ID,
-					"task_type": taskCopy.Type,
-					"command":   taskCopy.Command,
-				},
-			})
+			s.wg.Add(1)
+			go func() {
+				defer s.wg.Done()
+				defer func() {
+					if r := recover(); r != nil {
+						slog.Error("Panic in batch hook", "agent_id", taskCopy.AgentID, "recover", r)
+					}
+				}()
+				if err := s.pluginManager.ExecuteHook(s.ctx, plugin.Event{
+					Type:      plugin.EventTaskCreated,
+					Timestamp: time.Now(),
+					AgentID:   taskCopy.AgentID,
+					Payload: map[string]interface{}{
+						"task_id":   taskCopy.ID,
+						"task_type": taskCopy.Type,
+						"command":   taskCopy.Command,
+					},
+				}); err != nil {
+					slog.Warn("Hook errors on task_created event", "agent_id", taskCopy.AgentID, "task_id", taskCopy.ID, "err", err)
+				}
+			}()
 		}
 		s.metrics.TasksTotal.Inc()
 		s.broadcastTaskUpdate(tasks[i].AgentID, tasks[i])
@@ -286,9 +331,9 @@ func (s *Server) handleBulkResults(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"results": results[start:end],
-		"total":   total,
-		"page":    page,
+		"results":   results[start:end],
+		"total":     total,
+		"page":      page,
 		"page_size": pageSize,
 	})
 }

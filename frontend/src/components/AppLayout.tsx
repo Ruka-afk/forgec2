@@ -15,6 +15,8 @@ import { usePathname } from "next/navigation";
 import { useAppStore, selectSidebarWidth } from "@/lib/store";
 import { useI18n } from "@/lib/i18n";
 import { getPageTitleKey } from "@/lib/navigation";
+import { isFlushPath, showBreadcrumbBar } from "@/lib/layout";
+import { cn } from "@/lib/utils";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -25,6 +27,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const focusMode = useAppStore((s) => s.focusMode);
 
   const sidebarWidth = useAppStore(selectSidebarWidth);
+  const flush = isFlushPath(pathname);
+  const crumbs = showBreadcrumbBar(pathname, focusMode);
 
   const prevWidthRef = useRef<number>(typeof window !== "undefined" ? window.innerWidth : 1920);
 
@@ -50,9 +54,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (isMobile) useAppStore.setState({ sidebarCollapsed: true });
   }, [isMobile]);
 
-  // Focus mode shortcut: Cmd/Ctrl + "." toggles the full-viewport console.
+  // G10 fix: skip e.repeat so holding Ctrl+. does not rapid-toggle focus mode.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.repeat) return;
       if ((e.metaKey || e.ctrlKey) && e.key === ".") {
         e.preventDefault();
         useAppStore.getState().toggleFocusMode();
@@ -80,7 +85,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [isMobile, setMobileMenuOpen]);
 
   return (
-    <div className="h-screen flex overflow-hidden bg-background">
+    <div className="flex h-screen overflow-hidden bg-background">
       {/* Skip to content link (WCAG 2.4.1) */}
       <a
         href="#main-content"
@@ -96,19 +101,36 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         style={{ marginLeft: focusMode || isMobile ? 0 : sidebarWidth }}
       >
         <TopBar onMenuToggle={handleMenuToggle} />
-        <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto min-h-0 pt-14 scroll-smooth focus:outline-none">
-          {/* Sticky breadcrumb dock — merges into the topbar chrome plane */}
-          {!focusMode && (
-            <div className="sticky top-14 z-20 bg-background/85 backdrop-blur-xl border-b border-border/40">
-              <div className="mx-auto w-full max-w-(--content-width) px-5 sm:px-8 lg:px-10 py-2">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className={cn(
+            "relative flex min-h-0 flex-1 flex-col bg-background pt-(--shell-topbar-height) focus:outline-none",
+            flush ? "overflow-hidden" : "overflow-y-auto scroll-smooth",
+          )}
+        >
+          {crumbs && (
+            <div className="sticky top-0 z-20 flex h-(--shell-breadcrumb-height) shrink-0 items-center border-b border-border/70 bg-card/95 backdrop-blur-md">
+              <div className="mx-auto w-full max-w-(--content-wide) px-4 sm:px-6 lg:px-8">
                 <Breadcrumb />
               </div>
             </div>
           )}
-            <div className={`mx-auto h-full w-full max-w-(--content-width) px-5 sm:px-8 lg:px-10 py-5 sm:py-7 lg:py-8 ${focusMode ? "pt-5" : ""}`}>
-            <UpdateBanner />
-            <AgentStatusBanner />
-            {children}
+          <div
+            className={cn(
+              "mx-auto flex w-full min-h-0 flex-col",
+              flush
+                ? "max-w-none flex-1 px-0 py-0"
+                : "max-w-(--content-wide) gap-4 px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-7",
+            )}
+          >
+            {!flush && (
+              <>
+                <UpdateBanner />
+                <AgentStatusBanner />
+              </>
+            )}
+            <div className={cn(flush && "flex min-h-0 flex-1 flex-col")}>{children}</div>
           </div>
         </main>
         <GlobalInteractDock />

@@ -107,12 +107,21 @@ const (
 	TaskTypeRead             = "read"
 	TaskTypeDownload         = "download"
 	TaskTypeUpload           = "upload"
+	TaskTypeMkdir            = "mkdir"
+	TaskTypeRename           = "rename"
+	TaskTypeChmod            = "chmod"
 	TaskTypeNet              = "net"
 	TaskTypePowerpick        = "powerpick"
 	TaskTypePELoader         = "peloader"
 	TaskTypeExecAssemblyFR   = "execute_assembly_forkrun"
 	TaskTypeRPortFwdStart    = "rportfwd_start"
 	TaskTypeRPortFwdStop     = "rportfwd_stop"
+	TaskTypeLPortFwdStart    = "lportfwd_start"
+	TaskTypeLPortFwdStop     = "lportfwd_stop"
+	TaskTypeHostInfo         = "hostinfo"
+	TaskTypeHelp             = "help"
+	TaskTypeWebcam           = "webcam"
+	TaskTypeMic              = "mic"
 	TaskTypeDCSync           = "dcsync"
 	TaskTypeGoldenTicket     = "golden_ticket"
 	TaskTypeSilverTicket     = "silver_ticket"
@@ -240,11 +249,24 @@ const (
 	TaskTypeDCSyncMachine    = "dcsync_machine"
 
 	// Process list alias (implant handlePS; not a live tree viewer)
-	TaskTypeProcessTree       = "process_tree"
-	TaskTypePasswordSpray     = "password_spray"
+	TaskTypeProcessTree   = "process_tree"
+	TaskTypePasswordSpray = "password_spray"
 
 	// Single-credential validation against the domain (lockout-aware)
 	TaskTypeCredCheck = "cred_check"
+
+	TaskTypeTunStart  = "tun_start"
+	TaskTypeTunStop   = "tun_stop"
+	TaskTypeSccmRecon = "sccm_recon"
+	TaskTypeEntraPRT  = "entra_prt"
+
+	TaskTypeFileHunt            = "file_hunt"
+	TaskTypeScreenTriggerStart  = "screen_trigger_start"
+	TaskTypeScreenTriggerStop   = "screen_trigger_stop"
+	TaskTypeUSBEnum             = "usb_enum"
+	TaskTypeUSBDrop             = "usb_drop"
+	TaskTypeBrowserHistory      = "browser_history"
+	TaskTypeSessionRecon        = "session_recon"
 )
 
 // AllTaskTypes returns every defined task type constant in a deduplicated slice.
@@ -323,12 +345,21 @@ func AllTaskTypes() []string {
 		TaskTypeRead,
 		TaskTypeDownload,
 		TaskTypeUpload,
+		TaskTypeMkdir,
+		TaskTypeRename,
+		TaskTypeChmod,
 		TaskTypeNet,
 		TaskTypePowerpick,
 		TaskTypePELoader,
 		TaskTypeExecAssemblyFR,
 		TaskTypeRPortFwdStart,
 		TaskTypeRPortFwdStop,
+		TaskTypeLPortFwdStart,
+		TaskTypeLPortFwdStop,
+		TaskTypeHostInfo,
+		TaskTypeHelp,
+		TaskTypeWebcam,
+		TaskTypeMic,
 		TaskTypeDCSync,
 		TaskTypeGoldenTicket,
 		TaskTypeSilverTicket,
@@ -462,6 +493,17 @@ func AllTaskTypes() []string {
 
 		// Credential Check
 		TaskTypeCredCheck,
+		TaskTypeTunStart,
+		TaskTypeTunStop,
+		TaskTypeSccmRecon,
+		TaskTypeEntraPRT,
+		TaskTypeFileHunt,
+		TaskTypeScreenTriggerStart,
+		TaskTypeScreenTriggerStop,
+		TaskTypeUSBEnum,
+		TaskTypeUSBDrop,
+		TaskTypeBrowserHistory,
+		TaskTypeSessionRecon,
 	}
 }
 

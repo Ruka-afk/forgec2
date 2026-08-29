@@ -2,6 +2,10 @@
 
 import { useState, useMemo } from "react";
 import { API_BASE } from "@/lib/constants";
+import { paths } from "@/lib/api-paths";
+import { api } from "@/lib/api";
+import { downloadText } from "@/lib/download";
+import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { PageContainer } from "@/components/ui/page-container";
 import { Spinner } from "@/components/ui/spinner";
@@ -16,13 +20,17 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableEmptyState } from "@/components/ui/table";
-import { CircleAlert, Download, FileText, Info, Inbox, Key, Lightbulb, ListChecks, PieChart, Radio, Bot, ShieldCheck, TriangleAlert, Trash2, Wand2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { CircleAlert, Crosshair, Download, Eye, FileText, Info, Inbox, Key, Lightbulb, ListChecks, PieChart, Radio, Bot, ShieldCheck, TriangleAlert, Trash2, Wand2 } from "lucide-react";
 import { Accordion, AccordionItem, AccordionHeader, AccordionTrigger, AccordionPanel } from "@/components/ui/accordion";
 import { severityColor } from "./_components/types";
 import { useReportData } from "./_components/useReportData";
+import IOCTab from "./_components/IOCTab";
 
 export default function ReportPage() {
   const [activeSection, setActiveSection] = useState("overview");
+  const [viewingReport, setViewingReport] = useState<{ name: string; content: string } | null>(null);
+  const [loadingReport, setLoadingReport] = useState(false);
 
   const { t } = useI18n();
   const {
@@ -51,12 +59,13 @@ export default function ReportPage() {
   const totalCreds = useMemo(() => creds.reduce((s, c) => s + (c.count ?? 0), 0), [creds]);
 
   const SECTIONS = [
-    { key: "overview", label: t("report.sec_overview"), icon: <PieChart className="w-5 h-5" /> },
-    { key: "agents", label: t("report.sec_agents"), icon: <Bot className="w-5 h-5" /> },
-    { key: "tasks", label: t("report.sec_tasks"), icon: <ListChecks className="w-5 h-5" /> },
-    { key: "credentials", label: t("report.sec_credentials"), icon: <Key className="w-5 h-5" /> },
-    { key: "network", label: t("report.sec_network"), icon: <Radio className="w-5 h-5" /> },
-    { key: "recommendations", label: t("report.sec_recommendations"), icon: <Lightbulb className="w-5 h-5" /> },
+    { key: "overview", label: t("report.sec_overview"), icon: <PieChart className="size-5" /> },
+    { key: "agents", label: t("report.sec_agents"), icon: <Bot className="size-5" /> },
+    { key: "tasks", label: t("report.sec_tasks"), icon: <ListChecks className="size-5" /> },
+    { key: "credentials", label: t("report.sec_credentials"), icon: <Key className="size-5" /> },
+    { key: "network", label: t("report.sec_network"), icon: <Radio className="size-5" /> },
+    { key: "ioc", label: t("report.sec_ioc"), icon: <Crosshair className="size-5" /> },
+    { key: "recommendations", label: t("report.sec_recommendations"), icon: <Lightbulb className="size-5" /> },
   ];
 
   const TEMPLATES = [
@@ -88,8 +97,36 @@ export default function ReportPage() {
     window.open(`${API_BASE}${htmlExportUrl()}`, "_blank");
   };
 
+  const handleHandover = () => {
+    window.open(`${API_BASE}${paths.report.handoverExport(30)}`, "_blank");
+    toast.success(t("report.handover_started"));
+  };
+
   const handleDeleteReport = async (id: string) => {
     await deleteReport(id);
+  };
+
+  const isAIReport = (tpl?: string) => (tpl || "").startsWith("ai_");
+
+  const handleViewAIReport = async (id: string) => {
+    setLoadingReport(true);
+    try {
+      const d = await api.get<{ report?: { name?: string; content?: string } }>(paths.report.generated(id));
+      if (d.report?.content) {
+        setViewingReport({ name: d.report.name || t("report.ai_report"), content: d.report.content });
+      } else {
+        toast.error(t("report.toast.load_failed"));
+      }
+    } catch {
+      toast.error(t("report.toast.load_failed"));
+    } finally {
+      setLoadingReport(false);
+    }
+  };
+
+  const handleDownloadAIReport = () => {
+    if (!viewingReport) return;
+    downloadText(viewingReport.content, `${viewingReport.name.replace(/[^\w-]+/g, "_")}.md`, "text/markdown");
   };
 
   if (loading) {
@@ -98,16 +135,18 @@ export default function ReportPage() {
 
   return (
     <PageContainer
-      title={t("report.title")} icon={<FileText className="w-4 h-4" />}
+      title={t("report.title")} icon={<FileText className="size-4" />}
       subtitle={t("report.subtitle")}
-      contentClassName="space-y-6"
       actions={
         <>
+          <Button onClick={handleHandover} variant="secondary" className="gap-x-2">
+            <Download className="size-4" />{t("report.handover")}
+          </Button>
           <Button onClick={handleExportPDF} variant="destructive" className="gap-x-2">
-            <FileText className="w-4 h-4" />{t("report.export_html")}
+            <FileText className="size-4" />{t("report.export_html")}
           </Button>
           <Button onClick={handleGenerate} disabled={generating} className="gap-x-2">
-            {generating ? <Spinner size="xs" /> : <Wand2 className="w-4 h-4" />}
+            {generating ? <Spinner size="xs" /> : <Wand2 className="size-4" />}
             {generating ? t("report.generating") : t("report.generate")}
           </Button>
         </>
@@ -178,7 +217,7 @@ export default function ReportPage() {
                   <h3 className="text-sm font-semibold text-foreground mb-3">{t("report.history_title")}</h3>
                   {history.length === 0 ? (
                     <div className="text-center py-6 text-muted-foreground">
-                      <Inbox className="w-4 h-4" />
+                      <Inbox className="size-4" />
                       <p className="text-sm">{t("report.no_history")}</p>
                     </div>
                   ) : (
@@ -188,18 +227,26 @@ export default function ReportPage() {
                         return (
                           <div key={id} className="flex items-center justify-between p-3 bg-muted rounded-lg hover:bg-secondary transition-colors">
                             <div className="flex items-center gap-3">
-                              <FileText className="w-4 h-4" />
+                              <FileText className="size-4" />
                               <div>
-                                <div className="text-sm font-medium text-muted-foreground">{r.template || t("report.unknown_template")} - {r.format?.toUpperCase() || "HTML"}</div>
+                                <div className="text-sm font-medium text-muted-foreground">
+                                  {isAIReport(r.template) && <Badge variant="info" className="mr-2">AI</Badge>}
+                                  {r.name || r.template || t("report.unknown_template")} - {r.format?.toUpperCase() || "HTML"}
+                                </div>
                                 <div className="text-xs text-muted-foreground">{r.created_at || "-"} {r.size ? `· ${r.size}` : ""}</div>
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
+                              {isAIReport(r.template) && (
+                                <Button variant="ghost" size="icon" onClick={() => handleViewAIReport(id)} disabled={loadingReport} aria-label={t("report.a11y_view")}>
+                                  <Eye className="size-4" />
+                                </Button>
+                              )}
                               <a href={`${API_BASE}/report/${id}/download?format=html`} download className="p-2 text-primary hover:bg-primary/10 dark:hover:bg-primary/20 rounded-lg transition-colors">
-                                <Download className="w-4 h-4" />
+                                <Download className="size-4" />
                               </a>
                               <Button variant="ghost" size="icon" onClick={() => handleDeleteReport(id)} className="text-destructive hover:bg-destructive/10" aria-label={t("report.a11y_delete")}>
-                                <Trash2 className="w-4 h-4" />
+                                <Trash2 className="size-4" />
                               </Button>
                             </div>
                           </div>
@@ -359,6 +406,10 @@ export default function ReportPage() {
             </Card>
           </TabsContent>
 
+          <TabsContent value="ioc" className="mt-0">
+            <IOCTab />
+          </TabsContent>
+
           <TabsContent value="recommendations" className="mt-0">
             <Card className="overflow-hidden">
               <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-border">
@@ -366,7 +417,7 @@ export default function ReportPage() {
               </div>
               {findings.length === 0 ? (
                 <div className="py-16 sm:py-20 text-center text-muted-foreground">
-                  <ShieldCheck className="w-4 h-4" />
+                  <ShieldCheck className="size-4" />
                   <p className="text-sm">{t("report.no_findings")}</p>
                 </div>
               ) : (
@@ -379,7 +430,7 @@ export default function ReportPage() {
                           <AccordionTrigger className="px-4 py-3 hover:bg-muted/50">
                             <div className="flex items-start gap-3 flex-1 text-left">
                               <div className="mt-0.5">
-                                {f.severity === "critical" ? <CircleAlert className="w-4 h-4 text-destructive" /> : f.severity === "high" ? <TriangleAlert className="w-4 h-4 text-warning" /> : f.severity === "medium" ? <CircleAlert className="w-4 h-4 text-warning" /> : <Info className="w-4 h-4 text-info" />}
+                                {f.severity === "critical" ? <CircleAlert className="size-4 text-destructive" /> : f.severity === "high" ? <TriangleAlert className="size-4 text-warning" /> : f.severity === "medium" ? <CircleAlert className="size-4 text-warning" /> : <Info className="size-4 text-info" />}
                               </div>
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 flex-wrap">
@@ -398,7 +449,7 @@ export default function ReportPage() {
                             <p className="text-sm text-muted-foreground">{f.description || ""}</p>
                             {f.recommendation && (
                               <p className="text-sm text-primary">
-                                <Lightbulb className="w-4 h-4" />{t("report.recommendation_label")} {f.recommendation}
+                                <Lightbulb className="size-4" />{t("report.recommendation_label")} {f.recommendation}
                               </p>
                             )}
                           </div>
@@ -413,6 +464,25 @@ export default function ReportPage() {
         </div>
       </div>
       </Tabs>
+
+      <Dialog open={!!viewingReport} onOpenChange={(open) => { if (!open) setViewingReport(null); }}>
+        <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 truncate">
+              <Wand2 className="size-4 shrink-0" />{viewingReport?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <pre className="flex-1 overflow-auto whitespace-pre-wrap font-mono text-xs bg-muted/50 rounded-lg p-4 text-foreground scrollbar-thin">
+            {viewingReport?.content}
+          </pre>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewingReport(null)}>{t("common.close")}</Button>
+            <Button onClick={handleDownloadAIReport} className="gap-x-2">
+              <Download className="size-4" />{t("report.download_md")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageContainer>
   );
 }

@@ -128,9 +128,16 @@ func (s *Server) apiGetTask(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
 	}
-	id := c.Param("id")
+	// Strict numeric parse: a raw string here is both an injection vector and
+	// a tenant-isolation gap (same fix as handleGetTaskStatus).
+	taskID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, "invalid task id")
+		return
+	}
 	var task db.Task
-	if err := s.db.First(&task, id).Error; err != nil {
+	query := s.tenantScope(s.db, c)
+	if err := query.First(&task, taskID).Error; err != nil {
 		respondError(c, http.StatusNotFound, "task not found")
 		return
 	}
@@ -249,7 +256,7 @@ func (s *Server) apiDashboardStats(c *gin.Context) {
 				COALESCE(SUM(CASE WHEN last_seen > ? THEN 1 ELSE 0 END), 0) as online,
 				COALESCE(SUM(CASE WHEN last_seen > ? AND last_seen <= ? THEN 1 ELSE 0 END), 0) as stale,
 				COALESCE(SUM(CASE WHEN last_seen <= ? THEN 1 ELSE 0 END), 0) as offline
-			FROM implants`, offlineCutoff, offlineCutoff, staleCutoff, offlineCutoff,
+			FROM implants WHERE deleted_at IS NULL`, offlineCutoff, offlineCutoff, staleCutoff, offlineCutoff,
 		).Scan(&ac).Error
 	})
 

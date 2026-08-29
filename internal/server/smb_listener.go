@@ -2,12 +2,12 @@ package server
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"io"
 	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // newSMBListener is a package-level var so Windows can override via init()
@@ -45,6 +45,8 @@ func (s *Server) startSMBListener() {
 			if s.ctx.Err() != nil {
 				return
 			}
+			slog.Error("SMB accept error", "addr", listenAddr, "err", err)
+			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 		go s.handleSMBConnection(conn)
@@ -69,19 +71,31 @@ func (s *Server) handleSMBConnection(conn net.Conn) {
 			return
 		}
 
-		var req beaconRequest
-		if err := json.Unmarshal(buf, &req); err != nil {
-			slog.Error("SMB bad beacon json", "err", err)
+		env, req, kind := s.decodeBeaconEnvelope(buf)
+		if kind == frameRejected {
+			slog.Error("SMB beacon envelope rejected", "remote", conn.RemoteAddr().String())
 			return
 		}
 
-		resp := s.processBeacon(req, "")
-
-		respBytes, err := json.Marshal(resp)
-		if err != nil {
-			slog.Error("SMB marshal response failed", "error", err)
-			return
+		var respBytes []byte
+		if kind == frameEncrypted {
+			resp := s.processBeacon(req, "")
+			if s.sessionManager != nil && s.sessionManager.NeedsRekey(req.UUID, BeaconSessionRekeyMessages) {
+				resp.Rekey = true
+			}
+			var ok bool
+			respBytes, ok = s.buildBeaconResponse(req.UUID, env.Seq, resp)
+			if !ok {
+				return
+			}
+		} else {
+			var ok bool
+			respBytes, ok = s.processAuthFrame(env, kind)
+			if !ok {
+				return
+			}
 		}
+		respBytes = s.applyMalleableWrapping(respBytes)
 		if err := binary.Write(conn, binary.BigEndian, uint32(len(respBytes))); err != nil {
 			return
 		}

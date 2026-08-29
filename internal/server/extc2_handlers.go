@@ -35,6 +35,7 @@ func (s *Server) handleConfigureDiscordC2(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Start Discord C2"))
 		return
 	}
+	s.registerExtC2Runner(fmt.Sprintf("extc2-discord-%s", req.ChannelID), discord)
 
 	s.LogAuditRecord(c, "extc2_discord_configure", "extc2", req.ChannelID, "Discord External C2 configured", true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "channel_id": req.ChannelID, "id": channel.ID})
@@ -66,9 +67,42 @@ func (s *Server) handleConfigureSlackC2(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Start Slack C2"))
 		return
 	}
+	s.registerExtC2Runner(fmt.Sprintf("extc2-slack-%s", req.ChannelID), slackC2)
 
 	s.LogAuditRecord(c, "extc2_slack_configure", "extc2", req.ChannelID, "Slack External C2 configured", true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "channel_id": req.ChannelID, "id": channel.ID})
+}
+
+func (s *Server) handleConfigureTelegramC2(c *gin.Context) {
+	var req struct {
+		BotToken string `json:"bot_token" binding:"required"`
+		ChatID   string `json:"chat_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondError(c, http.StatusBadRequest, "bot_token and chat_id are required")
+		return
+	}
+
+	channel := db.ExtC2Channel{
+		Type:      "telegram",
+		BotToken:  req.BotToken,
+		ChannelID: req.ChatID,
+		Enabled:   true,
+	}
+	if err := s.db.Create(&channel).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Save config"))
+		return
+	}
+
+	telegramC2 := NewTelegramExternalC2(s, req.BotToken, req.ChatID)
+	if err := telegramC2.Start(); err != nil {
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Start Telegram C2"))
+		return
+	}
+	s.registerExtC2Runner(fmt.Sprintf("extc2-telegram-%s", req.ChatID), telegramC2)
+
+	s.LogAuditRecord(c, "extc2_telegram_configure", "extc2", req.ChatID, "Telegram External C2 configured", true, nil)
+	c.JSON(http.StatusOK, gin.H{"success": true, "chat_id": req.ChatID, "id": channel.ID})
 }
 
 func (s *Server) handleListExtC2Configs(c *gin.Context) {
@@ -91,6 +125,10 @@ func (s *Server) handleDeleteExtC2Config(c *gin.Context) {
 	}
 
 	channelKey := fmt.Sprintf("extc2-%s-%s", channel.Type, channel.ChannelID)
+	// Stop the LIVE poller too: without this the run loop kept reconnecting
+	// with the "deleted" bot token and kept accepting relayed results until
+	// process restart.
+	s.stopExtC2Runner(channelKey)
 	s.extC2ChannelsMu.Lock()
 	delete(s.extC2Channels, channelKey)
 	s.extC2ChannelsMu.Unlock()
@@ -116,6 +154,7 @@ func (s *Server) restoreExtC2Channels() {
 			if err := discord.Start(); err != nil {
 				slog.Error("Failed to restore Discord C2", "channel_id", ch.ChannelID, "error", err)
 			} else {
+				s.registerExtC2Runner(fmt.Sprintf("extc2-discord-%s", ch.ChannelID), discord)
 				slog.Info("Restored Discord C2 channel", "channel_id", ch.ChannelID)
 			}
 		case "slack":
@@ -123,7 +162,16 @@ func (s *Server) restoreExtC2Channels() {
 			if err := slackC2.Start(); err != nil {
 				slog.Error("Failed to restore Slack C2", "channel_id", ch.ChannelID, "error", err)
 			} else {
+				s.registerExtC2Runner(fmt.Sprintf("extc2-slack-%s", ch.ChannelID), slackC2)
 				slog.Info("Restored Slack C2 channel", "channel_id", ch.ChannelID)
+			}
+		case "telegram":
+			telegramC2 := NewTelegramExternalC2(s, ch.BotToken, ch.ChannelID)
+			if err := telegramC2.Start(); err != nil {
+				slog.Error("Failed to restore Telegram C2", "chat_id", ch.ChannelID, "error", err)
+			} else {
+				s.registerExtC2Runner(fmt.Sprintf("extc2-telegram-%s", ch.ChannelID), telegramC2)
+				slog.Info("Restored Telegram C2 channel", "chat_id", ch.ChannelID)
 			}
 		}
 	}

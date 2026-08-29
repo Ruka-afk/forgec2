@@ -51,7 +51,7 @@ function applyFocusFromStore() {
 // when the drawer is closed). Referenced by AppLayout/TopBar via useAppStore.
 export function selectSidebarWidth(state: AppStore): number {
   if (state.isMobile && !state.mobileMenuOpen) return 0;
-  return state.sidebarCollapsed ? 64 : 192;
+  return state.sidebarCollapsed ? 64 : 224;
 }
 
 const STATS_REFRESH_DEBOUNCE_MS = 800;

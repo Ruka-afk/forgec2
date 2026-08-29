@@ -12,7 +12,7 @@ function CredBody({ data }: { data: Record<string, number> }) {
   const maxValue = Math.max(...entries.map(([, v]) => v), 1);
   return (
     <div className="space-y-1.5">
-      {entries.length === 0 ? <p className="text-xs text-muted-foreground/70 text-center py-4">{t("dashboard.no_credential_data")}</p> : entries.slice(0, 8).map(([k, v]) => (
+      {entries.length === 0 ? <p className="text-xs text-muted-foreground/100 text-center py-4">{t("dashboard.no_credential_data")}</p> : entries.slice(0, 8).map(([k, v]) => (
         <div key={k} className="flex items-center gap-2 text-xs">
           <span className="w-16 text-muted-foreground truncate text-(--fs-micro-sm)">{k}</span>
           <div className="flex-1 h-3 bg-secondary rounded-full overflow-hidden">

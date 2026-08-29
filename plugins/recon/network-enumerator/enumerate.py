@@ -276,8 +276,8 @@ def main():
                 hports = []
                 try:
                     hports = json.loads(hsvc) if hsvc else []
-                except (json.JSONDecodeError, TypeError):
-                    pass
+                except (json.JSONDecodeError, TypeError) as exc:
+                    print(json.dumps({"level": "error", "message": f"Plugin error: could not parse services JSON for discovered host '{h.get('ip', '')}': {exc}"}), file=sys.stderr)
                 for hp in hports:
                     if isinstance(hp, dict):
                         port = hp.get("port", 0)

@@ -6,8 +6,15 @@ import { isProblemHealth, type ListenerHealth } from "../../listeners/_component
 export const DASHBOARD_VIEWS = ["ops", "analytics"] as const;
 export type DashboardView = (typeof DASHBOARD_VIEWS)[number];
 
+// NaN-safe timestamp parse: Date.parse("") is NaN and a comparator returning
+// NaN makes blank-dated entries tie with EVERYTHING (nondeterministic order).
+function ts(v?: string): number {
+  const t = Date.parse(v || "");
+  return Number.isNaN(t) ? 0 : t;
+}
+
 function byCreatedDesc<T extends { created_at?: string }>(a: T, b: T): number {
-  return Date.parse(b.created_at || "") - Date.parse(a.created_at || "");
+  return ts(b.created_at) - ts(a.created_at);
 }
 
 export function splitSessions(agents: NormalizedAgent[], limit = 6): {
@@ -15,7 +22,7 @@ export function splitSessions(agents: NormalizedAgent[], limit = 6): {
   dropped: NormalizedAgent[];
 } {
   const bySeen = (a: NormalizedAgent, b: NormalizedAgent) =>
-    Date.parse(b.last_seen || "") - Date.parse(a.last_seen || "");
+    ts(b.last_seen) - ts(a.last_seen);
   return {
     online: agents.filter((a) => a.status === "online").sort(bySeen).slice(0, limit),
     dropped: agents.filter((a) => a.status !== "online").sort(bySeen).slice(0, limit),

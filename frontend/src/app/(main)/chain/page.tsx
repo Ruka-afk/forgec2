@@ -85,7 +85,7 @@ export default function ChainPage() {
     if (!selectedAgent) return;
     try {
       await api.postJson(`/agents/${selectedAgent}/chain/set`, {
-        parent_agent_id: parentId,
+        parent_id: parentId,
       });
       setActionMsg(t("chain.parent_set", { id: parentId }));
       setShowModal(false);
@@ -116,7 +116,7 @@ export default function ChainPage() {
   }
 
   return (
-    <PageContainer title={t("chain.multi_hop")} icon={<Link className="w-4 h-4" />} subtitle={t("chain.subtitle")}>
+    <PageContainer title={t("chain.multi_hop")} icon={<Link className="size-4" />} subtitle={t("chain.subtitle")}>
 
       {/* Agent Selector */}
       <Card className="p-(--card-spacing) mb-6">
@@ -151,12 +151,12 @@ export default function ChainPage() {
                         {info ? `${info.hostname}` : id.substring(0, 8)}
                       </Badge>
                       {idx < chain.length - 1 && (
-                        <ArrowRight className="w-4 h-4" />
+                        <ArrowRight className="size-4" />
                       )}
                     </span>
                   );
                 })}
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="size-4" />
                 <Badge variant="success" className="text-xs font-medium">
                   C2
                 </Badge>
@@ -166,7 +166,7 @@ export default function ChainPage() {
                 <Badge variant="secondary" className="font-mono text-xs">
                   {selectedInfo ? selectedInfo.hostname : selectedAgent.substring(0, 8)}
                 </Badge>
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="size-4" />
                 <Badge variant="success" className="text-xs font-medium">
                   C2 (Direct)
                 </Badge>
@@ -180,14 +180,14 @@ export default function ChainPage() {
               size="sm"
               onClick={() => setShowModal(true)}
             >
-              <Pencil className="w-4 h-4" /> {t("chain.set_parent")}
+              <Pencil className="size-4" /> {t("chain.set_parent")}
             </Button>
             <Button
               size="sm"
               variant="destructive"
               onClick={handleClearChain}
             >
-              <X className="w-4 h-4" /> {t("chain.clear_chain")}
+              <X className="size-4" /> {t("chain.clear_chain")}
             </Button>
           </div>
 
@@ -202,7 +202,7 @@ export default function ChainPage() {
               </p>
               <div className="max-h-60 overflow-y-auto space-y-1">
                 {availableParents.length === 0 ? (
-                  <p className="text-xs text-muted-foreground/70 py-4 text-center">{t("chain.no_other_agents")}</p>
+                  <p className="text-xs text-muted-foreground/100 py-4 text-center">{t("chain.no_other_agents")}</p>
                 ) : (
                   availableParents.map((a) => (
                     <Button
@@ -212,10 +212,10 @@ export default function ChainPage() {
                       onClick={() => a.id && handleSetParent(a.id)}
                       className="w-full justify-start text-left h-auto px-3 py-2"
                     >
-                      <Bug className="w-4 h-4" />
+                      <Bug className="size-4" />
                       <span className="font-medium text-foreground">{a.hostname}</span>
-                      <span className="text-muted-foreground/70 ml-1">({a.ip})</span>
-                      <span className="text-(--fs-micro-sm) text-muted-foreground/70 font-mono ml-auto">{(a.id || "").substring(0, 8)}...</span>
+                      <span className="text-muted-foreground/100 ml-1">({a.ip})</span>
+                      <span className="text-(--fs-micro-sm) text-muted-foreground/100 font-mono ml-auto">{(a.id || "").substring(0, 8)}...</span>
                     </Button>
                   ))
                 )}
@@ -250,14 +250,14 @@ export default function ChainPage() {
                         </div>
                         {node.parent_id ? (
                           <>
-                            <ArrowRight className="w-4 h-4" />
-                            <span className="text-xs text-muted-foreground/70">
+                            <ArrowRight className="size-4" />
+                            <span className="text-xs text-muted-foreground/100">
                               via {getAgentInfo(node.parent_id)?.hostname || node.parent_id.substring(0, 8)}
                             </span>
                           </>
                         ) : (
                           <>
-                            <ArrowRight className="w-4 h-4" />
+                            <ArrowRight className="size-4" />
                             <Badge variant="success" className="text-(--fs-micro-sm) font-medium">
                               C2
                             </Badge>
@@ -277,7 +277,7 @@ export default function ChainPage() {
         <Card className="p-4 mb-6 flex items-center justify-between">
           <span className="text-sm text-foreground">{actionMsg}</span>
           <Button variant="ghost" size="sm" onClick={() => setActionMsg(null)}>
-            <X className="w-4 h-4" />
+            <X className="size-4" />
           </Button>
         </Card>
       )}

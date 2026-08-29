@@ -57,8 +57,12 @@ func (s *Server) handleRPortFwdRelayStart(c *gin.Context) {
 	}
 
 	relay := newRPortFwdRelay(s, id, lport, forwardTarget)
+	if err := relay.bind(); err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to bind rportfwd: "+err.Error())
+		return
+	}
 	s.rportfwdListeners[key] = relay
-	go relay.start()
+	go relay.acceptLoop()
 
 	slog.Info("Reverse port forward relay started", "agent_id", id, "lport", lport, "target", forwardTarget)
 	s.LogAuditRecord(c, "rportfwd_relay_start", "agent", id, fmt.Sprintf("rportfwd relay :%d -> %s via %s", lport, forwardTarget, id), true, nil)
@@ -176,7 +180,7 @@ func newRPortFwdRelay(s *Server, agentID string, lport int, target string) *rpor
 	}
 }
 
-func (r *rportfwdRelay) start() {
+func (r *rportfwdRelay) bind() error {
 	listenHost := "127.0.0.1"
 	if r.server != nil && r.server.cfg != nil && r.server.cfg.Server.SocksListenHost != "" {
 		listenHost = r.server.cfg.Server.SocksListenHost
@@ -184,8 +188,7 @@ func (r *rportfwdRelay) start() {
 	addr := fmt.Sprintf("%s:%d", listenHost, r.localPort)
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		slog.Error("Rportfwd relay listen failed", "addr", addr, "err", err)
-		return
+		return err
 	}
 	r.listener = &rportfwdListener{
 		ln:      ln,
@@ -193,15 +196,22 @@ func (r *rportfwdRelay) start() {
 	}
 	go func() {
 		defer func() {
-			if r := recover(); r != nil {
-				slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))
+			if rec := recover(); rec != nil {
+				slog.Error("recovered from panic", "err", rec, "stack", string(debug.Stack()))
 			}
 		}()
 		<-r.stopCh
 		ln.Close()
 	}()
+	return nil
+}
 
-	slog.Info("Rportfwd relay listening", "addr", addr, "target", r.forwardTarget, "agent_id", r.agentID)
+func (r *rportfwdRelay) acceptLoop() {
+	if r.listener == nil || r.listener.ln == nil {
+		return
+	}
+	ln := r.listener.ln
+	slog.Info("Rportfwd relay listening", "addr", ln.Addr().String(), "target", r.forwardTarget, "agent_id", r.agentID)
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -209,6 +219,14 @@ func (r *rportfwdRelay) start() {
 		}
 		go r.handleConn(conn)
 	}
+}
+
+func (r *rportfwdRelay) start() {
+	if err := r.bind(); err != nil {
+		slog.Error("Rportfwd relay listen failed", "err", err)
+		return
+	}
+	r.acceptLoop()
 }
 
 func (r *rportfwdRelay) handleConn(operatorConn net.Conn) {

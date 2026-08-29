@@ -12,14 +12,17 @@ import { ErrorState } from "@/components/ui/error-state";
 import { Permission } from "@/components/ui/permission";
 import { PageSpinner } from "@/components/ui/spinner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchInput } from "@/components/framework/SearchInput";
 import { toast } from "sonner";
-import { Bell, Bot, Cpu, Database, FileCode, Globe, Lock, Palette, Server, Shield, User, Users, Wrench, Archive, Radio, AlertTriangle, Activity } from "lucide-react";
+import { Bell, Bot, Cpu, Database, FileCode, Globe, Lock, Palette, Server, Shield, User, Users, Wrench, Archive, Radio, AlertTriangle, Activity, ScanSearch } from "lucide-react";
 import { useTOTP } from "./_components/useTOTP";
 import { useSettingsData } from "./_components/useSettingsData";
 import ProfileSection from "./_components/ProfileSection";
 import ThemeSection from "./_components/ThemeSection";
 import LanguageSection from "./_components/LanguageSection";
 import SecuritySection from "./_components/SecuritySection";
+import ApiKeysSection from "./_components/ApiKeysSection";
 import ServerSection from "./_components/ServerSection";
 import AgentSection from "./_components/AgentSection";
 import dynamic from "next/dynamic";
@@ -31,6 +34,7 @@ const AboutSection = dynamic(() => import("./_components/AboutSection"), { ssr: 
 const NotificationsSection = dynamic(() => import("./_components/NotificationsSection"), { ssr: false });
 const BackupSection = dynamic(() => import("./_components/BackupSection"), { ssr: false });
 const ExtC2Section = dynamic(() => import("./_components/ExtC2Section"), { ssr: false });
+const SIEMRulesSection = dynamic(() => import("./_components/SIEMRulesSection"), { ssr: false });
 const CertificatesSection = dynamic(() => import("./_components/CertificatesSection"), { ssr: false });
 const ModulesSection = dynamic(() => import("./_components/ModulesSection"), { ssr: false });
 const EmergencySection = dynamic(() => import("./_components/EmergencySection"), { ssr: false });
@@ -39,7 +43,7 @@ const TelemetrySection = dynamic(() => import("./_components/TelemetrySection"),
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, setLocale } = useI18n();
   const {
     data,
     loading,
@@ -58,6 +62,7 @@ export default function SettingsPage() {
     setLanguage,
   } = useSettingsData();
   const [activeSection, setActiveSection] = useState("profile");
+  const [sectionQuery, setSectionQuery] = useState("");
   const [purgeDays, setPurgeDays] = useState({ tasks: "30", audit: "30" });
   const [saving, setSaving] = useState(false);
   const { confirm: confirmAction, modal: modalAction } = useConfirm();
@@ -150,12 +155,12 @@ export default function SettingsPage() {
     } catch { /* silent */ }
   };
 
+  // G8 fix: use the single i18n setLocale to keep localStorage+cookie in sync.
+  // Previously only cookie was written here, causing language to revert on reload.
   const handleSetLanguage = (code: string) => {
     setLanguage(code);
-    setTimeout(() => {
-      try { document.cookie = `forgec2_lang=${code};path=/;max-age=31536000;SameSite=Strict`; router.refresh(); }
-      catch { /* silent */ }
-    }, 0);
+    try { setLocale(code as "en" | "zh"); } catch { /* silent */ }
+    setTimeout(() => { router.refresh(); }, 0);
   };
 
   const handleVacuum = async () => {
@@ -210,25 +215,46 @@ export default function SettingsPage() {
   if (loading) return <PageContainer title={t("settings.title")} subtitle={t("settings.subtitle")}><PageSpinner /></PageContainer>;
 
   const sections = [
-    { key: "profile", label: t("settings.profile"), icon: <User className="w-4 h-4" /> },
-    { key: "theme", label: t("settings.theme"), icon: <Palette className="w-4 h-4" /> },
-    { key: "language", label: t("settings.language"), icon: <Globe className="w-4 h-4" /> },
-    { key: "security", label: t("settings.security"), icon: <Lock className="w-4 h-4" /> },
-    { key: "access", label: t("settings.access"), icon: <Users className="w-4 h-4" /> },
-    { key: "server", label: t("settings.server"), icon: <Server className="w-4 h-4" /> },
-    { key: "agent", label: t("settings.agent"), icon: <Bot className="w-4 h-4" /> },
-    { key: "malleable", label: t("settings.malleable"), icon: <Shield className="w-4 h-4" /> },
-    { key: "database", label: t("settings.database"), icon: <Database className="w-4 h-4" /> },
-    { key: "backup", label: t("settings.backup"), icon: <Archive className="w-4 h-4" /> },
-    { key: "maintenance", label: t("settings.maintenance"), icon: <Wrench className="w-4 h-4" /> },
-    { key: "notifications", label: t("settings.notifications"), icon: <Bell className="w-4 h-4" /> },
-    { key: "extc2", label: t("settings.extc2"), icon: <Radio className="w-4 h-4" /> },
-    { key: "certificates", label: t("settings.certificates.label"), icon: <Lock className="w-4 h-4" /> },
-    { key: "modules", label: t("settings.modules.title"), icon: <FileCode className="w-4 h-4" /> },
-    { key: "emergency", label: t("settings.emergency.title"), icon: <AlertTriangle className="w-4 h-4" /> },
-    { key: "telemetry", label: t("settings.telemetry"), icon: <Activity className="w-4 h-4" /> },
-    { key: "about", label: t("settings.about"), icon: <Cpu className="w-4 h-4" /> },
+    { key: "profile", label: t("settings.profile"), icon: <User className="size-4" /> },
+    { key: "theme", label: t("settings.theme"), icon: <Palette className="size-4" /> },
+    { key: "language", label: t("settings.language"), icon: <Globe className="size-4" /> },
+    { key: "security", label: t("settings.security"), icon: <Lock className="size-4" /> },
+    { key: "access", label: t("settings.access"), icon: <Users className="size-4" /> },
+    { key: "server", label: t("settings.server"), icon: <Server className="size-4" /> },
+    { key: "agent", label: t("settings.agent"), icon: <Bot className="size-4" /> },
+    { key: "malleable", label: t("settings.malleable"), icon: <Shield className="size-4" /> },
+    { key: "database", label: t("settings.database"), icon: <Database className="size-4" /> },
+    { key: "backup", label: t("settings.backup"), icon: <Archive className="size-4" /> },
+    { key: "maintenance", label: t("settings.maintenance"), icon: <Wrench className="size-4" /> },
+    { key: "notifications", label: t("settings.notifications"), icon: <Bell className="size-4" /> },
+    { key: "extc2", label: t("settings.extc2"), icon: <Radio className="size-4" /> },
+    { key: "siem", label: t("settings.siem"), icon: <ScanSearch className="size-4" /> },
+    { key: "certificates", label: t("settings.certificates.label"), icon: <Lock className="size-4" /> },
+    { key: "modules", label: t("settings.modules.title"), icon: <FileCode className="size-4" /> },
+    { key: "emergency", label: t("settings.emergency.title"), icon: <AlertTriangle className="size-4" /> },
+    { key: "telemetry", label: t("settings.telemetry"), icon: <Activity className="size-4" /> },
+    { key: "about", label: t("settings.about"), icon: <Cpu className="size-4" /> },
   ];
+
+  const sectionGroups = [
+    { key: "account", label: t("settings.group_account"), members: ["profile", "theme", "language", "security", "access"] },
+    { key: "server", label: t("settings.group_server"), members: ["server", "database", "backup", "certificates"] },
+    { key: "agent", label: t("settings.group_agent"), members: ["agent", "malleable", "modules"] },
+    { key: "integrations", label: t("settings.group_integrations"), members: ["notifications", "extc2", "siem", "telemetry"] },
+    { key: "maintenance", label: t("settings.group_maintenance"), members: ["maintenance", "emergency", "about"] },
+  ].map((group) => ({
+    ...group,
+    items: sections.filter((section) => group.members.includes(section.key)),
+  }));
+  const normalizedSectionQuery = sectionQuery.trim().toLocaleLowerCase();
+  const visibleSectionGroups = sectionGroups
+    .map((group) => ({
+      ...group,
+      items: normalizedSectionQuery
+        ? group.items.filter((section) => section.label.toLocaleLowerCase().includes(normalizedSectionQuery))
+        : group.items,
+    }))
+    .filter((group) => group.items.length > 0);
 
   return (
     <Permission perms="settings.read" fallback={
@@ -236,33 +262,50 @@ export default function SettingsPage() {
         <ErrorState title={t("common.denied_title")} message={t("common.denied_desc")} />
       </PageContainer>
     }>
-    <PageContainer title={t("settings.title")} subtitle={t("settings.subtitle")}>
+    <PageContainer variant="standard" title={t("settings.title")} subtitle={t("settings.subtitle")}>
 
       <Tabs value={activeSection} onValueChange={setActiveSection}>
-        <div className="flex flex-col lg:flex-row gap-4">
-          <div className="w-48 shrink-0 hidden lg:block">
-            <div className="sticky lg:top-[96px] space-y-1">
-              <div className="text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground px-3 mb-2 font-semibold">{t("settings.sidebar_header")}</div>
-              <TabsList className="flex-col bg-transparent p-0 gap-1 w-full h-auto">
-                {sections.map((s) => (
-                  <TabsTrigger key={s.key} value={s.key}
-                    className="flex items-center gap-2 w-full justify-start px-3 py-2 text-xs rounded-lg transition-colors data-[selected]:bg-primary/10 data-[selected]:text-primary hover:bg-primary/5 text-muted-foreground">
-                    {s.icon}{s.label}
-                  </TabsTrigger>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+          <div className="hidden w-60 shrink-0 lg:block">
+            <div className="sticky top-24 space-y-4 rounded-xl border border-border/80 bg-card p-3 shadow-sm">
+              <SearchInput
+                value={sectionQuery}
+                onChange={setSectionQuery}
+                onClear={() => setSectionQuery("")}
+                placeholder={t("settings.search_sections")}
+                label={t("settings.search_sections")}
+              />
+              <div className="max-h-[calc(100vh-15rem)] space-y-4 overflow-y-auto pr-1">
+                {visibleSectionGroups.map((group) => (
+                  <div key={group.key}>
+                    <div className="mono-eyebrow mb-1.5 px-2 text-muted-foreground">{group.label}</div>
+                    <TabsList className="h-auto w-full flex-col gap-1 border-0 bg-transparent p-0 shadow-none">
+                      {group.items.map((s) => (
+                        <TabsTrigger key={s.key} value={s.key}
+                          className="flex w-full items-center justify-start gap-2 rounded-lg px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-primary/5 data-[selected]:bg-primary/10 data-[selected]:font-semibold data-[selected]:text-primary">
+                          {s.icon}{s.label}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                  </div>
                 ))}
-              </TabsList>
+              </div>
             </div>
           </div>
 
           <div className="flex-1 min-w-0">
-            <TabsList className="lg:hidden mb-4 overflow-x-auto flex gap-2 pb-2 bg-transparent p-0 h-auto">
-              {sections.map((s) => (
-                <TabsTrigger key={s.key} value={s.key}
-                  className="shrink-0 px-3 py-1.5 text-xs rounded-lg transition-colors data-[selected]:bg-primary/10 data-[selected]:text-primary bg-muted text-muted-foreground">
-                  {s.icon}{s.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+            <div className="lg:hidden">
+              <Select value={activeSection} onValueChange={(value) => { if (typeof value === "string") setActiveSection(value); }}>
+                <SelectTrigger className="w-full" aria-label={t("settings.sidebar_header")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {sectionGroups.map((group) => group.items.map((section) => (
+                    <SelectItem key={section.key} value={section.key}>{group.label} · {section.label}</SelectItem>
+                  )))}
+                </SelectContent>
+              </Select>
+            </div>
 
             <div className="space-y-6">
               <TabsContent value="profile" className="mt-0"><ProfileSection data={data} /></TabsContent>
@@ -280,6 +323,7 @@ export default function SettingsPage() {
                   saving={saving} onChangePassword={handleChangePassword} onRegenerateJWT={handleRegenerateJWT}
                   onGenerateTOTP={handleGenerateTOTP} onEnableTOTP={handleEnableTOTP} onDisableTOTP={handleDisableTOTP}
                 />
+                <div className="mt-4"><ApiKeysSection /></div>
               </TabsContent>
               <TabsContent value="server" className="mt-0"><ServerSection data={data} form={serverForm} setForm={setServerForm} saving={saving} onSave={handleSaveServer} /></TabsContent>
               <TabsContent value="agent" className="mt-0"><AgentSection form={agentForm} setForm={setAgentForm} saving={saving} onSave={handleSaveAgent} /></TabsContent>
@@ -290,6 +334,7 @@ export default function SettingsPage() {
               <TabsContent value="notifications" className="mt-0"><NotificationsSection /></TabsContent>
               <TabsContent value="about" className="mt-0"><AboutSection data={data} onCheckUpdate={handleCheckUpdate} /></TabsContent>
               <TabsContent value="extc2" className="mt-0"><ExtC2Section /></TabsContent>
+              <TabsContent value="siem" className="mt-0"><SIEMRulesSection /></TabsContent>
               <TabsContent value="certificates" className="mt-0"><CertificatesSection data={data} saving={saving} onRefresh={loadSettings} /></TabsContent>
               <TabsContent value="modules" className="mt-0"><ModulesSection /></TabsContent>
               <TabsContent value="emergency" className="mt-0"><EmergencySection /></TabsContent>

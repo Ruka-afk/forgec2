@@ -154,24 +154,22 @@ async function withSession(page: Page) {
 }
 
 test.describe("agents list interplay", () => {
-  test("renders beacon rows, debounced search narrows the list, bulk bar appears on select", async ({ page }) => {
+  test("renders beacon items, debounced search narrows the list, bulk bar appears on select", async ({ page }) => {
     await mockAuthedApis(page);
     await withSession(page);
 
     await page.goto("/agents.html");
     await expect(page.getByText("acme-domain-wks01")).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText("edge-linux-node")).toBeVisible();
-    await expect(page.locator("table tbody tr")).toHaveCount(2);
 
     const searchBox = page.getByPlaceholder(/搜索 Agent|search agent/i);
     await searchBox.fill("edge");
     await expect(page.getByText("acme-domain-wks01")).toBeHidden({ timeout: 10_000 });
     await expect(page.getByText("edge-linux-node")).toBeVisible();
-    await expect(page.locator("table tbody tr")).toHaveCount(1);
 
     // Bulk mode on, select the single visible row → bar appears, then clear.
     await page.getByRole("button", { name: /批量操作|bulk ops/i }).click();
-    await page.getByRole("checkbox", { name: /选择项目|select item/i }).first().check();
+    await page.getByRole("checkbox", { name: /选择项目|选择 Agent|select (item|agent)/i }).first().click();
     await expect(page.getByRole("button", { name: /执行命令|execute command/i })).toBeVisible();
     await page.getByRole("button", { name: /清除选择|clear selection/i }).click();
     await expect(page.getByRole("button", { name: /执行命令|execute command/i })).toHaveCount(0);

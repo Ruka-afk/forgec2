@@ -77,8 +77,14 @@ func NewSessionManagerWithConfig(maxAge time.Duration) (*SessionManager, error) 
 
 // GetPublicKey returns the server's public key for distribution to agents
 func (sm *SessionManager) GetPublicKey() []byte {
+	if sm == nil {
+		return nil
+	}
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
+	if sm.privateKey == nil {
+		return nil
+	}
 	return sm.privateKey.PublicKey().Bytes()
 }
 
@@ -178,16 +184,37 @@ func (sm *SessionManager) oldestSampledSessionLocked() string {
 	return victim
 }
 
-// GetSession retrieves an agent's session
+// GetSession retrieves a copy of the agent's session to prevent data races
+// from callers reading Session fields after RUnlock while writer mutates them.
 func (sm *SessionManager) GetSession(agentID string) *Session {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
-	return sm.sessions[agentID]
+	if s, ok := sm.sessions[agentID]; ok && s != nil {
+		c := *s
+		// Deep copy SessionKey slice to avoid sharing underlying array
+		if s.SessionKey != nil {
+			c.SessionKey = append([]byte(nil), s.SessionKey...)
+		}
+		return &c
+	}
+	return nil
 }
 
 // HasSession reports whether an active session exists for the agent.
 func (sm *SessionManager) HasSession(agentID string) bool {
 	return sm.GetSession(agentID) != nil
+}
+
+// RemoveSession drops the agent's session entirely. Called when an implant is
+// deleted so its session key cannot outlive the row it belonged to (the
+// periodic expiry sweep would otherwise keep it up to maxAge).
+func (sm *SessionManager) RemoveSession(agentID string) {
+	if sm == nil {
+		return
+	}
+	sm.mu.Lock()
+	delete(sm.sessions, agentID)
+	sm.mu.Unlock()
 }
 
 // SessionStats is a snapshot of rekey activity across live sessions.

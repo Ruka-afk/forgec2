@@ -28,6 +28,10 @@ export function useAgentQuickShell(agentId: string, os: string | undefined, succ
   );
   const mountedRef = useRef(true);
   const shellTouchedRef = useRef(false);
+  // In-flight guard: the Enter key handler bypasses the disabled Button, so
+  // rapid Enter presses would otherwise fire the same command twice on the
+  // agent (dangerous for destructive/lateral commands).
+  const sendingRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -57,6 +61,8 @@ export function useAgentQuickShell(agentId: string, os: string | undefined, succ
 
   const sendCommand = useCallback(async () => {
     if (!command.trim() || !agentId) return;
+    if (sendingRef.current) return;
+    sendingRef.current = true;
     setSending(true);
     const cmd = command.trim();
     const entry: ShellHistoryEntry = { command: cmd, shell, result: "", timestamp: new Date().toISOString() };
@@ -75,6 +81,7 @@ export function useAgentQuickShell(agentId: string, os: string | undefined, succ
     setHistory((prev) => [entry, ...prev].slice(0, 5));
     setCommand("");
     setSending(false);
+    sendingRef.current = false;
   }, [agentId, command, shell, successMessage, errorMessage]);
 
   return {

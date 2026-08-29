@@ -26,7 +26,7 @@ export default function NetworkStatusBanner() {
   return (
     <div className="px-4 sm:px-6 lg:px-8">
       <div className="mx-auto w-full mt-3">
-        <Banner tone="destructive" alert icon={<WifiOff className="w-4 h-4" />}>
+        <Banner tone="destructive" alert icon={<WifiOff className="size-4" />}>
           {t("network.offline")}
         </Banner>
       </div>

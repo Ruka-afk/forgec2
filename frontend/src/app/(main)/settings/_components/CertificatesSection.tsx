@@ -135,7 +135,7 @@ export default function CertificatesSection({
           <>
             {cert.is_self_signed && (
               <div className="mb-4 px-4 py-3 bg-warning/10 dark:bg-warning/20 border border-warning/20 dark:border-warning/40 rounded-lg text-sm text-warning flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <AlertTriangle className="size-4 shrink-0" />
                 {t("settings.certificates.self_signed_warning")}
               </div>
             )}
@@ -164,26 +164,26 @@ export default function CertificatesSection({
               <div className="bg-muted rounded-lg p-4 border border-border">
                 <div className="text-xs text-muted-foreground">{t("settings.certificates.type")}</div>
                 <div className="font-semibold text-sm text-foreground mt-1 flex items-center gap-1.5">
-                  {cert.is_self_signed ? <CheckCircle className="w-3.5 h-3.5 text-warning" /> : <CheckCircle className="w-3.5 h-3.5 text-success" />}
+                  {cert.is_self_signed ? <CheckCircle className="size-3.5 text-warning" /> : <CheckCircle className="size-3.5 text-success" />}
                   {cert.is_self_signed ? t("settings.certificates.self_signed") : t("settings.certificates.trusted")}
                 </div>
               </div>
             </div>
           </>
         ) : (
-          <div className="text-center py-8 text-muted-foreground/70 text-sm">{t("settings.certificates.no_cert")}</div>
+          <div className="text-center py-8 text-muted-foreground/100 text-sm">{t("settings.certificates.no_cert")}</div>
         )}
         <div className="flex flex-wrap gap-3">
           <Input type="file" ref={certInputRef} className="hidden" accept=".crt,.pem,.cer" onChange={handleCertFileChange} />
           <Input type="file" ref={keyInputRef} className="hidden" accept=".key,.pem" onChange={handleKeyFileChange} />
           <Button onClick={() => { setPendingCertFile(null); setWaitingForKey(false); certInputRef.current?.click(); }} size="lg" disabled={uploading || saving} className="px-4 bg-primary/10 hover:bg-primary/20 text-primary text-sm font-medium transition-colors disabled:opacity-50">
-            <Upload className="w-4 h-4" />{waitingForKey ? t("settings.certificates.choose_key") : t("settings.certificates.upload")}
+            <Upload className="size-4" />{waitingForKey ? t("settings.certificates.choose_key") : t("settings.certificates.upload")}
           </Button>
           <Button onClick={() => setShowRegenDialog(true)} size="lg" disabled={uploading || saving} className="px-4 bg-accent hover:bg-accent/80 text-accent-foreground text-sm font-medium transition-colors disabled:opacity-50">
-            <RefreshCw className="w-4 h-4" />{t("settings.certificates.regenerate")}
+            <RefreshCw className="size-4" />{t("settings.certificates.regenerate")}
           </Button>
           <Button onClick={loadCertInfo} size="lg" disabled={loadingCert || saving} variant="outline" className="px-4 text-sm font-medium">
-            <Globe className="w-4 h-4" />{t("settings.certificates.refresh")}
+            <Globe className="size-4" />{t("settings.certificates.refresh")}
           </Button>
         </div>
       </div>

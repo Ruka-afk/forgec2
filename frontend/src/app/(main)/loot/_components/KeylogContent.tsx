@@ -18,7 +18,6 @@ const SENSITIVE_PATTERNS: Array<{ re: RegExp; cls: "secret" | "email" | "url" | 
 ];
 
 function highlightKeylog(text: string): string {
-  const result = escapeHtml(text);
   const used: Array<[number, number, string]> = [];
   for (const { re, cls } of SENSITIVE_PATTERNS) {
     for (const m of text.matchAll(re)) {
@@ -28,16 +27,19 @@ function highlightKeylog(text: string): string {
       used.push([idx, idx + len, cls]);
     }
   }
-  if (used.length === 0) return result;
+  if (used.length === 0) return escapeHtml(text);
+  // Walk matches in order over the raw text, escaping each segment separately.
+  // Escaping first then slicing shifts indices whenever &, <, > or " appear.
   used.sort((a, b) => a[0] - b[0]);
   let out = "";
   let pos = 0;
   for (const [s, e, cls] of used) {
-    out += result.slice(pos, s);
-    out += `<mark class="keylog-${cls}">${result.slice(s, e)}</mark>`;
+    if (s < pos) continue;
+    out += escapeHtml(text.slice(pos, s));
+    out += `<mark class="keylog-${cls}">${escapeHtml(text.slice(s, e))}</mark>`;
     pos = e;
   }
-  out += result.slice(pos);
+  out += escapeHtml(text.slice(pos));
   return out;
 }
 

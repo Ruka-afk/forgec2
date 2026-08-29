@@ -104,7 +104,7 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 // handleExportTasks exports tasks as CSV for reporting
 func (s *Server) handleExportTasks(c *gin.Context) {
 	var tasks []db.Task
-	if err := s.db.Preload("Agent").
+	if err := s.db.WithContext(s.ctx).Preload("Agent").
 		Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"}).
 		Order("created_at desc").Limit(ExportTaskLimit).Find(&tasks).Error; err != nil {
 		handleQueryError(c, err, "Failed to export tasks")

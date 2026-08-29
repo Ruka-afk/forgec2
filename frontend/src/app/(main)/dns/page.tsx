@@ -1,247 +1,221 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { api } from "@/lib/api";
-import { paths } from "@/lib/api-paths";
+import { useState, useCallback, useEffect } from "react";
 import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { POLL } from "@/lib/polling";
-import { Spinner } from "@/components/ui/spinner";
+import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
+import { toast } from "sonner";
 import { PageContainer } from "@/components/ui/page-container";
-import { IconBadge } from "@/components/ui/icon-badge";
+import { PageSpinner } from "@/components/ui/spinner";
+import { StatCard } from "@/components/ui/animated-stat-card";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Card, CardContent } from "@/components/ui/card";
+import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { StatusDot } from "@/components/ui/status-dot";
-import { toast } from "sonner";
-import { Globe, Play, Square, Activity, Server, Wifi, WifiOff } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import {
+  Globe,
+  Server,
+  Play,
+  Square,
+  Settings,
+  ArrowDown,
+  ArrowUp,
+  Loader2,
+} from "lucide-react";
 
-interface DNSStatus {
-  running: boolean;
-  domain: string;
-  addr: string;
-  agent_ip: string;
-  beacon_count: number;
+interface DnsStatus {
+  running?: boolean;
+  domain?: string;
+  addr?: string;
+  agent_ip?: string;
+  beacon_count?: number;
 }
 
-export default function DNSPage() {
+export default function DnsPage() {
   const { t } = useI18n();
-  const [actionLoading, setActionLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [domain, setDomain] = useState("");
-  const [addr, setAddr] = useState(":53");
-  const [server, setServer] = useState("8.8.8.8:53");
-  const [txtPrefix, setTxtPrefix] = useState(".dns");
+  const [addr, setAddr] = useState("");
+  const [configDirty, setConfigDirty] = useState(false);
 
-  const { data: status, loading, refresh: fetchStatus } = useApiResource<DNSStatus>({
-    fetcher: async () => {
-      const data = await api.get<DNSStatus>(paths.dns.status);
-      return data;
-    },
+  const fetchStatus = useCallback(
+    () => api.get<DnsStatus>(paths.dns.status),
+    [],
+  );
+
+  const { data: status, loading, error, refresh } = useApiResource<DnsStatus>({
+    fetcher: fetchStatus,
     pollMs: POLL.dns,
-    toastThrottleMs: 0,
+    toastThrottleMs: POLL.toastThrottle,
     errorMessage: t("dns.toast.load_failed"),
   });
 
-  const seededRef = useRef(false);
+  const s = status ?? {
+    running: false,
+    domain: "",
+    addr: ":53",
+    agent_ip: "",
+    beacon_count: 0,
+  };
+
   useEffect(() => {
-    if (status && !seededRef.current) {
-      seededRef.current = true;
-      if (status.domain) setDomain(status.domain);
-      if (status.addr) setAddr(status.addr);
-    }
-  }, [status]);
+    if (!status || status.running || configDirty) return;
+    setDomain(status.domain ?? "");
+    setAddr(status.addr ?? ":53");
+  }, [configDirty, status]);
 
-  const handleStart = async () => {
-    setActionLoading(true);
+  const handleToggle = async (nextRunning: boolean) => {
+    if (busy) return;
+    setBusy(true);
     try {
-      await api.postJson<{ status: string }>(paths.dns.start, {
-        domain,
-        addr,
-        server,
-        txt_prefix: txtPrefix,
-      });
-      toast.success(t("dns.toast.started"));
-      fetchStatus();
-    } catch (e) {
-      toast.error(`${t("dns.toast.start_failed")}: ${e instanceof Error ? e.message : String(e)}`);
+      if (nextRunning) {
+        await api.postJson(paths.dns.start, { domain, addr });
+        setConfigDirty(false);
+        toast.success(t("dns.toast.started"));
+      } else {
+        await api.post(paths.dns.stop);
+        setConfigDirty(false);
+        toast.success(t("dns.toast.stopped"));
+      }
+      setTimeout(refresh, 500);
+    } catch {
+      toast.error(nextRunning ? t("dns.toast.start_failed") : t("dns.toast.stop_failed"));
+    } finally {
+      setBusy(false);
     }
-    setActionLoading(false);
   };
 
-  const handleStop = async () => {
-    setActionLoading(true);
-    try {
-      await api.postJson<{ status: string }>(paths.dns.stop, {});
-      toast.success(t("dns.toast.stopped"));
-      fetchStatus();
-    } catch (e) {
-      toast.error(`${t("dns.toast.stop_failed")}: ${e instanceof Error ? e.message : String(e)}`);
-    }
-    setActionLoading(false);
-  };
+  if (loading) return <PageContainer title={t("dns.title")} subtitle={t("dns.subtitle")}><PageSpinner /></PageContainer>;
 
-  if (loading) {
-    return (
-      <PageContainer title={t("dns.title")} subtitle={t("dns.subtitle")}>
-        <div className="flex items-center justify-center py-20">
-          <Spinner size="lg" />
-        </div>
-      </PageContainer>
-    );
-  }
+  const totalBeacons = s.beacon_count ?? 0;
+  const running = !!s.running;
 
   return (
     <PageContainer
-      title={t("dns.title")} icon={<Globe className="w-4 h-4" />}
-      subtitle={t("dns.subtitle")} contentClassName="space-y-6"
+      title={t("dns.title")}
+      subtitle={t("dns.subtitle")}
       actions={
-        status?.running ? (
-          <Button variant="destructive" size="sm" onClick={handleStop} disabled={actionLoading}>
-            {actionLoading ? <Spinner size="xs" /> : <Square className="w-3.5 h-3.5" />}
-            <span>{actionLoading ? t("dns.stopping") : t("dns.stop")}</span>
+        <div className="flex items-center gap-3">
+          <StatusIndicator
+            status={running ? "connected" : "disconnected"}
+            variant="dot"
+            label={running ? t("common.online") : t("common.offline")}
+            pulse={running}
+          />
+          <Button
+            size="sm"
+            variant={running ? "destructive" : "default"}
+            disabled={busy}
+            onClick={() => handleToggle(!running)}
+          >
+            {busy ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : running ? (
+              <Square className="size-4" />
+            ) : (
+              <Play className="size-4" />
+            )}
+            {running ? t("dns.stop") : t("dns.start")}
           </Button>
-        ) : (
-          <Button size="sm" onClick={handleStart} disabled={actionLoading}>
-            {actionLoading ? <Spinner size="xs" /> : <Play className="w-3.5 h-3.5" />}
-            <span>{actionLoading ? t("dns.starting") : t("dns.start")}</span>
-          </Button>
-        )
+        </div>
       }
     >
+      {error && <Banner tone="destructive" alert>{error}</Banner>}
 
-      {/* Status Card */}
-      <Card className="p-(--card-spacing)">
-        <div className="flex items-center gap-x-3 mb-5">
-          <IconBadge icon={status?.running ? Wifi : WifiOff} color={status?.running ? "success" : "destructive"} size="lg" />
-          <div>
-            <div className="text-sm font-semibold text-foreground">{t("dns.status_title")}</div>
-            <div className="text-xs text-muted-foreground">{t("dns.status_desc")}</div>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <Card className="p-3">
-            <CardContent className="p-0">
-              <div className="text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground/70 mb-1">{t("dns.status_title")}</div>
-              <div className="flex items-center gap-x-2">
-                <StatusDot tone={status?.running ? "success" : "destructive"} size="sm" pulse={!!status?.running} />
-                <span className="text-sm font-semibold text-foreground">{status?.running ? t("common.online") : t("common.offline")}</span>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="p-3">
-            <CardContent className="p-0">
-              <div className="text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground/70 mb-1">{t("dns.domain")}</div>
-              <div className="text-sm font-semibold text-foreground font-mono">{status?.domain || '\u2014'}</div>
-            </CardContent>
-          </Card>
-          <Card className="p-3">
-            <CardContent className="p-0">
-              <div className="text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground/70 mb-1">{t("dns.listen_addr")}</div>
-              <div className="text-sm font-semibold text-foreground font-mono">{status?.addr || '\u2014'}</div>
-            </CardContent>
-          </Card>
-          <Card className="p-3">
-            <CardContent className="p-0">
-              <div className="text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground/70 mb-1">{t("dns.beacon_count")}</div>
-              <div className="flex items-center gap-x-2">
-                <Activity className="w-3.5 h-3.5 text-primary" />
-                <span className="text-sm font-semibold text-foreground">{status?.beacon_count ?? 0}</span>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </Card>
+      {/* Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
+        <StatCard
+          label={t("dns.beacon_count")}
+          value={totalBeacons}
+          color="emerald"
+          icon={<Globe className="size-4" />}
+          sub={running ? t("common.online") : t("common.offline")}
+          dot={running}
+          dotTone={running ? "ok" : "crit"}
+        />
+        <StatCard
+          label={t("dns.domain")}
+          value={s.domain || "—"}
+          color="indigo"
+          icon={<Globe className="size-4" />}
+          sub={s.agent_ip || "—"}
+        />
+        <StatCard
+          label={t("dns.listen_addr")}
+          value={running ? t("common.online") : t("common.offline")}
+          color={running ? "emerald" : "slate"}
+          icon={<Server className="size-4" />}
+          sub={s.addr ?? ":53"}
+        />
+      </div>
+
+      {/* How it works banner */}
+      <Banner tone="info" className="items-start">
+        <div className="font-semibold">{t("dns.how_title")}</div>
+        <div className="text-xs text-muted-foreground mt-0.5">{t("dns.how_desc")}</div>
+      </Banner>
 
       {/* Configuration Card */}
-      <Card className="p-(--card-spacing)">
-        <div className="flex items-center gap-x-3 mb-5">
-          <IconBadge icon={Server} color="primary" size="lg" />
-          <div>
-            <div className="text-sm font-semibold text-foreground">{t("dns.config_title")}</div>
-            <div className="text-xs text-muted-foreground">{t("dns.config_desc")}</div>
+      <Card>
+        <CardContent>
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-sm font-semibold text-foreground">{t("dns.config_title")}</span>
           </div>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div>
-            <label htmlFor="dns-domain" className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("dns.field_domain")}</label>
-            <Input
-              id="dns-domain"
-              value={domain}
-              onChange={(e) => setDomain(e.target.value)}
-              placeholder="c2.example.com"
-              className="font-mono"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-xs font-semibold text-muted-foreground mb-1.5">{t("dns.field_domain")}</Label>
+              <Input
+                value={domain}
+                placeholder="c2.example.com"
+                disabled={running}
+                onChange={(e) => {
+                  setDomain(e.target.value);
+                  setConfigDirty(true);
+                }}
+              />
+              <p className="text-(--fs-micro-sm) text-muted-foreground mt-1">{t("dns.domain")}</p>
+            </div>
+            <div>
+              <Label className="text-xs font-semibold text-muted-foreground mb-1.5">{t("dns.field_listen")}</Label>
+              <Input
+                value={addr}
+                placeholder=":53"
+                disabled={running}
+                onChange={(e) => {
+                  setAddr(e.target.value);
+                  setConfigDirty(true);
+                }}
+              />
+              <p className="text-(--fs-micro-sm) text-muted-foreground mt-1">{t("dns.listen_addr")}</p>
+            </div>
           </div>
-          <div>
-            <label htmlFor="dns-listen" className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("dns.field_listen")}</label>
-            <Input
-              id="dns-listen"
-              value={addr}
-              onChange={(e) => setAddr(e.target.value)}
-              placeholder=":53"
-              className="font-mono"
-            />
-          </div>
-          <div>
-            <label htmlFor="dns-upstream" className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("dns.field_upstream")}</label>
-            <Input
-              id="dns-upstream"
-              value={server}
-              onChange={(e) => setServer(e.target.value)}
-              placeholder="8.8.8.8:53"
-              className="font-mono"
-            />
-          </div>
-          <div>
-            <label htmlFor="dns-prefix" className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("dns.field_prefix")}</label>
-            <Input
-              id="dns-prefix"
-              value={txtPrefix}
-              onChange={(e) => setTxtPrefix(e.target.value)}
-              placeholder=".dns"
-              className="font-mono"
-            />
-          </div>
-        </div>
-        <div className="mt-4 flex items-center gap-x-2">
-          <Badge variant="outline" className="text-xs">
-            {t("dns.query_hint")}
-          </Badge>
-          <Badge variant="outline" className="text-xs">
-            {t("dns.chunk_hint")}
-          </Badge>
-          <Badge variant="outline" className="text-xs">
-            {t("dns.encoding_hint")}
-          </Badge>
-        </div>
+        </CardContent>
       </Card>
 
-      {/* How It Works */}
+      {/* Protocol Details Card */}
       <Card className="p-(--card-spacing)">
-        <div className="flex items-center gap-x-3 mb-4">
-          <IconBadge icon={Globe} color="warning" size="lg" />
-          <div>
-            <div className="text-sm font-semibold text-foreground">{t("dns.how_title")}</div>
-            <div className="text-xs text-muted-foreground">{t("dns.how_desc")}</div>
+        <h3 className="text-sm font-semibold text-foreground mb-3">
+          <Settings className="size-4 inline mr-1.5" />
+          {t("dns.how_title")}
+        </h3>
+        <div className="space-y-2 max-h-64 overflow-y-auto">
+          <div className="flex items-start gap-3 p-3 bg-muted border border-border rounded-lg">
+            <ArrowDown className="size-4 text-emerald-500 mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <code className="text-xs font-semibold text-foreground">{t("dns.query_hint")}</code>
+              <p className="text-xs text-muted-foreground mt-0.5">{t("dns.desc_paragraph")}</p>
+            </div>
           </div>
-        </div>
-        <div className="space-y-3 text-xs text-muted-foreground">
-          <div className="flex gap-x-3">
-            <Badge variant="secondary" className="shrink-0">{t("dns.a_records")}</Badge>
-            <span>{t("dns.desc_paragraph")}</span>
-          </div>
-          <div className="flex gap-x-3">
-            <Badge variant="secondary" className="shrink-0">{t("dns.txt_records")}</Badge>
-            <span>{t("dns.desc_paragraph")}</span>
-          </div>
-          <div className="flex gap-x-3">
-            <Badge variant="secondary" className="shrink-0">{t("dns.query_format")}</Badge>
-            <span className="font-mono">{"<agent-uuid>[.<base32-data>].dns.<domain>"}</span>
-          </div>
-          <div className="flex gap-x-3">
-            <Badge variant="secondary" className="shrink-0">{t("dns.cache_bypass")}</Badge>
-            <span>{t("dns.desc_paragraph")}</span>
+          <div className="flex items-start gap-3 p-3 bg-muted border border-border rounded-lg">
+            <ArrowUp className="size-4 text-amber-500 mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <code className="text-xs font-semibold text-foreground">{t("dns.chunk_hint")}</code>
+              <p className="text-xs text-muted-foreground mt-0.5">{t("dns.encoding_hint")}</p>
+            </div>
           </div>
         </div>
       </Card>

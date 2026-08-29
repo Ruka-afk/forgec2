@@ -70,8 +70,8 @@ def main():
         try:
             with open(log_file, "a") as f:
                 f.write(json.dumps(record, default=str) + "\n")
-        except OSError:
-            pass
+        except OSError as exc:
+            print(json.dumps({"level": "error", "message": f"Plugin error: failed to write security event record to log file '{log_file}': {exc}"}), file=sys.stderr)
 
     output = f"[{record['severity'].upper()}] {record['detail']}"
     write_result(True, output=output, data=record)

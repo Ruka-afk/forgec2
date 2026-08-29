@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Cpu, Layers, Play, Trash2, Upload, User } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface BOFLibraryTabProps {
   libraryItems: BOFLibraryItem[];
@@ -70,7 +71,7 @@ export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadL
     <>
       <div className="flex justify-end mb-4">
         <Button onClick={() => setShowLibUpload(true)}>
-          <Upload className="w-4 h-4" />
+          <Upload className="size-4" />
           {t("bof.upload_library_title")}
         </Button>
       </div>
@@ -137,10 +138,10 @@ export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadL
                           }}
                           className="px-3 py-1.5 text-xs bg-success/15 text-success rounded-lg border border-success/30 hover:bg-success/15 transition-colors"
                         >
-                          <Play className="w-4 h-4" />{t("bof.run")}
+                          <Play className="size-4" />{t("bof.run")}
                         </Button>
                         <Button onClick={() => onDeleteLibrary(itemId)} aria-label={t("common.delete")} className="px-3 py-1.5 text-xs bg-destructive/10 text-destructive rounded-lg border border-destructive/20 hover:bg-destructive/10 transition-colors">
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="size-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -150,11 +151,7 @@ export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadL
             </TableBody>
           </Table>
         ) : (
-          <div className="text-center py-12 text-muted-foreground">
-            <Layers className="w-4 h-4" />
-            <p>{t("bof.no_files")}</p>
-            <p className="text-xs mt-1">{t("bof.no_files_lib_hint")}</p>
-          </div>
+          <EmptyState icon={Layers} title={t("bof.no_files")} message={t("bof.no_files_lib_hint")} />
         )}
       </Card>
 

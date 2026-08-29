@@ -44,18 +44,18 @@ export default memo(function NotesTagsSection({
     <SectionCard
       className="mb-4"
       title={t("agents.detail_notes_tags")}
-      icon={<Tag className="w-3.5 h-3.5" />}
+      icon={<Tag className="size-3.5" />}
       action={!editing ? (
         <Button variant="ghost" size="sm" onClick={onStartEdit} className="text-xs h-auto p-0 text-primary hover:bg-transparent gap-1.5">
-          <Pencil className="w-4 h-4" /> {t("agents.detail_edit")}
+          <Pencil className="size-4" /> {t("agents.detail_edit")}
         </Button>
       ) : (
         <div className="flex items-center gap-2">
           <Button size="sm" onClick={onSave} disabled={saving} className="text-xs h-7 gap-1.5">
-            {saving ? <Spinner size="xs" color="white" /> : <Check className="w-4 h-4" />} {t("agents.detail_save")}
+            {saving ? <Spinner size="xs" color="white" /> : <Check className="size-4" />} {t("agents.detail_save")}
           </Button>
           <Button variant="ghost" size="sm" onClick={onCancelEdit} className="text-xs h-7 text-muted-foreground gap-1.5">
-            <X className="w-4 h-4" /> {t("agents.detail_cancel")}
+            <X className="size-4" /> {t("agents.detail_cancel")}
           </Button>
         </div>
       )}
@@ -84,11 +84,11 @@ export default memo(function NotesTagsSection({
                     </Link>
                   ))}
                 </div>
-              ) : <span className="text-xs text-muted-foreground/70">{t("agents.detail_no_tags")}</span>}
+              ) : <span className="text-xs text-muted-foreground/100">{t("agents.detail_no_tags")}</span>}
             </div>
             <div>
               <div className="text-xs font-medium text-muted-foreground mb-1">{t("agents.detail_notes")}</div>
-              {note ? <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{note}</p> : <span className="text-xs text-muted-foreground/70">{t("agents.detail_no_notes")}</span>}
+              {note ? <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{note}</p> : <span className="text-xs text-muted-foreground/100">{t("agents.detail_no_notes")}</span>}
             </div>
           </div>
         )}

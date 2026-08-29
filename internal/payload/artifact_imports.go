@@ -37,6 +37,9 @@ type peSectionView struct {
 	rawSize uint32
 	va      uint32
 	virtSz  uint32
+	// hdrOff is the file offset of this section's 40-byte header, enabling
+	// in-place SizeOfRawData/VirtualSize growth for import slack.
+	hdrOff int
 }
 
 type peImportView struct {
@@ -104,6 +107,7 @@ func parseImportView(data []byte) (*peImportView, error) {
 			virtSz:  binary.LittleEndian.Uint32(data[h+8:]),
 			rawPtr:  binary.LittleEndian.Uint32(data[h+20:]),
 			rawSize: binary.LittleEndian.Uint32(data[h+16:]),
+			hdrOff:  h,
 		})
 	}
 
@@ -246,13 +250,16 @@ type missingDLL struct {
 	export string
 }
 
-func AddBenignImports(data []byte, dlls []string) error {
+// AddBenignImports injects benign DLL imports into a PE, growing the terminal
+// section (raw+virtual, aligned) when the existing layout lacks physical
+// slack. Returns the possibly reallocated image bytes.
+func AddBenignImports(data []byte, dlls []string) ([]byte, error) {
 	if len(dlls) == 0 {
-		return nil
+		return data, nil
 	}
 	view, err := parseImportView(data)
 	if err != nil {
-		return fmt.Errorf("import manipulation: %w", err)
+		return data, fmt.Errorf("import manipulation: %w", err)
 	}
 
 	existing := view.importedDLLs()
@@ -279,21 +286,108 @@ func AddBenignImports(data []byte, dlls []string) error {
 		}
 		export, ok := benignFuncs[name]
 		if !ok {
-			return artifactValidationError("import manipulation: no known benign export for %s", name)
+			return data, artifactValidationError("import manipulation: no known benign export for %s", name)
 		}
 		missing = append(missing, missingDLL{name: name, export: export})
 	}
 	if len(missing) == 0 {
-		return nil
+		return data, nil
 	}
 
-	if err := injectImportsInPlace(view, missing); err == nil {
-		return nil
-	} else if err := injectImportsRelocated(view, missing); err == nil {
-		return nil
-	} else {
-		return artifactValidationError("import manipulation: no zero slack space for %d new import(s)", len(missing))
+	tryInject := func(d []byte) ([]byte, bool, error, error) {
+		v, perr := parseImportView(d)
+		if perr != nil {
+			return d, false, perr, nil
+		}
+		iErr := injectImportsInPlace(v, missing)
+		if iErr == nil {
+			return d, true, nil, nil
+		}
+		rErr := injectImportsRelocated(v, missing)
+		if rErr == nil {
+			return d, true, nil, nil
+		}
+		return d, false, iErr, rErr
 	}
+
+	if out, ok, _, _ := tryInject(data); ok {
+		return out, nil
+	}
+
+	// Growth fallback: the import table's host section is grown in place —
+	// aligned zeros spliced at its raw end, subsequent sections' file offsets
+	// shifted, and SizeOfImage recomputed. Go's linker packs VirtSize ==
+	// RawSize so there is never pre-existing slack, and any post-link payload
+	// growth (e.g. a new embedded feature) starves the injectors.
+	hostIdx := -1
+	for i, sec := range view.sections {
+		end := sec.va + sec.virtSz
+		if view.importRVA >= sec.va && view.importRVA < end {
+			hostIdx = i
+			break
+		}
+	}
+	if hostIdx < 0 {
+		return data, artifactValidationError(
+			"import manipulation: no space for %d new import(s); import section not found", len(missing))
+	}
+	sec := view.sections[hostIdx]
+	// Size the growth to satisfy injectImportsRelocated's own requirement:
+	// relocated descriptor array (existing + new + null) plus ILT/IAT/name
+	// data for the new DLLs.
+	grow := 20*(view.descCount+len(missing)+1) + spaceForMissing(len(missing))
+	if grow < 0x200 {
+		grow = 0x200
+	}
+	grow = ((grow + 0x1ff) / 0x200) * 0x200
+
+	spliceAt := int(sec.rawPtr) + int(sec.rawSize)
+	pad := make([]byte, grow)
+	out := make([]byte, 0, len(data)+grow)
+	out = append(out, data[:spliceAt]...)
+	out = append(out, pad...)
+	out = append(out, data[spliceAt:]...)
+
+	// Grown section headers: raw and virtual sizes both extend.
+	newRaw := uint32(int(sec.rawSize) + grow)
+	newVirt := uint32(int(sec.virtSz) + grow)
+	binary.LittleEndian.PutUint32(out[sec.hdrOff+8:], newVirt)
+	binary.LittleEndian.PutUint32(out[sec.hdrOff+16:], newRaw)
+
+	// Shift every LATER section's file offset by grow (RVAs untouched).
+	oldEnd := spliceAt
+	for _, other := range view.sections {
+		if other.rawPtr >= uint32(oldEnd) {
+			np := binary.LittleEndian.Uint32(out[other.hdrOff+20:])
+			binary.LittleEndian.PutUint32(out[other.hdrOff+20:], np+uint32(grow))
+		}
+	}
+
+	// Recompute SizeOfImage from the extended layout (optional header +56),
+	// aligned to the section alignment at optional header +32.
+	maxEnd := uint32(0)
+	for _, s2 := range view.sections {
+		v := s2.va + s2.virtSz
+		if v > maxEnd {
+			maxEnd = v
+		}
+	}
+	if peOff := int(binary.LittleEndian.Uint32(out[0x3C:0x40])); peOff > 0 && peOff+24+56 <= len(out) {
+		opt := peOff + 24
+		secAlign := binary.LittleEndian.Uint32(out[opt+32:])
+		if secAlign == 0 {
+			secAlign = 0x1000
+		}
+		binary.LittleEndian.PutUint32(out[opt+56:], ((maxEnd+secAlign-1)/secAlign)*secAlign)
+	}
+
+	out2, ok, iErr2, rErr2 := tryInject(out)
+	if ok {
+		return out2, nil
+	}
+	return data, artifactValidationError(
+		"import manipulation: no zero slack space for %d new import(s) even after growth: in-place=%v; relocate=%v",
+		len(missing), iErr2, rErr2)
 }
 
 // spaceForMissing computes the total bytes needed for the new descriptors

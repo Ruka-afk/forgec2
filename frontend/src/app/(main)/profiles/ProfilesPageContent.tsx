@@ -107,36 +107,56 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
     }
   };
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
+    // Persist to the server (survives restarts) and keep the local export.
+    try {
+      await api.postJson(paths.generate.profileSave, editing);
+      toast.success(t("profiles.toast.profile_saved"));
+      await loadProfiles();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : t("profiles.toast.save_profile_failed"));
+      return;
+    }
     downloadJSON(editing, `${editing.name || "profile"}.json`);
     toast.success(t("profiles.toast.profile_exported"));
   };
 
-  const handleDeleteProfile = () => {
+  const handleDeleteProfile = async () => {
     if (selectedIdx < 0) return;
-    const name = editing.name;
-    setProfiles((prev) => prev.filter((_, i) => i !== selectedIdx));
-    if (selectedIdx >= profiles.length - 1) {
-      const newIdx = Math.max(0, profiles.length - 2);
-      setSelectedIdx(newIdx >= 0 ? newIdx : -1);
-      if (newIdx >= 0) setEditing({ ...profiles[newIdx] });
-      else setEditing(emptyProfile());
-    } else {
-      const newIdx = selectedIdx;
-      setSelectedIdx(newIdx);
-      setEditing({ ...profiles[newIdx] });
+    const target = profiles[selectedIdx];
+    const name = target?.name;
+    if (!name) return;
+    if (name === "default") {
+      toast.error(t("profiles.toast.delete_default_forbidden") || "cannot delete default profile");
+      return;
     }
-    toast.success(t("profiles.toast.profile_removed", { name: name || "" }));
+    try {
+      await api.del(paths.generate.profileDelete(name));
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : t("profiles.toast.delete_failed") || "delete failed");
+      return;
+    }
+    // Functional updates avoid the stale-closure index math that previously
+    // selected the wrong (or a removed) profile after deletion.
+    setProfiles(prev => prev.filter((_, i) => i !== selectedIdx));
+    setSelectedIdx(prev => Math.min(Math.max(0, prev), Math.max(0, profiles.length - 2)));
+    toast.success(t("profiles.toast.profile_removed", { name }));
   };
 
-  const handleDuplicateProfile = () => {
+  const handleDuplicateProfile = async () => {
     const copy: AgentProfile = {
       ...editing,
       name: editing.name + "_copy",
     };
-    const idx = profiles.length;
-    setProfiles((prev) => [...prev, copy]);
-    setSelectedIdx(idx);
+    try {
+      // Persist server-side so the duplicate isn't lost on reload.
+      await api.postJson(paths.generate.profileSave, copy);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : t("profiles.toast.save_profile_failed"));
+      return;
+    }
+    setProfiles(prev => [...prev, copy]);
+    setSelectedIdx(profiles.length);
     setEditing(copy);
     toast.success(t("profiles.toast.profile_duplicated"));
   };
@@ -153,16 +173,18 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
         return;
       }
       const imported: AgentProfile = d.profile!;
-      setProfiles((prev) => {
-        const idx = prev.findIndex((p) => p.name === imported.name);
-        if (idx >= 0) {
-          const next = [...prev];
-          next[idx] = imported;
-          return next;
-        }
-        return [...prev, imported];
-      });
-      setSelectedIdx(profiles.length);
+      // Resolve the target index against the CURRENT list: importing over an
+      // existing name must select the replaced slot, not profiles.length.
+      const existingIdx = profiles.findIndex((p) => p.name === imported.name);
+      if (existingIdx >= 0) {
+        const next = [...profiles];
+        next[existingIdx] = imported;
+        setProfiles(next);
+        setSelectedIdx(existingIdx);
+      } else {
+        setProfiles((prev) => [...prev, imported]);
+        setSelectedIdx(profiles.length);
+      }
       setEditing(imported);
       toast.success(t("profiles.toast.profile_imported"));
     } catch (err: unknown) {
@@ -213,7 +235,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
             disabled={reloading}
             className="px-5 bg-secondary/60 hover:bg-secondary/80 text-foreground text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
           >
-            {reloading ? <Spinner size="xs" /> : <RotateCw className="w-4 h-4" />}
+            {reloading ? <Spinner size="xs" /> : <RotateCw className="size-4" />}
             {reloading ? t("profiles.reloading") : t("profiles.reload_config")}
           </Button>
         } />
@@ -289,13 +311,13 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
 
               {lastReload && (
                 <div className="text-xs text-success flex items-center gap-1">
-                  <Clock className="w-4 h-4" />
+                  <Clock className="size-4" />
                   {t("profiles.last_reloaded", { time: lastReload })}
                 </div>
               )}
 
               <div className="p-3 bg-warning/15 rounded-lg border border-warning/30 text-xs text-warning mt-3">
-                <AlertTriangle className="w-4 h-4" />
+                <AlertTriangle className="size-4" />
                 {t("profiles.reload_warning")}
               </div>
             </>
@@ -305,12 +327,12 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
 
       {/* Tab switcher */}
       <Tabs defaultValue="server">
-        <TabsList className="mb-6">
+        <TabsList>
           <TabsTrigger value="server" className="gap-2">
-            <Server className="w-4 h-4" />{t("profiles.tab_server")}
+            <Server className="size-4" />{t("profiles.tab_server")}
           </TabsTrigger>
           <TabsTrigger value="agents" className="gap-2">
-            <PenTool className="w-4 h-4" />{t("profiles.tab_agents")}
+            <PenTool className="size-4" />{t("profiles.tab_agents")}
           </TabsTrigger>
         </TabsList>
 
@@ -349,11 +371,11 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                 </div>
               </div>
               <div className="p-3 bg-warning/15 rounded-lg border border-warning/30 text-xs text-warning">
-                <AlertTriangle className="w-4 h-4" />
+                <AlertTriangle className="size-4" />
                 {t("profiles.camouflage_warning")}
               </div>
               <Button type="submit" size="lg" disabled={savingMalleable} className="px-6 bg-primary hover:bg-primary/80 text-primary-foreground text-sm font-medium transition-colors disabled:opacity-50">
-                <Save className="w-4 h-4" />{t("profiles.save_profile")}
+                <Save className="size-4" />{t("profiles.save_profile")}
               </Button>
             </form>
           </CardContent>
@@ -368,14 +390,14 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
               <div className="bg-primary/10 border-b border-primary/20 px-5 py-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <List className="w-4 h-4" />
+                    <List className="size-4" />
                     <span className="text-sm font-semibold text-foreground">{t("profiles.list_title")}</span>
                     <span className="text-xs text-primary ml-1">({profiles.length})</span>
                   </div>
                   <div className="flex gap-1">
                     <Tooltip>
-                      <TooltipTrigger render={<Button onClick={() => fileInputRef.current?.click()} className="w-7 h-7 bg-secondary/50 hover:bg-secondary/70 flex items-center justify-center transition-colors" aria-label={t("profiles.import_btn")} size="icon" />}>
-                        <FileDown className="w-4 h-4" />
+                      <TooltipTrigger render={<Button onClick={() => fileInputRef.current?.click()} className="size-7 bg-secondary/50 hover:bg-secondary/70 flex items-center justify-center transition-colors" aria-label={t("profiles.import_btn")} size="icon" />}>
+                        <FileDown className="size-4" />
                       </TooltipTrigger>
                       <TooltipContent>{t("profiles.import_btn")}</TooltipContent>
                     </Tooltip>
@@ -386,8 +408,8 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                           setProfiles((prev) => [...prev, p]);
                           setSelectedIdx(idx);
                           setEditing(p);
-                        }} className="w-7 h-7 bg-secondary/50 hover:bg-secondary/70 flex items-center justify-center transition-colors" aria-label={t("profiles.new_profile")} size="icon" />}>
-                        <Plus className="w-4 h-4" />
+                        }} className="size-7 bg-secondary/50 hover:bg-secondary/70 flex items-center justify-center transition-colors" aria-label={t("profiles.new_profile")} size="icon" />}>
+                        <Plus className="size-4" />
                       </TooltipTrigger>
                       <TooltipContent>{t("profiles.new_profile")}</TooltipContent>
                     </Tooltip>
@@ -396,7 +418,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
               </div>
               <CardContent className="p-(--card-spacing)">
                 <div className="relative mb-3">
-                  <Search className="w-4 h-4" />
+                  <Search className="size-4" />
                   <Input aria-label={t("profiles.filter_ph")} name="filter-by-name-6"
                     type="text" placeholder={t("profiles.filter_ph")}
                     value={search} onChange={(e) => setSearch(e.target.value)}
@@ -410,7 +432,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                     <DataError message={profilesError} onRetry={loadProfiles} className="py-10" />
                   ) : filteredProfiles.length === 0 ? (
                     <div className="text-center py-16 sm:py-20 text-xs text-muted-foreground">
-                      <FileWarning className="w-4 h-4 mx-auto mb-2" />
+                      <FileWarning className="size-4 mx-auto mb-2" />
                       {search ? t("profiles.no_match") : t("profiles.none_loaded")}
                     </div>
                   ) : (
@@ -425,7 +447,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                           className={"w-full text-left px-3 py-2.5 rounded-lg text-xs transition-colors " + (selectedIdx === realIdx ? "bg-primary/10 dark:bg-primary/20 text-primary dark:text-primary border border-primary/30 dark:border-primary/40" : "hover:bg-secondary text-muted-foreground border border-transparent")}
                         >
                           <div className="flex items-center gap-2">
-                            <FileCode className={`w-4 h-4 ${selectedIdx === realIdx ? "text-primary" : "text-muted-foreground"}`} />
+                            <FileCode className={`size-4 ${selectedIdx === realIdx ? "text-primary" : "text-muted-foreground"}`} />
                             <span className="font-medium truncate">{p.name}</span>
                           </div>
                           {p.description && (
@@ -449,16 +471,16 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                   <CardHeaderRow icon={FileCode} tone="primary" title={`${t("profiles.editing")}: ${editing.name || t("common.untitled")}`} description={editing.description || t("common.no_description")} action={
                     <div className="flex gap-2">
                       <Button onClick={handleSaveProfile}                         className="h-9 px-4 text-xs font-medium transition-colors flex items-center gap-1.5">
-                        <Download className="w-4 h-4" />Save (Export JSON)
+                        <Download className="size-4" />Save (Export JSON)
                       </Button>
                       <Button onClick={handleDuplicateProfile} variant="secondary"                         className="h-9 px-4 text-xs font-medium transition-colors flex items-center gap-1.5">
-                        <Copy className="w-4 h-4" />{t("common.duplicate")}
+                        <Copy className="size-4" />{t("common.duplicate")}
                       </Button>
                       <Button onClick={handleDeleteProfile} className="h-9 px-4 bg-destructive hover:bg-destructive/90 text-destructive-foreground text-xs font-medium transition-colors flex items-center gap-1.5">
-                        <Trash2 className="w-4 h-4" />{t("common.delete")}
+                        <Trash2 className="size-4" />{t("common.delete")}
                       </Button>
                       <Button onClick={() => setShowPushModal(true)}                         className="h-9 px-4 text-xs font-medium transition-colors flex items-center gap-1.5">
-                        <Send className="w-4 h-4" />{t("profiles.push_to_agent")}
+                        <Send className="size-4" />{t("profiles.push_to_agent")}
                         </Button>
                       </div>
                       } />
@@ -521,7 +543,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                           <div className="flex items-center justify-between mb-1.5">
                             <Label className="text-xs text-muted-foreground">{t("profiles.custom_headers")}</Label>
                             <Button type="button" onClick={addHeader} className="text-xs text-primary hover:underline flex items-center gap-1" variant="link" size="sm">
-                              <Plus className="w-4 h-4" />{t("profiles.add_header")}
+                              <Plus className="size-4" />{t("profiles.add_header")}
                             </Button>
                           </div>
                           <div className="space-y-2">
@@ -538,8 +560,8 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                                   className="flex-1 text-xs font-mono"
                                 />
                                 {Object.entries(editing.headers).length > 1 && (
-                                   <Button onClick={() => removeHeader(i)} className="w-9 h-9 flex items-center justify-center text-destructive/50 hover:text-destructive hover:bg-destructive/10 transition-colors" variant="ghost" size="icon" aria-label={t("agents.config.remove_header")}>
-                                    <X className="w-4 h-4" />
+                                   <Button onClick={() => removeHeader(i)} className="size-9 flex items-center justify-center text-destructive/50 hover:text-destructive hover:bg-destructive/10 transition-colors" variant="ghost" size="icon" aria-label={t("agents.config.remove_header")}>
+                                    <X className="size-4" />
                                   </Button>
                                 )}
                               </div>
@@ -555,7 +577,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                 <Card className="overflow-hidden">
                   <div className="bg-secondary/60 border-b border-border px-6 py-3">
                     <div className="flex items-center gap-2">
-                      <Code className="w-4 h-4" />
+                      <Code className="size-4" />
                       <span className="text-sm font-semibold text-foreground">{t("profiles.json_preview")}</span>
                     </div>
                   </div>

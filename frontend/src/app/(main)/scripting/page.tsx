@@ -144,7 +144,7 @@ export default function ScriptingPage() {
     <PageContainer title={t("scripting.title")} subtitle={t("scripting.subtitle")} actions={<>
         <Button onClick={() => setShowTemplates(!showTemplates)}
           className="bg-primary hover:bg-primary/90 text-primary-foreground">
-          <BookOpen className="w-4 h-4" />
+          <BookOpen className="size-4" />
           <span className="hidden sm:inline">{t("scripting.templates")}</span>
         </Button>
       </>}>
@@ -153,11 +153,11 @@ export default function ScriptingPage() {
         <Card className="mb-6 p-(--card-spacing)">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Layers className="w-4 h-4" />
+              <Layers className="size-4" />
               <span className="text-sm font-semibold text-foreground">{t("scripting.script_library")}</span>
             </div>
             <Button variant="ghost" size="sm" onClick={() => setShowTemplates(false)} className="text-muted-foreground hover:text-foreground">
-              <X className="w-4 h-4" />
+              <X className="size-4" />
             </Button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -174,12 +174,12 @@ export default function ScriptingPage() {
 
       <div className="space-y-4">
         <Tabs defaultValue="editor">
-        <TabsList className="mb-4">
+        <TabsList>
           <TabsTrigger value="editor" className="gap-1.5">
-            <Code className="w-4 h-4" />{t("scripting.editor")}
+            <Code className="size-4" />{t("scripting.editor")}
           </TabsTrigger>
           <TabsTrigger value="history" className="gap-1.5">
-            <History className="w-4 h-4" />{t("scripting.run_history", { count: String(runHistory.length) })}
+            <History className="size-4" />{t("scripting.run_history", { count: String(runHistory.length) })}
           </TabsTrigger>
         </TabsList>
 
@@ -221,7 +221,7 @@ export default function ScriptingPage() {
                           {s.name || t("scripting.untitled")}
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => s.id && handleDeleteScript(s.id)} className="text-muted-foreground hover:text-destructive ml-2">
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="size-4" />
                         </Button>
                       </div>
                     ))
@@ -250,11 +250,11 @@ export default function ScriptingPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" onClick={handleSaveScript} disabled={!scriptName.trim()}>
-                      <Save className="w-4 h-4" />{t("scripting.save")}
+                      <Save className="size-4" />{t("scripting.save")}
                     </Button>
                     <Button size="sm" onClick={handleRunScript} disabled={running || !selectedAgent || !scriptCode.trim()}
                       >
-                      {running ? <Spinner size="xs" className="mr-1" /> : <Play className="w-4 h-4" />}
+                      {running ? <Spinner size="xs" className="mr-1" /> : <Play className="size-4" />}
                       {running ? t("scripting.running") : t("scripting.run")}
                     </Button>
                   </div>
@@ -276,10 +276,10 @@ export default function ScriptingPage() {
                 <div className="border-t border-border">
                   <div className="p-3 px-4 text-xs font-semibold text-muted-foreground flex items-center justify-between">
                     <span>
-                      <Terminal className="w-4 h-4" />{t("scripting.output")}
+                      <Terminal className="size-4" />{t("scripting.output")}
                     </span>
                     <Button variant="ghost" size="sm" onClick={() => setScriptOutput(t("scripting.waiting"))} className="text-xs text-muted-foreground hover:text-foreground h-auto p-0">
-                      <Eraser className="w-4 h-4" />{t("scripting.clear")}
+                      <Eraser className="size-4" />{t("scripting.clear")}
                     </Button>
                   </div>
                   <pre className="p-4 text-xs font-mono text-chart-1 bg-background m-2 rounded-lg max-h-48 overflow-y-auto whitespace-pre-wrap border border-border">

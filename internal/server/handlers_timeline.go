@@ -145,7 +145,7 @@ func (s *Server) buildTimelineEvents(filterType, filterUser, filterAgent, dateFr
 			ID       string
 			Hostname string
 		}
-		if err := s.db.Table("agents").Select("id, hostname").Where("id IN ?", ids).Find(&agents).Error; err != nil {
+		if err := s.db.Table("implants").Select("id, hostname").Where("id IN ?", ids).Find(&agents).Error; err != nil {
 			slog.Error("Timeline: failed to query agents", "err", err)
 		}
 		for _, a := range agents {

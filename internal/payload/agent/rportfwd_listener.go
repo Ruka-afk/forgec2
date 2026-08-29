@@ -93,6 +93,16 @@ func (h *rpfListener) acceptLoop() {
 			h.closeAll()
 			return
 		}
+		// Windows backlog race: an in-flight Accept can still hand us a
+		// connection after stop() closed the listener. Bridging it would hang
+		// stop()'s wg.Wait() forever, so reject it instead.
+		h.rpfMuLock()
+		closed := h.closed
+		h.rpfMuUnlock()
+		if closed {
+			_ = conn.Close()
+			return
+		}
 		h.wg.Add(1)
 		go h.bridge(conn)
 	}
@@ -135,8 +145,8 @@ func (h *rpfListener) bridge(in net.Conn) {
 	close(fin)
 }
 
-// stop closes the listener and every still-active bridge, then waits for all
-// bridge goroutines to fully unwind. Returns the number of connections that
+// stop closes the listener and every still-active bridge, then waits (bounded)
+// for the bridge goroutines to unwind. Returns the number of connections that
 // were still actively flowing when the operator stopped the listener (bridges
 // that already hit EOF are not counted — they were already torn down).
 func (h *rpfListener) stop() int {
@@ -152,6 +162,12 @@ func (h *rpfListener) stop() int {
 		case <-h.fin[cid]:
 		default:
 			active = append(active, c)
+			// Force-unblock parked bridge I/O now: on Windows, Close alone
+			// can leave io.Copy blocked until its next read/write returns,
+			// which would hang an unbounded wg.Wait below (same failure mode
+			// lportfwd hit; see lportfwd_listener.go).
+			_ = c.SetReadDeadline(time.Now())
+			_ = c.SetWriteDeadline(time.Now())
 		}
 	}
 	h.rpfMuUnlock()
@@ -160,7 +176,18 @@ func (h *rpfListener) stop() int {
 		_ = c.Close()
 	}
 	_ = h.ln.Close()
-	h.wg.Wait()
+
+	done := make(chan struct{})
+	go func() {
+		h.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		// Bounded reap: never wedge the implant's task loop on a stuck
+		// bridge — leaked goroutines die at their own deadlines.
+	}
 	return len(active)
 }
 

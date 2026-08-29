@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge, StatusIndicator } from "@/components/ui/status-indicator";
 import { StatTile } from "@/components/ui/stat-tile";
+import { MetricGrid } from "@/components/ui/metric-grid";
 import { DataError } from "@/components/ui/data-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -51,18 +52,18 @@ function Panel({
 function QuickLaunch() {
   const { t } = useI18n();
   const actions = [
-    { href: "/generate", label: t("dashboard.quick_generate"), icon: <Wand2 className="w-5 h-5" /> },
-    { href: "/listeners", label: t("dashboard.quick_listeners"), icon: <Radio className="w-5 h-5" /> },
-    { href: "/agents", label: t("dashboard.quick_agents"), icon: <Terminal className="w-5 h-5" /> },
-    { href: "/search", label: t("dashboard.quick_search"), icon: <Search className="w-5 h-5" /> },
+    { href: "/generate", label: t("dashboard.quick_generate"), icon: <Wand2 className="size-5" /> },
+    { href: "/listeners", label: t("dashboard.quick_listeners"), icon: <Radio className="size-5" /> },
+    { href: "/agents", label: t("dashboard.quick_agents"), icon: <Terminal className="size-5" /> },
+    { href: "/search", label: t("dashboard.quick_search"), icon: <Search className="size-5" /> },
   ];
   return (
     <SectionCard title={t("dashboard.quick_actions")}>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4">
         {actions.map((a) => (
           <Button key={a.href} variant="outline" render={<Link href={a.href} />}
-            className="h-auto flex-col gap-2 py-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary hover:bg-primary/5 hover:shadow-md">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary transition-transform group-hover:scale-105">{a.icon}</span>
+            className="h-auto flex-col gap-2 py-4 hover:border-primary hover:bg-primary/5">
+            <span className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary transition-transform group-hover:scale-105">{a.icon}</span>
             <span className="text-sm font-medium text-foreground">{a.label}</span>
           </Button>
         ))}
@@ -246,32 +247,32 @@ const DashboardStatTiles = memo(function DashboardStatTiles({ loading, unhealthy
   const totalTasks = s.total_tasks ?? 0;
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+    <MetricGrid count={5}>
       <Link href="/agents">
-        <Card className="surface-raised rounded-xl p-4 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:ring-accent-glow group focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-          <StatTile label={t("dashboard.beacons")} value={loading && !stats ? "…" : `${online}/${total}`} sub={online === total && total > 0 ? t("dashboard.all_online") : t("dashboard.online_suffix")} tone="success" icon={<Radio className="w-5 h-5" />} trend={total > 0 ? <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />{t("dashboard.live_agents")}</span> : undefined} />
+        <Card interactive className="p-4 hover:ring-1 hover:ring-primary/20">
+          <StatTile label={t("dashboard.beacons")} value={loading && !stats ? "…" : `${online}/${total}`} sub={online === total && total > 0 ? t("dashboard.all_online") : t("dashboard.online_suffix")} tone="success" icon={<Radio className="size-5" />} trend={total > 0 ? <span className="inline-flex items-center gap-1"><span className="size-1.5 rounded-full bg-success animate-pulse" />{t("dashboard.live_agents")}</span> : undefined} />
         </Card>
       </Link>
       <Link href="/timeline?tab=tasks">
-        <Card className="surface-raised rounded-xl p-4 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:ring-accent-glow group focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-          <StatTile label={t("dashboard.pending_tasks_label")} value={loading && !stats ? "…" : pending} tone={pending > 0 ? "warning" : "muted"} icon={<Clock className="w-5 h-5" />} trend={totalTasks > 0 ? `${Math.round((pending/totalTasks)*100)}% ${t("dashboard.queue_share")}` : undefined} />
+        <Card interactive className="p-4 hover:ring-1 hover:ring-primary/20">
+          <StatTile label={t("dashboard.pending_tasks_label")} value={loading && !stats ? "…" : pending} tone={pending > 0 ? "warning" : "muted"} icon={<Clock className="size-5" />} trend={totalTasks > 0 ? `${Math.round((pending/totalTasks)*100)}% ${t("dashboard.queue_share")}` : undefined} />
         </Card>
       </Link>
       <Link href="/timeline?tab=tasks">
-        <Card className="surface-raised rounded-xl p-4 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:ring-accent-glow group focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-          <StatTile label={t("dashboard.failed_tasks")} value={loading && !stats ? "…" : failed} tone={failed > 0 ? "destructive" : "muted"} icon={<Bug className="w-5 h-5" />} trend={failed > 0 ? t("dashboard.needs_attention") : t("dashboard.all_clear")} />
+        <Card interactive className="p-4 hover:ring-1 hover:ring-primary/20">
+          <StatTile label={t("dashboard.failed_tasks")} value={loading && !stats ? "…" : failed} tone={failed > 0 ? "destructive" : "muted"} icon={<Bug className="size-5" />} trend={failed > 0 ? t("dashboard.needs_attention") : t("dashboard.all_clear")} />
         </Card>
       </Link>
       <Link href="/listeners">
-        <Card className="surface-raised rounded-xl p-4 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:ring-accent-glow group focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-          <StatTile label={t("dashboard.unhealthy_count")} value={loading ? "…" : unhealthyCount} tone={unhealthyCount > 0 ? "destructive" : "success"} icon={<Radio className="w-5 h-5" />} trend={unhealthyCount === 0 ? t("dashboard.all_healthy") : undefined} />
+        <Card interactive className="p-4 hover:ring-1 hover:ring-primary/20">
+          <StatTile label={t("dashboard.unhealthy_count")} value={loading ? "…" : unhealthyCount} tone={unhealthyCount > 0 ? "destructive" : "success"} icon={<Radio className="size-5" />} trend={unhealthyCount === 0 ? t("dashboard.all_healthy") : undefined} />
         </Card>
       </Link>
       <Link href="/loot">
-        <Card className="surface-raised rounded-xl p-4 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:ring-accent-glow group focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-          <StatTile label={t("dashboard.loot_inbox")} value={loading ? "…" : lootCount} sub={t("dashboard.loot_recent")} tone={lootCount > 0 ? "info" : "muted"} icon={<Archive className="w-5 h-5" />} />
+        <Card interactive className="p-4 hover:ring-1 hover:ring-primary/20">
+          <StatTile label={t("dashboard.loot_inbox")} value={loading ? "…" : lootCount} sub={t("dashboard.loot_recent")} tone={lootCount > 0 ? "info" : "muted"} icon={<Archive className="size-5" />} />
         </Card>
       </Link>
-    </div>
+    </MetricGrid>
   );
 });

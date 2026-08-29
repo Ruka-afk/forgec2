@@ -25,7 +25,7 @@ export function QuickSleepModal({
           <DialogTitle>{t("agents.adjust_sleep")}</DialogTitle>
         </DialogHeader>
         <p className="text-xs text-muted-foreground">
-          <Monitor className="w-4 h-4" />{agent.hostname}
+          <Monitor className="size-4" />{agent.hostname}
         </p>
         <div className="grid grid-cols-2 gap-3">
           <div>

@@ -14,9 +14,12 @@ const EN_FILE = path.join(I18N_DIR, "en.ts");
 const ZH_FILE = path.join(I18N_DIR, "zh.ts");
 
 const KEY_RE = /"([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)":/g;
-const USE_DOUBLE = /t\(\s*"([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)"\s*[),]/g;
-const USE_TICK = /t\(\s*`([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)`\s*[),]/g;
-const USE_KEYFIELD = /(?:labelKey|descKey|titleKey|subtitleKey|valueKey|inputLabel|btnKey)\s*[:=]\s*"([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)"/g;
+const USE_DOUBLE = /\bt\?*\.?\(\s*"([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)"\s*[),]/g;
+const USE_TICK = /\bt\?*\.?\(\s*`([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)`\s*[),]/g;
+const USE_REF_DOUBLE = /\bt[A-Za-z]*\.current\(\s*"([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)"\s*[),]/g;
+const USE_REF_TICK = /\bt[A-Za-z]*\.current\(\s*`([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)`\s*[),]/g;
+const USE_KEYFIELD = /(?:labelKey|descKey|titleKey|subtitleKey|valueKey|inputLabel|btnKey|i18nKey)\s*[:=]\s*"([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)"/g;
+const USE_TOAST_FALLBACK = /\btoastError\(\s*[^,)]+,\s*"([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)"\s*\)/g;
 
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -44,7 +47,7 @@ function collectUsedKeys() {
   for (const file of walk(SRC)) {
     let src;
     try { src = fs.readFileSync(file, "utf8"); } catch { continue; }
-    for (const re of [USE_DOUBLE, USE_TICK, USE_KEYFIELD]) {
+    for (const re of [USE_DOUBLE, USE_TICK, USE_KEYFIELD, USE_TOAST_FALLBACK, USE_REF_DOUBLE, USE_REF_TICK]) {
       re.lastIndex = 0;
       let m;
       while ((m = re.exec(src)) !== null) used.add(m[1]);

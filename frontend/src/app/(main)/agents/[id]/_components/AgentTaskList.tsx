@@ -28,7 +28,7 @@ const MAX_FILTER_TYPES = 6;
 const MAX_RESULT_CHARS = 5000;
 
 function getTaskTypeIcon(type: string): React.ReactNode {
-  const s = "w-2.5 h-2.5";
+  const s = "size-2.5";
   switch (type) {
     case "shell": return <Terminal className={s} />;
     case "screenshot": return <Camera className={s} />;
@@ -58,27 +58,29 @@ function getTaskTypeColor(type: string): string {
  * for the lifetime of the list section.
  */
 function useFullTaskResults() {
-  const [results, setResults] = useState<Record<number, { result?: string; error?: string }>>({});
-  const inflightRef = useRef<Set<number>>(new Set());
+  const [results, setResults] = useState<Record<string, { result?: string; error?: string }>>({});
+  const inflightRef = useRef<Set<string>>(new Set());
 
-  const load = useCallback(async (taskId: number) => {
-    if (inflightRef.current.has(taskId)) return;
-    inflightRef.current.add(taskId);
+  const load = useCallback(async (taskId: string | number) => {
+    const key = String(taskId);
+    if (inflightRef.current.has(key)) return;
+    inflightRef.current.add(key);
     try {
-      const full = await api.get<{ result?: string; error?: string }>(paths.tasks.one(taskId));
-      setResults((prev) => ({ ...prev, [taskId]: { result: full?.result, error: full?.error } }));
+      const full = await api.get<{ result?: string; error?: string }>(paths.tasks.one(taskId as number));
+      setResults((prev) => ({ ...prev, [key]: { result: full?.result, error: full?.error } }));
     } catch {
       // Keep the preview; the next expand retries.
     } finally {
-      inflightRef.current.delete(taskId);
+      inflightRef.current.delete(key);
     }
   }, []);
 
-  const invalidate = useCallback((taskId: number) => {
+  const invalidate = useCallback((taskId: string | number) => {
+    const key = String(taskId);
     setResults((prev) => {
-      if (!(taskId in prev)) return prev;
+      if (!(key in prev)) return prev;
       const next = { ...prev };
-      delete next[taskId];
+      delete next[key];
       return next;
     });
   }, []);
@@ -89,8 +91,8 @@ function useFullTaskResults() {
 interface AgentTaskListProps {
   tasks: AgentTaskRecord[];
   agentId: string;
-  expandedTaskId: number | null;
-  onToggleExpand: (id: number) => void;
+  expandedTaskId: string | number | null;
+  onToggleExpand: (id: string | number) => void;
   totalTasks?: number;
   completedTasks?: number;
   pendingTasks?: number;
@@ -101,7 +103,7 @@ function StatCell({ icon, label, value, tone }: { icon: React.ReactNode; label: 
   return (
     <div className="flex items-center gap-1.5">
       {icon}
-      <span className="text-(--fs-micro-sm) font-medium text-muted-foreground/70">{label}</span>
+      <span className="text-(--fs-micro-sm) font-medium text-muted-foreground/100">{label}</span>
       <span className={`text-xs font-bold ${tone}`}>{value}</span>
     </div>
   );
@@ -121,16 +123,16 @@ export default memo(function AgentTaskList({
   // WS chunk updates evolve task.result over time; drop the stale full-result
   // cache when the preview changes so the expanded view never shows an old
   // snapshot, and re-fetch if that task is currently expanded.
-  const lastResultRef = useRef<Map<number, string>>(new Map());
+  const lastResultRef = useRef<Map<string, string>>(new Map());
   useEffect(() => {
     for (const task of tasks) {
-      const id = typeof task.id === "number" ? task.id : Number(task.id);
-      if (!Number.isFinite(id) || id <= 0) continue;
+      const id = String(task.id ?? (task as unknown as { ID?: string | number }).ID ?? "");
+      if (!id || id.startsWith("tmp-")) continue;
       const cur = task.result ?? "";
       const prev = lastResultRef.current.get(id);
       if (prev !== undefined && prev !== cur) {
         invalidate(id);
-        if (expandedTaskId === id) load(id);
+        if (String(expandedTaskId) === id) load(id);
       }
       lastResultRef.current.set(id, cur);
     }
@@ -169,7 +171,7 @@ export default memo(function AgentTaskList({
       <Card className="mb-4 overflow-hidden border-border/70 bg-card/90 shadow-sm">
         <div className="h-1 w-full bg-gradient-to-r from-primary via-chart-2 to-chart-1" />
         <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-border/70">
-          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><ListChecks className="w-3.5 h-3.5 text-primary" />{t("agents.tasklist_recent")}</h3>
+          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><ListChecks className="size-3.5 text-primary" />{t("agents.tasklist_recent")}</h3>
           <Link href={`/timeline?tab=tasks&agent_id=${agentId}`} className="text-xs text-primary hover:underline">{t("agents.tasklist_view_all")} &rarr;</Link>
         </div>
         <EmptyState icon={ListChecks} title={t("agents.tasklist_empty")} message={t("agents.tasklist_empty_hint")} className="py-10" />
@@ -181,23 +183,23 @@ export default memo(function AgentTaskList({
     <Card className="mb-4 overflow-hidden border-border/70 bg-card/90 shadow-sm">
       <div className="h-1 w-full bg-gradient-to-r from-primary via-chart-2 to-chart-1" />
       <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-border/70">
-        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><ListChecks className="w-3.5 h-3.5 text-primary" />{t("agents.tasklist_recent")}</h3>
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><ListChecks className="size-3.5 text-primary" />{t("agents.tasklist_recent")}</h3>
         <Link href={`/timeline?tab=tasks&agent_id=${agentId}`} className="text-xs text-primary hover:underline">{t("agents.tasklist_view_all")} &rarr;</Link>
       </div>
 
       <div className="px-4 py-2.5 flex items-center gap-2 sm:gap-4 flex-wrap border-b border-border/70">
         <div className="flex items-center gap-2.5 sm:gap-4 flex-wrap">
-          <StatCell icon={<ListChecks className="w-3 h-3 text-primary" />} label={t("agents.detail_total_tasks")} value={total} tone="text-foreground" />
+          <StatCell icon={<ListChecks className="size-3 text-primary" />} label={t("agents.detail_total_tasks")} value={total} tone="text-foreground" />
           <div className="w-px h-3.5 bg-border" />
-          <StatCell icon={<CheckCircle className="w-3 h-3 text-success" />} label={t("agents.detail_completed")} value={completed} tone="text-success" />
+          <StatCell icon={<CheckCircle className="size-3 text-success" />} label={t("agents.detail_completed")} value={completed} tone="text-success" />
           <div className="w-px h-3.5 bg-border" />
-          <StatCell icon={<Clock className="w-3 h-3 text-warning" />} label={t("agents.detail_pending")} value={pending} tone="text-warning" />
+          <StatCell icon={<Clock className="size-3 text-warning" />} label={t("agents.detail_pending")} value={pending} tone="text-warning" />
           <div className="w-px h-3.5 bg-border" />
-          <StatCell icon={<XCircle className="w-3 h-3 text-destructive" />} label={t("agents.detail_failed")} value={failed} tone="text-destructive" />
+          <StatCell icon={<XCircle className="size-3 text-destructive" />} label={t("agents.detail_failed")} value={failed} tone="text-destructive" />
         </div>
         <div className="ml-auto flex items-center gap-1.5">
           <div className="relative">
-            <Search className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60" aria-hidden="true" />
+            <Search className="size-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/85" aria-hidden="true" />
             <Input
               type="text"
               value={query}
@@ -215,7 +217,7 @@ export default memo(function AgentTaskList({
                 onClick={() => setOldestFirst((v) => !v)}
                 aria-label={oldestFirst ? t("agents.tasklist_sort_newest") : t("agents.tasklist_sort_oldest")}
               >
-                {oldestFirst ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />}
+                {oldestFirst ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />}
               </Button>
             </TooltipTrigger>
             <TooltipContent>{oldestFirst ? t("agents.tasklist_sort_newest") : t("agents.tasklist_sort_oldest")}</TooltipContent>
@@ -244,8 +246,8 @@ export default memo(function AgentTaskList({
 
       <div className="divide-y divide-border/70">
         {visibleTasks.map((task, i) => {
-          const taskId = task.id ?? i;
-          const isExpanded = expandedTaskId === taskId;
+          const taskId = String((task as unknown as { id?: unknown; ID?: unknown }).id ?? (task as unknown as { ID?: unknown }).ID ?? `tmp-${i}-${(task.command || "").slice(0, 8)}`);
+          const isExpanded = String(expandedTaskId ?? "") === taskId;
           const tType = task.type || "";
           const command = (task.command || "").substring(0, 60);
           const full = results[taskId];
@@ -275,19 +277,19 @@ export default memo(function AgentTaskList({
                     className="px-4 py-3 flex items-start justify-between gap-3 cursor-pointer transition-colors hover:bg-muted/50"
                   >
                     <div className="flex items-start gap-3 min-w-0 flex-1">
-                      <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border border-border/60 shadow-sm ${getTaskTypeColor(tType)}`}>
+                      <span className={`size-7 rounded-lg flex items-center justify-center shrink-0 border border-border/60 shadow-sm ${getTaskTypeColor(tType)}`}>
                         {getTaskTypeIcon(tType)}
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-xs font-semibold text-foreground truncate">{tType}</span>
                           {(task.command) && (
-                            <span className="text-(--fs-micro-sm) text-muted-foreground/70 font-mono truncate max-w-[220px]">
+                            <span className="text-(--fs-micro-sm) text-muted-foreground/100 font-mono truncate max-w-[220px]">
                               {command}
                             </span>
                           )}
                         </div>
-                        <div className="mt-1 flex items-center gap-2 text-(--fs-micro-sm) text-muted-foreground/70">
+                        <div className="mt-1 flex items-center gap-2 text-(--fs-micro-sm) text-muted-foreground/100">
                           <span className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 font-mono">#{taskId}</span>
                           {task.created_by && <span className="truncate">{task.created_by}</span>}
                         </div>
@@ -300,37 +302,37 @@ export default memo(function AgentTaskList({
                       )}
                       <Tooltip>
                         <TooltipTrigger>
-                          <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-1 text-(--fs-micro-sm) text-muted-foreground/70 whitespace-nowrap">
+                          <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-1 text-(--fs-micro-sm) text-muted-foreground/100 whitespace-nowrap">
                             {(task.created_at) ? timeAgo(String(task.created_at), t) : ""}
                           </span>
                         </TooltipTrigger>
                         <TooltipContent>{String(task.created_at || "")}</TooltipContent>
                       </Tooltip>
-                      <ChevronDown className="w-2.5 h-2.5 text-muted-foreground/70" />
+                      <ChevronDown className="size-2.5 text-muted-foreground/100" />
                     </div>
                   </div>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <div className="border-t border-border/70 bg-muted/20 px-4 pb-4">
                     <div className="grid gap-2 pt-3 text-xs md:grid-cols-2">
-                      <div><span className="text-muted-foreground/70">{t("agents.tasklist_label_id")}</span> <span className="font-mono text-foreground">{taskId}</span></div>
-                      <div><span className="text-muted-foreground/70">{t("agents.tasklist_label_type")}</span> <span className="text-foreground">{tType}</span></div>
-                      <div><span className="text-muted-foreground/70">{t("agents.tasklist_label_created")}</span> <span className="text-foreground">{task.created_at ? formatTime(String(task.created_at)) : "\u2014"}</span></div>
-                      {(task.created_by) && <div><span className="text-muted-foreground/70">{t("agents.tasklist_label_by")}</span> <span className="text-foreground">{task.created_by}</span></div>}
-                      {(task.command) && <div className="md:col-span-2"><span className="text-muted-foreground/70">{t("agents.tasklist_label_command")}</span> <span className="font-mono text-foreground break-all">{task.command}</span></div>}
+                      <div><span className="text-muted-foreground/100">{t("agents.tasklist_label_id")}</span> <span className="font-mono text-foreground">{taskId}</span></div>
+                      <div><span className="text-muted-foreground/100">{t("agents.tasklist_label_type")}</span> <span className="text-foreground">{tType}</span></div>
+                      <div><span className="text-muted-foreground/100">{t("agents.tasklist_label_created")}</span> <span className="text-foreground">{task.created_at ? formatTime(String(task.created_at)) : "\u2014"}</span></div>
+                      {(task.created_by) && <div><span className="text-muted-foreground/100">{t("agents.tasklist_label_by")}</span> <span className="text-foreground">{task.created_by}</span></div>}
+                      {(task.command) && <div className="md:col-span-2"><span className="text-muted-foreground/100">{t("agents.tasklist_label_command")}</span> <span className="font-mono text-foreground break-all">{task.command}</span></div>}
                       {resultText ? (
                         <div className="md:col-span-2">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-muted-foreground/70">{t("agents.tasklist_label_result")}</span>
+                            <span className="text-muted-foreground/100">{t("agents.tasklist_label_result")}</span>
                             <div className="flex items-center gap-1">
                               {resultText.length > MAX_RESULT_CHARS && (
-                                <span className="text-(--fs-micro-sm) text-muted-foreground/70">{t("agents.tasklist_result_truncated")}</span>
+                                <span className="text-(--fs-micro-sm) text-muted-foreground/100">{t("agents.tasklist_result_truncated")}</span>
                               )}
                               <Button variant="ghost" size="xs" onClick={copyResult} className="text-(--fs-micro-sm) text-muted-foreground hover:text-foreground gap-1">
-                                <Copy className="w-3 h-3" /> {t("agents.tasklist_copy_result")}
+                                <Copy className="size-3" /> {t("agents.tasklist_copy_result")}
                               </Button>
                               <Button variant="ghost" size="xs" onClick={downloadResult} className="text-(--fs-micro-sm) text-muted-foreground hover:text-foreground gap-1">
-                                <Download className="w-3 h-3" /> {t("agents.tasklist_download_result")}
+                                <Download className="size-3" /> {t("agents.tasklist_download_result")}
                               </Button>
                             </div>
                           </div>
@@ -338,10 +340,10 @@ export default memo(function AgentTaskList({
                         </div>
                       ) : (hasFullResult ? null : (
                         isExpanded ? (
-                          <div className="md:col-span-2"><span className="text-muted-foreground/70">{t("agents.tasklist_label_result")}</span><div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground/70"><Spinner size="xs" />{t("agents.tasklist_loading_result")}</div></div>
+                          <div className="md:col-span-2"><span className="text-muted-foreground/100">{t("agents.tasklist_label_result")}</span><div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground/100"><Spinner size="xs" />{t("agents.tasklist_loading_result")}</div></div>
                         ) : null
                       ))}
-                      {((full?.error ?? task.error)) && <div className="md:col-span-2"><span className="text-muted-foreground/70">{t("agents.tasklist_label_error")}</span><pre className="mt-1 max-h-32 overflow-y-auto rounded-lg border border-destructive/20 bg-destructive/10 p-3 font-mono text-xs text-destructive whitespace-pre-wrap break-all">{full?.error ?? task.error}</pre></div>}
+                      {((full?.error ?? task.error)) && <div className="md:col-span-2"><span className="text-muted-foreground/100">{t("agents.tasklist_label_error")}</span><pre className="mt-1 max-h-32 overflow-y-auto rounded-lg border border-destructive/20 bg-destructive/10 p-3 font-mono text-xs text-destructive whitespace-pre-wrap break-all">{full?.error ?? task.error}</pre></div>}
                     </div>
                   </div>
                 </CollapsibleContent>
@@ -350,7 +352,7 @@ export default memo(function AgentTaskList({
           );
         })}
         {visibleTasks.length === 0 && (
-          <div className="px-4 py-8 text-center text-xs text-muted-foreground/70">{t("agents.tasklist_no_match")}</div>
+          <div className="px-4 py-8 text-center text-xs text-muted-foreground/100">{t("agents.tasklist_no_match")}</div>
         )}
       </div>
       {!showAll && tasks.length > MAX_VISIBLE_TASKS && (

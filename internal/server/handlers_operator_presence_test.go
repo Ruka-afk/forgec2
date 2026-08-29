@@ -5,6 +5,18 @@ import (
 	"time"
 )
 
+// newPresenceSession builds a WSOperatorSession suitable for presence tests
+// (lastSeenNano is atomic, so it must be set after construction).
+func newPresenceSession(userID uint, username string, agentView string, lastSeen time.Time) *WSOperatorSession {
+	s := &WSOperatorSession{
+		UserID:    userID,
+		Username:  username,
+		AgentView: agentView,
+	}
+	s.lastSeenNano.Store(lastSeen.UnixNano())
+	return s
+}
+
 // TestActiveOperatorsForAgent verifies that the tracker correctly identifies
 // operators viewing a specific agent within the heartbeat window.
 func TestActiveOperatorsForAgent(t *testing.T) {
@@ -12,26 +24,11 @@ func TestActiveOperatorsForAgent(t *testing.T) {
 	now := time.Now()
 
 	// alice is viewing agent-1, recently active
-	tr.sessions[1] = &WSOperatorSession{
-		UserID:   1,
-		Username: "alice",
-		AgentView: "agent-1",
-		LastSeen:  now,
-	}
+	tr.sessions[1] = newPresenceSession(1, "alice", "agent-1", now)
 	// bob is viewing agent-1, but stale (beyond heartbeat window)
-	tr.sessions[2] = &WSOperatorSession{
-		UserID:   2,
-		Username: "bob",
-		AgentView: "agent-1",
-		LastSeen:  now.Add(-2 * operatorHeartbeatTimeout),
-	}
+	tr.sessions[2] = newPresenceSession(2, "bob", "agent-1", now.Add(-2*operatorHeartbeatTimeout))
 	// carol is viewing agent-2, recently active
-	tr.sessions[3] = &WSOperatorSession{
-		UserID:   3,
-		Username: "carol",
-		AgentView: "agent-2",
-		LastSeen:  now,
-	}
+	tr.sessions[3] = newPresenceSession(3, "carol", "agent-2", now)
 
 	// Query for agent-1, excluding alice (user 1) — only active operators, excluding self
 	others := tr.ActiveOperatorsForAgent("agent-1", 1)
@@ -63,9 +60,9 @@ func TestActiveOperatorCount(t *testing.T) {
 	tr := &operatorSessionTracker{sessions: make(map[uint]*WSOperatorSession)}
 	now := time.Now()
 
-	tr.sessions[1] = &WSOperatorSession{UserID: 1, LastSeen: now}
-	tr.sessions[2] = &WSOperatorSession{UserID: 2, LastSeen: now.Add(-2 * operatorHeartbeatTimeout)}
-	tr.sessions[3] = &WSOperatorSession{UserID: 3, LastSeen: now}
+	tr.sessions[1] = newPresenceSession(1, "", "", now)
+	tr.sessions[2] = newPresenceSession(2, "", "", now.Add(-2*operatorHeartbeatTimeout))
+	tr.sessions[3] = newPresenceSession(3, "", "", now)
 
 	if count := tr.ActiveOperatorCount(); count != 2 {
 		t.Fatalf("expected 2 active, got %d", count)
@@ -77,9 +74,9 @@ func TestOperatorPresenceSnapshot(t *testing.T) {
 	tr := &operatorSessionTracker{sessions: make(map[uint]*WSOperatorSession)}
 	now := time.Now()
 
-	tr.sessions[1] = &WSOperatorSession{UserID: 1, Username: "alice", AgentView: "agent-1", LastSeen: now}
-	tr.sessions[2] = &WSOperatorSession{UserID: 2, Username: "bob", AgentView: "", LastSeen: now}
-	tr.sessions[3] = &WSOperatorSession{UserID: 3, Username: "carol", AgentView: "agent-2", LastSeen: now.Add(-2 * operatorHeartbeatTimeout)}
+	tr.sessions[1] = newPresenceSession(1, "alice", "agent-1", now)
+	tr.sessions[2] = newPresenceSession(2, "bob", "", now)
+	tr.sessions[3] = newPresenceSession(3, "carol", "agent-2", now.Add(-2*operatorHeartbeatTimeout))
 
 	snap := tr.OperatorPresenceSnapshot()
 	if len(snap) != 2 {
@@ -125,12 +122,7 @@ func TestSoftLockBlocksTask(t *testing.T) {
 
 	// Set up a fake operator session viewing agent-lock-test
 	s.operatorSessions = &operatorSessionTracker{sessions: make(map[uint]*WSOperatorSession)}
-	s.operatorSessions.sessions[99] = &WSOperatorSession{
-		UserID:   99,
-		Username: "other_operator",
-		AgentView: "agent-lock-test",
-		LastSeen:  time.Now(),
-	}
+	s.operatorSessions.sessions[99] = newPresenceSession(99, "other_operator", "agent-lock-test", time.Now())
 
 	// Create task without caller — should succeed (no soft-lock check)
 	task, err := s.createTask("agent-lock-test", "shell", "whoami", "", "", "", 0, 0)
@@ -162,12 +154,8 @@ func TestSoftLockSkippedForStaleOperator(t *testing.T) {
 	s := newTasksTestServer(t)
 
 	s.operatorSessions = &operatorSessionTracker{sessions: make(map[uint]*WSOperatorSession)}
-	s.operatorSessions.sessions[99] = &WSOperatorSession{
-		UserID:   99,
-		Username: "stale_operator",
-		AgentView: "agent-stale-test",
-		LastSeen:  time.Now().Add(-2 * operatorHeartbeatTimeout), // stale
-	}
+	s.operatorSessions.sessions[99] = newPresenceSession(99, "stale_operator", "agent-stale-test",
+		time.Now().Add(-2*operatorHeartbeatTimeout)) // stale
 
 	// Should succeed — stale operator doesn't block
 	task, err := s.createTask("agent-stale-test", "shell", "whoami", "", "", "", 0, 0, WithCaller(1))

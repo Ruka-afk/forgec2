@@ -31,14 +31,14 @@ function PersistQualityMark({ quality }: { quality: DestQuality }) {
 }
 
 const PERSISTENCE_METHODS: { key: string; labelKey: string; icon: React.ReactNode }[] = [
-  { key: "registry", labelKey: "agents.persistence_registry", icon: <Settings className="w-4 h-4" /> },
-  { key: "scheduled_task", labelKey: "agents.persistence_scheduled_task", icon: <CalendarCheck className="w-4 h-4" /> },
-  { key: "startup_folder", labelKey: "agents.persistence_startup_folder", icon: <FolderOpen className="w-4 h-4" /> },
-  { key: "wmi", labelKey: "agents.persistence_wmi", icon: <Cog className="w-4 h-4" /> },
-  { key: "service", labelKey: "agents.persistence_service", icon: <Server className="w-4 h-4" /> },
-  { key: "image_file", labelKey: "agents.persistence_ifeo", icon: <Puzzle className="w-4 h-4" /> },
-  { key: "com_hijack", labelKey: "agents.persistence_com_hijack", icon: <Boxes className="w-4 h-4" /> },
-  { key: "dll_search_order", labelKey: "agents.persistence_dll_hijack", icon: <LinkIcon className="w-4 h-4" /> },
+  { key: "registry", labelKey: "agents.persistence_registry", icon: <Settings className="size-4" /> },
+  { key: "scheduled_task", labelKey: "agents.persistence_scheduled_task", icon: <CalendarCheck className="size-4" /> },
+  { key: "startup_folder", labelKey: "agents.persistence_startup_folder", icon: <FolderOpen className="size-4" /> },
+  { key: "wmi", labelKey: "agents.persistence_wmi", icon: <Cog className="size-4" /> },
+  { key: "service", labelKey: "agents.persistence_service", icon: <Server className="size-4" /> },
+  { key: "image_file", labelKey: "agents.persistence_ifeo", icon: <Puzzle className="size-4" /> },
+  { key: "com_hijack", labelKey: "agents.persistence_com_hijack", icon: <Boxes className="size-4" /> },
+  { key: "dll_search_order", labelKey: "agents.persistence_dll_hijack", icon: <LinkIcon className="size-4" /> },
 ];
 
 export default function AgentPersistencePage() {
@@ -155,7 +155,7 @@ export default function AgentPersistencePage() {
     return (
       <PageContainer>
         <div className="text-center py-20">
-          <Bug className="w-4 h-4" aria-hidden="true" />
+          <Bug className="size-4" aria-hidden="true" />
           <h2 className="text-xl font-semibold text-foreground mb-2">{t("agents.persistence_not_found_title")}</h2>
           <p className="text-sm text-muted-foreground mb-6">{t("agents.persistence_not_found_desc")}</p>
           <Button render={<Link href="/agents" />}>
@@ -171,13 +171,13 @@ export default function AgentPersistencePage() {
       <Card className="p-(--card-spacing) mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-lg bg-primary/15 flex items-center justify-center">
-              <LinkIcon className="w-4 h-4" aria-hidden="true" />
+            <div className="size-14 rounded-lg bg-primary/15 flex items-center justify-center">
+              <LinkIcon className="size-4" aria-hidden="true" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl font-bold text-foreground">{hostname}</h1>
-                <span className={`w-2.5 h-2.5 rounded-full ${statusColor}`}></span>
+                <span className={`size-2.5 rounded-full ${statusColor}`}></span>
                 <span className="text-xs font-medium text-muted-foreground">{agentStatus.toUpperCase()}</span>
               </div>
               <p className="text-sm text-muted-foreground mt-1">{t("agents.persistence_title")}</p>
@@ -188,7 +188,7 @@ export default function AgentPersistencePage() {
             size="sm"
             className="flex items-center gap-1.5"
           >
-            <RotateCw className="w-4 h-4" aria-hidden="true" /> {t("agents.persistence_refresh_list")}
+            <RotateCw className="size-4" aria-hidden="true" /> {t("agents.persistence_refresh_list")}
           </Button>
         </div>
       </Card>
@@ -201,7 +201,7 @@ export default function AgentPersistencePage() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <Card className="p-(--card-spacing)">
           <div className="flex items-center gap-2 mb-4">
-            <Plug className="w-4 h-4" aria-hidden="true" />
+            <Plug className="size-4" aria-hidden="true" />
             <h3 className="text-sm font-semibold text-foreground">{t("agents.persistence_install")}</h3>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -238,16 +238,16 @@ export default function AgentPersistencePage() {
         <Card className="p-(--card-spacing)">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <ListChecks className="w-4 h-4" aria-hidden="true" />
+              <ListChecks className="size-4" aria-hidden="true" />
               <h3 className="text-sm font-semibold text-foreground">{t("agents.persistence_installed")} <span className="text-xs font-normal text-muted-foreground">(queued)</span></h3>
             </div>
             <Badge variant="secondary" className="text-(--fs-micro-sm)">{queuedMethods.length}</Badge>
           </div>
           {queuedMethods.length === 0 ? (
             <div className="text-center py-8">
-              <Info className="w-4 h-4 mb-2" />
+              <Info className="size-4 mb-2" />
               <p className="text-xs text-muted-foreground">{t("agents.persistence_no_methods")}</p>
-              <p className="text-[10px] text-muted-foreground mt-1">Queued methods show tasks awaiting beacon; not confirmed on-host.</p>
+              <p className="text-(--fs-micro-sm) text-muted-foreground mt-1">{t("persistence.queued_hint")}</p>
             </div>
           ) : (
             <div className="space-y-2 max-h-[400px] overflow-y-auto">
@@ -260,7 +260,7 @@ export default function AgentPersistencePage() {
                     className="flex items-center justify-between px-4 py-3 bg-card border border-border rounded-lg"
                   >
                     <div className="flex items-center gap-3">
-                      {info?.icon || <Cog className="w-4 h-4 text-primary" />}
+                      {info?.icon || <Cog className="size-4 text-primary" />}
                       <span className="text-sm font-medium text-foreground">{info?.labelKey ? t(info.labelKey) : method}</span>
                     </div>
                     <Button
@@ -273,7 +273,7 @@ export default function AgentPersistencePage() {
                       {isLoading ? (
                         <Spinner size="xs" color="white" />
                       ) : (
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="size-4" />
                       )}
                       {t("agents.persistence_remove")}
                     </Button>

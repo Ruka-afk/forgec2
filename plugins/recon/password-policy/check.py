@@ -131,8 +131,8 @@ def parse_shadow(text):
                     expire_epoch = expire_days * 86400
                     if expire_epoch < now:
                         expired = True
-            except (ValueError, IndexError):
-                pass
+            except (ValueError, IndexError) as exc:
+                print(json.dumps({"level": "error", "message": f"Plugin error: could not parse shadow expiry day count '{parts[7]}': {exc}"}), file=sys.stderr)
         hash_type = "unknown"
         if password_hash.startswith("$1$"):
             hash_type = "md5crypt"

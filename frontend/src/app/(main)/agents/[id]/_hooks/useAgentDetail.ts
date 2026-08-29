@@ -6,6 +6,59 @@ import { paths } from "@/lib/api-paths";
 
 const MIN_RELOAD_INTERVAL_MS = 2000;
 
+interface MergableTask {
+  id?: number | string;
+  ID?: number | string;
+  status?: string;
+  result?: string;
+  error?: string;
+}
+
+/**
+ * Merge a freshly-fetched full snapshot with WS-incremental progress already
+ * present in `prev`. The fetch may have started BEFORE one or more task_update
+ * frames arrived, so a naive replace would clobber those live updates (e.g. a
+ * task that flipped to completed right as the fetch was resolving). This keeps
+ * any status/result/error the WS already advanced that the snapshot hasn't
+ * caught up to yet.
+ */
+function mergeSnapshotWithPrev<T>(snapshot: T, prev: T | null): T {
+  if (!prev || !snapshot) return snapshot;
+  const snap = snapshot as Record<string, unknown>;
+  const old = prev as Record<string, unknown>;
+  if (typeof snap !== "object" || typeof old !== "object") return snapshot;
+
+  const snapTasks = Array.isArray(snap.tasks) ? (snap.tasks as MergableTask[]) : null;
+  const prevTasks = Array.isArray(old.tasks) ? (old.tasks as MergableTask[]) : null;
+  if (!snapTasks || !prevTasks) return snapshot;
+
+  const merged = snapTasks.map((st) => st);
+  const prevById = new Map<number, MergableTask>();
+  for (const pt of prevTasks) {
+    const id = Number(pt.id ?? pt.ID);
+    if (Number.isFinite(id) && id > 0) prevById.set(id, pt);
+  }
+  let changed = false;
+  for (let i = 0; i < merged.length; i++) {
+    const snapTask = merged[i];
+    const id = Number(snapTask.id ?? snapTask.ID);
+    if (!Number.isFinite(id)) continue;
+    const prior = prevById.get(id);
+    if (!prior) continue;
+    // Only adopt WS-advanced fields; never overwrite server truth with a
+    // fallback. A WS frame reflects a more-recent transition than a snapshot
+    // taken earlier, so prefer prior.status/result/error when they differ.
+    const out = { ...snapTask };
+    let taskChanged = false;
+    if (prior.status && snapTask.status !== prior.status) { out.status = prior.status; taskChanged = true; }
+    if (prior.result && snapTask.result !== prior.result) { out.result = prior.result; taskChanged = true; }
+    if (prior.error && snapTask.error !== prior.error) { out.error = prior.error; taskChanged = true; }
+    if (taskChanged) { merged[i] = out; changed = true; }
+  }
+  if (!changed) return snapshot;
+  return { ...snapshot, tasks: merged };
+}
+
 export function useAgentDetail<T>(agentId: string) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
@@ -30,47 +83,52 @@ export function useAgentDetail<T>(agentId: string) {
         lastReloadRef.current = Date.now();
         setLoadError(false);
         hasDataRef.current = true;
-        // Keep the previous snapshot's identity when nothing changed so
-        // memoized children don't re-render on every 30s correction pass.
-        // Stringify once per reload (cached) instead of comparing two full
-        // serializations on every pass.
         setData((prev) => {
-          const snap = JSON.stringify(response);
-          if (prev && lastSnapshotRef.current === snap) return prev;
+          const merged = mergeSnapshotWithPrev<T>(response, prev);
+          const snap = JSON.stringify(merged);
+          if (lastSnapshotRef.current === snap) return prev;
           lastSnapshotRef.current = snap;
-          return response;
+          return merged;
         });
       } catch (error) {
         if ((error as Error).name !== "AbortError") {
-          // Keep the previous snapshot on transient errors so a blip in the
-          // 30s correction pass doesn't blank the whole detail page; the
-          // first load failure (no data yet) still lands on the error view.
           if (!hasDataRef.current) setLoadError(true);
         }
       } finally {
-        setLoading(false);
+        if (!signal?.aborted) setLoading(false);
       }
     },
     [agentId],
   );
 
   /**
-   * Throttled full reload: coalesces bursts of WS events into at most one
-   * refetch per MIN_RELOAD_INTERVAL_MS, trailing-edge style — the latest
-   * request wins, intermediate ones are dropped.
+   * Throttled full reload: coalesces bursts of WS events. Queues trailing
+   * call with latest background flag instead of dropping it.
    */
+  const pendingBackgroundRef = useRef(true);
   const reloadThrottled = useCallback(
     (background = true) => {
       if (!agentId) return;
-      if (pendingReloadRef.current) return;
+      if (pendingReloadRef.current) {
+        pendingBackgroundRef.current = background;
+        clearTimeout(pendingReloadRef.current);
+        const elapsed = Date.now() - lastReloadRef.current;
+        const delay = Math.max(0, MIN_RELOAD_INTERVAL_MS - elapsed);
+        pendingReloadRef.current = setTimeout(() => {
+          pendingReloadRef.current = null;
+          reload(pendingBackgroundRef.current);
+        }, delay);
+        return;
+      }
       const elapsed = Date.now() - lastReloadRef.current;
       if (elapsed >= MIN_RELOAD_INTERVAL_MS) {
         reload(background);
         return;
       }
+      pendingBackgroundRef.current = background;
       pendingReloadRef.current = setTimeout(() => {
         pendingReloadRef.current = null;
-        reload(background);
+        reload(pendingBackgroundRef.current);
       }, MIN_RELOAD_INTERVAL_MS - elapsed);
     },
     [agentId, reload],

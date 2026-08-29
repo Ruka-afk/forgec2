@@ -73,20 +73,21 @@ func buildTestPE64(withSlack bool, importRVA uint32) []byte {
 func TestAddBenignImportsAlreadyPresent(t *testing.T) {
 	data := buildTestPE64(true, 0x1000)
 	// "kernel32" (no extension) normalizes to kernel32.dll, already present.
-	if err := AddBenignImports(data, []string{"kernel32"}); err != nil {
+	if _, err := AddBenignImports(data, []string{"kernel32"}); err != nil {
 		t.Fatalf("already-imported DLL should be a no-op: %v", err)
 	}
-	if err := AddBenignImports(data, nil); err != nil {
+	if _, err := AddBenignImports(data, nil); err != nil {
 		t.Fatalf("empty request should be a no-op: %v", err)
 	}
 }
 
 func TestAddBenignImportsInjectsIntoSlack(t *testing.T) {
 	data := buildTestPE64(true, 0x1000)
-	if err := AddBenignImports(data, []string{"user32.dll"}); err != nil {
+	out, err := AddBenignImports(data, []string{"user32.dll"})
+	if err != nil {
 		t.Fatalf("injection into slack failed: %v", err)
 	}
-	view, err := parseImportView(data)
+	view, err := parseImportView(out)
 	if err != nil {
 		t.Fatalf("re-parse after injection: %v", err)
 	}
@@ -102,33 +103,49 @@ func TestAddBenignImportsInjectsIntoSlack(t *testing.T) {
 	}
 }
 
-func TestAddBenignImportsNoSlack(t *testing.T) {
+// TestAddBenignImportsGrowsWhenPacked upgrades the old "no slack" contract:
+// a packed terminal section is extended (raw+virtual) with aligned zeros so
+// injection always succeeds instead of failing the artifact.
+func TestAddBenignImportsGrowsWhenPacked(t *testing.T) {
 	data := buildTestPE64(false, 0x1000)
-	err := AddBenignImports(data, []string{"user32.dll"})
-	if err == nil {
-		t.Fatal("expected explicit error when there is no slack space")
+	out, err := AddBenignImports(data, []string{"user32.dll"})
+	if err != nil {
+		t.Fatalf("growth fallback failed: %v", err)
 	}
-	if !strings.Contains(err.Error(), "slack") {
-		t.Fatalf("error should mention slack: %v", err)
+	if len(out) <= len(data) {
+		t.Fatal("expected section growth to extend the image")
+	}
+	view, err := parseImportView(out)
+	if err != nil {
+		t.Fatalf("re-parse grown image: %v", err)
+	}
+	found := false
+	for _, n := range view.importedDLLs() {
+		if n == "user32.dll" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("user32.dll missing after growth; imports = %v", view.importedDLLs())
 	}
 }
 
 func TestAddBenignImportsUnknownDLL(t *testing.T) {
 	data := buildTestPE64(true, 0x1000)
-	if err := AddBenignImports(data, []string{"totally_unknown.dll"}); err == nil {
+	if _, err := AddBenignImports(data, []string{"totally_unknown.dll"}); err == nil {
 		t.Fatal("expected error for unknown DLL")
 	}
 }
 
 func TestAddBenignImportsRejectsNonPE(t *testing.T) {
-	if err := AddBenignImports([]byte("hello world"), []string{"user32.dll"}); err == nil {
+	if _, err := AddBenignImports([]byte("hello world"), []string{"user32.dll"}); err == nil {
 		t.Fatal("expected error for non-PE input")
 	}
 }
 
 func TestAddBenignImportsNoImportDirectory(t *testing.T) {
 	data := buildTestPE64(true, 0)
-	if err := AddBenignImports(data, []string{"user32.dll"}); err == nil {
+	if _, err := AddBenignImports(data, []string{"user32.dll"}); err == nil {
 		t.Fatal("expected error for PE without import directory")
 	}
 }

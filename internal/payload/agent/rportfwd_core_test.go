@@ -77,11 +77,21 @@ func TestRportFwdPivot(t *testing.T) {
 	}
 	rportfwdClose(connID)
 
-	// After close the connection must be gone from the registry.
+	// Close marks the leg closed but defers reaping until the residual
+	// outbound frames have been drained by a collect pass (previously the
+	// entry was deleted immediately, dropping the final window of data).
+	for _, f := range rportfwdCollectOutbound() {
+		if f.ConnID == connID && f.Action == "rportfwd_data" && string(f.Data) != "ping" {
+			t.Fatalf("unexpected post-close frame: %+v", f)
+		}
+	}
+
+	// After the draining collect pass the connection must be gone from the
+	// registry (drain-then-reap).
 	rportfwdMu.Lock()
 	_, still := rportfwdConns[connID]
 	rportfwdMu.Unlock()
 	if still {
-		t.Fatal("rportfwd connection not cleaned up after close")
+		t.Fatal("rportfwd connection not cleaned up after close+collect")
 	}
 }

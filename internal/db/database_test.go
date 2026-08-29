@@ -52,6 +52,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		&AgentLock{},
 		&ExtC2Channel{},
 		&BackupCode{},
+		&SIEMRule{},
 		&KillSwitch{},
 	)
 	if err != nil {

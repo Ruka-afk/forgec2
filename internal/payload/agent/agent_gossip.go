@@ -159,6 +159,12 @@ func handleGossipResponse(data GossipData, latency float64) {
 	defer peerTableMu.Unlock()
 
 	existing, ok := peerTable[data.AgentID]
+	if ok {
+		// Always refresh LastSeen so an active peer is never pruned just
+		// because its advertised route is not better than the recorded one.
+		existing.LastSeen = time.Now()
+		peerTable[data.AgentID] = existing
+	}
 	if !ok || data.Hops < existing.Hops {
 		peerTable[data.AgentID] = PeerInfo{
 			AgentID:  data.AgentID,

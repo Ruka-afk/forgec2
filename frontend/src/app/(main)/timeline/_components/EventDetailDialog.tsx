@@ -52,7 +52,7 @@ export default function EventDetailDialog({ event, onClose }: EventDetailDialogP
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("timeline.type")}</span>
             <p className="text-sm mt-0.5">
               <Badge variant={variantFor(getEventType(event))}>
-                <span className={`w-1.5 h-1.5 rounded-full ${colorFor(getEventType(event)).dot}`}></span>
+                <span className={`size-1.5 rounded-full ${colorFor(getEventType(event)).dot}`}></span>
                 {getEventType(event)}
               </Badge>
             </p>
@@ -83,7 +83,7 @@ export default function EventDetailDialog({ event, onClose }: EventDetailDialogP
             <div className="pt-2">
               <Link href={safeHref(getEventUrl(event))!}>
                 <Button className="gap-2">
-                  <ExternalLink className="w-4 h-4" />
+                  <ExternalLink className="size-4" />
                   <span>{t("timeline.view_related")}</span>
                 </Button>
               </Link>

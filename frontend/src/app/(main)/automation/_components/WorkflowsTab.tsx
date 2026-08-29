@@ -74,7 +74,7 @@ export function WorkflowsTab() {
     setShowEditor(true);
   }
 
-  async function handleSave(payload: { name: string; description: string; scope_type: string; scope_ids: string[]; steps: WorkflowStep[] }) {
+  async function handleSave(payload: { name: string; description: string; scope_type: string; scope_ids: string; steps: WorkflowStep[] }) {
     try {
       const data = editWf
         ? await api.putJson(paths.workflows.one(editWf.id), payload)
@@ -94,31 +94,43 @@ export function WorkflowsTab() {
     } catch { toast.error(t("workflows.toast.delete_failed")); }
   }
 
+  // In-flight guards: double-clicking Execute queued every command twice on
+  // every scoped agent; double-toggling flipped enabled twice (net no-op)
+  // while writing two audit rows.
+  const [execBusy, setExecBusy] = useState<string>("");
+  const [toggleBusy, setToggleBusy] = useState<string>("");
+
   async function handleToggle(w: Workflow) {
+    if (!w.id || toggleBusy === w.id) return;
+    setToggleBusy(w.id);
     try {
       await api.post(`${paths.workflows.one(w.id)}/toggle`);
       void fetchWorkflows();
     } catch { toast.error(t("workflows.toast.toggle_failed")); }
+    finally { setToggleBusy(""); }
   }
 
   async function handleExecute(w: Workflow) {
+    if (!w.id || execBusy === w.id) return;
+    setExecBusy(w.id);
     try {
       const data = await api.postJson(`${paths.workflows.one(w.id)}/execute`, {});
       if (data.success) { toast.success(t("workflows.toast.executed", { task_count: String(data.task_count), agents_count: String(data.agents_count) })); } else { toast.error((data.error as string)); }
     } catch { toast.error(t("workflows.toast.execute_failed")); }
+    finally { setExecBusy(""); }
   }
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center text-primary"><Workflow className="w-4 h-4" /></div>
+          <div className="size-8 bg-primary/10 rounded-lg flex items-center justify-center text-primary"><Workflow className="size-4" /></div>
           <div>
             <h2 className="text-sm font-semibold text-foreground">{t("workflows.title")}</h2>
             <p className="text-xs text-muted-foreground">{t("workflows.subtitle")}</p>
           </div>
         </div>
-        <Button onClick={openCreate} size="sm"><Plus className="w-4 h-4" /> {t("workflows.new")}</Button>
+        <Button onClick={openCreate} size="sm"><Plus className="size-4" /> {t("workflows.new")}</Button>
       </div>
 
       <DataState
@@ -150,18 +162,18 @@ export function WorkflowsTab() {
                 <div className="flex gap-1.5">
                   <Tooltip>
                     <TooltipTrigger render={<Button variant="outline" size="xs" onClick={() => setHistoryWfId(w.id)} aria-label={t("workflows.exec_history")} />}>
-                      <History className="w-4 h-4" />
+                      <History className="size-4" />
                     </TooltipTrigger>
                     <TooltipContent>{t("workflows.exec_history")}</TooltipContent>
                   </Tooltip>
                   <Tooltip>
-                    <TooltipTrigger render={<Button variant="outline" size="xs" onClick={() => handleExecute(w)} aria-label={t("workflows.execute_now")} className="border-success text-success hover:bg-success/15" />}>
-                      <Play className="w-4 h-4" />
+                    <TooltipTrigger render={<Button variant="outline" size="xs" disabled={execBusy === w.id} onClick={() => handleExecute(w)} aria-label={t("workflows.execute_now")} className="border-success text-success hover:bg-success/15" />}>
+                      <Play className="size-4" />
                     </TooltipTrigger>
                     <TooltipContent>{t("workflows.execute_now")}</TooltipContent>
                   </Tooltip>
                   <Button variant="outline" size="xs" onClick={() => openEdit(w)}>{t("workflows.edit")}</Button>
-                  <Button variant="outline" size="xs" onClick={() => handleToggle(w)}>{w.enabled ? t("workflows.disable") : t("workflows.enable")}</Button>
+                  <Button variant="outline" size="xs" disabled={toggleBusy === w.id} onClick={() => handleToggle(w)}>{w.enabled ? t("workflows.disable") : t("workflows.enable")}</Button>
                   <Button variant="destructive" size="xs" onClick={() => setDeleteId(w.id)}>{t("workflows.delete")}</Button>
                 </div>
               </div>
@@ -169,7 +181,7 @@ export function WorkflowsTab() {
               <div className="flex flex-col gap-1 mt-2">
                 {w.steps.map((s) => (
                   <div key={s.step_order} className="flex items-center gap-2 px-2.5 py-1.5 rounded bg-muted text-xs">
-                    <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-(--fs-micro-sm) font-semibold">{s.step_order}</span>
+                    <span className="size-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-(--fs-micro-sm) font-semibold">{s.step_order}</span>
                     <span className="font-semibold text-primary min-w-[80px]">{s.task_type}</span>
                     <span className="flex-1 font-mono text-foreground truncate">{s.command?.substring(0, 60)}</span>
                     <span className="text-muted-foreground">{s.shell} &middot; {s.timeout_sec}s{s.stop_on_failure ? ` \u00b7 ${t("workflows.stop_on_fail")}` : ""}{s.condition ? ` \u00b7 if: ${s.condition}` : ""}{(s.repeat_count ?? 0) > 0 ? ` \u00b7 repeat ${s.repeat_count}x` : ""}</span>

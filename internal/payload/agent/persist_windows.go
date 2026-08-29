@@ -14,8 +14,8 @@ import (
 	"unsafe"
 )
 
-func addPersistenceLinux() error  { return nil }
-func addPersistenceDarwin() error { return nil }
+func addPersistenceLinux() error  { return fmt.Errorf("persistence: linux not supported on windows") }
+func addPersistenceDarwin() error { return fmt.Errorf("persistence: darwin not supported on windows") }
 
 func addPersistenceWindows() {
 	srcPath, err := os.Executable()

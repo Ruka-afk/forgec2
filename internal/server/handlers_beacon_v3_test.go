@@ -37,9 +37,12 @@ func initV3BeaconServer(t *testing.T, database *gorm.DB, masterHex string) *Serv
 		wsClients:             make(map[*websocket.Conn]*wsClientConn),
 		agentPendingTasks:     make(map[string]int),
 		screenMonitorImplants: make(map[string]time.Time),
+		rportfwdListeners:     make(map[string]*rportfwdRelay),
+		lportfwdTargets:       make(map[string]*lportfwdTarget),
 	}
 	s.configMu.Lock()
 	s.cfg.Server.BeaconKey = masterHex
+	s.cfg.Server.LPortFwdEnabled = true
 	s.configMu.Unlock()
 	return s
 }

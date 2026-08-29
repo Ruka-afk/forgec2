@@ -37,17 +37,17 @@ func getPlatformSecurityInfo() (string, bool, string) {
 				uintptr(needed),
 				uintptr(unsafe.Pointer(&needed)),
 			)
-		// Parse TOKEN_INFORMATION_CLASS 25 (TokenIntegrityLevel) buffer:
-	// first 8 bytes = pointer to SID, followed by SID sub-authority count and RIDs
-	if ret2 != 0 && len(buf) >= 8 {
+			// Parse TOKEN_INFORMATION_CLASS 25 (TokenIntegrityLevel) buffer:
+			// first 8 bytes = pointer to SID, followed by SID sub-authority count and RIDs
+			if ret2 != 0 && len(buf) >= 8 {
 				// Read SID pointer from token info buffer, then extract sub-authority count
-			sidPtr := *(*uintptr)(unsafe.Pointer(&buf[0]))
+				sidPtr := *(*uintptr)(unsafe.Pointer(&buf[0]))
 				if sidPtr != 0 {
 					// SID offset 1: SubAuthorityCount; offset 8+: SubAuthority array
-				subCount := *(*uint8)(unsafe.Pointer(sidPtr + 1))
+					subCount := *(*uint8)(unsafe.Pointer(sidPtr + 1))
 					if subCount > 0 {
 						// Read last SubAuthority (RID) from SID to determine integrity level
-					rid := *(*uint32)(unsafe.Pointer(sidPtr + 8 + uintptr(subCount-1)*4))
+						rid := *(*uint32)(unsafe.Pointer(sidPtr + 8 + uintptr(subCount-1)*4))
 						switch {
 						case rid >= 16384:
 							integrity = "System"
@@ -73,6 +73,32 @@ func getPlatformSecurityInfo() (string, bool, string) {
 		domain, _ = os.Hostname()
 	}
 	return integrity, elevated, domain
+}
+
+func listProcessesForTree() ([]procNode, error) {
+	snap, _, _ := procCreateToolhelp32Snapshot.Call(TH32CS_SNAPPROCESS, 0)
+	if snap == 0 || snap == ^uintptr(0) {
+		return nil, fmt.Errorf("CreateToolhelp32Snapshot failed")
+	}
+	defer procCloseHandle.Call(snap)
+
+	var pe processEntry32
+	pe.dwSize = uint32(unsafe.Sizeof(pe))
+	ret, _, _ := procProcess32First.Call(snap, uintptr(unsafe.Pointer(&pe)))
+	if ret == 0 {
+		return nil, fmt.Errorf("Process32First failed")
+	}
+	var nodes []procNode
+	for ret != 0 {
+		name := syscall.UTF16ToString(pe.szExeFile[:])
+		nodes = append(nodes, procNode{
+			PID:  int(pe.th32ProcessID),
+			PPID: int(pe.th32ParentProcessID),
+			Name: name,
+		})
+		ret, _, _ = procProcess32Next.Call(snap, uintptr(unsafe.Pointer(&pe)))
+	}
+	return nodes, nil
 }
 
 func findPIDByName(name string) (uint32, error) {

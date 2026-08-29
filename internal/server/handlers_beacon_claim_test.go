@@ -67,6 +67,52 @@ func TestFetchPendingTasksRespectsCapacity(t *testing.T) {
 	}
 }
 
+func TestFetchRelayedChildTasksClaimsOnlyDispatchablePendingTasks(t *testing.T) {
+	database := testutil.SetupTestDB(t)
+	s := &Server{db: database}
+	parentID := "relay-parent"
+	childID := "relay-child"
+	if err := database.Create(&db.Implant{ID: childID, ParentID: parentID}).Error; err != nil {
+		t.Fatalf("create child: %v", err)
+	}
+
+	now := time.Now()
+	oldRunning := db.Task{AgentID: childID, Type: "old", Status: "running", ClaimedBy: parentID, CreatedAt: now.Add(-time.Minute)}
+	invalidUpload := db.Task{AgentID: childID, Type: "upload", Status: "pending", Path: "chunk.bin", CreatedAt: now}
+	validUpload := db.Task{AgentID: childID, Type: "upload", Status: "pending", Path: "chunk.bin", PrevMAC: "previous", MAC: "current", Priority: 2, CreatedAt: now.Add(time.Second)}
+	shellTask := db.Task{AgentID: childID, Type: "shell", Status: "pending", Command: "whoami", CreatedAt: now.Add(2 * time.Second)}
+	for _, task := range []*db.Task{&oldRunning, &invalidUpload, &validUpload, &shellTask} {
+		if err := database.Create(task).Error; err != nil {
+			t.Fatalf("create task: %v", err)
+		}
+	}
+
+	relayed := s.fetchRelayedChildTasks(parentID)
+	if len(relayed) != 1 || relayed[0].AgentID != childID {
+		t.Fatalf("expected one child relay batch, got %+v", relayed)
+	}
+	if len(relayed[0].Tasks) != 2 {
+		t.Fatalf("expected two newly claimed tasks, got %+v", relayed[0].Tasks)
+	}
+	if relayed[0].Tasks[0].ID != validUpload.ID || relayed[0].Tasks[0].PrevMAC != "previous" || relayed[0].Tasks[0].MAC != "current" {
+		t.Fatalf("upload integrity chain was not relayed: %+v", relayed[0].Tasks[0])
+	}
+	if relayed[0].Tasks[1].ID != shellTask.ID {
+		t.Fatalf("unexpected relayed task order: %+v", relayed[0].Tasks)
+	}
+
+	var persistedOld, persistedInvalid db.Task
+	if err := database.First(&persistedOld, oldRunning.ID).Error; err != nil {
+		t.Fatalf("load old running task: %v", err)
+	}
+	if err := database.First(&persistedInvalid, invalidUpload.ID).Error; err != nil {
+		t.Fatalf("load invalid upload: %v", err)
+	}
+	if persistedOld.Status != "running" || persistedInvalid.Status != "pending" {
+		t.Fatalf("non-dispatchable tasks were mutated: old=%+v invalid=%+v", persistedOld, persistedInvalid)
+	}
+}
+
 func TestTaskAcknowledgementPreventsStaleRequeue(t *testing.T) {
 	database := testutil.SetupTestDB(t)
 	s := &Server{db: database}

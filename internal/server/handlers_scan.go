@@ -24,6 +24,60 @@ func (s *Server) handleScannerPage(c *gin.Context) {
 		data[k] = v
 	}
 
+	var agents []db.Implant
+	if err := s.db.Select("id, hostname, ip, status, last_seen").
+		Where("status = ?", "online").
+		Order("last_seen desc").Limit(500).Find(&agents).Error; err != nil {
+		slog.Error("scanner: list agents", "err", err)
+		agents = []db.Implant{}
+	}
+	data["agents"] = agents
+
+	var results []db.ScanResult
+	if err := s.db.Order("created_at desc").Limit(500).Find(&results).Error; err != nil {
+		slog.Error("scanner: list results", "err", err)
+		results = []db.ScanResult{}
+	}
+	uiResults := make([]gin.H, 0, len(results))
+	for _, r := range results {
+		uiResults = append(uiResults, gin.H{
+			"ip": r.TargetIP, "port": r.Port, "protocol": r.Protocol,
+			"status": r.State, "service": r.Service, "version": r.Version, "banner": r.Banner,
+		})
+	}
+	data["results"] = uiResults
+
+	var active []db.Task
+	if err := s.db.Where("type = ? AND status IN ?", "portscan", []string{"pending", "running"}).
+		Order("created_at desc").Limit(100).Find(&active).Error; err != nil {
+		slog.Error("scanner: list active", "err", err)
+		active = []db.Task{}
+	}
+	activeScans := make([]gin.H, 0, len(active))
+	for _, t := range active {
+		activeScans = append(activeScans, gin.H{
+			"id": t.ID, "agent": t.AgentID, "target": t.Command,
+			"type": t.Type, "status": t.Status, "progress": t.Progress,
+			"started_at": t.CreatedAt,
+		})
+	}
+	data["active_scans"] = activeScans
+
+	var history []db.Task
+	if err := s.db.Where("type = ? AND status IN ?", "portscan", []string{"completed", "failed"}).
+		Order("created_at desc").Limit(100).Find(&history).Error; err != nil {
+		slog.Error("scanner: list history", "err", err)
+		history = []db.Task{}
+	}
+	hist := make([]gin.H, 0, len(history))
+	for _, t := range history {
+		hist = append(hist, gin.H{
+			"id": t.ID, "target": t.Command, "type": t.Type,
+			"status": t.Status, "created_at": t.CreatedAt,
+		})
+	}
+	data["history"] = hist
+
 	s.renderPageOrJSON(c, data)
 }
 
@@ -73,6 +127,7 @@ func (s *Server) handleScanTask(c *gin.Context) {
 		portList[i] = strconv.Itoa(p)
 	}
 
+	scanType := c.PostForm("scan_type")
 	command := fmt.Sprintf("%s:%s", target, strings.Join(portList, ","))
 
 	// Create task
@@ -80,6 +135,7 @@ func (s *Server) handleScanTask(c *gin.Context) {
 		AgentID:   agentID,
 		Type:      "portscan",
 		Command:   command,
+		Shell:     scanType,
 		Status:    "pending",
 		CreatedBy: user,
 		CreatedAt: time.Now(),
@@ -199,7 +255,7 @@ func (s *Server) handleExportScanResults(c *gin.Context) {
 	taskID := c.Param("taskId")
 
 	var results []db.ScanResult
-	if err := s.db.Where("task_id = ?", taskID).Order("port asc").Find(&results).Error; err != nil {
+	if err := s.db.WithContext(s.ctx).Where("task_id = ?", taskID).Order("port asc").Find(&results).Error; err != nil {
 		slog.Error("Failed to query scan results for export", "err", err)
 	}
 

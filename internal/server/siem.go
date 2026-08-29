@@ -8,35 +8,38 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/forgec2/forgec2/internal/db"
 )
 
 type SIEMEvent struct {
-	Timestamp  time.Time              `json:"timestamp"`
-	Action     string                 `json:"action"`
-	Resource   string                 `json:"resource"`
-	AgentID    string                 `json:"agent_id,omitempty"`
-	User       string                 `json:"user"`
-	IP         string                 `json:"ip"`
-	Success    bool                   `json:"success"`
-	Error      string                 `json:"error,omitempty"`
-	Details    string                 `json:"details,omitempty"`
-	Hostname   string                 `json:"hostname,omitempty"`
+	Timestamp time.Time `json:"timestamp"`
+	Action    string    `json:"action"`
+	Resource  string    `json:"resource"`
+	AgentID   string    `json:"agent_id,omitempty"`
+	User      string    `json:"user"`
+	IP        string    `json:"ip"`
+	Success   bool      `json:"success"`
+	Error     string    `json:"error,omitempty"`
+	Details   string    `json:"details,omitempty"`
+	Hostname  string    `json:"hostname,omitempty"`
 }
 
 type SIEMWebhook struct {
-	URL        string
-	Token      string
-	Enabled    bool
-	client     *http.Client
-	actions    map[string]bool
-	correlator *EventCorrelator
-	batch      []SIEMEvent
-	batchMu    sync.Mutex
+	URL         string
+	Token       string
+	Enabled     bool
+	server      *Server
+	client      *http.Client
+	actions     map[string]bool
+	correlator  *EventCorrelator
+	batch       []SIEMEvent
+	batchMu     sync.Mutex
 	batchTicker *time.Ticker
-	stopCh     chan struct{}
+	stopCh      chan struct{}
 }
 
-func NewSIEMWebhook(url, token, actions string) *SIEMWebhook {
+func NewSIEMWebhook(s *Server, url, token, actions string) *SIEMWebhook {
 	if url == "" {
 		return nil
 	}
@@ -44,6 +47,7 @@ func NewSIEMWebhook(url, token, actions string) *SIEMWebhook {
 		URL:         url,
 		Token:       token,
 		Enabled:     true,
+		server:      s,
 		client:      &http.Client{Timeout: 10 * time.Second},
 		correlator:  NewEventCorrelator(),
 		batch:       make([]SIEMEvent, 0, 100),
@@ -58,6 +62,32 @@ func NewSIEMWebhook(url, token, actions string) *SIEMWebhook {
 	}
 	go sw.flushLoop()
 	return sw
+}
+
+// ReloadRules re-loads user-authored correlation rules from the DB. If no
+// custom rules are configured (or the DB is unavailable) it falls back to the
+// built-in default rule set.
+func (sw *SIEMWebhook) ReloadRules() {
+	rules := defaultCorrelationRules()
+	if sw.server != nil && sw.server.db != nil {
+		var dbRules []db.SIEMRule
+		if err := sw.server.db.Where("enabled = ?", true).Order("id asc").Find(&dbRules).Error; err != nil {
+			slog.Warn("SIEM: failed to load custom rules, using defaults", "err", err)
+		} else if len(dbRules) > 0 {
+			rules = make([]CorrelationRule, 0, len(dbRules))
+			for _, r := range dbRules {
+				rules = append(rules, CorrelationRule{
+					Name:         r.Name,
+					Action:       r.Action,
+					Window:       time.Duration(r.WindowSec) * time.Second,
+					Threshold:    r.Threshold,
+					AlertAction:  r.AlertAction,
+					AlertDetails: r.AlertDetails,
+				})
+			}
+		}
+	}
+	sw.correlator.SetRules(rules)
 }
 
 func (sw *SIEMWebhook) Send(event SIEMEvent) {
@@ -141,11 +171,11 @@ func (sw *SIEMWebhook) Stop() {
 }
 
 type CorrelationRule struct {
-	Name        string
-	Action      string
-	Window      time.Duration
-	Threshold   int
-	AlertAction string
+	Name         string
+	Action       string
+	Window       time.Duration
+	Threshold    int
+	AlertAction  string
 	AlertDetails string
 }
 
@@ -162,8 +192,8 @@ type EventCorrelator struct {
 	maxWindow time.Duration
 }
 
-func NewEventCorrelator() *EventCorrelator {
-	rules := []CorrelationRule{
+func defaultCorrelationRules() []CorrelationRule {
+	return []CorrelationRule{
 		{
 			Name:         "multi_source_login_failure",
 			Action:       "login_failed",
@@ -205,6 +235,10 @@ func NewEventCorrelator() *EventCorrelator {
 			AlertDetails: "Agent privilege escalation detected",
 		},
 	}
+}
+
+func NewEventCorrelator() *EventCorrelator {
+	rules := defaultCorrelationRules()
 	var maxWindow time.Duration
 	for _, r := range rules {
 		if r.Window > maxWindow {
@@ -216,6 +250,21 @@ func NewEventCorrelator() *EventCorrelator {
 		windows:   make(map[string]*eventWindow),
 		dedup:     make(map[string]time.Time),
 		maxWindow: maxWindow,
+	}
+}
+
+// SetRules atomically replaces the active correlation rule set and recomputes
+// the max-window cleanup bound. Windows are kept so in-flight correlations
+// continue; rule-specific window size is applied at next event.
+func (ec *EventCorrelator) SetRules(rules []CorrelationRule) {
+	ec.mu.Lock()
+	defer ec.mu.Unlock()
+	ec.rules = rules
+	ec.maxWindow = 0
+	for _, r := range rules {
+		if r.Window > ec.maxWindow {
+			ec.maxWindow = r.Window
+		}
 	}
 }
 

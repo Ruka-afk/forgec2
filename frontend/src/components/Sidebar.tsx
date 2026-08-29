@@ -21,7 +21,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { StatusDot } from "@/components/ui/status-dot";
 import { ConnectionDot } from "@/components/ui/connection-dot";
-import { Shield, ChevronDown } from "lucide-react";
+import { Shield, ChevronDown, LayoutGrid, Settings } from "lucide-react";
 import { sidebarNavSections, filterNavByPermissions } from "@/lib/navigation";
 import type { PermissionKey } from "@/lib/permission-keys";
 import {
@@ -75,14 +75,14 @@ const SidebarLogo = memo(function SidebarLogo({
         className={`flex items-center gap-x-2.5 hover:opacity-80 transition-all duration-200 ${collapsed ? 'justify-center w-full' : ''}`}
         aria-label={collapsed ? expandLabel : collapseLabel}
         aria-expanded={!collapsed}>
-        <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary/75 rounded-xl flex items-center justify-center shadow-lg shadow-primary/25 ring-1 ring-primary/20 shrink-0">
-          <Shield className="w-4 h-4 text-primary-foreground" />
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/75 shadow-lg shadow-primary/25 ring-1 ring-primary/20">
+          <Shield className="size-4 text-primary-foreground" />
         </div>
         {!collapsed && (
           <div className="text-left leading-tight">
             <span className="font-bold text-xs tracking-tight text-foreground font-mono">Forge</span>
             <span className="font-bold text-xs tracking-tight text-primary font-mono">C2</span>
-            <div className="mono-eyebrow text-muted-foreground/50">net · ops</div>
+            <div className="mono-eyebrow text-muted-foreground/100">net · ops</div>
           </div>
         )}
       </Button>
@@ -133,9 +133,9 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
               className={`w-full flex items-center gap-x-1 px-2 pt-1 pb-0.5 cursor-pointer select-none transition-colors hover:text-foreground justify-start disabled:opacity-100 disabled:cursor-default ${idx > 0 ? 'mt-2.5 border-t border-border/40 pt-2.5' : ''}`}
             >
               {!section.pinned && (
-                <ChevronDown className={`w-3 h-3 text-muted-foreground transition-transform duration-200 ${(searching || sections[section.titleKey]) ? '' : '-rotate-90'}`} />
+                <ChevronDown className={`size-3 text-muted-foreground transition-transform duration-200 ${(searching || sections[section.titleKey]) ? '' : '-rotate-90'}`} />
               )}
-              <span className="mono-eyebrow text-muted-foreground/60">{t("section." + section.titleKey)}</span>
+              <span className="mono-eyebrow text-muted-foreground/85">{t("section." + section.titleKey)}</span>
               {section.titleKey === "lab" && (
                 <Badge variant="secondary" className="ml-auto px-1.5 py-px text-(--fs-micro) leading-none rounded bg-warning/15 text-warning-foreground font-medium">
                   {t("section.lab_badge")}
@@ -149,14 +149,14 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-x-2.5 rounded-lg transition-all duration-150 hover:translate-x-0.5 ${collapsed ? 'group relative' : ''}
-                  ${collapsed ? 'justify-center px-0 py-2 mx-auto w-10 h-10' : 'px-2 py-1'}
+                className={`flex items-center gap-x-2.5 rounded-lg transition-colors duration-150 ${collapsed ? 'group relative' : ''}
+                  ${collapsed ? 'justify-center px-0 py-2 mx-auto size-10' : 'px-2 py-1.5'}
                   ${isActive(item.href)
-                    ? 'bg-primary/12 text-primary font-medium border-l-2 border-primary shadow-sm'
+                    ? 'nav-item-active bg-primary/12 font-medium text-primary'
                     : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}`}
               >
                 <span className="relative inline-flex">
-                  <Icon className={collapsed ? 'w-5 h-5' : 'w-4 h-4'} />
+                  <Icon className={collapsed ? 'size-5' : 'size-4'} />
                   {collapsed && item.badge === "agents" && stats != null && (stats.online_agents ?? 0) > 0 && (
                     <StatusDot tone="success" size="xs" className="absolute -top-1 -right-2" />
                   )}
@@ -194,19 +194,20 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
   );
 });
 
-const SidebarFooter = memo(function SidebarFooter({ collapsed, connected, reconnectFailed, onlineUsers, currentUsername, t }: {
+const SidebarFooter = memo(function SidebarFooter({ collapsed, connected, reconnectFailed, onlineUsers, currentUsername, t, onOpenTools }: {
   collapsed: boolean;
   connected: boolean;
   reconnectFailed: boolean;
   onlineUsers: Array<{ username: string }>;
   currentUsername: string;
   t: (key: string, params?: Record<string, string | number>) => string;
+  onOpenTools: () => void;
 }) {
   return (
     <div className={`border-t border-border/60 ${collapsed ? 'px-2 py-2' : 'px-3 py-2.5'} space-y-2`}>
       {!collapsed && connected && (
         <div className="space-y-1">
-          <div className="mono-eyebrow text-muted-foreground/50">{t("sidebar.online_operators")}</div>
+          <div className="mono-eyebrow text-muted-foreground/100">{t("sidebar.online_operators")}</div>
           {currentUsername && (
               <div className="flex items-center gap-x-2 text-(--fs-xs-sm) text-foreground font-medium">
                 <StatusDot tone="success" size="xs" pulse />
@@ -221,6 +222,28 @@ const SidebarFooter = memo(function SidebarFooter({ collapsed, connected, reconn
             ))}
         </div>
       )}
+      <div className={collapsed ? "grid gap-1" : "grid grid-cols-2 gap-1.5"}>
+        <Button
+          variant="ghost"
+          size={collapsed ? "icon" : "sm"}
+          onClick={onOpenTools}
+          aria-label={t("sidebar.more_tools")}
+          className={collapsed ? "mx-auto" : "justify-start"}
+        >
+          <LayoutGrid className="size-4" />
+          {!collapsed && <span>{t("sidebar.more_tools")}</span>}
+        </Button>
+        <Button
+          variant="ghost"
+          size={collapsed ? "icon" : "sm"}
+          render={<Link href="/settings" />}
+          aria-label={t("nav.settings")}
+          className={collapsed ? "mx-auto" : "justify-start"}
+        >
+          <Settings className="size-4" />
+          {!collapsed && <span>{t("nav.settings")}</span>}
+        </Button>
+      </div>
       <div role="status" aria-live="polite" className="flex items-center gap-x-2 rounded-md bg-secondary/50 dark:bg-secondary/30 border border-border/40 px-2 py-1.5">
         <ConnectionDot connected={connected} reconnectFailed={reconnectFailed} />
         <span className="mono-cell text-(--fs-micro-sm) text-muted-foreground/80">
@@ -245,6 +268,7 @@ export default function Sidebar() {
   const mobileMenuOpen = useAppStore((s) => s.mobileMenuOpen);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const setMobileMenuOpen = useAppStore((s) => s.setMobileMenuOpen);
+  const setCommandPaletteOpen = useAppStore((s) => s.setCommandPaletteOpen);
   const onlineUsers = useAppStore(useShallow((s) => s.onlineUsers));
   const setOnlineUsers = useAppStore((s) => s.setOnlineUsers);
   const currentUsername = useAppStore((s) => s.currentUsername);
@@ -316,7 +340,7 @@ export default function Sidebar() {
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t("common.search") + "..."}
             aria-label={t("common.search")}
-            className="h-8 bg-secondary/50 text-(--fs-xs-sm) placeholder:text-muted-foreground/70"
+            className="h-8 bg-secondary/50 text-(--fs-xs-sm) placeholder:text-muted-foreground/100"
           />
         </div>
       )}
@@ -341,6 +365,7 @@ export default function Sidebar() {
         onlineUsers={onlineUsers}
         currentUsername={currentUsername}
         t={t}
+        onOpenTools={() => setCommandPaletteOpen(true)}
       />
     </>
   );
@@ -350,7 +375,7 @@ export default function Sidebar() {
     return (
       <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
         <SheetContent side="left" showCloseButton={false}
-          className="w-64 p-0 bg-sidebar border-r border-border">
+          className="w-72 p-0 bg-sidebar border-r border-border">
           <SheetTitle className="sr-only">{t("a11y.navigation")}</SheetTitle>
           <div className="flex flex-col h-full">
             {navContent}
@@ -364,7 +389,7 @@ export default function Sidebar() {
   return (
     <aside className={`flex flex-col overflow-hidden transition-all duration-200 ease-in-out h-screen
       bg-sidebar border-r border-border fixed left-0 top-0 z-40
-      ${collapsed ? 'w-16' : 'w-48'}`}
+      ${collapsed ? 'w-[var(--shell-sidebar-collapsed)]' : 'w-[var(--shell-sidebar-expanded)]'}`}
     >
       {navContent}
     </aside>

@@ -76,6 +76,24 @@ for (const f of files) {
   }
 }
 
+// --- Rule 4: icon/box sizing uses the size-* shorthand, not w-N h-N pairs ---
+// Tailwind v4's `size-N` is the canonical width+height token; paired
+// `w-4 h-4` classes are legacy drift. Only bare numeric pairs are flagged —
+// single-axis utilities (h-6 control heights) and responsive variants are
+// legitimate.
+const PAIR_SIZE_RE = /(?:^|[\s"'{(])([wh])-((?:\d+(?:\.\d+)?))\s+[wh]-\2(?=\s|"|'|$)/g;
+for (const f of files) {
+  if (!/\.(ts|tsx)$/.test(f)) continue;
+  const lines = readFileSync(f, "utf-8").split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    // matchAll (not match): /g + match() drops capture groups.
+    for (const mm of lines[i].matchAll(PAIR_SIZE_RE)) {
+      const pretty = mm[0].trim().replace(/^[^a-z0-9]+|[^a-z0-9]+$/gi, "");
+      errors.push(`${rel(f)}:${i + 1}: paired "${pretty}" — use size-${mm[2]} instead (scripts/unify-icon-sizes.mjs).`);
+    }
+  }
+}
+
 function rel(f) {
   return f.slice(srcRoot.length + 1).replace(/\\/g, "/");
 }

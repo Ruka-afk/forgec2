@@ -19,7 +19,7 @@ function TaskBody({ data }: { data: TaskCounts }) {
     ];
     return { items, total: items.reduce((s, i) => s + i.value, 0) };
   }, [data, t]);
-  if (total === 0) return <p className="text-xs text-muted-foreground/70 text-center py-4">{t("dashboard.no_tasks_yet")}</p>;
+  if (total === 0) return <p className="text-xs text-muted-foreground/100 text-center py-4">{t("dashboard.no_tasks_yet")}</p>;
   return (
     <div className="space-y-2">
       <div className="h-4 rounded-full overflow-hidden flex bg-secondary">
@@ -30,8 +30,8 @@ function TaskBody({ data }: { data: TaskCounts }) {
       <div className="grid grid-cols-4 gap-1 text-(--fs-micro-sm) text-center">
         {items.map((i) => (
           <div key={i.label} className="flex flex-col items-center gap-0.5">
-            <span className={`w-2 h-2 rounded-full ${i.color}`}></span>
-            <span className="text-muted-foreground/70">{i.label}</span>
+            <span className={`size-2 rounded-full ${i.color}`}></span>
+            <span className="text-muted-foreground/100">{i.label}</span>
             <span className="font-mono text-foreground font-medium">{i.value}</span>
           </div>
         ))}
@@ -44,12 +44,21 @@ export default withChartData<TaskCounts>(
   ({ data }) => <TaskBody data={data} />,
   paths.dashboard.taskStatus,
   (raw) => {
-    const d = (raw as { data: Record<string, number> }).data || raw || {};
+    const list = Array.isArray(raw)
+      ? (raw as Array<{ name?: string; status?: string; count?: number; value?: number }>)
+      : [];
+    const countFor = (...labels: string[]) => {
+      const hit = list.find((d) => {
+        const n = String(d.name ?? d.status ?? "").toLowerCase();
+        return labels.includes(n);
+      });
+      return Number(hit?.count ?? hit?.value) || 0;
+    };
     return {
-      completed: Number((d as Record<string, number>).completed) || 0,
-      pending: Number((d as Record<string, number>).pending) || 0,
-      failed: Number((d as Record<string, number>).failed) || 0,
-      running: Number((d as Record<string, number>).running) || 0,
+      completed: countFor("completed", "success"),
+      pending: countFor("pending", "queued"),
+      failed: countFor("failed", "error"),
+      running: countFor("running", "active"),
     };
   },
 );

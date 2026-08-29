@@ -119,7 +119,7 @@ export default function TagsPage() {
           onClick={openCreate}
           className="inline-flex items-center justify-center gap-x-2 px-4 sm:px-5 text-sm font-medium text-primary-foreground min-w-[2.75rem] min-h-[2.75rem]"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="size-4" />
           <span>{t("tags.create")}</span>
         </Button>
       }
@@ -127,18 +127,18 @@ export default function TagsPage() {
       {actionMsg && (
         <div className="mb-3 px-4 py-2 bg-primary/10 dark:bg-primary/20 border border-primary/20 dark:border-primary/40 rounded-lg text-sm text-primary dark:text-primary flex items-center justify-between">
           <span>{actionMsg}</span>
-          <Button variant="ghost" size="icon-sm" onClick={() => setActionMsg(null)} className="text-primary hover:text-primary" aria-label={t("common.dismiss")}><X className="w-4 h-4" /></Button>
+          <Button variant="ghost" size="icon-sm" onClick={() => setActionMsg(null)} className="text-primary hover:text-primary" aria-label={t("common.dismiss")}><X className="size-4" /></Button>
         </div>
       )}
 
       
 
-      <DataState loading={loading} error={error} onRetry={loadTags} empty={!loading && !error && tags.length === 0} emptyIcon={Tag} emptyTitle={t("tags.empty")} emptyMessage={t("tags.empty_desc")} emptyAction={<Button onClick={openCreate} className="inline-flex items-center gap-2 px-4 py-2.5 min-w-[2.75rem] min-h-[2.75rem]"><Plus className="w-4 h-4" /><span>{t("tags.create")}</span></Button>} loadingSkeleton={
+      <DataState loading={loading} error={error} onRetry={loadTags} empty={!loading && !error && tags.length === 0} emptyIcon={Tag} emptyTitle={t("tags.empty")} emptyMessage={t("tags.empty_desc")} emptyAction={<Button onClick={openCreate} className="inline-flex items-center gap-2 px-4 py-2.5 min-w-[2.75rem] min-h-[2.75rem]"><Plus className="size-4" /><span>{t("tags.create")}</span></Button>} loadingSkeleton={
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <Card key={"skel-" + i} className="p-(--card-spacing)">
               <div className="flex items-center gap-3 mb-3">
-                <Skeleton className="w-8 h-8 rounded-full" />
+                <Skeleton className="size-8 rounded-full" />
                 <Skeleton className="h-5 w-24" />
               </div>
               <Skeleton className="h-4 w-16" />
@@ -148,14 +148,14 @@ export default function TagsPage() {
       }>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {tags.map((tag) => (
-            <Card key={tag.id} className="p-(--card-spacing) hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30 transition-all cursor-pointer">
+            <Card key={tag.id} interactive className="p-(--card-spacing)">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3">
                   <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm"
+                    className="size-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm"
                     style={{ backgroundColor: tag.color }}
                   >
-                    <Tag className="w-4 h-4" />
+                    <Tag className="size-4" />
                   </div>
                   <div>
                     <h3 className="font-semibold text-sm text-foreground">{tag.name}</h3>
@@ -168,10 +168,10 @@ export default function TagsPage() {
                         variant="ghost"
                         size="icon"
                         onClick={() => openEdit(tag)}
-                        className="w-8 h-8 text-muted-foreground hover:text-primary min-w-[2.75rem] min-h-[2.75rem]"
+                        className="size-8 text-muted-foreground hover:text-primary min-w-[2.75rem] min-h-[2.75rem]"
                         aria-label={t("tags.a11y_edit")}
                       />}>
-                      <Pencil className="w-4 h-4" />
+                      <Pencil className="size-4" />
                     </TooltipTrigger>
                     <TooltipContent>{t("common.edit")}</TooltipContent>
                   </Tooltip>
@@ -180,10 +180,10 @@ export default function TagsPage() {
                         variant="ghost"
                         size="icon"
                         onClick={() => setDeleteConfirm(tag)}
-                        className="w-8 h-8 text-muted-foreground hover:text-destructive min-w-[2.75rem] min-h-[2.75rem]"
+                        className="size-8 text-muted-foreground hover:text-destructive min-w-[2.75rem] min-h-[2.75rem]"
                         aria-label={t("tags.a11y_delete")}
                       />}>
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="size-4" />
                     </TooltipTrigger>
                     <TooltipContent>{t("common.delete")}</TooltipContent>
                   </Tooltip>
@@ -223,7 +223,7 @@ export default function TagsPage() {
                     size="icon"
                     key={color}
                     onClick={() => setFormColor(color)}
-                    className={"w-8 h-8 rounded-full transition-all min-w-[2.75rem] min-h-[2.75rem] " + (formColor === color ? "ring-2 ring-offset-2 ring-primary dark:ring-offset-background" : "hover:scale-110")}
+                    className={"size-8 rounded-full transition-all min-w-[2.75rem] min-h-[2.75rem] " + (formColor === color ? "ring-2 ring-offset-2 ring-primary dark:ring-offset-background" : "hover:scale-110")}
                     style={{ backgroundColor: color }}
                     aria-label={`Select color ${color}`}
                   />
@@ -235,7 +235,7 @@ export default function TagsPage() {
                   type="color"
                   value={formColor}
                   onChange={(e) => setFormColor(e.target.value)}
-                  className="h-8 w-8 cursor-pointer p-0.5"
+                  className="size-8 cursor-pointer p-0.5"
                 />
                 <span className="text-xs font-mono text-muted-foreground">{formColor}</span>
               </div>

@@ -29,7 +29,7 @@ export default function AccessSection() {
             <Permission key={item.href} perms={item.perms}>
               <Link href={item.href}>
                 <Card className="flex items-start gap-3 p-4 hover:bg-secondary/50 transition-colors">
-                  <Icon className="mt-0.5 h-4 w-4 text-primary shrink-0" />
+                  <Icon className="mt-0.5 size-4 text-primary shrink-0" />
                   <div className="min-w-0">
                     <div className="text-sm font-medium">{t(item.labelKey)}</div>
                     <div className="text-xs text-muted-foreground mt-0.5">{t(item.descKey)}</div>

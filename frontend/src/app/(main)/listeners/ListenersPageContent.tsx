@@ -8,6 +8,8 @@ import { useForm } from "@/lib/hooks/useForm";
 import { FieldError } from "@/components/ui/field-error";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
+import { PageToolbar } from "@/components/ui/page-toolbar";
+import { MetricGrid } from "@/components/ui/metric-grid";
 import { StatusBadge } from "@/components/ui/status-indicator";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Card } from "@/components/ui/card";
@@ -200,11 +202,11 @@ export default function ListenersPageContent() {
       actions={
         <>
           <Button variant="outline" onClick={() => setShowBreakerConfig(true)}>
-            <SlidersHorizontal className="w-4 h-4" />
+            <SlidersHorizontal className="size-4" />
             <span>{t("listeners.breaker_config")}</span>
           </Button>
           <Button onClick={() => setShowCreate(true)}>
-            <Plus className="w-4 h-4" />
+            <Plus className="size-4" />
             <span>{t("listeners.create_listener")}</span>
           </Button>
         </>
@@ -218,19 +220,19 @@ export default function ListenersPageContent() {
         />
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 sm:gap-4 mb-4 sm:mb-6">
-        <Card className="p-(--card-spacing) hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"><StatTile label={t("listeners.total")} value={loading ? "…" : total} icon={<Plug className="w-5 h-5" />} /></Card>
-        <Card className="p-(--card-spacing) hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"><StatTile label={t("listeners.running")} value={loading ? "…" : enabledCount} tone="success" icon={<Power className="w-5 h-5" />} trend={enabledCount === total && total > 0 ? t("dashboard.all_online") : undefined} /></Card>
-        <Card className="p-(--card-spacing) hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"><StatTile label={t("listeners.burned")} value={loading ? "…" : burnedCount} tone={burnedCount > 0 ? "destructive" : "muted"} icon={<Flame className="w-5 h-5" />} /></Card>
-        <Card className="p-(--card-spacing) hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"><StatTile label={t("listeners.http")} value={loading ? "…" : httpCount} icon={<Globe className="w-5 h-5" />} /></Card>
-        <Card className="p-(--card-spacing) hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"><StatTile label={t("listeners.tcp")} value={loading ? "…" : tcpCount} icon={<Network className="w-5 h-5" />} /></Card>
-        <Card className="p-(--card-spacing) hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"><StatTile label={t("listeners.dns")} value={loading ? "…" : dnsCount} tone="primary" icon={<Radio className="w-5 h-5" />} /></Card>
-      </div>
+      <MetricGrid count={6}>
+        <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.total")} value={loading ? "…" : total} icon={<Plug className="size-5" />} /></Card>
+        <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.running")} value={loading ? "…" : enabledCount} tone="success" icon={<Power className="size-5" />} trend={enabledCount === total && total > 0 ? t("dashboard.all_online") : undefined} /></Card>
+        <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.burned")} value={loading ? "…" : burnedCount} tone={burnedCount > 0 ? "destructive" : "muted"} icon={<Flame className="size-5" />} /></Card>
+        <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.http")} value={loading ? "…" : httpCount} icon={<Globe className="size-5" />} /></Card>
+        <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.tcp")} value={loading ? "…" : tcpCount} icon={<Network className="size-5" />} /></Card>
+        <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.dns")} value={loading ? "…" : dnsCount} tone="primary" icon={<Radio className="size-5" />} /></Card>
+      </MetricGrid>
 
-      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+      <PageToolbar>
         <div className="flex gap-2">
           <Select value={typeFilter} onValueChange={(val) => setTypeFilter(typeof val === "string" ? val : "")}>
-            <SelectTrigger className="flex-1 h-11">
+            <SelectTrigger className="flex-1 sm:w-40">
               <SelectValue placeholder={t("listeners.all_types")} />
             </SelectTrigger>
             <SelectContent>
@@ -239,14 +241,15 @@ export default function ListenersPageContent() {
               <SelectItem value="https">HTTPS</SelectItem>
               <SelectItem value="tcp">TCP</SelectItem>
               <SelectItem value="dns">DNS</SelectItem>
-              <SelectItem value="smb">SMB</SelectItem>
               <SelectItem value="icmp">ICMP</SelectItem>
               <SelectItem value="ssh">SSH</SelectItem>
               <SelectItem value="h2c">H2C</SelectItem>
+              <SelectItem value="udp">UDP</SelectItem>
+              <SelectItem value="quic">QUIC</SelectItem>
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={(val) => setStatusFilter(typeof val === "string" ? val : "")}>
-            <SelectTrigger className="flex-1 h-11">
+            <SelectTrigger className="flex-1 sm:w-40">
               <SelectValue placeholder={t("listeners.all_statuses")} />
             </SelectTrigger>
             <SelectContent>
@@ -256,7 +259,7 @@ export default function ListenersPageContent() {
             </SelectContent>
           </Select>
           <Select value={healthFilter} onValueChange={(val) => setHealthFilter(typeof val === "string" ? val : "")}>
-            <SelectTrigger className="flex-1 h-11">
+            <SelectTrigger className="flex-1 sm:w-44">
               <SelectValue placeholder={t("listeners.filter_health_all")} />
             </SelectTrigger>
             <SelectContent>
@@ -266,10 +269,9 @@ export default function ListenersPageContent() {
             </SelectContent>
           </Select>
         </div>
-      </div>
+      </PageToolbar>
 
-      <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
-        <div className="overflow-x-auto scrollbar-thin">
+      <Card className="overflow-hidden">
         <Table>
           <TableHeader className="bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90 sticky top-0 z-10 border-b border-border">
             <TableRow className="hover:bg-transparent">
@@ -341,25 +343,25 @@ export default function ListenersPageContent() {
                             text={`${scheme}://${host}:${port}`}
                             title={t("listeners.copy")}
                             size="icon-xs"
-                            className="w-9 h-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs bg-secondary hover:bg-secondary/80 rounded-lg flex items-center justify-center gap-x-1 text-muted-foreground"
+                            className="size-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs bg-secondary hover:bg-secondary/80 rounded-lg flex items-center justify-center gap-x-1 text-muted-foreground"
                           >
                             {(copied) => (
                               <>
-                                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                                {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
                                 <span className="hidden sm:inline">{t("listeners.copy")}</span>
                               </>
                             )}
                           </CopyButton>
-                         <Button variant="ghost" onClick={() => handleEdit(l)} className="w-9 h-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs bg-secondary/70 hover:bg-secondary text-foreground rounded-lg flex items-center justify-center gap-x-1">
-                            <Pencil className="w-4 h-4" />
+                         <Button variant="ghost" onClick={() => handleEdit(l)} className="size-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs bg-secondary/70 hover:bg-secondary text-foreground rounded-lg flex items-center justify-center gap-x-1">
+                            <Pencil className="size-4" />
                             <span className="hidden sm:inline">{t("listeners.edit")}</span>
                          </Button>
-                         <Button variant="ghost" onClick={() => handleToggle(l)} className={`w-9 h-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs ${enabled ? "bg-warning/15 text-warning hover:bg-warning/15" : "bg-success/15 text-success hover:bg-success/15"} rounded-lg flex items-center justify-center gap-x-1`}>
-                            <Power className="w-4 h-4" />
+                         <Button variant="ghost" onClick={() => handleToggle(l)} className={`size-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs ${enabled ? "bg-warning/15 text-warning hover:bg-warning/15" : "bg-success/15 text-success hover:bg-success/15"} rounded-lg flex items-center justify-center gap-x-1`}>
+                            <Power className="size-4" />
                                <span className="hidden sm:inline">{enabled ? t("listeners.stop") : t("listeners.start")}</span>
                          </Button>
-                          <Button variant="ghost" onClick={() => handleDelete(l)} className="w-9 h-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-lg flex items-center justify-center gap-x-1">
-                           <Trash2 className="w-4 h-4" />
+                          <Button variant="ghost" onClick={() => handleDelete(l)} className="size-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-lg flex items-center justify-center gap-x-1">
+                           <Trash2 className="size-4" />
                              <span className="hidden sm:inline">{t("listeners.delete")}</span>
                          </Button>
                        </div>
@@ -376,18 +378,17 @@ export default function ListenersPageContent() {
             )}
           </TableBody>
         </Table>
-        </div>
         <div className="sm:hidden px-4 py-2 text-center text-xs text-muted-foreground border-t border-border bg-muted">
-          <ArrowLeftRight className="w-4 h-4" /> {t("listeners.swipe_more")}
+          <ArrowLeftRight className="size-4" /> {t("listeners.swipe_more")}
         </div>
       </Card>
 
       <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-primary/10 border border-primary/20 rounded-xl text-xs text-primary">
-        <Info className="w-4 h-4" />
+        <Info className="size-4" />
         <strong>{t("listeners.tip")}</strong> {t("listeners.tip_text")}
       </div>
 
-      <Dialog open={showCreate} onOpenChange={(open) => setShowCreate(open)}>
+      <Dialog open={showCreate} onOpenChange={(open) => { setShowCreate(open); if (open) resetCreate(); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("listeners.create_dialog_title")}</DialogTitle>
@@ -395,7 +396,7 @@ export default function ListenersPageContent() {
           <form onSubmit={handleCreateSubmit} noValidate>
             <div className="space-y-3">
               <div>
-                <Label className="text-xs mb-1" htmlFor="create-name">{t("listeners.field_name")}</Label>
+                <Label required className="text-xs mb-1" htmlFor="create-name">{t("listeners.field_name")}</Label>
                 <Input id="create-name" value={createForm.name} onChange={createChange("name")} onBlur={createBlur("name")}
                   placeholder={t("listeners.name_ph")}
                   aria-invalid={!!(createTouched.name && createErrors.name)}
@@ -413,10 +414,11 @@ export default function ListenersPageContent() {
                     <SelectItem value="https">HTTPS</SelectItem>
                     <SelectItem value="tcp">TCP</SelectItem>
                     <SelectItem value="dns">DNS</SelectItem>
-                    <SelectItem value="smb">SMB</SelectItem>
                     <SelectItem value="icmp">ICMP</SelectItem>
                     <SelectItem value="ssh">SSH</SelectItem>
                     <SelectItem value="h2c">H2C</SelectItem>
+              <SelectItem value="udp">UDP</SelectItem>
+              <SelectItem value="quic">QUIC</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -428,7 +430,7 @@ export default function ListenersPageContent() {
                 {createTouched.host && <FieldError id="create-host-error">{createErrors.host}</FieldError>}
               </div>
               <div>
-                <Label className="text-xs mb-1" htmlFor="create-port">{t("listeners.field_port")}</Label>
+                <Label required className="text-xs mb-1" htmlFor="create-port">{t("listeners.field_port")}</Label>
                 <Input id="create-port" type="number" min="1" max="65535" value={createForm.port} onChange={createChange("port")} onBlur={createBlur("port")}
                   placeholder="8443"
                   aria-invalid={!!(createTouched.port && createErrors.port)}
@@ -495,10 +497,11 @@ export default function ListenersPageContent() {
                     <SelectItem value="https">HTTPS</SelectItem>
                     <SelectItem value="tcp">TCP</SelectItem>
                     <SelectItem value="dns">DNS</SelectItem>
-                    <SelectItem value="smb">SMB</SelectItem>
                     <SelectItem value="icmp">ICMP</SelectItem>
                     <SelectItem value="ssh">SSH</SelectItem>
                     <SelectItem value="h2c">H2C</SelectItem>
+              <SelectItem value="udp">UDP</SelectItem>
+              <SelectItem value="quic">QUIC</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

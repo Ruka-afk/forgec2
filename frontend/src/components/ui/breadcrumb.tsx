@@ -55,17 +55,17 @@ function Breadcrumb() {
 
   return (
     <nav aria-label={t("common.breadcrumb")}>
-      <ol className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
+      <ol className="flex items-center gap-1.5 text-xs text-muted-foreground/100">
         {items.map((item, i) => {
           const isLast = i === items.length - 1;
           return (
             <li key={item.label} className="flex items-center gap-1.5">
-              {i > 0 && <ChevronSep className="w-3.5 h-3.5 shrink-0 text-muted-foreground/30" />}
+              {i > 0 && <ChevronSep className="size-3.5 shrink-0 text-muted-foreground/85" />}
               {isLast ? (
                 <span className="mono-cell font-medium text-foreground truncate max-w-[240px]">{item.label}</span>
               ) : item.href ? (
                 <Link href={item.href} className="mono-eyebrow hover:text-foreground transition-colors truncate max-w-[140px]">
-                  {i === 0 ? <Home className="w-3.5 h-3.5" aria-hidden="true" /> : item.label}
+                  {i === 0 ? <Home className="size-3.5" aria-hidden="true" /> : item.label}
                 </Link>
               ) : (
                 <span className="truncate max-w-[140px]">{item.label}</span>

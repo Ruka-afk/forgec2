@@ -4,6 +4,7 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { normalizeListEnvelope } from "@/lib/envelope";
+import { useAppStore } from "@/lib/store";
 import { ErrorState } from "@/components/ui/error-state";
 import { FieldError } from "@/components/ui/field-error";
 import { Permission } from "@/components/ui/permission";
@@ -29,6 +30,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Ban, Check, Crown, Key, Laptop, LogOut, Pencil, Plus, Trash2, User as UserIcon, Users } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { EmptyState } from "@/components/ui/empty-state";
 import { formatTime } from "@/lib/utils";
 
 interface User {
@@ -52,8 +54,8 @@ interface UserSession {
 
 function getRoleBadge(role: string) {
   if (role === "admin")
-    return { icon: <Crown className="w-2.5 h-2.5" />, key: "users.role_admin", cls: "bg-primary/10 text-primary dark:bg-primary/25 dark:text-primary" };
-  return { icon: <UserIcon className="w-2.5 h-2.5" />, key: "users.role_user", cls: "bg-info/10 text-info" };
+    return { icon: <Crown className="size-2.5" />, key: "users.role_admin", cls: "bg-primary/10 text-primary dark:bg-primary/25 dark:text-primary" };
+  return { icon: <UserIcon className="size-2.5" />, key: "users.role_user", cls: "bg-info/10 text-info" };
 }
 
 export default function UsersPage() {
@@ -98,6 +100,11 @@ export default function UsersPage() {
   const customRoles = data?.customRoles ?? [];
   const { can } = usePermissions();
   const canManageUsers = can("users.write");
+  // Self-protection: demoting/disabling/deleting the logged-in admin's own
+  // row is a one-way lockout — hide the destructive controls on it.
+  const currentUsername = useAppStore((s) => s.currentUsername);
+  const isSelf = (u: User) =>
+    !!currentUsername && (u.username || "").toLowerCase() === currentUsername.toLowerCase();
 
   const columns: DataTableColumn<User>[] = [
     {
@@ -150,29 +157,38 @@ export default function UsersPage() {
             const name = u.username || "-";
             const urole = u.role || "user";
             const isActive = u.is_active === true;
+            const self = isSelf(u);
             return (
               <div className="flex items-center justify-center gap-1">
-                <Button variant="ghost" size="icon-sm" onClick={() => handleToggle(uid)} disabled={actionLoading === uid + "_toggle"} className={`${isActive ? "text-warning hover:bg-warning/10" : "text-success hover:bg-success/10"}`} title={isActive ? t("users.disable") : t("users.enable")} aria-label={isActive ? t("users.disable") : t("users.enable")}>
-                  {isActive ? <Ban className="w-4 h-4" /> : <Check className="w-4 h-4" />}
-                </Button>
-                <Button variant="ghost" size="icon-sm" onClick={() => { setEditUser(u); setForm({ username: name, password: "", role: urole }); setShowEdit(true); }} className="text-info hover:bg-info/10" title={t("common.edit")} aria-label={t("common.edit")}>
-                  <Pencil className="w-4 h-4" />
-                </Button>
+                {!self && (
+                  <Button variant="ghost" size="icon-sm" onClick={() => handleToggle(uid)} disabled={actionLoading === uid + "_toggle"} className={`${isActive ? "text-warning hover:bg-warning/10" : "text-success hover:bg-success/10"}`} title={isActive ? t("users.disable") : t("users.enable")} aria-label={isActive ? t("users.disable") : t("users.enable")}>
+                    {isActive ? <Ban className="size-4" /> : <Check className="size-4" />}
+                  </Button>
+                )}
+                {!self && (
+                  <Button variant="ghost" size="icon-sm" onClick={() => { setEditUser(u); setForm({ username: name, password: "", role: urole }); setShowEdit(true); }} className="text-info hover:bg-info/10" title={t("common.edit")} aria-label={t("common.edit")}>
+                    <Pencil className="size-4" />
+                  </Button>
+                )}
                 <Button variant="ghost" size="icon-sm" onClick={() => { setPasswordUserId(uid); setNewPassword(""); setShowPasswordModal(true); }} className="text-primary hover:bg-primary/10" title={t("users.set_password")} aria-label={t("users.set_password")}>
-                  <Key className="w-4 h-4" />
+                  <Key className="size-4" />
                 </Button>
                 <Button variant="ghost" size="icon-sm" onClick={() => openSessions(u)} className="text-info hover:bg-info/10" title={t("users.sessions")} aria-label={t("users.sessions")}>
-                  <Laptop className="w-4 h-4" />
+                  <Laptop className="size-4" />
                 </Button>
-                <Button variant="ghost" size="icon-sm" onClick={() => handleForceLogout(uid)} className="text-warning hover:bg-warning/10" title={t("users.force_logout")} aria-label={t("users.force_logout")}>
-                  <LogOut className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="icon-sm" onClick={() => handleKick(uid)} className="text-destructive hover:bg-destructive/10" title={t("users.kick_user")} aria-label={t("users.kick_user")}>
-                  <LogOut className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(uid, name)} disabled={actionLoading === uid + "_delete"} className="text-destructive hover:bg-destructive/10" title={t("common.delete")} aria-label={t("common.delete")}>
-                  <Trash2 className="w-4 h-4" />
-                </Button>
+                {!self && (
+                  <>
+                    <Button variant="ghost" size="icon-sm" onClick={() => handleForceLogout(uid)} className="text-warning hover:bg-warning/10" title={t("users.force_logout")} aria-label={t("users.force_logout")}>
+                      <LogOut className="size-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon-sm" onClick={() => handleKick(uid)} className="text-destructive hover:bg-destructive/10" title={t("users.kick_user")} aria-label={t("users.kick_user")}>
+                      <LogOut className="size-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(uid, name)} disabled={actionLoading === uid + "_delete"} className="text-destructive hover:bg-destructive/10" title={t("common.delete")} aria-label={t("common.delete")}>
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </>
+                )}
               </div>
             );
           },
@@ -333,16 +349,16 @@ export default function UsersPage() {
 
   return (
     <Permission perms="users.read" fallback={
-      <PageContainer title={t("users.title")} icon={<Users className="w-4 h-4" />} subtitle={t("users.subtitle")}>
+      <PageContainer title={t("users.title")} icon={<Users className="size-4" />} subtitle={t("users.subtitle")}>
         <ErrorState title={t("common.denied_title")} message={t("common.denied_desc")} />
       </PageContainer>
     }>
-      <PageContainer title={t("users.title")} icon={<Users className="w-4 h-4" />} subtitle={t("users.subtitle")} actions={<>
+      <PageContainer title={t("users.title")} icon={<Users className="size-4" />} subtitle={t("users.subtitle")} actions={<>
         <div className="flex items-center gap-2 flex-wrap">
           <SearchInput value={search} onChange={setSearch} placeholder={t("users.search_placeholder")} className="w-40 sm:w-48" label={t("common.search")} />
           {canManageUsers && (
             <Button onClick={() => setShowAdd(true)}>
-              <Plus className="w-4 h-4" /> {t("users.add_user")}
+              <Plus className="size-4" /> {t("users.add_user")}
             </Button>
           )}
         </div>
@@ -358,26 +374,26 @@ export default function UsersPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <Card className="p-4 shadow-sm hover:shadow-md transition-shadow duration-200">
           <div className="flex items-center gap-2 mb-2">
-            <Crown className="w-4 h-4" />
+            <Crown className="size-4" />
             <span className="text-sm font-semibold text-primary dark:text-primary">{t("users.role_admin")}</span>
           </div>
           <ul className="text-xs text-primary space-y-1">
-            <li className="flex items-start gap-1.5"><Check className="w-4 h-4" />{t("users.admin_desc_1")}</li>
-            <li className="flex items-start gap-1.5"><Check className="w-4 h-4" />{t("users.admin_desc_2")}</li>
-            <li className="flex items-start gap-1.5"><Check className="w-4 h-4" />{t("users.admin_desc_3")}</li>
-            <li className="flex items-start gap-1.5"><Check className="w-4 h-4" />{t("users.admin_desc_4")}</li>
+            <li className="flex items-start gap-1.5"><Check className="size-4" />{t("users.admin_desc_1")}</li>
+            <li className="flex items-start gap-1.5"><Check className="size-4" />{t("users.admin_desc_2")}</li>
+            <li className="flex items-start gap-1.5"><Check className="size-4" />{t("users.admin_desc_3")}</li>
+            <li className="flex items-start gap-1.5"><Check className="size-4" />{t("users.admin_desc_4")}</li>
           </ul>
         </Card>
         <Card className="p-4 shadow-sm hover:shadow-md transition-shadow duration-200">
           <div className="flex items-center gap-2 mb-2">
-            <UserIcon className="w-4 h-4" />
+            <UserIcon className="size-4" />
             <span className="text-sm font-semibold text-info">{t("users.role_user")}</span>
           </div>
           <ul className="text-xs text-muted-foreground space-y-1">
-            <li className="flex items-start gap-1.5"><Check className="w-4 h-4" />{t("users.user_desc_1")}</li>
-            <li className="flex items-start gap-1.5"><Check className="w-4 h-4" />{t("users.user_desc_2")}</li>
-            <li className="flex items-start gap-1.5"><Check className="w-4 h-4" />{t("users.user_desc_3")}</li>
-            <li className="flex items-start gap-1.5"><Check className="w-4 h-4" />{t("users.user_desc_4")}</li>
+            <li className="flex items-start gap-1.5"><Check className="size-4" />{t("users.user_desc_1")}</li>
+            <li className="flex items-start gap-1.5"><Check className="size-4" />{t("users.user_desc_2")}</li>
+            <li className="flex items-start gap-1.5"><Check className="size-4" />{t("users.user_desc_3")}</li>
+            <li className="flex items-start gap-1.5"><Check className="size-4" />{t("users.user_desc_4")}</li>
           </ul>
         </Card>
       </div>
@@ -501,7 +517,7 @@ export default function UsersPage() {
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground">{t("users.showing", { filtered: String(sessions.length), total: String(sessions.length) })}</span>
             <Button variant="destructive" size="sm" onClick={handleRevokeAll} disabled={sessions.length === 0 || revokeLoading !== null}>
-              <LogOut className="w-4 h-4" /> {t("users.revoke_all_sessions")}
+              <LogOut className="size-4" /> {t("users.revoke_all_sessions")}
             </Button>
           </div>
           {sessionsError && <p className="text-xs text-destructive">{sessionsError}</p>}
@@ -510,10 +526,7 @@ export default function UsersPage() {
               {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
             </div>
           ) : sessions.length === 0 ? (
-            <div className="py-12 text-center text-muted-foreground text-sm">
-              <Laptop className="w-6 h-6 mx-auto mb-2 opacity-50" />
-              {t("users.sessions_empty")}
-            </div>
+            <EmptyState compact icon={Laptop} title={t("users.sessions_empty")} />
           ) : (
             <ScrollArea className="max-h-80">
             <div className="space-y-2">
@@ -529,13 +542,13 @@ export default function UsersPage() {
                       <div className="text-xs text-muted-foreground truncate max-w-md">
                         {(s.user_agent || "-")}{s.device_fingerprint ? ` · ${s.device_fingerprint}` : ""}
                       </div>
-                      <div className="text-xs text-muted-foreground/70">
+                      <div className="text-xs text-muted-foreground/100">
                         {t("users.col_expires")}: {formatTime(s.expires_at)}
                       </div>
                     </div>
                   </div>
                   <Button variant="ghost" size="sm" onClick={() => handleRevokeSession(s.id)} disabled={revokeLoading !== null} className="text-destructive hover:bg-destructive/10 shrink-0">
-                    <LogOut className="w-4 h-4" /> {t("users.revoke_session")}
+                    <LogOut className="size-4" /> {t("users.revoke_session")}
                   </Button>
                 </div>
               ))}

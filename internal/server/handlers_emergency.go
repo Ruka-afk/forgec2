@@ -213,19 +213,23 @@ func (s *Server) handleKillSwitch(c *gin.Context) {
 		if err := s.db.Where("type = ? AND status IN ?", "uninstall", []string{"pending", "running"}).Find(&queued).Error; err != nil {
 			slog.Warn("Kill switch disarm: failed to query queued uninstall tasks", "err", err)
 		} else if len(queued) > 0 {
-			ids := make([]uint, 0, len(queued))
+			// Per-row conditional flip: a task that completed between the
+			// SELECT and the UPDATE must keep its terminal state, and its
+			// slot must not be released twice (the completion path already
+			// decremented it).
 			for _, t := range queued {
-				ids = append(ids, t.ID)
-			}
-			if err := s.db.Model(&db.Task{}).Where("id IN ?", ids).Update("status", "cancelled").Error; err != nil {
-				slog.Warn("Kill switch disarm: failed to cancel queued uninstall tasks", "err", err)
-			} else {
-				reclaimed = len(queued)
-				// These tasks will never be observed as completed, so roll
-				// back the per-agent pending counters that arm/ent incremented.
-				for _, t := range queued {
-					s.decPendingTasks(t.AgentID)
+				res := s.db.Model(&db.Task{}).
+					Where("id = ? AND status IN ?", t.ID, []string{"pending", "running"}).
+					Update("status", "cancelled")
+				if res.Error != nil {
+					slog.Warn("Kill switch disarm: failed to cancel uninstall task", "task_id", t.ID, "err", res.Error)
+					continue
 				}
+				if res.RowsAffected == 0 {
+					continue // already terminal; slot already accounted for
+				}
+				reclaimed++
+				s.decPendingTasks(t.AgentID)
 			}
 		}
 

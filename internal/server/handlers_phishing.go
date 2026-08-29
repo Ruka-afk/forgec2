@@ -295,14 +295,30 @@ func sendPhishingMail(host string, port int, user, pass, from, to, subject, body
 		contentType = "text/html; charset=\"UTF-8\""
 	}
 	msg := strings.Builder{}
-	msg.WriteString(fmt.Sprintf("From: %s\r\n", from))
-	msg.WriteString(fmt.Sprintf("To: %s\r\n", to))
-	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
+	// Header injection guard: Subject/From carry operator/template strings
+	// that are rendered with target emails — any CRLF in them would inject
+	// arbitrary headers (Bcc:) into outbound mail.
+	safeSubject := sanitizeSMTPHeaderValue(subject)
+	safeFrom := sanitizeSMTPHeaderValue(from)
+	msg.WriteString(fmt.Sprintf("From: %s\r\n", safeFrom))
+	msg.WriteString(fmt.Sprintf("To: %s\r\n", sanitizeSMTPHeaderValue(to)))
+	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", safeSubject))
 	msg.WriteString("MIME-Version: 1.0\r\n")
 	msg.WriteString(fmt.Sprintf("Content-Type: %s\r\n", contentType))
 	msg.WriteString("\r\n")
 	msg.WriteString(body)
-	return smtp.SendMail(addr, auth, extractEmailAddr(from), []string{to}, []byte(msg.String()))
+	return smtp.SendMail(addr, auth, extractEmailAddr(safeFrom), []string{to}, []byte(msg.String()))
+}
+
+// sanitizeSMTPHeaderValue strips CR/LF and control characters so a value can
+// never terminate the header line early.
+func sanitizeSMTPHeaderValue(v string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\r' || r == '\n' {
+			return ' '
+		}
+		return r
+	}, strings.TrimSpace(v))
 }
 
 func extractEmailAddr(from string) string {
@@ -321,7 +337,18 @@ func (s *Server) handleAPILaunchPhishingCampaign(c *gin.Context) {
 	if !s.findOrFail(c, &camp, id, "campaign") {
 		return
 	}
-	if camp.Status == "running" {
+
+	// Atomically claim the launch: the old check-then-save let two concurrent
+	// requests both observe "draft" and both start runPhishingCampaign —
+	// emailing every target twice.
+	claim := s.db.Model(&db.PhishingCampaign{}).
+		Where("id = ? AND status <> ?", id, "running").
+		Update("status", "running")
+	if claim.Error != nil {
+		respondError(c, http.StatusInternalServerError, sanitizeError(claim.Error, "Phishing operation"))
+		return
+	}
+	if claim.RowsAffected == 0 {
 		respondError(c, http.StatusBadRequest, "campaign is already running")
 		return
 	}
@@ -365,7 +392,7 @@ func (s *Server) handleAPILaunchPhishingCampaign(c *gin.Context) {
 	baseURL := s.phishingBaseURL()
 	from := tpl.FromEmail
 	if tpl.FromName != "" {
-		from = fmt.Sprintf("%s <%s>", tpl.FromName, tpl.FromEmail)
+		from = fmt.Sprintf("%s <%s>", sanitizeSMTPHeaderValue(tpl.FromName), tpl.FromEmail)
 	}
 	isHTML := tpl.Type != "text" && tpl.Type != "plain"
 

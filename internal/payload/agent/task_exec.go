@@ -79,8 +79,19 @@ func workerLoop() {
 // runTask esbuilds the per-task execution scope (timeout context, abort wiring,
 // goroutine-local context) around executeTask and post-processes the result so
 // an interrupted command surfaces an operator-facing error.
-func runTask(task Task) TaskResult {
+func runTask(task Task) (result TaskResult) {
+	defer func() {
+		if r := recover(); r != nil {
+			result = TaskResult{
+				TaskID: task.ID,
+				Error:  fmt.Sprintf("handler panic: %v", r),
+			}
+		}
+	}()
 	if isTaskAborted(task.ID) {
+		abortMu.Lock()
+		delete(abortedTasks, task.ID)
+		abortMu.Unlock()
 		return TaskResult{
 			TaskID: task.ID,
 			Type:   task.Type,
@@ -98,6 +109,9 @@ func runTask(task Task) TaskResult {
 	if isTaskAborted(task.ID) && res.Error != "" && isCancelRelatedError(res.Error) {
 		res.Error = "task aborted by operator"
 	}
+	abortMu.Lock()
+	delete(abortedTasks, task.ID)
+	abortMu.Unlock()
 	return res
 }
 

@@ -17,6 +17,8 @@ export const BEACON_TRANSPORTS: TransportOption[] = [
   { value: "icmp", label: "ICMP", quality: "experimental" },
   { value: "mtls", label: "mTLS", quality: "experimental" },
   { value: "h2c", label: "H2C", quality: "experimental" },
+  { value: "udp", label: "UDP", quality: "experimental" },
+  { value: "quic", label: "QUIC", quality: "experimental" },
 ];
 
 export function transportQuality(value: string): TransportQuality {

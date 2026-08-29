@@ -34,9 +34,9 @@ export default function AgentStatusBanner() {
       <div className={bannerSurface("warning", "mt-3")} aria-live="polite">
         <Collapsible open={expanded} onOpenChange={setExpanded}>
         <div className="flex items-center gap-3 px-4 py-2.5">
-          <span className="relative flex h-2.5 w-2.5 shrink-0">
+          <span className="relative flex size-2.5 shrink-0">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-warning opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-warning"></span>
+            <span className="relative inline-flex rounded-full size-2.5 bg-warning"></span>
           </span>
 
           <div className="flex-1 flex items-center gap-2 flex-wrap text-sm">
@@ -58,12 +58,12 @@ export default function AgentStatusBanner() {
           </div>
 
           <CollapsibleTrigger render={<Button variant="ghost" size="icon-xs" className="shrink-0 text-warning hover:text-warning/80" aria-label={t("status_banner.toggle_details")} />}>
-            <ChevronDown className="w-3 h-3" />
+            <ChevronDown className="size-3" />
           </CollapsibleTrigger>
 
           <Tooltip>
             <TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => setDismissedSig(sig)} className="shrink-0 text-warning/80 hover:text-warning" aria-label={t("status_banner.dismiss")} />}>
-              <X className="w-3 h-3" />
+              <X className="size-3" />
             </TooltipTrigger>
             <TooltipContent>{t("status_banner.dismiss_hint")}</TooltipContent>
           </Tooltip>

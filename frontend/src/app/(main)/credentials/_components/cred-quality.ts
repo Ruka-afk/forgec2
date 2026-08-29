@@ -16,6 +16,9 @@ const CRED_DUMP_ACTIONS: CredDumpAction[] = [
   { action: "dcsync", quality: "scripted", requiresMimikatzModule: true, endpoint: "mimikatz" },
   { action: "kerberoast", quality: "scripted", requiresMimikatzModule: false, endpoint: "kerberoast" },
   { action: "wifi_creds", quality: "hardened", requiresMimikatzModule: false, endpoint: "wifi_creds" },
+  { action: "cookie_export", quality: "hardened", requiresMimikatzModule: false, endpoint: "cookie_export" },
+  { action: "sccm_recon", quality: "scripted", requiresMimikatzModule: false, endpoint: "sccm_recon" },
+  { action: "entra_prt", quality: "scripted", requiresMimikatzModule: false, endpoint: "entra_prt" },
 ];
 
 export function moduleLooksLikeMimikatz(name: string): boolean {
@@ -66,5 +69,6 @@ export function credActionEndpoint(action: string): string {
 
 /** Harvest buttons shown on the Credentials console (not a new page). */
 export const CRED_HARVEST_ACTIONS: CredDumpAction[] = CRED_DUMP_ACTIONS.filter((a) =>
-  a.action === "creds" || a.action === "mimikatz" || a.action === "kerberoast" || a.action === "wifi_creds",
+  a.action === "creds" || a.action === "mimikatz" || a.action === "kerberoast" || a.action === "wifi_creds"
+  || a.action === "cookie_export" || a.action === "sccm_recon" || a.action === "entra_prt",
 );

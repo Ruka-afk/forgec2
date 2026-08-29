@@ -67,7 +67,7 @@ describe("navigation single source", () => {
     }
   });
 
-  it("pins a console of at most 8 primary items", () => {
+  it("pins the four core operational destinations", () => {
     const primary = NAV_SECTIONS[0];
     expect(primary.pinned).toBe(true);
     expect(primary.items.length).toBeLessThanOrEqual(8);
@@ -75,11 +75,13 @@ describe("navigation single source", () => {
       "/dashboard",
       "/agents",
       "/listeners",
-      "/generate",
-      "/loot",
-      "/credentials",
       "/timeline",
-      "/settings",
     ]);
+  });
+
+  it("keeps settings reachable but outside the scrolling sidebar sections", () => {
+    const hrefs = sidebarNavSections().flatMap((s) => s.items.map((i) => i.href));
+    expect(hrefs).not.toContain("/settings");
+    expect(NAV_BY_HREF["/settings"]).toBe("nav.settings");
   });
 });

@@ -71,7 +71,7 @@ func TestHandleCreateListener_Validation(t *testing.T) {
 	})
 
 	t.Run("unbindable scheme rejected", func(t *testing.T) {
-		for _, scheme := range []string{"wss", "ws", "smb", "grpc", "mtls", "udp"} {
+		for _, scheme := range []string{"wss", "ws", "smb", "grpc", "mtls"} {
 			body := `{"name":"bad-` + scheme + `","scheme":"` + scheme + `","host":"127.0.0.1","port":9443}`
 			w, c := newJSONRequest(http.MethodPost, "/api/listeners", body)
 			s.handleCreateListener(c)
@@ -173,6 +173,9 @@ func TestNormalizeListenerProtocol_SSHandH2C(t *testing.T) {
 		{"protocol h2c", db.Listener{Protocol: "h2c"}, "h2c", "h2c"},
 		{"type ssh", db.Listener{Type: "ssh"}, "ssh", "ssh"},
 		{"type h2c", db.Listener{Type: "h2c"}, "h2c", "h2c"},
+		{"scheme quic", db.Listener{Scheme: "quic"}, "quic", "quic"},
+		{"scheme udp", db.Listener{Scheme: "udp"}, "udp", "udp"},
+		{"type quic", db.Listener{Type: "quic"}, "quic", "quic"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

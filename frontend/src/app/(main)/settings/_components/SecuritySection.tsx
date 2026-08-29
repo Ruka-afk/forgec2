@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { SafeImg } from "@/components/ui/safe-img";
 import { AlertTriangle, Check, CheckCircle, Key, Lock, QrCode, RotateCw, Save, Shield, X } from "lucide-react";
 
 export default function SecuritySection({
@@ -48,7 +49,7 @@ export default function SecuritySection({
       <CardHeaderRow icon={Lock} tone="muted" title={t("settings.security.title")} description={t("settings.security.subtitle")} />
       <div className="p-(--card-spacing) space-y-6">
         <div>
-          <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2"><Key className="w-4 h-4" />{t("settings.security.change_password")}</h3>
+          <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2"><Key className="size-4" />{t("settings.security.change_password")}</h3>
           <form onSubmit={onChangePassword} className="max-w-md space-y-4">
             <div>
               <Label htmlFor="sec-current-pw" className="text-xs text-muted-foreground mb-1.5">{t("settings.security.current_password")}</Label>
@@ -65,26 +66,26 @@ export default function SecuritySection({
               </div>
             </div>
             <Button type="submit" size="lg" disabled={saving} className="px-6 text-sm font-medium transition-colors disabled:opacity-50">
-              <Save className="w-4 h-4" />{t("settings.security.change_password")}
+              <Save className="size-4" />{t("settings.security.change_password")}
             </Button>
           </form>
         </div>
 
         <div className="border-t border-border pt-6">
-          <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2"><Key className="w-4 h-4" />{t("settings.security.jwt_secret")}</h3>
+          <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2"><Key className="size-4" />{t("settings.security.jwt_secret")}</h3>
           <div className="flex items-center gap-4 p-4 bg-warning/10 rounded-lg border border-warning/20">
             <div className="flex-1">
               <div className="text-xs text-warning font-medium mb-1">{t("settings.security.current_key")}</div>
               <code className="text-sm font-mono text-warning-foreground break-all select-all">{data.jwt_masked ?? "????????"}</code>
             </div>
             <Button onClick={onRegenerateJWT} size="lg" disabled={saving} className="shrink-0 px-4 bg-warning/15 text-warning hover:bg-warning/25 text-sm font-medium transition-colors disabled:opacity-50">
-              <RotateCw className="w-4 h-4" />{t("settings.security.regenerate")}
+              <RotateCw className="size-4" />{t("settings.security.regenerate")}
             </Button>
           </div>
         </div>
 
         <div className="border-t border-border pt-6">
-          <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2"><Shield className="w-4 h-4" />{t("settings.security.two_factor")}</h3>
+          <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2"><Shield className="size-4" />{t("settings.security.two_factor")}</h3>
 
           {totpStatus === null ? (
             <div className="flex items-center gap-3 p-4 bg-muted rounded-lg border border-border">
@@ -102,15 +103,15 @@ export default function SecuritySection({
               </div>
               {!showTotpSetup ? (
                 <Button onClick={onGenerateTOTP} size="lg" className="px-6 text-sm font-medium transition-colors">
-                  <QrCode className="w-4 h-4" />{t("settings.security.setup_2fa")}
+                  <QrCode className="size-4" />{t("settings.security.setup_2fa")}
                 </Button>
               ) : (
                 <div className="space-y-4">
                   <div className="bg-primary/10 dark:bg-primary/20 border border-primary/30 dark:border-primary/40 rounded-lg p-4">
                     <div className="text-xs font-medium text-primary mb-2">{t("settings.security.scan_qr")}</div>
                     <div className="flex items-center gap-4">
-                      <div className="w-32 h-32 bg-card rounded-lg border border-primary/30 dark:border-primary/40 flex items-center justify-center shrink-0">
-                        {totpQR ? <img src={totpQR} alt={t("settings.security.qr_alt")} className="max-w-full max-h-full p-2" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} /> : <QrCode className="w-4 h-4" />}
+                      <div className="size-32 bg-card rounded-lg border border-primary/30 dark:border-primary/40 flex items-center justify-center shrink-0">
+                        {totpQR ? <SafeImg src={totpQR} alt={t("settings.security.qr_alt")} className="max-w-full max-h-full p-2" loading="lazy" /> : <QrCode className="size-4" />}
                       </div>
                       <div>
                         <div className="text-xs text-primary mb-1">{t("settings.security.secret_key")}</div>
@@ -128,12 +129,12 @@ export default function SecuritySection({
                   </div>
                   {totpBackupCodes && (
                     <div className="bg-warning/10 border border-warning/20 rounded-lg p-3 text-xs text-warning-foreground">
-                      <AlertTriangle className="w-4 h-4" />
+                      <AlertTriangle className="size-4" />
                       {t("settings.security.save_backup_codes")} <div className="mt-2 font-mono font-semibold whitespace-pre-wrap">{totpBackupCodes}</div>
                     </div>
                   )}
                   <Button onClick={onEnableTOTP} size="lg" disabled={saving} className="px-6 text-sm font-medium transition-colors disabled:opacity-50">
-                    <Check className="w-4 h-4" />{t("settings.security.enable_2fa")}
+                    <Check className="size-4" />{t("settings.security.enable_2fa")}
                   </Button>
                 </div>
               )}
@@ -142,7 +143,7 @@ export default function SecuritySection({
             <div className="space-y-4">
               <div className="bg-success/15 border border-success/30 rounded-lg p-4">
                 <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4" />
+                  <CheckCircle className="size-4" />
                   <span className="text-sm font-medium text-success">{t("settings.security.2fa_enabled")}</span>
                 </div>
                 <div className="text-xs text-success mt-1">{t("settings.security.2fa_login_hint")}</div>
@@ -156,7 +157,7 @@ export default function SecuritySection({
                 <Input id="totp-disable-code" type="text" aria-label={t("settings.security.enter_2fa_code")} placeholder="123 456" maxLength={8} value={totpDisableCode} onChange={(e) => setTotpDisableCode(e.target.value)} />
               </div>
               <Button onClick={async () => { if (await confirm({ message: t("settings.disable_totp") })) onDisableTOTP(); }} size="lg" disabled={saving} className="px-6 bg-destructive/10 hover:bg-destructive/20 text-destructive text-sm font-medium transition-colors disabled:opacity-50">
-                <X className="w-4 h-4" />{t("settings.security.disable_2fa")}
+                <X className="size-4" />{t("settings.security.disable_2fa")}
               </Button>
             </div>
           )}

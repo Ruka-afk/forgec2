@@ -17,9 +17,13 @@ func saveFileChunk(s *Server, uuid string, task *db.Task, r taskResult, logPrefi
 	if uploadBase == "" {
 		slog.Error("Invalid agent ID for upload path", "agent_id", uuid)
 		task.Result = "ERROR: invalid agent id"
-		if err := s.db.Save(task).Error; err != nil {
-			slog.Error("Failed to save invalid agent id error", "task_id", task.ID, "error", err)
-		}
+	task.EncryptTaskFields()
+	if err := s.db.Model(&db.Task{}).Where("id = ?", task.ID).Updates(map[string]interface{}{
+		"result": task.Result,
+		"error":  task.Error,
+	}).Error; err != nil {
+		slog.Error("Failed to save invalid agent id error", "task_id", task.ID, "error", err)
+	}
 		return true
 	}
 	if err := os.MkdirAll(uploadBase, 0700); err != nil {
@@ -32,7 +36,11 @@ func saveFileChunk(s *Server, uuid string, task *db.Task, r taskResult, logPrefi
 	filePath := safeJoin(uploadBase, filename)
 	if filePath == "" {
 		task.Result = "ERROR: invalid filename (path traversal blocked)"
-		if err := s.db.Save(task).Error; err != nil {
+		task.EncryptTaskFields()
+		if err := s.db.Model(&db.Task{}).Where("id = ?", task.ID).Updates(map[string]interface{}{
+			"result": task.Result,
+			"error":  task.Error,
+		}).Error; err != nil {
 			slog.Error("Failed to save file path traversal error", "task_id", task.ID, "error", err)
 		}
 		return true
@@ -43,14 +51,22 @@ func saveFileChunk(s *Server, uuid string, task *db.Task, r taskResult, logPrefi
 		if len(task.Result) > MaxResultSize {
 			task.Result = truncateString(task.Result, MaxResultSize)
 		}
-		if saveErr := s.db.Save(task).Error; saveErr != nil {
+		task.EncryptTaskFields()
+		if saveErr := s.db.Model(&db.Task{}).Where("id = ?", task.ID).Updates(map[string]interface{}{
+			"result": task.Result,
+			"error":  task.Error,
+		}).Error; saveErr != nil {
 			slog.Error("Failed to save decode error", "task_id", task.ID, "error", saveErr)
 		}
 		return true
 	}
 	if len(decoded) > MaxTransferChunkSize {
 		task.Result = fmt.Sprintf("ERROR: chunk too large (%d bytes, max %d)", len(decoded), MaxTransferChunkSize)
-		if saveErr := s.db.Save(task).Error; saveErr != nil {
+		task.EncryptTaskFields()
+		if saveErr := s.db.Model(&db.Task{}).Where("id = ?", task.ID).Updates(map[string]interface{}{
+			"result": task.Result,
+			"error":  task.Error,
+		}).Error; saveErr != nil {
 			slog.Error("Failed to save chunk size error", "task_id", task.ID, "error", saveErr)
 		}
 		slog.Warn("Oversized exfil chunk rejected", "agent_id", uuid, "task_id", task.ID, "size", len(decoded))
@@ -58,35 +74,68 @@ func saveFileChunk(s *Server, uuid string, task *db.Task, r taskResult, logPrefi
 	}
 	if err := s.verifyAndCommitChain(uuid, task.ID, r.MAC, decoded); err != nil {
 		task.Result = fmt.Sprintf("ERROR: %v", err)
-		if saveErr := s.db.Save(task).Error; saveErr != nil {
+		task.EncryptTaskFields()
+		if saveErr := s.db.Model(&db.Task{}).Where("id = ?", task.ID).Updates(map[string]interface{}{
+			"result": task.Result,
+			"error":  task.Error,
+		}).Error; saveErr != nil {
 			slog.Error("Failed to save integrity error", "task_id", task.ID, "error", saveErr)
 		}
 		slog.Warn("File chunk integrity failure", "agent_id", uuid, "task_id", task.ID, "error", err)
 		return true
 	}
-	f, ferr := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, 0600)
+	off := r.Offset
+	if off == 0 {
+		off = task.Offset
+	}
+	// Offset validation (agent-controlled): a negative value skipped both the
+	// O_TRUNC branch and the Seek, silently corrupting chunk 0; an astronomic
+	// value made Seek+Write zero-fill terabytes of teamserver disk. Bound it
+	// against the declared transfer size with a sane hard cap.
+	const maxChunkOffset = int64(8) << 30 // 8 GiB
+	if off < 0 || off > maxChunkOffset {
+		task.Result = fmt.Sprintf("ERROR: invalid chunk offset %d", off)
+		task.EncryptTaskFields()
+		if saveErr := s.db.Model(&db.Task{}).Where("id = ?", task.ID).Updates(map[string]interface{}{
+			"result": task.Result,
+			"error":  task.Error,
+		}).Error; saveErr != nil {
+			slog.Error("Failed to save offset error", "task_id", task.ID, "error", saveErr)
+		}
+		slog.Warn("File chunk rejected: invalid offset", "agent_id", uuid, "task_id", task.ID, "offset", off)
+		return true
+	}
+	openFlags := os.O_CREATE | os.O_WRONLY
+	if off == 0 {
+		openFlags |= os.O_TRUNC
+	}
+	f, ferr := os.OpenFile(filePath, openFlags, 0600)
 	if ferr != nil {
 		task.Result = fmt.Sprintf("ERROR: open file failed: %v", ferr)
 		if len(task.Result) > MaxResultSize {
 			task.Result = truncateString(task.Result, MaxResultSize)
 		}
-		if saveErr := s.db.Save(task).Error; saveErr != nil {
+		task.EncryptTaskFields()
+		if saveErr := s.db.Model(&db.Task{}).Where("id = ?", task.ID).Updates(map[string]interface{}{
+			"result": task.Result,
+			"error":  task.Error,
+		}).Error; saveErr != nil {
 			slog.Error("Failed to save open file error", "task_id", task.ID, "error", saveErr)
 		}
 		return true
 	}
 	defer f.Close()
-	off := r.Offset
-	if off == 0 {
-		off = task.Offset
-	}
 	if off > 0 {
 		if _, err := f.Seek(off, 0); err != nil {
 			task.Result = fmt.Sprintf("ERROR: seek failed: %v", err)
 			if len(task.Result) > MaxResultSize {
 				task.Result = truncateString(task.Result, MaxResultSize)
 			}
-			if err := s.db.Save(task).Error; err != nil {
+			task.EncryptTaskFields()
+			if err := s.db.Model(&db.Task{}).Where("id = ?", task.ID).Updates(map[string]interface{}{
+				"result": task.Result,
+				"error":  task.Error,
+			}).Error; err != nil {
 				slog.Error("Failed to save "+logPrefix+" seek error", "task_id", task.ID, "error", err)
 			}
 			return true
@@ -97,7 +146,11 @@ func saveFileChunk(s *Server, uuid string, task *db.Task, r taskResult, logPrefi
 		if len(task.Result) > MaxResultSize {
 			task.Result = truncateString(task.Result, MaxResultSize)
 		}
-		if err := s.db.Save(task).Error; err != nil {
+		task.EncryptTaskFields()
+		if err := s.db.Model(&db.Task{}).Where("id = ?", task.ID).Updates(map[string]interface{}{
+			"result": task.Result,
+			"error":  task.Error,
+		}).Error; err != nil {
 			slog.Error("Failed to save "+logPrefix+" write error", "task_id", task.ID, "error", err)
 		}
 		return true
@@ -106,7 +159,11 @@ func saveFileChunk(s *Server, uuid string, task *db.Task, r taskResult, logPrefi
 	if len(task.Result) > MaxResultSize {
 		task.Result = truncateString(task.Result, MaxResultSize)
 	}
-	if err := s.db.Save(task).Error; err != nil {
+	task.EncryptTaskFields()
+	if err := s.db.Model(&db.Task{}).Where("id = ?", task.ID).Updates(map[string]interface{}{
+		"result": task.Result,
+		"error":  task.Error,
+	}).Error; err != nil {
 		slog.Error("Failed to save "+logPrefix+" success", "task_id", task.ID, "error", err)
 	}
 	slog.Info("File chunk "+logPrefix, "agent_id", uuid, "file", filename, "offset", off, "size", r.Size)

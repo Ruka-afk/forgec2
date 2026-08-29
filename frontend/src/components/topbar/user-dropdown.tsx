@@ -34,26 +34,26 @@ export function UserDropdown() {
         </div>
         <div className="hidden md:block text-left">
           <div className="text-xs font-medium text-foreground">{name}</div>
-          <div className="text-(--fs-micro-sm) text-muted-foreground/70">{role}</div>
+          <div className="text-(--fs-micro-sm) text-muted-foreground/100">{role}</div>
         </div>
         <span className="md:hidden text-xs font-medium text-foreground max-w-[60px] truncate">{name.slice(0, 6)}</span>
-        <ChevronDown className="w-3 h-3 text-muted-foreground/70 hidden md:block" />
+        <ChevronDown className="size-3 text-muted-foreground/100 hidden md:block" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <div className="px-3 py-2 border-b border-border text-sm font-medium">
           <div>{name}</div>
-          <div className="text-(--fs-micro-sm) text-muted-foreground/70">{t("topbar.role", { role })}</div>
+          <div className="text-(--fs-micro-sm) text-muted-foreground/100">{t("topbar.role", { role })}</div>
         </div>
         <DropdownMenuItem onClick={() => router.push("/settings")}>
-          <Settings className="w-4 h-4" />{t("topbar.settings")}
+          <Settings className="size-4" />{t("topbar.settings")}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => router.push("/audit")}>
-          <Shield className="w-4 h-4" />{t("topbar.audit_log")}
+          <Shield className="size-4" />{t("topbar.audit_log")}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive"
           onClick={() => { api.post(paths.auth.logout).catch(() =>         toast.error(t("topbar.toast.logout_failed"))).finally(() => router.push("/login")); }}>
-          <LogOut className="w-4 h-4" />
+          <LogOut className="size-4" />
           {t("topbar.logout")}
         </DropdownMenuItem>
       </DropdownMenuContent>

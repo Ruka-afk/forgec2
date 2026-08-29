@@ -46,6 +46,7 @@ const MAIN_PAGES: Record<string, ReturnType<typeof lazyPage>> = {
   lateral: lazyPage(() => import("@/app/(main)/lateral/page")),
   listeners: lazyPage(() => import("@/app/(main)/listeners/page")),
   loot: lazyPage(() => import("@/app/(main)/loot/page")),
+  macros: lazyPage(() => import("@/app/(main)/macros/page")),
   notifications: lazyPage(() => import("@/app/(main)/notifications/page")),
   ntlm: lazyPage(() => import("@/app/(main)/ntlm/page")),
   opsec: lazyPage(() => import("@/app/(main)/opsec/page")),

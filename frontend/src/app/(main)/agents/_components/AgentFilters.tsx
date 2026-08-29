@@ -1,6 +1,6 @@
 "use client";
 
-import { Card } from "@/components/ui/card";
+import { PageToolbar } from "@/components/ui/page-toolbar";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -36,20 +36,20 @@ export function AgentFilters({
 }: AgentFiltersProps) {
   const { t } = useI18n();
   return (
-    <Card className="p-3 sm:p-4 mb-4 gap-0">
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex gap-2 flex-wrap">
+    <PageToolbar>
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-1 sm:flex-wrap">
           <SearchInput
             id="agent-search"
             value={searchInput}
             onChange={setSearchInput}
             onClear={() => setSearchInput("")}
             placeholder={t("agents.search_placeholder_short")}
-            className="flex-1 sm:max-w-xs"
+            className="col-span-2 w-full sm:col-span-1 sm:max-w-xs sm:flex-1"
             label={t("common.search")}
           />
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v ?? "")}>
-            <SelectTrigger aria-label={t("agents.filter_status_aria")} className="flex-1 sm:flex-none">
+            <SelectTrigger aria-label={t("agents.filter_status_aria")} className="w-full sm:w-auto sm:flex-none">
               <SelectValue placeholder={t("agents.all_status")} />
             </SelectTrigger>
             <SelectContent>
@@ -60,7 +60,7 @@ export function AgentFilters({
             </SelectContent>
           </Select>
           <Select value={osFilter} onValueChange={(v) => setOsFilter(v ?? "")}>
-            <SelectTrigger aria-label={t("agents.filter_os_aria")} className="flex-1 sm:flex-none">
+            <SelectTrigger aria-label={t("agents.filter_os_aria")} className="w-full sm:w-auto sm:flex-none">
               <SelectValue placeholder={t("agents.all_os")} />
             </SelectTrigger>
             <SelectContent>
@@ -71,7 +71,7 @@ export function AgentFilters({
             </SelectContent>
           </Select>
           <Select value={tagFilter} onValueChange={(v) => setTagFilter(v ?? "")}>
-            <SelectTrigger aria-label={t("agents.filter_tag_aria")} className="flex-1 sm:flex-none">
+            <SelectTrigger aria-label={t("agents.filter_tag_aria")} className="w-full sm:w-auto sm:flex-none">
               <SelectValue placeholder={t("agents.all_tags")} />
             </SelectTrigger>
             <SelectContent>
@@ -82,7 +82,7 @@ export function AgentFilters({
             </SelectContent>
           </Select>
           <Select value={linkedFilter} onValueChange={(v) => setLinkedFilter(v ?? "")}>
-            <SelectTrigger aria-label={t("agents.filter_link_aria")} className="flex-1 sm:flex-none">
+            <SelectTrigger aria-label={t("agents.filter_link_aria")} className="w-full sm:w-auto sm:flex-none">
               <SelectValue placeholder={t("agents.all_links")} />
             </SelectTrigger>
             <SelectContent>
@@ -92,8 +92,8 @@ export function AgentFilters({
             </SelectContent>
           </Select>
           <DropdownMenu>
-            <DropdownMenuTrigger render={<Button variant="secondary" size="lg" className="flex-1 sm:flex-none gap-2" aria-label={t("agents.toggle_columns_aria")} />}>
-              <Columns className="w-4 h-4" />
+            <DropdownMenuTrigger render={<Button variant="secondary" size="lg" className="hidden w-full gap-2 sm:inline-flex sm:w-auto sm:flex-none" aria-label={t("agents.toggle_columns_aria")} />}>
+              <Columns className="size-4" />
               <span className="hidden sm:inline">{t("agents.columns")}</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[160px]">
@@ -109,13 +109,13 @@ export function AgentFilters({
             </DropdownMenuContent>
           </DropdownMenu>
           <div className="hidden sm:flex items-center gap-1.5 ml-auto text-(--fs-xs-sm)">
-            {onlineCount > 0 && <Badge variant="secondary" className="gap-1 text-success"><Wifi className="w-4 h-4" />{onlineCount}</Badge>}
-            {windowsCount > 0 && <Badge variant="secondary" className="gap-1"><Monitor className="w-4 h-4" />{windowsCount}</Badge>}
-            {linuxCount > 0 && <Badge variant="secondary" className="gap-1"><Terminal className="w-4 h-4" />{linuxCount}</Badge>}
-            {darwinCount > 0 && <Badge variant="secondary" className="gap-1"><Apple className="w-4 h-4" />{darwinCount}</Badge>}
+            {onlineCount > 0 && <Badge variant="secondary" className="gap-1 text-success"><Wifi className="size-4" />{onlineCount}</Badge>}
+            {windowsCount > 0 && <Badge variant="secondary" className="gap-1"><Monitor className="size-4" />{windowsCount}</Badge>}
+            {linuxCount > 0 && <Badge variant="secondary" className="gap-1"><Terminal className="size-4" />{linuxCount}</Badge>}
+            {darwinCount > 0 && <Badge variant="secondary" className="gap-1"><Apple className="size-4" />{darwinCount}</Badge>}
           </div>
         </div>
       </div>
-    </Card>
+    </PageToolbar>
   );
 }

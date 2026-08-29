@@ -75,7 +75,7 @@ export function ListenerHealthCell({ health, onReset }: ListenerHealthCellProps)
               />
             }
           >
-            <RotateCw className="h-3 w-3" />
+            <RotateCw className="size-3" />
           </TooltipTrigger>
           <TooltipContent>{t("listeners.reset_health")}</TooltipContent>
         </Tooltip>

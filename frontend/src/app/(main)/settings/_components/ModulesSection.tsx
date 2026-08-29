@@ -165,7 +165,7 @@ export default function ModulesSection() {
         <div className="flex gap-2">
           <Input ref={fileRef} type="file" className="hidden" accept=".ps1,.exe,.dll,.bin,.zip" onChange={handleUpload} />
           <Button onClick={() => fileRef.current?.click()} disabled={uploading}>
-            {uploading ? <Spinner size="xs" /> : <Upload className="w-4 h-4" />}
+            {uploading ? <Spinner size="xs" /> : <Upload className="size-4" />}
             {t("settings.modules.upload")}
           </Button>
           <Button variant="outline" onClick={() => { load(); loadAgents(); }}>{t("common.refresh")}</Button>
@@ -193,7 +193,7 @@ export default function ModulesSection() {
                   </TableCell>
                   <TableCell>
                     <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(m.name)} aria-label={t("common.delete")}>
-                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                      <Trash2 className="size-3.5 text-destructive" />
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -207,7 +207,7 @@ export default function ModulesSection() {
         {modules.length > 0 && (
           <div className="rounded-lg border border-border/60 bg-muted/20 p-4 space-y-3">
             <div className="flex items-center gap-2">
-              <Rocket className="w-4 h-4 text-chart-6" />
+              <Rocket className="size-4 text-chart-6" />
               <h3 className="text-sm font-medium">{t("settings.modules.deploy_title")}</h3>
             </div>
             <p className="text-xs text-muted-foreground">{t("settings.modules.deploy_hint")}</p>
@@ -253,7 +253,7 @@ export default function ModulesSection() {
               </div>
             </div>
             <Button onClick={handleDeploy} disabled={deploying || !deployModule || !deployAgent || deployAgent === "__none"}>
-              {deploying ? <Spinner size="xs" /> : <Rocket className="w-4 h-4" />}
+              {deploying ? <Spinner size="xs" /> : <Rocket className="size-4" />}
               {t("settings.modules.deploy")}
             </Button>
           </div>

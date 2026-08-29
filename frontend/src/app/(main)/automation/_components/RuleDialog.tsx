@@ -1,10 +1,14 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { FlaskConical } from "lucide-react";
@@ -16,6 +20,13 @@ interface RuleFormState {
   action_type: string;
   action_config: string;
   webhook: WebhookActionParams;
+  macro_id: number | null;
+  macro_stop_on_error: boolean;
+}
+
+interface MacroOption {
+  id?: number;
+  name: string;
 }
 
 interface Props {
@@ -30,6 +41,15 @@ interface Props {
 
 export function RuleDialog({ open, onOpenChange, ruleForm, setRuleForm, sendingTest, onTestWebhook, onSave }: Props) {
   const { t } = useI18n();
+  const [macros, setMacros] = useState<MacroOption[]>([]);
+
+  // Load macro options when the run_macro action is picked.
+  useEffect(() => {
+    if (!open || ruleForm.action_type !== "run_macro") return;
+    api.get<{ macros?: MacroOption[] }>(paths.macros.list)
+      .then((d) => setMacros(d.macros || []))
+      .catch(() => setMacros([]));
+  }, [open, ruleForm.action_type]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -62,6 +82,7 @@ export function RuleDialog({ open, onOpenChange, ruleForm, setRuleForm, sendingT
                 <SelectItem value="command">{t("auto.action_send_command")}</SelectItem>
                 <SelectItem value="webhook">{t("auto.action_send_webhook")}</SelectItem>
                 <SelectItem value="notify">{t("auto.action_show_alert")}</SelectItem>
+                <SelectItem value="run_macro">{t("auto.action_run_macro")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -75,6 +96,35 @@ export function RuleDialog({ open, onOpenChange, ruleForm, setRuleForm, sendingT
             <div>
               <Label>{t("auto.notification_message")}</Label>
               <Input placeholder={t("auto.notification_placeholder")} value={ruleForm.action_config} onChange={(e) => setRuleForm({ ...ruleForm, action_config: e.target.value })} className="mt-1" aria-label={t("auto.notification_message")} />
+            </div>
+          )}
+          {ruleForm.action_type === "run_macro" && (
+            <div className="space-y-3">
+              <div>
+                <Label>{t("auto.macro_select")}</Label>
+                <Select
+                  value={ruleForm.macro_id != null ? String(ruleForm.macro_id) : ""}
+                  onValueChange={(v) => setRuleForm({ ...ruleForm, macro_id: v ? Number(v) : null })}
+                >
+                  <SelectTrigger className="w-full mt-1" aria-label={t("auto.macro_select")}><SelectValue placeholder={t("auto.macro_select_ph")} /></SelectTrigger>
+                  <SelectContent>
+                    {macros.map((m) => (
+                      <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {macros.length === 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">{t("auto.macro_none_hint")}</p>
+                )}
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <Switch
+                  checked={ruleForm.macro_stop_on_error}
+                  onCheckedChange={(v) => setRuleForm({ ...ruleForm, macro_stop_on_error: v === true })}
+                />
+                <span className="text-sm text-muted-foreground">{t("macros.global_stop_on_error")}</span>
+              </label>
+              <p className="text-xs text-muted-foreground">{t("auto.macro_trigger_hint")}</p>
             </div>
           )}
           {ruleForm.action_type === "webhook" && (
@@ -135,7 +185,7 @@ export function RuleDialog({ open, onOpenChange, ruleForm, setRuleForm, sendingT
               )}
               <div className="flex justify-end">
                 <Button onClick={onTestWebhook} disabled={sendingTest} variant="ghost" size="sm">
-                  {sendingTest ? <Spinner size="xs" /> : <FlaskConical className="w-4 h-4" />}
+                  {sendingTest ? <Spinner size="xs" /> : <FlaskConical className="size-4" />}
                   {sendingTest ? t("auto.sending") : t("auto.test_notification")}
                 </Button>
               </div>

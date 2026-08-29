@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ArrowDown, ArrowLeftRight, ArrowRight, ArrowUp, Check, Info, Network, Play, PlusCircle, Radio, RotateCw, Route, Square, X } from "lucide-react";
-import { formatCreated, formatUptime } from "./_components/types";
+import { formatCreated } from "./_components/types";
 import { formatBytes } from "@/lib/utils";
 import { usePivotingData } from "./_components/usePivotingData";
 import { api } from "@/lib/api";
@@ -41,8 +41,6 @@ export default function PivotingPageContent() {
   } = usePivotingData();
   const [selectedAgent, setSelectedAgent] = useState("");
   const [relayPort, setRelayPort] = useState(1080);
-  const [relayHost, setRelayHost] = useState("127.0.0.1");
-  const [relayProtocol, setRelayProtocol] = useState<"socks" | "http">("socks");
   const [starting, setStarting] = useState(false);
   const [localStarting, setLocalStarting] = useState(false);
   const [localPort, setLocalPort] = useState(1080);
@@ -54,16 +52,32 @@ export default function PivotingPageContent() {
   const [rportRemotePort, setRportRemotePort] = useState(22);
   const [rportLocalPort, setRportLocalPort] = useState(8022);
   const [rportProtocol, setRportProtocol] = useState<"tcp" | "udp">("tcp");
+  const [rportStarting, setRportStarting] = useState(false);
+  const [directSocksBusy, setDirectSocksBusy] = useState<string>("");
   const [throughAgent, setThroughAgent] = useState("");
+  const [tunAgent, setTunAgent] = useState("");
+  const [tunCidr, setTunCidr] = useState("10.66.0.2/24");
+  const [tunUdpPort, setTunUdpPort] = useState(0);
+  const [tunBusy, setTunBusy] = useState(false);
   const { confirm, modal } = useConfirm();
 
+  const invalidPort = (p: number) => !Number.isInteger(p) || p < 1 || p > 65535;
+
   const startRelay = async () => {
+    if (invalidPort(relayPort)) {
+      toast.error(t("pivoting.invalid_port"));
+      return;
+    }
     setStarting(true);
-    await startRelayApi(selectedAgent, relayPort, relayHost, relayProtocol);
+    await startRelayApi(selectedAgent, relayPort, "127.0.0.1", "socks");
     setStarting(false);
   };
 
   const startLocalProxy = async () => {
+    if (invalidPort(localPort)) {
+      toast.error(t("pivoting.invalid_port"));
+      return;
+    }
     setLocalStarting(true);
     await startLocalProxyApi(
       throughAgent,
@@ -79,54 +93,62 @@ export default function PivotingPageContent() {
   };
 
   const startRPort = async () => {
-    await startRPortApi({
-      rportAgent,
-      remoteHost: rportRemoteHost,
-      remotePort: rportRemotePort,
-      localPort: rportLocalPort,
-      protocol: rportProtocol,
-    });
+    if (invalidPort(rportRemotePort) || invalidPort(rportLocalPort)) {
+      toast.error(t("pivoting.invalid_port"));
+      return;
+    }
+    setRportStarting(true);
+    try {
+      await startRPortApi({
+        rportAgent,
+        remoteHost: rportRemoteHost,
+        remotePort: rportRemotePort,
+        localPort: rportLocalPort,
+        protocol: rportProtocol,
+      });
+    } finally {
+      // In-flight guard: double-click fired two POSTs; the second hit the
+      // server duplicate rejection and surfaced a spurious error toast.
+      setRportStarting(false);
+    }
   };
 
-  const stopRPort = async (id: string) => {
-    await stopRPortApi(rportAgent, id);
+  const stopRPort = async (agentId: string, lport: number) => {
+    await stopRPortApi(agentId, lport);
   };
 
   const maxBytes = useMemo(
     () => sessions.reduce((m, s) => Math.max(m, s.bytes_in || 0, s.bytes_out || 0), 0),
     [sessions],
   );
-  const maxRPortBytes = useMemo(
-    () => rportForwards.reduce((m, r) => Math.max(m, r.bytes_in || 0, r.bytes_out || 0), 0),
-    [rportForwards],
-  );
-  const tabOverallMax = Math.max(maxBytes, maxRPortBytes, 1);
+  const tabOverallMax = Math.max(maxBytes, 1);
 
   const activeSessions = useMemo(() => sessions.filter(s => s.active), [sessions]);
   const stoppedSessions = useMemo(() => sessions.filter(s => !s.active), [sessions]);
 
   return (
-    <PageContainer title={t("pivoting.title")} icon={<Route className="w-4 h-4" />} subtitle={t("pivoting.subtitle")} contentClassName="space-y-6" actions={<>
+    <PageContainer title={t("pivoting.title")} icon={<Route className="size-4" />} subtitle={t("pivoting.subtitle")} actions={<>
         <Button variant="outline" onClick={loadData}>
-          <RotateCw className="w-4 h-4" /> {t("pivoting.refresh")}
+          <RotateCw className="size-4" /> {t("pivoting.refresh")}
         </Button>
       </>}>
 
       {throughAgent && (
-        <Banner tone="info" icon={<Route className="w-4 h-4" />} className="animate-fade-in" action={<Button variant="ghost" size="icon" onClick={() => setThroughAgent("")} className="text-info hover:text-primary" aria-label={t("common.clear")}><X className="w-4 h-4" /></Button>}>
+        <Banner tone="info" icon={<Route className="size-4" />} className="animate-fade-in" action={<Button variant="ghost" size="icon" onClick={() => setThroughAgent("")} className="text-info hover:text-primary" aria-label={t("common.clear")}><X className="size-4" /></Button>}>
           {t("pivoting.routing_strip")}: <strong className="font-mono">{throughAgent.substring(0, 12)}</strong>
         </Banner>
       )}
 
       <Tabs defaultValue="relay">
-        <TabsList className="mb-6">
+        <TabsList>
           {[
             { key: "relay", label: t("pivoting.tab_relay"), Icon: Radio },
             { key: "local", label: t("pivoting.tab_local"), Icon: Network },
             { key: "rport", label: t("pivoting.tab_rport"), Icon: ArrowLeftRight },
+            { key: "tun", label: t("pivoting.tab_tun"), Icon: Route },
           ].map((tab) => (
             <TabsTrigger key={tab.key} value={tab.key} className="gap-2">
-              <tab.Icon className="w-4 h-4" />
+              <tab.Icon className="size-4" />
               <span>{tab.label}</span>
               {tab.key === "relay" && activeSessions.length > 0 && (
                 <StatusDot tone="success" size="sm" pulse />
@@ -139,7 +161,7 @@ export default function PivotingPageContent() {
         <>
           <Card className="p-(--card-spacing)">
             <div className="font-semibold text-foreground flex items-center gap-x-2 mb-4">
-              <Radio className="w-4 h-4" />
+              <Radio className="size-4" />
               <span>{t("pivoting.sessions_active")}</span>
               <Badge variant="success">{activeSessions.length} running</Badge>
               {stoppedSessions.length > 0 && (
@@ -151,38 +173,38 @@ export default function PivotingPageContent() {
               <EmptyState icon={Radio} title={t("pivoting.empty_relay_title")} message={t("pivoting.empty_relay_message")} />
             ) : (
               <div className="space-y-3">                {sessions.map((s, i) => (
-                  <div key={s.id || i} className={`border rounded-lg p-4 transition-colors ${s.active ? "border-success/30 bg-success/10/50 dark:border-success/40 dark:bg-success/20" : "border-border opacity-60"}`}>
+                  <div key={s.id || i} className={`border rounded-lg p-4 transition-colors ${s.active ? "border-success/30 bg-success/10 dark:border-success/40 dark:bg-success/20" : "border-border opacity-60"}`}>
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-x-3">
                          <StatusDot tone={s.active ? "success" : "muted"} size="md" pulse={s.active} />
                         <div>
-                          <div className="font-medium text-sm text-foreground">{s.agent_id.substring(0, 12)}... {s.hostname && <span className="text-muted-foreground font-normal">({s.hostname})</span>}</div>
+                          <div className="font-medium text-sm text-foreground">{String(s.agent_id || "").substring(0, 12)}... {s.hostname && <span className="text-muted-foreground font-normal">({s.hostname})</span>}</div>
                           <div className="text-xs text-muted-foreground">{t("pivoting.port")} {s.listen_port} {s.active ? t("pivoting.running") : t("pivoting.stopped")}  {formatCreated(s.created_at)}</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-x-3">
                         <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                          <Network className="w-4 h-4" />
+                          <Network className="size-4" />
                           {s.active_conn || 0} {t("pivoting.active")} / {s.conn_count || 0} {t("pivoting.total")}                        </div>
                         <Button
                           variant={throughAgent === s.agent_id ? "default" : "outline"}
                           size="sm"
                           onClick={() => {
                             setThroughAgent(s.agent_id);
-                             toast.info(t("pivoting.toast.routing_via", { agent_id: s.agent_id.substring(0, 12) }));
+                             toast.info(t("pivoting.toast.routing_via", { agent_id: String(s.agent_id || "").substring(0, 12) }));
                           }}
                         >
-                          {throughAgent === s.agent_id ? <Check className="w-4 h-4" /> : <Route className="w-4 h-4" />}
+                          {throughAgent === s.agent_id ? <Check className="size-4" /> : <Route className="size-4" />}
                           {throughAgent === s.agent_id ? " Selected" : " Through Me"}
                         </Button>
                         {s.active && (
                           <Button variant="destructive" size="sm" onClick={() => stopRelay(s.agent_id)}>
-                            <Square className="w-4 h-4" />
+                            <Square className="size-4" />
                           </Button>
                         )}
                       </div>                    </div>                    <div className="mb-1.5 flex justify-between text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><ArrowDown className="w-4 h-4" />{formatBytes(s.bytes_in || 0)} down</span>
-                      <span className="flex items-center gap-1"><ArrowUp className="w-4 h-4" />{formatBytes(s.bytes_out || 0)} up</span>
+                      <span className="flex items-center gap-1"><ArrowDown className="size-4" />{formatBytes(s.bytes_in || 0)} down</span>
+                      <span className="flex items-center gap-1"><ArrowUp className="size-4" />{formatBytes(s.bytes_out || 0)} up</span>
                     </div>
                     <div className="flex h-2 bg-secondary rounded-full overflow-hidden">
                       <div className="bg-success transition-all" style={{ width: `${tabOverallMax > 0 ? ((s.bytes_in || 0) / tabOverallMax) * 100 : 0}%` }}></div>
@@ -194,7 +216,7 @@ export default function PivotingPageContent() {
 
           <Card className="p-(--card-spacing)">
             <div className="font-semibold text-foreground flex items-center gap-x-2 mb-4">
-              <PlusCircle className="w-4 h-4" /> Start New SOCKS Relay
+              <PlusCircle className="size-4" /> Start New SOCKS Relay
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
@@ -207,30 +229,19 @@ export default function PivotingPageContent() {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs font-medium mb-1 block">{t("pivoting.listen_host")}</Label>
-                  <Input aria-label="127.0.0.1" name="input-1" type="text" value={relayHost} onChange={e => setRelayHost(e.target.value)} placeholder="127.0.0.1" />                </div>
-                <div>                  <Label className="text-xs font-medium mb-1 block">{t("pivoting.listen_port")}</Label>
-                  <Input aria-label={t("pivoting.socks_listen_port")} name="input-2" type="number" value={relayPort} onChange={e => setRelayPort(Number(e.target.value))} min={1} max={65535} />
-                </div>
+              </div>              <div>
+                <Label className="text-xs font-medium mb-1 block">{t("pivoting.listen_port")}</Label>
+                <Input aria-label={t("pivoting.socks_listen_port")} name="input-2" type="number" value={relayPort} onChange={e => setRelayPort(Number(e.target.value))} min={1} max={65535} />
               </div>
-            </div>            <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4 items-end">
-              <div>                <Label className="text-xs font-medium mb-1 block">{t("pivoting.protocol")}</Label>                <Select value={relayProtocol} onValueChange={v => setRelayProtocol(v as "socks" | "http")}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder={t("pivoting.protocol_ph")} /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="socks">SOCKS5</SelectItem>
-                    <SelectItem value="http">HTTP CONNECT</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            </div>
+            <div className="mt-4 flex items-center gap-3">
               <Button onClick={startRelay} size="lg" disabled={!selectedAgent || starting}
-                className="lg:col-span-2 px-6 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium whitespace-nowrap transition-colors flex items-center justify-center gap-2">
-                {starting ? <><Spinner size="xs" /> {t("pivoting.starting")}</> : <><Play className="w-4 h-4" /> {t("pivoting.start")} {relayProtocol.toUpperCase()} Relay</>}
+                className="px-6 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium whitespace-nowrap transition-colors flex items-center justify-center gap-2">
+                {starting ? <><Spinner size="xs" /> {t("pivoting.starting")}</> : <><Play className="size-4" /> {t("pivoting.start")} SOCKS5 Relay</>}
               </Button>
             </div>
             <div className="mt-3 p-3 bg-muted rounded-lg text-xs text-muted-foreground flex items-start gap-1.5">
-              <Info className="w-4 h-4" />
+              <Info className="size-4" />
               <span>{t("pivoting.proxy_hint")}</span>
             </div>          </Card>
         </>
@@ -239,7 +250,7 @@ export default function PivotingPageContent() {
       <TabsContent value="local">
         <>          <Card className="p-(--card-spacing)">
             <div className="font-semibold text-foreground flex items-center gap-x-2 mb-4">
-              <Network className="w-4 h-4" />
+              <Network className="size-4" />
               <span>{t("pivoting.local_proxy")}</span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">              <div>
@@ -252,7 +263,7 @@ export default function PivotingPageContent() {
                   <SelectTrigger className="w-full"><SelectValue placeholder="-- Direct (no pivot) --" /></SelectTrigger>
                   <SelectContent>
                     {sessions.filter(s => s.active).map(s => (
-                      <SelectItem key={s.agent_id} value={s.agent_id}>{s.agent_id.substring(0, 12)}... (:{s.listen_port})</SelectItem>
+                      <SelectItem key={s.agent_id} value={s.agent_id}>{String(s.agent_id || "").substring(0, 12)}... (:{s.listen_port})</SelectItem>
                     ))}
                     {agents.map(a => (
                       <SelectItem key={a.id} value={a.id}>{a.hostname} ({a.ip})</SelectItem>
@@ -277,7 +288,7 @@ export default function PivotingPageContent() {
             )}
             <div className="mt-4 flex items-center gap-3">
               <Button onClick={startLocalProxy} disabled={localStarting} className="gap-2">
-                <Play className="w-4 h-4" />
+                <Play className="size-4" />
                 {localStarting ? t("pivoting.starting") : t("pivoting.start_local_proxy")}
               </Button>
               <Button variant="outline" onClick={() => { setLocalPort(1080); setThroughAgent(""); setLocalAuthEnabled(false); setLocalUsername(""); setLocalPassword(""); }}>
@@ -286,7 +297,7 @@ export default function PivotingPageContent() {
             </div>
           </Card>          <Card className="p-(--card-spacing)">
             <div className="font-semibold text-foreground flex items-center gap-x-2 mb-3">
-              <Network className="w-4 h-4" /> {t("pivoting.direct_socks")}            </div>
+              <Network className="size-4" /> {t("pivoting.direct_socks")}            </div>
             <p className="text-sm text-muted-foreground mb-4">
               {t("pivoting.direct_socks_desc")}
             </p>
@@ -298,12 +309,24 @@ export default function PivotingPageContent() {
                         <span className="text-xs text-muted-foreground">{a.ip}</span>
                       </div>
                       <div className="text-xs text-muted-foreground mb-3 font-mono">{a.id.substring(0, 12)}...</div>
-                      <Button variant="secondary" size="sm" onClick={() => {
-                        void api.post(paths.agents.socks(a.id), { port: localPort.toString() });
-                        toast.success(t("pivoting.toast.direct_socks", { host: a.hostname, port: String(localPort) }));
+                      <Button variant="secondary" size="sm" disabled={directSocksBusy === a.id || invalidPort(localPort)} onClick={async () => {
+                        if (invalidPort(localPort)) {
+                          // Port field may be cleared: never POST port "0".
+                          toast.error(t("pivoting.invalid_port"));
+                          return;
+                        }
+                        setDirectSocksBusy(a.id);
+                        try {
+                          await api.post(paths.agents.socks(a.id), { port: localPort.toString() });
+                          toast.success(t("pivoting.toast.direct_socks", { host: a.hostname, port: String(localPort) }));
+                        } catch (err) {
+                          toast.error(String(err));
+                        } finally {
+                          setDirectSocksBusy("");
+                        }
                       }}
                         className="w-full text-xs px-3 py-2 transition-colors flex items-center justify-center gap-1.5">
-                        <Play className="w-4 h-4" /> {t("pivoting.start_socks_on", { port: String(localPort) })}
+                        <Play className="size-4" /> {t("pivoting.start_socks_on", { port: String(localPort) })}
                       </Button>
                     </CardContent>
                   </Card>
@@ -317,7 +340,7 @@ export default function PivotingPageContent() {
       <TabsContent value="rport">
         <>
           <Card className="p-(--card-spacing)">
-            <div className="font-semibold text-foreground flex items-center gap-x-2 mb-4">              <ArrowLeftRight className="w-4 h-4" />
+            <div className="font-semibold text-foreground flex items-center gap-x-2 mb-4">              <ArrowLeftRight className="size-4" />
               <span>{t("pivoting.active_reverse_forwards")}</span>
               <Badge variant="secondary">{rportForwards.filter(r => r.active).length} {t("pivoting.active")}</Badge>
             </div>
@@ -326,45 +349,39 @@ export default function PivotingPageContent() {
             ) : (
               <div className="space-y-3">
                 {rportForwards.map(rf => (
-                  <div key={rf.id} className={`rounded-lg p-4 transition-colors border ${rf.active ? "border-info/30 bg-info/10 dark:border-info/40 dark:bg-info/20" : "border-border opacity-60"}`}>
+                  <div key={`${rf.agent_id}:${rf.local_port}`} className={`rounded-lg p-4 transition-colors border ${rf.active ? "border-info/30 bg-info/10 dark:border-info/40 dark:bg-info/20" : "border-border opacity-60"}`}>
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-x-3">                        <StatusDot tone={rf.active ? "info" : "muted"} size="md" pulse={rf.active} />
                         <div>                          <div className="text-sm font-medium text-foreground flex items-center gap-2">                            <span className="font-mono">{rf.remote_host}:{rf.remote_port}</span>
-                            <ArrowRight className="w-4 h-4" />
+                            <ArrowRight className="size-4" />
                             <span className="font-mono">localhost:{rf.local_port}</span>
                             <Badge variant="outline">{rf.protocol.toUpperCase()}</Badge>
                           </div>
-                          <div className="text-xs text-muted-foreground mt-0.5">{t("pivoting.agent")}: {rf.agent_id.substring(0, 12)}... {rf.active ? `${t("pivoting.up")}: ${formatUptime(rf.uptime)}` : t("pivoting.stopped")}{rf.error && <span className="text-destructive ml-2">{rf.error}</span>}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">{t("pivoting.agent")}: {String(rf.agent_id || "").substring(0, 12)}... {rf.active ? t("pivoting.active") : t("pivoting.stopped")}</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => checkRPortStatus(rf.id)}
+                          onClick={() => checkRPortStatus(rf.agent_id)}
                         >
-                          <Info className="w-4 h-4" /> Status
+                          <Info className="size-4" /> Status
                         </Button>
                         <Button
                           variant="destructive"
                           size="sm"
-                          onClick={() => stopRPort(rf.id)}
-                        >                          <Square className="w-4 h-4" /> Stop
+                          onClick={() => stopRPort(rf.agent_id, rf.local_port)}
+                        >                          <Square className="size-4" /> Stop
                         </Button>
                       </div>                    </div>
-                    <div className="mb-1.5 flex justify-between text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><ArrowDown className="w-4 h-4" />{formatBytes(rf.bytes_in || 0)}</span>
-                      <span className="flex items-center gap-1"><ArrowUp className="w-4 h-4" />{formatBytes(rf.bytes_out || 0)}</span>                    </div>
-                    <div className="flex h-2 bg-secondary rounded-full overflow-hidden">                      <div className="bg-success transition-all" style={{ width: `${tabOverallMax > 0 ? ((rf.bytes_in || 0) / tabOverallMax) * 100 : 0}%` }}></div>
-                      <div className="bg-info transition-all" style={{ width: `${tabOverallMax > 0 ? ((rf.bytes_out || 0) / tabOverallMax) * 100 : 0}%` }}></div>
-                    </div>
                   </div>
                 ))}
               </div>            )}
           </Card>
 
           <Card className="p-(--card-spacing)">
-            <div className="font-semibold text-foreground flex items-center gap-x-2 mb-4">              <PlusCircle className="w-4 h-4" /> New Reverse Port Forward
+            <div className="font-semibold text-foreground flex items-center gap-x-2 mb-4">              <PlusCircle className="size-4" /> New Reverse Port Forward
             </div>            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>                <Label className="text-xs font-medium mb-1 block">{t("pivoting.agent")}</Label>
                 <Select value={rportAgent} onValueChange={(v) => setRportAgent(v ?? "")}>
@@ -383,17 +400,18 @@ export default function PivotingPageContent() {
             </div>            <div className="flex items-center gap-3">
               <div>
                 <Label className="text-xs font-medium mb-1 block">{t("pivoting.protocol")}</Label>
-                <Select value={rportProtocol} onValueChange={v => setRportProtocol(v as "tcp" | "udp")}>
+                {/* Server-side relay is TCP-only (net.Listen "tcp"); UDP here
+                    silently created a TCP tunnel — lock the selector to TCP. */}
+                <Select value={rportProtocol} onValueChange={v => setRportProtocol(v as "tcp" | "udp")} disabled>
                   <SelectTrigger className="w-full"><SelectValue placeholder={t("pivoting.protocol_ph")} /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="tcp">TCP</SelectItem>
-                    <SelectItem value="udp">UDP</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <Button onClick={startRPort} size="lg" disabled={!rportAgent}
+              <Button onClick={startRPort} size="lg" disabled={!rportAgent || rportStarting}
                 className="px-6 bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors flex items-center gap-2">
-                <Play className="w-4 h-4" /> {t("pivoting.start_forward")}</Button>
+                <Play className="size-4" /> {t("pivoting.start_forward")}</Button>
               <Button variant="outline" size="lg"
                 onClick={() => {
                   toast.info(t("pivoting.toast.refreshing_rport"));
@@ -401,13 +419,87 @@ export default function PivotingPageContent() {
                 }}
                 className="px-4 flex items-center gap-1.5"
               >
-                <RotateCw className="w-4 h-4" /> {t("pivoting.refresh_status")}
+                <RotateCw className="size-4" /> {t("pivoting.refresh_status")}
               </Button>
             </div>
-            <Banner tone="info" icon={<Info className="w-4 h-4" />} className="items-start">
+            <Banner tone="info" icon={<Info className="size-4" />} className="items-start">
               {t("pivoting.rport_hint", { local: rportLocalPort, host: rportRemoteHost || "[target]", remote: rportRemotePort })}
             </Banner>
           </Card>        </>
+      </TabsContent>
+
+      <TabsContent value="tun">
+        <Card className="p-(--card-spacing) space-y-4">
+          <div className="font-semibold">{t("pivoting.tun_title")}</div>
+          <p className="text-xs text-muted-foreground">{t("pivoting.tun_hint")}</p>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div>
+              <Label className="text-xs font-medium mb-1 block">{t("pivoting.target_agent")}</Label>
+              <Select value={tunAgent} onValueChange={(v) => setTunAgent(v ?? "")}>
+                <SelectTrigger className="w-full"><SelectValue placeholder={t("pivoting.agent")} /></SelectTrigger>
+                <SelectContent>
+                  {agents.map(a => (
+                    <SelectItem key={a.id} value={a.id}>{a.hostname} ({a.ip})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs font-medium mb-1 block">{t("pivoting.tun_cidr")}</Label>
+              <Input value={tunCidr} onChange={(e) => setTunCidr(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs font-medium mb-1 block">{t("pivoting.tun_udp_port")}</Label>
+              <Input type="number" value={tunUdpPort} onChange={(e) => setTunUdpPort(Number(e.target.value))} min={0} max={65535} />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              disabled={!tunAgent || tunBusy}
+              onClick={async () => {
+                // Backend accepts 0 (auto) and rejects only negatives — the
+                // shared invalidPort() here blocked the untouched default.
+                if (!Number.isInteger(tunUdpPort) || tunUdpPort < 0 || tunUdpPort > 65535) {
+                  toast.error(t("pivoting.invalid_port"));
+                  return;
+                }
+                setTunBusy(true);
+                try {
+                  // Handler reads PostForm — must send urlencoded, not JSON
+                  // (a JSON body silently ignored cidr/udp_port defaults).
+                  const res = await api.post<{ udp_port?: number }>(paths.agents.tunStart(tunAgent), {
+                    cidr: tunCidr,
+                    udp_port: String(tunUdpPort || 0),
+                  });
+                  toast.success(t("pivoting.tun_started", { port: String(res.udp_port ?? 0) }));
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : t("pivoting.tun_failed"));
+                } finally {
+                  setTunBusy(false);
+                }
+              }}
+            >
+              <Play className="size-4" /> {t("pivoting.tun_start")}
+            </Button>
+            <Button
+              variant="outline"
+              disabled={!tunAgent || tunBusy}
+              onClick={async () => {
+                setTunBusy(true);
+                try {
+                  await api.post(paths.agents.tunStop(tunAgent), {});
+                  toast.success(t("pivoting.tun_stopped"));
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : t("pivoting.tun_failed"));
+                } finally {
+                  setTunBusy(false);
+                }
+              }}
+            >
+              <Square className="size-4" /> {t("pivoting.tun_stop")}
+            </Button>
+          </div>
+        </Card>
       </TabsContent>
       </Tabs>
       {modal}

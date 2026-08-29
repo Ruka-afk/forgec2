@@ -100,9 +100,9 @@ export default function CampaignPageContent() {
 
   return (
     <>
-      <PageContainer title={t("campaign.title")} subtitle={t("campaign.subtitle")} contentClassName="space-y-6" actions={<>
+      <PageContainer title={t("campaign.title")} subtitle={t("campaign.subtitle")} actions={<>
         <Button onClick={() => setShowCreate(true)}>
-          <Plus className="w-4 h-4" />{t("campaign.new")}
+          <Plus className="size-4" />{t("campaign.new")}
         </Button>
       </>}>
 
@@ -133,6 +133,7 @@ export default function CampaignPageContent() {
 
       {selectedCampaign && selected ? (
         <CampaignDetailView
+          key={selected.id}
           campaign={selected}
           stats={campaignStats}
           onBack={() => setSelectedCampaign(null)}
@@ -170,7 +171,7 @@ export default function CampaignPageContent() {
                   <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5 text-right">
                     <Button variant="ghost" size="icon-xs" className="text-destructive"
                       onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }} aria-label={t("campaign.a11y_delete")}>
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="size-4" />
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -208,24 +209,33 @@ function CampaignDetailView({
     const controller = new AbortController();
     (async () => {
       try {
+        // api.get auto-unwraps {success,data}: consume the payload directly —
+        // checking .success here was always undefined (list/killchain dead).
         const [mitreJson, tplJson] = await Promise.all([
-          api.get<{success: boolean; data?: CampaignMITRE}>(paths.campaigns.mitre(campaign.id), { signal: controller.signal }),
-          api.get<{success: boolean; data?: KillChainTemplate[]}>(paths.mitre.templates, { signal: controller.signal }),
+          api.get<CampaignMITRE | { success: boolean; data?: CampaignMITRE }>(paths.campaigns.mitre(campaign.id), { signal: controller.signal }),
+          api.get<KillChainTemplate[] | { success: boolean; data?: KillChainTemplate[] }>(paths.mitre.templates, { signal: controller.signal }),
         ]);
-        if (mitreJson.success) setMitreData(mitreJson.data ?? null);
-        if (tplJson.success) setTemplates(tplJson.data || []);
-      } catch { toast.error(t("campaign.toast.load_failed")); }
+        const mitre = (mitreJson as CampaignMITRE).phases !== undefined
+          ? (mitreJson as CampaignMITRE)
+          : (mitreJson as { data?: CampaignMITRE }).data;
+        if (mitre) setMitreData(mitre);
+        const tpls = Array.isArray(tplJson)
+          ? (tplJson as KillChainTemplate[])
+          : (tplJson as { data?: KillChainTemplate[] }).data;
+        if (tpls) setTemplates(tpls);
+      } catch {
+        if (!controller.signal.aborted) toast.error(t("campaign.toast.load_failed"));
+      }
     })();
     return () => controller.abort();
   }, [campaign.id, t]);
 
   const loadPhaseTasks = async (phase: string) => {
     try {
-      const json = await api.get<{success: boolean; data?: PhaseTask[]}>(paths.mitre.timeline(`campaign_id=${campaign.id}`));
-      if (json.success) {
-        const tasks = (json.data || []).filter((e: PhaseTask) => e.phase === phase);
-        setPhaseTasks((prev) => ({ ...prev, [phase]: tasks }));
-      }
+      const json = await api.get<PhaseTask[] | {success: boolean; data?: PhaseTask[]}>(paths.mitre.timeline(`campaign_id=${campaign.id}`));
+      const events = Array.isArray(json) ? json : json.data || [];
+      const tasks = events.filter((e: PhaseTask) => e.phase === phase);
+      setPhaseTasks((prev) => ({ ...prev, [phase]: tasks }));
     } catch { toast.error(t("campaign.toast.load_failed")); }
   };
 
@@ -242,10 +252,21 @@ function CampaignDetailView({
     if (!selectedTemplate) return;
     setExecuting(true);
     try {
-          await api.postJson(paths.campaigns.killchain(campaign.id), { template: selectedTemplate });
-      const mitreJson = await api.get<{success: boolean; data?: CampaignMITRE}>(paths.campaigns.mitre(campaign.id));
-      if (mitreJson.success) setMitreData(mitreJson.data ?? null);
-    } catch { toast.error(t("campaign.toast.load_failed")); }
+      const res = await api.postJson<{ tasks_created?: number; agents_skipped?: number }>(
+        paths.campaigns.killchain(campaign.id), { template: selectedTemplate });
+      toast.success(t("campaign.toast.seeded", {
+        n: String(res?.tasks_created ?? 0),
+        skipped: String(res?.agents_skipped ?? 0),
+      }));
+      const mitreJson = await api.get<CampaignMITRE | {success: boolean; data?: CampaignMITRE}>(paths.campaigns.mitre(campaign.id));
+      const mitre = (mitreJson as CampaignMITRE).phases !== undefined
+        ? (mitreJson as CampaignMITRE)
+        : (mitreJson as { data?: CampaignMITRE }).data;
+      if (mitre) setMitreData(mitre);
+    } catch (e) {
+      // Distinct message: this is an execute failure, not a load failure.
+      toast.error(e instanceof Error && e.message ? e.message : t("campaign.toast.load_failed"));
+    }
     setExecuting(false);
     setSelectedTemplate("");
   };
@@ -255,7 +276,7 @@ function CampaignDetailView({
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" size="icon" onClick={onBack} aria-label={t("campaign.a11y_back")}><ArrowLeft className="w-4 h-4" /></Button>
+        <Button variant="ghost" size="icon" onClick={onBack} aria-label={t("campaign.a11y_back")}><ArrowLeft className="size-4" /></Button>
         <div className="flex-1">
           <h2 className="text-2xl font-semibold tracking-tight text-foreground leading-tight">{campaign.name}</h2>
           {campaign.description && <p className="text-muted-foreground text-sm">{campaign.description}</p>}
@@ -272,7 +293,7 @@ function CampaignDetailView({
             </SelectContent>
           </Select>
           <Button variant="ghost" size="icon" className="text-destructive" onClick={onDelete} aria-label={t("campaign.a11y_delete")}>
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="size-4" />
           </Button>
         </div>
       </div>
@@ -291,7 +312,7 @@ function CampaignDetailView({
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-lg font-semibold">{t("campaign.kill_chain")}</h3>
               <Button variant="ghost" size="sm" onClick={() => setShowTimeline(!showTimeline)}>
-                {showTimeline ? <ListChecks className="w-4 h-4 mr-1" /> : <Clock className="w-4 h-4 mr-1" />}
+                {showTimeline ? <ListChecks className="size-4 mr-1" /> : <Clock className="size-4 mr-1" />}
                 {showTimeline ? t("campaign.kill_chain") : t("campaign.timeline")}
               </Button>
             </div>
@@ -317,10 +338,10 @@ function CampaignDetailView({
                         } ${isCompleted ? "bg-success/15" : isPending ? "" : "bg-warning/15"}`}
                         title={phase}
                       >
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                          <div className={`size-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
                             isCompleted ? "bg-success text-success-foreground" : isPending ? "bg-muted-foreground text-white" : "bg-warning text-warning-foreground"
                           }`}>
-                            {isCompleted ? <Check className="w-4 h-4" /> : isPending ? "" : <Play className="w-4 h-4" />}
+                            {isCompleted ? <Check className="size-4" /> : isPending ? "" : <Play className="size-4" />}
                           </div>
                           <span className={`text-(--fs-micro-sm) text-center leading-tight ${isCompleted ? "text-success font-medium" : isPending ? "text-muted-foreground" : "text-warning"}`}>
                             {phase.split(" ").slice(0, 2).join("\n")}
@@ -363,7 +384,7 @@ function CampaignDetailView({
                 ) : (
                   (mitreData?.timeline || []).map((event, i) => (
                     <div key={i} className="mb-3 relative">
-                      <div className="absolute -left-[calc(1.5rem+1px)] top-1 w-3 h-3 rounded-full border-2 border-card"
+                      <div className="absolute -left-[calc(1.5rem+1px)] top-1 size-3 rounded-full border-2 border-card"
                         style={{ background: phaseColor(event.phase) }} />
                       <div className="text-sm font-medium">{event.phase}</div>
                       <div className="text-xs text-muted-foreground">{formatTime(event.first_seen)}</div>
@@ -378,7 +399,7 @@ function CampaignDetailView({
           {/* Kill Chain Template Executor */}
 <Card className="mb-6 shadow-sm hover:shadow-md transition-shadow duration-200">
             <h3 className="text-lg font-semibold mb-3">
-              <Zap className="w-4 h-4" />
+              <Zap className="size-4" />
               {t("campaign.templates")}
             </h3>
             <div className="flex gap-2 items-end">
@@ -401,7 +422,7 @@ function CampaignDetailView({
               </div>
               <Button size="sm" disabled={!selectedTemplate || executing}
                 onClick={handleExecuteTemplate}>
-                {executing ? <Spinner size="xs" className="mr-1" /> : <Play className="w-4 h-4" />}
+                {executing ? <Spinner size="xs" className="mr-1" /> : <Play className="size-4" />}
                 {t("campaign.execute")}
               </Button>
             </div>
@@ -411,7 +432,7 @@ function CampaignDetailView({
                 <div className="flex flex-wrap gap-1">
                   {templates.find((t) => t.name === selectedTemplate)?.steps?.map((step, i) => (
                     <Badge key={`${step.task_type}-${i}`} variant="secondary" className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs">
-                      <span className="w-2 h-2 rounded-full" style={{ background: phaseColor(step.phase) }} />
+                      <span className="size-2 rounded-full" style={{ background: phaseColor(step.phase) }} />
                       {step.task_type}
                     </Badge>
                   )) ?? null}
@@ -429,7 +450,7 @@ function CampaignDetailView({
               <div className="relative pl-6 border-l-2 border-border">
                 {stats.phase_timeline.map((event: PhaseEvent, i: number) => (
                   <div key={i} className="mb-4 relative">
-                    <div className="absolute -left-[calc(1.5rem+1px)] top-1 w-3 h-3 rounded-full border-2 border-card"
+                    <div className="absolute -left-[calc(1.5rem+1px)] top-1 size-3 rounded-full border-2 border-card"
                       style={{ background: phaseColor(event.phase) }} />
                     <div className="text-sm font-medium">{event.phase}</div>
                     <div className="text-xs text-muted-foreground">{formatTime(event.first_seen)}</div>

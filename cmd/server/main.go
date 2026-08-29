@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -115,19 +116,25 @@ func main() {
 	slog.Info("ForgeC2 ready", "web_ui", fmt.Sprintf("http://localhost:%d", cfg.Server.Port))
 
 	// Signal handling for graceful shutdown
-	sigCh := make(chan os.Signal, 1)
+	sigCh := make(chan os.Signal, 2)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
 		sig := <-sigCh
 		slog.Info("Received signal, shutting down...", "signal", sig)
 		srv.Shutdown()
+		// Second signal forces hard exit
+		<-sigCh
+		slog.Warn("Received second signal, forcing exit")
+		os.Exit(1)
 	}()
 
 	if err := srv.Run(); err != nil {
-		slog.Error("Server failed", "err", err)
-		srv.Shutdown()
-		os.Exit(1)
+		if err != http.ErrServerClosed {
+			slog.Error("Server failed", "err", err)
+			srv.Shutdown()
+			os.Exit(1)
+		}
 	}
 }
 

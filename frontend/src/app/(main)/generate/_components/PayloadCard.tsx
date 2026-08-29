@@ -31,10 +31,10 @@ export function PayloadCard({
   className?: string;
 }) {
   return (
-    <Card className={cn("flex flex-col p-(--card-spacing) hover:shadow-lg dark:hover:shadow-black/30 transition-shadow", className)}>
+    <Card className={cn("flex flex-col p-(--card-spacing) hover:shadow-lg dark:hover:shadow-xl transition-shadow", className)}>
       <div className="mb-4 flex items-start justify-between gap-3 border-b border-border pb-4">
         <div className="flex min-w-0 items-center gap-x-3">
-          <div className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-lg ring-1 ring-border/50", tint)}>
+          <div className={cn("grid size-10 shrink-0 place-items-center rounded-lg ring-1 ring-border/50", tint)}>
             {icon}
           </div>
           <div className="min-w-0">
@@ -76,7 +76,7 @@ export function AdvancedSection({
     <div className={cn("mt-2 border-t border-border pt-2", className)}>
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger className="group flex w-full items-center gap-1.5 text-xs text-muted-foreground transition-colors select-none hover:text-primary">
-          <ChevronDown className={cn("h-4 w-4 transition-transform duration-200", open && "rotate-180")} />
+          <ChevronDown className={cn("size-4 transition-transform duration-200", open && "rotate-180")} />
           <span className="font-medium">{title}</span>
         </CollapsibleTrigger>
         <CollapsibleContent className="mt-2 space-y-2">{children}</CollapsibleContent>

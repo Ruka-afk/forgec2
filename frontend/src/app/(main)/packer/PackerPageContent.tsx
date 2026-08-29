@@ -182,17 +182,17 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
       <PageContainer embedded={embedded} title={!embedded ? t("packer.title") : undefined} subtitle={!embedded ? t("packer.subtitle") : undefined}>
 
       <Tabs defaultValue="artifact">
-        <TabsList className="mb-6">
+        <TabsList>
           <TabsTrigger value="artifact" className="gap-2">
-            <Wrench className="w-4 h-4" />{t("packer.tab_artifact")}
+            <Wrench className="size-4" />{t("packer.tab_artifact")}
           </TabsTrigger>
           <TabsTrigger value="bundle" className="gap-2">
-            <Box className="w-4 h-4" />{t("packer.tab_bundle")}
+            <Box className="size-4" />{t("packer.tab_bundle")}
           </TabsTrigger>
         </TabsList>
 
       {message && (
-        <Banner tone={message.tone} className="mb-4" action={<Button variant="ghost" size="icon-sm" onClick={clearMessage} className="opacity-60 hover:opacity-100" aria-label={t("common.dismiss")}><X className="w-4 h-4" /></Button>}>
+        <Banner tone={message.tone} className="mb-4" action={<Button variant="ghost" size="icon-sm" onClick={clearMessage} className="opacity-60 hover:opacity-100" aria-label={t("common.dismiss")}><X className="size-4" /></Button>}>
           {message.text}
         </Banner>
       )}
@@ -307,7 +307,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
               <div>
                 <Label className="text-xs">{t("packer.shellcode_file")}</Label>
                 <Input type="file" accept=".bin" onChange={handleShellcodeFile} aria-label={t("packer.upload_bof")} />
-                {shellcodeB64 && <span className="text-xs text-success mt-1 flex items-center gap-1"><CheckCircle className="w-4 h-4" />{t("packer.shellcode_loaded")}</span>}
+                {shellcodeB64 && <span className="text-xs text-success mt-1 flex items-center gap-1"><CheckCircle className="size-4" />{t("packer.shellcode_loaded")}</span>}
               </div>
             </div>
           </div>
@@ -323,7 +323,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
 
           <Button onClick={handleBuildArtifact} disabled={loading}
             className="w-full">
-            {loading ? <><Spinner size="xs" /> {t("packer.building")}</> : <><Hammer className="w-4 h-4" /> {t("packer.build_artifact")}</>}
+            {loading ? <><Spinner size="xs" /> {t("packer.building")}</> : <><Hammer className="size-4" /> {t("packer.build_artifact")}</>}
           </Button>
         </Card>
       </TabsContent>
@@ -333,7 +333,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
           <div>
             <Label className="text-xs mb-1.5">{t("packer.payload_exe")}</Label>
             <Input type="file" accept=".exe,.dll" onChange={handleFileSelect} aria-label={t("packer.upload_dll")} />
-            {exeB64 && <span className="text-xs text-success mt-1 flex items-center gap-1"><CheckCircle className="w-4 h-4" />{t("packer.exe_loaded", { size: String(Math.round(exeB64.length * 0.75 / 1024)) })}</span>}
+            {exeB64 && <span className="text-xs text-success mt-1 flex items-center gap-1"><CheckCircle className="size-4" />{t("packer.exe_loaded", { size: String(Math.round(exeB64.length * 0.75 / 1024)) })}</span>}
           </div>
 
           <div className="border-t border-border pt-4">
@@ -378,7 +378,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
 
           <Button onClick={handleBundle} disabled={loading}
             className="w-full">
-            {loading ? <><Spinner size="xs" /> {t("packer.bundling")}</> : <><Box className="w-4 h-4" /> {t("packer.bundle_payload")}</>}
+            {loading ? <><Spinner size="xs" /> {t("packer.bundling")}</> : <><Box className="size-4" /> {t("packer.bundle_payload")}</>}
           </Button>
         </Card>
       </TabsContent>
@@ -395,7 +395,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
               </div>
             </div>
             <Button onClick={handleDownload}>
-              <Download className="w-4 h-4" /> {t("packer.download")}
+              <Download className="size-4" /> {t("packer.download")}
             </Button>
           </div>
         </Card>

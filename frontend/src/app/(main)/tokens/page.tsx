@@ -150,7 +150,7 @@ export default function TokensPage() {
       cell: (token) =>
         token.active ? (
           <Badge variant="warning" className="gap-1.5 text-xs">
-            <span className="w-2 h-2 bg-warning rounded-full animate-pulse" />{t("tokens.active")}
+            <span className="size-2 bg-warning rounded-full animate-pulse" />{t("tokens.active")}
           </Badge>
         ) : (
           <Badge variant="secondary" className="text-xs">{t("tokens.inactive")}</Badge>
@@ -171,7 +171,7 @@ export default function TokensPage() {
       cell: (token) => (
         <Tooltip>
           <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => handleRevert(token)} aria-label={t("tokens.revert")} />}>
-            <RotateCcw className="w-4 h-4" />
+            <RotateCcw className="size-4" />
           </TooltipTrigger>
           <TooltipContent>{t("tokens.revert")}</TooltipContent>
         </Tooltip>
@@ -181,11 +181,11 @@ export default function TokensPage() {
 
   return (
     <PageContainer
-      title={t("tokens.title")} icon={<BadgeInfo className="w-4 h-4" />}
+      title={t("tokens.title")} icon={<BadgeInfo className="size-4" />}
       subtitle={`${t("tokens.subtitle")} ${filtered.length} ${t("tokens.count")}`}
       actions={
         <Button onClick={() => refresh()} className="gap-2">
-          <RotateCw className="w-4 h-4" /> {t("tokens.refresh")}
+          <RotateCw className="size-4" /> {t("tokens.refresh")}
         </Button>
       }
     >

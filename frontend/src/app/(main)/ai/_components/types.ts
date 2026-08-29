@@ -7,11 +7,13 @@ export interface AIMessage {
 
 export interface AIConfig {
   enabled: boolean;
+  has_api_key?: boolean;
   provider: string;
   api_key: string;
   model: string;
   endpoint: string;
   system_prompt: string;
+  engagement_notes?: string;
   allow_execute?: boolean;
 }
 

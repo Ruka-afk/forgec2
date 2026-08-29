@@ -24,8 +24,8 @@ export default function RouteErrorPage({
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
       <div className="flex justify-center mb-4">
-        <div className="w-12 h-12 rounded-xl bg-destructive/10 flex items-center justify-center">
-          <AlertTriangle className="w-6 h-6 text-destructive" />
+        <div className="flex size-12 items-center justify-center rounded-lg bg-destructive/10">
+          <AlertTriangle className="size-6 text-destructive" />
         </div>
       </div>
       <h2 className="text-lg font-semibold text-foreground mb-2">{t("common.error")}</h2>
