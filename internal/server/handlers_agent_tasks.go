@@ -53,7 +53,7 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 
 	// Collect distinct task types for filter dropdown (degraded gracefully on error)
 	var taskTypes []string
-	if err := s.db.Model(&db.Task{}).
+	if err := s.tenantScope(s.db.Model(&db.Task{}), c).
 		Where("type NOT IN ?", silentTypes).
 		Distinct("type").Pluck("type", &taskTypes).Error; err != nil {
 		slog.Warn("Failed to pluck task types", "err", err)
@@ -62,13 +62,13 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 
 	// Collect agents for filter dropdown (degraded gracefully on error)
 	var agents []db.Implant
-	if err := s.db.Select("id, hostname, ip").Order("hostname").Limit(500).Find(&agents).Error; err != nil {
+	if err := s.tenantScope(s.db.Select("id, hostname, ip"), c).Order("hostname").Limit(500).Find(&agents).Error; err != nil {
 		slog.Warn("Failed to query agent filter list", "err", err)
 	}
 
 	// Count failed tasks for "retry all" button (degraded gracefully on error)
 	var failedCount int64
-	if err := s.db.Model(&db.Task{}).Where("status = ?", "failed").Count(&failedCount).Error; err != nil {
+	if err := s.tenantScope(s.db.Model(&db.Task{}), c).Where("status = ?", "failed").Count(&failedCount).Error; err != nil {
 		slog.Warn("Failed to count failed tasks", "err", err)
 	}
 
@@ -104,9 +104,10 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 // handleExportTasks exports tasks as CSV for reporting
 func (s *Server) handleExportTasks(c *gin.Context) {
 	var tasks []db.Task
-	if err := s.db.WithContext(s.ctx).Preload("Agent").
-		Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"}).
-		Order("created_at desc").Limit(ExportTaskLimit).Find(&tasks).Error; err != nil {
+	query := s.db.WithContext(s.ctx).Preload("Agent").
+		Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"})
+	query = s.tenantScope(query, c)
+	if err := query.Order("created_at desc").Limit(ExportTaskLimit).Find(&tasks).Error; err != nil {
 		handleQueryError(c, err, "Failed to export tasks")
 		return
 	}
@@ -155,7 +156,9 @@ func (s *Server) apiBulkTaskStatus(c *gin.Context) {
 		return
 	}
 	var tasks []db.Task
-	if err := s.db.Where("id IN ?", req.TaskIDs).Select("id, status, result, error, updated_at").Find(&tasks).Error; err != nil {
+	query := s.db.Where("id IN ?", req.TaskIDs)
+	query = s.tenantScope(query, c)
+	if err := query.Select("id, status, result, error, updated_at").Find(&tasks).Error; err != nil {
 		handleQueryError(c, err, "Failed to bulk query task status")
 		return
 	}

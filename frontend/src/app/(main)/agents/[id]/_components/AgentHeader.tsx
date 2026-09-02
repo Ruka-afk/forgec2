@@ -8,13 +8,14 @@ import { CopyButton } from "@/components/ui/copy-button";
 import { StatusBadge } from "@/components/ui/status-indicator";
 import { Spinner } from "@/components/ui/spinner";
 import type { AgentDetail, AgentStatus } from "@/types/agent";
-import { Activity, Apple, Bot, Camera, Clipboard, Crown, Database, FolderOpen, Key, Keyboard, Link as LinkIcon, ListChecks, MapPin, Monitor, MoreHorizontal, PictureInPicture2, RefreshCw, Shield, Skull, SlidersHorizontal, Terminal, Trash2 } from "lucide-react";
+import { Activity, Apple, Bot, Camera, Clipboard, Crown, Database, FolderOpen, Key, Keyboard, Link as LinkIcon, ListChecks, MapPin, Monitor, MoreHorizontal, PictureInPicture2, Radio, RefreshCw, Shield, Skull, SlidersHorizontal, Terminal, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useI18n } from "@/lib/i18n";
 import { isExperimentalDesktop, sessionActionQuality, type SessionActionQuality } from "./session-quality";
 import { implantBlocksDest, knownImplantVersion } from "../../_components/implant-version";
+import { rebuildPayloadHref } from "../../../generate/_components/generate-query";
 
 function QualityMark({ quality }: { quality: SessionActionQuality }) {
   const { t } = useI18n();
@@ -42,6 +43,7 @@ interface AgentHeaderProps {
   onQuickAction: (action: string, label: string) => void;
   credCount: number | null;
   mimikatzReady?: boolean;
+  avProducts?: string[];
   onKill: () => void;
   onUninstall: () => void;
   onMigrate?: () => void;
@@ -50,7 +52,7 @@ interface AgentHeaderProps {
 
 export default memo(function AgentHeader({
   agent, agentId, status,
-  actionLoading, onQuickAction, credCount, mimikatzReady = false, onKill, onUninstall, onMigrate, onPopOut,
+  actionLoading, onQuickAction, credCount, mimikatzReady = false, avProducts = [], onKill, onUninstall, onMigrate, onPopOut,
 }: AgentHeaderProps) {
   const { t } = useI18n();
   const hostname = agent.hostname || "\u2014";
@@ -112,7 +114,7 @@ export default memo(function AgentHeader({
                   {version ? (
                     <Badge variant="outline" className="font-mono text-(--fs-micro-sm)">{version}</Badge>
                   ) : (
-                    <Badge variant="warning" className="text-(--fs-micro-sm)" title={t("agents.version_unknown_hint")}>
+                    <Badge variant="warning" className="text-(--fs-micro-sm)" title={t("agents.version_unknown_hint")} render={<Link href={rebuildPayloadHref(agent)} />}>
                       {t("agents.version_unknown")}
                     </Badge>
                   )}
@@ -144,6 +146,19 @@ export default memo(function AgentHeader({
                       <span className="text-foreground">{domain}</span>
                     </span>
                   )}
+                  {avProducts.length > 0 ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-success/20 bg-success/10 px-2.5 py-1">
+                      <Shield className="size-3 text-success" />
+                      <span className="text-(--fs-micro-sm) uppercase tracking-wide text-success">AV</span>
+                      <span className="text-foreground">{avProducts.join(", ")}</span>
+                    </span>
+                  ) : status === "online" ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
+                      <Shield className="size-3 text-muted-foreground" />
+                      <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/100">AV</span>
+                      <span className="text-muted-foreground text-xs">{t("hostinfo.no_security_products")}</span>
+                    </span>
+                  ) : null}
                 </div>
                 {country && (
                   <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground/100">
@@ -156,6 +171,7 @@ export default memo(function AgentHeader({
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:w-[34rem]">
               <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/shell`} />}><Terminal className="size-4" /> {t("agents.shell_title")} <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">S</kbd></Button>
               <Button variant="outline" size="sm" render={<Link href={`/ai?agent=${encodeURIComponent(agentId)}`} />}><Bot className="size-4" /> {t("ai.open_for_agent")}</Button>
+              <Button variant="outline" size="sm" render={<Link href={rebuildPayloadHref(agent)} />}><RefreshCw className="size-4" /> {t("agents.rebuild_payload")}</Button>
               <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/files`} />}><FolderOpen className="size-4" /> {t("agents.files_title")} <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">F</kbd></Button>
               <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/screen`} />}><Monitor className="size-4" /> {t("agents.screen_title")} <span className="text-(--fs-micro) opacity-70"><QualityMark quality="hardened" /></span> <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">D</kbd></Button>
               <Button variant="outline" size="sm" onClick={onPopOut} aria-label={t("agents.popout_console")}>
@@ -177,6 +193,9 @@ export default memo(function AgentHeader({
                     {isExperimentalDesktop("remote-desktop") ? (
                       <span className="ml-auto text-(--fs-micro) text-warning"><QualityMark quality="experimental" /></span>
                     ) : null}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onQuickAction("beacon_now", t("agents.beacon_now"))}>
+                    <Radio className="size-4" /> {t("agents.beacon_now")}
                   </DropdownMenuItem>
                   <DropdownMenuItem render={<Link href={`/agents/${agentId}/config`} />}><SlidersHorizontal className="size-4" /> {t("agents.config_hot_config")}</DropdownMenuItem>
                   <DropdownMenuItem render={<Link href={`/agents/${agentId}/traffic`} />}><Activity className="size-4" /> {t("agents.traffic_title")}</DropdownMenuItem>

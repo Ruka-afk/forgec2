@@ -27,11 +27,11 @@ export function safeHref(raw: unknown): string | undefined {
 }
 
 // safeSrcForImage allows data:image/* (screenshots are embedded as data URLs)
-// but still blocks javascript: and friends. SVG is excluded: SVG data URLs can
-// carry embedded scripts even in <img> context in some browsers.
+// and blob: (via dataUrlToBlobUrl) but still blocks javascript: and friends. SVG is excluded.
 export function isSafeImageSrc(raw: unknown): raw is string {
   if (typeof raw !== "string" || raw.length > 16 * 1024 * 1024) return false;
   const lower = raw.toLowerCase();
+  if (lower.startsWith("blob:")) return true;
   if (!lower.startsWith("data:image/")) return isSafeUrl(raw);
   // SVG is excluded: SVG data URLs can carry embedded scripts even in <img>
   // context in some browsers.

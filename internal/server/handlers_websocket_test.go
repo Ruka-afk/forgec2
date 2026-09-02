@@ -163,6 +163,12 @@ func TestBroadcastTaskUpdate_StreamsLargeShellOutput(t *testing.T) {
 	if update["status"] != "completed" {
 		t.Fatalf("task_update status = %v, want completed", update["status"])
 	}
+	if update["result_complete"] != false {
+		t.Fatalf("large task result_complete = %v, want false", update["result_complete"])
+	}
+	if _, ok := update["result"]; ok {
+		t.Fatal("large streamed task_update must not include a truncated result")
+	}
 
 	// Small results must not stream frames.
 	s.broadcastTaskUpdate("agent-1", db.Task{
@@ -179,6 +185,9 @@ func TestBroadcastTaskUpdate_StreamsLargeShellOutput(t *testing.T) {
 			continue
 		}
 		if frame["type"] == "task_update" && frame["result"] == "small output" {
+			if frame["result_complete"] != true {
+				t.Fatalf("small task result_complete = %v, want true", frame["result_complete"])
+			}
 			break
 		}
 	}

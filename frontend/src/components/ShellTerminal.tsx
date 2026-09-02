@@ -3,61 +3,54 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
-import { runTask, ApiError } from "@/lib/api";
+import { runTask, ApiError, formatThrownError } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { fetchAgentBeaconTiming, loadCommandHistory, saveCommandHistory } from "@/lib/shell";
 import { getCompletions } from "@/lib/completions";
 import { highlightOutput } from "@/lib/highlight";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
-import { StatusDot } from "@/components/ui/status-dot";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Clock, Type, Trash2, Keyboard, Copy, Check } from "lucide-react";
+import { Copy, Check, Eraser, TerminalSquare } from "lucide-react";
+import type { AgentStatus } from "@/types/agent";
 import { useI18n } from "@/lib/i18n";
-import { useTheme } from "@/lib/theme";
+import { timeAgo } from "@/lib/utils";
+import {
+  SHELL_FONT_KEY,
+  SHELL_TERM_BG,
+  buildTerminalTheme,
+  decodeShellWhitespace,
+  defaultInterpreter,
+  interpreterOptions,
+  operatorErrorText,
+  quickCommands,
+  sessionPromptSeq,
+  truncateUploadDisplay,
+} from "@/lib/shell-ui";
 
-const PROMPT_CHARS = ["$", "#", ">", "%"];
-const KEY = "forgec2_shell_fontsize";
 const MAX_DRAG_UPLOAD_BYTES = 4 * 1024;
-
-function buildTerminalTheme() {
-  const cs = typeof window === "undefined" ? null : getComputedStyle(document.documentElement);
-  const v = (name: string, fallback: string) => cs?.getPropertyValue(name).trim() || fallback;
-  const primary = v("--primary", "#4f46e5");
-  const isDark = typeof document !== "undefined" && document.documentElement.classList.contains("dark");
-  return {
-    background: isDark ? v("--card", "#0f172a") : v("--background", "#f8fafc"),
-    foreground: v("--foreground", "#0f172a"),
-    cursor: primary,
-    cursorAccent: v("--background", "#020617"),
-    selectionBackground: `color-mix(in oklch, ${primary} 28%, transparent)`,
-    selectionForeground: v("--foreground", "#e2e8f0"),
-  };
-}
-
-function fmtTime(d = new Date()) {
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
-}
-
-function clearCommandHistory() {
-  try { localStorage.removeItem("forgec2_shell_history"); } catch { /* ignore */ }
-}
 
 export default function ShellTerminal({
   agentId,
-  shellType = "cmd",
-  showHeader = true,
+  shellType,
   osType = "windows",
+  hostname,
+  username,
+  lastSeen,
+  status,
   className,
 }: {
   agentId: string;
   shellType?: string;
-  showHeader?: boolean;
   osType?: string;
+  hostname?: string;
+  username?: string;
+  ip?: string;
+  lastSeen?: string;
+  status?: AgentStatus;
   className?: string;
 }) {
-  const { resolved } = useTheme();
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -68,20 +61,28 @@ export default function ShellTerminal({
   const [loading, setLoading] = useState(false);
   const [fontSize, setFontSize] = useState(() => {
     if (typeof window === "undefined") return 14;
-    return Number(localStorage.getItem(KEY)) || 14;
+    return Number(localStorage.getItem(SHELL_FONT_KEY)) || 14;
   });
   const fontSizeRef = useRef(fontSize);
   fontSizeRef.current = fontSize;
   const osTypeRef = useRef(osType);
   osTypeRef.current = osType;
+  const statusRef = useRef(status);
+  statusRef.current = status;
+  const lastSeenRef = useRef(lastSeen);
+  lastSeenRef.current = lastSeen;
+  const [interpreter, setInterpreter] = useState(() => shellType || defaultInterpreter(osType));
+  const interpreterRef = useRef(interpreter);
+  interpreterRef.current = interpreter;
+  useEffect(() => {
+    setInterpreter(shellType || defaultInterpreter(osType));
+  }, [agentId, osType, shellType]);
   const [beaconHint, setBeaconHint] = useState("");
   const [lastOutput, setLastOutput] = useState("");
   const [copyFlash, setCopyFlash] = useState(false);
   const copyFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const a11yLogRef = useRef<HTMLDivElement>(null);
 
-  // xterm renders to canvas, which screen readers cannot see. Mirror plain-text
-  // output into an off-screen live region so AT users hear command results.
   const announce = useCallback((text: string) => {
     const el = a11yLogRef.current;
     if (!el || !text) return;
@@ -91,13 +92,15 @@ export default function ShellTerminal({
     while (el.childElementCount > 30) el.removeChild(el.firstElementChild!);
   }, []);
 
-  const [promptChar] = useState(() => PROMPT_CHARS[Math.floor(Math.random() * PROMPT_CHARS.length)]);
-  const promptRef = useRef(`\x1b[94m${promptChar}\x1b[0m `);
+  const promptOpts = { osType, hostname, username, interpreter };
+  const promptRef = useRef(sessionPromptSeq(promptOpts));
+  useEffect(() => {
+    promptRef.current = sessionPromptSeq({ osType, hostname, username, interpreter });
+  }, [osType, hostname, username, interpreter]);
   const execRef = useRef<(cmd: string) => Promise<void>>(async () => {});
   const writePromptRef = useRef<() => void>(() => {});
   const lastCommandRef = useRef<string>("");
   const abortRef = useRef<AbortController | null>(null);
-  const waitingWrittenRef = useRef(false);
   const inputRef = useRef("");
   const tRef = useRef(t);
   tRef.current = t;
@@ -117,21 +120,25 @@ export default function ShellTerminal({
   const executeCommand = useCallback(
     async (cmd: string) => {
       if (!cmd.trim() || loadingRef.current || !agentId) return;
+      const stNow = statusRef.current;
+      if (stNow && stNow !== "online") {
+        writeln(`✕ ${tRef.current("shell.not_online_hint", {
+          status: tRef.current(`agents.${stNow}_label`),
+          when: timeAgo(lastSeenRef.current, tRef.current),
+        })}`, "33");
+        writePrompt();
+        return;
+      }
       abortRef.current?.abort();
       const ac = new AbortController();
       abortRef.current = ac;
       loadingRef.current = true;
       setLoading(true);
       lastCommandRef.current = cmd;
-      waitingWrittenRef.current = false;
-      // Header line with timestamp — separates commands visually and gives operator timeline.
-      // C11 fix: for upload commands, truncate the displayed command to just the
-      // filename so the header line doesn't contain thousands of base64 characters.
-      const displayCmd = cmd.length > 200 && cmd.startsWith("upload ") ? `upload ${cmd.slice(7, cmd.indexOf(" ", 7))}` : cmd;
-      termRef.current?.writeln(`\x1b[90m─ ${fmtTime()}  ${promptChar} ${displayCmd}\x1b[0m`);
       let rendered = 0;
       let fullOut = "";
       const appendOutput = (text: string, announceText: string) => {
+        text = decodeShellWhitespace(text);
         if (text.length <= rendered) return;
         const fresh = text.slice(rendered);
         rendered = text.length;
@@ -143,43 +150,34 @@ export default function ShellTerminal({
       try {
         const st = await runTask(
           agentId,
-          paths.agents.cmd(agentId, "shell"),
+          paths.agents.command(agentId),
           {
             method: "postJson",
-            body: { command: cmd, shell: shellType },
+            body: { command: cmd, shell: interpreterRef.current },
             checkOnline: true,
             timeoutMs: 60000,
             signal: ac.signal,
             onStatus: (s) => {
-              if ((s.status === "pending" || s.status === "running") && !waitingWrittenRef.current) {
-                waitingWrittenRef.current = true;
-                writeln(`◷ ${t("shell.waiting_output")}`, "90");
-              }
               if (s.result) appendOutput(s.result, "");
             },
           },
         );
         if (st.status === "failed") {
-          const msg = st.error || t("shell.command_failed");
+          const msg = operatorErrorText(st.error, tRef.current("shell.command_failed"));
           writeln(`✕ ${msg}`, "31");
           setLastOutput(fullOut || msg);
         } else if (st.result) {
           appendOutput(st.result, st.result);
-          termRef.current?.write("\r\n");
-          // success tick with duration hint
-          termRef.current?.writeln(`\x1b[32m✓\x1b[0m \x1b[90m${fmtTime()}\x1b[0m`);
+          if (!st.result.endsWith("\n")) termRef.current?.write("\r\n");
           setLastOutput(st.result);
         } else {
-          writeln(`○ ${t("shell.no_output")}`, "33");
+          writeln(tRef.current("shell.no_output"), "90");
           setLastOutput("");
         }
       } catch (e) {
         if (!ac.signal.aborted) {
-          if (e instanceof ApiError && e.status === 409) {
-            writeln(`⚠ ${String(e.message)}`, "33");
-          } else {
-            writeln(`✕ ${String(e)}`, "31");
-          }
+          const raw = e instanceof ApiError && e.status === 409 ? e.message : formatThrownError(e);
+          writeln(`✕ ${operatorErrorText(raw, tRef.current("shell.command_failed"))}`, e instanceof ApiError && e.status === 409 ? "33" : "31");
         }
       } finally {
         loadingRef.current = false;
@@ -190,7 +188,7 @@ export default function ShellTerminal({
         }
       }
     },
-    [agentId, shellType, t, writeln, writePrompt, announce, promptChar],
+    [agentId, writeln, writePrompt, announce],
   );
 
   useEffect(() => { execRef.current = executeCommand; }, [executeCommand]);
@@ -213,7 +211,6 @@ export default function ShellTerminal({
         import("@xterm/addon-fit"),
       ]);
       if (disposed) return;
-      // Load xterm CSS dynamically
       if (!document.querySelector('link[href*="xterm.css"]')) {
         const link = document.createElement("link");
         link.rel = "stylesheet";
@@ -240,19 +237,17 @@ export default function ShellTerminal({
       fitRef.current = fit;
 
       historyRef.current = loadCommandHistory();
-      term.writeln(`\x1b[90m${tRef.current("shell.banner")}\x1b[0m`);
       writePromptRef.current();
 
       term.onData((data: string) => {
-        const t = term;
-        if (!t) return;
+        const termInst = term;
+        if (!termInst) return;
         if (data === "\x03") {
-          // Ctrl+C — interrupt the in-flight command (if any)
           if (abortRef.current) {
             abortRef.current.abort();
             abortRef.current = null;
           }
-          t.writeln("^C");
+          termInst.writeln("^C");
           loadingRef.current = false;
           setLoading(false);
           inputRef.current = "";
@@ -264,14 +259,10 @@ export default function ShellTerminal({
         if (data === "\r") {
           const cmd = inputRef.current.trim();
           inputRef.current = "";
-          t.writeln("");
+          termInst.writeln("");
           if (cmd) {
             saveCommandHistory(cmd);
             historyRef.current = loadCommandHistory();
-            // C10 fix: sync histIdxRef so Up-arrow works immediately on fresh
-            // mount. Without this, Up does nothing until the first Enter press
-            // of the session because histIdxRef remains at -1 while the Up
-            // handler requires > 0.
             histIdxRef.current = historyRef.current.length;
             execRef.current(cmd);
           } else {
@@ -283,7 +274,7 @@ export default function ShellTerminal({
         if (data === "\u007f") {
           if (inputRef.current.length > 0) {
             inputRef.current = inputRef.current.slice(0, -1);
-            t.write("\b \b");
+            termInst.write("\b \b");
           }
           return;
         }
@@ -291,45 +282,37 @@ export default function ShellTerminal({
         if (data === "\x1b[A") {
           if (historyRef.current.length > 0 && histIdxRef.current > 0) {
             histIdxRef.current--;
-            const cmd = historyRef.current[histIdxRef.current];
-            for (let i = inputRef.current.length; i > 0; i--) t.write("\b \b");
-            inputRef.current = cmd;
-            t.write(cmd);
+            const histCmd = historyRef.current[histIdxRef.current];
+            for (let i = inputRef.current.length; i > 0; i--) termInst.write("\b \b");
+            inputRef.current = histCmd;
+            termInst.write(histCmd);
           }
           return;
         }
 
         if (data === "\x1b[B") {
-          // histIdxRef -1 means "fresh prompt" (nothing browsed yet) — Down
-          // must be a no-op, not jump to the OLDEST saved entry.
           if (histIdxRef.current >= 0 && histIdxRef.current < historyRef.current.length - 1) {
             histIdxRef.current++;
-            const cmd = historyRef.current[histIdxRef.current];
-            for (let i = inputRef.current.length; i > 0; i--) t.write("\b \b");
-            inputRef.current = cmd;
-            t.write(cmd);
+            const histCmd = historyRef.current[histIdxRef.current];
+            for (let i = inputRef.current.length; i > 0; i--) termInst.write("\b \b");
+            inputRef.current = histCmd;
+            termInst.write(histCmd);
           } else if (histIdxRef.current >= 0) {
             histIdxRef.current = historyRef.current.length;
-            for (let i = inputRef.current.length; i > 0; i--) t.write("\b \b");
+            for (let i = inputRef.current.length; i > 0; i--) termInst.write("\b \b");
             inputRef.current = "";
           }
           return;
         }
 
         if (data === "\x0c") {
-          t.clear();
+          termInst.clear();
           writePromptRef.current();
-          t.write(inputRef.current);
+          termInst.write(inputRef.current);
           return;
         }
 
         if (data === "\x09") {
-          // C5 fix: only append the suffix delta between the completion and
-          // the current input. Previously Tab replaced the entire input with
-          // the first match which cased e.g. "dir C:\Windows" → "dir" (the
-          // raw completion without the original path prefix).
-          // C17 fix: trim for completion lookup but use the untrimmed length
-          // for suffix calculation to preserve leading whitespace in input.
           const currentInput = inputRef.current;
           const trimmed = currentInput.trim();
           const matches = getCompletions(trimmed, osTypeRef.current || "windows");
@@ -339,21 +322,21 @@ export default function ShellTerminal({
             const suffix = completed.slice(trimmed.length);
             if (suffix) {
               inputRef.current = currentInput + suffix;
-              t.write(suffix);
+              termInst.write(suffix);
             }
           } else if (matches.length > 1) {
-            t.write("\r\n");
-            t.write(matches.join("  "));
-            t.write("\r\n");
-            t.write(promptRef.current);
-            t.write(currentInput);
+            termInst.write("\r\n");
+            termInst.write(matches.join("  "));
+            termInst.write("\r\n");
+            termInst.write(promptRef.current);
+            termInst.write(currentInput);
           }
           return;
         }
 
         if (!data.startsWith("\x1b")) {
           inputRef.current += data;
-          t.write(data);
+          termInst.write(data);
         }
       });
 
@@ -388,10 +371,6 @@ export default function ShellTerminal({
   }, [fontSize]);
 
   useEffect(() => {
-    if (termRef.current) termRef.current.options.theme = buildTerminalTheme();
-  }, [resolved]);
-
-  useEffect(() => {
     if (!agentId) return;
     let cancelled = false;
     fetchAgentBeaconTiming(agentId)
@@ -407,126 +386,106 @@ export default function ShellTerminal({
     return () => { cancelled = true; };
   }, [agentId, t]);
 
-  const quickCommands =
-    osType === "linux"
-      ? ["whoami", "id", "uname -a", "hostname", "ps aux", "ip addr"]
-      : ["whoami", "hostname", "ipconfig", "systeminfo", "netstat -ano", "tasklist"];
+  const cmds = quickCommands(osType);
+  const interps = interpreterOptions(osType);
+  const offline = Boolean(status && status !== "online");
 
   const runQuick = (cmd: string) => {
-    if (loadingRef.current) return;
+    if (loadingRef.current || offline) return;
     inputRef.current = "";
-    // No manual echo here: executeCommand writes its own timestamped header —
-    // writing both printed the command twice per quick click.
+    termRef.current?.write(`${cmd}\r\n`);
     void executeCommand(cmd);
   };
 
   const handleCopyLast = async () => {
     if (!lastOutput) return;
-    try { await navigator.clipboard.writeText(lastOutput); setCopyFlash(true); if (copyFlashTimerRef.current) clearTimeout(copyFlashTimerRef.current); copyFlashTimerRef.current = setTimeout(() => setCopyFlash(false), 1200); } catch { /* ignore */ }
+    try {
+      await navigator.clipboard.writeText(lastOutput);
+      setCopyFlash(true);
+      if (copyFlashTimerRef.current) clearTimeout(copyFlashTimerRef.current);
+      copyFlashTimerRef.current = setTimeout(() => setCopyFlash(false), 1200);
+    } catch { /* ignore */ }
   };
 
   const handleClear = () => {
-    historyRef.current = [];
-    // keep persisted history but clear session view; persisted stays for Up/Down
     termRef.current?.clear();
-    termRef.current?.writeln(`\x1b[90m${t("shell.banner")}\x1b[0m`);
     writePromptRef.current();
+    termRef.current?.focus();
   };
 
+  const iconBtn = "size-7 text-slate-300 hover:bg-white/10 hover:text-white";
+
   return (
-    <div className={className || "relative flex h-full min-h-[20rem] flex-col overflow-hidden rounded-lg border border-border bg-card text-foreground shadow-sm"}>
-      {showHeader && (
-        <div className="shrink-0 bg-card/90 backdrop-blur supports-[backdrop-filter]:bg-card/80 border-b border-border px-3 py-2.5 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="size-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 ring-1 ring-primary/15">
-              <Keyboard className="size-4" />
-            </span>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-sm tracking-tight truncate">{t("shell.title")}</span>
-                <span className="inline-flex items-center gap-1 text-(--fs-micro-sm) font-bold tracking-widest uppercase px-1.5 py-0.5 rounded bg-secondary text-muted-foreground ring-1 ring-border/50">{shellType}</span>
-                <span className="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-foreground/80 font-mono">
-                  <StatusDot tone="success" size="sm" pulse />
-                  <span className="truncate max-w-[10rem]">{agentId.slice(0, 8)}…</span>
-                </span>
-              </div>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground/100">
-                  <Clock className="size-3" />
-                  {beaconHint || t("shell.beacon_loading")}
-                </span>
-                {loading && <span className="inline-flex items-center gap-1 text-xs text-chart-1"><Spinner size="xs" />{t("shell.executing")}</span>}
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
-            <div className="hidden md:flex items-center gap-1 text-xs text-muted-foreground mr-1">
-              <Type className="size-3.5" />
-              <Select value={String(fontSize)} onValueChange={(v) => {
-                  const val = Number(v ?? 14);
-                  setFontSize(val);
-                  localStorage.setItem(KEY, String(val));
-                }}>
-                <SelectTrigger className="h-7 w-auto text-xs" aria-label={t("shell.font_size")}>
-                  <SelectValue placeholder="14" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="12">12</SelectItem>
-                  <SelectItem value="13">13</SelectItem>
-                  <SelectItem value="14">14</SelectItem>
-                  <SelectItem value="16">16</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="hidden lg:flex items-center gap-1">
-            {quickCommands.slice(0, 4).map((cmd) => (
-              <Button
-                key={cmd}
-                variant="outline"
-                size="sm"
-                onClick={() => runQuick(cmd)}
-                disabled={loading}
-                className="whitespace-nowrap h-7 text-xs"
-              >
-                {cmd}
-              </Button>
+    <div className={className || "relative flex h-full min-h-[20rem] flex-col overflow-hidden bg-(--shell-terminal-bg) text-slate-100"}>
+      <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b border-white/10 px-2 py-1.5">
+        <TerminalSquare className="size-3.5 shrink-0 text-sky-400/80" aria-hidden />
+        <span className="sr-only">{t("shell.title")}</span>
+        <Select value={interpreter} onValueChange={(v) => { if (v) setInterpreter(v); }}>
+          <SelectTrigger className="h-7 w-[9rem] shrink-0 border-white/10 bg-white/5 font-mono text-xs text-slate-200" aria-label={t("shell.interpreter")}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {interps.map((name) => (
+              <SelectItem key={name} value={name}>{name}</SelectItem>
             ))}
-            </div>
-            <Tooltip>
-              <TooltipTrigger render={<Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={handleCopyLast}
-                  disabled={!lastOutput}
-                  aria-label={t("shell.copy_last_output")}
-                />}>
-                {copyFlash ? <Check className="size-4 text-success" /> : <Copy className="size-4" />}
-              </TooltipTrigger>
-              <TooltipContent>{t("shell.copy_last_output")}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger render={<Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => { clearCommandHistory(); historyRef.current = []; histIdxRef.current = 0; termRef.current?.clear(); writeln(t("shell.history_cleared"), "33"); }}
-                  aria-label={t("common.clear_history")}
-                />}>
-                <Trash2 className="size-4" />
-              </TooltipTrigger>
-              <TooltipContent>{t("common.clear_history")}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={handleClear} aria-label={t("shell.clear_screen")} />}>
-                <span className="text-xs font-mono">⌧</span>
-              </TooltipTrigger>
-              <TooltipContent>{t("shell.clear_screen")}</TooltipContent>
-            </Tooltip>
-          </div>
+          </SelectContent>
+        </Select>
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+          {cmds.map((cmd) => (
+            <Button
+              key={cmd}
+              variant="ghost"
+              size="sm"
+              onClick={() => runQuick(cmd)}
+              disabled={loading || offline}
+              className="h-6 shrink-0 px-2 font-mono text-(--fs-micro-sm) text-slate-400 hover:bg-white/10 hover:text-slate-100"
+            >
+              {cmd}
+            </Button>
+          ))}
         </div>
-      )}
+        <span className="hidden min-w-0 truncate font-mono text-(--fs-micro-sm) text-slate-500 lg:inline" title={t("shell.banner")}>
+          {t("shell.connected_as", {
+            user: username || "user",
+            host: hostname || agentId.slice(0, 8),
+            interpreter,
+          })}
+          {beaconHint ? ` · ${beaconHint}` : ""}
+        </span>
+        <Select value={String(fontSize)} onValueChange={(v) => {
+            const val = Number(v ?? 14);
+            setFontSize(val);
+            localStorage.setItem(SHELL_FONT_KEY, String(val));
+          }}>
+          <SelectTrigger className="hidden h-7 w-14 border-white/10 bg-white/5 text-xs text-slate-200 md:flex" aria-label={t("shell.font_size")}>
+            <SelectValue placeholder="14" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="12">12</SelectItem>
+            <SelectItem value="13">13</SelectItem>
+            <SelectItem value="14">14</SelectItem>
+            <SelectItem value="16">16</SelectItem>
+            <SelectItem value="18">18</SelectItem>
+          </SelectContent>
+        </Select>
+        <Tooltip>
+          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={handleCopyLast} disabled={!lastOutput} className={iconBtn} aria-label={t("shell.copy_last_output")} />}>
+            {copyFlash ? <Check className="size-4 text-emerald-400" /> : <Copy className="size-4" />}
+          </TooltipTrigger>
+          <TooltipContent>{t("shell.copy_last_output")}</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className={iconBtn} onClick={handleClear} aria-label={t("shell.clear_screen")} />}>
+            <Eraser className="size-4" />
+          </TooltipTrigger>
+          <TooltipContent>{t("shell.clear_screen")}</TooltipContent>
+        </Tooltip>
+      </div>
       <div
         ref={containerRef}
-        className={`flex-1 min-h-0 bg-background relative ${isDragging ? "ring-2 ring-primary" : ""}`}
+        className={`relative min-h-0 flex-1 ${isDragging ? "ring-2 ring-inset ring-sky-400/70" : ""}`}
+        style={{ background: SHELL_TERM_BG }}
+        onClick={() => termRef.current?.focus()}
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={async (e) => {
@@ -534,10 +493,6 @@ export default function ShellTerminal({
           setIsDragging(false);
           const files = Array.from(e.dataTransfer.files);
           if (files.length === 0) return;
-          // C4 fix: serialize drag-drop uploads instead of firing them all in
-          // parallel. Concurrent upload commands race the agent task queue and
-          // cause partial/truncated transfers. We now wait for each upload to
-          // finish before starting the next one.
           for (const file of files) {
             if (file.size > MAX_DRAG_UPLOAD_BYTES) {
               writeln(
@@ -548,8 +503,6 @@ export default function ShellTerminal({
             }
             const reader = new FileReader();
             await new Promise<void>((resolve) => {
-              // onerror MUST resolve too: an unsettled promise would wedge
-              // the whole upload queue and silently skip remaining files.
               reader.onerror = () => {
                 writeln(`${t("shell.drop_upload_read_failed")}: ${file.name}`, "31");
                 resolve();
@@ -557,17 +510,8 @@ export default function ShellTerminal({
               reader.onload = () => {
                 const b64 = (reader.result as string).split(",")[1];
                 const cmd = `upload ${file.name} ${b64}`;
-                // C4 fix: only show filename in the input area, not the raw
-                // base64 payload. The full command (with b64) is sent to the
-                // agent via execRef; echoing base64 into the visible input
-                // spams the terminal with thousands of garbage characters.
                 inputRef.current = `upload ${file.name}`;
-                termRef.current?.write(`upload ${file.name}\r\n`);
-                // AWAIT the execution: executeCommand refuses concurrent runs
-                // (loadingRef guard), so firing without awaiting made every
-                // file after the first silently vanish — the echo above still
-                // showed it as typed. Serializing honors the "wait for each"
-                // contract the loop was written for.
+                termRef.current?.write(`${truncateUploadDisplay(cmd)}\r\n`);
                 const run = execRef.current ? execRef.current(cmd) : Promise.resolve();
                 Promise.resolve(run).catch(() => {}).finally(resolve);
               };
@@ -577,24 +521,23 @@ export default function ShellTerminal({
         }}
       />
       {isDragging && (
-        <div className="absolute inset-0 bg-primary/10 border-2 border-dashed border-primary rounded-lg flex items-center justify-center z-10 pointer-events-none">
-          <span className="text-primary font-medium">{t("shell.drop_file")}</span>
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center border-2 border-dashed border-sky-400/60 bg-sky-500/10">
+          <span className="font-medium text-sky-200">{t("shell.drop_file")}</span>
         </div>
       )}
       <div ref={a11yLogRef} role="log" aria-live="polite" aria-atomic="false" className="sr-only" />
-      {loading && (
-        <div className="shrink-0 bg-card border-t border-border px-4 py-1.5 text-xs text-chart-1 flex items-center gap-2">
-           <Spinner size="xs" /> {t("shell.executing")}
-        </div>
-      )}
-      <div className="shrink-0 bg-background border-t border-border px-4 py-1.5 text-(--fs-micro-sm) text-muted-foreground/100 flex items-center justify-between">
-        <span>
-           <Keyboard className="size-3 mr-1 inline" />
-          {t("shell.footer_shortcuts", { exitKey: osType === "linux" ? "Ctrl+D" : "Ctrl+Z" })}
+      <div className="flex shrink-0 items-center justify-between border-t border-white/10 px-3 py-1 font-mono text-(--fs-micro-sm) text-slate-500">
+        <span className="inline-flex min-w-0 items-center gap-2 truncate">
+          {loading ? (
+            <>
+              <Spinner size="xs" />
+              <span className="text-sky-300">{t("shell.waiting_output")}</span>
+            </>
+          ) : (
+            <span className="truncate">{t("shell.session_hint")} · {t("shell.footer_shortcuts", { exitKey: osType === "linux" ? "Ctrl+D" : "Ctrl+Z" })}</span>
+          )}
         </span>
-        <span>
-          {t("shell.font_label", { size: fontSize })}
-        </span>
+        <span className="shrink-0">{t("shell.font_label", { size: fontSize })}</span>
       </div>
     </div>
   );

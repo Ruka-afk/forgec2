@@ -2,7 +2,7 @@
 
 import { useCallback } from "react";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, formatThrownError } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { normalizeListEnvelope } from "@/lib/envelope";
 import { useI18n } from "@/lib/i18n";
@@ -117,7 +117,7 @@ export function usePivotingData() {
         await loadData();
         return true;
       } catch (err) {
-        toast.error(String(err));
+        toast.error(formatThrownError(err));
         return false;
       }
     },

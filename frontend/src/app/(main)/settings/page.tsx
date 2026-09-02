@@ -15,7 +15,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchInput } from "@/components/framework/SearchInput";
 import { toast } from "sonner";
-import { Bell, Bot, Cpu, Database, FileCode, Globe, Lock, Palette, Server, Shield, User, Users, Wrench, Archive, Radio, AlertTriangle, Activity, ScanSearch } from "lucide-react";
+import { Bell, Bot, Cpu, Database, FileCode, Globe, Lock, Palette, Server, Shield, User, Users, Wrench, Archive, Radio, AlertTriangle, Activity, ScanSearch, SearchX } from "lucide-react";
 import { useTOTP } from "./_components/useTOTP";
 import { useSettingsData } from "./_components/useSettingsData";
 import ProfileSection from "./_components/ProfileSection";
@@ -40,6 +40,23 @@ const ModulesSection = dynamic(() => import("./_components/ModulesSection"), { s
 const EmergencySection = dynamic(() => import("./_components/EmergencySection"), { ssr: false });
 const AccessSection = dynamic(() => import("./_components/AccessSection"), { ssr: false });
 const TelemetrySection = dynamic(() => import("./_components/TelemetrySection"), { ssr: false });
+
+const SETTINGS_SECTION_KEYS = new Set([
+  "profile", "theme", "language", "security", "access", "server", "agent",
+  "malleable", "database", "backup", "maintenance", "notifications", "extc2",
+  "siem", "certificates", "modules", "emergency", "telemetry", "about",
+]);
+
+function sectionFromHash(): string | null {
+  const raw = window.location.hash.match(/^#tab=(.+)$/)?.[1];
+  if (!raw) return null;
+  try {
+    const section = decodeURIComponent(raw);
+    return SETTINGS_SECTION_KEYS.has(section) ? section : null;
+  } catch {
+    return null;
+  }
+}
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -69,8 +86,13 @@ export default function SettingsPage() {
   const { confirm: confirmPurge, modal: modalPurge } = useConfirm();
 
   useEffect(() => {
-    const tab = window.location.hash.match(/^#tab=(.+)$/)?.[1];
-    if (tab) setActiveSection(tab);
+    const syncFromHash = () => {
+      const section = sectionFromHash();
+      if (section) setActiveSection(section);
+    };
+    syncFromHash();
+    window.addEventListener("hashchange", syncFromHash);
+    return () => window.removeEventListener("hashchange", syncFromHash);
   }, []);
 
   const {
@@ -255,6 +277,14 @@ export default function SettingsPage() {
         : group.items,
     }))
     .filter((group) => group.items.length > 0);
+  const activeSectionMeta = sections.find((section) => section.key === activeSection) ?? sections[0];
+  const activeGroup = sectionGroups.find((group) => group.members.includes(activeSection)) ?? sectionGroups[0];
+  const activeSectionIndex = sections.findIndex((section) => section.key === activeSection);
+  const handleSectionChange = (section: string) => {
+    if (!SETTINGS_SECTION_KEYS.has(section)) return;
+    setActiveSection(section);
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#tab=${encodeURIComponent(section)}`);
+  };
 
   return (
     <Permission perms="settings.read" fallback={
@@ -262,12 +292,17 @@ export default function SettingsPage() {
         <ErrorState title={t("common.denied_title")} message={t("common.denied_desc")} />
       </PageContainer>
     }>
-    <PageContainer variant="standard" title={t("settings.title")} subtitle={t("settings.subtitle")}>
+    <PageContainer variant="wide" title={t("settings.title")} subtitle={t("settings.subtitle")}>
 
-      <Tabs value={activeSection} onValueChange={setActiveSection}>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-          <div className="hidden w-60 shrink-0 lg:block">
-            <div className="sticky top-24 space-y-4 rounded-xl border border-border/80 bg-card p-3 shadow-sm">
+      <Tabs value={activeSection} onValueChange={handleSectionChange} orientation="vertical">
+        <div className="grid gap-4 lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-start lg:gap-6">
+          <aside className="hidden lg:block">
+            <div className="sticky top-24 overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm">
+              <div className="border-b border-border/70 bg-muted/35 p-3">
+                <div className="mb-2 flex items-center justify-between px-0.5">
+                  <span className="text-xs font-semibold text-foreground">{t("settings.sidebar_header")}</span>
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-primary">{sections.length}</span>
+                </div>
               <SearchInput
                 value={sectionQuery}
                 onChange={setSectionQuery}
@@ -275,28 +310,37 @@ export default function SettingsPage() {
                 placeholder={t("settings.search_sections")}
                 label={t("settings.search_sections")}
               />
-              <div className="max-h-[calc(100vh-15rem)] space-y-4 overflow-y-auto pr-1">
+              </div>
+              <nav aria-label={t("settings.sidebar_header")} className="max-h-[calc(100vh-13rem)] space-y-3 overflow-y-auto p-2.5 supports-[height:100dvh]:max-h-[calc(100dvh-13rem)]">
                 {visibleSectionGroups.map((group) => (
                   <div key={group.key}>
-                    <div className="mono-eyebrow mb-1.5 px-2 text-muted-foreground">{group.label}</div>
-                    <TabsList className="h-auto w-full flex-col gap-1 border-0 bg-transparent p-0 shadow-none">
+                    <div className="mono-eyebrow mb-1 px-2 text-muted-foreground">{group.label}</div>
+                    <TabsList variant="sidebar">
                       {group.items.map((s) => (
                         <TabsTrigger key={s.key} value={s.key}
-                          className="flex w-full items-center justify-start gap-2 rounded-lg px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-primary/5 data-[selected]:bg-primary/10 data-[selected]:font-semibold data-[selected]:text-primary">
-                          {s.icon}{s.label}
+                          className="relative flex min-h-10 w-full items-center justify-start gap-2.5 rounded-lg border-l-2 border-transparent px-2.5 py-2 text-xs text-muted-foreground transition-colors hover:bg-primary/5 data-[selected]:border-l-primary data-[selected]:bg-primary/10 data-[selected]:font-semibold data-[selected]:text-primary data-[selected]:shadow-none data-[selected]:[&>span:first-child]:bg-primary/10 data-[selected]:[&>span:first-child]:text-primary">
+                          <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted/75 text-muted-foreground">{s.icon}</span>
+                          <span className="truncate">{s.label}</span>
                         </TabsTrigger>
                       ))}
                     </TabsList>
                   </div>
                 ))}
-              </div>
+                {visibleSectionGroups.length === 0 && (
+                  <div className="flex flex-col items-center px-3 py-8 text-center">
+                    <SearchX className="mb-2 size-5 text-muted-foreground" />
+                    <p className="text-xs text-muted-foreground">{t("settings.no_sections")}</p>
+                    <button type="button" onClick={() => setSectionQuery("")} className="mt-2 text-xs font-medium text-primary hover:underline">{t("common.clear")}</button>
+                  </div>
+                )}
+              </nav>
             </div>
-          </div>
+          </aside>
 
-          <div className="flex-1 min-w-0">
-            <div className="lg:hidden">
-              <Select value={activeSection} onValueChange={(value) => { if (typeof value === "string") setActiveSection(value); }}>
-                <SelectTrigger className="w-full" aria-label={t("settings.sidebar_header")}>
+          <div className="min-w-0">
+            <div className="sticky top-[calc(var(--shell-breadcrumb-height)+0.5rem)] z-20 mb-4 rounded-xl border border-border/80 bg-background/95 p-2 shadow-sm backdrop-blur lg:hidden">
+              <Select value={activeSection} onValueChange={(value) => { if (typeof value === "string") handleSectionChange(value); }}>
+                <SelectTrigger className="min-h-11 w-full bg-card" aria-label={t("settings.sidebar_header")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -307,7 +351,16 @@ export default function SettingsPage() {
               </Select>
             </div>
 
-            <div className="space-y-6">
+            <div className="mb-4 flex items-center gap-3 rounded-xl border border-border/75 bg-card px-4 py-3 shadow-xs">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">{activeSectionMeta.icon}</span>
+              <div className="min-w-0 flex-1">
+                <div className="mono-eyebrow text-muted-foreground">{activeGroup.label}</div>
+                <h2 className="truncate text-base font-semibold text-foreground">{activeSectionMeta.label}</h2>
+              </div>
+              <span className="shrink-0 font-mono text-[10px] text-muted-foreground">{activeSectionIndex + 1}/{sections.length}</span>
+            </div>
+
+            <div className="mx-auto max-w-5xl space-y-6">
               <TabsContent value="profile" className="mt-0"><ProfileSection data={data} /></TabsContent>
               <TabsContent value="theme" className="mt-0"><ThemeSection theme={theme} onApplyTheme={handleApplyTheme} /></TabsContent>
               <TabsContent value="language" className="mt-0"><LanguageSection language={language} onSetLanguage={handleSetLanguage} /></TabsContent>

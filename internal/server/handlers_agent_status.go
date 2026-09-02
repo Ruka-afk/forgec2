@@ -28,8 +28,9 @@ func (s *Server) handleAgentStatusHistory(c *gin.Context) {
 	}
 
 	var events []db.AgentStatusEvent
-	s.db.Where("agent_id = ? AND timestamp >= ?", agentID, startTime).
-		Order("timestamp ASC").
+	q := s.db.Where("agent_id = ? AND timestamp >= ?", agentID, startTime)
+	q = s.tenantScope(q, c)
+	q.Order("timestamp ASC").
 		Find(&events)
 
 	c.JSON(http.StatusOK, gin.H{

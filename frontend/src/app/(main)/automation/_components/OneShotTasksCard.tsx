@@ -16,6 +16,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { CalendarClock, Plus, Trash2, Zap } from "lucide-react";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 
 interface OneShotTask {
   id: number;
@@ -44,8 +45,6 @@ function toLocalRFC3339(localInput: string): string {
 export function OneShotTasksCard() {
   const { t } = useI18n();
   const { confirm, modal } = useConfirm();
-  const [tasks, setTasks] = useState<OneShotTask[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
 
   // form state
@@ -64,25 +63,15 @@ export function OneShotTasksCard() {
   useEffect(() => { void loadAgents(); }, [loadAgents]);
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
-    try {
-      const d = await api.get<{ tasks?: OneShotTask[] }>(paths.scheduler.oneshotList);
-      setTasks(d.tasks || []);
-    } catch {
-      setTasks([]);
-    } finally {
-      setLoading(false);
-    }
+  const fetchTasks = useCallback(async (signal?: AbortSignal) => {
+    const data = await api.get<{ tasks?: OneShotTask[] }>(paths.scheduler.oneshotList, { signal });
+    return data.tasks || [];
   }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  useEffect(() => {
-    const id = setInterval(load, 30000);
-    return () => clearInterval(id);
-  }, [load]);
+  const { data, loading, refresh } = useApiResource<OneShotTask[]>({
+    fetcher: fetchTasks,
+    pollMs: 30000,
+  });
+  const tasks = data || [];
 
   const handleCreate = async () => {
     if (!agentId || !command.trim()) {
@@ -100,7 +89,7 @@ export function OneShotTasksCard() {
       setShowForm(false);
       setCommand("");
       setRunAtLocal("");
-      load();
+      await refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("oneshot.toast_create_failed"));
     } finally {
@@ -113,7 +102,7 @@ export function OneShotTasksCard() {
     try {
       await api.del(paths.scheduler.oneshot(task.id));
       toast.success(t("oneshot.toast_cancelled"));
-      load();
+      await refresh();
     } catch {
       toast.error(t("oneshot.toast_cancel_failed"));
     }

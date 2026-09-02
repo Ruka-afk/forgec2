@@ -36,7 +36,6 @@ export function UserDropdown() {
           <div className="text-xs font-medium text-foreground">{name}</div>
           <div className="text-(--fs-micro-sm) text-muted-foreground/100">{role}</div>
         </div>
-        <span className="md:hidden text-xs font-medium text-foreground max-w-[60px] truncate">{name.slice(0, 6)}</span>
         <ChevronDown className="size-3 text-muted-foreground/100 hidden md:block" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">

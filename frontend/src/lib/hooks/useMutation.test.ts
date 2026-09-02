@@ -80,4 +80,24 @@ describe("useMutation", () => {
     await waitFor(() => expect(result.current.isPending).toBe(false));
     expect(onSuccess).toHaveBeenCalledWith("fresh");
   });
+
+  it("does not fire lifecycle callbacks after unmount", async () => {
+    const pending = deferred<string>();
+    const onSuccess = vi.fn();
+    const onSettled = vi.fn();
+    const { result, unmount } = renderHook(() => useMutation<[], string>({
+      fn: () => pending.promise,
+      onSuccess,
+      onSettled,
+    }));
+
+    let completion!: Promise<string | undefined>;
+    act(() => { completion = result.current.mutate(); });
+    unmount();
+    pending.resolve("late");
+    await completion;
+
+    expect(onSuccess).not.toHaveBeenCalled();
+    expect(onSettled).not.toHaveBeenCalled();
+  });
 });

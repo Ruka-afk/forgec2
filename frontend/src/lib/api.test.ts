@@ -5,10 +5,19 @@ import {
   buildUrl,
   api,
   ApiError,
+  formatThrownError,
   handleUnauthorized,
   resetAuthRedirectState,
   getRateLimitRetryAfter,
+  parseRetryAfterSeconds,
 } from "./api";
+
+describe("formatThrownError", () => {
+  it("uses the Error message without the class name prefix", () => {
+    expect(formatThrownError(new ApiError("not found", 404))).toBe("not found");
+    expect(formatThrownError(new Error("offline"))).toBe("offline");
+  });
+});
 
 describe("unwrapBody", () => {
   it("extracts data from success envelope", () => {
@@ -48,6 +57,19 @@ describe("getCsrfToken", () => {
   it("reads forgec2_csrf cookie", () => {
     document.cookie = "forgec2_csrf=abc123";
     expect(getCsrfToken()).toBe("abc123");
+  });
+});
+
+describe("parseRetryAfterSeconds", () => {
+  it("supports delta seconds and HTTP dates", () => {
+    const now = Date.parse("2026-08-31T00:00:00Z");
+    expect(parseRetryAfterSeconds("2.2", now)).toBe(3);
+    expect(parseRetryAfterSeconds("Mon, 31 Aug 2026 00:00:10 GMT", now)).toBe(10);
+  });
+
+  it("rejects malformed and negative values", () => {
+    expect(parseRetryAfterSeconds("not-a-date")).toBeNull();
+    expect(parseRetryAfterSeconds("-5")).toBeNull();
   });
 });
 
@@ -143,6 +165,11 @@ describe("api.get network layer", () => {
     );
     const data = await api.get<{ ok: number }>("/agents");
     expect(data).toEqual({ ok: 1 });
+  });
+
+  it("accepts a successful empty response", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 204 }));
+    await expect(api.del("/sessions/1")).resolves.toBeUndefined();
   });
 
   it("throws ApiError with status on 403 without redirect", async () => {

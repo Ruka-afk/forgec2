@@ -36,25 +36,28 @@ func (s *Server) aiAssistReady() bool {
 // aiOneShot performs a single non-streaming completion (system + user) and
 // returns the assistant text. It reuses aiDoRequest so SSRF protection,
 // endpoint resolution, claude conversion and retry/backoff all apply.
-func (s *Server) aiOneShot(system, user string, maxTokens int) (string, error) {
-	if !s.aiAssistReady() {
+func (s *Server) aiOneShot(parent context.Context, system, user string, maxTokens int) (string, error) {
+	providerConfig, err := s.aiProviderRequestConfigSnapshot()
+	if err != nil {
+		return "", err
+	}
+	if !providerConfig.enabled || strings.TrimSpace(providerConfig.apiKey) == "" {
 		return "", errAIDisabled
 	}
 	if maxTokens <= 0 {
 		maxTokens = 2048
 	}
 
-	s.configMu.RLock()
-	model := s.cfg.AI.Model
+	model := providerConfig.model
 	if model == "" {
-		model = "deepseek-chat"
+		model = aiDefaultModel(providerConfig.provider)
 	}
-	provider := s.cfg.AI.Provider
-	s.configMu.RUnlock()
+	provider := providerConfig.provider
+	providerConfig.model = model
 
 	body := chatRequest{
-		Model:     model,
-		Messages:  []chatMessage{
+		Model: model,
+		Messages: []chatMessage{
 			{Role: "system", Content: system},
 			{Role: "user", Content: user},
 		},
@@ -67,10 +70,13 @@ func (s *Server) aiOneShot(system, user string, maxTokens int) (string, error) {
 		return "", fmt.Errorf("marshal request failed")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), aiOneShotTimeout)
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(parent, aiOneShotTimeout)
 	defer cancel()
 
-	resp, err := s.aiDoRequest(ctx, payload)
+	resp, err := s.aiDoRequestWithConfig(ctx, payload, providerConfig)
 	if err != nil {
 		return "", err
 	}
@@ -237,7 +243,7 @@ func (s *Server) handleAIAnalyzeResult(c *gin.Context) {
 {"summary":"2-3 sentence plain summary","highlights":[{"kind":"priv|av|network|path|cred|other","severity":"info|low|medium|high","text":"short finding"}],"next_steps":["imperative suggestion"]}
 Highlight rules: privileged processes/SYSTEM/admin groups -> kind=priv; antivirus/EDR (Defender, 360, Huorong, CrowdStrike, SentinelOne...) -> kind=av severity=high; unusual outbound connections/RDP/tunnels -> kind=network; sensitive paths (passwords, keys, DB dumps) -> kind=path; credentials/tokens/hashes -> kind=cred severity=high. Max 8 highlights, max 4 next_steps. Reply in the language of the output data.`
 
-	text, err := s.aiOneShot(system, "Task type: "+task.Type+"\nCommand: "+truncateStr(task.Command, 500)+"\n\nOutput:\n"+excerpt, 1500)
+	text, err := s.aiOneShot(c.Request.Context(), system, "Task type: "+task.Type+"\nCommand: "+truncateStr(task.Command, 500)+"\n\nOutput:\n"+excerpt, 1500)
 	if err != nil {
 		if errors.Is(err, errAIDisabled) {
 			aiAssistUnavailable(c)
@@ -286,13 +292,19 @@ Highlight rules: privileged processes/SYSTEM/admin groups -> kind=priv; antiviru
 
 // buildAttackSurfaceData gathers everything suggest-next-steps needs about one
 // agent. Extracted from the get_attack_surface tool so both share one source.
-func (s *Server) buildAttackSurfaceData(agent db.Implant) map[string]interface{} {
+func (s *Server) buildAttackSurfaceData(agent db.Implant) (map[string]interface{}, error) {
 	var credCount int64
-	s.db.Model(&db.CredentialEntry{}).Where("agent_id = ?", agent.ID).Count(&credCount)
+	if err := s.db.Model(&db.CredentialEntry{}).Where("agent_id = ?", agent.ID).Count(&credCount).Error; err != nil {
+		return nil, fmt.Errorf("count nearby credentials: %w", err)
+	}
 	var recentTasks []db.Task
-	s.db.Where("agent_id = ?", agent.ID).Order("created_at desc").Limit(5).Find(&recentTasks)
+	if err := s.db.Where("agent_id = ?", agent.ID).Order("created_at desc").Limit(5).Find(&recentTasks).Error; err != nil {
+		return nil, fmt.Errorf("load recent tasks: %w", err)
+	}
 	var recentLateral []db.Task
-	s.db.Where("agent_id = ? AND type IN ?", agent.ID, []string{"lateral", "ssh_lateral", "token_steal", "token_make"}).Order("created_at desc").Limit(5).Find(&recentLateral)
+	if err := s.db.Where("agent_id = ? AND type IN ?", agent.ID, []string{"lateral", "ssh_lateral", "token_steal", "token_make"}).Order("created_at desc").Limit(5).Find(&recentLateral).Error; err != nil {
+		return nil, fmt.Errorf("load recent lateral tasks: %w", err)
+	}
 	return map[string]interface{}{
 		"agent": map[string]interface{}{
 			"id": agent.ID, "hostname": agent.Hostname, "ip": agent.IP,
@@ -304,7 +316,7 @@ func (s *Server) buildAttackSurfaceData(agent db.Implant) map[string]interface{}
 		"credentials_nearby": credCount,
 		"recent_tasks":       recentTasks,
 		"recent_lateral":     recentLateral,
-	}
+	}, nil
 }
 
 // handleAISuggestNextSteps ranks concrete follow-up actions for one agent.
@@ -332,16 +344,30 @@ func (s *Server) handleAISuggestNextSteps(c *gin.Context) {
 		return
 	}
 
-	surface := s.buildAttackSurfaceData(agent)
-	covTac, gapTac, _ := s.mitreCoverageCounts()
+	surface, err := s.buildAttackSurfaceData(agent)
+	if err != nil {
+		slog.Error("AI suggestion context query failed", "agent_id", aid, "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to build agent context")
+		return
+	}
+	covTac, gapTac, _, err := s.mitreCoverageCounts()
+	if err != nil {
+		slog.Error("AI suggestion MITRE context query failed", "agent_id", aid, "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to build MITRE context")
+		return
+	}
 	surface["mitre"] = map[string]int{"covered_tactics": covTac, "gap_tactics": gapTac}
 
-	surfaceJSON, _ := marshalJSONSafe(surface)
+	surfaceJSON, ok := marshalJSONSafe(surface)
+	if !ok {
+		respondError(c, http.StatusInternalServerError, "failed to encode agent context")
+		return
+	}
 
 	system := `You are a senior red-team operator advising on next steps for one compromised host. Given the JSON context, reply with ONLY a JSON array (max 6 items), each: {"action":"short imperative title","reason":"why now, grounded in the data","risk":"low|medium|high","command_hint":"concrete command or empty"}.
 Order by operational value. Prefer OPSEC-quiet actions. If host is elevated with creds nearby, prioritize credential access/lateral movement; if not elevated, privilege escalation; if stale/offline, re-acquisition. Never include destructive commands. Reply in Chinese when hostnames/domains look Chinese-domain-joined, else English.`
 
-	text, err := s.aiOneShot(system, string(surfaceJSON), 1200)
+	text, err := s.aiOneShot(c.Request.Context(), system, string(surfaceJSON), 1200)
 	if err != nil {
 		if errors.Is(err, errAIDisabled) {
 			aiAssistUnavailable(c)
@@ -415,7 +441,7 @@ func (s *Server) handleAINLQuery(c *gin.Context) {
 	system := `Convert the user's question about C2 task history into a search filter. Reply with ONLY JSON: {"keywords":["substring",...],"agent_hostname":"","task_type":"","status":"","since_days":30}.
 Rules: keywords = distinctive words likely inside command/result text ([] for none); status only one of pending/pending_approval/running/completed/failed/cancelled else ""; task_type examples shell,screenshot,keylogger_dump,download,upload,lateral else ""; since_days integer 1-365 default 30. Empty string means no filter.`
 
-	text, err := s.aiOneShot(system, strings.TrimSpace(req.Question), 300)
+	text, err := s.aiOneShot(c.Request.Context(), system, strings.TrimSpace(req.Question), 300)
 	if err != nil {
 		if errors.Is(err, errAIDisabled) {
 			aiAssistUnavailable(c)
@@ -451,11 +477,11 @@ Rules: keywords = distinctive words likely inside command/result text ([] for no
 		q = q.Where("status = ?", filter.Status)
 	}
 	if filter.TaskType != "" {
-		q = q.Where("LOWER(type) LIKE ?", "%"+filter.TaskType+"%")
+		q = q.Where("LOWER(type) LIKE ? ESCAPE '\\'", "%"+strings.ToLower(escapeLike(filter.TaskType))+"%")
 	}
 	if hn := strings.TrimSpace(filter.AgentHostname); hn != "" {
 		q = q.Where("agent_id IN (?)", s.db.Model(&db.Implant{}).
-			Select("id").Where("LOWER(hostname) LIKE ?", "%"+strings.ToLower(hn)+"%"))
+			Select("id").Where("LOWER(hostname) LIKE ? ESCAPE '\\'", "%"+strings.ToLower(escapeLike(hn))+"%"))
 	}
 	kwCount := 0
 	for _, kw := range filter.Keywords {
@@ -463,20 +489,24 @@ Rules: keywords = distinctive words likely inside command/result text ([] for no
 		if kw == "" || kwCount >= 3 {
 			continue
 		}
-		like := "%" + kw + "%"
-		q = q.Where("(command LIKE ? OR result LIKE ?)", like, like)
+		like := "%" + escapeLike(kw) + "%"
+		q = q.Where("(command LIKE ? ESCAPE '\\' OR result LIKE ? ESCAPE '\\')", like, like)
 		kwCount++
 	}
 	var tasks []db.Task
-	q.Order("created_at desc").Limit(50).Find(&tasks)
+	if err := q.Order("created_at desc").Limit(50).Find(&tasks).Error; err != nil {
+		slog.Error("AI natural-language query failed", "err", err)
+		respondError(c, http.StatusInternalServerError, "task query failed")
+		return
+	}
 
 	rows := make([]gin.H, 0, len(tasks))
 	for _, t := range tasks {
 		rows = append(rows, gin.H{
 			"id": t.ID, "agent_id": t.AgentID, "type": t.Type,
-			"command":   truncateStr(t.Command, 160),
-			"status":    t.Status,
-			"result":    truncateStr(t.Result, 200),
+			"command":    truncateStr(t.Command, 160),
+			"status":     t.Status,
+			"result":     truncateStr(t.Result, 200),
 			"created_at": t.CreatedAt.Format(time.RFC3339),
 		})
 	}
@@ -515,7 +545,7 @@ func (s *Server) handleAIGeneratePlaybook(c *gin.Context) {
 	system := `You are a red-team playbook designer for Windows/Linux implants managed by ForgeC2. Given a goal (and optional target profile), draft a step-by-step macro. Reply with ONLY JSON: {"name":"snake_case_name","description":"one line","steps":[{"command":"shell command","shell":"cmd.exe|powershell.exe|/bin/sh","rationale":"why this step"}]}.
 Rules: 2-8 steps, each step self-contained and quiet (prefer built-in tools over downloads). Steps run sequentially on ONE agent. No destructive or persistence-without-consent steps. Use powershell.exe shell for PowerShell cmdlets, /bin/sh on non-Windows targets.`
 
-	text, err := s.aiOneShot(system, "Goal: "+strings.TrimSpace(req.Goal)+contextLine, 1400)
+	text, err := s.aiOneShot(c.Request.Context(), system, "Goal: "+strings.TrimSpace(req.Goal)+contextLine, 1400)
 	if err != nil {
 		if errors.Is(err, errAIDisabled) {
 			aiAssistUnavailable(c)
@@ -557,8 +587,8 @@ Rules: 2-8 steps, each step self-contained and quiet (prefer built-in tools over
 			shell = "cmd.exe"
 		}
 		steps = append(steps, gin.H{
-			"command": truncateStr(cmd, 800),
-			"shell":   shell,
+			"command":   truncateStr(cmd, 800),
+			"shell":     shell,
 			"rationale": truncateStr(st.Rationale, 300),
 		})
 	}
@@ -620,12 +650,19 @@ func (s *Server) handleAISavePlaybook(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "no usable steps")
 		return
 	}
-	stepsJSON, _ := marshalJSONSafe(steps)
+	stepsJSON, ok := marshalJSONSafe(steps)
+	if !ok {
+		respondError(c, http.StatusInternalServerError, "failed to encode playbook steps")
+		return
+	}
 
 	// Unique-name safety: append a numeric suffix on collision instead of failing.
 	name := req.Name
 	var count int64
-	s.db.Model(&db.CommandMacro{}).Where("name = ?", name).Count(&count)
+	if err := s.db.Model(&db.CommandMacro{}).Where("name = ?", name).Count(&count).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to check playbook name")
+		return
+	}
 	if count > 0 {
 		name = fmt.Sprintf("%s_%d", name, time.Now().Unix()%100000)
 	}

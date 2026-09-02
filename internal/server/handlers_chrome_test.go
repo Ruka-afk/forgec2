@@ -41,7 +41,7 @@ func TestChromeBeaconRegistersAndDispatches(t *testing.T) {
 	if err := s.db.First(&agent, "id = ?", chromeTestUUID).Error; err != nil {
 		t.Fatalf("agent not persisted: %v", err)
 	}
-	if !s.isChromeAgentKind(chromeTestUUID) {
+	if !s.isChromeAgentKind(nil, chromeTestUUID) {
 		t.Fatalf("agent tags=%q, want chrome", agent.Tags)
 	}
 

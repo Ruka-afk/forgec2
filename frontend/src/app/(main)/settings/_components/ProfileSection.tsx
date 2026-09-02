@@ -20,8 +20,8 @@ export default function ProfileSection({ data }: { data: SettingsData }) {
       <CardHeaderRow icon={User} tone="primary" title={t("settings.profile.title")} description={t("settings.profile.subtitle")} />
       <div className="p-(--card-spacing)">
         <div className="flex items-center gap-4">
-          <div className="size-16 bg-primary/10 text-primary ring-1 ring-border/50 rounded-lg flex items-center justify-center text-2xl font-bold">
-            <User className="size-4" />
+          <div className="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/15">
+            <User className="size-7" />
           </div>
           <div className="space-y-1.5">
             <div className="text-lg font-semibold text-foreground">{currentUsername}</div>
@@ -32,18 +32,18 @@ export default function ProfileSection({ data }: { data: SettingsData }) {
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 pt-6 border-t border-border">
-          <div className="bg-muted rounded-lg p-4 text-center">
+        <div className="mt-6 grid grid-cols-1 gap-3 border-t border-border pt-6 sm:grid-cols-3">
+          <div className="rounded-xl border border-border/70 bg-muted/45 p-4 text-left">
             <div className="text-xs text-muted-foreground">{t("settings.profile.user_id")}</div>
-            <div className="text-xl font-bold text-foreground mt-1 font-mono text-sm">{data.current_user_id ?? "-"}</div>
+            <div className="mt-1 font-mono text-sm font-semibold text-foreground">{data.current_user_id ?? "-"}</div>
           </div>
-          <div className="bg-muted rounded-lg p-4 text-center">
+          <div className="rounded-xl border border-border/70 bg-muted/45 p-4 text-left">
             <div className="text-xs text-muted-foreground">{t("settings.profile.role")}</div>
-            <div className="text-xl font-bold text-foreground mt-1">{currentRole.toUpperCase()}</div>
+            <div className="mt-1 text-sm font-semibold text-foreground">{currentRole.toUpperCase()}</div>
           </div>
-          <div className="bg-muted rounded-lg p-4 text-center">
+          <div className="rounded-xl border border-border/70 bg-muted/45 p-4 text-left">
             <div className="text-xs text-muted-foreground">{t("settings.profile.server_version")}</div>
-            <div className="text-xl font-bold text-foreground mt-1 font-mono text-sm">v{data.server_version ?? "2.0.0"}</div>
+            <div className="mt-1 font-mono text-sm font-semibold text-foreground">v{data.server_version ?? "2.0.0"}</div>
           </div>
         </div>
       </div>

@@ -14,6 +14,7 @@ const HEX_RE = /#[0-9a-fA-F]{3,8}\b/g;
 // (html-to-image needs explicit pixel colors; CSS vars do not paint).
 const HEX_EXEMPT = new Set([
   "components/ShellTerminal.tsx",
+  "lib/shell-ui.ts",
   "components/TopologyGraph.tsx",
   "app/(main)/groups/page.tsx",
   "app/(main)/tags/page.tsx",

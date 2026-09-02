@@ -37,6 +37,7 @@ export const COMMAND_TYPES = [
   { value: "ps", labelKey: "command.type.process_list" },
   { value: "ls", labelKey: "command.type.list_directory" },
   { value: "screenshot", labelKey: "command.type.screenshot" },
+  { value: "beacon_now", labelKey: "command.type.beacon_now" },
   { value: "sleep", labelKey: "command.type.sleep" },
   { value: "netstat", labelKey: "command.type.netstat" },
   { value: "users", labelKey: "command.type.users" },

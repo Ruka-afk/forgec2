@@ -1,6 +1,10 @@
 import type { AgentStatus } from "@/types/agent";
 import { Apple, Monitor, Terminal } from "lucide-react";
 
+export function agentDetailHref(id: string): string {
+  return `/agents/${encodeURIComponent(id)}`;
+}
+
 /** Format a Date as a local-timezone `<input type="date">` value (YYYY-MM-DD). */
 export function toLocalDateInput(d: Date): string {
   const y = d.getFullYear();

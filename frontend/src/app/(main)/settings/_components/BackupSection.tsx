@@ -14,6 +14,7 @@ import { Archive, Clock, Download, HardDrive, RefreshCw, Upload } from "lucide-r
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
 import { formatTime, formatSize } from "@/lib/utils";
+import { downloadBlob } from "@/lib/download";
 
 interface BackupInfo {
   name: string;
@@ -29,13 +30,14 @@ export default function BackupSection() {
   const [restoring, setRestoring] = useState<string | null>(null);
   const [confirmRestore, setConfirmRestore] = useState<BackupInfo | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [downloading, setDownloading] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadBackups = useCallback(async () => {
     setLoading(true);
     try {
-      const d = await api.get<{ data?: BackupInfo[] }>(paths.settings.dbBackups);
-      setBackups(d.data ?? []);
+      const backups = await api.get<BackupInfo[]>(paths.settings.dbBackups);
+      setBackups(Array.isArray(backups) ? backups : []);
     } catch {
       toast.error(t("settings.toast.load_backups_failed"));
     } finally {
@@ -97,6 +99,19 @@ export default function BackupSection() {
     }
   };
 
+  const handleDownload = async (name: string) => {
+    if (downloading) return;
+    setDownloading(name);
+    try {
+      const { blob, filename } = await api.downloadGet(paths.settings.dbBackupsDownload(name), name);
+      downloadBlob(blob, filename);
+    } catch {
+      toast.error(t("settings.backup.download_failed"));
+    } finally {
+      setDownloading(null);
+    }
+  };
+
   return (
     <Card className="overflow-hidden">
       <CardHeaderRow icon={Archive} tone="warning" title={t("settings.backup.title")} description={t("settings.backup.subtitle")} />
@@ -142,10 +157,8 @@ export default function BackupSection() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <Button variant="ghost" size="sm" onClick={() => {
-                    window.open(paths.settings.dbBackupsDownload(b.name), "_blank");
-                  }} className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground">
-                    <Download className="size-3.5" />
+                  <Button variant="ghost" size="sm" disabled={downloading !== null} onClick={() => void handleDownload(b.name)} className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground" aria-label={t("settings.backup.download", { name: b.name })}>
+                    {downloading === b.name ? <Spinner size="xs" /> : <Download className="size-3.5" />}
                   </Button>
                   <Button variant="ghost" size="sm" disabled={restoring === b.name} onClick={() => setConfirmRestore(b)} className="h-8 px-3 text-xs text-warning hover:text-warning hover:bg-warning/15">
                     {restoring === b.name ? <Spinner size="xs" /> : t("settings.backup.restore")}

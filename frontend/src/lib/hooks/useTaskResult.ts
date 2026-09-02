@@ -22,7 +22,7 @@ export function useTaskResult(agentId: string, pollMs = 2000, maxAttempts = 45) 
   const [result, setResult] = useState<string>("");
   const attempts = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inFlight = useRef(false);
+  const inFlightSeq = useRef<number | null>(null);
   const seqRef = useRef(0);
   const taskIdRef = useRef<string | null>(null);
 
@@ -65,24 +65,27 @@ export function useTaskResult(agentId: string, pollMs = 2000, maxAttempts = 45) 
 
     const tick = async () => {
       if (seqRef.current !== seq) return;
-      if (inFlight.current) return;
+      if (inFlightSeq.current === seq) return;
       attempts.current += 1;
       if (attempts.current > maxAttempts) {
         if (seqRef.current !== seq) return;
         setStatus("timeout");
         return;
       }
-      inFlight.current = true;
+      inFlightSeq.current = seq;
+      let terminal = false;
       try {
         const data = await api.get<TaskStatusResponse>(paths.agents.task(agentId, taskId));
         if (seqRef.current !== seq) return;
         const st = (data.status || "").toLowerCase();
         if (st === "completed" || st === "success" || st === "done") {
+          terminal = true;
           setStatus("completed");
           setResult(data.result || data.output || "");
           return;
         }
         if (st === "failed" || st === "error" || st === "cancelled") {
+          terminal = true;
           setStatus("failed");
           setResult(data.error || data.result || t("common.task_failed"));
           return;
@@ -95,15 +98,15 @@ export function useTaskResult(agentId: string, pollMs = 2000, maxAttempts = 45) 
       } catch {
         // keep polling until timeout
       } finally {
-        inFlight.current = false;
-        if (seqRef.current === seq && !document.hidden) {
+        if (inFlightSeq.current === seq) inFlightSeq.current = null;
+        if (!terminal && seqRef.current === seq && !document.hidden) {
           timer.current = setTimeout(tick, pollMs);
         }
       }
     };
 
     const handleVisibility = () => {
-      if (!document.hidden && seqRef.current === seq && !inFlight.current) {
+      if (!document.hidden && seqRef.current === seq && inFlightSeq.current !== seq) {
         tick();
       }
     };

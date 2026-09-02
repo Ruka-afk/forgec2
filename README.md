@@ -8,7 +8,7 @@
 
 **English** · [中文](README.zh.md)
 
-ForgeC2 is a self-hosted, single-binary C2 platform written in pure Go. One executable ships a hardened implant build pipeline, multi-protocol beaconing, an AI-assisted operations console, and a full Next.js web UI — no frontend server, no database engine, no dependencies to babysit.
+ForgeC2 is a self-hosted, single-binary C2 platform written in pure Go. One executable ships a hardened implant build pipeline with custom icons & JPG disguise, multi-protocol beaconing, an AI-assisted operations console with budget-aware context, and a full Vite + React web UI — no frontend server, no database engine, no dependencies to babysit.
 
 ---
 
@@ -50,6 +50,9 @@ git clone https://github.com/Ruka-afk/forgec2.git && cd forgec2
 # requires Go 1.25+ and Node.js 20+
 powershell -File scripts/build-embedded.ps1   # frontend → embedded → binary
 
+# one-line comprehensive verify + build + deploy (auto-fix, skip heavy)
+powershell -File scripts/verify-all.ps1       # tsc + lint + vet + test + build + health
+
 # ...or containerized
 docker compose up -d
 ```
@@ -63,6 +66,7 @@ The centerpiece of ForgeC2 is a workspace-style generator that treats payload cr
 - **Sticky connection panel** — listener, C2 URLs, transport, malleable profile, beacon timing, and keys stay in view while you build
 - **Build status** — every artifact reports Ready / Compiling / Done / Failed with inline results
 - **Artifact families** — agent binaries (EXE, DLL, PS1, ELF, macOS), stagers, shellcode/Donut, one-liners, and one-click quick presets
+- **Custom icon & JPG disguise** — upload `.ico/.png` (≤256KB) or pick presets, `photo.jpg.exe` double-extension and `winres`-based `RT_ICON`/`VersionInfo` injection via `rsrc.syso`
 - **Transport-aware fields** — picking WSS, gRPC, SSH, DNS, ICMP, mTLS, or H2C reveals only the fields that transport actually needs
 - **Everything is i18n'd** — English and Chinese, with key coverage enforced in CI
 
@@ -84,10 +88,12 @@ Full per-task, per-OS capability matrix: [docs/CAPABILITY_MATRIX.md](docs/CAPABI
 ## Operations console
 
 - **60+ pages** — dashboard with live charts (heatmaps, OS distribution, task Gantt, geo, attack paths), agent fleet management, file browser, terminal, token lab, traffic profiles
-- **Multi-operator** — RBAC roles, agent locking, task claiming, audit trail
+- **Agent detail** — one-click diagnose (`hostinfo/ps/netstat/users/av`), running AV chips (auto-collected), kill-date countdown, P2P chain, quick sleep, lazy-loaded screenshots
+- **Screen & AI** — Blob URL streaming (60% memory saving), WS-main + hash-skip for screen (80% bandwidth saving on static desktops), AI context budget bar + tool batch (expand/collapse/copy all) + pinned-first sessions
+- **Multi-operator** — RBAC roles, agent locking, task claiming, audit trail, tenant-isolated queries
 - **Automation** — workflow engine, task scheduler, auto-tagging, PDF report generation
 - **Teammate tools** — campaigns, phishing (SMTP + tracking), BloodHound ingestion, domain fronting, infrastructure redirectors
-- **Resilience** — circuit breaker for listener health, AES-GCM encrypted DB backups, graceful failover
+- **Resilience** — circuit breaker for listener health, AES-GCM encrypted DB backups, graceful failover, corporate+EDR no longer blocks `screen_stream_start`
 
 ## Security posture
 
@@ -136,12 +142,15 @@ Everything lives in one YAML file ([config.example.yaml](config.example.yaml) is
 ## Development
 
 ```bash
-go build ./...            # backend
+go build ./cmd/server     # backend (avoid ./... hits data/e2e dual main)
 go test ./internal/...    # tests (run with -count=1)
 cd frontend && npm run dev  # UI hot-reload on :3000
+
+# comprehensive one-liner (see scripts/verify-all.ps1)
+powershell -File scripts/verify-all.ps1  # vet + tsc + lint + test + build + webdist + health
 ```
 
-Repository hygiene is enforced by checks: `go vet`, OpenAPI validation (`cmd/checkopenapi`), and frontend CSS/i18n/path gates (`npm run check`).
+Repository hygiene is enforced by checks: `go vet` (payload/agent filtered), `gofmt -w` (changed files), OpenAPI validation, and frontend CSS/i18n/path/bundle gates (`npm run check` now parallel via `concurrently`).
 
 ## Docs & versioning
 

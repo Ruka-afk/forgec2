@@ -17,11 +17,17 @@ export function useTOTP(t: (key: string) => string, setSaving: (v: boolean) => v
   const [totpDisableCode, setTotpDisableCode] = useState("");
 
   useEffect(() => {
+    const controller = new AbortController();
     if (activeSection === "security") {
-      api.get(paths.settings.totpStatus)
-        .then((d: Record<string, unknown>) => setTotpStatus((d.totp_enabled ?? false) as boolean))
-        .catch(() => setTotpStatus(false));
+      api.get(paths.settings.totpStatus, { signal: controller.signal })
+        .then((d: Record<string, unknown>) => {
+          if (!controller.signal.aborted) setTotpStatus((d.totp_enabled ?? false) as boolean);
+        })
+        .catch((error: unknown) => {
+          if (!controller.signal.aborted && (!(error instanceof Error) || error.name !== "AbortError")) setTotpStatus(false);
+        });
     }
+    return () => controller.abort();
   }, [activeSection]);
 
   const handleGenerateTOTP = useCallback(async () => {

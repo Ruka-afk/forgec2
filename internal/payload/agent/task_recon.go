@@ -43,7 +43,7 @@ func handleScreenshot(task Task, res *TaskResult) {
 
 func handleScreenStreamStart(task Task, res *TaskResult) {
 	intervalSec, quality := parseScreenStreamSettings(task.Command)
-	if atomic.LoadInt32(&screenStreaming) == 1 {
+	if !atomic.CompareAndSwapInt32(&screenStreaming, 0, 1) {
 		res.Output = fmt.Sprintf("screen stream already running (interval=%ds quality=%d)", intervalSec, quality)
 		return
 	}
@@ -51,14 +51,24 @@ func handleScreenStreamStart(task Task, res *TaskResult) {
 	// that cannot produce frames (headless/DUMMY display, no grabber, etc.).
 	first, err := takeScreenshotJPEG(quality)
 	if err != nil {
+		atomic.StoreInt32(&screenStreaming, 0)
 		res.Error = "screen stream failed to start: " + err.Error()
 		return
 	}
-	atomic.StoreInt32(&screenStreaming, 1)
 	go func() {
+		if atomic.LoadInt32(&screenStreaming) != 1 {
+			return
+		}
 		sendScreenFrame(first)
-		for atomic.LoadInt32(&screenStreaming) == 1 {
-			time.Sleep(time.Duration(intervalSec) * time.Second)
+		timer := time.NewTimer(time.Duration(intervalSec) * time.Second)
+		defer timer.Stop()
+		for {
+			<-timer.C
+			// A stop can arrive while the timer is waiting. Re-check before
+			// capturing so stopping never emits one final, expensive frame.
+			if atomic.LoadInt32(&screenStreaming) != 1 {
+				return
+			}
 			data, err := takeScreenshotJPEG(quality)
 			if err != nil {
 				// Stop streaming rather than silently skipping errors and
@@ -68,6 +78,7 @@ func handleScreenStreamStart(task Task, res *TaskResult) {
 				return
 			}
 			sendScreenFrame(data)
+			timer.Reset(time.Duration(intervalSec) * time.Second)
 		}
 	}()
 	res.Output = fmt.Sprintf("screen stream started (interval=%ds quality=%d)", intervalSec, quality)
@@ -82,7 +93,7 @@ func parseScreenStreamSettings(command string) (intervalSec int, quality int) {
 	}
 	parts := strings.Split(command, ",")
 	if len(parts) >= 1 {
-		if v, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil && v > 0 {
+		if v, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil && v >= 1 && v <= 60 {
 			intervalSec = v
 		}
 	}

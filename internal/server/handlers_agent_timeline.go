@@ -12,13 +12,13 @@ import (
 
 // timelineEvent is one unified entry on an agent's activity timeline.
 type timelineEvent struct {
-	Time    time.Time `json:"time"`
-	Kind    string    `json:"kind"` // task, screenshot, credential, status
-	Type    string    `json:"type,omitempty"`
-	Title   string    `json:"title"`
-	Detail  string    `json:"detail,omitempty"`
-	Status  string    `json:"status,omitempty"`
-	RefID   uint      `json:"ref_id,omitempty"`
+	Time   time.Time `json:"time"`
+	Kind   string    `json:"kind"` // task, screenshot, credential, status
+	Type   string    `json:"type,omitempty"`
+	Title  string    `json:"title"`
+	Detail string    `json:"detail,omitempty"`
+	Status string    `json:"status,omitempty"`
+	RefID  uint      `json:"ref_id,omitempty"`
 }
 
 // handleAgentTimeline merges tasks, screenshots, harvested credentials and
@@ -63,6 +63,7 @@ func (s *Server) handleAgentTimeline(c *gin.Context) {
 	q := s.db.Table("tasks").
 		Select("id, type, command, status, created_at").
 		Where("agent_id = ?", id)
+	q = s.tenantScope(q, c)
 	if err := q.Order("created_at desc").Limit(limit).Scan(&tasks).Error; err != nil {
 		// Non-fatal: still render other sources.
 		tasks = nil
@@ -105,9 +106,11 @@ func (s *Server) handleAgentTimeline(c *gin.Context) {
 			Source    string    `json:"source"`
 			CreatedAt time.Time `json:"created_at"`
 		}
-		if err := s.db.Table("credential_entries").
+		credQuery := s.db.Table("credential_entries").
 			Select("id, domain, username, type, source, created_at").
-			Where("agent_id = ?", id).
+			Where("agent_id = ?", id)
+		credQuery = s.tenantScope(credQuery, c)
+		if err := credQuery.
 			Order("created_at desc").Limit(limit).Scan(&creds).Error; err != nil {
 			creds = nil
 		}
@@ -131,9 +134,11 @@ func (s *Server) handleAgentTimeline(c *gin.Context) {
 			Status    string    `json:"status"`
 			Timestamp time.Time `json:"timestamp"`
 		}
-		if err := s.db.Table("agent_status_events").
+		statusQuery := s.db.Table("agent_status_events").
 			Select("id, status, timestamp").
-			Where("agent_id = ?", id).
+			Where("agent_id = ?", id)
+		statusQuery = s.tenantScope(statusQuery, c)
+		if err := statusQuery.
 			Order("timestamp desc").Limit(limit).Scan(&statuses).Error; err != nil {
 			statuses = nil
 		}
@@ -159,7 +164,10 @@ type screenshotMod struct {
 }
 
 func (s *Server) listScreenshotModTimes(agentID string) []screenshotMod {
-	dir := filepath.Join(s.cfg.Server.DataDir, "screenshots", agentID)
+	dir := safeJoin(filepath.Join(s.cfg.Server.DataDir, "screenshots"), agentID)
+	if dir == "" {
+		return nil
+	}
 	entries, err := listDirEntries(dir)
 	if err != nil {
 		return nil

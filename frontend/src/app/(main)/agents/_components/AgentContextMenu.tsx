@@ -14,6 +14,8 @@ import {
   Network,
   Monitor,
   MoreHorizontal,
+  Radio,
+  RefreshCw,
   StickyNote,
   Terminal,
   Trash2,
@@ -116,12 +118,14 @@ export function AgentContextMenu({ point, onClose, onAction }: AgentContextMenuP
       <MenuRow icon={<MoreHorizontal />} label={t("agents.context_open_details")} onClick={() => run("details")} />
       <Separator className="my-1" />
       <MenuRow icon={<Camera />} label={t("agents.screenshot")} onClick={() => run("screenshot")} />
+      <MenuRow icon={<Radio />} label={t("agents.beacon_now")} onClick={() => run("beacon_now")} />
       <MenuRow icon={<Clock />} label={t("agents.quick_sleep")} onClick={() => run("sleep")} />
       <MenuRow icon={<StickyNote />} label={t("agents.edit_notes")} onClick={() => run("notes")} />
       <Separator className="my-1" />
       <MenuRow icon={<FolderOpen />} label={t("agents.files_title")} onClick={() => run("files")} />
       <MenuRow icon={<Network />} label={t("agents.dock_cmd_socks")} onClick={() => run("socks")} />
       <MenuRow icon={<Copy />} label={t("agents.copy_id")} onClick={() => run("copy_id")} />
+      <MenuRow icon={<RefreshCw />} label={t("agents.rebuild_payload")} onClick={() => run("rebuild")} />
       <MenuRow icon={<IdCard />} label={`${t("agents.token_title")} · ${t("generate.quality_hardened")}`} onClick={() => run("tokens")} />
       <MenuRow icon={<Monitor />} label={`${t("agents.screen_title")} · ${t("generate.quality_hardened")}`} onClick={() => run("screen")} />
       <Separator className="my-1" />

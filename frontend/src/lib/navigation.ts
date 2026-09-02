@@ -9,7 +9,7 @@ import {
   Radio, Server, Cloud, Box, Wrench, Code, Key,
   Route, IdCard, Archive, SatelliteDish, ArrowLeftRight,
   FileCode, Globe, Puzzle, Network, Crosshair, ClipboardList,
-  Plug, Users, Settings, Search, ListOrdered,
+  Plug, Users, Settings, ListOrdered,
 } from "lucide-react";
 
 interface NavItemDef {
@@ -82,7 +82,6 @@ export const NAV_SECTIONS: NavSectionDef[] = [
     items: [
       { href: "/loot", labelKey: "nav.loot", icon: Archive, perms: ["agents.read"] },
       { href: "/credentials", labelKey: "nav.credentials", icon: Key, perms: ["credentials.read"] },
-      { href: "/search", labelKey: "nav.search", icon: Search },
       { href: "/audit", labelKey: "nav.audit", icon: Shield, perms: ["audit.read"] },
       { href: "/traffic", labelKey: "nav.traffic", icon: Network, perms: ["agents.read"] },
       { href: "/report", labelKey: "nav.report", icon: ClipboardList, perms: ["agents.read"] },

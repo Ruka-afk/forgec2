@@ -93,6 +93,10 @@ func (s *Server) handleAddUser(c *gin.Context) {
 
 // handleToggleUser enables/disables a user
 func (s *Server) handleToggleUser(c *gin.Context) {
+	// Only admins can toggle users
+	if !s.requireAdmin(c) {
+		return
+	}
 	idStr := c.Param("id")
 	var user db.User
 	if !s.findOrFail(c, &user, idStr, "User") {
@@ -101,10 +105,6 @@ func (s *Server) handleToggleUser(c *gin.Context) {
 
 	currentUser, _ := c.Get("user")
 
-	// Only admins can toggle users
-	if !s.requireAdmin(c) {
-		return
-	}
 	// Prevent disabling yourself
 	if currentUser == user.Username {
 		respondError(c, http.StatusBadRequest, "Cannot disable your own account")
@@ -127,6 +127,7 @@ func (s *Server) handleToggleUser(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("User %s", status)})
 }
+
 // handleEditUser updates username/role (admin only)
 func (s *Server) handleEditUser(c *gin.Context) {
 	idStr := c.Param("id")

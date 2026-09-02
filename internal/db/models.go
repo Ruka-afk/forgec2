@@ -3,6 +3,7 @@ package db
 import (
 	"encoding/json"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/crypto"
@@ -54,6 +55,9 @@ const (
 	PermAutomationWrite    = "automation.write"
 	PermNotificationsRead  = "notifications.read"
 	PermNotificationsWrite = "notifications.write"
+	PermAIUse              = "ai.use"
+	PermAIConfigure        = "ai.configure"
+	PermAIKnowledgeManage  = "ai.knowledge.manage"
 )
 
 var RolePermissionsMap = map[string][]string{
@@ -74,6 +78,7 @@ var RolePermissionsMap = map[string][]string{
 		PermIntelRead, PermIntelWrite,
 		PermAutomationRead, PermAutomationWrite,
 		PermNotificationsRead, PermNotificationsWrite,
+		PermAIUse, PermAIConfigure, PermAIKnowledgeManage,
 	},
 	RoleUser: {
 		PermAgentsRead, PermAgentsWrite,
@@ -91,6 +96,7 @@ var RolePermissionsMap = map[string][]string{
 		PermIntelRead,
 		PermAutomationRead,
 		PermNotificationsRead,
+		PermAIUse,
 	},
 }
 
@@ -471,6 +477,18 @@ func decryptField(val *string) error {
 
 // BeforeCreate encrypts sensitive fields before inserting into the database.
 func (c *CredentialEntry) BeforeCreate(tx *gorm.DB) error {
+	if c.TenantID == 0 && c.AgentID != "" {
+		var agent Implant
+		if err := tx.Select("tenant_id").Where("id = ?", c.AgentID).First(&agent).Error; err == nil {
+			c.TenantID = agent.TenantID
+		}
+	}
+	if c.TenantID == 0 {
+		var tenant Tenant
+		if err := tx.Select("id").Where("name = ?", DefaultTenantName).First(&tenant).Error; err == nil {
+			c.TenantID = tenant.ID
+		}
+	}
 	if err := encryptField(&c.Password); err != nil {
 		return err
 	}
@@ -653,6 +671,7 @@ type Tenant struct {
 // Auto-populated when "creds" task results arrive, or manually added.
 type CredentialEntry struct {
 	ID       uint   `gorm:"primaryKey" json:"id"`
+	TenantID uint   `gorm:"index" json:"tenant_id"`
 	AgentID  string `gorm:"index" json:"agent_id"`
 	Domain   string `json:"domain"`
 	Username string `json:"username"`
@@ -984,7 +1003,7 @@ type OneShotTask struct {
 	Type       string     `gorm:"size:50;default:'shell'" json:"type"`
 	Command    string     `gorm:"type:text" json:"command"`
 	RunAt      time.Time  `gorm:"index" json:"run_at"`
-	Status     string     `gorm:"size:16;default:'pending'" json:"status"` // pending, done, cancelled, error
+	Status     string     `gorm:"size:16;default:'pending'" json:"status"` // pending, dispatching, done, cancelled, error
 	TaskID     uint       `json:"task_id"`
 	CreatedBy  string     `gorm:"size:100" json:"created_by"`
 	CreatedAt  time.Time  `json:"created_at"`
@@ -1161,6 +1180,7 @@ func GetAllPermissions() []string {
 		PermIntelRead, PermIntelWrite,
 		PermAutomationRead, PermAutomationWrite,
 		PermNotificationsRead, PermNotificationsWrite,
+		PermAIUse, PermAIConfigure, PermAIKnowledgeManage,
 	}
 }
 
@@ -1512,11 +1532,21 @@ func (ChatMessage) TableName() string { return "chat_messages" }
 
 // AIChatSession — a persisted AI assistant conversation
 type AIChatSession struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	Title     string    `gorm:"size:255;not null;default:'New Chat'" json:"title"`
-	Owner     string    `gorm:"size:100;index" json:"owner"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID              uint      `gorm:"primaryKey" json:"id"`
+	TenantID        uint      `gorm:"index" json:"tenant_id"`
+	OwnerID         uint      `gorm:"index" json:"owner_id"`
+	Owner           string    `gorm:"size:100;index" json:"owner"`
+	Title           string    `gorm:"size:255;not null;default:'New Chat'" json:"title"`
+	ProfileID       *uint     `gorm:"index" json:"profile_id,omitempty"`
+	ParentSessionID *uint     `gorm:"index" json:"parent_session_id,omitempty"`
+	ForkMessageID   *uint     `gorm:"index" json:"fork_message_id,omitempty"`
+	ContextAgentID  string    `gorm:"size:64;index" json:"context_agent_id,omitempty"`
+	WritePolicy     string    `gorm:"size:32;not null;default:'approval'" json:"write_policy"`
+	Draft           string    `gorm:"type:text" json:"draft,omitempty"`
+	Pinned          bool      `gorm:"index;default:false" json:"pinned"`
+	Archived        bool      `gorm:"index;default:false" json:"archived"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 func (AIChatSession) TableName() string { return "ai_chat_sessions" }
@@ -1525,6 +1555,8 @@ func (AIChatSession) TableName() string { return "ai_chat_sessions" }
 type AIChatMessage struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	SessionID uint      `gorm:"index;not null" json:"session_id"`
+	RunID     string    `gorm:"size:36;index" json:"run_id,omitempty"`
+	ClientID  string    `gorm:"size:64;index" json:"client_id,omitempty"`
 	Role      string    `gorm:"size:20;not null" json:"role"` // user | assistant | tool
 	Content   string    `gorm:"type:text;not null" json:"content"`
 	ToolName  string    `gorm:"size:100" json:"tool_name,omitempty"`
@@ -1532,6 +1564,197 @@ type AIChatMessage struct {
 }
 
 func (AIChatMessage) TableName() string { return "ai_chat_messages" }
+
+// AIProviderProfile is an administrator-managed provider configuration. APIKey
+// is encrypted at rest and is never included in public handler responses.
+type AIProviderProfile struct {
+	ID                uint       `gorm:"primaryKey" json:"id"`
+	TenantID          uint       `gorm:"index" json:"tenant_id"`
+	Name              string     `gorm:"size:120;not null" json:"name"`
+	Provider          string     `gorm:"size:32;not null" json:"provider"`
+	Model             string     `gorm:"size:200;not null" json:"model"`
+	Endpoint          string     `gorm:"size:2048" json:"endpoint,omitempty"`
+	APIKey            string     `gorm:"type:text" json:"-"`
+	ContextLimit      int        `gorm:"default:48000" json:"context_limit"`
+	OutputLimit       int        `gorm:"default:4096" json:"output_limit"`
+	SupportsReasoning bool       `gorm:"default:false" json:"supports_reasoning"`
+	SupportsTools     bool       `gorm:"default:true" json:"supports_tools"`
+	Enabled           bool       `gorm:"index;default:true" json:"enabled"`
+	IsDefault         bool       `gorm:"index;default:false" json:"is_default"`
+	LastHealthStatus  string     `gorm:"size:32" json:"last_health_status,omitempty"`
+	LastHealthError   string     `gorm:"size:500" json:"last_health_error,omitempty"`
+	LastHealthLatency int64      `json:"last_health_latency_ms,omitempty"`
+	LastCheckedAt     *time.Time `json:"last_checked_at,omitempty"`
+	CreatedBy         string     `gorm:"size:100" json:"created_by"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+}
+
+func (AIProviderProfile) TableName() string { return "ai_provider_profiles" }
+
+// AIChatRun is a durable background generation. Its event stream is replayable
+// after browser disconnects without re-executing tools.
+type AIChatRun struct {
+	ID               string     `gorm:"primaryKey;size:36" json:"id"`
+	TenantID         uint       `gorm:"index;uniqueIndex:idx_ai_run_idempotency;not null" json:"tenant_id"`
+	OwnerID          uint       `gorm:"index;uniqueIndex:idx_ai_run_idempotency;not null" json:"owner_id"`
+	Owner            string     `gorm:"size:100;index;not null" json:"owner"`
+	SessionID        uint       `gorm:"index;not null" json:"session_id"`
+	ProfileID        *uint      `gorm:"index" json:"profile_id,omitempty"`
+	Provider         string     `gorm:"size:32" json:"provider"`
+	Model            string     `gorm:"size:200" json:"model"`
+	IdempotencyKey   string     `gorm:"size:100;uniqueIndex:idx_ai_run_idempotency" json:"-"`
+	Status           string     `gorm:"size:32;index;not null" json:"status"`
+	Input            string     `gorm:"type:text" json:"-"`
+	ContextAgentID   string     `gorm:"size:64;index" json:"context_agent_id,omitempty"`
+	LastEventSeq     int64      `gorm:"default:0" json:"last_event_seq"`
+	PromptTokens     int        `gorm:"default:0" json:"prompt_tokens"`
+	CompletionTokens int        `gorm:"default:0" json:"completion_tokens"`
+	ErrorCode        string     `gorm:"size:64" json:"error_code,omitempty"`
+	ErrorMessage     string     `gorm:"type:text" json:"error_message,omitempty"`
+	StartedAt        *time.Time `json:"started_at,omitempty"`
+	CompletedAt      *time.Time `json:"completed_at,omitempty"`
+	CreatedAt        time.Time  `gorm:"index" json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+func (AIChatRun) TableName() string { return "ai_chat_runs" }
+
+type AIChatRunEvent struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	RunID     string    `gorm:"uniqueIndex:idx_ai_run_seq;size:36;not null" json:"run_id"`
+	Sequence  int64     `gorm:"uniqueIndex:idx_ai_run_seq;not null" json:"sequence"`
+	Type      string    `gorm:"size:32;not null" json:"type"`
+	Payload   string    `gorm:"type:text" json:"payload"`
+	CreatedAt time.Time `gorm:"index" json:"created_at"`
+}
+
+func (AIChatRunEvent) TableName() string { return "ai_chat_run_events" }
+
+type AIExecutionIntent struct {
+	ID              string     `gorm:"primaryKey;size:36" json:"id"`
+	TenantID        uint       `gorm:"index;not null" json:"tenant_id"`
+	OwnerID         uint       `gorm:"index;not null" json:"owner_id"`
+	Owner           string     `gorm:"size:100;index;not null" json:"owner"`
+	SessionID       uint       `gorm:"index;not null" json:"session_id"`
+	RunID           string     `gorm:"size:36;index;not null" json:"run_id"`
+	ToolName        string     `gorm:"size:100;not null" json:"tool_name"`
+	Risk            string     `gorm:"size:32;not null" json:"risk"`
+	RequiredPerm    string     `gorm:"size:64" json:"required_permission,omitempty"`
+	TargetSummary   string     `gorm:"size:500" json:"target_summary"`
+	Arguments       string     `gorm:"type:text" json:"-"`
+	ArgumentsDigest string     `gorm:"size:500" json:"arguments_summary"`
+	Result          string     `gorm:"type:text" json:"-"`
+	ResultDigest    string     `gorm:"size:500" json:"result_summary,omitempty"`
+	Status          string     `gorm:"size:32;index;not null" json:"status"`
+	TaskID          *uint      `gorm:"index" json:"task_id,omitempty"`
+	DecidedBy       string     `gorm:"size:100" json:"decided_by,omitempty"`
+	DecidedAt       *time.Time `json:"decided_at,omitempty"`
+	CreatedAt       time.Time  `gorm:"index" json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+}
+
+func (AIExecutionIntent) TableName() string { return "ai_execution_intents" }
+
+type AIAttachment struct {
+	ID          string    `gorm:"primaryKey;size:36" json:"id"`
+	TenantID    uint      `gorm:"index;not null" json:"tenant_id"`
+	OwnerID     uint      `gorm:"index;not null" json:"owner_id"`
+	SessionID   uint      `gorm:"index;not null" json:"session_id"`
+	Filename    string    `gorm:"size:255;not null" json:"filename"`
+	MediaType   string    `gorm:"size:120" json:"media_type"`
+	Size        int64     `json:"size"`
+	Content     string    `gorm:"type:text" json:"-"`
+	ContentHash string    `gorm:"size:64;index" json:"content_hash"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+func (AIAttachment) TableName() string { return "ai_attachments" }
+
+type AIKnowledgeCollection struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	TenantID  uint      `gorm:"index;not null" json:"tenant_id"`
+	OwnerID   uint      `gorm:"index;not null" json:"owner_id"`
+	Name      string    `gorm:"size:160;not null" json:"name"`
+	Shared    bool      `gorm:"index;default:false" json:"shared"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (AIKnowledgeCollection) TableName() string { return "ai_knowledge_collections" }
+
+type AIKnowledgeSource struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	TenantID     uint      `gorm:"index;not null" json:"tenant_id"`
+	OwnerID      uint      `gorm:"index;not null" json:"owner_id"`
+	CollectionID uint      `gorm:"index;not null" json:"collection_id"`
+	Name         string    `gorm:"size:255;not null" json:"name"`
+	ContentHash  string    `gorm:"size:64;index" json:"content_hash"`
+	ChunkCount   int       `json:"chunk_count"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+func (AIKnowledgeSource) TableName() string { return "ai_knowledge_sources" }
+
+type AIKnowledgeChunk struct {
+	ID           uint   `gorm:"primaryKey" json:"id"`
+	TenantID     uint   `gorm:"index;not null" json:"tenant_id"`
+	CollectionID uint   `gorm:"index;not null" json:"collection_id"`
+	SourceID     uint   `gorm:"index;not null" json:"source_id"`
+	Position     int    `gorm:"index;not null" json:"position"`
+	Content      string `gorm:"type:text" json:"content"`
+	SearchTokens string `gorm:"type:text" json:"-"`
+}
+
+func (AIKnowledgeChunk) TableName() string { return "ai_knowledge_chunks" }
+
+func encryptAIFields(values ...*string) error {
+	for _, value := range values {
+		if *value == "" || strings.HasPrefix(*value, "FC2ENC:") {
+			continue
+		}
+		encrypted, err := crypto.EncryptLoot(*value)
+		if err != nil {
+			return err
+		}
+		*value = encrypted
+	}
+	return nil
+}
+
+func decryptAIFields(values ...*string) error {
+	for _, value := range values {
+		if err := decryptField(value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *AIChatSession) BeforeSave(*gorm.DB) error     { return encryptAIFields(&s.Draft) }
+func (s *AIChatSession) AfterFind(*gorm.DB) error      { return decryptAIFields(&s.Draft) }
+func (m *AIChatMessage) BeforeSave(*gorm.DB) error     { return encryptAIFields(&m.Content) }
+func (m *AIChatMessage) AfterFind(*gorm.DB) error      { return decryptAIFields(&m.Content) }
+func (p *AIProviderProfile) BeforeSave(*gorm.DB) error { return encryptAIFields(&p.APIKey) }
+func (p *AIProviderProfile) AfterFind(*gorm.DB) error  { return decryptAIFields(&p.APIKey) }
+func (r *AIChatRun) BeforeSave(*gorm.DB) error {
+	return encryptAIFields(&r.Input, &r.ErrorMessage)
+}
+func (r *AIChatRun) AfterFind(*gorm.DB) error {
+	return decryptAIFields(&r.Input, &r.ErrorMessage)
+}
+func (e *AIChatRunEvent) BeforeSave(*gorm.DB) error { return encryptAIFields(&e.Payload) }
+func (e *AIChatRunEvent) AfterFind(*gorm.DB) error  { return decryptAIFields(&e.Payload) }
+func (i *AIExecutionIntent) BeforeSave(*gorm.DB) error {
+	return encryptAIFields(&i.Arguments, &i.Result)
+}
+func (i *AIExecutionIntent) AfterFind(*gorm.DB) error {
+	return decryptAIFields(&i.Arguments, &i.Result)
+}
+func (a *AIAttachment) BeforeSave(*gorm.DB) error     { return encryptAIFields(&a.Content) }
+func (a *AIAttachment) AfterFind(*gorm.DB) error      { return decryptAIFields(&a.Content) }
+func (c *AIKnowledgeChunk) BeforeSave(*gorm.DB) error { return encryptAIFields(&c.Content) }
+func (c *AIKnowledgeChunk) AfterFind(*gorm.DB) error  { return decryptAIFields(&c.Content) }
 
 func (AutoTagRule) TableName() string { return "auto_tag_rules" }
 
@@ -1633,9 +1856,9 @@ type SIEMRule struct {
 	ID           uint      `gorm:"primaryKey" json:"id"`
 	Name         string    `gorm:"size:128;not null;uniqueIndex" json:"name"`
 	Enabled      bool      `gorm:"default:true" json:"enabled"`
-	Action       string    `gorm:"size:128;not null;index" json:"action"`      // SIEM event action to match (e.g. login_failed, implant_checkin)
-	WindowSec    int       `gorm:"not null;default:300" json:"window_sec"`     // correlation window in seconds
-	Threshold    int       `gorm:"not null;default:5" json:"threshold"`        // events required within the window to alert
+	Action       string    `gorm:"size:128;not null;index" json:"action"`  // SIEM event action to match (e.g. login_failed, implant_checkin)
+	WindowSec    int       `gorm:"not null;default:300" json:"window_sec"` // correlation window in seconds
+	Threshold    int       `gorm:"not null;default:5" json:"threshold"`    // events required within the window to alert
 	AlertAction  string    `gorm:"size:128;not null;default:siem_alert" json:"alert_action"`
 	AlertDetails string    `gorm:"size:512" json:"alert_details"`
 	CreatedAt    time.Time `json:"created_at"`

@@ -38,30 +38,33 @@ export function Pagination({ page, pageSize, total, onPageChange }: {
   }
 
   return (
-    <nav className="flex items-center justify-between border-t border-border bg-muted/30 px-4 py-2.5" aria-label={t("common.pagination")}>
-      <span className="text-xs text-muted-foreground">
+    <nav className="flex items-center justify-between gap-3 border-t border-border bg-muted/30 px-3 py-2.5 sm:px-4" aria-label={t("common.pagination")}>
+      <span className="hidden text-xs text-muted-foreground sm:inline">
         {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, total)} / {total}
       </span>
-      <div className="flex gap-1">
-        <Button variant="outline" size="xs" onClick={() => onPageChange(safePage - 1)} disabled={safePage <= 1} aria-label={t("common.previous_page")}
-          className="px-3">
-          <ChevronLeft className="size-3" />
+      <span className="text-xs font-medium text-muted-foreground sm:hidden">
+        {safePage} / {totalPages}
+      </span>
+      <div className="flex items-center gap-1">
+        <Button variant="outline" size="icon-lg" onClick={() => onPageChange(safePage - 1)} disabled={safePage <= 1} aria-label={t("common.previous_page")}
+          className="sm:size-7">
+          <ChevronLeft className="size-3.5" />
         </Button>
         {pages.map((p, i) =>
           p === "..." ? (
-            <span key={`e${i}`} className="px-2 py-1 text-xs text-muted-foreground" aria-hidden="true">...</span>
+            <span key={`e${i}`} className="hidden px-2 py-1 text-xs text-muted-foreground sm:inline" aria-hidden="true">...</span>
           ) : (
             <Button key={p} size="xs" onClick={() => onPageChange(p)}
               aria-label={t("common.page_number").replace("{n}", String(p))} aria-current={p === safePage ? "page" : undefined}
-              className={`px-3 ${p === safePage ? "bg-primary border-primary text-primary-foreground hover:bg-primary/90" : ""}`}
+              className={`hidden px-3 sm:inline-flex ${p === safePage ? "bg-primary border-primary text-primary-foreground hover:bg-primary/90" : ""}`}
               variant={p === safePage ? undefined : "outline"}>
               {p}
             </Button>
           )
         )}
-        <Button variant="outline" size="xs" onClick={() => onPageChange(safePage + 1)} disabled={safePage >= totalPages} aria-label={t("common.next_page")}
-          className="px-3">
-          <ChevronRight className="size-3" />
+        <Button variant="outline" size="icon-lg" onClick={() => onPageChange(safePage + 1)} disabled={safePage >= totalPages} aria-label={t("common.next_page")}
+          className="sm:size-7">
+          <ChevronRight className="size-3.5" />
         </Button>
       </div>
     </nav>

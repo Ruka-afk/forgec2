@@ -46,18 +46,19 @@ func (s *Server) handleBuildEffectiveness(c *gin.Context) {
 	}
 
 	type implantRow struct {
-		ID         string `json:"id"`
-		Hostname   string `json:"hostname"`
-		Status     string `json:"status"`
-		ListenerID uint `json:"listener_id"`
-		Version    string `json:"version"`
+		ID         string    `json:"id"`
+		Hostname   string    `json:"hostname"`
+		Status     string    `json:"status"`
+		ListenerID uint      `json:"listener_id"`
+		Version    string    `json:"version"`
 		CreatedAt  time.Time `json:"created_at"`
 	}
 	var implants []implantRow
-	if err := s.db.Table("implants").
+	implantQ := s.db.Table("implants").
 		Select("id, hostname, status, listener_id, version, created_at").
-		Where("created_at >= ?", since).
-		Find(&implants).Error; err != nil {
+		Where("created_at >= ?", since)
+	implantQ = s.tenantScope(implantQ, c)
+	if err := implantQ.Find(&implants).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "query failed")
 		return
 	}

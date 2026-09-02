@@ -11,7 +11,7 @@ interface UiSlice {
   setMobileMenuOpen: (open: boolean) => void;
   setIsMobile: (mobile: boolean) => void;
   commandPaletteOpen: boolean;
-  setCommandPaletteOpen: (open: boolean) => void;
+  setCommandPaletteOpen: (open: boolean | ((v: boolean) => boolean)) => void;
   density: Density;
   setDensity: (d: Density) => void;
   focusMode: boolean;
@@ -67,7 +67,10 @@ export const createUiSlice: StateCreator<AppStore, [], [], UiSlice> = (set, get)
   setIsMobile: (mobile: boolean) =>
     set({ isMobile: mobile, mobileMenuOpen: mobile ? false : get().mobileMenuOpen }),
 
-  setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
+  setCommandPaletteOpen: (open: boolean | ((v: boolean) => boolean)) =>
+    set((state) => ({
+      commandPaletteOpen: typeof open === "function" ? (open as (v: boolean) => boolean)(state.commandPaletteOpen) : open,
+    })),
 
   setDensity: (d) => {
     applyDensity(d);

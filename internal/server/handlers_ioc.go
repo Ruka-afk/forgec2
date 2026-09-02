@@ -149,7 +149,11 @@ func (s *Server) handleListIOCs(c *gin.Context) {
 	typeFilter := c.Query("type")
 	includePrivate := c.Query("include_private") == "true"
 
-	entries, totalScanned := s.extractIOCs(days, includePrivate)
+	entries, totalScanned, err := s.extractIOCs(days, includePrivate)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to extract indicators")
+		return
+	}
 	filtered := make([]iocEntry, 0, len(entries))
 	for _, e := range entries {
 		if typeFilter != "" && e.Type != typeFilter {
@@ -159,16 +163,16 @@ func (s *Server) handleListIOCs(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"success":      true,
-		"iocs":         filtered,
-		"total":        len(filtered),
+		"success":       true,
+		"iocs":          filtered,
+		"total":         len(filtered),
 		"tasks_scanned": totalScanned,
 	})
 }
 
 // extractIOCs scans task results/commands in the window and returns merged,
 // count-ranked indicators.
-func (s *Server) extractIOCs(days int, includePrivate bool) ([]iocEntry, int) {
+func (s *Server) extractIOCs(days int, includePrivate bool) ([]iocEntry, int, error) {
 	since := time.Now().AddDate(0, 0, -days)
 	acc := &iocAccumulator{items: map[string]*iocEntry{}}
 
@@ -181,7 +185,7 @@ func (s *Server) extractIOCs(days int, includePrivate bool) ([]iocEntry, int) {
 		Select("command, result, created_at").
 		Where("created_at >= ?", since).
 		Order("created_at desc").Limit(20000).Scan(&rows).Error; err != nil {
-		rows = nil
+		return nil, 0, fmt.Errorf("scan task indicators: %w", err)
 	}
 	scanned := len(rows)
 	for _, r := range rows {
@@ -200,18 +204,19 @@ func (s *Server) extractIOCs(days int, includePrivate bool) ([]iocEntry, int) {
 		CreatedAt time.Time
 	}
 	if err := s.db.Table("network_hosts").
-		Select("ip, hostname, created_at").Limit(10000).Scan(&hosts).Error; err == nil {
-		for _, h := range hosts {
-			if includePrivate || isPublicIP(h.IP) {
-				acc.add("ipv4", h.IP, h.CreatedAt, "network_hosts")
-			}
-			if h.Hostname != "" && strings.Contains(h.Hostname, ".") {
-				acc.add("domain", strings.ToLower(h.Hostname), h.CreatedAt, "network_hosts")
-			}
+		Select("ip, hostname, created_at").Limit(10000).Scan(&hosts).Error; err != nil {
+		return nil, 0, fmt.Errorf("scan network-host indicators: %w", err)
+	}
+	for _, h := range hosts {
+		if includePrivate || isPublicIP(h.IP) {
+			acc.add("ipv4", h.IP, h.CreatedAt, "network_hosts")
+		}
+		if h.Hostname != "" && strings.Contains(h.Hostname, ".") {
+			acc.add("domain", strings.ToLower(h.Hostname), h.CreatedAt, "network_hosts")
 		}
 	}
 
-	return iocSortEntries(acc), scanned
+	return iocSortEntries(acc), scanned, nil
 }
 
 // handleExportIOCs downloads the indicator list as STIX 2.1 or CSV.
@@ -224,7 +229,11 @@ func (s *Server) handleExportIOCs(c *gin.Context) {
 	}
 	includePrivate := c.Query("include_private") == "true"
 
-	entries, _ := s.extractIOCs(days, includePrivate)
+	entries, _, err := s.extractIOCs(days, includePrivate)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to extract indicators")
+		return
+	}
 	stamp := time.Now().UTC().Format("20060102T150405Z")
 
 	switch format {
@@ -254,12 +263,12 @@ func buildStixBundle(entries []iocEntry, stamp string) map[string]interface{} {
 	now := time.Now().UTC().Format(time.RFC3339)
 	objects := []map[string]interface{}{
 		{
-			"type":        "marking-definition",
-			"spec_version": "2.1",
-			"id":          "marking-definition--613f2e26-407d-48c7-9eca-b8e91df99dc9",
-			"created":     "2017-01-20T00:00:00.000Z",
+			"type":            "marking-definition",
+			"spec_version":    "2.1",
+			"id":              "marking-definition--613f2e26-407d-48c7-9eca-b8e91df99dc9",
+			"created":         "2017-01-20T00:00:00.000Z",
 			"definition_type": "tlp",
-			"definition":  map[string]string{"tlp": "amber"},
+			"definition":      map[string]string{"tlp": "amber"},
 		},
 	}
 	idSeq := 0
@@ -293,26 +302,26 @@ func buildStixBundle(entries []iocEntry, stamp string) map[string]interface{} {
 			continue
 		}
 		objects = append(objects, map[string]interface{}{
-			"type":            "indicator",
-			"spec_version":    "2.1",
-			"id":              newID(),
-			"created":         e.FirstSeen,
-			"modified":        e.LastSeen,
-			"name":            name,
-			"description":     fmt.Sprintf("Extracted from ForgeC2 task data (%d occurrences)", e.Count),
-			"pattern":         pattern,
-			"valid_from":      e.FirstSeen,
-			"labels":          []string{"malicious-activity"},
-			"confidence":      confidenceForCount(e.Count),
+			"type":                "indicator",
+			"spec_version":        "2.1",
+			"id":                  newID(),
+			"created":             e.FirstSeen,
+			"modified":            e.LastSeen,
+			"name":                name,
+			"description":         fmt.Sprintf("Extracted from ForgeC2 task data (%d occurrences)", e.Count),
+			"pattern":             pattern,
+			"valid_from":          e.FirstSeen,
+			"labels":              []string{"malicious-activity"},
+			"confidence":          confidenceForCount(e.Count),
 			"object_marking_refs": []string{"marking-definition--613f2e26-407d-48c7-9eca-b8e91df99dc9"},
 		})
 	}
 	return map[string]interface{}{
-		"type":           "bundle",
-		"id":             fmt.Sprintf("bundle--fc2a0000-0000-4000-8000-%s", strconv.FormatInt(time.Now().UnixNano()%1e12, 10)),
-		"timestamp":      now,
+		"type":            "bundle",
+		"id":              fmt.Sprintf("bundle--fc2a0000-0000-4000-8000-%s", strconv.FormatInt(time.Now().UnixNano()%1e12, 10)),
+		"timestamp":       now,
 		"x_forgec2_stamp": stamp,
-		"objects":        objects,
+		"objects":         objects,
 	}
 }
 

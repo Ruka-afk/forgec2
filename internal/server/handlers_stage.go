@@ -210,5 +210,10 @@ func (s *Server) stageBuildLock(token string) func() {
 	}
 	s.stageBuildLocksMu.Unlock()
 	m.Lock()
-	return m.Unlock
+	return func() {
+		m.Unlock()
+		s.stageBuildLocksMu.Lock()
+		delete(s.stageBuildLocks, token)
+		s.stageBuildLocksMu.Unlock()
+	}
 }

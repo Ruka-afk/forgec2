@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -15,11 +16,11 @@ import (
 
 // MacroStep is one entry in a macro's step list.
 type MacroStep struct {
-	Command   string `json:"command"`
-	DelayMs   int    `json:"delay_ms"`   // fixed delay before next step when not waiting for output
-	Wait      bool   `json:"wait"`       // wait for this task's result before continuing
-	TimeoutS  int    `json:"timeout_s"`  // wait cap; 0 = default (120s)
-	StopOnError bool `json:"stop_on_error"`
+	Command     string `json:"command"`
+	DelayMs     int    `json:"delay_ms"`  // fixed delay before next step when not waiting for output
+	Wait        bool   `json:"wait"`      // wait for this task's result before continuing
+	TimeoutS    int    `json:"timeout_s"` // wait cap; 0 = default (120s)
+	StopOnError bool   `json:"stop_on_error"`
 }
 
 type macroRunLogEntry struct {
@@ -76,8 +77,8 @@ func (s *Server) handleListMacros(c *gin.Context) {
 
 func (s *Server) handleCreateMacro(c *gin.Context) {
 	var req struct {
-		Name        string `json:"name" binding:"required"`
-		Description string `json:"description"`
+		Name        string      `json:"name" binding:"required"`
+		Description string      `json:"description"`
 		Steps       []MacroStep `json:"steps" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -115,8 +116,8 @@ func (s *Server) handleUpdateMacro(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Name        string `json:"name" binding:"required"`
-		Description string `json:"description"`
+		Name        string      `json:"name" binding:"required"`
+		Description string      `json:"description"`
 		Steps       []MacroStep `json:"steps" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -215,14 +216,14 @@ func (s *Server) startMacroRun(macro *db.CommandMacro, agentID, operator string,
 		return err
 	}
 	run := db.MacroRun{
-		MacroID:     macro.ID,
-		MacroName:   macro.Name,
-		AgentID:     agentID,
-		Status:      "running",
-		TotalSteps:  len(steps),
-		Log:         "[]",
-		CreatedBy:   operator,
-		StartedAt:   time.Now(),
+		MacroID:    macro.ID,
+		MacroName:  macro.Name,
+		AgentID:    agentID,
+		Status:     "running",
+		TotalSteps: len(steps),
+		Log:        "[]",
+		CreatedBy:  operator,
+		StartedAt:  time.Now(),
 	}
 	if err := s.db.Create(&run).Error; err != nil {
 		return err
@@ -233,6 +234,12 @@ func (s *Server) startMacroRun(macro *db.CommandMacro, agentID, operator string,
 		defer func() {
 			if r := recover(); r != nil {
 				slog.Error("Macro runner panicked", "run_id", runID, "panic", r)
+				now := time.Now()
+				if err := s.db.Model(&db.MacroRun{}).Where("id = ?", runID).Updates(map[string]interface{}{
+					"status": "failed", "finished_at": &now,
+				}).Error; err != nil {
+					slog.Error("Failed to persist panicked macro status", "run_id", runID, "err", err)
+				}
 			}
 		}()
 		s.executeMacroRun(runID, agentID, steps, operator, stopOnError)
@@ -265,10 +272,13 @@ func (s *Server) handleRunMacro(c *gin.Context) {
 	// Only dispatch to agents that actually exist.
 	existing := map[string]bool{}
 	var implants []db.Implant
-	if err := s.db.Select("id").Find(&implants).Error; err == nil {
-		for _, a := range implants {
-			existing[a.ID] = true
-		}
+	if err := s.db.Select("id").Find(&implants).Error; err != nil {
+		slog.Error("Failed to resolve macro target agents", "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to load agents")
+		return
+	}
+	for _, a := range implants {
+		existing[a.ID] = true
 	}
 	operator := s.currentUsername(c)
 
@@ -299,13 +309,19 @@ func (s *Server) handleRunMacro(c *gin.Context) {
 func (s *Server) executeMacroRun(runID uint, agentID string, steps []MacroStep, operator string, globalStopOnError bool) {
 	logEntries := make([]macroRunLogEntry, 0, len(steps))
 	failed := false
+	runCtx := s.ctx
+	if runCtx == nil {
+		runCtx = context.Background()
+	}
 
 	appendLog := func(entry macroRunLogEntry) {
 		entry.Timestamp = time.Now().UTC().Format(time.RFC3339)
 		logEntries = append(logEntries, entry)
 		raw, _ := json.Marshal(logEntries)
-		s.db.Model(&db.MacroRun{}).Where("id = ?", runID).
-			Update("log", string(raw))
+		if err := s.db.Model(&db.MacroRun{}).Where("id = ?", runID).
+			Update("log", string(raw)).Error; err != nil {
+			slog.Error("Failed to persist macro log", "run_id", runID, "err", err)
+		}
 	}
 
 	setStatus := func(status string, step int) {
@@ -326,6 +342,10 @@ func (s *Server) executeMacroRun(runID uint, agentID string, steps []MacroStep, 
 	}
 
 	defer func() {
+		if recovered := recover(); recovered != nil {
+			failed = true
+			slog.Error("Macro execution panicked", "run_id", runID, "agent_id", agentID, "panic", recovered)
+		}
 		// A stop request may have flipped the row to "stopped" between steps;
 		// re-read and preserve it instead of blindly overwriting with the
 		// runner's own terminal status.
@@ -341,9 +361,12 @@ func (s *Server) executeMacroRun(runID uint, agentID string, steps []MacroStep, 
 			final = current.Status
 		}
 		now := time.Now()
-		s.db.Model(&db.MacroRun{}).Where("id = ?", runID).Updates(map[string]interface{}{
+		if err := s.db.Model(&db.MacroRun{}).Where("id = ?", runID).Updates(map[string]interface{}{
 			"status": final, "finished_at": &now,
-		})
+		}).Error; err != nil {
+			slog.Error("Failed to persist macro terminal status", "run_id", runID, "status", final, "err", err)
+			return
+		}
 		s.broadcastOperatorEvent(map[string]interface{}{
 			"type": "macro_update", "run_id": runID, "agent_id": agentID,
 			"status": final, "total_steps": len(steps),
@@ -351,9 +374,21 @@ func (s *Server) executeMacroRun(runID uint, agentID string, steps []MacroStep, 
 	}()
 
 	for i, step := range steps {
+		select {
+		case <-runCtx.Done():
+			appendLog(macroRunLogEntry{Step: i + 1, Command: step.Command, Status: "failed", Error: "server shutting down"})
+			failed = true
+			return
+		default:
+		}
 		// Re-check for a stop request between steps.
 		var current db.MacroRun
-		if err := s.db.Select("status").First(&current, runID).Error; err != nil || current.Status != "running" {
+		if err := s.db.Select("status").First(&current, runID).Error; err != nil {
+			slog.Error("Failed to load macro run status", "run_id", runID, "err", err)
+			failed = true
+			return
+		}
+		if current.Status != "running" {
 			failed = false
 			return
 		}
@@ -366,7 +401,6 @@ func (s *Server) executeMacroRun(runID uint, agentID string, steps []MacroStep, 
 			failed = true
 			return
 		}
-		s.metrics.TasksTotal.Inc()
 		s.broadcastTaskUpdate(agentID, *task)
 
 		stepFailed := false
@@ -381,13 +415,19 @@ func (s *Server) executeMacroRun(runID uint, agentID string, steps []MacroStep, 
 				stepFailed = true
 			}
 			appendLog(macroRunLogEntry{Step: i + 1, Command: step.Command, Status: status, TaskID: task.ID, Output: truncateForLog(output), Error: errMsg})
+			if runCtx.Err() != nil {
+				failed = true
+				return
+			}
 		} else {
 			delay := time.Duration(step.DelayMs) * time.Millisecond
 			if delay <= 0 {
 				delay = 500 * time.Millisecond
 			}
 			select {
-			case <-s.ctx.Done():
+			case <-runCtx.Done():
+				appendLog(macroRunLogEntry{Step: i + 1, Command: step.Command, Status: "failed", TaskID: task.ID, Error: "server shutting down"})
+				failed = true
 				return
 			case <-time.After(delay):
 			}
@@ -413,10 +453,14 @@ func (s *Server) waitForMacroTask(runID uint, agentID string, taskID uint, timeo
 		timeout = time.Duration(timeoutS) * time.Second
 	}
 	deadline := time.Now().Add(timeout)
+	runCtx := s.ctx
+	if runCtx == nil {
+		runCtx = context.Background()
+	}
 	for time.Now().Before(deadline) {
 		select {
-		case <-s.ctx.Done():
-			return false, "", ""
+		case <-runCtx.Done():
+			return false, "", "server shutting down"
 		case <-time.After(1 * time.Second):
 		}
 		// Honor a stop request mid-wait: without this the runner sat through

@@ -143,6 +143,7 @@
   --shell-sidebar-collapsed: 4rem;
   --shell-topbar-height: 3.5rem;
   --shell-breadcrumb-height: 2rem;
+  --shell-terminal-bg: #0b1220;
   --z-scroll-to-top: 70;
   --z-skip-link: 100;
   --tracking-wide: 0.08em;
@@ -543,6 +544,7 @@ body {
   --shell-sidebar-collapsed: 4rem;
   --shell-topbar-height: 3.5rem;
   --shell-breadcrumb-height: 2rem;
+  --shell-terminal-bg: #0b1220;
 }
 
 @layer base {

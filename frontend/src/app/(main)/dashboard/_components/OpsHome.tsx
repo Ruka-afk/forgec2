@@ -16,7 +16,7 @@ import { MetricGrid } from "@/components/ui/metric-grid";
 import { DataError } from "@/components/ui/data-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Archive, Bug, Radio, Clock, ListChecks, Search, Terminal, Wand2 } from "lucide-react";
+import { Archive, Bug, Radio, Clock, ListChecks, Terminal, Wand2 } from "lucide-react";
 import type { DashboardStats } from "@/types/agent";
 import { useOpsHomeData } from "./useOpsHomeData";
 import {
@@ -55,11 +55,10 @@ function QuickLaunch() {
     { href: "/generate", label: t("dashboard.quick_generate"), icon: <Wand2 className="size-5" /> },
     { href: "/listeners", label: t("dashboard.quick_listeners"), icon: <Radio className="size-5" /> },
     { href: "/agents", label: t("dashboard.quick_agents"), icon: <Terminal className="size-5" /> },
-    { href: "/search", label: t("dashboard.quick_search"), icon: <Search className="size-5" /> },
   ];
   return (
     <SectionCard title={t("dashboard.quick_actions")}>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4">
         {actions.map((a) => (
           <Button key={a.href} variant="outline" render={<Link href={a.href} />}
             className="h-auto flex-col gap-2 py-4 hover:border-primary hover:bg-primary/5">

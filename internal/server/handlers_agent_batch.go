@@ -186,7 +186,7 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 			continue
 		}
 
-		if err := s.validateTaskCreation(agentID, req.TaskType, req.Command, callerUID); err != nil {
+		if err := s.validateTaskCreation(c, agentID, req.TaskType, req.Command, callerUID); err != nil {
 			slog.Warn("Batch command: validation failed", "agent_id", agentID, "err", err)
 			continue
 		}

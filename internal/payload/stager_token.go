@@ -350,9 +350,10 @@ func buildTokenStager(cfg ImplantConfig, outputDir string, fetch StagerFetch, go
 
 	tidyCmd := exec.CommandContext(ctx, goCmd, "mod", "tidy")
 	tidyCmd.Dir = tmpDir
+	tidyCmd.Env = goModuleEnv()
 	if out, err := tidyCmd.CombinedOutput(); err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return "", fmt.Errorf("go mod tidy timed out after %s: %w", buildTimeout, err)
+			return "", fmt.Errorf("go mod tidy timed out after %s (module proxy unreachable?). Set GOPROXY or implant.goproxy in config.yaml: %w", buildTimeout, err)
 		}
 		return "", fmt.Errorf("go mod tidy failed: %w\n%s", err, string(out))
 	}
@@ -369,7 +370,7 @@ func buildTokenStager(cfg ImplantConfig, outputDir string, fetch StagerFetch, go
 	if err != nil {
 		return "", err
 	}
-	cmd.Env = append(os.Environ(),
+	cmd.Env = goModuleEnv(
 		"GOOS="+goos,
 		"GOARCH="+goarch,
 		"CGO_ENABLED=0",

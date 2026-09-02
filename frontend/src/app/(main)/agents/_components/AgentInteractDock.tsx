@@ -131,10 +131,10 @@ export function AgentInteractDock({
     if (!id) return;
     try {
       await api.post(action === "approve" ? paths.tasksCollab.approve(taskId) : paths.tasksCollab.reject(taskId));
-      setTasks((prev) => prev.map((t) => (Number(t.id) !== taskId ? t : {
-        ...t,
+      setTasks((prev) => prev.map((tk) => (Number(tk.id) !== taskId ? tk : {
+        ...tk,
         status: action === "approve" ? "pending" : "cancelled",
-        error: action === "reject" ? (t.error || "rejected") : t.error,
+        error: action === "reject" ? (tk.error || "rejected") : tk.error,
       })));
       if (action === "approve") toast.success(t("agents.dock_task_approved"));
       else toast.success(t("agents.dock_task_rejected"));
@@ -148,7 +148,7 @@ export function AgentInteractDock({
     if (!id) return;
     try {
       await api.post(paths.agents.cancelTask(id, taskId));
-      setTasks((prev) => prev.map((t) => (Number(t.id) !== taskId ? t : { ...t, status: "cancelled", error: t.error || "cancelled" })));
+      setTasks((prev) => prev.map((tk) => (Number(tk.id) !== taskId ? tk : { ...tk, status: "cancelled", error: tk.error || "cancelled" })));
       toast.success(t("agents.dock_task_cancelled"));
     } catch {
       toast.error(t("agents.dock_task_cancel_failed"));
@@ -292,8 +292,12 @@ export function AgentInteractDock({
               <ShellTerminal
                 agentId={id}
                 osType={osType}
-                showHeader={false}
-                className="flex h-full flex-col overflow-hidden bg-background text-foreground"
+                hostname={beacon.hostname}
+                username={beacon.username}
+                ip={beacon.ip}
+                lastSeen={beacon.last_seen}
+                status={beacon.status}
+                className="flex h-full flex-col overflow-hidden bg-(--shell-terminal-bg) text-slate-100"
               />
             )}
           </TabsContent>

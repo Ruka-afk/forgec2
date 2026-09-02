@@ -81,6 +81,126 @@ describe("pollTask streaming", () => {
     const final = await p;
     expect(final.status).toBe("completed");
     expect(final.result).toBe("FULL-RESULT");
+    expect(seen.some((status) => status.result === "preview")).toBe(false);
+  });
+
+  it("uses an explicitly complete shell result when the detail fetch fails", async () => {
+    const seen: Array<{ status: string; result?: string }> = [];
+    const p = pollTask("agent-1", 1, {
+      intervalMs: 60000,
+      timeoutMs: 60000,
+      onStatus: (st) => seen.push({ status: st.status, result: st.result }),
+    });
+
+    await Promise.resolve();
+    vi.mocked(api.get).mockRejectedValue(new Error("detail unavailable"));
+    emit({
+      type: "task_update",
+      task_id: 1,
+      status: "completed",
+      result: "COMPLETE-SHELL-OUTPUT",
+      result_complete: true,
+    });
+
+    const final = await p;
+    expect(seen.some((status) => status.result === "COMPLETE-SHELL-OUTPUT")).toBe(true);
+    expect(final.result).toBe("COMPLETE-SHELL-OUTPUT");
+  });
+
+  it("does not let an empty final detail erase complete WebSocket output", async () => {
+    const p = pollTask("agent-1", 1, {
+      intervalMs: 60000,
+      timeoutMs: 60000,
+    });
+
+    await Promise.resolve();
+    vi.mocked(api.get).mockResolvedValue({ id: 1, status: "completed", result: "" });
+    emit({
+      type: "task_update",
+      task_id: 1,
+      status: "completed",
+      result: "COMPLETE-SHELL-OUTPUT",
+      result_complete: true,
+    });
+
+    const final = await p;
+    expect(final.result).toBe("COMPLETE-SHELL-OUTPUT");
+  });
+
+  it("ignores an older REST snapshot that resolves after a terminal event", async () => {
+    let releaseInitial: ((value: { id: number; status: "pending"; result: string }) => void) | undefined;
+    vi.mocked(api.get).mockImplementationOnce(() => new Promise((resolve) => {
+      releaseInitial = resolve;
+    }));
+
+    const seen: Array<{ status: string; result?: string }> = [];
+    const p = pollTask("agent-1", 1, {
+      intervalMs: 60000,
+      timeoutMs: 60000,
+      onStatus: (st) => seen.push({ status: st.status, result: st.result }),
+    });
+
+    await Promise.resolve();
+    completed = true;
+    emit({
+      type: "task_update",
+      task_id: 1,
+      status: "completed",
+      result: "COMPLETE-SHELL-OUTPUT",
+      result_complete: true,
+    });
+    releaseInitial?.({ id: 1, status: "pending", result: "" });
+
+    const final = await p;
+    expect(final.status).toBe("completed");
+    expect(seen.at(-1)?.status).toBe("completed");
+  });
+
+  it("preserves a terminal WebSocket state when the final REST read still lags", async () => {
+    vi.mocked(api.get).mockResolvedValue({ id: 1, status: "pending", result: "" });
+    const p = pollTask("agent-1", 1, { intervalMs: 60000, timeoutMs: 60000 });
+
+    await Promise.resolve();
+    emit({
+      type: "task_update",
+      task_id: 1,
+      status: "completed",
+      result: "COMPLETE-SHELL-OUTPUT",
+      result_complete: true,
+    });
+
+    const final = await p;
+    expect(final.status).toBe("completed");
+    expect(final.result).toBe("COMPLETE-SHELL-OUTPUT");
+  });
+
+  it("treats cancellation as terminal instead of polling until timeout", async () => {
+    vi.mocked(api.get).mockResolvedValue({ id: 1, status: "pending", result: "" });
+    const p = pollTask("agent-1", 1, { intervalMs: 60000, timeoutMs: 60000 });
+
+    await Promise.resolve();
+    emit({ type: "task_update", task_id: 1, status: "cancelled", error: "cancelled by operator" });
+
+    const final = await p;
+    expect(final.status).toBe("cancelled");
+    expect(final.error).toBe("cancelled by operator");
+  });
+
+  it("never exposes at-rest ciphertext while recovering the final plaintext", async () => {
+    const seen: Array<{ status: string; result?: string }> = [];
+    const p = pollTask("agent-1", 1, {
+      intervalMs: 60000,
+      timeoutMs: 60000,
+      onStatus: (st) => seen.push({ status: st.status, result: st.result }),
+    });
+
+    await Promise.resolve();
+    completed = true;
+    emit({ type: "task_update", task_id: 1, status: "completed", result: "FC2ENC:ciphertext" });
+
+    const final = await p;
+    expect(seen.some((status) => status.result?.startsWith("FC2ENC:"))).toBe(false);
+    expect(final.result).toBe("FULL-RESULT");
   });
 
   it("ignores task_output frames for other tasks", async () => {

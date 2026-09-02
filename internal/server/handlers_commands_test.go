@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -43,6 +44,42 @@ func TestValidateCommandArg(t *testing.T) {
 				t.Errorf("unexpected error for %q: %v", tc.v, err)
 			}
 		})
+	}
+}
+
+func TestHandleGetTaskStatusEnforcesAgentScope(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := newInjectTestServer(t)
+	for _, agent := range []db.Implant{
+		{ID: "agent-a", Hostname: "HOST-A"},
+		{ID: "agent-b", Hostname: "HOST-B"},
+	} {
+		if err := s.db.Create(&agent).Error; err != nil {
+			t.Fatalf("seed agent %s: %v", agent.ID, err)
+		}
+	}
+	task := db.Task{AgentID: "agent-a", Type: "shell", Status: "completed", Result: "ok"}
+	if err := s.db.Create(&task).Error; err != nil {
+		t.Fatalf("seed task: %v", err)
+	}
+
+	request := func(agentID string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Params = gin.Params{
+			{Key: "id", Value: agentID},
+			{Key: "taskId", Value: strconv.FormatUint(uint64(task.ID), 10)},
+		}
+		c.Request, _ = http.NewRequest(http.MethodGet, "/api/v1/agents/"+agentID+"/tasks/"+strconv.FormatUint(uint64(task.ID), 10), nil)
+		s.handleGetTaskStatus(c)
+		return w
+	}
+
+	if w := request("agent-a"); w.Code != http.StatusOK {
+		t.Fatalf("matching agent: expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	if w := request("agent-b"); w.Code != http.StatusNotFound {
+		t.Fatalf("mismatched agent: expected 404, got %d body=%s", w.Code, w.Body.String())
 	}
 }
 
@@ -284,5 +321,41 @@ func TestHandleSendCommand_ValidCreatesTaskAndPendingCount(t *testing.T) {
 	}
 	if got := s.agentPendingTasks["a1"]; got != 1 {
 		t.Fatalf("pending count: got %d, want 1", got)
+	}
+}
+
+func TestHandleSendCommand_JSONBodyCreatesTask(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := newInjectTestServer(t)
+	agent := db.Implant{
+		ID:       "a1",
+		Hostname: "TEST-HOST",
+		Username: "testuser",
+		OS:       "windows",
+		Arch:     "amd64",
+		IP:       "10.0.0.1",
+	}
+	if err := s.db.Create(&agent).Error; err != nil {
+		t.Fatalf("seed agent: %v", err)
+	}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{{Key: "id", Value: "a1"}}
+	c.Request, _ = http.NewRequest(http.MethodPost, "/agents/a1/command", strings.NewReader(`{"command":"whoami","shell":"cmd.exe"}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Set("user_role", "operator")
+	s.handleSendCommand(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var task db.Task
+	if err := s.db.Where("agent_id = ? AND type = ?", "a1", "shell").First(&task).Error; err != nil {
+		t.Fatalf("task not created: %v", err)
+	}
+	if task.Command != "whoami" {
+		t.Errorf("unexpected command %q", task.Command)
+	}
+	if task.Shell != "cmd.exe" {
+		t.Errorf("unexpected shell %q", task.Shell)
 	}
 }

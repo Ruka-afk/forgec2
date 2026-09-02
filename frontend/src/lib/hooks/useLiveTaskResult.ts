@@ -6,6 +6,13 @@ import { useI18n } from "@/lib/i18n";
 
 type LiveTaskStatus = "idle" | "pending" | "running" | "completed" | "failed" | "timeout";
 
+function toLiveTaskStatus(status: TaskStatus["status"]): LiveTaskStatus {
+  if (status === "pending" || status === "pending_approval") return "pending";
+  if (status === "running" || status === "sent") return "running";
+  if (status === "cancelled") return "failed";
+  return status;
+}
+
 interface UseLiveTaskResultOptions {
   /** Max time to wait for a task result before failing with the timeout status. */
   timeoutMs?: number;
@@ -64,16 +71,16 @@ export function useLiveTaskResult(opts: UseLiveTaskResultOptions = {}) {
           onStatus: (st: TaskStatus) => {
             if (seqRef.current !== seq) return;
             setTaskId(st.id);
-            setStatus(st.status);
+            setStatus(toLiveTaskStatus(st.status));
             if (st.result) setResult(st.result);
-            if (st.status === "failed") setError(st.error ?? t("common.task_failed"));
+            if (st.status === "failed" || st.status === "cancelled") setError(st.error ?? t("common.task_failed"));
           },
         });
         if (seqRef.current !== seq) return null;
         setTaskId(final.id);
-        setStatus(final.status);
+        setStatus(toLiveTaskStatus(final.status));
         if (final.result) setResult(final.result);
-        if (final.status === "failed") setError(final.error ?? t("common.task_failed"));
+        if (final.status === "failed" || final.status === "cancelled") setError(final.error ?? t("common.task_failed"));
         return final;
       } catch (e) {
         if (seqRef.current !== seq) return null;

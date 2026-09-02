@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -208,20 +209,20 @@ func (m *MonitorCollector) checkAgentAlerts() {
 								slog.Error("Plugin hook panicked (agent offline)", "agent", a.ID, "recover", r)
 							}
 						}()
-					ctx, cancel := context.WithTimeout(context.Background(), offlineHookTimeout)
-					defer cancel()
-					if err := m.server.pluginManager.ExecuteHook(ctx, plugin.Event{
-						Type:      plugin.EventAgentDisconnect,
-						Timestamp: time.Now(),
-						AgentID:   a.ID,
-						Payload: map[string]interface{}{
-							"hostname":            a.Hostname,
-							"ip":                  a.IP,
-							"offline_for_seconds": now.Sub(a.LastSeen).Seconds(),
-						},
-					}); err != nil {
-						slog.Warn("Hook errors on agent_disconnect event", "agent_id", a.ID, "err", err)
-					}
+						ctx, cancel := context.WithTimeout(context.Background(), offlineHookTimeout)
+						defer cancel()
+						if err := m.server.pluginManager.ExecuteHook(ctx, plugin.Event{
+							Type:      plugin.EventAgentDisconnect,
+							Timestamp: time.Now(),
+							AgentID:   a.ID,
+							Payload: map[string]interface{}{
+								"hostname":            a.Hostname,
+								"ip":                  a.IP,
+								"offline_for_seconds": now.Sub(a.LastSeen).Seconds(),
+							},
+						}); err != nil {
+							slog.Warn("Hook errors on agent_disconnect event", "agent_id", a.ID, "err", err)
+						}
 					}(agent)
 				default:
 					slog.Warn("Monitor: offline hook backlog full, skipping agent", "agent", agent.ID)
@@ -650,22 +651,30 @@ func (s *Server) handleStartScreenMonitor(c *gin.Context) {
 		return
 	}
 
-	s.screenMonitorMu.Lock()
-	if len(s.screenMonitorImplants) >= MaxScreenMonitors {
-		s.screenMonitorMu.Unlock()
-		respondError(c, http.StatusTooManyRequests, "screen monitor limit reached")
-		return
+	var request struct {
+		Interval string `json:"interval" form:"interval"`
+		Quality  string `json:"quality" form:"quality"`
+		Width    string `json:"width" form:"width"`
+		Mime     string `json:"mime" form:"mime"`
 	}
-	s.screenMonitorImplants[strings.ToLower(id)] = time.Now()
-	s.screenMonitorMu.Unlock()
+	if c.Request.ContentLength > 0 {
+		if err := c.ShouldBind(&request); err != nil {
+			respondError(c, http.StatusBadRequest, "invalid screen monitor settings")
+			return
+		}
+	}
 
-	interval := c.PostForm("interval")
+	interval := strings.TrimSpace(request.Interval)
 	if interval == "" {
 		interval = c.Query("interval")
 	}
-	quality := c.PostForm("quality")
+	quality := strings.TrimSpace(strings.ToLower(request.Quality))
 	if quality == "" {
-		quality = c.Query("quality")
+		quality = strings.TrimSpace(strings.ToLower(c.Query("quality")))
+	}
+	widthStr := strings.TrimSpace(request.Width)
+	if widthStr == "" {
+		widthStr = strings.TrimSpace(c.Query("width"))
 	}
 	if interval == "" {
 		interval = "5"
@@ -673,17 +682,74 @@ func (s *Server) handleStartScreenMonitor(c *gin.Context) {
 	if quality == "" {
 		quality = "medium"
 	}
+	intervalSeconds, err := strconv.Atoi(interval)
+	if err != nil || intervalSeconds < 1 || intervalSeconds > 60 {
+		respondError(c, http.StatusBadRequest, "interval must be between 1 and 60 seconds")
+		return
+	}
+	if quality != "low" && quality != "medium" && quality != "high" {
+		qualityValue, qualityErr := strconv.Atoi(quality)
+		if qualityErr != nil || qualityValue < 1 || qualityValue > 100 {
+			respondError(c, http.StatusBadRequest, "quality must be low, medium, high, or a value from 1 to 100")
+			return
+		}
+		quality = strconv.Itoa(qualityValue)
+	}
+	interval = strconv.Itoa(intervalSeconds)
+
+	monitorKey := strings.ToLower(id)
+	s.screenMonitorMu.Lock()
+	defer s.screenMonitorMu.Unlock()
+	if _, active := s.screenMonitorImplants[monitorKey]; active {
+		c.JSON(http.StatusOK, gin.H{
+			"success":        true,
+			"active":         true,
+			"already_active": true,
+			"message":        "Screen stream is already active",
+		})
+		return
+	}
+	if len(s.screenMonitorImplants) >= MaxScreenMonitors {
+		respondError(c, http.StatusTooManyRequests, "screen monitor limit reached")
+		return
+	}
+
 	streamCmd := interval + "," + quality
-	task, err := s.createTask(id, "screen_stream_start", streamCmd, "", "", "", 0, 0)
+	if widthStr != "" {
+		streamCmd += "," + widthStr
+	}
+	mimeVal := strings.ToLower(strings.TrimSpace(request.Mime))
+	if mimeVal == "" {
+		mimeVal = strings.ToLower(strings.TrimSpace(c.Query("mime")))
+	}
+	if mimeVal == "webp" || mimeVal == "jpeg" || mimeVal == "png" {
+		streamCmd += "," + mimeVal
+	}
+	task, err := s.createTask(id, "screen_stream_start", streamCmd, "", "", "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		slog.Error("Screen monitor: failed to create task", "agent_id", id, "err", err)
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
+	s.screenMonitorImplants[monitorKey] = time.Now()
+	s.broadcastTaskUpdate(id, *task)
 
 	s.LogAuditRecord(c, "screen_monitor_start", "agent", id, "Started screen monitoring", true, nil)
 	slog.Info("Screen monitoring started", "agent_id", id, "task_id", task.ID)
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Screen stream started"})
+	c.JSON(http.StatusOK, gin.H{
+		"success":  true,
+		"active":   true,
+		"task_id":  task.ID,
+		"interval": intervalSeconds,
+		"quality":  quality,
+		"message":  "Screen stream started",
+	})
+}
+
+type cachedScreenFrame struct {
+	data       string
+	mime       string
+	capturedAt time.Time
 }
 
 func (s *Server) handleStopScreenMonitor(c *gin.Context) {
@@ -691,29 +757,34 @@ func (s *Server) handleStopScreenMonitor(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
-
-	s.screenMonitorMu.Lock()
-	startTime, ok := s.screenMonitorImplants[strings.ToLower(id)]
-	delete(s.screenMonitorImplants, strings.ToLower(id))
-	s.screenMonitorMu.Unlock()
-
-	if ok {
-		s.db.Where("agent_id = ? AND created_at >= ? AND type IN (?)", id, startTime,
-			[]string{"screenshot", "screen_stream_start"}).
-			Delete(&db.Task{})
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
 	}
 
-	stopTask, err := s.createTask(id, "screen_stream_stop", "", "", "", "", 0, 0)
+	monitorKey := strings.ToLower(id)
+	s.screenMonitorMu.Lock()
+	defer s.screenMonitorMu.Unlock()
+	if _, active := s.screenMonitorImplants[monitorKey]; !active {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"active":  false,
+			"message": "Screen stream is already stopped",
+		})
+		return
+	}
+
+	stopTask, err := s.createTask(id, "screen_stream_stop", "", "", "", "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		slog.Error("Screen monitor stop: failed to create task", "agent_id", id, "err", err)
 		respondError(c, http.StatusInternalServerError, "failed to create stop task")
 		return
 	}
+	delete(s.screenMonitorImplants, monitorKey)
 	s.broadcastTaskUpdate(id, *stopTask)
 
 	s.LogAuditRecord(c, "screen_monitor_stop", "agent", id, "Stopped screen monitoring", true, nil)
 	slog.Info("Screen monitoring stopped", "agent_id", id)
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	c.JSON(http.StatusOK, gin.H{"success": true, "active": false, "task_id": stopTask.ID})
 }
 
 func (s *Server) IsScreenMonitoring(agentID string) bool {
@@ -724,10 +795,36 @@ func (s *Server) IsScreenMonitoring(agentID string) bool {
 }
 
 func (s *Server) BroadcastScreenshot(agentID string, base64Data string) {
+	mime := "image/png"
+	if strings.HasPrefix(base64Data, "/9j/") {
+		mime = "image/jpeg"
+	}
+	capturedAt := time.Now().UTC()
+	monitorKey := strings.ToLower(agentID)
+	s.screenMonitorMu.Lock()
+	if _, active := s.screenMonitorImplants[monitorKey]; active {
+		// A frame is also the monitor heartbeat. Without this refresh, a healthy
+		// long-running stream could be removed by stale-map maintenance.
+		s.screenMonitorImplants[monitorKey] = capturedAt
+	}
+	s.screenMonitorMu.Unlock()
+	s.screenFrameMu.Lock()
+	if s.screenFrames == nil {
+		s.screenFrames = make(map[string]cachedScreenFrame)
+	}
+	s.screenFrames[monitorKey] = cachedScreenFrame{
+		data:       base64Data,
+		mime:       mime,
+		capturedAt: capturedAt,
+	}
+	s.screenFrameMu.Unlock()
+
 	payload := map[string]string{
-		"type":     "screenshot",
-		"agent_id": agentID,
-		"data":     base64Data,
+		"type":        "screenshot",
+		"agent_id":    agentID,
+		"data":        base64Data,
+		"mime":        mime,
+		"captured_at": capturedAt.Format(time.RFC3339Nano),
 	}
 	message, err := json.Marshal(payload)
 	if err != nil {
@@ -735,6 +832,34 @@ func (s *Server) BroadcastScreenshot(agentID string, base64Data string) {
 		return
 	}
 
+	s.broadcastToClients(message)
+}
+
+func (s *Server) latestScreenFrame(agentID string) (cachedScreenFrame, bool) {
+	s.screenFrameMu.RLock()
+	defer s.screenFrameMu.RUnlock()
+	frame, ok := s.screenFrames[strings.ToLower(agentID)]
+	return frame, ok
+}
+
+// BroadcastScreenMonitorError notifies subscribed consoles when a stream that
+// was already running fails on the agent. The monitor slot is released so the
+// operator can retry immediately instead of being blocked by stale server state.
+func (s *Server) BroadcastScreenMonitorError(agentID, errorMessage string) {
+	s.screenMonitorMu.Lock()
+	delete(s.screenMonitorImplants, strings.ToLower(agentID))
+	s.screenMonitorMu.Unlock()
+
+	payload := map[string]string{
+		"type":     "screen_stream_error",
+		"agent_id": agentID,
+		"error":    errorMessage,
+	}
+	message, err := json.Marshal(payload)
+	if err != nil {
+		slog.Error("Failed to marshal screen monitor error", "agent_id", agentID, "err", err)
+		return
+	}
 	s.broadcastToClients(message)
 }
 

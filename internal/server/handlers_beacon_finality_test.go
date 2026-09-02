@@ -1,9 +1,12 @@
 package server
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,6 +15,7 @@ import (
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/testutil"
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 	"gorm.io/gorm"
 )
 
@@ -27,14 +31,96 @@ func newBeaconFinalityTestServer(t *testing.T) (*Server, *gorm.DB) {
 	s := &Server{
 		db:                    database,
 		cfg:                   &config.Config{},
+		ctx:                   context.Background(),
+		wsClients:             make(map[*websocket.Conn]*wsClientConn),
 		sessionManager:        sm,
 		eventManager:          NewEventManager(database),
 		agentPendingTasks:     make(map[string]int),
 		beaconDedupCache:      make(map[string]time.Time),
 		screenMonitorImplants: make(map[string]time.Time),
+		fileChains:            newFileChainState(),
 	}
 	t.Cleanup(func() { s.eventManager.Shutdown() })
 	return s, database
+}
+
+// TestRelayedTaskBroadcastKeepsResultPlaintext ensures encryption at rest does
+// not leak the FC2ENC storage representation into an operator shell session.
+func TestRelayedTaskBroadcastKeepsResultPlaintext(t *testing.T) {
+	crypto.InitLootEncryption(testStorageKeyHex)
+	s, database := newBeaconFinalityTestServer(t)
+	parent := "aaaa1111-5555-4333-8444-111111111111"
+	child := "bbbb2222-5555-4333-8444-222222222222"
+	output := `CHILD\\operator`
+
+	if err := database.Create(&db.Implant{ID: child, Hostname: "CHILD-01", ParentID: parent}).Error; err != nil {
+		t.Fatalf("create child agent: %v", err)
+	}
+	task := db.Task{AgentID: child, Type: "shell", Command: "whoami", Status: "running"}
+	if err := database.Create(&task).Error; err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+
+	client := &wsClientConn{ch: make(chan []byte, 1), done: make(chan struct{})}
+	s.wsClients[nil] = client
+	s.agentPendingTasks[child] = 1
+	s.processRelayedResults([]relayedData{{
+		AgentID: child,
+		Results: []taskResult{{TaskID: task.ID, Type: "shell", Output: output, ResultID: "rid-plain-ws"}},
+	}}, parent, time.Now())
+
+	select {
+	case raw := <-client.ch:
+		var message map[string]interface{}
+		if err := json.Unmarshal(raw, &message); err != nil {
+			t.Fatalf("decode websocket message: %v", err)
+		}
+		if got := message["result"]; got != output {
+			t.Fatalf("broadcast result = %q, want plaintext %q", got, output)
+		}
+		if strings.Contains(string(raw), "FC2ENC:") {
+			t.Fatalf("broadcast leaked encrypted storage value: %s", raw)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for relayed task broadcast")
+	}
+
+	var stored struct{ Result string }
+	if err := database.Raw("SELECT result FROM tasks WHERE id = ?", task.ID).Scan(&stored).Error; err != nil {
+		t.Fatalf("read raw stored task: %v", err)
+	}
+	if !strings.HasPrefix(stored.Result, "FC2ENC:") {
+		t.Fatalf("task result is not encrypted at rest: %q", stored.Result)
+	}
+}
+
+func TestBroadcastTaskUpdateDecryptsAtRestResult(t *testing.T) {
+	crypto.InitLootEncryption(testStorageKeyHex)
+	s, _ := newBeaconFinalityTestServer(t)
+	client := &wsClientConn{ch: make(chan []byte, 1), done: make(chan struct{})}
+	s.wsClients[nil] = client
+
+	ciphertext, err := crypto.EncryptLoot(`DOMAIN\\operator`)
+	if err != nil {
+		t.Fatalf("encrypt task result: %v", err)
+	}
+	s.broadcastTaskUpdate("agent-1", db.Task{ID: 42, AgentID: "agent-1", Type: "shell", Status: "completed", Result: ciphertext})
+
+	select {
+	case raw := <-client.ch:
+		var message map[string]interface{}
+		if err := json.Unmarshal(raw, &message); err != nil {
+			t.Fatalf("decode websocket message: %v", err)
+		}
+		if got := message["result"]; got != `DOMAIN\\operator` {
+			t.Fatalf("broadcast result = %q, want plaintext", got)
+		}
+		if strings.Contains(string(raw), "FC2ENC:") {
+			t.Fatalf("broadcast leaked encrypted storage value: %s", raw)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for task broadcast")
+	}
 }
 
 // TestCancelledTaskResultNotApplied pins the P6 finality guarantee: a result

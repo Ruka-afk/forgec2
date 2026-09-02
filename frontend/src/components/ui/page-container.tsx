@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { PageSpinner } from "@/components/ui/spinner";
 import { DataError } from "@/components/ui/data-state";
 import { EmptyState } from "@/components/ui/empty-state";
+import { useI18n } from "@/lib/i18n";
 
 interface PageContainerProps {
   /** Page title; when provided a PageHeader is rendered automatically. */
@@ -71,6 +72,7 @@ export function PageContainer({
   emptyAction,
   onRetry,
 }: PageContainerProps) {
+  const { t } = useI18n();
   const body = loading ? (
     loadingSkeleton ?? <PageSpinner />
   ) : error ? (
@@ -78,7 +80,7 @@ export function PageContainer({
   ) : empty ? (
     <EmptyState
       icon={emptyIcon}
-      title={emptyTitle ?? ""}
+      title={emptyTitle ?? t("common.no_data")}
       message={emptyMessage}
       action={emptyAction}
     />

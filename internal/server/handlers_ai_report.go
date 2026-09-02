@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"fmt"
@@ -12,9 +12,11 @@ import (
 // mitreCoverageCounts summarizes technique coverage: how many tactics have at
 // least one exercised technique vs tactics whose mapped task types were never
 // run. Shared by get_coverage_gaps and generate_report.
-func (s *Server) mitreCoverageCounts() (coveredTactics, gapTactics int, usedTypes []string) {
+func (s *Server) mitreCoverageCounts() (coveredTactics, gapTactics int, usedTypes []string, err error) {
 	used := map[string]bool{}
-	s.db.Table("tasks").Distinct().Pluck("type", &usedTypes)
+	if err := s.db.Table("tasks").Distinct().Pluck("type", &usedTypes).Error; err != nil {
+		return 0, 0, nil, fmt.Errorf("load MITRE task types: %w", err)
+	}
 	for _, t := range usedTypes {
 		used[t] = true
 	}
@@ -36,7 +38,7 @@ func (s *Server) mitreCoverageCounts() (coveredTactics, gapTactics int, usedType
 			}
 		}
 	}
-	return len(seenCovered), len(seenGap), usedTypes
+	return len(seenCovered), len(seenGap), usedTypes, nil
 }
 
 // buildAIMarkdownReport renders a live engagement snapshot as a markdown
@@ -53,7 +55,9 @@ func (s *Server) buildAIMarkdownReport(scope string) (string, []string, error) {
 	since := now.AddDate(0, 0, -30)
 
 	var agents []db.Implant
-	s.db.Order("last_seen desc").Limit(200).Find(&agents)
+	if err := s.db.Order("last_seen desc").Limit(200).Find(&agents).Error; err != nil {
+		return "", nil, fmt.Errorf("load agents: %w", err)
+	}
 	online, elevated := 0, 0
 	domSet := map[string]bool{}
 	for _, a := range agents {
@@ -69,18 +73,34 @@ func (s *Server) buildAIMarkdownReport(scope string) (string, []string, error) {
 	}
 
 	var totT, okT, failT, actT int64
-	s.db.Model(&db.Task{}).Where("created_at >= ?", since).Count(&totT)
-	s.db.Model(&db.Task{}).Where("created_at >= ? AND status = ?", since, "completed").Count(&okT)
-	s.db.Model(&db.Task{}).Where("created_at >= ? AND status = ?", since, "failed").Count(&failT)
-	s.db.Model(&db.Task{}).Where("status IN ?", []string{"pending", TaskStatusPendingApproval}).Count(&actT)
+	if err := s.db.Model(&db.Task{}).Where("created_at >= ?", since).Count(&totT).Error; err != nil {
+		return "", nil, fmt.Errorf("count recent tasks: %w", err)
+	}
+	if err := s.db.Model(&db.Task{}).Where("created_at >= ? AND status = ?", since, "completed").Count(&okT).Error; err != nil {
+		return "", nil, fmt.Errorf("count completed tasks: %w", err)
+	}
+	if err := s.db.Model(&db.Task{}).Where("created_at >= ? AND status = ?", since, "failed").Count(&failT).Error; err != nil {
+		return "", nil, fmt.Errorf("count failed tasks: %w", err)
+	}
+	if err := s.db.Model(&db.Task{}).Where("status IN ?", []string{"pending", TaskStatusPendingApproval}).Count(&actT).Error; err != nil {
+		return "", nil, fmt.Errorf("count queued tasks: %w", err)
+	}
 
 	var totC, valC, invC int64
-	s.db.Model(&db.CredentialEntry{}).Count(&totC)
-	s.db.Model(&db.CredentialEntry{}).Where("verify_status = ?", "valid").Count(&valC)
-	s.db.Model(&db.CredentialEntry{}).Where("verify_status = ?", "invalid").Count(&invC)
+	if err := s.db.Model(&db.CredentialEntry{}).Count(&totC).Error; err != nil {
+		return "", nil, fmt.Errorf("count credentials: %w", err)
+	}
+	if err := s.db.Model(&db.CredentialEntry{}).Where("verify_status = ?", "valid").Count(&valC).Error; err != nil {
+		return "", nil, fmt.Errorf("count valid credentials: %w", err)
+	}
+	if err := s.db.Model(&db.CredentialEntry{}).Where("verify_status = ?", "invalid").Count(&invC).Error; err != nil {
+		return "", nil, fmt.Errorf("count invalid credentials: %w", err)
+	}
 
 	var listeners []db.Listener
-	s.db.Order("created_at desc").Limit(100).Find(&listeners)
+	if err := s.db.Order("created_at desc").Limit(100).Find(&listeners).Error; err != nil {
+		return "", nil, fmt.Errorf("load listeners: %w", err)
+	}
 	lisEnabled := 0
 	for _, l := range listeners {
 		if l.Enabled {
@@ -88,13 +108,21 @@ func (s *Server) buildAIMarkdownReport(scope string) (string, []string, error) {
 		}
 	}
 
-	iocs, _ := s.extractIOCs(30, false)
+	iocs, _, err := s.extractIOCs(30, false)
+	if err != nil {
+		return "", nil, err
+	}
 	sort.Slice(iocs, func(i, j int) bool { return iocs[i].Count > iocs[j].Count })
 
-	covTac, gapTac, usedTypes := s.mitreCoverageCounts()
+	covTac, gapTac, usedTypes, err := s.mitreCoverageCounts()
+	if err != nil {
+		return "", nil, err
+	}
 
 	var failed []db.Task
-	s.db.Where("status = ? AND created_at >= ?", "failed", since).Order("created_at desc").Limit(8).Find(&failed)
+	if err := s.db.Where("status = ? AND created_at >= ?", "failed", since).Order("created_at desc").Limit(8).Find(&failed).Error; err != nil {
+		return "", nil, fmt.Errorf("load recent failures: %w", err)
+	}
 
 	allSections := []string{"overview", "agents", "tasks", "credentials", "network", "iocs", "coverage", "findings", "recommendations"}
 	included := make([]string, 0, len(allSections))

@@ -2,7 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 /**
  * UI smoke against static export (`out/`).
- * Run after `npm run build`. Serves with `npx serve out`.
+ * Run after `npm run build`. Serves the exported HTML files without network dependencies.
  */
 export default defineConfig({
   testDir: "./e2e",
@@ -22,7 +22,7 @@ export default defineConfig({
     { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1920, height: 1080 } } },
   ],
   webServer: {
-    command: "npx --yes serve out -l 4173",
+    command: "node scripts/serve-static.mjs out 4173",
     url: "http://127.0.0.1:4173",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

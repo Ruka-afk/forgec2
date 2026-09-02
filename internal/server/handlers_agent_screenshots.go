@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -38,6 +40,20 @@ func (s *Server) handleGetAgentScreenshot(c *gin.Context) {
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
+	if frame, ok := s.latestScreenFrame(id); ok && s.IsScreenMonitoring(id) {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data": gin.H{
+				"image":       "data:" + frame.mime + ";base64," + frame.data,
+				"width":       0,
+				"height":      0,
+				"window_name": "Desktop",
+				"capture_id":  "live-" + strconv.FormatInt(frame.capturedAt.UnixNano(), 10),
+				"captured_at": frame.capturedAt.Format(time.RFC3339Nano),
+			},
+		})
+		return
+	}
 
 	screenshotBase := filepath.Join(s.cfg.Server.DataDir, "screenshots")
 	screenshotDir := safeJoin(screenshotBase, id)
@@ -54,6 +70,9 @@ func (s *Server) handleGetAgentScreenshot(c *gin.Context) {
 	var newest os.DirEntry
 	var newestTime time.Time
 	for _, e := range entries {
+		if e.IsDir() || !strings.EqualFold(filepath.Ext(e.Name()), ".png") {
+			continue
+		}
 		info, err := e.Info()
 		if err != nil {
 			continue
@@ -83,6 +102,8 @@ func (s *Server) handleGetAgentScreenshot(c *gin.Context) {
 			"width":       width,
 			"height":      height,
 			"window_name": "Desktop",
+			"capture_id":  newest.Name(),
+			"captured_at": newestTime.UTC().Format(time.RFC3339Nano),
 		},
 	})
 }

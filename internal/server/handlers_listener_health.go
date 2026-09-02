@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -53,22 +54,54 @@ func (t *listenerHealthTracker) snapshot() []listenerHealth {
 	for _, h := range t.state {
 		out = append(out, *h)
 	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].ListenerID < out[j].ListenerID
+	})
 	return out
+}
+
+// observe records a probe and carries forward the consecutive failure count.
+// A successful or unsupported probe starts a fresh sequence.
+func (t *listenerHealthTracker) observe(h *listenerHealth) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	previous := t.state[h.ListenerID]
+	if h.OK || h.Skipped {
+		h.Failures = 0
+	} else {
+		h.Failures = 1
+		if previous != nil && !previous.OK && !previous.Skipped {
+			h.Failures = previous.Failures + 1
+		}
+	}
+	t.state[h.ListenerID] = h
+}
+
+// prune removes disabled or deleted listeners from the API snapshot.
+func (t *listenerHealthTracker) prune(active map[uint]struct{}) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for id := range t.state {
+		if _, ok := active[id]; !ok {
+			delete(t.state, id)
+		}
+	}
 }
 
 func (s *Server) startListenerHealthLoop() {
 	slog.Info("Listener health heartbeat starting", "interval", listenerHealthInterval)
 	ticker := time.NewTicker(listenerHealthInterval)
-	// First pass shortly after boot so status is populated fast.
-	go func() {
-		time.Sleep(15 * time.Second)
-		s.checkAllListeners()
-	}()
+	initial := time.NewTimer(15 * time.Second)
+	defer ticker.Stop()
+	defer initial.Stop()
 	for {
 		select {
 		case <-s.ctx.Done():
-			ticker.Stop()
 			return
+		case <-initial.C:
+			// First pass shortly after boot so status is populated fast.
+			s.checkAllListeners()
 		case <-ticker.C:
 			s.checkAllListeners()
 		}
@@ -81,17 +114,37 @@ func (s *Server) checkAllListeners() {
 		slog.Error("Listener health: query failed", "err", err)
 		return
 	}
-	for _, ln := range listeners {
-		h := s.probeListener(&ln)
-		lhTracker.mu.Lock()
-		prev := lhTracker.state[ln.ID]
-		wasOK := prev != nil && prev.OK
-		lhTracker.state[ln.ID] = h
-		lhTracker.mu.Unlock()
+	active := make(map[uint]struct{}, len(listeners))
+	for i := range listeners {
+		active[listeners[i].ID] = struct{}{}
+	}
+	lhTracker.prune(active)
 
-		// Transition to failed: flip DB status + notify once.
-		if !h.OK && !h.Skipped && h.Failures >= listenerFailThreshold && wasOK {
-			s.db.Model(&db.Listener{}).Where("id = ?", ln.ID).Update("status", "error")
+	ctx := s.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	for _, ln := range listeners {
+		if err := ctx.Err(); err != nil {
+			return
+		}
+		h := s.probeListener(ctx, &ln)
+		lhTracker.observe(h)
+
+		// Use a conditional update as the transition gate. It both retries a
+		// failed persistence on the next pass and prevents duplicate alerts if
+		// two health sweeps overlap.
+		if !h.OK && !h.Skipped && h.Failures >= listenerFailThreshold {
+			res := s.db.Model(&db.Listener{}).
+				Where("id = ? AND status <> ?", ln.ID, "error").
+				Update("status", "error")
+			if res.Error != nil {
+				slog.Error("Listener health: failed to persist failure", "listener_id", ln.ID, "err", res.Error)
+				continue
+			}
+			if res.RowsAffected == 0 {
+				continue
+			}
 			s.DispatchNotification(&db.Notification{
 				Type:     "listener_health",
 				Title:    "Listener unreachable: " + ln.Name,
@@ -103,9 +156,18 @@ func (s *Server) checkAllListeners() {
 				"name": ln.Name, "status": "failed", "error": h.Error,
 			})
 			slog.Warn("Listener health FAILED", "name", ln.Name, "addr", fmt.Sprintf("%s:%d", ln.Host, ln.Port), "err", h.Error)
-		} else if h.OK && prev != nil && !wasOK && !prev.Skipped {
+		} else if h.OK && !h.Skipped {
 			// Recovery: restore honest running state.
-			s.db.Model(&db.Listener{}).Where("id = ?", ln.ID).Update("status", "running")
+			res := s.db.Model(&db.Listener{}).
+				Where("id = ? AND status = ?", ln.ID, "error").
+				Update("status", "running")
+			if res.Error != nil {
+				slog.Error("Listener health: failed to persist recovery", "listener_id", ln.ID, "err", res.Error)
+				continue
+			}
+			if res.RowsAffected == 0 {
+				continue
+			}
 			s.broadcastOperatorEvent(map[string]interface{}{
 				"type": "listener_health", "listener_id": ln.ID,
 				"name": ln.Name, "status": "recovered",
@@ -121,7 +183,7 @@ func (s *Server) handleListenerHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "health": lhTracker.snapshot()})
 }
 
-func (s *Server) probeListener(ln *db.Listener) *listenerHealth {
+func (s *Server) probeListener(ctx context.Context, ln *db.Listener) *listenerHealth {
 	h := &listenerHealth{
 		ListenerID: ln.ID,
 		Name:       ln.Name,
@@ -132,18 +194,18 @@ func (s *Server) probeListener(ln *db.Listener) *listenerHealth {
 
 	switch ln.Scheme {
 	case "http":
-		h.OK = probeTCP(h.Addr)
+		h.OK = probeTCP(ctx, h.Addr)
 		if !h.OK {
 			h.Error = "tcp connect failed"
 		}
 	case "https", "tls":
-		ok, err := probeTLS(h.Addr)
+		ok, err := probeTLS(ctx, h.Addr)
 		h.OK = ok
 		if !ok {
 			h.Error = err.Error()
 		}
 	case "dns":
-		ok, err := probeDNS(ln.Host, ln.Port, ln.DNSDomain)
+		ok, err := probeDNS(ctx, ln.Host, ln.Port, ln.DNSDomain)
 		h.OK = ok
 		if !ok {
 			h.Error = err.Error()
@@ -156,8 +218,9 @@ func (s *Server) probeListener(ln *db.Listener) *listenerHealth {
 	return h
 }
 
-func probeTCP(addr string) bool {
-	conn, err := net.DialTimeout("tcp", addr, listenerProbeTimeout)
+func probeTCP(ctx context.Context, addr string) bool {
+	dialer := net.Dialer{Timeout: listenerProbeTimeout}
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return false
 	}
@@ -165,8 +228,9 @@ func probeTCP(addr string) bool {
 	return true
 }
 
-func probeTLS(addr string) (bool, error) {
-	conn, err := net.DialTimeout("tcp", addr, listenerProbeTimeout)
+func probeTLS(ctx context.Context, addr string) (bool, error) {
+	dialer := net.Dialer{Timeout: listenerProbeTimeout}
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return false, err
 	}
@@ -178,14 +242,14 @@ func probeTLS(addr string) (bool, error) {
 	if err := tlsConn.SetDeadline(time.Now().Add(listenerProbeTimeout)); err != nil {
 		return false, err
 	}
-	if err := tlsConn.HandshakeContext(context.Background()); err != nil {
+	if err := tlsConn.HandshakeContext(ctx); err != nil {
 		return false, err
 	}
 	_ = tlsConn.Close()
 	return true, nil
 }
 
-func probeDNS(host string, port int, zone string) (bool, error) {
+func probeDNS(ctx context.Context, host string, port int, zone string) (bool, error) {
 	if zone == "" {
 		zone = "health-check.probe"
 	}
@@ -193,7 +257,7 @@ func probeDNS(host string, port int, zone string) (bool, error) {
 	m := new(dns.Msg)
 	m.SetQuestion(dns.Fqdn("probe."+zone), dns.TypeTXT)
 	client := &dns.Client{Net: "udp", Timeout: listenerProbeTimeout}
-	_, _, err := client.ExchangeContext(context.Background(), m, target)
+	_, _, err := client.ExchangeContext(ctx, m, target)
 	if err != nil {
 		return false, err
 	}

@@ -38,6 +38,84 @@ func TestBuildTransportCandidatesExcludesDNSWhenUnconfigured(t *testing.T) {
 	}
 }
 
+func TestBuildTransportCandidatesHTTPOnlyExcludesTCPAndICMP(t *testing.T) {
+	oldP, oldB, oldD, oldS, oldURL := Protocol, BeaconTransport, DNSDomain, DNSServer, C2URL
+	oldCands, oldIdx := transportCandidates, currentC2Idx.Load()
+	defer func() {
+		Protocol, BeaconTransport, DNSDomain, DNSServer, C2URL = oldP, oldB, oldD, oldS, oldURL
+		transportCandidates = oldCands
+		currentC2Idx.Store(oldIdx)
+	}()
+
+	Protocol, BeaconTransport = "http", "http"
+	DNSDomain, DNSServer = "", ""
+	C2URL = "http://10.0.0.1:8443"
+	c2URLsStore([]string{C2URL}, 0)
+	transportCandidates = nil
+
+	cands := buildTransportCandidates()
+	for _, c := range cands {
+		if c == "tcp" || c == "icmp" || c == "udp" || c == "quic" {
+			t.Fatalf("http-only implant must not failover to %s, got %v", c, cands)
+		}
+	}
+	foundHTTP := false
+	for _, c := range cands {
+		if c == "http" {
+			foundHTTP = true
+		}
+	}
+	if !foundHTTP {
+		t.Fatalf("expected http in candidates, got %v", cands)
+	}
+}
+
+func TestBuildTransportCandidatesIncludesTCPWhenURLConfigured(t *testing.T) {
+	oldP, oldB, oldD, oldS, oldURL := Protocol, BeaconTransport, DNSDomain, DNSServer, C2URL
+	oldCands, oldIdx := transportCandidates, currentC2Idx.Load()
+	defer func() {
+		Protocol, BeaconTransport, DNSDomain, DNSServer, C2URL = oldP, oldB, oldD, oldS, oldURL
+		transportCandidates = oldCands
+		currentC2Idx.Store(oldIdx)
+	}()
+
+	Protocol, BeaconTransport = "http", "http"
+	DNSDomain, DNSServer = "", ""
+	C2URL = "http://10.0.0.1:8443,tcp://10.0.0.1:4444"
+	c2URLsStore([]string{"http://10.0.0.1:8443", "tcp://10.0.0.1:4444"}, 0)
+	transportCandidates = nil
+
+	cands := buildTransportCandidates()
+	foundTCP := false
+	for _, c := range cands {
+		if c == "tcp" {
+			foundTCP = true
+		}
+	}
+	if !foundTCP {
+		t.Fatalf("expected tcp in candidates when tcp:// URL is configured, got %v", cands)
+	}
+}
+
+func TestApplyTransportSelectsMatchingC2URL(t *testing.T) {
+	oldP, oldB, oldURL := Protocol, BeaconTransport, C2URL
+	oldIdx := currentC2Idx.Load()
+	defer func() {
+		Protocol, BeaconTransport, C2URL = oldP, oldB, oldURL
+		currentC2Idx.Store(oldIdx)
+	}()
+
+	C2URL = "http://10.0.0.1:8443,tcp://10.0.0.1:4444"
+	c2URLsStore([]string{"http://10.0.0.1:8443", "tcp://10.0.0.1:4444"}, 0)
+	applyTransport("tcp")
+	if effectiveTransport() != "tcp" {
+		t.Fatalf("expected tcp transport, got %s", effectiveTransport())
+	}
+	if got := c2URLAtIndex(int(currentC2Idx.Load())); got != "tcp://10.0.0.1:4444" {
+		t.Fatalf("expected tcp URL after applyTransport, got %q", got)
+	}
+}
+
 func TestTransportFailoverRotatesAfterThreshold(t *testing.T) {
 	oldP, oldB, oldD, oldS := Protocol, BeaconTransport, DNSDomain, DNSServer
 	oldStreak, oldIdx, oldCands := transportFailStreak, currentTransportIdx, transportCandidates

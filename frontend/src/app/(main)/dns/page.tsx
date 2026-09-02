@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { POLL } from "@/lib/polling";
@@ -41,6 +41,7 @@ export default function DnsPage() {
   const [domain, setDomain] = useState("");
   const [addr, setAddr] = useState("");
   const [configDirty, setConfigDirty] = useState(false);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchStatus = useCallback(
     () => api.get<DnsStatus>(paths.dns.status),
@@ -81,13 +82,21 @@ export default function DnsPage() {
         setConfigDirty(false);
         toast.success(t("dns.toast.stopped"));
       }
-      setTimeout(refresh, 500);
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = setTimeout(() => {
+        refreshTimerRef.current = null;
+        void refresh();
+      }, 500);
     } catch {
       toast.error(nextRunning ? t("dns.toast.start_failed") : t("dns.toast.stop_failed"));
     } finally {
       setBusy(false);
     }
   };
+
+  useEffect(() => () => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+  }, []);
 
   if (loading) return <PageContainer title={t("dns.title")} subtitle={t("dns.subtitle")}><PageSpinner /></PageContainer>;
 

@@ -46,8 +46,8 @@ export function useBOFData() {
 
   const loadRepo = useCallback(async () => {
     try {
-      const data = await api.get<{ data?: RepoItem[]; repo?: RepoItem[]; items?: RepoItem[] }>("/bof_repo");
-      setRepoItems(data.data || data.repo || data.items || []);
+      const data = await api.get<RepoItem[]>(paths.bof.repos);
+      setRepoItems(Array.isArray(data) ? data : []);
     } catch {
       setRepoItems([]);
     }

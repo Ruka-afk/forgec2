@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
-import { api } from "@/lib/api";
+import { api, formatThrownError } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,28 +71,54 @@ export default function AgentTokenPage() {
   const [whoamiResult, setWhoamiResult] = useState<string | null>(null);
   const [tokenNotes, setTokenNotes] = useState<Record<string, string>>({});
   const [noteTargetId, setNoteTargetId] = useState<string | null>(null);
+  const tokenLoadSeqRef = useRef(0);
+  const processLoadSeqRef = useRef(0);
+  const delayedReloadRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const loadTokens = useCallback(async () => {
+  const loadTokens = useCallback(async (signal?: AbortSignal) => {
+    const seq = ++tokenLoadSeqRef.current;
     try {
       // B1 fix: backend returns a raw array, not {tokens: [...]}. Handle both
       // formats for forward compatibility.
-      const res = await api.get(paths.agents.tokenList(agentId));
+      const res = await api.get(paths.agents.tokenList(agentId), { signal });
       const list = Array.isArray(res) ? res : ((res as Record<string, unknown>)?.tokens || (res as Record<string, unknown>)?.Tokens || []) as Token[];
+      if (signal?.aborted || seq !== tokenLoadSeqRef.current) return;
       setTokens(list as Token[]);
-    } catch { toast.error(t("agents.token_load_failed")); }
+    } catch {
+      if (!signal?.aborted && seq === tokenLoadSeqRef.current) toast.error(t("agents.token_load_failed"));
+    }
   }, [agentId, t]);
 
-  const loadProcesses = useCallback(async () => {
+  const loadProcesses = useCallback(async (signal?: AbortSignal) => {
+    const seq = ++processLoadSeqRef.current;
     try {
-      const data = await api.post<{ processes?: Process[]; data?: Process[] }>(paths.agents.tokenListProcs(agentId));
+      const data = await api.post<{ processes?: Process[]; data?: Process[] }>(paths.agents.tokenListProcs(agentId), undefined, { signal });
+      if (signal?.aborted || seq !== processLoadSeqRef.current) return;
       setProcesses(data.processes || data.data || []);
-    } catch { toast.error(t("agents.token_load_processes_failed")); }
+    } catch {
+      if (!signal?.aborted && seq === processLoadSeqRef.current) toast.error(t("agents.token_load_processes_failed"));
+    }
   }, [agentId, t]);
 
   useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
-    Promise.all([loadTokens(), loadProcesses()]).finally(() => setLoading(false));
+    Promise.all([loadTokens(controller.signal), loadProcesses(controller.signal)])
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
   }, [loadTokens, loadProcesses]);
+
+  const scheduleTokenReload = useCallback(() => {
+    if (delayedReloadRef.current) clearTimeout(delayedReloadRef.current);
+    delayedReloadRef.current = setTimeout(() => {
+      delayedReloadRef.current = null;
+      void loadTokens();
+    }, 3000);
+  }, [loadTokens]);
+
+  useEffect(() => () => {
+    if (delayedReloadRef.current) clearTimeout(delayedReloadRef.current);
+  }, [agentId]);
 
   const handleStealToken = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,7 +131,7 @@ export default function AgentTokenPage() {
       setStealPid("");
       // B7 fix: task accepted, poll later
       toast.info(t("agents.token_task_queued"));
-      setTimeout(() => loadTokens(), 3000);
+      scheduleTokenReload();
     } catch {
       toast.error(t("agents.token_steal_failed"));
     } finally {
@@ -124,7 +150,7 @@ export default function AgentTokenPage() {
       // B7 fix: token operations only return task_id, the actual token appears
       // later via agent callback. Show "task accepted" instead of false success.
       toast.info(t("agents.token_task_queued"));
-      setTimeout(() => loadTokens(), 3000);
+      scheduleTokenReload();
     } catch {
       toast.error(t("agents.token_make_failed"));    } finally {
       setActiveAction(null);
@@ -137,7 +163,7 @@ export default function AgentTokenPage() {
       await api.post(paths.agents.tokenRevert(agentId));
       toast.info(t("agents.token_task_queued"));
       setWhoamiResult(null);
-      setTimeout(() => loadTokens(), 3000);
+      scheduleTokenReload();
     } catch {
       toast.error(t("agents.token_revert_failed"));    } finally {
       setActiveAction(null);
@@ -161,7 +187,7 @@ export default function AgentTokenPage() {
       toast.success(t("agents.token_impersonate"));
       await loadTokens();
     } catch {
-      toast.error(t("agents.token_drop_failed"));
+      toast.error(t("agents.token_impersonate_failed"));
     } finally {      setActiveAction(null);    }
   };
 
@@ -174,7 +200,7 @@ export default function AgentTokenPage() {
       setWhoamiResult(user);
       toast(`Identity: ${d.user || d.username || t("agents.unknown")}`);
     } catch (err) {
-      setWhoamiResult(`Error: ${err}`);
+      setWhoamiResult(formatThrownError(err));
       toast.error(t("agents.token_whoami_failed"));    } finally {      setActiveAction(null);    }
   };
 
@@ -328,7 +354,7 @@ export default function AgentTokenPage() {
           </h2>          <div className="flex items-center gap-2">
             <div className="text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
-                <span className="size-2 bg-warning rounded-full animate-pulse"></span>                {tokens.filter(t => t.active).length} active
+                <span className="size-2 bg-warning rounded-full animate-pulse"></span>                {tokens.filter(tok => tok.active).length} active
               </span>
             </div>
           </div>

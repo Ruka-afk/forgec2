@@ -11,17 +11,20 @@ import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Lightbulb, Copy, Play, Sparkles } from "lucide-react";
 
-// Module-level AI status cache: one probe per browser session is enough and
-// keeps every assist card cheap to mount.
-let aiStatusCache: { enabled: boolean; hasApiKey: boolean } | null = null;
+// Module-level AI status cache with 60s TTL so config changes propagate
+// without a full page refresh.
+let aiStatusCache: { enabled: boolean; hasApiKey: boolean; ts: number } | null = null;
+const AI_STATUS_TTL = 60_000;
 
 export async function fetchAIStatus(): Promise<{ enabled: boolean; hasApiKey: boolean }> {
-  if (aiStatusCache) return aiStatusCache;
+  if (aiStatusCache && Date.now() - aiStatusCache.ts < AI_STATUS_TTL) {
+    return aiStatusCache;
+  }
   try {
     const d = await api.get<{ enabled?: boolean; has_api_key?: boolean }>(paths.ai.status);
-    aiStatusCache = { enabled: !!d.enabled && !!d.has_api_key, hasApiKey: !!d.has_api_key };
+    aiStatusCache = { enabled: !!d.enabled && !!d.has_api_key, hasApiKey: !!d.has_api_key, ts: Date.now() };
   } catch {
-    aiStatusCache = { enabled: false, hasApiKey: false };
+    aiStatusCache = { enabled: false, hasApiKey: false, ts: Date.now() };
   }
   return aiStatusCache;
 }

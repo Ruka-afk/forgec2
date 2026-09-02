@@ -178,13 +178,34 @@ const (
 	DefaultLockoutTimeSec   = 900
 
 	// ─── AI ───
-	AIResponseTruncLen   = 8000
+	// Keep normal long-form model replies intact. The old 8 KB ceiling cut
+	// common 4K-token answers roughly halfway through (and could split a UTF-8
+	// rune). Rendering/history have matching, slightly larger client ceilings.
+	AIResponseTruncLen   = 64 * 1024
 	AIThinkingPreviewLen = 300
 	AIErrorBodyTruncLen  = 500
 	aiRetryMax           = 2
-	AIToolResultTruncLen = 500
+	// Tool results keep enough structured rows for useful summaries. Oversized
+	// payloads are reduced to valid JSON with explicit partial-result metadata.
+	AIToolResultTruncLen = 1000
 	AITaskResultTruncLen = 2000
 	AIStreamBufSize      = 4096
+	// Providers send tiny token deltas. We expose cumulative snapshots to the
+	// browser for backward compatibility, but only after a useful increment so
+	// long replies do not create quadratic SSE traffic and render churn.
+	AIStreamEmitMinBytes    = 256
+	AIChatRequestMaxBytes   = 2 << 20
+	AIChatMaxMessages       = 512
+	AIConfigRequestMaxBytes = 64 << 10
+	// Safety ceilings applied when config.yaml leaves the corresponding
+	// max_* field at 0 ("unlimited"). Without these, a tool-calling model
+	// can loop forever and the SSE request never ends (UI appears frozen).
+	AISafetyMaxTurns          = 16
+	AISafetyMaxToolRounds     = 8
+	AISafetyMaxDuplicateTools = 2
+	AIRoundTimeout            = 3 * time.Minute
+	AIStreamChanBuf           = 64
+	AIStreamHeartbeatInterval = 15 * time.Second
 
 	// ─── DNS ───
 	DNSTXTChunkSize = 255

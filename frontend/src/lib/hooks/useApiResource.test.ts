@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { createElement, StrictMode, type PropsWithChildren } from "react";
 import { useApiResource } from "./useApiResource";
 
 describe("useApiResource", () => {
@@ -82,5 +83,33 @@ describe("useApiResource", () => {
       await vi.advanceTimersByTimeAsync(6000);
     });
     expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("aborts an in-flight request when the resource is disabled", async () => {
+    let observedSignal: AbortSignal | undefined;
+    const fetcher = vi.fn((signal?: AbortSignal) => new Promise<number[]>((_, reject) => {
+      observedSignal = signal;
+      signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+    }));
+    const { result, rerender } = renderHook(
+      ({ enabled }) => useApiResource<number[]>({ fetcher, enabled }),
+      { initialProps: { enabled: true } },
+    );
+
+    await waitFor(() => expect(observedSignal).toBeDefined());
+    rerender({ enabled: false });
+
+    await waitFor(() => expect(observedSignal?.aborted).toBe(true));
+    expect(result.current.loading).toBe(false);
+  });
+
+  it("still accepts the latest response under React Strict Mode", async () => {
+    const fetcher = vi.fn().mockResolvedValue([7]);
+    const wrapper = ({ children }: PropsWithChildren) => createElement(StrictMode, null, children);
+    const { result } = renderHook(() => useApiResource<number[]>({ fetcher }), { wrapper });
+
+    await waitFor(() => expect(result.current.data).toEqual([7]));
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBeNull();
   });
 });

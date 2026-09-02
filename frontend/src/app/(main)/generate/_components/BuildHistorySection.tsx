@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { downloadBlob } from "@/lib/download";
 import { formatTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
@@ -11,10 +14,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/empty-state";
-import { AppWindow, Apple, Binary, CheckCircle2, ChevronDown, Disc, HardDrive, History, PackageOpen, Puzzle, Terminal, XCircle } from "lucide-react";
+import { AppWindow, Apple, Binary, CheckCircle2, ChevronDown, Disc, Download, HardDrive, History, PackageOpen, Puzzle, RefreshCw, Terminal, XCircle } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { BuildHistoryEntry } from "@/types/generate";
+import { isPayloadFormat } from "./generate-format";
 
 const FORMAT_ICONS: Record<string, React.ReactNode> = {
   exe: <AppWindow className="size-4" />, dll: <Puzzle className="size-4" />, ps1: <Terminal className="size-4" />,
@@ -37,6 +41,28 @@ export default function BuildHistorySection({ refreshKey }: { refreshKey?: numbe
   });
   useEffect(() => { if (refreshKey) void refresh(); }, [refreshKey, refresh]);
   const builds = data?.builds ?? [];
+
+  const handleDownload = async (build: BuildHistoryEntry) => {
+    if (!build.id) return;
+    try {
+      const { blob, filename } = await api.downloadGet(
+        paths.builds.download(String(build.id)),
+        build.filename || `build-${build.id}`,
+      );
+      downloadBlob(blob, filename);
+    } catch {
+      toast.error(t("builds.toast.download_failed"));
+    }
+  };
+
+  const rebuildHref = (build: BuildHistoryEntry) => {
+    const params = new URLSearchParams();
+    if (build.listener_id) params.set("listener_id", String(build.listener_id));
+    const fmt = (build.format || "").toLowerCase();
+    if (isPayloadFormat(fmt)) params.set("format", fmt);
+    const q = params.toString();
+    return q ? `/generate?${q}` : "/generate";
+  };
 
   if (loading) return null;
 
@@ -72,6 +98,7 @@ export default function BuildHistorySection({ refreshKey }: { refreshKey?: numbe
                     <TableHead className="text-left font-medium">{t("builds.col_filename")}</TableHead>
                     <TableHead className="text-left font-medium">{t("builds.status")}</TableHead>
                     <TableHead className="text-left font-medium">{t("builds.col_user")}</TableHead>
+                    <TableHead className="text-right font-medium">{t("common.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -98,6 +125,24 @@ export default function BuildHistorySection({ refreshKey }: { refreshKey?: numbe
                         )}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{b.user || "system"}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="inline-flex items-center gap-1">
+                          {(b.status === "success" || b.output_path) && (
+                            <Tooltip>
+                              <TooltipTrigger render={<Button type="button" variant="ghost" size="icon-xs" onClick={() => void handleDownload(b)} aria-label={t("builds.download_artifact")}>
+                                <Download className="size-3.5" />
+                              </Button>} />
+                              <TooltipContent>{t("builds.download_artifact")}</TooltipContent>
+                            </Tooltip>
+                          )}
+                          <Tooltip>
+                            <TooltipTrigger render={<Button type="button" variant="ghost" size="icon-xs" render={<Link href={rebuildHref(b)} />} aria-label={t("generate.rebuild")}>
+                              <RefreshCw className="size-3.5" />
+                            </Button>} />
+                            <TooltipContent>{t("generate.rebuild")}</TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

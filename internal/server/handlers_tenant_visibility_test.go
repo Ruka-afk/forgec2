@@ -184,6 +184,69 @@ func TestListAgentsTenantScoped(t *testing.T) {
 	}
 }
 
+func TestLegacyAPIRoutesAreTenantScoped(t *testing.T) {
+	ginSetTestMode(t)
+	s := &Server{db: testutil.SetupTestDB(t), cfg: &config.Config{}, wsClients: make(map[*websocket.Conn]*wsClientConn)}
+	for _, agent := range []db.Implant{
+		{ID: "api-a1", TenantID: 1, Hostname: "TENANT-ONE"},
+		{ID: "api-a2", TenantID: 2, Hostname: "TENANT-TWO"},
+	} {
+		if err := s.db.Create(&agent).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, task := range []db.Task{
+		{AgentID: "api-a1", TenantID: 1, Type: "shell", Status: "completed", Result: "one"},
+		{AgentID: "api-a2", TenantID: 2, Type: "shell", Status: "completed", Result: "two"},
+	} {
+		if err := s.db.Create(&task).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	t.Run("agent detail hides another tenant", func(t *testing.T) {
+		c, w := tenantScopedAdminContext(s, t, "api-admin-agent", 1)
+		c.Params = gin.Params{{Key: "id", Value: "api-a2"}}
+		c.Request, _ = http.NewRequest(http.MethodGet, "/api/v1/agents/api-a2", nil)
+		s.apiGetAgent(c)
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("task list only returns current tenant", func(t *testing.T) {
+		c, w := tenantScopedAdminContext(s, t, "api-admin-tasks", 1)
+		c.Request, _ = http.NewRequest(http.MethodGet, "/api/v1/tasks", nil)
+		s.apiListTasks(c)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+		}
+		var response struct {
+			Data []db.Task `json:"data"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
+		if len(response.Data) != 1 || response.Data[0].TenantID != 1 {
+			t.Fatalf("unexpected tasks: %+v", response.Data)
+		}
+	})
+
+	t.Run("delete cannot target another tenant", func(t *testing.T) {
+		c, w := tenantScopedAdminContext(s, t, "api-admin-delete", 1)
+		c.Params = gin.Params{{Key: "id", Value: "api-a2"}}
+		c.Request, _ = http.NewRequest(http.MethodDelete, "/api/v1/agents/api-a2", nil)
+		s.apiDeleteAgent(c)
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+		}
+		var count int64
+		if err := s.db.Model(&db.Implant{}).Where("id = ?", "api-a2").Count(&count).Error; err != nil || count != 1 {
+			t.Fatalf("other tenant agent was deleted: count=%d err=%v", count, err)
+		}
+	})
+}
+
 // TestDashboardCountsTenantScoped verifies the dashboard totals and nav badge
 // stats are filtered by the caller's tenant instead of counting the whole fleet.
 func TestDashboardCountsTenantScoped(t *testing.T) {
@@ -241,5 +304,82 @@ func TestDashboardCountsTenantScoped(t *testing.T) {
 	}
 	if got, ok := stats["pending_count"].(int64); !ok || got != 1 {
 		t.Fatalf("nav pending_count = %v, want 1 (tenant-scoped)", stats["pending_count"])
+	}
+}
+
+// TestAPIDashboardStatsUsesOwnershipAwareScopes guards the JSON dashboard
+// endpoint against applying a tenant_id predicate to tables that do not own
+// that column. Those rows are scoped through their owning agent/operator.
+func TestAPIDashboardStatsUsesOwnershipAwareScopes(t *testing.T) {
+	ginSetTestMode(t)
+	cfg := &config.Config{}
+	cfg.Server.OfflineThreshold = 60
+	s := &Server{db: testutil.SetupTestDB(t), cfg: cfg, wsClients: make(map[*websocket.Conn]*wsClientConn)}
+
+	c, w := tenantScopedAdminContext(s, t, "dashboard-admin", 1)
+	if err := s.db.Create(&db.User{Username: "other-admin", TenantID: 2, Role: "admin", IsActive: true}).Error; err != nil {
+		t.Fatal(err)
+	}
+	agents := []db.Implant{
+		{ID: "dashboard-a1", TenantID: 1, Hostname: "ONE", LastSeen: time.Now()},
+		{ID: "dashboard-a2", TenantID: 2, Hostname: "TWO", LastSeen: time.Now()},
+	}
+	for i := range agents {
+		if err := s.db.Create(&agents[i]).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	tasks := []db.Task{
+		{AgentID: "dashboard-a1", TenantID: 1, Type: "shell", Status: "completed", CreatedAt: time.Now()},
+		{AgentID: "dashboard-a2", TenantID: 2, Type: "shell", Status: "failed", CreatedAt: time.Now()},
+	}
+	for i := range tasks {
+		if err := s.db.Create(&tasks[i]).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, row := range []any{
+		&db.CredentialEntry{AgentID: "dashboard-a1", Username: "one"},
+		&db.CredentialEntry{AgentID: "dashboard-a2", Username: "two"},
+		&db.TokenEntry{AgentID: "dashboard-a1", Username: "one"},
+		&db.TokenEntry{AgentID: "dashboard-a2", Username: "two"},
+		&db.AuditLog{User: "dashboard-admin", Action: "view", Resource: "dashboard", Success: true},
+		&db.AuditLog{User: "other-admin", Action: "view", Resource: "dashboard", Success: true},
+		&db.Listener{Name: "global-http", Scheme: "http", Host: "127.0.0.1", Port: 8080},
+	} {
+		if err := s.db.Create(row).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	s.apiDashboardStats(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	var response struct {
+		Success bool `json:"success"`
+		Data    struct {
+			TotalAgents    int64     `json:"total_agents"`
+			TotalTasks     int64     `json:"total_tasks"`
+			TotalCreds     int64     `json:"total_creds"`
+			TotalTokens    int64     `json:"total_tokens"`
+			TotalListeners int64     `json:"total_listeners"`
+			TotalAudits    int64     `json:"total_audits"`
+			RecentTasks    []db.Task `json:"recent_tasks"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if !response.Success {
+		t.Fatalf("success=false body=%s", w.Body.String())
+	}
+	if response.Data.TotalAgents != 1 || response.Data.TotalTasks != 1 ||
+		response.Data.TotalCreds != 1 || response.Data.TotalTokens != 1 ||
+		response.Data.TotalListeners != 1 || response.Data.TotalAudits != 1 {
+		t.Fatalf("unexpected tenant-scoped dashboard counts: %+v", response.Data)
+	}
+	if len(response.Data.RecentTasks) != 1 || response.Data.RecentTasks[0].TenantID != 1 {
+		t.Fatalf("recent tasks leaked another tenant: %+v", response.Data.RecentTasks)
 	}
 }

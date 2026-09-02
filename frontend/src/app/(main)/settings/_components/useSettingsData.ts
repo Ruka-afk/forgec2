@@ -47,10 +47,11 @@ export function useSettingsData() {
   const [theme, setTheme] = useState("light");
   const [language, setLanguage] = useState("zh");
 
-  const loadSettings = useCallback(async () => {
+  const loadSettings = useCallback(async (signal?: AbortSignal) => {
     setError(null);
     try {
-      const d = await api.get<SettingsData>(paths.settings.root);
+      const d = await api.get<SettingsData>(paths.settings.root, { signal });
+      if (signal?.aborted) return;
       setData(d);
       setAgentForm({
         interval: d.default_interval ?? 5,
@@ -85,16 +86,19 @@ export function useSettingsData() {
         if (storedLang === "en" || storedLang === "zh") setLanguage(storedLang);
       } catch { /* silent */ }
     } catch (e) {
+      if (signal?.aborted || (e instanceof Error && e.name === "AbortError")) return;
       const msg = e instanceof Error ? e.message : t("settings.toast.load_failed");
       setError(msg);
       toast.error(msg);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [t]);
 
   useEffect(() => {
-    loadSettings();
+    const controller = new AbortController();
+    void loadSettings(controller.signal);
+    return () => controller.abort();
   }, [loadSettings]);
 
   return {

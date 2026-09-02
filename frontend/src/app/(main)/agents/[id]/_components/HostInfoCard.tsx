@@ -7,7 +7,6 @@ import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -16,7 +15,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
 
 /**
  * HostInfoCard — dispatches the on-demand `hostinfo` sweep and renders the
@@ -93,22 +91,29 @@ function ObjectTable({ rows }: { rows: Record<string, unknown>[] }) {
   );
 }
 
-function ProtectionBadge({ state }: { state: string }) {
-  const tone =
-    state === "enabled"
-      ? "bg-destructive/10 text-destructive"
-      : state === "disabled"
-        ? "bg-success/10 text-success"
-        : "bg-muted text-muted-foreground";
-  return <Badge variant="outline" className={cn("text-(--fs-micro-sm)", tone)}>{state}</Badge>;
-}
-
 function SecuritySection({ data }: { data: HostInfoSection }) {
   const { t } = useI18n();
   const av = asArray(data.av_products);
   const edr = asArray(data.edr_processes);
+  // Summary chips for currently running AV/EDR — prominent at top
+  const avNames = av.map((a) => asStr(a.name)).filter(Boolean);
+  const edrNames = edr.map((e) => asStr(e.product) || asStr(e.process)).filter(Boolean);
   return (
     <div className="space-y-3">
+      {(avNames.length > 0 || edrNames.length > 0) && (
+        <div className="flex flex-wrap gap-1.5">
+          {avNames.map((n) => (
+            <span key={n} className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2.5 py-1 text-xs font-medium text-success ring-1 ring-success/20">
+              <ShieldAlert className="size-3" />{n}
+            </span>
+          ))}
+          {edrNames.map((n) => (
+            <span key={n} className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning ring-1 ring-warning/20">
+              <ShieldAlert className="size-3" />{n} (EDR)
+            </span>
+          ))}
+        </div>
+      )}
       {av.length > 0 && (
         <div>
           <div className="text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground mb-1">AV</div>
@@ -118,14 +123,6 @@ function SecuritySection({ data }: { data: HostInfoSection }) {
             signatures: asStr(a.signatures),
             state_hex: asStr(a.state_hex),
           }))} />
-        </div>
-      )}
-      {/* Visual fallback when the table renderer is absent */}
-      {av.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {av.map((a, i) => (
-            <ProtectionBadge key={i} state={asStr(a.protection) || "unknown"} />
-          ))}
         </div>
       )}
       {edr.length > 0 && (
@@ -224,6 +221,15 @@ export function HostInfoCard({ agentId, online }: { agentId: string; online: boo
       setBusy(false);
     }
   }, [agentId, busy, category, filter, t]);
+
+  // Auto-collect AV/security on mount when online — show running AV without manual click
+  const autoCollectedRef = useRef(false);
+  useEffect(() => {
+    if (!online || report || busy || error || autoCollectedRef.current) return;
+    autoCollectedRef.current = true;
+    const timer = setTimeout(() => { void collect(); }, 800);
+    return () => clearTimeout(timer);
+  }, [online, report, busy, error, collect]);
 
   const sectionIcon = (key: string) => {
     switch (key) {

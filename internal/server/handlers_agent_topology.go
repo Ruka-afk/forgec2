@@ -13,8 +13,10 @@ import (
 // handlePivoting shows SOCKS / proxy status and agents useful for pivoting
 func (s *Server) handlePivoting(c *gin.Context) {
 	var recentAgents []db.Implant
-	if err := s.db.Select("id", "hostname", "ip", "os", "arch", "last_seen").
-		Where("last_seen > ?", time.Now().Add(-30*time.Minute)).Limit(30).Find(&recentAgents).Error; err != nil {
+	q := s.db.Select("id", "hostname", "ip", "os", "arch", "last_seen").
+		Where("last_seen > ?", time.Now().Add(-30*time.Minute))
+	q = s.tenantScope(q, c)
+	if err := q.Limit(30).Find(&recentAgents).Error; err != nil {
 		slog.Error("Failed to query recent agents for topology", "err", err)
 	}
 
@@ -53,7 +55,9 @@ func (s *Server) handleTopologyData(c *gin.Context) {
 	}
 
 	var agents []db.Implant
-	if err := s.db.Select("id, hostname, os, ip, username, status, last_seen, listener_id, parent_id").Order("last_seen desc").Limit(TopologyAgentLimit).Find(&agents).Error; err != nil {
+	agentQ := s.db.Select("id, hostname, os, ip, username, status, last_seen, listener_id, parent_id").Order("last_seen desc")
+	agentQ = s.tenantScope(agentQ, c)
+	if err := agentQ.Limit(TopologyAgentLimit).Find(&agents).Error; err != nil {
 		slog.Error("Failed to query agents for topology", "err", err)
 		respondError(c, http.StatusInternalServerError, "failed to query agents for topology")
 		return
@@ -125,6 +129,9 @@ func (s *Server) handleTopologyData(c *gin.Context) {
 
 // handleLinkAgent links a child agent to a parent agent for P2P relay
 func (s *Server) handleLinkAgent(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	parentID := c.Param("id")
 	childID := c.PostForm("child_id")
 	mode := c.PostForm("p2p_mode") // "smb" or "tcp"
@@ -136,11 +143,15 @@ func (s *Server) handleLinkAgent(c *gin.Context) {
 	}
 
 	var parent, child db.Implant
-	if err := s.db.Where("id = ?", parentID).First(&parent).Error; err != nil {
+	pq := s.db.Where("id = ?", parentID)
+	pq = s.tenantScope(pq, c)
+	if err := pq.First(&parent).Error; err != nil {
 		respondError(c, http.StatusNotFound, "parent agent not found")
 		return
 	}
-	if err := s.db.Where("id = ?", childID).First(&child).Error; err != nil {
+	cq := s.db.Where("id = ?", childID)
+	cq = s.tenantScope(cq, c)
+	if err := cq.First(&child).Error; err != nil {
 		respondError(c, http.StatusNotFound, "child agent not found")
 		return
 	}
@@ -158,10 +169,15 @@ func (s *Server) handleLinkAgent(c *gin.Context) {
 
 // handleUnlinkAgent removes the P2P parent link from a child agent
 func (s *Server) handleUnlinkAgent(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	childID := c.Param("id")
 
 	var child db.Implant
-	if err := s.db.Where("id = ?", childID).First(&child).Error; err != nil {
+	q := s.db.Where("id = ?", childID)
+	q = s.tenantScope(q, c)
+	if err := q.First(&child).Error; err != nil {
 		respondError(c, http.StatusNotFound, "agent not found")
 		return
 	}

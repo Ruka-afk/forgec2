@@ -679,7 +679,7 @@ func parseCredentialsFromText(raw string, agentID string, taskID uint) []db.Cred
 // handleCredentialsPage renders the credentials vault page (DB-backed)
 func (s *Server) handleCredentialsPage(c *gin.Context) {
 	var creds []db.CredentialEntry
-	query := s.db.Model(&db.CredentialEntry{}).Order("created_at desc")
+	query := s.tenantScope(s.db.Model(&db.CredentialEntry{}), c).Order("created_at desc")
 
 	tagFilter := c.Query("tag")
 	searchQuery := c.Query("search")
@@ -937,6 +937,7 @@ func (s *Server) handleAddCredential(c *gin.Context) {
 		return
 	}
 	entry := db.CredentialEntry{
+		TenantID: s.currentTenantID(c),
 		AgentID:  c.PostForm("agent_id"),
 		Domain:   c.PostForm("domain"),
 		Username: c.PostForm("username"),
@@ -945,6 +946,13 @@ func (s *Server) handleAddCredential(c *gin.Context) {
 		Source:   "manual",
 		Type:     c.PostForm("type"),
 		Notes:    c.PostForm("notes"),
+	}
+	if entry.AgentID != "" && entry.TenantID != 0 {
+		var visible int64
+		if err := s.db.Model(&db.Implant{}).Where("id = ? AND tenant_id = ?", entry.AgentID, entry.TenantID).Count(&visible).Error; err != nil || visible == 0 {
+			respondError(c, http.StatusBadRequest, "agent is not visible to this tenant")
+			return
+		}
 	}
 	if entry.Type == "" {
 		if entry.Hash != "" {
@@ -962,10 +970,10 @@ func (s *Server) handleAddCredential(c *gin.Context) {
 	s.LogAuditRecord(c, "credential_add", "credential", entry.AgentID,
 		"added credential (domain="+entry.Domain+", user="+entry.Username+", type="+entry.Type+")", true, nil)
 	s.broadcastOperatorEvent(map[string]interface{}{
-		"type":         "credential_update",
-		"action":       "added",
-		"id":           entry.ID,
-		"agent_id":     entry.AgentID,
+		"type":     "credential_update",
+		"action":   "added",
+		"id":       entry.ID,
+		"agent_id": entry.AgentID,
 	})
 	c.JSON(http.StatusOK, gin.H{"success": true, "id": entry.ID})
 }
@@ -1054,10 +1062,10 @@ func (s *Server) handleUpdateCredential(c *gin.Context) {
 	}
 	s.LogAuditRecord(c, "credential_update", "credential", cred.AgentID, "updated credential id="+idStr, true, nil)
 	s.broadcastOperatorEvent(map[string]interface{}{
-		"type":         "credential_update",
-		"action":       "updated",
-		"id":           cred.ID,
-		"agent_id":     cred.AgentID,
+		"type":     "credential_update",
+		"action":   "updated",
+		"id":       cred.ID,
+		"agent_id": cred.AgentID,
 	})
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
@@ -1220,10 +1228,10 @@ func (s *Server) handleToggleConfirmed(c *gin.Context) {
 	s.LogAuditRecord(c, "credential_confirm", "credential", cred.AgentID,
 		"set confirmed="+strconv.FormatBool(cred.Confirmed)+" for credential id="+idStr, true, nil)
 	s.broadcastOperatorEvent(map[string]interface{}{
-		"type":         "credential_update",
-		"action":       "updated",
-		"id":           cred.ID,
-		"agent_id":     cred.AgentID,
+		"type":     "credential_update",
+		"action":   "updated",
+		"id":       cred.ID,
+		"agent_id": cred.AgentID,
 	})
 	c.JSON(http.StatusOK, gin.H{"success": true, "confirmed": cred.Confirmed})
 }

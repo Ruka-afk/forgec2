@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { API_BASE } from "@/lib/constants";
 import { paths } from "@/lib/api-paths";
 import { api } from "@/lib/api";
-import { downloadText } from "@/lib/download";
+import { downloadBlob, downloadText } from "@/lib/download";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { PageContainer } from "@/components/ui/page-container";
@@ -31,6 +30,7 @@ export default function ReportPage() {
   const [activeSection, setActiveSection] = useState("overview");
   const [viewingReport, setViewingReport] = useState<{ name: string; content: string } | null>(null);
   const [loadingReport, setLoadingReport] = useState(false);
+  const [downloading, setDownloading] = useState<string | null>(null);
 
   const { t } = useI18n();
   const {
@@ -93,13 +93,25 @@ export default function ReportPage() {
     await generateReport(sections);
   };
 
-  const handleExportPDF = () => {
-    window.open(`${API_BASE}${htmlExportUrl()}`, "_blank");
+  const downloadReport = async (path: string, fallbackFilename: string, key: string) => {
+    if (downloading) return;
+    setDownloading(key);
+    try {
+      const { blob, filename } = await api.downloadGet(path, fallbackFilename);
+      downloadBlob(blob, filename);
+    } catch {
+      toast.error(t("report.toast.download_failed"));
+    } finally {
+      setDownloading(null);
+    }
   };
 
-  const handleHandover = () => {
-    window.open(`${API_BASE}${paths.report.handoverExport(30)}`, "_blank");
-    toast.success(t("report.handover_started"));
+  const handleExportPDF = async () => {
+    await downloadReport(htmlExportUrl(), "forgec2-report.html", "html");
+  };
+
+  const handleHandover = async () => {
+    await downloadReport(paths.report.handoverExport(30), "forgec2-handover.zip", "handover");
   };
 
   const handleDeleteReport = async (id: string) => {
@@ -139,11 +151,11 @@ export default function ReportPage() {
       subtitle={t("report.subtitle")}
       actions={
         <>
-          <Button onClick={handleHandover} variant="secondary" className="gap-x-2">
-            <Download className="size-4" />{t("report.handover")}
+          <Button onClick={() => void handleHandover()} disabled={downloading !== null} variant="secondary" className="gap-x-2">
+            {downloading === "handover" ? <Spinner size="xs" /> : <Download className="size-4" />}{t("report.handover")}
           </Button>
-          <Button onClick={handleExportPDF} variant="destructive" className="gap-x-2">
-            <FileText className="size-4" />{t("report.export_html")}
+          <Button onClick={() => void handleExportPDF()} disabled={downloading !== null} variant="destructive" className="gap-x-2">
+            {downloading === "html" ? <Spinner size="xs" /> : <FileText className="size-4" />}{t("report.export_html")}
           </Button>
           <Button onClick={handleGenerate} disabled={generating} className="gap-x-2">
             {generating ? <Spinner size="xs" /> : <Wand2 className="size-4" />}
@@ -160,11 +172,11 @@ export default function ReportPage() {
         <StatCard color="destructive" label={t("report.stat_findings")} value={stats.total_findings || 0} sub={`${t("report.critical")}: ${stats.critical_findings || 0} | ${t("report.high")} ${stats.high_findings || 0}`} subColor="text-destructive" />
       </div>
 
-      <Tabs value={activeSection} onValueChange={setActiveSection}>
+      <Tabs value={activeSection} onValueChange={setActiveSection} orientation="vertical">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
           <div className="lg:col-span-1">
             <Card className="p-2 sticky lg:top-[96px]">
-              <TabsList className="flex-col bg-transparent p-0 gap-1 w-full h-auto">
+              <TabsList variant="sidebar" className="gap-1">
                 {SECTIONS.map((s) => (
                   <TabsTrigger key={s.key} value={s.key}
                     className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-sm font-medium transition-colors data-[selected]:bg-primary/10 data-[selected]:text-primary text-muted-foreground hover:bg-muted/50">
@@ -242,9 +254,16 @@ export default function ReportPage() {
                                   <Eye className="size-4" />
                                 </Button>
                               )}
-                              <a href={`${API_BASE}/report/${id}/download?format=html`} download className="p-2 text-primary hover:bg-primary/10 dark:hover:bg-primary/20 rounded-lg transition-colors">
-                                <Download className="size-4" />
-                              </a>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={downloading !== null}
+                                onClick={() => void downloadReport(paths.report.download(id, "html"), `report-${id}.html`, `history-${id}`)}
+                                className="text-primary hover:bg-primary/10 dark:hover:bg-primary/20"
+                                aria-label={t("report.download")}
+                              >
+                                {downloading === `history-${id}` ? <Spinner size="xs" /> : <Download className="size-4" />}
+                              </Button>
                               <Button variant="ghost" size="icon" onClick={() => handleDeleteReport(id)} className="text-destructive hover:bg-destructive/10" aria-label={t("report.a11y_delete")}>
                                 <Trash2 className="size-4" />
                               </Button>

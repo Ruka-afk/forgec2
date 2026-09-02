@@ -574,6 +574,17 @@ paths:
             format: uuid
       requestBody:
         content:
+          application/json:
+            schema:
+              type: object
+              required: [command]
+              properties:
+                command:
+                  type: string
+                  description: Command to execute
+                shell:
+                  type: string
+                  description: Shell to use (cmd.exe, powershell.exe, /bin/bash, etc.)
           application/x-www-form-urlencoded:
             schema:
               type: object
@@ -5199,6 +5210,45 @@ paths:
       responses:
         '200':
           description: OK
+    post:
+      tags: [Agents]
+      summary: Execute shell command
+      description: Alias of POST /agents/{id}/command used by the interactive shell.
+      operationId: executeCommandViaShell
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [command]
+              properties:
+                command:
+                  type: string
+                shell:
+                  type: string
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [command]
+              properties:
+                command:
+                  type: string
+                shell:
+                  type: string
+      responses:
+        '200':
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
 
   /agents/{id}/token:
     get:
@@ -5255,7 +5305,7 @@ paths:
           description: OK
     post:
       tags: [AI]
-      summary: Post AI message
+      summary: Persist one AI message or an atomic message batch
       operationId: aiSessionPostMessage
       security:
         - SessionCookie: []
@@ -5264,9 +5314,25 @@ paths:
           in: path
           required: true
           schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/AIChatMessageInput'
+                - type: object
+                  required: [messages]
+                  properties:
+                    messages:
+                      type: array
+                      minItems: 1
+                      maxItems: 64
+                      items:
+                        $ref: '#/components/schemas/AIChatMessageInput'
       responses:
-        '200':
-          description: OK
+        '201':
+          description: Message or message batch persisted
 
   /ai/sessions/{id}:
     put:
@@ -8629,15 +8695,6 @@ paths:
         '200':
           description: OK
 
-  /search:
-    get:
-      tags: [Agents]
-      summary: Search SPA
-      operationId: get_search
-      responses:
-        '200':
-          description: OK
-
   /ai:
     get:
       tags: [AI]
@@ -9337,16 +9394,6 @@ paths:
       responses:
         '200':
           description: OK
-  /api/search:
-    get:
-      tags: [Agents]
-      summary: Global search
-      operationId: get__api_search
-      security:
-        - SessionCookie: []
-      responses:
-        '200':
-          description: OK
   /api/roles:
     get:
       tags: [Users]
@@ -10016,6 +10063,246 @@ paths:
       responses:
         '200':
           description: OK
+  /api/ai/runs:
+    get:
+      tags: [AI]
+      summary: List the current operator's AI runs
+      operationId: listAIRuns
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: session_id, in: query, schema: {type: integer}}
+        - {name: status, in: query, schema: {type: string, enum: [active]}}
+      responses:
+        '200': {description: Operator-owned runs}
+    post:
+      tags: [AI]
+      summary: Create a durable background AI run
+      operationId: createAIRun
+      security: [{SessionCookie: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AIRunInput'}
+      responses:
+        '202': {description: Run queued}
+        '429': {description: Operator or tenant concurrency limit reached}
+  /api/ai/runs/{id}:
+    get:
+      tags: [AI]
+      summary: Get a durable AI run
+      operationId: getAIRun
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Run state}
+        '404': {description: Run not visible}
+  /api/ai/runs/{id}/events:
+    get:
+      tags: [AI]
+      summary: Replay and follow AI run events over SSE
+      operationId: streamAIRunEvents
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: Last-Event-ID, in: header, schema: {type: string}}
+        - {name: after, in: query, schema: {type: integer, format: int64}}
+      responses:
+        '200': {description: text/event-stream with monotonically increasing event IDs}
+  /api/ai/runs/{id}/cancel:
+    post:
+      tags: [AI]
+      summary: Cancel an active AI run
+      operationId: cancelAIRun
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Cancellation requested}
+        '409': {description: Run is already terminal}
+  /api/ai/intents:
+    get:
+      tags: [AI]
+      summary: List tenant-scoped AI execution intents visible to the operator
+      operationId: listAIExecutionIntents
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Approval intents}
+  /api/ai/intents/{id}/approve:
+    post:
+      tags: [AI]
+      summary: Approve and execute an AI intent after rechecking permissions
+      operationId: approveAIExecutionIntent
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Intent executed}
+        '409': {description: Intent already decided}
+  /api/ai/intents/{id}/reject:
+    post:
+      tags: [AI]
+      summary: Reject an AI execution intent
+      operationId: rejectAIExecutionIntent
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Intent rejected}
+  /api/ai/profiles:
+    get:
+      tags: [AI]
+      summary: List usable AI provider profiles without secrets
+      operationId: listAIProfiles
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Redacted provider profiles}
+    post:
+      tags: [AI]
+      summary: Create an administrator-managed AI provider profile
+      operationId: createAIProfile
+      security: [{SessionCookie: []}]
+      responses:
+        '201': {description: Profile created}
+  /api/ai/profiles/{id}:
+    put:
+      tags: [AI]
+      summary: Update an AI provider profile
+      operationId: updateAIProfile
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Profile updated}
+    delete:
+      tags: [AI]
+      summary: Delete an unused AI provider profile
+      operationId: deleteAIProfile
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Profile deleted}
+        '409': {description: Profile is referenced by sessions}
+  /api/ai/profiles/{id}/test:
+    post:
+      tags: [AI]
+      summary: Test DNS, SSRF policy, authentication and first response latency
+      operationId: testAIProfile
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Provider healthy}
+        '502': {description: Provider unhealthy}
+  /ai/sessions/{id}/branch:
+    post:
+      tags: [AI]
+      summary: Branch a conversation through a selected message
+      operationId: branchAISession
+      security: [{SessionCookie: []}]
+      responses:
+        '201': {description: Independent child session created}
+  /api/ai/sessions/{id}/attachments:
+    get:
+      tags: [AI]
+      summary: List session attachments
+      operationId: listAIAttachments
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Attachments without plaintext content}
+    post:
+      tags: [AI]
+      summary: Upload up to five validated UTF-8 text attachments
+      operationId: uploadAIAttachments
+      security: [{SessionCookie: []}]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                files: {type: array, maxItems: 5, items: {type: string, format: binary}}
+      responses:
+        '201': {description: Attachments encrypted and stored}
+        '413': {description: Attachment limits exceeded}
+  /api/ai/attachments/{attachmentID}:
+    delete:
+      tags: [AI]
+      summary: Delete an owned AI attachment
+      operationId: deleteAIAttachment
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: attachmentID, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Attachment deleted}
+  /api/ai/knowledge/collections:
+    get:
+      tags: [AI]
+      summary: List private and authorized shared knowledge collections
+      operationId: listAIKnowledgeCollections
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Visible collections}
+    post:
+      tags: [AI]
+      summary: Create a private or administrator-managed shared collection
+      operationId: createAIKnowledgeCollection
+      security: [{SessionCookie: []}]
+      responses:
+        '201': {description: Collection created}
+  /api/ai/knowledge/collections/{collectionID}:
+    delete:
+      tags: [AI]
+      summary: Delete an owned knowledge collection and its encrypted chunks
+      operationId: deleteAIKnowledgeCollection
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: collectionID, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Collection deleted}
+  /api/ai/knowledge/collections/{collectionID}/sources:
+    get:
+      tags: [AI]
+      summary: List sources in a visible knowledge collection
+      operationId: listAIKnowledgeSources
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: collectionID, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Knowledge sources}
+  /api/ai/knowledge/collections/{collectionID}/sources/{sourceID}:
+    delete:
+      tags: [AI]
+      summary: Delete an owned knowledge source and its chunks
+      operationId: deleteAIKnowledgeSource
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: collectionID, in: path, required: true, schema: {type: integer}}
+        - {name: sourceID, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Source deleted}
+  /api/ai/knowledge/collections/{collectionID}/attachments/{attachmentID}:
+    post:
+      tags: [AI]
+      summary: Promote an attachment into encrypted chunked knowledge
+      operationId: promoteAIAttachment
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: collectionID, in: path, required: true, schema: {type: integer}}
+        - {name: attachmentID, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '201': {description: Knowledge source created}
+  /api/ai/knowledge/search:
+    post:
+      tags: [AI]
+      summary: Search authorized selected collections through a keyed blind index
+      operationId: searchAIKnowledge
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Cited matching chunks}
 components:
   securitySchemes:
     SessionCookie:
@@ -10025,6 +10312,39 @@ components:
       description: Session cookie obtained from login endpoint
 
   schemas:
+    AIRunInput:
+      type: object
+      required: [session_id, messages]
+      properties:
+        session_id: {type: integer}
+        profile_id: {type: integer, nullable: true}
+        idempotency_key: {type: string, maxLength: 100}
+        attachment_ids: {type: array, maxItems: 5, items: {type: string, format: uuid}}
+        knowledge_collection_ids: {type: array, items: {type: integer}}
+        messages:
+          type: array
+          minItems: 1
+          items: {$ref: '#/components/schemas/AIChatMessageInput'}
+        context:
+          type: object
+          properties:
+            page: {type: string}
+            agent_id: {type: string}
+            allow_low_risk_writes: {type: boolean}
+    AIChatMessageInput:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [user, assistant, tool]
+        content:
+          type: string
+          maxLength: 98304
+        tool_name:
+          type: string
+          maxLength: 100
+
     SuccessResponse:
       type: object
       required: [success]

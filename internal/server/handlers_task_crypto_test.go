@@ -1,6 +1,8 @@
 package server
 
 import (
+	"crypto/ecdh"
+	"crypto/rand"
 	"strings"
 	"testing"
 
@@ -116,5 +118,51 @@ func TestSensitiveTaskTypesDerivedFromAtRestSet(t *testing.T) {
 	}
 	if db.SensitiveShellTypes["shell"] {
 		t.Error("shell interpreter must never be treated as a Shell secret")
+	}
+}
+
+// TestEncryptTaskPayloadEncryptsShellInterpreter is the wire-side counterpart
+// of the implant executeTask decrypt: once Encrypted is set, Command AND Shell
+// must both be ciphertext. Leaving cmd.exe in the clear made every interactive
+// shell command fail with "task payload decryption failed".
+func TestEncryptTaskPayloadEncryptsShellInterpreter(t *testing.T) {
+	sm, err := crypto.NewSessionManager()
+	if err != nil {
+		t.Fatalf("session manager: %v", err)
+	}
+	agentID := "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+	priv, err := ecdh.X25519().GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("agent key: %v", err)
+	}
+	if err := sm.EstablishSession(agentID, priv.PublicKey().Bytes()); err != nil {
+		t.Fatalf("establish: %v", err)
+	}
+	s := &Server{sessionManager: sm}
+	wire := task{ID: 47, Type: "shell", Command: "whoami", Shell: "cmd.exe"}
+	encryptTaskPayload(s, agentID, &wire)
+	if !wire.Encrypted {
+		t.Fatal("expected Encrypted=true")
+	}
+	if wire.Command == "whoami" || wire.Command == "" {
+		t.Fatalf("command still plaintext: %q", wire.Command)
+	}
+	if wire.Shell == "cmd.exe" || wire.Shell == "" {
+		t.Fatalf("shell interpreter still plaintext: %q", wire.Shell)
+	}
+	aad := []byte(agentID + "\x00" + "47")
+	cmd, err := sm.DecryptWithAADB64(agentID, wire.Command, aad)
+	if err != nil {
+		t.Fatalf("command decrypt: %v", err)
+	}
+	if string(cmd) != "whoami" {
+		t.Fatalf("command plaintext %q", cmd)
+	}
+	sh, err := sm.DecryptWithAADB64(agentID, wire.Shell, aad)
+	if err != nil {
+		t.Fatalf("shell decrypt: %v", err)
+	}
+	if string(sh) != "cmd.exe" {
+		t.Fatalf("shell plaintext %q", sh)
 	}
 }

@@ -6,7 +6,7 @@ import { Banner } from "@/components/ui/banner";
 import { useI18n } from "@/lib/i18n";
 import { enumLabel } from "@/lib/utils";
 import type { BulkResult } from "./types";
-import { Camera, Clock, History, Power, Terminal, Trash2, X } from "lucide-react";
+import { Camera, Clock, History, Power, Radio, Terminal, Trash2, X } from "lucide-react";
 
 interface AgentBulkBarProps {
   selected: Set<string>;
@@ -15,6 +15,7 @@ interface AgentBulkBarProps {
   showResults: boolean; setShowResults: (v: boolean) => void;
   onBulkShell: () => void;
   onBulkScreenshot: () => void;
+  onBulkBeaconNow: () => void;
   onBulkSleep: () => void;
   onBulkKill: () => void;
   onBulkUninstall: () => void;
@@ -26,7 +27,7 @@ interface AgentBulkBarProps {
 export function AgentBulkBar({
   selected, bulkMode,
   bulkResults, showResults, setShowResults,
-  onBulkShell, onBulkScreenshot, onBulkSleep,
+  onBulkShell, onBulkScreenshot, onBulkBeaconNow, onBulkSleep,
   onBulkKill, onBulkUninstall, onBulkDelete,
   onClearSelection,
   actionMsg, dismissActionMsg,
@@ -55,6 +56,7 @@ export function AgentBulkBar({
           <span className="text-sm text-foreground font-medium mr-2">{t("agents.n_selected").replace("{n}", String(selected.size))}</span>
           <Button size="sm" onClick={onBulkShell} ><Terminal className="size-4" />{t("agents.shell")}</Button>
           <Button size="sm" variant="secondary" onClick={onBulkScreenshot}><Camera className="size-4" />{t("agents.screenshot")}</Button>
+          <Button size="sm" variant="secondary" onClick={onBulkBeaconNow}><Radio className="size-4" />{t("agents.beacon_now")}</Button>
           <Button size="sm" variant="secondary" onClick={onBulkSleep}><Clock className="size-4" />{t("agents.sleep")}</Button>
           <Button size="sm" onClick={onBulkDelete} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"><Trash2 className="size-4" />{t("agents.delete")}</Button>
           <Button variant="ghost" size="sm" onClick={onClearSelection} className="ml-auto text-muted-foreground/100 hover:text-foreground">{t("agents.clear")}</Button>

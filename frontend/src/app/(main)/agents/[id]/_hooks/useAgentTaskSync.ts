@@ -109,7 +109,15 @@ export function applyTaskUpdate(
     created_at: new Date().toISOString(),
   };
   const stats = adjustStats(prev, undefined, frame.status);
-  seenTaskIds?.add(taskId);
+  if (seenTaskIds) {
+    seenTaskIds.add(taskId);
+    // Cap at 2000 to prevent unbounded memory growth on long-lived pages.
+    if (seenTaskIds.size > 2000) {
+      const ids = Array.from(seenTaskIds);
+      seenTaskIds.clear();
+      for (const id of ids.slice(-1000)) seenTaskIds.add(id);
+    }
+  }
   return { ...prev, ...stats, tasks: [entry, ...tasks] };
 }
 

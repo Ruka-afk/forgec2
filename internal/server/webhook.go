@@ -67,7 +67,7 @@ func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) error {
 			}
 		}
 
-		resp, err := s.httpClient.Do(req)
+		resp, err := ssrfSafeClient(s.httpClient).Do(req)
 		if err != nil {
 			if attempt < webhookMaxRetries {
 				slog.Warn("Webhook delivery failed, retrying", "name", wh.Name, "attempt", attempt+1, "error", err)

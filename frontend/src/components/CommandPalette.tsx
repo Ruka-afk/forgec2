@@ -7,7 +7,7 @@ import { useI18n } from "@/lib/i18n";
 import { useAppStore } from "@/lib/store";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { isEditableTarget } from "@/app/(main)/agents/_components/interact-workspace";
-import { Search, CornerDownLeft, Server } from "lucide-react";
+import { Search, Server } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -82,8 +82,6 @@ export default function CommandPalette() {
     );
   }, [items, agentItems, query]);
 
-  const showSearchAction = query.trim().length > 0;
-
   useEffect(() => {
     if (open) {
       setQuery("");
@@ -101,13 +99,6 @@ export default function CommandPalette() {
     router.push(item.href);
   }, [filtered, close, router]);
 
-  const handleSubmitSearch = useCallback(() => {
-    const q = query.trim();
-    if (!q) return;
-    close();
-    router.push(`/search?q=${encodeURIComponent(q)}`);
-  }, [query, close, router]);
-
   // G10 fix: skip e.repeat (held key auto-repeat) and skip editable targets
   // so Ctrl+K does not hijack xterm's native kill-line shortcut.
   useEffect(() => {
@@ -116,7 +107,7 @@ export default function CommandPalette() {
       if (isEditableTarget(e.target)) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        setOpen(!useAppStore.getState().commandPaletteOpen);
+        setOpen((v: boolean) => !v);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -126,7 +117,7 @@ export default function CommandPalette() {
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      const total = filtered.length + (showSearchAction ? 1 : 0);
+      const total = filtered.length;
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setActiveIndex((i) => (i + 1) % total);
@@ -135,8 +126,7 @@ export default function CommandPalette() {
         setActiveIndex((i) => (i - 1 + total) % total);
       } else if (e.key === "Enter") {
         e.preventDefault();
-        if (showSearchAction && activeIndex === 0) handleSubmitSearch();
-        else handleSelect(activeIndex - (showSearchAction ? 1 : 0));
+        handleSelect(activeIndex);
       } else if (e.key === "Escape") {
         e.preventDefault();
         close();
@@ -144,7 +134,7 @@ export default function CommandPalette() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, filtered, showSearchAction, activeIndex, handleSelect, handleSubmitSearch, close]);
+  }, [open, filtered, activeIndex, handleSelect, close]);
 
   useEffect(() => {
     setActiveIndex(0);
@@ -157,14 +147,17 @@ export default function CommandPalette() {
     }
   }, [activeIndex]);
 
-  const groups = new Map<string, PaletteItem[]>();
-  for (const item of filtered) {
-    const list = groups.get(item.section) || [];
-    list.push(item);
-    groups.set(item.section, list);
-  }
-
-  const searchOffset = showSearchAction ? 1 : 0;
+  const { groups, indexMap } = useMemo(() => {
+    const m = new Map<string, PaletteItem[]>();
+    const idx = new Map<PaletteItem, number>();
+    filtered.forEach((item, i) => {
+      idx.set(item, i);
+      const list = m.get(item.section) || [];
+      list.push(item);
+      m.set(item.section, list);
+    });
+    return { groups: m, indexMap: idx };
+  }, [filtered]);
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) close(); }}>
@@ -194,22 +187,6 @@ export default function CommandPalette() {
 
         <ScrollArea className="max-h-[45vh]">
           <div ref={listRef} id="command-palette-list" role="listbox" aria-label={t("palette.title")} className="py-2">
-            {showSearchAction && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  role="option"
-                  id="palette-option-0"
-                  aria-selected={activeIndex === 0}
-                  data-active={activeIndex === 0}
-                  onClick={handleSubmitSearch}
-                  className={`h-auto w-full justify-start gap-3 rounded-none px-4 py-2.5 text-left text-sm ${activeIndex === 0 ? "bg-primary/10" : ""}`}
-                >
-                <Search className="size-4 text-muted-foreground" />
-                <span className="text-primary">{t("palette.search_for", { query: query.trim() })}</span>
-                <CornerDownLeft className="ml-auto size-3.5 text-muted-foreground/85" />
-              </Button>
-            )}
             {filtered.length === 0 ? (
               <div className="px-4 py-10 text-center text-sm text-muted-foreground">{t("palette.no_results")}</div>
             ) : (
@@ -219,7 +196,7 @@ export default function CommandPalette() {
                     {section}
                   </div>
                   {group.map((item) => {
-                    const globalIndex = searchOffset + filtered.indexOf(item);
+                    const globalIndex = indexMap.get(item) ?? 0;
                     const Icon = item.icon;
                     return (
                       <Button
@@ -230,7 +207,7 @@ export default function CommandPalette() {
                         id={`palette-option-${globalIndex}`}
                         aria-selected={activeIndex === globalIndex}
                         data-active={activeIndex === globalIndex}
-                        onClick={() => handleSelect(filtered.indexOf(item))}
+                        onClick={() => handleSelect(globalIndex)}
                         className={`h-auto w-full justify-start gap-3 rounded-none px-4 py-2.5 text-left text-sm ${activeIndex === globalIndex ? "bg-primary/10" : ""}`}
                       >
                         <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-secondary/70">

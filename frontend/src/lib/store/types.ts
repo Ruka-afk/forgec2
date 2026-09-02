@@ -35,7 +35,7 @@ export interface AppStore {
   setMobileMenuOpen: (open: boolean) => void;
   setIsMobile: (mobile: boolean) => void;
   commandPaletteOpen: boolean;
-  setCommandPaletteOpen: (open: boolean) => void;
+  setCommandPaletteOpen: (open: boolean | ((v: boolean) => boolean)) => void;
   density: Density;
   setDensity: (d: Density) => void;
   focusMode: boolean;

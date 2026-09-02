@@ -104,13 +104,13 @@ export function DataError({ message, onRetry, onDismiss, className }: DataErrorP
       <p className="text-xs text-muted-foreground mb-4 max-w-xs">{t("common.error_hint")}</p>
       <div className="flex items-center gap-2">
         {onRetry && (
-          <Button onClick={onRetry} size="sm" variant="outline">
+          <Button onClick={onRetry} size="sm" variant="outline" className="min-h-11 px-4 sm:min-h-7 sm:px-2.5">
             <RefreshCw className="size-3 mr-1.5" aria-hidden="true" />
             {t("common.try_again")}
           </Button>
         )}
         {onDismiss && (
-          <Button onClick={onDismiss} size="sm" variant="ghost">
+          <Button onClick={onDismiss} size="sm" variant="ghost" className="min-h-11 px-4 sm:min-h-7 sm:px-2.5">
             {t("common.dismiss")}
           </Button>
         )}

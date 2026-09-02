@@ -11,8 +11,9 @@ vi.mock("@/lib/i18n", () => ({
         "common.next_page": "Next page",
         "common.page_number": "page {n}",
         "common.no_data": "No data",
+        "common.open_row": "Open row {n}",
       };
-      return map[key] || key.replace("{n}", params?.n || "?");
+      return (map[key] || key).replace("{n}", params?.n || "?");
     },
   }),
 }));
@@ -75,6 +76,11 @@ describe("DataTable", () => {
     expect(cellsDesc[0].textContent).toBe("charlie");
   });
 
+  it("exposes sortable headers as keyboard-operable buttons", () => {
+    render(<DataTable data={rows} columns={columns} rowKey={(r) => r.id} />);
+    expect(screen.getByRole("button", { name: "Score" })).toBeTruthy();
+  });
+
   it("invokes the sort callback in controlled mode", () => {
     const onSortChange = vi.fn();
     render(
@@ -96,6 +102,19 @@ describe("DataTable", () => {
     expect(screen.getByLabelText("Next page")).toBeTruthy();
   });
 
+  it("renders server-provided rows on pages after the first", () => {
+    const secondPage = [{ id: "3", name: "charlie", score: 20 }];
+    render(
+      <DataTable
+        data={secondPage}
+        columns={columns}
+        rowKey={(r) => r.id}
+        pagination={{ page: 2, pageSize: 2, total: 3, onPageChange: () => {} }}
+      />,
+    );
+    expect(screen.getByText("charlie")).toBeTruthy();
+  });
+
   it("virtualizes large row sets and renders a subset", () => {
     const big = Array.from({ length: 120 }, (_, i) => ({ id: String(i), name: `row-${i}`, score: i }));
     render(<DataTable data={big} columns={columns} rowKey={(r) => r.id} />);
@@ -109,6 +128,14 @@ describe("DataTable", () => {
     const onRowClick = vi.fn();
     render(<DataTable data={rows} columns={columns} rowKey={(r) => r.id} onRowClick={onRowClick} />);
     fireEvent.click(screen.getByText("bravo"));
+    expect(onRowClick).toHaveBeenCalledWith(rows[1]);
+  });
+
+  it("supports keyboard activation for interactive rows", () => {
+    const onRowClick = vi.fn();
+    render(<DataTable data={rows} columns={columns} rowKey={(r) => r.id} onRowClick={onRowClick} />);
+    const row = screen.getByRole("row", { name: "Open row 2" });
+    fireEvent.keyDown(row, { key: "Enter" });
     expect(onRowClick).toHaveBeenCalledWith(rows[1]);
   });
 

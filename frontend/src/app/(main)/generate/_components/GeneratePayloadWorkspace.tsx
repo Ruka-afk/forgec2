@@ -1,14 +1,16 @@
 "use client";
 
 import { useCallback, useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { ReactNode } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { PageSpinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import { BinaryPanel, UnixPanel, StagerPanel, PS1Panel, ShellcodePanel, DonutPanel } from "./BuildPanels";
-import { canGenerateFromListener } from "./generate-gate";
+import { canGenerateFromListener, canGeneratePayload } from "./generate-gate";
 import { defaultPayloadFormat, PAYLOAD_FORMATS, PAYLOAD_FORMAT_LABEL, type PayloadFormat } from "./generate-format";
+import { parseGenerateQuery } from "./generate-query";
 import { ListenerCallbackStrip } from "./ListenerCallbackStrip";
 import dynamic from "next/dynamic";
 import { usePayloadGenerator } from "../hooks/usePayloadGenerator";
@@ -41,6 +43,7 @@ function SectionHeading({ icon, tint, title, desc, className }: { icon: ReactNod
 
 export default function GeneratePayloadWorkspace() {
   const { t } = useI18n();
+  const [searchParams] = useSearchParams();
   const g = usePayloadGenerator();
   const [showBanner, setShowBanner] = useState(true);
   const [historyRefresh, setHistoryRefresh] = useState(0);
@@ -53,9 +56,19 @@ export default function GeneratePayloadWorkspace() {
     try {
       const dismissed = localStorage.getItem(BANNER_DISMISS_KEY);
       if (dismissed === "true") setShowBanner(false);
-      setFormat(defaultPayloadFormat(localStorage.getItem(FORMAT_KEY)));
     } catch { /* ignore */ }
   }, []);
+
+  useEffect(() => {
+    try {
+      const q = parseGenerateQuery(searchParams.toString());
+      const next = q.format || defaultPayloadFormat(localStorage.getItem(FORMAT_KEY));
+      setFormat(next);
+      if (q.format) {
+        try { localStorage.setItem(FORMAT_KEY, q.format); } catch { /* ignore */ }
+      }
+    } catch { /* ignore */ }
+  }, [searchParams]);
 
   const pickFormat = (next: PayloadFormat) => {
     setFormat(next);
@@ -109,7 +122,13 @@ export default function GeneratePayloadWorkspace() {
 
   if (g.loading) return <PageSpinner />;
 
-  const canGenerate = canGenerateFromListener(g.shared.listener_id);
+  const currentListener = g.listeners.find((l) => String(l.id) === String(g.shared.listener_id));
+  const canGenerate = canGeneratePayload({
+    listenerId: g.shared.listener_id,
+    listenerScheme: currentListener?.scheme || currentListener?.type,
+    beaconTransport: g.shared.beacon_transport,
+    failover: g.shared.failover,
+  });
 
   const formatPanel = (key: PayloadFormat) => {
     switch (key) {
@@ -136,8 +155,6 @@ export default function GeneratePayloadWorkspace() {
         );
     }
   };
-
-  const currentListener = g.listeners.find((l) => String(l.id) === String(g.shared.listener_id));
 
   return (
     <div>

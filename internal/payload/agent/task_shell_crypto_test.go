@@ -103,3 +103,47 @@ func TestExecuteTaskDecryptsShellFailure(t *testing.T) {
 		t.Fatalf("tampered Shell must fail decryption, got %q", res.Error)
 	}
 }
+
+// TestExecuteTaskPlainShellInterpreter allows Encrypted shell tasks whose
+// interpreter was left in the clear (the historical teamserver behaviour).
+func TestExecuteTaskPlainShellInterpreter(t *testing.T) {
+	prevUUID := agentUUID
+	prevSess := ecdhSess
+	defer func() {
+		agentUUID = prevUUID
+		ecdhSess = prevSess
+	}()
+
+	agentUUID = "agent-shell-plain-interp"
+	client, err := newECDSession()
+	if err != nil {
+		t.Fatalf("newECDSession: %v", err)
+	}
+	server, err := newECDSession()
+	if err != nil {
+		t.Fatalf("newECDSession: %v", err)
+	}
+	if err := client.establishFromServerKey(server.publicKeyB64()); err != nil {
+		t.Fatalf("client establish: %v", err)
+	}
+	if err := server.establishFromServerKey(client.publicKeyB64()); err != nil {
+		t.Fatalf("server establish: %v", err)
+	}
+	ecdhSess = client
+
+	aad := []byte(agentUUID + "\x00" + "9")
+	ct, err := server.encryptAESGCMWithAAD([]byte("whoami"), aad)
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	res := executeTask(Task{
+		ID:        9,
+		Type:      "shell",
+		Encrypted: true,
+		Command:   ct,
+		Shell:     "cmd.exe",
+	})
+	if res.Error == "task payload decryption failed" {
+		t.Fatal("plaintext shell interpreter must not fail payload decrypt")
+	}
+}

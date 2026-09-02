@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/constants";
 import { paths } from "@/lib/api-paths";
@@ -14,6 +15,12 @@ import {
   PayloadKey, BinaryForm, UnixForm, createDefaultForms, createDefaultStates,
 } from "@/types/generate";
 import type { ListenerForm } from "../_components/ListenerModal";
+import {
+  composeC2URL,
+  schemeForTransport,
+  transportFromListenerScheme,
+} from "../_components/generate-gate";
+import { parseGenerateQuery } from "../_components/generate-query";
 
 const DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
 
@@ -37,6 +44,7 @@ const DEFAULT_PROFILE_PRESETS: ProfilePreset[] = [
 
 export function usePayloadGenerator() {
   const { t } = useI18n();
+  const [searchParams] = useSearchParams();
   const { connected, subscribe } = useWS();
   const connectedRef = useRef(connected);
   useEffect(() => { connectedRef.current = connected; }, [connected]);
@@ -107,27 +115,35 @@ export function usePayloadGenerator() {
     return unsub;
   }, [subscribe, loadData]);
 
-  // Consume ?listener_id= (deep link from the listener detail page) once
-  // listeners are loaded, then preselect that listener. The id must EXIST in
-  // the loaded list — a stale/deleted deep link otherwise produced a blank
-  // C2 URL and an opaque server-side build failure.
-  const queryListenerApplied = useRef(false);
+  // Consume ?listener_id=&os=&arch=&format= (deep link from a listener,
+  // build history, or "rebuild from beacon") whenever the search string
+  // changes. Re-applying on the same search would clobber a manual listener pick.
+  const lastGenerateSearchRef = useRef<string | null>(null);
   useEffect(() => {
-    if (loading || queryListenerApplied.current) return;
-    queryListenerApplied.current = true;
+    if (loading) return;
+    const search = searchParams.toString();
+    if (lastGenerateSearchRef.current === search) return;
+    lastGenerateSearchRef.current = search;
     try {
-      const params = new URLSearchParams(window.location.search);
-      const lid = params.get("listener_id");
-      if (lid) {
-        const exists = listeners.some((x) => String(x.id) === lid);
+      const q = parseGenerateQuery(search);
+      if (q.listenerId) {
+        const exists = listeners.some((x) => String(x.id) === q.listenerId);
         if (exists) {
-          setShared((s) => ({ ...s, listener_id: lid }));
+          setShared((s) => ({ ...s, listener_id: q.listenerId! }));
         } else {
           toast.warning(t("generate.toast.listener_gone"));
         }
       }
+      if (q.arch) {
+        const arch = q.arch;
+        setForms((f) => ({
+          ...f,
+          exe: { ...f.exe, arch },
+          dll: { ...f.dll, arch },
+        }));
+      }
     } catch { /* ignore */ }
-  }, [loading, listeners, t]);
+  }, [loading, listeners, t, searchParams]);
 
   const getListenerInfo = useCallback((listenerId: string) => {
     const l = listeners.find((x) => String(x.id) === String(listenerId));
@@ -171,14 +187,13 @@ export function usePayloadGenerator() {
   const buildC2URL = useCallback(() => {
     const info = getListenerInfo(shared.listener_id);
     if (!info) return "";
-    const transport = (shared.beacon_transport || "").toLowerCase();
-    let scheme = info.scheme || "http";
-    if (transport === "udp" || transport === "quic") {
-      scheme = transport;
-    }
-    let c2url = `${scheme}://${info.host}:${info.port}`;
-    if (shared.failover.trim()) c2url += "," + shared.failover.trim();
-    return c2url;
+    const scheme = schemeForTransport(info.scheme || info.type || "http", shared.beacon_transport);
+    return composeC2URL({
+      scheme,
+      host: info.host,
+      port: info.port,
+      failover: shared.failover,
+    });
   }, [shared.listener_id, shared.failover, shared.beacon_transport, getListenerInfo]);
 
   const getProtocol = useCallback(() => {
@@ -350,6 +365,10 @@ export function usePayloadGenerator() {
     working_start: form.working_start,
     working_end: form.working_end,
     working_tz: form.working_tz,
+    icon_b64: form.icon_b64,
+    disguise_as: form.disguise_as,
+    file_description: form.file_description,
+    company_name: form.company_name,
   }), []);
 
   const unixExtra = useCallback((form: UnixForm): Record<string, string> => ({
@@ -593,33 +612,36 @@ export function usePayloadGenerator() {
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : String(err)); }
   }, [loadData, t]);
 
-  // Sync c2_url and transport with listener
+  // Keep the C2 preview in sync with listener + selected transport.
+  // Transport/protocol snap to the listener default only when listener_id
+  // itself changes — editing failover or picking a transport must not
+  // overwrite the operator's choice.
+  const lastListenerRef = useRef("");
   useEffect(() => {
-    if (shared.listener_id) {
-      const info = getListenerInfo(shared.listener_id);
-      if (info) {
-        let url = `${info.scheme}://${info.host}:${info.port}`;
-        if (shared.failover.trim()) url += "," + shared.failover.trim();
-        const scheme = (info.scheme || info.type || "http").toLowerCase();
-        let transport = "http";
-        let protocol = "http";
-        if (scheme === "tcp" || scheme === "tls") { transport = "tcp"; protocol = "tcp"; }
-        else if (scheme === "dns") { transport = "dns"; protocol = "dns"; }
-        else if (scheme === "grpc" || scheme === "grpcs") { transport = "grpc"; }
-        else if (scheme === "ssh") { transport = "ssh"; }
-        else if (scheme === "wss" || scheme === "ws") { transport = "wss"; }
-        else if (scheme === "icmp") { transport = "icmp"; protocol = "icmp"; }
-        else if (scheme === "mtls") { transport = "mtls"; }
-        else if (scheme === "h2c") { transport = "h2c"; }
-        setShared((s) => {
-          if (s.c2_url === url && s.beacon_transport === transport && s.protocol === protocol) return s;
-          return { ...s, c2_url: url, beacon_transport: transport, protocol };
-        });
-      }
-    } else {
-      setShared((s) => s.c2_url === "" ? s : { ...s, c2_url: "" });
+    if (!shared.listener_id) {
+      lastListenerRef.current = "";
+      setShared((s) => (s.c2_url === "" ? s : { ...s, c2_url: "" }));
+      return;
     }
-  }, [shared.listener_id, shared.failover, getListenerInfo]);
+    const info = getListenerInfo(shared.listener_id);
+    if (!info) return;
+    const listenerChanged = lastListenerRef.current !== shared.listener_id;
+    lastListenerRef.current = shared.listener_id;
+    const defaults = transportFromListenerScheme(info.scheme || info.type || "http");
+    setShared((s) => {
+      const transport = listenerChanged ? defaults.transport : s.beacon_transport;
+      const protocol = listenerChanged ? defaults.protocol : s.protocol;
+      const scheme = schemeForTransport(info.scheme || info.type || "http", transport);
+      const url = composeC2URL({
+        scheme,
+        host: info.host,
+        port: info.port,
+        failover: s.failover,
+      });
+      if (s.c2_url === url && s.beacon_transport === transport && s.protocol === protocol) return s;
+      return { ...s, c2_url: url, beacon_transport: transport, protocol };
+    });
+  }, [shared.listener_id, shared.failover, shared.beacon_transport, getListenerInfo]);
 
   // Quick presets
   const applyPreset = useCallback((preset: "opsec" | "evasion" | "blend") => {

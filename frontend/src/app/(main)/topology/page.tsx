@@ -259,13 +259,20 @@ export default function TopologyPage() {
   // spinner (not the previous mode's graph or an empty-state flash), while
   // repeat polls of an already-loaded mode keep the graph mounted.
   const loadedRef = useRef<Partial<Record<TopoViewMode, boolean>>>({});
+  const loadControllerRef = useRef<AbortController | null>(null);
 
-  const loadTopology = useCallback(async (signal?: AbortSignal) => {
+  const loadTopology = useCallback(async () => {
+    loadControllerRef.current?.abort();
+    const controller = new AbortController();
+    loadControllerRef.current = controller;
+    const { signal } = controller;
+    const stale = () => signal.aborted || loadControllerRef.current !== controller;
     const firstLoad = !loadedRef.current[viewMode];
     if (firstLoad) setLoading(true);
     try {
       if (viewMode === "net") {
         const result = await api.get<NetTopologyData & { success?: boolean }>(paths.topology.network, { signal });
+        if (stale()) return;
         setNetData({
           nodes: (result.nodes || []) as TopoNode[],
           edges: (result.edges || []) as TopoEdge[],
@@ -273,6 +280,7 @@ export default function TopologyPage() {
         });
       } else if (viewMode === "mesh") {
         const result = await api.get<{ success?: boolean; nodes?: TopoNode[]; edges?: TopoEdge[] }>("/mesh/topology", { signal });
+        if (stale()) return;
         if (result.success) {
           setMeshData({ nodes: (result.nodes || []) as TopoNode[], edges: (result.edges || []) as TopoEdge[] });
         } else {
@@ -280,6 +288,7 @@ export default function TopologyPage() {
         }
       } else {
         const result = await api.get<{ Nodes?: TopoNode[]; nodes?: TopoNode[]; Edges?: Array<{ from: string; to: string }>; edges?: Array<{ from: string; to: string }>; data?: { Nodes?: TopoNode[]; nodes?: TopoNode[]; Edges?: Array<{ from: string; to: string }>; edges?: Array<{ from: string; to: string }> } }>(paths.topology.data, { signal });
+        if (stale()) return;
         if (result.data) {
           setData({ nodes: (result.data.nodes || []) as TopoNode[], edges: (result.data.edges || []) as Array<{ from: string; to: string }> });
         } else {
@@ -287,6 +296,7 @@ export default function TopologyPage() {
         }
       }
     } catch {
+      if (stale()) return;
       // Keep the last good graph on transient poll failures — wiping the
       // data here would destroy/recreate the vis instance (zoom/pan reset).
       // Only a first-load failure surfaces the empty state (data stays null).
@@ -294,16 +304,16 @@ export default function TopologyPage() {
       setLoading(false);
       return;
     }
+    if (stale()) return;
     loadedRef.current[viewMode] = true;
     setLoading(false);
   }, [viewMode]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    loadTopology(controller.signal);
-    return () => controller.abort();
+    void loadTopology();
+    return () => loadControllerRef.current?.abort();
   }, [loadTopology]);
-  useVisibleInterval(loadTopology, POLL.topology);
+  useVisibleInterval(() => { void loadTopology(); }, POLL.topology);
 
   useEffect(() => { setNow(nowTime()); }, []);
 

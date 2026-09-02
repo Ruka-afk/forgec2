@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -143,9 +143,10 @@ function LoginForm() {
         <p className="relative text-xs text-muted-foreground">{t("login.footer")}</p>
       </section>
 
-      <section className="relative flex min-h-screen items-center justify-center px-5 py-10 sm:px-10">
-        <div aria-hidden="true" className="absolute right-0 top-0 size-64 rounded-full bg-primary/5 blur-(--blur-orb)" />
-        <div className="relative z-10 w-full max-w-[25rem] animate-fade-slide-up">
+      <section className="relative flex min-h-screen items-center justify-center overflow-hidden bg-muted/20 px-5 py-10 sm:px-10">
+        <div aria-hidden="true" className="absolute -right-24 -top-24 size-80 rounded-full bg-primary/6 blur-(--blur-orb)" />
+        <div aria-hidden="true" className="absolute -bottom-32 -left-24 size-72 rounded-full bg-primary/4 blur-(--blur-orb)" />
+        <div className="relative z-10 w-full max-w-[27rem] animate-fade-slide-up">
           <div className="mb-7 lg:hidden">
             <div className="mb-4 flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/15">
               <Shield className="size-5" aria-hidden="true" />
@@ -154,7 +155,18 @@ function LoginForm() {
             <p className="mt-1 text-sm text-muted-foreground">{t("login.subtitle")}</p>
           </div>
 
-        <Card className="border-border bg-card shadow-xl">
+        <Card className="border-border/90 bg-card shadow-lg shadow-foreground/5">
+          <CardHeader className="border-b border-border/70 pb-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold tracking-tight text-foreground">{t("login.form_title")}</h2>
+                <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{t("login.form_description")}</p>
+              </div>
+              <div className="hidden size-10 shrink-0 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary sm:flex" aria-hidden="true">
+                <Lock className="size-4" />
+              </div>
+            </div>
+          </CardHeader>
           <CardContent className="px-6 sm:px-7">
           {error && (
             <Alert variant="destructive" className="mb-5 animate-scale-in" role="alert">
@@ -163,9 +175,9 @@ function LoginForm() {
             </Alert>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4" aria-label={t("login.form_aria")} noValidate>
+          <form onSubmit={handleSubmit} className="space-y-5" aria-label={t("login.form_aria")} noValidate>
             <div>
-              <Label htmlFor="login-username" className="text-xs font-medium text-muted-foreground mb-1.5 block">{t("login.username")}</Label>
+              <Label htmlFor="login-username" className="mb-2 block text-sm font-medium text-foreground">{t("login.username")}</Label>
               <div className="relative group">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" aria-hidden="true" />
                 <Input
@@ -175,7 +187,7 @@ function LoginForm() {
                   value={values.username}
                   onChange={handleChange("username")}
                   onBlur={handleBlur("username")}
-                  className="h-9 pl-9 transition-colors"
+                  className="h-11 pl-9 transition-colors"
                   aria-invalid={!!(touched.username && errors.username)}
                   aria-describedby={errors.username ? "login-username-error" : undefined}
                   autoComplete="username"
@@ -187,7 +199,7 @@ function LoginForm() {
             </div>
 
             <div>
-              <Label htmlFor="login-password" className="text-xs font-medium text-muted-foreground mb-1.5 block">{t("login.password")}</Label>
+              <Label htmlFor="login-password" className="mb-2 block text-sm font-medium text-foreground">{t("login.password")}</Label>
               <div className="relative group">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" aria-hidden="true" />
                 <Input
@@ -196,7 +208,7 @@ function LoginForm() {
                   value={values.password}
                   onChange={handleChange("password")}
                   onBlur={handleBlur("password")}
-                  className="h-9 pl-9 transition-colors"
+                  className="h-11 pl-9 transition-colors"
                   aria-invalid={!!(touched.password && errors.password)}
                   aria-describedby={errors.password ? "login-password-error" : undefined}
                   autoComplete="current-password"
@@ -208,7 +220,7 @@ function LoginForm() {
             </div>
 
             <div>
-              <Label htmlFor="login-totp" className="text-xs font-medium text-muted-foreground mb-1.5 block">
+              <Label htmlFor="login-totp" className="mb-2 block text-sm font-medium text-foreground">
                 {t("login.totp")} <span className="text-muted-foreground/100">({t("login.totp_optional")})</span>
               </Label>
               <div className="relative group">
@@ -224,7 +236,7 @@ function LoginForm() {
                   onChange={handleChange("totpCode")}
                   onBlur={handleBlur("totpCode")}
                   placeholder="000000"
-                  className="h-9 pl-9 font-mono tracking-(--tracking-wide) text-center transition-colors"
+                  className="h-11 pl-9 font-mono tracking-(--tracking-wide) text-center transition-colors"
                   aria-invalid={!!(touched.totpCode && errors.totpCode)}
                   aria-describedby={errors.totpCode ? "login-totp-error" : undefined}
                 />
@@ -234,13 +246,13 @@ function LoginForm() {
               )}
             </div>
 
-            <label className="flex items-center gap-2 cursor-pointer select-none">
+            <label className="flex min-h-11 cursor-pointer select-none items-center gap-2.5 rounded-lg px-1">
               <Checkbox
                 checked={values.rememberMe}
                 onCheckedChange={(v) => setFieldValue("rememberMe", v === true)}
                 aria-label={t("login.remember_me")}
               />
-              <span className="text-xs text-muted-foreground">{t("login.remember_me")}</span>
+              <span className="text-sm text-muted-foreground">{t("login.remember_me")}</span>
             </label>
 
             <Button
@@ -261,10 +273,8 @@ function LoginForm() {
           </CardContent>
         </Card>
 
-        <p className="mt-6 text-center text-xs text-muted-foreground lg:hidden">
-          {version
-            ? t("login.footer_version", { version })
-            : t("login.footer")}
+        <p className="mt-6 text-center text-xs text-muted-foreground">
+          {version ? `${t("login.footer_version", { version })} · ${t("login.footer")}` : t("login.footer")}
         </p>
         </div>
       </section>

@@ -9,11 +9,21 @@ interface CacheEntry<T> {
 
 const cache = new Map<string, CacheEntry<unknown>>();
 const inflight = new Map<string, Promise<unknown>>();
+const generations = new Map<string, number>();
+let cacheEpoch = 0;
 
 /** Clear the shared module-level cache (used by tests and logout). */
 export function clearDataCache(): void {
+  cacheEpoch += 1;
   cache.clear();
   inflight.clear();
+  generations.clear();
+}
+
+function invalidateKey(key: string): void {
+  generations.set(key, (generations.get(key) ?? 0) + 1);
+  cache.delete(key);
+  inflight.delete(key);
 }
 
 /**
@@ -25,13 +35,17 @@ export async function fetchCached<T>(key: string, fetcher: () => Promise<T>, ttl
   if (hit && hit.expiresAt >= Date.now()) return hit.value;
   const existing = inflight.get(key);
   if (existing) return existing as Promise<T>;
+  const epoch = cacheEpoch;
+  const generation = generations.get(key) ?? 0;
   const run = fetcher()
     .then((value) => {
-      cache.set(key, { value, expiresAt: Date.now() + ttlMs });
+      if (cacheEpoch === epoch && (generations.get(key) ?? 0) === generation) {
+        cache.set(key, { value, expiresAt: Date.now() + ttlMs });
+      }
       return value;
     })
     .finally(() => {
-      inflight.delete(key);
+      if (inflight.get(key) === run) inflight.delete(key);
     });
   inflight.set(key, run);
   return run;
@@ -68,7 +82,8 @@ export function useCachedData<T>(
   });
   const [loading, setLoading] = useState<boolean>(() => {
     const entry = cache.get(key);
-    return entry && entry.expiresAt >= Date.now() ? false : !keepStaleWhileRevalidate;
+    if (!entry) return true;
+    return entry.expiresAt >= Date.now() ? false : !keepStaleWhileRevalidate;
   });
   const [error, setError] = useState(false);
 
@@ -80,6 +95,16 @@ export function useCachedData<T>(
   ttlRef.current = ttlMs;
   const keepRef = useRef(keepStaleWhileRevalidate);
   keepRef.current = keepStaleWhileRevalidate;
+  const requestSeqRef = useRef(0);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      requestSeqRef.current += 1;
+    };
+  }, []);
 
   useEffect(() => {
     const entry = cache.get(key);
@@ -96,14 +121,15 @@ export function useCachedData<T>(
     }
     setError(false);
     let cancelled = false;
+    const seq = ++requestSeqRef.current;
     fetchCached<T>(key, fetcherRef.current, ttlRef.current)
       .then((value) => {
-        if (cancelled) return;
+        if (cancelled || requestSeqRef.current !== seq) return;
         setData(value);
         setLoading(false);
       })
       .catch((err: unknown) => {
-        if (cancelled) return;
+        if (cancelled || requestSeqRef.current !== seq) return;
         setError(true);
         setLoading(false);
         onErrorRef.current?.(err);
@@ -114,20 +140,24 @@ export function useCachedData<T>(
   }, [key]);
 
   const refresh = useCallback((): Promise<T> => {
+    const seq = ++requestSeqRef.current;
     setLoading(true);
     setError(false);
-    cache.delete(key);
-    inflight.delete(key);
+    invalidateKey(key);
     const run = fetchCached<T>(key, fetcherRef.current, ttlRef.current)
       .then((value) => {
-        setData(value);
-        setLoading(false);
+        if (mountedRef.current && requestSeqRef.current === seq) {
+          setData(value);
+          setLoading(false);
+        }
         return value;
       })
       .catch((err: unknown) => {
-        setError(true);
-        setLoading(false);
-        onErrorRef.current?.(err);
+        if (mountedRef.current && requestSeqRef.current === seq) {
+          setError(true);
+          setLoading(false);
+          onErrorRef.current?.(err);
+        }
         throw err;
       });
     return run;

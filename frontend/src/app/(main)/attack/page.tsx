@@ -418,8 +418,8 @@ function UsageHeatmapCard() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    api.get<{ data?: HeatmapData }>(paths.mitre.heatmap(range))
-      .then((d) => { if (!cancelled) setData(d.data || null); })
+    api.get<HeatmapData>(paths.mitre.heatmap(range))
+      .then((d) => { if (!cancelled) setData(d); })
       .catch(() => { if (!cancelled) setData(null); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };

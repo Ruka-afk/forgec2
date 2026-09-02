@@ -35,6 +35,7 @@ import SavedViewPicker from "@/components/SavedViewPicker";
 import AgentDetailPage from "./[id]/AgentDetailPage";
 import type { Beacon, BulkResult } from "./_components/types";
 import type { AgentMenuAction, AgentMenuPoint } from "./_components/agent-menu-actions";
+import { rebuildPayloadHref } from "../generate/_components/generate-query";
 import { useVirtualWindow } from "@/lib/hooks/useVirtualWindow";
 import { useInteractStore } from "@/lib/interact-store";
 import { toast } from "sonner";
@@ -368,6 +369,21 @@ export default function AgentsPageContent() {
           })
           .catch(() => toast.error(t("agents.screenshot_failed")));
         break;
+      case "beacon_now":
+        api.post(paths.agents.cmd(id, "beacon_now"))
+          .then((d) => {
+            const taskId = Number((d as { task_id?: number }).task_id);
+            const queued = Number.isFinite(taskId) && taskId > 0;
+            if (queued) useInteractStore.getState().revealTask(id, taskId);
+            toast.success(t("agents.beacon_now_queued"));
+          })
+          .catch(() => toast.error(t("agents.beacon_now_failed")));
+        break;
+      case "rebuild": {
+        if (!point.beacon.listener_id) toast.warning(t("agents.rebuild_no_listener"));
+        router.push(rebuildPayloadHref(point.beacon));
+        break;
+      }
       case "sleep":
         openQuickSleep(point.beacon);
         break;
@@ -611,6 +627,11 @@ export default function AgentsPageContent() {
         setShowResults={setShowResults}
         onBulkShell={openCmdModal}
         onBulkScreenshot={batchScreenshot}
+        onBulkBeaconNow={() => {
+          const ids = Array.from(selected);
+          if (!ids.length) return;
+          void bulkTask(ids, "beacon_now", "");
+        }}
         onBulkSleep={batchSleep}
         onBulkKill={() => setConfirm({ type: "bulk-kill" })}
         onBulkUninstall={() => setConfirm({ type: "bulk-uninstall" })}
@@ -946,7 +967,7 @@ export default function AgentsPageContent() {
         <BatchSleepModal
           agentCount={selected.size}
           interval={batchSleepInterval}
-          setInterval={setBatchSleepInterval}
+          onIntervalChange={setBatchSleepInterval}
           jitter={batchSleepJitter}
           setJitter={setBatchSleepJitter}
           onSubmit={doBatchSleep}
@@ -955,7 +976,11 @@ export default function AgentsPageContent() {
       )}
 
       <Sheet open={!!selectedAgentId} onOpenChange={(open) => { if (!open) setSelectedAgentId(null); }}>
-        <SheetContent side="right" className="w-full sm:w-[800px] lg:w-[1000px] sm:max-w-none p-0 overflow-auto" showCloseButton={false}>
+        <SheetContent
+          side="right"
+          showCloseButton={false}
+          className="h-full w-full gap-0 overflow-hidden bg-background p-0 text-base sm:max-w-[min(96rem,92vw)]"
+        >
           <ErrorBoundary>
             {selectedAgentId && <AgentDetailPage key={selectedAgentId} agentId={selectedAgentId} onClose={handleCloseDetail} />}
           </ErrorBoundary>

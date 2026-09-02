@@ -7,13 +7,12 @@ import { ShortcutsHelpButton } from "@/components/ShortcutsHelp";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ConnectionDot } from "@/components/ui/connection-dot";
-import { SearchBox } from "@/components/topbar/search-box";
 import { ThemeSelector } from "@/components/topbar/theme-selector";
 import { LanguageSelector } from "@/components/topbar/language-selector";
 import { NotificationDropdown } from "@/components/topbar/notification-dropdown";
 import { UserDropdown } from "@/components/topbar/user-dropdown";
 import {
-  Menu, AlertTriangle, Maximize2, Minimize2,
+  Menu, AlertTriangle, Maximize2, Minimize2, Search,
 } from "lucide-react";
 
 export default function TopBar({ onMenuToggle }: { onMenuToggle?: () => void }) {
@@ -22,6 +21,7 @@ export default function TopBar({ onMenuToggle }: { onMenuToggle?: () => void }) 
   const storeSidebarWidth = useAppStore(selectSidebarWidth);
   const focusMode = useAppStore((s) => s.focusMode);
   const toggleFocusMode = useAppStore((s) => s.toggleFocusMode);
+  const setCommandPaletteOpen = useAppStore((s) => s.setCommandPaletteOpen);
   const stats = useAppStore((s) => s.stats);
 
   return (
@@ -35,7 +35,17 @@ export default function TopBar({ onMenuToggle }: { onMenuToggle?: () => void }) 
           variant="ghost" size="icon" className="lg:hidden" aria-label={t("common.toggle_menu")}>
           <Menu className="size-5" />
         </Button>
-        <SearchBox />
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setCommandPaletteOpen(true)}
+          className="hidden h-9 min-w-0 max-w-sm flex-1 justify-start gap-2 bg-muted/45 px-3 text-muted-foreground shadow-none hover:border-primary/25 hover:bg-muted lg:flex"
+          aria-label={t("palette.placeholder")}
+        >
+          <Search className="size-4 shrink-0" />
+          <span className="truncate text-(--fs-compact)">{t("palette.placeholder")}</span>
+          <kbd className="ml-auto shrink-0 rounded-md border border-border/80 bg-card px-1.5 py-0.5 font-mono text-(--fs-micro-sm) text-muted-foreground">Ctrl K</kbd>
+        </Button>
       </div>
 
       <div className="flex items-center gap-1">
@@ -68,19 +78,19 @@ export default function TopBar({ onMenuToggle }: { onMenuToggle?: () => void }) 
         <span className="hidden md:inline-flex">
           <ShortcutsHelpButton />
         </span>
-        <ThemeSelector />
-        <LanguageSelector />
+        <span className="hidden sm:inline-flex"><ThemeSelector /></span>
+        <span className="hidden md:inline-flex"><LanguageSelector /></span>
         <NotificationDropdown />
         <UserDropdown />
       </div>
     </header>
     {reconnectFailed && (
       <div
-        className="fixed top-14 right-0 z-20 flex items-center gap-2 px-4 py-2 bg-destructive/10 border-b border-destructive/30 text-destructive text-sm"
+        className="fixed top-(--shell-topbar-height) right-0 z-30 flex h-10 items-center gap-2 border-b border-destructive/30 bg-destructive/10 px-3 text-xs text-destructive backdrop-blur-sm sm:px-4 sm:text-sm"
         style={{ left: focusMode ? 0 : storeSidebarWidth }}
       >
         <AlertTriangle className="size-4 shrink-0" />
-        <span>{t("topbar.ws_disconnected_banner")}</span>
+        <span className="min-w-0 flex-1 truncate">{t("topbar.ws_disconnected_banner")}</span>
         <Button variant="outline" size="sm" className="ml-auto h-7 text-xs border-destructive/30 text-destructive hover:bg-destructive/10" onClick={reconnect}>
           {t("topbar.reconnect")}
         </Button>

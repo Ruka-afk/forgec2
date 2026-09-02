@@ -13,7 +13,19 @@ let rateLimitRetryAfter = 0;
 const getDedupCache = new Map<string, Promise<unknown>>();
 
 export function getRateLimitRetryAfter(): number {
+  if (!Number.isFinite(rateLimitRetryAfter)) rateLimitRetryAfter = 0;
   return Math.max(0, rateLimitRetryAfter - Math.floor(Date.now() / 1000));
+}
+
+export function parseRetryAfterSeconds(value: string | null, now = Date.now()): number | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const numeric = Number(trimmed);
+  if (Number.isFinite(numeric)) return numeric >= 0 ? Math.ceil(numeric) : null;
+  const at = Date.parse(value);
+  if (!Number.isFinite(at)) return null;
+  return Math.max(0, Math.ceil((at - now) / 1000));
 }
 
 function readCsrfCookie(): string {
@@ -64,6 +76,12 @@ export class ApiError extends Error {
     this.name = "ApiError";
     this.status = status;
   }
+}
+
+/** Operator-facing text for thrown API/network errors (no `ApiError:` prefix). */
+export function formatThrownError(e: unknown): string {
+  if (e instanceof Error && e.message) return e.message;
+  return String(e);
 }
 
 export function handleUnauthorized(res: Pick<Response, "status">): void {
@@ -205,8 +223,9 @@ async function request<T>(path: string, options: RequestOptions & { body?: unkno
         handleUnauthorized(res);
         if (res.status === 429) {
           const retryAfter = res.headers.get("Retry-After");
-          if (retryAfter) {
-            rateLimitRetryAfter = Math.floor(Date.now() / 1000) + parseInt(retryAfter, 10);
+          const retryAfterSeconds = parseRetryAfterSeconds(retryAfter);
+          if (retryAfterSeconds != null) {
+            rateLimitRetryAfter = Math.floor(Date.now() / 1000) + retryAfterSeconds;
           }
         }
         let errorMsg: string;
@@ -226,6 +245,10 @@ async function request<T>(path: string, options: RequestOptions & { body?: unkno
 
       if (options.raw) {
         return res as unknown as T;
+      }
+
+      if (res.status === 204 || method === "HEAD") {
+        return undefined as T;
       }
 
       const respBody = await res.json();
@@ -349,10 +372,11 @@ type TaskStatusBase = {
   created?: string;
 };
 
-type TaskRunning = TaskStatusBase & { status: "running" | "pending" };
+type TaskRunning = TaskStatusBase & { status: "running" | "pending" | "sent" | "pending_approval" };
 type TaskCompleted = TaskStatusBase & { status: "completed"; result: string };
 type TaskFailed = TaskStatusBase & { status: "failed"; error: string };
-export type TaskStatus = TaskRunning | TaskCompleted | TaskFailed;
+type TaskCancelled = TaskStatusBase & { status: "cancelled"; error?: string };
+export type TaskStatus = TaskRunning | TaskCompleted | TaskFailed | TaskCancelled;
 
 interface PollTaskHandle {
   promise: Promise<TaskStatus>;
@@ -383,6 +407,11 @@ function pollTaskWithCancel(
   let unsub: (() => void) | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let rejectRef: ((err: Error) => void) | null = null;
+  // Capture the latest WebSocket-delivered plaintext so we can recover the
+  // operator-visible result even if a final REST fetch momentarily returns an
+  // at-rest ciphertext blob (e.g. during a key rotation window).
+  let wsResult: string | undefined;
+  let wsError: string | undefined;
 
   const cleanup = () => {
     done = true;
@@ -391,11 +420,44 @@ function pollTaskWithCancel(
     if (!opts.signal) ac.abort();
   };
 
+  const atRestCipher = (s?: string) => !!s && (s.startsWith("FC2ENC:") || s.startsWith("FC2EXT:"));
+  const isTerminal = (status: TaskStatus["status"]) =>
+    status === "completed" || status === "failed" || status === "cancelled";
+  const plaintext = (...values: Array<string | undefined>) => {
+    // A just-completed REST read can briefly expose an empty persisted value
+    // while the WebSocket already delivered the complete operator result.
+    // Prefer meaningful plaintext, but preserve an explicit empty value when
+    // every safe candidate is empty.
+    let empty: string | undefined;
+    for (const value of values) {
+      if (value == null || atRestCipher(value)) continue;
+      if (value !== "") return value;
+      empty ??= value;
+    }
+    return empty;
+  };
+  const operatorStatus = (status: TaskStatus): TaskStatus => ({
+    ...status,
+    result: plaintext(status.result),
+    error: plaintext(status.error),
+  } as TaskStatus);
   const finalFetch = async (fallback: TaskStatus): Promise<TaskStatus> => {
     try {
-      return await api.get<TaskStatus>(paths.agents.task(agentId, taskId));
+      const fetched = await api.get<TaskStatus>(paths.agents.task(agentId, taskId));
+      // WebSocket delivery can win the race with the database-backed detail
+      // endpoint. A lagging pending/running read must not roll a terminal state
+      // back to non-terminal.
+      const status = isTerminal(fallback.status) && !isTerminal(fetched.status)
+        ? fallback.status
+        : fetched.status;
+      return operatorStatus({
+        ...fetched,
+        status,
+        result: plaintext(fetched.result, fallback.result, wsResult),
+        error: plaintext(fetched.error, fallback.error, wsError),
+      } as TaskStatus);
     } catch {
-      return fallback;
+      return operatorStatus(fallback);
     }
   };
 
@@ -418,19 +480,30 @@ function pollTaskWithCancel(
         if (Number(ev.task_id) !== taskId) return;
         if ("status" in ev) {
           const status = String(ev.status) as TaskStatus["status"];
-          const partial = {
+          // Most task_update results are short previews. Interactive shell
+          // results are consumed only when the server explicitly marks the
+          // value complete; otherwise full output comes from task_output frames
+          // or the authoritative detail fetch in finalFetch().
+          const eventResult = ev.result_complete === true
+            ? plaintext(ev.result as string | undefined)
+            : undefined;
+          const eventError = plaintext(ev.error as string | undefined);
+          if (eventResult != null) wsResult = eventResult;
+          if (eventError != null) wsError = eventError;
+          const partial = operatorStatus({
             id: taskId,
             status,
-            result: ev.result as string | undefined,
-            error: ev.error as string | undefined,
-          } as TaskStatus;
+            result: eventResult,
+            error: eventError,
+          } as TaskStatus);
           opts.onStatus?.(partial);
-          if (status === "completed" || status === "failed") finish(partial);
+          if (isTerminal(status)) finish(partial);
           return;
         }
         // Ordered streaming frame for large shell results: deliver the
         // accumulated output so callers can render incrementally.
         streamedOutput += String(ev.chunk ?? "");
+        wsResult = streamedOutput;
         opts.onStatus?.({
           id: taskId,
           status: "running",
@@ -453,10 +526,16 @@ function pollTaskWithCancel(
       if (signal.aborted) return fail(new Error("cancelled"));
       if (Date.now() > deadline) return fail(new Error("Agent did not respond within the timeout (is it online?)"));
       try {
-        const st = await api.get<TaskStatus>(paths.agents.task(agentId, taskId), { signal });
+        const st = operatorStatus(await api.get<TaskStatus>(paths.agents.task(agentId, taskId), { signal }));
+        // A terminal WebSocket event may have completed the task while this
+        // fallback request was in flight. Never emit its older snapshot or
+        // schedule another timer after cleanup.
+        if (done) return;
         opts.onStatus?.(st);
-        if (st.status === "completed" || st.status === "failed") return finish(st);
+        if (isTerminal(st.status)) return finish(st);
       } catch (err) {
+        if (done) return;
+        if (signal.aborted) return fail(new Error("cancelled"));
         if (process.env.NODE_ENV === "development") logger.debug("pollTask failed", { agentId, taskId }, err);
       }
       timer = setTimeout(tick, intervalMs);
@@ -480,8 +559,8 @@ import type { AgentStatus } from "@/types/agent";
 const VALID_STATUSES: readonly string[] = AGENT_STATUSES;
 
 async function getAgentStatus(agentId: string): Promise<AgentStatus | "unknown"> {
-  const data = await api.get<{ Agent?: { status?: string } }>(paths.agents.one(agentId));
-  const raw = data.Agent?.status || "unknown";
+  const data = await api.get<{ Agent?: { status?: string }; agent?: { status?: string } }>(paths.agents.one(agentId));
+  const raw = data.agent?.status || data.Agent?.status || "unknown";
   return (VALID_STATUSES.includes(raw) ? raw : "unknown") as AgentStatus | "unknown";
 }
 

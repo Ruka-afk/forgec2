@@ -11,6 +11,7 @@ interface AIComposerProps {
   messageCount: number;
   disabled?: boolean;
   usage?: { prompt: number; completion: number };
+  maxLength?: number;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   onChange: (value: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
@@ -24,6 +25,7 @@ export function AIComposer({
   messageCount,
   disabled,
   usage,
+  maxLength,
   textareaRef,
   onChange,
   onKeyDown,
@@ -43,7 +45,9 @@ export function AIComposer({
           value={input}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
-          disabled={disabled || loading}
+          disabled={disabled}
+          aria-busy={loading}
+          maxLength={maxLength}
         />
         {loading ? (
           <Button variant="destructive" size="icon" onClick={onStop} className="mb-0.5 shrink-0 rounded-xl" aria-label={t("ai.stop_generation")}>
@@ -57,7 +61,8 @@ export function AIComposer({
       </div>
       <div className="flex items-center justify-between gap-3 border-t border-border/60 bg-muted/30 px-3 py-2">
         <span className="text-(--fs-micro-sm) text-muted-foreground">
-          {messageCount}/40
+          {messageCount}
+          {maxLength && <> &middot; {input.length}/{maxLength}</>}
           {input.trim() && <> &middot; ~{Math.ceil(input.trim().length / 4)} {t("ai.tokens_est")}</>}
         </span>
         <span className="flex items-center gap-3 text-(--fs-micro-sm) text-muted-foreground">
@@ -66,7 +71,9 @@ export function AIComposer({
               ↑{usage.prompt} ↓{usage.completion}
             </span>
           )}
-          <span className="hidden sm:inline">{t("ai.input_hint")}</span>
+          <span className="hidden sm:inline">
+            {loading ? t("ai.input_during_generation") : t("ai.input_hint")}
+          </span>
         </span>
       </div>
     </div>

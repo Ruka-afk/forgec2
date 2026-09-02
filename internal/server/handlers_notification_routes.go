@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -29,6 +30,38 @@ func severityRank(sev string) int {
 }
 
 const notificationRouteTimeout = 8 * time.Second
+const notificationRouteMask = "********"
+
+func redactNotificationRoute(route db.NotificationRoute) db.NotificationRoute {
+	if route.Secret != "" {
+		route.Secret = notificationRouteMask
+	}
+	// Telegram targets are chat IDs, but Discord and generic webhook targets
+	// commonly carry credentials in their path or query string.
+	if route.Channel != "telegram" && route.Target != "" {
+		route.Target = notificationRouteMask
+	}
+	return route
+}
+
+func validateNotificationRoute(channel, target, secret string) error {
+	if !validNotificationChannel(channel) {
+		return errors.New("channel must be discord, telegram or webhook")
+	}
+	if target == "" || target == notificationRouteMask {
+		return errors.New("target required")
+	}
+	if channel == "telegram" {
+		if secret == "" || secret == notificationRouteMask {
+			return errors.New("telegram bot token required")
+		}
+		return nil
+	}
+	if err := validateExternalURL(target); err != nil {
+		return fmt.Errorf("invalid notification target: %w", err)
+	}
+	return nil
+}
 
 // DispatchNotification persists a notification and fans it out to every
 // enabled notification route whose minimum severity matches. Callers should
@@ -58,14 +91,14 @@ func (s *Server) DispatchNotification(n *db.Notification) {
 					slog.Error("Notification route panicked", "route", route.Name, "panic", r)
 				}
 			}()
-			s.sendNotificationRoute(route, n)
+			_ = s.sendNotificationRoute(route, n)
 		}(route)
 	}
 }
 
 // sendNotificationRoute delivers one notification over one channel.
-func (s *Server) sendNotificationRoute(route db.NotificationRoute, n *db.Notification) {
-	client := &http.Client{Timeout: notificationRouteTimeout}
+func (s *Server) sendNotificationRoute(route db.NotificationRoute, n *db.Notification) error {
+	client := ssrfSafeClient(&http.Client{Timeout: notificationRouteTimeout})
 	var payload []byte
 	target := ""
 
@@ -94,10 +127,16 @@ func (s *Server) sendNotificationRoute(route db.NotificationRoute, n *db.Notific
 		target = route.Target
 	default:
 		slog.Warn("Unknown notification route channel", "channel", route.Channel)
-		return
+		return fmt.Errorf("unknown notification channel %q", route.Channel)
 	}
 	if target == "" {
-		return
+		return errors.New("notification target is empty")
+	}
+	// Revalidate at delivery time as well as create/update time. Existing rows
+	// may predate validation, and DNS may have changed since configuration.
+	if err := validateExternalURL(target); err != nil {
+		slog.Warn("Notification route target rejected", "route", route.Name, "error", err)
+		return fmt.Errorf("notification target rejected: %w", err)
 	}
 
 	resp, err := client.Post(target, "application/json", bytes.NewReader(payload))
@@ -110,12 +149,14 @@ func (s *Server) sendNotificationRoute(route db.NotificationRoute, n *db.Notific
 		} else {
 			slog.Warn("Notification route delivery failed", "route", route.Name, "error", err)
 		}
-		return
+		return errors.New("notification delivery failed")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
 		slog.Warn("Notification route returned error status", "route", route.Name, "status", resp.StatusCode)
+		return fmt.Errorf("notification route returned HTTP %d", resp.StatusCode)
 	}
+	return nil
 }
 
 // ── REST management ─────────────────────────────────────────────────────────
@@ -126,11 +167,9 @@ func (s *Server) handleListNotificationRoutes(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "query failed")
 		return
 	}
-	// Never echo secrets back to the UI.
+	// Never echo secrets or credential-bearing webhook URLs back to the UI.
 	for i := range routes {
-		if routes[i].Secret != "" {
-			routes[i].Secret = "********"
-		}
+		routes[i] = redactNotificationRoute(routes[i])
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "routes": routes})
 }
@@ -139,18 +178,22 @@ func validNotificationChannel(ch string) bool {
 	return ch == "discord" || ch == "telegram" || ch == "webhook"
 }
 
+func validNotificationSeverity(severity string) bool {
+	return severity == "info" || severity == "warning" || severity == "critical"
+}
+
 func (s *Server) handleCreateNotificationRoute(c *gin.Context) {
 	var req db.NotificationRoute
-	if err := c.ShouldBindJSON(&req); err != nil || req.Name == "" {
+	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.Name) == "" {
 		respondError(c, http.StatusBadRequest, "name required")
 		return
 	}
-	if !validNotificationChannel(req.Channel) {
-		respondError(c, http.StatusBadRequest, "channel must be discord, telegram or webhook")
-		return
-	}
-	if req.Target == "" {
-		respondError(c, http.StatusBadRequest, "target required")
+	req.Name = strings.TrimSpace(req.Name)
+	req.Channel = strings.TrimSpace(req.Channel)
+	req.Target = strings.TrimSpace(req.Target)
+	req.Secret = strings.TrimSpace(req.Secret)
+	if err := validateNotificationRoute(req.Channel, req.Target, req.Secret); err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 	req.ID = 0
@@ -158,12 +201,16 @@ func (s *Server) handleCreateNotificationRoute(c *gin.Context) {
 	if req.MinSeverity == "" {
 		req.MinSeverity = "info"
 	}
+	if !validNotificationSeverity(req.MinSeverity) {
+		respondError(c, http.StatusBadRequest, "min_severity must be info, warning or critical")
+		return
+	}
 	if err := s.db.Create(&req).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create route")
 		return
 	}
 	s.LogAuditRecord(c, "notification_route_create", "settings", strconv.FormatUint(uint64(req.ID), 10), req.Name+" ("+req.Channel+")", true, nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "route": req})
+	c.JSON(http.StatusOK, gin.H{"success": true, "route": redactNotificationRoute(req)})
 }
 
 func (s *Server) handleUpdateNotificationRoute(c *gin.Context) {
@@ -197,17 +244,39 @@ func (s *Server) handleUpdateNotificationRoute(c *gin.Context) {
 		updates["channel"] = req.Channel
 	}
 	if req.Target != "" {
-		updates["target"] = req.Target
+		if req.Target != notificationRouteMask {
+			updates["target"] = strings.TrimSpace(req.Target)
+		}
 	}
 	// An empty secret keeps the stored value (the UI masks it as ********).
-	if req.Secret != "" && req.Secret != "********" {
-		updates["secret"] = req.Secret
+	if req.Secret != "" && req.Secret != notificationRouteMask {
+		updates["secret"] = strings.TrimSpace(req.Secret)
 	}
 	if req.MinSeverity != "" {
+		if !validNotificationSeverity(req.MinSeverity) {
+			respondError(c, http.StatusBadRequest, "invalid min_severity")
+			return
+		}
 		updates["min_severity"] = req.MinSeverity
 	}
 	if req.Enabled != nil {
 		updates["enabled"] = *req.Enabled
+	}
+	candidateChannel := existing.Channel
+	if channel, ok := updates["channel"].(string); ok {
+		candidateChannel = channel
+	}
+	candidateTarget := existing.Target
+	if target, ok := updates["target"].(string); ok {
+		candidateTarget = target
+	}
+	candidateSecret := existing.Secret
+	if secret, ok := updates["secret"].(string); ok {
+		candidateSecret = secret
+	}
+	if err := validateNotificationRoute(candidateChannel, candidateTarget, candidateSecret); err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
 	}
 	if len(updates) == 0 {
 		c.JSON(http.StatusOK, gin.H{"success": true})
@@ -251,6 +320,9 @@ func (s *Server) handleTestNotificationRoute(c *gin.Context) {
 		Message:  "If you can read this, the \"" + route.Name + "\" route works.",
 		Severity: "info",
 	}
-	s.sendNotificationRoute(route, test)
+	if err := s.sendNotificationRoute(route, test); err != nil {
+		respondError(c, http.StatusBadGateway, "notification delivery failed")
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }

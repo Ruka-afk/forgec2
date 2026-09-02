@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"sync"
 )
 
@@ -25,13 +26,25 @@ var (
 // a new key without requiring a process restart.
 // The key MUST be a 32-byte hex string: the legacy SHA-256(jwt_secret)
 // derivation was removed so loot ciphertext is cryptographically independent
-// of the JWT secret. An invalid/empty key clears the key (encryption then
-// fails loudly until a valid key is configured).
+// of the JWT secret.
+//
+// A valid key is always adopted. An empty/invalid value is only allowed to
+// CLEAR the key when no key is currently active (e.g. first init with no
+// configured key) so encryption fails loudly. If a key is ALREADY active, an
+// empty/invalid reload value is ignored (with a warning) rather than silently
+// wiping it — otherwise a config reload that dropped crypto.loot_key would
+// leave every already-encrypted task result (FC2ENC:) permanently undecryptable
+// while new results would be stored as plaintext, producing inconsistent output.
 func InitLootEncryption(lootKeyHex string) {
 	lootKeyMu.Lock()
 	defer lootKeyMu.Unlock()
 	if b, err := hex.DecodeString(lootKeyHex); err == nil && len(b) == 32 {
 		lootKey = b
+		return
+	}
+	if lootKey != nil {
+		slog.Warn("InitLootEncryption called with empty/invalid key; keeping existing key so stored loot stays decryptable",
+			"provided", lootKeyHex)
 		return
 	}
 	lootKey = nil

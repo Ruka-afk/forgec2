@@ -31,7 +31,12 @@ export default function UpdateBanner({ currentVersion }: { currentVersion?: stri
     return subscribe((msg) => {
       if (msg.type === "update_available") {
         const latest = String(msg.latest || "");
-        const dismissedVer = localStorage.getItem(DISMISS_KEY);
+        let dismissedVer: string | null = null;
+        try {
+          dismissedVer = localStorage.getItem(DISMISS_KEY);
+        } catch {
+          toast.error(t("update_banner.toast.storage_failed"));
+        }
         if (dismissedVer === latest) return;
         setInfo({
           latest,
@@ -40,7 +45,7 @@ export default function UpdateBanner({ currentVersion }: { currentVersion?: stri
         setDismissed(false);
       }
     });
-  }, [subscribe]);
+  }, [subscribe, t]);
 
   if (!info || dismissed) return null;
 
@@ -56,7 +61,7 @@ export default function UpdateBanner({ currentVersion }: { currentVersion?: stri
   const downloadHref = info.downloadUrl ?? "https://github.com/forgec2/forgec2/releases";
 
   return (
-    <div className={cn(bannerSurface("info"), "flex items-center justify-between gap-3 px-4 sm:px-5 py-2.5 mx-2 sm:mx-3 mb-2 animate-fade-in")} aria-live="polite">
+    <div className={cn(bannerSurface("info"), "flex w-full items-center justify-between gap-3 px-4 py-2.5 animate-fade-in sm:px-5")} aria-live="polite">
       <div className="flex items-center gap-2 min-w-0">
         <ArrowUpCircle className="size-4 text-info shrink-0" />
         <span className="mono-cell text-(--fs-compact) text-foreground/90 truncate">

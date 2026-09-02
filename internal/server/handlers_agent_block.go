@@ -30,6 +30,9 @@ const maxBlockedReasonLen = 255
 //
 // POST /api/agents/:id/block  {"reason": "..."}  (body optional)
 func (s *Server) handleBlockAgent(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	var req struct {
 		Reason string `json:"reason"`

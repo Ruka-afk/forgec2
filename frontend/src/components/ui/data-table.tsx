@@ -9,6 +9,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { DataState } from "@/components/ui/data-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { computeVirtualRange, VIRTUAL_THRESHOLD } from "@/lib/virtual";
+import { useI18n } from "@/lib/i18n";
 
 type SortDirection = "asc" | "desc";
 
@@ -51,6 +52,8 @@ interface DataTableProps<T> {
 
   // row interaction
   onRowClick?: (row: T) => void;
+  /** Accessible label for an interactive row. Defaults to a localized row number. */
+  rowAriaLabel?: (row: T, index: number) => string;
 
   // toolbar rendered above the scroll container
   toolbar?: React.ReactNode;
@@ -93,6 +96,7 @@ export function DataTable<T>({
   emptyMessage,
   emptyIcon,
   onRowClick,
+  rowAriaLabel,
   toolbar,
   pagination,
   sort: sortProp,
@@ -105,6 +109,7 @@ export function DataTable<T>({
   tableClassName,
   maxHeight = "min(60vh, 36rem)",
 }: DataTableProps<T>) {
+  const { t } = useI18n();
   const [internalSort, setInternalSort] = useState<SortState | null>(defaultSort ?? null);
   const sort = sortProp !== undefined ? sortProp : internalSort;
 
@@ -130,9 +135,9 @@ export function DataTable<T>({
     });
   }, [data, sort, columns]);
 
-  const rows = pagination
-    ? sorted.slice((pagination.page - 1) * pagination.pageSize, pagination.page * pagination.pageSize)
-    : sorted;
+  // `pagination` is server-controlled: `data` already contains the requested
+  // page. Slicing again would turn every page after page 1 into an empty table.
+  const rows = sorted;
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -248,32 +253,43 @@ export function DataTable<T>({
                     <TableHead
                       key={col.id}
                       className={cn(
+                        "p-0",
                         col.headerClassName,
-                        col.width != null && "p-0",
-                        sortable && "cursor-pointer select-none",
                         col.align === "right" && "text-right",
                         col.align === "center" && "text-center",
                         col.hidden,
                       )}
                       style={col.width != null ? { width: col.width } : undefined}
                       aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : undefined}
-                      onClick={sortable ? () => handleSort(col.id) : undefined}
                     >
-                      <span
-                        className={cn(
-                          "inline-flex h-9 items-center gap-1 px-3",
-                          col.align === "right" && "flex-row-reverse justify-end w-full",
-                          col.align === "center" && "justify-center w-full",
-                        )}
-                      >
-                        {col.header}
-                        {sortable &&
-                          (active ? (
+                      {sortable ? (
+                        <button
+                          type="button"
+                          onClick={() => handleSort(col.id)}
+                          className={cn(
+                            "inline-flex h-10 w-full select-none items-center gap-1 px-3 outline-none hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                            col.align === "right" && "flex-row-reverse justify-start",
+                            col.align === "center" && "justify-center",
+                          )}
+                        >
+                          {col.header}
+                          {active ? (
                             dir === "asc" ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />
                           ) : (
                             <ChevronsUpDown className="size-3.5 opacity-40" />
-                          ))}
-                      </span>
+                          )}
+                        </button>
+                      ) : (
+                        <span
+                          className={cn(
+                            "inline-flex h-10 w-full items-center px-3",
+                            col.align === "right" && "justify-end",
+                            col.align === "center" && "justify-center",
+                          )}
+                        >
+                          {col.header}
+                        </span>
+                      )}
                     </TableHead>
                   );
                 })}
@@ -291,12 +307,13 @@ export function DataTable<T>({
                   <TableRow
                     key={rowKey(row, index)}
                     data-row-key={rowKey(row, index)}
-                    className={cn(onRowClick && "cursor-pointer")}
+                    className={cn(
+                      onRowClick && "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                    )}
                     style={shouldVirtualize ? { height: effRowHeight } : undefined}
                     onClick={onRowClick ? () => onRowClick(row) : undefined}
                     tabIndex={onRowClick ? 0 : undefined}
-                    role={onRowClick ? "button" : undefined}
-                    aria-label={onRowClick ? `Open ${String(columns[0]?.id ?? "row")}` : undefined}
+                    aria-label={onRowClick ? (rowAriaLabel?.(row, index) ?? t("common.open_row", { n: index + 1 })) : undefined}
                     onKeyDown={
                       onRowClick
                         ? (e) => {

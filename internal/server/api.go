@@ -66,7 +66,7 @@ func (s *Server) apiGetAgent(c *gin.Context) {
 	}
 	id := c.Param("id")
 	var agent db.Implant
-	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
+	if err := s.tenantScope(s.db, c).First(&agent, "id = ?", id).Error; err != nil {
 		respondError(c, http.StatusNotFound, "agent not found")
 		return
 	}
@@ -81,6 +81,15 @@ func (s *Server) apiDeleteAgent(c *gin.Context) {
 	}
 
 	id := c.Param("id")
+	var visible int64
+	if err := s.tenantScope(s.db.Model(&db.Implant{}), c).Where("id = ?", id).Count(&visible).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "delete failed")
+		return
+	}
+	if visible == 0 {
+		respondError(c, http.StatusNotFound, "agent not found")
+		return
+	}
 	// Cascade-delete all dependent rows (tasks, credentials, tokens, …) —
 	// a bare implant delete would leave orphans behind.
 	if !s.deleteAgentRecord(id) {
@@ -98,7 +107,7 @@ func (s *Server) apiListTasks(c *gin.Context) {
 		return
 	}
 	var tasks []db.Task
-	query := s.db.Order("created_at desc")
+	query := s.tenantScope(s.db, c).Order("created_at desc")
 
 	if agentID := c.Query("agent_id"); agentID != "" {
 		query = query.Where("agent_id = ?", agentID)
@@ -149,11 +158,11 @@ func (s *Server) apiCreateTask(c *gin.Context) {
 		return
 	}
 	var req struct {
-		AgentID        string `json:"agent_id" binding:"required"`
-		Type           string `json:"type" binding:"required"`
-		Command        string `json:"command"`
-		Shell          string `json:"shell"`
-		EncryptResult  bool   `json:"encrypt_result"`
+		AgentID       string `json:"agent_id" binding:"required"`
+		Type          string `json:"type" binding:"required"`
+		Command       string `json:"command"`
+		Shell         string `json:"shell"`
+		EncryptResult bool   `json:"encrypt_result"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, "invalid request")
@@ -247,9 +256,20 @@ func (s *Server) apiDashboardStats(c *gin.Context) {
 	}
 
 	g, ctx := errgroup.WithContext(c.Request.Context())
+	tid := s.currentTenantID(c)
 
 	var ac agentCounts
 	g.Go(func() error {
+		if tid != 0 {
+			return s.db.WithContext(ctx).Raw(`
+				SELECT
+					COUNT(*) as total,
+					COALESCE(SUM(CASE WHEN last_seen > ? THEN 1 ELSE 0 END), 0) as online,
+					COALESCE(SUM(CASE WHEN last_seen > ? AND last_seen <= ? THEN 1 ELSE 0 END), 0) as stale,
+					COALESCE(SUM(CASE WHEN last_seen <= ? THEN 1 ELSE 0 END), 0) as offline
+				FROM implants WHERE deleted_at IS NULL AND tenant_id = ?`, offlineCutoff, offlineCutoff, staleCutoff, offlineCutoff, tid,
+			).Scan(&ac).Error
+		}
 		return s.db.WithContext(ctx).Raw(`
 			SELECT
 				COUNT(*) as total,
@@ -262,6 +282,17 @@ func (s *Server) apiDashboardStats(c *gin.Context) {
 
 	var tc taskCounts
 	g.Go(func() error {
+		if tid != 0 {
+			return s.db.WithContext(ctx).Raw(`
+				SELECT
+					COUNT(*) as total,
+					COALESCE(SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END), 0) as today,
+					COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) as pending,
+					COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) as completed,
+					COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as failed
+				FROM tasks WHERE tenant_id = ?`, todayStart, tid,
+			).Scan(&tc).Error
+		}
 		return s.db.WithContext(ctx).Raw(`
 			SELECT
 				COUNT(*) as total,
@@ -273,11 +304,36 @@ func (s *Server) apiDashboardStats(c *gin.Context) {
 		).Scan(&tc).Error
 	})
 
+	// Only implants and tasks have a tenant_id column. Credentials and tokens
+	// inherit ownership from their agent, listeners are deployment-global, and
+	// audit rows inherit ownership from their operator. Applying tenantScope to
+	// those tables directly generates invalid SQL ("no such column: tenant_id")
+	// and makes the whole dashboard fail with HTTP 500 for tenant-bound users.
+	countAgentOwnedRows := func(model any, total *int64) error {
+		query := s.db.WithContext(ctx).Model(model)
+		if tid != 0 {
+			ownedAgentIDs := s.db.WithContext(ctx).Model(&db.Implant{}).
+				Select("id").Where("tenant_id = ?", tid)
+			query = query.Where("agent_id IN (?)", ownedAgentIDs)
+		}
+		return query.Count(total).Error
+	}
+
 	var totalCreds, totalTokens, totalListeners, totalAudits int64
-	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.CredentialEntry{}).Count(&totalCreds).Error })
-	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.TokenEntry{}).Count(&totalTokens).Error })
-	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.Listener{}).Count(&totalListeners).Error })
-	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.AuditLog{}).Count(&totalAudits).Error })
+	g.Go(func() error { return countAgentOwnedRows(&db.CredentialEntry{}, &totalCreds) })
+	g.Go(func() error { return countAgentOwnedRows(&db.TokenEntry{}, &totalTokens) })
+	g.Go(func() error {
+		return s.db.WithContext(ctx).Model(&db.Listener{}).Count(&totalListeners).Error
+	})
+	g.Go(func() error {
+		query := s.db.WithContext(ctx).Model(&db.AuditLog{})
+		if tid != 0 {
+			tenantUsers := s.db.WithContext(ctx).Model(&db.User{}).
+				Select("username").Where("tenant_id = ?", tid)
+			query = query.Where("user IN (?)", tenantUsers)
+		}
+		return query.Count(&totalAudits).Error
+	})
 	var onlineUsersList []UserSession
 	g.Go(func() error {
 		onlineUsersList = s.getOnlineUsers()
@@ -288,10 +344,38 @@ func (s *Server) apiDashboardStats(c *gin.Context) {
 		return
 	}
 
+	if tid != 0 && len(onlineUsersList) > 0 {
+		usernames := make([]string, 0, len(onlineUsersList))
+		for _, session := range onlineUsersList {
+			usernames = append(usernames, session.Username)
+		}
+		var tenantUsernames []string
+		if err := s.db.WithContext(c.Request.Context()).Model(&db.User{}).
+			Where("tenant_id = ? AND username IN ?", tid, usernames).
+			Pluck("username", &tenantUsernames).Error; err != nil {
+			handleQueryError(c, err, "API: failed to scope online users")
+			return
+		}
+		allowed := make(map[string]struct{}, len(tenantUsernames))
+		for _, username := range tenantUsernames {
+			allowed[username] = struct{}{}
+		}
+		filtered := onlineUsersList[:0]
+		for _, session := range onlineUsersList {
+			if _, ok := allowed[session.Username]; ok {
+				filtered = append(filtered, session)
+			}
+		}
+		onlineUsersList = filtered
+	}
 	onlineUsers := int64(len(onlineUsersList))
 
 	var recentTasks []db.Task
-	if err := s.db.Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"}).
+	recentTasksQuery := s.db.WithContext(c.Request.Context())
+	if tid != 0 {
+		recentTasksQuery = recentTasksQuery.Where("tenant_id = ?", tid)
+	}
+	if err := recentTasksQuery.Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"}).
 		Order("created_at desc").Limit(DashboardRecentTasks).Find(&recentTasks).Error; err != nil {
 		handleQueryError(c, err, "API: failed to query recent tasks")
 		return
@@ -305,7 +389,11 @@ func (s *Server) apiDashboardStats(c *gin.Context) {
 		}
 		if len(agentIDs) > 0 {
 			var agents []db.Implant
-			if err := s.db.Where("id IN ?", agentIDs).Find(&agents).Error; err != nil {
+			agentsQuery := s.db.WithContext(c.Request.Context()).Where("id IN ?", agentIDs)
+			if tid != 0 {
+				agentsQuery = agentsQuery.Where("tenant_id = ?", tid)
+			}
+			if err := agentsQuery.Find(&agents).Error; err != nil {
 				handleQueryError(c, err, "API: failed to query agents for recent tasks")
 				return
 			}

@@ -102,6 +102,7 @@ type Config struct {
 		DNSDoHURL           string `yaml:"dns_doh_url"`           // DNS-over-HTTPS endpoint
 		DNSDoTAddr          string `yaml:"dns_dot_addr"`          // DNS-over-TLS address:port
 		DNSIPv6             bool   `yaml:"dns_ipv6"`              // enable IPv6 AAAA tunneling
+		GoProxy             string `yaml:"goproxy"`               // optional GOPROXY for payload builds when env GOPROXY is unset
 	} `yaml:"implant"`
 
 	Auth struct {
@@ -160,6 +161,9 @@ type Config struct {
 		MaxToolRounds         int    `yaml:"max_tool_rounds"`          // 0 = unlimited (default)
 		MaxDuplicateToolCalls int    `yaml:"max_duplicate_tool_calls"` // 0 = unlimited; else cap identical tool+args repeats
 		AllowExecute          bool   `yaml:"allow_execute"`            // permit AI to run commands on agents (default false = safe)
+		MaxRunsPerUser        int    `yaml:"max_runs_per_user"`        // active background runs per operator (default 2)
+		MaxRunsPerTenant      int    `yaml:"max_runs_per_tenant"`      // active background runs per tenant (default 8)
+		RunRetentionDays      int    `yaml:"run_retention_days"`       // durable event retention (default 30)
 	} `yaml:"ai"`
 
 	Logging struct {
@@ -337,7 +341,13 @@ func DefaultConfig() *Config {
 	cfg.AI.MaxConversationTurns = 0  // 0 = unlimited
 	cfg.AI.MaxToolRounds = 0         // 0 = unlimited
 	cfg.AI.MaxDuplicateToolCalls = 0 // 0 = unlimited
-	cfg.AI.SystemPrompt = "You are the ForgeC2 red team operations assistant, running on the C2 server. You can list online agents, view target details, execute commands, view credentials, manage listeners, and more."
+	cfg.AI.MaxRunsPerUser = 2
+	cfg.AI.MaxRunsPerTenant = 8
+	cfg.AI.RunRetentionDays = 30
+	// Blank: handlers_ai.effectiveAISystemPrompt substitutes the built-in
+	// operations prompt so new installs get tool-use rules without copying
+	// a long string into every config.yaml.
+	cfg.AI.SystemPrompt = ""
 	cfg.TLSFingerprint.JARMEnabled = true
 	cfg.TLSFingerprint.JARMRotate = "24h"
 	cfg.TLSFingerprint.JA3Enabled = true
@@ -712,6 +722,12 @@ func (c *Config) Validate() error {
 	}
 	if c.AI.MaxDuplicateToolCalls < 0 {
 		errs = append(errs, errors.New("ai.max_duplicate_tool_calls must be >= 0 (0 = unlimited)"))
+	}
+	if c.AI.MaxRunsPerUser < 0 || c.AI.MaxRunsPerTenant < 0 {
+		errs = append(errs, errors.New("ai run concurrency limits must be >= 0"))
+	}
+	if c.AI.RunRetentionDays < 0 {
+		errs = append(errs, errors.New("ai.run_retention_days must be >= 0"))
 	}
 	if c.AI.Enabled && c.AI.Provider != "" {
 		validProviders := map[string]bool{"openai": true, "anthropic": true, "claude": true, "google": true, "deepseek": true, "qianwen": true, "zhipu": true, "longcat": true, "local": true, "custom": true}

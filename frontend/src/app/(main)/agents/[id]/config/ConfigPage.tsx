@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import type { AgentDetail } from "@/types/agent";
 import { useI18n } from "@/lib/i18n";
 
 import { Spinner, PageSpinner } from "@/components/ui/spinner";
@@ -55,7 +54,6 @@ const defaultConfig: EffectiveConfig = {
 export default function AgentConfigPage() {
   const { id } = useParams<{ id: string }>();
   const { t } = useI18n();
-  const [, setAgent] = useState<Partial<AgentDetail> | null>(null);
   const [effective, setEffective] = useState<EffectiveConfig>(defaultConfig);
   const [hasPending, setHasPending] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -84,14 +82,10 @@ export default function AgentConfigPage() {
   const loadConfig = useCallback(async () => {
     if (!id) return;
     try {
-      const [data, agentData] = await Promise.all([
-        api.get<ConfigResponse>(paths.agents.config(id)),
-        api.get<{ agent?: Partial<AgentDetail> }>(paths.agents.one(id)),
-      ]);
+      const data = await api.get<ConfigResponse>(paths.agents.config(id));
       setEffective(data.effective);
       setHasPending(data.has_pending);
       resetForm(data.effective);
-      setAgent((agentData.agent || agentData) as AgentDetail | null);
     } catch {
       toast.error(t("agents.config_load_failed"));
     } finally {

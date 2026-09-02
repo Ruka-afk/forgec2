@@ -215,7 +215,7 @@ func InitDBWithDriver(driver, dsn, fallbackPath string, logLevel slog.Level, dbM
 
 	// Auto-migrate all models (creates any tables/columns still missing on
 	// fresh installs and after historical migrations)
-	if err := db.AutoMigrate(&Implant{}, &Task{}, &AuditLog{}, &Listener{}, &TokenEntry{}, &SocksSession{}, &CredentialEntry{}, &User{}, &BuildLog{}, &ScanResult{}, &NetworkHost{}, &CommandTemplate{}, &BOFFile{}, &BOFLibrary{}, &ServerConfig{}, &WebhookConfig{}, &Plugin{}, &PluginReview{}, &PluginDependency{}, &PluginUpdateStatus{}, &RolePermission{}, &AutomationRule{}, &AlertRule{}, &Alert{}, &SystemMetric{}, &GeneratedReport{}, &Campaign{}, &CampaignAgent{}, &MeshPeer{}, &BloodHoundResult{}, &BloodHoundFile{}, &OpsecHistory{}, &OpsecRule{}, &CircuitBreakerConfig{}, &CircuitBreakerEvent{}, &CustomRole{}, &PhishingTemplate{}, &PhishingCampaign{}, &PhishingEvent{}, &AgentTag{}, &AgentTagAssignment{}, &AutoTagRule{}, &Notification{}, &AgentGroup{}, &AgentGroupAssignment{}, &Workflow{}, &WorkflowStep{}, &ExecutionLog{}, &ChatMessage{}, &StagerToken{}, &Redirector{}, &AgentLock{}, &CloudCred{}, &AIChatSession{}, &AIChatMessage{}, &ExtC2Channel{}, &AgentStatusEvent{}, &BackupCode{}, &SIEMRule{}, &UserSession{}, &PasswordHistory{}, &ApiKey{}, &Script{}, 	&RegSecret{}, &KillSwitch{}, &Tenant{}, &CredentialUsage{}, &CommandMacro{}, &MacroRun{}, &NotificationRoute{}, &SavedView{}, &OneShotTask{}); err != nil {
+	if err := db.AutoMigrate(&Implant{}, &Task{}, &AuditLog{}, &Listener{}, &TokenEntry{}, &SocksSession{}, &CredentialEntry{}, &User{}, &BuildLog{}, &ScanResult{}, &NetworkHost{}, &CommandTemplate{}, &BOFFile{}, &BOFLibrary{}, &ServerConfig{}, &WebhookConfig{}, &Plugin{}, &PluginReview{}, &PluginDependency{}, &PluginUpdateStatus{}, &RolePermission{}, &AutomationRule{}, &AlertRule{}, &Alert{}, &SystemMetric{}, &GeneratedReport{}, &Campaign{}, &CampaignAgent{}, &MeshPeer{}, &BloodHoundResult{}, &BloodHoundFile{}, &OpsecHistory{}, &OpsecRule{}, &CircuitBreakerConfig{}, &CircuitBreakerEvent{}, &CustomRole{}, &PhishingTemplate{}, &PhishingCampaign{}, &PhishingEvent{}, &AgentTag{}, &AgentTagAssignment{}, &AutoTagRule{}, &Notification{}, &AgentGroup{}, &AgentGroupAssignment{}, &Workflow{}, &WorkflowStep{}, &ExecutionLog{}, &ChatMessage{}, &StagerToken{}, &Redirector{}, &AgentLock{}, &CloudCred{}, &AIChatSession{}, &AIChatMessage{}, &AIProviderProfile{}, &AIChatRun{}, &AIChatRunEvent{}, &AIExecutionIntent{}, &AIAttachment{}, &AIKnowledgeCollection{}, &AIKnowledgeSource{}, &AIKnowledgeChunk{}, &ExtC2Channel{}, &AgentStatusEvent{}, &BackupCode{}, &SIEMRule{}, &UserSession{}, &PasswordHistory{}, &ApiKey{}, &Script{}, &RegSecret{}, &KillSwitch{}, &Tenant{}, &CredentialUsage{}, &CommandMacro{}, &MacroRun{}, &NotificationRoute{}, &SavedView{}, &OneShotTask{}); err != nil {
 		return nil, err
 	}
 
@@ -325,6 +325,14 @@ func ensureDefaultTenant(db *gorm.DB) error {
 	backfill(&User{}, "users")
 	backfill(&Implant{}, "implants")
 	backfill(&Task{}, "tasks")
+	// Credential ownership follows its source implant when possible. Manual and
+	// orphaned legacy rows fall back to the default tenant below.
+	if err := db.Exec(`UPDATE credential_entries
+		SET tenant_id = COALESCE((SELECT tenant_id FROM implants WHERE implants.id = credential_entries.agent_id), 0)
+		WHERE tenant_id = 0 OR tenant_id IS NULL`).Error; err != nil {
+		slog.Warn("Credential tenant backfill partial", "err", err)
+	}
+	backfill(&CredentialEntry{}, "credential_entries")
 	slog.Info("Default tenant ensured", "tenant_id", t.ID)
 	return nil
 }

@@ -236,10 +236,16 @@ func (s *Server) handleGetTaskStatus(c *gin.Context) {
 
 	var task db.Task
 	query := s.tenantScope(s.db.Preload("Agent"), c)
+	// The agent-scoped route must not expose a task belonging to a different
+	// agent. The global /tasks/:taskId route intentionally has no id parameter.
+	if agentID := strings.TrimSpace(c.Param("id")); agentID != "" {
+		query = query.Where("agent_id = ?", agentID)
+	}
 	if err := query.First(&task, taskID).Error; err != nil {
 		respondError(c, http.StatusNotFound, "task not found")
 		return
 	}
+	task = taskForOperator(task)
 
 	respondSuccess(c, gin.H{
 		"id":         task.ID,

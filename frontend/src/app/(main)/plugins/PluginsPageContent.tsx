@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadBlob } from "@/lib/download";
@@ -55,7 +55,7 @@ export default function PluginsPage() {
   const [page, setPage] = useState(1);
   const { confirm, modal } = useConfirm();
 
-  const filtered = plugins.filter((p) => {
+  const filtered = useMemo(() => plugins.filter((p) => {
     const name = (p.name || "").toLowerCase();
     const desc = (p.description || "").toLowerCase();
     const author = (p.author || "").toLowerCase();
@@ -63,7 +63,7 @@ export default function PluginsPage() {
     const matchSearch = name.includes(term) || desc.includes(term) || author.includes(term);
     const matchCategory = !category || (p.category || "") === category;
     return matchSearch && matchCategory;
-  });
+  }), [plugins, search, category]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);

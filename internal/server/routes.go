@@ -42,14 +42,10 @@ func (s *Server) registerPublicRoutes() {
 	s.router.GET("/forgec2-chrome-c2.zip", chromeBeaconLimiter.Limit(), s.handleChromeExtensionZip)
 }
 
-// registerAgentRoutes registers dashboard, search, and agent CRUD routes.
+// registerAgentRoutes registers dashboard and agent CRUD routes.
 func (s *Server) registerAgentRoutes(auth *gin.RouterGroup) {
 	auth.GET("/", s.handleDashboard)
 	auth.GET("/dashboard", s.handleDashboard)
-	auth.GET("/search", s.handleSearchPage)
-	// Search indexes agents, tasks and credentials (decrypted in results):
-	// require both read permissions.
-	auth.GET("/api/search", middleware.RequireAllPermissions(db.PermAgentsRead, db.PermCredsRead), s.handleAPISearch)
 
 	agentsRead := auth.Group("/")
 	agentsRead.Use(middleware.RequirePermission(db.PermAgentsRead))
@@ -101,6 +97,7 @@ func (s *Server) registerAgentRoutes(auth *gin.RouterGroup) {
 		agentsWrite.POST("/agents/:id/chain/clear", s.handleAgentChainClear)
 		agentsWrite.POST("/agents/:id/kill_date", s.handleSetKillDate)
 		agentsWrite.DELETE("/agents/:id/kill_date", s.handleClearKillDate)
+		agentsWrite.POST("/agents/:id/diagnose", s.handleAgentDiagnose)
 		agentsWrite.POST("/agents/:id/block", s.handleBlockAgent)
 		agentsWrite.DELETE("/agents/:id/block", s.handleUnblockAgent)
 	}
@@ -118,6 +115,7 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 	agentCmd.Use(middleware.RequirePermission(db.PermAgentsWrite))
 	{
 		agentCmd.POST("/command", s.handleSendCommand)
+		agentCmd.POST("/shell", s.handleSendCommand)
 		agentCmd.GET("/screenshot", s.handleGetAgentScreenshot)
 		agentCmd.POST("/screenshot", s.handleRequestScreenshot)
 		agentCmd.POST("/screenshot_window", s.handleRequestScreenshotWindow)
@@ -277,11 +275,11 @@ func (s *Server) registerListenerRoutes(auth *gin.RouterGroup) {
 	listenersRead := auth.Group("/")
 	listenersRead.Use(middleware.RequirePermission(db.PermListenersRead))
 	{
-	listenersRead.GET("/listeners", s.handleListenersPage)
-	listenersRead.GET("/listeners/:id", s.handleListenerDetail)
-	listenersRead.GET("/api/listeners", s.handleListListeners)
-	listenersRead.GET("/api/listeners/health", s.handleListenerHealth)
-	listenersRead.GET("/api/listeners/:id", s.handleAPIGetListener)
+		listenersRead.GET("/listeners", s.handleListenersPage)
+		listenersRead.GET("/listeners/:id", s.handleListenerDetail)
+		listenersRead.GET("/api/listeners", s.handleListListeners)
+		listenersRead.GET("/api/listeners/health", s.handleListenerHealth)
+		listenersRead.GET("/api/listeners/:id", s.handleAPIGetListener)
 	}
 	listenersWrite := auth.Group("/")
 	listenersWrite.Use(middleware.RequirePermission(db.PermListenersWrite))
@@ -849,9 +847,6 @@ func (s *Server) registerUserRoutes(auth *gin.RouterGroup) {
 		userRead.GET("/api/docs", s.handleAPIDocsRedirect)
 		userRead.GET("/api/docs/", s.handleAPIDocs)
 		userRead.GET("/api/docs/openapi.yaml", s.handleAPIDocsYAML)
-		userRead.GET("/ai", s.handleAIPage)
-		userRead.GET("/ai/sessions", s.handleAISessionsList)
-		userRead.GET("/ai/sessions/:id/messages", s.handleAISessionsGet)
 		userRead.GET("/tokens", s.handleGlobalTokensPage)
 		userRead.GET("/socks/sessions", s.handleGetSocksSessions)
 		userRead.GET("/scripting", s.handleScriptingPage)
@@ -863,15 +858,53 @@ func (s *Server) registerUserRoutes(auth *gin.RouterGroup) {
 	{
 		userWrite.POST("/api/saved-views", s.handleCreateSavedView)
 		userWrite.DELETE("/api/saved-views/:id", s.handleDeleteSavedView)
-		userWrite.POST("/ai/chat", s.handleAIChat)
-		userWrite.POST("/ai/config", s.handleAIConfig)
-		userWrite.POST("/ai/sessions", s.handleAISessionsCreate)
-		userWrite.POST("/ai/sessions/:id/messages", s.handleAISessionsMessages)
-		userWrite.PUT("/ai/sessions/:id", s.handleAISessionsUpdate)
-		userWrite.DELETE("/ai/sessions/:id", s.handleAISessionsDelete)
 		userWrite.POST("/api/scripts", s.handleAPISaveScript)
 		userWrite.DELETE("/api/scripts/:id", s.handleAPIDeleteScript)
 		userWrite.POST("/api/scripts/execute", s.handleAPIExecuteScript)
+	}
+
+	aiUse := auth.Group("/")
+	aiUse.Use(middleware.RequirePermission(db.PermAIUse))
+	{
+		aiUse.GET("/ai", s.handleAIPage)
+		aiUse.POST("/ai/chat", s.handleAIChat) // compatibility endpoint
+		aiUse.GET("/ai/sessions", s.handleAISessionsList)
+		aiUse.POST("/ai/sessions", s.handleAISessionsCreate)
+		aiUse.GET("/ai/sessions/:id/messages", s.handleAISessionsGet)
+		aiUse.POST("/ai/sessions/:id/messages", s.handleAISessionsMessages)
+		aiUse.POST("/ai/sessions/:id/branch", s.handleAISessionBranch)
+		aiUse.PUT("/ai/sessions/:id", s.handleAISessionsUpdate)
+		aiUse.DELETE("/ai/sessions/:id", s.handleAISessionsDelete)
+
+		aiUse.POST("/api/ai/runs", s.handleAIRunsCreate)
+		aiUse.GET("/api/ai/runs", s.handleAIRunsList)
+		aiUse.GET("/api/ai/runs/:id", s.handleAIRunsGet)
+		aiUse.GET("/api/ai/runs/:id/events", s.handleAIRunEvents)
+		aiUse.POST("/api/ai/runs/:id/cancel", s.handleAIRunCancel)
+		aiUse.GET("/api/ai/intents", s.handleAIIntentsList)
+		aiUse.POST("/api/ai/intents/:id/approve", s.handleAIIntentApprove)
+		aiUse.POST("/api/ai/intents/:id/reject", s.handleAIIntentReject)
+		aiUse.GET("/api/ai/profiles", s.handleAIProfilesList)
+		aiUse.GET("/api/ai/sessions/:id/attachments", s.handleAIAttachmentsList)
+		aiUse.POST("/api/ai/sessions/:id/attachments", s.handleAIAttachmentsUpload)
+		aiUse.DELETE("/api/ai/attachments/:attachmentID", s.handleAIAttachmentDelete)
+		aiUse.GET("/api/ai/knowledge/collections", s.handleAIKnowledgeCollectionsList)
+		aiUse.POST("/api/ai/knowledge/collections", s.handleAIKnowledgeCollectionCreate)
+		aiUse.DELETE("/api/ai/knowledge/collections/:collectionID", s.handleAIKnowledgeCollectionDelete)
+		aiUse.GET("/api/ai/knowledge/collections/:collectionID/sources", s.handleAIKnowledgeSourcesList)
+		aiUse.DELETE("/api/ai/knowledge/collections/:collectionID/sources/:sourceID", s.handleAIKnowledgeSourceDelete)
+		aiUse.POST("/api/ai/knowledge/collections/:collectionID/attachments/:attachmentID", s.handleAIKnowledgePromoteAttachment)
+		aiUse.POST("/api/ai/knowledge/search", s.handleAIKnowledgeSearch)
+	}
+
+	aiConfigure := auth.Group("/")
+	aiConfigure.Use(middleware.RequirePermission(db.PermAIConfigure))
+	{
+		aiConfigure.POST("/ai/config", s.handleAIConfig)
+		aiConfigure.POST("/api/ai/profiles", s.handleAIProfileCreate)
+		aiConfigure.PUT("/api/ai/profiles/:id", s.handleAIProfileUpdate)
+		aiConfigure.DELETE("/api/ai/profiles/:id", s.handleAIProfileDelete)
+		aiConfigure.POST("/api/ai/profiles/:id/test", s.handleAIProfileTest)
 	}
 
 	usersRead := auth.Group("/")

@@ -6,6 +6,7 @@
     "dev": "vite",
     "build": "vite build",
     "start": "vite preview",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -20,7 +21,9 @@
     "check:bundle": "node scripts/check-bundle.mjs",
     "gen:openapi": "openapi-typescript ../api/openapi.yaml -o src/lib/api-schema.d.ts",
     "gen:permissions": "node scripts/gen-permissions.mjs",
-    "check": "npm run check:css && npm run check:tokens && npm run check:i18n && npm run check:paths && npm run check:openapi-types && npm run check:permissions && npm run check:webdist && npm run check:bundle"
+    "check": "npx concurrently -n css,tokens,i18n,paths,openapi,perms,webdist,bundle \"npm:check:css\" \"npm:check:tokens\" \"npm:check:i18n\" \"npm:check:paths\" \"npm:check:openapi-types\" \"npm:check:permissions\" \"npm:check:webdist\" \"npm:check:bundle\"",
+    "check:pre": "npx concurrently -n css,tokens,i18n,paths,openapi,perms \"npm:check:css\" \"npm:check:tokens\" \"npm:check:i18n\" \"npm:check:paths\" \"npm:check:openapi-types\" \"npm:check:permissions\"",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run check"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -51,6 +54,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5.2.0",
+    "concurrently": "^9.2.1",
     "eslint": "^9",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.11.0",

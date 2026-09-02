@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
-import { API_BASE } from "@/lib/constants";
 import { paths } from "@/lib/api-paths";
+import { downloadBlob } from "@/lib/download";
 import { formatTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { Card } from "@/components/ui/card";
@@ -35,6 +36,7 @@ export default function IOCTab() {
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState("30");
   const [typeFilter, setTypeFilter] = useState("");
+  const [downloading, setDownloading] = useState<"stix2" | "csv" | null>(null);
   const loadGenRef = useRef(0);
 
   const load = useCallback(() => {
@@ -60,8 +62,18 @@ export default function IOCTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  const download = (format: "stix2" | "csv") => {
-    window.open(`${API_BASE}${paths.report.iocExport(format, Number(days))}`, "_blank");
+  const download = async (format: "stix2" | "csv") => {
+    if (downloading) return;
+    setDownloading(format);
+    try {
+      const fallback = `forgec2-iocs-${days}d.${format === "stix2" ? "json" : "csv"}`;
+      const { blob, filename } = await api.downloadGet(paths.report.iocExport(format, Number(days)), fallback);
+      downloadBlob(blob, filename);
+    } catch {
+      toast.error(t("report.toast.download_failed"));
+    } finally {
+      setDownloading(null);
+    }
   };
 
   return (
@@ -90,11 +102,11 @@ export default function IOCTab() {
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" onClick={() => download("stix2")} className="gap-1.5">
-            <FileJson className="size-4" /> STIX 2.1
+          <Button variant="outline" size="sm" onClick={() => void download("stix2")} disabled={downloading !== null} className="gap-1.5">
+            {downloading === "stix2" ? <Spinner size="xs" /> : <FileJson className="size-4" />} STIX 2.1
           </Button>
-          <Button variant="outline" size="sm" onClick={() => download("csv")} className="gap-1.5">
-            <FileSpreadsheet className="size-4" /> CSV
+          <Button variant="outline" size="sm" onClick={() => void download("csv")} disabled={downloading !== null} className="gap-1.5">
+            {downloading === "csv" ? <Spinner size="xs" /> : <FileSpreadsheet className="size-4" />} CSV
           </Button>
         </div>
       </div>

@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { api } from "@/lib/api";
+import { api, formatThrownError } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { fetchAgentListCached } from "@/lib/agents";
 import { useI18n } from "@/lib/i18n";
@@ -56,7 +56,7 @@ export default function ToolkitPage() {
         toast.error((data.error as string) || t("toolkit.toast.action_failed"));
       }
     } catch (e) {
-      toast.error(String(e));
+      toast.error(formatThrownError(e));
     }
   };
 

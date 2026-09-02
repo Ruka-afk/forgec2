@@ -17,6 +17,7 @@ describe("api paths", () => {
     expect(paths.agents.remoteInput("x")).toBe("/api/agents/x/input");
     expect(paths.agents.batch).toBe("/agents/batch");
     expect(paths.agents.bulkResults()).toMatch(/^\/agents\/bulk\/results/);
+    expect(paths.agents.command("x")).toBe("/agents/x/command");
     expect(paths.agents.cmd("x", "shell")).toBe("/agents/x/shell");
     expect(paths.agents.cmd("x", "/files/ls")).toBe("/agents/x/files/ls");
     expect(paths.agents.filesPush("x")).toBe("/agents/x/files/push");

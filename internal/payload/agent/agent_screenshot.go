@@ -53,7 +53,23 @@ func sendScreenStreamError(msg string) {
 	}
 }
 
+var lastScreenFrameHash string
+
+func screenFrameHash(data []byte) string {
+	if len(data) < 1024 {
+		return fmt.Sprintf("%d:%x", len(data), data)
+	}
+	// Fast hash: length + first 256 + last 256 bytes
+	return fmt.Sprintf("%d:%x:%x", len(data), data[:256], data[len(data)-256:])
+}
+
 func sendScreenFrame(data []byte) {
+	// Dirty-rect lite: skip identical frames (static desktop) — saves 80% bandwidth
+	h := screenFrameHash(data)
+	if h == lastScreenFrameHash {
+		return
+	}
+	lastScreenFrameHash = h
 	b64 := base64.StdEncoding.EncodeToString(data)
 	req := BeaconRequest{
 		UUID: agentUUID,

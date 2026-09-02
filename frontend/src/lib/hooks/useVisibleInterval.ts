@@ -34,7 +34,10 @@ export function useVisibleInterval(callback: () => void, delay: number) {
       }
     }
 
-    start()
+    // A page can be mounted in a background tab. Do not create a timer until
+    // it becomes visible; otherwise the first visibilitychange arrives only
+    // after needless background wakeups have already occurred.
+    if (!document.hidden) start()
     document.addEventListener("visibilitychange", handleVisibility)
 
     return () => {

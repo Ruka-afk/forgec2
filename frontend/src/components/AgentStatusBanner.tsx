@@ -30,8 +30,8 @@ export default function AgentStatusBanner() {
   const hasStale = stale > 0;
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8">
-      <div className={bannerSurface("warning", "mt-3")} aria-live="polite">
+    <div className="w-full">
+      <div className={bannerSurface("warning")} aria-live="polite">
         <Collapsible open={expanded} onOpenChange={setExpanded}>
         <div className="flex items-center gap-3 px-4 py-2.5">
           <span className="relative flex size-2.5 shrink-0">

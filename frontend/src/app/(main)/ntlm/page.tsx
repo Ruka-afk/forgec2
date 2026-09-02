@@ -7,7 +7,7 @@ import { PageContainer } from "@/components/ui/page-container";
 import { IconBadge } from "@/components/ui/icon-badge";
 import { ErrorState } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/button";
-import { api } from "@/lib/api";
+import { api, formatThrownError } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { fetchAgentListCached } from "@/lib/agents";
 import { useI18n } from "@/lib/i18n";
@@ -76,7 +76,7 @@ export default function NtlmPage() {
       const data = await api.post(paths.agents.coerce(selectedAgent, coerceType), Object.fromEntries(body));
       if (data.success) toast.success(t("ntlm.toast.coerce_dispatched", { task_id: String(data.task_id) }));
       else toast.error((data.error as string) || t("ntlm.toast.coerce_failed"));
-    } catch (e) { toast.error(String(e)); }
+    } catch (e) { toast.error(formatThrownError(e)); }
     setLoading(false);
   };
 
@@ -91,7 +91,7 @@ export default function NtlmPage() {
       const data = await api.post(paths.agents.relayStart(selectedAgent), Object.fromEntries(body));
       if (data.success) toast.success(t("ntlm.toast.relay_started", { task_id: String(data.task_id) }));
       else toast.error((data.error as string) || t("ntlm.toast.start_failed"));
-    } catch (e) { toast.error(String(e)); }
+    } catch (e) { toast.error(formatThrownError(e)); }
     setLoading(false);
   };
 
@@ -105,7 +105,7 @@ export default function NtlmPage() {
       const data = await api.post(paths.agents.relayStop(selectedAgent), {});
       if (data.success) toast.success(t("ntlm.toast.relay_stopped"));
       else toast.error((data.error as string) || t("ntlm.toast.stop_failed"));
-    } catch (e) { toast.error(String(e)); }
+    } catch (e) { toast.error(formatThrownError(e)); }
     setLoading(false);
   };
 

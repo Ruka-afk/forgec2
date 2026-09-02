@@ -90,11 +90,11 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
   const { data, loading, refresh: fetchData } = useApiResource<{ tasks: ScheduledRule[]; agents: Agent[] }>({
     fetcher: async () => {
       const [rules, agentList] = await Promise.all([
-        api.get<{ data?: ScheduledRule[] }>(paths.automation.rules),
+        api.get<ScheduledRule[]>(paths.automation.rules),
         fetchAgentListCached(),
       ]);
       return {
-        tasks: (rules.data || []).filter((r) => r.event_type === "schedule"),
+        tasks: (Array.isArray(rules) ? rules : []).filter((r) => r.event_type === "schedule"),
         agents: agentList,
       };
     },

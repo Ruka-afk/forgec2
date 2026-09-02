@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { api } from "@/lib/api";
+import { api, formatThrownError } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { useConfirm } from "@/lib/hooks/useConfirm";
@@ -68,12 +68,14 @@ export default function AgentPersistencePage() {
   const listPersistence = useCallback(async () => {
     if (!id) return;
     setListLoading(true);
+    let cancelled = false;
     try {
       const data = await api.post(paths.agents.persistence(id), { action: "list" });
       if (data.success) {
         toast.success(t("agents.persistence_list_success"));
         for (let attempt = 0; attempt < 10; attempt++) {
           await new Promise((resolve) => setTimeout(resolve, 1500));
+          if (cancelled) break;
           const tasks = await api.get<{ tasks?: Array<{ type: string; result: string }> }>(
             paths.agents.tasks(id),
           );
@@ -89,10 +91,11 @@ export default function AgentPersistencePage() {
         toast.error((data.error as string) || t("agents.persistence_load_failed"));
       }
     } catch (e) {
-      toast.error(String(e));
+      toast.error(formatThrownError(e));
     } finally {
       setListLoading(false);
     }
+    return () => { cancelled = true; };
   }, [id, t]);
 
   useEffect(() => { loadAgent(); }, [loadAgent]);
@@ -117,7 +120,7 @@ export default function AgentPersistencePage() {
         toast.error((data.error as string) || t("agents.persistence_install_failed"));
       }
     } catch (e) {
-      toast.error(String(e));
+      toast.error(formatThrownError(e));
     } finally {
       setActionLoading(null);
     }
@@ -137,7 +140,7 @@ export default function AgentPersistencePage() {
         toast.error((data.error as string) || t("agents.persistence_remove_failed"));
       }
     } catch (e) {
-      toast.error(String(e));
+      toast.error(formatThrownError(e));
     } finally {
       setActionLoading(null);
     }

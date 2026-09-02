@@ -47,10 +47,10 @@ function applyFocusFromStore() {
   document.documentElement.setAttribute("data-focus", useAppStore.getState().focusMode ? "on" : "off");
 }
 
-// Derived selector: width the sidebar occupies when rendered (0 on mobile
-// when the drawer is closed). Referenced by AppLayout/TopBar via useAppStore.
+// Derived selector: width the sidebar occupies in document layout. The mobile
+// Sheet is an overlay, so it never offsets TopBar/content even while open.
 export function selectSidebarWidth(state: AppStore): number {
-  if (state.isMobile && !state.mobileMenuOpen) return 0;
+  if (state.isMobile) return 0;
   return state.sidebarCollapsed ? 64 : 224;
 }
 

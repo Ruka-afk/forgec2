@@ -8,6 +8,10 @@ import ErrorBoundary from "./ErrorBoundary";
 import SessionTimeoutWarning from "./SessionTimeoutWarning";
 import RateLimitBanner from "./RateLimitBanner";
 import NetworkStatusBanner from "./NetworkStatusBanner";
+import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
+import { useAppStore } from "@/lib/store";
+import type { PermissionKey } from "@/lib/permission-keys";
 
 const CHUNK_ERROR_RE = /dynamically imported module|Loading chunk|Importing a module script|Failed to fetch dynamically/i;
 const RELOAD_FLAG = "chunkErrorReloadAt";
@@ -41,8 +45,51 @@ function useChunkErrorReload() {
   }, []);
 }
 
+type CurrentUser = {
+  username?: string;
+  role?: string;
+  permissions?: string[];
+};
+
+function readCurrentUser(payload: unknown): CurrentUser {
+  if (!payload || typeof payload !== "object") return {};
+  const record = payload as Record<string, unknown>;
+  const candidate = record.data && typeof record.data === "object"
+    ? record.data as Record<string, unknown>
+    : record;
+  return {
+    username: typeof candidate.username === "string" ? candidate.username : undefined,
+    role: typeof candidate.role === "string" ? candidate.role : undefined,
+    permissions: Array.isArray(candidate.permissions)
+      ? candidate.permissions.filter((permission): permission is string => typeof permission === "string")
+      : undefined,
+  };
+}
+
+/** Load authorization independently of the sidebar so focus/mobile layouts
+ * receive the same permission state. `unwrap:false` also tolerates legacy and
+ * current `/api/me` response shapes during rolling upgrades. */
+function useCurrentUserBootstrap() {
+  const setCurrentUsername = useAppStore((state) => state.setCurrentUsername);
+  const setCurrentUserRole = useAppStore((state) => state.setCurrentUserRole);
+  const setCurrentPermissions = useAppStore((state) => state.setCurrentPermissions);
+
+  useEffect(() => {
+    let active = true;
+    void api.get<unknown>(paths.auth.me, { unwrap: false }).then((payload) => {
+      if (!active) return;
+      const user = readCurrentUser(payload);
+      if (user.username) setCurrentUsername(user.username);
+      if (user.role) setCurrentUserRole(user.role);
+      if (user.permissions) setCurrentPermissions(user.permissions as PermissionKey[]);
+    }).catch(() => { /* the session and network banners surface auth failures */ });
+    return () => { active = false; };
+  }, [setCurrentPermissions, setCurrentUserRole, setCurrentUsername]);
+}
+
 export default function ClientProvider({ children }: { children: React.ReactNode }) {
   useChunkErrorReload();
+  useCurrentUserBootstrap();
   return (
     <ErrorBoundary>
       <ThemeProvider>

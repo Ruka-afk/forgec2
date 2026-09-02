@@ -7,13 +7,13 @@ import { useI18n } from "@/lib/i18n";
 
 interface BatchSleepModalProps {
   agentCount: number;
-  interval: string; setInterval: (v: string) => void;
+  interval: string; onIntervalChange: (v: string) => void;
   jitter: string; setJitter: (v: string) => void;
   onSubmit: () => void;
   onClose: () => void;
 }
 
-export function BatchSleepModal({ agentCount, interval, setInterval, jitter, setJitter, onSubmit, onClose }: BatchSleepModalProps) {
+export function BatchSleepModal({ agentCount, interval, onIntervalChange, jitter, setJitter, onSubmit, onClose }: BatchSleepModalProps) {
   const { t } = useI18n();
   return (
     <Dialog open onOpenChange={onClose}>
@@ -27,7 +27,7 @@ export function BatchSleepModal({ agentCount, interval, setInterval, jitter, set
         <div className="grid grid-cols-2 gap-3">
           <div>
             <span className="block text-xs font-medium text-muted-foreground mb-1">{t("agents.interval_s")}</span>
-            <Input type="number" value={interval} onChange={(e) => setInterval(e.target.value)} min={5} max={3600}
+            <Input type="number" value={interval} onChange={(e) => onIntervalChange(e.target.value)} min={5} max={3600}
               className="h-10" />
           </div>
           <div>

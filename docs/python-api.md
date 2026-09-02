@@ -55,9 +55,6 @@ session.post("http://localhost:8000/login", data={
 - `POST /generate/stager` — Generate stager
 - `GET /api/generate/profiles` — List malleable profiles
 
-### Search
-- `GET /api/search?q=query` — Global search
-
 ### Dashboard
 - `GET /` — Dashboard page
 - `GET /api/dashboard/activity-heatmap` — Activity heatmap

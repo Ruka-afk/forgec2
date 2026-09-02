@@ -17,6 +17,7 @@ import { useI18n } from "@/lib/i18n";
 import { getPageTitleKey } from "@/lib/navigation";
 import { isFlushPath, showBreadcrumbBar } from "@/lib/layout";
 import { cn } from "@/lib/utils";
+import { useWS } from "@/lib/wsContext";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -25,6 +26,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const setIsMobile = useAppStore((s) => s.setIsMobile);
   const setMobileMenuOpen = useAppStore((s) => s.setMobileMenuOpen);
   const focusMode = useAppStore((s) => s.focusMode);
+  const { reconnectFailed } = useWS();
 
   const sidebarWidth = useAppStore(selectSidebarWidth);
   const flush = isFlushPath(pathname);
@@ -85,7 +87,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [isMobile, setMobileMenuOpen]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen overflow-hidden bg-background supports-[height:100dvh]:h-[100dvh]">
       {/* Skip to content link (WCAG 2.4.1) */}
       <a
         href="#main-content"
@@ -105,7 +107,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           id="main-content"
           tabIndex={-1}
           className={cn(
-            "relative flex min-h-0 flex-1 flex-col bg-background pt-(--shell-topbar-height) focus:outline-none",
+            "relative flex min-h-0 flex-1 flex-col bg-background focus:outline-none",
+            reconnectFailed
+              ? "pt-[calc(var(--shell-topbar-height)+2.5rem)]"
+              : "pt-(--shell-topbar-height)",
             flush ? "overflow-hidden" : "overflow-y-auto scroll-smooth",
           )}
         >

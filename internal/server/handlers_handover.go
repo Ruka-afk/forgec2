@@ -25,6 +25,11 @@ func (s *Server) handleHandoverExport(c *gin.Context) {
 		days = 30
 	}
 	since := time.Now().AddDate(0, 0, -days)
+	iocs, _, err := s.extractIOCs(days, false)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to extract indicators")
+		return
+	}
 
 	stamp := time.Now().UTC().Format("20060102T150405Z")
 	filename := fmt.Sprintf("forgec2-handover-%s.zip", stamp)
@@ -162,7 +167,6 @@ func (s *Server) handleHandoverExport(c *gin.Context) {
 	addJSON("network_hosts.json", hosts)
 
 	// ── IOCs + STIX bundle ──
-	iocs, _ := s.extractIOCs(days, false)
 	iocCount = int64(len(iocs))
 	addJSON("iocs.json", iocs)
 	addJSON("iocs.stix2.json", buildStixBundle(iocs, stamp))

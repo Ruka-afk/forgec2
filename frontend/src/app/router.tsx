@@ -63,7 +63,6 @@ const MAIN_PAGES: Record<string, ReturnType<typeof lazyPage>> = {
   scheduler: lazyPage(() => import("@/app/(main)/scheduler/page")),
   screenshots: lazyPage(() => import("@/app/(main)/screenshots/page")),
   scripting: lazyPage(() => import("@/app/(main)/scripting/page")),
-  search: lazyPage(() => import("@/app/(main)/search/page")),
   settings: lazyPage(() => import("@/app/(main)/settings/page")),
   stager: lazyPage(() => import("@/app/(main)/stager/page")),
   tags: lazyPage(() => import("@/app/(main)/tags/page")),

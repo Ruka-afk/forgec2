@@ -25,6 +25,7 @@ import { safeImageSrc } from "@/lib/safeUrl";
 import { nowTime } from "@/lib/utils";
 import { isExperimentalDesktop } from "../_components/session-quality";
 import { implantBlocksDest } from "../../_components/implant-version";
+import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 
 interface ResolutionOption {
   value: string;
@@ -74,7 +75,6 @@ export default function RemoteDesktopPage() {
   const imgRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const moveThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastFrameRef = useRef<string | null>(null);
   const frameRafRef = useRef<number | null>(null);
   const pendingFrameRef = useRef<{ data: string; width?: number; height?: number } | null>(null);
@@ -93,7 +93,6 @@ export default function RemoteDesktopPage() {
         setMonitoring(false);
         setStatus("waiting");
         setWsLive(false);
-        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
         api.post(paths.agents.screenStop(prevIdRef.current)).catch(() => {});
       }
       setScreenData(null);
@@ -167,17 +166,16 @@ export default function RemoteDesktopPage() {
       toast.error(t("agents.version_unknown_dest"));
       return;
     }
-    setMonitoring(true);
-    monitoringRef.current = true;
     setStatus("capturing");
     try {
       await api.post(paths.agents.screenStart(id), { interval: String(pollInterval) });
+      setMonitoring(true);
+      monitoringRef.current = true;
       await captureFrame();
-      if (timerRef.current) clearInterval(timerRef.current);
-      timerRef.current = setInterval(() => { if (shouldCapture()) captureFrame(); }, pollInterval);
     } catch {
       setStatus("error");
       setMonitoring(false);
+      monitoringRef.current = false;
       toast.error(t("agents.rdp_start_failed"));
     }
   };
@@ -187,10 +185,6 @@ export default function RemoteDesktopPage() {
     setMonitoring(false);
     monitoringRef.current = false;
     setStatus("waiting");
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
     try {
       await api.post(paths.agents.screenStop(id));
     } catch {
@@ -198,14 +192,10 @@ export default function RemoteDesktopPage() {
     }
   };
 
-  useEffect(() => {
-    if (!monitoring) return;
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => { if (shouldCapture()) captureFrame(); }, pollInterval);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [resolution, monitoring, captureFrame, pollInterval, shouldCapture]);
+  useVisibleInterval(
+    () => { if (shouldCapture()) void captureFrame(); },
+    monitoring ? pollInterval : 0,
+  );
 
   useEffect(() => {
     if (!id) return;

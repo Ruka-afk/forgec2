@@ -7,7 +7,13 @@ const envelope = {
   status: "ok",
   success: true,
   version: "test",
-  data: { profiles: [], agents: [] },
+  data: {
+    username: "admin",
+    role: "admin",
+    permissions: ["agents.read", "listeners.read", "settings.read", "ai.configure"],
+    profiles: [],
+    agents: [],
+  },
   agents: [],
   tasks: [],
   listeners: [],
@@ -31,6 +37,16 @@ async function prepare(page: Page, theme: "light" | "dark" = "light") {
     const type = route.request().resourceType();
     if (type === "websocket") return route.abort();
     if (type === "xhr" || type === "fetch") {
+      const pathname = new URL(route.request().url()).pathname;
+      if ([
+        "/ai/sessions",
+        "/api/ai/profiles",
+        "/api/ai/runs",
+        "/api/ai/intents",
+        "/api/ai/knowledge/collections",
+      ].includes(pathname) || /^\/api\/ai\/sessions\/[^/]+\/attachments$/.test(pathname)) {
+        return route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
+      }
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(envelope) });
     }
     return route.continue();

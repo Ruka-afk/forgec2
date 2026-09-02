@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,11 +12,13 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // 鈹€鈹€ AI Chat Page 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
@@ -24,6 +27,8 @@ import (
 // send to any authenticated user. The provider API key is NEVER included
 // (S1): only non-secret display fields are exposed.
 func (s *Server) aiConfigPublicView() gin.H {
+	s.configMu.RLock()
+	defer s.configMu.RUnlock()
 	return gin.H{
 		"enabled":          s.cfg.AI.Enabled,
 		"has_api_key":      s.cfg.AI.APIKey != "",
@@ -36,24 +41,36 @@ func (s *Server) aiConfigPublicView() gin.H {
 	}
 }
 
+func (s *Server) aiExecutionEnabled() bool {
+	if s.cfg == nil {
+		return false
+	}
+	s.configMu.RLock()
+	defer s.configMu.RUnlock()
+	return s.cfg.AI.AllowExecute
+}
+
 func (s *Server) handleAIPage(c *gin.Context) {
 	stats := s.getNavStats(c)
+	publicConfig := s.aiConfigPublicView()
+	aiEnabled, _ := publicConfig["enabled"].(bool)
+	aiHasAPIKey, _ := publicConfig["has_api_key"].(bool)
 	data := gin.H{
-		"Title":        "ForgeC2 - AI Assistant",
-		"ActiveNav":    "ai",
-		"IsFullPage":   true,
+		"Title":      "ForgeC2 - AI Assistant",
+		"ActiveNav":  "ai",
+		"IsFullPage": true,
 		// Never embed the raw AIConfig: it carries the provider API key. Send a
 		// redacted view so the key is never exposed to any authenticated user
 		// (including non-admin operators) via the JSON page data (S1).
-		"AIConfig":     s.aiConfigPublicView(),
-		"AIConfigured": s.cfg.AI.Enabled && s.cfg.AI.APIKey != "",
-		"AIHasAPIKey":  s.cfg.AI.APIKey != "",
+		"AIConfig":     publicConfig,
+		"AIConfigured": aiEnabled && aiHasAPIKey,
+		"AIHasAPIKey":  aiHasAPIKey,
 	}
 	s.addUserToData(c, data)
 	for k, v := range stats {
 		data[k] = v
 	}
-	slog.Info("AI page rendered", "enabled", s.cfg.AI.Enabled, "provider", s.cfg.AI.Provider)
+	slog.Info("AI page rendered", "enabled", aiEnabled, "provider", publicConfig["provider"])
 	s.renderPageOrJSON(c, data)
 }
 
@@ -71,41 +88,112 @@ func (s *Server) handleAIConfig(c *gin.Context) {
 		Endpoint        string `json:"endpoint"`
 		SystemPrompt    string `json:"system_prompt"`
 		EngagementNotes string `json:"engagement_notes"`
+		AllowExecute    bool   `json:"allow_execute"`
 	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, AIConfigRequestMaxBytes)
 	if err := c.ShouldBindJSON(&req); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			respondError(c, http.StatusRequestEntityTooLarge, "AI configuration request too large")
+			return
+		}
 		respondError(c, http.StatusBadRequest, "invalid request")
+		return
+	}
+
+	req.Provider = strings.ToLower(strings.TrimSpace(req.Provider))
+	req.APIKey = strings.TrimSpace(req.APIKey)
+	req.Model = strings.TrimSpace(req.Model)
+	req.Endpoint = strings.TrimSpace(req.Endpoint)
+	allowedProviders := map[string]bool{
+		"deepseek": true, "openai": true, "claude": true, "qianwen": true,
+		"zhipu": true, "longcat": true, "custom": true,
+	}
+	if !allowedProviders[req.Provider] {
+		respondError(c, http.StatusBadRequest, "unsupported AI provider")
+		return
+	}
+	if req.Model == "" {
+		req.Model = aiDefaultModel(req.Provider)
+	}
+	if len(req.APIKey) > 16*1024 || len(req.Model) > 200 || len(req.Endpoint) > 2048 || len(req.SystemPrompt) > 16*1024 {
+		respondError(c, http.StatusBadRequest, "AI configuration field too large")
+		return
+	}
+	if strings.ContainsAny(req.APIKey, "\r\n") {
+		respondError(c, http.StatusBadRequest, "API key contains invalid characters")
+		return
+	}
+	if len(req.EngagementNotes) > aiMaxNotesLen {
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("engagement notes too large (max %d chars)", aiMaxNotesLen))
+		return
+	}
+	if req.Endpoint != "" {
+		if err := validateExternalURL(req.Endpoint); err != nil {
+			respondError(c, http.StatusBadRequest, "AI endpoint is invalid or blocked")
+			return
+		}
+	}
+
+	s.configMu.RLock()
+	hasExistingAPIKey := strings.TrimSpace(s.cfg.AI.APIKey) != ""
+	s.configMu.RUnlock()
+	if req.Enabled && req.APIKey == "" && !hasExistingAPIKey {
+		respondError(c, http.StatusBadRequest, "API key is required when AI is enabled")
 		return
 	}
 
 	slog.Info("AI config save request", "enabled", req.Enabled, "provider", req.Provider, "model", req.Model)
 	s.configMu.Lock()
-	s.cfg.AI.Enabled = req.Enabled
-	s.cfg.AI.Provider = req.Provider
-	if strings.TrimSpace(req.APIKey) != "" {
-		s.cfg.AI.APIKey = req.APIKey
+	previousAI := s.cfg.AI
+	nextAI := previousAI
+	nextAI.Enabled = req.Enabled
+	nextAI.Provider = req.Provider
+	if req.APIKey != "" {
+		nextAI.APIKey = req.APIKey
 	}
-	s.cfg.AI.Model = req.Model
-	s.cfg.AI.Endpoint = req.Endpoint
-	s.cfg.AI.SystemPrompt = req.SystemPrompt
-	if len(req.EngagementNotes) <= aiMaxNotesLen {
-		s.cfg.AI.EngagementNotes = req.EngagementNotes
-	} else {
-		s.configMu.Unlock()
-		respondError(c, http.StatusBadRequest, fmt.Sprintf("engagement notes too large (max %d chars)", aiMaxNotesLen))
-		return
-	}
+	nextAI.Model = req.Model
+	nextAI.Endpoint = req.Endpoint
+	nextAI.SystemPrompt = req.SystemPrompt
+	nextAI.AllowExecute = req.AllowExecute
+	nextAI.EngagementNotes = req.EngagementNotes
+	s.cfg.AI = nextAI
 	s.configMu.Unlock()
 	configPath := s.configPath
 	if configPath == "" {
 		configPath = "config.yaml"
 	}
 	if err := s.cfg.Save(configPath); err != nil {
+		// A failed disk write must not leave the running server on a config the
+		// operator was explicitly told did not save.
+		s.configMu.Lock()
+		if s.cfg.AI == nextAI {
+			s.cfg.AI = previousAI
+		}
+		s.configMu.Unlock()
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "AI operation"))
 		return
 	}
 	username, _ := c.Get("user")
-	slog.Info("AI config saved", "user", username, "enabled", s.cfg.AI.Enabled, "provider", s.cfg.AI.Provider)
+	slog.Info("AI config saved", "user", username, "enabled", req.Enabled, "provider", req.Provider)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "AI config saved"})
+}
+
+func aiDefaultModel(provider string) string {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "openai", "custom":
+		return "gpt-4o-mini"
+	case "claude":
+		return "claude-3-5-sonnet-latest"
+	case "qianwen":
+		return "qwen-plus"
+	case "zhipu":
+		return "glm-4-flash"
+	case "longcat":
+		return "LongCat-Flash-Chat"
+	default:
+		return "deepseek-chat"
+	}
 }
 
 // 鈹€鈹€ SSE Chat (streaming) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
@@ -115,19 +203,20 @@ func (s *Server) handleAIChat(c *gin.Context) {
 	aiEnabled := s.cfg.AI.Enabled
 	aiAPIKey := s.cfg.AI.APIKey
 	aiProvider := s.cfg.AI.Provider
+	aiModel := s.cfg.AI.Model
+	aiEndpoint := s.cfg.AI.Endpoint
+	if aiEndpoint == "" {
+		aiEndpoint = s.cfg.AIEndpoint()
+	}
+	aiSystemPrompt := s.cfg.AI.SystemPrompt
+	aiEngagementNotes := s.cfg.AI.EngagementNotes
+	aiMaxConversationTurns := s.cfg.AI.MaxConversationTurns
+	aiMaxToolRounds := s.cfg.AI.MaxToolRounds
+	aiMaxDuplicateToolCalls := s.cfg.AI.MaxDuplicateToolCalls
 	s.configMu.RUnlock()
 	if !aiEnabled || aiAPIKey == "" {
 		slog.Warn("AI chat blocked", "enabled", aiEnabled, "provider", aiProvider)
 		respondError(c, http.StatusBadRequest, "AI not configured. Set api_key in AI settings.")
-		return
-	}
-
-	// The AI assistant can dispatch commands to agents (execute_command tool),
-	// so gate it behind the same permission as manual command execution.
-	role, _ := c.Get("user_role")
-	roleStr, _ := role.(string)
-	if roleStr != "admin" && !db.RoleHasPermission(roleStr, db.PermAgentsWrite) {
-		respondError(c, http.StatusForbidden, "AI assistant requires agents.write permission")
 		return
 	}
 
@@ -138,9 +227,38 @@ func (s *Server) handleAIChat(c *gin.Context) {
 			AgentID string `json:"agent_id"`
 		} `json:"context"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil || len(req.Messages) == 0 {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, AIChatRequestMaxBytes)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			respondError(c, http.StatusRequestEntityTooLarge, "AI chat request too large")
+			return
+		}
 		respondError(c, http.StatusBadRequest, "messages required")
 		return
+	}
+	if len(req.Messages) == 0 {
+		respondError(c, http.StatusBadRequest, "messages required")
+		return
+	}
+	if len(req.Messages) > AIChatMaxMessages {
+		respondError(c, http.StatusBadRequest, "too many messages")
+		return
+	}
+	for _, message := range req.Messages {
+		if message.Role != "user" && message.Role != "assistant" {
+			respondError(c, http.StatusBadRequest, "invalid message role")
+			return
+		}
+	}
+	principal := aiPrincipal{}
+	if s.db != nil {
+		var ok bool
+		principal, ok = s.currentAIPrincipal(c)
+		if !ok {
+			respondError(c, http.StatusForbidden, "AI use permission required")
+			return
+		}
 	}
 
 	c.Header("Content-Type", "text/event-stream")
@@ -148,30 +266,32 @@ func (s *Server) handleAIChat(c *gin.Context) {
 	c.Header("Connection", "keep-alive")
 	c.Header("X-Accel-Buffering", "no")
 	c.Status(http.StatusOK)
-	if rc := http.NewResponseController(c.Writer); rc != nil {
-		_ = rc.SetWriteDeadline(time.Time{})
-	}
+	clearHTTPWriteDeadline(c.Writer)
 	flusher, _ := c.Writer.(http.Flusher)
 
-	model := s.cfg.AI.Model
+	model := aiModel
 	if model == "" {
-		model = "deepseek-chat"
+		model = aiDefaultModel(aiProvider)
 	}
 
-	sysPrompt := s.cfg.AI.SystemPrompt
-	if notes := strings.TrimSpace(s.cfg.AI.EngagementNotes); notes != "" {
-		sysPrompt += "\n\n## Engagement memory (operator-maintained, persistent)\n" + notes
+	sysPrompt := effectiveAISystemPrompt(aiSystemPrompt)
+	if principal.TenantID == 0 {
+		if notes := strings.TrimSpace(aiEngagementNotes); notes != "" {
+			sysPrompt += "\n\n## Engagement memory (operator-maintained, persistent)\n" + notes
+		}
 	}
-	if snap := s.buildSituationSnapshot(); snap != "" {
-		sysPrompt += "\n\n" + snap
+	if principal.TenantID == 0 {
+		if snap := s.buildSituationSnapshot(); snap != "" {
+			sysPrompt += "\n\n" + snap
+		}
 	}
 
 	// Operator context: which page/agent the human is looking at right now.
 	// Tools fall back to this agent when the model omits agent_id, so "dump
 	// creds on this machine" works without pasting identifiers.
-	reqCtx := &aiReqCtx{}
+	reqCtx := &aiReqCtx{Principal: principal}
 	if ctxAgent := strings.TrimSpace(req.Context.AgentID); ctxAgent != "" {
-		if aid := s.resolveAgentID(ctxAgent); aid != "" {
+		if aid := s.resolveAIAgentID(reqCtx, ctxAgent); aid != "" {
 			reqCtx.DefaultAgentID = aid
 			var agent db.Implant
 			if err := s.db.Where("id = ?", aid).First(&agent).Error; err == nil {
@@ -191,9 +311,30 @@ func (s *Server) handleAIChat(c *gin.Context) {
 
 	userMessages := trimConversationHistory(req.Messages)
 
-	events := s.converse(model, sysPrompt, userMessages, c.Request.Context(), reqCtx)
-	for evt := range events {
-		s.writeSSE(c, flusher, evt.Type, evt.Data)
+	events := s.converse(model, sysPrompt, userMessages, c.Request.Context(), reqCtx, aiConversationOptions{
+		provider:              aiProvider,
+		endpoint:              aiEndpoint,
+		apiKey:                aiAPIKey,
+		maxConversationTurns:  aiMaxConversationTurns,
+		maxToolRounds:         aiMaxToolRounds,
+		maxDuplicateToolCalls: aiMaxDuplicateToolCalls,
+	})
+	heartbeat := time.NewTicker(AIStreamHeartbeatInterval)
+	defer heartbeat.Stop()
+	for {
+		select {
+		case <-c.Request.Context().Done():
+			return
+		case <-heartbeat.C:
+			// Explicit ping events keep reverse proxies and the browser watchdog
+			// alive while a provider is still thinking before its first token.
+			s.writeSSE(c, flusher, "ping", strconv.FormatInt(time.Now().Unix(), 10))
+		case evt, ok := <-events:
+			if !ok {
+				return
+			}
+			s.writeSSE(c, flusher, evt.Type, evt.Data)
+		}
 	}
 }
 
@@ -205,11 +346,21 @@ const aiMaxNotesLen = 8000
 // (~4 chars/token heuristic). Oldest turns beyond the budget are collapsed.
 const aiMaxContextChars = 48000
 
+const aiMaxContextMessageChars = 16000
+
 // trimConversationHistory collapses the oldest turns when the conversation
 // grows past the context budget: everything except the system prompt and the
 // most recent messages is replaced by a single deterministic summary marker.
 // This keeps long engagements usable without an extra summarization API call.
 func trimConversationHistory(msgs []chatMessage) []chatMessage {
+	normalized := make([]chatMessage, len(msgs))
+	for i, message := range msgs {
+		if len(message.Content) > aiMaxContextMessageChars {
+			message.Content = truncateStr(message.Content, aiMaxContextMessageChars)
+		}
+		normalized[i] = message
+	}
+	msgs = normalized
 	total := 0
 	for _, m := range msgs {
 		total += len(m.Content)
@@ -284,10 +435,38 @@ type aiToolLimits struct {
 }
 
 func resolveAIToolLimits(maxConversationTurns, maxToolRounds, maxDuplicateToolCalls int) aiToolLimits {
+	// 0 in config means "unlimited", but an unbounded tool loop never
+	// closes the SSE stream and the composer stays stuck on loading.
+	// Apply a hard safety ceiling so the conversation always terminates.
+	if maxConversationTurns <= 0 {
+		maxConversationTurns = AISafetyMaxTurns
+	}
+	if maxToolRounds <= 0 {
+		maxToolRounds = AISafetyMaxToolRounds
+	}
+	if maxDuplicateToolCalls <= 0 {
+		maxDuplicateToolCalls = AISafetyMaxDuplicateTools
+	}
 	return aiToolLimits{
 		maxConversationTurns:  maxConversationTurns,
 		maxToolRounds:         maxToolRounds,
 		maxDuplicateToolCalls: maxDuplicateToolCalls,
+	}
+}
+
+// clearHTTPWriteDeadline drops the server WriteTimeout for a long-lived SSE
+// response. gin.Context.Writer wraps the net/http ResponseWriter, so we unwrap
+// a few layers until SetWriteDeadline sticks.
+func clearHTTPWriteDeadline(w http.ResponseWriter) {
+	for i := 0; i < 6 && w != nil; i++ {
+		if err := http.NewResponseController(w).SetWriteDeadline(time.Time{}); err == nil {
+			return
+		}
+		u, ok := w.(interface{ Unwrap() http.ResponseWriter })
+		if !ok {
+			return
+		}
+		w = u.Unwrap()
 	}
 }
 
@@ -301,95 +480,181 @@ type aiUsage struct {
 // operator is currently viewing, used as fallback target when a tool call
 // omits agent_id ("run mimikatz on this box" while looking at that box).
 type aiReqCtx struct {
-	DefaultAgentID string
+	DefaultAgentID         string
+	Principal              aiPrincipal
+	SessionID              uint
+	RunID                  string
+	AllowLowRiskWrites     bool
+	ApprovedIntent         bool
+	KnowledgeCollectionIDs []uint
+	DisableTools           bool
+}
+
+type aiConversationOptions struct {
+	provider              string
+	endpoint              string
+	apiKey                string
+	maxConversationTurns  int
+	maxToolRounds         int
+	maxDuplicateToolCalls int
 }
 
 // converse runs the LLM conversation loop with tool calling, returning SSE events
-func (s *Server) converse(model, systemPrompt string, userMessages []chatMessage, ctx context.Context, reqCtx *aiReqCtx) <-chan sseEvent {
-	ch := make(chan sseEvent, 10)
+func (s *Server) converse(model, systemPrompt string, userMessages []chatMessage, ctx context.Context, reqCtx *aiReqCtx, options aiConversationOptions) <-chan sseEvent {
+	ch := make(chan sseEvent, AIStreamChanBuf)
 
 	go func() {
+		defer close(ch)
 		defer func() {
 			if r := recover(); r != nil {
 				slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))
+				select {
+				case ch <- sseEvent{"error", "AI processing failed unexpectedly"}:
+				case <-ctx.Done():
+				}
 			}
 		}()
-		defer close(ch)
 
-		var totalUsage aiUsage
+		send := func(evt sseEvent) bool {
+			select {
+			case <-ctx.Done():
+				return false
+			case ch <- evt:
+				return true
+			}
+		}
 
-		// Send immediate thinking indicator
-		ch <- sseEvent{"thinking", ""}
+		if !send(aiProgressEvent("analyzing", 1)) {
+			return
+		}
 
 		messages := make([]chatMessage, 0, len(userMessages)+1)
 		messages = append(messages, chatMessage{Role: "system", Content: systemPrompt})
 		messages = append(messages, userMessages...)
-		tools := s.buildTools()
+		tools := s.buildToolsForContext(reqCtx)
+		wantReasoning := aiShouldRequestReasoning(options.provider, options.endpoint)
 
 		limits := resolveAIToolLimits(
-			s.cfg.AI.MaxConversationTurns,
-			s.cfg.AI.MaxToolRounds,
-			s.cfg.AI.MaxDuplicateToolCalls,
+			options.maxConversationTurns,
+			options.maxToolRounds,
+			options.maxDuplicateToolCalls,
 		)
 		toolCallHistory := make(map[string]int) // track tool calls to prevent infinite loops
 		consecutiveTools := 0
+		emptyContentRounds := 0
+		retriedNoTools := false
 
-		for turn := 0; limits.maxConversationTurns == 0 || turn < limits.maxConversationTurns; turn++ {
-			// Check if client disconnected
+		for turn := 0; turn < limits.maxConversationTurns; turn++ {
 			select {
 			case <-ctx.Done():
 				return
 			default:
 			}
+			if turn > 0 && !retriedNoTools {
+				if !send(aiProgressEvent("synthesizing", turn+1)) {
+					return
+				}
+			}
 
+			toolsThisRound := tools
+			if retriedNoTools {
+				toolsThisRound = nil
+			}
 			body := chatRequest{
 				Model:    model,
 				Messages: messages,
 				Stream:   true,
-				Tools:    tools,
+				Tools:    toolsThisRound,
 			}
-			if turn > 0 {
+			if wantReasoning {
+				body.Reasoning = &aiReasoningHint{Enabled: true}
+			}
+			if turn > 0 && !retriedNoTools {
 				body.ToolChoice = "auto"
 			}
 
 			payload, ok := marshalJSONSafe(body)
 			if !ok {
-				ch <- sseEvent{"error", "failed to marshal request"}
+				send(sseEvent{"error", "failed to marshal request"})
 				return
 			}
-			resp, err := s.aiDoRequest(ctx, payload)
+			roundCtx, cancelRound := context.WithTimeout(ctx, AIRoundTimeout)
+			resp, err := s.aiDoRequestWithConfig(roundCtx, payload, aiProviderRequestConfig{
+				provider: options.provider,
+				endpoint: options.endpoint,
+				apiKey:   options.apiKey,
+				model:    model,
+			})
 			if err != nil {
-				ch <- sseEvent{"error", aiFlattenError(err)}
+				cancelRound()
+				send(sseEvent{"error", aiFlattenError(err)})
 				return
 			}
 
 			var toolCalls []toolCall
-			var content, finishReason string
+			var content, reasoning, finishReason string
 			var turnUsage aiUsage
-			if s.cfg.AI.Provider == "claude" {
-				toolCalls, content, finishReason, turnUsage = s.parseClaudeStream(resp, ch)
+			var streamErr error
+			if options.provider == "claude" {
+				toolCalls, content, reasoning, finishReason, turnUsage, streamErr = s.parseClaudeStream(resp, ch, roundCtx)
 			} else {
-				toolCalls, content, _, finishReason, turnUsage = s.parseStreamChunks(resp, ch)
+				toolCalls, content, reasoning, finishReason, turnUsage, streamErr = s.parseStreamChunks(resp, ch, roundCtx)
 			}
 			resp.Body.Close()
-
-			// Report per-turn token usage so the operator sees cost accrue.
-			totalUsage.PromptTokens += turnUsage.PromptTokens
-			totalUsage.CompletionTokens += turnUsage.CompletionTokens
-			if ub, ok := marshalJSONSafe(totalUsage); ok {
-				ch <- sseEvent{"usage", string(ub)}
+			cancelRound()
+			if streamErr != nil {
+				send(sseEvent{"error", aiFlattenError(streamErr)})
+				return
 			}
 
-			// Safety: cap content length
+			think, visible := splitThinkBlocks(content)
+			if think != "" {
+				reasoning = joinNonEmpty(reasoning, think, "\n\n")
+				content = visible
+			}
+			if strings.TrimSpace(content) == "" && strings.TrimSpace(reasoning) == "" && len(toolCalls) == 0 && !retriedNoTools && len(tools) > 0 {
+				slog.Info("AI empty reply with tools, retrying without tools", "model", model)
+				retriedNoTools = true
+				turn--
+				continue
+			}
+			retriedNoTools = false
+			if reasoning != "" {
+				if !send(sseEvent{"reasoning", reasoning}) {
+					return
+				}
+			}
+
+			// Report this turn's token delta; the browser accumulates it across
+			// tool rounds and messages without double-counting prior turns.
+			if ub, ok := marshalJSONSafe(turnUsage); ok {
+				if !send(sseEvent{"usage", string(ub)}) {
+					return
+				}
+			}
+
+			// Safety: cap content length without splitting UTF-8 text.
 			if len(content) > AIResponseTruncLen {
-				content = content[:AIResponseTruncLen] + "\n\n[Response truncated]"
+				content, _ = appendAIResponseText("", content)
 			}
 
 			if finishReason == "tool_calls" && len(toolCalls) > 0 {
-				// Prevent infinite tool loops: same tool+args = skip
+				// Auto-disable tools after 3 empty rounds (no meaningful content, likely model stuck)
+				if len(strings.TrimSpace(content)) < 50 {
+					emptyContentRounds++
+					if emptyContentRounds >= 3 {
+						send(sseEvent{"text", "\n\n[Auto-disabled tools after 3 empty rounds — continuing as plain answer]"})
+						tools = nil
+						retriedNoTools = true
+					}
+				} else {
+					emptyContentRounds = 0
+				}
+				// Prevent infinite tool loops: semantic dedup (normalize args: lowercase + no whitespace) + exact history
+				normalizeKey := func(s string) string { return strings.ToLower(strings.Join(strings.Fields(s), "")) }
 				var newCalls []toolCall
 				for _, tc := range toolCalls {
-					key := tc.Function.Name + ":" + tc.Function.Arguments
+					key := tc.Function.Name + ":" + normalizeKey(tc.Function.Arguments)
 					if limits.maxDuplicateToolCalls > 0 && toolCallHistory[key] >= limits.maxDuplicateToolCalls {
 						continue
 					}
@@ -397,22 +662,53 @@ func (s *Server) converse(model, systemPrompt string, userMessages []chatMessage
 					newCalls = append(newCalls, tc)
 				}
 				if len(newCalls) == 0 {
-					ch <- sseEvent{"text", "Duplicate tool calls detected, loop terminated."}
+					send(sseEvent{"text", "Duplicate tool calls detected, loop terminated."})
+					send(sseEvent{"done", "ok"})
 					return
 				}
 				consecutiveTools++
-				if limits.maxToolRounds > 0 && consecutiveTools > limits.maxToolRounds {
-					ch <- sseEvent{"text", content + "\n\n[Max tool calls reached]"}
+				if consecutiveTools > limits.maxToolRounds {
+					send(sseEvent{"text", content + "\n\n[Max tool calls reached]"})
+					send(sseEvent{"done", "ok"})
 					return
 				}
 
 				assistMsg := chatMessage{Role: "assistant", Content: content, ToolCalls: newCalls}
 				messages = append(messages, assistMsg)
-				for _, tc := range newCalls {
-					ch <- sseEvent{"tool_start", tc.Function.Name}
-					result := s.executeToolCtx(reqCtx, tc.Function.Name, tc.Function.Arguments)
-					ch <- sseEvent{"tool", fmt.Sprintf(`{"id":"%s","name":"%s","result":%s}`,
-						tc.ID, tc.Function.Name, result)}
+				type toolOutcome struct {
+					tc     toolCall
+					result string
+				}
+				outcomes := make([]toolOutcome, len(newCalls))
+				var wg sync.WaitGroup
+				for i, tc := range newCalls {
+					wg.Add(1)
+					go func(i int, tc toolCall) {
+						defer wg.Done()
+						defer func() {
+							if r := recover(); r != nil {
+								outcomes[i].result = `{"error":"tool panicked"}`
+							}
+						}()
+						outcomes[i].tc = tc
+						outcomes[i].result = compactToolResultJSON(s.executeToolCtx(reqCtx, tc.Function.Name, tc.Function.Arguments))
+					}(i, tc)
+				}
+				wg.Wait()
+				for _, oc := range outcomes {
+					tc := oc.tc
+					result := oc.result
+					if payload, ok := marshalJSONSafe(map[string]string{"id": tc.ID, "name": tc.Function.Name}); ok {
+						if !send(sseEvent{"tool_start", string(payload)}) {
+							return
+						}
+					} else if !send(sseEvent{"tool_start", tc.Function.Name}) {
+						return
+					}
+					if !send(sseEvent{"tool", fmt.Sprintf(`{"id":"%s","name":"%s","result":%s}`,
+						tc.ID, tc.Function.Name, result)}) {
+						return
+					}
 					messages = append(messages, chatMessage{
 						Role: "tool", ToolCallID: tc.ID, Content: result,
 					})
@@ -420,21 +716,39 @@ func (s *Server) converse(model, systemPrompt string, userMessages []chatMessage
 				continue
 			}
 
-			// No tool calls 鈥?clear thinking and send content
-			ch <- sseEvent{"clear", ""}
-			if content != "" {
-				ch <- sseEvent{"text", content}
+			// No tool calls: transition into the final response.
+			if !send(sseEvent{"clear", ""}) {
+				return
 			}
+			if strings.TrimSpace(content) == "" && strings.TrimSpace(reasoning) != "" {
+				// Some thinking models (OpenRouter/DeepSeek-style) put the
+				// entire reply in delta.reasoning and leave content empty.
+				content = reasoning
+			}
+			if content != "" && !send(sseEvent{"text", content}) {
+				return
+			}
+			if content == "" && !send(sseEvent{"text", "The model returned an empty reply."}) {
+				return
+			}
+			send(sseEvent{"done", "ok"})
 			return
 		}
+		send(sseEvent{"text", "[Max conversation turns reached]"})
+		send(sseEvent{"done", "ok"})
 	}()
 
 	return ch
 }
 
-// parseStreamChunks reads OpenAI-compatible SSE stream, forwards text/reasoning in real-time,
-// and accumulates tool calls. Returns collected tool calls, full content, full reasoning, finish reason, and token usage.
-func (s *Server) parseStreamChunks(resp *http.Response, ch chan<- sseEvent) (toolCalls []toolCall, content, reasoning, finishReason string, usage aiUsage) {
+// parseStreamChunks reads an OpenAI-compatible SSE stream and accumulates tool
+// calls. Provider reasoning (delta.reasoning / reasoning_content / <think>)
+// is forwarded as SSE "reasoning" events so the UI can show the thinking
+// process without mixing it into the final answer until the stream ends.
+func (s *Server) parseStreamChunks(resp *http.Response, ch chan<- sseEvent, ctx context.Context) (toolCalls []toolCall, content, reasoning, finishReason string, usage aiUsage, err error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	reader := io.Reader(resp.Body)
 	buf := make([]byte, AIStreamBufSize)
 	var leftover string
@@ -446,11 +760,47 @@ func (s *Server) parseStreamChunks(resp *http.Response, ch chan<- sseEvent) (too
 		Arguments strings.Builder
 	}
 	var buildingTools []*buildingTool
+	reasoningStarted := false
+	answeringStarted := false
+	reasoningTruncated := false
+	contentTruncated := false
+	lastReasoningSent := 0
+	lastContentSent := 0
+	sawTerminalEvent := false
+
+	sendChunk := func(evt sseEvent) bool {
+		select {
+		case <-ctx.Done():
+			return false
+		case ch <- evt:
+			return true
+		}
+	}
+	flushBufferedSnapshots := func() {
+		if reasoning != "" && len(reasoning) != lastReasoningSent && sendChunk(sseEvent{"reasoning", reasoning}) {
+			lastReasoningSent = len(reasoning)
+		}
+		if content != "" && len(content) != lastContentSent && sendChunk(sseEvent{"text", content}) {
+			lastContentSent = len(content)
+		}
+	}
 
 	for {
-		n, err := reader.Read(buf)
-		if n > 0 {
+		select {
+		case <-ctx.Done():
+			err = ctx.Err()
+			return
+		default:
+		}
+		n, readErr := reader.Read(buf)
+		// A provider is allowed to close the response without a trailing newline.
+		// Process the buffered suffix on EOF instead of silently losing its final
+		// token/finish_reason (the UI otherwise appears randomly truncated).
+		if n > 0 || (readErr == io.EOF && leftover != "") {
 			data := leftover + string(buf[:n])
+			if readErr == io.EOF {
+				data += "\n"
+			}
 			lines := strings.Split(data, "\n")
 			// Last element may be incomplete
 			leftover = lines[len(lines)-1]
@@ -458,20 +808,35 @@ func (s *Server) parseStreamChunks(resp *http.Response, ch chan<- sseEvent) (too
 
 			for _, line := range lines {
 				line = strings.TrimSpace(line)
-				if line == "" || line == "data: [DONE]" {
+				if line == "" {
 					continue
 				}
-				if !strings.HasPrefix(line, "data: ") {
+				if !strings.HasPrefix(line, "data:") {
 					continue
 				}
-				jsonStr := strings.TrimPrefix(line, "data: ")
+				jsonStr := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+				if jsonStr == "" {
+					continue
+				}
+				if jsonStr == "[DONE]" {
+					sawTerminalEvent = true
+					continue
+				}
 
 				var chunk struct {
+					Error *struct {
+						Message string `json:"message"`
+					} `json:"error"`
 					Choices []struct {
 						Delta struct {
-							Content          string `json:"content"`
-							ReasoningContent string `json:"reasoning_content"`
-							ToolCalls        []struct {
+							Content          json.RawMessage `json:"content"`
+							Reasoning        json.RawMessage `json:"reasoning"`
+							ReasoningContent json.RawMessage `json:"reasoning_content"`
+							ReasoningDetails []struct {
+								Type string `json:"type"`
+								Text string `json:"text"`
+							} `json:"reasoning_details"`
+							ToolCalls []struct {
 								Index    int    `json:"index"`
 								ID       string `json:"id"`
 								Type     string `json:"type"`
@@ -491,6 +856,11 @@ func (s *Server) parseStreamChunks(resp *http.Response, ch chan<- sseEvent) (too
 				if err := json.Unmarshal([]byte(jsonStr), &chunk); err != nil {
 					continue
 				}
+				if chunk.Error != nil && strings.TrimSpace(chunk.Error.Message) != "" {
+					flushBufferedSnapshots()
+					err = errors.New(chunk.Error.Message)
+					return
+				}
 				if chunk.Usage != nil && (chunk.Usage.PromptTokens > 0 || chunk.Usage.CompletionTokens > 0) {
 					usage = aiUsage{
 						PromptTokens:     chunk.Usage.PromptTokens,
@@ -502,20 +872,46 @@ func (s *Server) parseStreamChunks(resp *http.Response, ch chan<- sseEvent) (too
 				}
 				delta := chunk.Choices[0].Delta
 				fr := chunk.Choices[0].FinishReason
-
-				// Forward reasoning in real-time
-				if delta.ReasoningContent != "" {
-					reasoning += delta.ReasoningContent
-					ch <- sseEvent{"reasoning", delta.ReasoningContent}
+				if fr != "" {
+					sawTerminalEvent = true
 				}
-				// Forward text in real-time (cap at 8000 chars to prevent runaway generation)
-				if delta.Content != "" {
-					content += delta.Content
-					if len(content) > AIResponseTruncLen {
-						content = content[:AIResponseTruncLen] + "\n\n[Response truncated]"
+
+				if piece := streamReasoningDelta(delta.Reasoning, delta.ReasoningContent, delta.ReasoningDetails); piece != "" && !reasoningTruncated {
+					reasoning, reasoningTruncated = appendAIResponseText(reasoning, piece)
+					if !reasoningStarted {
+						if !sendChunk(aiProgressEvent("reasoning", 0)) {
+							err = ctx.Err()
+							return
+						}
+						reasoningStarted = true
+					}
+					if shouldEmitAIStreamSnapshot(reasoning, lastReasoningSent, piece, reasoningTruncated) {
+						if !sendChunk(sseEvent{"reasoning", reasoning}) {
+							err = ctx.Err()
+							return
+						}
+						lastReasoningSent = len(reasoning)
+					}
+				}
+				if piece := decodeStreamText(delta.Content); piece != "" && !contentTruncated {
+					if !answeringStarted {
+						if !sendChunk(aiProgressEvent("answering", 0)) {
+							err = ctx.Err()
+							return
+						}
+						answeringStarted = true
+					}
+					content, contentTruncated = appendAIResponseText(content, piece)
+					if shouldEmitAIStreamSnapshot(content, lastContentSent, piece, contentTruncated) {
+						if !sendChunk(sseEvent{"text", content}) {
+							err = ctx.Err()
+							return
+						}
+						lastContentSent = len(content)
+					}
+					if contentTruncated {
 						return
 					}
-					ch <- sseEvent{"text", content}
 				}
 				// Accumulate tool calls
 				for _, tc := range delta.ToolCalls {
@@ -537,13 +933,19 @@ func (s *Server) parseStreamChunks(resp *http.Response, ch chan<- sseEvent) (too
 				}
 			}
 		}
-		if err == io.EOF {
+		if readErr == io.EOF {
 			break
 		}
-		if err != nil {
-			ch <- sseEvent{"error", "stream read error"}
+		if readErr != nil {
+			flushBufferedSnapshots()
+			err = readErr
 			return
 		}
+	}
+	if !sawTerminalEvent && (content != "" || reasoning != "" || len(buildingTools) > 0) {
+		flushBufferedSnapshots()
+		err = io.ErrUnexpectedEOF
+		return
 	}
 
 	// Convert building tools to tool calls
@@ -565,6 +967,14 @@ func (s *Server) parseStreamChunks(resp *http.Response, ch chan<- sseEvent) (too
 type sseEvent struct {
 	Type string
 	Data string
+}
+
+func aiProgressEvent(stage string, turn int) sseEvent {
+	payload, ok := marshalJSONSafe(map[string]interface{}{"stage": stage, "turn": turn})
+	if !ok {
+		return sseEvent{"progress", fmt.Sprintf(`{"stage":%q}`, stage)}
+	}
+	return sseEvent{"progress", string(payload)}
 }
 
 // aiFlattenError formats an AI request error into a single-line, user-visible
@@ -605,8 +1015,65 @@ func aiBuildChatURL(baseURL, provider string) string {
 	return baseURL + "/chat/completions"
 }
 
+// aiStreamClient is used for provider chat streams. The short httpClient
+// Timeout (30s) covers the entire request including body read, so a normal
+// streamed reply (or a tool round) would get canceled mid-token and leave
+// the UI sitting on a half-open SSE connection.
+func (s *Server) aiStreamClient() *http.Client {
+	base := s.httpClientLong
+	if base == nil {
+		base = s.httpClient
+	}
+	c := ssrfSafeClient(base)
+	c.Timeout = 0
+	if t, ok := c.Transport.(*http.Transport); ok && t != nil {
+		cloned := t.Clone()
+		cloned.ResponseHeaderTimeout = 45 * time.Second
+		c.Transport = cloned
+	}
+	return c
+}
+
+type aiProviderRequestConfig struct {
+	enabled  bool
+	provider string
+	endpoint string
+	apiKey   string
+	model    string
+}
+
+func (s *Server) aiProviderRequestConfigSnapshot() (aiProviderRequestConfig, error) {
+	if s.cfg == nil {
+		return aiProviderRequestConfig{}, errors.New("AI configuration unavailable")
+	}
+	s.configMu.RLock()
+	snapshot := aiProviderRequestConfig{
+		enabled:  s.cfg.AI.Enabled,
+		provider: s.cfg.AI.Provider,
+		endpoint: s.cfg.AIEndpoint(),
+		apiKey:   s.cfg.AI.APIKey,
+		model:    s.cfg.AI.Model,
+	}
+	s.configMu.RUnlock()
+	return snapshot, nil
+}
+
 func (s *Server) aiDoRequest(ctx context.Context, payload []byte) (*http.Response, error) {
-	baseURL := strings.TrimRight(s.cfg.AIEndpoint(), "/")
+	snapshot, err := s.aiProviderRequestConfigSnapshot()
+	if err != nil {
+		return nil, err
+	}
+	return s.aiDoRequestWithConfig(ctx, payload, snapshot)
+}
+
+func (s *Server) aiDoRequestWithConfig(ctx context.Context, payload []byte, snapshot aiProviderRequestConfig) (*http.Response, error) {
+	// Keep one coherent provider snapshot for the full retry sequence. Config
+	// reloads may otherwise change the endpoint, provider, parser, or credential
+	// while a request is in flight.
+	baseURL := strings.TrimRight(snapshot.endpoint, "/")
+	provider := snapshot.provider
+	apiKey := snapshot.apiKey
+	model := snapshot.model
 	hostAndPath := baseURL
 	hostAndPath = strings.TrimPrefix(hostAndPath, "https://")
 	hostAndPath = strings.TrimPrefix(hostAndPath, "http://")
@@ -622,42 +1089,46 @@ func (s *Server) aiDoRequest(ctx context.Context, payload []byte) (*http.Respons
 	}
 
 	var urlStr string
-	if s.cfg.AI.Provider == "claude" {
+	if provider == "claude" {
 		urlStr = aiBuildChatURL(baseURL, "claude")
 		payload = s.buildClaudeRequest(payload)
 	} else {
 		urlStr = aiBuildChatURL(baseURL, "")
 	}
 
-	slog.Info("AI API request", "url", urlStr, "model", s.cfg.AI.Model, "provider", s.cfg.AI.Provider)
-
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", urlStr, bytes.NewReader(payload))
-	if err != nil {
-		return nil, err
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	if s.cfg.AI.Provider == "claude" {
-		httpReq.Header.Set("x-api-key", s.cfg.AI.APIKey)
-		httpReq.Header.Set("anthropic-version", "2023-06-01")
-	} else {
-		httpReq.Header.Set("Authorization", "Bearer "+s.cfg.AI.APIKey)
-	}
-	if s.cfg.AI.Provider == "deepseek" {
-		httpReq.Header.Set("Accept", "application/json")
-	}
+	slog.Info("AI API request", "url", urlStr, "model", model, "provider", provider)
 
 	backoff := []time.Duration{time.Second, 3 * time.Second, 7 * time.Second}
 	var lastErr error
 	// ssrfSafeClient re-validates every redirect hop so a public endpoint
 	// cannot pivot into internal targets while carrying the API key (S4).
-	aiClient := ssrfSafeClient(s.httpClient)
+	aiClient := s.aiStreamClient()
 	for attempt := 0; attempt <= aiRetryMax; attempt++ {
+		// A request body is consumed by Client.Do. Rebuild the request for each
+		// attempt so retries carry the same payload instead of an empty body.
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", urlStr, bytes.NewReader(payload))
+		if err != nil {
+			return nil, err
+		}
+		httpReq.Header.Set("Content-Type", "application/json")
+		if provider == "claude" {
+			httpReq.Header.Set("x-api-key", apiKey)
+			httpReq.Header.Set("anthropic-version", "2023-06-01")
+		} else {
+			httpReq.Header.Set("Authorization", "Bearer "+apiKey)
+		}
+		if provider == "deepseek" {
+			httpReq.Header.Set("Accept", "application/json")
+		}
+
 		resp, err := aiClient.Do(httpReq)
 		if err != nil {
 			lastErr = fmt.Errorf("request failed: %w", err)
 			if attempt < aiRetryMax {
 				slog.Warn("AI API request failed, retrying", "attempt", attempt+1, "error", err)
-				time.Sleep(backoff[attempt])
+				if err := waitAIBackoff(ctx, backoff[attempt]); err != nil {
+					return nil, fmt.Errorf("request cancelled: %w", err)
+				}
 				continue
 			}
 			return nil, lastErr
@@ -674,7 +1145,9 @@ func (s *Server) aiDoRequest(ctx context.Context, payload []byte) (*http.Respons
 			}
 			if attempt < aiRetryMax && (resp.StatusCode == 429 || resp.StatusCode >= 500) {
 				slog.Warn("AI API retryable error", "status", resp.StatusCode, "attempt", attempt+1)
-				time.Sleep(backoff[attempt])
+				if err := waitAIBackoff(ctx, backoff[attempt]); err != nil {
+					return nil, fmt.Errorf("request cancelled: %w", err)
+				}
 				continue
 			}
 			slog.Error("AI API error", "status", resp.StatusCode, "url", urlStr, "body", bodyStr)
@@ -683,6 +1156,17 @@ func (s *Server) aiDoRequest(ctx context.Context, payload []byte) (*http.Respons
 		return resp, nil
 	}
 	return nil, lastErr
+}
+
+func waitAIBackoff(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func (s *Server) writeSSE(c *gin.Context, flusher http.Flusher, event string, data string) {
@@ -694,6 +1178,22 @@ func (s *Server) writeSSE(c *gin.Context, flusher http.Flusher, event string, da
 	if flusher != nil {
 		flusher.Flush()
 	}
+}
+
+func appendAIResponseText(current, piece string) (string, bool) {
+	next := current + piece
+	if len(next) <= AIResponseTruncLen {
+		return next, false
+	}
+	cut := AIResponseTruncLen
+	for cut > 0 && !utf8.RuneStart(next[cut]) {
+		cut--
+	}
+	return next[:cut] + "\n\n[Response truncated]", true
+}
+
+func shouldEmitAIStreamSnapshot(current string, lastSent int, piece string, truncated bool) bool {
+	return lastSent == 0 || truncated || len(current)-lastSent >= AIStreamEmitMinBytes || strings.Contains(piece, "\n")
 }
 
 // 鈹€鈹€ JSON structures 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
@@ -726,6 +1226,8 @@ type chatRequest struct {
 	// ClaudeMaxTokens). Set by one-shot helpers, left unset by the
 	// streaming conversation loop.
 	MaxTokens int `json:"max_tokens,omitempty"`
+	// OpenRouter / DeepSeek: ask the model to emit thinking tokens.
+	Reasoning *aiReasoningHint `json:"reasoning,omitempty"`
 }
 
 type toolDef struct {
@@ -742,7 +1244,7 @@ type toolFuncDef struct {
 // 鈹€鈹€ Tool Definitions 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 func (s *Server) buildTools() []toolDef {
-	allowExec := s.cfg != nil && s.cfg.AI.AllowExecute
+	allowExec := s.aiExecutionEnabled()
 	execDesc := "Execute a command on the specified agent."
 	if allowExec {
 		execDesc += " When allow_execute is enabled, non-sensitive commands execute immediately (optional wait_for_result up to 60s); sensitive commands (mimikatz/dcsync/secretsdump etc.) always require human approval and return pending_approval."
@@ -754,10 +1256,31 @@ func (s *Server) buildTools() []toolDef {
 			Type: "function",
 			Function: toolFuncDef{
 				Name:        "list_agents",
-				Description: "List all agents, returns ID, hostname, IP, OS, online status",
+				Description: "List implants. Filter with status (online/offline), os, query (hostname/IP/username/id), elevated=true. Returns id, hostname, IP, OS, user, elevated, integrity, sleep, last_seen, stale (missed check-in). Prefer status=online for 'who is up'.",
 				Parameters: map[string]interface{}{
-					"type":       "object",
-					"properties": map[string]interface{}{},
+					"type": "object",
+					"properties": map[string]interface{}{
+						"status": map[string]string{
+							"type":        "string",
+							"description": "online | offline | all (default all)",
+						},
+						"os": map[string]string{
+							"type":        "string",
+							"description": "OS substring filter, e.g. windows, linux",
+						},
+						"query": map[string]string{
+							"type":        "string",
+							"description": "Search hostname, IP, username, or agent id",
+						},
+						"elevated": map[string]interface{}{
+							"type":        "boolean",
+							"description": "If true, only elevated (admin/root) implants",
+						},
+						"limit": map[string]interface{}{
+							"type":        "integer",
+							"description": "Max results (1-50, default 30)",
+						},
+					},
 				},
 			},
 		},
@@ -850,7 +1373,7 @@ func (s *Server) buildTools() []toolDef {
 			Type: "function",
 			Function: toolFuncDef{
 				Name:        "get_online_operators",
-				Description: "View currently online operators",
+				Description: "List operators currently connected to the teamserver dashboard and which agent they are viewing, if any.",
 				Parameters: map[string]interface{}{
 					"type":       "object",
 					"properties": map[string]interface{}{},
@@ -1272,6 +1795,83 @@ func (s *Server) buildTools() []toolDef {
 		{
 			Type: "function",
 			Function: toolFuncDef{
+				Name:        "get_situation",
+				Description: "Live engagement snapshot: agent counts, OS mix of online hosts, elevated online count, listeners, pending approvals, active alerts, credential count, connected operators. Use this first for 'what's going on' / situation reports.",
+				Parameters: map[string]interface{}{
+					"type":       "object",
+					"properties": map[string]interface{}{},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: toolFuncDef{
+				Name:        "get_alerts",
+				Description: "List recent alerts (beacon drops, rule hits). Filter by status: active, acknowledged, resolved. Use when the operator asks what needs attention.",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"status": map[string]string{
+							"type":        "string",
+							"description": "active | acknowledged | resolved | all (default active)",
+						},
+						"limit": map[string]interface{}{
+							"type":        "integer",
+							"description": "Max results (1-50, default 15)",
+						},
+					},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: toolFuncDef{
+				Name:        "set_sleep",
+				Description: "Queue a set_sleep task to change an implant's beacon interval and jitter. interval is seconds (1-86400), jitter is 0-100 percent. Same approval rules as execute_command.",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"agent_id": map[string]string{
+							"type":        "string",
+							"description": "Agent ID or hostname",
+						},
+						"interval": map[string]interface{}{
+							"type":        "integer",
+							"description": "Sleep interval in seconds (1-86400)",
+						},
+						"jitter": map[string]interface{}{
+							"type":        "integer",
+							"description": "Jitter percent 0-100 (default 0)",
+						},
+					},
+					"required": []string{"agent_id", "interval"},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: toolFuncDef{
+				Name:        "queue_collection",
+				Description: "Queue a typed collection/recon task on an agent. action: screenshot, ps, netstat, av, users, drives, services, beacon_now. Prefer this over execute_command. Same approval rules as execute_command.",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"agent_id": map[string]string{
+							"type":        "string",
+							"description": "Agent ID or hostname",
+						},
+						"action": map[string]string{
+							"type":        "string",
+							"description": "screenshot | ps | netstat | av | users | drives | services | beacon_now",
+						},
+					},
+					"required": []string{"agent_id", "action"},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: toolFuncDef{
 				Name:        "delete_listener",
 				Description: "Delete a listener permanently. Requires allow_execute. Refuses if any agent still references the listener.",
 				Parameters: map[string]interface{}{
@@ -1306,17 +1906,26 @@ func (s *Server) executeToolCtx(reqCtx *aiReqCtx, name string, argsJSON string) 
 	// operator is already focused on an agent in the console. Array-valued
 	// keys never land in the partial map; injectDefaultAgent re-parses the
 	// full JSON and only injects when the real key is absent/empty.
+	normalizedArgs := argsJSON
 	if reqCtx.DefaultAgentID != "" {
 		for _, key := range []string{"agent_id", "agent_ids"} {
 			raw, exists := args[key]
 			if !exists || strings.TrimSpace(raw) == "" || raw == "null" || raw == `[]` {
 				continue
 			}
-			return s.executeToolSwitch(name, argsJSON)
+			normalizedArgs = argsJSON
+			goto authorize
 		}
-		return s.executeToolWithDefaultAgent(name, argsJSON, reqCtx.DefaultAgentID)
+		normalizedArgs = injectDefaultAgent(name, argsJSON, reqCtx.DefaultAgentID)
 	}
-	return s.executeToolSwitch(name, argsJSON)
+authorize:
+	if allowed, result := s.authorizeAITool(reqCtx, name, normalizedArgs); !allowed {
+		return result
+	}
+	if name == "search_knowledge" {
+		return s.executeAIKnowledgeSearchTool(reqCtx, normalizedArgs)
+	}
+	return s.executeToolSwitchCtx(reqCtx, name, normalizedArgs)
 }
 
 // injectDefaultAgent returns argsJSON with the context agent filled in for
@@ -1325,7 +1934,7 @@ func (s *Server) executeToolCtx(reqCtx *aiReqCtx, name string, argsJSON string) 
 func injectDefaultAgent(name string, argsJSON string, defaultAgent string) string {
 	switch name {
 	case "execute_command", "get_agent_tasks", "get_timeline", "get_attack_surface",
-		"get_agent_detail", "query_bloodhound":
+		"get_agent_detail", "query_bloodhound", "set_sleep", "queue_collection":
 		var orig map[string]interface{}
 		if err := json.Unmarshal([]byte(argsJSON), &orig); err == nil {
 			cur, _ := orig["agent_id"].(string)
@@ -1358,6 +1967,10 @@ func (s *Server) executeToolWithDefaultAgent(name string, argsJSON string, defau
 }
 
 func (s *Server) executeToolSwitch(name string, argsJSON string) string {
+	return s.executeToolSwitchCtx(nil, name, argsJSON)
+}
+
+func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON string) string {
 	// Tolerant pre-parse (see executeToolCtx): string-valued keys still land
 	// in the map even when array/number keys make Unmarshal return an error.
 	// Tools that need non-string values re-parse argsJSON themselves.
@@ -1366,26 +1979,69 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 
 	switch name {
 	case "list_agents":
+		var p struct {
+			Status   string `json:"status"`
+			OS       string `json:"os"`
+			Query    string `json:"query"`
+			Elevated *bool  `json:"elevated"`
+			Limit    int    `json:"limit"`
+		}
+		_ = json.Unmarshal([]byte(argsJSON), &p)
+		if p.Limit <= 0 || p.Limit > 50 {
+			p.Limit = 30
+		}
+		q := s.db.Model(&db.Implant{})
+		if reqCtx != nil && reqCtx.Principal.UserID != 0 {
+			q = q.Where("tenant_id = ?", reqCtx.Principal.TenantID)
+		}
+		switch strings.ToLower(strings.TrimSpace(p.Status)) {
+		case "online", "offline":
+			q = q.Where("status = ?", strings.ToLower(strings.TrimSpace(p.Status)))
+		}
+		if osFilter := strings.TrimSpace(p.OS); osFilter != "" {
+			q = q.Where("os LIKE ?", "%"+osFilter+"%")
+		}
+		if query := strings.TrimSpace(p.Query); query != "" {
+			like := "%" + query + "%"
+			q = q.Where("id LIKE ? OR hostname LIKE ? OR ip LIKE ? OR username LIKE ?", like, like, like, like)
+		}
+		if p.Elevated != nil && *p.Elevated {
+			q = q.Where("elevated = ?", true)
+		}
 		var agents []db.Implant
-		if err := s.db.Order("last_seen desc").Limit(50).Find(&agents).Error; err != nil {
+		if err := q.Order("last_seen desc").Limit(p.Limit).Find(&agents).Error; err != nil {
 			slog.Error("AI: failed to list agents", "err", err)
+			return `{"error":"failed to list agents"}`
 		}
 		var out []map[string]interface{}
 		for _, a := range agents {
-			out = append(out, map[string]interface{}{
+			row := map[string]interface{}{
 				"id": a.ID, "hostname": a.Hostname, "ip": a.IP,
-				"os": a.OS, "username": a.Username, "status": a.Status,
+				"os": a.OS, "username": a.Username,
+				"status": a.Status, "elevated": a.Elevated,
 				"last_seen": a.LastSeen.Format(time.RFC3339),
-			})
+				"stale":     implantIsStale(a),
+			}
+			if a.Domain != "" {
+				row["domain"] = a.Domain
+			}
+			if a.Integrity != "" {
+				row["integrity"] = a.Integrity
+			}
+			if a.CurrentInterval > 0 {
+				row["sleep_s"] = a.CurrentInterval
+				row["jitter"] = a.CurrentJitter
+			}
+			out = append(out, row)
 		}
-		b, ok := marshalJSONSafe(out)
+		b, ok := marshalJSONSafe(map[string]interface{}{"count": len(out), "agents": out})
 		if !ok {
 			return `{"error":"failed to marshal agents"}`
 		}
 		return string(b)
 
 	case "get_agent_detail":
-		aid := s.resolveAgentID(args["agent_id"])
+		aid := s.resolveAIAgentID(reqCtx, args["agent_id"])
 		if aid == "" {
 			return `{"error":"agent not found"}`
 		}
@@ -1397,14 +2053,38 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		if err := s.db.Model(&db.Task{}).Where("agent_id = ?", agent.ID).Count(&taskCount).Error; err != nil {
 			slog.Error("Failed to count agent tasks", "err", err)
 		}
-		type detail struct {
-			ID, Hostname, IP, OS, Arch, Username, Domain, Status string
-			Integrity                                            string
-			PID                                                  int
-			Elevated                                             bool
-			TaskCount                                            int64
+		d := map[string]interface{}{
+			"id": agent.ID, "hostname": agent.Hostname, "ip": agent.IP,
+			"os": agent.OS, "arch": agent.Arch, "username": agent.Username,
+			"domain": agent.Domain, "status": agent.Status, "integrity": agent.Integrity,
+			"pid": agent.PID, "process": agent.ProcessName, "elevated": agent.Elevated,
+			"task_count": taskCount, "sleep_s": agent.CurrentInterval, "jitter": agent.CurrentJitter,
+			"last_seen": agent.LastSeen.Format(time.RFC3339), "stale": implantIsStale(agent),
 		}
-		d := detail{agent.ID, agent.Hostname, agent.IP, agent.OS, agent.Arch, agent.Username, agent.Domain, agent.Status, agent.Integrity, agent.PID, agent.Elevated, taskCount}
+		if agent.Notes != "" {
+			d["notes"] = truncateStr(agent.Notes, 240)
+		}
+		if agent.Tags != "" {
+			d["tags"] = agent.Tags
+		}
+		var recent []db.Task
+		if err := s.db.Where("agent_id = ?", agent.ID).Order("created_at desc").Limit(3).Find(&recent).Error; err == nil && len(recent) > 0 {
+			var brief []map[string]interface{}
+			for _, t := range recent {
+				item := map[string]interface{}{
+					"id": t.ID, "type": t.Type, "status": t.Status,
+					"created_at": t.CreatedAt.Format(time.RFC3339),
+				}
+				if t.Command != "" {
+					item["command"] = truncateStr(t.Command, 120)
+				}
+				if t.Error != "" {
+					item["error"] = truncateStr(t.Error, 200)
+				}
+				brief = append(brief, item)
+			}
+			d["recent_tasks"] = brief
+		}
 		b, ok := marshalJSONSafe(d)
 		if !ok {
 			return `{"error":"failed to marshal agent detail"}`
@@ -1413,7 +2093,7 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 
 	case "execute_command":
 		ecArgs := parseExecuteCommandArgs(argsJSON)
-		aid := s.resolveAgentID(ecArgs.AgentID)
+		aid := s.resolveAIAgentID(reqCtx, ecArgs.AgentID)
 		if aid == "" {
 			return `{"error":"agent not found"}`
 		}
@@ -1421,7 +2101,7 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		if shell == "" {
 			shell = "cmd.exe"
 		}
-		allowExec := s.cfg != nil && s.cfg.AI.AllowExecute
+		allowExec := s.aiExecutionEnabled()
 		sensitive := isSensitiveCommand(ecArgs.Command)
 		status := TaskStatusPendingApproval
 		// allow_execute is a SUBSET gate: server-wide RequireApproval for
@@ -1484,7 +2164,7 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		return string(b)
 
 	case "get_agent_tasks":
-		aid := s.resolveAgentID(args["agent_id"])
+		aid := s.resolveAIAgentID(reqCtx, args["agent_id"])
 		if aid == "" {
 			return `{"error":"agent not found"}`
 		}
@@ -1532,7 +2212,11 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 
 	case "list_credentials":
 		var creds []db.CredentialEntry
-		if err := s.db.Order("created_at desc").Limit(100).Find(&creds).Error; err != nil {
+		credentialQuery := s.db.Order("created_at desc").Limit(100)
+		if reqCtx != nil && reqCtx.Principal.UserID != 0 {
+			credentialQuery = credentialQuery.Where("agent_id IN (?)", s.db.Model(&db.Implant{}).Select("id").Where("tenant_id = ?", reqCtx.Principal.TenantID))
+		}
+		if err := credentialQuery.Find(&creds).Error; err != nil {
 			slog.Error("AI: failed to list credentials", "err", err)
 		}
 		var out []map[string]interface{}
@@ -1551,7 +2235,14 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		return string(b)
 
 	case "get_online_operators":
-		b, ok := marshalJSONSafe([]map[string]string{})
+		var ops []map[string]interface{}
+		if s.operatorSessions != nil {
+			ops = s.operatorSessions.OperatorPresenceSnapshot()
+		}
+		if ops == nil {
+			ops = []map[string]interface{}{}
+		}
+		b, ok := marshalJSONSafe(map[string]interface{}{"count": len(ops), "operators": ops})
 		if !ok {
 			return `{"error":"failed to marshal operators"}`
 		}
@@ -1571,7 +2262,11 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		}
 		like := "%" + q.Query + "%"
 		var tasks []db.Task
-		if err := s.db.Where("command LIKE ? OR result LIKE ?", like, like).Order("created_at desc").Limit(q.Limit).Find(&tasks).Error; err != nil {
+		taskQuery := s.db.Where("command LIKE ? OR result LIKE ?", like, like)
+		if reqCtx != nil && reqCtx.Principal.UserID != 0 {
+			taskQuery = taskQuery.Where("agent_id IN (?)", s.db.Model(&db.Implant{}).Select("id").Where("tenant_id = ?", reqCtx.Principal.TenantID))
+		}
+		if err := taskQuery.Order("created_at desc").Limit(q.Limit).Find(&tasks).Error; err != nil {
 			return `{"error":"failed to search tasks"}`
 		}
 		var out []map[string]interface{}
@@ -1602,7 +2297,7 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		if p.Limit <= 0 || p.Limit > 100 {
 			p.Limit = 30
 		}
-		aid2 := s.resolveAgentID(p.AgentID)
+		aid2 := s.resolveAIAgentID(reqCtx, p.AgentID)
 		if aid2 == "" {
 			return `{"error":"agent not found"}`
 		}
@@ -1633,7 +2328,10 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		if p.Days <= 0 || p.Days > 365 {
 			p.Days = 30
 		}
-		entries, _ := s.extractIOCs(p.Days, false)
+		entries, _, err := s.extractIOCs(p.Days, false)
+		if err != nil {
+			return fmt.Sprintf(`{"error":%q}`, err.Error())
+		}
 		var filtered []iocEntry
 		for _, e := range entries {
 			if p.Type != "" && e.Type != p.Type {
@@ -1666,12 +2364,12 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		return string(b)
 
 	case "run_macro":
-		if s.cfg == nil || !s.cfg.AI.AllowExecute {
+		if !s.aiExecutionEnabled() {
 			return `{"error":"allow_execute is disabled in AI config; enable it to run macros"}`
 		}
 		var p struct {
-			MacroID   *uint   `json:"macro_id"`
-			MacroName string  `json:"macro_name"`
+			MacroID   *uint    `json:"macro_id"`
+			MacroName string   `json:"macro_name"`
 			AgentIDs  []string `json:"agent_ids"`
 		}
 		_ = json.Unmarshal([]byte(argsJSON), &p)
@@ -1695,7 +2393,7 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		}
 		dispatched := 0
 		for _, aid := range p.AgentIDs {
-			resolved := s.resolveAgentID(aid)
+			resolved := s.resolveAIAgentID(reqCtx, aid)
 			if resolved == "" {
 				continue
 			}
@@ -1710,7 +2408,7 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		return string(b)
 
 	case "create_automation_rule":
-		if s.cfg == nil || !s.cfg.AI.AllowExecute {
+		if !s.aiExecutionEnabled() {
 			return `{"error":"allow_execute is disabled; enable it to create automation rules"}`
 		}
 		var p struct {
@@ -1740,13 +2438,13 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 			return `{"error":"command or macro_id required"}`
 		}
 		rule := db.AutomationRule{
-			ID:        fmt.Sprintf("ai-%d", time.Now().UnixNano()),
-			Name:      p.Name,
-			EventType: p.EventType,
+			ID:         fmt.Sprintf("ai-%d", time.Now().UnixNano()),
+			Name:       p.Name,
+			EventType:  p.EventType,
 			Conditions: "[]",
-			Actions:   fmt.Sprintf(`[{"type":"%s","params":%s}]`, actionType, params),
-			Enabled:   true,
-			CreatedBy: "ai",
+			Actions:    fmt.Sprintf(`[{"type":"%s","params":%s}]`, actionType, params),
+			Enabled:    true,
+			CreatedBy:  "ai",
 		}
 		if err := s.db.Create(&rule).Error; err != nil {
 			return `{"error":"failed to create rule"}`
@@ -1769,7 +2467,7 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		if p.AgentID == "" {
 			return `{"error":"agent_id required"}`
 		}
-		aid := s.resolveAgentID(p.AgentID)
+		aid := s.resolveAIAgentID(reqCtx, p.AgentID)
 		if aid == "" {
 			return `{"error":"agent not found"}`
 		}
@@ -1790,9 +2488,9 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 				"elevated": ag.Elevated, "pid": ag.PID, "status": ag.Status, "version": ag.Version,
 			},
 			"credentials_nearby": credCount,
-			"recent_tasks": recentTasks,
-			"recent_lateral": recentLateral,
-			"hint": "Use this surface to recommend the next step (e.g., lateral movement, cred dumping, persistence). Consider OS, privilege level, and nearby creds.",
+			"recent_tasks":       recentTasks,
+			"recent_lateral":     recentLateral,
+			"hint":               "Use this surface to recommend the next step (e.g., lateral movement, cred dumping, persistence). Consider OS, privilege level, and nearby creds.",
 		}
 		b, ok := marshalJSONSafe(surface)
 		if !ok {
@@ -1815,6 +2513,9 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		}
 		var task db.Task
 		if err := s.db.First(&task, p.TaskID).Error; err != nil {
+			return `{"error":"task not found"}`
+		}
+		if reqCtx != nil && reqCtx.Principal.UserID != 0 && s.resolveAIAgentID(reqCtx, task.AgentID) == "" {
 			return `{"error":"task not found"}`
 		}
 		out := map[string]interface{}{
@@ -1851,7 +2552,7 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		if len(p.AgentIDs) > 20 {
 			p.AgentIDs = p.AgentIDs[:20]
 		}
-		allowExec := s.cfg != nil && s.cfg.AI.AllowExecute
+		allowExec := s.aiExecutionEnabled()
 		sensitive := isSensitiveCommand(p.Command)
 		status := "pending_approval"
 		// Same subset-gate as execute_command: server RequireApproval wins.
@@ -1869,7 +2570,7 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		}
 		var results []bulkResult
 		for _, aid := range p.AgentIDs {
-			resolved := s.resolveAgentID(aid)
+			resolved := s.resolveAIAgentID(reqCtx, aid)
 			if resolved == "" {
 				results = append(results, bulkResult{AgentID: aid, Error: "agent not found"})
 				continue
@@ -1909,23 +2610,26 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		}
 		_ = json.Unmarshal([]byte(argsJSON), &p)
 		q := s.db.Model(&db.BloodHoundResult{})
+		if reqCtx != nil && reqCtx.Principal.UserID != 0 {
+			q = q.Where("agent_id IN (?)", s.db.Model(&db.Implant{}).Select("id").Where("tenant_id = ?", reqCtx.Principal.TenantID))
+		}
 		if p.AgentID != "" {
-			q = q.Where("agent_id = ?", s.resolveAgentID(p.AgentID))
+			q = q.Where("agent_id = ?", s.resolveAIAgentID(reqCtx, p.AgentID))
 		}
 		var bh db.BloodHoundResult
 		if err := q.Order("id desc").First(&bh).Error; err != nil {
 			return `{"error":"no bloodhound collections found. Run a collection from the BloodHound page first."}`
 		}
 		b, ok := marshalJSONSafe(map[string]interface{}{
-			"id":                  bh.ID,
-			"agent_id":            bh.AgentID,
-			"collection_method":   bh.CollectionMethod,
-			"summary":             truncateStr(bh.Summary, AIToolResultTruncLen * 2),
-			"user_count":          bh.UserCount,
-			"computer_count":      bh.ComputerCount,
-			"group_count":         bh.GroupCount,
-			"session_count":       bh.SessionCount,
-			"domain_admin_count":  bh.DomainAdminCount,
+			"id":                 bh.ID,
+			"agent_id":           bh.AgentID,
+			"collection_method":  bh.CollectionMethod,
+			"summary":            truncateStr(bh.Summary, AIToolResultTruncLen*2),
+			"user_count":         bh.UserCount,
+			"computer_count":     bh.ComputerCount,
+			"group_count":        bh.GroupCount,
+			"session_count":      bh.SessionCount,
+			"domain_admin_count": bh.DomainAdminCount,
 		})
 		if !ok {
 			return `{"error":"failed to marshal bloodhound data"}`
@@ -2089,7 +2793,7 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		if p.Action != "approve" && p.Action != "cancel" {
 			return `{"error":"action must be \"approve\" or \"cancel\""}`
 		}
-		allowExec := s.cfg != nil && s.cfg.AI.AllowExecute
+		allowExec := s.aiExecutionEnabled()
 		var approved, cancelled, skippedHuman, skippedSensitive, skippedOther int
 		var audit []auditEntry
 		type bulkErr struct {
@@ -2164,11 +2868,11 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 			s.LogAuditRecords(nil, audit)
 		}
 		result := map[string]interface{}{
-			"action":          p.Action,
-			"approved":        approved,
-			"cancelled":       cancelled,
-			"skipped_human":   skippedHuman,
-			"skipped_other":   skippedOther,
+			"action":            p.Action,
+			"approved":          approved,
+			"cancelled":         cancelled,
+			"skipped_human":     skippedHuman,
+			"skipped_other":     skippedOther,
 			"sensitive_blocked": skippedSensitive,
 		}
 		if len(errs) > 0 {
@@ -2191,8 +2895,11 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		}
 		since := time.Now().AddDate(0, 0, -p.Days)
 		q := s.db.Where("type IN ? AND created_at >= ?", []string{"screenshot", "screenshot_window", "screen_stream_start"}, since)
+		if reqCtx != nil && reqCtx.Principal.UserID != 0 {
+			q = q.Where("agent_id IN (?)", s.db.Model(&db.Implant{}).Select("id").Where("tenant_id = ?", reqCtx.Principal.TenantID))
+		}
 		if p.AgentID != "" {
-			aid := s.resolveAgentID(p.AgentID)
+			aid := s.resolveAIAgentID(reqCtx, p.AgentID)
 			if aid == "" {
 				return `{"error":"agent not found"}`
 			}
@@ -2202,11 +2909,11 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		q.Order("created_at desc").Limit(500).Find(&tasks)
 		byAgent := map[string]int{}
 		type shotItem struct {
-			TaskID     uint   `json:"task_id"`
-			AgentID    string `json:"agent_id"`
-			Status     string `json:"status"`
-			Size       int64  `json:"size_bytes"`
-			CreatedAt  string `json:"created_at"`
+			TaskID    uint   `json:"task_id"`
+			AgentID   string `json:"agent_id"`
+			Status    string `json:"status"`
+			Size      int64  `json:"size_bytes"`
+			CreatedAt string `json:"created_at"`
 		}
 		var recent []shotItem
 		for i, t := range tasks {
@@ -2220,11 +2927,11 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 			agentsOut = append(agentsOut, map[string]interface{}{"agent_id": aid, "count": cnt})
 		}
 		b, ok := marshalJSONSafe(map[string]interface{}{
-			"window_days":   p.Days,
-			"total":         len(tasks),
-			"by_agent":      agentsOut,
-			"recent":        recent,
-			"note":          "Screenshot files are served from the Screenshots page; this is task-level metadata.",
+			"window_days": p.Days,
+			"total":       len(tasks),
+			"by_agent":    agentsOut,
+			"recent":      recent,
+			"note":        "Screenshot files are served from the Screenshots page; this is task-level metadata.",
 		})
 		if !ok {
 			return `{"error":"failed to marshal summary"}`
@@ -2242,8 +2949,11 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		}
 		since := time.Now().AddDate(0, 0, -p.Days)
 		q := s.db.Where("type = ? AND created_at >= ?", "keylogger_dump", since)
+		if reqCtx != nil && reqCtx.Principal.UserID != 0 {
+			q = q.Where("agent_id IN (?)", s.db.Model(&db.Implant{}).Select("id").Where("tenant_id = ?", reqCtx.Principal.TenantID))
+		}
 		if p.AgentID != "" {
-			aid := s.resolveAgentID(p.AgentID)
+			aid := s.resolveAIAgentID(reqCtx, p.AgentID)
 			if aid == "" {
 				return `{"error":"agent not found"}`
 			}
@@ -2254,10 +2964,10 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		byAgent := map[string]int{}
 		highValueKeywords := []string{"password", "passwd", "login", "logon", "credential", "token", "@gmail", "@outlook", "@yahoo", "@qq.", "@163.", "banking", "vpn"}
 		type kvEntry struct {
-			TaskID  uint   `json:"task_id"`
-			AgentID string `json:"agent_id"`
-			Keyword string `json:"keyword"`
-			Context string `json:"context"`
+			TaskID    uint   `json:"task_id"`
+			AgentID   string `json:"agent_id"`
+			Keyword   string `json:"keyword"`
+			Context   string `json:"context"`
 			CreatedAt string `json:"created_at"`
 		}
 		var hits []kvEntry
@@ -2293,12 +3003,12 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 			agentsOut = append(agentsOut, map[string]interface{}{"agent_id": aid, "dumps": cnt})
 		}
 		b, ok := marshalJSONSafe(map[string]interface{}{
-			"window_days":       p.Days,
-			"total_dumps":       len(tasks),
-			"captured_bytes":    totalBytes,
-			"by_agent":          agentsOut,
-			"high_value_hits":   hits,
-			"note":              "Full keystroke dumps are on the agent detail page; this is a keyword-triage view.",
+			"window_days":     p.Days,
+			"total_dumps":     len(tasks),
+			"captured_bytes":  totalBytes,
+			"by_agent":        agentsOut,
+			"high_value_hits": hits,
+			"note":            "Full keystroke dumps are on the agent detail page; this is a keyword-triage view.",
 		})
 		if !ok {
 			return `{"error":"failed to marshal summary"}`
@@ -2352,7 +3062,7 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		return string(b)
 
 	case "create_listener":
-		if s.cfg == nil || !s.cfg.AI.AllowExecute {
+		if !s.aiExecutionEnabled() {
 			return `{"error":"allow_execute is disabled in AI config; enable it to manage listeners"}`
 		}
 		var p struct {
@@ -2423,7 +3133,7 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		return string(b)
 
 	case "update_listener":
-		if s.cfg == nil || !s.cfg.AI.AllowExecute {
+		if !s.aiExecutionEnabled() {
 			return `{"error":"allow_execute is disabled in AI config; enable it to manage listeners"}`
 		}
 		var p struct {
@@ -2500,7 +3210,7 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		return string(b)
 
 	case "delete_listener":
-		if s.cfg == nil || !s.cfg.AI.AllowExecute {
+		if !s.aiExecutionEnabled() {
 			return `{"error":"allow_execute is disabled in AI config; enable it to manage listeners"}`
 		}
 		var p struct {
@@ -2543,6 +3253,154 @@ func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 		}
 		return string(b)
 
+	case "get_situation":
+		snap := s.collectSituation(reqCtx)
+		b, ok := marshalJSONSafe(snap)
+		if !ok {
+			return `{"error":"failed to marshal situation"}`
+		}
+		return string(b)
+
+	case "get_alerts":
+		var p struct {
+			Status string `json:"status"`
+			Limit  int    `json:"limit"`
+		}
+		_ = json.Unmarshal([]byte(argsJSON), &p)
+		if p.Limit <= 0 || p.Limit > 50 {
+			p.Limit = 15
+		}
+		status := strings.ToLower(strings.TrimSpace(p.Status))
+		if status == "" {
+			status = "active"
+		}
+		q := s.db.Model(&db.Alert{})
+		if status != "all" {
+			q = q.Where("status = ?", status)
+		}
+		var alerts []db.Alert
+		if err := q.Order("created_at desc").Limit(p.Limit).Find(&alerts).Error; err != nil {
+			return `{"error":"failed to list alerts"}`
+		}
+		var out []map[string]interface{}
+		for _, a := range alerts {
+			out = append(out, map[string]interface{}{
+				"id": a.ID, "type": a.Type, "severity": a.Severity,
+				"title": a.Title, "message": truncateStr(a.Message, 240),
+				"source": a.Source, "source_name": a.SourceName,
+				"status": a.Status, "created_at": a.CreatedAt.Format(time.RFC3339),
+			})
+		}
+		b, ok := marshalJSONSafe(map[string]interface{}{"count": len(out), "alerts": out})
+		if !ok {
+			return `{"error":"failed to marshal alerts"}`
+		}
+		return string(b)
+
+	case "set_sleep":
+		var p struct {
+			AgentID  string `json:"agent_id"`
+			Interval int    `json:"interval"`
+			Jitter   int    `json:"jitter"`
+		}
+		_ = json.Unmarshal([]byte(argsJSON), &p)
+		if p.AgentID == "" {
+			p.AgentID = args["agent_id"]
+		}
+		aid := s.resolveAIAgentID(reqCtx, p.AgentID)
+		if aid == "" {
+			return `{"error":"agent not found"}`
+		}
+		if p.Interval < 1 || p.Interval > 86400 {
+			return `{"error":"interval must be 1-86400 seconds"}`
+		}
+		if p.Jitter < 0 || p.Jitter > 100 {
+			return `{"error":"jitter must be 0-100"}`
+		}
+		allowExec := s.aiExecutionEnabled()
+		status := TaskStatusPendingApproval
+		if allowExec && s.resolveInitialTaskStatus("set_sleep") == "pending" {
+			status = "pending"
+		}
+		if err := s.trackPendingTask(aid); err != nil {
+			b, _ := marshalJSONSafe(map[string]interface{}{"error": sanitizeError(err, "task")})
+			return string(b)
+		}
+		cmd := fmt.Sprintf("%d,%d", p.Interval, p.Jitter)
+		task := db.Task{
+			AgentID: aid, Type: "set_sleep", Command: cmd,
+			Status: status, CreatedBy: "ai",
+		}
+		if err := s.db.Create(&task).Error; err != nil {
+			s.decPendingTasks(aid)
+			return `{"error":"failed to create set_sleep task"}`
+		}
+		if status == "pending" {
+			s.broadcastTaskUpdate(aid, task)
+		}
+		msg := "Sleep change queued."
+		if status == TaskStatusPendingApproval {
+			msg = "Sleep change requires operator approval."
+		}
+		b, ok := marshalJSONSafe(map[string]interface{}{
+			"task_id": task.ID, "status": status, "interval": p.Interval, "jitter": p.Jitter, "message": msg,
+		})
+		if !ok {
+			return `{"error":"failed to marshal result"}`
+		}
+		return string(b)
+
+	case "queue_collection":
+		var p struct {
+			AgentID string `json:"agent_id"`
+			Action  string `json:"action"`
+		}
+		_ = json.Unmarshal([]byte(argsJSON), &p)
+		if p.AgentID == "" {
+			p.AgentID = args["agent_id"]
+		}
+		if p.Action == "" {
+			p.Action = args["action"]
+		}
+		aid := s.resolveAIAgentID(reqCtx, p.AgentID)
+		if aid == "" {
+			return `{"error":"agent not found"}`
+		}
+		taskType, ok := aiCollectionTypes[strings.ToLower(strings.TrimSpace(p.Action))]
+		if !ok {
+			return `{"error":"action must be screenshot, ps, netstat, av, users, drives, services, or beacon_now"}`
+		}
+		allowExec := s.aiExecutionEnabled()
+		status := TaskStatusPendingApproval
+		if allowExec && s.resolveInitialTaskStatus(taskType) == "pending" {
+			status = "pending"
+		}
+		if err := s.trackPendingTask(aid); err != nil {
+			b, _ := marshalJSONSafe(map[string]interface{}{"error": sanitizeError(err, "task")})
+			return string(b)
+		}
+		task := db.Task{
+			AgentID: aid, Type: taskType, Status: status, CreatedBy: "ai",
+		}
+		if err := s.db.Create(&task).Error; err != nil {
+			s.decPendingTasks(aid)
+			return `{"error":"failed to create collection task"}`
+		}
+		if status == "pending" {
+			s.broadcastTaskUpdate(aid, task)
+		}
+		msg := "Collection task queued."
+		if status == TaskStatusPendingApproval {
+			msg = "Collection task requires operator approval."
+		}
+		b, mok := marshalJSONSafe(map[string]interface{}{
+			"task_id": task.ID, "status": status, "action": taskType, "message": msg,
+		})
+		if !mok {
+			return `{"error":"failed to marshal result"}`
+		}
+		return string(b)
+
 	default:
 		return `{"error":"unknown tool"}`
 	}
@@ -2566,38 +3424,130 @@ func truncateStr(s string, n int) string {
 
 // ── Situation snapshot (injected as live system context) ──────────────────
 
+type aiSituation struct {
+	AgentsTotal     int64               `json:"agents_total"`
+	AgentsOnline    int64               `json:"agents_online"`
+	AgentsOffline   int64               `json:"agents_offline"`
+	ElevatedOnline  int64               `json:"elevated_online"`
+	StaleOnline     int64               `json:"stale_online"`
+	OnlineOS        map[string]int64    `json:"online_os"`
+	ListenersActive int64               `json:"listeners_active"`
+	PendingApproval int64               `json:"pending_approval"`
+	AIPending       int64               `json:"ai_pending_approval"`
+	ActiveAlerts    int64               `json:"active_alerts"`
+	Credentials     int64               `json:"credentials"`
+	OperatorsOnline int                 `json:"operators_online"`
+	RecentAgents    []map[string]string `json:"recent_agents"`
+}
+
+func (s *Server) collectSituation(reqCtx *aiReqCtx) aiSituation {
+	out := aiSituation{OnlineOS: map[string]int64{}, RecentAgents: []map[string]string{}}
+	if s.db == nil {
+		return out
+	}
+	scoped := reqCtx != nil && reqCtx.Principal.UserID != 0
+	agents := func() *gorm.DB {
+		query := s.db.Model(&db.Implant{})
+		if scoped {
+			query = query.Where("tenant_id = ?", reqCtx.Principal.TenantID)
+		}
+		return query
+	}
+	hasPermission := func(permission string) bool {
+		return !scoped || reqCtx.Principal.hasPermission(s.db, permission)
+	}
+
+	agents().Count(&out.AgentsTotal)
+	agents().Where("status = ?", "online").Count(&out.AgentsOnline)
+	out.AgentsOffline = out.AgentsTotal - out.AgentsOnline
+	agents().Where("status = ? AND elevated = ?", "online", true).Count(&out.ElevatedOnline)
+	var onlineHosts []db.Implant
+	agents().Where("status = ?", "online").Find(&onlineHosts)
+	for _, a := range onlineHosts {
+		if implantIsStale(a) {
+			out.StaleOnline++
+		}
+	}
+	if hasPermission(db.PermListenersRead) {
+		s.db.Model(&db.Listener{}).Where("enabled = ?", true).Count(&out.ListenersActive)
+	}
+	if hasPermission(db.PermTasksRead) {
+		tasks := s.db.Model(&db.Task{})
+		if scoped {
+			tenantAgents := s.db.Model(&db.Implant{}).Select("id").Where("tenant_id = ?", reqCtx.Principal.TenantID)
+			tasks = tasks.Where("agent_id IN (?)", tenantAgents)
+		}
+		tasks.Where("status = ?", "pending_approval").Count(&out.PendingApproval)
+		tasks.Where("status = ? AND created_by = ?", "pending_approval", "ai").Count(&out.AIPending)
+	}
+	if hasPermission(db.PermOpsecRead) {
+		s.db.Model(&db.Alert{}).Where("status = ?", "active").Count(&out.ActiveAlerts)
+	}
+	if hasPermission(db.PermCredsRead) {
+		credentials := s.db.Model(&db.CredentialEntry{})
+		if scoped {
+			credentials = credentials.Where("tenant_id = ?", reqCtx.Principal.TenantID)
+		}
+		credentials.Count(&out.Credentials)
+	}
+	if hasPermission(db.PermUsersRead) && s.operatorSessions != nil {
+		out.OperatorsOnline = s.operatorSessions.ActiveOperatorCount()
+	}
+
+	type osRow struct {
+		OS    string
+		Count int64
+	}
+	var osRows []osRow
+	agents().Select("os as os, count(*) as count").Where("status = ?", "online").Group("os").Scan(&osRows)
+	for _, row := range osRows {
+		label := row.OS
+		if strings.TrimSpace(label) == "" {
+			label = "unknown"
+		}
+		out.OnlineOS[label] = row.Count
+	}
+
+	var recent []db.Implant
+	agents().Order("last_seen desc").Limit(5).Find(&recent)
+	for _, a := range recent {
+		out.RecentAgents = append(out.RecentAgents, map[string]string{
+			"id": a.ID, "hostname": a.Hostname, "os": a.OS, "status": a.Status,
+			"username": a.Username, "last_seen": a.LastSeen.Format(time.RFC3339),
+		})
+	}
+	return out
+}
+
 func (s *Server) buildSituationSnapshot() string {
+	snap := s.collectSituation(nil)
 	if s.db == nil {
 		return ""
 	}
-	var totalAgents, onlineAgents, pendingTasks, aiPendingTasks, alertCount int64
-	var listenersActive int64
-
-	s.db.Model(&db.Implant{}).Count(&totalAgents)
-	s.db.Model(&db.Implant{}).Where("status = ?", "online").Count(&onlineAgents)
-	s.db.Model(&db.Task{}).Where("status = ?", "pending_approval").Count(&pendingTasks)
-	s.db.Model(&db.Task{}).Where("status = ? AND created_by = ?", "pending_approval", "ai").Count(&aiPendingTasks)
-	s.db.Model(&db.Alert{}).Where("status = ?", "active").Count(&alertCount)
-	s.db.Model(&db.Listener{}).Where("enabled = ?", true).Count(&listenersActive)
-
-	var recentAgents []db.Implant
-	s.db.Order("last_seen desc").Limit(3).Find(&recentAgents)
-
 	var sb strings.Builder
 	sb.WriteString("## Current situation snapshot (live)\n")
-	sb.WriteString(fmt.Sprintf("- Agents: %d total, %d online, %d offline\n", totalAgents, onlineAgents, totalAgents-onlineAgents))
-	sb.WriteString(fmt.Sprintf("- Listeners: %d active\n", listenersActive))
-	sb.WriteString(fmt.Sprintf("- Tasks pending approval: %d", pendingTasks))
-	if aiPendingTasks > 0 {
-		sb.WriteString(fmt.Sprintf(" (%d AI-proposed)", aiPendingTasks))
+	sb.WriteString(fmt.Sprintf("- Agents: %d total, %d online, %d offline, %d elevated-online, %d stale-online\n",
+		snap.AgentsTotal, snap.AgentsOnline, snap.AgentsOffline, snap.ElevatedOnline, snap.StaleOnline))
+	if len(snap.OnlineOS) > 0 {
+		sb.WriteString("- Online OS mix:")
+		for osName, n := range snap.OnlineOS {
+			sb.WriteString(fmt.Sprintf(" %s=%d", osName, n))
+		}
+		sb.WriteString("\n")
+	}
+	sb.WriteString(fmt.Sprintf("- Listeners: %d active\n", snap.ListenersActive))
+	sb.WriteString(fmt.Sprintf("- Tasks pending approval: %d", snap.PendingApproval))
+	if snap.AIPending > 0 {
+		sb.WriteString(fmt.Sprintf(" (%d AI-proposed)", snap.AIPending))
 	}
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("- Active alerts: %d\n", alertCount))
-	if len(recentAgents) > 0 {
+	sb.WriteString(fmt.Sprintf("- Active alerts: %d · credentials in vault: %d · operators online: %d\n",
+		snap.ActiveAlerts, snap.Credentials, snap.OperatorsOnline))
+	if len(snap.RecentAgents) > 0 {
 		sb.WriteString("- Recently seen agents:\n")
-		for _, a := range recentAgents {
-			sb.WriteString(fmt.Sprintf("  - %s (%s, %s, %s, last_seen %s)\n",
-				a.ID, a.Hostname, a.OS, a.Status, a.LastSeen.Format(time.RFC3339)))
+		for _, a := range snap.RecentAgents {
+			sb.WriteString(fmt.Sprintf("  - %s (%s, %s, %s, %s, last_seen %s)\n",
+				a["id"], a["hostname"], a["os"], a["username"], a["status"], a["last_seen"]))
 		}
 	}
 	return sb.String()
@@ -2606,14 +3556,14 @@ func (s *Server) buildSituationSnapshot() string {
 // ── Sensitive command guard ───────────────────────────────────────────────
 
 var sensitiveCommandKeywords = map[string]bool{
-	"mimikatz":   true,
+	"mimikatz":    true,
 	"secretsdump": true,
-	"dcsync":     true,
-	"kerberoast": true,
-	"psexec":     true,
-	"wce":        true,
-	"bloodhound": true,
-	"sharphound": true,
+	"dcsync":      true,
+	"kerberoast":  true,
+	"psexec":      true,
+	"wce":         true,
+	"bloodhound":  true,
+	"sharphound":  true,
 }
 
 func isSensitiveCommand(cmd string) bool {
@@ -2839,7 +3789,10 @@ func parseJSONMap(s string) map[string]interface{} {
 	return m
 }
 
-func (s *Server) parseClaudeStream(resp *http.Response, ch chan<- sseEvent) (toolCalls []toolCall, content, finishReason string, usage aiUsage) {
+func (s *Server) parseClaudeStream(resp *http.Response, ch chan<- sseEvent, ctx context.Context) (toolCalls []toolCall, content, reasoning, finishReason string, usage aiUsage, err error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	reader := io.Reader(resp.Body)
 	buf := make([]byte, AIStreamBufSize)
 	var leftover string
@@ -2850,21 +3803,61 @@ func (s *Server) parseClaudeStream(resp *http.Response, ch chan<- sseEvent) (too
 		Arguments strings.Builder
 	}
 	var buildingTools []*buildingClaudeTool
+	answeringStarted := false
+	reasoningStarted := false
+	reasoningTruncated := false
+	contentTruncated := false
+	lastReasoningSent := 0
+	lastContentSent := 0
+	sawTerminalEvent := false
+
+	sendChunk := func(evt sseEvent) bool {
+		select {
+		case <-ctx.Done():
+			return false
+		case ch <- evt:
+			return true
+		}
+	}
+	flushBufferedSnapshots := func() {
+		if reasoning != "" && len(reasoning) != lastReasoningSent && sendChunk(sseEvent{"reasoning", reasoning}) {
+			lastReasoningSent = len(reasoning)
+		}
+		if content != "" && len(content) != lastContentSent && sendChunk(sseEvent{"text", content}) {
+			lastContentSent = len(content)
+		}
+	}
 
 	for {
-		n, err := reader.Read(buf)
-		if n > 0 {
+		select {
+		case <-ctx.Done():
+			err = ctx.Err()
+			return
+		default:
+		}
+		n, readErr := reader.Read(buf)
+		if n > 0 || (readErr == io.EOF && leftover != "") {
 			data := leftover + string(buf[:n])
+			if readErr == io.EOF {
+				data += "\n"
+			}
 			lines := strings.Split(data, "\n")
 			leftover = lines[len(lines)-1]
 			lines = lines[:len(lines)-1]
 
 			for _, line := range lines {
 				line = strings.TrimSpace(line)
-				if line == "" || !strings.HasPrefix(line, "data: ") {
+				if line == "" || !strings.HasPrefix(line, "data:") {
 					continue
 				}
-				jsonStr := strings.TrimPrefix(line, "data: ")
+				jsonStr := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+				if jsonStr == "" {
+					continue
+				}
+				if jsonStr == "[DONE]" {
+					sawTerminalEvent = true
+					continue
+				}
 
 				var event struct {
 					Type  string `json:"type"`
@@ -2872,6 +3865,7 @@ func (s *Server) parseClaudeStream(resp *http.Response, ch chan<- sseEvent) (too
 					Delta struct {
 						Type        string `json:"type"`
 						Text        string `json:"text"`
+						Thinking    string `json:"thinking"`
 						PartialJSON string `json:"partial_json"`
 						StopReason  string `json:"stop_reason"`
 					} `json:"delta"`
@@ -2888,6 +3882,9 @@ func (s *Server) parseClaudeStream(resp *http.Response, ch chan<- sseEvent) (too
 					Usage *struct {
 						OutputTokens int `json:"output_tokens"`
 					} `json:"usage"`
+					Error *struct {
+						Message string `json:"message"`
+					} `json:"error"`
 				}
 				if err := json.Unmarshal([]byte(jsonStr), &event); err != nil {
 					continue
@@ -2900,15 +3897,56 @@ func (s *Server) parseClaudeStream(resp *http.Response, ch chan<- sseEvent) (too
 				}
 
 				switch event.Type {
+				case "error":
+					flushBufferedSnapshots()
+					message := "Claude stream error"
+					if event.Error != nil && strings.TrimSpace(event.Error.Message) != "" {
+						message = event.Error.Message
+					}
+					err = errors.New(message)
+					return
+				case "message_stop":
+					sawTerminalEvent = true
 				case "content_block_delta":
-					if event.Delta.Type == "text_delta" && event.Delta.Text != "" {
-						content += event.Delta.Text
-						if len(content) > 8000 {
-							content = content[:8000] + "\n\n[Response truncated]"
-							ch <- sseEvent{"text", content}
+					if (event.Delta.Type == "thinking_delta" || event.Delta.Type == "reasoning_delta") && event.Delta.Thinking+event.Delta.Text != "" && !reasoningTruncated {
+						piece := event.Delta.Thinking
+						if piece == "" {
+							piece = event.Delta.Text
+						}
+						reasoning, reasoningTruncated = appendAIResponseText(reasoning, piece)
+						if !reasoningStarted {
+							if !sendChunk(aiProgressEvent("reasoning", 0)) {
+								err = ctx.Err()
+								return
+							}
+							reasoningStarted = true
+						}
+						if shouldEmitAIStreamSnapshot(reasoning, lastReasoningSent, piece, reasoningTruncated) {
+							if !sendChunk(sseEvent{"reasoning", reasoning}) {
+								err = ctx.Err()
+								return
+							}
+							lastReasoningSent = len(reasoning)
+						}
+					} else if event.Delta.Type == "text_delta" && event.Delta.Text != "" && !contentTruncated {
+						if !answeringStarted {
+							if !sendChunk(aiProgressEvent("answering", 0)) {
+								err = ctx.Err()
+								return
+							}
+							answeringStarted = true
+						}
+						content, contentTruncated = appendAIResponseText(content, event.Delta.Text)
+						if shouldEmitAIStreamSnapshot(content, lastContentSent, event.Delta.Text, contentTruncated) {
+							if !sendChunk(sseEvent{"text", content}) {
+								err = ctx.Err()
+								return
+							}
+							lastContentSent = len(content)
+						}
+						if contentTruncated {
 							return
 						}
-						ch <- sseEvent{"text", content}
 					} else if event.Delta.Type == "input_json_delta" && event.Delta.PartialJSON != "" {
 						for len(buildingTools) <= event.Index {
 							buildingTools = append(buildingTools, &buildingClaudeTool{})
@@ -2926,16 +3964,24 @@ func (s *Server) parseClaudeStream(resp *http.Response, ch chan<- sseEvent) (too
 				case "message_delta":
 					if event.Delta.StopReason != "" {
 						finishReason = event.Delta.StopReason
+						sawTerminalEvent = true
 					}
 				}
 			}
 		}
-		if err == io.EOF {
+		if readErr == io.EOF {
 			break
 		}
-		if err != nil {
+		if readErr != nil {
+			flushBufferedSnapshots()
+			err = readErr
 			return
 		}
+	}
+	if !sawTerminalEvent && (content != "" || reasoning != "" || len(buildingTools) > 0) {
+		flushBufferedSnapshots()
+		err = io.ErrUnexpectedEOF
+		return
 	}
 
 	for _, bt := range buildingTools {
@@ -2961,6 +4007,17 @@ func (s *Server) parseClaudeStream(resp *http.Response, ch chan<- sseEvent) (too
 func (s *Server) resolveAgentID(idOrHost string) string {
 	var agent db.Implant
 	if err := s.db.Where("id = ? OR hostname = ?", idOrHost, idOrHost).First(&agent).Error; err != nil {
+		return ""
+	}
+	return agent.ID
+}
+
+func (s *Server) resolveAIAgentID(reqCtx *aiReqCtx, idOrHost string) string {
+	if reqCtx == nil || reqCtx.Principal.UserID == 0 {
+		return s.resolveAgentID(idOrHost)
+	}
+	var agent db.Implant
+	if err := s.db.Where("tenant_id = ? AND (id = ? OR hostname = ?)", reqCtx.Principal.TenantID, idOrHost, idOrHost).First(&agent).Error; err != nil {
 		return ""
 	}
 	return agent.ID

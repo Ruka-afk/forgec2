@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CopyButton } from "@/components/ui/copy-button";
+import { Banner } from "@/components/ui/banner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CraftPanel } from "@/components/framework/CraftPanel";
 import { ConfigSection } from "@/components/framework/ConfigSection";
@@ -23,6 +24,7 @@ import {
   visibleBeaconTransports,
   type TransportQuality,
 } from "./transport-quality";
+import { listenerTransportCompatible } from "./generate-gate";
 
 function TransportQualityLabel({ quality }: { quality: TransportQuality }) {
   const { t } = useI18n();
@@ -98,6 +100,9 @@ export default function ConnectionPanel({
   };
 
   const transport = shared.beacon_transport || "http";
+  const listenerScheme = currentListener?.scheme || currentListener?.type || "";
+  const transportOk = listenerTransportCompatible(listenerScheme, transport, shared.failover);
+  const previewUrl = (shared.c2_url || "").split(",")[0] || "";
 
   useEffect(() => {
     if (isExperimentalTransport(transport)) setShowExperimental(true);
@@ -147,7 +152,17 @@ export default function ConnectionPanel({
               <Input aria-label={t("generate.c2_url_auto")} type="text" readOnly value={shared.c2_url} className="min-w-0 flex-1 font-mono text-xs" />
               <CopyButton text={shared.c2_url} label={t("generate.c2_url_auto")} size="icon-xs" />
             </div>
+            {previewUrl ? (
+              <p className="mt-1.5 text-(--fs-micro-sm) text-muted-foreground">
+                {t("generate.c2_preview", { url: previewUrl, transport: transport.toUpperCase() })}
+              </p>
+            ) : null}
           </div>
+          {!transportOk && shared.listener_id ? (
+            <Banner tone="warning" alert>
+              {t("generate.transport_mismatch", { transport: transport.toUpperCase(), scheme: listenerScheme || "http" })}
+            </Banner>
+          ) : null}
           <div>
             <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">{t("generate.failover_c2")}</span>
             <Input aria-label={t("generate.failover_c2")} type="text" placeholder="http://backup1:8080,http://backup2:8080" value={shared.failover} onChange={(e) => setShared(s => ({ ...s, failover: e.target.value }))} className="font-mono text-xs" />

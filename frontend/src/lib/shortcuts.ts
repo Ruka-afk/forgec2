@@ -13,7 +13,6 @@ export const DEFAULT_SHORTCUTS: Record<string, ShortcutDef> = {
   close_modal: { key: "Escape", descKey: "shortcuts.close_modal_desc" },
   refresh: { key: "F5", descKey: "shortcuts.refresh_desc" },
   toggle_lock: { key: "l", ctrl: true, shift: true, descKey: "shortcuts.toggle_lock_desc" },
-  global_search: { key: "k", ctrl: true, descKey: "shortcuts.global_search_desc" },
 };
 
 const STORAGE_KEY = "forgec2_shortcuts";

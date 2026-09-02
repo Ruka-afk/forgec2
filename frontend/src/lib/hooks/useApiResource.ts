@@ -67,8 +67,21 @@ export function useApiResource<T>({
   const hasDataRef = useRef(false);
   const inFlightRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    // Keep this lifecycle effect before the initial-refresh effect below.
+    // React Strict Mode replays effects in declaration order, so the mounted
+    // flag is restored before the replayed refresh starts.
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      abortRef.current?.abort();
+    };
+  }, []);
 
   const refresh = useCallback(async () => {
+    if (!mountedRef.current) return;
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
@@ -77,11 +90,11 @@ export function useApiResource<T>({
     setLoading(!hasDataRef.current);
     try {
       const value = await fetcherRef.current(ac.signal);
-      if (ac.signal.aborted) return;
+      if (ac.signal.aborted || !mountedRef.current) return;
       hasDataRef.current = true;
       setData(value);
     } catch (err) {
-      if (ac.signal.aborted) return;
+      if (ac.signal.aborted || !mountedRef.current) return;
       onErrorRef.current?.(err);
       if (!retainRef.current || !hasDataRef.current) {
         setError(errorMsgRef.current);
@@ -95,16 +108,21 @@ export function useApiResource<T>({
       if (abortRef.current === ac) {
         abortRef.current = null;
         inFlightRef.current = false;
-        setLoading(false);
+        if (mountedRef.current) setLoading(false);
       }
     }
   }, []);
 
   useEffect(() => {
-    if (enabled) refresh();
+    if (enabled) {
+      void refresh();
+      return;
+    }
+    abortRef.current?.abort();
+    abortRef.current = null;
+    inFlightRef.current = false;
+    setLoading(false);
   }, [enabled, refresh]);
-
-  useEffect(() => () => abortRef.current?.abort(), []);
 
   useVisibleInterval(() => { if (!inFlightRef.current) void refresh(); }, enabled ? pollMs : 0);
 

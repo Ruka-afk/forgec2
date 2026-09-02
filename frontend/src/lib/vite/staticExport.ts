@@ -60,7 +60,6 @@ const STATIC_ROUTES: string[] = [
   "scheduler",
   "screenshots",
   "scripting",
-  "search",
   "settings",
   "stager",
   "tags",

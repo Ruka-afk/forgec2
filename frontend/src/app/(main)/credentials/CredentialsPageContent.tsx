@@ -360,9 +360,9 @@ export default function CredentialsPage() {
 
   const pageCount = Math.max(1, Math.ceil(filteredEntries.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
-  const paginatedEntries = useMemo(
-    () => filteredEntries.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
-    [filteredEntries, currentPage],
+  const paginatedEntries = filteredEntries.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
   );
 
   const handleSearchChange = (value: string) => { setSearchQuery(value); setPage(1); };

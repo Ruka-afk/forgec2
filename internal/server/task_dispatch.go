@@ -14,10 +14,13 @@ import (
 	"gorm.io/gorm"
 )
 
-// getAgentOrFail fetches agent by ID. On failure writes JSON 404 and returns false.
+// getAgentOrFail fetches agent by ID within the caller's tenant scope.
+// On failure writes JSON 404 and returns false.
 func (s *Server) getAgentOrFail(c *gin.Context, id string) (db.Implant, bool) {
 	var agent db.Implant
-	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
+	q := s.db.Model(&db.Implant{})
+	q = s.tenantScope(q, c)
+	if err := q.First(&agent, "id = ?", id).Error; err != nil {
 		slog.Error("Agent not found", "agent_id", id, "error", err)
 		respondError(c, http.StatusNotFound, "agent not found")
 		return agent, false
@@ -28,9 +31,13 @@ func (s *Server) getAgentOrFail(c *gin.Context, id string) (db.Implant, bool) {
 // isChromeAgentKind reports whether the target implant is a browser-extension
 // (Chrome) agent, i.e. tagged "chrome". Exact token match to avoid
 // misclassifying "chromed" or "my-chromebook" tags.
-func (s *Server) isChromeAgentKind(agentID string) bool {
+func (s *Server) isChromeAgentKind(c *gin.Context, agentID string) bool {
 	var agent db.Implant
-	if err := s.db.Select("tags").First(&agent, "id = ?", agentID).Error; err != nil {
+	q := s.db.Model(&db.Implant{})
+	if c != nil {
+		q = s.tenantScope(q, c)
+	}
+	if err := q.Select("tags").First(&agent, "id = ?", agentID).Error; err != nil {
 		return false
 	}
 	for _, t := range strings.Split(agent.Tags, ",") {
@@ -73,7 +80,7 @@ func callerOpts(c *gin.Context) []TaskOption {
 // switch, adaptive OPSEC blocking, and the operator soft-lock. Centralizing
 // these keeps the single-task and batch paths consistent so neither can
 // bypass a gate.
-func (s *Server) validateTaskCreation(agentID, taskType, command string, callerUserID uint) error {
+func (s *Server) validateTaskCreation(c *gin.Context, agentID, taskType, command string, callerUserID uint) error {
 	if !IsKnownTaskType(taskType) && !protocol.ValidTaskType(taskType) {
 		return fmt.Errorf("unknown task type: %s", taskType)
 	}
@@ -81,7 +88,7 @@ func (s *Server) validateTaskCreation(agentID, taskType, command string, callerU
 	// Chrome-extension-only task types must never be queued onto a standard Go
 	// implant: they would sit "pending" until the next beacon and then be
 	// rejected as unknown. Restrict them to implants tagged "chrome".
-	chromeAgent := s.isChromeAgentKind(agentID)
+	chromeAgent := s.isChromeAgentKind(c, agentID)
 	if chromeTaskTypes[taskType] && !chromeAgent {
 		return fmt.Errorf("task type %s requires a chrome-tagged agent (browser extension)", taskType)
 	}
@@ -132,7 +139,7 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 		opt(&tOpts)
 	}
 
-	if err := s.validateTaskCreation(agentID, taskType, command, tOpts.callerUserID); err != nil {
+	if err := s.validateTaskCreation(nil, agentID, taskType, command, tOpts.callerUserID); err != nil {
 		return nil, err
 	}
 
@@ -428,12 +435,47 @@ func isConflictError(err error) bool {
 }
 
 // respondTaskError writes the appropriate HTTP error for a createTask failure.
-// Agent conflicts are surfaced as 409; everything else is 500.
+// Agent conflicts are surfaced as 409. Validation/policy errors raised before
+// any DB write (unknown task type, missing required parameter, opsec block,
+// lportfwd disabled, pending-task limit) are client errors (400/403/429) so the
+// operator UI can render them instead of a generic 500. Only genuine internal
+// failures (DB errors) become 500.
 func respondTaskError(c *gin.Context, err error) {
 	if isConflictError(err) {
 		respondError(c, http.StatusConflict, err.Error())
 		return
 	}
+	if status, ok := clientErrorStatus(err); ok {
+		respondError(c, status, err.Error())
+		return
+	}
 	slog.Error("Failed to create task", "error", err)
 	respondError(c, http.StatusInternalServerError, "failed to create task")
+}
+
+// clientErrorStatus maps the validation/policy errors returned by createTask /
+// validateTaskCreation to the correct client HTTP status, keeping them out of
+// the 500 bucket.
+func clientErrorStatus(err error) (int, bool) {
+	if err == nil {
+		return 0, false
+	}
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "too many pending tasks"):
+		return http.StatusTooManyRequests, true
+	case strings.Contains(msg, "requires a chrome-tagged agent"),
+		strings.Contains(msg, "is not supported on chrome extension agents"),
+		strings.Contains(msg, "lportfwd is disabled"),
+		strings.Contains(msg, "blocked by adaptive opsec"):
+		return http.StatusForbidden, true
+	case strings.Contains(msg, "unknown task type"),
+		strings.Contains(msg, "requires 'command' parameter"),
+		strings.Contains(msg, "requires 'shell' parameter"),
+		strings.Contains(msg, "requires 'path' parameter"),
+		strings.Contains(msg, "requires 'data' parameter"),
+		strings.Contains(msg, "command too long"):
+		return http.StatusBadRequest, true
+	}
+	return 0, false
 }

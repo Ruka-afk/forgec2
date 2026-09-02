@@ -58,6 +58,11 @@ export interface BinaryForm {
   working_start: string;
   working_end: string;
   working_tz: string;
+  icon_file: File | null;
+  icon_b64: string;
+  disguise_as: string;
+  file_description: string;
+  company_name: string;
 }
 
 export interface UnixForm {
@@ -169,6 +174,7 @@ export const DEFAULT_BINARY_FORM: BinaryForm = {
   arch: "amd64", domain_front: "", p2p_mode: "", p2p_parent: "",
   p2p_listen_addr: "", dns_domain: "", dns_server: "",
   working_start: "", working_end: "", working_tz: "",
+  icon_file: null, icon_b64: "", disguise_as: "", file_description: "", company_name: "",
 };
 
 export const DEFAULT_UNIX_FORM: UnixForm = {

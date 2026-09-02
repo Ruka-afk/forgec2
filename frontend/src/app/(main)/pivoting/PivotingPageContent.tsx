@@ -21,7 +21,7 @@ import { ArrowDown, ArrowLeftRight, ArrowRight, ArrowUp, Check, Info, Network, P
 import { formatCreated } from "./_components/types";
 import { formatBytes } from "@/lib/utils";
 import { usePivotingData } from "./_components/usePivotingData";
-import { api } from "@/lib/api";
+import { api, formatThrownError } from "@/lib/api";
 import { toast } from "sonner";
 
 export default function PivotingPageContent() {
@@ -320,7 +320,7 @@ export default function PivotingPageContent() {
                           await api.post(paths.agents.socks(a.id), { port: localPort.toString() });
                           toast.success(t("pivoting.toast.direct_socks", { host: a.hostname, port: String(localPort) }));
                         } catch (err) {
-                          toast.error(String(err));
+                          toast.error(formatThrownError(err));
                         } finally {
                           setDirectSocksBusy("");
                         }

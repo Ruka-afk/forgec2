@@ -7,9 +7,6 @@ import { useEffect, useState, useCallback, memo } from "react";
 import { useShallow } from "zustand/shallow";
 import { useI18n } from "@/lib/i18n";
 import { useAppStore, initStatsWSListener } from "@/lib/store";
-import { api } from "@/lib/api";
-import { paths } from "@/lib/api-paths";
-import { logger } from "@/lib/logger";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { POLL } from "@/lib/polling";
 import type { DashboardStats } from "@/types/agent";
@@ -272,22 +269,9 @@ export default function Sidebar() {
   const onlineUsers = useAppStore(useShallow((s) => s.onlineUsers));
   const setOnlineUsers = useAppStore((s) => s.setOnlineUsers);
   const currentUsername = useAppStore((s) => s.currentUsername);
-  const setCurrentUsername = useAppStore((s) => s.setCurrentUsername);
-  const setCurrentUserRole = useAppStore((s) => s.setCurrentUserRole);
-  const setCurrentPermissions = useAppStore((s) => s.setCurrentPermissions);
   const permissions = useAppStore((s) => s.currentPermissions);
 
   useEffect(() => { Promise.resolve().then(() => setSections(getSavedSections())); }, []);
-
-  useEffect(() => {
-    if (currentUsername) return;
-    api.get<{ data?: { username?: string; role?: string; permissions?: string[] } }>(paths.auth.me).then((d) => {
-      const me = d?.data;
-      if (me?.username) setCurrentUsername(me.username);
-      if (me?.role) setCurrentUserRole(me.role);
-      if (Array.isArray(me?.permissions)) setCurrentPermissions(me.permissions as PermissionKey[]);
-    }).catch((e) => { if (process.env.NODE_ENV === "development") logger.error("fetch current user failed", e); });
-  }, [currentUsername, setCurrentUsername, setCurrentUserRole, setCurrentPermissions]);
 
   const collapsed = sidebarCollapsed;
 
@@ -387,7 +371,7 @@ export default function Sidebar() {
 
   // Desktop: fixed aside
   return (
-    <aside className={`flex flex-col overflow-hidden transition-all duration-200 ease-in-out h-screen
+    <aside className={`flex h-screen flex-col overflow-hidden transition-all duration-200 ease-in-out supports-[height:100dvh]:h-[100dvh]
       bg-sidebar border-r border-border fixed left-0 top-0 z-40
       ${collapsed ? 'w-[var(--shell-sidebar-collapsed)]' : 'w-[var(--shell-sidebar-expanded)]'}`}
     >

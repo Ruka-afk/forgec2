@@ -18,13 +18,26 @@ func TestInitLootEncryption(t *testing.T) {
 }
 
 func TestInitLootEncryptionInvalidKeyClearsLoot(t *testing.T) {
-	InitLootEncryption(testHexKey)
+	// When no key is active, invalid key should leave it nil (clear).
+	lootKeyMu.Lock()
+	lootKey = nil
+	lootKeyMu.Unlock()
 	InitLootEncryption("not-valid-hex!")
 	lootKeyMu.RLock()
 	cleared := lootKey == nil
 	lootKeyMu.RUnlock()
 	if !cleared {
-		t.Fatal("invalid key should clear the loot encryption key")
+		t.Fatal("invalid key should leave loot key nil when none was active")
+	}
+	// When a key is already active, invalid reload must keep existing key
+	// (see loot.go:31-37 — prevents wiping decryptability of stored FC2ENC rows).
+	InitLootEncryption(testHexKey)
+	InitLootEncryption("not-valid-hex!")
+	lootKeyMu.RLock()
+	kept := lootKey != nil
+	lootKeyMu.RUnlock()
+	if !kept {
+		t.Fatal("invalid key should keep existing loot key when one is already active")
 	}
 	InitLootEncryption(testHexKey)
 }

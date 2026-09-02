@@ -11,12 +11,11 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/i18n", () => ({
   useI18n: () => ({
-    t: (key: string, params?: Record<string, string>) => {
+    t: (key: string) => {
       if (key === "palette.placeholder") return "Type to jump…";
       if (key === "palette.title") return "Command palette";
       if (key === "palette.no_results") return "No results";
       if (key === "palette.agents") return "Agents";
-      if (key === "palette.search_for") return `Search for "${params?.query}"`;
       return key;
     },
   }),
@@ -55,7 +54,7 @@ describe("CommandPalette", () => {
     expect(screen.getByText("nav.settings")).toBeTruthy();
   });
 
-  it("filters pages by query and offers search fallback", () => {
+  it("filters pages by query and shows no results when nothing matches", () => {
     useAppStore.setState({ commandPaletteOpen: true });
     render(<CommandPalette />);
     const input = screen.getByLabelText(/type to jump/i);
@@ -63,7 +62,7 @@ describe("CommandPalette", () => {
     expect(screen.getByText("nav.bloodhound")).toBeTruthy();
     expect(screen.queryByText("nav.dashboard")).toBeNull();
     fireEvent.change(input, { target: { value: "kerberoast" } });
-    expect(screen.getByText(/search for "kerberoast"/i)).toBeTruthy();
+    expect(screen.getByText(/no results/i)).toBeTruthy();
   });
 
   it("lists matching agents under the Agents group", () => {

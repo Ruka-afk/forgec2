@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useI18n } from "@/lib/i18n";
 import { Card } from "@/components/ui/card";
+import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Permission } from "@/components/ui/permission";
 import { Layers, Shield, Tags, Users, Wand2 } from "lucide-react";
 
@@ -20,26 +21,26 @@ const LINKS = [
 export default function AccessSection() {
   const { t } = useI18n();
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">{t("settings.access_desc")}</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <Card className="overflow-hidden">
+      <CardHeaderRow icon={Users} tone="primary" title={t("settings.access")} description={t("settings.access_desc")} />
+      <div className="grid grid-cols-1 gap-3 p-(--card-spacing) sm:grid-cols-2">
         {LINKS.map((item) => {
           const Icon = item.icon;
           return (
             <Permission key={item.href} perms={item.perms}>
-              <Link href={item.href}>
-                <Card className="flex items-start gap-3 p-4 hover:bg-secondary/50 transition-colors">
-                  <Icon className="mt-0.5 size-4 text-primary shrink-0" />
+              <Link href={item.href} className="group rounded-xl border border-border/75 bg-muted/35 p-4 transition-colors hover:border-primary/30 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
+                <div className="flex items-start gap-3">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-card text-primary shadow-xs"><Icon className="size-4" /></span>
                   <div className="min-w-0">
-                    <div className="text-sm font-medium">{t(item.labelKey)}</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">{t(item.descKey)}</div>
+                    <div className="text-sm font-semibold text-foreground group-hover:text-primary">{t(item.labelKey)}</div>
+                    <div className="mt-1 text-xs leading-5 text-muted-foreground">{t(item.descKey)}</div>
                   </div>
-                </Card>
+                </div>
               </Link>
             </Permission>
           );
         })}
       </div>
-    </div>
+    </Card>
   );
 }

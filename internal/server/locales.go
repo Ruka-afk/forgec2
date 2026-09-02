@@ -197,18 +197,6 @@ var enTranslations = TranslationMap{
 	"login.totp_label":      "Two-Factor Code (Optional)",
 	"login.authorized_only": "Authorized users only. All access is audited.",
 
-	"search.title":           "Global Search",
-	"search.subtitle":        "Search across implants, listeners, credentials and more",
-	"search.placeholder":     "Search agents, listeners, credentials…",
-	"search.hint":            "Type to search implants, listeners, credentials, BOFs, users and tasks",
-	"search.no_results":      "No results found",
-	"search.type.agent":      "Implant",
-	"search.type.listener":   "Listener",
-	"search.type.credential": "Credential",
-	"search.type.bof":        "BOF",
-	"search.type.user":       "User",
-	"search.type.task":       "Task",
-
 	"traffic.title":           "Traffic Monitoring",
 	"traffic.subtitle":        "Live view of Agent Beacon HTTP requests",
 	"traffic.auto_refresh":    "Auto Refresh",
@@ -580,18 +568,6 @@ var zhTranslations = TranslationMap{
 	"login.totp_label":           "双因素验证码（可选）",
 	"login.authorized_only":      "仅限授权用户，所有访问均被审计。",
 
-	"search.title":           "全局搜索",
-	"search.subtitle":        "搜索 Implant、监听器、凭据等",
-	"search.placeholder":     "搜索 Agent、监听器、凭据…",
-	"search.hint":            "输入关键词搜索 Implant、监听器、凭据、BOF、用户和任务",
-	"search.no_results":      "未找到结果",
-	"search.type.agent":      "Implant",
-	"search.type.listener":   "监听器",
-	"search.type.credential": "凭据",
-	"search.type.bof":        "BOF",
-	"search.type.user":       "用户",
-	"search.type.task":       "任务",
-
 	"traffic.title":           "流量监控",
 	"traffic.subtitle":        "实时查看 Agent Beacon HTTP 请求",
 	"traffic.auto_refresh":    "自动刷新",
@@ -794,7 +770,6 @@ var zhTranslations = TranslationMap{
 	"shell.regen_hint":    "植入程序心跳间隔与服务器默认设置不一致。请在「生成」页面重新生成 Implant 以应用新间隔。",
 	"generate.regen_hint": "更改心跳间隔后需重新生成 Implant 才能生效。",
 }
-
 
 var (
 	i18nMutex sync.RWMutex

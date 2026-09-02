@@ -11,7 +11,7 @@ import { Keyboard } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
 const groups = [
-  { titleKey: "shortcuts.group_nav", keys: ["global_search", "refresh"] },
+  { titleKey: "shortcuts.group_nav", keys: ["refresh"] },
   { titleKey: "shortcuts.group_actions", keys: ["new_item", "save", "toggle_lock"] },
   { titleKey: "shortcuts.group_general", keys: ["show_shortcuts", "close_modal"] },
 ];
