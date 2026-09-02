@@ -13,8 +13,8 @@ jobs:
     name: Build frontend embed
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: "npm"
@@ -24,7 +24,7 @@ jobs:
         run: |
           rm -rf internal/webdist/dist
           cp -r frontend/out internal/webdist/dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: webdist
           path: internal/webdist/dist
@@ -38,15 +38,15 @@ jobs:
         goos: [linux, windows]
         goarch: [amd64, arm64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: "1.25"
 
       - name: Download fresh webdist
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: webdist
           path: internal/webdist/dist
@@ -62,7 +62,7 @@ jobs:
           sha256sum "forgec2-server-${{ matrix.goos }}-${{ matrix.goarch }}${ext}" > "forgec2-server-${{ matrix.goos }}-${{ matrix.goarch }}${ext}.sha256"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: forgec2-server-${{ matrix.goos }}-${{ matrix.goarch }}
           path: forgec2-server-${{ matrix.goos }}-${{ matrix.goarch }}*
@@ -72,7 +72,7 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: forgec2-server-*
           merge-multiple: true
@@ -85,7 +85,7 @@ jobs:
           ls forgec2-server-* | grep -v '.sha256$' | sed 's/^/- /' >> release-notes.md
 
       - name: Create release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: forgec2-server-*
           body_path: release-notes.md
