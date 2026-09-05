@@ -28,7 +28,6 @@ const MAIN_PAGES: Record<string, ReturnType<typeof lazyPage>> = {
   campaign: lazyPage(() => import("@/app/(main)/campaign/page")),
   chain: lazyPage(() => import("@/app/(main)/chain/page")),
   chat: lazyPage(() => import("@/app/(main)/chat/page")),
-  chrome: lazyPage(() => import("@/app/(main)/chrome/page")),
   "circuit-breaker": lazyPage(() => import("@/app/(main)/circuit-breaker/page")),
   cloud: lazyPage(() => import("@/app/(main)/cloud/page")),
   command_templates: lazyPage(() => import("@/app/(main)/command_templates/page")),

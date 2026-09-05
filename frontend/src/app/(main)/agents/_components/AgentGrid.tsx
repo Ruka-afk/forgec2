@@ -1,6 +1,8 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { AvatarFallback } from "@/components/ui/avatar";
 import { timeAgo, formatTime, enumLabel } from "@/lib/utils";
@@ -9,7 +11,7 @@ import type { Beacon, Tag } from "./types";
 import { avatarColor, formatUptime, osIcon, agentStatusBorderClass, integrityTone } from "./types";
 import type { AgentMenuPoint } from "./agent-menu-actions";
 import { groupBeaconsByHost } from "./groupBeaconsByHost";
-import { Clock, Globe, Square, CheckSquare } from "lucide-react";
+import { Clock, Globe } from "lucide-react";
 import { StatusDot } from "@/components/ui/status-dot";
 
 interface AgentGridProps {
@@ -24,12 +26,19 @@ interface AgentGridProps {
   onToggleSelect?: (id: string, checked: boolean) => void;
 }
 
+// Cap initial card render: thousands of host groups would mount thousands
+// of cards at once on the (unvirtualized) mobile grid path.
+const GRID_PAGE = 120;
+
 export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCountMap, activeId, onInteract, onDetails, onMenu, selected, onToggleSelect }: AgentGridProps) {
   const { t } = useI18n();
+  const [visible, setVisible] = useState(GRID_PAGE);
   const groups = groupBeaconsByHost(beacons);
+  const shown = groups.slice(0, visible);
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 p-4">
-      {groups.map((group) => {
+    <div className="p-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+      {shown.map((group) => {
         const beacon = group.sessions[0];
         const id = beacon.id || "";
         const hostname = group.hostname || "-";
@@ -61,19 +70,14 @@ export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCou
             <div className="flex items-start justify-between mb-2">
               <div className="flex items-center gap-2.5 min-w-0">
                 {onToggleSelect && (
-                  <span
-                    role="checkbox"
-                    tabIndex={0}
-                    aria-checked={isSelected}
+                  <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={(checked) => onToggleSelect(id, checked === true)}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
                     aria-label={t("agents.select_agent")}
-                    onClick={(e) => { e.stopPropagation(); onToggleSelect(id, !isSelected); }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onToggleSelect(id, !isSelected); }
-                    }}
-                    className={`shrink-0 ${isSelected ? "text-primary" : "text-muted-foreground/100 hover:text-foreground"}`}
-                  >
-                    {isSelected ? <CheckSquare className="size-4" /> : <Square className="size-4" />}
-                  </span>
+                    className="shrink-0"
+                  />
                 )}
                 <AvatarFallback name={hostname} size="md" shape="xl" color={avatarColor(hostname)} />
                 <div className="min-w-0">
@@ -113,6 +117,14 @@ export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCou
           </Card>
         );
       })}
+    </div>
+    {visible < groups.length && (
+      <div className="mt-3 flex justify-center">
+        <Button variant="outline" size="sm" onClick={() => setVisible((v) => v + GRID_PAGE)} className="rounded-full">
+          {t("agents.grid_show_more").replace("{shown}", String(shown.length)).replace("{total}", String(groups.length))}
+        </Button>
+      </div>
+    )}
     </div>
   );
 })

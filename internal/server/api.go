@@ -202,7 +202,7 @@ func (s *Server) apiListCredentials(c *gin.Context) {
 		return
 	}
 	var creds []db.CredentialEntry
-	query := s.db.Order("created_at desc")
+	query := s.tenantScope(s.db.Order("created_at desc"), c)
 
 	if agentID := c.Query("agent_id"); agentID != "" {
 		query = query.Where("agent_id = ?", agentID)

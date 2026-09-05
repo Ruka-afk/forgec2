@@ -37,7 +37,7 @@ Add credential harvesting, vault storage, or new cred types (hash, ticket, brows
 
 ## AI integration
 
-- `list_credentials` tool in `handlers_ai.go` returns summary only (no secrets).
+- `list_credentials` tool in `ai_tools_exec.go` returns summary only (no secrets).
 
 ## Verify
 

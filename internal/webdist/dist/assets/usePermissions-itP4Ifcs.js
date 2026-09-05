@@ -1,1 +1,0 @@
-import{a7 as a,al as e,am as o,an as c}from"./index-DPfSh_ZJ.js";function i(){const s=a(n=>n.currentPermissions),r=a(n=>n.currentUserRole);return{permissions:s,role:r,can:n=>c(s,n),canAny:n=>o(s,n),canAll:n=>e(s,n)}}export{i as u};

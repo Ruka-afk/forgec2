@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // agentConfigJSON mirrors the agent's config var names so the blob can be
@@ -62,6 +63,16 @@ type agentConfigJSON struct {
 	MalleableRequestHeaders map[string]string `json:"malleable_request_headers"`
 	// Max random bytes appended to the HTTP/WS beacon body (0=disabled).
 	ContentLengthJitter string `json:"content_length_jitter"`
+	// v2 chains + rotation (agent parses ServerOutput via MalleableRespDecode).
+	MalleableRespDecode string `json:"malleable_resp_decode"`
+	MalleableClientID   string `json:"malleable_client_id"`
+	MalleableClientMeta string `json:"malleable_client_meta"`
+	BeaconURIs          string `json:"beacon_uris"`
+	Parameter           string `json:"parameter"`
+	MalleablePlacement  string `json:"malleable_placement"`
+	UserAgents          string `json:"user_agents"`
+	JitterURI           string `json:"jitter_uri"`
+	ParameterNames      string `json:"parameter_names"`
 }
 
 // randomAESKey returns 32 random bytes suitable for AES-256.
@@ -231,6 +242,15 @@ func marshalConfigBlobJSON(cfg ImplantConfig, profile MalleableProfile) []byte {
 		MalleableRequestAppend:  cfg.MalleableRequestAppend,
 		MalleableRequestHeaders: cfg.MalleableRequestHeaders,
 		ContentLengthJitter:     fmt.Sprintf("%d", cfg.ContentLengthJitter),
+		MalleableRespDecode:     cfg.MalleableServerOutput,
+		MalleableClientID:       cfg.MalleableClientID,
+		MalleableClientMeta:     cfg.MalleableClientMetadata,
+		BeaconURIs:              strings.Join(cfg.BeaconURIs, ","),
+		Parameter:               cfg.Parameter,
+		MalleablePlacement:      cfg.Placements,
+		UserAgents:              strings.Join(cfg.UserAgents, "\n"),
+		JitterURI:               map[bool]string{true: "true", false: "false"}[cfg.JitterURI],
+		ParameterNames:          strings.Join(cfg.ParameterNames, "\n"),
 	}
 	raw, err := json.Marshal(bc)
 	if err != nil {

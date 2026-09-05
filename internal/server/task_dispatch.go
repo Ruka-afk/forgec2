@@ -28,25 +28,7 @@ func (s *Server) getAgentOrFail(c *gin.Context, id string) (db.Implant, bool) {
 	return agent, true
 }
 
-// isChromeAgentKind reports whether the target implant is a browser-extension
-// (Chrome) agent, i.e. tagged "chrome". Exact token match to avoid
-// misclassifying "chromed" or "my-chromebook" tags.
-func (s *Server) isChromeAgentKind(c *gin.Context, agentID string) bool {
-	var agent db.Implant
-	q := s.db.Model(&db.Implant{})
-	if c != nil {
-		q = s.tenantScope(q, c)
-	}
-	if err := q.Select("tags").First(&agent, "id = ?", agentID).Error; err != nil {
-		return false
-	}
-	for _, t := range strings.Split(agent.Tags, ",") {
-		if strings.TrimSpace(strings.ToLower(t)) == "chrome" {
-			return true
-		}
-	}
-	return false
-}
+
 
 // TaskOption configures optional createTask behaviour.
 type TaskOption func(*taskOptions)
@@ -83,19 +65,6 @@ func callerOpts(c *gin.Context) []TaskOption {
 func (s *Server) validateTaskCreation(c *gin.Context, agentID, taskType, command string, callerUserID uint) error {
 	if !IsKnownTaskType(taskType) && !protocol.ValidTaskType(taskType) {
 		return fmt.Errorf("unknown task type: %s", taskType)
-	}
-
-	// Chrome-extension-only task types must never be queued onto a standard Go
-	// implant: they would sit "pending" until the next beacon and then be
-	// rejected as unknown. Restrict them to implants tagged "chrome".
-	chromeAgent := s.isChromeAgentKind(c, agentID)
-	if chromeTaskTypes[taskType] && !chromeAgent {
-		return fmt.Errorf("task type %s requires a chrome-tagged agent (browser extension)", taskType)
-	}
-	// The reverse: a chrome extension cannot execute implant task types
-	// (shell, inject, ...). Queueing them would claim on check-in and stall.
-	if chromeAgent && !chromeTaskTypes[taskType] {
-		return fmt.Errorf("task type %s is not supported on chrome extension agents", taskType)
 	}
 
 	// lportfwd opens a tunneled egress path through the teamserver; honor the
@@ -250,6 +219,35 @@ func (s *Server) resolveInitialTaskStatus(taskType string) string {
 		}
 	}
 	return "pending"
+}
+
+// TaskSpec describes a single agent task issued from an HTTP handler.
+type TaskSpec struct {
+	Type    string
+	Command string
+	Shell   string
+	Path    string
+	Data    string
+	Offset  int64
+	Size    int64
+}
+
+// issueAgentTask is the single choke point for handler-issued tasks: it runs
+// the tenant-scoped agent lookup, creates the task with the caller's operator
+// identity (so the soft-lock gate applies), and maps creation failures to the
+// correct client status via respondTaskError. On failure it writes the error
+// response and returns nil; on success it returns the task WITHOUT writing a
+// response, leaving the caller to dispatch (dispatchTask) or render custom JSON.
+func (s *Server) issueAgentTask(c *gin.Context, id string, spec TaskSpec) *db.Task {
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return nil
+	}
+	task, err := s.createTask(id, spec.Type, spec.Command, spec.Shell, spec.Path, spec.Data, spec.Offset, spec.Size, callerOpts(c)...)
+	if err != nil {
+		respondTaskError(c, err)
+		return nil
+	}
+	return task
 }
 
 // dispatchTask logs the audit action, broadcasts the update via WS, and returns success JSON.
@@ -462,7 +460,8 @@ func clientErrorStatus(err error) (int, bool) {
 	}
 	msg := err.Error()
 	switch {
-	case strings.Contains(msg, "too many pending tasks"):
+	case strings.Contains(msg, "too many pending tasks"),
+		strings.Contains(msg, "pending tasks (limit"):
 		return http.StatusTooManyRequests, true
 	case strings.Contains(msg, "requires a chrome-tagged agent"),
 		strings.Contains(msg, "is not supported on chrome extension agents"),

@@ -31,10 +31,11 @@ func newTrafficRequest(method, path, agentID, body string) (*httptest.ResponseRe
 	return w, c
 }
 
-func seedTrafficAgent(s *Server, id string, interval, jitter int) db.Implant {
+func seedTrafficAgent(t *testing.T, s *Server, id string, interval, jitter int) db.Implant {
+	t.Helper()
 	agent := db.Implant{ID: id, Hostname: "host-" + id, CurrentInterval: interval, CurrentJitter: jitter}
 	if err := s.db.Create(&agent).Error; err != nil {
-		panic(err)
+		t.Fatalf("seed agent %s: %v", id, err)
 	}
 	return agent
 }
@@ -53,25 +54,13 @@ func seedTrafficLog(s *Server, agentID string, n int, step time.Duration) {
 
 func TestHandleTrafficProfileGet(t *testing.T) {
 	s := newTrafficProfileTestServer(t)
-	seedTrafficAgent(s, "agent-1", 5, 0)
+	seedTrafficAgent(t, s, "agent-1", 5, 0)
 
-	t.Run("unknown agent still returns report with auto_adapt false", func(t *testing.T) {
+	t.Run("unknown agent returns 404", func(t *testing.T) {
 		w, c := newTrafficRequest(http.MethodGet, "/api/agents/ghost/traffic-profile", "ghost", "")
 		s.handleTrafficProfileGet(c)
-		if w.Code != http.StatusOK {
-			t.Fatalf("expected 200, got %d", w.Code)
-		}
-		var resp struct {
-			Success bool `json:"success"`
-			Data    struct {
-				AutoAdapt bool `json:"auto_adapt"`
-			} `json:"data"`
-		}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("invalid json: %v", err)
-		}
-		if !resp.Success || resp.Data.AutoAdapt {
-			t.Errorf("expected success with auto_adapt=false, got %+v", resp)
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("expected 404, got %d", w.Code)
 		}
 	})
 
@@ -139,7 +128,7 @@ func TestHandleTrafficProfileAdapt(t *testing.T) {
 	})
 
 	t.Run("insufficient samples returns 400", func(t *testing.T) {
-		seedTrafficAgent(s, "agent-1", 5, 0)
+		seedTrafficAgent(t, s, "agent-1", 5, 0)
 		w, c := newTrafficRequest(http.MethodPost, "/api/agents/agent-1/traffic-profile/adapt", "agent-1", `{}`)
 		s.handleTrafficProfileAdapt(c)
 		if w.Code != http.StatusBadRequest {
@@ -199,7 +188,7 @@ func TestHandleTrafficProfileAdapt(t *testing.T) {
 
 func TestHandleTrafficProfileAutoAdapt(t *testing.T) {
 	s := newTrafficProfileTestServer(t)
-	seedTrafficAgent(s, "agent-1", 5, 0)
+	seedTrafficAgent(t, s, "agent-1", 5, 0)
 
 	t.Run("missing agent returns 404", func(t *testing.T) {
 		w, c := newTrafficRequest(http.MethodPost, "/api/agents/ghost/traffic-profile/auto-adapt", "ghost", `{"enabled":true}`)
@@ -246,10 +235,10 @@ func TestHandleTrafficProfileAutoAdapt(t *testing.T) {
 
 func TestMaybeAutoAdaptBeacon(t *testing.T) {
 	s := newTrafficProfileTestServer(t)
-	seedTrafficAgent(s, "agent-1", 5, 0)
+	seedTrafficAgent(t, s, "agent-1", 5, 0)
 
 	t.Run("disabled agents never get tasks", func(t *testing.T) {
-		s.maybeAutoAdaptBeacon(seedTrafficAgent(s, "agent-off", 5, 0))
+		s.maybeAutoAdaptBeacon(seedTrafficAgent(t, s, "agent-off", 5, 0))
 		var count int64
 		s.db.Model(&db.Task{}).Where("agent_id = ?", "agent-off").Count(&count)
 		if count != 0 {
@@ -257,7 +246,7 @@ func TestMaybeAutoAdaptBeacon(t *testing.T) {
 		}
 	})
 
-	agent := seedTrafficAgent(s, "agent-adapt", 5, 0)
+	agent := seedTrafficAgent(t, s, "agent-adapt", 5, 0)
 	agent.AutoAdapt = true
 
 	t.Run("no samples -> no task", func(t *testing.T) {
@@ -293,7 +282,7 @@ func TestMaybeAutoAdaptBeacon(t *testing.T) {
 	})
 
 	t.Run("pending set_sleep blocks a new one", func(t *testing.T) {
-		agent2 := seedTrafficAgent(s, "agent-pending", 5, 0)
+		agent2 := seedTrafficAgent(t, s, "agent-pending", 5, 0)
 		agent2.AutoAdapt = true
 		seedTrafficLog(s, "agent-pending", 5, 5*time.Second)
 		s.maybeAutoAdaptBeacon(agent2)
@@ -302,6 +291,11 @@ func TestMaybeAutoAdaptBeacon(t *testing.T) {
 		if count != 1 {
 			t.Fatalf("expected exactly 1 task, got %d", count)
 		}
+		// Clear the rate-limit timestamp so the second call actually reaches
+		// the pending-task guard instead of short-circuiting on rate limit.
+		s.autoAdaptMu.Lock()
+		delete(s.autoAdaptLast, "agent-pending")
+		s.autoAdaptMu.Unlock()
 		s.maybeAutoAdaptBeacon(agent2)
 		s.db.Model(&db.Task{}).Where("agent_id = ?", "agent-pending").Count(&count)
 		if count != 1 {
@@ -310,7 +304,7 @@ func TestMaybeAutoAdaptBeacon(t *testing.T) {
 	})
 
 	t.Run("matching profile does not queue a task", func(t *testing.T) {
-		agent3 := seedTrafficAgent(s, "agent-match", 6, 0)
+		agent3 := seedTrafficAgent(t, s, "agent-match", 6, 0)
 		agent3.AutoAdapt = true
 		seedTrafficLog(s, "agent-match", 5, 5*time.Second)
 		s.maybeAutoAdaptBeacon(agent3)

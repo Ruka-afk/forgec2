@@ -1,6 +1,6 @@
 ---
 name: add-ai-tool
-description: Add a new AI function-calling tool to ForgeC2 via handlers_ai.go buildTools and executeTool
+description: Add a new AI function-calling tool to ForgeC2 via ai_tools_defs.go buildTools and ai_tools_exec.go executeToolSwitchCtx
 license: MIT
 compatibility: grok
 metadata:
@@ -14,7 +14,7 @@ Expose a new ForgeC2 capability to the AI assistant (SSE chat at `/ai/chat`).
 
 ## File
 
-`internal/server/handlers_ai.go`
+`internal/server/ai_tools_defs.go` (schema) + `internal/server/ai_tools_exec.go` (handler case)
 
 ## Step 1 — Define tool in `buildTools()`
 
@@ -83,7 +83,7 @@ Configured in `config.yaml` under `ai:` (see `configure-ai` skill):
 | `max_tool_rounds` | `0` | Consecutive tool-call rounds (`0` = unlimited) |
 | `max_duplicate_tool_calls` | `0` | Identical tool+args repeats before skip |
 
-`[Max tool calls reached]` is emitted by `converse()` in `handlers_ai.go`, not the IDE.
+`[Max tool calls reached]` is emitted by `converse()` in `ai_stream.go`, not the IDE.
 
 ## Verify
 

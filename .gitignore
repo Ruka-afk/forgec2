@@ -6,6 +6,8 @@
 forgec2-server
 forgec2-server-linux-amd64
 forgec2-server-linux-arm64
+forgec2-server-darwin-amd64
+forgec2-server-darwin-arm64
 
 # ForgeC2 specific
 data/
@@ -37,6 +39,7 @@ Thumbs.db
 
 # Debug logs and temp output
 *.log
+*.log.gz
 *.err
 *.tmp
 *.txt
@@ -60,6 +63,7 @@ docker-data/
 
 # Temp
 tmp/
+.cache/
 *.exe~
 
 # Local dev artifacts

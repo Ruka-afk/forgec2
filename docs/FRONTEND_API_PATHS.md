@@ -27,6 +27,8 @@ Source of truth: `frontend/src/lib/api-paths.ts`.
 | Credentials mutations | `paths.credentials.add` / `one` / `confirm` / `batchTags` → `/credentials/*` |
 | Listeners CRUD | `paths.listeners.list` / `one` / `enable` / `disable` |
 | Profile import | `paths.generate.profileImport` |
+| Payload builds | `paths.generate.binary(fmt)` / `donut` / `oneLiner` / `delivery` |
+| Chain graph | `paths.chain.graph` → `/chain/graph` |
 | Config hot reload | `paths.config.reload` |
 | Users (dual) | `paths.users.list` → `/users` (not `/api/users`) |
 | Builds (dual) | `paths.builds.list()` → `/builds` (not `/api/builds`) |
@@ -46,11 +48,11 @@ Source of truth: `frontend/src/lib/api-paths.ts`.
 | OPSEC / Privesc / Lateral | `paths.opsec.*` / `paths.privesc.*` / `paths.lateral.*` |
 | Phishing / Scheduler / Scripts | `paths.phishing.*` / `paths.scheduler.*` / `paths.scripts.*` |
 | Automation / Plugins / AI | `paths.automation.*` / `paths.plugins.*` / `paths.ai.*` |
-| BOF / BloodHound / Chrome | `paths.bof.*` / `paths.bloodhound.*` / `paths.chrome.*` |
+| BOF / BloodHound | `paths.bof.*` / `paths.bloodhound.*` |
 | Chat / Circuit breaker | `paths.chat.*` / `paths.circuitBreaker.*` |
 | Autotag / Domain front / Mesh | `paths.autotag.*` / `paths.domainFront.*` / `paths.mesh.*` |
 | Settings mutations | `paths.settings.agent` / `server` / `malleable` / `certs*` / `sync*` / `totp*` / `siem*` |
-| Roles / Tags / Templates | `paths.roles.*` / `paths.tags.list` / `paths.templates.*` |
+| Roles / Tags | `paths.roles.*` / `paths.tags.list` |
 
 **Goal:** application source should not call `api.*( "/…")` with string literals — only via `paths.*` (tests may use stubs).
 | Workflows | `paths.workflows.list` / `one` |

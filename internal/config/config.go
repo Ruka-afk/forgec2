@@ -147,6 +147,9 @@ type Config struct {
 		RequestPrepend string            `yaml:"request_prepend"`
 		RequestAppend  string            `yaml:"request_append"`
 		RequestHeaders map[string]string `yaml:"request_headers"`
+		// Placements: JSON array [{target,chain}] cover copies, e.g.
+		// [{"target":"cookie:SESSION","chain":"base64"}].
+		Placements string `yaml:"placements"`
 	} `yaml:"malleable"`
 
 	AI struct {
@@ -875,7 +878,9 @@ func (c *Config) Save(path string) error {
 	return os.WriteFile(path, out, 0600)
 }
 
-// CopyFrom copies all exported fields from src into c with mutex protection
+// CopyFrom copies all exported fields from src into c with mutex protection.
+// Every top-level section must be listed here, otherwise hot-reload silently
+// keeps stale values for the omitted sections.
 func (c *Config) CopyFrom(src *Config) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -883,14 +888,19 @@ func (c *Config) CopyFrom(src *Config) {
 	c.Database = src.Database
 	c.Implant = src.Implant
 	c.Auth = src.Auth
+	c.PasswordPolicy = src.PasswordPolicy
 	c.Crypto = src.Crypto
 	c.Malleable = src.Malleable
 	c.AI = src.AI
 	c.Logging = src.Logging
-	c.RateLimit = src.RateLimit
+	c.SIEM = src.SIEM
 	c.Integrations = src.Integrations
-	c.Listeners = src.Listeners
 	c.Socks = src.Socks
+	c.RateLimit = src.RateLimit
+	c.Security = src.Security
+	c.Monitoring = src.Monitoring
+	c.Listeners = src.Listeners
+	c.Roe = src.Roe
 	c.TLSFingerprint = src.TLSFingerprint
 }
 

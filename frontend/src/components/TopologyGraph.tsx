@@ -93,11 +93,21 @@ export default function TopologyGraph({
   const useNetSourceRef = useRef(useNetSource);
   useNetSourceRef.current = useNetSource;
 
+  // Theme foreground is read once per mount, not on every data sync:
+  // getComputedStyle forces a style reflow each call.
+  const textColorRef = useRef<string | null>(null);
+  const readTextColor = () => {
+    if (textColorRef.current == null) {
+      textColorRef.current =
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--foreground")
+          .trim() || "#e2e8f0";
+    }
+    return textColorRef.current;
+  };
+
   const buildVisData = () => {
-    const textColor =
-      getComputedStyle(document.documentElement)
-        .getPropertyValue("--foreground")
-        .trim() || "#e2e8f0";
+    const textColor = readTextColor();
     const currentNodes = nodesRef.current as TopoNode[];
     const visNodes = currentNodes.map((n, i) => ({
       id: n.id || String(i),
@@ -128,9 +138,21 @@ export default function TopologyGraph({
     return { visNodes, visEdges, textColor };
   };
 
+  // Skip setData when the id sets are unchanged: every 10s topology tick
+  // otherwise rebuilds the whole vis dataset even with zero changes.
+  const dataSigRef = useRef("");
   const syncData = () => {
     const net = netInstanceRef.current;
     if (!net) return;
+    const sig =
+      (nodesRef.current as TopoNode[]).map((n, i) => n.id || String(i)).join(",") +
+      "|" +
+      edgesRef.current.map((e) => `${e.from}>${e.to}`).join(",");
+    if (sig === dataSigRef.current) {
+      net.setOptions({ physics: { enabled: physicsRef.current } });
+      return;
+    }
+    dataSigRef.current = sig;
     const { visNodes, visEdges } = buildVisData();
     net.setData({ nodes: visNodes, edges: visEdges });
     net.setOptions({ physics: { enabled: physicsRef.current } });
@@ -234,5 +256,26 @@ export default function TopologyGraph({
     );
   }
 
-  return <div ref={networkRef} className="w-full h-full min-h-[500px]" />;
+  return (
+    <>
+      <div
+        ref={networkRef}
+        className="w-full h-full min-h-[500px]"
+        role="img"
+        aria-label={`${t("topology.graph_alt")}: ${nodes.length} nodes, ${edges.length} links`}
+      />
+      {/* Screen-reader fallback: the canvas graph exposes no semantics. */}
+      <table className="sr-only">
+        <caption>{t("topology.graph_alt")}</caption>
+        <tbody>
+          {nodes.map((n, i) => (
+            <tr key={n.id || String(i)}>
+              <td>{n.label || n.id || "?"}</td>
+              <td>{n.group || ""}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
 }

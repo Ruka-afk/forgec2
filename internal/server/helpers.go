@@ -196,6 +196,19 @@ func (s *Server) findOrFailPreload(c *gin.Context, dest interface{}, id, entityN
 	return true
 }
 
+// findTenantOrFail fetches a tenant-owned record by primary key, applying
+// tenantScope. A tenant-scoped operator gets 404 for other tenants' rows
+// (closing a cross-tenant IDOR on single-item reads); legacy/unscoped
+// operators (tenant 0) keep global visibility, mirroring list behavior.
+// Use this for every entity carrying TenantID instead of findOrFail.
+func (s *Server) findTenantOrFail(c *gin.Context, dest interface{}, id, entityName string) bool {
+	if err := s.tenantScope(s.db, c).First(dest, "id = ?", id).Error; err != nil {
+		respondError(c, http.StatusNotFound, entityName+" not found")
+		return false
+	}
+	return true
+}
+
 // --- #7: Pagination helper ---
 
 // paginationParams holds parsed pagination query parameters.

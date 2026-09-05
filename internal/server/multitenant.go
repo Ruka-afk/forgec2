@@ -6,9 +6,26 @@ import (
 	"gorm.io/gorm"
 )
 
+// tenantIDContextKey caches the resolved tenant ID for the request so repeated
+// tenantScope calls (e.g. fan-out detail queries) cost one user lookup total.
+const tenantIDContextKey = "forgec2_tenant_id"
+
 // currentTenantID returns the tenant ID for the authenticated operator, or 0 if
-// the user is unscoped (legacy / pre-multi-tenant).
+// the user is unscoped (legacy / pre-multi-tenant). The result is cached in
+// the gin context: tenantScope-heavy handlers previously paid one SELECT per
+// call (4-5 per agent-detail page).
 func (s *Server) currentTenantID(c *gin.Context) uint {
+	if v, ok := c.Get(tenantIDContextKey); ok {
+		if tid, ok := v.(uint); ok {
+			return tid
+		}
+	}
+	tid := s.lookupTenantID(c)
+	c.Set(tenantIDContextKey, tid)
+	return tid
+}
+
+func (s *Server) lookupTenantID(c *gin.Context) uint {
 	if u, ok := c.Get("user"); ok {
 		if name, ok := u.(string); ok && name != "" {
 			var user db.User

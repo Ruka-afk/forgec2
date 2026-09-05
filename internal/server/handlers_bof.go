@@ -211,9 +211,8 @@ func (s *Server) handleBOFQuickRun(c *gin.Context) {
 	args := c.PostForm("args")
 	b64Data := base64.StdEncoding.EncodeToString(data)
 
-	task, err := s.createTask(id, "bof", args, "", "", b64Data, 0, 0)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "bof", Command: args, Data: b64Data})
+	if task == nil {
 		return
 	}
 	slog.Info("BOF quick execute", "agent_id", id, "file", file.Filename, "size", len(data), "args", args)

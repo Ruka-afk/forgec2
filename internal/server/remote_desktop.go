@@ -123,7 +123,11 @@ func (h *RDHub) SendInput(s *Server, agentID string, inputType string, data map[
 		}
 		if payloadJSON, err := json.Marshal(payload); err == nil {
 			func() {
-				defer func() { recover() }()
+				defer func() {
+					if r := recover(); r != nil {
+						slog.Warn("Remote desktop send to closed channel", "agent_id", agentID)
+					}
+				}()
 				select {
 				case beacon.Send <- payloadJSON:
 				default:
@@ -222,13 +226,8 @@ func (s *Server) handleRDAPIScreenshot(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
-	task, err := s.createTask(id, "screenshot", "screenshot", "", "", "", 0, 0)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create screenshot task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "screenshot", Command: "screenshot"})
+	if task == nil {
 		return
 	}
 

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -9,8 +10,10 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 )
 
@@ -180,4 +183,75 @@ func (s *Server) configureTLS(srv *http.Server) error {
 
 	srv.TLSConfig = tlsConfig
 	return nil
+}
+
+// ActivityMiddleware updates user's LastActivity timestamp on each request (throttled to 60s)
+func (s *Server) ActivityMiddleware() gin.HandlerFunc {
+	var mu sync.Mutex
+	lastUpdated := make(map[uint]time.Time)
+
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		ticker := time.NewTicker(ActivityCleanupInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-s.ctx.Done():
+				return
+			case <-ticker.C:
+				cutoff := time.Now().Add(-ActivityCleanupInterval)
+				mu.Lock()
+				for uid, t := range lastUpdated {
+					if t.Before(cutoff) {
+						delete(lastUpdated, uid)
+					}
+				}
+				mu.Unlock()
+			}
+		}
+	}()
+
+	return func(c *gin.Context) {
+		userID, exists := c.Get("user_id")
+		if !exists {
+			c.Next()
+			return
+		}
+		uid, ok := userID.(uint)
+		if !ok {
+			c.Next()
+			return
+		}
+		now := time.Now()
+		mu.Lock()
+		last := lastUpdated[uid]
+		if now.Sub(last) < ActivityUpdateThrottle {
+			mu.Unlock()
+			c.Next()
+			return
+		}
+		lastUpdated[uid] = now
+		mu.Unlock()
+		go func() {
+			ctx, cancel := context.WithTimeout(s.ctx, 5*time.Second)
+			defer cancel()
+			s.db.WithContext(ctx).Model(&db.User{}).Where("id = ?", uid).Update("last_activity", now)
+		}()
+		c.Next()
+	}
+}
+
+// handleHealthCheck provides health/ready endpoints for monitoring
+func (s *Server) handleHealthCheck(c *gin.Context) {
+	sqlDB, err := s.db.DB()
+	if err != nil || sqlDB.Ping() != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "db_unavailable"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "ok",
+		"version": ServerVersion,
+		"uptime":  time.Since(s.startTime).String(),
+	})
 }

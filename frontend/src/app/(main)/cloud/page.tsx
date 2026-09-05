@@ -88,6 +88,9 @@ export default function CloudPage() {
       if (pollRef.current) clearInterval(pollRef.current);
       setPollNote(t("cloud.poll_waiting"));
       pollRef.current = setInterval(async () => {
+        // Don't burn requests while the tab is hidden; the countdown only
+        // advances on visible ticks.
+        if (typeof document !== "undefined" && document.hidden) return;
         attempts += 1;
         const n = await loadResults(selectedAgent, true);
         const count = n >= 0 ? n : 0;

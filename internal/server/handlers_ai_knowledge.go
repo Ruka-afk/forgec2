@@ -265,7 +265,9 @@ func (s *Server) handleAIKnowledgeCollectionDelete(c *gin.Context) {
 			return err
 		}
 		if len(chunkIDs) > 0 {
-			_ = tx.Exec("DELETE FROM ai_knowledge_fts WHERE chunk_id IN ?", chunkIDs).Error
+			if err := tx.Exec("DELETE FROM ai_knowledge_fts WHERE chunk_id IN ?", chunkIDs).Error; err != nil {
+				return err
+			}
 		}
 		if err := tx.Where("collection_id = ?", collection.ID).Delete(&db.AIKnowledgeChunk{}).Error; err != nil {
 			return err
@@ -321,7 +323,9 @@ func (s *Server) handleAIKnowledgeSourceDelete(c *gin.Context) {
 			return err
 		}
 		if len(chunkIDs) > 0 {
-			_ = tx.Exec("DELETE FROM ai_knowledge_fts WHERE chunk_id IN ?", chunkIDs).Error
+			if err := tx.Exec("DELETE FROM ai_knowledge_fts WHERE chunk_id IN ?", chunkIDs).Error; err != nil {
+				return err
+			}
 		}
 		if err := tx.Where("source_id = ?", source.ID).Delete(&db.AIKnowledgeChunk{}).Error; err != nil {
 			return err
@@ -663,11 +667,50 @@ func (s *Server) initializeAIKnowledgeIndex() {
 	if err := s.db.Raw("SELECT COUNT(*) FROM ai_knowledge_fts").Scan(&count).Error; err != nil || count > 0 {
 		return
 	}
-	var chunks []db.AIKnowledgeChunk
-	if err := s.db.Session(&gorm.Session{SkipHooks: true}).Select("id", "search_tokens").Where("search_tokens <> ''").Find(&chunks).Error; err != nil {
+	// Stream by id pages (bounded memory) and insert with multi-row
+	// statements in a single transaction instead of one Exec per row. Reads
+	// go through the same tx connection: the pure-Go sqlite driver
+	// serializes writes, so holding the tx while querying on another handle
+	// deadlocks. Any failure rolls back so the index is never half-built.
+	const ftsBatchSize = 500
+	tx := s.db.Begin()
+	if tx.Error != nil {
 		return
 	}
-	for _, chunk := range chunks {
-		_ = s.db.Exec("INSERT INTO ai_knowledge_fts(chunk_id, tokens) VALUES(?, ?)", chunk.ID, chunk.SearchTokens).Error
+	committed := false
+	defer func() {
+		if !committed {
+			tx.Rollback()
+		}
+	}()
+	txNoHooks := tx.Session(&gorm.Session{SkipHooks: true})
+	var lastID uint
+	for {
+		var batch []db.AIKnowledgeChunk
+		if err := txNoHooks.Select("id", "search_tokens").
+			Where("search_tokens <> '' AND id > ?", lastID).Order("id ASC").Limit(ftsBatchSize).
+			Find(&batch).Error; err != nil {
+			return
+		}
+		if len(batch) == 0 {
+			break
+		}
+		lastID = batch[len(batch)-1].ID
+		query := "INSERT INTO ai_knowledge_fts(chunk_id, tokens) VALUES " + strings.Repeat("(?, ?),", len(batch))
+		query = strings.TrimSuffix(query, ",")
+		args := make([]interface{}, 0, len(batch)*2)
+		for _, chunk := range batch {
+			args = append(args, chunk.ID, chunk.SearchTokens)
+		}
+		if err := tx.Exec(query, args...).Error; err != nil {
+			return
+		}
+		if len(batch) < ftsBatchSize {
+			break
+		}
 	}
+	if err := tx.Commit().Error; err != nil {
+		return
+	}
+	committed = true
 }

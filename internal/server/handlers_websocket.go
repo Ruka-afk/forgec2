@@ -132,7 +132,11 @@ func (h *WebSocketHub) Broadcast(data []byte) {
 	defer h.mu.RUnlock()
 	for _, beacon := range h.beacons {
 		func() {
-			defer func() { recover() }()
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Warn("WebSocket broadcast to closed channel", "agent_id", beacon.AgentID)
+				}
+			}()
 			select {
 			case beacon.Send <- data:
 			default:
@@ -458,7 +462,11 @@ func (s *Server) wsReadPump(beacon *WebSocketBeacon) {
 		}
 
 		func() {
-			defer func() { recover() }()
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Warn("WebSocket beacon send to closed channel", "agent_id", beacon.AgentID)
+				}
+			}()
 			select {
 			case beacon.Send <- respJSON:
 			default:

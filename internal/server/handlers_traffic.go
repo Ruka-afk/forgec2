@@ -22,7 +22,7 @@ type TrafficEntry struct {
 const maxTrafficLogs = 500
 
 type trafficRing struct {
-	mu    sync.Mutex
+	mu    sync.RWMutex
 	logs  []TrafficEntry
 	index int
 	count int
@@ -36,15 +36,16 @@ type trafficByteBucket struct {
 	out int64
 }
 
-// trafficByteAccumulator keeps hourly in/out byte counters for the last 31
-// days in memory. It is updated from the traffic middleware where the real
-// request Content-Length and response body size are known.
+// trafficByteAccumulator keeps hourly in/out byte counters for the last 7
+// days in memory (slimmed from 31d per user confirmation). It is updated
+// from the traffic middleware where the real request Content-Length and
+// response body size are known.
 type trafficByteAccumulator struct {
-	mu     sync.Mutex
+	mu     sync.RWMutex
 	hourly map[int64]*trafficByteBucket // key = hour-truncated unix time
 }
 
-const trafficAccumulatorWindowHours = 31 * 24
+const trafficAccumulatorWindowHours = 7 * 24
 
 func newTrafficByteAccumulator() *trafficByteAccumulator {
 	return &trafficByteAccumulator{
@@ -79,8 +80,8 @@ func (a *trafficByteAccumulator) add(t time.Time, in, out int64) {
 func (a *trafficByteAccumulator) sumRange(start, end time.Time) (in, out int64) {
 	startKey := start.Truncate(time.Hour).Unix()
 	endKey := end.Truncate(time.Hour).Unix()
-	a.mu.Lock()
-	defer a.mu.Unlock()
+	a.mu.RLock()
+	defer a.mu.RUnlock()
 	for k, b := range a.hourly {
 		if k >= startKey && k < endKey {
 			in += b.in
@@ -107,8 +108,8 @@ func (t *trafficRing) add(entry TrafficEntry) {
 }
 
 func (t *trafficRing) recent(n int) []TrafficEntry {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 	if n <= 0 || n > maxTrafficLogs {
 		n = maxTrafficLogs
 	}
@@ -119,6 +120,36 @@ func (t *trafficRing) recent(n int) []TrafficEntry {
 	start := (t.index - n + maxTrafficLogs) % maxTrafficLogs
 	for i := 0; i < n; i++ {
 		result[i] = t.logs[(start+i)%maxTrafficLogs]
+	}
+	return result
+}
+
+// recentFor copies at most n of the newest entries for one agent in
+// chronological order. It avoids the copy-everything-then-filter pattern:
+// single pass, no post-sort needed since ring order is already chronological.
+func (t *trafficRing) recentFor(agentID string, n int) []TrafficEntry {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if n <= 0 || n > maxTrafficLogs {
+		n = maxTrafficLogs
+	}
+	total := t.count
+	if total > maxTrafficLogs {
+		total = maxTrafficLogs
+	}
+	result := make([]TrafficEntry, 0, n)
+	start := (t.index - total + maxTrafficLogs) % maxTrafficLogs
+	// Walk oldest→newest, keeping only the newest n matches via sliding window.
+	for i := 0; i < total; i++ {
+		l := t.logs[(start+i)%maxTrafficLogs]
+		if l.AgentID != agentID {
+			continue
+		}
+		if len(result) == n {
+			copy(result, result[1:])
+			result = result[:n-1]
+		}
+		result = append(result, l)
 	}
 	return result
 }

@@ -31,17 +31,17 @@ Defaults in `internal/config/config.go` — `0` means no cap.
 
 ## Runtime save
 
-- UI: `/ai` settings panel → `POST /ai/config` (`handleAIConfig` in `handlers_ai.go`)
+- UI: `/ai` settings panel → `POST /ai/config` (`handleAIConfig` in `ai_chat.go`)
 - Admin only; API key blank = keep existing key
 
 ## Tool calling loop
 
 | File | Function |
 |------|----------|
-| `handlers_ai.go` | `converse()` — SSE loop |
-| `handlers_ai.go` | `buildTools()` — function definitions |
-| `handlers_ai.go` | `executeTool()` — server-side execution |
-| `handlers_ai.go` | `resolveAIToolLimits()` — reads config caps |
+| `ai_stream.go` | `converse()` — SSE loop |
+| `ai_tools_defs.go` | `buildTools()` — function definitions |
+| `ai_tools_exec.go` | `executeToolSwitchCtx()` — server-side execution |
+| `ai_chat.go` | `resolveAIToolLimits()` — reads config caps |
 
 `[Max tool calls reached]` comes from `converse()` when `max_tool_rounds > 0` exceeded — not Cursor.
 

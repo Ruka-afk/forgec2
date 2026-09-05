@@ -2,7 +2,10 @@
 
 package main
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestHighValueDefaultAllowsShell(t *testing.T) {
 	p := defaultProfiles[EnvHighValue]
@@ -13,11 +16,18 @@ func TestHighValueDefaultAllowsShell(t *testing.T) {
 
 func liveDetector(t *testing.T) *EnvironmentDetector {
 	t.Helper()
+	// Stub the live probes (uptime, recent files, hypervisor) so classify()
+	// is hermetic: it must not depend on the test host's uptime, profile
+	// freshness, or virtualization.
 	return &EnvironmentDetector{
 		cpuCores: 8,
 		totalRAM: 16 * 1024 * 1024 * 1024,
 		users:    3,
 		services: 80,
+		stubEnv:         true,
+		stubUptimeMin:   120,
+		stubRecentFiles: 10,
+		stubHypervisor:  false,
 	}
 }
 
@@ -49,13 +59,33 @@ func TestClassifyDomainJoinedWorkstationIsNotDC(t *testing.T) {
 }
 
 func TestCorporateScreenCapturePolicy(t *testing.T) {
+	// be6958d0 decision: corporate+EDR keeps operator triage (shell/screen);
+	// only high-value/server get full lockdown under EDR.
 	ordinary := adjustedOpsProfile(EnvCorporate, false)
 	if !ordinary.AllowScreenCapture {
 		t.Fatal("ordinary corporate workstation must allow screen capture")
 	}
 	managed := adjustedOpsProfile(EnvCorporate, true)
-	if managed.AllowScreenCapture {
-		t.Fatal("EDR-managed corporate workstation must block screen capture")
+	if !managed.AllowScreenCapture {
+		t.Fatal("EDR-managed corporate workstation must keep screen capture")
+	}
+	locked := adjustedOpsProfile(EnvHighValue, true)
+	if locked.AllowScreenCapture {
+		t.Fatal("EDR-managed high-value server must block screen capture")
+	}
+}
+
+func TestForceReanalyzeDoesNotDeadlock(t *testing.T) {
+	ed := liveDetector(t)
+	done := make(chan *OpsProfile, 1)
+	go func() { done <- ed.ForceReanalyze() }()
+	select {
+	case p := <-done:
+		if p == nil {
+			t.Fatal("nil profile")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("ForceReanalyze deadlocked")
 	}
 }
 

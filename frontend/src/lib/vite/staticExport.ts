@@ -24,7 +24,6 @@ const STATIC_ROUTES: string[] = [
   "campaign",
   "chain",
   "chat",
-  "chrome",
   "circuit-breaker",
   "cloud",
   "command_templates",

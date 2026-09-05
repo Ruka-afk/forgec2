@@ -74,9 +74,9 @@ export default function AgentShellPage() {
     return () => controller.abort();
   }, [loadAgent]);
 
-  useVisibleInterval(() => { void loadAgent(undefined, true); }, POLL.shellStatus);
-
   const offline = Boolean(status && status !== "online");
+  // Offline agents won't come back in 5s; back off to 15s to cut idle load.
+  useVisibleInterval(() => { void loadAgent(undefined, true); }, offline ? 15_000 : POLL.shellStatus);
   const title = agentIdentityTitle(hostname, username, agentId);
 
   return (

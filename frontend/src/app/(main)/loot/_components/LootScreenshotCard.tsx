@@ -33,7 +33,7 @@ function LootScreenshotCardInner({
         aria-label={`Open ${s.filename}`}
         className="block h-auto w-full rounded-none p-0"
       >
-        <SafeImg src={`/screenshots/${s.path}`} alt={s.filename} className="w-full h-24 object-contain bg-background" loading="lazy" />
+        <SafeImg src={`/screenshots/${s.path}`} alt={`${t("agents.screen_alt_thumb")}: ${s.filename}`} className="w-full h-24 object-contain bg-background" loading="lazy" />
       </Button>
       <div className="absolute top-1.5 left-1.5 z-10">
         <Checkbox checked={isSelected} onCheckedChange={() => onToggleSelect(s.id)} aria-label={`Select screenshot ${s.filename}`} className="bg-secondary/90" />

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useI18n } from "@/lib/i18n";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Archive, LoaderCircle, MessageSquare, Pencil, Pin, Plus, Search, Trash2 } from "lucide-react";
@@ -39,7 +40,12 @@ function formatSessionWhen(iso: string): string {
 
 export default function AISessionSidebar({ sessions, activeSessionId, onSelect, onDelete, onRename, onNewChat, onPin, onArchive, selectingSessionId, runStatuses = {} }: AISessionSidebarProps) {
   const { t } = useI18n();
+  const { confirm, modal } = useConfirm();
   const [query, setQuery] = useState("");
+  const handleArchive = async (id: number) => {
+    const ok = await confirm({ title: t("ai.archive_session"), message: t("ai.archive_confirm") || "Archive this session? You can restore it later.", confirmText: t("ai.archive_session") });
+    if (ok) onArchive?.(id);
+  };
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const list = q ? sessions.filter((s) => s.title.toLowerCase().includes(q)) : [...sessions];
@@ -81,6 +87,7 @@ export default function AISessionSidebar({ sessions, activeSessionId, onSelect, 
           )}
         </div>
       )}
+      {modal}
       <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/80 px-4 py-10 text-center">
@@ -133,7 +140,7 @@ export default function AISessionSidebar({ sessions, activeSessionId, onSelect, 
               </Button>
 			  <Button
 				variant="ghost" size="icon-xs"
-				onClick={() => onArchive?.(s.id)}
+				onClick={() => handleArchive(s.id)}
 				className="shrink-0 text-muted-foreground opacity-100 transition-opacity hover:text-warning sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
 				aria-label={t("ai.archive_session")}
 			  >

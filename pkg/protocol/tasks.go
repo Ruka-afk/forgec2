@@ -191,20 +191,6 @@ const (
 	// P2P Mesh Auto-Discovery
 	TaskTypeGossipDiscover = "gossip_discover"
 
-	// Chrome C2
-	TaskTypeChromeC2         = "chrome_c2"
-	TaskTypeChromeExec       = "chrome_exec"
-	TaskTypeChromeScript     = "chrome_script"
-	TaskTypeChromeCookies    = "chrome_cookies"
-	TaskTypeChromeBookmarks  = "chrome_bookmarks"
-	TaskTypeChromeHistory    = "chrome_history"
-	TaskTypeChromeTabs       = "chrome_tabs"
-	TaskTypeChromeDownload   = "chrome_download"
-	TaskTypeChromeStorage    = "chrome_storage"
-	TaskTypeChromeScreenshot = "chrome_screenshot"
-	TaskTypeChromeClipboard  = "chrome_clipboard"
-	TaskTypeChromeIdle       = "chrome_idle"
-
 	// Container escape
 	TaskTypeContainerDetect = "container_detect"
 	TaskTypeContainerEscape = "container_escape"
@@ -414,18 +400,6 @@ func AllTaskTypes() []string {
 		TaskTypeTunnelAddRoute,
 		TaskTypeTunnelRemoveRoute,
 		TaskTypeGossipDiscover,
-		TaskTypeChromeC2,
-		TaskTypeChromeExec,
-		TaskTypeChromeScript,
-		TaskTypeChromeCookies,
-		TaskTypeChromeBookmarks,
-		TaskTypeChromeHistory,
-		TaskTypeChromeTabs,
-		TaskTypeChromeDownload,
-		TaskTypeChromeStorage,
-		TaskTypeChromeScreenshot,
-		TaskTypeChromeClipboard,
-		TaskTypeChromeIdle,
 		TaskTypeContainerDetect,
 		TaskTypeContainerEscape,
 		TaskTypeContainerDocker,

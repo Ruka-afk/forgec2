@@ -25,10 +25,9 @@ export const POLL = {
   clockTick: 15_000,
   /** Circuit-breaker breaker state page. */
   circuitBreaker: 15_000,
-  /** Chrome session list page. */
-  chrome: 15_000,
-  /** DNS record/listener status page. */
-  dns: 5_000,
+
+  /** DNS record/listener status page (nearly static; refresh on toggle). */
+  dns: 30_000,
   /** Password-spray agents listing. */
   spray: 30_000,
   /** Dashboard ops aggregate fetch (outside the WS stats stream). */
@@ -37,8 +36,8 @@ export const POLL = {
   listeners: 15_000,
   /** Report run data page. */
   report: 30_000,
-  /** Pivoting relay/forward status page. */
-  pivoting: 5_000,
+  /** Pivoting relay/forward status page (nearly static; refresh on action). */
+  pivoting: 30_000,
   /** Traffic page auto-refresh toggle. */
   traffic: 5_000,
   /** Dashboard active-missions board. */

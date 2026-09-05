@@ -7,12 +7,42 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+var aiProfileTestLimiter = struct {
+	sync.Mutex
+	hits map[string][]time.Time
+}{hits: make(map[string][]time.Time)}
+
+func aiProfileTestAllowed(key string) bool {
+	aiProfileTestLimiter.Lock()
+	defer aiProfileTestLimiter.Unlock()
+	now := time.Now()
+	cutoff := now.Add(-time.Minute)
+	hits := aiProfileTestLimiter.hits[key]
+	// prune
+	n := 0
+	for _, t := range hits {
+		if t.After(cutoff) {
+			hits[n] = t
+			n++
+		}
+	}
+	hits = hits[:n]
+	if len(hits) >= 5 {
+		aiProfileTestLimiter.hits[key] = hits
+		return false
+	}
+	hits = append(hits, now)
+	aiProfileTestLimiter.hits[key] = hits
+	return true
+}
 
 type aiProfileView struct {
 	ID                  uint       `json:"id"`
@@ -252,6 +282,10 @@ func (s *Server) handleAIProfileTest(c *gin.Context) {
 	principal, ok := s.currentAIPrincipal(c)
 	if !ok || !principal.hasPermission(s.db, db.PermAIConfigure) {
 		respondError(c, http.StatusForbidden, "AI configure permission required")
+		return
+	}
+	if !aiProfileTestAllowed(fmt.Sprintf("%d:%d", principal.TenantID, principal.UserID)) {
+		respondError(c, http.StatusTooManyRequests, "too many health checks; try again in a minute")
 		return
 	}
 	profile, ok := s.loadTenantAIProfile(c, principal)

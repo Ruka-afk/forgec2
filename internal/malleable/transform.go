@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+var base64URL = base64.URLEncoding
+
 // Apply applies the transform chain to data.
 // Each transform is applied in sequence, passing the output of one as input to the next.
 func (tb *TransformBlock) Apply(data []byte, encode bool) ([]byte, error) {
@@ -46,8 +48,51 @@ func applySingle(data []byte, t Transform, encode bool) ([]byte, error) {
 		}
 		return netbiosDecode(data), nil
 
+	case "base64url":
+		if encode {
+			return []byte(base64URL.EncodeToString(data)), nil
+		}
+		s := strings.TrimSpace(string(data))
+		// Accept unpadded input.
+		if m := len(s) % 4; m != 0 {
+			s += strings.Repeat("=", 4-m)
+		}
+		dst := make([]byte, base64URL.DecodedLen(len(s)))
+		n, err := base64URL.Decode(dst, []byte(s))
+		if err != nil {
+			return nil, err
+		}
+		return dst[:n], nil
+
+	case "netbiosu":
+		if encode {
+			return netbiosUEncode(data), nil
+		}
+		return netbiosUDecode(data), nil
+
+	case "strrep":
+		// value is "old:new"; encode replaces old->new, decode reverses.
+		old, rep := splitStrrep(t.Value)
+		if old == "" {
+			return data, nil
+		}
+		if encode {
+			return []byte(strings.ReplaceAll(string(data), old, rep)), nil
+		}
+		return []byte(strings.ReplaceAll(string(data), rep, old)), nil
+
+	case "case":
+		if encode {
+			return []byte(strings.ToUpper(string(data))), nil
+		}
+		return []byte(strings.ToLower(string(data))), nil
+
 	case "mask":
-		return applyMask(data, t.Value), nil
+		v, err := normalizeMaskValue(t.Value)
+		if err != nil {
+			return nil, err
+		}
+		return applyMask(data, v), nil
 
 	case "print":
 		if encode {
@@ -118,6 +163,19 @@ func netbiosDecode(data []byte) []byte {
 	return result
 }
 
+// normalizeMaskValue validates mask input. Empty key is rejected instead of
+// panicking on modulo-zero (legacy path did not guard).
+func normalizeMaskValue(param string) (string, error) {
+	if strings.TrimSpace(param) == "" {
+		return "", fmt.Errorf("mask requires a key value")
+	}
+	parts := strings.SplitN(param, ";", 2)
+	if parts[0] == "" {
+		return "", fmt.Errorf("mask requires a non-empty key")
+	}
+	return param, nil
+}
+
 // applyMask applies XOR mask with the given key and offset.
 // Format: "key;offset" (e.g., "secret;3")
 func applyMask(data []byte, param string) []byte {
@@ -128,11 +186,58 @@ func applyMask(data []byte, param string) []byte {
 		key = parts[0]
 		fmt.Sscanf(parts[1], "%d", &offset)
 	}
+	if len(key) == 0 {
+		return data
+	}
+	if offset < 0 {
+		offset = 0
+	}
 	result := make([]byte, len(data))
 	for i, b := range data {
 		result[i] = b ^ key[(i+offset)%len(key)]
 	}
 	return result
+}
+
+func netbiosUEncode(data []byte) []byte {
+	var out []byte
+	for _, b := range data {
+		hi, lo := (b>>4)&0xF, b&0xF
+		hc, lc := 'A'+hi, 'a'+lo
+		out = append(out, byte(hc), byte(lc))
+	}
+	return out
+}
+
+func netbiosUDecode(data []byte) []byte {
+	var out []byte
+	for i := 0; i+1 < len(data); i += 2 {
+		var hi, lo byte
+		c0, c1 := data[i], data[i+1]
+		if c0 >= 'A' && c0 <= 'P' {
+			hi = c0 - 'A'
+		} else if c0 >= 'a' && c0 <= 'p' {
+			hi = c0 - 'a'
+		} else {
+			continue
+		}
+		if c1 >= 'A' && c1 <= 'P' {
+			lo = c1 - 'A'
+		} else if c1 >= 'a' && c1 <= 'p' {
+			lo = c1 - 'a'
+		} else {
+			continue
+		}
+		out = append(out, (hi<<4)|lo)
+	}
+	return out
+}
+
+func splitStrrep(v string) (string, string) {
+	if i := strings.Index(v, ":"); i >= 0 {
+		return v[:i], v[i+1:]
+	}
+	return v, ""
 }
 
 // printableEncode encodes binary data as printable hex-like string.

@@ -121,17 +121,24 @@ func (s *Server) handleBuildLogs(c *gin.Context) {
 
 // logBuild creates a build log entry
 func (s *Server) logBuild(platform, format, c2URL string, listenerID uint, filename, status, errStr, outputPath string) {
+	s.logBuildWithProfile(platform, format, c2URL, listenerID, filename, status, errStr, outputPath, "", "")
+}
+
+// logBuildWithProfile additionally records the malleable profile for audit.
+func (s *Server) logBuildWithProfile(platform, format, c2URL string, listenerID uint, filename, status, errStr, outputPath, profileName, profileHash string) {
 	user := "system"
 	if err := s.db.Create(&db.BuildLog{
-		Platform:   platform,
-		Format:     format,
-		C2URL:      c2URL,
-		ListenerID: listenerID,
-		Filename:   filename,
-		User:       user,
-		Status:     status,
-		Error:      errStr,
-		OutputPath: outputPath,
+		Platform:    platform,
+		Format:      format,
+		C2URL:       c2URL,
+		ListenerID:  listenerID,
+		Filename:    filename,
+		User:        user,
+		Status:      status,
+		Error:       errStr,
+		OutputPath:  outputPath,
+		ProfileName: profileName,
+		ProfileHash: profileHash,
 	}).Error; err != nil {
 		slog.Error("Failed to create build log", "error", err)
 	}

@@ -221,10 +221,10 @@ func (s *Server) handleTunStart(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "tun helper"))
 		return
 	}
-	task, err := s.createTask(id, "tun_start", cidr, "", "", "", 0, 0, callerOpts(c)...)
-	if err != nil {
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "tun_start", Command: cidr})
+	if task == nil {
+		// Roll back the local UDP listener; the error response is already written.
 		_ = s.tunEngine.stop(id)
-		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	s.LogAuditRecord(c, "tun_start", "agent", id, fmt.Sprintf("cidr=%s udp=127.0.0.1:%d", cidr, actual), true, nil)
@@ -247,12 +247,8 @@ func (s *Server) handleTunStop(c *gin.Context) {
 	if s.tunEngine != nil {
 		_ = s.tunEngine.stop(id)
 	}
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	task, err := s.createTask(id, "tun_stop", "", "", "", "", 0, 0, callerOpts(c)...)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "tun_stop"})
+	if task == nil {
 		return
 	}
 	s.dispatchTask(c, task, "tun_stop", "")

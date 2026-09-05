@@ -128,7 +128,7 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
           ) : (
             <div className="flex flex-col gap-2">
               {executions.map(ex => (
-                <div key={ex.execution_id} role="button" tabIndex={0} className="flex items-center gap-3 p-3 rounded-lg bg-muted hover:bg-muted/80 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => viewExecution(ex.execution_id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); viewExecution(ex.execution_id); } }}>
+                <button key={ex.execution_id} type="button" className="flex w-full items-center gap-3 p-3 rounded-lg bg-muted hover:bg-muted/80 cursor-pointer transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => viewExecution(ex.execution_id)}>
                   {statusBadge(ex.status)}
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">{ex.workflow_name}</div>
@@ -136,7 +136,7 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
                     {ex.error_msg && <div className="text-xs text-destructive truncate">{ex.error_msg}</div>}
                   </div>
                   <ChevronRight className="size-4 text-muted-foreground shrink-0" />
-                </div>
+                </button>
               ))}
             </div>
           )

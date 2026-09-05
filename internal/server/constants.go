@@ -189,11 +189,12 @@ const (
 	// payloads are reduced to valid JSON with explicit partial-result metadata.
 	AIToolResultTruncLen = 1000
 	AITaskResultTruncLen = 2000
-	AIStreamBufSize      = 4096
+	AIStreamBufSize      = 8192
 	// Providers send tiny token deltas. We expose cumulative snapshots to the
 	// browser for backward compatibility, but only after a useful increment so
 	// long replies do not create quadratic SSE traffic and render churn.
-	AIStreamEmitMinBytes    = 256
+	// Reduced to 128 for latency-first streaming (chosen).
+	AIStreamEmitMinBytes    = 128
 	AIChatRequestMaxBytes   = 2 << 20
 	AIChatMaxMessages       = 512
 	AIConfigRequestMaxBytes = 64 << 10
@@ -204,8 +205,12 @@ const (
 	AISafetyMaxToolRounds     = 8
 	AISafetyMaxDuplicateTools = 2
 	AIRoundTimeout            = 3 * time.Minute
-	AIStreamChanBuf           = 64
+	AIStreamChanBuf           = 256
 	AIStreamHeartbeatInterval = 15 * time.Second
+	AISSEMaxBufferBytes       = 2 << 20 // 2 MB cap for SSE buffer growth
+	AIWebSearchTimeout        = 8 * time.Second
+	AIWebSearchMaxResults     = 6
+	AIWebSearchMaxQueryLen    = 200
 
 	// ─── DNS ───
 	DNSTXTChunkSize = 255

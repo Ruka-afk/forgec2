@@ -293,7 +293,7 @@ export function usePayloadGenerator() {
     buildFormData(formData, opts?.extra);
     try {
       // 1) Start the build (or synchronous request)
-      const res = await fetch(`${API_BASE}/generate${endpoint}`, { method: "POST", body: formData, headers: { "X-CSRF-Token": getCsrfToken() }, credentials: "include" });
+      const res = await fetch(`${API_BASE}${paths.generate.binary(endpoint)}`, { method: "POST", body: formData, headers: { "X-CSRF-Token": getCsrfToken() }, credentials: "include" });
       if (!res.ok) {
         handleUnauthorized(res);
         const ct = res.headers.get("content-type") || "";
@@ -366,9 +366,15 @@ export function usePayloadGenerator() {
     working_end: form.working_end,
     working_tz: form.working_tz,
     icon_b64: form.icon_b64,
+    icon_preset: form.icon_preset,
     disguise_as: form.disguise_as,
     file_description: form.file_description,
     company_name: form.company_name,
+    lnk_disguise: form.lnk_disguise ? "true" : "",
+    pe_timestamp: form.pe_timestamp,
+    pe_sections: form.pe_sections,
+    pe_imports: form.pe_imports,
+    pe_manifest: form.pe_manifest,
   }), []);
 
   const unixExtra = useCallback((form: UnixForm): Record<string, string> => ({
@@ -460,7 +466,7 @@ export function usePayloadGenerator() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000);
       try {
-        const res = await fetch(`${API_BASE}/generate/donut`, { method: "POST", body: formData, headers: { "X-CSRF-Token": getCsrfToken() }, credentials: "include", signal: controller.signal });
+        const res = await fetch(`${API_BASE}${paths.generate.donut}`, { method: "POST", body: formData, headers: { "X-CSRF-Token": getCsrfToken() }, credentials: "include", signal: controller.signal });
         if (res.ok) {
           await downloadFromResponse(res, "donut_loader.bin");
           toast.success(t("generate.toast.donut_generated"));
@@ -508,7 +514,7 @@ export function usePayloadGenerator() {
     formData.set("crypto_key", s.crypto_key);
     formData.set("beacon_key", s.beacon_key);
     try {
-      const data = await api.postFormData<{ success?: boolean; error?: string; types?: Array<{ name: string; desc: string; command: string }>; download_url?: string }>("/generate/one-liner", formData);
+      const data = await api.postFormData<{ success?: boolean; error?: string; types?: Array<{ name: string; desc: string; command: string }>; download_url?: string }>(paths.generate.oneLiner, formData);
       if (!data.success) {
         setStates((s) => ({ ...s, oneliner: { busy: false, result: data.error || "" } }));
       } else {
@@ -572,12 +578,13 @@ export function usePayloadGenerator() {
       if (!data.success) { toast.error(data.error || t("generate.toast.import_failed")); return; }
       const p = data.profile;
       if (!p) return;
-      const preset: ProfilePreset = { name: p.name, description: p.description, user_agent: p.user_agent, sleep: p.sleep, jitter: p.jitter };
+      const preset: ProfilePreset = { name: p.name, description: p.description, user_agent: p.user_agent, sleep: p.sleep, jitter: p.jitter, beacon_uri: (p as { beacon_uri?: string }).beacon_uri, method: (p as { method?: string }).method };
       setProfilePresets((prev) => { const idx = prev.findIndex((p) => p.name === preset.name); if (idx >= 0) { const next = [...prev]; next[idx] = preset; return next; } return [...prev, preset]; });
+      changeProfile(preset.name);
       toast.success(t("generate.toast.profile_imported"));
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : String(err)); }
     finally { e.target.value = ""; }
-  }, [t]);
+  }, [t, changeProfile]);
 
   const deleteProfile = useCallback(async (name: string) => {
     if (!name || name === "default") return false;

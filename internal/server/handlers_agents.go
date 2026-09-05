@@ -125,7 +125,11 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 	// Screenshots stay on-FS and respect include_screenshots=false for lazy loading.
 	var screenshots []string
 	if c.Query("include_screenshots") != "false" {
-		screenshots, _ = s.listAgentScreenshots(id)
+		var err error
+		screenshots, err = s.listAgentScreenshots(id)
+		if err != nil {
+			slog.Debug("Agent detail screenshots unavailable", "agent_id", id, "error", err)
+		}
 	}
 	g, ctx := errgroup.WithContext(c.Request.Context())
 	var tasks []db.Task
@@ -313,14 +317,8 @@ func (s *Server) handleKillAgent(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
-	task, err := s.createTask(id, "kill", "exit", "", "", "", 0, 0, callerOpts(c)...)
-	if err != nil {
-		slog.Error("Failed to create kill task", "agent_id", id, "err", err)
-		respondError(c, http.StatusInternalServerError, "failed to create kill task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "kill", Command: "exit"})
+	if task == nil {
 		return
 	}
 
@@ -610,8 +608,12 @@ func paginateHostBuckets(order []*implantHostBucket, page, pageSize int) ([]db.I
 }
 
 func (s *Server) listAgentsGroupedByHost(query *gorm.DB, page, pageSize int, sortKey, sortDir string) ([]db.Implant, int64, error) {
+	// Cap initial load to 5000 implants to avoid OOM on 10k+ fleets; grouping
+	// stays in-memory but bounded. A true DB-side DISTINCT pagination would
+	// require a host_key persisted column; this cap is the no-migration fix
+	// per user choice (no host_key column).
 	var matched []db.Implant
-	if err := query.Find(&matched).Error; err != nil {
+	if err := query.Limit(5000).Find(&matched).Error; err != nil {
 		return nil, 0, err
 	}
 	order := groupImplantsByHost(matched)
@@ -910,10 +912,8 @@ func (s *Server) handleSetKillDate(c *gin.Context) {
 	}
 
 	// Create a task for the agent to pick up the kill date at next beacon
-	task, err := s.createTask(id, "set_kill_date", req.KillDate, "", "", "", 0, 0, callerOpts(c)...)
-	if err != nil {
-		slog.Error("Failed to create kill date task", "agent_id", id, "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to create kill date task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "set_kill_date", Command: req.KillDate})
+	if task == nil {
 		return
 	}
 
@@ -936,10 +936,8 @@ func (s *Server) handleClearKillDate(c *gin.Context) {
 		return
 	}
 
-	task, err := s.createTask(id, "clear_kill_date", "", "", "", "", 0, 0, callerOpts(c)...)
-	if err != nil {
-		slog.Error("Failed to create clear kill date task", "agent_id", id, "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to create clear kill date task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "clear_kill_date"})
+	if task == nil {
 		return
 	}
 

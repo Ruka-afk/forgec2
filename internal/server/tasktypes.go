@@ -122,7 +122,6 @@ var dangerousTaskTypes = map[string]bool{
 	protocol.TaskTypeDPAPIBlob:      true,
 	protocol.TaskTypeDPAPIBrowser:   true,
 	protocol.TaskTypeCookieExport:   true,
-	protocol.TaskTypeChromeCookies:  true,
 	protocol.TaskTypeUSBDrop:        true,
 
 	// Destructive / irreversible filesystem operations: recursive delete must

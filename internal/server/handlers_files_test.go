@@ -181,6 +181,86 @@ func TestHandleFileDelete(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// TestHandleFileMkdir / TestHandleFileRename
+// ---------------------------------------------------------------------------
+
+func TestHandleFileMkdir(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	database := newContractDB(t)
+	srv := newTestFileServer(t, database)
+	agent := seedImplant(t, database)
+
+	t.Run("empty path returns 400", func(t *testing.T) {
+		w, c := newFormContext(http.MethodPost, "/", nil)
+		c.Params = gin.Params{{Key: "id", Value: agent.ID}}
+		srv.handleFileMkdir(c)
+		assertStatus(t, w, http.StatusBadRequest)
+	})
+
+	t.Run("valid request creates mkdir task", func(t *testing.T) {
+		form := url.Values{}
+		form.Set("path", `C:\temp\newdir`)
+		w, c := newFormContext(http.MethodPost, "/", &form)
+		c.Params = gin.Params{{Key: "id", Value: agent.ID}}
+		srv.handleFileMkdir(c)
+		assertStatus(t, w, http.StatusOK)
+		assertSuccessJSON(t, w)
+		var task db.Task
+		if err := database.Where("agent_id = ? AND type = ?", agent.ID, "mkdir").First(&task).Error; err != nil {
+			t.Fatalf("mkdir task not persisted: %v", err)
+		}
+		if task.Command != `C:\temp\newdir` {
+			t.Fatalf("command = %q, want dir path", task.Command)
+		}
+	})
+}
+
+func TestHandleFileRename(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	database := newContractDB(t)
+	srv := newTestFileServer(t, database)
+	agent := seedImplant(t, database)
+
+	t.Run("missing dest returns 400", func(t *testing.T) {
+		form := url.Values{}
+		form.Set("path", `C:\temp\old.txt`)
+		w, c := newFormContext(http.MethodPost, "/", &form)
+		c.Params = gin.Params{{Key: "id", Value: agent.ID}}
+		srv.handleFileRename(c)
+		assertStatus(t, w, http.StatusBadRequest)
+	})
+
+	t.Run("destination alias accepted", func(t *testing.T) {
+		form := url.Values{}
+		form.Set("path", `C:\temp\old.txt`)
+		form.Set("destination", `C:\temp\new.txt`)
+		w, c := newFormContext(http.MethodPost, "/", &form)
+		c.Params = gin.Params{{Key: "id", Value: agent.ID}}
+		srv.handleFileRename(c)
+		assertStatus(t, w, http.StatusOK)
+		assertSuccessJSON(t, w)
+	})
+
+	t.Run("valid request creates rename task with src and dst", func(t *testing.T) {
+		form := url.Values{}
+		form.Set("path", `C:\temp\a.txt`)
+		form.Set("dest", `C:\temp\b.txt`)
+		w, c := newFormContext(http.MethodPost, "/", &form)
+		c.Params = gin.Params{{Key: "id", Value: agent.ID}}
+		srv.handleFileRename(c)
+		assertStatus(t, w, http.StatusOK)
+		assertSuccessJSON(t, w)
+		var task db.Task
+		if err := database.Where("agent_id = ? AND type = ?", agent.ID, "rename").Order("id DESC").First(&task).Error; err != nil {
+			t.Fatalf("rename task not persisted: %v", err)
+		}
+		if task.Command != `C:\temp\a.txt` || task.Data != `C:\temp\b.txt` {
+			t.Fatalf("command/data = %q/%q, want src/dst", task.Command, task.Data)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
 // TestHandleFileRead
 // ---------------------------------------------------------------------------
 

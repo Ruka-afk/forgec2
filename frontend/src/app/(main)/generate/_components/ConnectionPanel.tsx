@@ -112,7 +112,7 @@ export default function ConnectionPanel({
     <CraftPanel
       title={t("generate.connection_title")}
       badge={<span className="rounded-md bg-primary/10 px-2 py-0.5 text-(--fs-micro-sm) font-mono text-primary uppercase">{transport}</span>}
-      bodyClassName="space-y-3"
+      bodyClassName="space-y-2.5"
       footer={
         <div className="flex flex-wrap gap-1.5">
           <SummaryChip label={t("generate.connection_listener")} value={currentListener?.name || t("generate.select_listener")} tint="bg-primary/10 text-primary" />
@@ -274,11 +274,21 @@ export default function ConnectionPanel({
               </SelectTrigger>
               <SelectContent>
                 {profilePresets.map((p) => (
-                  <SelectItem key={p.name} value={p.name}>{p.description || p.name}</SelectItem>
+                  <SelectItem key={p.name} value={p.name}>
+                    {p.description || p.name}
+                    {p.sleep != null || p.jitter != null ? ` · ${p.sleep ?? "?"}s/${p.jitter ?? "?"}%` : ""}
+                    {p.beacon_uri ? ` · ${p.beacon_uri}` : ""}
+                  </SelectItem>
                 ))}
                 <SelectItem value="__import__">{t("generate.import_profile")}</SelectItem>
               </SelectContent>
             </Select>
+            <Tooltip>
+              <TooltipTrigger render={<Button type="button" variant="outline" size="icon" aria-label={t("generate.manage_profiles") || "Manage profiles"} onClick={() => { window.location.href = "/generate?tab=profiles"; }} />}>
+                <FileCode2 className="size-4" />
+              </TooltipTrigger>
+              <TooltipContent>{t("generate.manage_profiles") || "Manage profiles"}</TooltipContent>
+            </Tooltip>
             {!isBuiltin && (
               <Tooltip>
                 <TooltipTrigger render={<Button type="button" variant="destructive" size="icon" onClick={handleDeleteProfile} disabled={deleting} aria-label={t("generate.delete_profile")} />}>

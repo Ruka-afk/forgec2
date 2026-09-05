@@ -1,4 +1,4 @@
-# Stage 1: Build Next.js frontend
+# Stage 1: Build Vite frontend
 FROM node:20.18-alpine AS frontend-builder
 WORKDIR /build/frontend
 COPY frontend/package*.json ./
@@ -17,7 +17,6 @@ COPY --from=frontend-builder /build/frontend/out /build/internal/webdist/dist
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 COPY pkg/ ./pkg/
-COPY locales/ ./locales/
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o forgec2-server ./cmd/server
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o healthcheck ./cmd/healthcheck
 

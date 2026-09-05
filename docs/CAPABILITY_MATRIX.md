@@ -81,7 +81,6 @@
 | Modules store | Core | Settings → Modules; deploy to agent via upload task |
 | Scripting | Hardened | DB-persisted scripts |
 | Remote desktop | Experimental | Screenshot stream + input |
-| Chrome C2 page | Hardened | Extension check-in at POST /api/chrome/beacon; zip download substitutes C2 origin |
 | NTLM coerce/relay UI | Experimental | Lab section; Windows-centric |
 | Cloud steal UI | Experimental | Lab; result polling |
 | Container UI | Experimental | Detect better on Linux; escape often stub elsewhere |
@@ -92,6 +91,20 @@
 | Scanner UI | Hardened | Agent-side port scan; not full Nmap |
 | ATT&CK coverage UI | Hardened | Task-type mapping only — not proof of compromise |
 | Circuit breaker UI | Hardened | Listener probe/failover; not full multi-C2 mesh |
+
+## Malleable C2 profiles (v2)
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Multi-URI rotation (round-robin) | Hardened | `beacon_uris`; primary stays `beacon_uri` for old agents; server NoRoute accepts custom URIs even with no global preset |
+| Request placements (cookie/query/header cover copies) | Hardened | `placements: [{target, chain}]`; canonical body always sent; server scans all query/cookie values so param-name rotation works |
+| Transform chains (base64/url, netbios(u), xor, mask, strrep, case, urlencode, uri_append) | Hardened | Agent/server engines aligned (full-key xor, `key;offset` mask); Validate endpoint round-trips each chain |
+| Header order determinism + UA pool | Hardened | Fixed browser order, sorted custom keys, per-beacon UA rotation (profile pool + built-ins) |
+| URI jitter + param-name rotation + work window | Hardened | Junk query per beacon; query names rotate through pool; `work_start/end/tz` gates beacons |
+| CS `.profile` import + Validate (dry-run) | Hardened | `POST /api/generate/profile/import-text`, `/api/generate/profile/validate` |
+| Response output chains | Experimental | `server_output` encodes only via matching global preset; per-file chains preview-only until global preset matches |
+
+Rebuild implants after changing placement/header/timing fields — old agents keep the old shape.
 
 ## Operator rules
 

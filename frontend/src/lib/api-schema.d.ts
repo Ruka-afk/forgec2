@@ -4499,6 +4499,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/generate/profile/import-text": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import malleable profile from pasted JSON or Cobalt Strike text */
+        post: operations["generateProfileImportText"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/generate/profile/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate malleable profile without saving */
+        post: operations["generateProfileValidate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/generate/profile/{name}": {
         parameters: {
             query?: never;
@@ -5746,23 +5780,6 @@ export interface paths {
         put?: never;
         /** Release task */
         post: operations["collabTaskRelease"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/chrome/agents/{uuid}/tasks": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Chrome agent tasks */
-        post: operations["chromeAgentTasks"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8711,60 +8728,6 @@ export interface paths {
         };
         /** Script run history */
         get: operations["get__api_scripts_history"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/chrome/beacon": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Chrome extension agent check-in
-         * @description Public (no session). Registers a chrome-tagged implant, accepts task results, returns pending chrome_* tasks. Optional X-ForgeC2-Chrome-Token when server.beacon_key is set.
-         */
-        post: operations["post__api_chrome_beacon"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/chrome/agents": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Chrome extension agents */
-        get: operations["get__api_chrome_agents"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/forgec2-chrome-c2.zip": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Download Chrome C2 extension zip (C2 origin substituted) */
-        get: operations["get_forgec2_chrome_c2_zip"];
         put?: never;
         post?: never;
         delete?: never;
@@ -16586,6 +16549,42 @@ export interface operations {
             };
         };
     };
+    generateProfileImportText: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    generateProfileValidate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     generateProfileDelete: {
         parameters: {
             query?: never;
@@ -18135,26 +18134,6 @@ export interface operations {
             header?: never;
             path: {
                 taskId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    chromeAgentTasks: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                uuid: string;
             };
             cookie?: never;
         };
@@ -21938,84 +21917,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    post__api_chrome_beacon: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    uuid: string;
-                    info?: {
-                        [key: string]: string;
-                    };
-                    results?: {
-                        task_id?: number;
-                        type?: string;
-                        output?: string;
-                        error?: string;
-                    }[];
-                };
-            };
-        };
-        responses: {
-            /** @description Pending chrome tasks */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Chrome token rejected */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    get__api_chrome_agents: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    get_forgec2_chrome_c2_zip: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Zip archive */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/zip": string;
-                };
             };
             /** @description Extension sources not found on disk */
             503: {

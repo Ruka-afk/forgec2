@@ -555,12 +555,21 @@ export default function AIPage() {
 	  let lastEventId = "";
 	  let response: Response | null = null;
 	  for (let attempt = 0; attempt < 4; attempt += 1) {
+		const headers: Record<string, string> = { Accept: "text/event-stream" };
+		if (lastEventId) headers["Last-Event-ID"] = lastEventId;
 		response = await fetch(`${API_BASE}${paths.ai.runEvents(backgroundRunId)}${lastEventId ? `?after=${encodeURIComponent(lastEventId)}` : ""}`, {
 		  method: "GET",
-		  headers: lastEventId ? { "Last-Event-ID": lastEventId } : undefined,
+		  headers,
 		  credentials: "include",
 		  signal: controller.signal,
 		});
+		if (response.status === 401) {
+		  const { handleUnauthorized } = await import("@/lib/api");
+		  handleUnauthorized(response);
+		  finishTrace(true);
+		  presentStreamError(t("ai.error_connection"));
+		  return;
+		}
 		if (response.ok && response.body) break;
 		if (response.status >= 400 && response.status < 500) break;
 		await new Promise((resolve) => window.setTimeout(resolve, 500 * (attempt + 1)));
@@ -731,6 +740,9 @@ export default function AIPage() {
 		  buffer += decoder.decode(value, { stream: true });
 		  const parsed = consumeSSEBuffer(buffer);
 		  buffer = parsed.remainder;
+		  if (parsed.overflow) {
+			presentStreamError(t("ai.error_prefix") + "SSE buffer overflow - truncated");
+		  }
 		  parsed.events.forEach(processEvent);
 		  if (streamCompleted) {
 			await reader.cancel();
@@ -747,11 +759,18 @@ export default function AIPage() {
 		await consumeRunStream(currentResponse);
 		if (streamCompleted || streamFailed || gen !== streamGenRef.current) break;
 		await new Promise((resolve) => window.setTimeout(resolve, 600 * (reconnect + 1)));
+		const h: Record<string, string> = { Accept: "text/event-stream" };
+		if (lastEventId) h["Last-Event-ID"] = lastEventId;
 		currentResponse = await fetch(`${API_BASE}${paths.ai.runEvents(backgroundRunId)}?after=${encodeURIComponent(lastEventId || "0")}`, {
-		  headers: lastEventId ? { "Last-Event-ID": lastEventId } : undefined,
+		  headers: h,
 		  credentials: "include",
 		  signal: controller.signal,
 		});
+		if (currentResponse.status === 401) {
+		  const { handleUnauthorized } = await import("@/lib/api");
+		  handleUnauthorized(currentResponse);
+		  break;
+		}
 		if (!currentResponse.ok || !currentResponse.body) break;
 	  }
 	  if (gen === streamGenRef.current) {

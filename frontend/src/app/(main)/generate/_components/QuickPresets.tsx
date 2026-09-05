@@ -41,26 +41,26 @@ const PRESETS = [
 export default React.memo(function QuickPresets({ onApply }: QuickPresetsProps) {
   const { t } = useI18n();
   return (
-    <div className="flex items-center gap-x-3 gap-y-4 flex-wrap">
-      <div className="flex items-center gap-x-2.5 shrink-0">
+    <div className="rounded-xl border border-border/60 bg-card p-3.5 shadow-sm">
+      <div className="mb-3 flex items-center gap-x-2.5">
         <IconBadge icon={Wand2} color="cyan" size="md" />
         <div>
-          <div className="text-sm font-semibold text-foreground">{t("generate.quick_presets")}</div>
-          <div className="text-xs text-muted-foreground">{t("generate.quick_presets_desc")}</div>
+          <div className="text-sm font-semibold tracking-tight text-foreground">{t("generate.quick_presets")}</div>
+          <div className="text-xs leading-4 text-muted-foreground">{t("generate.quick_presets_desc")}</div>
         </div>
       </div>
-      <div className="flex flex-1 flex-wrap gap-3 min-w-0">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {PRESETS.map((p) => (
-          <Card key={p.key} className="relative flex-1 min-w-[180px] p-4 hover:shadow-lg dark:hover:shadow-xl transition-shadow">
+          <Card key={p.key} className="group relative overflow-hidden p-4 transition-all duration-200 hover:-translate-y-px hover:border-primary/20 hover:shadow-md">
             <Button
               type="button"
               variant="ghost"
               onClick={() => onApply(p.key)}
-              className="absolute inset-0 z-10 h-auto rounded-lg"
+              className="absolute inset-0 z-10 h-auto rounded-xl"
               aria-label={t(p.labelKey)}
             />
             <div className="flex items-center gap-2.5">
-              <div className={`size-8 ${p.iconBg} rounded-lg flex items-center justify-center`}><span className={p.iconColor}>{p.icon}</span></div>
+              <div className={`grid size-9 shrink-0 place-items-center ${p.iconBg} rounded-xl ring-1 ring-border/30 transition-transform duration-200 group-hover:scale-105`}><span className={p.iconColor}>{p.icon}</span></div>
               <div className="min-w-0">
                 <div className="text-sm font-semibold text-foreground">{t(p.labelKey)}</div>
                 <p className="truncate text-xs text-muted-foreground">{t(p.descKey)}</p>

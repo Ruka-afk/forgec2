@@ -59,10 +59,17 @@ export default defineConfig(({ command, mode }) => ({
     emptyOutDir: true,
     assetsDir: "assets",
     target: "es2020",
-    chunkSizeWarningLimit: 1200,
+    chunkSizeWarningLimit: 500,
     rollupOptions: {
       output: {
         manualChunks(id) {
+          if (id.includes("src/app/(main)/ai")) return "route-ai";
+          // Split the agents route: the list view must not drag the detail
+          // view (+15 sections) into its chunk. Detail lives under [id]/.
+          if (id.includes("src/app/(main)/agents/[id]")) return "route-agents-detail";
+          if (id.includes("src/app/(main)/agents")) return "route-agents-list";
+          if (id.includes("src/app/(main)/credentials")) return "route-credentials";
+          if (id.includes("src/app/(main)/generate")) return "route-generate";
           if (!id.includes("node_modules")) return;
           // Order matters: react-router is a react lib too.
           if (id.includes("react-router")) return "vendor-router";

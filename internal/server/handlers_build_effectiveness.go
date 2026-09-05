@@ -58,7 +58,8 @@ func (s *Server) handleBuildEffectiveness(c *gin.Context) {
 		Select("id, hostname, status, listener_id, version, created_at").
 		Where("created_at >= ?", since)
 	implantQ = s.tenantScope(implantQ, c)
-	if err := implantQ.Find(&implants).Error; err != nil {
+	// Bound the in-memory O(builds × implants) join below.
+	if err := implantQ.Order("created_at desc").Limit(AgentQueryLimit).Find(&implants).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "query failed")
 		return
 	}

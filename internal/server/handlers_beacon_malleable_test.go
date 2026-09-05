@@ -8,6 +8,26 @@ import (
 	"testing"
 )
 
+func TestDecodeTaskResult(t *testing.T) {
+	textB64 := base64.StdEncoding.EncodeToString([]byte("hello world"))
+	if got := decodeTaskResult("shell", "base64", textB64); got != "hello world" {
+		t.Fatalf("text base64 not decoded: %q", got)
+	}
+	// Binary-carrying types must keep base64 so JSON transport stays intact.
+	jpegish := base64.StdEncoding.EncodeToString([]byte{0xff, 0xd8, 0xff, 0x00, 0x41})
+	for _, typ := range []string{"webcam", "mic", "upload", "download"} {
+		if got := decodeTaskResult(typ, "base64", jpegish); got != jpegish {
+			t.Fatalf("%s base64 not preserved", typ)
+		}
+	}
+	if got := decodeTaskResult("shell", "", "plain"); got != "plain" {
+		t.Fatalf("plain passthrough broken: %q", got)
+	}
+	if got := decodeTaskResult("shell", "base64", "!!!not-base64!!!"); got != "!!!not-base64!!!" {
+		t.Fatalf("invalid base64 should pass through: %q", got)
+	}
+}
+
 // TestMalleableWrapsBeaconResponse verifies the HTTP beacon reply passes
 // through applyMalleableProfile when the server-side profile is enabled:
 // prepend/append bytes wrap the JSON envelope, and the inner JSON survives.

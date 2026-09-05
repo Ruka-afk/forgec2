@@ -109,13 +109,20 @@ func (b *aiRunBroker) subscribe(runID string) (<-chan aiLiveEvent, func()) {
 func (b *aiRunBroker) publish(runID string, event aiLiveEvent, ephemeral bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	_ = ephemeral // reasoning is delivered live and intentionally never retained.
+	_ = ephemeral // reasoning is live-only per choice #3 (single session visible).
 	for ch := range b.subscribers[runID] {
 		select {
 		case ch <- event:
 		default:
-			// Durable events are replayed from SQLite on reconnect. Dropping here
-			// protects the run from a stalled browser.
+			// Buffer full: try blocking 100ms before dropping to favor latency-first but avoid stall.
+			// Single-session reasoning stays ephemeral; durable events are replayed from SQLite.
+			go func(dst chan aiLiveEvent, ev aiLiveEvent, rid string) {
+				select {
+				case dst <- ev:
+				case <-time.After(100 * time.Millisecond):
+					slog.Warn("AI broker drop: stalled subscriber", "run_id", rid, "event_id", ev.Sequence, "type", ev.Type)
+				}
+			}(ch, event, runID)
 		}
 	}
 }
@@ -284,6 +291,8 @@ func (s *Server) handleAIRunsCreate(c *gin.Context) {
 	}
 	// Serialize the short count-and-create critical section so concurrent
 	// requests cannot all pass the per-user/per-tenant active-run limits.
+	// Local mutex is fast path; DB transaction with BEGIN IMMEDIATE serializes
+	// across multi-instance deployments (sqlite WAL).
 	s.aiRunCreateMu.Lock()
 	defer s.aiRunCreateMu.Unlock()
 	var existing db.AIChatRun
@@ -300,14 +309,6 @@ func (s *Server) handleAIRunsCreate(c *gin.Context) {
 		tenantLimit = s.cfg.AI.MaxRunsPerTenant
 	}
 	s.configMu.RUnlock()
-	var userActive, tenantActive int64
-	s.db.Model(&db.AIChatRun{}).Where("owner_id = ? AND status IN ?", principal.UserID, aiActiveRunStatuses).Count(&userActive)
-	s.db.Model(&db.AIChatRun{}).Where("tenant_id = ? AND status IN ?", principal.TenantID, aiActiveRunStatuses).Count(&tenantActive)
-	if userActive >= int64(userLimit) || tenantActive >= int64(tenantLimit) {
-		c.Header("Retry-After", "5")
-		respondError(c, http.StatusTooManyRequests, "AI run concurrency limit reached")
-		return
-	}
 	profile, err := s.resolveAIRunProfile(principal, req.ProfileID)
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err.Error())
@@ -318,23 +319,74 @@ func (s *Server) handleAIRunsCreate(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "invalid run input")
 		return
 	}
-	now := time.Now()
-	run := db.AIChatRun{
-		ID: uuid.NewString(), TenantID: principal.TenantID, OwnerID: principal.UserID,
-		Owner: principal.Username, SessionID: session.ID, ProfileID: profile.ID,
-		Provider: profile.Provider, Model: profile.Model, IdempotencyKey: req.IdempotencyKey,
-		Status: aiRunStatusQueued, Input: string(input), ContextAgentID: req.Context.AgentID,
-		CreatedAt: now, UpdatedAt: now,
-	}
-	if err := s.db.Create(&run).Error; err != nil {
-		if errors.Is(err, gorm.ErrDuplicatedKey) {
+	// Transaction with immediate lock to prevent race across processes
+	var run db.AIChatRun
+	txErr := s.db.Transaction(func(tx *gorm.DB) error {
+		// BEGIN IMMEDIATE for sqlite to acquire reserved lock early
+		if tx.Dialector.Name() == "sqlite" {
+			if err := tx.Exec("BEGIN IMMEDIATE").Error; err != nil {
+				// Non-fatal: the dialect may auto-handle locking, but a
+				// failed BEGIN means the cross-process race guard is off.
+				slog.Warn("AI run BEGIN IMMEDIATE failed, continuing without early lock", "error", err)
+			}
+		}
+		var userActive, tenantActive int64
+		if err := tx.Model(&db.AIChatRun{}).Where("owner_id = ? AND status IN ?", principal.UserID, aiActiveRunStatuses).Count(&userActive).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&db.AIChatRun{}).Where("tenant_id = ? AND status IN ?", principal.TenantID, aiActiveRunStatuses).Count(&tenantActive).Error; err != nil {
+			return err
+		}
+		if userActive >= int64(userLimit) || tenantActive >= int64(tenantLimit) {
+			return fmt.Errorf("concurrency limit")
+		}
+		now := time.Now()
+		run = db.AIChatRun{
+			ID: uuid.NewString(), TenantID: principal.TenantID, OwnerID: principal.UserID,
+			Owner: principal.Username, SessionID: session.ID, ProfileID: profile.ID,
+			Provider: profile.Provider, Model: profile.Model, IdempotencyKey: req.IdempotencyKey,
+			Status: aiRunStatusQueued, Input: string(input), ContextAgentID: req.Context.AgentID,
+			CreatedAt: now, UpdatedAt: now,
+		}
+		if err := tx.Create(&run).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+	if txErr != nil {
+		if txErr.Error() == "concurrency limit" {
+			c.Header("Retry-After", "5")
+			respondError(c, http.StatusTooManyRequests, "AI run concurrency limit reached")
+			return
+		}
+		if errors.Is(txErr, gorm.ErrDuplicatedKey) {
 			if s.db.Where("tenant_id = ? AND owner_id = ? AND idempotency_key = ?", principal.TenantID, principal.UserID, req.IdempotencyKey).First(&existing).Error == nil {
 				c.JSON(http.StatusOK, gin.H{"success": true, "data": existing, "reused": true})
 				return
 			}
 		}
-		respondError(c, http.StatusInternalServerError, "failed to create AI run")
-		return
+		// Retry once on SQLITE_BUSY
+		if strings.Contains(txErr.Error(), "database is locked") || strings.Contains(txErr.Error(), "busy") {
+			time.Sleep(50 * time.Millisecond)
+			// Fallback to single insert attempt
+			now := time.Now()
+			fallback := db.AIChatRun{
+				ID: uuid.NewString(), TenantID: principal.TenantID, OwnerID: principal.UserID,
+				Owner: principal.Username, SessionID: session.ID, ProfileID: profile.ID,
+				Provider: profile.Provider, Model: profile.Model, IdempotencyKey: req.IdempotencyKey,
+				Status: aiRunStatusQueued, Input: string(input), ContextAgentID: req.Context.AgentID,
+				CreatedAt: now, UpdatedAt: now,
+			}
+			if err := s.db.Create(&fallback).Error; err == nil {
+				run = fallback
+			} else {
+				respondError(c, http.StatusInternalServerError, "failed to create AI run")
+				return
+			}
+		} else {
+			respondError(c, http.StatusInternalServerError, "failed to create AI run")
+			return
+		}
 	}
 	if session.ProfileID == nil && profile.ID != nil {
 		s.db.Model(&db.AIChatSession{}).Where("id = ?", session.ID).Update("profile_id", *profile.ID)
@@ -409,6 +461,10 @@ func (s *Server) executeAIBackgroundRun(ctx context.Context, run db.AIChatRun, r
 	s.configMu.RUnlock()
 	if contextText := s.buildAIRunContext(principal, run.SessionID, lastUser, req.AttachmentIDs, req.KnowledgeCollectionIDs); contextText != "" {
 		sysPrompt += "\n\n" + contextText
+	}
+	// Inject live situation snapshot for runs to match legacy chat parity (tenant-aware)
+	if snap := s.buildSituationSnapshot(); snap != "" {
+		sysPrompt += "\n\n" + snap
 	}
 	reqCtx := &aiReqCtx{
 		DefaultAgentID:         req.Context.AgentID,
@@ -591,9 +647,14 @@ func (s *Server) handleAIRunEvents(c *gin.Context) {
 	defer heartbeat.Stop()
 	for {
 		var status string
-		_ = s.db.Model(&db.AIChatRun{}).Where("id = ?", run.ID).Pluck("status", &status).Error
+		if err := s.db.Model(&db.AIChatRun{}).Where("id = ?", run.ID).Pluck("status", &status).Error; err != nil {
+			slog.Warn("AI run status poll failed", "run_id", run.ID, "error", err)
+			return
+		}
 		if aiRunTerminal(status) {
-			_ = loadDurable()
+			if !loadDurable() {
+				slog.Warn("AI run terminal replay missed events", "run_id", run.ID)
+			}
 			return
 		}
 		select {

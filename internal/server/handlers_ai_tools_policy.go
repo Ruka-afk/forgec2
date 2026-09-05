@@ -67,6 +67,7 @@ var aiToolPolicies = map[string]aiToolPolicy{
 	"set_sleep":        {Risk: aiToolRiskLowRiskWrite, Permission: db.PermAgentsWrite},
 	"queue_collection": {Risk: aiToolRiskLowRiskWrite, Permission: db.PermTasksWrite},
 	"search_knowledge": {Risk: aiToolRiskRead, Permission: db.PermAIUse},
+	"web_search":       {Risk: aiToolRiskRead, Permission: db.PermAIUse},
 }
 
 func (s *Server) buildToolsForContext(reqCtx *aiReqCtx) []toolDef {

@@ -7,6 +7,13 @@ export interface ProfilePreset {
   user_agent?: string;
   sleep?: number;
   jitter?: number;
+  beacon_uri?: string;
+  beacon_uris?: string[];
+  method?: string;
+  headers?: Record<string, string>;
+  server_output?: string;
+  client_metadata?: string;
+  client_id?: string;
 }
 
 export interface OneLinerType {
@@ -60,9 +67,15 @@ export interface BinaryForm {
   working_tz: string;
   icon_file: File | null;
   icon_b64: string;
+  icon_preset: string;
   disguise_as: string;
   file_description: string;
   company_name: string;
+  lnk_disguise: boolean;
+  pe_timestamp: string;
+  pe_sections: string;
+  pe_imports: string;
+  pe_manifest: string;
 }
 
 export interface UnixForm {
@@ -174,7 +187,8 @@ export const DEFAULT_BINARY_FORM: BinaryForm = {
   arch: "amd64", domain_front: "", p2p_mode: "", p2p_parent: "",
   p2p_listen_addr: "", dns_domain: "", dns_server: "",
   working_start: "", working_end: "", working_tz: "",
-  icon_file: null, icon_b64: "", disguise_as: "", file_description: "", company_name: "",
+  icon_file: null, icon_b64: "", icon_preset: "", disguise_as: "", file_description: "", company_name: "", lnk_disguise: false,
+  pe_timestamp: "zero", pe_sections: "default", pe_imports: "none", pe_manifest: "default",
 };
 
 export const DEFAULT_UNIX_FORM: UnixForm = {

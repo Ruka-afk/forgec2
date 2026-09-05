@@ -42,9 +42,10 @@ func handleScreenshot(task Task, res *TaskResult) {
 }
 
 func handleScreenStreamStart(task Task, res *TaskResult) {
-	intervalSec, quality := parseScreenStreamSettings(task.Command)
+	vs := parseVideoSettings(task.Command)
+	intervalSec, quality := vs.Interval, vs.Quality
 	if !atomic.CompareAndSwapInt32(&screenStreaming, 0, 1) {
-		res.Output = fmt.Sprintf("screen stream already running (interval=%ds quality=%d)", intervalSec, quality)
+		res.Output = fmt.Sprintf("screen stream already running (interval=%ds quality=%d codec=%s fps=%d)", intervalSec, quality, vs.Codec, vs.FPS)
 		return
 	}
 	// Capture synchronously first so we never report "started" on a stream
@@ -60,59 +61,107 @@ func handleScreenStreamStart(task Task, res *TaskResult) {
 			return
 		}
 		sendScreenFrame(first)
-		timer := time.NewTimer(time.Duration(intervalSec) * time.Second)
+		// Video mode: use FPS-derived interval when codec is h264 and FPS>1
+		interval := time.Duration(intervalSec) * time.Second
+		if vs.Codec == "h264" && vs.FPS > 1 {
+			interval = time.Duration(1000/vs.FPS) * time.Millisecond
+			if interval < 100*time.Millisecond {
+				interval = 100 * time.Millisecond
+			}
+		}
+		timer := time.NewTimer(interval)
 		defer timer.Stop()
 		for {
 			<-timer.C
-			// A stop can arrive while the timer is waiting. Re-check before
-			// capturing so stopping never emits one final, expensive frame.
 			if atomic.LoadInt32(&screenStreaming) != 1 {
 				return
 			}
 			data, err := takeScreenshotJPEG(quality)
 			if err != nil {
-				// Stop streaming rather than silently skipping errors and
-				// pretending the stream is healthy.
 				atomic.StoreInt32(&screenStreaming, 0)
 				sendScreenStreamError("screen stream stopped: " + err.Error())
 				return
 			}
 			sendScreenFrame(data)
-			timer.Reset(time.Duration(intervalSec) * time.Second)
+			timer.Reset(interval)
 		}
 	}()
-	res.Output = fmt.Sprintf("screen stream started (interval=%ds quality=%d)", intervalSec, quality)
+	res.Output = fmt.Sprintf("screen stream started (interval=%ds quality=%d codec=%s)", intervalSec, quality, vs.Codec)
 }
 
 func parseScreenStreamSettings(command string) (intervalSec int, quality int) {
-	intervalSec = 5
-	quality = 65
+	s := parseVideoSettings(command)
+	return s.Interval, s.Quality
+}
+
+type VideoSettings struct {
+	Interval int
+	Quality  int
+	FPS      int
+	Codec    string
+	Bitrate  string
+	Width    int
+	Mime     string
+}
+
+func parseVideoSettings(command string) VideoSettings {
+	s := VideoSettings{Interval: 5, Quality: 65, FPS: 5, Codec: "jpeg", Bitrate: "800k"}
 	command = strings.TrimSpace(command)
 	if command == "" {
-		return intervalSec, quality
+		return s
 	}
 	parts := strings.Split(command, ",")
 	if len(parts) >= 1 {
 		if v, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil && v >= 1 && v <= 60 {
-			intervalSec = v
+			s.Interval = v
+			s.FPS = 1000 / (v * 1000) // placeholder, will be overridden if fps provided
+			if s.FPS < 1 {
+				s.FPS = 1
+			}
+			if s.FPS > 30 {
+				s.FPS = 30
+			}
 		}
 	}
 	if len(parts) >= 2 {
 		q := strings.TrimSpace(strings.ToLower(parts[1]))
 		switch q {
 		case "high":
-			quality = 85
+			s.Quality = 85
 		case "medium":
-			quality = 65
+			s.Quality = 65
 		case "low":
-			quality = 40
+			s.Quality = 40
 		default:
 			if v, err := strconv.Atoi(q); err == nil && v > 0 && v <= 100 {
-				quality = v
+				s.Quality = v
 			}
 		}
 	}
-	return intervalSec, quality
+	if len(parts) >= 3 {
+		if w, err := strconv.Atoi(strings.TrimSpace(parts[2])); err == nil && w >= 320 && w <= 3840 {
+			s.Width = w
+		}
+	}
+	if len(parts) >= 4 {
+		m := strings.ToLower(strings.TrimSpace(parts[3]))
+		if m == "h264" || m == "vp8" || m == "jpeg" || m == "png" || m == "webp" {
+			s.Codec = m
+			s.Mime = m
+		}
+	}
+	if len(parts) >= 5 && strings.TrimSpace(parts[4]) != "" {
+		s.Bitrate = strings.TrimSpace(parts[4])
+	}
+	// FPS derived from interval if not explicitly set: 5fps for video mode when interval <1s
+	if s.Interval <= 1 {
+		s.FPS = 15
+	} else if s.Interval <= 2 {
+		s.FPS = 5
+	} else {
+		s.FPS = 1
+	}
+	return s
 }
 
 func handleScreenStreamStop(task Task, res *TaskResult) {

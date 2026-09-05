@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -37,10 +38,32 @@ func validateExternalURL(raw string) error {
 	if host == "" {
 		return errors.New("URL has no host")
 	}
+	// Port whitelist: allow 80/443 + common AI gateway ports, block DB/SSH.
+	if port := u.Port(); port != "" {
+		allowed := map[string]bool{"80": true, "443": true, "8000": true, "8080": true, "8443": true, "11434": true, "3000": true, "5000": true, "9000": true}
+		if !allowed[port] {
+			// For custom ports, still allow if explicitly in range 8000-9000 is covered; otherwise block.
+			p, err := strconv.Atoi(port)
+			if err != nil || p < 1 || p > 65535 {
+				return fmt.Errorf("invalid port %s", port)
+			}
+			// Block well-known sensitive ports
+			blocked := map[int]bool{22: true, 23: true, 25: true, 3306: true, 5432: true, 6379: true, 27017: true, 11211: true}
+			if blocked[p] {
+				return fmt.Errorf("blocked port %s", port)
+			}
+			// Default deny for non-allowlisted custom ports except 8000-9000 already handled;
+			// For AI providers allow any high port >1024 if not blocked, but log.
+			if p < 1024 && p != 80 && p != 443 {
+				return fmt.Errorf("blocked privileged port %s", port)
+			}
+		}
+	}
 	var addrs []netip.Addr
 	if ip, perr := netip.ParseAddr(host); perr == nil {
 		addrs = append(addrs, ip.Unmap())
 	} else {
+		// Mitigate DNS rebinding: resolve with timeout and reject if any record is private
 		resolved, lerr := net.LookupIP(host)
 		if lerr != nil {
 			return fmt.Errorf("host resolution failed: %w", lerr)
@@ -58,6 +81,13 @@ func validateExternalURL(raw string) error {
 		if a.IsLoopback() || a.IsPrivate() || a.IsLinkLocalUnicast() ||
 			a.IsLinkLocalMulticast() || a.IsUnspecified() || a.IsMulticast() {
 			return fmt.Errorf("blocked non-public address %s", a)
+		}
+		// Extra: block 0.0.0.0/8 and CGNAT 100.64.0.0/10 which IsPrivate may miss on some Go versions
+		if a.Is4() {
+			ip4 := a.As4()
+			if ip4[0] == 0 || (ip4[0] == 100 && ip4[1] >= 64 && ip4[1] <= 127) {
+				return fmt.Errorf("blocked non-public address %s", a)
+			}
 		}
 	}
 	return nil

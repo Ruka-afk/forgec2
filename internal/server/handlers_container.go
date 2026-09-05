@@ -112,12 +112,8 @@ func (s *Server) handleContainerAgents(c *gin.Context) {
 // POST /agents/:id/container_detect
 func (s *Server) handleContainerDetect(c *gin.Context) {
 	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	task, err := s.createTask(id, protocol.TaskTypeContainerDetect, "", "", "", "", 0, 0)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: protocol.TaskTypeContainerDetect})
+	if task == nil {
 		return
 	}
 	slog.Info("Container detect requested", "agent_id", id)
@@ -128,12 +124,8 @@ func (s *Server) handleContainerDetect(c *gin.Context) {
 // POST /agents/:id/container_escape
 func (s *Server) handleContainerEscape(c *gin.Context) {
 	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	task, err := s.createTask(id, protocol.TaskTypeContainerEscape, "", "", "", "", 0, 0)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: protocol.TaskTypeContainerEscape})
+	if task == nil {
 		return
 	}
 	slog.Info("Container escape requested", "agent_id", id)
@@ -144,12 +136,8 @@ func (s *Server) handleContainerEscape(c *gin.Context) {
 // POST /agents/:id/container_docker
 func (s *Server) handleContainerDocker(c *gin.Context) {
 	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	task, err := s.createTask(id, protocol.TaskTypeContainerDocker, "", "", "", "", 0, 0)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: protocol.TaskTypeContainerDocker})
+	if task == nil {
 		return
 	}
 	slog.Info("Container Docker escape requested", "agent_id", id)
@@ -160,12 +148,8 @@ func (s *Server) handleContainerDocker(c *gin.Context) {
 // POST /agents/:id/container_k8s
 func (s *Server) handleContainerK8s(c *gin.Context) {
 	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	task, err := s.createTask(id, protocol.TaskTypeContainerK8s, "", "", "", "", 0, 0)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: protocol.TaskTypeContainerK8s})
+	if task == nil {
 		return
 	}
 	slog.Info("Container K8s escape requested", "agent_id", id)

@@ -46,10 +46,12 @@ type NetworkConfig struct {
 	MalleableRespDecode string `json:"malleable_resp_decode"`
 	// Request-side transforms applied by the agent to outbound beacons and
 	// stripped by the server on inbound.
-	RequestPrepend  string            `json:"request_prepend"`
-	RequestAppend   string            `json:"request_append"`
-	RequestHeaders  map[string]string `json:"request_headers"`
-	BeaconURI       string            `json:"beacon_uri"`
+	RequestPrepend string            `json:"request_prepend"`
+	RequestAppend  string            `json:"request_append"`
+	RequestHeaders map[string]string `json:"request_headers"`
+	BeaconURI      string            `json:"beacon_uri"`
+	// v2 placements JSON [{target,chain}] cover copies; empty = body only.
+	MalleablePlacement string `json:"malleable_placement"`
 }
 
 // DeriveNetworkConfigKey derives the AES-256-GCM key used to encrypt/decrypt

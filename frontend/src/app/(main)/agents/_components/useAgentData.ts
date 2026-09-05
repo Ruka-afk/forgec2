@@ -8,7 +8,7 @@ import { useCachedData } from "@/lib/hooks/useCachedData";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import type { Beacon } from "./types";
 
-type AgentTag = { id: string; name: string; color: string };
+export type AgentTag = { id: string; name: string; color: string };
 
 interface BeaconQueryParams {
   search: string;

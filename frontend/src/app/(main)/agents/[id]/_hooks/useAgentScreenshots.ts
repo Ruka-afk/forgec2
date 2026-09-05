@@ -104,7 +104,14 @@ export function useAgentScreenshots(agentId: string, online: boolean) {
         reloadDebounced();
       } else if (msg.type === "task_update") {
         const frame = msg as { task_type?: string; status?: string };
-        if (frame.task_type === "screenshot" && frame.status === "completed") {
+        // Window captures and trigger matches land in the same gallery as
+        // plain screenshots (server saves every frame to disk).
+        if (
+          frame.status === "completed" &&
+          (frame.task_type === "screenshot" ||
+            frame.task_type === "screenshot_window" ||
+            frame.task_type === "screen_trigger_start")
+        ) {
           reloadDebounced();
         }
       }

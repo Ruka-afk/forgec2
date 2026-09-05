@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
-	"sort"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -40,22 +39,13 @@ type trafficProfileStats struct {
 }
 
 func (s *Server) trafficProfileStatsFor(agentID string) trafficProfileStats {
-	logs := s.trafficLog.recent(500)
-	var agentLogs []TrafficEntry
-	for _, l := range logs {
-		if l.AgentID == agentID {
-			agentLogs = append(agentLogs, l)
-		}
-	}
+	// recentFor returns matches in chronological order already; no re-sort.
+	agentLogs := s.trafficLog.recentFor(agentID, 500)
 
 	st := trafficProfileStats{agentLogs: agentLogs}
 	if len(agentLogs) < 2 {
 		return st
 	}
-
-	sort.Slice(agentLogs, func(i, j int) bool {
-		return agentLogs[i].Time.Before(agentLogs[j].Time)
-	})
 
 	intervals := make([]float64, 0, len(agentLogs)-1)
 	sizes := make([]float64, 0, len(agentLogs))
@@ -93,20 +83,34 @@ func (s *Server) handleTrafficProfileGet(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "agent id required")
 		return
 	}
-
+	if _, ok := s.getAgentOrFail(c, agentID); !ok {
+		return
+	}
 	st := s.trafficProfileStatsFor(agentID)
 
 	autoAdapt := false
 	var agent db.Implant
-	if err := s.db.First(&agent, "id = ?", agentID).Error; err == nil {
+	if err := s.tenantScope(s.db, c).First(&agent, "id = ?", agentID).Error; err == nil {
 		autoAdapt = agent.AutoAdapt
 	}
 
 	var suggestion *adaptationSuggestion
 	if len(st.agentLogs) >= 2 {
-		suggestion = computeAdaptationSuggestion(st.baselineInterval, st.baselineJitter, st.baselinePacket)
+		// Use actual CurrentJitter for adaptation decision, baselineJitter is only for display (cv*100)
+		jitterForAdapt := agent.CurrentJitter
+		if jitterForAdapt == 0 {
+			jitterForAdapt = st.baselineJitter
+		}
+		suggestion = computeAdaptationSuggestion(st.baselineInterval, jitterForAdapt, st.baselinePacket)
 	}
 
+	// Cap the record payload: full 500-entry dumps on every poll waste
+	// bandwidth; the UI pages from the newest end.
+	recent := st.agentLogs
+	const maxRecentRecords = 50
+	if len(recent) > maxRecentRecords {
+		recent = recent[len(recent)-maxRecentRecords:]
+	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
 		"agent_id":             agentID,
 		"sample_count":         len(st.agentLogs),
@@ -118,7 +122,7 @@ func (s *Server) handleTrafficProfileGet(c *gin.Context) {
 		"mean_packet_size":     int(math.Round(st.meanPacketSize)),
 		"cv":                   math.Round(st.cv*1000) / 1000,
 		"auto_adapt":           autoAdapt,
-		"recent_records":       st.agentLogs,
+		"recent_records":       recent,
 		"suggestion":           suggestion,
 	}})
 }
@@ -155,10 +159,8 @@ func (s *Server) handleTrafficProfileAdapt(c *gin.Context) {
 	}
 
 	sleep := fmt.Sprintf("%d,%d", interval, jitter)
-	task, err := s.createTask(agentID, "set_sleep", sleep, "", "", "", 0, 0, callerOpts(c)...)
-	if err != nil {
-		slog.Error("Failed to create traffic adaptation task", "agent_id", agentID, "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to create adaptation task")
+	task := s.issueAgentTask(c, agentID, TaskSpec{Type: "set_sleep", Command: sleep})
+	if task == nil {
 		return
 	}
 	slog.Info("Traffic adaptation task queued", "agent_id", agentID, "task_id", task.ID, "sleep", sleep)
@@ -204,6 +206,16 @@ func (s *Server) maybeAutoAdaptBeacon(agent db.Implant) {
 	if !agent.AutoAdapt {
 		return
 	}
+	// Rate-limit first: computing stats (ring scan + sort + floats) on every
+	// beacon is O(500) per check-in. A recent adaptation means the next one
+	// cannot fire for autoAdaptMinInterval anyway, so skip the work.
+	s.autoAdaptMu.RLock()
+	last := s.autoAdaptLast[agent.ID]
+	s.autoAdaptMu.RUnlock()
+	if time.Since(last) < autoAdaptMinInterval {
+		return
+	}
+
 	st := s.trafficProfileStatsFor(agent.ID)
 	if len(st.agentLogs) < 2 {
 		return
@@ -216,13 +228,6 @@ func (s *Server) maybeAutoAdaptBeacon(agent db.Implant) {
 	interval := clampInt(suggestion.DesiredInterval, 1, 86400)
 	jitter := clampInt(suggestion.DesiredJitter, 0, 100)
 	if interval == agent.CurrentInterval && jitter == agent.CurrentJitter {
-		return
-	}
-
-	s.autoAdaptMu.Lock()
-	last := s.autoAdaptLast[agent.ID]
-	s.autoAdaptMu.Unlock()
-	if time.Since(last) < autoAdaptMinInterval {
 		return
 	}
 
@@ -243,6 +248,15 @@ func (s *Server) maybeAutoAdaptBeacon(agent db.Implant) {
 
 	s.autoAdaptMu.Lock()
 	s.autoAdaptLast[agent.ID] = time.Now()
+	// Prune stale entries so the map cannot grow unboundedly with agent IDs.
+	if len(s.autoAdaptLast) > 10000 {
+		cutoff := time.Now().Add(-24 * time.Hour)
+		for id, ts := range s.autoAdaptLast {
+			if ts.Before(cutoff) {
+				delete(s.autoAdaptLast, id)
+			}
+		}
+	}
 	s.autoAdaptMu.Unlock()
 
 	slog.Info("Auto-adapt queued set_sleep", "agent_id", agent.ID, "task_id", task.ID, "interval", interval, "jitter", jitter)

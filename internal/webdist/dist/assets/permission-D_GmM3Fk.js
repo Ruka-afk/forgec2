@@ -1,0 +1,1 @@
+import{u as l}from"./route-ai-Bp7ojmd-.js";function e({mode:u="any",perms:o,fallback:r=null,children:n}){const{permissions:a,canAny:i,canAll:f}=l(),t=Array.isArray(o)?o:[o];if(a==null)return typeof n=="function"?n(!0):n;const s=u==="all"?f(t):i(t);return typeof n=="function"?n(s):s?n:r}export{e as P};

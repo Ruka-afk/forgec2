@@ -57,6 +57,12 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
   const [pushSelected, setPushSelected] = useState<string[]>([]);
   const [pushing, setPushing] = useState(false);
   const [loadingAgents, setLoadingAgents] = useState(false);
+  const [showCSModal, setShowCSModal] = useState(false);
+  const [csName, setCSName] = useState("");
+  const [csText, setCSText] = useState("");
+  const [csBusy, setCSBusy] = useState(false);
+  const [validating, setValidating] = useState(false);
+  const [validateResult, setValidateResult] = useState<{ wire?: Record<string, string>; sample?: { input: string; encoded: string }; warnings?: string[] } | null>(null);
 
   const handleReloadConfig = useCallback(async () => {
     setReloading(true);
@@ -77,9 +83,19 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
     }
   }, [loadActiveConfig, loadMalleableSettings, t]);
 
+  const normalizeEditing = (p: AgentProfile): AgentProfile => {
+    const e = { ...p } as unknown as Record<string, unknown>;
+    if (Array.isArray(e.placements)) {
+      e.placements = (e.placements as { target: string; chain?: string }[])
+        .map((pl) => (pl.chain ? `${pl.target} | ${pl.chain}` : pl.target))
+        .join("\n") as unknown as AgentProfile["placements"];
+    }
+    return e as unknown as AgentProfile;
+  };
+
   const selectProfile = (idx: number) => {
     setSelectedIdx(idx);
-    setEditing({ ...profiles[idx] });
+    setEditing(normalizeEditing(profiles[idx]));
   };
 
   const filteredProfiles = profiles.filter((p) =>
@@ -107,17 +123,40 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
     }
   };
 
+  const placementsToJSON = (raw: unknown): unknown => {
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw !== "string" || !raw.trim()) return undefined;
+    const t = raw.trim();
+    if (t.startsWith("[")) return JSON.parse(t);
+    return t.split("\n").map((s) => s.trim()).filter(Boolean).map((line) => {
+      const i = line.indexOf("|");
+      if (i < 0) return { target: line, chain: "" };
+      return { target: line.slice(0, i).trim(), chain: line.slice(i + 1).trim() };
+    });
+  };
+
   const handleSaveProfile = async () => {
     // Persist to the server (survives restarts) and keep the local export.
+    // Convert the placements textarea lines into the JSON array the backend
+    // validates, keeping the editor state human-friendly.
+    const payload: Record<string, unknown> = { ...(editing as unknown as Record<string, unknown>) };
     try {
-      await api.postJson(paths.generate.profileSave, editing);
+      const conv = placementsToJSON((editing as unknown as Record<string, unknown>).placements);
+      if (conv === undefined) delete payload.placements;
+      else payload.placements = conv;
+    } catch {
+      toast.error("placements must be JSON array or lines of 'target | chain'");
+      return;
+    }
+    try {
+      await api.postJson(paths.generate.profileSave, payload);
       toast.success(t("profiles.toast.profile_saved"));
       await loadProfiles();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : t("profiles.toast.save_profile_failed"));
       return;
     }
-    downloadJSON(editing, `${editing.name || "profile"}.json`);
+    downloadJSON(payload, `${editing.name || "profile"}.json`);
     toast.success(t("profiles.toast.profile_exported"));
   };
 
@@ -185,12 +224,67 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
         setProfiles((prev) => [...prev, imported]);
         setSelectedIdx(profiles.length);
       }
-      setEditing(imported);
+      setEditing(normalizeEditing(imported));
       toast.success(t("profiles.toast.profile_imported"));
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       e.target.value = "";
+    }
+  };
+
+  const handleValidateEditing = async () => {
+    setValidating(true);
+    setValidateResult(null);
+    const content = { ...(editing as unknown as Record<string, unknown>) };
+    try {
+      const conv = placementsToJSON((editing as unknown as Record<string, unknown>).placements);
+      if (conv === undefined) delete content.placements;
+      else content.placements = conv;
+    } catch {
+      toast.error("placements must be JSON array or lines of 'target | chain'");
+      setValidating(false);
+      return;
+    }
+    try {
+      const d = await api.postJson(paths.generate.profileValidate, { name: editing.name, format: "json", content: JSON.stringify(content) }) as { success?: boolean; data?: { wire?: Record<string, string>; sample?: { input: string; encoded: string }; warnings?: string[] }; error?: string };
+      if (!d.success) { toast.error((d as { error?: string }).error || "validate failed"); return; }
+      setValidateResult(d.data || null);
+      const warns = (d.data?.warnings || []).length;
+      if (warns) toast.warning(`validate passed with ${warns} warning(s)`);
+      else toast.success("profile valid");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setValidating(false);
+    }
+  };
+
+  const handleImportCSText = async () => {
+    if (!csText.trim()) { toast.error("paste CS profile text first"); return; }
+    setCSBusy(true);
+    try {
+      const d = await api.postJson(paths.generate.profileImportText, { name: csName.trim() || "imported", format: "cs", content: csText }) as { success?: boolean; error?: string; profile?: AgentProfile };
+      if (!d.success) { toast.error(d.error || "CS import failed"); return; }
+      const imported = d.profile!;
+      const existingIdx = profiles.findIndex((p) => p.name === imported.name);
+      if (existingIdx >= 0) {
+        const next = [...profiles];
+        next[existingIdx] = imported;
+        setProfiles(next);
+        setSelectedIdx(existingIdx);
+      } else {
+        setProfiles((prev) => [...prev, imported]);
+        setSelectedIdx(profiles.length);
+      }
+      setEditing(normalizeEditing(imported));
+      setShowCSModal(false);
+      setCSText("");
+      toast.success("CS profile imported");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCSBusy(false);
     }
   };
 
@@ -402,6 +496,12 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                       <TooltipContent>{t("profiles.import_btn")}</TooltipContent>
                     </Tooltip>
                     <Tooltip>
+                      <TooltipTrigger render={<Button onClick={() => setShowCSModal(true)} className="size-7 bg-secondary/50 hover:bg-secondary/70 flex items-center justify-center transition-colors" aria-label="Import CS .profile text" size="icon" />}>
+                        <Code className="size-4" />
+                      </TooltipTrigger>
+                      <TooltipContent>Import CS .profile text</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
                       <TooltipTrigger render={<Button onClick={() => {
                           const p = emptyProfile();
                           const idx = profiles.length;
@@ -470,6 +570,9 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                 <Card className="overflow-hidden">
                   <CardHeaderRow icon={FileCode} tone="primary" title={`${t("profiles.editing")}: ${editing.name || t("common.untitled")}`} description={editing.description || t("common.no_description")} action={
                     <div className="flex gap-2">
+                      <Button onClick={handleValidateEditing} disabled={validating} variant="outline" className="h-9 px-4 text-xs font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50">
+                        <Shield className="size-4" />{validating ? "Validating…" : "Validate"}
+                      </Button>
                       <Button onClick={handleSaveProfile}                         className="h-9 px-4 text-xs font-medium transition-colors flex items-center gap-1.5">
                         <Download className="size-4" />Save (Export JSON)
                       </Button>
@@ -573,6 +676,110 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                   </CardContent>
                 </Card>
 
+                {/* v2 advanced: multi-URI, chains, jitter */}
+                <Card className="overflow-hidden">
+                  <div className="bg-secondary/60 border-b border-border px-6 py-3">
+                    <div className="flex items-center gap-2">
+                      <PenTool className="size-4" />
+                      <span className="text-sm font-semibold text-foreground">Advanced (v2)</span>
+                      <span className="text-xs text-muted-foreground">multi-URI · transform chains · jitter</span>
+                    </div>
+                  </div>
+                  <CardContent className="p-(--card-spacing)">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      <div className="space-y-3">
+                        <div>
+                          <Label className="text-xs text-muted-foreground mb-1.5">beacon_uris (one per line, first = primary)</Label>
+                          <Textarea rows={3} value={(editing.beacon_uris || []).join("\n")} onChange={(e) => setEditing({ ...editing, beacon_uris: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean) })} placeholder="/api/v1/beacon&#10;/config/v1/autodiscover" className="font-mono text-xs" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-1.5">parameter</Label>
+                            <Input type="text" value={editing.parameter || ""} onChange={(e) => setEditing({ ...editing, parameter: e.target.value })} placeholder="id" className="font-mono text-xs" />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-1.5">content_length_jitter (0..4096)</Label>
+                            <Input type="number" min={0} max={4096} value={editing.content_length_jitter ?? 0} onChange={(e) => setEditing({ ...editing, content_length_jitter: Number(e.target.value) })} />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-1.5">prepend (response wrap)</Label>
+                            <Input type="text" value={editing.prepend || ""} onChange={(e) => setEditing({ ...editing, prepend: e.target.value })} className="font-mono text-xs" />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-1.5">append (response wrap)</Label>
+                            <Input type="text" value={editing.append || ""} onChange={(e) => setEditing({ ...editing, append: e.target.value })} className="font-mono text-xs" />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-1.5">request_prepend</Label>
+                            <Input type="text" value={editing.request_prepend || ""} onChange={(e) => setEditing({ ...editing, request_prepend: e.target.value })} className="font-mono text-xs" />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-1.5">request_append</Label>
+                            <Input type="text" value={editing.request_append || ""} onChange={(e) => setEditing({ ...editing, request_append: e.target.value })} className="font-mono text-xs" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        <div>
+                          <Label className="text-xs text-muted-foreground mb-1.5">server_output chain (wire: base64;xor:key)</Label>
+                          <Textarea rows={2} value={editing.server_output || ""} onChange={(e) => setEditing({ ...editing, server_output: e.target.value })} placeholder="base64" className="font-mono text-xs" />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground mb-1.5">client_metadata chain</Label>
+                          <Textarea rows={2} value={editing.client_metadata || ""} onChange={(e) => setEditing({ ...editing, client_metadata: e.target.value })} placeholder="base64;prepend:SES" className="font-mono text-xs" />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground mb-1.5">client_id chain</Label>
+                          <Textarea rows={2} value={editing.client_id || ""} onChange={(e) => setEditing({ ...editing, client_id: e.target.value })} placeholder="base64" className="font-mono text-xs" />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground mb-1.5">placements (one per line: target | chain)</Label>
+                          <Textarea rows={2} value={editing.placements || ""} onChange={(e) => setEditing({ ...editing, placements: e.target.value })} placeholder={"cookie:SESSION | base64\nquery:id | base64"} className="font-mono text-xs" />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground mb-1.5">user_agents (one per line, rotates per beacon)</Label>
+                          <Textarea rows={2} value={(editing.user_agents || []).join("\n")} onChange={(e) => setEditing({ ...editing, user_agents: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean) })} placeholder="Mozilla/5.0 ..." className="font-mono text-xs" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Checkbox checked={!!editing.jitter_uri} onCheckedChange={(v) => setEditing({ ...editing, jitter_uri: v === true })} />
+                            URI jitter (junk query)
+                          </label>
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-1.5">parameter_names (one per line)</Label>
+                            <Textarea rows={2} value={(editing.parameter_names || []).join("\n")} onChange={(e) => setEditing({ ...editing, parameter_names: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean) })} placeholder="id" className="font-mono text-xs" />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-1.5">work_start</Label>
+                            <Input type="time" value={editing.work_start || ""} onChange={(e) => setEditing({ ...editing, work_start: e.target.value })} />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-1.5">work_end</Label>
+                            <Input type="time" value={editing.work_end || ""} onChange={(e) => setEditing({ ...editing, work_end: e.target.value })} />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-1.5">work_tz</Label>
+                            <Input type="text" value={editing.work_tz || ""} onChange={(e) => setEditing({ ...editing, work_tz: e.target.value })} placeholder="UTC" className="font-mono text-xs" />
+                          </div>
+                        </div>
+                        {validateResult && (
+                          <div className="rounded-lg border border-border bg-secondary/40 p-3 text-xs">
+                            <div className="font-semibold mb-1">Wire preview</div>
+                            <div className="font-mono truncate">server_output: {validateResult.wire?.server_output || "(none)"}</div>
+                            <div className="font-mono truncate">client_metadata: {validateResult.wire?.client_metadata || "(none)"}</div>
+                            {validateResult.sample && <div className="font-mono truncate mt-1">sample: {validateResult.sample.encoded}</div>}
+                            {(validateResult.warnings || []).map((w, i) => <div key={i} className="text-warning mt-1">⚠ {w}</div>)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
                 {/* JSON Preview */}
                 <Card className="overflow-hidden">
                   <div className="bg-secondary/60 border-b border-border px-6 py-3">
@@ -593,6 +800,30 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
         </div>
       </TabsContent>
       </Tabs>
+
+      <Dialog open={showCSModal} onOpenChange={setShowCSModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import Cobalt Strike .profile text</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1.5">Profile name</Label>
+              <Input type="text" value={csName} onChange={(e) => setCSName(e.target.value)} placeholder="imported" className="font-mono text-xs" />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1.5">CS profile text (http-get/http-post blocks)</Label>
+              <Textarea rows={10} value={csText} onChange={(e) => setCSText(e.target.value)} placeholder={'http-get {\n  set uri "/api/v1/beacon";\n  client {\n    metadata {\n      base64;\n    }\n  }\n}'} className="font-mono text-xs" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCSModal(false)} className="h-9 px-4">Cancel</Button>
+            <Button disabled={csBusy || !csText.trim()} onClick={handleImportCSText} className="h-9 px-4 text-sm disabled:opacity-50">
+              {csBusy ? "Importing…" : "Import"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showPushModal} onOpenChange={setShowPushModal}>
         <DialogContent>

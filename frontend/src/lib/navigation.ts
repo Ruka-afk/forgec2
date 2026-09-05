@@ -8,7 +8,7 @@ import {
   MessageSquare, GitBranch, Link as LinkIcon, Boxes,
   Radio, Server, Cloud, Box, Wrench, Code, Key,
   Route, IdCard, Archive, SatelliteDish, ArrowLeftRight,
-  FileCode, Globe, Puzzle, Network, Crosshair, ClipboardList,
+  FileCode, Puzzle, Network, Crosshair, ClipboardList,
   Plug, Users, Settings, ListOrdered,
 } from "lucide-react";
 
@@ -99,7 +99,6 @@ export const NAV_SECTIONS: NavSectionDef[] = [
     items: [
       { href: "/phishing", labelKey: "nav.phishing", icon: Fish, perms: ["campaigns.read"] },
       { href: "/circuit-breaker", labelKey: "nav.circuit_breaker", icon: Zap, perms: ["opsec.read"] },
-      { href: "/chrome", labelKey: "nav.chrome_c2", icon: Globe, perms: ["intel.read"] },
       { href: "/cloud", labelKey: "nav.cloud", icon: Cloud, perms: ["intel.read"] },
       { href: "/ntlm", labelKey: "nav.ntlm", icon: Zap, perms: ["agents.read"] },
       { href: "/container", labelKey: "nav.container", icon: Box, perms: ["agents.read"] },

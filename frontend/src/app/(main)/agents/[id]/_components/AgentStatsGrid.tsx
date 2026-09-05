@@ -22,9 +22,6 @@ function InfoRow({ label, value, mono, title, copyValue, copyLabel, isSelect }: 
       if (sel) { sel.removeAllRanges(); sel.addRange(range); }
     }
   };
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(); }
-  };
   const isEmDash = value === "\u2014";
   const spanClasses = [
     "text-xs text-right",
@@ -38,7 +35,9 @@ function InfoRow({ label, value, mono, title, copyValue, copyLabel, isSelect }: 
       <span className="text-xs text-muted-foreground/100 shrink-0">{label}</span>
       <div className="flex items-center min-w-0">
         {isSelect ? (
-          <span ref={spanRef} onClick={handleClick} tabIndex={0} role="button" onKeyDown={handleKeyDown} className={spanClasses}>{value}</span>
+          <button type="button" onClick={handleClick} aria-label={`${label}: ${value}`} className={`${spanClasses} rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}>
+            <span ref={spanRef}>{value}</span>
+          </button>
         ) : (
           <span className={spanClasses}>{value}</span>
         )}

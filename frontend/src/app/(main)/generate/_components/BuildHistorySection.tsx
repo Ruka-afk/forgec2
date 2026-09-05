@@ -67,32 +67,34 @@ export default function BuildHistorySection({ refreshKey }: { refreshKey?: numbe
   if (loading) return null;
 
   return (
-    <div className="mt-8">
+    <div className="rounded-xl border border-border/60 bg-card p-3.5 shadow-sm">
       <Collapsible open={expanded} onOpenChange={setExpanded}>
-        <CollapsibleTrigger>
-          <Button type="button" variant="ghost" className="flex items-center gap-x-3 mb-5 w-full text-left justify-start h-auto py-0">
-            <div className="size-10 bg-card ring-1 ring-border/50 rounded-lg flex items-center justify-center text-muted-foreground"><History className="size-4" /></div>
-            <div className="flex-1">
-              <div className="text-sm font-semibold text-foreground">{t("builds.history_title")}</div>
-              <div className="text-xs text-muted-foreground">{t("generate.history_recent", { count: builds.length })}</div>
+        <CollapsibleTrigger className="w-full">
+          <div className="flex w-full items-center gap-x-3 text-left">
+            <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground ring-1 ring-border/40"><History className="size-4" /></div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold tracking-tight text-foreground">{t("builds.history_title")}</div>
+              <div className="text-xs leading-4 text-muted-foreground">{t("generate.history_recent", { count: builds.length })}</div>
             </div>
-            <ChevronDown className="size-3 text-muted-foreground transition-transform" data-rotate={expanded ? "180" : undefined} />
-          </Button>
+            <Badge variant="outline" className="rounded-full">{builds.length}</Badge>
+            <ChevronDown className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${expanded ? "rotate-180" : ""}`} />
+          </div>
         </CollapsibleTrigger>
-        <CollapsibleContent>
+        <CollapsibleContent className="mt-4">
           {builds.length === 0 ? (
-            <Card className="p-4">
+            <div className="rounded-xl border border-dashed border-border/70 bg-muted/20 p-4">
               <EmptyState
                 icon={History}
                 title={t("generate.history_empty")}
                 message={t("generate.history_empty_desc")}
               />
-            </Card>
+            </div>
           ) : (
-            <Card className="overflow-hidden p-0">
+            <Card className="overflow-hidden rounded-xl border-border/60 p-0 shadow-sm">
+              <div className="max-h-[420px] overflow-y-auto [scrollbar-width:thin]">
               <Table>
-                <TableHeader>
-                  <TableRow className="text-xs text-muted-foreground">
+                <TableHeader className="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm">
+                  <TableRow className="text-xs text-muted-foreground hover:bg-transparent">
                     <TableHead className="text-left font-medium">{t("builds.col_time")}</TableHead>
                     <TableHead className="text-left font-medium">{t("builds.col_format")}</TableHead>
                     <TableHead className="text-left font-medium">{t("builds.col_filename")}</TableHead>
@@ -103,22 +105,22 @@ export default function BuildHistorySection({ refreshKey }: { refreshKey?: numbe
                 </TableHeader>
                 <TableBody>
                   {builds.slice(0, 20).map((b) => (
-                    <TableRow key={b.id}>
-                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatTime(b.created_at)}</TableCell>
+                    <TableRow key={b.id} className="transition-colors hover:bg-muted/40">
+                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{formatTime(b.created_at)}</TableCell>
                       <TableCell>
-                        <span className="inline-flex items-center gap-x-1.5 text-xs font-medium text-muted-foreground">
-                          <span className="text-muted-foreground/100">{FORMAT_ICONS[b.format]}</span>
+                        <span className="inline-flex items-center gap-x-1.5 rounded-md bg-muted/60 px-1.5 py-0.5 text-xs font-medium text-muted-foreground ring-1 ring-border/30">
+                          <span>{FORMAT_ICONS[b.format]}</span>
                           <span className="uppercase">{b.format}</span>
                         </span>
                       </TableCell>
-                      <TableCell className="text-xs font-mono text-muted-foreground">{b.filename || "\u2014"}</TableCell>
+                      <TableCell className="max-w-[220px] truncate font-mono text-xs text-muted-foreground" title={b.filename}>{b.filename || "\u2014"}</TableCell>
                       <TableCell>
                         {b.status === "success" ? (
-                          <Badge variant="success" className="text-xs gap-1"><CheckCircle2 className="size-4" /> {t("builds.success")}</Badge>
+                          <Badge variant="success" className="gap-1 rounded-full text-xs"><CheckCircle2 className="size-3.5" /> {t("builds.success")}</Badge>
                         ) : (
                           <Tooltip>
                             <TooltipTrigger>
-                              <Badge variant="destructive" className="text-xs gap-1"><XCircle className="size-4" /> {t("builds.error")}</Badge>
+                              <Badge variant="destructive" className="gap-1 rounded-full text-xs"><XCircle className="size-3.5" /> {t("builds.error")}</Badge>
                             </TooltipTrigger>
                             <TooltipContent>{b.error}</TooltipContent>
                           </Tooltip>
@@ -129,14 +131,14 @@ export default function BuildHistorySection({ refreshKey }: { refreshKey?: numbe
                         <div className="inline-flex items-center gap-1">
                           {(b.status === "success" || b.output_path) && (
                             <Tooltip>
-                              <TooltipTrigger render={<Button type="button" variant="ghost" size="icon-xs" onClick={() => void handleDownload(b)} aria-label={t("builds.download_artifact")}>
+                              <TooltipTrigger render={<Button type="button" variant="ghost" size="icon-xs" onClick={() => void handleDownload(b)} aria-label={t("builds.download_artifact")} className="rounded-lg hover:bg-primary/10 hover:text-primary">
                                 <Download className="size-3.5" />
                               </Button>} />
                               <TooltipContent>{t("builds.download_artifact")}</TooltipContent>
                             </Tooltip>
                           )}
                           <Tooltip>
-                            <TooltipTrigger render={<Button type="button" variant="ghost" size="icon-xs" render={<Link href={rebuildHref(b)} />} aria-label={t("generate.rebuild")}>
+                            <TooltipTrigger render={<Button type="button" variant="ghost" size="icon-xs" render={<Link href={rebuildHref(b)} />} aria-label={t("generate.rebuild")} className="rounded-lg hover:bg-muted">
                               <RefreshCw className="size-3.5" />
                             </Button>} />
                             <TooltipContent>{t("generate.rebuild")}</TooltipContent>
@@ -147,6 +149,7 @@ export default function BuildHistorySection({ refreshKey }: { refreshKey?: numbe
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </Card>
           )}
         </CollapsibleContent>

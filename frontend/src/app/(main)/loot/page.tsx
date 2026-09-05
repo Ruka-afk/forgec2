@@ -466,7 +466,7 @@ function LootPage() {
             <div className="text-center text-xs text-white/80 bg-black/60 rounded-lg px-3 py-1.5 mb-2">
               {lbIndex + 1} / {lbScreenshots.length} · {lbCurrent.filename} · {formatTime(lbCurrent.created_at)}
             </div>
-            <SafeImg src={safeImageSrc(lbUrl)} alt={lbCurrent.filename} className="max-w-[95vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" loading="lazy" />
+            <SafeImg src={safeImageSrc(lbUrl)} alt={`${t("agents.screen_alt_full")}: ${lbCurrent.filename}`} className="max-w-[95vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" loading="lazy" />
           </DialogContent>
         </Dialog>
       )}

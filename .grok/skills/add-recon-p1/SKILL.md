@@ -24,7 +24,7 @@ Toolkit buttons in `toolkit.html` + `handlers_toolkit.go`.
 2. Linux/darwin stub returning clear message
 3. `task_registry.go` + `task_credentials.go` or `task_recon.go`
 4. Server handler + credential vault parsing if needed
-5. AI tool in `handlers_ai.go` (optional)
+5. AI tool in `ai_tools_defs.go` + `ai_tools_exec.go` (optional)
 
 ## Planned (not yet done)
 

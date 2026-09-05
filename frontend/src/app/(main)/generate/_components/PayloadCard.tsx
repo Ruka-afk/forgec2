@@ -31,21 +31,21 @@ export function PayloadCard({
   className?: string;
 }) {
   return (
-    <Card className={cn("flex flex-col p-(--card-spacing) hover:shadow-lg dark:hover:shadow-xl transition-shadow", className)}>
-      <div className="mb-4 flex items-start justify-between gap-3 border-b border-border pb-4">
-        <div className="flex min-w-0 items-center gap-x-3">
-          <div className={cn("grid size-10 shrink-0 place-items-center rounded-lg ring-1 ring-border/50", tint)}>
+    <Card className={cn("group/card flex flex-col overflow-hidden border-border/60 bg-gradient-to-b from-card to-card/80 p-0 shadow-sm backdrop-blur-sm transition-all duration-200 hover:shadow-md hover:shadow-primary/5 hover:border-primary/15 dark:from-card dark:to-card/60", className)}>
+      <div className="flex items-center justify-between gap-2 border-b border-border/60 bg-gradient-to-r from-muted/40 via-muted/20 to-transparent px-3.5 py-2.5">
+        <div className="flex min-w-0 items-center gap-x-2.5">
+          <div className={cn("grid size-8 shrink-0 place-items-center rounded-lg shadow-sm ring-1 ring-border/40 transition-transform duration-200 group-hover/card:scale-105", tint)}>
             {icon}
           </div>
           <div className="min-w-0">
-            <div className="truncate text-base font-semibold text-foreground">{title}</div>
-            {subtitle && <div className="truncate text-xs text-muted-foreground">{subtitle}</div>}
+            <div className="truncate text-sm font-semibold tracking-tight text-foreground">{title}</div>
+            {subtitle && <div className="truncate text-xs leading-4 text-muted-foreground">{subtitle}</div>}
           </div>
         </div>
         {badge}
       </div>
-      <div className="flex-1 space-y-3">{children}</div>
-      {footer && <div className="mt-4 border-t border-border pt-3">{footer}</div>}
+      <div className="flex-1 space-y-3 p-3.5">{children}</div>
+      {footer && <div className="border-t border-border/60 bg-muted/20 px-3.5 py-3 backdrop-blur-sm">{footer}</div>}
     </Card>
   );
 }
@@ -53,7 +53,7 @@ export function PayloadCard({
 /** Consistent form label used across all payload panels. */
 export function FieldLabel({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <span className={cn("mb-1.5 block text-xs font-semibold text-muted-foreground", className)}>
+    <span className={cn("mb-1.5 block text-xs font-semibold tracking-wide text-muted-foreground/90", className)}>
       {children}
     </span>
   );
@@ -73,13 +73,16 @@ export function AdvancedSection({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className={cn("mt-2 border-t border-border pt-2", className)}>
+    <div className={cn("mt-2 rounded-lg border border-border/50 bg-muted/20 p-2.5 transition-colors hover:bg-muted/30", className)}>
       <Collapsible open={open} onOpenChange={setOpen}>
-        <CollapsibleTrigger className="group flex w-full items-center gap-1.5 text-xs text-muted-foreground transition-colors select-none hover:text-primary">
-          <ChevronDown className={cn("size-4 transition-transform duration-200", open && "rotate-180")} />
-          <span className="font-medium">{title}</span>
+        <CollapsibleTrigger className="group flex w-full items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors select-none hover:text-foreground">
+          <div className="grid size-5 place-items-center rounded-md bg-background ring-1 ring-border/50 transition-colors group-hover:ring-primary/20">
+            <ChevronDown className={cn("size-3 transition-transform duration-200", open && "rotate-180")} />
+          </div>
+          <span>{title}</span>
+          <span className="ml-auto text-[10px] tracking-widest text-muted-foreground/60">{open ? "收起" : "展开"}</span>
         </CollapsibleTrigger>
-        <CollapsibleContent className="mt-2 space-y-2">{children}</CollapsibleContent>
+        <CollapsibleContent className="mt-2 space-y-2.5 border-t border-border/50 pt-2.5">{children}</CollapsibleContent>
       </Collapsible>
     </div>
   );

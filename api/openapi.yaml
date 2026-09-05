@@ -5552,6 +5552,28 @@ paths:
         '200':
           description: OK
 
+  /api/generate/profile/import-text:
+    post:
+      tags: [Generate]
+      summary: Import malleable profile from pasted JSON or Cobalt Strike text
+      operationId: generateProfileImportText
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/generate/profile/validate:
+    post:
+      tags: [Generate]
+      summary: Validate malleable profile without saving
+      operationId: generateProfileValidate
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
   /api/generate/profile/{name}:
     delete:
       tags: [Generate]
@@ -6630,22 +6652,6 @@ paths:
         - SessionCookie: []
       parameters:
         - name: taskId
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '200':
-          description: OK
-
-  /chrome/agents/{uuid}/tasks:
-    post:
-      tags: [Agents]
-      summary: Chrome agent tasks
-      operationId: chromeAgentTasks
-      security:
-        - SessionCookie: []
-      parameters:
-        - name: uuid
           in: path
           required: true
           schema: { type: string }
@@ -9453,63 +9459,7 @@ paths:
       responses:
         '200':
           description: OK
-  /api/chrome/beacon:
-    post:
-      tags: [Intel]
-      summary: Chrome extension agent check-in
-      description: Public (no session). Registers a chrome-tagged implant, accepts task results, returns pending chrome_* tasks. Optional X-ForgeC2-Chrome-Token when server.beacon_key is set.
-      operationId: post__api_chrome_beacon
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [uuid]
-              properties:
-                uuid: { type: string }
-                info:
-                  type: object
-                  additionalProperties: { type: string }
-                results:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      task_id: { type: integer }
-                      type: { type: string }
-                      output: { type: string }
-                      error: { type: string }
-      responses:
-        '200':
-          description: Pending chrome tasks
-        '401':
-          description: Chrome token rejected
-  /api/chrome/agents:
-    get:
-      tags: [Intel]
-      summary: List Chrome extension agents
-      operationId: get__api_chrome_agents
-      security:
-        - SessionCookie: []
-      responses:
-        '200':
-          description: OK
-  /forgec2-chrome-c2.zip:
-    get:
-      tags: [Intel]
-      summary: Download Chrome C2 extension zip (C2 origin substituted)
-      operationId: get_forgec2_chrome_c2_zip
-      security: []
-      responses:
-        '200':
-          description: Zip archive
-          content:
-            application/zip:
-              schema:
-                type: string
-                format: binary
+
         '503':
           description: Extension sources not found on disk
   /api/dashboard/os-distribution:

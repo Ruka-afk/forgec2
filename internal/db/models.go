@@ -754,17 +754,19 @@ func CredentialLifecycle(entry CredentialEntry, latestUsage *CredentialUsage, no
 
 // BuildLog records a build attempt
 type BuildLog struct {
-	ID         uint      `gorm:"primaryKey" json:"id"`
-	Platform   string    `json:"platform"` // windows, linux
-	Format     string    `json:"format"`   // exe, ps1, linux, stager
-	C2URL      string    `json:"c2_url"`
-	ListenerID uint      `json:"listener_id"`
-	Filename   string    `json:"filename"`
-	User       string    `json:"user"`   // operator username
-	Status     string    `json:"status"` // success, failed
-	Error      string    `json:"error"`
-	OutputPath string    `json:"output_path"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	Platform    string    `json:"platform"` // windows, linux
+	Format      string    `json:"format"`   // exe, ps1, linux, stager
+	C2URL       string    `json:"c2_url"`
+	ListenerID  uint      `json:"listener_id"`
+	Filename    string    `json:"filename"`
+	User        string    `json:"user"`   // operator username
+	Status      string    `json:"status"` // success, failed
+	Error       string    `json:"error"`
+	OutputPath  string    `json:"output_path"`
+	ProfileName string    `json:"profile_name,omitempty"`
+	ProfileHash string    `json:"profile_hash,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 func (BuildLog) TableName() string { return "build_logs" }

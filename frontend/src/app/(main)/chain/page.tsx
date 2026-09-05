@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 
 import { PageSpinner } from "@/components/ui/spinner";
 import { PageContainer } from "@/components/ui/page-container";
@@ -47,7 +48,7 @@ export default function ChainPage() {
 
   const { data: graphData, loading: graphLoading, refresh } = useApiResource<{ nodes: ChainNode[] }>({
     fetcher: async () => {
-      const data = await api.get<{ nodes: ChainNode[] }>("/chain/graph");
+      const data = await api.get<{ nodes: ChainNode[] }>(paths.chain.graph);
       return data;
     },
     toastThrottleMs: POLL.toastThrottle,
@@ -61,7 +62,7 @@ export default function ChainPage() {
       return;
     }
     try {
-      const data = await api.get<{ chain: string[] }>(`/agents/${agentId}/chain`);
+      const data = await api.get<{ chain: string[] }>(paths.agents.chain(agentId));
       setChain(data.chain || []);
     } catch {
       setChain([]);
@@ -84,7 +85,7 @@ export default function ChainPage() {
   const handleSetParent = async (parentId: string) => {
     if (!selectedAgent) return;
     try {
-      await api.postJson(`/agents/${selectedAgent}/chain/set`, {
+      await api.postJson(paths.agents.chainSet(selectedAgent), {
         parent_id: parentId,
       });
       setActionMsg(t("chain.parent_set", { id: parentId }));
@@ -99,7 +100,7 @@ export default function ChainPage() {
   const handleClearChain = async () => {
     if (!selectedAgent) return;
     try {
-      await api.postJson(`/agents/${selectedAgent}/chain/clear`, {});
+      await api.postJson(paths.agents.chainClear(selectedAgent), {});
       setActionMsg(t("chain.cleared"));
       loadChain(selectedAgent);
       refresh();
@@ -158,7 +159,7 @@ export default function ChainPage() {
                 })}
                 <ArrowRight className="size-4" />
                 <Badge variant="success" className="text-xs font-medium">
-                  C2
+                  {t("chain.c2")}
                 </Badge>
               </div>
             ) : (
@@ -168,7 +169,7 @@ export default function ChainPage() {
                 </Badge>
                 <ArrowRight className="size-4" />
                 <Badge variant="success" className="text-xs font-medium">
-                  C2 (Direct)
+                  {t("chain.c2_direct")}
                 </Badge>
               </div>
             )}

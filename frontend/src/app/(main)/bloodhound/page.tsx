@@ -194,10 +194,10 @@ export default function BloodHoundPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
           <div>
             <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bloodhound.target_agent")}</span>
-            <Select value={selectedAgent || "placeholder"} onValueChange={(v) => setSelectedAgent(v === "placeholder" || v === null ? "" : v)}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="-- Select Agent --" />
-              </SelectTrigger>
+              <Select value={selectedAgent || "placeholder"} onValueChange={(v) => setSelectedAgent(v === "placeholder" || v === null ? "" : v)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={t("bloodhound.select_agent")} />
+                </SelectTrigger>
               <SelectContent>
                 <SelectItem value="placeholder">{t("bloodhound.select_agent")}</SelectItem>
                 {agents.map(a => {

@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useWS } from "@/lib/wsContext";
-import { downloadText } from "@/lib/download";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
@@ -12,43 +11,38 @@ import { POLL } from "@/lib/polling";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataError } from "@/components/ui/data-state";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageContainer } from "@/components/ui/page-container";
-import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Pagination } from "@/components/ui/pagination";
 import { AgentFilters } from "./_components/AgentFilters";
 import { AgentBulkBar } from "./_components/AgentBulkBar";
-import { AgentRow } from "./_components/AgentRow";
 import { AgentGrid } from "./_components/AgentGrid";
-import { BulkCommandModal } from "./_components/BulkCommandModal";
-import { QuickSleepModal } from "./_components/QuickSleepModal";
-import { NotesEditModal } from "./_components/NotesEditModal";
-import { BatchSleepModal } from "./_components/BatchSleepModal";
 import { AgentContextMenu } from "./_components/AgentContextMenu";
+import AgentsTable from "./_components/AgentsTable";
+import AgentsToolbar from "./_components/AgentsToolbar";
+import AgentsConfirmDialogs from "./_components/AgentsConfirmDialogs";
 import { useAgentFilters } from "./_components/useAgentFilters";
 import { useAgentSelection } from "./_components/useAgentSelection";
 import { useAgentData } from "./_components/useAgentData";
 import { useAgentModals } from "./_components/useAgentModals";
+import { useAgentBulkOps } from "./_components/useAgentBulkOps";
+import { useAgentMenuAction } from "./_components/useAgentMenuAction";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import SavedViewPicker from "@/components/SavedViewPicker";
-import AgentDetailPage from "./[id]/AgentDetailPage";
+import dynamic from "next/dynamic";
 import type { Beacon, BulkResult } from "./_components/types";
-import type { AgentMenuAction, AgentMenuPoint } from "./_components/agent-menu-actions";
-import { rebuildPayloadHref } from "../generate/_components/generate-query";
-import { useVirtualWindow } from "@/lib/hooks/useVirtualWindow";
-import { useInteractStore } from "@/lib/interact-store";
-import { toast } from "sonner";
-import { useAppStore } from "@/lib/store";
 
-export type { Beacon };
-import { Checkbox } from "@/components/ui/checkbox";
+// Detail view (+15 sections) loads on demand so the list chunk stays lean.
+const AgentDetailPage = dynamic(() => import("./[id]/AgentDetailPage"), { ssr: false });
+import type { AgentMenuPoint } from "./_components/agent-menu-actions";
+import { useVirtualWindow } from "@/lib/hooks/useVirtualWindow";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useI18n } from "@/lib/i18n";
-import { ArrowDown, ArrowLeftRight, ArrowUp, ArrowUpDown, Download, Grip, History, ListChecks, ListOrdered, Pause, Play, Plus, Radio, RefreshCw } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Plus, Radio } from "lucide-react";
+import { useAppStore } from "@/lib/store";
 
-
+export type { Beacon };
 
 export default function AgentsPageContent() {
   const { t } = useI18n();
@@ -86,7 +80,6 @@ export default function AgentsPageContent() {
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [bulkResults, setBulkResults] = useState<BulkResult[]>([]);
-  const [exporting, setExporting] = useState(false);
 
   const {
     searchInput, setSearchInput, searchQuery,
@@ -236,280 +229,23 @@ export default function AgentsPageContent() {
     [toggleSort],
   );
 
-  const runBatch = async (payload: Record<string, unknown>) => {
-    try {
-      const data = await api.postJson<{ success?: boolean; tasks_created?: number; error?: string }>(paths.agents.batch, payload);
-      if (data.success) {
-        setActionMsg(t("agents.batch_result").replace("{count}", String(data.tasks_created ?? selected.size)));
-        setSelected(new Set());
-        loadBeacons();
-      } else {
-        setActionMsg(data.error || t("agents.batch_failed"));
-      }
-    } catch {
-      setActionMsg(t("agents.batch_failed"));
-    }
-  };
+  const bulkOps = useAgentBulkOps({
+    t, selected, setSelected, loadBeacons, setActionMsg, setConfirm,
+    setScreenshotConfirm, openBatchSleep, closeBatchSleep, batchSleepInterval, batchSleepJitter,
+    cmdType, cmdText, closeCmdModal,
+    quickSleepAgent, sleepInterval, sleepJitter, closeQuickSleep,
+    editingNotesId, editNotesText, closeNotesEdit,
+    searchQuery, statusFilter, osFilter, tagFilter, linkedFilter, sortKey, sortDir,
+  });
+  const {
+    exporting, batchScreenshot, batchSleep,
+    killAgent, deleteAgent, uninstallAgent, batchDelete, bulkKill, bulkUninstall,
+    handleCmdSubmit, submitQuickSleep, submitNotes, doBatchScreenshot, doBatchSleep, exportCSV,
+  } = bulkOps;
 
-  const bulkTask = async (agentIds: string[], type: string, command: string) => {
-    try {
-      const data = await api.postJson<{ success?: boolean; tasks_created?: number; failed?: number; error?: string }>(paths.agents.bulkTask, { agent_ids: agentIds, task_type: type, command });
-      if (data.success) {
-        let bulkMsg = t("agents.bulk_type_result").replace("{type}", type).replace("{count}", String(data.tasks_created ?? agentIds.length));
-        if (data.failed) bulkMsg += ` (${data.failed} ${t("agents.failed_suffix")})`;
-        setActionMsg(bulkMsg);
-        setSelected(new Set());
-        loadBeacons();
-      } else {
-        setActionMsg(data.error || t("agents.bulk_task_failed"));
-      }
-    } catch {
-      setActionMsg(t("agents.bulk_task_failed"));
-    }
-  };
-
-  const batchScreenshot = () => {
-    const ids = Array.from(selected);
-    if (!ids.length) return;
-    setScreenshotConfirm(true);
-  };
-
-  const doBatchScreenshot = () => {
-    setScreenshotConfirm(false);
-    runBatch({ agent_ids: Array.from(selected), task_type: "screenshot" });
-  };
-
-  const batchSleep = () => {
-    const ids = Array.from(selected);
-    if (!ids.length) return;
-    openBatchSleep("30", "20");
-  };
-
-  const doBatchSleep = () => {
-    const ids = Array.from(selected);
-    if (!ids.length) return;
-    const interval = Number(batchSleepInterval);
-    const jitter = Number(batchSleepJitter);
-    if (!Number.isFinite(interval) || interval < 1 || interval > 86400 || !Number.isFinite(jitter) || jitter < 0 || jitter > 100) {
-      setActionMsg(t("agents.sleep_invalid"));
-      return;
-    }
-    runBatch({ agent_ids: ids, task_type: "sleep", args: `${interval},${jitter}` });
-    closeBatchSleep();
-  };
-
-  const batchDelete = async () => {
-    const ids = Array.from(selected);
-    if (!ids.length) return;
-    try {
-      const data = await api.postJson<{ success?: boolean; deleted?: number; error?: string }>(paths.agents.batchDelete, { agent_ids: ids });
-      if (data.success) {
-        setActionMsg(t("agents.delete_result").replace("{count}", String(data.deleted ?? 0)));
-        setSelected(new Set());
-        loadBeacons();
-      } else {
-        setActionMsg(data.error || t("agents.delete_failed"));
-      }
-    } catch {
-      setActionMsg(t("agents.delete_failed"));
-    }
-    setConfirm(null);
-  };
-
-  const killAgent = async (id: string) => {
-    try {
-      await api.postJson(paths.agents.kill(id), {});
-      setActionMsg(t("agents.kill_sent"));
-      loadBeacons();
-    } catch {
-      setActionMsg(t("agents.kill_failed"));
-    }
-    setConfirm(null);
-  };
-
-  const deleteAgent = async (id: string) => {
-    try {
-      await api.del(paths.agents.one(id));
-      setActionMsg(t("agents.deleted"));
-      loadBeacons();
-    } catch {
-      setActionMsg(t("agents.delete_failed"));
-    }
-    setConfirm(null);
-  };
-
-  const uninstallAgent = async (id: string) => {
-    try {
-      await api.postJson(paths.agents.uninstall(id), {});
-      setActionMsg(t("agents.detail_uninstall_sent"));
-      loadBeacons();
-    } catch {
-      setActionMsg(t("agents.detail_uninstall_failed"));
-    }
-    setConfirm(null);
-  };
-
-  const handleMenuAction = useCallback((action: AgentMenuAction, point: AgentMenuPoint) => {
-    const id = point.beacon.id || "";
-    switch (action) {
-      case "interact":
-      case "socks":
-        useInteractStore.getState().open(id, { beacon: point.beacon });
-        break;
-      case "details":
-        setSelectedAgentId(id);
-        break;
-      case "screenshot":
-        api.post(paths.agents.screenshotTask(id))
-          .then((d) => {
-            const taskId = Number((d as { task_id?: number }).task_id);
-            const queued = Number.isFinite(taskId) && taskId > 0;
-            if (queued) useInteractStore.getState().revealTask(id, taskId);
-            toast.success(t("agents.detail_action_queued", { label: t("agents.screenshot") }));
-          })
-          .catch(() => toast.error(t("agents.screenshot_failed")));
-        break;
-      case "beacon_now":
-        api.post(paths.agents.cmd(id, "beacon_now"))
-          .then((d) => {
-            const taskId = Number((d as { task_id?: number }).task_id);
-            const queued = Number.isFinite(taskId) && taskId > 0;
-            if (queued) useInteractStore.getState().revealTask(id, taskId);
-            toast.success(t("agents.beacon_now_queued"));
-          })
-          .catch(() => toast.error(t("agents.beacon_now_failed")));
-        break;
-      case "rebuild": {
-        if (!point.beacon.listener_id) toast.warning(t("agents.rebuild_no_listener"));
-        router.push(rebuildPayloadHref(point.beacon));
-        break;
-      }
-      case "sleep":
-        openQuickSleep(point.beacon);
-        break;
-      case "notes":
-        openNotesEdit(point.beacon);
-        break;
-      case "files":
-        router.push(`/agents/${id}/files`);
-        break;
-      case "tokens":
-        router.push(`/agents/${id}/token`);
-        break;
-      case "screen":
-        router.push(`/agents/${id}/screen`);
-        break;
-      case "copy_id":
-        navigator.clipboard.writeText(id)
-          .then(() => toast.success(t("agents.detail_copied")))
-          .catch(() => toast.error(t("agents.detail_copy_failed")));
-        break;
-      case "kill":
-        setConfirm({ type: "kill", id, hostname: point.beacon.hostname || id });
-        break;
-      case "uninstall":
-        setConfirm({ type: "uninstall", id, hostname: point.beacon.hostname || id });
-        break;
-      case "delete":
-        setConfirm({ type: "delete", id, hostname: point.beacon.hostname || id });
-        break;
-    }
-    setMenuPoint(null);
-  }, [t, openQuickSleep, openNotesEdit, router, setConfirm]);
-
-  const handleQuickNav = useCallback((beacon: Beacon, view: "shell" | "files" | "screen") => {
-    const id = beacon.id || "";
-    if (!id) return;
-    router.push(`/agents/${id}/${view}`);
-  }, [router]);
-
-  const bulkKill = async () => {
-    const ids = Array.from(selected);
-    if (!ids.length) return;
-    await bulkTask(ids, "kill", "");
-    setConfirm(null);
-  };
-
-  const bulkUninstall = async () => {
-    const ids = Array.from(selected);
-    if (!ids.length) return;
-    await bulkTask(ids, "uninstall", "");
-    setConfirm(null);
-  };
-
-  const handleCmdSubmit = async () => {
-    const ids = Array.from(selected);
-    if (!ids.length) return;
-    await bulkTask(ids, cmdType, cmdText);
-    closeCmdModal();
-  };
-
-  const submitQuickSleep = async () => {
-    if (!quickSleepAgent) return;
-    const interval = Number(sleepInterval);
-    const jitter = Number(sleepJitter);
-    if (!Number.isFinite(interval) || interval < 1 || interval > 86400 || !Number.isFinite(jitter) || jitter < 0 || jitter > 100) {
-      setActionMsg(t("agents.sleep_invalid"));
-      return;
-    }
-    try {
-      await api.postJson(paths.agents.setSleep(quickSleepAgent.id), { interval, jitter });
-      setActionMsg(t("agents.sleep_updated").replace("{name}", quickSleepAgent.hostname));
-      closeQuickSleep();
-      loadBeacons();
-    } catch { setActionMsg(t("agents.sleep_failed")); }
-  };
-
-  const submitNotes = async () => {
-    if (!editingNotesId) return;
-    try {
-      await api.postJson(paths.agents.note(editingNotesId), { notes: editNotesText });
-      setActionMsg(t("agents.notes_updated"));
-      closeNotesEdit();
-      loadBeacons();
-    } catch { setActionMsg(t("agents.notes_failed")); }
-  };
-
-  const exportCSV = async () => {
-    if (exporting) return;
-    setExporting(true);
-    try {
-      // Export respects the active filters but spans ALL pages, not just
-      // the current 50-row slice.
-      const all: Beacon[] = [];
-      const PAGE = 100;
-      for (let p = 1; p <= 1000; p++) {
-        const q = new URLSearchParams({ page: String(p), page_size: String(PAGE), group: "host" });
-        if (searchQuery) q.set("search", searchQuery);
-        if (statusFilter) q.set("status", statusFilter);
-        if (osFilter) q.set("os", osFilter);
-        if (tagFilter) q.set("tag_id", tagFilter);
-        if (linkedFilter) q.set("linked", linkedFilter);
-        q.set("sort_key", sortKey);
-        q.set("sort_dir", sortDir);
-        const d = await api.get<{ agents?: Beacon[]; total?: number | string }>(paths.agents.list(q.toString()), { unwrap: false });
-        const pageList = (d.agents || []) as Beacon[];
-        all.push(...pageList);
-        if (pageList.length < PAGE) break;
-      }
-      if (all.length === 0) {
-        toast.info(t("agents.no_beacons"));
-        return;
-      }
-      const headers = ["Hostname", "User", "OS", "IP", "Status", "Last Seen", "Version", "Active Window", "Notes"];
-      const rows = all.map((b) => [
-        b.hostname || "", b.username || "", b.os || "", b.ip || "",
-        b.status || "", b.last_seen || "", b.version || "", b.active_window || "", b.notes || "",
-      ]);
-      const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
-      downloadText(csv, `agents-${new Date().toISOString().slice(0, 10)}.csv`, "text/csv");
-      toast.success(t("agents.export_done").replace("{count}", String(all.length)));
-    } catch {
-      toast.error(t("agents.export_failed"));
-    } finally {
-      setExporting(false);
-    }
-  };
+  const { handleMenuAction, handleQuickNav } = useAgentMenuAction({
+    t, router, setSelectedAgentId, setMenuPoint, openQuickSleep, openNotesEdit, setConfirm,
+  });
 
   const counts = useMemo(() => {
     let online = 0, stale = 0, offline = 0, windows = 0, linux = 0, darwin = 0;
@@ -529,86 +265,25 @@ export default function AgentsPageContent() {
   const effectiveViewMode = isMobile ? "grid" : viewMode;
 
   const emptyColSpan = Object.values(visibleCols).filter(Boolean).length + 2;
-  const allVisibleSelected = beacons.length > 0 && beacons.every((b) => b.id && selected.has(b.id));
-  const someVisibleSelected = selected.size > 0 && !allVisibleSelected;
 
   return (
     <PageContainer
       title={t("agents.title")}
       subtitle={`${total} ${t("agents.total_label")} · ${onlineCount} ${t("agents.online_label")}${staleCount > 0 ? `, ${staleCount} ${t("agents.stale_label")}` : ""}${offlineCount > 0 ? `, ${offlineCount} ${t("agents.offline_label")}` : ""}`}
-      actions={<>
-        <Button
-          variant="outline"
-          onClick={() => { setBulkMode((p) => !p); if (!bulkMode) setSelected(new Set()); }}
-          aria-label={t("agents.bulk_ops")}
-          className={`h-9 sm:h-10 px-3 rounded-lg gap-2 min-w-[2.75rem] min-h-[2.75rem] transition-all ${
-            bulkMode
-              ? "bg-primary text-primary-foreground border-primary hover:bg-primary/80"
-              : "text-muted-foreground"
-          }`}
-        >
-          <ListChecks className="size-4" />
-          <span className="hidden sm:inline text-sm">{t("agents.bulk_ops")}</span>
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => { setShowResults((p) => !p); if (!showResults) setBulkMode(true); }}
-          className={`h-9 sm:h-10 px-3 rounded-lg gap-2 min-w-[2.75rem] min-h-[2.75rem] transition-all ${
-            showResults
-              ? "bg-primary text-primary-foreground border-primary hover:bg-primary/80"
-              : "text-muted-foreground"
-          }`}
-          title={t("agents.bulk_results_title")}
-        >
-          <History className="size-4" />
-          <span className="hidden sm:inline text-sm">{t("agents.results")}</span>
-        </Button>
-        <Button
-          variant="outline"
-          onClick={exportCSV}
-          disabled={exporting}
-          className="h-9 sm:h-10 px-3 rounded-lg gap-2 min-w-[2.75rem] min-h-[2.75rem]"
-          title={t("agents.export_csv_title")}
-        >
-          <Download className="size-4" />
-          <span className="hidden sm:inline text-foreground text-sm">{t("agents.export")}</span>
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => setAutoRefresh((p) => !p)}
-          className={`h-9 sm:h-10 px-3 rounded-lg gap-2 min-w-[2.75rem] min-h-[2.75rem] transition-all ${
-            autoRefresh
-              ? "bg-success border-success text-white hover:bg-success/10"
-              : "text-muted-foreground"
-          }`}
-          title={autoRefresh ? t("agents.auto_refresh_on") : t("agents.auto_refresh_off")}
-        >
-          {autoRefresh ? <Pause className="size-4" /> : <Play className="size-4" />}
-          <span className="hidden sm:inline text-sm">{autoRefresh ? t("agents.live") : t("agents.auto")}</span>
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => setViewMode((p) => p === "table" ? "grid" : "table")}
-          className="hidden h-9 min-h-[2.75rem] min-w-[2.75rem] gap-2 rounded-lg px-3 sm:inline-flex sm:h-10"
-          title={effectiveViewMode === "table" ? t("agents.switch_grid") : t("agents.switch_table")}
-        >
-          {effectiveViewMode === "table" ? <Grip className="size-4" /> : <ListOrdered className="size-4" />}
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => { setPage(1); loadBeacons(); }}
-          aria-label={t("agents.refresh")}
-          className="h-9 sm:h-10 px-3 rounded-lg gap-2 min-w-[2.75rem] min-h-[2.75rem]"
-        >
-          <RefreshCw className="size-4" />
-          <span className="hidden sm:inline text-foreground text-sm">{t("agents.refresh")}</span>
-        </Button>
-        <Button render={<Link href="/generate" />}>
-          <Plus className="size-4" />
-          <span className="hidden sm:inline">{t("agents.generate_implant")}</span>
-          <span className="sm:hidden">{t("agents.new")}</span>
-        </Button>
-      </>}
+      actions={<AgentsToolbar
+        t={t}
+        bulkMode={bulkMode}
+        onToggleBulk={() => { setBulkMode((p) => !p); if (!bulkMode) setSelected(new Set()); }}
+        showResults={showResults}
+        onToggleResults={() => { setShowResults((p) => !p); if (!showResults) setBulkMode(true); }}
+        exporting={exporting}
+        onExport={() => void exportCSV()}
+        autoRefresh={autoRefresh}
+        onToggleAutoRefresh={() => setAutoRefresh((p) => !p)}
+        effectiveViewMode={effectiveViewMode}
+        onToggleView={() => setViewMode((p) => p === "table" ? "grid" : "table")}
+        onRefresh={() => { setPage(1); loadBeacons(); }}
+      />}
     >
       {error && (
         <DataError
@@ -630,7 +305,7 @@ export default function AgentsPageContent() {
         onBulkBeaconNow={() => {
           const ids = Array.from(selected);
           if (!ids.length) return;
-          void bulkTask(ids, "beacon_now", "");
+          void bulkOps.bulkTask(ids, "beacon_now", "");
         }}
         onBulkSleep={batchSleep}
         onBulkKill={() => setConfirm({ type: "bulk-kill" })}
@@ -690,129 +365,41 @@ export default function AgentsPageContent() {
       />
 
       {effectiveViewMode === "table" && (
-      <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
-        <div
-          ref={agentScrollRef}
-          onScroll={onAgentScroll}
-          className={agentVirtualized ? "overflow-auto max-h-[min(70vh,720px)] scrollbar-thin" : "overflow-auto scrollbar-thin"}
-        >
-        <Table className="text-sm min-w-[850px]">
-          <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90 border-b border-border">
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5 w-10">
-                <Checkbox aria-label={t("agents.select_all")} name="input-4"
-                  checked={allVisibleSelected || someVisibleSelected}
-                  indeterminate={someVisibleSelected && !allVisibleSelected}
-                  onCheckedChange={(v) => toggleSelectAll(v !== false)}
-                />
-              </TableHead>
-              {visibleCols.hostname && (
-              <TableHead className="text-left py-3 px-3 sm:py-3.5 sm:px-4 cursor-pointer select-none" tabIndex={0} role="columnheader" aria-sort={sortKey === "hostname" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} onClick={() => toggleSort("hostname")} onKeyDown={handleSortKeyDown("hostname")}>
-                {t("agents.col_hostname")} {sortIcon("hostname")}
-              </TableHead>
-              )}
-              {visibleCols.username && (
-              <TableHead className="text-left py-3 px-3 sm:py-3.5 sm:px-4 cursor-pointer select-none" tabIndex={0} role="columnheader" aria-sort={sortKey === "username" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} onClick={() => toggleSort("username")} onKeyDown={handleSortKeyDown("username")}>
-                {t("agents.col_user")} {sortIcon("username")}
-              </TableHead>
-              )}
-              {visibleCols.os && (
-              <TableHead className="text-left py-3 px-3 sm:py-3.5 sm:px-4 cursor-pointer select-none" tabIndex={0} role="columnheader" aria-sort={sortKey === "os" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} onClick={() => toggleSort("os")} onKeyDown={handleSortKeyDown("os")}>
-                {t("agents.col_os")} {sortIcon("os")}
-              </TableHead>
-              )}
-              {visibleCols.ip && (
-              <TableHead className="text-left py-3 px-3 sm:py-3.5 sm:px-4 cursor-pointer select-none" tabIndex={0} role="columnheader" aria-sort={sortKey === "ip" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} onClick={() => toggleSort("ip")} onKeyDown={handleSortKeyDown("ip")}>
-                {t("agents.col_ip")} {sortIcon("ip")}
-              </TableHead>
-              )}
-              {visibleCols.last_seen && (
-              <TableHead className="text-left py-3 px-3 sm:py-3.5 sm:px-4 cursor-pointer select-none" tabIndex={0} role="columnheader" aria-sort={sortKey === "last_seen" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} onClick={() => toggleSort("last_seen")} onKeyDown={handleSortKeyDown("last_seen")}>
-                {t("agents.col_last_seen")} {sortIcon("last_seen")}
-              </TableHead>
-              )}
-              {visibleCols.window && (
-              <TableHead className="text-left py-3 px-3 sm:py-3.5 sm:px-4 max-sm:hidden">{t("agents.col_window")}</TableHead>
-              )}
-              {visibleCols.lock && (
-              <TableHead className="text-center py-3 px-3 sm:py-3.5 sm:px-4 max-sm:hidden">{t("agents.col_lock")}</TableHead>
-              )}
-              {visibleCols.tasks && (
-              <TableHead className="text-center py-3 px-3 sm:py-3.5 sm:px-4 max-sm:hidden">{t("agents.col_tasks")}</TableHead>
-              )}
-              {visibleCols.version && <TableHead className="text-left py-3 px-3 sm:py-3.5 sm:px-4 max-sm:hidden">{t("agents.col_version")}</TableHead>}
-              {visibleCols.status && (
-              <TableHead className="text-center py-3 px-3 sm:py-3.5 sm:px-4 cursor-pointer select-none" tabIndex={0} role="columnheader" aria-sort={sortKey === "status" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} onClick={() => toggleSort("status")} onKeyDown={handleSortKeyDown("status")}>
-                {t("agents.col_status")} {sortIcon("status")}
-              </TableHead>
-              )}
-              <TableHead className="text-right py-3 px-4 sm:py-3.5 sm:px-5">{t("agents.col_actions")}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody className="divide-y divide-border">
-            {loading && Array.from({ length: 6 }).map((_, i) => (
-              <TableRow key={`skel-${i}`}>
-                {Array.from({ length: emptyColSpan }).map((_, j) => (
-                  <TableCell key={j} className="py-3 px-3 sm:py-3.5 sm:px-4">
-                    <Skeleton className="h-4 w-3/4" />
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-            {!loading && agentVirtualized && agentOffsetTop > 0 && (
-              <TableRow aria-hidden className="hover:bg-transparent">
-                <TableCell colSpan={emptyColSpan} style={{ height: agentOffsetTop, padding: 0, border: 0 }} />
-              </TableRow>
-            )}
-            {!loading && visibleBeacons.map((beacon) => (
-              <AgentRow
-                key={beacon.id || ""}
-                beacon={beacon}
-                isSelected={selected.has(beacon.id || "")}
-                onToggleSelect={toggleSelect}
-                onInteract={handleSelectAgent}
-                onDetails={handleSelectAgent}
-                onMenu={setMenuPoint}
-                onQuickNav={handleQuickNav}
-                onEditNotes={openNotesEdit}
-                taskCount={taskCountMap[beacon.id || ""] ?? 0}
-                lockUser={agentLocks[beacon.id || ""] || null}
-                presenceUsers={operatorPresence[beacon.id || ""] || null}
-                visibleCols={visibleCols}
-                tags={tagsByAgent[beacon.id || ""] || []}
-              />
-            ))}
-            {!loading && agentVirtualized && agentTotalHeight - agentOffsetTop - visibleBeacons.length * rowHeight > 0 && (
-              <TableRow aria-hidden className="hover:bg-transparent">
-                <TableCell colSpan={emptyColSpan} style={{ height: agentTotalHeight - agentOffsetTop - visibleBeacons.length * rowHeight, padding: 0, border: 0 }} />
-              </TableRow>
-            )}
-            {!loading && beacons.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={emptyColSpan} className="py-10">
-                  <EmptyState
-                    icon={Radio}
-                    title={t("agents.no_beacons")}
-                    message={statusFilter || osFilter ? t("agents.no_beacons_filtered") : t("agents.no_beacons_hint")}
-                    action={!statusFilter && !osFilter ? (
-                      <Button render={<Link href="/generate" />}>
-                        <Plus className="size-4" />
-                        <span>{t("agents.generate_implant")}</span>
-                      </Button>
-                    ) : undefined}
-                  />
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-        </div>
-        <div className="sm:hidden px-4 py-2 text-center text-xs text-muted-foreground border-t border-border bg-muted">
-          <ArrowLeftRight className="size-4" /> {t("agents.swipe_hint")}
-        </div>
-
-        <Pagination page={page} pageSize={50} total={total} onPageChange={setPage} />
-      </Card>
+      <AgentsTable
+        t={t}
+        beacons={beacons}
+        visibleBeacons={visibleBeacons}
+        selected={selected}
+        toggleSelect={toggleSelect}
+        toggleSelectAll={toggleSelectAll}
+        sortKey={sortKey}
+        sortDir={sortDir}
+        toggleSort={toggleSort}
+        sortIcon={sortIcon}
+        handleSortKeyDown={handleSortKeyDown}
+        visibleCols={visibleCols}
+        loading={loading}
+        emptyColSpan={emptyColSpan}
+        agentVirtualized={agentVirtualized}
+        agentScrollRef={agentScrollRef}
+        onAgentScroll={onAgentScroll}
+        agentOffsetTop={agentOffsetTop}
+        agentTotalHeight={agentTotalHeight}
+        rowHeight={rowHeight}
+        statusFilter={statusFilter}
+        osFilter={osFilter}
+        page={page}
+        total={total}
+        setPage={setPage}
+        onSelectAgent={handleSelectAgent}
+        onMenu={setMenuPoint}
+        onQuickNav={handleQuickNav}
+        onEditNotes={openNotesEdit}
+        taskCountMap={taskCountMap}
+        agentLocks={agentLocks}
+        operatorPresence={operatorPresence}
+        tagsByAgent={tagsByAgent}
+      />
       )}
 
       {effectiveViewMode === "grid" && loading && (
@@ -863,117 +450,47 @@ export default function AgentsPageContent() {
         </>
       )}
 
-      <ConfirmModal
-        open={confirm?.type === "kill"}
-        title={t("agents.confirm_kill_title")}
-        message={t("agents.confirm_kill_msg").replace("{name}", confirm?.hostname || confirm?.id || "")}
-        confirmText={t("agents.confirm_kill_btn")}
-        danger
-        requireText={confirm?.hostname || ""}
-        onConfirm={() => { if (confirm?.id) void killAgent(confirm.id); }}
-        onCancel={() => setConfirm(null)}
-      />
-      <ConfirmModal
-        open={confirm?.type === "delete"}
-        title={t("agents.confirm_delete_title")}
-        message={t("agents.confirm_delete_msg").replace("{name}", confirm?.hostname || confirm?.id || "")}
-        confirmText={t("agents.confirm_delete_btn")}
-        danger
-        requireText={confirm?.hostname || ""}
-        onConfirm={() => { if (confirm?.id) void deleteAgent(confirm.id); }}
-        onCancel={() => setConfirm(null)}
-      />
-      <ConfirmModal
-        open={confirm?.type === "uninstall"}
-        title={t("agents.uninstall_agent")}
-        message={t("agents.uninstall_msg").replace("{name}", confirm?.hostname || confirm?.id || "")}
-        confirmText={t("agents.uninstall")}
-        danger
-        requireText={confirm?.hostname || ""}
-        onConfirm={() => { if (confirm?.id) void uninstallAgent(confirm.id); }}
-        onCancel={() => setConfirm(null)}
-      />
-      <ConfirmModal
-        open={confirm?.type === "batch-delete"}
-        title={t("agents.confirm_batch_delete_title")}
-        message={t("agents.confirm_batch_delete_msg").replace("{count}", String(selected.size))}
-        confirmText={t("agents.confirm_batch_delete_btn")}
-        danger
-        onConfirm={batchDelete}
-        onCancel={() => setConfirm(null)}
-      />
-      <ConfirmModal
-        open={confirm?.type === "bulk-kill"}
-        title={t("agents.confirm_bulk_kill_title")}
-        message={t("agents.confirm_bulk_kill_msg").replace("{count}", String(selected.size))}
-        confirmText={t("agents.confirm_bulk_kill_btn")}
-        danger
-        onConfirm={bulkKill}
-        onCancel={() => setConfirm(null)}
-      />
-      <ConfirmModal
-        open={confirm?.type === "bulk-uninstall"}
-        title={t("agents.confirm_bulk_uninstall_title")}
-        message={t("agents.confirm_bulk_uninstall_msg").replace("{count}", String(selected.size))}
-        confirmText={t("agents.confirm_bulk_uninstall_btn")}
-        danger
-        onConfirm={bulkUninstall}
-        onCancel={() => setConfirm(null)}
-      />
-
-      <BulkCommandModal
-        open={cmdModalOpen}
-        selectedCount={selected.size}
+      <AgentsConfirmDialogs
+        t={t}
+        confirm={confirm}
+        setConfirm={setConfirm}
+        selectedSize={selected.size}
+        killAgent={(id) => void killAgent(id)}
+        deleteAgent={(id) => void deleteAgent(id)}
+        uninstallAgent={(id) => void uninstallAgent(id)}
+        batchDelete={() => void batchDelete()}
+        bulkKill={() => void bulkKill()}
+        bulkUninstall={() => void bulkUninstall()}
+        cmdModalOpen={cmdModalOpen}
         cmdType={cmdType}
         setCmdType={setCmdType}
         cmdText={cmdText}
         setCmdText={setCmdText}
-        onSubmit={handleCmdSubmit}
-        onClose={closeCmdModal}
+        handleCmdSubmit={() => void handleCmdSubmit()}
+        closeCmdModal={closeCmdModal}
+        quickSleepAgent={quickSleepAgent}
+        sleepInterval={sleepInterval}
+        setSleepInterval={setSleepInterval}
+        sleepJitter={sleepJitter}
+        setSleepJitter={setSleepJitter}
+        submitQuickSleep={() => void submitQuickSleep()}
+        closeQuickSleep={closeQuickSleep}
+        editingNotesId={editingNotesId}
+        editNotesText={editNotesText}
+        setNotesText={setNotesText}
+        submitNotes={() => void submitNotes()}
+        closeNotesEdit={closeNotesEdit}
+        screenshotConfirmOpen={screenshotConfirmOpen}
+        setScreenshotConfirm={setScreenshotConfirm}
+        doBatchScreenshot={doBatchScreenshot}
+        batchSleepOpen={batchSleepOpen}
+        batchSleepInterval={batchSleepInterval}
+        setBatchSleepInterval={setBatchSleepInterval}
+        batchSleepJitter={batchSleepJitter}
+        setBatchSleepJitter={setBatchSleepJitter}
+        doBatchSleep={doBatchSleep}
+        closeBatchSleep={closeBatchSleep}
       />
-
-      {quickSleepAgent && (
-        <QuickSleepModal
-          agent={quickSleepAgent}
-          sleepInterval={sleepInterval}
-          setSleepInterval={setSleepInterval}
-          sleepJitter={sleepJitter}
-          setSleepJitter={setSleepJitter}
-          onSubmit={submitQuickSleep}
-          onClose={closeQuickSleep}
-        />
-      )}
-
-      {editingNotesId && (
-        <NotesEditModal
-          notesText={editNotesText}
-          setNotesText={setNotesText}
-          onSubmit={submitNotes}
-          onClose={closeNotesEdit}
-        />
-      )}
-
-      <ConfirmModal
-        open={screenshotConfirmOpen}
-        title={t("agents.confirm_screenshot_title")}
-        message={t("agents.confirm_screenshot_msg").replace("{count}", String(selected.size))}
-        confirmText={t("agents.confirm_screenshot_btn")}
-        danger={false}
-        onConfirm={doBatchScreenshot}
-        onCancel={() => setScreenshotConfirm(false)}
-      />
-
-      {batchSleepOpen && (
-        <BatchSleepModal
-          agentCount={selected.size}
-          interval={batchSleepInterval}
-          onIntervalChange={setBatchSleepInterval}
-          jitter={batchSleepJitter}
-          setJitter={setBatchSleepJitter}
-          onSubmit={doBatchSleep}
-          onClose={closeBatchSleep}
-        />
-      )}
 
       <Sheet open={!!selectedAgentId} onOpenChange={(open) => { if (!open) setSelectedAgentId(null); }}>
         <SheetContent
@@ -995,4 +512,3 @@ export default function AgentsPageContent() {
     </PageContainer>
   );
 }
-

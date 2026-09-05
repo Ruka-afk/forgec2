@@ -103,6 +103,10 @@ export default function SessionTimeoutWarning() {
   return (
     <div className="fixed bottom-4 right-4 z-50 max-w-sm">
       <div
+        role="alertdialog"
+        aria-modal="false"
+        aria-live="assertive"
+        aria-label={t("session.expires_less_minute")}
         className={cn(bannerSurface(urgent ? "destructive" : "warning", "rounded-lg p-4 shadow-lg backdrop-blur-sm"))}
       >
         <p
@@ -121,6 +125,7 @@ export default function SessionTimeoutWarning() {
             size="sm"
             variant={urgent ? "destructive" : "default"}
             onClick={handleExtend}
+            autoFocus
           >
             {t("session.extend")}
           </Button>

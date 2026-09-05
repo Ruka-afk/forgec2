@@ -36,18 +36,12 @@ func (s *Server) handleRequestHostInfo(c *gin.Context) {
 		return
 	}
 
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
 	details := "host profile sweep"
 	if category != "" && category != "all" {
 		details += " (" + category + ")"
 	}
-	task, err := s.createTask(id, "hostinfo", category, "", "", filter, 0, 0, callerOpts(c)...)
-	if err != nil {
-		slog.Error("Failed to create hostinfo task", "agent_id", id, "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to create hostinfo task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "hostinfo", Command: category, Data: filter})
+	if task == nil {
 		return
 	}
 	slog.Info("hostinfo requested", "agent_id", id, "category", category, "filter", filter)

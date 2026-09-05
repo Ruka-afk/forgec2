@@ -138,22 +138,32 @@ export default memo(function AgentTaskList({
     }
   }, [tasks, expandedTaskId, invalidate, load]);
 
-  const filterTypes = useMemo(() => {
-    const counts = new Map<string, number>();
+  // Single-pass status/type aggregation: the old code filtered the whole
+  // list 3x per render plus once more per badge below (O(n*m)).
+  const statusCounts = useMemo(() => {
+    const counts = { completed: 0, pending: 0, failed: 0 };
+    const byType = new Map<string, number>();
     for (const task of tasks) {
+      if (task.status === "completed") counts.completed++;
+      else if (task.status === "pending") counts.pending++;
+      else if (task.status === "failed") counts.failed++;
       const type = task.type || "";
-      if (type) counts.set(type, (counts.get(type) || 0) + 1);
+      if (type) byType.set(type, (byType.get(type) || 0) + 1);
     }
-    return [...counts.entries()]
+    return { ...counts, byType };
+  }, [tasks]);
+
+  const filterTypes = useMemo(() => {
+    return [...statusCounts.byType.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, MAX_FILTER_TYPES)
       .map(([type]) => type);
-  }, [tasks]);
+  }, [statusCounts]);
 
   const total = totalTasks ?? tasks.length;
-  const completed = completedTasks ?? tasks.filter((task) => task.status === "completed").length;
-  const pending = pendingTasks ?? tasks.filter((task) => task.status === "pending").length;
-  const failed = failedTasks ?? tasks.filter((task) => task.status === "failed").length;
+  const completed = completedTasks ?? statusCounts.completed;
+  const pending = pendingTasks ?? statusCounts.pending;
+  const failed = failedTasks ?? statusCounts.failed;
 
   const visibleTasks = useMemo(() => {
     let list = tasks;
@@ -238,7 +248,7 @@ export default memo(function AgentTaskList({
                   : "border-border/70 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
             >
-              {type ? `${type} (${tasks.filter((task) => (task.type || "") === type).length})` : t("agents.tasklist_filter_all")}
+              {type ? `${type} (${statusCounts.byType.get(type) ?? 0})` : t("agents.tasklist_filter_all")}
             </button>
           ))}
         </div>

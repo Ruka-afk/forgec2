@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -46,6 +47,40 @@ func TestDefaultConfig(t *testing.T) {
 	}
 	if cfg.AI.MaxDuplicateToolCalls != 0 {
 		t.Errorf("expected AI max_duplicate_tool_calls 0 (unlimited), got %d", cfg.AI.MaxDuplicateToolCalls)
+	}
+}
+
+// TestCopyFromCoversAllSections pins the hot-reload contract: every exported
+// Config section must be carried by CopyFrom, otherwise InitOptimizations
+// silently keeps stale values after reload.
+func TestCopyFromCoversAllSections(t *testing.T) {
+	src := DefaultConfig()
+	src.Server.Port = 18001
+	src.Implant.MinInterval = 42
+	src.Roe.Enabled = true
+	src.Security.RequireApproval = true
+	src.Monitoring.TaskFailureRateMaxPct = 77
+	src.SIEM.URL = "https://siem.example/hook"
+	src.PasswordPolicy.MinLength = 20
+	src.AI.Provider = "custom-test-provider"
+	src.Socks.Enabled = true
+	src.Integrations.Slack.Enabled = true
+	src.Listeners.H2C.Addr = ":19999"
+	src.TLSFingerprint.JARMEnabled = true
+
+	dst := DefaultConfig()
+	dst.CopyFrom(src)
+
+	sv, dv := reflect.ValueOf(src).Elem(), reflect.ValueOf(dst).Elem()
+	st := sv.Type()
+	for i := 0; i < st.NumField(); i++ {
+		f := st.Field(i)
+		if f.PkgPath != "" {
+			continue // unexported (mu)
+		}
+		if !reflect.DeepEqual(sv.Field(i).Interface(), dv.FieldByName(f.Name).Interface()) {
+			t.Errorf("CopyFrom dropped section %s", f.Name)
+		}
 	}
 }
 

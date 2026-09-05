@@ -19,14 +19,8 @@ func (s *Server) handleRequestScreenshot(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
-	task, err := s.createTask(id, "screenshot", "", "", "", "", 0, 0, callerOpts(c)...)
-	if err != nil {
-		slog.Error("Failed to create task", "agent_id", id, "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "screenshot"})
+	if task == nil {
 		return
 	}
 
@@ -121,14 +115,8 @@ func (s *Server) handleRequestScreenshotWindow(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
-	task, err := s.createTask(id, "screenshot_window", "", "", "", "", 0, 0, callerOpts(c)...)
-	if err != nil {
-		slog.Error("Failed to create task", "agent_id", id, "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "screenshot_window"})
+	if task == nil {
 		return
 	}
 

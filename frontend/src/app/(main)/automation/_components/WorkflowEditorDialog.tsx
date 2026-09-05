@@ -57,6 +57,7 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
   const [formName, setFormName] = useState(editWf?.name || "");
   const [formDesc, setFormDesc] = useState(editWf?.description || "");
   const [formScope, setFormScope] = useState(editWf?.scope_type || "all");
+  const [formScopeIds, setFormScopeIds] = useState(editWf?.scope_ids || "");
   const [formSteps, setFormSteps] = useState<WorkflowStep[]>(() =>
     editWf?.steps?.length
       ? editWf.steps.map((s, i) => ({ ...DEFAULT_STEP, ...s, step_order: i + 1 }))
@@ -68,11 +69,13 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
       setFormName(editWf.name);
       setFormDesc(editWf.description);
       setFormScope(editWf.scope_type);
+      setFormScopeIds(editWf.scope_ids || "");
       setFormSteps(editWf.steps.length > 0 ? editWf.steps.map((s, i) => ({ ...DEFAULT_STEP, ...s, step_order: i + 1 })) : [{ ...DEFAULT_STEP, _key: nextKey() }]);
     } else {
       setFormName("");
       setFormDesc("");
       setFormScope("all");
+      setFormScopeIds("");
       setFormSteps([{ ...DEFAULT_STEP, _key: nextKey() }]);
     }
   };
@@ -110,10 +113,7 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
       name: formName.trim(),
       description: formDesc,
       scope_type: formScope,
-      // Preserve the edited workflow's existing scope_ids verbatim — the
-      // editor has no id picker, and the backend assigns unconditionally
-      // (a hardcoded "[]" used to wipe all targets on every edit).
-      scope_ids: editWf?.scope_ids || "",
+      scope_ids: formScope === "all" ? "" : formScopeIds.trim(),
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       steps: formSteps.map(({ _key, ...s }) => s),
     });
@@ -144,6 +144,12 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
               </Select>
             </div>
           </div>
+          {formScope !== "all" && (
+            <div>
+              <Label className="mb-1">{t("workflows.scope_ids_label")}</Label>
+              <Input aria-label={t("workflows.scope_ids_label")} name="wf-scope-ids" value={formScopeIds} onChange={e => setFormScopeIds(e.target.value)} placeholder={t("workflows.scope_ids_ph")} className="font-mono" />
+            </div>
+          )}
           <div>
             <Label className="mb-1">{t("workflows.field_desc")}</Label>
             <Input aria-label={t("workflows.a11y_desc")} name="wf-desc" value={formDesc} onChange={e => setFormDesc(e.target.value)} placeholder={t("workflows.field_desc")} />
@@ -201,6 +207,7 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
                         <SelectItem value="equals('0')">equals(&apos;0&apos;)</SelectItem>
                       </SelectContent>
                     </Select>
+                    <Input aria-label={t("workflows.condition_expr")} name={`cond-expr-${idx}`} value={step.condition_expr || ""} onChange={e => updateStep(idx, "condition_expr", e.target.value)} placeholder={t("workflows.condition_expr_ph")} className="h-8 px-2 text-xs font-mono flex-1 min-w-24" />
                     <span className="text-xs text-muted-foreground">{t("workflows.on_success")}</span>
                     <Select value={step.on_success || "continue"} onValueChange={v => { if (v !== null) updateStep(idx, "on_success", v); }}>
                       <SelectTrigger className="h-8 text-xs w-32"><SelectValue /></SelectTrigger>

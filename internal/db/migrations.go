@@ -820,6 +820,17 @@ var indexMigrations = []*gormigrate.Migration{
 			return nil
 		},
 	},
+	{
+		ID: "2026-09-03-add-task-stale-sweep-index",
+		Migrate: func(tx *gorm.DB) error {
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_tasks_status_claimed ON tasks(status, claimed_at)", "idx_tasks_status_claimed")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			execMigration(tx, "DROP INDEX IF EXISTS idx_tasks_status_claimed", "drop_idx_tasks_status_claimed")
+			return nil
+		},
+	},
 }
 
 // Migrations is the combined migration history, kept for tooling and tests.

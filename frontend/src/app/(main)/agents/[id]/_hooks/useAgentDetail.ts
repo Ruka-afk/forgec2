@@ -22,7 +22,7 @@ interface MergableTask {
  * any status/result/error the WS already advanced that the snapshot hasn't
  * caught up to yet.
  */
-function mergeSnapshotWithPrev<T>(snapshot: T, prev: T | null): T {
+export function mergeSnapshotWithPrev<T>(snapshot: T, prev: T | null): T {
   if (!prev || !snapshot) return snapshot;
   const snap = snapshot as Record<string, unknown>;
   const old = prev as Record<string, unknown>;

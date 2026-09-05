@@ -784,7 +784,8 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 
 	var allTags []string
 	var tagStrings []string
-	if err := s.db.Model(&db.CredentialEntry{}).Where("tags != '' AND tags IS NOT NULL").Limit(5000).Pluck("tags", &tagStrings).Error; err != nil {
+	// Tenant scope: the filter dropdown must not leak other tenants' tag names.
+	if err := s.tenantScope(s.db.Model(&db.CredentialEntry{}), c).Where("tags != '' AND tags IS NOT NULL").Limit(5000).Pluck("tags", &tagStrings).Error; err != nil {
 		slog.Error("Failed to pluck credential tags", "err", err)
 		tagStrings = []string{}
 	}
@@ -985,7 +986,7 @@ func (s *Server) handleGetCredential(c *gin.Context) {
 		return
 	}
 	var cred db.CredentialEntry
-	if !s.findOrFail(c, &cred, idStr, "credential") {
+	if !s.findTenantOrFail(c, &cred, idStr, "credential") {
 		return
 	}
 	cred.Notes = decryptCredNotes(cred.Notes)
@@ -1002,6 +1003,12 @@ func (s *Server) handleDeleteCredential(c *gin.Context) {
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
 		respondError(c, http.StatusBadRequest, "invalid id")
+		return
+	}
+	// Tenant gate: the delete below is by raw id, so verify ownership first —
+	// otherwise any tenant-scoped operator could delete any tenant's vault row.
+	var owned db.CredentialEntry
+	if !s.findTenantOrFail(c, &owned, idStr, "credential") {
 		return
 	}
 	// Delete atomically with the usage-ledger rows: CredentialUsage has no FK
@@ -1037,7 +1044,7 @@ func (s *Server) handleUpdateCredential(c *gin.Context) {
 	}
 
 	var cred db.CredentialEntry
-	if !s.findOrFail(c, &cred, idStr, "credential") {
+	if !s.findTenantOrFail(c, &cred, idStr, "credential") {
 		return
 	}
 
@@ -1091,7 +1098,9 @@ func (s *Server) handleBatchVerifyCredentials(c *gin.Context) {
 	}
 
 	var entries []db.CredentialEntry
-	if err := s.db.Where("id IN ?", req.IDs).Find(&entries).Error; err != nil {
+	// Tenant scope: verify must not queue cred_check tasks (embedding another
+	// tenant's cleartext password) against other tenants' vault rows.
+	if err := s.tenantScope(s.db, c).Where("id IN ?", req.IDs).Find(&entries).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "query failed")
 		return
 	}
@@ -1186,7 +1195,8 @@ func (s *Server) handleBatchAddTags(c *gin.Context) {
 
 	newTags := strings.Join(req.Tags, ",")
 
-	if err := s.db.Model(&db.CredentialEntry{}).
+	// Tenant scope: blind UPDATE by ids would otherwise retag other tenants' rows.
+	if err := s.tenantScope(s.db.Model(&db.CredentialEntry{}), c).
 		Where("id IN ?", req.IDs).
 		Update("tags", gorm.Expr("CASE WHEN tags = '' OR tags IS NULL THEN ? ELSE tags || ',' || ? END", newTags, newTags)).Error; err != nil {
 		slog.Error("Failed to batch add tags", "err", err)
@@ -1214,7 +1224,7 @@ func (s *Server) handleToggleConfirmed(c *gin.Context) {
 	}
 
 	var cred db.CredentialEntry
-	if !s.findOrFail(c, &cred, idStr, "credential") {
+	if !s.findTenantOrFail(c, &cred, idStr, "credential") {
 		return
 	}
 

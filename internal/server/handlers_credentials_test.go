@@ -229,17 +229,10 @@ func TestHandleDeleteCredential_NotFound(t *testing.T) {
 
 	s.handleDeleteCredential(c)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 (GORM delete is idempotent), got %d; body=%s", w.Code, w.Body.String())
-	}
-	var resp struct {
-		Success bool `json:"success"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
-	}
-	if !resp.Success {
-		t.Fatal("expected success=true")
+	// Tenant-gated pre-check: deleting a row that is not visible to the
+	// caller (missing or foreign tenant) is 404, not silent 200.
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d; body=%s", w.Code, w.Body.String())
 	}
 }
 

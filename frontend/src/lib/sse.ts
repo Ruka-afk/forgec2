@@ -27,21 +27,36 @@ function parseFrame(frame: string): ParsedSSEEvent | null {
 	return parsed;
 }
 
+export const SSE_MAX_BUFFER_BYTES = 2 * 1024 * 1024;
+
 /**
  * Parses only complete SSE frames and returns the unfinished suffix. This is
  * intentionally chunk-boundary agnostic: event names, JSON and blank frame
  * delimiters may all be split across network reads.
+ * O(n) regex scan with 2 MB cap to prevent unbounded growth.
  */
 export function consumeSSEBuffer(buffer: string): {
   events: ParsedSSEEvent[];
   remainder: string;
+  overflow: boolean;
 } {
-  const frames = buffer.split(/\r?\n\r?\n/);
-  const remainder = frames.pop() ?? "";
-  const events = frames
-    .map(parseFrame)
-    .filter((event): event is ParsedSSEEvent => event !== null);
-  return { events, remainder };
+  let overflow = false;
+  if (buffer.length > SSE_MAX_BUFFER_BYTES) {
+    buffer = buffer.slice(buffer.length - SSE_MAX_BUFFER_BYTES);
+    overflow = true;
+  }
+  const events: ParsedSSEEvent[] = [];
+  const re = /\r?\n\r?\n/g;
+  let match: RegExpExecArray | null;
+  let lastIndex = 0;
+  while ((match = re.exec(buffer)) !== null) {
+    const frame = buffer.slice(lastIndex, match.index);
+    const parsed = parseFrame(frame);
+    if (parsed) events.push(parsed);
+    lastIndex = match.index + match[0].length;
+    if (events.length > 5000) break;
+  }
+  return { events, remainder: buffer.slice(lastIndex), overflow };
 }
 
 /** Parse a final unterminated frame after the response body closes. */

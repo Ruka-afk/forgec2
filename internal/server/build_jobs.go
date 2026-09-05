@@ -24,21 +24,30 @@ type BuildJob struct {
 	C2URL       string
 	ListenerID  uint
 	Filename    string
+	ProfileName string
+	ProfileHash string
 	CreatedAt   time.Time
 	CompletedAt time.Time
 }
 
 // startBuildJob creates a build job, stores it, and returns its ID.
 func (s *Server) startBuildJob(platform, format, c2URL string, listenerID uint, filename string) *BuildJob {
+	return s.startBuildJobWithProfile(platform, format, c2URL, listenerID, filename, "", "")
+}
+
+// startBuildJobWithProfile additionally records the malleable profile for audit.
+func (s *Server) startBuildJobWithProfile(platform, format, c2URL string, listenerID uint, filename, profileName, profileHash string) *BuildJob {
 	job := &BuildJob{
-		ID:         protocol.UUIDv7(),
-		Status:     "building",
-		Platform:   platform,
-		Format:     format,
-		C2URL:      c2URL,
-		ListenerID: listenerID,
-		Filename:   filename,
-		CreatedAt:  time.Now(),
+		ID:          protocol.UUIDv7(),
+		Status:      "building",
+		Platform:    platform,
+		Format:      format,
+		C2URL:       c2URL,
+		ListenerID:  listenerID,
+		Filename:    filename,
+		ProfileName: profileName,
+		ProfileHash: profileHash,
+		CreatedAt:   time.Now(),
 	}
 	s.buildJobsMu.Lock()
 	s.buildJobs[job.ID] = job
@@ -179,13 +188,15 @@ func (s *Server) buildJobSnapshots() []gin.H {
 	resp := make([]gin.H, 0, len(s.buildJobs))
 	for _, j := range s.buildJobs {
 		entry := gin.H{
-			"id":          j.ID,
-			"status":      j.Status,
-			"platform":    j.Platform,
-			"format":      j.Format,
-			"filename":    j.Filename,
-			"listener_id": j.ListenerID,
-			"created_at":  j.CreatedAt,
+			"id":           j.ID,
+			"status":       j.Status,
+			"platform":     j.Platform,
+			"format":       j.Format,
+			"filename":     j.Filename,
+			"listener_id":  j.ListenerID,
+			"profile_name": j.ProfileName,
+			"profile_hash": j.ProfileHash,
+			"created_at":   j.CreatedAt,
 		}
 		if j.Error != "" {
 			entry["error"] = j.Error
@@ -208,7 +219,7 @@ func (s *Server) runBuildAndUpdateJob(job *BuildJob, buildFn func() (string, err
 			err := fmt.Errorf("panic in build: %v", r)
 			slog.Error("Async build panicked", "build_id", job.ID, "platform", platform, "format", format, "panic", r)
 			s.completeBuildJob(job, "", err)
-			s.logBuild(platform, format, c2URL, listenerID, filename, "failed", err.Error(), "")
+			s.logBuildWithProfile(platform, format, c2URL, listenerID, filename, "failed", err.Error(), "", job.ProfileName, job.ProfileHash)
 			s.broadcastOperatorEvent(map[string]interface{}{
 				"type":         "build_update",
 				"build_id":     job.ID,
@@ -232,18 +243,18 @@ func (s *Server) runBuildAndUpdateJob(job *BuildJob, buildFn func() (string, err
 	outPath, err := buildFn()
 	s.completeBuildJob(job, outPath, err)
 	if err != nil {
-		s.logBuild(platform, format, c2URL, listenerID, filename, "failed", err.Error(), "")
+		s.logBuildWithProfile(platform, format, c2URL, listenerID, filename, "failed", err.Error(), "", job.ProfileName, job.ProfileHash)
 		slog.Error("Async build failed", "build_id", job.ID, "platform", platform, "format", format, "error", err)
 	} else {
-		s.logBuild(platform, format, c2URL, listenerID, filename, "success", "", outPath)
+		s.logBuildWithProfile(platform, format, c2URL, listenerID, filename, "success", "", outPath, job.ProfileName, job.ProfileHash)
 		slog.Info("Async build completed", "build_id", job.ID, "platform", platform, "format", format, "output", outPath)
 	}
 	event := map[string]interface{}{
-		"type":   "build_update",
+		"type":     "build_update",
 		"build_id": job.ID,
-		"status": job.Status,
+		"status":   job.Status,
 		"platform": platform,
-		"format": format,
+		"format":   format,
 	}
 	if job.Error != "" {
 		event["error"] = job.Error

@@ -191,7 +191,7 @@ export function useAgentFiles(agentId: string) {
           const rec = data as { content?: string; data?: string };
           raw = rec.content || rec.data || "";
         }
-        const preview = fileReadPreview(raw, isImageFile(filename));
+        const preview = fileReadPreview(raw, isImageFile(filename), filename);
         if (!preview.content && looksLikeFileTaskAckJson(raw)) throw new Error(t("agents.files_read_waiting"));
         setPreviewContent(preview.content);
         setPreviewIsImage(preview.isImage);
@@ -224,6 +224,172 @@ export function useAgentFiles(agentId: string) {
       }
     },
     [agentId, currentPath, osType, selectedFile, loadDirectory, showToast, t],
+  );
+
+  const mkdir = useCallback(
+    async (dirname: string) => {
+      const name = dirname.trim().replace(/[\\/]+$/, "");
+      if (!name) return;
+      const path = joinPath(currentPath, name, osType);
+      try {
+        const data = await api.post(paths.agents.filesMkdir(agentId), { path });
+        if (isFileTaskAck(data)) {
+          const taskId = fileTaskId(data);
+          if (taskId) {
+            const st = await pollTask(agentId, taskId, { timeoutMs: 90_000 });
+            if (st.status === "failed") throw new Error(st.error || t("agents.files_mkdir_failed"));
+          }
+        }
+        showToast(t("agents.files_mkdir_done", { name }), "success");
+        await loadDirectory(currentPath);
+      } catch (err) {
+        showToast(String(err), "error");
+      }
+    },
+    [agentId, currentPath, osType, loadDirectory, showToast, t],
+  );
+
+  const renameFile = useCallback(
+    async (filename: string, newName: string) => {
+      const target = newName.trim().replace(/^[\\/]+/, "");
+      if (!target || target === filename) return;
+      const src = joinPath(currentPath, filename, osType);
+      // A bare name renames in place; a sub-path moves within the tree.
+      const dst = /[\\/]/.test(target) ? target : joinPath(currentPath, target, osType);
+      try {
+        const data = await api.post(paths.agents.filesRename(agentId), { path: src, dest: dst });
+        if (isFileTaskAck(data)) {
+          const taskId = fileTaskId(data);
+          if (taskId) {
+            const st = await pollTask(agentId, taskId, { timeoutMs: 90_000 });
+            if (st.status === "failed") throw new Error(st.error || t("agents.files_rename_failed"));
+          }
+        }
+        showToast(t("agents.files_rename_done", { filename }), "success");
+        await loadDirectory(currentPath);
+        if (selectedFile === filename) setSelectedFile(null);
+      } catch (err) {
+        showToast(String(err), "error");
+      }
+    },
+    [agentId, currentPath, osType, selectedFile, loadDirectory, showToast, t],
+  );
+
+  const cancelUpload = useCallback(() => {
+    uploadAbortRef.current?.abort();
+    uploadAbortRef.current = null;
+    setUploading(false);
+    setUploadProgress(0);
+  }, []);
+
+  const [batchBusy, setBatchBusy] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{ done: number; total: number; current: string } | null>(null);
+  const batchAbortRef = useRef<AbortController | null>(null);
+
+  const cancelBatch = useCallback(() => {
+    batchAbortRef.current?.abort();
+  }, []);
+
+  const deleteFiles = useCallback(
+    async (filenames: string[]) => {
+      if (filenames.length === 0 || batchBusy) return;
+      setBatchBusy(true);
+      const abort = new AbortController();
+      batchAbortRef.current = abort;
+      let ok = 0;
+      let failed = 0;
+      try {
+        for (let i = 0; i < filenames.length; i++) {
+          if (abort.signal.aborted) break;
+          const filename = filenames[i];
+          setBatchProgress({ done: i, total: filenames.length, current: filename });
+          try {
+            const data = await api.post(paths.agents.filesDelete(agentId), { path: joinPath(currentPath, filename, osType) });
+            if (isFileTaskAck(data)) {
+              const taskId = fileTaskId(data);
+              if (taskId) {
+                const st = await pollTask(agentId, taskId, { timeoutMs: 90_000, signal: abort.signal });
+                if (st.status === "failed") throw new Error(st.error || t("agents.files_delete_failed"));
+              }
+            }
+            ok++;
+          } catch (err) {
+            if (abort.signal.aborted) break;
+            failed++;
+            showToast(`${filename}: ${String(err)}`, "error");
+          }
+        }
+        if (abort.signal.aborted) {
+          showToast(t("agents.files_batch_cancelled"), "info");
+        } else {
+          showToast(t("agents.files_batch_deleted", { ok, failed }), failed > 0 ? "error" : "success");
+        }
+        await loadDirectory(currentPath);
+        setSelectedFile(null);
+      } finally {
+        batchAbortRef.current = null;
+        setBatchBusy(false);
+        setBatchProgress(null);
+      }
+    },
+    [agentId, batchBusy, currentPath, osType, loadDirectory, showToast, t],
+  );
+
+  const pullFiles = useCallback(
+    async (filenames: string[]) => {
+      if (filenames.length === 0 || batchBusy) return;
+      const targets = filenames.filter((f) => !entries.find((e) => e.name === f)?.is_dir);
+      if (targets.length === 0) {
+        showToast(t("agents.files_batch_no_files"), "info");
+        return;
+      }
+      setBatchBusy(true);
+      const abort = new AbortController();
+      batchAbortRef.current = abort;
+      let ok = 0;
+      let failed = 0;
+      try {
+        for (let i = 0; i < targets.length; i++) {
+          if (abort.signal.aborted) break;
+          const filename = targets[i];
+          setBatchProgress({ done: i, total: targets.length, current: filename });
+          setPullName(filename);
+          try {
+            const known = entries.find((e) => e.name === filename)?.size ?? 0;
+            const kind = await pullRemoteFile({
+              agentId,
+              remotePath: joinPath(currentPath, filename, osType),
+              filename,
+              fileSize: known,
+              t,
+              signal: abort.signal,
+              onProgress: setPullProgress,
+            });
+            if (kind === "partial") {
+              showToast(t("agents.files_pull_partial", { filename, size: String(known || "") }), "info");
+            }
+            ok++;
+          } catch (err) {
+            if (abort.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) break;
+            failed++;
+            showToast(`${filename}: ${String(err)}`, "error");
+          } finally {
+            setPullProgress(null);
+          }
+        }
+        if (abort.signal.aborted) {
+          showToast(t("agents.files_batch_cancelled"), "info");
+        } else {
+          showToast(t("agents.files_batch_pulled", { ok, failed }), failed > 0 ? "error" : "success");
+        }
+      } finally {
+        batchAbortRef.current = null;
+        setBatchBusy(false);
+        setBatchProgress(null);
+        setPullName(null);
+      }
+    },
+    [agentId, batchBusy, currentPath, entries, osType, showToast, t],
   );
 
   const uploadFile = useCallback(
@@ -387,7 +553,15 @@ export function useAgentFiles(agentId: string) {
     downloadFile,
     readFile,
     deleteFile,
+    deleteFiles,
+    pullFiles,
+    batchBusy,
+    batchProgress,
+    cancelBatch,
+    mkdir,
+    renameFile,
     uploadFile,
+    cancelUpload,
     loadDrives,
     loadUsb,
     findFiles,

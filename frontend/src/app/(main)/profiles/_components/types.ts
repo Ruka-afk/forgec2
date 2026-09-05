@@ -16,6 +16,26 @@ export interface AgentProfile {
   headers: Record<string, string>;
   sleep: number;
   jitter: number;
+  // v2 highly-customizable fields (all optional, backward compatible)
+  beacon_uris?: string[];
+  uris?: string[];
+  prepend?: string;
+  append?: string;
+  request_prepend?: string;
+  request_append?: string;
+  request_headers?: Record<string, string>;
+  server_output?: string;
+  client_metadata?: string;
+  client_id?: string;
+  content_length_jitter?: number;
+  parameter?: string;
+  placements?: string;
+  user_agents?: string[];
+  jitter_uri?: boolean;
+  parameter_names?: string[];
+  work_start?: string;
+  work_end?: string;
+  work_tz?: string;
 }
 
 export interface ActiveMalleableConfig {

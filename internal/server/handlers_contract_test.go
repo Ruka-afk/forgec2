@@ -173,7 +173,6 @@ func TestContract_Envelope_More(t *testing.T) {
 		{"campaigns", s.handleCampaignsList},
 		{"bloodhound-list", s.handleBloodHoundList},
 		{"bloodhound-status", s.handleBloodHoundStatus},
-		{"chrome-agents", s.handleChromeAgents},
 		{"collab-agents", s.handleCollabAgents},
 		{"cloud-results", s.handleCloudResults},
 		{"bof-list", s.handleBOFList},

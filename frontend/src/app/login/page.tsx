@@ -13,6 +13,7 @@ import { AlertCircle, Lock, Shield, User } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useForm } from "@/lib/hooks/useForm";
 import { isLoginSuccessResponse, parseLoginErrorBody, safeNextPath } from "@/lib/login";
+import { paths } from "@/lib/api-paths";
 import { z } from "zod";
 
 type LoginFormValues = {
@@ -61,7 +62,7 @@ function LoginForm() {
       if (vals.rememberMe) params.append("remember_me", "on");
 
       try {
-        const response = await fetch("/login", {
+        const response = await fetch(paths.auth.login, {
           method: "POST",
           headers: {
             "Content-Type": "application/x-www-form-urlencoded",
@@ -105,7 +106,7 @@ function LoginForm() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/health", { credentials: "include" });
+        const res = await fetch(paths.auth.health, { credentials: "include" });
         if (!res.ok) return;
         const data = await res.json() as { version?: string };
         if (!cancelled && data.version) setVersion(String(data.version));

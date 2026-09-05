@@ -194,9 +194,8 @@ func (s *Server) handleModulesDeploy(c *gin.Context) {
 		remotePath = `C:\Windows\Temp\` + safe
 	}
 	b64 := base64.StdEncoding.EncodeToString(data)
-	task, err := s.createTask(id, "upload", remotePath, "", remotePath, b64, 0, 0)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, sanitizeError(err, "module deploy"))
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "upload", Command: remotePath, Path: remotePath, Data: b64})
+	if task == nil {
 		return
 	}
 	s.LogAuditRecord(c, "deploy_module", "agent", id, safe+" → "+remotePath, true, nil)

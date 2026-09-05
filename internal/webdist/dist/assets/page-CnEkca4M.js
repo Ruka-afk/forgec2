@@ -1,1 +1,0 @@
-import{W as t}from"./index-DPfSh_ZJ.js";import"./vendor-react-DklbvxIc.js";import"./vendor-misc-pIg0fCm4.js";import"./vendor-router-KugTxA1M.js";import"./vendor-sonner-COYKQKQ2.js";import"./vendor-baseui-DhAZuMAS.js";import"./vendor-icons-DPhq_het.js";import"./vendor-zod-BAGC-vYU.js";function c(){t("/automation#tab=scheduled")}export{c as default};

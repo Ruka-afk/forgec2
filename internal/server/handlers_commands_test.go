@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"github.com/forgec2/forgec2/internal/config"
+	"github.com/forgec2/forgec2/internal/crypto"
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/internal/payload"
 	"github.com/forgec2/forgec2/internal/testutil"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -44,6 +46,99 @@ func TestValidateCommandArg(t *testing.T) {
 				t.Errorf("unexpected error for %q: %v", tc.v, err)
 			}
 		})
+	}
+}
+
+func TestClampSleepString(t *testing.T) {
+	cases := []struct {
+		in, want string
+		minI, minJ int
+	}{
+		{"5,5", "30,20", 30, 20},
+		{"60,50", "60,50", 30, 20},
+		{"not-a-sleep", "not-a-sleep", 30, 20},
+		{"5", "5", 30, 20},
+		{"5,5", "5,5", 1, 0},
+	}
+	for _, tc := range cases {
+		if got := clampSleepString(tc.in, tc.minI, tc.minJ); got != tc.want {
+			t.Errorf("clampSleepString(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestHandleSetSleepHonorsMinInterval(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := newTasksTestServer(t)
+	s.cfg = config.DefaultConfig()
+	s.cfg.Implant.MinInterval = 30
+	s.cfg.Implant.MinJitter = 20
+	if err := s.db.Create(&db.Implant{ID: "a1", Hostname: "TEST"}).Error; err != nil {
+		t.Fatalf("seed agent: %v", err)
+	}
+
+	post := func(body, ctype string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Params = gin.Params{{Key: "id", Value: "a1"}}
+		c.Request, _ = http.NewRequest(http.MethodPost, "/agents/a1/set_sleep", strings.NewReader(body))
+		c.Request.Header.Set("Content-Type", ctype)
+		s.handleSetSleep(c)
+		return w
+	}
+
+	// Form path below the floor must be clamped, not rejected.
+	if w := post("sleep=5%2C5", "application/x-www-form-urlencoded"); w.Code != http.StatusOK {
+		t.Fatalf("form: expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	// JSON path below the floor must be clamped too.
+	if w := post(`{"interval":10,"jitter":5}`, "application/json"); w.Code != http.StatusOK {
+		t.Fatalf("json: expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var tasks []db.Task
+	if err := s.db.Where("agent_id = ? AND type = ?", "a1", "set_sleep").Order("id").Find(&tasks).Error; err != nil {
+		t.Fatalf("query tasks: %v", err)
+	}
+	if len(tasks) != 2 {
+		t.Fatalf("expected 2 tasks, got %d", len(tasks))
+	}
+	for _, task := range tasks {
+		if task.Command != "30,20" {
+			t.Errorf("command = %q, want clamped %q", task.Command, "30,20")
+		}
+	}
+}
+
+func TestBuildImplantConfigFallsBackToDefaultWorkingHours(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := newTasksTestServer(t)
+	s.cfg = config.DefaultConfig()
+	s.cfg.Server.BeaconKey = strings.Repeat("ab", 32) // 64 hex chars = 32 bytes
+	s.regSecrets = crypto.NewRegSecretStore(make([]byte, 32))
+	s.cfg.Implant.DefaultWorkingStart = "09:00"
+	s.cfg.Implant.DefaultWorkingEnd = "18:00"
+	s.cfg.Implant.DefaultWorkingTZ = "UTC"
+
+	cfg, err := s.buildImplantConfig(&binaryGenForm{Architecture: "amd64"})
+	if err != nil {
+		t.Fatalf("buildImplantConfig: %v", err)
+	}
+	// Normalize applies the documented precedence explicit form > profile >
+	// server default (dataDir without profiles → default profile).
+	payload.NormalizeImplantConfig(&cfg, t.TempDir())
+	if cfg.WorkingStart != "09:00" || cfg.WorkingEnd != "18:00" || cfg.WorkingTZ != "UTC" {
+		t.Errorf("working hours = %q/%q/%q, want server default 09:00/18:00/UTC",
+			cfg.WorkingStart, cfg.WorkingEnd, cfg.WorkingTZ)
+	}
+
+	// Explicit form values win over the server default.
+	cfg, err = s.buildImplantConfig(&binaryGenForm{Architecture: "amd64", WorkingStart: "01:00", WorkingEnd: "02:00", WorkingTZ: "UTC"})
+	if err != nil {
+		t.Fatalf("buildImplantConfig: %v", err)
+	}
+	payload.NormalizeImplantConfig(&cfg, t.TempDir())
+	if cfg.WorkingStart != "01:00" || cfg.WorkingEnd != "02:00" {
+		t.Errorf("explicit working hours lost: %q/%q", cfg.WorkingStart, cfg.WorkingEnd)
 	}
 }
 

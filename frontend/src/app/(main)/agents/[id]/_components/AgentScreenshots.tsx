@@ -43,7 +43,7 @@ export default memo(function AgentScreenshots({
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-2">
             {screenshots.slice(0, 12).map((fn, i) => (
 <Button key={fn} variant="ghost" onClick={() => onOpenLightbox(i)} className="group relative aspect-video rounded-lg border border-border/70 bg-muted/30 p-0 h-auto overflow-hidden shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-                <SafeImg src={`/screenshots/${agentId}/${fn}`} alt={fn} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" />
+                <SafeImg src={`/screenshots/${agentId}/${fn}`} alt={`${t("agents.screen_alt_thumb")}: ${fn}`} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" />
                 {freshSet.has(fn) && (
                   <span className="absolute top-1.5 left-1.5"><Badge className="px-1.5 py-0 text-(--fs-micro-sm)">{t("agents.screenshots_new")}</Badge></span>
                 )}
@@ -64,7 +64,7 @@ export default memo(function AgentScreenshots({
           <DialogContent className="max-w-5xl bg-transparent border-0 p-0 shadow-none" showCloseButton={false}>
             <div className="relative mx-auto max-w-[92vw] max-h-[88vh]">
               <Button variant="ghost" size="icon-lg" onClick={onPrevLightbox} className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 text-white backdrop-blur-sm" disabled={lightboxIdx === 0} aria-label={t("agents.screenshots_prev")}><ChevronLeft className="size-4" /></Button>
-              <SafeImg src={`/screenshots/${agentId}/${screenshots[lightboxIdx!]}`} alt={`Screenshot ${lightboxIdx! + 1} of ${screenshots.length}`} className="max-w-full max-h-[82vh] object-contain rounded-2xl border border-white/10 shadow-2xl" loading="lazy" />
+              <SafeImg src={`/screenshots/${agentId}/${screenshots[lightboxIdx!]}`} alt={`${t("agents.screen_alt_full")} ${lightboxIdx! + 1}/${screenshots.length}`} className="max-w-full max-h-[82vh] object-contain rounded-2xl border border-white/10 shadow-2xl" loading="lazy" />
               <div className="absolute left-1/2 bottom-3 -translate-x-1/2 rounded-full bg-black/55 px-3 py-1 text-(--fs-xs-sm) text-white/80 backdrop-blur-sm">
                 {lightboxIdx! + 1} / {screenshots.length}
               </div>

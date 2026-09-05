@@ -31,15 +31,24 @@ const FORMAT_KEY = "forgec2_gen_format";
 
 function SectionHeading({ icon, tint, title, desc, className }: { icon: ReactNode; tint: string; title: string; desc: string; className?: string }) {
   return (
-    <div className={cn("flex items-center gap-x-3 mb-5", className)}>
-      <div className={cn("size-10 rounded-lg ring-1 ring-border/50 flex items-center justify-center", tint)}>{icon}</div>
-      <div>
-        <div className="text-sm font-semibold text-foreground">{title}</div>
-        <div className="text-xs text-muted-foreground">{desc}</div>
+    <div className={cn("mb-3 flex items-center gap-x-2.5", className)}>
+      <div className={cn("grid size-8 place-items-center rounded-lg shadow-sm ring-1 ring-border/30", tint)}>{icon}</div>
+      <div className="min-w-0">
+        <div className="truncate text-sm font-semibold tracking-tight text-foreground">{title}</div>
+        <div className="truncate text-xs leading-4 text-muted-foreground">{desc}</div>
       </div>
     </div>
   );
 }
+
+const FORMAT_META: Record<PayloadFormat, { icon: ReactNode; desc: string; iconTint: string; activeRing: string }> = {
+  exe: { icon: <AppWindow className="size-4" />, desc: "GUI implant · exe", iconTint: "bg-warning/10 text-warning", activeRing: "border-warning/30 bg-warning/5" },
+  dll: { icon: <PackageOpen className="size-4" />, desc: "sideload · dll", iconTint: "bg-destructive/10 text-destructive", activeRing: "border-destructive/30 bg-destructive/5" },
+  ps1: { icon: <Cpu className="size-4" />, desc: "ps1 · one-liner", iconTint: "bg-info/10 text-info", activeRing: "border-info/30 bg-info/5" },
+  linux: { icon: <Cpu className="size-4" />, desc: "elf · amd64/arm", iconTint: "bg-success/10 text-success", activeRing: "border-success/30 bg-success/5" },
+  macos: { icon: <AppWindow className="size-4" />, desc: "mach-o · mac", iconTint: "bg-chart-6/violet text-chart-6", activeRing: "border-chart-6/30 bg-chart-6/5" },
+  oneliner: { icon: <PackageOpen className="size-4" />, desc: "curl · wget · ps", iconTint: "bg-muted text-muted-foreground", activeRing: "border-primary/30 bg-primary/5" },
+};
 
 export default function GeneratePayloadWorkspace() {
   const { t } = useI18n();
@@ -157,18 +166,20 @@ export default function GeneratePayloadWorkspace() {
   };
 
   return (
-    <div>
+    <div className="mx-auto w-full max-w-[1440px]">
       <ListenerCallbackStrip
         listener={currentListener}
         callback={g.shared.c2_url}
         onCreate={g.handleCreateListener}
       />
       {showBanner && (
-        <div className="mt-3 flex items-center gap-2 px-4 py-2 bg-warning/10 border border-warning/20 rounded-lg">
-          <Info className="size-4" />
-          <span className="flex-1 text-xs text-warning-foreground">{t("generate.banner_text")} <a href="https://go.dev/dl/" target="_blank" rel="noopener noreferrer" className="underline hover:text-warning-foreground transition-colors">{t("generate.banner_download")}</a></span>
+        <div className="mt-2 flex items-center gap-2.5 rounded-lg border border-warning/25 bg-gradient-to-r from-warning/15 via-warning/10 to-transparent px-3 py-2 shadow-sm">
+          <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-warning/15 text-warning ring-1 ring-warning/20">
+            <Info className="size-4" />
+          </div>
+          <span className="flex-1 text-xs leading-5 text-warning-foreground">{t("generate.banner_text")} <a href="https://go.dev/dl/" target="_blank" rel="noopener noreferrer" className="font-medium underline decoration-warning/40 underline-offset-2 transition-colors hover:text-warning">{t("generate.banner_download")}</a></span>
           <Tooltip>
-            <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={dismissBanner} className="text-warning hover:text-warning" aria-label={t("generate.dismiss")} />}>
+            <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={dismissBanner} className="shrink-0 text-warning hover:bg-warning/10 hover:text-warning" aria-label={t("generate.dismiss")} />}>
             <X className="size-4" />
             </TooltipTrigger>
             <TooltipContent>{t("generate.dismiss")}</TooltipContent>
@@ -176,9 +187,9 @@ export default function GeneratePayloadWorkspace() {
         </div>
       )}
 
-      <div className="mt-5 grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-5 items-start">
-        {/* ── Left rail: connection (sticky) ── */}
-        <div className="min-w-0 lg:sticky lg:top-12 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
+      <div className="mt-3 grid grid-cols-1 items-start gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
+        {/* ── 左栏：连接信息 ── */}
+        <div className="min-w-0 lg:sticky lg:top-4 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:pr-1 lg:pb-2 [scrollbar-width:thin]">
           <ConnectionPanel
             listeners={g.listeners}
             shared={g.shared}
@@ -197,8 +208,8 @@ export default function GeneratePayloadWorkspace() {
           />
         </div>
 
-        {/* ── Main workspace ── */}
-        <div className="min-w-0 space-y-8">
+        {/* ── 右栏：生成载荷 ── */}
+        <div className="min-w-0 space-y-4">
           <section className="animate-fade-slide-up">
             <SectionHeading
               icon={<AppWindow className="size-4" />}
@@ -206,41 +217,60 @@ export default function GeneratePayloadWorkspace() {
               title={t("generate.agents_title")}
               desc={t("generate.build_one_desc")}
             />
-            <div className="mb-4 flex flex-wrap gap-1.5">
-              {PAYLOAD_FORMATS.map((key) => (
-                <Button
-                  key={key}
-                  type="button"
-                  size="xs"
-                  variant={format === key ? "default" : "outline"}
-                  onClick={() => pickFormat(key)}
-                >
-                  {t(PAYLOAD_FORMAT_LABEL[key])}
-                </Button>
-              ))}
+            <div className="mb-3 grid grid-cols-3 gap-1.5 sm:grid-cols-6" role="tablist" aria-label={t("generate.agents_title")}>
+              {PAYLOAD_FORMATS.map((key) => {
+                const meta = FORMAT_META[key];
+                const active = format === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => pickFormat(key)}
+                    className={cn(
+                      "group relative flex items-center gap-2 rounded-lg border px-2 py-2 text-left outline-none transition-all duration-150 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]",
+                      active
+                        ? cn("shadow-sm ring-1", meta.activeRing)
+                        : "border-border/60 bg-card hover:border-primary/20 hover:bg-muted/40"
+                    )}
+                  >
+                    <div className={cn("grid size-7 shrink-0 place-items-center rounded-md ring-1 ring-border/30 transition-transform duration-200 group-hover:scale-105", meta.iconTint)}>
+                      {meta.icon}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-xs font-semibold leading-4 text-foreground">{t(PAYLOAD_FORMAT_LABEL[key])}</div>
+                      <div className="truncate text-[11px] leading-3 text-muted-foreground">{meta.desc}</div>
+                    </div>
+                    {active && <div className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary shadow-sm" aria-hidden="true" />}
+                  </button>
+                );
+              })}
             </div>
-            {formatPanel(format)}
-            <div className="mt-3">
-              <Button type="button" variant="ghost" size="xs" onClick={() => setShowAllFormats((v) => !v)}>
+            <div className="animate-fade-slide-up" key={format}>{formatPanel(format)}</div>
+            <div className="mt-2.5 flex justify-center">
+              <Button type="button" variant="outline" size="xs" onClick={() => setShowAllFormats((v) => !v)} className="h-7 rounded-full px-3 text-xs shadow-sm">
                 {showAllFormats ? t("generate.hide_all_formats") : t("generate.show_all_formats")}
               </Button>
             </div>
             {showAllFormats && (
-              <div className="mt-3 grid grid-cols-1 gap-5 md:grid-cols-2">
+              <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
                 {PAYLOAD_FORMATS.filter((key) => key !== format).map((key) => (
-                  <div key={key}>{formatPanel(key)}</div>
+                  <div key={key} className="animate-fade-slide-up">{formatPanel(key)}</div>
                 ))}
               </div>
             )}
           </section>
 
-          <section>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setShowDelivery((v) => !v)}>
-              <PackageOpen className="size-4" />
-              {showDelivery ? t("generate.hide_delivery") : t("generate.show_delivery")}
+          <section className="rounded-xl border border-border/60 bg-muted/20 p-3">
+            <Button type="button" variant="ghost" size="sm" onClick={() => setShowDelivery((v) => !v)} className="h-9 w-full justify-start rounded-lg px-2.5 py-1.5 hover:bg-card">
+              <span className="grid size-8 place-items-center rounded-lg bg-chart-6/10 text-chart-6 ring-1 ring-border/40">
+                <PackageOpen className="size-4" />
+              </span>
+              <span className="flex-1 text-left text-sm font-medium">{showDelivery ? t("generate.hide_delivery") : t("generate.show_delivery")}</span>
             </Button>
             {showDelivery && (
-              <div className="mt-4 space-y-6">
+              <div className="mt-3 animate-fade-slide-up space-y-4">
                 <div>
                   <SectionHeading
                     icon={<PackageOpen className="size-4" />}
@@ -248,7 +278,7 @@ export default function GeneratePayloadWorkspace() {
                     title={t("generate.artifact_kit")}
                     desc={t("generate.artifact_kit_desc")}
                   />
-                  <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                     <StagerPanel variant="windows" form={g.forms.stager} setForm={makeDispatch("stager")} busy={g.states.stager.busy} result={g.states.stager.result} onGenerate={g.handlerMap.stager} canGenerate={canGenerate} />
                     <StagerPanel variant="linux" form={g.forms.stager_linux} setForm={makeDispatch("stager_linux")} busy={g.states.stager_linux.busy} result={g.states.stager_linux.result} onGenerate={g.handlerMap.stager_linux} canGenerate={canGenerate} />
                   </div>
@@ -260,7 +290,7 @@ export default function GeneratePayloadWorkspace() {
                     title={t("generate.shellcode_donut")}
                     desc={t("generate.shellcode_donut_desc")}
                   />
-                  <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                     <ShellcodePanel form={g.forms.shellcode} setForm={makeDispatch("shellcode")} busy={g.states.shellcode.busy} result={g.states.shellcode.result} onGenerate={g.handlerMap.shellcode} canGenerate={canGenerate} />
                     <DonutPanel form={g.forms.donut} setForm={makeDispatch("donut")} busy={g.states.donut.busy} result={g.states.donut.result} onGenerate={g.handlerMap.donut} fileRef={g.donutFileRef} canGenerate={canGenerate} />
                   </div>
@@ -273,9 +303,9 @@ export default function GeneratePayloadWorkspace() {
           <QuickPresets onApply={g.applyPreset} />
           <BuildHistorySection refreshKey={historyRefresh} />
 
-          <div className="pt-4 text-center text-xs text-muted-foreground border-t border-border/60">
+          <div className="rounded-xl border border-border/60 bg-card px-4 py-3 text-center text-xs leading-5 text-muted-foreground">
             {t("generate.footer_text")}
-            <span className="block mt-1 text-warning">{t("generate.footer_warning")}</span>
+            <span className="mt-1 block font-medium text-warning">{t("generate.footer_warning")}</span>
           </div>
         </div>
       </div>

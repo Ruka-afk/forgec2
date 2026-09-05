@@ -97,7 +97,25 @@ export function parseFindResult(result: string): string[] {
   return out;
 }
 
-export function fileReadPreview(result: string, isImage: boolean): { content: string; isImage: boolean } {
+const IMAGE_MIME_BY_EXT: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  gif: "image/gif",
+  bmp: "image/bmp",
+  webp: "image/webp",
+  tiff: "image/tiff",
+  tif: "image/tiff",
+  ico: "image/x-icon",
+  svg: "image/svg+xml",
+};
+
+export function imageMimeForFilename(filename: string): string {
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+  return IMAGE_MIME_BY_EXT[ext] ?? "image/png";
+}
+
+export function fileReadPreview(result: string, isImage: boolean, filename = ""): { content: string; isImage: boolean } {
   const raw = result || "";
   if (looksLikeFileTaskAckJson(raw)) {
     return { content: "", isImage: false };
@@ -106,7 +124,7 @@ export function fileReadPreview(result: string, isImage: boolean): { content: st
   if (raw.startsWith("data:")) return { content: raw, isImage: true };
   const compact = raw.replace(/\s+/g, "");
   if (compact.length > 32 && /^[A-Za-z0-9+/=]+$/.test(compact)) {
-    return { content: `data:image/png;base64,${compact}`, isImage: true };
+    return { content: `data:${imageMimeForFilename(filename)};base64,${compact}`, isImage: true };
   }
   return { content: raw, isImage: false };
 }

@@ -120,9 +120,8 @@ func (s *Server) handleCoerce(c *gin.Context) {
 	if listenAddr != "" {
 		cmd = target + " " + listenAddr
 	}
-	task, err := s.createTask(id, taskType, cmd, "", "", "", 0, 0)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: taskType, Command: cmd})
+	if task == nil {
 		return
 	}
 	slog.Info("Coerce requested", "agent_id", id, "type", coerceType, "target", target)
@@ -159,9 +158,8 @@ func (s *Server) handleNTLMRelayStart(c *gin.Context) {
 	if flags != "" {
 		cmd += " " + flags
 	}
-	task, err := s.createTask(id, protocol.TaskTypeRelayNTLMStart, cmd, "", "", "", 0, 0)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: protocol.TaskTypeRelayNTLMStart, Command: cmd})
+	if task == nil {
 		return
 	}
 
@@ -188,9 +186,8 @@ func (s *Server) handleNTLMRelayStop(c *gin.Context) {
 		return
 	}
 
-	task, err := s.createTask(id, protocol.TaskTypeRelayNTLMStop, "", "", "", "", 0, 0)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: protocol.TaskTypeRelayNTLMStop})
+	if task == nil {
 		return
 	}
 

