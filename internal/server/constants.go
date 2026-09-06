@@ -3,7 +3,7 @@ package server
 import "time"
 
 const (
-	ServerVersion = "2.5.0"
+	ServerVersion = "2.6.0"
 
 	BeaconRateLimit  = 100
 	BeaconRateWindow = 1 * time.Minute

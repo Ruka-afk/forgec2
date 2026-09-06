@@ -1,16 +1,18 @@
-version: "3.9"
-
 services:
   forgec2:
     build: .
     container_name: forgec2
     restart: unless-stopped
     ports:
-      - "8000:8000"
-      - "443:443"
-      - "8443:8443"
-      - "53:53/udp"
+      - "${FORGEC2_PORT:-8000}:8000"
+      # Extra listener ports — uncomment only the transports you enabled in
+      # config.yaml (binding host ports <1024 needs root on the host).
+      # - "443:443"
+      # - "8443:8443"
+      # - "53:53/udp"
     volumes:
+      # config.yaml MUST exist first (cp config.example.yaml config.yaml) —
+      # otherwise Docker creates a directory here and the server won't start.
       - ./config.yaml:/data/config.yaml:ro
       - forgec2_data:/data
     environment:
@@ -18,32 +20,36 @@ services:
       - FORGEC2_AI_API_KEY=${FORGEC2_AI_API_KEY:-}
       - FORGEC2_HOST=${FORGEC2_HOST:-127.0.0.1} # change to 0.0.0.0 for production access
       - FORGEC2_PORT=${FORGEC2_PORT:-8000}
+      # SQLite is the default (zero-config). For Postgres, set
+      # FORGEC2_DB_DRIVER=postgres + FORGEC2_DB_DSN and enable the profile below:
+      #   docker compose --profile postgres up -d --build
+      - FORGEC2_DB_DRIVER=${FORGEC2_DB_DRIVER:-sqlite}
       - FORGEC2_DB_PATH=${FORGEC2_DB_PATH:-/data/db/forgec2.db}
-      - FORGEC2_DB_DRIVER=${FORGEC2_DB_DRIVER:-postgres}
-      - FORGEC2_DB_DSN=${FORGEC2_DB_DSN:-host=postgres user=forgec2 password=$DB_PASSWORD dbname=forgec2 port=5432 sslmode=disable}
-      - DB_PASSWORD=${DB_PASSWORD:?set DB_PASSWORD in the .env file (no default allowed)}
+      - FORGEC2_DB_DSN=${FORGEC2_DB_DSN:-}
       - TZ=${TZ:-UTC}
     depends_on:
       postgres:
         condition: service_healthy
+        required: false
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["/usr/local/bin/healthcheck"]
+      test: ["CMD", "/usr/local/bin/healthcheck"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 30s
 
   postgres:
+    profiles: ["postgres"]
     image: postgres:16-alpine
     container_name: forgec2-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: forgec2
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in the .env file (required, no weak default)}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD when using --profile postgres}
       POSTGRES_DB: forgec2
     volumes:
       - postgres_data:/var/lib/postgresql/data

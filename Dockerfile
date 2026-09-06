@@ -26,6 +26,12 @@ LABEL org.opencontainers.image.title="ForgeC2"
 LABEL org.opencontainers.image.description="Command & Control Framework"
 COPY --from=backend-builder /build/forgec2-server /usr/local/bin/
 COPY --from=backend-builder /build/healthcheck /usr/local/bin/healthcheck
+# Seed /data with nonroot ownership: Docker copies image content (including
+# ownership) into a fresh named volume, so the server can write its SQLite
+# DB there despite running as nonroot. Without this, /data is root-owned
+# and first startup crashes with "unable to open database file".
+USER root:root
+RUN mkdir -p /data/db && chown -R nonroot:nonroot /data
 EXPOSE 8000 443 8443 53
 USER nonroot:nonroot
 WORKDIR /home/nonroot
