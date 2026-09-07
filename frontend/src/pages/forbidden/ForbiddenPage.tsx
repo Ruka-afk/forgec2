@@ -5,7 +5,7 @@ import { useI18n } from "@/lib/i18n";
 import { ShieldAlert } from "lucide-react";
 import { SystemStatePage } from "@/components/ui/system-state-page";
 
-export default function Forbidden() {
+export default function ForbiddenPage() {
   const { t } = useI18n();
   return (
     <SystemStatePage

@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 
-export default function Home() {
+export default function HomePage() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const { pathname } = useLocation();

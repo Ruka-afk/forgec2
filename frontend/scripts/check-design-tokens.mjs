@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const srcRoot = resolve(__dirname, "../src");
-const cssPath = resolve(srcRoot, "app/globals.css");
+const cssPath = resolve(srcRoot, "styles/globals.css");
 
 const HEX_RE = /#[0-9a-fA-F]{3,8}\b/g;
 
@@ -102,7 +102,7 @@ function rel(f) {
 if (errors.length > 0) {
   console.error("\n❌ design-token contract violations:\n");
   errors.forEach((e) => console.error(`  ${e}`));
-  console.error("\nDesign tokens live in src/app/globals.css (--elevation-*, --shadow-*, --fs-*, ...). Elevations, radii and colors must go through tokens, not raw values.\n");
+  console.error("\nDesign tokens live in src/styles/globals.css (--elevation-*, --shadow-*, --fs-*, ...). Elevations, radii and colors must go through tokens, not raw values.\n");
   process.exit(1);
 } else {
   console.log("✅ design tokens OK — no raw hex, tokenized shadows, Card radius contract held.");

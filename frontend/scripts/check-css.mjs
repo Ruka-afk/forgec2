@@ -3,7 +3,7 @@ import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const cssPath = resolve(__dirname, "../src/app/globals.css");
+const cssPath = resolve(__dirname, "../src/styles/globals.css");
 const css = readFileSync(cssPath, "utf-8");
 
 const forbidden = [

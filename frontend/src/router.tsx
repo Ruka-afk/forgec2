@@ -3,10 +3,10 @@ import { createBrowserRouter, Outlet, Navigate, useLocation } from "react-router
 import { PageSpinner } from "@/components/ui/spinner";
 import AppLayout from "@/components/AppLayout";
 import RouterErrorView from "@/components/RouterErrorView";
-import NotFound from "@/app/not-found";
-import Forbidden from "@/app/forbidden/page";
-import HomePage from "@/app/page";
-import LoginPage from "@/app/login/page";
+import NotFound from "@/pages/NotFound";
+import Forbidden from "@/pages/forbidden/ForbiddenPage";
+import HomePage from "@/pages/home/HomePage";
+import LoginPage from "@/pages/login/LoginPage";
 import { NAV_ITEMS } from "@/lib/navigation";
 import { useAppStore } from "@/lib/store";
 import { canAny } from "@/lib/permissions";

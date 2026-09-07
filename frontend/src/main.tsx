@@ -3,11 +3,11 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router-dom";
 import { Toaster } from "sonner";
-import "./app/globals.css";
+import "./styles/globals.css";
 import ClientProvider from "@/components/ClientProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useTheme } from "@/lib/theme";
-import { router } from "./app/router";
+import { router } from "./router";
 
 function ThemedToaster() {
   const { resolved } = useTheme();
