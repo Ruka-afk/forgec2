@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -414,6 +415,11 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))
+			}
+		}()
 		ticker := time.NewTicker(BeaconDedupCleanup)
 		defer ticker.Stop()
 		for {

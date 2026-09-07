@@ -275,6 +275,13 @@ func (ec *EventCorrelator) cleanup() {
 			delete(ec.windows, key)
 		}
 	}
+	// Dedup keys gate on rule windows (all <= maxWindow), so anything older
+	// is dead weight — without this the map grows rules × agents forever.
+	for key, ts := range ec.dedup {
+		if now.Sub(ts) > ec.maxWindow && ec.maxWindow > 0 {
+			delete(ec.dedup, key)
+		}
+	}
 }
 
 func (ec *EventCorrelator) ProcessEvent(event SIEMEvent) []SIEMEvent {

@@ -49,7 +49,11 @@ func (s *Server) handleCreateAPIKey(c *gin.Context) {
 		return
 	}
 
-	userID, _ := c.Get("user_id")
+	userID, ok := currentUserID(c)
+	if !ok {
+		respondError(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 
 	plaintext, hash, prefix, err := generateAPIKey()
 	if err != nil {
@@ -59,7 +63,7 @@ func (s *Server) handleCreateAPIKey(c *gin.Context) {
 	}
 
 	apiKey := db.ApiKey{
-		UserID:    userID.(uint),
+		UserID:    userID,
 		Name:      req.Name,
 		KeyHash:   hash,
 		Prefix:    prefix,
@@ -82,7 +86,7 @@ func (s *Server) handleCreateAPIKey(c *gin.Context) {
 		return
 	}
 
-	s.LogAuditRecord(c, "api_key_create", "user", fmt.Sprintf("%d", userID.(uint)), fmt.Sprintf("API key created: %s", req.Name), true, nil)
+	s.LogAuditRecord(c, "api_key_create", "user", fmt.Sprintf("%d", userID), fmt.Sprintf("API key created: %s", req.Name), true, nil)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -99,7 +103,11 @@ func (s *Server) handleCreateAPIKey(c *gin.Context) {
 }
 
 func (s *Server) handleListAPIKeys(c *gin.Context) {
-	userID, _ := c.Get("user_id")
+	userID, ok := currentUserID(c)
+	if !ok {
+		respondError(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 
 	var keys []db.ApiKey
 	if err := s.db.Where("user_id = ?", userID).Order("created_at DESC").Find(&keys).Error; err != nil {
@@ -129,7 +137,11 @@ func (s *Server) handleListAPIKeys(c *gin.Context) {
 
 func (s *Server) handleRevokeAPIKey(c *gin.Context) {
 	id := c.Param("id")
-	userID, _ := c.Get("user_id")
+	userID, ok := currentUserID(c)
+	if !ok {
+		respondError(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 
 	var key db.ApiKey
 	if err := s.db.Where("id = ? AND user_id = ?", id, userID).First(&key).Error; err != nil {
@@ -142,14 +154,18 @@ func (s *Server) handleRevokeAPIKey(c *gin.Context) {
 		return
 	}
 
-	s.LogAuditRecord(c, "api_key_revoke", "user", fmt.Sprintf("%d", userID.(uint)), fmt.Sprintf("API key revoked: %s (id=%s)", key.Name, id), true, nil)
+	s.LogAuditRecord(c, "api_key_revoke", "user", fmt.Sprintf("%d", userID), fmt.Sprintf("API key revoked: %s (id=%s)", key.Name, id), true, nil)
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "API key revoked"})
 }
 
 func (s *Server) handleRotateAPIKey(c *gin.Context) {
 	id := c.Param("id")
-	userID, _ := c.Get("user_id")
+	userID, ok := currentUserID(c)
+	if !ok {
+		respondError(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 
 	var oldKey db.ApiKey
 	if err := s.db.Where("id = ? AND user_id = ?", id, userID).First(&oldKey).Error; err != nil {
@@ -185,7 +201,7 @@ func (s *Server) handleRotateAPIKey(c *gin.Context) {
 		return
 	}
 
-	s.LogAuditRecord(c, "api_key_rotate", "user", fmt.Sprintf("%d", userID.(uint)), fmt.Sprintf("API key rotated: %s (old_id=%s, new_id=%d)", oldKey.Name, id, newKey.ID), true, nil)
+	s.LogAuditRecord(c, "api_key_rotate", "user", fmt.Sprintf("%d", userID), fmt.Sprintf("API key rotated: %s (old_id=%s, new_id=%d)", oldKey.Name, id, newKey.ID), true, nil)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

@@ -176,6 +176,9 @@ func (am *AdaptiveManager) DecayThreatLevel(agentID string) {
 		slog.Info("Agent threat level decayed",
 			"agent_id", agentID, "new_level", state.Level)
 	}
+	if state.Level <= ThreatNormal && time.Since(state.LastFailureAt) > time.Hour {
+		delete(am.states, agentID)
+	}
 }
 
 func (am *AdaptiveManager) StartDecayLoop() {
@@ -204,6 +207,11 @@ func (am *AdaptiveManager) decayLocked(agentID string) {
 	}
 	if time.Since(state.LastFailureAt) > 10*time.Minute && state.Level > ThreatNormal {
 		state.Level--
+	}
+	// Fully cooled-down agents carry no signal — drop the entry so the map
+	// stays proportional to active agents instead of ever-seen ones.
+	if state.Level <= ThreatNormal && time.Since(state.LastFailureAt) > time.Hour {
+		delete(am.states, agentID)
 	}
 }
 

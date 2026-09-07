@@ -197,6 +197,22 @@ func (s *Server) findOrFailPreload(c *gin.Context, dest interface{}, id, entityN
 	return true
 }
 
+// currentUserID extracts the authenticated operator's user id. Returns false
+// (no response written — the caller decides the status) when the auth
+// middleware didn't populate it or stored an unexpected type. Prefer this
+// over bare userID.(uint) assertions, which panic the handler goroutine.
+func currentUserID(c *gin.Context) (uint, bool) {
+	v, ok := c.Get("user_id")
+	if !ok {
+		return 0, false
+	}
+	uid, ok := v.(uint)
+	if !ok || uid == 0 {
+		return 0, false
+	}
+	return uid, true
+}
+
 // findTenantOrFail fetches a tenant-owned record by primary key, applying
 // tenantScope. A tenant-scoped operator gets 404 for other tenants' rows
 // (closing a cross-tenant IDOR on single-item reads); legacy/unscoped

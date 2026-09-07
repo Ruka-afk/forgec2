@@ -105,7 +105,10 @@ func (s *Server) cleanupStaleMapEntries() {
 	}
 	s.screenFrameMu.Unlock()
 
-	// Clean empty extC2TaskQueue entries
+	// Clean empty extC2TaskQueue entries. (Non-empty queues are bounded
+	// per-channel by MaxExtC2QueuePerChan and keyed by live channel IDs, so
+	// the key space can't grow without bound — contents are left alone so a
+	// reconnecting channel never loses queued tasks.)
 	s.extC2TaskMu.Lock()
 	for k, v := range s.extC2TaskQueue {
 		if len(v) == 0 {
@@ -114,6 +117,51 @@ func (s *Server) cleanupStaleMapEntries() {
 		}
 	}
 	s.extC2TaskMu.Unlock()
+
+	// Clean expired phishing landing rate-limiter windows (keyed token+IP;
+	// attackers can mint unbounded keys, so anything past the window goes).
+	s.landingLimiterMu.Lock()
+	if s.landingLimiterSince != nil {
+		winCutoff := time.Now().Add(-phishingLandingWindow)
+		for k, since := range s.landingLimiterSince {
+			if since.Before(winCutoff) {
+				delete(s.landingLimiterHits, k)
+				delete(s.landingLimiterSince, k)
+				cleaned++
+			}
+		}
+	}
+	s.landingLimiterMu.Unlock()
+
+	// Clean stale traffic-profile auto-adapt timestamps.
+	s.autoAdaptMu.Lock()
+	if s.autoAdaptLast != nil {
+		for k, ts := range s.autoAdaptLast {
+			if ts.Before(cutoff) {
+				delete(s.autoAdaptLast, k)
+				cleaned++
+			}
+		}
+	}
+	s.autoAdaptMu.Unlock()
+
+	// Clean stale nav-stats cache snapshots (keyed by tenant; entries carry
+	// their own timestamp and are cheaply recomputed on next request).
+	s.navStatsCacheMu.Lock()
+	if s.navStatsCache != nil {
+		for k, e := range s.navStatsCache {
+			if e.at.Before(cutoff) {
+				delete(s.navStatsCache, k)
+				cleaned++
+			}
+		}
+	}
+	s.navStatsCacheMu.Unlock()
+
+	// Drop abandoned file-transfer chain links (agent died mid-transfer).
+	if s.fileChains != nil {
+		cleaned += s.fileChains.sweep(StaleMapCleanupAge)
+	}
 
 	if cleaned > 0 {
 		slog.Info("Cleaned stale map entries", "count", cleaned)

@@ -13,10 +13,18 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"gorm.io/gorm"
 )
+
+// hookBreakerThreshold trips a plugin's hook delivery after this many
+// consecutive failures (e.g. a broken interpreter exiting 9009 on every
+// beacon). Tripped plugins are skipped silently-ish until the cooldown
+// passes, then one probe is allowed through.
+const hookBreakerThreshold = 5
+const hookBreakerCooldown = time.Minute
 
 // pendingPlugin is one manifest discovered on disk, waiting for its turn in
 // the dependency-ordered registration pass.
@@ -33,15 +41,55 @@ type Manager struct {
 	mu          sync.RWMutex
 	pluginDir   string
 	exec        *executor
+	// hookFails counts consecutive hook failures per plugin name;
+	// hookTrippedAt marks when the breaker tripped (cooldown probes).
+	hookFails     map[string]int
+	hookTrippedAt map[string]time.Time
 }
 
 // NewManager creates a new plugin manager backed by the given database.
 func NewManager(database *gorm.DB) *Manager {
 	return &Manager{
-		db:        database,
-		plugins:   make(map[string]Plugin),
-		pluginDir: "plugins",
-		exec:      &executor{},
+		db:            database,
+		plugins:       make(map[string]Plugin),
+		pluginDir:     "plugins",
+		exec:          &executor{},
+		hookFails:     make(map[string]int),
+		hookTrippedAt: make(map[string]time.Time),
+	}
+}
+
+// hookAllowed reports whether a plugin's hook may run. Tripped plugins are
+// skipped until the cooldown passes, when a single probe goes through.
+func (m *Manager) hookAllowed(name string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.hookFails[name] < hookBreakerThreshold {
+		return true
+	}
+	return time.Since(m.hookTrippedAt[name]) > hookBreakerCooldown
+}
+
+// hookRecord accounts one hook delivery outcome for the breaker.
+func (m *Manager) hookRecord(name string, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	// Lazily initialized: a zero-value Manager (not via NewManager) must
+	// not panic on its first hook delivery.
+	if m.hookFails == nil {
+		m.hookFails = make(map[string]int)
+	}
+	if m.hookTrippedAt == nil {
+		m.hookTrippedAt = make(map[string]time.Time)
+	}
+	if err == nil {
+		delete(m.hookFails, name)
+		delete(m.hookTrippedAt, name)
+		return
+	}
+	m.hookFails[name]++
+	if m.hookFails[name] >= hookBreakerThreshold {
+		m.hookTrippedAt[name] = time.Now()
 	}
 }
 
@@ -406,6 +454,12 @@ func (m *Manager) ExecuteHook(ctx context.Context, event Event) error {
 		if !contains(hp.SubscribedEvents(), event.Type) {
 			continue
 		}
+		if !m.hookAllowed(hp.Name()) {
+			// Breaker tripped: a persistently failing plugin (broken
+			// interpreter, missing runtime) must not fork+log on every event.
+			slog.Debug("Hook plugin skipped by breaker", "plugin", hp.Name(), "event", event.Type)
+			continue
+		}
 		wg.Add(1)
 		go func(h HookPlugin) {
 			defer wg.Done()
@@ -417,9 +471,11 @@ func (m *Manager) ExecuteHook(ctx context.Context, event Event) error {
 					slog.Error("Panic in hook plugin", "plugin", h.Name(), "event", event.Type, "recover", r)
 				}
 			}()
-			if err := h.OnEvent(ctx, event); err != nil {
-				slog.Warn("Hook plugin execution failed", "plugin", h.Name(), "event", event.Type, "err", err)
-				errCh <- err
+			hookErr := h.OnEvent(ctx, event)
+			m.hookRecord(h.Name(), hookErr)
+			if hookErr != nil {
+				slog.Warn("Hook plugin execution failed", "plugin", h.Name(), "event", event.Type, "err", hookErr)
+				errCh <- hookErr
 			}
 		}(hp)
 	}

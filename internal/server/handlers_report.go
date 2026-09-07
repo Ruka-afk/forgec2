@@ -280,13 +280,52 @@ func (s *Server) handleGenerateReport(c *gin.Context) {
 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
 }
 
+// reportMap safely extracts a nested gin.H (empty on shape mismatch instead
+// of panicking the handler goroutine).
+func reportMap(report gin.H, key string) gin.H {
+	if m, ok := report[key].(gin.H); ok {
+		return m
+	}
+	if m, ok := report[key].(map[string]interface{}); ok {
+		return gin.H(m)
+	}
+	return gin.H{}
+}
+
+// reportList safely extracts a []gin.H section (nil on shape mismatch).
+func reportList(report gin.H, key string) []gin.H {
+	if l, ok := report[key].([]gin.H); ok {
+		return l
+	}
+	if l, ok := report[key].([]map[string]interface{}); ok {
+		out := make([]gin.H, 0, len(l))
+		for _, m := range l {
+			out = append(out, gin.H(m))
+		}
+		return out
+	}
+	return nil
+}
+
+func reportCount(summary gin.H, key string) int64 {
+	if n, ok := toInt64(summary[key]); ok {
+		return n
+	}
+	return 0
+}
+
+func reportFlag(m gin.H, key string) bool {
+	b, _ := m[key].(bool)
+	return b
+}
+
 // generateHTMLReport creates a formatted HTML report
 func generateHTMLReport(report gin.H) string {
-	summary := report["summary"].(gin.H)
-	agents := report["agents"].([]gin.H)
-	tasks := report["tasks"].([]gin.H)
-	creds := report["credentials"].([]gin.H)
-	audits := report["audit"].([]gin.H)
+	summary := reportMap(report, "summary")
+	agents := reportList(report, "agents")
+	tasks := reportList(report, "tasks")
+	creds := reportList(report, "credentials")
+	audits := reportList(report, "audit")
 
 	html := fmt.Sprintf(`<!DOCTYPE html>
 <html>
@@ -341,8 +380,8 @@ func generateHTMLReport(report gin.H) string {
         </div>
 
 `, report["title"], report["title"], report["generated"], report["date_range"],
-		summary["total_agents"].(int64), summary["total_tasks"].(int64),
-		summary["total_creds"].(int64), summary["total_audits"].(int64))
+		reportCount(summary, "total_agents"), reportCount(summary, "total_tasks"),
+		reportCount(summary, "total_creds"), reportCount(summary, "total_audits"))
 
 	// Agents table
 	if len(agents) > 0 {
@@ -404,7 +443,7 @@ func generateHTMLReport(report gin.H) string {
 `
 		for _, a := range audits {
 			successBadge := "success"
-			if !a["success"].(bool) {
+			if !reportFlag(a, "success") {
 				successBadge = "failed"
 			}
 			html += fmt.Sprintf("<tr><td>%s</td><td>%s</td><td>%s</td><td><span class=\"badge badge-%s\">%v</span></td><td>%s</td></tr>\n",
@@ -656,12 +695,12 @@ func (s *Server) handleAPIGetGeneratedReport(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"report": gin.H{
-		"id":      r.ID,
-		"name":    r.Name,
+		"id":       r.ID,
+		"name":     r.Name,
 		"template": r.Template,
-		"format":  r.Format,
-		"content": r.Content,
-		"created": r.CreatedAt.Format("2006-01-02 15:04:05"),
+		"format":   r.Format,
+		"content":  r.Content,
+		"created":  r.CreatedAt.Format("2006-01-02 15:04:05"),
 	}})
 }
 

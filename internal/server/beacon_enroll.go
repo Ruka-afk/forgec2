@@ -136,6 +136,10 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 			Timestamp: now,
 			Data:      map[string]interface{}{"new": true, "ip": agent.IP},
 		})
+		// Plugin connect hook fires here (and on reconnect below) — never on
+		// steady-state beacons, which previously forked a plugin process per
+		// beacon per plugin (log/exec storm, beacon latency).
+		s.fireAgentConnectHook(agent, true, now)
 	} else {
 		prevStatus := s.agentStatus(agent).Status
 		if agent.Status == "offline" || agent.Status == "stale" {
@@ -275,6 +279,7 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 				Timestamp: now,
 				Data:      map[string]interface{}{"new": false, "reconnected": true, "prev_status": prevStatus, "ip": agent.IP},
 			})
+			s.fireAgentConnectHook(agent, false, now)
 		}
 		slog.Info("Beacon processed", "agent_id", req.UUID, "last_seen", now, "status", "online", "prev_status", prevStatus)
 	}

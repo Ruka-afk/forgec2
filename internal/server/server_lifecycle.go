@@ -116,6 +116,12 @@ func (s *Server) shutdown() {
 	if s.opsecAdaptive != nil {
 		s.opsecAdaptive.Stop()
 	}
+	if s.transportObfuscation != nil {
+		s.transportObfuscation.Stop()
+	}
+	if s.tlsCertMonitor != nil {
+		s.tlsCertMonitor.Stop()
+	}
 	if s.eventManager != nil {
 		s.eventManager.Shutdown()
 	}
@@ -229,6 +235,11 @@ func (s *Server) Run() error {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))
+			}
+		}()
 		s.recoverClaimedOneShotTasks()
 		ticker := time.NewTicker(20 * time.Second)
 		defer ticker.Stop()
@@ -237,7 +248,14 @@ func (s *Server) Run() error {
 			case <-s.ctx.Done():
 				return
 			case <-ticker.C:
-				s.dispatchDueOneShotTasks()
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							slog.Error("Panic in one-shot dispatcher tick", "recover", r, "stack", string(debug.Stack()))
+						}
+					}()
+					s.dispatchDueOneShotTasks()
+				}()
 			}
 		}
 	}()

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/forgec2/forgec2/internal/crypto"
 )
@@ -34,12 +35,33 @@ const (
 // (in-memory; a server restart mid-transfer simply breaks the chain and the
 // operator re-runs the transfer).
 type fileChainState struct {
-	mu     sync.Mutex
-	chains map[uint][]byte
+	mu      sync.Mutex
+	chains  map[uint][]byte
+	touched map[uint]time.Time
 }
 
 func newFileChainState() *fileChainState {
-	return &fileChainState{chains: make(map[uint][]byte)}
+	return &fileChainState{chains: make(map[uint][]byte), touched: make(map[uint]time.Time)}
+}
+
+// sweep drops chain links idle longer than ttl (abandoned mid-transfer when
+// an agent dies). Returns the evicted count for logging.
+func (fc *fileChainState) sweep(ttl time.Duration) int {
+	if fc == nil {
+		return 0
+	}
+	cutoff := time.Now().Add(-ttl)
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+	n := 0
+	for id, ts := range fc.touched {
+		if ts.Before(cutoff) {
+			delete(fc.chains, id)
+			delete(fc.touched, id)
+			n++
+		}
+	}
+	return n
 }
 
 // prev returns the expected previous-MAC for the given task: the committed MAC
@@ -64,6 +86,7 @@ func (fc *fileChainState) commit(taskID uint, mac []byte) {
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
 	fc.chains[taskID] = mac
+	fc.touched[taskID] = time.Now()
 }
 
 // reset drops chain state for a task (task errored or completed).
@@ -74,6 +97,7 @@ func (fc *fileChainState) reset(taskID uint) {
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
 	delete(fc.chains, taskID)
+	delete(fc.touched, taskID)
 }
 
 // fileChainKey returns the HMAC chain key for an implant (derived from its

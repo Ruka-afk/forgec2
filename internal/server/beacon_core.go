@@ -247,7 +247,7 @@ func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconRespons
 		return beaconResponse{}
 	}
 
-	agent, isNew := s.processAgentRegistration(req, publicIP, now)
+	agent, _ := s.processAgentRegistration(req, publicIP, now)
 	if agent.ID == "" {
 		return beaconResponse{}
 	}
@@ -263,7 +263,8 @@ func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconRespons
 		}
 	}
 
-	s.fireAgentConnectHook(agent, isNew, now)
+	// NOTE: the plugin connect hook fires inside processAgentRegistration
+	// (new + reconnect only) — not per beacon.
 
 	s.processTaskAcknowledgements(req.UUID, req.AckTaskIDs, now)
 	s.processTaskResults(agent, req.Results, req.UUID, now)

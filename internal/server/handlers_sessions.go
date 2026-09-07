@@ -60,8 +60,13 @@ func (s *Server) isSessionRevoked(token string) bool {
 
 func (s *Server) handleListUserSessions(c *gin.Context) {
 	userID := c.Param("id")
-	requesterID, _ := c.MustGet("user_id").(uint)
-	requesterRole, _ := c.MustGet("user_role").(string)
+	// Never MustGet + bare assert here: a missing key panics the handler
+	// goroutine (masked as a 500 storm by gin.Recovery).
+	var requesterID uint
+	if v, ok := c.Get("user_id"); ok {
+		requesterID, _ = v.(uint)
+	}
+	requesterRole := c.GetString("user_role")
 	if requesterRole != "admin" {
 		targetID, err := strconv.ParseUint(userID, 10, 64)
 		if err != nil {
@@ -86,8 +91,11 @@ func (s *Server) handleListUserSessions(c *gin.Context) {
 func (s *Server) handleRevokeSession(c *gin.Context) {
 	userID := c.Param("id")
 	sessionID := c.Param("sessionId")
-	requesterID, _ := c.MustGet("user_id").(uint)
-	requesterRole, _ := c.MustGet("user_role").(string)
+	var requesterID uint
+	if v, ok := c.Get("user_id"); ok {
+		requesterID, _ = v.(uint)
+	}
+	requesterRole := c.GetString("user_role")
 
 	var session db.UserSession
 	if err := s.db.First(&session, "id = ?", sessionID).Error; err != nil {
@@ -116,7 +124,7 @@ func (s *Server) handleRevokeSession(c *gin.Context) {
 
 func (s *Server) handleRevokeAllUserSessions(c *gin.Context) {
 	userID := c.Param("id")
-	requesterRole, _ := c.MustGet("user_role").(string)
+	requesterRole := c.GetString("user_role")
 	if requesterRole != "admin" {
 		respondError(c, http.StatusForbidden, "Permission denied")
 		return
