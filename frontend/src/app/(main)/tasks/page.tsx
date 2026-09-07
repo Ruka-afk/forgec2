@@ -1,16 +1,16 @@
 "use client";
 
 import { Suspense, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 function TasksRedirectInner() {
-  const router = useRouter();
-  const sp = useSearchParams();
+  const navigate = useNavigate();
+  const [sp] = useSearchParams();
   useEffect(() => {
     const q = new URLSearchParams(sp.toString());
     q.set("tab", "tasks");
-    router.replace(`/timeline?${q.toString()}`);
-  }, [router, sp]);
+    navigate(`/timeline?${q.toString()}`, { replace: true });
+  }, [navigate, sp]);
   return null;
 }
 

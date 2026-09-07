@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams } from "react-router-dom";
 import { PageContainer } from "@/components/ui/page-container";
 import { useI18n } from "@/lib/i18n";
 import { useScreenMonitor, type ScreenQuality } from "./_components/useScreenMonitor";

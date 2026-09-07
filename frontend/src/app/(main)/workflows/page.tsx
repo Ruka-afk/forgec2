@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { Navigate } from "react-router-dom";
 
 export default function WorkflowsRedirect() {
-  redirect("/automation#tab=workflows");
+  return <Navigate to="/automation#tab=workflows" replace />;
 }

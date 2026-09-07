@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-indicator";
 import { GitBranch } from "lucide-react";
@@ -34,7 +34,7 @@ export default memo(function AgentChildList({ childAgents }: AgentChildListProps
           return (
             <Link
               key={cid}
-              href={`/agents/${cid}`}
+              to={`/agents/${cid}`}
               className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/50 hover:bg-muted transition-colors group"
             >
               <div className="size-8 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center shrink-0">

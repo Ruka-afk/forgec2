@@ -1,12 +1,11 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import { lazy, Suspense } from "react";
 
-const ReportPageContent = dynamic(
-  () => import("./ReportPageContent"),
-  { ssr: false }
-);
+
+const ReportPageContent = lazy(
+  () => import("./ReportPageContent"));
 
 export default function ReportPagePage() {
-  return <ReportPageContent />;
+  return <Suspense fallback={null}><ReportPageContent /></Suspense>;
 }

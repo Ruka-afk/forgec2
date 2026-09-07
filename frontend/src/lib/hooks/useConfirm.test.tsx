@@ -27,7 +27,6 @@ function Harness({ onResult }: { onResult: (v: boolean) => void }) {
   );
 }
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }) }));
 
 describe("useConfirm", () => {
   it("resolves true when confirmed", async () => {

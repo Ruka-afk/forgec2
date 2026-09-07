@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, type ReactNode, type RefObject } from "react";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -161,7 +161,7 @@ export default memo(function AgentsTable(props: AgentsTableProps) {
                   title={t("agents.no_beacons")}
                   message={statusFilter || osFilter ? t("agents.no_beacons_filtered") : t("agents.no_beacons_hint")}
                   action={!statusFilter && !osFilter ? (
-                    <Button render={<Link href="/generate" />}>
+                    <Button render={<Link to="/generate" />}>
                       <Plus className="size-4" />
                       <span>{t("agents.generate_implant")}</span>
                     </Button>

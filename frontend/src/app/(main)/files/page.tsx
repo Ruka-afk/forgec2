@@ -1,15 +1,15 @@
 "use client";
 
 import { Suspense, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 function FilesRedirectInner() {
-  const router = useRouter();
-  const sp = useSearchParams();
+  const navigate = useNavigate();
+  const [sp] = useSearchParams();
   useEffect(() => {
     const id = sp.get("agent_id") || sp.get("id");
-    router.replace(id ? `/agents/${encodeURIComponent(id)}/files` : "/agents");
-  }, [router, sp]);
+    navigate(id ? `/agents/${encodeURIComponent(id)}/files` : "/agents", { replace: true });
+  }, [navigate, sp]);
   return null;
 }
 

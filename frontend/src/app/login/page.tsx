@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,8 +27,8 @@ function LoginForm() {
   const { t } = useI18n();
   const [error, setError] = useState("");
   const [version, setVersion] = useState("");
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const loginSchema = useMemo(
     () =>
@@ -75,8 +75,8 @@ function LoginForm() {
 
         if (isLoginSuccessResponse(response)) {
           const dest = safeNextPath(searchParams.get("next"));
-          router.push(dest);
-          router.refresh();
+          navigate(dest);
+          window.location.reload();
           return;
         }
 

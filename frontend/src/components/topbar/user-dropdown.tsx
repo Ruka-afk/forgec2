@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 import { useAppStore } from "@/lib/store";
 import { api } from "@/lib/api";
@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Settings, Shield, LogOut, ChevronDown } from "lucide-react";
 
 export function UserDropdown() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { t } = useI18n();
   const currentUsername = useAppStore((s) => s.currentUsername);
   const currentUserRole = useAppStore((s) => s.currentUserRole);
@@ -43,15 +43,15 @@ export function UserDropdown() {
           <div>{name}</div>
           <div className="text-(--fs-micro-sm) text-muted-foreground/100">{t("topbar.role", { role })}</div>
         </div>
-        <DropdownMenuItem onClick={() => router.push("/settings")}>
+        <DropdownMenuItem onClick={() => navigate("/settings")}>
           <Settings className="size-4" />{t("topbar.settings")}
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => router.push("/audit")}>
+        <DropdownMenuItem onClick={() => navigate("/audit")}>
           <Shield className="size-4" />{t("topbar.audit_log")}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive"
-          onClick={() => { api.post(paths.auth.logout).catch(() =>         toast.error(t("topbar.toast.logout_failed"))).finally(() => router.push("/login")); }}>
+          onClick={() => { api.post(paths.auth.logout).catch(() =>         toast.error(t("topbar.toast.logout_failed"))).finally(() => navigate("/login")); }}>
           <LogOut className="size-4" />
           {t("topbar.logout")}
         </DropdownMenuItem>

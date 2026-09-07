@@ -1,0 +1,1 @@
+import{j as t}from"./vendor-react-DklbvxIc.js";import{N as e}from"./vendor-router-B3vCXr4z.js";import"./vendor-misc-pIg0fCm4.js";function i(){return t.jsx(e,{to:"/automation#tab=scheduled",replace:!0})}export{i as default};

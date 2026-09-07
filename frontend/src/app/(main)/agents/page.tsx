@@ -1,15 +1,14 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import { lazy, Suspense } from "react";
+
 import type { Beacon } from "./_components/types";
 
 export type { Beacon };
 
-const AgentsPageContent = dynamic(
-  () => import("./AgentsPageContent"),
-  { ssr: false }
-);
+const AgentsPageContent = lazy(
+  () => import("./AgentsPageContent"));
 
 export default function AgentsPage() {
-  return <AgentsPageContent />;
+  return <Suspense fallback={null}><AgentsPageContent /></Suspense>;
 }

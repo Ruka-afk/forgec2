@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { z } from "zod";
 import { useI18n } from "@/lib/i18n";
 import { useForm } from "@/lib/hooks/useForm";
@@ -315,7 +315,7 @@ export default function ListenersPageContent() {
                 const health = healthForListener(healthByTarget, id);
                 return (
                   <TableRow key={id} className="hover:bg-muted/50 transition-colors">
-                    <TableCell className="py-3 px-4 sm:py-4 sm:px-6 font-medium"><Link href={`/listeners/${id}`} className="text-primary hover:underline">{name}</Link></TableCell>
+                    <TableCell className="py-3 px-4 sm:py-4 sm:px-6 font-medium"><Link to={`/listeners/${id}`} className="text-primary hover:underline">{name}</Link></TableCell>
                     <TableCell className="max-sm:hidden py-3 px-3 sm:py-4 sm:px-4">
                       <Badge variant={type === "http" ? "outline" : "success"} className="text-(--fs-xs-sm) font-medium">{type}</Badge>
                     </TableCell>

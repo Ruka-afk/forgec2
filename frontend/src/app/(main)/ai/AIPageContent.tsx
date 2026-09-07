@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 import { API_BASE } from "@/lib/constants";
 import { downloadText } from "@/lib/download";
@@ -89,7 +89,7 @@ export default function AIPage() {
   // Operator context: deep links like /ai?agent=<id>&q=<text> (e.g. the
   // "Ask AI" button on an agent page) focus the conversation on one agent.
   // Every chat request carries it so tools can resolve "this machine".
-  const searchParams = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [contextAgentId, setContextAgentId] = useState("");
   const deepLinkDoneRef = useRef(false);
   const handleSendRef = useRef<(textOverride?: string, regenerated?: boolean) => Promise<void>>(async () => {});

@@ -8,7 +8,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { useBOFData } from "./_components/useBOFData";
 import { quickBOFLibrary } from "./_components/types";
 import type { QuickBOF } from "./_components/types";
-import dynamic from "next/dynamic";
+import { lazy, Suspense } from "react";
+
 import { Card } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/animated-stat-card";
 import { Button } from "@/components/ui/button";
@@ -16,10 +17,10 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { BookOpen, Box, Check, Layers, PieChart, Terminal, Zap } from "lucide-react";
 
-const BOFListTab = dynamic(() => import("./_components/BOFListTab"), { ssr: false });
-const BOFRepoTab = dynamic(() => import("./_components/BOFRepoTab"), { ssr: false });
-const BOFLibraryTab = dynamic(() => import("./_components/BOFLibraryTab"), { ssr: false });
-const BOFExecutionsTab = dynamic(() => import("./_components/BOFExecutionsTab"), { ssr: false });
+const BOFListTab = lazy(() => import("./_components/BOFListTab"));
+const BOFRepoTab = lazy(() => import("./_components/BOFRepoTab"));
+const BOFLibraryTab = lazy(() => import("./_components/BOFLibraryTab"));
+const BOFExecutionsTab = lazy(() => import("./_components/BOFExecutionsTab"));
 
 export default function BOFPage() {
   const { t } = useI18n();
@@ -97,18 +98,20 @@ export default function BOFPage() {
         </TabsList>
 
       <TabsContent value="bof">
-        <BOFListTab
-          files={files}
-          loading={loading}
-          onUpload={(file, arch, name, desc) => uploadBOF(file, arch, name, desc)}
-          onDelete={(id) => deleteBOF(String(id))}
-          onRun={(id, agentId, args) => runBOF(String(id), agentId, args)}
-          onEdit={editBOF}
-          agents={agents}
-        />
+        <Suspense fallback={null}>
+          <BOFListTab
+            files={files}
+            loading={loading}
+            onUpload={(file, arch, name, desc) => uploadBOF(file, arch, name, desc)}
+            onDelete={(id) => deleteBOF(String(id))}
+            onRun={(id, agentId, args) => runBOF(String(id), agentId, args)}
+            onEdit={editBOF}
+            agents={agents}
+          />
+        </Suspense>
       </TabsContent>
 
-      <TabsContent value="exec"><BOFExecutionsTab executions={executions} loading={loading} /></TabsContent>
+      <TabsContent value="exec"><Suspense fallback={null}><BOFExecutionsTab executions={executions} loading={loading} /></Suspense></TabsContent>
 
       <TabsContent value="quick">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -135,19 +138,21 @@ export default function BOFPage() {
         </div>
       </TabsContent>
 
-      <TabsContent value="repo"><BOFRepoTab repoItems={repoItems} loading={loading} onImport={importFromRepo} onImportUrl={importFromUrl} onRate={rateRepoItem} /></TabsContent>
+      <TabsContent value="repo"><Suspense fallback={null}><BOFRepoTab repoItems={repoItems} loading={loading} onImport={importFromRepo} onImportUrl={importFromUrl} onRate={rateRepoItem} /></Suspense></TabsContent>
 
       <TabsContent value="library">
-        <BOFLibraryTab
-          libraryItems={libraryItems}
-          loading={loading}
-          agents={agents}
-          onUploadLibrary={(file, arch, name, desc, author) => uploadLibrary(file, arch, name, desc, author)}
-          onRunLibrary={(id, agentId, args) => runLibrary(id, agentId, args)}
-          onDeleteLibrary={async (id) => {
-            if (await confirm({ message: t("bof.delete_library") })) deleteLibrary(id);
-          }}
-        />
+        <Suspense fallback={null}>
+          <BOFLibraryTab
+            libraryItems={libraryItems}
+            loading={loading}
+            agents={agents}
+            onUploadLibrary={(file, arch, name, desc, author) => uploadLibrary(file, arch, name, desc, author)}
+            onRunLibrary={(id, agentId, args) => runLibrary(id, agentId, args)}
+            onDeleteLibrary={async (id) => {
+              if (await confirm({ message: t("bof.delete_library") })) deleteLibrary(id);
+            }}
+          />
+        </Suspense>
       </TabsContent>
       </Tabs>
 

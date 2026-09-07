@@ -2,7 +2,7 @@ import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
 import { createBrowserRouter, Outlet, Navigate, useLocation } from "react-router-dom";
 import { PageSpinner } from "@/components/ui/spinner";
 import AppLayout from "@/components/AppLayout";
-import RouterErrorView from "@/components/framework/RouterErrorView";
+import RouterErrorView from "@/components/RouterErrorView";
 import NotFound from "@/app/not-found";
 import Forbidden from "@/app/forbidden/page";
 import HomePage from "@/app/page";

@@ -1,12 +1,11 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import { lazy, Suspense } from "react";
 
-const ListenersPageContent = dynamic(
-  () => import("./ListenersPageContent"),
-  { ssr: false }
-);
+
+const ListenersPageContent = lazy(
+  () => import("./ListenersPageContent"));
 
 export default function ListenersPage() {
-  return <ListenersPageContent />;
+  return <Suspense fallback={null}><ListenersPageContent /></Suspense>;
 }

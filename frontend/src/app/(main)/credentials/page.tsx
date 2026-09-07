@@ -1,12 +1,11 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import { lazy, Suspense } from "react";
 
-const CredentialsPageContent = dynamic(
-  () => import("./CredentialsPageContent"),
-  { ssr: false }
-);
+
+const CredentialsPageContent = lazy(
+  () => import("./CredentialsPageContent"));
 
 export default function CredentialsPagePage() {
-  return <CredentialsPageContent />;
+  return <Suspense fallback={null}><CredentialsPageContent /></Suspense>;
 }

@@ -20,14 +20,7 @@ const projectFiles = program
 const sourceFiles = projectFiles.filter(({ path: fp }) => fp.includes("/src/"));
 
 const existsFile = (p) => program.getSourceFile(p) !== undefined;
-// Vite alias map (mirrors vite.config.ts) so next/* shim imports resolve.
-const NEXT_ALIASES = {
-  "next/link": path.join(srcDir, "lib/next/link.tsx"),
-  "next/navigation": path.join(srcDir, "lib/next/navigation.ts"),
-  "next/dynamic": path.join(srcDir, "lib/next/dynamic.tsx"),
-};
 function resolveImport(fromFile, spec) {
-  if (NEXT_ALIASES[spec]) return norm(NEXT_ALIASES[spec]);
   let p;
   if (spec.startsWith("@/")) p = path.join(srcDir, spec.slice(2));
   else p = path.resolve(path.dirname(fromFile), spec);

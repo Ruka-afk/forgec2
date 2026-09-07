@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useEffect, useRef } from "react";
+import { useCallback, useState, useEffect, useRef, lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { ReactNode } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -12,17 +12,17 @@ import { canGenerateFromListener, canGeneratePayload } from "./generate-gate";
 import { defaultPayloadFormat, PAYLOAD_FORMATS, PAYLOAD_FORMAT_LABEL, type PayloadFormat } from "./generate-format";
 import { parseGenerateQuery } from "./generate-query";
 import { ListenerCallbackStrip } from "./ListenerCallbackStrip";
-import dynamic from "next/dynamic";
+
 import { usePayloadGenerator } from "../hooks/usePayloadGenerator";
 import type { PayloadKey } from "@/types/generate";
 import { AppWindow, Cpu, Info, PackageOpen, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const ConnectionPanel = dynamic(() => import("./ConnectionPanel"), { ssr: false });
-const OneLinerPanel = dynamic(() => import("./OneLinerPanel"), { ssr: false });
-const DeliveryPanel = dynamic(() => import("./DeliveryPanel"), { ssr: false });
-const QuickPresets = dynamic(() => import("./QuickPresets"), { ssr: false });
-const BuildHistorySection = dynamic(() => import("./BuildHistorySection"), { ssr: false });
+const ConnectionPanel = lazy(() => import("./ConnectionPanel"));
+const OneLinerPanel = lazy(() => import("./OneLinerPanel"));
+const DeliveryPanel = lazy(() => import("./DeliveryPanel"));
+const QuickPresets = lazy(() => import("./QuickPresets"));
+const BuildHistorySection = lazy(() => import("./BuildHistorySection"));
 
 import { useWS } from "@/lib/wsContext";
 
@@ -153,14 +153,16 @@ export default function GeneratePayloadWorkspace() {
         return <UnixPanel variant="macos" form={g.forms.macos} setForm={makeDispatch("macos")} busy={g.states.macos.busy} result={g.states.macos.result} onGenerate={g.handlerMap.macos} canGenerate={canGenerate} />;
       case "oneliner":
         return (
-          <OneLinerPanel
-            form={g.forms.oneliner} setForm={makeDispatch("oneliner")}
-            busy={g.states.oneliner.busy} result={g.states.oneliner.result}
-            onelinerData={g.extras.oneliner?.data}
-            listeners={g.listeners} getListenerInfo={g.getListenerInfo}
-            onGenerate={g.handlerMap.oneliner}
-            canGenerate={canGenerateFromListener(g.forms.oneliner.listener_id || g.shared.listener_id)}
-          />
+          <Suspense fallback={null}>
+            <OneLinerPanel
+              form={g.forms.oneliner} setForm={makeDispatch("oneliner")}
+              busy={g.states.oneliner.busy} result={g.states.oneliner.result}
+              onelinerData={g.extras.oneliner?.data}
+              listeners={g.listeners} getListenerInfo={g.getListenerInfo}
+              onGenerate={g.handlerMap.oneliner}
+              canGenerate={canGenerateFromListener(g.forms.oneliner.listener_id || g.shared.listener_id)}
+            />
+          </Suspense>
         );
     }
   };
@@ -190,22 +192,24 @@ export default function GeneratePayloadWorkspace() {
       <div className="mt-3 grid grid-cols-1 items-start gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
         {/* ── 左栏：连接信息 ── */}
         <div className="min-w-0 lg:sticky lg:top-4 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:pr-1 lg:pb-2 [scrollbar-width:thin]">
-          <ConnectionPanel
-            listeners={g.listeners}
-            shared={g.shared}
-            profilePresets={g.profilePresets}
-            profileLocked={g.profileLocked}
-            showListenerModal={g.showListenerModal}
-            listenerForm={g.listenerForm}
-            setShared={g.setShared}
-            changeProfile={g.changeProfile}
-            handleCreateListener={g.handleCreateListener}
-            submitListener={g.submitListener}
-            setShowListenerModal={g.setShowListenerModal}
-            onProfileDeleted={g.deleteProfile}
-            fileInputRef={g.fileInputRef}
-            onProfileImport={g.handleProfileImport}
-          />
+          <Suspense fallback={null}>
+            <ConnectionPanel
+              listeners={g.listeners}
+              shared={g.shared}
+              profilePresets={g.profilePresets}
+              profileLocked={g.profileLocked}
+              showListenerModal={g.showListenerModal}
+              listenerForm={g.listenerForm}
+              setShared={g.setShared}
+              changeProfile={g.changeProfile}
+              handleCreateListener={g.handleCreateListener}
+              submitListener={g.submitListener}
+              setShowListenerModal={g.setShowListenerModal}
+              onProfileDeleted={g.deleteProfile}
+              fileInputRef={g.fileInputRef}
+              onProfileImport={g.handleProfileImport}
+            />
+          </Suspense>
         </div>
 
         {/* ── 右栏：生成载荷 ── */}
@@ -295,13 +299,13 @@ export default function GeneratePayloadWorkspace() {
                     <DonutPanel form={g.forms.donut} setForm={makeDispatch("donut")} busy={g.states.donut.busy} result={g.states.donut.result} onGenerate={g.handlerMap.donut} fileRef={g.donutFileRef} canGenerate={canGenerate} />
                   </div>
                 </div>
-                <DeliveryPanel />
+                <Suspense fallback={null}><DeliveryPanel /></Suspense>
               </div>
             )}
           </section>
 
-          <QuickPresets onApply={g.applyPreset} />
-          <BuildHistorySection refreshKey={historyRefresh} />
+          <Suspense fallback={null}><QuickPresets onApply={g.applyPreset} /></Suspense>
+          <Suspense fallback={null}><BuildHistorySection refreshKey={historyRefresh} /></Suspense>
 
           <div className="rounded-xl border border-border/60 bg-card px-4 py-3 text-center text-xs leading-5 text-muted-foreground">
             {t("generate.footer_text")}

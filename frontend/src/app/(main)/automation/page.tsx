@@ -1,12 +1,11 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import { lazy, Suspense } from "react";
 
-const AutomationPageContent = dynamic(
-  () => import("./AutomationPageContent"),
-  { ssr: false }
-);
+
+const AutomationPageContent = lazy(
+  () => import("./AutomationPageContent"));
 
 export default function AutomationPagePage() {
-  return <AutomationPageContent />;
+  return <Suspense fallback={null}><AutomationPageContent /></Suspense>;
 }

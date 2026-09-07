@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo, Suspense, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
@@ -40,7 +40,7 @@ import type { DownloadTask } from "@/types/loot";
 
 function LootPage() {
   const { t } = useI18n();
-  const searchParams = useSearchParams();
+  const [searchParams] = useSearchParams();
   const initialTab = (searchParams.get("tab") as LootTab) || "screenshots";
   const { data, loading, error, loadLoot } = useLootData();
   const [lbIndex, setLbIndex] = useState(-1);

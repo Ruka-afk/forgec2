@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import dynamic from "next/dynamic";
-import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from "react";
+
+import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { firstArray } from "@/lib/envelope";
@@ -18,9 +18,9 @@ import { Spinner } from "@/components/ui/spinner";
 import { GitCompare, Maximize2, Pin, PinOff, X } from "lucide-react";
 import type { Beacon } from "./types";
 import type { AgentTaskRecord } from "@/types/agent";
-const AgentDockFiles = dynamic(() => import("./AgentDockFiles").then((m) => ({ default: m.AgentDockFiles })), { ssr: false });
-const AgentDockCommands = dynamic(() => import("./AgentDockCommands").then((m) => ({ default: m.AgentDockCommands })), { ssr: false });
-const AgentDockShot = dynamic(() => import("./AgentDockShot").then((m) => ({ default: m.AgentDockShot })), { ssr: false });
+const AgentDockFiles = lazy(() => import("./AgentDockFiles").then((m) => ({ default: m.AgentDockFiles })));
+const AgentDockCommands = lazy(() => import("./AgentDockCommands").then((m) => ({ default: m.AgentDockCommands })));
+const AgentDockShot = lazy(() => import("./AgentDockShot").then((m) => ({ default: m.AgentDockShot })));
 import { shouldRefreshDockShot } from "./dock-shot";
 import { applyTaskEvent, canApproveOwnTask, canCancelTask, canReviewTask, isDockTaskEvent, shouldRevealTaskResult, taskEventId } from "./dock-tasks";
 import { diffChangeLines, diffResults, previousComparableTask, resultLooksComparable } from "./result-diff";
@@ -30,14 +30,7 @@ import { POLL } from "@/lib/polling";
 import { clampDockHeight, type InteractTab } from "@/lib/interact-storage";
 import { useInteractStore } from "@/lib/interact-store";
 
-const ShellTerminal = dynamic(() => import("@/components/ShellTerminal"), {
-  ssr: false,
-  loading: () => (
-    <div className="flex h-full items-center justify-center">
-      <Spinner />
-    </div>
-  ),
-});
+const ShellTerminal = lazy(() => import("@/components/ShellTerminal")); // xterm is heavy; spinner fallback at usage below
 
 interface AgentInteractDockProps {
   beacon: Beacon;
@@ -263,24 +256,26 @@ export function AgentInteractDock({
           </div>
         </div>
         {id && (
-          <AgentDockCommands
-            agentId={id}
-            intervalHint={beacon.current_interval}
-            jitterHint={beacon.current_jitter}
-            onQueued={(queued) => {
-              useInteractStore.getState().revealTask(id, queued.task_id);
-              setTasks((prev) => applyTaskEvent(prev, {
-                type: "task_created",
-                task_id: queued.task_id,
-                task_type: queued.type,
-                command: queued.command,
-                status: "pending",
-                agent_id: id,
-              }));
-            }}
-          />
+          <Suspense fallback={null}>
+            <AgentDockCommands
+              agentId={id}
+              intervalHint={beacon.current_interval}
+              jitterHint={beacon.current_jitter}
+              onQueued={(queued) => {
+                useInteractStore.getState().revealTask(id, queued.task_id);
+                setTasks((prev) => applyTaskEvent(prev, {
+                  type: "task_created",
+                  task_id: queued.task_id,
+                  task_type: queued.type,
+                  command: queued.command,
+                  status: "pending",
+                  agent_id: id,
+                }));
+              }}
+            />
+          </Suspense>
         )}
-        {id && <AgentDockShot agentId={id} refreshKey={shotKey} />}
+        {id && <Suspense fallback={null}><AgentDockShot agentId={id} refreshKey={shotKey} /></Suspense>}
         <Tabs value={tab} onValueChange={(v) => { if (v === "shell" || v === "files" || v === "tasks") onTabChange(v); }} className="flex min-h-0 flex-1 flex-col gap-0">
           <TabsList className="mb-0 h-8 w-full justify-start rounded-none border-b bg-transparent px-2">
             <TabsTrigger value="shell" className="h-7 text-xs">{t("agents.dock_tab_shell")} <span className="ml-1 text-muted-foreground/85">1</span></TabsTrigger>
@@ -289,20 +284,26 @@ export function AgentInteractDock({
           </TabsList>
           <TabsContent value="shell" keepMounted className="mt-0 min-h-0 flex-1 p-0">
             {id && (
-              <ShellTerminal
-                agentId={id}
-                osType={osType}
-                hostname={beacon.hostname}
-                username={beacon.username}
-                ip={beacon.ip}
-                lastSeen={beacon.last_seen}
-                status={beacon.status}
-                className="flex h-full flex-col overflow-hidden bg-(--shell-terminal-bg) text-slate-100"
-              />
+              <Suspense fallback={(
+                <div className="flex h-full items-center justify-center">
+                  <Spinner />
+                </div>
+              )}>
+                <ShellTerminal
+                  agentId={id}
+                  osType={osType}
+                  hostname={beacon.hostname}
+                  username={beacon.username}
+                  ip={beacon.ip}
+                  lastSeen={beacon.last_seen}
+                  status={beacon.status}
+                  className="flex h-full flex-col overflow-hidden bg-(--shell-terminal-bg) text-slate-100"
+                />
+              </Suspense>
             )}
           </TabsContent>
           <TabsContent value="files" keepMounted className="mt-0 min-h-0 flex-1 p-0">
-            {id && <AgentDockFiles agentId={id} osType={osType} />}
+            {id && <Suspense fallback={null}><AgentDockFiles agentId={id} osType={osType} /></Suspense>}
           </TabsContent>
           <TabsContent value="tasks" className="mt-0 min-h-0 flex-1 p-0">
             {tasksLoading ? (
@@ -436,7 +437,7 @@ export function AgentInteractDock({
                   })}
                 </ul>
                 <div className="px-3 py-2">
-                  <Link href={`/timeline?tab=tasks&agent_id=${id}`} className="text-xs text-primary hover:underline">
+                  <Link to={`/timeline?tab=tasks&agent_id=${id}`} className="text-xs text-primary hover:underline">
                     {t("agents.tasklist_view_all")}
                   </Link>
                 </div>

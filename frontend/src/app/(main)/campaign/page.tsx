@@ -1,12 +1,11 @@
-﻿"use client";
+"use client";
 
-import dynamic from "next/dynamic";
+import { lazy, Suspense } from "react";
 
-const CampaignPageContent = dynamic(
-  () => import("./CampaignPageContent"),
-  { ssr: false }
-);
+
+const CampaignPageContent = lazy(
+  () => import("./CampaignPageContent"));
 
 export default function CampaignsPage() {
-  return <CampaignPageContent />;
+  return <Suspense fallback={null}><CampaignPageContent /></Suspense>;
 }

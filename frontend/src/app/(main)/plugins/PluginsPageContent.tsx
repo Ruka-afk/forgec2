@@ -26,7 +26,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { CheckCircle, CloudUpload, FileDown, LayoutGrid, List, Play, Plus, Puzzle } from "lucide-react";
-import { SearchInput } from "@/components/framework/SearchInput";
+import { SearchInput } from "@/components/SearchInput";
 import { PLUGIN_CATEGORIES } from "./_components/categories";
 import { PluginCard, PluginListItem, PluginDetailModal, ReviewsModal } from "./_components/PluginUI";
 import type { Plugin, Review } from "./_components/types";

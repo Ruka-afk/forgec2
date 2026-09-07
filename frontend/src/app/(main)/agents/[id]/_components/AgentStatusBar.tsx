@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-indicator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -55,19 +55,19 @@ export default memo(function AgentStatusBar({ agent, agentId, status }: AgentSta
             <div className="ml-auto flex items-center gap-1.5 shrink-0">
               <Tooltip>
                 <TooltipTrigger>
-                  <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/shell`} />} className="h-7 gap-1.5 text-xs"><Terminal className="size-3.5" /> {t("agents.shell_title")}</Button>
+                  <Button variant="outline" size="sm" render={<Link to={`/agents/${agentId}/shell`} />} className="h-7 gap-1.5 text-xs"><Terminal className="size-3.5" /> {t("agents.shell_title")}</Button>
                 </TooltipTrigger>
                 <TooltipContent>{t("agents.shortcut_hint", { key: "S" })}</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger>
-                  <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/files`} />} className="h-7 gap-1.5 text-xs"><FolderOpen className="size-3.5" /> {t("agents.files_title")}</Button>
+                  <Button variant="outline" size="sm" render={<Link to={`/agents/${agentId}/files`} />} className="h-7 gap-1.5 text-xs"><FolderOpen className="size-3.5" /> {t("agents.files_title")}</Button>
                 </TooltipTrigger>
                 <TooltipContent>{t("agents.shortcut_hint", { key: "F" })}</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger>
-                  <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/screen`} />} className="h-7 gap-1.5 text-xs"><Monitor className="size-3.5" /> {t("agents.screen_title")}</Button>
+                  <Button variant="outline" size="sm" render={<Link to={`/agents/${agentId}/screen`} />} className="h-7 gap-1.5 text-xs"><Monitor className="size-3.5" /> {t("agents.screen_title")}</Button>
                 </TooltipTrigger>
                 <TooltipContent>{t("agents.shortcut_hint", { key: "D" })}</TooltipContent>
               </Tooltip>

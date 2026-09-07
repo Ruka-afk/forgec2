@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
+import { useNavigate } from "react-router-dom";
 import { useWS } from "@/lib/wsContext";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
@@ -29,11 +29,11 @@ import { useAgentMenuAction } from "./_components/useAgentMenuAction";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import SavedViewPicker from "@/components/SavedViewPicker";
-import dynamic from "next/dynamic";
+
 import type { Beacon, BulkResult } from "./_components/types";
 
 // Detail view (+15 sections) loads on demand so the list chunk stays lean.
-const AgentDetailPage = dynamic(() => import("./[id]/AgentDetailPage"), { ssr: false });
+const AgentDetailPage = lazy(() => import("./[id]/AgentDetailPage"));
 import type { AgentMenuPoint } from "./_components/agent-menu-actions";
 import { useVirtualWindow } from "@/lib/hooks/useVirtualWindow";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -47,7 +47,7 @@ export type { Beacon };
 export default function AgentsPageContent() {
   const { t } = useI18n();
   const isMobile = useAppStore((state) => state.isMobile);
-  const router = useRouter();
+  const navigate = useNavigate();
   const { subscribe } = useWS();
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -244,7 +244,7 @@ export default function AgentsPageContent() {
   } = bulkOps;
 
   const { handleMenuAction, handleQuickNav } = useAgentMenuAction({
-    t, router, setSelectedAgentId, setMenuPoint, openQuickSleep, openNotesEdit, setConfirm,
+    t, navigate, setSelectedAgentId, setMenuPoint, openQuickSleep, openNotesEdit, setConfirm,
   });
 
   const counts = useMemo(() => {
@@ -425,7 +425,7 @@ export default function AgentsPageContent() {
             title={t("agents.no_beacons")}
             message={statusFilter || osFilter ? t("agents.no_beacons_filtered") : t("agents.no_beacons_hint")}
             action={!statusFilter && !osFilter ? (
-              <Button render={<Link href="/generate" />}>
+              <Button render={<Link to="/generate" />}>
                 <Plus className="size-4" />
                 <span>{t("agents.generate_implant")}</span>
               </Button>
@@ -499,7 +499,7 @@ export default function AgentsPageContent() {
           className="h-full w-full gap-0 overflow-hidden bg-background p-0 text-base sm:max-w-[min(96rem,92vw)]"
         >
           <ErrorBoundary>
-            {selectedAgentId && <AgentDetailPage key={selectedAgentId} agentId={selectedAgentId} onClose={handleCloseDetail} />}
+            {selectedAgentId && <Suspense fallback={null}><AgentDetailPage key={selectedAgentId} agentId={selectedAgentId} onClose={handleCloseDetail} /></Suspense>}
           </ErrorBoundary>
         </SheetContent>
       </Sheet>

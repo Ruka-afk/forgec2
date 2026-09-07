@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DEFAULT_SHORTCUTS, loadShortcuts, formatShortcut, matchShortcut } from "@/lib/shortcuts";
@@ -55,7 +55,7 @@ function ShortcutsHelpPanel({ open, onOpenChange }: { open: boolean; onOpenChang
             </div>
           ))}
           <p className="text-xs text-muted-foreground pt-2 border-t border-border">
-            <Link href="/settings#section-shortcuts" className="text-primary hover:underline">
+            <Link to="/settings#section-shortcuts" className="text-primary hover:underline">
               {t("shortcuts.customize")}
             </Link>{" "}
             {t("shortcuts.in_settings")}

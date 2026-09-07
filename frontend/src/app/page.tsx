@@ -1,18 +1,18 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 
 export default function Home() {
   const { t } = useI18n();
-  const router = useRouter();
-  const pathname = usePathname();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
   useEffect(() => {
     if (pathname === "/") {
-      router.replace("/dashboard");
+      navigate("/dashboard", { replace: true });
     }
-  }, [router, pathname]);
+  }, [navigate, pathname]);
 
   if (typeof window === "undefined") return null;
 

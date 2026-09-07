@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import type { GenerateTab } from "./generate-tabs";
 
 export default function RedirectToGenerateTab({ tab }: { tab: GenerateTab }) {
-  const router = useRouter();
+  const navigate = useNavigate();
   useEffect(() => {
-    router.replace(`/generate?tab=${tab}`);
-  }, [router, tab]);
+    navigate(`/generate?tab=${tab}`, { replace: true });
+  }, [navigate, tab]);
   return null;
 }

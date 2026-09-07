@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
+import type { NavigateFunction } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
@@ -14,7 +15,7 @@ type TKey = (key: string, params?: Record<string, string | number>) => string;
 
 export interface MenuActionDeps {
   t: TKey;
-  router: { push: (href: string) => void };
+  navigate: NavigateFunction;
   setSelectedAgentId: (id: string | null) => void;
   setMenuPoint: (p: AgentMenuPoint | null) => void;
   openQuickSleep: (beacon: Beacon) => void;
@@ -28,7 +29,7 @@ function toastQueued(t: TKey) {
 
 /** Row/grid context-menu + quick-nav dispatch for the agents list. */
 export function useAgentMenuAction(deps: MenuActionDeps) {
-  const { t, router, setSelectedAgentId, setMenuPoint, openQuickSleep, openNotesEdit, setConfirm } = deps;
+  const { t, navigate, setSelectedAgentId, setMenuPoint, openQuickSleep, openNotesEdit, setConfirm } = deps;
 
   const handleMenuAction = useCallback((action: AgentMenuAction, point: AgentMenuPoint) => {
     const id = point.beacon.id || "";
@@ -62,7 +63,7 @@ export function useAgentMenuAction(deps: MenuActionDeps) {
         break;
       case "rebuild": {
         if (!point.beacon.listener_id) toast.warning(t("agents.rebuild_no_listener"));
-        router.push(rebuildPayloadHref(point.beacon));
+        navigate(rebuildPayloadHref(point.beacon));
         break;
       }
       case "sleep":
@@ -72,13 +73,13 @@ export function useAgentMenuAction(deps: MenuActionDeps) {
         openNotesEdit(point.beacon);
         break;
       case "files":
-        router.push(`/agents/${id}/files`);
+        navigate(`/agents/${id}/files`);
         break;
       case "tokens":
-        router.push(`/agents/${id}/token`);
+        navigate(`/agents/${id}/token`);
         break;
       case "screen":
-        router.push(`/agents/${id}/screen`);
+        navigate(`/agents/${id}/screen`);
         break;
       case "copy_id":
         navigator.clipboard.writeText(id)
@@ -96,13 +97,13 @@ export function useAgentMenuAction(deps: MenuActionDeps) {
         break;
     }
     setMenuPoint(null);
-  }, [t, openQuickSleep, openNotesEdit, router, setConfirm, setMenuPoint, setSelectedAgentId]);
+  }, [t, openQuickSleep, openNotesEdit, navigate, setConfirm, setMenuPoint, setSelectedAgentId]);
 
   const handleQuickNav = useCallback((beacon: Beacon, view: "shell" | "files" | "screen") => {
     const id = beacon.id || "";
     if (!id) return;
-    router.push(`/agents/${id}/${view}`);
-  }, [router]);
+    navigate(`/agents/${id}/${view}`);
+  }, [navigate]);
 
   return { handleMenuAction, handleQuickNav };
 }

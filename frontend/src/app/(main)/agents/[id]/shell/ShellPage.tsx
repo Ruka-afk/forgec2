@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
-import Link from "next/link";
-import dynamic from "next/dynamic";
+import { useCallback, useEffect, useState, lazy, Suspense } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { Link } from "react-router-dom";
+
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { fetchAgentList, type AgentSummary } from "@/lib/agents";
@@ -21,19 +21,13 @@ import { agentIdentityTitle, pickAgentField } from "@/lib/shell-ui";
 import { agentDetailHref } from "../_components/agent-detail-utils";
 import type { AgentStatus } from "@/types/agent";
 
-const ShellTerminal = dynamic(() => import("@/components/ShellTerminal"), {
-  ssr: false,
-  loading: () => (
-    <div className="flex h-full items-center justify-center bg-(--shell-terminal-bg)">
-      <Spinner />
-    </div>
-  ),
-});
+const ShellTerminal = lazy(() => import("@/components/ShellTerminal")); // xterm is heavy; spinner fallback at usage below
 
 export default function AgentShellPage() {
   const { t } = useI18n();
-  const router = useRouter();
-  const { id: agentId } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { id } = useParams();
+  const agentId = id ?? ""; // route always provides :id; empty falls through to API error handling
   const [osType, setOsType] = useState("windows");
   const [hostname, setHostname] = useState("");
   const [username, setUsername] = useState("");
@@ -86,7 +80,7 @@ export default function AgentShellPage() {
         <Button
           variant="ghost"
           size="sm"
-          render={<Link href={agentDetailHref(agentId)} />}
+          render={<Link to={agentDetailHref(agentId)} />}
           className="gap-1.5 px-2 text-slate-200 hover:bg-white/10 hover:text-white"
         >
           <ArrowLeft className="size-4" />
@@ -100,7 +94,7 @@ export default function AgentShellPage() {
             {[ip, osType].filter(Boolean).join(" · ")}
           </div>
         </div>
-        <Select value={agentId} onValueChange={(v) => { if (v) router.push(`/agents/${v}/shell`); }}>
+        <Select value={agentId} onValueChange={(v) => { if (v) navigate(`/agents/${v}/shell`); }}>
           <SelectTrigger
             className="ml-auto h-8 w-[min(18rem,40vw)] border-white/10 bg-white/5 text-xs text-slate-200"
             aria-label={t("shell.switch_session")}
@@ -129,16 +123,22 @@ export default function AgentShellPage() {
         <p className="shrink-0 px-4 py-1.5 text-xs text-red-300" role="alert">{listError}</p>
       )}
       {agentId && (
-        <ShellTerminal
-          agentId={agentId}
-          osType={osType}
-          hostname={hostname}
-          username={username}
-          ip={ip}
-          lastSeen={lastSeen}
-          status={status}
-          className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
-        />
+        <Suspense fallback={(
+          <div className="flex h-full items-center justify-center bg-(--shell-terminal-bg)">
+            <Spinner />
+          </div>
+        )}>
+          <ShellTerminal
+            agentId={agentId}
+            osType={osType}
+            hostname={hostname}
+            username={username}
+            ip={ip}
+            lastSeen={lastSeen}
+            status={status}
+            className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
+          />
+        </Suspense>
       )}
     </div>
   );

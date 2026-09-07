@@ -1,12 +1,11 @@
-﻿"use client";
+"use client";
 
-import dynamic from "next/dynamic";
+import { lazy, Suspense } from "react";
 
-const PhishingPageContent = dynamic(
-  () => import("./PhishingPageContent"),
-  { ssr: false }
-);
+
+const PhishingPageContent = lazy(
+  () => import("./PhishingPageContent"));
 
 export default function PhishingPage() {
-  return <PhishingPageContent />;
+  return <Suspense fallback={null}><PhishingPageContent /></Suspense>;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { ArrowLeft, Maximize2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -40,7 +40,7 @@ export default function AgentDetailChrome({
           <X className="size-4" />
         </Button>
       ) : (
-        <Button variant="ghost" size="sm" render={<Link href="/agents" />} className="gap-1.5 px-2">
+        <Button variant="ghost" size="sm" render={<Link to="/agents" />} className="gap-1.5 px-2">
           <ArrowLeft className="size-4" />
           <span className="hidden sm:inline">{t("agents.detail_back_to_agents")}</span>
         </Button>
@@ -51,7 +51,7 @@ export default function AgentDetailChrome({
       {status ? <StatusBadge status={status} pulse={status === "online"} /> : null}
       <CopyButton text={typeof window === "undefined" ? href : `${window.location.origin}${href}`} label={t("agents.detail_copy_link")} size="icon-xs" />
       {embedded ? (
-        <Button variant="outline" size="sm" render={<Link href={href} />} className="gap-1.5">
+        <Button variant="outline" size="sm" render={<Link to={href} />} className="gap-1.5">
           <Maximize2 className="size-3.5" />
           <span className="hidden sm:inline">{t("agents.detail_open_full_page")}</span>
         </Button>

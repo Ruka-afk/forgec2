@@ -4,7 +4,7 @@ import { PageToolbar } from "@/components/ui/page-toolbar";
 import { ErrorState } from "@/components/ui/error-state";
 
 import { Suspense, useState, useCallback, useEffect, memo, useMemo, useRef, createElement } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { downloadText } from "@/lib/download";
 import { toast } from "sonner";
@@ -54,7 +54,7 @@ type SortKey = "created_at" | "type" | "command" | "status";
 
 function TasksPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useI18n();
-  const searchParams = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [tasks, setTasks] = useState<Task[]>([]);
   const { agents } = useAgentList();
   const [total, setTotal] = useState(0);

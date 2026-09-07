@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { firstArray } from "@/lib/envelope";
@@ -16,7 +16,7 @@ import { DataState } from "@/components/ui/data-state";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { SearchInput } from "@/components/framework/SearchInput";
+import { SearchInput } from "@/components/SearchInput";
 import { StatusBadge } from "@/components/ui/status-indicator";
 import { RefreshCw, Activity, AlertTriangle, ListTodo, Zap, Radio } from "lucide-react";
 import type { Task } from "@/types/task";
@@ -214,7 +214,7 @@ export default function EventsStream() {
                   {/* Agent link */}
                   {ev.agentId && (
                     <Link
-                      href={`/agents/${ev.agentId}`}
+                      to={`/agents/${ev.agentId}`}
                       className="shrink-0 rounded-md bg-primary/10 px-1.5 py-0.5 font-mono text-xs text-primary transition-colors hover:bg-primary/20"
                     >
                       {ev.agentId.slice(0, 8)}

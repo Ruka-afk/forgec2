@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { useWebSocket } from "@/lib/useWebSocket";
 import { useEffect, useState, useCallback, memo } from "react";
 import { useShallow } from "zustand/shallow";
@@ -145,7 +145,7 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
             const linkEl = (
               <Link
                 key={item.href}
-                href={item.href}
+                to={item.href}
                 className={`flex items-center gap-x-2.5 rounded-lg transition-colors duration-150 ${collapsed ? 'group relative' : ''}
                   ${collapsed ? 'justify-center px-0 py-2 mx-auto size-10' : 'px-2 py-1.5'}
                   ${isActive(item.href)
@@ -233,7 +233,7 @@ const SidebarFooter = memo(function SidebarFooter({ collapsed, connected, reconn
         <Button
           variant="ghost"
           size={collapsed ? "icon" : "sm"}
-          render={<Link href="/settings" />}
+          render={<Link to="/settings" />}
           aria-label={t("nav.settings")}
           className={collapsed ? "mx-auto" : "justify-start"}
         >
@@ -253,7 +253,7 @@ const SidebarFooter = memo(function SidebarFooter({ collapsed, connected, reconn
 });
 
 export default function Sidebar() {
-  const pathname = usePathname();
+  const { pathname } = useLocation();
   const { connected, reconnectFailed, subscribe } = useWebSocket();
   const { t } = useI18n();
   const [sections, setSections] = useState<Record<string, boolean>>(defaultSections);

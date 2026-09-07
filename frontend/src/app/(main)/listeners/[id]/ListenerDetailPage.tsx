@@ -2,8 +2,8 @@
 import { PageContainer } from "@/components/ui/page-container";
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams } from "next/navigation";
-import Link from "next/link";
+import { useParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
@@ -126,7 +126,7 @@ export default function ListenerDetailPage() {
               <div><span className="text-muted-foreground">{t("listener.created")}</span> <span className="text-foreground">{createdAt}</span></div>
             </div>
             <div className="mt-6 flex gap-2">
-               <Button render={<Link href={`/generate?listener_id=${id}`} />} className="flex-1">{t("listener.generate_implant")}</Button>
+               <Button render={<Link to={`/generate?listener_id=${id}`} />} className="flex-1">{t("listener.generate_implant")}</Button>
             </div>
           </Card>
         </div>
@@ -152,7 +152,7 @@ export default function ListenerDetailPage() {
       <div className="mt-8">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-foreground">{t("listener.agents_using")} ({stats.total})</h2>
-          <Link href="/agents" className="text-sm text-primary hover:text-primary transition-colors">{t("listener.view_all_agents")}</Link>
+          <Link to="/agents" className="text-sm text-primary hover:text-primary transition-colors">{t("listener.view_all_agents")}</Link>
         </div>
 
         <Card className="overflow-hidden">
@@ -186,7 +186,7 @@ export default function ListenerDetailPage() {
                         )}
                       </TableCell>
                       <TableCell className="py-3 px-6 text-right">
-                        <Link href={`/agents/${aid}`} className="text-primary hover:text-primary hover:underline text-sm transition-colors">{t("listener.detail")}</Link>
+                        <Link to={`/agents/${aid}`} className="text-primary hover:text-primary hover:underline text-sm transition-colors">{t("listener.detail")}</Link>
                       </TableCell>
                     </TableRow>
                   );

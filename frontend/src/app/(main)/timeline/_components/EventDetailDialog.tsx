@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -81,7 +81,7 @@ export default function EventDetailDialog({ event, onClose }: EventDetailDialogP
           )}
           {getEventUrl(event) && safeHref(getEventUrl(event)) && (
             <div className="pt-2">
-              <Link href={safeHref(getEventUrl(event))!}>
+              <Link to={safeHref(getEventUrl(event))!}>
                 <Button className="gap-2">
                   <ExternalLink className="size-4" />
                   <span>{t("timeline.view_related")}</span>

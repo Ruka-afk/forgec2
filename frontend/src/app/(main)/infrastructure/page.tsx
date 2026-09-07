@@ -1,12 +1,11 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import { lazy, Suspense } from "react";
 
-const InfrastructurePageContent = dynamic(
-  () => import("./InfrastructurePageContent"),
-  { ssr: false }
-);
+
+const InfrastructurePageContent = lazy(
+  () => import("./InfrastructurePageContent"));
 
 export default function InfrastructurePagePage() {
-  return <InfrastructurePageContent />;
+  return <Suspense fallback={null}><InfrastructurePageContent /></Suspense>;
 }

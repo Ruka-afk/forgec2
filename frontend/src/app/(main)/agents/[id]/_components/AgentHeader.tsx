@@ -3,7 +3,7 @@
 import { memo, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { CopyButton } from "@/components/ui/copy-button";
 import { StatusBadge } from "@/components/ui/status-indicator";
 import { Spinner } from "@/components/ui/spinner";
@@ -114,7 +114,7 @@ export default memo(function AgentHeader({
                   {version ? (
                     <Badge variant="outline" className="font-mono text-(--fs-micro-sm)">{version}</Badge>
                   ) : (
-                    <Badge variant="warning" className="text-(--fs-micro-sm)" title={t("agents.version_unknown_hint")} render={<Link href={rebuildPayloadHref(agent)} />}>
+                    <Badge variant="warning" className="text-(--fs-micro-sm)" title={t("agents.version_unknown_hint")} render={<Link to={rebuildPayloadHref(agent)} />}>
                       {t("agents.version_unknown")}
                     </Badge>
                   )}
@@ -169,26 +169,26 @@ export default memo(function AgentHeader({
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:w-[34rem]">
-              <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/shell`} />}><Terminal className="size-4" /> {t("agents.shell_title")} <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">S</kbd></Button>
-              <Button variant="outline" size="sm" render={<Link href={`/ai?agent=${encodeURIComponent(agentId)}`} />}><Bot className="size-4" /> {t("ai.open_for_agent")}</Button>
-              <Button variant="outline" size="sm" render={<Link href={rebuildPayloadHref(agent)} />}><RefreshCw className="size-4" /> {t("agents.rebuild_payload")}</Button>
-              <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/files`} />}><FolderOpen className="size-4" /> {t("agents.files_title")} <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">F</kbd></Button>
-              <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/screen`} />}><Monitor className="size-4" /> {t("agents.screen_title")} <span className="text-(--fs-micro) opacity-70"><QualityMark quality="hardened" /></span> <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">D</kbd></Button>
+              <Button variant="outline" size="sm" render={<Link to={`/agents/${agentId}/shell`} />}><Terminal className="size-4" /> {t("agents.shell_title")} <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">S</kbd></Button>
+              <Button variant="outline" size="sm" render={<Link to={`/ai?agent=${encodeURIComponent(agentId)}`} />}><Bot className="size-4" /> {t("ai.open_for_agent")}</Button>
+              <Button variant="outline" size="sm" render={<Link to={rebuildPayloadHref(agent)} />}><RefreshCw className="size-4" /> {t("agents.rebuild_payload")}</Button>
+              <Button variant="outline" size="sm" render={<Link to={`/agents/${agentId}/files`} />}><FolderOpen className="size-4" /> {t("agents.files_title")} <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">F</kbd></Button>
+              <Button variant="outline" size="sm" render={<Link to={`/agents/${agentId}/screen`} />}><Monitor className="size-4" /> {t("agents.screen_title")} <span className="text-(--fs-micro) opacity-70"><QualityMark quality="hardened" /></span> <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">D</kbd></Button>
               <Button variant="outline" size="sm" onClick={onPopOut} aria-label={t("agents.popout_console")}>
                 <PictureInPicture2 className="size-4" /> {t("agents.popout_console")}
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger render={<Button variant="secondary" size="sm" className="gap-1.5"><MoreHorizontal className="size-4" /> {t("agents.header_more")}</Button>} />
                 <DropdownMenuContent className="w-48">
-                  <DropdownMenuItem render={<Link href={`/agents/${agentId}/token`} />}>
+                  <DropdownMenuItem render={<Link to={`/agents/${agentId}/token`} />}>
                     <Key className="size-4" /> {t("agents.token_title")}
                     <span className="ml-auto text-(--fs-micro) text-muted-foreground"><QualityMark quality="hardened" /></span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem render={<Link href={`/agents/${agentId}/persistence`} />}>
+                  <DropdownMenuItem render={<Link to={`/agents/${agentId}/persistence`} />}>
                     <LinkIcon className="size-4" /> {t("agents.persistence_title")}
                     <span className="ml-auto text-(--fs-micro) text-muted-foreground"><QualityMark quality="hardened" /></span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem render={<Link href={`/agents/${agentId}/remote-desktop`} />}>
+                  <DropdownMenuItem render={<Link to={`/agents/${agentId}/remote-desktop`} />}>
                     <Monitor className="size-4" /> {t("agents.rdp_title")}
                     {isExperimentalDesktop("remote-desktop") ? (
                       <span className="ml-auto text-(--fs-micro) text-warning"><QualityMark quality="experimental" /></span>
@@ -197,8 +197,8 @@ export default memo(function AgentHeader({
                   <DropdownMenuItem onClick={() => onQuickAction("beacon_now", t("agents.beacon_now"))}>
                     <Radio className="size-4" /> {t("agents.beacon_now")}
                   </DropdownMenuItem>
-                  <DropdownMenuItem render={<Link href={`/agents/${agentId}/config`} />}><SlidersHorizontal className="size-4" /> {t("agents.config_hot_config")}</DropdownMenuItem>
-                  <DropdownMenuItem render={<Link href={`/agents/${agentId}/traffic`} />}><Activity className="size-4" /> {t("agents.traffic_title")}</DropdownMenuItem>
+                  <DropdownMenuItem render={<Link to={`/agents/${agentId}/config`} />}><SlidersHorizontal className="size-4" /> {t("agents.config_hot_config")}</DropdownMenuItem>
+                  <DropdownMenuItem render={<Link to={`/agents/${agentId}/traffic`} />}><Activity className="size-4" /> {t("agents.traffic_title")}</DropdownMenuItem>
                   {onMigrate && (
                     <DropdownMenuItem onClick={onMigrate}><RefreshCw className="size-4" /> {t("agents.header_migrate")}</DropdownMenuItem>
                   )}

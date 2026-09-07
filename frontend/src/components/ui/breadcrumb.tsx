@@ -1,7 +1,7 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-import Link from "next/link";
+import { useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 import { NAV_SEGMENT_LABELS } from "@/lib/navigation";
 import { Home, ChevronRight as ChevronSep } from "lucide-react";
@@ -22,7 +22,7 @@ const SUB_ROUTE_LABELS: Record<string, string> = {
 };
 
 function Breadcrumb() {
-  const pathname = usePathname();
+  const { pathname } = useLocation();
   const { t } = useI18n();
 
   if (!pathname || pathname === "/dashboard" || pathname === "/login") return null;
@@ -67,7 +67,7 @@ function Breadcrumb() {
               {isLast ? (
                 <span className="mono-cell min-w-0 truncate font-medium text-foreground sm:max-w-[240px]">{item.label}</span>
               ) : item.href ? (
-                <Link href={item.href} className="mono-eyebrow hover:text-foreground transition-colors truncate max-w-[140px]">
+                <Link to={item.href} className="mono-eyebrow hover:text-foreground transition-colors truncate max-w-[140px]">
                   {i === 0 ? <Home className="size-3.5" aria-hidden="true" /> : item.label}
                 </Link>
               ) : (

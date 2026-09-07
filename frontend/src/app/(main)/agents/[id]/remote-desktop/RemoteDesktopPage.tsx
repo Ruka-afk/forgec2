@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams } from "react-router-dom";
 import { Banner } from "@/components/ui/banner";
 import { PageContainer } from "@/components/ui/page-container";
 import { TriangleAlert } from "lucide-react";

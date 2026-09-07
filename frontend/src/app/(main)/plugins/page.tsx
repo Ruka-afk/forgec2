@@ -1,12 +1,11 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import { lazy, Suspense } from "react";
 
-const PluginsPageContent = dynamic(
-  () => import("./PluginsPageContent"),
-  { ssr: false }
-);
+
+const PluginsPageContent = lazy(
+  () => import("./PluginsPageContent"));
 
 export default function PluginsPagePage() {
-  return <PluginsPageContent />;
+  return <Suspense fallback={null}><PluginsPageContent /></Suspense>;
 }

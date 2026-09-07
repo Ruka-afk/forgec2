@@ -1,7 +1,7 @@
 "use client";
 
 import React, { Suspense, useEffect, useState } from "react";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
@@ -42,7 +42,7 @@ function AuditStrip() {
         <CardTitle className="text-sm font-semibold text-foreground">
           <Shield className="size-4" />{t("dashboard.recent_audit")}
         </CardTitle>
-        <Link href="/audit" className="text-xs text-primary hover:underline">{t("dashboard.view_all")}</Link>
+        <Link to="/audit" className="text-xs text-primary hover:underline">{t("dashboard.view_all")}</Link>
       </CardHeader>
       <div className="divide-y divide-border">
         {logs.map((log, i) => (

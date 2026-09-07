@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams } from "next/navigation";
-import Link from "next/link";
+import { useParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { api, formatThrownError } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
@@ -161,7 +161,7 @@ export default function AgentPersistencePage() {
           <Bug className="size-4" aria-hidden="true" />
           <h2 className="text-xl font-semibold text-foreground mb-2">{t("agents.persistence_not_found_title")}</h2>
           <p className="text-sm text-muted-foreground mb-6">{t("agents.persistence_not_found_desc")}</p>
-          <Button render={<Link href="/agents" />}>
+          <Button render={<Link to="/agents" />}>
               {t("agents.persistence_back_to_agents")}
           </Button>
         </div>

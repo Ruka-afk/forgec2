@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { Navigate } from "react-router-dom";
 
 export default function DocsRedirect() {
-  redirect("/settings#tab=about");
+  return <Navigate to="/settings#tab=about" replace />;
 }

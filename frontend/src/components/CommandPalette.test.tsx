@@ -5,8 +5,9 @@ import CommandPalette from "@/components/CommandPalette";
 
 const pushMock = vi.fn();
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: pushMock }),
+vi.mock("react-router-dom", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("react-router-dom")>()),
+  useNavigate: () => pushMock,
 }));
 
 vi.mock("@/lib/i18n", () => ({

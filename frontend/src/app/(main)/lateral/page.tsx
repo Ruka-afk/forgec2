@@ -1,12 +1,11 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import { lazy, Suspense } from "react";
 
-const LateralPageContent = dynamic(
-  () => import("./LateralPageContent"),
-  { ssr: false }
-);
+
+const LateralPageContent = lazy(
+  () => import("./LateralPageContent"));
 
 export default function LateralPage() {
-  return <LateralPageContent />;
+  return <Suspense fallback={null}><LateralPageContent /></Suspense>;
 }

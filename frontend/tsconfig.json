@@ -20,15 +20,6 @@
     "paths": {
       "@/*": [
         "./src/*"
-      ],
-      "next/link": [
-        "./src/lib/next/link.tsx"
-      ],
-      "next/navigation": [
-        "./src/lib/next/navigation.ts"
-      ],
-      "next/dynamic": [
-        "./src/lib/next/dynamic.tsx"
       ]
     }
   },

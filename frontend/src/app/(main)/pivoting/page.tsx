@@ -1,12 +1,11 @@
-﻿"use client";
+"use client";
 
-import dynamic from "next/dynamic";
+import { lazy, Suspense } from "react";
 
-const PivotingPageContent = dynamic(
-  () => import("./PivotingPageContent"),
-  { ssr: false }
-);
+
+const PivotingPageContent = lazy(
+  () => import("./PivotingPageContent"));
 
 export default function PivotingPage() {
-  return <PivotingPageContent />;
+  return <Suspense fallback={null}><PivotingPageContent /></Suspense>;
 }

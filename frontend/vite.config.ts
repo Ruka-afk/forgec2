@@ -1,7 +1,7 @@
 import { fileURLToPath, URL } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
-import { staticExportPlugin } from "./src/lib/vite/staticExport";
+import { staticExportPlugin } from "./vite-plugins/staticExport";
 
 // Inject <link rel="preload" as="font"> for the hashed woff2 assets emitted
 // during the build. The hashed filename is only known after bundling, so the
@@ -41,9 +41,6 @@ export default defineConfig(({ command, mode }) => ({
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
-      "next/link": fileURLToPath(new URL("./src/lib/next/link.tsx", import.meta.url)),
-      "next/navigation": fileURLToPath(new URL("./src/lib/next/navigation.ts", import.meta.url)),
-      "next/dynamic": fileURLToPath(new URL("./src/lib/next/dynamic.tsx", import.meta.url)),
     },
   },
   define:

@@ -11,7 +11,7 @@ import CommandPalette from "@/components/CommandPalette";
 import GlobalInteractDock from "@/components/GlobalInteractDock";
 import TelemetryCollector from "@/components/TelemetryCollector";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
-import { usePathname } from "next/navigation";
+import { useLocation } from "react-router-dom";
 import { useAppStore, selectSidebarWidth } from "@/lib/store";
 import { useI18n } from "@/lib/i18n";
 import { getPageTitleKey } from "@/lib/navigation";
@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 import { useWS } from "@/lib/wsContext";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
+  const { pathname } = useLocation();
   const { t } = useI18n();
   const isMobile = useAppStore((s) => s.isMobile);
   const setIsMobile = useAppStore((s) => s.setIsMobile);

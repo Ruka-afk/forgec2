@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { memo, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/shallow";
@@ -60,7 +60,7 @@ function QuickLaunch() {
     <SectionCard title={t("dashboard.quick_actions")}>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4">
         {actions.map((a) => (
-          <Button key={a.href} variant="outline" render={<Link href={a.href} />}
+          <Button key={a.href} variant="outline" render={<Link to={a.href} />}
             className="h-auto flex-col gap-2 py-4 hover:border-primary hover:bg-primary/5">
             <span className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary transition-transform group-hover:scale-105">{a.icon}</span>
             <span className="text-sm font-medium text-foreground">{a.label}</span>
@@ -104,7 +104,7 @@ export default memo(function OpsHome() {
                 {sessions.online.length === 0 ? (
                   <p className="px-4 py-3 text-xs text-muted-foreground">{t("dashboard.no_sessions")}</p>
                 ) : sessions.online.map((a) => (
-                  <Link key={a.id} href={`/agents/${a.id}`} className="flex items-center justify-between gap-2 px-4 py-2 hover:bg-secondary/50">
+                  <Link key={a.id} to={`/agents/${a.id}`} className="flex items-center justify-between gap-2 px-4 py-2 hover:bg-secondary/50">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <StatusBadge status="online" variant="dotOnly" size="sm" />
@@ -121,7 +121,7 @@ export default memo(function OpsHome() {
                 {sessions.dropped.length === 0 ? (
                   <p className="px-4 py-3 text-xs text-muted-foreground">{t("dashboard.no_sessions")}</p>
                 ) : sessions.dropped.map((a) => (
-                  <Link key={a.id} href={`/agents/${a.id}`} className="flex items-center justify-between gap-2 px-4 py-2 hover:bg-secondary/50">
+                  <Link key={a.id} to={`/agents/${a.id}`} className="flex items-center justify-between gap-2 px-4 py-2 hover:bg-secondary/50">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <StatusBadge status={a.status} variant="dotOnly" size="sm" />
@@ -145,7 +145,7 @@ export default memo(function OpsHome() {
           ) : (
             <div className="divide-y divide-border">
               {unhealthy.map((h) => (
-                <Link key={h.target} href={`/listeners/${h.target}`} className="flex items-center justify-between gap-2 px-4 py-2.5 hover:bg-secondary/50">
+                <Link key={h.target} to={`/listeners/${h.target}`} className="flex items-center justify-between gap-2 px-4 py-2.5 hover:bg-secondary/50">
                   <div className="min-w-0">
                     <StatusIndicator
                       status={healthIndicatorStatus(h.status)}
@@ -174,7 +174,7 @@ export default memo(function OpsHome() {
               {attention.map((task) => (
                 <Link
                   key={task.id}
-                  href={`/timeline?tab=tasks&agent_id=${encodeURIComponent(task.agent_id || "")}`}
+                  to={`/timeline?tab=tasks&agent_id=${encodeURIComponent(task.agent_id || "")}`}
                   className="flex items-center justify-between gap-2 px-4 py-2.5 hover:bg-secondary/50"
                 >
                   <div className="min-w-0">
@@ -207,7 +207,7 @@ export default memo(function OpsHome() {
               {lootItems.map((item) => (
                 <Link
                   key={item.id}
-                  href={`/loot?tab=${LOOT_TAB[item.kind]}`}
+                  to={`/loot?tab=${LOOT_TAB[item.kind]}`}
                   className="flex items-center justify-between gap-2 px-4 py-2.5 hover:bg-secondary/50"
                 >
                   <div className="min-w-0">
@@ -247,27 +247,27 @@ const DashboardStatTiles = memo(function DashboardStatTiles({ loading, unhealthy
 
   return (
     <MetricGrid count={5}>
-      <Link href="/agents">
+      <Link to="/agents">
         <Card interactive className="p-4 hover:ring-1 hover:ring-primary/20">
           <StatTile label={t("dashboard.beacons")} value={loading && !stats ? "…" : `${online}/${total}`} sub={online === total && total > 0 ? t("dashboard.all_online") : t("dashboard.online_suffix")} tone="success" icon={<Radio className="size-5" />} trend={total > 0 ? <span className="inline-flex items-center gap-1"><span className="size-1.5 rounded-full bg-success animate-pulse" />{t("dashboard.live_agents")}</span> : undefined} />
         </Card>
       </Link>
-      <Link href="/timeline?tab=tasks">
+      <Link to="/timeline?tab=tasks">
         <Card interactive className="p-4 hover:ring-1 hover:ring-primary/20">
           <StatTile label={t("dashboard.pending_tasks_label")} value={loading && !stats ? "…" : pending} tone={pending > 0 ? "warning" : "muted"} icon={<Clock className="size-5" />} trend={totalTasks > 0 ? `${Math.round((pending/totalTasks)*100)}% ${t("dashboard.queue_share")}` : undefined} />
         </Card>
       </Link>
-      <Link href="/timeline?tab=tasks">
+      <Link to="/timeline?tab=tasks">
         <Card interactive className="p-4 hover:ring-1 hover:ring-primary/20">
           <StatTile label={t("dashboard.failed_tasks")} value={loading && !stats ? "…" : failed} tone={failed > 0 ? "destructive" : "muted"} icon={<Bug className="size-5" />} trend={failed > 0 ? t("dashboard.needs_attention") : t("dashboard.all_clear")} />
         </Card>
       </Link>
-      <Link href="/listeners">
+      <Link to="/listeners">
         <Card interactive className="p-4 hover:ring-1 hover:ring-primary/20">
           <StatTile label={t("dashboard.unhealthy_count")} value={loading ? "…" : unhealthyCount} tone={unhealthyCount > 0 ? "destructive" : "success"} icon={<Radio className="size-5" />} trend={unhealthyCount === 0 ? t("dashboard.all_healthy") : undefined} />
         </Card>
       </Link>
-      <Link href="/loot">
+      <Link to="/loot">
         <Card interactive className="p-4 hover:ring-1 hover:ring-primary/20">
           <StatTile label={t("dashboard.loot_inbox")} value={loading ? "…" : lootCount} sub={t("dashboard.loot_recent")} tone={lootCount > 0 ? "info" : "muted"} icon={<Archive className="size-5" />} />
         </Card>

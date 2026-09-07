@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Banner } from "@/components/ui/banner";
 import { Input } from "@/components/ui/input";
-import { SearchInput } from "@/components/framework/SearchInput";
+import { SearchInput } from "@/components/SearchInput";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";

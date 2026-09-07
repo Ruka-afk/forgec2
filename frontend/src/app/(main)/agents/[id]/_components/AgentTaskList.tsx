@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { StatusBadge } from "@/components/ui/status-indicator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { timeAgo, formatTime } from "@/lib/utils";
@@ -182,7 +182,7 @@ export default memo(function AgentTaskList({
         <div className="h-1 w-full bg-gradient-to-r from-primary via-chart-2 to-chart-1" />
         <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-border/70">
           <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><ListChecks className="size-3.5 text-primary" />{t("agents.tasklist_recent")}</h3>
-          <Link href={`/timeline?tab=tasks&agent_id=${agentId}`} className="text-xs text-primary hover:underline">{t("agents.tasklist_view_all")} &rarr;</Link>
+          <Link to={`/timeline?tab=tasks&agent_id=${agentId}`} className="text-xs text-primary hover:underline">{t("agents.tasklist_view_all")} &rarr;</Link>
         </div>
         <EmptyState icon={ListChecks} title={t("agents.tasklist_empty")} message={t("agents.tasklist_empty_hint")} className="py-10" />
       </Card>
@@ -194,7 +194,7 @@ export default memo(function AgentTaskList({
       <div className="h-1 w-full bg-gradient-to-r from-primary via-chart-2 to-chart-1" />
       <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-border/70">
         <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><ListChecks className="size-3.5 text-primary" />{t("agents.tasklist_recent")}</h3>
-        <Link href={`/timeline?tab=tasks&agent_id=${agentId}`} className="text-xs text-primary hover:underline">{t("agents.tasklist_view_all")} &rarr;</Link>
+        <Link to={`/timeline?tab=tasks&agent_id=${agentId}`} className="text-xs text-primary hover:underline">{t("agents.tasklist_view_all")} &rarr;</Link>
       </div>
 
       <div className="px-4 py-2.5 flex items-center gap-2 sm:gap-4 flex-wrap border-b border-border/70">

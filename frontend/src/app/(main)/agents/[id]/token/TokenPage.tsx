@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams } from "react-router-dom";
 import { api, formatThrownError } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { Button } from "@/components/ui/button";

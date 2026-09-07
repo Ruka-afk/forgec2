@@ -3,7 +3,7 @@ import { PageContainer } from "@/components/ui/page-container";
 import { ErrorState } from "@/components/ui/error-state";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { downloadBlob } from "@/lib/download";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
@@ -253,7 +253,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
     <PageContainer embedded={embedded} title={t("builds.title")} subtitle={`${t("builds.subtitle")} · ${successCount} ${t("builds.success")} · ${failedCount} ${t("builds.failed")} · Avg ${avgDuration}s`}>
         {!embedded && (
           <div className={`flex items-center gap-2 ${embedded ? "ml-auto" : ""}`}>
-            <Button render={<Link href="/generate" />}>
+            <Button render={<Link to="/generate" />}>
               <Plus className="size-4" /> {t("builds.new_build")}
             </Button>
             <Button variant="secondary" onClick={loadBuilds}>
@@ -343,7 +343,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
         emptyTitle={t("builds.empty")}
         emptyMessage={t("builds.generate_new_implant")}
         emptyAction={
-          <Button render={<Link href="/generate" />}>
+          <Button render={<Link to="/generate" />}>
             <Plus className="size-4" /> {t("builds.go_generate")}
           </Button>
         }

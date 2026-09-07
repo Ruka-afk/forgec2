@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SafeImg } from "@/components/ui/safe-img";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { Camera, ChevronLeft, ChevronRight, Maximize2, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
@@ -37,7 +37,7 @@ export default memo(function AgentScreenshots({
         <div className="h-1 w-full bg-gradient-to-r from-primary via-chart-2 to-chart-1" />
         <div className="px-4 py-3 border-b border-border/70 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><Camera className="size-3.5 text-primary" />{t("agents.screenshots_title")} <span className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-(--fs-micro-sm) font-normal text-muted-foreground/100">({screenshots.length})</span></h3>
-          <Link href={`/loot?tab=screenshots&agent_id=${agentId}`} className="text-xs text-primary hover:underline">{t("agents.screenshots_view_all")} &rarr;</Link>
+          <Link to={`/loot?tab=screenshots&agent_id=${agentId}`} className="text-xs text-primary hover:underline">{t("agents.screenshots_view_all")} &rarr;</Link>
         </div>
         <div className="p-3">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-2">

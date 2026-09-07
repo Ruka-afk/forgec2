@@ -8,7 +8,7 @@ import { IconBadge } from "@/components/ui/icon-badge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { SearchInput } from "@/components/framework/SearchInput";
+import { SearchInput } from "@/components/SearchInput";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Box, Check, CheckCircle, Download, DownloadCloud, Layers, Link, Star, TriangleAlert } from "lucide-react";
 import { useI18n } from "@/lib/i18n";

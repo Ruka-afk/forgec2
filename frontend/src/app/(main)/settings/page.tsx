@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useCallback, useEffect, lazy, Suspense } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadBlob } from "@/lib/download";
@@ -13,7 +12,7 @@ import { Permission } from "@/components/ui/permission";
 import { PageSpinner } from "@/components/ui/spinner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SearchInput } from "@/components/framework/SearchInput";
+import { SearchInput } from "@/components/SearchInput";
 import { toast } from "sonner";
 import { Bell, Bot, Cpu, Database, FileCode, Globe, Lock, Palette, Server, Shield, User, Users, Wrench, Archive, Radio, AlertTriangle, Activity, ScanSearch, SearchX } from "lucide-react";
 import { useTOTP } from "./_components/useTOTP";
@@ -25,21 +24,21 @@ import SecuritySection from "./_components/SecuritySection";
 import ApiKeysSection from "./_components/ApiKeysSection";
 import ServerSection from "./_components/ServerSection";
 import AgentSection from "./_components/AgentSection";
-import dynamic from "next/dynamic";
 
-const MalleableSection = dynamic(() => import("./_components/MalleableSection"), { ssr: false });
-const DatabaseSection = dynamic(() => import("./_components/DatabaseSection"), { ssr: false });
-const MaintenanceSection = dynamic(() => import("./_components/MaintenanceSection"), { ssr: false });
-const AboutSection = dynamic(() => import("./_components/AboutSection"), { ssr: false });
-const NotificationsSection = dynamic(() => import("./_components/NotificationsSection"), { ssr: false });
-const BackupSection = dynamic(() => import("./_components/BackupSection"), { ssr: false });
-const ExtC2Section = dynamic(() => import("./_components/ExtC2Section"), { ssr: false });
-const SIEMRulesSection = dynamic(() => import("./_components/SIEMRulesSection"), { ssr: false });
-const CertificatesSection = dynamic(() => import("./_components/CertificatesSection"), { ssr: false });
-const ModulesSection = dynamic(() => import("./_components/ModulesSection"), { ssr: false });
-const EmergencySection = dynamic(() => import("./_components/EmergencySection"), { ssr: false });
-const AccessSection = dynamic(() => import("./_components/AccessSection"), { ssr: false });
-const TelemetrySection = dynamic(() => import("./_components/TelemetrySection"), { ssr: false });
+
+const MalleableSection = lazy(() => import("./_components/MalleableSection"));
+const DatabaseSection = lazy(() => import("./_components/DatabaseSection"));
+const MaintenanceSection = lazy(() => import("./_components/MaintenanceSection"));
+const AboutSection = lazy(() => import("./_components/AboutSection"));
+const NotificationsSection = lazy(() => import("./_components/NotificationsSection"));
+const BackupSection = lazy(() => import("./_components/BackupSection"));
+const ExtC2Section = lazy(() => import("./_components/ExtC2Section"));
+const SIEMRulesSection = lazy(() => import("./_components/SIEMRulesSection"));
+const CertificatesSection = lazy(() => import("./_components/CertificatesSection"));
+const ModulesSection = lazy(() => import("./_components/ModulesSection"));
+const EmergencySection = lazy(() => import("./_components/EmergencySection"));
+const AccessSection = lazy(() => import("./_components/AccessSection"));
+const TelemetrySection = lazy(() => import("./_components/TelemetrySection"));
 
 const SETTINGS_SECTION_KEYS = new Set([
   "profile", "theme", "language", "security", "access", "server", "agent",
@@ -59,7 +58,6 @@ function sectionFromHash(): string | null {
 }
 
 export default function SettingsPage() {
-  const router = useRouter();
   const { t, setLocale } = useI18n();
   const {
     data,
@@ -182,7 +180,7 @@ export default function SettingsPage() {
   const handleSetLanguage = (code: string) => {
     setLanguage(code);
     try { setLocale(code as "en" | "zh"); } catch { /* silent */ }
-    setTimeout(() => { router.refresh(); }, 0);
+    setTimeout(() => { window.location.reload(); }, 0);
   };
 
   const handleVacuum = async () => {
@@ -364,7 +362,7 @@ export default function SettingsPage() {
               <TabsContent value="profile" className="mt-0"><ProfileSection data={data} /></TabsContent>
               <TabsContent value="theme" className="mt-0"><ThemeSection theme={theme} onApplyTheme={handleApplyTheme} /></TabsContent>
               <TabsContent value="language" className="mt-0"><LanguageSection language={language} onSetLanguage={handleSetLanguage} /></TabsContent>
-              <TabsContent value="access" className="mt-0"><AccessSection /></TabsContent>
+              <TabsContent value="access" className="mt-0"><Suspense fallback={null}><AccessSection /></Suspense></TabsContent>
               <TabsContent value="security" className="mt-0">
                 <SecuritySection
                   data={data} passwordForm={passwordForm} setPasswordForm={setPasswordForm}
@@ -380,18 +378,18 @@ export default function SettingsPage() {
               </TabsContent>
               <TabsContent value="server" className="mt-0"><ServerSection data={data} form={serverForm} setForm={setServerForm} saving={saving} onSave={handleSaveServer} /></TabsContent>
               <TabsContent value="agent" className="mt-0"><AgentSection form={agentForm} setForm={setAgentForm} saving={saving} onSave={handleSaveAgent} /></TabsContent>
-              <TabsContent value="malleable" className="mt-0"><MalleableSection form={malleableForm} setForm={setMalleableForm} saving={saving} onSave={handleSaveMalleable} /></TabsContent>
-              <TabsContent value="database" className="mt-0"><DatabaseSection data={data} saving={saving} onVacuum={handleVacuum} onBackup={handleBackup} onDownloadDB={handleDownloadDB} /></TabsContent>
-              <TabsContent value="backup" className="mt-0"><BackupSection /></TabsContent>
-              <TabsContent value="maintenance" className="mt-0"><MaintenanceSection purgeDays={purgeDays} setPurgeDays={setPurgeDays} saving={saving} onPurge={handlePurge} onPurgeScreenshots={async () => { if (await confirmPurge({ message: t("settings.confirm.purge_screenshots"), confirmText: t("settings.btn.purge") })) handlePurge("screenshots"); }} /></TabsContent>
-              <TabsContent value="notifications" className="mt-0"><NotificationsSection /></TabsContent>
-              <TabsContent value="about" className="mt-0"><AboutSection data={data} onCheckUpdate={handleCheckUpdate} /></TabsContent>
-              <TabsContent value="extc2" className="mt-0"><ExtC2Section /></TabsContent>
-              <TabsContent value="siem" className="mt-0"><SIEMRulesSection /></TabsContent>
-              <TabsContent value="certificates" className="mt-0"><CertificatesSection data={data} saving={saving} onRefresh={loadSettings} /></TabsContent>
-              <TabsContent value="modules" className="mt-0"><ModulesSection /></TabsContent>
-              <TabsContent value="emergency" className="mt-0"><EmergencySection /></TabsContent>
-              <TabsContent value="telemetry" className="mt-0"><TelemetrySection /></TabsContent>
+              <TabsContent value="malleable" className="mt-0"><Suspense fallback={null}><MalleableSection form={malleableForm} setForm={setMalleableForm} saving={saving} onSave={handleSaveMalleable} /></Suspense></TabsContent>
+              <TabsContent value="database" className="mt-0"><Suspense fallback={null}><DatabaseSection data={data} saving={saving} onVacuum={handleVacuum} onBackup={handleBackup} onDownloadDB={handleDownloadDB} /></Suspense></TabsContent>
+              <TabsContent value="backup" className="mt-0"><Suspense fallback={null}><BackupSection /></Suspense></TabsContent>
+              <TabsContent value="maintenance" className="mt-0"><Suspense fallback={null}><MaintenanceSection purgeDays={purgeDays} setPurgeDays={setPurgeDays} saving={saving} onPurge={handlePurge} onPurgeScreenshots={async () => { if (await confirmPurge({ message: t("settings.confirm.purge_screenshots"), confirmText: t("settings.btn.purge") })) handlePurge("screenshots"); }} /></Suspense></TabsContent>
+              <TabsContent value="notifications" className="mt-0"><Suspense fallback={null}><NotificationsSection /></Suspense></TabsContent>
+              <TabsContent value="about" className="mt-0"><Suspense fallback={null}><AboutSection data={data} onCheckUpdate={handleCheckUpdate} /></Suspense></TabsContent>
+              <TabsContent value="extc2" className="mt-0"><Suspense fallback={null}><ExtC2Section /></Suspense></TabsContent>
+              <TabsContent value="siem" className="mt-0"><Suspense fallback={null}><SIEMRulesSection /></Suspense></TabsContent>
+              <TabsContent value="certificates" className="mt-0"><Suspense fallback={null}><CertificatesSection data={data} saving={saving} onRefresh={loadSettings} /></Suspense></TabsContent>
+              <TabsContent value="modules" className="mt-0"><Suspense fallback={null}><ModulesSection /></Suspense></TabsContent>
+              <TabsContent value="emergency" className="mt-0"><Suspense fallback={null}><EmergencySection /></Suspense></TabsContent>
+              <TabsContent value="telemetry" className="mt-0"><Suspense fallback={null}><TelemetrySection /></Suspense></TabsContent>
             </div>
           </div>
         </div>

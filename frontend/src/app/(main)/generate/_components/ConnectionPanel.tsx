@@ -13,8 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CopyButton } from "@/components/ui/copy-button";
 import { Banner } from "@/components/ui/banner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { CraftPanel } from "@/components/framework/CraftPanel";
-import { ConfigSection } from "@/components/framework/ConfigSection";
+import { CraftPanel } from "@/components/CraftPanel";
+import { ConfigSection } from "@/components/ConfigSection";
 import { Listener, ProfilePreset, SharedState, clampInterval, clampJitter } from "./types";
 import ListenerModal from "./ListenerModal";
 import { FileCode2, Import, KeyRound, Lock, Network, Plus, Radio, Timer, Trash2 } from "lucide-react";

@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,7 +79,7 @@ export default memo(function NotesTagsSection({
               {displayTags.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
                   {displayTags.map((tag) => (
-                    <Link key={tag} href={`/agents?tag=${encodeURIComponent(tag)}`}>
+                    <Link key={tag} to={`/agents?tag=${encodeURIComponent(tag)}`}>
                       <Badge variant="outline" className="cursor-pointer hover:opacity-80 transition-opacity">{tag}</Badge>
                     </Link>
                   ))}

@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { Navigate } from "react-router-dom";
 
 export default function ScreenshotsRedirect() {
-  redirect("/loot?tab=screenshots");
+  return <Navigate to="/loot?tab=screenshots" replace />;
 }

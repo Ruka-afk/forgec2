@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { Navigate } from "react-router-dom";
 
 export default function SchedulerRedirect() {
-  redirect("/automation#tab=scheduled");
+  return <Navigate to="/automation#tab=scheduled" replace />;
 }

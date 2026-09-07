@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Download, Grip, History, ListChecks, ListOrdered, Pause, Play, Plus, RefreshCw } from "lucide-react";
 
@@ -96,7 +96,7 @@ export default memo(function AgentsToolbar({
         <RefreshCw className="size-4" />
         <span className="hidden sm:inline text-foreground text-sm">{t("agents.refresh")}</span>
       </Button>
-      <Button render={<Link href="/generate" />}>
+      <Button render={<Link to="/generate" />}>
         <Plus className="size-4" />
         <span className="hidden sm:inline">{t("agents.generate_implant")}</span>
         <span className="sm:hidden">{t("agents.new")}</span>

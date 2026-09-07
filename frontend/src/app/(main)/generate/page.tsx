@@ -1,6 +1,5 @@
-"use client";
+import { lazy, Suspense } from "react";
 
-import dynamic from "next/dynamic";
 import { useI18n } from "@/lib/i18n";
 import { useUrlState } from "@/lib/hooks/useUrlState";
 import { PageContainer } from "@/components/ui/page-container";
@@ -8,26 +7,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { GENERATE_TABS, type GenerateTab } from "./_components/generate-tabs";
 
-const GeneratePayloadWorkspace = dynamic(
-  () => import("./_components/GeneratePayloadWorkspace"),
-  { ssr: false },
-);
-const PackerPageContent = dynamic(
-  () => import("../packer/PackerPageContent"),
-  { ssr: false },
-);
-const StagerPageContent = dynamic(
-  () => import("../stager/StagerPageContent"),
-  { ssr: false },
-);
-const BuildsPageContent = dynamic(
-  () => import("../builds/BuildsPageContent"),
-  { ssr: false },
-);
-const ProfilesPageContent = dynamic(
-  () => import("../profiles/ProfilesPageContent"),
-  { ssr: false },
-);
+const GeneratePayloadWorkspace = lazy(() => import("./_components/GeneratePayloadWorkspace"));
+const PackerPageContent = lazy(() => import("../packer/PackerPageContent"));
+const StagerPageContent = lazy(() => import("../stager/StagerPageContent"));
+const BuildsPageContent = lazy(() => import("../builds/BuildsPageContent"));
+const ProfilesPageContent = lazy(() => import("../profiles/ProfilesPageContent"));
 
 export default function GeneratePage() {
   const { t } = useI18n();
@@ -49,19 +33,19 @@ export default function GeneratePage() {
           <TabsTrigger value="builds">{t("generate.tab_builds")}</TabsTrigger>
         </TabsList>
         <TabsContent value="payload" className="mt-0">
-          <GeneratePayloadWorkspace />
+          <Suspense fallback={null}><GeneratePayloadWorkspace /></Suspense>
         </TabsContent>
         <TabsContent value="profiles" className="mt-0">
-          <ProfilesPageContent embedded />
+          <Suspense fallback={null}><ProfilesPageContent embedded /></Suspense>
         </TabsContent>
         <TabsContent value="stager" className="mt-0">
-          <StagerPageContent embedded />
+          <Suspense fallback={null}><StagerPageContent embedded /></Suspense>
         </TabsContent>
         <TabsContent value="packer" className="mt-0">
-          <PackerPageContent embedded />
+          <Suspense fallback={null}><PackerPageContent embedded /></Suspense>
         </TabsContent>
         <TabsContent value="builds" className="mt-0">
-          <BuildsPageContent embedded />
+          <Suspense fallback={null}><BuildsPageContent embedded /></Suspense>
         </TabsContent>
       </Tabs>
     </PageContainer>

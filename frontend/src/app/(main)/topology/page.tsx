@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
-import dynamic from "next/dynamic";
+import { useEffect, useState, useCallback, useRef, lazy, Suspense } from "react";
+
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
@@ -18,7 +18,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Download, Globe2, Info, List, Menu, MousePointerClick, RotateCw, Snowflake, Zap } from "lucide-react";
 import type { TopoNode, TopoEdge, TopoData, NetTopologyData } from "@/types/topology";
 
-const TopologyGraph = dynamic(() => import("@/components/TopologyGraph"), { ssr: false });
+const TopologyGraph = lazy(() => import("@/components/TopologyGraph"));
 
 type TopoViewMode = "c2" | "mesh" | "net";
 
@@ -464,16 +464,18 @@ export default function TopologyPage() {
               </div>
             </div>
             <div ref={graphContainerRef} className="relative p-4 bg-card [background-image:radial-gradient(ellipse_at_center,var(--card)_0%,var(--background)_100%)] min-h-[500px]">
-              <TopologyGraph
-                data={data || { nodes: [], edges: [] }}
-                meshData={meshData || { nodes: [], edges: [] }}
-                netData={netData || { nodes: [], edges: [] }}
-                useMeshSource={useMeshSource}
-                useNetSource={useNetSource}
-                physicsEnabled={physicsEnabled}
-                loading={loading}
-                onNodeClick={handleNodeClick}
-              />
+              <Suspense fallback={null}>
+                <TopologyGraph
+                  data={data || { nodes: [], edges: [] }}
+                  meshData={meshData || { nodes: [], edges: [] }}
+                  netData={netData || { nodes: [], edges: [] }}
+                  useMeshSource={useMeshSource}
+                  useNetSource={useNetSource}
+                  physicsEnabled={physicsEnabled}
+                  loading={loading}
+                  onNodeClick={handleNodeClick}
+                />
+              </Suspense>
             </div>
             <div className="bg-background border-t border-border px-4 py-1.5 flex items-center justify-between">
               <span className="text-(--fs-micro-sm) text-muted-foreground font-mono">

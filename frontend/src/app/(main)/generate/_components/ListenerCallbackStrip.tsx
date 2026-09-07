@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -33,7 +33,7 @@ export function ListenerCallbackStrip({
           <code className="min-w-0 flex-1 truncate rounded-md bg-muted/60 px-2 py-1 font-mono text-xs text-muted-foreground ring-1 ring-border/40">{callback}</code>
           <CopyButton text={callback} label={t("generate.c2_url_auto")} size="icon-xs" />
           {id && (
-            <Button variant="outline" size="xs" render={<Link href={`/listeners/${id}`} />} className="rounded-full shadow-sm">
+            <Button variant="outline" size="xs" render={<Link to={`/listeners/${id}`} />} className="rounded-full shadow-sm">
               {t("generate.strip_open_listener")}
             </Button>
           )}

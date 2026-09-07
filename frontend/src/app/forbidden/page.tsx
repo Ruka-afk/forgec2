@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import { ShieldAlert } from "lucide-react";
@@ -15,7 +15,7 @@ export default function Forbidden() {
       icon={<ShieldAlert className="size-7" aria-hidden="true" />}
       title={t("forbidden.title")}
       message={t("forbidden.message")}
-      action={<Button render={<Link href="/dashboard" />}>{t("forbidden.back")}</Button>}
+      action={<Button render={<Link to="/dashboard" />}>{t("forbidden.back")}</Button>}
     />
   );
 }

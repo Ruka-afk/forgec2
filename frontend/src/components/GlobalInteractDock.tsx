@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { AgentInteractDock } from "@/app/(main)/agents/_components/AgentInteractDock";
@@ -9,8 +9,8 @@ import { isEditableTarget, tabFromDigit } from "@/app/(main)/agents/_components/
 import { shouldCloseOnNavigate, useInteractStore } from "@/lib/interact-store";
 
 export default function GlobalInteractDock() {
-  const router = useRouter();
-  const pathname = usePathname();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
   const prevPath = useRef(pathname);
   const prevFocus = useRef<HTMLElement | null>(null);
   const agentId = useInteractStore((s) => s.agentId);
@@ -25,8 +25,8 @@ export default function GlobalInteractDock() {
   const setBeacon = useInteractStore((s) => s.setBeacon);
 
   const openAgentDetails = useCallback(() => {
-    if (agentId) router.push(`/agents/${agentId}`);
-  }, [router, agentId]);
+    if (agentId) navigate(`/agents/${agentId}`);
+  }, [navigate, agentId]);
 
   const handleClose = useCallback(() => {
     prevFocus.current?.focus();

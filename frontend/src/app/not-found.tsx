@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import { SystemStatePage } from "@/components/ui/system-state-page";
@@ -12,7 +12,7 @@ export default function NotFound() {
       code="404"
       title={t("notfound.title")}
       message={t("notfound.message")}
-      action={<Button render={<Link href="/dashboard" />}>{t("notfound.back")}</Button>}
+      action={<Button render={<Link to="/dashboard" />}>{t("notfound.back")}</Button>}
     />
   );
 }

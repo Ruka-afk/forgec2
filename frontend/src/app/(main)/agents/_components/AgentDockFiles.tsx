@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { ErrorState } from "@/components/ui/error-state";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { CloudUpload, Download, File, Folder, FolderUp } from "lucide-react";
 import { formatSize, joinPath, parentPath, type FileEntry } from "../[id]/files/_components/types";
 import { extractImmediateListing, filesLsTaskId, isFilesLsAck, parseLsListing } from "../[id]/files/_components/ls-listing";
@@ -176,7 +176,7 @@ export function AgentDockFiles({ agentId, osType }: AgentDockFilesProps) {
       </form>
       <p className="border-b border-border px-3 py-1 text-(--fs-micro-sm) text-muted-foreground">
         {t("agents.dock_files_transfer_hint")}{" "}
-        <Link href={`/agents/${agentId}/files`} className="text-primary hover:underline">
+        <Link to={`/agents/${agentId}/files`} className="text-primary hover:underline">
           {t("agents.files_title")}
         </Link>
         {busyName && pushPct > 0 && (

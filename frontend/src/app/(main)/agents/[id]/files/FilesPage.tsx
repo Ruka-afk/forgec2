@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageContainer } from "@/components/ui/page-container";

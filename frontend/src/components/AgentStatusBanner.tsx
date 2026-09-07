@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
@@ -41,13 +41,13 @@ export default function AgentStatusBanner() {
 
           <div className="flex-1 flex items-center gap-2 flex-wrap text-sm">
             {hasOffline && (
-              <Link href="/agents?status=offline" className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors font-medium text-xs">
+              <Link to="/agents?status=offline" className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors font-medium text-xs">
                 <StatusDot tone="destructive" size="xs" />
                 {offline} {t("status_banner.offline")}
               </Link>
             )}
             {hasStale && (
-              <Link href="/agents?status=stale" className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-warning/15 text-warning hover:bg-warning/25 transition-colors font-medium text-xs">
+              <Link to="/agents?status=stale" className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-warning/15 text-warning hover:bg-warning/25 transition-colors font-medium text-xs">
                 <StatusDot tone="warning" size="xs" />
                 {stale} {t("status_banner.stale")}
               </Link>
@@ -75,11 +75,11 @@ export default function AgentStatusBanner() {
               {t("status_banner.expanded_message")}
             </p>
             <div className="mt-2 flex items-center gap-2">
-              <Link href="/agents?status=offline" className="text-warning hover:text-warning/80 underline underline-offset-2 transition-colors">
+              <Link to="/agents?status=offline" className="text-warning hover:text-warning/80 underline underline-offset-2 transition-colors">
                 {t("status_banner.view_offline")}
               </Link>
               <span className="text-warning/60">|</span>
-              <Link href="/agents?status=stale" className="text-warning hover:text-warning/80 underline underline-offset-2 transition-colors">
+              <Link to="/agents?status=stale" className="text-warning hover:text-warning/80 underline underline-offset-2 transition-colors">
                 {t("status_banner.view_stale")}
               </Link>
             </div>

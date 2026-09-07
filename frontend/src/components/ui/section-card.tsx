@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { ChevronDown } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -80,7 +80,7 @@ export function SectionCard({
         {action}
         {collapsible && <ChevronDown className="size-2.5 text-muted-foreground/100" />}
         {href && linkLabel && (
-          <Link href={href} className="text-xs text-primary hover:underline">
+          <Link to={href} className="text-xs text-primary hover:underline">
             {linkLabel}
           </Link>
         )}

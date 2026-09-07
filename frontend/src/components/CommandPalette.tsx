@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { NAV_SECTIONS, filterNavByPermissions } from "@/lib/navigation";
 import { useI18n } from "@/lib/i18n";
 import { useAppStore } from "@/lib/store";
@@ -28,7 +28,7 @@ function normalize(s: string): string {
 
 export default function CommandPalette() {
   const { t } = useI18n();
-  const router = useRouter();
+  const navigate = useNavigate();
   const open = useAppStore((s) => s.commandPaletteOpen);
   const setOpen = useAppStore((s) => s.setCommandPaletteOpen);
   const permissions = useAppStore((s) => s.currentPermissions);
@@ -96,8 +96,8 @@ export default function CommandPalette() {
     const item = filtered[index];
     if (!item) return;
     close();
-    router.push(item.href);
-  }, [filtered, close, router]);
+    navigate(item.href);
+  }, [filtered, close, navigate]);
 
   // G10 fix: skip e.repeat (held key auto-repeat) and skip editable targets
   // so Ctrl+K does not hijack xterm's native kill-line shortcut.

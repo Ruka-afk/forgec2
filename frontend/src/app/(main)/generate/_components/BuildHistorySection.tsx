@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
@@ -138,7 +138,7 @@ export default function BuildHistorySection({ refreshKey }: { refreshKey?: numbe
                             </Tooltip>
                           )}
                           <Tooltip>
-                            <TooltipTrigger render={<Button type="button" variant="ghost" size="icon-xs" render={<Link href={rebuildHref(b)} />} aria-label={t("generate.rebuild")} className="rounded-lg hover:bg-muted">
+                            <TooltipTrigger render={<Button type="button" variant="ghost" size="icon-xs" render={<Link to={rebuildHref(b)} />} aria-label={t("generate.rebuild")} className="rounded-lg hover:bg-muted">
                               <RefreshCw className="size-3.5" />
                             </Button>} />
                             <TooltipContent>{t("generate.rebuild")}</TooltipContent>

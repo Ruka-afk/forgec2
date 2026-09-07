@@ -1,12 +1,11 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import { lazy, Suspense } from "react";
 
-const AIPageContent = dynamic(
-  () => import("./AIPageContent"),
-  { ssr: false }
-);
+
+const AIPageContent = lazy(
+  () => import("./AIPageContent"));
 
 export default function AIPagePage() {
-  return <AIPageContent />;
+  return <Suspense fallback={null}><AIPageContent /></Suspense>;
 }
