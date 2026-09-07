@@ -203,7 +203,9 @@ test.describe("loot screenshots pagination", () => {
     await page.goto("/loot.html");
     const imgs = page.getByRole("img", { name: /screenshot-\d+\.png/ });
     await expect(imgs).toHaveCount(48, { timeout: 10_000 });
-    await expect(page.getByText(/\/ 60/)).toBeVisible();
+    // The "n / 60" counter is `hidden sm:inline` (viewport-dependent), so
+    // assert presence instead of visibility.
+    await expect(page.getByText(/\/ 60/)).toHaveCount(1);
 
     await page.getByRole("button", { name: /下一页|next/i }).click();
     await expect(imgs).toHaveCount(12, { timeout: 10_000 });

@@ -11,7 +11,12 @@ export default React.memo(function ScrollToTop() {
   useEffect(() => {
     const main = document.querySelector("main");
     if (!main) return;
-    const onScroll = () => setVisible(main.scrollTop > 300);
+    const onScroll = () => {
+      // Near the bottom the button would sit on top of bottom-anchored
+      // actions (e.g. pagination prev/next on mobile) — hide it there.
+      const nearBottom = main.scrollHeight - main.scrollTop - main.clientHeight < 160;
+      setVisible(main.scrollTop > 300 && !nearBottom);
+    };
     main.addEventListener("scroll", onScroll, { passive: true });
     return () => main.removeEventListener("scroll", onScroll);
   }, []);

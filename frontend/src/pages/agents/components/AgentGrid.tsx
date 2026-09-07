@@ -1,5 +1,5 @@
 
-import { memo, useState } from "react";
+import { memo, useState, type SyntheticEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
@@ -29,6 +29,12 @@ interface AgentGridProps {
 // of cards at once on the (unvirtualized) mobile grid path.
 const GRID_PAGE = 120;
 
+/** True when a click bubbled up from a checkbox (see Card onClick below). */
+function isCheckboxOrigin(e: SyntheticEvent): boolean {
+  const t = e.target as HTMLElement | null;
+  return !!t?.closest?.('[role="checkbox"], input[type="checkbox"]');
+}
+
 export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCountMap, activeId, onInteract, onDetails, onMenu, selected, onToggleSelect }: AgentGridProps) {
   const { t } = useI18n();
   const [visible, setVisible] = useState(GRID_PAGE);
@@ -57,8 +63,12 @@ export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCou
             role="button"
             tabIndex={0}
             aria-label={`${hostname} ${os} ${status} ${ip}`}
-            onClick={() => onInteract(id)}
-            onDoubleClick={() => onDetails(id)}
+            // Base UI Checkbox re-dispatches a synthetic click on its sibling
+            // hidden <input>, which escapes the Checkbox's own stopPropagation
+            // and would otherwise bubble here and pop the detail view when the
+            // operator only meant to (de)select the row.
+            onClick={(e) => { if (isCheckboxOrigin(e)) return; onInteract(id); }}
+            onDoubleClick={(e) => { if (isCheckboxOrigin(e)) return; onDetails(id); }}
             onContextMenu={(e) => {
               e.preventDefault();
               onMenu({ x: e.clientX, y: e.clientY, beacon });
