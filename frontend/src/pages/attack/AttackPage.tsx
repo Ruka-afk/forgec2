@@ -1,0 +1,506 @@
+
+import { useEffect, useState, useCallback } from "react";
+import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
+import { phaseColor } from "@/lib/chart-palette";
+import { PageSpinner } from "@/components/ui/spinner";
+import { PageContainer } from "@/components/ui/page-container";
+import { useAgentList } from "@/lib/hooks/useAgentList";
+import { useApiResource } from "@/lib/hooks/useApiResource";
+import { POLL } from "@/lib/polling";
+import { Card } from "@/components/ui/card";
+import { Banner } from "@/components/ui/banner";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
+import { Check, CheckCircle, ChevronDown, CircleX, Zap } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
+
+interface AttackTechnique {
+  id: string;
+  name: string;
+  tactic: string;
+  task_types: string[];
+}
+
+interface TacticGroup {
+  tactic: string;
+  techniques: AttackTechnique[];
+  covered: number;
+  total: number;
+}
+
+interface AttackCoverageResponse {
+  tactics: TacticGroup[];
+  total_covered: number;
+  total: number;
+  used_task_types: string[];
+}
+
+interface PhaseCoverage {
+  phase: string;
+  total_tasks: number;
+  campaigns_covered: number;
+  total_campaigns: number;
+}
+
+const KILL_CHAIN_PHASES = [
+  "Reconnaissance", "Resource Development", "Initial Access", "Execution",
+  "Persistence", "Privilege Escalation", "Defense Evasion", "Credential Access",
+  "Discovery", "Lateral Movement", "Collection", "Command and Control",
+  "Exfiltration", "Impact",
+];
+
+const TACTIC_ORDER = [
+  "Execution",
+  "Persistence",
+  "Privilege Escalation",
+  "Defense Evasion",
+  "Credential Access",
+  "Discovery",
+  "Collection",
+  "Lateral Movement",
+  "Command and Control",
+];
+
+const TACTIC_BORDER_COLORS: Record<string, string> = {
+  "Execution": "border-chart-5/30",
+  "Persistence": "border-info/30",
+  "Privilege Escalation": "border-chart-4/30",
+  "Defense Evasion": "border-chart-6/30",
+  "Credential Access": "border-warning/30",
+  "Discovery": "border-chart-2/30",
+  "Collection": "border-chart-3/30",
+  "Lateral Movement": "border-chart-1/30",
+  "Command and Control": "border-destructive/30",
+};
+
+const TACTIC_HEADER_COLORS: Record<string, string> = {
+  "Execution": "bg-chart-5",
+  "Persistence": "bg-info",
+  "Privilege Escalation": "bg-chart-4",
+  "Defense Evasion": "bg-chart-6",
+  "Credential Access": "bg-warning",
+  "Discovery": "bg-chart-2",
+  "Collection": "bg-chart-3",
+  "Lateral Movement": "bg-chart-1",
+  "Command and Control": "bg-destructive",
+};
+
+export default function AttackPage() {
+  const { t } = useI18n();
+  const { agents } = useAgentList();
+  const [data, setData] = useState<AttackCoverageResponse | null>(null);
+  const [selectedAgent, setSelectedAgent] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [expandedTactic, setExpandedTactic] = useState<string | null>(null);
+
+  const fetchCoverage = useCallback(async (agentId: string, signal?: AbortSignal) => {
+    try {
+      const params = new URLSearchParams();
+      if (agentId) params.set("agent_id", agentId);
+      const json = await api.get<AttackCoverageResponse>(`/attack/coverage?${params}`, { signal });
+      setData(json);
+    } catch {
+      toast.error(t("attack.fetch_failed"));
+    } finally {
+      setLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    fetchCoverage(selectedAgent, controller.signal);
+    return () => controller.abort();
+  }, [selectedAgent, fetchCoverage]);
+
+  // Build a set of used task types for quickly checking technique coverage
+  const usedTaskTypes = new Set(data?.used_task_types ?? []);
+
+  // Helper to check if a technique is covered
+  const isTechniqueCovered = (tech: AttackTechnique): boolean => {
+    return tech.task_types.some((tt) => usedTaskTypes.has(tt));
+  };
+
+  const sortedTactics = data
+    ? [...data.tactics].sort((a, b) => {
+        const ai = TACTIC_ORDER.indexOf(a.tactic);
+        const bi = TACTIC_ORDER.indexOf(b.tactic);
+        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+      })
+    : [];
+
+  const percentage = data && data.total > 0 ? Math.round((data.total_covered / data.total) * 100) : 0;
+
+  if (loading && !data) {
+    return (
+      <PageContainer title={t("attack.title")} subtitle={t("attack.subtitle")}>
+        <PageSpinner />
+      </PageContainer>
+    );
+  }
+
+  return (
+    <PageContainer title={t("attack.title")} subtitle={t("attack.subtitle")} actions={<>
+        <Select value={selectedAgent || "all"} onValueChange={(v) => setSelectedAgent(v === "all" ? "" : v ?? "")}>
+          <SelectTrigger className="max-w-[250px]">
+            <SelectValue placeholder={t("attack.all_agents")} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("attack.all_agents")}</SelectItem>
+            {agents
+              .filter((a) => a.id && a.hostname)
+              .map((a) => (
+                <SelectItem key={a.id || ""} value={a.id || ""}>
+                  {a.hostname} ({a.ip || (a.id || "").slice(0, 8)})
+                </SelectItem>
+              ))}
+          </SelectContent>
+        </Select>
+      </>}>
+
+      <Banner tone="warning" className="items-start">
+        <div className="font-semibold">{t("attack.honesty_title")}</div>
+        <div className="text-xs text-muted-foreground mt-0.5">{t("attack.honesty_desc")}</div>
+      </Banner>
+
+      {/* Summary Card */}
+      <Card className="p-(--card-spacing)">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+              {t("attack.total_coverage")}
+            </div>
+            <div className="text-4xl font-bold mt-2 text-foreground">
+              {data?.total_covered ?? 0}
+              <span className="text-xl text-muted-foreground font-normal">/{data?.total ?? 0}</span>
+            </div>
+            <div className="text-sm mt-1 text-muted-foreground">
+              {t("attack.techniques_used")}
+            </div>
+          </div>
+          <div className="flex flex-col items-center">
+            <div className="relative size-24">
+              <svg className="size-24 -rotate-90" viewBox="0 0 36 36" role="img" aria-label={t("attack.progress_ring")}>
+                <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="3"
+                  className="text-border" />
+                <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="3"
+                  strokeDasharray={`${percentage * 0.9722} 100`}
+                  className="text-primary"
+                  strokeLinecap="round" />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-2xl font-bold text-primary">{percentage}%</span>
+              </div>
+            </div>
+            <span className="text-xs text-muted-foreground mt-1">{t("attack.coverage")}</span>
+          </div>
+        </div>
+      </Card>
+
+      {/* Kill Chain Phase Coverage */}
+      <PhaseCoverageCard />
+
+      {/* Technique Usage Heatmap */}
+      <UsageHeatmapCard />
+
+      {/* Tactic Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {sortedTactics.map((tactic) => {
+          const isExpanded = expandedTactic === tactic.tactic;
+          const headerColor = TACTIC_HEADER_COLORS[tactic.tactic] || "bg-primary";
+          const borderColor = TACTIC_BORDER_COLORS[tactic.tactic] || "border-primary/30";
+          const tacticPct = tactic.total > 0 ? Math.round((tactic.covered / tactic.total) * 100) : 0;
+
+          return (
+            <Card
+              key={tactic.tactic}
+              className={`overflow-hidden shadow-sm ${borderColor} border`}
+            >
+              <Collapsible open={isExpanded} onOpenChange={(open) => setExpandedTactic(open ? tactic.tactic : null)}>
+              <CollapsibleTrigger className="flex items-center justify-between px-4 py-3 cursor-pointer hover:text-muted-foreground transition-opacity w-full">
+                <div className="flex items-center gap-3">
+                  <div className={`size-3 rounded-full ${headerColor}`}></div>
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">
+                      {tactic.tactic}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {tactic.covered}/{tactic.total} {t("attack.techniques")}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5">
+                    <Progress value={tacticPct} className="w-20" indicatorClassName={cn(
+                      "h-full rounded-full transition-all duration-500",
+                      tacticPct >= 50 ? "bg-primary" : tacticPct >= 25 ? "bg-warning" : "bg-destructive"
+                    )} />
+                    <span className="text-xs font-mono text-muted-foreground tabular-nums w-8 text-right">
+                      {tacticPct}%
+                    </span>
+                  </div>
+                   <ChevronDown className="size-3 text-muted-foreground" />
+                </div>
+              </CollapsibleTrigger>
+
+              <CollapsibleContent>
+                <div className="border-t border-border divide-y divide-border">
+                  {tactic.techniques.map((tech) => {
+                    const covered = isTechniqueCovered(tech);
+                    return (
+                      <div
+                        key={tech.id}
+                        className={`px-4 py-2.5 flex items-center justify-between transition-colors ${
+                          covered
+                            ? "bg-success/10"
+                            : "hover:bg-muted/30"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {/* Covered indicator */}
+                          {covered ? (
+                            <CheckCircle className="size-4" />
+                          ) : (
+                            <CircleX className="size-4 text-muted-foreground shrink-0" />
+                          )}
+                          <code className="text-xs font-mono text-primary shrink-0 w-20">
+                            {tech.id}
+                          </code>
+                          <span className={`text-sm truncate ${
+                            covered
+                              ? "text-foreground font-medium"
+                              : "text-muted-foreground"
+                          }`}>
+                            {tech.name}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          {tech.task_types.slice(0, 3).map((tt) => (
+                            <Badge
+                              key={tt}
+                              variant={usedTaskTypes.has(tt) ? "success" : "outline"}
+                              className="text-(--fs-micro-sm) font-mono"
+                            >
+                              {tt}
+                            </Badge>
+                          ))}
+                          {tech.task_types.length > 3 && (
+                            <span className="text-(--fs-micro-sm) text-muted-foreground">+{tech.task_types.length - 3}</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CollapsibleContent>
+              </Collapsible>
+            </Card>
+          );
+        })}
+      </div>
+    </PageContainer>
+  );
+}
+
+function PhaseCoverageCard() {
+  const { t } = useI18n();
+  const { data: resp, loading } = useApiResource<{ success?: boolean; data?: PhaseCoverage[] }>({
+    fetcher: async () => {
+      const json = await api.get(paths.mitre.phases);
+      return json;
+    },
+    toastThrottleMs: POLL.toastThrottle,
+    errorMessage: t("attack.load_phases_failed"),
+  });
+  const phases = resp?.data ?? [];
+
+  if (loading || phases.length === 0) return null;
+
+  const maxCoverage = Math.max(...phases.map((p) => p.campaigns_covered), 1);
+
+  return (
+    <Card className="p-(--card-spacing)">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-lg font-semibold text-foreground">
+            <Zap className="size-4" />{t("attack.kill_chain_title")}
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {t("attack.kill_chain_subtitle")}
+          </p>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
+        {KILL_CHAIN_PHASES.map((phase) => {
+          const found = phases.find((p) => p.phase === phase);
+          const isCovered = found && found.campaigns_covered > 0;
+          const pct = found ? Math.round((found.campaigns_covered / maxCoverage) * 100) : 0;
+          return (
+            <div key={phase} className={`p-3 rounded-lg border text-center transition-colors ${
+              isCovered ? "border-success/30 bg-success/10" : "border-border bg-card"
+            }`}>
+              <div className="size-6 rounded-full mx-auto mb-1.5 flex items-center justify-center"
+                style={{ background: phaseColor(phase) }}>
+                {isCovered ? (
+                  <Check className="size-4" />
+                ) : (
+                  <span className="text-white text-(--fs-micro-sm) font-bold">-</span>
+                )}
+              </div>
+              <div className="text-(--fs-micro-sm) font-medium text-foreground leading-tight mb-1">
+                {phase.split(" ").slice(0, 2).join(" ")}
+              </div>
+              <div className="w-full h-1.5 rounded-full bg-secondary overflow-hidden">
+                <div className={`h-full rounded-full transition-all ${isCovered ? "bg-success" : "bg-muted-foreground"}`}
+                  style={{ width: `${pct}%` }} />
+              </div>
+              {found && (
+                <div className="text-(--fs-micro) text-muted mt-1">
+                  {found.total_tasks} {t("attack.tasks")}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+// ── Technique usage heatmap ─────────────────────────────────────────────────
+
+interface HeatmapCell {
+  date: string;
+  tactic: string;
+  count: number;
+}
+
+interface HeatmapData {
+  days: string[];
+  tactics: string[];
+  cells: HeatmapCell[];
+  range: string;
+  total_tasks: number;
+}
+
+function heatmapShade(count: number): string {
+  if (count <= 0) return "bg-secondary";
+  if (count < 3) return "bg-primary/25";
+  if (count < 8) return "bg-primary/45";
+  if (count < 20) return "bg-primary/70";
+  return "bg-primary";
+}
+
+const HEATMAP_TACTIC_COLORS: Record<string, string> = {
+  Execution: "text-chart-1",
+  Persistence: "text-chart-2",
+  "Privilege Escalation": "text-chart-3",
+  "Defense Evasion": "text-chart-4",
+  "Credential Access": "text-destructive",
+  Discovery: "text-info",
+  Collection: "text-warning",
+  "Lateral Movement": "text-chart-5",
+  "Command and Control": "text-primary",
+};
+
+function UsageHeatmapCard() {
+  const { t } = useI18n();
+  const [range, setRange] = useState("30d");
+  const [data, setData] = useState<HeatmapData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    api.get<HeatmapData>(paths.mitre.heatmap(range))
+      .then((d) => { if (!cancelled) setData(d); })
+      .catch(() => { if (!cancelled) setData(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [range]);
+
+  const lookup = new Map<string, number>();
+  (data?.cells || []).forEach((c) => lookup.set(`${c.date}|${c.tactic}`, c.count));
+
+  return (
+    <Card>
+      <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2 flex-wrap">
+        <h3 className="text-sm font-semibold text-foreground">{t("attack.heatmap_title")}</h3>
+        <Select value={range} onValueChange={(v) => v && setRange(v)}>
+          <SelectTrigger className="w-28" aria-label={t("attack.heatmap_range")}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="7d">7d</SelectItem>
+            <SelectItem value="30d">30d</SelectItem>
+            <SelectItem value="90d">90d</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="p-4">
+        {loading ? (
+          <PageSpinner />
+        ) : !data || data.total_tasks === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-6">{t("attack.heatmap_empty")}</p>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <div className="inline-block min-w-full">
+                {/* Tactic rows */}
+                <div className="space-y-1">
+                  {data.tactics.map((tactic) => (
+                    <div key={tactic} className="flex items-center gap-1">
+                      <span className={`text-(--fs-micro-sm) w-36 shrink-0 truncate ${HEATMAP_TACTIC_COLORS[tactic] || "text-foreground"}`}>
+                        {tactic}
+                      </span>
+                      <div className="flex gap-[2px] flex-1">
+                        {data.days.map((day) => {
+                          const count = lookup.get(`${day}|${tactic}`) || 0;
+                          return (
+                            <div
+                              key={day}
+                              title={`${tactic} · ${day}: ${count}`}
+                              className={`h-3.5 flex-1 min-w-[6px] rounded-[2px] ${heatmapShade(count)}`}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {/* Day axis labels */}
+                <div className="flex items-center gap-1 mt-1.5">
+                  <span className="w-36 shrink-0" />
+                  <div className="flex gap-[2px] flex-1">
+                    {data.days.map((day, i) => (
+                      <span key={day} className="flex-1 min-w-[6px] text-center text-(--fs-micro) text-muted-foreground/70">
+                        {(i % Math.ceil(data.days.length / 10)) === 0 ? day.slice(8) : ""}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-between mt-3 text-(--fs-micro-sm) text-muted-foreground">
+              <span>{t("attack.heatmap_total", { count: data.total_tasks })}</span>
+              <span className="flex items-center gap-1">
+                {t("attack.heatmap_less")}
+                <span className="size-3 rounded-[2px] bg-secondary inline-block" />
+                <span className="size-3 rounded-[2px] bg-primary/25 inline-block" />
+                <span className="size-3 rounded-[2px] bg-primary/45 inline-block" />
+                <span className="size-3 rounded-[2px] bg-primary/70 inline-block" />
+                <span className="size-3 rounded-[2px] bg-primary inline-block" />
+                {t("attack.heatmap_more")}
+              </span>
+            </div>
+          </>
+        )}
+      </div>
+    </Card>
+  );
+}

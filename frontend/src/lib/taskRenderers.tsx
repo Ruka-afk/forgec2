@@ -1,4 +1,3 @@
-"use client";
 
 // taskRenderers — pluggable per-task-type result rendering.
 //

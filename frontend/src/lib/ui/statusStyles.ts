@@ -1,4 +1,3 @@
-"use client";
 
 /**
  * Single source of truth for semantic status/accent colors.

@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type TransientTone = "info" | "success" | "warning" | "destructive" | "muted";

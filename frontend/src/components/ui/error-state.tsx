@@ -1,4 +1,3 @@
-"use client";
 
 import { CircleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";

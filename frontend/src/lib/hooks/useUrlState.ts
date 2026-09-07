@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useEffect, useState } from "react";
 
 // readUrlState extracts a validated filter value from the query string.

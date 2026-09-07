@@ -1,4 +1,3 @@
-"use client";
 
 type SpinnerSize = "xs" | "sm" | "md" | "lg" | "xl";
 

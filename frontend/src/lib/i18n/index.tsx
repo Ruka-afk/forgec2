@@ -1,5 +1,3 @@
-"use client";
-
 import { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo, type ReactNode } from "react";
 import { en } from "./en";
 

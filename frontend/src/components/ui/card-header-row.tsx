@@ -1,5 +1,3 @@
-"use client";
-
 import { cn } from "@/lib/utils";
 import { IconBadge } from "@/components/ui/icon-badge";
 import { hueStyles, type Hue } from "@/lib/ui/statusStyles";

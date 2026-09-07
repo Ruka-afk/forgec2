@@ -1,5 +1,3 @@
-"use client";
-
 import type { StateCreator } from "zustand";
 import type { AppStore, OnlineUser } from "./types";
 import type { PermissionKey } from "@/lib/permission-keys";

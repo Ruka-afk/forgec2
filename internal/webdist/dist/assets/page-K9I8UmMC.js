@@ -1,1 +1,0 @@
-import{j as t}from"./vendor-react-DklbvxIc.js";import{N as o}from"./vendor-router-B3vCXr4z.js";import"./vendor-misc-pIg0fCm4.js";function i(){return t.jsx(o,{to:"/automation#tab=workflows",replace:!0})}export{i as default};

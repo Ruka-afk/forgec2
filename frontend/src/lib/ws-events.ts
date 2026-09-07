@@ -1,5 +1,3 @@
-"use client";
-
 /**
  * Typed WebSocket event registry.
  *

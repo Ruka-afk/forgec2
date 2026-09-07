@@ -1,4 +1,3 @@
-"use client";
 
 import { useEffect, useCallback, useRef } from "react";
 import Sidebar from "@/components/Sidebar";

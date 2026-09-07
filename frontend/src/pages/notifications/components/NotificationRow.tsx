@@ -1,0 +1,99 @@
+
+import { memo } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Check, CheckCircle, CircleAlert, Info, Trash2, XCircle } from "lucide-react";
+import { formatTime } from "@/lib/utils";
+import { StatusDot } from "@/components/ui/status-dot";
+
+interface NotificationItem {
+  id: number;
+  type: string;
+  title: string;
+  message: string;
+  agent_id: string;
+  task_id: number;
+  severity: string;
+  read: boolean;
+  created_at: string;
+}
+
+const SEVERITY_VARIANT: Record<string, "success" | "destructive" | "warning" | "default"> = {
+  success: "success",
+  error: "destructive",
+  warning: "warning",
+  info: "default",
+};
+
+const SEVERITY_ICONS: Record<string, React.ReactNode> = {
+  success: <CheckCircle className="size-4" />,
+  error: <XCircle className="size-4" />,
+  warning: <CircleAlert className="size-4" />,
+  info: <Info className="size-4" />,
+};
+
+interface NotificationRowProps {
+  item: NotificationItem;
+  isSelected: boolean;
+  onToggleSelect: (id: number) => void;
+  onMarkRead: (id: number) => void;
+  onDelete: (id: number) => void;
+  t: (key: string, params?: Record<string, string | number>) => string;
+}
+
+function NotificationRowInner({
+  item,
+  isSelected,
+  onToggleSelect,
+  onMarkRead,
+  onDelete,
+  t,
+}: NotificationRowProps) {
+  const n = item;
+  return (
+    <div className={`flex items-start gap-3 px-4 sm:px-6 py-4 transition-colors ${n.read ? "" : "bg-primary/5"}`}>
+      <Checkbox
+        checked={isSelected}
+        onCheckedChange={() => onToggleSelect(n.id)}
+        aria-label={`Select notification ${n.title}`}
+        className="mt-1 shrink-0"
+      />
+      <div className={`shrink-0 size-8 rounded-full flex items-center justify-center text-xs ${SEVERITY_VARIANT[n.severity] === "success" ? "bg-success/15 text-success" : SEVERITY_VARIANT[n.severity] === "destructive" ? "bg-destructive/15 text-destructive" : SEVERITY_VARIANT[n.severity] === "warning" ? "bg-warning/15 text-warning dark:bg-warning/20 dark:text-warning" : "bg-info/15 text-info"}`}>
+        {SEVERITY_ICONS[n.severity] || <Info className="size-4" />}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-0.5">
+          <span className="font-medium text-sm">{n.title || n.type}</span>
+          {!n.read && <StatusDot tone="primary" size="sm" className="shrink-0" />}
+        </div>
+        <p className="text-sm text-muted-foreground truncate">{n.message}</p>
+        <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+          <span>{n.created_at ? formatTime(n.created_at) : "-"}</span>
+          {n.agent_id && <span>{t("notifications.agent_prefix")} {n.agent_id.substring(0, 8)}</span>}
+          <Badge variant={SEVERITY_VARIANT[n.severity] || "default"}>{t(`notifications.severity_${n.severity}`)}</Badge>
+          <span className="font-mono text-(--fs-micro-sm)">{n.type}</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-1 shrink-0">
+        {!n.read && (
+          <Tooltip>
+            <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => onMarkRead(n.id)} className="size-8 p-0" aria-label={t("notifications.mark_read")} />}>
+              <Check className="size-4" />
+            </TooltipTrigger>
+            <TooltipContent>{t("notifications.mark_read")}</TooltipContent>
+          </Tooltip>
+        )}
+        <Tooltip>
+          <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => onDelete(n.id)} className="size-8 p-0 text-muted-foreground hover:text-destructive" aria-label={t("notifications.delete")} />}>
+            <Trash2 className="size-4" />
+          </TooltipTrigger>
+          <TooltipContent>{t("notifications.delete")}</TooltipContent>
+        </Tooltip>
+      </div>
+    </div>
+  );
+}
+
+export const NotificationRow = memo(NotificationRowInner);

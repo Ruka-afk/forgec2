@@ -1,4 +1,3 @@
-"use client";
 
 import { useEffect, useRef, useMemo } from "react";
 import { Spinner } from "@/components/ui/spinner";

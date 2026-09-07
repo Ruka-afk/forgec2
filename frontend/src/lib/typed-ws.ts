@@ -1,5 +1,3 @@
-"use client";
-
 import { useMemo } from "react";
 import { onWSMessage, type WSMessage } from "@/lib/wsContext";
 import { useWebSocket } from "@/lib/useWebSocket";

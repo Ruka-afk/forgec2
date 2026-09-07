@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import { runTask, type TaskStatus } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";

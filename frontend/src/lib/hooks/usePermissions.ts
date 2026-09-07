@@ -1,5 +1,3 @@
-"use client";
-
 import { useAppStore } from "@/lib/store";
 import { can, canAny, canAll } from "@/lib/permissions";
 import type { PermissionKey } from "@/lib/permissions";

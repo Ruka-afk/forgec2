@@ -1,7 +1,5 @@
-"use client";
-
 import { create } from "zustand";
-import type { Beacon } from "@/app/(main)/agents/_components/types";
+import type { Beacon } from "@/pages/agents/components/types";
 import {
   defaultInteractPrefs,
   readInteractPrefs,

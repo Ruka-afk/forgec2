@@ -1,5 +1,3 @@
-"use client";
-
 import type { ReactNode } from "react";
 import { usePermissions } from "@/lib/hooks/usePermissions";
 import type { PermissionKey } from "@/lib/permission-keys";

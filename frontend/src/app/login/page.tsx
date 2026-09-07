@@ -1,4 +1,3 @@
-"use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";

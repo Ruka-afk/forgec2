@@ -1,5 +1,3 @@
-"use client";
-
 /**
  * Canonical runtime registries for status vocabularies.
  *

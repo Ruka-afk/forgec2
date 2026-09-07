@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useState } from "react";
 import { getRateLimitRetryAfter } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";

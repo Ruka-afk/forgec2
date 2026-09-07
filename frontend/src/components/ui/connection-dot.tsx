@@ -1,5 +1,3 @@
-"use client";
-
 import { memo } from "react";
 import { StatusDot } from "@/components/ui/status-dot";
 

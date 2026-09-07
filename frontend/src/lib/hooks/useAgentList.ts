@@ -1,5 +1,3 @@
-"use client";
-
 import { fetchAgentListCached, AGENTS_CACHE_KEY } from "@/lib/agents";
 import { useCachedData } from "@/lib/hooks/useCachedData";
 import { useI18n } from "@/lib/i18n";

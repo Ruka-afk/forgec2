@@ -1,0 +1,515 @@
+
+import { useState } from "react";
+import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageContainer } from "@/components/ui/page-container";
+import { PageSpinner } from "@/components/ui/spinner";
+import { useConfirm } from "@/lib/hooks/useConfirm";
+import { useApiResource } from "@/lib/hooks/useApiResource";
+import { POLL } from "@/lib/polling";
+import { formatTime } from "@/lib/utils";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { toast } from "sonner";
+import { useI18n } from "@/lib/i18n";
+import { FileText, Key, Pencil, Play, Plus, Save, Send, Square, Trash2, Shield } from "lucide-react";
+import { EntraIdentityPanel } from "./components/EntraIdentityPanel";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+
+interface PhishingTemplate {
+  id: number;
+  ID: number;
+  name: string;
+  subject: string;
+  body: string;
+  from_name: string;
+  from_email: string;
+  type: string;
+  created_by: string;
+  created_at: string;
+}
+
+interface PhishingCampaign {
+  id: number;
+  ID: number;
+  name: string;
+  template_id: number;
+  target_list: string;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_user: string;
+  smtp_pass: string;
+  status: string;
+  sent_count: number;
+  failed_count: number;
+  open_count: number;
+  cred_count: number;
+  created_by: string;
+  created_at: string;
+}
+
+interface CaptureEntry {
+  id: number;
+  ID: number;
+  username: string;
+  password: string;
+  domain: string;
+  source: string;
+  type: string;
+  created_at: string;
+}
+
+type Tab = "templates" | "campaigns" | "captures" | "entra";
+
+export default function PhishingPageContent() {
+  const { t } = useI18n();
+  const { confirm, modal } = useConfirm();
+
+  // Template form
+  const [showTplForm, setShowTplForm] = useState(false);
+  const [tplForm, setTplForm] = useState({ name: "", subject: "", body: "", from_name: "", from_email: "", type: "html" });
+  const [editTplId, setEditTplId] = useState<number | null>(null);
+  const [savingTpl, setSavingTpl] = useState(false);
+
+  // Campaign form
+  const [showCampForm, setShowCampForm] = useState(false);
+  const [campForm, setCampForm] = useState({ name: "", template_id: 0, target_list: "", smtp_host: "", smtp_port: 587, smtp_user: "", smtp_pass: "" });
+  const [savingCamp, setSavingCamp] = useState(false);
+
+  const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
+    { key: "templates", label: t("phishing.tab_templates"), icon: <FileText className="size-4" /> },
+    { key: "campaigns", label: t("phishing.tab_campaigns"), icon: <Send className="size-4" /> },
+    { key: "captures", label: t("phishing.tab_captures"), icon: <Key className="size-4" /> },
+    { key: "entra", label: t("phishing.tab_entra"), icon: <Shield className="size-4" /> },
+  ];
+
+  const { data, loading, refresh: loadAll } = useApiResource<{
+    templates: PhishingTemplate[];
+    campaigns: PhishingCampaign[];
+    captures: CaptureEntry[];
+  }>({
+    fetcher: async () => {
+      const [t, c, cap] = await Promise.all([
+        api.get(paths.phishing.templates),
+        api.get(paths.phishing.campaigns),
+        api.get(paths.phishing.captures),
+      ]);
+      return {
+        templates: (t.data as PhishingTemplate[]) || [],
+        campaigns: (c.data as PhishingCampaign[]) || [],
+        captures: (cap.data as CaptureEntry[]) || [],
+      };
+    },
+    toastThrottleMs: POLL.toastThrottle,
+    errorMessage: t("phishing.toast.load_failed"),
+  });
+  const templates = data?.templates ?? [];
+  const campaigns = data?.campaigns ?? [];
+  const captures = data?.captures ?? [];
+
+  // 鈹€鈹€ Template CRUD 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+
+  const handleSaveTpl = async () => {
+    if (savingTpl) return;
+    setSavingTpl(true);
+    try {
+      if (editTplId) {
+        await api.putJson(paths.phishing.template(editTplId), tplForm);
+      } else {
+        await api.postJson(paths.phishing.templates, tplForm);
+      }
+      setShowTplForm(false);
+      setEditTplId(null);
+      setTplForm({ name: "", subject: "", body: "", from_name: "", from_email: "", type: "html" });
+      loadAll();
+    } catch { toast.error(t("phishing.toast.save_template_failed")); }
+    finally { setSavingTpl(false); }
+  };
+
+  const handleEditTpl = (t: PhishingTemplate) => {
+    setEditTplId(t.id);
+    setTplForm({ name: t.name, subject: t.subject, body: t.body, from_name: t.from_name, from_email: t.from_email, type: t.type || "html" });
+    setShowTplForm(true);
+  };
+
+  const handleDeleteTpl = async (id: number) => {
+    if (!(await confirm({ message: t("phishing.delete_template") }))) return;
+    try {
+      await api.del(paths.phishing.template(id));
+      loadAll();
+    } catch {
+      toast.error(t("phishing.toast.delete_template_failed"));
+    }
+  };
+
+  // 鈹€鈹€ Campaign CRUD 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+
+  const handleSaveCamp = async () => {
+    if (!campForm.template_id) {
+      toast.error(t("phishing.toast.select_template"));
+      return;
+    }
+    if (savingCamp) return;
+    setSavingCamp(true);
+    try {
+      await api.postJson(paths.phishing.campaigns, campForm);
+      setShowCampForm(false);
+      setCampForm({ name: "", template_id: 0, target_list: "", smtp_host: "", smtp_port: 587, smtp_user: "", smtp_pass: "" });
+      loadAll();
+    } catch { toast.error(t("phishing.toast.save_campaign_failed")); }
+    finally { setSavingCamp(false); }
+  };
+
+  const [launchingId, setLaunchingId] = useState<number | null>(null);
+  const handleLaunch = async (id: number) => {
+    // Double-click guard: two launches could email the full target list
+    // twice (the backend claim is atomic, but the second request still
+    // errors confusingly).
+    if (launchingId !== null) return;
+    setLaunchingId(id);
+    try {
+      const res = await api.postJson<{ success?: boolean; queued?: number; message?: string; error?: string }>(
+        `/phishing/campaigns/${id}/launch`,
+        {},
+      );
+      if (res.message) toast.success(res.message);
+      else toast.success(t("phishing.toast.launched", { count: res.queued ?? 0 }));
+      loadAll();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("phishing.toast.launch_failed"));
+    } finally {
+      setLaunchingId(null);
+    }
+  };
+
+  const handleStop = async (id: number) => {
+    try {
+      await api.post(paths.phishing.campaignStop(id));
+      loadAll();
+    } catch { toast.error(t("phishing.toast.save_campaign_failed")); }
+  };
+
+  const handleDeleteCamp = async (id: number) => {
+    if (!(await confirm({ message: t("phishing.delete_campaign") }))) return;
+    try {
+      await api.del(paths.phishing.campaign(id));
+      loadAll();
+    } catch {
+      toast.error(t("phishing.toast.delete_campaign_failed"));
+    }
+  };
+
+  if (loading) return <PageContainer title={t("phishing.title")} subtitle={t("phishing.subtitle")}><PageSpinner /></PageContainer>;
+
+  // 鈹€鈹€ Templates Tab 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+
+  function renderTemplates() {
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-foreground">{t("phishing.templates_title")}</h2>
+          <Button onClick={() => { setEditTplId(null); setTplForm({ name: "", subject: "", body: "", from_name: "", from_email: "", type: "html" }); setShowTplForm(true); }}>
+            <Plus className="size-4" /> {t("phishing.new_template")}
+          </Button>
+        </div>
+        {templates.length === 0 ? (
+          <EmptyState icon={FileText} title={t("phishing.empty_templates")} message={t("phishing.empty_templates_hint")} />
+        ) : (
+          <Card>
+            <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-left px-4 py-3 sm:py-3.5">{t("phishing.col_name")}</TableHead>
+                  <TableHead className="text-left px-4 py-3 sm:py-3.5">{t("phishing.col_subject")}</TableHead>
+                  <TableHead className="text-left px-4 py-3 sm:py-3.5">{t("phishing.col_from")}</TableHead>
+                  <TableHead className="text-left px-4 py-3 sm:py-3.5">{t("phishing.col_type")}</TableHead>
+                  <TableHead className="text-right px-4 py-3 sm:py-3.5">{t("phishing.col_actions")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {templates.map((tpl) => {
+                  const tid = tpl.id;
+                  return (
+                    <TableRow key={tid}>
+                      <TableCell className="px-4 py-3 sm:py-3.5 font-medium text-foreground">{tpl.name}</TableCell>
+                      <TableCell className="px-4 py-3 sm:py-3.5 text-muted-foreground max-w-[200px] truncate">{tpl.subject}</TableCell>
+                      <TableCell className="px-4 py-3 sm:py-3.5 text-muted-foreground">{tpl.from_name || tpl.from_email}</TableCell>
+                      <TableCell className="px-4 py-3 sm:py-3.5"><Badge variant="outline">{tpl.type}</Badge></TableCell>
+                      <TableCell className="px-4 py-3 sm:py-3.5 text-right">
+                        <Button variant="ghost" size="icon-xs" onClick={() => handleEditTpl(tpl)} className="text-muted-foreground hover:text-primary mr-3" aria-label={t("phishing.a11y_edit_template")}><Pencil className="size-4" /></Button>
+                        <Button variant="ghost" size="icon-xs" onClick={() => handleDeleteTpl(tid)} className="text-muted-foreground hover:text-destructive" aria-label={t("phishing.a11y_delete_template")}><Trash2 className="size-4" /></Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+            </div>
+          </Card>
+        )}
+        <Dialog open={showTplForm} onOpenChange={(open) => {
+          setShowTplForm(open);
+          if (!open) setEditTplId(null);
+        }}>
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" showCloseButton={false}>
+            <DialogHeader>
+              <DialogTitle>{editTplId ? t("phishing.dialog_edit_template") : t("phishing.dialog_new_template")}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label>{t("phishing.field_template_name")}</Label>
+                  <Input value={tplForm.name} onChange={(e) => setTplForm({ ...tplForm, name: e.target.value })} />
+                </div>
+                <div>
+                  <Label>{t("common.type")}</Label>
+                  <Select value={tplForm.type} onValueChange={(v) => setTplForm({ ...tplForm, type: v || "html" })}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="html">{t("phishing.type_html")}</SelectItem>
+                      <SelectItem value="text">{t("phishing.type_plain")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div>
+                <Label>{t("phishing.field_subject")}</Label>
+                <Input value={tplForm.subject} onChange={(e) => setTplForm({ ...tplForm, subject: e.target.value })} />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label>{t("phishing.field_from_name")}</Label>
+                  <Input value={tplForm.from_name} onChange={(e) => setTplForm({ ...tplForm, from_name: e.target.value })} />
+                </div>
+                <div>
+                  <Label>{t("phishing.field_from_email")}</Label>
+                  <Input value={tplForm.from_email} onChange={(e) => setTplForm({ ...tplForm, from_email: e.target.value })} />
+                </div>
+              </div>
+              <div>
+                <Label>
+                  {t("phishing.field_body")}
+                  <span className="text-xs text-muted-foreground ml-2">Supports {'{{.Link}}'}, {'{{.Token}}'}, {'{{.Email}}'}, {'{{.Username}}'}</span>
+                </Label>
+                <Textarea rows={12} className="font-mono" value={tplForm.body} onChange={(e) => setTplForm({ ...tplForm, body: e.target.value })} />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <Button onClick={handleSaveTpl} disabled={savingTpl} className="flex-1"><Save className="size-4" />{t("common.save")}</Button>
+              <Button variant="outline" onClick={() => { setShowTplForm(false); setEditTplId(null); }}>{t("common.cancel")}</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
+
+  // 鈹€鈹€ Campaigns Tab 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+
+  function renderCampaigns() {
+    const statusBadge = (s: string) => {
+      const label = s === "stopped" ? t("phishing.stopped") : s;
+      const variant = s === "running" ? "warning" as const : s === "completed" ? "success" as const : s === "stopped" ? "destructive" as const : "secondary" as const;
+      return <Badge variant={variant}>{label}</Badge>;
+    };
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-foreground">{t("phishing.campaigns_title")}</h2>
+          <Button onClick={() => setShowCampForm(true)}>
+            <Plus className="size-4" /> {t("phishing.new_campaign")}
+          </Button>
+        </div>
+        {campaigns.length === 0 ? (
+          <EmptyState icon={Send} title={t("campaign.empty")} />
+        ) : (
+          <Card>
+            <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-left px-4 py-3 sm:py-3.5">{t("phishing.col_name")}</TableHead>
+                  <TableHead className="text-left px-4 py-3 sm:py-3.5">{t("phishing.col_status")}</TableHead>
+                  <TableHead className="text-right px-4 py-3 sm:py-3.5">{t("common.total")}</TableHead>
+                  <TableHead className="text-right px-4 py-3 sm:py-3.5">{t("phishing.col_from")}</TableHead>
+                  <TableHead className="text-right px-4 py-3 sm:py-3.5">{t("phishing.col_subject")}</TableHead>
+                  <TableHead className="text-right px-4 py-3 sm:py-3.5">{t("phishing.col_actions")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {campaigns.map((c) => {
+                  const cid = c.id;
+                  return (
+                    <TableRow key={cid}>
+                      <TableCell className="px-4 py-3 sm:py-3.5 font-medium text-foreground">{c.name}</TableCell>
+                      <TableCell className="px-4 py-3 sm:py-3.5">{statusBadge(c.status)}</TableCell>
+                      <TableCell className="px-4 py-3 sm:py-3.5 text-right text-muted-foreground">{c.sent_count}{c.failed_count > 0 && <span className="text-destructive"> ({t("phishing.sends_failed", { n: c.failed_count })})</span>}</TableCell>
+                      <TableCell className="px-4 py-3 sm:py-3.5 text-right text-muted-foreground">{c.open_count}</TableCell>
+                      <TableCell className="px-4 py-3 sm:py-3.5 text-right text-muted-foreground">{c.cred_count}</TableCell>
+                      <TableCell className="px-4 py-3 sm:py-3.5 text-right">
+                        {c.status === "draft" && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" disabled={launchingId === cid} onClick={() => handleLaunch(cid)} className="text-primary hover:text-primary dark:hover:text-primary mr-3" aria-label={t("phishing.launch")} />}><Play className="size-4" /></TooltipTrigger><TooltipContent>{t("phishing.launch")}</TooltipContent></Tooltip>}
+                        {c.status === "running" && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleStop(cid)} className="text-warning hover:text-warning-foreground mr-3" aria-label={t("phishing.stop")} />}><Square className="size-4" /></TooltipTrigger><TooltipContent>{t("phishing.stop")}</TooltipContent></Tooltip>}
+                        {(c.status === "draft" || c.status === "completed" || c.status === "stopped") && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleDeleteCamp(cid)} className="text-muted-foreground hover:text-destructive" aria-label={t("phishing.delete")} />}><Trash2 className="size-4" /></TooltipTrigger><TooltipContent>{t("phishing.delete")}</TooltipContent></Tooltip>}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+            </div>
+          </Card>
+        )}
+        <Dialog open={showCampForm} onOpenChange={setShowCampForm}>
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" showCloseButton={false}>
+            <DialogHeader>
+              <DialogTitle>{t("phishing.new_campaign")}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>{t("phishing.campaign_name")}</Label>
+                <Input value={campForm.name} onChange={(e) => setCampForm({ ...campForm, name: e.target.value })} />
+              </div>
+              <div>
+                <Label>{t("phishing.field_template")}</Label>
+                <Select value={String(campForm.template_id)} onValueChange={(v) => {
+                  if (v !== null) setCampForm({ ...campForm, template_id: parseInt(v) });
+                }}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={t("phishing.field_template")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">{t("phishing.field_template")}</SelectItem>
+                    {templates.map((t) => (<SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>{t("phishing.field_targets")}</Label>
+                <Textarea rows={4} className="font-mono" value={campForm.target_list} onChange={(e) => setCampForm({ ...campForm, target_list: e.target.value })} placeholder='["user1@example.com","user2@example.com"]' />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label>{t("phishing.field_smtp_host")}</Label>
+                  <Input value={campForm.smtp_host} onChange={(e) => setCampForm({ ...campForm, smtp_host: e.target.value })} />
+                </div>
+                <div>
+                  <Label>{t("phishing.field_smtp_port")}</Label>
+                  <Input type="number" value={campForm.smtp_port} onChange={(e) => setCampForm({ ...campForm, smtp_port: parseInt(e.target.value, 10) || 587 })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label>{t("phishing.field_smtp_user")}</Label>
+                  <Input value={campForm.smtp_user} onChange={(e) => setCampForm({ ...campForm, smtp_user: e.target.value })} />
+                </div>
+                <div>
+                  <Label>{t("phishing.field_smtp_pass")}</Label>
+                  <Input type="password" value={campForm.smtp_pass} onChange={(e) => setCampForm({ ...campForm, smtp_pass: e.target.value })} />
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <Button onClick={handleSaveCamp} disabled={savingCamp} className="flex-1"><Save className="size-4" />{t("phishing.create_campaign")}</Button>
+              <Button variant="outline" onClick={() => setShowCampForm(false)}>{t("common.cancel")}</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
+
+  // 鈹€鈹€ Captures Tab 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+
+  function renderCaptures() {
+    const typeBadge = (t: string) => {
+      const variant = t === "cleartext" ? "success" as const : t === "ntlm" ? "warning" as const : "secondary" as const;
+      return <Badge variant={variant}>{t}</Badge>;
+    };
+    return (
+      <div>
+        <h2 className="text-lg font-semibold text-foreground mb-4">{t("phishing.captures_title")}</h2>
+        {captures.length === 0 ? (
+          <EmptyState icon={Key} title={t("phishing.empty_captures")} message={t("phishing.empty_captures_hint")} />
+        ) : (
+          <Card>
+            <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-left px-4 py-3 sm:py-3.5">{t("users.label_username")}</TableHead>
+                  <TableHead className="text-left px-4 py-3 sm:py-3.5">{t("phishing.col_password")}</TableHead>
+                  <TableHead className="text-left px-4 py-3 sm:py-3.5">{t("phishing.col_type")}</TableHead>
+                  <TableHead className="text-left px-4 py-3 sm:py-3.5">{t("phishing.col_from")}</TableHead>
+                  <TableHead className="text-left px-4 py-3 sm:py-3.5">{t("phishing.col_date")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {captures.map((cr) => {
+                  const cid = cr.id;
+                  return (
+                    <TableRow key={cid}>
+                      <TableCell className="px-4 py-3 sm:py-3.5 font-medium text-foreground">{cr.username}</TableCell>
+                      <TableCell className="px-4 py-3 sm:py-3.5 text-muted-foreground font-mono text-xs">{cr.password ? cr.password.substring(0, 40) + (cr.password.length > 40 ? "..." : "") : "-"}</TableCell>
+                      <TableCell className="px-4 py-3 sm:py-3.5">{typeBadge(cr.type)}</TableCell>
+                      <TableCell className="px-4 py-3 sm:py-3.5 text-muted-foreground text-xs">{cr.source}</TableCell>
+                      <TableCell className="px-4 py-3 sm:py-3.5 text-muted-foreground text-xs">{cr.created_at ? formatTime(cr.created_at) : ""}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+            </div>
+          </Card>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <PageContainer title={t("phishing.title")} subtitle={t("phishing.subtitle")}>
+
+      {/* Tabs */}
+      <Tabs defaultValue="templates">
+        <TabsList>
+          {tabs.map((tab) => (
+            <TabsTrigger key={tab.key} value={tab.key} className="gap-1.5">
+              {tab.icon}
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+
+      <TabsContent value="templates">
+        {renderTemplates()}
+      </TabsContent>
+
+      <TabsContent value="campaigns">
+        {renderCampaigns()}
+      </TabsContent>
+
+      <TabsContent value="captures">
+        {renderCaptures()}
+      </TabsContent>
+
+      <TabsContent value="entra">
+        <EntraIdentityPanel />
+      </TabsContent>
+      </Tabs>
+
+      {modal}
+    </PageContainer>
+  );
+}
+

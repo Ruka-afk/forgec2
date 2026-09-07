@@ -1,11 +1,9 @@
-"use client";
-
 import { useCallback, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { AgentInteractDock } from "@/app/(main)/agents/_components/AgentInteractDock";
-import { isEditableTarget, tabFromDigit } from "@/app/(main)/agents/_components/interact-workspace";
+import { AgentInteractDock } from "@/pages/agents/components/AgentInteractDock";
+import { isEditableTarget, tabFromDigit } from "@/pages/agents/components/interact-workspace";
 import { shouldCloseOnNavigate, useInteractStore } from "@/lib/interact-store";
 
 export default function GlobalInteractDock() {

@@ -1,1 +1,0 @@
-import{j as t}from"./vendor-react-DklbvxIc.js";import{N as r}from"./vendor-router-B3vCXr4z.js";import"./vendor-misc-pIg0fCm4.js";function s(){return t.jsx(r,{to:"/settings#tab=about",replace:!0})}export{s as default};

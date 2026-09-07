@@ -1,1 +1,0 @@
-import{j as t}from"./vendor-react-DklbvxIc.js";import{N as e}from"./vendor-router-B3vCXr4z.js";import"./vendor-misc-pIg0fCm4.js";function a(){return t.jsx(e,{to:"/loot?tab=screenshots",replace:!0})}export{a as default};

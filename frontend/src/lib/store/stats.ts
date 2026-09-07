@@ -1,5 +1,3 @@
-"use client";
-
 import type { StateCreator } from "zustand";
 import { api } from "../api";
 import { paths } from "../api-paths";

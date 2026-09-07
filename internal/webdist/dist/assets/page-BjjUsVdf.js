@@ -1,1 +1,0 @@
-import{j as t}from"./vendor-react-DklbvxIc.js";import{N as e}from"./vendor-router-B3vCXr4z.js";import"./vendor-misc-pIg0fCm4.js";function m(){return t.jsx(e,{to:"/toolkit",replace:!0})}export{m as default};

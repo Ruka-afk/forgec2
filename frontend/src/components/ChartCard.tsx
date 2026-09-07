@@ -1,4 +1,3 @@
-"use client";
 
 import { useRef, ReactNode } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";

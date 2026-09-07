@@ -1,4 +1,3 @@
-"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -6,7 +5,7 @@ import { NAV_SECTIONS, filterNavByPermissions } from "@/lib/navigation";
 import { useI18n } from "@/lib/i18n";
 import { useAppStore } from "@/lib/store";
 import { useAgentList } from "@/lib/hooks/useAgentList";
-import { isEditableTarget } from "@/app/(main)/agents/_components/interact-workspace";
+import { isEditableTarget } from "@/pages/agents/components/interact-workspace";
 import { Search, Server } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";

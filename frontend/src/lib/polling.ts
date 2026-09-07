@@ -1,5 +1,3 @@
-"use client";
-
 // Central registry of UI polling cadences (ms). Named by concern so call sites
 // read intent instead of magic numbers; tuned together as one table.
 export const POLL = {

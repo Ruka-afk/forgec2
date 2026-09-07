@@ -1,5 +1,3 @@
-"use client";
-
 import type { DashboardStats } from "@/types/agent";
 import type { PermissionKey } from "@/lib/permission-keys";
 

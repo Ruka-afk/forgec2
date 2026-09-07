@@ -1,5 +1,3 @@
-"use client";
-
 export function dataUrlToBlob(dataUrl: string): Blob | null {
   if (dataUrl.startsWith("blob:")) return null;
   const comma = dataUrl.indexOf(",");

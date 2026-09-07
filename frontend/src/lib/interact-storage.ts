@@ -1,5 +1,3 @@
-"use client";
-
 const INTERACT_TABS = ["shell", "files", "tasks"] as const;
 export type InteractTab = (typeof INTERACT_TABS)[number];
 

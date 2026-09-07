@@ -1,0 +1,175 @@
+
+import { useState, useEffect, useRef, useCallback } from "react";
+import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
+import { Card } from "@/components/ui/card";
+import { CardHeaderRow } from "@/components/ui/card-header-row";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { toast } from "sonner";
+import { useI18n } from "@/lib/i18n";
+import { Archive, Clock, Download, HardDrive, RefreshCw, Upload } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Spinner } from "@/components/ui/spinner";
+import { formatTime, formatSize } from "@/lib/utils";
+import { downloadBlob } from "@/lib/download";
+
+interface BackupInfo {
+  name: string;
+  size: number;
+  mod_time: string;
+}
+
+export default function BackupSection() {
+  const { t } = useI18n();
+  const [backups, setBackups] = useState<BackupInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [restoring, setRestoring] = useState<string | null>(null);
+  const [confirmRestore, setConfirmRestore] = useState<BackupInfo | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const loadBackups = useCallback(async () => {
+    setLoading(true);
+    try {
+      const backups = await api.get<BackupInfo[]>(paths.settings.dbBackups);
+      setBackups(Array.isArray(backups) ? backups : []);
+    } catch {
+      toast.error(t("settings.toast.load_backups_failed"));
+    } finally {
+      setLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => { void loadBackups(); }, [loadBackups]);
+
+  const handleCreateBackup = async () => {
+    setCreating(true);
+    try {
+      await api.post(paths.settings.dbBackup);
+      toast.success(t("settings.toast.backup_created"));
+      await loadBackups();
+    } catch {
+      toast.error(t("settings.toast.create_backup_failed"));
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleRestoreFromServer = async (name: string) => {
+    setRestoring(name);
+    try {
+      const d = await api.post<{ message?: string; restart?: boolean }>(paths.settings.dbRestore, { type: "file", name });
+      toast.success(d.message ?? t("settings.toast.db_restored"));
+      if (d.restart) {
+        toast.info(t("settings.toast.server_restarting"), { duration: 5000 });
+        setTimeout(() => { window.location.reload(); }, 3000);
+      }
+    } catch {
+      toast.error(t("settings.toast.restore_db_failed"));
+    } finally {
+      setRestoring(null);
+      setConfirmRestore(null);
+    }
+  };
+
+  const handleUploadRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("type", "upload");
+      fd.append("file", file);
+      const d = await api.postFormData<{ message?: string; restart?: boolean }>(paths.settings.dbRestore, fd);
+      toast.success(d.message ?? t("settings.toast.db_restored"));
+      if (d.restart) {
+        toast.info(t("settings.toast.server_restarting"), { duration: 5000 });
+        setTimeout(() => { window.location.reload(); }, 3000);
+      }
+    } catch {
+      toast.error(t("settings.toast.restore_upload_failed"));
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleDownload = async (name: string) => {
+    if (downloading) return;
+    setDownloading(name);
+    try {
+      const { blob, filename } = await api.downloadGet(paths.settings.dbBackupsDownload(name), name);
+      downloadBlob(blob, filename);
+    } catch {
+      toast.error(t("settings.backup.download_failed"));
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  return (
+    <Card className="overflow-hidden">
+      <CardHeaderRow icon={Archive} tone="warning" title={t("settings.backup.title")} description={t("settings.backup.subtitle")} />
+
+      <div className="p-(--card-spacing) space-y-5">
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={handleCreateBackup} size="lg" disabled={creating} className="px-4 bg-primary/10 hover:bg-primary/20 text-primary text-sm font-medium transition-colors disabled:opacity-50">
+            {creating ? <Spinner size="xs" /> : <Archive className="size-4" />}
+            {t("settings.backup.create")}
+          </Button>
+          <Button onClick={() => fileInputRef.current?.click()} size="lg" disabled={uploading} className="px-4 bg-success/15 hover:bg-success/20 dark:hover:bg-success/60 text-success text-sm font-medium transition-colors disabled:opacity-50">
+            {uploading ? <Spinner size="xs" /> : <Upload className="size-4" />}
+            {t("settings.backup.upload_restore")}
+          </Button>
+          <Input ref={fileInputRef} type="file" accept=".db,.fbk" onChange={handleUploadRestore} className="hidden" />
+          <Button onClick={loadBackups} size="lg" disabled={loading} variant="ghost" className="px-3 text-sm text-muted-foreground">
+            {loading ? <Spinner size="xs" /> : <RefreshCw className="size-4" />}
+          </Button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+            <Spinner size="xs" className="mr-2" />{t("settings.backup.loading")}
+          </div>
+        ) : backups.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-muted-foreground text-sm gap-2">
+            <EmptyState icon={HardDrive} title={t("settings.backup.empty_title")} message={t("settings.backup.empty_message")} />
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {backups.map((b) => (
+              <div key={b.name} className="flex items-center justify-between bg-muted rounded-lg px-4 py-3 border border-border hover:border-primary/20 transition-colors">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Archive className="size-4 text-muted-foreground shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-foreground truncate">{b.name}</div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Clock className="size-3" />
+                      <span>{formatTime(b.mod_time)}</span>
+                      <span>·</span>
+                      <span>{formatSize(b.size)}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button variant="ghost" size="sm" disabled={downloading !== null} onClick={() => void handleDownload(b.name)} className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground" aria-label={t("settings.backup.download", { name: b.name })}>
+                    {downloading === b.name ? <Spinner size="xs" /> : <Download className="size-3.5" />}
+                  </Button>
+                  <Button variant="ghost" size="sm" disabled={restoring === b.name} onClick={() => setConfirmRestore(b)} className="h-8 px-3 text-xs text-warning hover:text-warning hover:bg-warning/15">
+                    {restoring === b.name ? <Spinner size="xs" /> : t("settings.backup.restore")}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <ConfirmModal open={!!confirmRestore} title={t("settings.backup.restore_title")} message={t("settings.backup.restore_message").replace("{name}", confirmRestore?.name ?? "")} danger onConfirm={() => { if (confirmRestore) handleRestoreFromServer(confirmRestore.name); }} onCancel={() => setConfirmRestore(null)} />
+    </Card>
+  );
+}

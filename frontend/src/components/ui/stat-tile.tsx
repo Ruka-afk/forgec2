@@ -1,4 +1,3 @@
-"use client";
 
 import { cn } from "@/lib/utils";
 import { hueStyles, resolveHue, type Hue } from "@/lib/ui/statusStyles";

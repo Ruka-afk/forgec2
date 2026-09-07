@@ -1,4 +1,3 @@
-"use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useTypedWS, isWSEvent } from "@/lib/typed-ws";

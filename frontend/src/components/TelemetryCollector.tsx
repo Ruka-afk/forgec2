@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect } from "react";
 import { onCLS, onFCP, onINP, onLCP, onTTFB, type Metric } from "web-vitals";
 import { recordVital, recordClientError, type VitalName } from "@/lib/telemetry";

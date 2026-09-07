@@ -16,8 +16,8 @@ const HEX_EXEMPT = new Set([
   "components/ShellTerminal.tsx",
   "lib/shell-ui.ts",
   "components/TopologyGraph.tsx",
-  "app/(main)/groups/page.tsx",
-  "app/(main)/tags/page.tsx",
+  "pages/groups/GroupsPage.tsx",
+  "pages/tags/TagsPage.tsx",
   "lib/chartExport.ts",
 ]);
 

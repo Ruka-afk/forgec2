@@ -16,75 +16,70 @@ const lazyPage = (imp: () => Promise<{ default: unknown }>) =>
   lazy(imp as () => Promise<{ default: ComponentType }>);
 
 const MAIN_PAGES: Record<string, ReturnType<typeof lazyPage>> = {
-  agents: lazyPage(() => import("@/app/(main)/agents/page")),
-  ai: lazyPage(() => import("@/app/(main)/ai/page")),
-  attack: lazyPage(() => import("@/app/(main)/attack/page")),
-  audit: lazyPage(() => import("@/app/(main)/audit/page")),
-  automation: lazyPage(() => import("@/app/(main)/automation/page")),
-  autotag: lazyPage(() => import("@/app/(main)/autotag/page")),
-  bloodhound: lazyPage(() => import("@/app/(main)/bloodhound/page")),
-  bof: lazyPage(() => import("@/app/(main)/bof/page")),
-  builds: lazyPage(() => import("@/app/(main)/builds/page")),
-  campaign: lazyPage(() => import("@/app/(main)/campaign/page")),
-  chain: lazyPage(() => import("@/app/(main)/chain/page")),
-  chat: lazyPage(() => import("@/app/(main)/chat/page")),
-  "circuit-breaker": lazyPage(() => import("@/app/(main)/circuit-breaker/page")),
-  cloud: lazyPage(() => import("@/app/(main)/cloud/page")),
-  command_templates: lazyPage(() => import("@/app/(main)/command_templates/page")),
-  container: lazyPage(() => import("@/app/(main)/container/page")),
-  credentials: lazyPage(() => import("@/app/(main)/credentials/page")),
-  dashboard: lazyPage(() => import("@/app/(main)/dashboard/page")),
-  dns: lazyPage(() => import("@/app/(main)/dns/page")),
-  docs: lazyPage(() => import("@/app/(main)/docs/page")),
-  "domain-fronting": lazyPage(() => import("@/app/(main)/domain-fronting/page")),
-  files: lazyPage(() => import("@/app/(main)/files/page")),
-  generate: lazyPage(() => import("@/app/(main)/generate/page")),
-  groups: lazyPage(() => import("@/app/(main)/groups/page")),
-  infrastructure: lazyPage(() => import("@/app/(main)/infrastructure/page")),
-  integrations: lazyPage(() => import("@/app/(main)/integrations/page")),
-  lateral: lazyPage(() => import("@/app/(main)/lateral/page")),
-  listeners: lazyPage(() => import("@/app/(main)/listeners/page")),
-  loot: lazyPage(() => import("@/app/(main)/loot/page")),
-  macros: lazyPage(() => import("@/app/(main)/macros/page")),
-  notifications: lazyPage(() => import("@/app/(main)/notifications/page")),
-  ntlm: lazyPage(() => import("@/app/(main)/ntlm/page")),
-  opsec: lazyPage(() => import("@/app/(main)/opsec/page")),
-  packer: lazyPage(() => import("@/app/(main)/packer/page")),
-  "password-spray": lazyPage(() => import("@/app/(main)/password-spray/page")),
-  phishing: lazyPage(() => import("@/app/(main)/phishing/page")),
-  pivoting: lazyPage(() => import("@/app/(main)/pivoting/page")),
-  plugins: lazyPage(() => import("@/app/(main)/plugins/page")),
-  privesc: lazyPage(() => import("@/app/(main)/privesc/page")),
-  profiles: lazyPage(() => import("@/app/(main)/profiles/page")),
-  report: lazyPage(() => import("@/app/(main)/report/page")),
-  roles: lazyPage(() => import("@/app/(main)/roles/page")),
-  scanner: lazyPage(() => import("@/app/(main)/scanner/page")),
-  scheduler: lazyPage(() => import("@/app/(main)/scheduler/page")),
-  screenshots: lazyPage(() => import("@/app/(main)/screenshots/page")),
-  scripting: lazyPage(() => import("@/app/(main)/scripting/page")),
-  settings: lazyPage(() => import("@/app/(main)/settings/page")),
-  stager: lazyPage(() => import("@/app/(main)/stager/page")),
-  tags: lazyPage(() => import("@/app/(main)/tags/page")),
-  tasks: lazyPage(() => import("@/app/(main)/tasks/page")),
-  timeline: lazyPage(() => import("@/app/(main)/timeline/page")),
-  tokens: lazyPage(() => import("@/app/(main)/tokens/page")),
-  toolkit: lazyPage(() => import("@/app/(main)/toolkit/page")),
-  topology: lazyPage(() => import("@/app/(main)/topology/page")),
-  traffic: lazyPage(() => import("@/app/(main)/traffic/page")),
-  users: lazyPage(() => import("@/app/(main)/users/page")),
-  workflows: lazyPage(() => import("@/app/(main)/workflows/page")),
+  agents: lazyPage(() => import("@/pages/agents/AgentsPageContent")),
+  ai: lazyPage(() => import("@/pages/ai/AIPageContent")),
+  attack: lazyPage(() => import("@/pages/attack/AttackPage")),
+  audit: lazyPage(() => import("@/pages/audit/AuditPage")),
+  automation: lazyPage(() => import("@/pages/automation/AutomationPageContent")),
+  autotag: lazyPage(() => import("@/pages/autotag/AutoTagPage")),
+  bloodhound: lazyPage(() => import("@/pages/bloodhound/BloodHoundPage")),
+  bof: lazyPage(() => import("@/pages/bof/BOFPage")),
+  builds: lazyPage(() => import("@/pages/builds/BuildsPage")),
+  campaign: lazyPage(() => import("@/pages/campaign/CampaignPageContent")),
+  chain: lazyPage(() => import("@/pages/chain/ChainPage")),
+  chat: lazyPage(() => import("@/pages/chat/ChatPage")),
+  "circuit-breaker": lazyPage(() => import("@/pages/circuit-breaker/CircuitBreakerPage")),
+  cloud: lazyPage(() => import("@/pages/cloud/CloudPage")),
+  container: lazyPage(() => import("@/pages/container/ContainerPage")),
+  credentials: lazyPage(() => import("@/pages/credentials/CredentialsPageContent")),
+  dashboard: lazyPage(() => import("@/pages/dashboard/DashboardPage")),
+  dns: lazyPage(() => import("@/pages/dns/DnsPage")),
+  "domain-fronting": lazyPage(() => import("@/pages/domain-fronting/DomainFrontingPage")),
+  files: lazyPage(() => import("@/pages/files/FilesPage")),
+  generate: lazyPage(() => import("@/pages/generate/GeneratePage")),
+  groups: lazyPage(() => import("@/pages/groups/GroupsPage")),
+  infrastructure: lazyPage(() => import("@/pages/infrastructure/InfrastructurePageContent")),
+  integrations: lazyPage(() => import("@/pages/integrations/IntegrationsPage")),
+  lateral: lazyPage(() => import("@/pages/lateral/LateralPageContent")),
+  listeners: lazyPage(() => import("@/pages/listeners/ListenersPageContent")),
+  loot: lazyPage(() => import("@/pages/loot/LootPage")),
+  macros: lazyPage(() => import("@/pages/macros/MacrosPageContent")),
+  notifications: lazyPage(() => import("@/pages/notifications/NotificationsPage")),
+  ntlm: lazyPage(() => import("@/pages/ntlm/NtlmPage")),
+  opsec: lazyPage(() => import("@/pages/opsec/OpsecPage")),
+  packer: lazyPage(() => import("@/pages/packer/PackerPage")),
+  "password-spray": lazyPage(() => import("@/pages/password-spray/PasswordSprayPage")),
+  phishing: lazyPage(() => import("@/pages/phishing/PhishingPageContent")),
+  pivoting: lazyPage(() => import("@/pages/pivoting/PivotingPageContent")),
+  plugins: lazyPage(() => import("@/pages/plugins/PluginsPageContent")),
+  privesc: lazyPage(() => import("@/pages/privesc/PrivescPage")),
+  profiles: lazyPage(() => import("@/pages/profiles/ProfilesPage")),
+  report: lazyPage(() => import("@/pages/report/ReportPageContent")),
+  roles: lazyPage(() => import("@/pages/roles/RolesPage")),
+  scanner: lazyPage(() => import("@/pages/scanner/ScannerPage")),
+  scripting: lazyPage(() => import("@/pages/scripting/ScriptingPage")),
+  settings: lazyPage(() => import("@/pages/settings/SettingsPage")),
+  stager: lazyPage(() => import("@/pages/stager/StagerPage")),
+  tags: lazyPage(() => import("@/pages/tags/TagsPage")),
+  tasks: lazyPage(() => import("@/pages/tasks/TasksPage")),
+  timeline: lazyPage(() => import("@/pages/timeline/components/EventsPageContent")),
+  tokens: lazyPage(() => import("@/pages/tokens/TokensPage")),
+  toolkit: lazyPage(() => import("@/pages/toolkit/ToolkitPage")),
+  topology: lazyPage(() => import("@/pages/topology/TopologyPage")),
+  traffic: lazyPage(() => import("@/pages/traffic/TrafficPage")),
+  users: lazyPage(() => import("@/pages/users/UsersPage")),
 };
 
-const AgentDetailPage = lazyPage(() => import("@/app/(main)/agents/[id]/page"));
-const AgentConfigPage = lazyPage(() => import("@/app/(main)/agents/[id]/config/page"));
-const AgentFilesPage = lazyPage(() => import("@/app/(main)/agents/[id]/files/page"));
-const AgentPersistencePage = lazyPage(() => import("@/app/(main)/agents/[id]/persistence/page"));
-const AgentRemoteDesktopPage = lazyPage(() => import("@/app/(main)/agents/[id]/remote-desktop/page"));
-const AgentScreenPage = lazyPage(() => import("@/app/(main)/agents/[id]/screen/page"));
-const AgentShellPage = lazyPage(() => import("@/app/(main)/agents/[id]/shell/page"));
-const AgentTokenPage = lazyPage(() => import("@/app/(main)/agents/[id]/token/page"));
-const AgentTrafficPage = lazyPage(() => import("@/app/(main)/agents/[id]/traffic/page"));
-const ListenerDetailPage = lazyPage(() => import("@/app/(main)/listeners/[id]/page"));
+const AgentDetailPage = lazyPage(() => import("@/pages/agents/detail/AgentDetailPage"));
+const AgentConfigPage = lazyPage(() => import("@/pages/agents/detail/config/ConfigPage"));
+const AgentFilesPage = lazyPage(() => import("@/pages/agents/detail/files/FilesPage"));
+const AgentPersistencePage = lazyPage(() => import("@/pages/agents/detail/persistence/PersistencePage"));
+const AgentRemoteDesktopPage = lazyPage(() => import("@/pages/agents/detail/remote-desktop/RemoteDesktopPage"));
+const AgentScreenPage = lazyPage(() => import("@/pages/agents/detail/screen/ScreenPage"));
+const AgentShellPage = lazyPage(() => import("@/pages/agents/detail/shell/ShellPage"));
+const AgentTokenPage = lazyPage(() => import("@/pages/agents/detail/token/TokenPage"));
+const AgentTrafficPage = lazyPage(() => import("@/pages/agents/detail/traffic/TrafficPage"));
+const ListenerDetailPage = lazyPage(() => import("@/pages/listeners/detail/ListenerDetailPage"));
 
 /** Route-local suspense: each lazy page shows the standard spinner while its
  *  chunk loads (replaces the single Root-level Suspense from the declarative
@@ -201,6 +196,31 @@ export const router = createBrowserRouter([
       {
         path: "/agents/:id/traffic",
         element: guard("agents/:id/traffic", AgentTrafficPage),
+        errorElement: <RouterErrorView />,
+      },
+      {
+        path: "/command_templates",
+        element: <Navigate to="/toolkit" replace />,
+        errorElement: <RouterErrorView />,
+      },
+      {
+        path: "/docs",
+        element: <Navigate to="/settings#tab=about" replace />,
+        errorElement: <RouterErrorView />,
+      },
+      {
+        path: "/scheduler",
+        element: <Navigate to="/automation#tab=scheduled" replace />,
+        errorElement: <RouterErrorView />,
+      },
+      {
+        path: "/screenshots",
+        element: <Navigate to="/loot?tab=screenshots" replace />,
+        errorElement: <RouterErrorView />,
+      },
+      {
+        path: "/workflows",
+        element: <Navigate to="/automation#tab=workflows" replace />,
         errorElement: <RouterErrorView />,
       },
       {
