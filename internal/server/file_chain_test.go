@@ -1,12 +1,15 @@
 package server
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/forgec2/forgec2/internal/config"
 	"github.com/forgec2/forgec2/internal/crypto"
+	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/testutil"
 )
 
@@ -135,6 +138,86 @@ func TestFileChainTaskIsolation(t *testing.T) {
 	if err := s.verifyAndCommitChain("agent-3", 42, macB, chunk); err != nil {
 		t.Fatalf("task B should verify independently: %v", err)
 	}
+}
+
+func seedRelayChild(t *testing.T, s *Server, childID, parentID, taskType string) uint {
+	t.Helper()
+	if err := s.db.Create(&db.Implant{ID: childID, ParentID: parentID, Status: "online"}).Error; err != nil {
+		t.Fatalf("seed child: %v", err)
+	}
+	task := db.Task{AgentID: childID, Type: taskType, Status: "pending"}
+	if err := s.db.Create(&task).Error; err != nil {
+		t.Fatalf("seed task: %v", err)
+	}
+	return task.ID
+}
+
+func relayResult(taskID uint, chunk []byte, macHex string) taskResult {
+	return taskResult{
+		TaskID:   taskID,
+		Type:     "upload",
+		Output:   base64.StdEncoding.EncodeToString(chunk),
+		Encoding: "base64",
+		MAC:      macHex,
+	}
+}
+
+func TestRelayedFileChunkChain(t *testing.T) {
+	chunk := []byte("relayed exfil chunk")
+
+	t.Run("valid child MAC applies", func(t *testing.T) {
+		s := testServerForChain(t)
+		defer s.db.DB()
+		taskID := seedRelayChild(t, s, "child-a", "parent-a", "upload")
+		mac := linkMAC(t, buildChainKey(t, s, "child-a"), make([]byte, 32), chunk)
+		s.processRelayedResults([]relayedData{{
+			AgentID: "child-a",
+			Results: []taskResult{relayResult(taskID, chunk, mac)},
+		}}, "parent-a", time.Now())
+		var task db.Task
+		if err := s.db.First(&task, taskID).Error; err != nil {
+			t.Fatalf("reload: %v", err)
+		}
+		if task.Status != "completed" {
+			t.Fatalf("valid relayed chunk not applied: status=%q", task.Status)
+		}
+	})
+
+	t.Run("forged MAC dropped", func(t *testing.T) {
+		s := testServerForChain(t)
+		defer s.db.DB()
+		taskID := seedRelayChild(t, s, "child-b", "parent-b", "upload")
+		// MAC computed over different bytes (or a parent-held key): must fail.
+		bad := linkMAC(t, buildChainKey(t, s, "child-b"), make([]byte, 32), []byte("something else"))
+		s.processRelayedResults([]relayedData{{
+			AgentID: "child-b",
+			Results: []taskResult{relayResult(taskID, chunk, bad)},
+		}}, "parent-b", time.Now())
+		var task db.Task
+		if err := s.db.First(&task, taskID).Error; err != nil {
+			t.Fatalf("reload: %v", err)
+		}
+		if task.Status != "pending" {
+			t.Fatalf("forged relayed chunk applied: status=%q", task.Status)
+		}
+	})
+
+	t.Run("empty MAC tolerated like direct path", func(t *testing.T) {
+		s := testServerForChain(t)
+		defer s.db.DB()
+		taskID := seedRelayChild(t, s, "child-c", "parent-c", "upload")
+		s.processRelayedResults([]relayedData{{
+			AgentID: "child-c",
+			Results: []taskResult{relayResult(taskID, chunk, "")},
+		}}, "parent-c", time.Now())
+		var task db.Task
+		if err := s.db.First(&task, taskID).Error; err != nil {
+			t.Fatalf("reload: %v", err)
+		}
+		if task.Status != "completed" {
+			t.Fatalf("legacy empty-MAC relayed chunk not applied: status=%q", task.Status)
+		}
+	})
 }
 
 func mustHex(t *testing.T, s string) []byte {

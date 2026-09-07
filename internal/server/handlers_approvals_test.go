@@ -13,6 +13,7 @@ import (
 
 func TestApprovalTaskNotClaimedUntilApproved(t *testing.T) {
 	s := newTasksTestServer(t)
+	seedAgent(t, s, "agent-approve")
 	task := seedTask(t, s, "agent-approve", "shell", "whoami", TaskStatusPendingApproval)
 
 	if claimed := s.fetchPendingTasks("agent-approve"); len(claimed) != 0 {
@@ -47,6 +48,7 @@ func TestApprovalTaskNotClaimedUntilApproved(t *testing.T) {
 
 func TestApproveNonPendingTaskRejected(t *testing.T) {
 	s := newTasksTestServer(t)
+	seedAgent(t, s, "agent-approve")
 	seedTask(t, s, "agent-approve", "shell", "whoami", "completed")
 
 	w := httptest.NewRecorder()
@@ -64,6 +66,7 @@ func TestApproveNonPendingTaskRejected(t *testing.T) {
 
 func TestRejectTask(t *testing.T) {
 	s := newTasksTestServer(t)
+	seedAgent(t, s, "agent-reject")
 	task := seedTask(t, s, "agent-reject", "shell", "del /f important.txt", TaskStatusPendingApproval)
 
 	w := httptest.NewRecorder()
@@ -93,6 +96,7 @@ func TestRejectTask(t *testing.T) {
 
 func TestApproveTaskResponseShape(t *testing.T) {
 	s := newTasksTestServer(t)
+	seedAgent(t, s, "agent-approve")
 	seedTask(t, s, "agent-approve", "shell", "whoami", TaskStatusPendingApproval)
 
 	w := httptest.NewRecorder()
@@ -120,6 +124,7 @@ func TestApproveTaskResponseShape(t *testing.T) {
 
 func TestApproveSelfCreatedTaskRejected(t *testing.T) {
 	s := newTasksTestServer(t)
+	seedAgent(t, s, "agent-approve")
 	task := seedTask(t, s, "agent-approve", "shell", "whoami", TaskStatusPendingApproval)
 	s.db.Model(&task).Update("created_by", "alice")
 
@@ -147,6 +152,7 @@ func TestApproveSelfCreatedTaskRejected(t *testing.T) {
 
 func TestApproveRecordsSecondOperator(t *testing.T) {
 	s := newTasksTestServer(t)
+	seedAgent(t, s, "agent-approve")
 	task := seedTask(t, s, "agent-approve", "shell", "whoami", TaskStatusPendingApproval)
 	s.db.Model(&task).Update("created_by", "alice")
 

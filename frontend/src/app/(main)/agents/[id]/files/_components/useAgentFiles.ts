@@ -45,6 +45,10 @@ export function useAgentFiles(agentId: string) {
   const [osType, setOsType] = useState<"windows" | "linux">("windows");
   const uploadAbortRef = useRef<AbortController | null>(null);
   const lsAbortRef = useRef<AbortController | null>(null);
+  // Live mirror of currentPath: long polls must not rewind a navigation
+  // the operator made while waiting (see deleteFile/mkdir/renameFile).
+  const currentPathRef = useRef("");
+  currentPathRef.current = currentPath;
 
   const showToast = useCallback((text: string, type: string = "info") => {
     if (type === "success") toast.success(text);
@@ -124,6 +128,9 @@ export function useAgentFiles(agentId: string) {
     })();
     return () => {
       cancelled = true;
+      // Aborting the in-flight upload stops the pump chain (its finally
+      // drains the queue and returns without scheduling); queued items die
+      // with this hook instance — no leak, no extra handling needed.
       if (uploadAbortRef.current) {
         uploadAbortRef.current.abort();
         uploadAbortRef.current = null;
@@ -206,7 +213,8 @@ export function useAgentFiles(agentId: string) {
 
   const deleteFile = useCallback(
     async (filename: string) => {
-      const path = joinPath(currentPath, filename, osType);
+      const pathAtStart = currentPathRef.current;
+      const path = joinPath(pathAtStart, filename, osType);
       try {
         const data = await api.post(paths.agents.filesDelete(agentId), { path });
         showToast(t("agents.files_delete_queued", { filename }), "info");
@@ -217,20 +225,24 @@ export function useAgentFiles(agentId: string) {
             if (st.status === "failed") throw new Error(st.error || t("agents.files_delete_failed"));
           }
         }
-        await loadDirectory(currentPath);
+        // Don't rewind a navigation the operator made while the poll was in
+        // flight — the new location already loaded itself.
+        if (currentPathRef.current !== pathAtStart) return;
+        await loadDirectory(pathAtStart);
         if (selectedFile === filename) setSelectedFile(null);
       } catch (err) {
         showToast(String(err), "error");
       }
     },
-    [agentId, currentPath, osType, selectedFile, loadDirectory, showToast, t],
+    [agentId, osType, selectedFile, loadDirectory, showToast, t],
   );
 
   const mkdir = useCallback(
     async (dirname: string) => {
       const name = dirname.trim().replace(/[\\/]+$/, "");
       if (!name) return;
-      const path = joinPath(currentPath, name, osType);
+      const pathAtStart = currentPathRef.current;
+      const path = joinPath(pathAtStart, name, osType);
       try {
         const data = await api.post(paths.agents.filesMkdir(agentId), { path });
         if (isFileTaskAck(data)) {
@@ -241,21 +253,23 @@ export function useAgentFiles(agentId: string) {
           }
         }
         showToast(t("agents.files_mkdir_done", { name }), "success");
-        await loadDirectory(currentPath);
+        if (currentPathRef.current !== pathAtStart) return;
+        await loadDirectory(pathAtStart);
       } catch (err) {
         showToast(String(err), "error");
       }
     },
-    [agentId, currentPath, osType, loadDirectory, showToast, t],
+    [agentId, osType, loadDirectory, showToast, t],
   );
 
   const renameFile = useCallback(
     async (filename: string, newName: string) => {
       const target = newName.trim().replace(/^[\\/]+/, "");
       if (!target || target === filename) return;
-      const src = joinPath(currentPath, filename, osType);
+      const pathAtStart = currentPathRef.current;
+      const src = joinPath(pathAtStart, filename, osType);
       // A bare name renames in place; a sub-path moves within the tree.
-      const dst = /[\\/]/.test(target) ? target : joinPath(currentPath, target, osType);
+      const dst = /[\\/]/.test(target) ? target : joinPath(pathAtStart, target, osType);
       try {
         const data = await api.post(paths.agents.filesRename(agentId), { path: src, dest: dst });
         if (isFileTaskAck(data)) {
@@ -266,18 +280,82 @@ export function useAgentFiles(agentId: string) {
           }
         }
         showToast(t("agents.files_rename_done", { filename }), "success");
-        await loadDirectory(currentPath);
+        if (currentPathRef.current !== pathAtStart) return;
+        await loadDirectory(pathAtStart);
         if (selectedFile === filename) setSelectedFile(null);
       } catch (err) {
         showToast(String(err), "error");
       }
     },
-    [agentId, currentPath, osType, selectedFile, loadDirectory, showToast, t],
+    [agentId, osType, selectedFile, loadDirectory, showToast, t],
   );
 
+  // Uploads run through a serial queue: concurrent pushLocalFile calls used
+  // to share one abort ref + progress state, so cancel only aborted the last
+  // file and progress bars overwrote each other mid-flight.
+  interface QueuedUpload {
+    file: File;
+    dest: string;
+    onDone?: () => void;
+  }
+  const uploadQueueRef = useRef<QueuedUpload[]>([]);
+  const uploadActiveRef = useRef(false);
+  // Indirection so the pump's finally can schedule the next file without a
+  // self-reference inside its own initializer (TDZ).
+  const pumpRef = useRef<() => void>(() => undefined);
+
+  const pumpUploadQueue = useCallback(() => {
+    if (uploadActiveRef.current) return;
+    const next = uploadQueueRef.current.shift();
+    if (!next) {
+      setUploading(false);
+      setUploadProgress(0);
+      return;
+    }
+    uploadActiveRef.current = true;
+    setUploading(true);
+    setUploadProgress(0);
+    const abort = new AbortController();
+    uploadAbortRef.current = abort;
+    const pathAtStart = currentPathRef.current;
+    showToast(t("agents.files_push_queued", { name: next.file.name }), "info");
+    void pushLocalFile({
+      agentId,
+      destPath: next.dest,
+      file: next.file,
+      t,
+      onProgress: (pct) => { if (!abort.signal.aborted) setUploadProgress(pct); },
+      signal: abort.signal,
+    })
+      .then(() => {
+        if (abort.signal.aborted) return;
+        showToast(t("agents.files_push_done", { name: next.file.name }), "success");
+        next.onDone?.();
+        if (currentPathRef.current === pathAtStart) void loadDirectory(pathAtStart);
+      })
+      .catch((err) => {
+        if (abort.signal.aborted) return;
+        showToast(err instanceof Error ? err.message : t("agents.files_push_failed"), "error");
+      })
+      .finally(() => {
+        uploadActiveRef.current = false;
+        if (uploadAbortRef.current === abort) uploadAbortRef.current = null;
+        if (abort.signal.aborted) {
+          uploadQueueRef.current.length = 0;
+          setUploading(false);
+          setUploadProgress(0);
+          return;
+        }
+        pumpRef.current();
+      });
+  }, [agentId, loadDirectory, showToast, t]);
+  pumpRef.current = pumpUploadQueue;
+
   const cancelUpload = useCallback(() => {
+    uploadQueueRef.current.length = 0;
     uploadAbortRef.current?.abort();
     uploadAbortRef.current = null;
+    uploadActiveRef.current = false;
     setUploading(false);
     setUploadProgress(0);
   }, []);
@@ -394,38 +472,11 @@ export function useAgentFiles(agentId: string) {
 
   const uploadFile = useCallback(
     (file: File, onDone?: () => void) => {
-      const dest = joinPath(currentPath, file.name, osType);
+      uploadQueueRef.current.push({ file, dest: joinPath(currentPathRef.current, file.name, osType), onDone });
       setUploading(true);
-      setUploadProgress(0);
-      const abort = new AbortController();
-      uploadAbortRef.current = abort;
-      showToast(t("agents.files_push_queued", { name: file.name }), "info");
-      void pushLocalFile({
-        agentId,
-        destPath: dest,
-        file,
-        t,
-        onProgress: setUploadProgress,
-        signal: abort.signal,
-      })
-        .then(() => {
-          if (abort.signal.aborted) return;
-          showToast(t("agents.files_push_done", { name: file.name }), "success");
-          onDone?.();
-          void loadDirectory(currentPath);
-        })
-        .catch((err) => {
-          if (abort.signal.aborted) return;
-          showToast(err instanceof Error ? err.message : t("agents.files_push_failed"), "error");
-        })
-        .finally(() => {
-          if (!abort.signal.aborted) {
-            setUploading(false);
-            setUploadProgress(0);
-          }
-        });
+      pumpUploadQueue();
     },
-    [agentId, currentPath, loadDirectory, osType, showToast, t],
+    [osType, pumpUploadQueue],
   );
 
   const loadDrives = useCallback(async () => {

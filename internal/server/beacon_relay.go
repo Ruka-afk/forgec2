@@ -92,6 +92,23 @@ func (s *Server) processRelayedResults(relayed []relayedData, parentUUID string,
 			} else {
 				task.Result = r.Output
 			}
+			// Chain integrity for relayed file transfers: a compromised
+			// parent forwarding a child's exfil must present the child's
+			// chain link (keyed per-child, which the parent never holds), or
+			// the forged chunk is dropped before it reaches disk/parsers.
+			// Same empty-MAC legacy tolerance as the direct path.
+			if r.Type == "upload" || r.Type == "download" {
+				chunk := []byte(r.Output)
+				if r.Encoding == "base64" && r.Output != "" {
+					if decoded, err := base64.StdEncoding.DecodeString(r.Output); err == nil {
+						chunk = decoded
+					}
+				}
+				if err := s.verifyAndCommitChain(rd.AgentID, task.ID, r.MAC, chunk); err != nil {
+					slog.Warn("Relayed file chunk integrity failure", "child", rd.AgentID, "task_id", r.TaskID, "error", err)
+					continue
+				}
+			}
 			if len(task.Result) > MaxResultSize {
 				task.Result = truncateString(task.Result, MaxResultSize)
 			}

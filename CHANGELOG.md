@@ -4,6 +4,26 @@ All notable changes to ForgeC2 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.6.1] - 2026-09-06
+
+### Added
+
+- Agent detail: one-click recon (drives/services/users/netstat/AV/portscan/sessions/USB/container), registry editor, screen trigger manager, process suspend/resume/kill, browser history, webcam/mic gallery
+- Screen monitoring video mode, remote-desktop page, file browser mkdir/rename
+- `docs/DEPLOY.md`: Linux (Docker/binary) + Windows deployment guide
+
+### Changed
+
+- God-file splits: `handlers_ai` → 6 files, `handlers_beacon` → 9 files, `server` → core + 6 files, `handlers_commands` → 8 files; Agents/Files/Screen/RemoteDesktop pages split into hooks + components
+- Single task-dispatch choke point `issueAgentTask` (soft-lock + error mapping centralized)
+- Docker deploy defaults to SQLite (postgres opt-in profile); healthcheck is TLS/port aware; release binaries stamp the tag version via ldflags
+
+### Fixed
+
+- Credential vault cross-tenant IDOR (read/update/delete/batch) + agent task/batch/loot/approval/collab/listener/AI-tool tenant scoping (12 + 8 regression tests)
+- Pending-task counter leaks, rerun 500 → mapped statuses, AI broker goroutine pile-up, worker-pool shutdown wedge
+- File-chain integrity verification for P2P-relayed chunks
+
 ## [2.5.0] - 2026-08-04
 
 ### Added

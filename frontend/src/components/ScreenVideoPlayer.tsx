@@ -44,7 +44,7 @@ export function ScreenVideoPlayer({ src, wsLive, fps = 5, className, onFullscree
   if (!src) {
     return (
       <div className={cn("flex aspect-video w-full items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/20", className)}>
-        <span className="text-sm text-muted-foreground">No video — start monitoring</span>
+        <span className="text-sm text-muted-foreground">{t("agents.screen_no_video")}</span>
       </div>
     );
   }
@@ -61,7 +61,7 @@ export function ScreenVideoPlayer({ src, wsLive, fps = 5, className, onFullscree
       />
       {!isPlaying && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-          <span className="text-sm text-white">Paused</span>
+          <span className="text-sm text-white">{t("agents.screen_paused")}</span>
         </div>
       )}
       {/* Video-like overlay controls */}

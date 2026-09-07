@@ -24,7 +24,13 @@ func main() {
 	configPath := flag.String("config", "config.yaml", "Path to configuration file")
 	logFormat := flag.String("log-format", "text", "Log format: text or json")
 	logFile := flag.String("log-file", "", "Path to log file (empty = stdout)")
+	showVersion := flag.Bool("version", false, "Print version and exit")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println(server.ServerVersion)
+		return
+	}
 
 	// Initialize structured logger with log rotation
 	logDir := "logs"

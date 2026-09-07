@@ -192,6 +192,11 @@ func (s *Server) handleSendCommand(c *gin.Context) {
 
 func (s *Server) handleGetAgentTasks(c *gin.Context) {
 	id := c.Param("id")
+	// Tenant gate: task history (often credential-bearing) must not leak
+	// across tenants via a guessed agent UUID.
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
 	p := parsePagination(c, DefaultTaskPageSize, MaxTaskPageSize)
 
 	query := s.db.Where("agent_id = ?", id).

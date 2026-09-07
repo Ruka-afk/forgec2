@@ -341,6 +341,51 @@ func TestCancelRunningTaskInjectsAbortTask(t *testing.T) {
 	}
 }
 
+// TestCancelRunningTaskSkipsAbortWhenQueueFull verifies the abort injection
+// respects the per-agent pending cap: with a full queue the cancel still
+// succeeds but no abort task is injected (and the counter is untouched).
+func TestCancelRunningTaskSkipsAbortWhenQueueFull(t *testing.T) {
+	s, database := newBeaconFinalityTestServer(t)
+
+	uuid := "dddd4444-5555-4333-8444-444444444444"
+	agent := db.Implant{ID: uuid, Hostname: "WS-02", IP: "10.0.0.9"}
+	if err := database.Create(&agent).Error; err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	task := db.Task{AgentID: uuid, Type: "shell", Command: "sleep 3600", Status: "running"}
+	if err := database.Create(&task).Error; err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	// Simulate a drifted counter above the cap: cancel releases one slot
+	// (back to exactly max), so the best-effort abort injection must defer
+	// instead of pushing past the ceiling.
+	s.agentPendingTasks[uuid] = MaxPendingTasksPerAgent + 1
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodPost, "/", nil)
+	c.Params = gin.Params{{Key: "id", Value: uuid}, {Key: "taskId", Value: strconv.FormatUint(uint64(task.ID), 10)}}
+	c.Set("user", "tester")
+
+	s.handleCancelTask(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("cancel status=%d body=%s", w.Code, w.Body.String())
+	}
+	var abortCount int64
+	if err := database.Model(&db.Task{}).Where("type = ? AND agent_id = ?", "abort", uuid).Count(&abortCount).Error; err != nil {
+		t.Fatalf("count abort tasks: %v", err)
+	}
+	if abortCount != 0 {
+		t.Errorf("full queue injected %d abort tasks, want 0", abortCount)
+	}
+	// Cancel released exactly one slot; the skipped abort added none back.
+	if n := s.agentPendingTasks[uuid]; n != MaxPendingTasksPerAgent {
+		t.Errorf("counter drifted: got %d, want %d", n, MaxPendingTasksPerAgent)
+	}
+}
+
 // TestCancelPendingTaskDoesNotInjectAbort verifies a pending (not yet fetched)
 // task is simply cancelled without an abort task, since no execution runs.
 func TestCancelPendingTaskDoesNotInjectAbort(t *testing.T) {

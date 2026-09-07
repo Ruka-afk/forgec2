@@ -24,16 +24,7 @@ func (s *Server) fireAgentConnectHook(agent db.Implant, isNew bool, now time.Tim
 	if s.pluginManager == nil {
 		return
 	}
-	s.wg.Add(1)
-	go func() {
-		s.taskWorkerSem <- struct{}{}
-		defer func() { <-s.taskWorkerSem }()
-		defer s.wg.Done()
-		defer func() {
-			if r := recover(); r != nil {
-				slog.Error("Plugin hook panicked (agent connect)", "agent_id", agent.ID, "recover", r)
-			}
-		}()
+	s.runTaskWorker("plugin_connect_hook", func() {
 		ctx, cancel := context.WithTimeout(s.ctx, PluginHookTimeout)
 		defer cancel()
 		if err := s.pluginManager.ExecuteHook(ctx, plugin.Event{
@@ -50,7 +41,7 @@ func (s *Server) fireAgentConnectHook(agent db.Implant, isNew bool, now time.Tim
 		}); err != nil {
 			slog.Warn("Hook errors on agent_connect event", "agent_id", agent.ID, "err", err)
 		}
-	}()
+	})
 }
 
 // enforceKillDate injects a kill task when the agent's kill date has passed and no kill task

@@ -31,6 +31,25 @@ func issueTestContext(id string) (*gin.Context, *httptest.ResponseRecorder) {
 	return c, w
 }
 
+func TestRerunMapsLimitTo429(t *testing.T) {
+	s := newTasksTestServer(t)
+	seedIssueAgent(t, s, "agent-rerun-limit")
+	orig := seedTask(t, s, "agent-rerun-limit", "shell", "whoami", "completed")
+	s.agentPendingTasks["agent-rerun-limit"] = MaxPendingTasksPerAgent
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodPost, "/", nil)
+	c.Params = gin.Params{{Key: "id", Value: "agent-rerun-limit"}, {Key: "taskId", Value: itoa(int(orig.ID))}}
+	c.Set("user_role", "admin")
+
+	s.handleRerunTask(c)
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d; body=%s", w.Code, w.Body.String())
+	}
+}
+
 func TestClientErrorStatus_Mapping(t *testing.T) {
 	cases := []struct {
 		name   string

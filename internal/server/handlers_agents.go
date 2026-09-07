@@ -388,9 +388,10 @@ func (s *Server) handleDeleteAgent(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
-	var agent db.Implant
-	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
-		respondError(c, http.StatusNotFound, "agent not found")
+	// Tenant gate: deleteAgentRecordTx purges the implant plus all dependent
+	// rows, so ownership must be verified before anything is touched.
+	agent, ok := s.getAgentOrFail(c, id)
+	if !ok {
 		return
 	}
 	s.LogAuditRecord(c, "agent_delete", "agent", id, fmt.Sprintf("Deleted agent %s", agent.Hostname), true, nil)

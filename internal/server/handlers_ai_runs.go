@@ -76,12 +76,17 @@ type aiRunBroker struct {
 	mu          sync.Mutex
 	subscribers map[string]map[chan aiLiveEvent]struct{}
 	cancels     map[string]context.CancelFunc
+	// retrying tracks channels with an in-flight blocking retry worker, so
+	// a stalled subscriber coalesces to at most one worker instead of one
+	// goroutine per event (previously unbounded at event rate).
+	retrying map[chan aiLiveEvent]bool
 }
 
 func newAIRunBroker() *aiRunBroker {
 	return &aiRunBroker{
 		subscribers: make(map[string]map[chan aiLiveEvent]struct{}),
 		cancels:     make(map[string]context.CancelFunc),
+		retrying:    make(map[chan aiLiveEvent]bool),
 	}
 }
 
@@ -116,7 +121,32 @@ func (b *aiRunBroker) publish(runID string, event aiLiveEvent, ephemeral bool) {
 		default:
 			// Buffer full: try blocking 100ms before dropping to favor latency-first but avoid stall.
 			// Single-session reasoning stays ephemeral; durable events are replayed from SQLite.
+			// At most one retry worker per channel — concurrent full-buffer
+			// events coalesce (the worker carries the latest) instead of
+			// spawning a goroutine per event under a stalled subscriber.
+			if b.retrying[ch] {
+				continue
+			}
+			b.retrying[ch] = true
 			go func(dst chan aiLiveEvent, ev aiLiveEvent, rid string) {
+				// A racing unsubscribe closes dst; sending then panics.
+				// Recover as drop — the subscriber is gone by definition.
+				defer func() {
+					if r := recover(); r != nil {
+						slog.Debug("AI broker retry on closed channel", "run_id", rid)
+					}
+					b.mu.Lock()
+					delete(b.retrying, dst)
+					b.mu.Unlock()
+				}()
+				// Re-check membership: an unsubscribe that won the race made
+				// this retry pointless — drop without touching the channel.
+				b.mu.Lock()
+				_, alive := b.subscribers[rid][dst]
+				b.mu.Unlock()
+				if !alive {
+					return
+				}
 				select {
 				case dst <- ev:
 				case <-time.After(100 * time.Millisecond):
@@ -368,6 +398,22 @@ func (s *Server) handleAIRunsCreate(c *gin.Context) {
 		// Retry once on SQLITE_BUSY
 		if strings.Contains(txErr.Error(), "database is locked") || strings.Contains(txErr.Error(), "busy") {
 			time.Sleep(50 * time.Millisecond)
+			// The blind fallback below runs without the transaction's early
+			// lock, so re-verify idempotency + concurrency caps first —
+			// otherwise a lost race silently duplicates runs or exceeds caps.
+			var dup db.AIChatRun
+			if err := s.db.Where("tenant_id = ? AND owner_id = ? AND idempotency_key = ?", principal.TenantID, principal.UserID, req.IdempotencyKey).First(&dup).Error; err == nil {
+				c.JSON(http.StatusOK, gin.H{"success": true, "data": dup, "reused": true})
+				return
+			}
+			var userActive, tenantActive int64
+			s.db.Model(&db.AIChatRun{}).Where("owner_id = ? AND status IN ?", principal.UserID, aiActiveRunStatuses).Count(&userActive)
+			s.db.Model(&db.AIChatRun{}).Where("tenant_id = ? AND status IN ?", principal.TenantID, aiActiveRunStatuses).Count(&tenantActive)
+			if userActive >= int64(userLimit) || tenantActive >= int64(tenantLimit) {
+				c.Header("Retry-After", "5")
+				respondError(c, http.StatusTooManyRequests, "AI run concurrency limit reached")
+				return
+			}
 			// Fallback to single insert attempt
 			now := time.Now()
 			fallback := db.AIChatRun{
@@ -379,6 +425,14 @@ func (s *Server) handleAIRunsCreate(c *gin.Context) {
 			}
 			if err := s.db.Create(&fallback).Error; err == nil {
 				run = fallback
+			} else if errors.Is(err, gorm.ErrDuplicatedKey) {
+				// Lost the race after all: return the winner instead of 500.
+				if s.db.Where("tenant_id = ? AND owner_id = ? AND idempotency_key = ?", principal.TenantID, principal.UserID, req.IdempotencyKey).First(&dup).Error == nil {
+					c.JSON(http.StatusOK, gin.H{"success": true, "data": dup, "reused": true})
+					return
+				}
+				respondError(c, http.StatusInternalServerError, "failed to create AI run")
+				return
 			} else {
 				respondError(c, http.StatusInternalServerError, "failed to create AI run")
 				return

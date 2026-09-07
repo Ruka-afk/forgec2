@@ -93,24 +93,29 @@ func (s *Server) handleCancelTask(c *gin.Context) {
 	s.decPendingTasks(agentID)
 
 	if wasRunning {
-		abortTask := db.Task{
-			AgentID:   agentID,
-			Type:      "abort",
-			Command:   fmt.Sprintf("%d", taskID),
-			Status:    "pending",
-			Priority:  3,
-			ClaimedBy: agentID,
-			ClaimedAt: time.Now(),
-			CreatedBy: c.GetString("user"),
-		}
-		if err := s.db.Create(&abortTask).Error; err != nil {
-			slog.Error("Failed to inject abort task", "agent_id", agentID, "original_task", taskID, "err", err)
+		// Abort injection is best-effort: respect the per-agent pending cap
+		// like every other creation path (previously an uncapped manual
+		// increment that also leaked when the insert failed).
+		if err := s.trackPendingTask(agentID); err != nil {
+			slog.Warn("Abort task skipped: agent pending queue full", "agent_id", agentID, "original_task", taskID)
 		} else {
-			s.agentPendingTasksMu.Lock()
-			s.agentPendingTasks[agentID]++
-			s.agentPendingTasksMu.Unlock()
-			s.broadcastTaskUpdate(agentID, abortTask)
-			slog.Info("Abort task injected for cancelled running task", "agent_id", agentID, "original_task", taskID)
+			abortTask := db.Task{
+				AgentID:   agentID,
+				Type:      "abort",
+				Command:   fmt.Sprintf("%d", taskID),
+				Status:    "pending",
+				Priority:  3,
+				ClaimedBy: agentID,
+				ClaimedAt: time.Now(),
+				CreatedBy: c.GetString("user"),
+			}
+			if err := s.db.Create(&abortTask).Error; err != nil {
+				s.decPendingTasks(agentID)
+				slog.Error("Failed to inject abort task", "agent_id", agentID, "original_task", taskID, "err", err)
+			} else {
+				s.broadcastTaskUpdate(agentID, abortTask)
+				slog.Info("Abort task injected for cancelled running task", "agent_id", agentID, "original_task", taskID)
+			}
 		}
 	}
 
@@ -164,10 +169,11 @@ func (s *Server) handleRerunTask(c *gin.Context) {
 		return
 	}
 
-	// Clone the original task parameters
-	newTask, err := s.createTask(agentID, original.Type, original.Command, original.Shell, original.Path, original.Data, original.Offset, original.Size)
+	// Clone the original task parameters (caller identity included so the
+	// soft-lock gate applies, like every other creation path).
+	newTask, err := s.createTask(agentID, original.Type, original.Command, original.Shell, original.Path, original.Data, original.Offset, original.Size, callerOpts(c)...)
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+		respondTaskError(c, err)
 		return
 	}
 

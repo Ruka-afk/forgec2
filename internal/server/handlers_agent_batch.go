@@ -29,6 +29,28 @@ func (s *Server) handleBulkDeleteAgents(c *gin.Context) {
 		return
 	}
 
+	// Tenant gate (fail-closed BEFORE the transaction): any requested id
+	// outside the caller's tenant aborts the whole batch so a foreign UUID
+	// can neither be probed nor deleted. Single-delete atomicity below is
+	// preserved — nothing is touched on this path.
+	var visible []db.Implant
+	if err := s.tenantScope(s.db, c).Select("id").Where("id IN ?", req.AgentIDs).Find(&visible).Error; err != nil {
+		handleQueryError(c, err, "Failed to query agents for bulk delete")
+		return
+	}
+	if len(visible) != len(req.AgentIDs) {
+		seen := make(map[string]bool, len(visible))
+		for _, a := range visible {
+			seen[a.ID] = true
+		}
+		for _, id := range req.AgentIDs {
+			if !seen[id] {
+				respondError(c, http.StatusNotFound, "agent not found")
+				return
+			}
+		}
+	}
+
 	// Whole batch is deleted in a single transaction: any failure rolls back
 	// every agent so the operation never leaves a partially-deleted state.
 	deleted := 0
@@ -124,7 +146,9 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 	}
 
 	var existingAgents []db.Implant
-	if err := s.db.Select("id").Where("id IN ?", uniqueIDs).Find(&existingAgents).Error; err != nil {
+	// Tenant gate: foreign-tenant ids simply miss the visible set and fall
+	// into failedCount below — no task is ever queued on another tenant's agent.
+	if err := s.tenantScope(s.db, c).Select("id").Where("id IN ?", uniqueIDs).Find(&existingAgents).Error; err != nil {
 		handleQueryError(c, err, "Failed to query existing agents for batch")
 		return
 	}

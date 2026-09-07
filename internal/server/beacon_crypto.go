@@ -105,7 +105,11 @@ func (s *Server) acceptSeq(agentID string, seq uint64) (accepted bool) {
 // actor could otherwise drive unbounded memory growth). Mirrors the
 // loginLockoutTracker cleanup pattern (S5).
 func (s *Server) startSeqLockoutCleanup(ctx context.Context) {
+	// Tracked so graceful shutdown joins it instead of closing the DB
+	// underneath a mid-sweep Pluck (same discipline as all server loops).
+	s.wg.Add(1)
 	go func() {
+		defer s.wg.Done()
 		defer func() {
 			if r := recover(); r != nil {
 				slog.Error("seqLockout cleanup recovered from panic", "err", r)

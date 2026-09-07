@@ -71,13 +71,15 @@ func (s *Server) handleListenerDetail(c *gin.Context) {
 		return
 	}
 
+	// Tenant gate: listeners are global, but the attached agents (hostnames,
+	// IPs, users) are tenant assets — only expose caller-visible ones.
 	agents := make([]db.Implant, 0)
-	if err := s.db.Where("listener_id = ?", listener.ID).Order("last_seen desc").Limit(5000).Find(&agents).Error; err != nil {
+	if err := s.tenantScope(s.db, c).Where("listener_id = ?", listener.ID).Order("last_seen desc").Limit(5000).Find(&agents).Error; err != nil {
 		slog.Error("Failed to query listener agents", "err", err)
 	}
 
 	var activeCount int64
-	if err := s.db.Model(&db.Implant{}).Where("listener_id = ? AND last_seen > ?", listener.ID, time.Now().Add(-ListenerActiveThreshold)).Count(&activeCount).Error; err != nil {
+	if err := s.tenantScope(s.db.Model(&db.Implant{}), c).Where("listener_id = ? AND last_seen > ?", listener.ID, time.Now().Add(-ListenerActiveThreshold)).Count(&activeCount).Error; err != nil {
 		slog.Error("Failed to count active agents", "err", err)
 	}
 
@@ -107,15 +109,16 @@ func (s *Server) handleAPIGetListener(c *gin.Context) {
 		return
 	}
 
+	// Tenant gate: see handleListenerDetail — listeners are global, agents are not.
 	agents := make([]db.Implant, 0)
-	if err := s.db.Where("listener_id = ?", listener.ID).Order("last_seen desc").Limit(5000).Find(&agents).Error; err != nil {
+	if err := s.tenantScope(s.db, c).Where("listener_id = ?", listener.ID).Order("last_seen desc").Limit(5000).Find(&agents).Error; err != nil {
 		slog.Error("Failed to query listener agents", "err", err)
 		respondError(c, http.StatusInternalServerError, "failed to query listener agents")
 		return
 	}
 
 	var activeCount int64
-	if err := s.db.Model(&db.Implant{}).Where("listener_id = ? AND last_seen > ?", listener.ID, time.Now().Add(-ListenerActiveThreshold)).Count(&activeCount).Error; err != nil {
+	if err := s.tenantScope(s.db.Model(&db.Implant{}), c).Where("listener_id = ? AND last_seen > ?", listener.ID, time.Now().Add(-ListenerActiveThreshold)).Count(&activeCount).Error; err != nil {
 		slog.Error("Failed to count active agents", "err", err)
 	}
 

@@ -13,7 +13,8 @@ import RdpStatusCards from "./_components/RdpStatusCards";
 export default function RemoteDesktopPage() {
   const { t } = useI18n();
   const params = useParams();
-  const id = params.id as string;
+  const rawId = params.id as string | string[];
+  const id = Array.isArray(rawId) ? rawId[0] : rawId || "";
 
   const rdp = useRemoteDesktop(id);
 

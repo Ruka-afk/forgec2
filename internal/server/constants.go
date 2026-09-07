@@ -2,8 +2,12 @@ package server
 
 import "time"
 
+// ServerVersion is overridden at release time via
+// -ldflags "-X github.com/forgec2/forgec2/internal/server.ServerVersion=<tag>".
+// A const cannot be overridden that way, hence var. Local builds report "dev".
+var ServerVersion = "dev"
+
 const (
-	ServerVersion = "2.6.0"
 
 	BeaconRateLimit  = 100
 	BeaconRateWindow = 1 * time.Minute

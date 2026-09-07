@@ -211,16 +211,26 @@ export function useRemoteDesktop(agentId: string) {
     };
   }, [id]);
 
-  const getRelativeCoords = useCallback((e: React.MouseEvent<HTMLDivElement | HTMLImageElement>) => {
+  const coordsFromClient = useCallback((clientX: number, clientY: number) => {
     const img = imgRef.current;
     if (!img) return { x: 0, y: 0 };
     const rect = img.getBoundingClientRect();
     const scaleX = (img.naturalWidth || nativeWidth || 1920) / rect.width;
     const scaleY = (img.naturalHeight || nativeHeight || 1080) / rect.height;
-    const x = Math.round((e.clientX - rect.left) * scaleX);
-    const y = Math.round((e.clientY - rect.top) * scaleY);
+    const x = Math.round((clientX - rect.left) * scaleX);
+    const y = Math.round((clientY - rect.top) * scaleY);
     return { x, y };
   }, [nativeWidth, nativeHeight]);
+
+  const getRelativeCoords = useCallback((e: React.MouseEvent<HTMLDivElement | HTMLImageElement>) => {
+    // Read synchronously: the throttled move sender below must not touch a
+    // (possibly pooled/recycled) SyntheticEvent after the handler returns.
+    return coordsFromClient(e.clientX, e.clientY);
+  }, [coordsFromClient]);
+
+  // Backpressure for move frames: at most one in flight, so slow links don't
+  // stack unbounded POSTs behind the 50ms throttle.
+  const moveInflightRef = useRef(false);
 
   const handleClick = useCallback(async (e: React.MouseEvent<HTMLDivElement>) => {
     if (!monitoring || !id) return;
@@ -254,13 +264,17 @@ export function useRemoteDesktop(agentId: string) {
       }
 
       if (moveThrottleRef.current) return;
+      const { x, y } = coordsFromClient(e.clientX, e.clientY);
       moveThrottleRef.current = setTimeout(() => {
         moveThrottleRef.current = null;
-        const { x, y } = getRelativeCoords(e);
-        api.postJson(paths.agents.remoteInput(id), { type: "move", x, y }).catch(() => {});
+        if (moveInflightRef.current) return;
+        moveInflightRef.current = true;
+        api.postJson(paths.agents.remoteInput(id), { type: "move", x, y })
+          .catch(() => {})
+          .finally(() => { moveInflightRef.current = false; });
       }, 50);
     },
-    [monitoring, id, getRelativeCoords],
+    [monitoring, id, coordsFromClient],
   );
 
   const hideCursor = useCallback(() => setShowCursor(false), []);

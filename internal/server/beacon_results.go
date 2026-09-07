@@ -397,33 +397,17 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 		})
 
 		// Task callbacks: POST results to external URL when task completes.
-		// Uses a semaphore to bound concurrent background goroutines.
+		// Bounded pool with shutdown-safe acquire (see runTaskWorker).
 		if task.CallbackURL != "" && !task.CallbackSent {
-			s.wg.Add(1)
-			go func() {
-				s.taskWorkerSem <- struct{}{}
-				defer func() { <-s.taskWorkerSem }()
-				defer s.wg.Done()
-				defer func() {
-					if r := recover(); r != nil {
-						slog.Error("Task callback panicked", "task_id", task.ID, "recover", r)
-					}
-				}()
-				s.executeTaskCallback(*task, uuid)
-			}()
+			completed := *task
+			s.runTaskWorker("task_callback", func() {
+				s.executeTaskCallback(completed, uuid)
+			})
 		}
 
 		if s.pluginManager != nil {
-			s.wg.Add(1)
-			go func() {
-				s.taskWorkerSem <- struct{}{}
-				defer func() { <-s.taskWorkerSem }()
-				defer s.wg.Done()
-				defer func() {
-					if r := recover(); r != nil {
-						slog.Error("Plugin hook panicked", "agent_id", uuid, "recover", r)
-					}
-				}()
+			completed := *task
+			s.runTaskWorker("plugin_hook", func() {
 				ctx, cancel := context.WithTimeout(s.ctx, PluginHookTimeout)
 				defer cancel()
 				if err := s.pluginManager.ExecuteHook(ctx, plugin.Event{
@@ -431,33 +415,25 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 					Timestamp: now,
 					AgentID:   uuid,
 					Payload: map[string]interface{}{
-						"task_id":   task.ID,
-						"task_type": task.Type,
-						"status":    task.Status,
-						"error":     task.Error,
+						"task_id":   completed.ID,
+						"task_type": completed.Type,
+						"status":    completed.Status,
+						"error":     completed.Error,
 					},
 				}); err != nil {
-					slog.Warn("Hook errors on task_completed event", "agent_id", uuid, "task_id", task.ID, "err", err)
+					slog.Warn("Hook errors on task_completed event", "agent_id", uuid, "task_id", completed.ID, "err", err)
 				}
-			}()
+			})
 		}
 
 		// ── Token vault: persist steal/make results ───────────────────────────
 		if r.Error == "" && task.Result != "" {
 			switch r.Type {
 			case "token_steal", "token_make", "token_revert", "rev2self":
-				s.wg.Add(1)
-				go func() {
-					s.taskWorkerSem <- struct{}{}
-					defer func() { <-s.taskWorkerSem }()
-					defer s.wg.Done()
-					defer func() {
-						if r := recover(); r != nil {
-							slog.Error("Token result processor panicked", "agent_id", uuid, "recover", r)
-						}
-					}()
-					s.processTokenResult(uuid, r.Type, task.Result)
-				}()
+				completed := *task
+				s.runTaskWorker("token_result", func() {
+					s.processTokenResult(uuid, r.Type, completed.Result)
+				})
 			}
 		}
 

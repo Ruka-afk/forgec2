@@ -24,29 +24,39 @@ function pollOk() {
 }
 
 describe("collectTaskResult", () => {
-  it("returns the task result after polling", async () => {
+  it("returns the poll-resolved plaintext without a second fetch", async () => {
     mockedPost.mockResolvedValue({ task_id: 7 });
     pollOk();
-    mockedGet.mockResolvedValue({ result: "hello" });
 
     const out = await collectTaskResult("a1", paths.agents.drives("a1"));
 
-    expect(out).toBe("hello");
+    expect(out).toBe("x");
     expect(mockedPost).toHaveBeenCalledWith(paths.agents.drives("a1"), {});
     expect(mockedPoll).toHaveBeenCalledWith("a1", 7, { timeoutMs: 120_000 });
-    expect(mockedGet).toHaveBeenCalledWith(paths.agents.task("a1", "7"));
+    expect(mockedGet).not.toHaveBeenCalled();
   });
 
-  it("falls back to data.result and forwards body/timeout", async () => {
+  it("falls back to GET when the poll result is empty", async () => {
     mockedPost.mockResolvedValue({ task_id: 9 });
-    pollOk();
-    mockedGet.mockResolvedValue({ data: { result: "nested" } });
+    mockedPoll.mockResolvedValue({ status: "completed", result: "" } as never);
+    mockedGet.mockResolvedValue({ result: "hello" });
 
     const out = await collectTaskResult("a1", "/p", { target: "t" }, 5000);
 
-    expect(out).toBe("nested");
+    expect(out).toBe("hello");
     expect(mockedPost).toHaveBeenCalledWith("/p", { target: "t" });
     expect(mockedPoll).toHaveBeenCalledWith("a1", 9, { timeoutMs: 5000 });
+    expect(mockedGet).toHaveBeenCalledWith(paths.agents.task("a1", "9"));
+  });
+
+  it("falls back to data.result", async () => {
+    mockedPost.mockResolvedValue({ task_id: 9 });
+    mockedPoll.mockResolvedValue({ status: "completed", result: "" } as never);
+    mockedGet.mockResolvedValue({ data: { result: "nested" } });
+
+    const out = await collectTaskResult("a1", "/p");
+
+    expect(out).toBe("nested");
   });
 
   it("throws when dispatch yields no task id", async () => {

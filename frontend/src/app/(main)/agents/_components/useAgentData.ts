@@ -131,6 +131,8 @@ export function useAgentData(t: (key: string) => string) {
   const allTags = cachedAllTags ?? [];
 
   const idsKey = useMemo(() => beacons.map((b) => b.id || "").filter(Boolean).sort().join(","), [beacons]);
+  const idsKeyRef = useRef(idsKey);
+  idsKeyRef.current = idsKey;
 
   useEffect(() => {
     if (beacons.length === 0) {
@@ -139,15 +141,18 @@ export function useAgentData(t: (key: string) => string) {
     }
     const ac = new AbortController();
     const ids = beacons.map((b) => b.id || "").filter(Boolean);
+    const keyAtStart = idsKey;
     // Debounce so rapid list refreshes (sorting, pagination, polling) coalesce
     // into a single batch request instead of a burst.
     const timer = setTimeout(() => {
       if (ac.signal.aborted) return;
       api
-        .postJson<{ tags: Record<string, AgentTag[]> }>(paths.agents.batchTags, { agent_ids: ids })
-        .then((d) => { if (!ac.signal.aborted) setTagsByAgent(d.tags || {}); })
+        .postJson<{ tags: Record<string, AgentTag[]> }>(paths.agents.batchTags, { agent_ids: ids }, { signal: ac.signal })
+        // Guard on idsKey as well as abort: a slow earlier response must not
+        // overwrite tags fetched for a newer id set.
+        .then((d) => { if (!ac.signal.aborted && keyAtStart === idsKeyRef.current) setTagsByAgent(d.tags || {}); })
         .catch(() => {
-          if (!ac.signal.aborted) setTagsByAgent({});
+          if (!ac.signal.aborted && keyAtStart === idsKeyRef.current) setTagsByAgent({});
         });
     }, 200);
     return () => {

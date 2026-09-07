@@ -37,8 +37,18 @@ func seedTask(t *testing.T, s *Server, agentID, taskType, command, status string
 	return task
 }
 
+// seedAgent creates a bare implant row. Required since task handlers gate on
+// agent visibility (getAgentOrFail) — tasks without an owning agent 404.
+func seedAgent(t *testing.T, s *Server, agentID string) {
+	t.Helper()
+	if err := s.db.Create(&db.Implant{ID: agentID}).Error; err != nil {
+		t.Fatalf("seed agent: %v", err)
+	}
+}
+
 func TestHandleGetAgentTasks_Empty(t *testing.T) {
 	s := newTasksTestServer(t)
+	seedAgent(t, s, "agent-1")
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -63,6 +73,7 @@ func TestHandleGetAgentTasks_Empty(t *testing.T) {
 
 func TestHandleGetAgentTasks_WithData(t *testing.T) {
 	s := newTasksTestServer(t)
+	seedAgent(t, s, "agent-tasks")
 	seedTask(t, s, "agent-tasks", "shell", "whoami", "completed")
 
 	w := httptest.NewRecorder()

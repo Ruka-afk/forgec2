@@ -113,6 +113,9 @@ func (s *Server) shutdown() {
 	if s.siem != nil {
 		s.siem.Stop()
 	}
+	if s.opsecAdaptive != nil {
+		s.opsecAdaptive.Stop()
+	}
 	if s.eventManager != nil {
 		s.eventManager.Shutdown()
 	}

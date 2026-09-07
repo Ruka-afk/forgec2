@@ -21,6 +21,7 @@ import (
 
 	"github.com/forgec2/forgec2/internal/config"
 	"github.com/forgec2/forgec2/internal/crypto"
+	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 )
 
@@ -207,6 +208,37 @@ func (s *Server) findTenantOrFail(c *gin.Context, dest interface{}, id, entityNa
 		return false
 	}
 	return true
+}
+
+// findVisibleTask loads a task by ID and verifies its owning agent is visible
+// to the caller. Tasks don't carry a reliable TenantID at creation time, so
+// the gate goes through the agent (the same pattern the AI tools use with
+// agent_id subqueries). Returns 404 when either the task or its agent is
+// outside the caller's tenant.
+func (s *Server) findVisibleTask(c *gin.Context, taskID uint) (*db.Task, bool) {
+	var task db.Task
+	if err := s.db.First(&task, taskID).Error; err != nil {
+		respondError(c, http.StatusNotFound, "task not found")
+		return nil, false
+	}
+	if _, ok := s.getAgentOrFail(c, task.AgentID); !ok {
+		return nil, false
+	}
+	return &task, true
+}
+
+// agentVisible reports whether an agent is visible to the caller WITHOUT
+// writing any response — for bulk loops where a 404 per item would corrupt
+// the single JSON response. tenantScope keeps legacy (tenant 0) global.
+func (s *Server) agentVisible(c *gin.Context, agentID string) bool {
+	if agentID == "" {
+		return false
+	}
+	var n int64
+	if err := s.tenantScope(s.db.Model(&db.Implant{}), c).Where("id = ?", agentID).Count(&n).Error; err != nil {
+		return false
+	}
+	return n > 0
 }
 
 // --- #7: Pagination helper ---

@@ -60,6 +60,12 @@ func (s *Server) handleServeScreenshot(c *gin.Context) {
 	agentID := c.Param("agent_id")
 	filename := c.Param("filename")
 
+	// Tenant gate: screenshots are stored per agent dir on disk — verify the
+	// caller can see this agent before serving anything under its directory.
+	if _, ok := s.getAgentOrFail(c, agentID); !ok {
+		return
+	}
+
 	// Validate screenshot extension to prevent serving arbitrary files
 	ext := strings.ToLower(filepath.Ext(filename))
 	if ext != ".png" && ext != ".jpg" && ext != ".jpeg" && ext != ".gif" && ext != ".webp" {

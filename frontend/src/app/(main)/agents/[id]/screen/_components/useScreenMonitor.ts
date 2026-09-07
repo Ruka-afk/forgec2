@@ -76,6 +76,21 @@ export function useScreenMonitor(agentId: string, opts: ScreenMonitorOpts) {
   const [monitoringStatus, setMonitoringStatus] = useState<MonitorStatus>("waiting");
   const [status, setStatus] = useState<CaptureStatus>("waiting");
   const [busyAction, setBusyAction] = useState<BusyAction>(null);
+  // Sync check-and-set mirror of busyAction: two clicks in the same frame
+  // both read stale `null` state (TOCTOU) and would double-dispatch.
+  const busyRef = useRef<BusyAction>(null);
+  const tryClaimBusy = useCallback((kind: Exclude<BusyAction, null>) => {
+    if (!agentId || busyRef.current) return false;
+    busyRef.current = kind;
+    setBusyAction(kind);
+    return true;
+  }, [agentId]);
+  const releaseBusy = useCallback(() => {
+    busyRef.current = null;
+    // No mounted guard: React 18+ silently ignores post-unmount setState,
+    // and guarding would capture mountedRef into a []-dep callback.
+    setBusyAction(null);
+  }, []);
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [screenshotGallery, setScreenshotGallery] = useState<ScreenshotItem[]>([]);
   const [lastUpdate, setLastUpdate] = useState("-");
@@ -107,6 +122,10 @@ export function useScreenMonitor(agentId: string, opts: ScreenMonitorOpts) {
       if (!next || next.data === lastFrameRef.current) return;
 
       lastFrameRef.current = next.data;
+      // Viewer and gallery keep SEPARATE object URLs on purpose: the viewer
+      // revokes its previous URL on every frame, which must not break the
+      // gallery thumbnail of that same frame. (Two URLs to one Blob share
+      // the bytes — handles are cheap, no data is duplicated.)
       const sharedBlob = dataUrlToBlob(next.data);
       const blobUrl = sharedBlob ? URL.createObjectURL(sharedBlob) : dataUrlToBlobUrl(next.data);
       const galleryBlobUrl = sharedBlob ? URL.createObjectURL(sharedBlob) : dataUrlToBlobUrl(next.data);
@@ -212,9 +231,8 @@ export function useScreenMonitor(agentId: string, opts: ScreenMonitorOpts) {
   }, [agentId, t]);
 
   const requestFreshCapture = useCallback(async (kind: "capture" | "window") => {
-    if (!agentId || busyAction) return;
+    if (!tryClaimBusy(kind)) return;
     const previousSequence = frameSequenceRef.current;
-    setBusyAction(kind);
     setStatus("capturing");
     setMonitoringStatus("capturing");
     try {
@@ -236,14 +254,13 @@ export function useScreenMonitor(agentId: string, opts: ScreenMonitorOpts) {
       setMonitoringStatus(monitoringRef.current ? "connected" : "waiting");
       toast.error(formatThrownError(error));
     } finally {
-      if (mountedRef.current) setBusyAction(null);
+      releaseBusy();
     }
-  }, [busyAction, captureScreenshot, agentId, t, waitForTask]);
+  }, [captureScreenshot, agentId, t, waitForTask, releaseBusy, tryClaimBusy]);
 
   const startMonitoring = useCallback(async () => {
     const { interval, quality } = optsRef.current;
-    if (!agentId || busyAction) return;
-    setBusyAction("start");
+    if (!tryClaimBusy("start")) return;
     setMonitoringStatus("capturing");
     setStatus("waiting");
     try {
@@ -260,13 +277,12 @@ export function useScreenMonitor(agentId: string, opts: ScreenMonitorOpts) {
       setMonitoringStatus("offline");
       toast.error(`${t("agents.screen_start_failed")}: ${formatThrownError(error)}`);
     } finally {
-      if (mountedRef.current) setBusyAction(null);
+      releaseBusy();
     }
-  }, [agentId, busyAction, captureScreenshot, t]);
+  }, [agentId, captureScreenshot, t, releaseBusy, tryClaimBusy]);
 
   const stopMonitoring = useCallback(async () => {
-    if (!agentId || busyAction) return;
-    setBusyAction("stop");
+    if (!tryClaimBusy("stop")) return;
     try {
       await api.post(paths.agents.screenStop(agentId), {});
       monitoringRef.current = false;
@@ -278,9 +294,9 @@ export function useScreenMonitor(agentId: string, opts: ScreenMonitorOpts) {
     } catch (error) {
       toast.error(`${t("agents.screen_stop_failed")}: ${formatThrownError(error)}`);
     } finally {
-      if (mountedRef.current) setBusyAction(null);
+      releaseBusy();
     }
-  }, [agentId, busyAction, t]);
+  }, [agentId, t, releaseBusy, tryClaimBusy]);
 
   const startTitleTrigger = useCallback(async (matchRaw: string) => {
     const { interval } = optsRef.current;
@@ -319,13 +335,45 @@ export function useScreenMonitor(agentId: string, opts: ScreenMonitorOpts) {
     link.click();
   }, [screenshot, agentId]);
 
+  // Lightbox owns an independent copy of the image URL: gallery eviction
+  // revokes the thumbnail URL, which must not blank an open fullscreen view.
+  const modalOwnedRef = useRef<string | null>(null);
+  const modalOpenRef = useRef(false);
   const openModal = useCallback((image: string) => {
     if (!image) return;
-    setModalImage(image);
+    if (modalOwnedRef.current) {
+      revokeBlobUrl(modalOwnedRef.current);
+      modalOwnedRef.current = null;
+    }
+    modalOpenRef.current = true;
+    if (image.startsWith("blob:")) {
+      // Clone via fetch so later eviction can't blank us; show the shared
+      // URL instantly and swap in the owned copy when ready.
+      setModalImage(image);
+      fetch(image)
+        .then((r) => r.blob())
+        .then((b) => {
+          if (!modalOpenRef.current) return;
+          const url = URL.createObjectURL(b);
+          if (modalOwnedRef.current) revokeBlobUrl(modalOwnedRef.current);
+          modalOwnedRef.current = url;
+          setModalImage(url);
+        })
+        .catch(() => {});
+    } else {
+      setModalImage(image);
+    }
     setShowModal(true);
   }, []);
 
-  const closeModal = useCallback(() => setShowModal(false), []);
+  const closeModal = useCallback(() => {
+    modalOpenRef.current = false;
+    setShowModal(false);
+    if (modalOwnedRef.current) {
+      revokeBlobUrl(modalOwnedRef.current);
+      modalOwnedRef.current = null;
+    }
+  }, []);
 
   const activatePreview = useCallback((event: React.KeyboardEvent<HTMLElement>, image: string) => {
     if (event.key === "Enter" || event.key === " ") {
@@ -396,6 +444,10 @@ export function useScreenMonitor(agentId: string, opts: ScreenMonitorOpts) {
       }
       setScreenshot((prev) => { if (prev) revokeBlobUrl(prev); return prev; });
       setScreenshotGallery((prev) => { prev.forEach((item) => revokeBlobUrl(item.data)); return prev; });
+      if (modalOwnedRef.current) {
+        revokeBlobUrl(modalOwnedRef.current);
+        modalOwnedRef.current = null;
+      }
     };
   }, []);
 

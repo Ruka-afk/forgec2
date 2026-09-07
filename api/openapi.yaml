@@ -27,7 +27,7 @@ info:
     - **admin**: Full control (all permissions)
     - **user**: Standard operator permissions (agents, tasks, credentials, limited settings)
 
-  version: 2.4.1
+  version: 2.6.1
   contact:
     name: ForgeC2 Support
     email: support@forgec2.io

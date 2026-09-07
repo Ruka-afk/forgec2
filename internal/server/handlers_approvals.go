@@ -30,9 +30,10 @@ func (s *Server) handleApproveTask(c *gin.Context) {
 		return
 	}
 
-	var task db.Task
-	if err := s.db.First(&task, taskID).Error; err != nil {
-		respondError(c, http.StatusNotFound, "task not found")
+	// Tenant gate (agent-visibility): tasks carry no reliable TenantID, so a
+	// foreign-tenant pending task must 404 here instead of being approvable.
+	task, ok := s.findVisibleTask(c, taskID)
+	if !ok {
 		return
 	}
 	if task.Status != TaskStatusPendingApproval {
@@ -58,7 +59,7 @@ func (s *Server) handleApproveTask(c *gin.Context) {
 	// read here let approve resurrect a task another operator had just
 	// rejected or cancelled (dangerous types would then execute).
 	res := s.db.Model(&db.Task{}).
-		Where("id = ? AND status IN ?", taskID, []string{TaskStatusPendingApproval}).
+		Where("id = ? AND agent_id = ? AND status IN ?", taskID, task.AgentID, []string{TaskStatusPendingApproval}).
 		Updates(updates)
 	if res.Error != nil {
 		slog.Error("Failed to approve task", "task", taskID, "err", res.Error)
@@ -74,7 +75,7 @@ func (s *Server) handleApproveTask(c *gin.Context) {
 
 	slog.Info("Task approved", "agent_id", task.AgentID, "task", taskID, "type", task.Type)
 	s.LogAuditRecord(c, "approve_task", "agent_id", task.AgentID, fmt.Sprintf("Approved task #%d (%s)", taskID, task.Type), true, nil)
-	s.broadcastTaskUpdate(task.AgentID, task)
+	s.broadcastTaskUpdate(task.AgentID, *task)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Task approved and queued for execution"})
 }
 
@@ -91,9 +92,9 @@ func (s *Server) handleRejectTask(c *gin.Context) {
 		return
 	}
 
-	var task db.Task
-	if err := s.db.First(&task, taskID).Error; err != nil {
-		respondError(c, http.StatusNotFound, "task not found")
+	// Tenant gate (agent-visibility): see handleApproveTask.
+	task, ok := s.findVisibleTask(c, taskID)
+	if !ok {
 		return
 	}
 	if task.Status != TaskStatusPendingApproval {
@@ -106,7 +107,7 @@ func (s *Server) handleRejectTask(c *gin.Context) {
 	priorStatus := task.Status
 
 	result := s.db.Model(&db.Task{}).
-		Where("id = ? AND status IN ?", taskID, []string{"pending", TaskStatusPendingApproval}).
+		Where("id = ? AND agent_id = ? AND status IN ?", taskID, task.AgentID, []string{"pending", TaskStatusPendingApproval}).
 		Updates(map[string]interface{}{
 			"status": "cancelled",
 			"error":  "rejected by operator",
@@ -119,7 +120,7 @@ func (s *Server) handleRejectTask(c *gin.Context) {
 	if result.RowsAffected == 0 {
 		currentStatus := priorStatus
 		var fresh db.Task
-		if err := s.db.First(&fresh, "id = ?", taskID).Error; err == nil {
+		if err := s.db.Where("id = ? AND agent_id = ?", taskID, task.AgentID).First(&fresh).Error; err == nil {
 			currentStatus = fresh.Status
 		}
 		respondError(c, http.StatusConflict, fmt.Sprintf("task is now %s, cannot reject", currentStatus))
@@ -137,6 +138,6 @@ func (s *Server) handleRejectTask(c *gin.Context) {
 
 	slog.Info("Task rejected", "agent_id", task.AgentID, "task", taskID, "type", task.Type)
 	s.LogAuditRecord(c, "reject_task", "agent_id", task.AgentID, fmt.Sprintf("Rejected task #%d (%s)", taskID, task.Type), true, nil)
-	s.broadcastTaskUpdate(task.AgentID, task)
+	s.broadcastTaskUpdate(task.AgentID, *task)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Task rejected"})
 }

@@ -86,12 +86,23 @@ func (s *Server) handleLootPage(c *gin.Context) {
 
 	dataDir := lootDataDir(s)
 
+	// Tenant gate: the screenshot store is keyed by agent dir on disk, so
+	// restrict enumeration to agents visible to the caller — otherwise any
+	// tenant sees every tenant's captures (filenames + timestamps).
+	visibleAgents := make(map[string]bool, len(agents))
+	for _, a := range agents {
+		visibleAgents[a.ID] = true
+	}
+
 	var allScreenshots []lootScreenshotDTO
 	lootLimit := 500
 	screenshotRoot := filepath.Join(dataDir, "screenshots")
 	if entries, err := os.ReadDir(screenshotRoot); err == nil {
 		for _, e := range entries {
 			if !e.IsDir() {
+				continue
+			}
+			if !visibleAgents[e.Name()] {
 				continue
 			}
 			agentDir := filepath.Join(screenshotRoot, e.Name())
@@ -155,6 +166,20 @@ func (s *Server) handleLootPage(c *gin.Context) {
 	s.renderPageOrJSON(c, data)
 }
 
+// deleteVisibleLootTask deletes one loot task row only when its owning agent
+// is visible to the caller. Returns true when a row was actually deleted.
+func (s *Server) deleteVisibleLootTask(c *gin.Context, id string, types []string) bool {
+	var t db.Task
+	if err := s.db.Where("id = ? AND type IN ?", id, types).First(&t).Error; err != nil {
+		return false
+	}
+	if !s.agentVisible(c, t.AgentID) {
+		return false
+	}
+	res := s.db.Delete(&db.Task{}, "id = ? AND type IN ?", id, types)
+	return res.Error == nil && res.RowsAffected > 0
+}
+
 // handleLootBulkDelete deletes multiple loot items by composite IDs.
 // IDs are "screenshot:AGENT:FILE", "keylog:TASK_ID", or "download:TASK_ID".
 func (s *Server) handleLootBulkDelete(c *gin.Context) {
@@ -186,6 +211,10 @@ func (s *Server) handleLootBulkDelete(c *gin.Context) {
 			}
 			agentDir := parts[1]
 			filename := parts[2]
+			// Tenant gate (silent skip, not 404: one response per batch).
+			if !s.agentVisible(c, agentDir) {
+				continue
+			}
 			fp := filepath.Join(screenshotRoot, agentDir, filename)
 			if err := validateFilePath(fp, screenshotRoot); err == nil {
 				if err := os.Remove(fp); err == nil {
@@ -193,17 +222,15 @@ func (s *Server) handleLootBulkDelete(c *gin.Context) {
 				}
 			}
 		case "keylog":
-			deleteQ := s.db.Delete(&db.Task{}, "id = ? AND type IN ?", id, []string{"keylogger_dump", "keylogger_start"})
-			deleteQ = s.tenantScope(deleteQ, c)
-			res := deleteQ
-			if res.Error == nil && res.RowsAffected > 0 {
+			// Tenant gate via the owning agent: tasks carry no reliable
+			// TenantID (createTask leaves it 0), so tenantScope on the task
+			// row itself would hide even the operator's own rows. Chaining
+			// tenantScope onto Delete's result was a no-op anyway.
+			if s.deleteVisibleLootTask(c, id, []string{"keylogger_dump", "keylogger_start"}) {
 				deleted++
 			}
 		case "download":
-			deleteQ := s.db.Delete(&db.Task{}, "id = ? AND type IN ?", id, []string{"download", "upload"})
-			deleteQ = s.tenantScope(deleteQ, c)
-			res := deleteQ
-			if res.Error == nil && res.RowsAffected > 0 {
+			if s.deleteVisibleLootTask(c, id, []string{"download", "upload"}) {
 				deleted++
 			}
 		}

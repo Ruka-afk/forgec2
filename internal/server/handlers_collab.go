@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -13,13 +14,25 @@ import (
 // handleCollabAgents returns the list of agents along with their current
 // collaboration lock owner (if any). Used by the agents page to show locks.
 func (s *Server) handleCollabAgents(c *gin.Context) {
+	// Tenant gate: lock presence reveals which agents exist and who views
+	// them — restrict both sides to caller-visible agents.
 	var agents []db.Implant
-	if err := s.db.Select("id").Order("last_seen desc").Limit(5000).Find(&agents).Error; err != nil {
+	if err := s.tenantScope(s.db, c).Select("id").Order("last_seen desc").Limit(5000).Find(&agents).Error; err != nil {
 		slog.Error("Failed to query collab agents", "err", err)
+	}
+	visible := make([]string, 0, len(agents))
+	for _, a := range agents {
+		visible = append(visible, a.ID)
 	}
 
 	var locks []db.AgentLock
-	if err := s.db.Limit(1000).Find(&locks).Error; err != nil {
+	lockQ := s.db.Limit(1000)
+	if len(visible) > 0 {
+		lockQ = lockQ.Where("agent_id IN ?", visible)
+	} else {
+		lockQ = lockQ.Where("1 = 0")
+	}
+	if err := lockQ.Find(&locks).Error; err != nil {
 		slog.Error("Failed to query collab locks", "err", err)
 	}
 	lockMap := make(map[string]string, len(locks))
@@ -46,6 +59,10 @@ func (s *Server) handleCollabLock(c *gin.Context) {
 	username := s.currentUsername(c)
 	if username == "" {
 		respondError(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	// Tenant gate: locks are per-agent operator presence — no foreign agents.
+	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
 
@@ -79,6 +96,10 @@ func (s *Server) handleCollabUnlock(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
+	// Tenant gate: see handleCollabLock.
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
 	res := s.db.Where("agent_id = ?", id).Delete(&db.AgentLock{})
 	if res.Error != nil {
 		respondError(c, http.StatusInternalServerError, "failed to release collaboration lock")
@@ -97,11 +118,15 @@ func (s *Server) handleCollabClaimTask(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
 	}
-	taskID := c.Param("taskId")
 	username := s.currentUsername(c)
 
-	var task db.Task
-	if !s.findOrFail(c, &task, taskID, "task") {
+	taskID, err := parseTaskIDParam(c.Param("taskId"))
+	if err != nil {
+		respondError(c, http.StatusBadRequest, "invalid task id")
+		return
+	}
+	task, ok := s.findVisibleTask(c, taskID)
+	if !ok {
 		return
 	}
 	task.ClaimedBy = username
@@ -118,9 +143,13 @@ func (s *Server) handleCollabReleaseTask(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
 	}
-	taskID := c.Param("taskId")
-	var task db.Task
-	if !s.findOrFail(c, &task, taskID, "task") {
+	taskID, err := parseTaskIDParam(c.Param("taskId"))
+	if err != nil {
+		respondError(c, http.StatusBadRequest, "invalid task id")
+		return
+	}
+	task, ok := s.findVisibleTask(c, taskID)
+	if !ok {
 		return
 	}
 	task.ClaimedBy = ""
@@ -129,6 +158,15 @@ func (s *Server) handleCollabReleaseTask(c *gin.Context) {
 		return
 	}
 	respond(c, gin.H{"success": true})
+}
+
+// parseTaskIDParam parses a task id route parameter.
+func parseTaskIDParam(raw string) (uint, error) {
+	var taskID uint
+	if _, err := fmt.Sscanf(raw, "%d", &taskID); err != nil {
+		return 0, err
+	}
+	return taskID, nil
 }
 
 // currentUsername extracts the authenticated operator username from context.

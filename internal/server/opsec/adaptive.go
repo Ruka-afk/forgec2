@@ -27,14 +27,24 @@ type AgentThreatState struct {
 }
 
 type AdaptiveManager struct {
-	mu     sync.RWMutex
-	states map[string]*AgentThreatState
+	mu       sync.RWMutex
+	states   map[string]*AgentThreatState
+	done     chan struct{}
+	stopOnce sync.Once
 }
 
 func NewAdaptiveManager() *AdaptiveManager {
 	return &AdaptiveManager{
 		states: make(map[string]*AgentThreatState),
+		done:   make(chan struct{}),
 	}
+}
+
+// Stop terminates the decay loop. Safe to call multiple times; required on
+// server shutdown so the loop (and its 5-minute ticker) doesn't outlive the
+// process teardown in tests and restarts.
+func (am *AdaptiveManager) Stop() {
+	am.stopOnce.Do(func() { close(am.done) })
 }
 
 func (am *AdaptiveManager) RecordIntegrityFailure(agentID string) ThreatLevel {
@@ -172,12 +182,17 @@ func (am *AdaptiveManager) StartDecayLoop() {
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
-		for range ticker.C {
-			am.mu.Lock()
-			for id := range am.states {
-				am.decayLocked(id)
+		for {
+			select {
+			case <-am.done:
+				return
+			case <-ticker.C:
+				am.mu.Lock()
+				for id := range am.states {
+					am.decayLocked(id)
+				}
+				am.mu.Unlock()
 			}
-			am.mu.Unlock()
 		}
 	}()
 }

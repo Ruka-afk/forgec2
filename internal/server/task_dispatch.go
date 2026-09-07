@@ -413,6 +413,35 @@ func (s *Server) trackPendingTask(agentID string) error {
 	return nil
 }
 
+// taskWorkerAcquireTimeout bounds how long a background worker waits for a
+// pool slot. Without it, a saturated pool (callbacks/hooks wedged on
+// SQLITE_BUSY) parks wg-tracked goroutines forever and stalls graceful
+// shutdown inside wg.Wait.
+const taskWorkerAcquireTimeout = 30 * time.Second
+
+// runTaskWorker runs fn in a wg-tracked goroutine holding one pool slot. When
+// the pool stays saturated past the timeout the work is dropped with a log
+// instead of wedging shutdown. Payloads are value-captured by the caller.
+func (s *Server) runTaskWorker(what string, fn func()) {
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("Task worker panicked", "what", what, "recover", r)
+			}
+		}()
+		select {
+		case s.taskWorkerSem <- struct{}{}:
+		case <-time.After(taskWorkerAcquireTimeout):
+			slog.Warn("Task worker pool saturated, dropping background work", "what", what)
+			return
+		}
+		defer func() { <-s.taskWorkerSem }()
+		fn()
+	}()
+}
+
 // joinUsernames joins a slice of usernames with commas for error messages.
 func joinUsernames(names []string) string {
 	switch len(names) {

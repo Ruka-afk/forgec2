@@ -47,6 +47,11 @@ git tag vX.Y.Z
 git push origin vX.Y.Z   # release.yml builds linux/windows × amd64/arm64
 ```
 
+The tag is stamped into the binary (`-version` reports it; `/health`
+reports it too). The `linux/amd64` build asserts this in CI and fails the
+release if the tag didn't make it in. Custom `FORGEC2_PORT` is honored by
+both the server and the container healthcheck.
+
 ## Troubleshooting
 
 | Symptom | Cause / fix |

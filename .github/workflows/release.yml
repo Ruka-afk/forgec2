@@ -58,8 +58,18 @@ jobs:
         run: |
           ext=""
           if [ "${{ matrix.goos }}" = "windows" ]; then ext=".exe"; fi
-          go build -o "forgec2-server-${{ matrix.goos }}-${{ matrix.goarch }}${ext}" ./cmd/server
-          sha256sum "forgec2-server-${{ matrix.goos }}-${{ matrix.goarch }}${ext}" > "forgec2-server-${{ matrix.goos }}-${{ matrix.goarch }}${ext}.sha256"
+          bin="forgec2-server-${{ matrix.goos }}-${{ matrix.goarch }}${ext}"
+          go build -ldflags "-X github.com/forgec2/forgec2/internal/server.ServerVersion=${{ github.ref_name }}" -o "$bin" ./cmd/server
+          # Fail the job if the tag didn't make it into the binary.
+          # (Windows/arm64 binaries can't execute on this runner — same
+          # ldflags line builds them, and linux/amd64 proves the wiring.)
+          if [ "${{ matrix.goos }}/${{ matrix.goarch }}" = "linux/amd64" ]; then
+            if [ "$(./"$bin" -version)" != "${{ github.ref_name }}" ]; then
+              echo "version mismatch: binary reports [$(./"$bin" -version)] but tag is [${{ github.ref_name }}]"
+              exit 1
+            fi
+          fi
+          sha256sum "$bin" > "$bin.sha256"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

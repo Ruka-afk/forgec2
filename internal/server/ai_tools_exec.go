@@ -685,7 +685,13 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 	case "get_coverage_gaps":
 		usedTypes := map[string]bool{}
 		var types []string
-		if err := s.db.Table("tasks").Distinct().Pluck("type", &types).Error; err != nil {
+		// Tenant gate: coverage must reflect the caller's own fleet, not
+		// every tenant's task types.
+		typeQ := s.db.Table("tasks").Distinct()
+		if reqCtx != nil && reqCtx.Principal.UserID != 0 {
+			typeQ = typeQ.Where("agent_id IN (?)", s.db.Model(&db.Implant{}).Select("id").Where("tenant_id = ?", reqCtx.Principal.TenantID))
+		}
+		if err := typeQ.Pluck("type", &types).Error; err != nil {
 			types = nil
 		}
 		for _, t := range types {
@@ -799,6 +805,11 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 			p.Limit = 20
 		}
 		q := s.db.Where("status IN ?", []string{"pending", TaskStatusPendingApproval})
+		// Tenant gate: only surface tasks of caller-visible agents (same
+		// agent-subquery pattern as list_credentials/search_tasks above).
+		if reqCtx != nil && reqCtx.Principal.UserID != 0 {
+			q = q.Where("agent_id IN (?)", s.db.Model(&db.Implant{}).Select("id").Where("tenant_id = ?", reqCtx.Principal.TenantID))
+		}
 		switch p.Creator {
 		case "ai":
 			q = q.Where("created_by = ?", "ai")
@@ -853,6 +864,16 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 				errs = append(errs, bulkErr{TaskID: tid, Error: "not found"})
 				continue
 			}
+			// Tenant gate: one tenant's AI must not approve/cancel another
+			// tenant's AI tasks (defeats the two-man rule across tenants).
+			if reqCtx != nil && reqCtx.Principal.UserID != 0 {
+				var visible int64
+				s.db.Model(&db.Implant{}).Where("id = ? AND tenant_id = ?", task.AgentID, reqCtx.Principal.TenantID).Count(&visible)
+				if visible == 0 {
+					errs = append(errs, bulkErr{TaskID: tid, Error: "not found"})
+					continue
+				}
+			}
 			if task.Status != "pending" && task.Status != TaskStatusPendingApproval {
 				skippedOther++
 				continue
@@ -865,7 +886,7 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 			}
 			if p.Action == "cancel" {
 				res := s.db.Model(&db.Task{}).
-					Where("id = ? AND status IN ?", tid, []string{"pending", TaskStatusPendingApproval}).
+					Where("id = ? AND agent_id = ? AND status IN ?", tid, task.AgentID, []string{"pending", TaskStatusPendingApproval}).
 					Updates(map[string]interface{}{"status": "cancelled", "error": "cancelled by AI assistant"})
 				if res.Error != nil || res.RowsAffected == 0 {
 					errs = append(errs, bulkErr{TaskID: tid, Error: "state changed concurrently"})
@@ -892,7 +913,7 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 					continue
 				}
 				res := s.db.Model(&db.Task{}).
-					Where("id = ? AND status = ?", tid, TaskStatusPendingApproval).
+					Where("id = ? AND agent_id = ? AND status = ?", tid, task.AgentID, TaskStatusPendingApproval).
 					Updates(map[string]interface{}{"status": "pending", "approved_by": "ai", "approved_at": time.Now()})
 				if res.Error != nil || res.RowsAffected == 0 {
 					errs = append(errs, bulkErr{TaskID: tid, Error: "state changed concurrently"})

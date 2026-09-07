@@ -1134,7 +1134,10 @@ func (s *Server) handleBatchVerifyCredentials(c *gin.Context) {
 			continue
 		}
 		var agent db.Implant
-		if err := s.db.Select("id").Where("id = ?", entry.AgentID).First(&agent).Error; err != nil {
+		// Tenant gate: entries surviving the scoped query above always belong
+		// to visible agents, but re-verify — never queue cred_check (with the
+		// vault password in its command) against a foreign agent.
+		if err := s.tenantScope(s.db, c).Select("id").Where("id = ?", entry.AgentID).First(&agent).Error; err != nil {
 			out.Status = "skipped_agent_gone"
 			outcomes = append(outcomes, out)
 			continue
@@ -1153,6 +1156,9 @@ func (s *Server) handleBatchVerifyCredentials(c *gin.Context) {
 			outcomes = append(outcomes, out)
 			continue
 		}
+		// Queued checks were invisible on WS until the next poll — broadcast
+		// like every other creation path so the UI updates immediately.
+		s.broadcastTaskUpdate(entry.AgentID, *task)
 		now := time.Now()
 		s.db.Model(&db.CredentialEntry{}).Where("id = ?", entry.ID).Updates(map[string]interface{}{
 			"verify_status":    "pending",
@@ -1273,8 +1279,7 @@ func (s *Server) apiRecordUsage(c *gin.Context) {
 		return
 	}
 	idStr := c.Param("cred_id")
-	id, err := strconv.ParseUint(idStr, 10, 64)
-	if err != nil {
+	if _, err := strconv.ParseUint(idStr, 10, 64); err != nil {
 		respondError(c, http.StatusBadRequest, "invalid credential id")
 		return
 	}
@@ -1283,9 +1288,10 @@ func (s *Server) apiRecordUsage(c *gin.Context) {
 	if action == "" {
 		action = "manual"
 	}
+	// Tenant gate: the usage ledger feeds verified/used/stale lifecycle, so a
+	// foreign vault row must not be writable here.
 	var cred db.CredentialEntry
-	if err := s.db.First(&cred, uint(id)).Error; err != nil {
-		respondError(c, http.StatusNotFound, "credential not found")
+	if !s.findTenantOrFail(c, &cred, idStr, "credential") {
 		return
 	}
 	username, _ := c.Get("user")

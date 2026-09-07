@@ -17,6 +17,9 @@ export const DYNAMIC_PREFIXES = [
   "generate.format_", // payload format picker: t(PAYLOAD_FORMAT_LABEL[key])
   "agents.timeline_kind_", // agent timeline event kind: t(`agents.timeline_kind_${kind}`)
   "agents.recon_", // recon section labels via RECON_LABEL_KEYS record lookup
+  "agents.col_", // agents table headers via sortableHead(field, labelKey) indirection
+  "agents.files_col_", // files table headers via sortHead(key, labelKey) indirection
+  "agents.proc_", // process actions via t(`agents.proc_${action}`) template
   "ai.risk_", // AI suggestion risk badge: t(`ai.risk_${suggestion.risk}`)
   "events.source_", // merged timeline source label selected before t(labelKey)
 ];

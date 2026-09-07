@@ -19,6 +19,9 @@ COPY internal/ ./internal/
 COPY pkg/ ./pkg/
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o forgec2-server ./cmd/server
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o healthcheck ./cmd/healthcheck
+# Seed /data with nonroot ownership in the builder (which has a shell).
+# NOTE: no RUN in the distroless stage — it has no shell and the build fails.
+RUN mkdir -p /data/db && chown -R nonroot:nonroot /data
 
 # Stage 3: Runtime — distroless for minimal attack surface
 FROM gcr.io/distroless/static-debian12
@@ -26,12 +29,11 @@ LABEL org.opencontainers.image.title="ForgeC2"
 LABEL org.opencontainers.image.description="Command & Control Framework"
 COPY --from=backend-builder /build/forgec2-server /usr/local/bin/
 COPY --from=backend-builder /build/healthcheck /usr/local/bin/healthcheck
-# Seed /data with nonroot ownership: Docker copies image content (including
-# ownership) into a fresh named volume, so the server can write its SQLite
-# DB there despite running as nonroot. Without this, /data is root-owned
-# and first startup crashes with "unable to open database file".
-USER root:root
-RUN mkdir -p /data/db && chown -R nonroot:nonroot /data
+# Docker copies image content (including ownership) into a fresh named volume,
+# so the server can write its SQLite DB there despite running as nonroot.
+# Without this, /data is root-owned and first startup crashes with
+# "unable to open database file".
+COPY --from=backend-builder --chown=nonroot:nonroot /data /data
 EXPOSE 8000 443 8443 53
 USER nonroot:nonroot
 WORKDIR /home/nonroot

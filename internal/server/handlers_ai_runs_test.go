@@ -145,6 +145,34 @@ func TestAIReasoningIsNotReplayedToNewSubscriber(t *testing.T) {
 	}
 }
 
+func TestAIBrokerCoalescesStalledRetries(t *testing.T) {
+	broker := newAIRunBroker()
+	stream, unsubscribe := broker.subscribe("run-1")
+	// Fill the 256 buffer so every publish takes the retry path.
+	for i := 0; i < 256; i++ {
+		broker.publish("run-1", aiLiveEvent{Sequence: int64(i), Type: "text", Payload: "x"}, false)
+	}
+	// Flood: with per-event goroutines this parks hundreds of goroutines;
+	// with coalescing at most one retry worker exists per channel.
+	for i := 0; i < 500; i++ {
+		broker.publish("run-1", aiLiveEvent{Sequence: int64(1000 + i), Type: "text", Payload: "y"}, false)
+	}
+	broker.mu.Lock()
+	n := len(broker.retrying)
+	broker.mu.Unlock()
+	if n > 1 {
+		t.Fatalf("expected at most 1 retry worker, got %d", n)
+	}
+	// Unsubscribe mid-retry must not panic a racing worker (send-on-close).
+	unsubscribe()
+	select {
+	case <-stream:
+	case <-time.After(20 * time.Millisecond):
+	}
+	// Drain remaining worker without hanging the suite.
+	time.Sleep(150 * time.Millisecond)
+}
+
 func TestAIKnowledgeSearchRejectsCrossTenantCollections(t *testing.T) {
 	s := setupAIRunStorageTest(t)
 	one := db.AIKnowledgeCollection{TenantID: 1, OwnerID: 1, Name: "one"}
