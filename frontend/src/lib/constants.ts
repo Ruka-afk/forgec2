@@ -1,4 +1,4 @@
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
+export const API_BASE = import.meta.env.VITE_FORGEC2_API_BASE || "";
 
 export const DEFAULT_WS_HOST = "localhost";
 export const DEFAULT_WS_PORT = "8000";

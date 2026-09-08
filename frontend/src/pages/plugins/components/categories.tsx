@@ -1,5 +1,3 @@
-﻿"use client";
-
 import { Anchor, Bug, Key, Layers, Search, Terminal } from "lucide-react";
 
 export const PLUGIN_CATEGORIES = [

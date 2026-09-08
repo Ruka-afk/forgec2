@@ -16,7 +16,7 @@ ForgeC2 is a self-hosted, single-binary C2 platform written in pure Go. One exec
 
 | | |
 |---|---|
-| 🚀 **One binary, everything inside** | Next.js console, REST API, beacon endpoints and SQLite — all served from a single port. Deploy with one file. |
+| 🚀 **One binary, everything inside** | React console, REST API, beacon endpoints and SQLite — all served from a single port. Deploy with one file. |
 | 🧬 **On-demand payload factory** | EXE / DLL / PowerShell / ELF / macOS implants, XOR stagers, shellcode, Donut, and one-liners — generated in-browser, cross-compiled server-side. |
 | 📡 **Ten transports** | HTTP(S), WSS, gRPC, mTLS, H2C, TCP, DNS, ICMP, SSH — plus SMB/TCP P2P chaining and Discord/Slack external C2. |
 | 🤖 **AI copilot built in** | DeepSeek, OpenAI, Claude, or any OpenAI-compatible model — drive your engagement from chat with tool calling. |
@@ -110,9 +110,9 @@ Full per-task, per-OS capability matrix: [docs/CAPABILITY_MATRIX.md](docs/CAPABI
                     ┌────────────────────────────────────────────┐
    Operators ─────▶ │  ForgeC2 (single binary, :8000)            │
                     │  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
-                    │  │  Web UI  │  │   API    │  │  Beacon  │  │
-                    │  │ Next.js  │  │ Gin REST │  │ endpoints│  │
-                    │  │ (embedded)│ │ + WS + AI│  │          │  │
+                     │  │  Web UI  │  │   API    │  │  Beacon  │  │
+                     │  │React+Vite│  │ Gin REST │  │ endpoints│  │
+                     │  │ (embedded)│ │ + WS + AI│  │          │  │
                     │  └──────────┘  └──────────┘  └──────────┘  │
                     │  SQLite · Plugins · Scripting · OPSEC      │
                     │  Build queue → cross-compiled implants     │

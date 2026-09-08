@@ -1,5 +1,3 @@
-﻿"use client";
-
 import { API_BASE } from "./constants";
 import { subscribeTyped } from "./typed-ws";
 import { logger } from "./logger";

@@ -55,11 +55,11 @@ interface WSContextValue {
 const WSContext = createContext<WSContextValue | null>(null);
 
 export function getWSURL(path = "/ws"): string {
-  const envURL = process.env.NEXT_PUBLIC_WS_URL;
+  const envURL = import.meta.env.VITE_FORGEC2_WS_URL;
   if (envURL) return envURL + path;
   const proto = typeof window !== "undefined" && window.location.protocol === "https:" ? "wss:" : "ws:";
   const host = typeof window !== "undefined" ? window.location.hostname : DEFAULT_WS_HOST;
-  let port = process.env.NEXT_PUBLIC_GO_BACKEND_PORT || (typeof window !== "undefined" ? window.location.port : DEFAULT_WS_PORT);
+  let port = import.meta.env.VITE_FORGEC2_BACKEND_PORT || (typeof window !== "undefined" ? window.location.port : DEFAULT_WS_PORT);
   if (!port) port = proto === "wss:" ? "443" : "80";
   return `${proto}//${host}:${port}${path}`;
 }

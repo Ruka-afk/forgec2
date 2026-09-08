@@ -32,7 +32,17 @@ function fontPreloadPlugin(): Plugin {
   };
 }
 
-export default defineConfig(({ command, mode }) => ({
+export default defineConfig(({ command }) => {
+  // One-release compat: the old NEXT_PUBLIC_* names are ignored; warn loudly
+  // instead of failing silently with an empty API base.
+  for (const legacy of ["NEXT_PUBLIC_API_BASE", "NEXT_PUBLIC_WS_URL", "NEXT_PUBLIC_GO_BACKEND_PORT"]) {
+    if (process.env[legacy]) {
+      console.warn(
+        `[forgec2] ${legacy} is no longer read; use VITE_FORGEC2_${legacy.slice("NEXT_PUBLIC_".length)} instead.`,
+      );
+    }
+  }
+  return {
   plugins: [
     react(),
     fontPreloadPlugin(),
@@ -43,14 +53,6 @@ export default defineConfig(({ command, mode }) => ({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
-  define:
-    mode === "test"
-      ? {}
-      : {
-          "process.env.NEXT_PUBLIC_API_BASE": JSON.stringify(process.env.NEXT_PUBLIC_API_BASE ?? ""),
-          "process.env.NEXT_PUBLIC_WS_URL": JSON.stringify(process.env.NEXT_PUBLIC_WS_URL ?? ""),
-          "process.env.NEXT_PUBLIC_GO_BACKEND_PORT": JSON.stringify(process.env.NEXT_PUBLIC_GO_BACKEND_PORT ?? ""),
-        },
   build: {
     outDir: "out",
     emptyOutDir: true,
@@ -96,4 +98,5 @@ export default defineConfig(({ command, mode }) => ({
       "/ws": { target: "ws://127.0.0.1:8000", ws: true },
     },
   },
-}));
+  };
+});
