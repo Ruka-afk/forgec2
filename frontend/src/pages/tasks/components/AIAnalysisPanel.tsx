@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
-import { fetchAIStatus } from "@/pages/agents/detail/components/AISuggestCard";
+import { fetchAIStatus } from "@/lib/ai-status";
 import { Sparkles, AlertTriangle, ShieldAlert, Globe, FolderOpen, KeyRound, Info, ArrowRight } from "lucide-react";
 
 interface Analysis {

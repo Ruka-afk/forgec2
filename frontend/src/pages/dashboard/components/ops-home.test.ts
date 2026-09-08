@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { NormalizedAgent } from "@/types/agent";
 import type { Task } from "@/types/task";
 import type { LootData } from "@/types/loot";
-import type { ListenerHealth } from "../../listeners/components/listener-health";
+import type { ListenerHealth } from "@/lib/listener-health";
 import {
   flattenLoot,
   mergeAttention,

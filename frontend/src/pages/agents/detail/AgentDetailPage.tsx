@@ -63,9 +63,9 @@ import { useAgentNotes } from "./hooks/useAgentNotes";
 import { useAgentDangerActions } from "./hooks/useAgentDangerActions";
 import { useAgentTaskSync } from "./hooks/useAgentTaskSync";
 import { usePersistedState } from "@/lib/hooks/usePersistedState";
-import { credActionBlockReason, credActionEndpoint, hasMimikatzModule, parseModuleNames } from "../../credentials/components/cred-quality";
+import { credActionBlockReason, credActionEndpoint, hasMimikatzModule, parseModuleNames } from "@/lib/cred-quality";
 import { sessionActionQuality } from "./components/session-quality";
-import { implantBlocksDest } from "../components/implant-version";
+import { implantBlocksDest } from "@/lib/implant-version";
 
 interface AgentDetailPageProps {
   agentId?: string;

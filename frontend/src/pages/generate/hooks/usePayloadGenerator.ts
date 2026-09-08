@@ -19,7 +19,7 @@ import {
   schemeForTransport,
   transportFromListenerScheme,
 } from "../components/generate-gate";
-import { parseGenerateQuery } from "../components/generate-query";
+import { parseGenerateQuery } from "@/lib/generate-query";
 
 const DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
 

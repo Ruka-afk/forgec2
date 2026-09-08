@@ -25,7 +25,7 @@ import {
   pickUnhealthyListeners,
   splitSessions,
 } from "./ops-home";
-import { healthIndicatorStatus, translateHealthStatus } from "../../listeners/components/listener-health";
+import { healthIndicatorStatus, translateHealthStatus } from "@/lib/listener-health";
 import ActiveMissions from "./ActiveMissions";
 
 function Panel({

@@ -2,7 +2,7 @@ import { memo, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, ArrowRight, FolderOpen } from "lucide-react";
-import { parentPath } from "./types";
+import { parentPath } from "@/lib/agent-files/types";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;
 

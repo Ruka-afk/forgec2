@@ -11,7 +11,7 @@ import type { NormalizedAgent } from "@/types/agent";
 import type { Task } from "@/types/task";
 import { emptyLootData, normalizeLootData } from "../../loot/components/types";
 import type { LootData } from "@/types/loot";
-import { indexListenerHealth, type ListenerHealth } from "../../listeners/components/listener-health";
+import { indexListenerHealth, type ListenerHealth } from "@/lib/listener-health";
 
 function asAgent(row: Record<string, unknown>): NormalizedAgent {
   const statusRaw = String(row.status ?? "");

@@ -16,7 +16,7 @@ import {
   hasMimikatzModule,
   parseModuleNames,
   type CredActionQuality,
-} from "./cred-quality";
+} from "@/lib/cred-quality";
 
 function QualityMark({ quality }: { quality: CredActionQuality }) {
   const { t } = useI18n();

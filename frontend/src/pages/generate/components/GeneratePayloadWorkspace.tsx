@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import { BinaryPanel, UnixPanel, StagerPanel, PS1Panel, ShellcodePanel, DonutPanel } from "./BuildPanels";
 import { canGenerateFromListener, canGeneratePayload } from "./generate-gate";
-import { defaultPayloadFormat, PAYLOAD_FORMATS, PAYLOAD_FORMAT_LABEL, type PayloadFormat } from "./generate-format";
-import { parseGenerateQuery } from "./generate-query";
+import { defaultPayloadFormat, PAYLOAD_FORMATS, PAYLOAD_FORMAT_LABEL, type PayloadFormat } from "@/lib/generate-format";
+import { parseGenerateQuery } from "@/lib/generate-query";
 import { ListenerCallbackStrip } from "./ListenerCallbackStrip";
 
 import { usePayloadGenerator } from "../hooks/usePayloadGenerator";

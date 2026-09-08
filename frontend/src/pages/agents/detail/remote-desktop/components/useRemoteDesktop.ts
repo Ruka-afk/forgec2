@@ -7,7 +7,7 @@ import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { useI18n } from "@/lib/i18n";
 import { logger } from "@/lib/logger";
 import { nowTime } from "@/lib/utils";
-import { implantBlocksDest } from "../../../components/implant-version";
+import { implantBlocksDest } from "@/lib/implant-version";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;
 

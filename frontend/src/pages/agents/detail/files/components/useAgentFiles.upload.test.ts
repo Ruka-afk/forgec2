@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useAgentFiles } from "./useAgentFiles";
-import { pushLocalFile } from "./file-transfer";
+import { pushLocalFile } from "@/lib/agent-files/file-transfer";
 
-vi.mock("./file-transfer", () => ({
+vi.mock("@/lib/agent-files/file-transfer", () => ({
   pushLocalFile: vi.fn(),
   pullRemoteFile: vi.fn(),
 }));

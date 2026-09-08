@@ -1,7 +1,7 @@
 import type { NormalizedAgent } from "@/types/agent";
 import type { Task } from "@/types/task";
 import type { LootData } from "@/types/loot";
-import { isProblemHealth, type ListenerHealth } from "../../listeners/components/listener-health";
+import { isProblemHealth, type ListenerHealth } from "@/lib/listener-health";
 
 export const DASHBOARD_VIEWS = ["ops", "analytics"] as const;
 export type DashboardView = (typeof DASHBOARD_VIEWS)[number];

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
-import { fetchAIStatus } from "@/pages/agents/detail/components/AISuggestCard";
+import { fetchAIStatus } from "@/lib/ai-status";
 import { MessageSquareText, Search, Sparkles } from "lucide-react";
 
 interface NLFilter {

@@ -19,7 +19,7 @@ import { Bug, Info, Link as LinkIcon, ListChecks, Plug, RotateCw, Trash2 } from 
 
 import type { AgentDetail } from "@/types/agent";
 import { persistenceMethodQuality, type DestQuality } from "../components/dest-quality";
-import { implantBlocksDest } from "../../components/implant-version";
+import { implantBlocksDest } from "@/lib/implant-version";
 
 function PersistQualityMark({ quality }: { quality: DestQuality }) {
   const { t } = useI18n();

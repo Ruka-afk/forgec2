@@ -7,7 +7,7 @@ import { useInteractStore } from "@/lib/interact-store";
 import type { Beacon } from "./types";
 import type { AgentConfirmType } from "./useAgentModals";
 import type { AgentMenuAction, AgentMenuPoint } from "./agent-menu-actions";
-import { rebuildPayloadHref } from "../../generate/components/generate-query";
+import { rebuildPayloadHref } from "@/lib/generate-query";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;
 

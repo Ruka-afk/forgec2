@@ -16,7 +16,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { fetchAIStatus } from "@/pages/agents/detail/components/AISuggestCard";
+import { fetchAIStatus } from "@/lib/ai-status";
 import { Sparkles, Wand2, Save } from "lucide-react";
 
 interface PBStep {

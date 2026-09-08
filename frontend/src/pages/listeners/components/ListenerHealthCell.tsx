@@ -9,7 +9,7 @@ import {
   healthIndicatorStatus,
   translateHealthStatus,
   type ListenerHealth,
-} from "./listener-health";
+} from "@/lib/listener-health";
 
 interface ListenerHealthCellProps {
   health?: ListenerHealth;

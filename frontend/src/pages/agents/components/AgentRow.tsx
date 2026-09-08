@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { TableCell } from "@/components/ui/table";
 import { Check, Copy, FolderOpen, Link as LinkIcon, Lock, Maximize2, Monitor, MoreHorizontal, Shield, StickyNote, Terminal, Unlock, Users } from "lucide-react";
 import type { AgentMenuPoint } from "./agent-menu-actions";
-import { knownImplantVersion } from "./implant-version";
+import { knownImplantVersion } from "@/lib/implant-version";
 import { useCopiedField } from "@/lib/hooks/useCopiedField";
 
 interface AgentRowProps {

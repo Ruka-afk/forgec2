@@ -4,13 +4,13 @@ import { toast } from "sonner";
 import { api, pollTask } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
-import { pullRemoteFile, pushLocalFile } from "./file-transfer";
+import { pullRemoteFile, pushLocalFile } from "@/lib/agent-files/file-transfer";
 import {
   isImageFile,
   joinPath,
   type FileEntry,
-} from "./types";
-import { extractImmediateListing, filesLsTaskId, isFilesLsAck, parseLsListing } from "./ls-listing";
+} from "@/lib/agent-files/types";
+import { extractImmediateListing, filesLsTaskId, isFilesLsAck, parseLsListing } from "@/lib/agent-files/ls-listing";
 import {
   fileReadPreview,
   fileTaskId,
@@ -18,7 +18,7 @@ import {
   looksLikeFileTaskAckJson,
   parseFindResult,
   type TransferProgress,
-} from "./file-task";
+} from "@/lib/agent-files/file-task";
 
 export function useAgentFiles(agentId: string) {
   const { t } = useI18n();

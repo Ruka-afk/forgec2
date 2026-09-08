@@ -9,7 +9,7 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { Shield, Zap, AlertTriangle } from "lucide-react";
-import { EVASION_TECHNIQUES, EVASION_GROUPS } from "../../components/evasion-techniques";
+import { EVASION_TECHNIQUES, EVASION_GROUPS } from "@/lib/evasion-techniques";
 
 interface EvasionSectionProps {
   agentId: string;

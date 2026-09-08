@@ -7,8 +7,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { useI18n } from "@/lib/i18n";
 import { Banner } from "@/components/ui/banner";
 import { COMMAND_TYPES } from "./types";
-import { credActionDef } from "../../credentials/components/cred-quality";
-import { EVASION_TECHNIQUES, EVASION_GROUPS } from "./evasion-techniques";
+import { credActionDef } from "@/lib/cred-quality";
+import { EVASION_TECHNIQUES, EVASION_GROUPS } from "@/lib/evasion-techniques";
 
 interface BulkCommandModalProps {
   open: boolean;

@@ -9,7 +9,7 @@ import { useWS } from "@/lib/wsContext";
 import { useI18n } from "@/lib/i18n";
 import type { CreateListenerForm, EditListenerForm, Listener } from "./types";
 import { emptyCreateForm, emptyEditForm } from "./types";
-import { indexListenerHealth, type ListenerHealth } from "./listener-health";
+import { indexListenerHealth, type ListenerHealth } from "@/lib/listener-health";
 
 export function useListenersData() {
   const { t } = useI18n();

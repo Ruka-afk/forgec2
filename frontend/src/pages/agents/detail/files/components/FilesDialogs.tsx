@@ -10,7 +10,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { CloudUpload, Download, FileText, FolderPlus, HardDrive, ImageIcon, Pencil, Usb, X } from "lucide-react";
 import { downloadText } from "@/lib/download";
 import { safeImageSrc } from "@/lib/safeUrl";
-import { joinPath } from "./types";
+import { joinPath } from "@/lib/agent-files/types";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;
 

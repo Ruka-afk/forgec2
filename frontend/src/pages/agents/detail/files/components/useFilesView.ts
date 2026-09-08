@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { FileEntry } from "./types";
+import type { FileEntry } from "@/lib/agent-files/types";
 
 export type FileSortKey = "name" | "size" | "mod_time";
 

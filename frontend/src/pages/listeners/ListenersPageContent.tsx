@@ -30,7 +30,7 @@ import { useListenersData } from "./components/useListenersData";
 import type { CreateListenerForm, EditListenerForm } from "./components/types";
 import { ListenerHealthCell } from "./components/ListenerHealthCell";
 import { ListenerBreakerConfigDialog } from "./components/ListenerBreakerConfigDialog";
-import { healthForListener, isProblemHealth } from "./components/listener-health";
+import { healthForListener, isProblemHealth } from "@/lib/listener-health";
 
 export default function ListenersPageContent() {
   const { t } = useI18n();

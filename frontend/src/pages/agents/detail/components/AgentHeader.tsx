@@ -13,8 +13,8 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useI18n } from "@/lib/i18n";
 import { isExperimentalDesktop, sessionActionQuality, type SessionActionQuality } from "./session-quality";
-import { implantBlocksDest, knownImplantVersion } from "../../components/implant-version";
-import { rebuildPayloadHref } from "../../../generate/components/generate-query";
+import { implantBlocksDest, knownImplantVersion } from "@/lib/implant-version";
+import { rebuildPayloadHref } from "@/lib/generate-query";
 
 function QualityMark({ quality }: { quality: SessionActionQuality }) {
   const { t } = useI18n();

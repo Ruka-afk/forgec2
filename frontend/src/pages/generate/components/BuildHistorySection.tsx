@@ -17,7 +17,7 @@ import { AppWindow, Apple, Binary, CheckCircle2, ChevronDown, Disc, Download, Ha
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { BuildHistoryEntry } from "@/types/generate";
-import { isPayloadFormat } from "./generate-format";
+import { isPayloadFormat } from "@/lib/generate-format";
 
 const FORMAT_ICONS: Record<string, React.ReactNode> = {
   exe: <AppWindow className="size-4" />, dll: <Puzzle className="size-4" />, ps1: <Terminal className="size-4" />,

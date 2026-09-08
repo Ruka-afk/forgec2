@@ -81,6 +81,29 @@ const AgentTokenPage = lazyPage(() => import("@/pages/agents/detail/token/TokenP
 const AgentTrafficPage = lazyPage(() => import("@/pages/agents/detail/traffic/TrafficPage"));
 const ListenerDetailPage = lazyPage(() => import("@/pages/listeners/detail/ListenerDetailPage"));
 
+type MainRoute =
+  | { path: string; comp: ReturnType<typeof lazyPage> }
+  | { path: string; redirect: string };
+
+const MAIN_ROUTES: MainRoute[] = [
+  ...Object.keys(MAIN_PAGES).map((name) => ({ path: `/${name}`, comp: MAIN_PAGES[name] })),
+  { path: "/agents/:id", comp: AgentDetailPage },
+  { path: "/agents/:id/config", comp: AgentConfigPage },
+  { path: "/agents/:id/files", comp: AgentFilesPage },
+  { path: "/agents/:id/persistence", comp: AgentPersistencePage },
+  { path: "/agents/:id/remote-desktop", comp: AgentRemoteDesktopPage },
+  { path: "/agents/:id/screen", comp: AgentScreenPage },
+  { path: "/agents/:id/shell", comp: AgentShellPage },
+  { path: "/agents/:id/token", comp: AgentTokenPage },
+  { path: "/agents/:id/traffic", comp: AgentTrafficPage },
+  { path: "/command_templates", redirect: "/toolkit" },
+  { path: "/docs", redirect: "/settings#tab=about" },
+  { path: "/scheduler", redirect: "/automation#tab=scheduled" },
+  { path: "/screenshots", redirect: "/loot?tab=screenshots" },
+  { path: "/workflows", redirect: "/automation#tab=workflows" },
+  { path: "/listeners/:id", comp: ListenerDetailPage },
+];
+
 /** Route-local suspense: each lazy page shows the standard spinner while its
  *  chunk loads (replaces the single Root-level Suspense from the declarative
  *  router). */
@@ -148,86 +171,20 @@ export const router = createBrowserRouter([
     element: <MainLayout />,
     errorElement: <RouterErrorView />,
     children: [
-      ...Object.entries(MAIN_PAGES).map(([name, Comp]) => ({
-        path: `/${name}`,
-        element: guard(name, Comp),
-        errorElement: <RouterErrorView />,
-      })),
-      {
-        path: "/agents/:id",
-        element: guard("agents/:id", AgentDetailPage),
-        errorElement: <RouterErrorView />,
-      },
-      {
-        path: "/agents/:id/config",
-        element: guard("agents/:id/config", AgentConfigPage),
-        errorElement: <RouterErrorView />,
-      },
-      {
-        path: "/agents/:id/files",
-        element: guard("agents/:id/files", AgentFilesPage),
-        errorElement: <RouterErrorView />,
-      },
-      {
-        path: "/agents/:id/persistence",
-        element: guard("agents/:id/persistence", AgentPersistencePage),
-        errorElement: <RouterErrorView />,
-      },
-      {
-        path: "/agents/:id/remote-desktop",
-        element: guard("agents/:id/remote-desktop", AgentRemoteDesktopPage),
-        errorElement: <RouterErrorView />,
-      },
-      {
-        path: "/agents/:id/screen",
-        element: guard("agents/:id/screen", AgentScreenPage),
-        errorElement: <RouterErrorView />,
-      },
-      {
-        path: "/agents/:id/shell",
-        element: guard("agents/:id/shell", AgentShellPage),
-        errorElement: <RouterErrorView />,
-      },
-      {
-        path: "/agents/:id/token",
-        element: guard("agents/:id/token", AgentTokenPage),
-        errorElement: <RouterErrorView />,
-      },
-      {
-        path: "/agents/:id/traffic",
-        element: guard("agents/:id/traffic", AgentTrafficPage),
-        errorElement: <RouterErrorView />,
-      },
-      {
-        path: "/command_templates",
-        element: <Navigate to="/toolkit" replace />,
-        errorElement: <RouterErrorView />,
-      },
-      {
-        path: "/docs",
-        element: <Navigate to="/settings#tab=about" replace />,
-        errorElement: <RouterErrorView />,
-      },
-      {
-        path: "/scheduler",
-        element: <Navigate to="/automation#tab=scheduled" replace />,
-        errorElement: <RouterErrorView />,
-      },
-      {
-        path: "/screenshots",
-        element: <Navigate to="/loot?tab=screenshots" replace />,
-        errorElement: <RouterErrorView />,
-      },
-      {
-        path: "/workflows",
-        element: <Navigate to="/automation#tab=workflows" replace />,
-        errorElement: <RouterErrorView />,
-      },
-      {
-        path: "/listeners/:id",
-        element: guard("listeners/:id", ListenerDetailPage),
-        errorElement: <RouterErrorView />,
-      },
+      // Single route table: path -> lazy page or redirect target. Adding a
+      // page means adding one entry here (plus its lazy import above) —
+      // paths, guards and redirects can no longer drift apart.
+      ...MAIN_ROUTES.map((r) => ("redirect" in r
+        ? {
+            path: r.path,
+            element: <Navigate to={r.redirect} replace />,
+            errorElement: <RouterErrorView />,
+          }
+        : {
+            path: r.path,
+            element: guard(r.path, r.comp),
+            errorElement: <RouterErrorView />,
+          })),
     ],
   },
   {

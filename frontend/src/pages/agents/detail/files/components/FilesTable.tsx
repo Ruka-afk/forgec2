@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowDown, ArrowUp, Download, Eye, File, Folder, ImageIcon, Pencil, Trash2, X } from "lucide-react";
-import { formatSize, formatTimestamp, isImageFile, type FileEntry } from "./types";
+import { formatSize, formatTimestamp, isImageFile, type FileEntry } from "@/lib/agent-files/types";
 import type { FileSortKey } from "./useFilesView";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;

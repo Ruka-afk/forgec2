@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useFilesView } from "./useFilesView";
-import type { FileEntry } from "./types";
+import type { FileEntry } from "@/lib/agent-files/types";
 
 const entries: FileEntry[] = [
   { name: "b.txt", is_dir: false, size: 200, mod_time: "2024-01-02" },
