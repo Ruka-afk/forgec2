@@ -1,6 +1,9 @@
 #!/bin/sh
+# Fast pre-commit gate: lint + static consistency scripts (no build output).
+# The slow build-output checks (webdist/bundle) run on pre-push instead, so
+# everyday commits stay under a minute. Full suite always runs in CI.
 set -e
 ROOT=$(git rev-parse --show-toplevel)
-echo "==> frontend checks (lint + i18n key consistency)"
+echo "==> frontend fast checks (lint + css/tokens/i18n/paths/openapi/perms)"
 npm --prefix "$ROOT/frontend" run lint
-npm --prefix "$ROOT/frontend" run check
+npm --prefix "$ROOT/frontend" run check:pre

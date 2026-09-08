@@ -1,0 +1,9 @@
+#!/bin/sh
+# Pre-push gate: the slow build-output checks. webdist/bundle only change when
+# frontend output changes, so they are verified here (and in CI) rather than
+# on every commit.
+set -e
+ROOT=$(git rev-parse --show-toplevel)
+echo "==> frontend build-output checks (webdist + bundle)"
+npm --prefix "$ROOT/frontend" run check:webdist
+npm --prefix "$ROOT/frontend" run check:bundle
