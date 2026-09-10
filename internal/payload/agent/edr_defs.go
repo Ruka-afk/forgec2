@@ -11,6 +11,16 @@ const (
 	EDRBitDefender = "bitdefender"
 	EDRSymantec    = "symantec"
 	EDRTrendMicro  = "trendmicro"
+	EDRKaspersky   = "kaspersky"
+	EDRESET        = "eset"
+	EDRMcAfee      = "mcafee"
+	EDRSophos      = "sophos"
+	EDRCortex      = "cortex"
+	EDRElastic     = "elastic"
+	EDRSysmon      = "sysmon"
+	EDR360         = "360"
+	EDRHuorong     = "huorong"
+	EDRTencent     = "tencent"
 	EDRUnknown     = "unknown"
 )
 

@@ -31,7 +31,7 @@ const (
 )
 
 func antidebugGetPEB() uintptr {
-	procNtQueryInfoProcess := antidebugNtdll.NewProc(s(SProcNtQIP))
+	procNtQueryInfoProcess := ntdllProc(antidebugNtdll, hashNtQueryInformationProcess, s(SProcNtQIP))
 	var pbi antidebugProcessBasicInfo
 	ret, _, _ := procNtQueryInfoProcess.Call(
 		^uintptr(0),
@@ -87,7 +87,7 @@ func checkHeapFlags() bool {
 }
 
 func checkNtQueryInfoProcessDebugPort() bool {
-	procNtQueryInfoProcess := antidebugNtdll.NewProc(s(SProcNtQIP))
+	procNtQueryInfoProcess := ntdllProc(antidebugNtdll, hashNtQueryInformationProcess, s(SProcNtQIP))
 	var debugPort uint32
 	ret, _, _ := procNtQueryInfoProcess.Call(
 		^uintptr(0),
@@ -103,7 +103,7 @@ func checkNtQueryInfoProcessDebugPort() bool {
 }
 
 func checkNtQueryInfoProcessFlags() bool {
-	procNtQueryInfoProcess := antidebugNtdll.NewProc(s(SProcNtQIP))
+	procNtQueryInfoProcess := ntdllProc(antidebugNtdll, hashNtQueryInformationProcess, s(SProcNtQIP))
 	var debugFlags uint32
 	ret, _, _ := procNtQueryInfoProcess.Call(
 		^uintptr(0),
@@ -119,8 +119,8 @@ func checkNtQueryInfoProcessFlags() bool {
 }
 
 func checkNtSetInfoThread() bool {
-	procNtSetInfoThread := antidebugNtdll.NewProc(s(SProcNtSIT))
-	procGetCurrentThread := k32.NewProc(s(SProcGCThread))
+	procNtSetInfoThread := ntdllProc(antidebugNtdll, hashNtSetInformationThread, s(SProcNtSIT))
+	procGetCurrentThread := ntdllProc(k32, hashGetCurrentThread, s(SProcGCThread))
 	hThread, _, _ := procGetCurrentThread.Call()
 	ret, _, _ := procNtSetInfoThread.Call(
 		hThread,
@@ -132,7 +132,7 @@ func checkNtSetInfoThread() bool {
 }
 
 func checkCloseHandleNt() bool {
-	procNtClose := antidebugNtdll.NewProc(s(SProcNtC))
+	procNtClose := ntdllProc(antidebugNtdll, hashNtClose, s(SProcNtC))
 	ret, _, _ := procNtClose.Call(uintptr(0xDEADBEEF))
 	return ret == 0
 }

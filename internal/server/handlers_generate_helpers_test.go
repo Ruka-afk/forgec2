@@ -1,6 +1,11 @@
 package server
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestClampIntervalJitter_Defaults(t *testing.T) {
 	interval, jitter := clampIntervalJitter(0, 0, 0)
@@ -73,5 +78,47 @@ func TestParseArchitecture_Whitespace(t *testing.T) {
 	got := parseArchitecture("  amd64  ")
 	if got != "amd64" {
 		t.Fatalf("parseArchitecture(\"  amd64  \") = %q, want \"amd64\"", got)
+	}
+}
+
+func TestBuildOneLiners_VerifiedVariants(t *testing.T) {
+	// Without a hash only the base variants are emitted.
+	base := buildOneLiners("exe", "", "http://x/p", "/tmp/p", "", "")
+	withHash := buildOneLiners("exe", "", "http://x/p", "/tmp/p", "", "abc123")
+	if len(withHash) != len(base)+2 {
+		t.Fatalf("exe verified variants = %d, want base+2 (%d)", len(withHash), len(base)+2)
+	}
+	joined := ""
+	for _, it := range withHash {
+		joined += it.Name + "\n" + it.Command + "\n"
+	}
+	if !strings.Contains(joined, "abc123") {
+		t.Fatal("verified variants must embed the SHA-256")
+	}
+	if !strings.Contains(joined, "-C -") {
+		t.Fatal("verified variants must use resumable curl (-C -)")
+	}
+
+	linBase := buildOneLiners("linux", "", "http://x/p", "/tmp/p", "", "")
+	linHash := buildOneLiners("linux", "", "http://x/p", "/tmp/p", "", "abc123")
+	if len(linHash) != len(linBase)+1 {
+		t.Fatalf("linux verified variants = %d, want base+1 (%d)", len(linHash), len(linBase)+1)
+	}
+}
+
+func TestSha256OfFile(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "p.bin")
+	if err := os.WriteFile(p, []byte("hello"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	sum, size := sha256OfFile(p)
+	if sum != "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824" {
+		t.Fatalf("sha256 = %q, want hello digest", sum)
+	}
+	if size != 5 {
+		t.Fatalf("size = %d, want 5", size)
+	}
+	if sum2, size2 := sha256OfFile(filepath.Join(t.TempDir(), "missing")); sum2 != "" || size2 != 0 {
+		t.Fatalf("missing file must return empty/0, got %q/%d", sum2, size2)
 	}
 }

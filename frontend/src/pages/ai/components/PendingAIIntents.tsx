@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Check, Clock, ShieldCheck, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -8,7 +8,7 @@ import { normalizeListEnvelope } from "@/lib/envelope";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface AIExecutionIntent {
   id: string;
@@ -25,6 +25,8 @@ interface AIExecutionIntent {
 export function PendingAIIntents({ activeSessionId }: { activeSessionId: number | null }) {
   const { t } = useI18n();
   const [acting, setActing] = useState<Set<string>>(() => new Set());
+  const [open, setOpen] = useState(false);
+  const prevCount = useRef(0);
   const fetchIntents = useCallback(async (signal?: AbortSignal) => {
     const payload = await api.get<unknown>(`${paths.ai.intents}?status=pending`, { signal });
     return normalizeListEnvelope(payload, ["intents", "data"]) as AIExecutionIntent[];
@@ -32,6 +34,13 @@ export function PendingAIIntents({ activeSessionId }: { activeSessionId: number 
 	const { data, refresh } = useApiResource({ fetcher: fetchIntents, pollMs: 5000 });
 	const allIntents = data ?? [];
 	const intents = activeSessionId == null ? allIntents : allIntents.filter((intent) => intent.session_id === activeSessionId);
+
+  // Auto-open the modal when new intents arrive so approvals cannot be
+  // missed in the inline flow; the operator can still dismiss it.
+  useEffect(() => {
+    if (intents.length > prevCount.current) setOpen(true);
+    prevCount.current = intents.length;
+  }, [intents.length]);
 
   const decide = async (intent: AIExecutionIntent, approve: boolean) => {
     setActing((current) => new Set(current).add(intent.id));
@@ -52,13 +61,25 @@ export function PendingAIIntents({ activeSessionId }: { activeSessionId: number 
 
   if (intents.length === 0) return null;
   return (
-    <Card className="border-warning/30 bg-warning/5 p-3" aria-live="polite">
-      <div className="mb-2 flex items-center gap-2">
-        <ShieldCheck className="size-4 text-warning" />
-        <span className="text-sm font-semibold">{t("ai.intent_manual_approval")}</span>
-        <Badge variant="warning" className="ml-auto">{intents.length}</Badge>
+    <>
+      <div className="flex justify-center">
+        <Button variant="outline" size="sm" onClick={() => setOpen(true)} className="gap-1.5 border-warning/40 text-warning">
+          <ShieldCheck className="size-4" />
+          {t("ai.intent_manual_approval")}
+          <Badge variant="warning">{intents.length}</Badge>
+        </Button>
       </div>
-      <div className="max-h-72 space-y-2 overflow-y-auto">
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-lg" aria-live="polite">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldCheck className="size-4 text-warning" />
+              {t("ai.intent_manual_approval")}
+              <Badge variant="warning" className="ml-auto">{intents.length}</Badge>
+            </DialogTitle>
+            <DialogDescription>{t("ai.intent_dialog_hint")}</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-72 space-y-2 overflow-y-auto">
         {intents.map((intent) => (
           <div key={intent.id} className="rounded-xl border border-border bg-card p-3 shadow-xs">
             <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -76,7 +97,10 @@ export function PendingAIIntents({ activeSessionId }: { activeSessionId: number 
             </div>
           </div>
         ))}
-      </div>
-    </Card>
+          </div>
+          <DialogFooter showCloseButton />
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

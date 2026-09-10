@@ -135,3 +135,48 @@ func TestNotificationRouteTestReportsDeliveryFailure(t *testing.T) {
 		t.Fatalf("failed delivery returned %d, want 502", w.Code)
 	}
 }
+
+func TestBuildRoutePayloadChannels(t *testing.T) {
+	n := &db.Notification{Severity: "critical", Type: "agent", Title: "Agent online", Message: "host-01 checked in", AgentID: "a1"}
+	for _, ch := range []string{"discord", "telegram", "webhook", "dingtalk", "wecom", "feishu", "slack"} {
+		payload, target, err := buildRoutePayload(ch, "https://hooks.example/x", "s3cr3t", n)
+		if err != nil {
+			t.Fatalf("channel %s: %v", ch, err)
+		}
+		if len(payload) == 0 || target == "" {
+			t.Fatalf("channel %s returned empty payload/target", ch)
+		}
+		var decoded map[string]interface{}
+		if err := json.Unmarshal(payload, &decoded); err != nil {
+			t.Fatalf("channel %s payload is not JSON: %v", ch, err)
+		}
+	}
+	if _, _, err := buildRoutePayload("nope", "https://x", "", n); err == nil {
+		t.Fatal("unknown channel must error")
+	}
+	// DingTalk unsigned: target untouched; signed: timestamp+sign appended.
+	if _, target, _ := buildRoutePayload("dingtalk", "https://oapi.dingtalk.com/robot/send?access_token=T", "", n); target != "https://oapi.dingtalk.com/robot/send?access_token=T" {
+		t.Fatalf("unsigned dingtalk target rewritten: %q", target)
+	}
+	if _, target, _ := buildRoutePayload("dingtalk", "https://oapi.dingtalk.com/robot/send?access_token=T", "s3cr3t", n); !bytes.Contains([]byte(target), []byte("timestamp=")) || !bytes.Contains([]byte(target), []byte("sign=")) {
+		t.Fatalf("signed dingtalk target missing query: %q", target)
+	}
+	// Telegram routes through the bot API, never the raw target.
+	if _, target, _ := buildRoutePayload("telegram", "-100123", "tok", n); !bytes.Contains([]byte(target), []byte("api.telegram.org/bottok/sendMessage")) {
+		t.Fatalf("telegram target wrong: %q", target)
+	}
+}
+
+func TestValidNotificationChannelExtended(t *testing.T) {
+	for _, ch := range []string{"discord", "telegram", "webhook", "dingtalk", "wecom", "feishu", "slack"} {
+		if !validNotificationChannel(ch) {
+			t.Fatalf("channel %s must be valid", ch)
+		}
+	}
+	if validNotificationChannel("irc") {
+		t.Fatal("irc must be invalid")
+	}
+	if err := validateNotificationRoute("dingtalk", "https://oapi.dingtalk.com/robot/send?access_token=T", ""); err != nil {
+		t.Fatalf("dingtalk without secret must validate (unsigned mode): %v", err)
+	}
+}

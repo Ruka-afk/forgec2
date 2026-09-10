@@ -33,13 +33,22 @@ func (s *Server) getAgentOrFail(c *gin.Context, id string) (db.Implant, bool) {
 // TaskOption configures optional createTask behaviour.
 type TaskOption func(*taskOptions)
 type taskOptions struct {
-	callerUserID uint
+	callerUserID   uint
+	idempotencyKey string
 }
 
 // WithCaller tags a createTask call with the operator user ID so the
 // soft-lock check can exclude the caller from the conflict list.
 func WithCaller(uid uint) TaskOption {
 	return func(o *taskOptions) { o.callerUserID = uid }
+}
+
+// WithIdempotencyKey deduplicates task creation: when non-empty and a live
+// (pending/pending_approval/running) task with the same key already exists
+// on the agent, createTask returns it instead of inserting a duplicate
+// (double-clicks, retried automation, replayed API calls).
+func WithIdempotencyKey(key string) TaskOption {
+	return func(o *taskOptions) { o.idempotencyKey = key }
 }
 
 // callerOpts extracts the user_id from gin.Context and returns a WithCaller
@@ -116,6 +125,23 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 		return nil, fmt.Errorf("command too long (max %d characters)", MaxCommandLength)
 	}
 
+	// Idempotency: a live task with the same key short-circuits creation.
+	// Checked before the pending-counter increment so dedup hits never
+	// consume quota. Terminal tasks (completed/failed/cancelled/timeout)
+	// never block key reuse.
+	if key := strings.TrimSpace(tOpts.idempotencyKey); key != "" {
+		if len(key) > 64 {
+			return nil, fmt.Errorf("idempotency key too long (max 64 characters)")
+		}
+		var existing db.Task
+		if err := s.db.Where("agent_id = ? AND idempotency_key = ? AND status IN ?",
+			agentID, key, []string{"pending", TaskStatusPendingApproval, "running"}).
+			Order("id DESC").First(&existing).Error; err == nil {
+			return &existing, nil
+		}
+		tOpts.idempotencyKey = key
+	}
+
 	if info, ok := getTaskTypeInfo(taskType); ok {
 		for _, p := range info.Parameters {
 			if p.Required {
@@ -160,6 +186,9 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 		Offset:  offset,
 		Size:    size,
 		Status:  "pending",
+	}
+	if tOpts.idempotencyKey != "" {
+		task.IdempotencyKey = tOpts.idempotencyKey
 	}
 
 	task.Status = s.resolveInitialTaskStatus(taskType)
@@ -223,13 +252,14 @@ func (s *Server) resolveInitialTaskStatus(taskType string) string {
 
 // TaskSpec describes a single agent task issued from an HTTP handler.
 type TaskSpec struct {
-	Type    string
-	Command string
-	Shell   string
-	Path    string
-	Data    string
-	Offset  int64
-	Size    int64
+	Type           string
+	Command        string
+	Shell          string
+	Path           string
+	Data           string
+	Offset         int64
+	Size           int64
+	IdempotencyKey string
 }
 
 // issueAgentTask is the single choke point for handler-issued tasks: it runs
@@ -242,7 +272,8 @@ func (s *Server) issueAgentTask(c *gin.Context, id string, spec TaskSpec) *db.Ta
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return nil
 	}
-	task, err := s.createTask(id, spec.Type, spec.Command, spec.Shell, spec.Path, spec.Data, spec.Offset, spec.Size, callerOpts(c)...)
+	task, err := s.createTask(id, spec.Type, spec.Command, spec.Shell, spec.Path, spec.Data, spec.Offset, spec.Size,
+		append(callerOpts(c), WithIdempotencyKey(spec.IdempotencyKey))...)
 	if err != nil {
 		respondTaskError(c, err)
 		return nil

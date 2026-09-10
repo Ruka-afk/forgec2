@@ -2,7 +2,10 @@ package server
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
+
+	"github.com/forgec2/forgec2/internal/db"
 )
 
 // ── JSON structures ───────────────────────────────────────────────────────
@@ -746,6 +749,11 @@ authorize:
 	if allowed, result := s.authorizeAITool(reqCtx, name, normalizedArgs); !allowed {
 		return result
 	}
+	// Audit every authorized tool call (read and write alike) with
+	// secret-redacted arguments, so AI-driven actions are traceable in the
+	// same trail as operator clicks. Approval decisions keep their own
+	// ai_intent_approve/reject entries; this records the execution itself.
+	s.auditAIToolCall(reqCtx, name, normalizedArgs)
 	if name == "search_knowledge" {
 		return s.executeAIKnowledgeSearchTool(reqCtx, normalizedArgs)
 	}
@@ -753,6 +761,38 @@ authorize:
 		return s.executeAIWebSearchTool(reqCtx, normalizedArgs)
 	}
 	return s.executeToolSwitchCtx(reqCtx, name, normalizedArgs)
+}
+
+// auditAIToolCall records one authorized AI tool invocation. Arguments go
+// through summarizeAIArguments so credentials never land in the audit trail.
+func (s *Server) auditAIToolCall(reqCtx *aiReqCtx, name, argsJSON string) {
+	if s == nil || s.db == nil {
+		return
+	}
+	user, target := "ai", ""
+	if reqCtx != nil {
+		if reqCtx.Principal.Username != "" {
+			user = reqCtx.Principal.Username
+		}
+		target = reqCtx.RunID
+		if reqCtx.SessionID != 0 {
+			target = "session:" + strconv.FormatUint(uint64(reqCtx.SessionID), 10)
+		}
+	}
+	details := name
+	if target != "" {
+		details = "[" + target + "] " + details
+	}
+	if digest := summarizeAIArguments(argsJSON); digest != "" {
+		details = details + " " + digest
+	}
+	s.flushAuditEntries([]db.AuditLog{{
+		User:     user,
+		Action:   "ai_tool",
+		Resource: "ai",
+		Success:  true,
+		Details:  truncateString(details, 1000),
+	}})
 }
 
 // injectDefaultAgent returns argsJSON with the context agent filled in for

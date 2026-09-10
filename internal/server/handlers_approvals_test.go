@@ -228,6 +228,7 @@ func TestExpandedDangerousTypesRequireApproval(t *testing.T) {
 		"creds", "mimikatz", "kerberoast",
 		"dpapi_masterkey", "dpapi_blob", "dpapi_browser",
 		"cookie_export", "delete", "usb_drop",
+		"edr_blind", "edr_kill", "byovd_load",
 	}
 	for _, tt := range dangerous {
 		path := ""

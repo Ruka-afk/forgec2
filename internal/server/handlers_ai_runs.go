@@ -191,6 +191,10 @@ type aiRunRequest struct {
 		Page               string `json:"page"`
 		AgentID            string `json:"agent_id"`
 		AllowLowRiskWrites bool   `json:"allow_low_risk_writes"`
+		// DisableTools forces a pure-chat run: the model answers from
+		// context with no tool calls (saves tokens for short chatter like
+		// "ok" / follow-up questions). OR-ed with the profile capability.
+		DisableTools bool `json:"disable_tools"`
 	} `json:"context"`
 }
 
@@ -516,6 +520,10 @@ func (s *Server) executeAIBackgroundRun(ctx context.Context, run db.AIChatRun, r
 	if contextText := s.buildAIRunContext(principal, run.SessionID, lastUser, req.AttachmentIDs, req.KnowledgeCollectionIDs); contextText != "" {
 		sysPrompt += "\n\n" + contextText
 	}
+	// Rolling memory: older turns already folded into the session digest.
+	if summary := s.sessionSummaryForPrompt(run.SessionID); summary != "" {
+		sysPrompt += "\n\n" + summary
+	}
 	// Inject live situation snapshot for runs to match legacy chat parity (tenant-aware)
 	if snap := s.buildSituationSnapshot(); snap != "" {
 		sysPrompt += "\n\n" + snap
@@ -527,7 +535,7 @@ func (s *Server) executeAIBackgroundRun(ctx context.Context, run db.AIChatRun, r
 		RunID:                  run.ID,
 		AllowLowRiskWrites:     req.Context.AllowLowRiskWrites && sessionAllowsLowRisk(s.db, run.SessionID),
 		KnowledgeCollectionIDs: req.KnowledgeCollectionIDs,
-		DisableTools:           !profile.SupportsTools,
+		DisableTools:           !profile.SupportsTools || req.Context.DisableTools,
 	}
 	events := s.converse(profile.Model, sysPrompt, trimConversationHistory(req.Messages), ctx, reqCtx, limits)
 	finalText := ""
@@ -577,6 +585,9 @@ func (s *Server) executeAIBackgroundRun(ctx context.Context, run db.AIChatRun, r
 		"status": status, "completed_at": completed, "error_code": errorCode, "error_message": errorMessage,
 	})
 	s.db.Model(&db.AIChatSession{}).Where("id = ?", run.SessionID).Update("updated_at", completed)
+	// Fold older turns into the rolling digest in the background (never
+	// blocks run completion; failures only log).
+	go s.maybeSummarizeSession(run.SessionID)
 	if status != aiRunStatusCompleted {
 		emit("error", errorMessage, true)
 	}

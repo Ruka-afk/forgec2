@@ -374,12 +374,17 @@ export function usePayloadGenerator() {
     pe_sections: form.pe_sections,
     pe_imports: form.pe_imports,
     pe_manifest: form.pe_manifest,
+    slim: form.slim ? "true" : "",
+    upx: form.upx ? "true" : "",
+    win7_compat: form.win7compat ? "true" : "",
   }), []);
 
   const unixExtra = useCallback((form: UnixForm): Record<string, string> => ({
     persist: form.persist ? "true" : "",
     skip_tls_verify: form.skip_tls ? "true" : "",
     obfuscate: form.obfuscate ? "true" : "",
+    slim: form.slim ? "true" : "",
+    upx: form.upx ? "true" : "",
     filename: form.filename,
     domain_front: form.domain_front,
     working_start: form.working_start,
@@ -651,7 +656,7 @@ export function usePayloadGenerator() {
 
   // Quick presets
   const applyPreset = useCallback((preset: "opsec" | "evasion" | "blend") => {
-    const resetBinary = (f: BinaryForm) => ({ ...f, persist: false, skip_tls: false, evasion: false, ghost_mode: false, obfuscate: false });
+    const resetBinary = (f: BinaryForm) => ({ ...f, persist: false, skip_tls: false, evasion: false, ghost_mode: false, obfuscate: false, slim: false, upx: false, win7compat: false });
     const maxBinary = (f: BinaryForm) => ({ ...f, persist: true, skip_tls: false, evasion: true, obfuscate: true });
     switch (preset) {
       case "opsec":

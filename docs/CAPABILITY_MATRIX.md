@@ -67,7 +67,9 @@
 |------|---------|-------|
 | execute_assembly / powerpick / peloader | Hardened | Windows |
 | bof | Hardened | Windows |
-| inject / shinject / threadless… | Hardened | Windows-only suite |
+| inject / shinject / threadless… | Hardened | Windows-only suite; hollow uses per-call random benign host (rundll32/dllhost/svchost/explorer) with fallback |
+| edr_blind / edr_kill / byovd_load | Experimental | Windows-only EDR pack; approval-gated; byovd_load takes an operator-supplied .sys (no bundled driver) |
+| ppl_check | Hardened | Windows-only read-only protection-level query |
 
 ## Server product modules
 

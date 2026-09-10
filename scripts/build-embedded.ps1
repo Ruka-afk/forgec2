@@ -27,6 +27,12 @@ try {
         Pop-Location
     }
 
+    # 0.6. Refresh the Win7 shim mirror (embedded parent sources for the
+    # legacy toolchain) so the binary always embeds current sources.
+    Write-Host "==> Syncing Win7 shim mirror..." -ForegroundColor Cyan
+    node scripts/sync-win7shim.mjs
+    if ($LASTEXITCODE -ne 0) { throw "win7shim sync failed" }
+
     # 1. Build frontend
     Write-Host "==> Building frontend..." -ForegroundColor Cyan
     Push-Location frontend

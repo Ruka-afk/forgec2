@@ -148,6 +148,10 @@ export default function NotificationRoutesCard() {
                       <SelectContent>
                         <SelectItem value="discord">Discord</SelectItem>
                         <SelectItem value="telegram">Telegram</SelectItem>
+                        <SelectItem value="dingtalk">{t("settings.routes.channel_dingtalk")}</SelectItem>
+                        <SelectItem value="wecom">{t("settings.routes.channel_wecom")}</SelectItem>
+                        <SelectItem value="feishu">{t("settings.routes.channel_feishu")}</SelectItem>
+                        <SelectItem value="slack">Slack</SelectItem>
                         <SelectItem value="webhook">{t("settings.routes.channel_webhook")}</SelectItem>
                       </SelectContent>
                     </Select>
@@ -179,6 +183,14 @@ export default function NotificationRoutesCard() {
                       <Label className="text-(--fs-micro-sm) text-muted-foreground">{t("settings.routes.bot_token")}</Label>
                       <Input className="text-xs mt-1 font-mono" type="password"
                         placeholder="123456:ABC-DEF..."
+                        value={route.secret} onChange={(e) => update(idx, { secret: e.target.value })} />
+                    </div>
+                  )}
+                  {route.channel === "dingtalk" && (
+                    <div>
+                      <Label className="text-(--fs-micro-sm) text-muted-foreground">{t("settings.routes.sign_secret")}</Label>
+                      <Input className="text-xs mt-1 font-mono" type="password"
+                        placeholder={t("settings.routes.sign_secret_hint")}
                         value={route.secret} onChange={(e) => update(idx, { secret: e.target.value })} />
                     </div>
                   )}

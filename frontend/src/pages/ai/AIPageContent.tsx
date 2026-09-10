@@ -27,6 +27,7 @@ import { useAIConfig } from "./components/useAIConfig";
 import { useAISessions } from "./components/useAISessions";
 import { AIMessageList } from "./components/AIMessageList";
 import { AIComposer } from "./components/AIComposer";
+import { AIAssistBar } from "./components/AIAssistBar";
 import { AIConfigPanel } from "./components/AIConfigPanel";
 import { PendingAIIntents } from "./components/PendingAIIntents";
 import { AIContextPanel } from "./components/AIContextPanel";
@@ -55,6 +56,7 @@ export default function AIPage() {
 	const [selectedAttachmentIds, setSelectedAttachmentIds] = useState<string[]>([]);
 	const [selectedCollectionIds, setSelectedCollectionIds] = useState<number[]>([]);
 	const [lowRiskAuto, setLowRiskAuto] = useState(false);
+	const [chatOnly, setChatOnly] = useState(false);
 	const [profilesReady, setProfilesReady] = useState(false);
 	const [runStatuses, setRunStatuses] = useState<Record<number, string>>({});
 	const [runView, dispatchRunView] = useReducer(aiRunViewReducer, initialAIRunViewState);
@@ -544,6 +546,7 @@ export default function AIPage() {
 		  page: typeof window !== "undefined" ? window.location.pathname : "",
 		  agent_id: contextAgentId,
 		  allow_low_risk_writes: lowRiskAuto,
+		  disable_tools: chatOnly,
 		},
 	  });
 	  backgroundRunId = run.id;
@@ -1200,6 +1203,11 @@ export default function AIPage() {
 
         <div className="shrink-0 border-t border-border/70 bg-card/95 px-3 py-3 sm:px-5 sm:py-4">
           <div className="mx-auto w-full max-w-4xl">
+            <AIAssistBar
+              sessionId={activeSessionId}
+              disabled={configLoading || !configured}
+              onInsertPrompt={(prompt) => { replaceInput(prompt); adjustTextarea(); textareaRef.current?.focus(); }}
+            />
             <AIComposer
               input={input}
               loading={loading}
@@ -1207,11 +1215,13 @@ export default function AIPage() {
               messageCount={messages.filter((m) => !m.thinking && !m.trace).length}
               usage={usage}
               maxLength={AI_INPUT_MAX_CHARS}
+              chatOnly={chatOnly}
               textareaRef={textareaRef}
               onChange={(v) => { replaceInput(v); adjustTextarea(); }}
               onKeyDown={handleKeyDown}
               onSend={handleSend}
               onStop={handleStop}
+              onChatOnlyChange={setChatOnly}
             />
           </div>
         </div>

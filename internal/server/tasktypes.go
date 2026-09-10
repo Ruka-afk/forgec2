@@ -128,6 +128,13 @@ var dangerousTaskTypes = map[string]bool{
 	// be gated so a single operator cannot wipe host data without a second
 	// approval (S4: "delete recursive no confirm").
 	protocol.TaskTypeDelete: true,
+
+	// EDR pack (experimental): sensor blinding, EDR process kill and
+	// operator-supplied driver load are high-impact and inherit the two-man
+	// rule. ppl_check is read-only recon and stays ungated.
+	protocol.TaskTypeEDRBlind:  true,
+	protocol.TaskTypeEDRKill:   true,
+	protocol.TaskTypeBYOVDLoad: true,
 }
 
 // GetRegisteredTaskTypes returns a copy of the registered task type list.

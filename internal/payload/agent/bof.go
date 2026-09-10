@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strings"
+	"sync"
 	"syscall"
 	"unsafe"
 
@@ -95,6 +96,8 @@ var (
 	bofOleaut32 = syscall.NewLazyDLL("oleaut32.dll")
 	bofOle32    = syscall.NewLazyDLL("ole32.dll")
 	bofIphlpapi = syscall.NewLazyDLL("iphlpapi.dll")
+	// bofProcCache memoizes resolved symbol addresses across BOF loads.
+	bofProcCache sync.Map // string -> uintptr
 )
 
 // bofMemcpy copies n bytes from src to dst using unsafe pointers.
@@ -126,10 +129,20 @@ func bofGoString(p uintptr) string {
 }
 
 func getProcAddr(name string) uintptr {
+	// Symbol cache: BOF symbol resolution runs per loaded object, and DLL
+	// Find() walks the loader on every miss. Cache resolved addresses so
+	// repeated BOF loads skip handle resolution entirely.
+	if v, ok := bofProcCache.Load(name); ok {
+		if addr, ok := v.(uintptr); ok {
+			return addr
+		}
+	}
 	for _, dll := range []*syscall.LazyDLL{bofNtdll, bofKernel32, bofUser32, bofAdvapi32, bofWs2_32, bofNetapi32, bofOleaut32, bofOle32, bofIphlpapi} {
 		proc := dll.NewProc(name)
 		if proc != nil && proc.Find() == nil {
-			return proc.Addr()
+			addr := proc.Addr()
+			bofProcCache.Store(name, addr)
+			return addr
 		}
 	}
 	return 0

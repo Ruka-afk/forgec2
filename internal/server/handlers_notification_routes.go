@@ -2,6 +2,9 @@ package server
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -46,7 +49,7 @@ func redactNotificationRoute(route db.NotificationRoute) db.NotificationRoute {
 
 func validateNotificationRoute(channel, target, secret string) error {
 	if !validNotificationChannel(channel) {
-		return errors.New("channel must be discord, telegram or webhook")
+		return errors.New("channel must be discord, telegram, webhook, dingtalk, wecom, feishu or slack")
 	}
 	if target == "" || target == notificationRouteMask {
 		return errors.New("target required")
@@ -99,35 +102,10 @@ func (s *Server) DispatchNotification(n *db.Notification) {
 // sendNotificationRoute delivers one notification over one channel.
 func (s *Server) sendNotificationRoute(route db.NotificationRoute, n *db.Notification) error {
 	client := ssrfSafeClient(&http.Client{Timeout: notificationRouteTimeout})
-	var payload []byte
-	target := ""
-
-	text := fmt.Sprintf("[%s] %s\n%s", n.Severity, n.Title, n.Message)
-	switch route.Channel {
-	case "discord":
-		payload, _ = json.Marshal(map[string]string{"content": text})
-		target = route.Target
-	case "telegram":
-		api := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", route.Secret)
-		payload, _ = json.Marshal(map[string]string{
-			"chat_id": route.Target,
-			"text":    text,
-		})
-		target = api
-	case "webhook":
-		payload, _ = json.Marshal(map[string]interface{}{
-			"severity": n.Severity,
-			"type":     n.Type,
-			"title":    n.Title,
-			"message":  n.Message,
-			"agent_id": n.AgentID,
-			"task_id":  n.TaskID,
-			"ts":       time.Now().UTC().Format(time.RFC3339),
-		})
-		target = route.Target
-	default:
+	payload, target, err := buildRoutePayload(route.Channel, route.Target, route.Secret, n)
+	if err != nil {
 		slog.Warn("Unknown notification route channel", "channel", route.Channel)
-		return fmt.Errorf("unknown notification channel %q", route.Channel)
+		return err
 	}
 	if target == "" {
 		return errors.New("notification target is empty")
@@ -175,7 +153,87 @@ func (s *Server) handleListNotificationRoutes(c *gin.Context) {
 }
 
 func validNotificationChannel(ch string) bool {
-	return ch == "discord" || ch == "telegram" || ch == "webhook"
+	switch ch {
+	case "discord", "telegram", "webhook",
+		"dingtalk", "wecom", "feishu", "slack":
+		return true
+	}
+	return false
+}
+
+// buildRoutePayload renders the per-channel request body and final target URL
+// for a notification. Pure function (no I/O) so payload shapes are unit
+// testable without network. secret carries the telegram bot token or the
+// dingtalk sign key depending on channel.
+func buildRoutePayload(channel, target, secret string, n *db.Notification) (payload []byte, targetURL string, err error) {
+	text := fmt.Sprintf("[%s] %s\n%s", n.Severity, n.Title, n.Message)
+	switch channel {
+	case "discord":
+		payload, _ = json.Marshal(map[string]string{"content": text})
+		return payload, target, nil
+	case "telegram":
+		api := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", secret)
+		payload, _ = json.Marshal(map[string]string{
+			"chat_id": target,
+			"text":    text,
+		})
+		return payload, api, nil
+	case "webhook":
+		payload, _ = json.Marshal(map[string]interface{}{
+			"severity": n.Severity,
+			"type":     n.Type,
+			"title":    n.Title,
+			"message":  n.Message,
+			"agent_id": n.AgentID,
+			"task_id":  n.TaskID,
+			"ts":       time.Now().UTC().Format(time.RFC3339),
+		})
+		return payload, target, nil
+	case "dingtalk":
+		// Robot markdown message; when secret (sign key) is set, append the
+		// timestamp+sign query pair. Body text keeps newlines as Markdown.
+		body, _ := json.Marshal(map[string]interface{}{
+			"msgtype": "markdown",
+			"markdown": map[string]string{
+				"title": n.Title,
+				"text":  fmt.Sprintf("### %s\n%s", n.Title, n.Message),
+			},
+		})
+		if secret == "" {
+			return body, target, nil
+		}
+		ts := time.Now().UnixMilli()
+		mac := hmac.New(sha256.New, []byte(secret))
+		mac.Write([]byte(fmt.Sprintf("%d\n%s", ts, secret)))
+		sign := url.QueryEscape(base64.StdEncoding.EncodeToString(mac.Sum(nil)))
+		sep := "?"
+		if strings.Contains(target, "?") {
+			sep = "&"
+		}
+		return body, fmt.Sprintf("%s%stimestamp=%d&sign=%s", target, sep, ts, sign), nil
+	case "wecom":
+		// WeCom robot markdown (content capped at 4096 chars by the API).
+		content := text
+		if len(content) > 4000 {
+			content = content[:4000] + "…"
+		}
+		payload, _ = json.Marshal(map[string]interface{}{
+			"msgtype":  "markdown",
+			"markdown": map[string]string{"content": content},
+		})
+		return payload, target, nil
+	case "feishu":
+		payload, _ = json.Marshal(map[string]interface{}{
+			"msg_type": "text",
+			"content":  map[string]string{"text": text},
+		})
+		return payload, target, nil
+	case "slack":
+		payload, _ = json.Marshal(map[string]string{"text": text})
+		return payload, target, nil
+	default:
+		return nil, "", fmt.Errorf("unknown notification channel %q", channel)
+	}
 }
 
 func validNotificationSeverity(severity string) bool {

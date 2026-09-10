@@ -2,7 +2,7 @@
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, Square } from "lucide-react";
+import { MessageCircle, Send, Square } from "lucide-react";
 
 interface AIComposerProps {
   input: string;
@@ -11,11 +11,13 @@ interface AIComposerProps {
   disabled?: boolean;
   usage?: { prompt: number; completion: number };
   maxLength?: number;
+  chatOnly?: boolean;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   onChange: (value: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
   onSend: () => void;
   onStop: () => void;
+  onChatOnlyChange?: (value: boolean) => void;
 }
 
 export function AIComposer({
@@ -25,11 +27,13 @@ export function AIComposer({
   disabled,
   usage,
   maxLength,
+  chatOnly,
   textareaRef,
   onChange,
   onKeyDown,
   onSend,
   onStop,
+  onChatOnlyChange,
 }: AIComposerProps) {
   const { t } = useI18n();
   return (
@@ -65,6 +69,18 @@ export function AIComposer({
           {input.trim() && <> &middot; ~{Math.ceil(input.trim().length / 4)} {t("ai.tokens_est")}</>}
         </span>
         <span className="flex items-center gap-3 text-(--fs-micro-sm) text-muted-foreground">
+          {onChatOnlyChange && (
+            <button
+              type="button"
+              onClick={() => onChatOnlyChange(!chatOnly)}
+              aria-pressed={chatOnly === true}
+              title={t("ai.chat_only_hint")}
+              className={`flex items-center gap-1 rounded-full px-2 py-0.5 ring-1 transition-colors ${chatOnly ? "bg-primary/10 text-primary ring-primary/40" : "ring-border/60 hover:text-foreground"}`}
+            >
+              <MessageCircle className="size-3" />
+              {t("ai.chat_only")}
+            </button>
+          )}
           {usage && (usage.prompt > 0 || usage.completion > 0) && (
             <span title={t("ai.tokens_used")} className="font-mono">
               ↑{usage.prompt} ↓{usage.completion}

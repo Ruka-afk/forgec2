@@ -47,8 +47,19 @@ func TestRandomizeStrxorRoundTrip(t *testing.T) {
 	tmpl := strxorConstants(t, template)
 	ca := strxorConstants(t, genA)
 	cb := strxorConstants(t, genB)
-	if len(ca) != len(tmpl) || len(cb) != len(tmpl) {
-		t.Fatalf("constant count mismatch: template=%d genA=%d genB=%d", len(tmpl), len(ca), len(cb))
+	// Honeypot decoys (SDecoy*) intentionally inflate the generated table, so
+	// require superset rather than exact count equality.
+	for _, gen := range []map[string]string{ca, cb} {
+		for name := range tmpl {
+			if _, ok := gen[name]; !ok {
+				t.Fatalf("generated table missing template const %s", name)
+			}
+		}
+		for name := range gen {
+			if _, ok := tmpl[name]; !ok && !strings.HasPrefix(name, "SDecoy") {
+				t.Fatalf("generated table has unexpected non-decoy const %s", name)
+			}
+		}
 	}
 
 	// Both generated tables must decode to identical plaintext as the template

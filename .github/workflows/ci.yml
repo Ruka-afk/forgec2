@@ -55,6 +55,11 @@ jobs:
           test "$stale" -eq 0
       - name: Build server for smoke
         run: go build -o forgec2-server ./cmd/server
+      - name: Version stamp check (ldflags must reach -version)
+        run: |
+          go build -ldflags "-X github.com/forgec2/forgec2/internal/server.ServerVersion=ci-test" -o forgec2-version-check ./cmd/server
+          test "$(./forgec2-version-check -version)" = "ci-test"
+          rm -f forgec2-version-check
       - name: API smoke (unauth + default admin)
         run: |
           # Fresh DB. config.example.yaml leaves auth.default_password empty
@@ -133,6 +138,8 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      - name: Win7 shim mirror freshness
+        run: node ../scripts/sync-win7shim.mjs --check
       - run: npx tsc --noEmit
       - run: npm run lint
       - run: npm run check:i18n

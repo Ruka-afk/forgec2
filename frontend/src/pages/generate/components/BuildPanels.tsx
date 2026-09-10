@@ -234,6 +234,29 @@ export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setF
           </span>
         </label>
       )}
+      <label htmlFor={`${id}-slim`} className="flex cursor-pointer items-start gap-x-2.5 rounded-lg border border-border/50 bg-background/40 px-2.5 py-2 transition-colors hover:border-primary/25 hover:bg-muted/30 has-checked:border-primary/30 has-checked:bg-primary/5">
+        <Checkbox id={`${id}-slim`} aria-label={t("generate.panel.slim_aria")} checked={form.slim} onCheckedChange={(checked) => setForm({ ...form, slim: checked === true })} className="mt-0.5" />
+        <span className="text-sm text-muted-foreground">
+          {t("generate.panel.slim")}
+          <span className="block font-normal text-muted-foreground/80 text-xs leading-4">{t("generate.panel.slim_hint")}</span>
+        </span>
+      </label>
+      <label htmlFor={`${id}-upx`} className="flex cursor-pointer items-start gap-x-2.5 rounded-lg border border-border/50 bg-background/40 px-2.5 py-2 transition-colors hover:border-primary/25 hover:bg-muted/30 has-checked:border-primary/30 has-checked:bg-primary/5">
+        <Checkbox id={`${id}-upx`} aria-label={t("generate.panel.upx_aria")} checked={form.upx} onCheckedChange={(checked) => setForm({ ...form, upx: checked === true })} className="mt-0.5" />
+        <span className="text-sm text-muted-foreground">
+          {t("generate.panel.upx")}
+          <span className="block font-normal text-muted-foreground/80 text-xs leading-4">{t("generate.panel.upx_hint")}</span>
+        </span>
+      </label>
+      {variant === "exe" && (
+        <label htmlFor={`${id}-win7`} className="flex cursor-pointer items-start gap-x-2.5 rounded-lg border border-border/50 bg-background/40 px-2.5 py-2 transition-colors hover:border-primary/25 hover:bg-muted/30 has-checked:border-primary/30 has-checked:bg-primary/5">
+          <Checkbox id={`${id}-win7`} aria-label={t("generate.panel.win7_aria")} checked={form.win7compat} onCheckedChange={(checked) => setForm({ ...form, win7compat: checked === true })} className="mt-0.5" />
+          <span className="text-sm text-muted-foreground">
+            {t("generate.panel.win7")}
+            <span className="block font-normal text-muted-foreground/80 text-xs leading-4">{t("generate.panel.win7_hint")}</span>
+          </span>
+        </label>
+      )}
       <div>
         <FieldLabel>{t("generate.panel.domain_front")}</FieldLabel>
         <Input aria-label={t("generate.panel.domain_front_aria")} name={`${id}-domain-front`} value={form.domain_front} onChange={(e) => setForm({ ...form, domain_front: e.target.value })} placeholder={t("generate.panel.domain_front_aria")} />
@@ -306,6 +329,10 @@ export const UnixPanel = React.memo(function UnixPanel({ variant, form, setForm,
         <Label htmlFor={`${id}-skip-tls`} className="text-sm text-muted-foreground">{t("generate.panel.skip_tls_short")}</Label>
         <Checkbox id={`${id}-obfuscate`} aria-label={t("generate.panel.obfuscate_aria")} checked={form.obfuscate} onCheckedChange={(checked) => setForm({ ...form, obfuscate: checked === true })} className="ml-3" />
         <Label htmlFor={`${id}-obfuscate`} className="text-sm text-muted-foreground">{t("generate.panel.obfuscate_aria")}</Label>
+        <Checkbox id={`${id}-slim`} aria-label={t("generate.panel.slim_aria")} checked={form.slim} onCheckedChange={(checked) => setForm({ ...form, slim: checked === true })} className="ml-3" />
+        <Label htmlFor={`${id}-slim`} className="text-sm text-muted-foreground">{t("generate.panel.slim")}</Label>
+        <Checkbox id={`${id}-upx`} aria-label={t("generate.panel.upx_aria")} checked={form.upx} onCheckedChange={(checked) => setForm({ ...form, upx: checked === true })} className="ml-3" />
+        <Label htmlFor={`${id}-upx`} className="text-sm text-muted-foreground">{t("generate.panel.upx")}</Label>
       </div>
       <div>
         <FieldLabel>{t("generate.panel.domain_front")}</FieldLabel>

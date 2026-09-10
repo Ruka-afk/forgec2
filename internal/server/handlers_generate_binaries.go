@@ -78,6 +78,9 @@ type binaryGenForm struct {
 	PESectionMode       string `form:"pe_sections"`
 	PEImportMode        string `form:"pe_imports"`
 	PEManifestMode      string `form:"pe_manifest"`
+	Slim                string `form:"slim"`        // "true" for the light profile (grpc/quic/wss compiled out, ~30% smaller)
+	UPX                 string `form:"upx"`         // "true" for post-build UPX --lzma (exe/elf; missing binary = skip)
+	Win7Compat          string `form:"win7_compat"` // "true" for Win7/2008R2 (go1.20.14 toolchain, forces slim, forbids garble)
 }
 
 // parseBinaryForm validates a binary generation request and returns the resolved form.
@@ -378,6 +381,9 @@ func (s *Server) buildImplantConfig(form *binaryGenForm) (payload.ImplantConfig,
 		PESectionMode:         form.PESectionMode,
 		PEImportMode:          form.PEImportMode,
 		PEManifestMode:        form.PEManifestMode,
+		Slim:                  form.Slim == "true" || form.Slim == "1",
+		UPX:                   form.UPX == "true" || form.UPX == "1",
+		Win7Compat:            form.Win7Compat == "true" || form.Win7Compat == "1",
 	}, nil
 }
 

@@ -5,7 +5,7 @@
 
 BINARY   ?= forgec2-server
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-LDFLAGS  := -s -w -buildid= -X main.version=$(VERSION)
+LDFLAGS  := -s -w -buildid= -X github.com/forgec2/forgec2/internal/server.ServerVersion=$(VERSION)
 
 # ---------- Core ----------
 

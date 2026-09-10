@@ -82,7 +82,7 @@ func buildLoaderEXE(workDir string, blob, key []byte, method ShellcodeEncode, en
 		return nil, fmt.Errorf("go executable not found in PATH. Install Go from https://go.dev/dl/ or set the GO_BINARY environment variable")
 	}
 	outPath := filepath.Join(workDir, "loader.exe")
-	if err := buildAgentBinary(goCmd, workDir, "-s -w -H=windowsgui", outPath, false, "windows", "amd64", "", ""); err != nil {
+	if err := buildAgentBinary(goCmd, workDir, "-s -w -H=windowsgui", outPath, false, "windows", "amd64", "", "", false); err != nil {
 		return nil, fmt.Errorf("loader build failed: %w", err)
 	}
 	if err := validatePE(outPath, windowsMachine("amd64")); err != nil {

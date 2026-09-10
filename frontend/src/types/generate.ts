@@ -25,6 +25,9 @@ export interface OneLinerType {
 export interface OneLinerData {
   download_url: string;
   types: OneLinerType[];
+  sha256?: string;
+  size?: number;
+  expires_at?: string;
 }
 
 export interface SharedState {
@@ -76,6 +79,9 @@ export interface BinaryForm {
   pe_sections: string;
   pe_imports: string;
   pe_manifest: string;
+  slim: boolean;
+  upx: boolean;
+  win7compat: boolean;
 }
 
 export interface UnixForm {
@@ -83,6 +89,8 @@ export interface UnixForm {
   persist: boolean;
   skip_tls: boolean;
   obfuscate: boolean;
+  slim: boolean;
+  upx: boolean;
   domain_front: string;
   working_start: string;
   working_end: string;
@@ -188,11 +196,11 @@ export const DEFAULT_BINARY_FORM: BinaryForm = {
   p2p_listen_addr: "", dns_domain: "", dns_server: "",
   working_start: "", working_end: "", working_tz: "",
   icon_file: null, icon_b64: "", icon_preset: "", disguise_as: "", file_description: "", company_name: "", lnk_disguise: false,
-  pe_timestamp: "zero", pe_sections: "default", pe_imports: "none", pe_manifest: "default",
+  pe_timestamp: "zero", pe_sections: "default", pe_imports: "none", pe_manifest: "default", slim: false, upx: false, win7compat: false,
 };
 
 export const DEFAULT_UNIX_FORM: UnixForm = {
-  filename: "forge_implant", persist: false, skip_tls: false, obfuscate: false, domain_front: "",
+  filename: "forge_implant", persist: false, skip_tls: false, obfuscate: false, slim: false, upx: false, domain_front: "",
   working_start: "", working_end: "", working_tz: "",
 };
 

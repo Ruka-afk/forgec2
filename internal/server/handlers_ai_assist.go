@@ -679,3 +679,117 @@ func (s *Server) handleAISavePlaybook(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "id": macro.ID, "name": macro.Name, "steps": len(steps)})
 }
+
+// handleAIRunReview produces a post-run debrief for a completed AI run:
+// what the assistant did, what worked, gaps, and concrete next steps.
+// It reads the durable run event stream (no re-execution) and runs one
+// non-streaming completion over a capped transcript. Accepts either run_id
+// or session_id (latest completed/failed run in that session).
+func (s *Server) handleAIRunReview(c *gin.Context) {
+	if !s.aiAssistReady() {
+		aiAssistUnavailable(c)
+		return
+	}
+	principal, ok := s.currentAIPrincipal(c)
+	if !ok {
+		respondError(c, http.StatusForbidden, "AI use permission required")
+		return
+	}
+	var req struct {
+		RunID     string `json:"run_id"`
+		SessionID uint   `json:"session_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || (req.RunID == "" && req.SessionID == 0) {
+		respondError(c, http.StatusBadRequest, "run_id or session_id required")
+		return
+	}
+	runQuery := s.db.Where("owner_id = ? AND owner = ?", principal.UserID, principal.Username)
+	if principal.TenantID != 0 {
+		runQuery = runQuery.Where("tenant_id = ?", principal.TenantID)
+	}
+	var run db.AIChatRun
+	if req.RunID != "" {
+		if err := runQuery.Where("id = ?", req.RunID).First(&run).Error; err != nil {
+			respondError(c, http.StatusNotFound, "run not found")
+			return
+		}
+	} else {
+		if err := runQuery.Where("session_id = ? AND status IN ?", req.SessionID,
+			[]string{aiRunStatusCompleted, aiRunStatusFailed}).
+			Order("completed_at DESC").First(&run).Error; err != nil {
+			respondError(c, http.StatusNotFound, "no completed run in session")
+			return
+		}
+	}
+	if run.Status != aiRunStatusCompleted && run.Status != aiRunStatusFailed {
+		respondError(c, http.StatusBadRequest, "run is not finished yet")
+		return
+	}
+
+	var events []db.AIChatRunEvent
+	if err := s.db.Where("run_id = ?", run.ID).Order("sequence").Limit(60).Find(&events).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "query failed")
+		return
+	}
+	if len(events) == 0 {
+		respondError(c, http.StatusBadRequest, "run has no events to review")
+		return
+	}
+	var sb strings.Builder
+	sb.WriteString("Run status: " + run.Status + "\n")
+	for _, ev := range events {
+		payload := truncateStr(ev.Payload, 1500)
+		switch ev.Type {
+		case "text", "reasoning", "tool_call", "tool_result", "tool_error":
+			sb.WriteString("[" + ev.Type + "] " + payload + "\n")
+		}
+		if sb.Len() > 14000 {
+			break
+		}
+	}
+	transcript := sb.String()
+	if len(transcript) > 15000 {
+		transcript = transcript[:15000] + "\n...[truncated]"
+	}
+
+	system := `You are a red-team operations analyst inside a C2 console. Review the finished AI assistant run below and reply with ONLY a JSON object, no prose, in this exact schema:
+{"summary":"2-3 sentence plain summary of what was done","what_worked":["concrete completed item"],"gaps":["what failed or is still unknown"],"next_steps":["imperative follow-up suggestion"]}
+Max 5 items per list. Reply in the language of the transcript.`
+	text, err := s.aiOneShot(c.Request.Context(), system, "Original goal: "+truncateStr(run.Input, 500)+"\n\nTranscript:\n"+transcript, 1500)
+	if err != nil {
+		if errors.Is(err, errAIDisabled) {
+			aiAssistUnavailable(c)
+			return
+		}
+		slog.Warn("AI run-review failed", "err", err)
+		respondError(c, http.StatusBadGateway, sanitizeError(err, "AI review"))
+		return
+	}
+	var parsed struct {
+		Summary    string   `json:"summary"`
+		WhatWorked []string `json:"what_worked"`
+		Gaps       []string `json:"gaps"`
+		NextSteps  []string `json:"next_steps"`
+	}
+	if err := decodeModelJSON(text, &parsed); err != nil || parsed.Summary == "" {
+		parsed.Summary = strings.TrimSpace(text)
+	}
+	cap5 := func(in []string) []string {
+		out := make([]string, 0, len(in))
+		for i, v := range in {
+			if i >= 5 {
+				break
+			}
+			out = append(out, truncateStr(v, 300))
+		}
+		return out
+	}
+	c.JSON(http.StatusOK, gin.H{"review": gin.H{
+		"run_id":      run.ID,
+		"run_status":  run.Status,
+		"summary":     truncateStr(parsed.Summary, 4000),
+		"what_worked": cap5(parsed.WhatWorked),
+		"gaps":        cap5(parsed.Gaps),
+		"next_steps":  cap5(parsed.NextSteps),
+	}})
+}

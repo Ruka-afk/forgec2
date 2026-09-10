@@ -93,6 +93,8 @@ var (
 	SSHHostKeyStr           string            = ""                            // base64 server host public key (pin); empty = SSH transport refuses to connect
 	EgressDetectionStr      string            = "false"                       // enable egress detection on startup
 	EgressPortsStr          string            = "80,443,8080,8443,53,22,2222" // ports to test for egress
+	StartDelayMinStr        string            = "0"                           // startup delay window floor, seconds (0 = disabled)
+	StartDelayMaxStr        string            = "0"                           // startup delay window ceiling, seconds (0 = disabled)
 
 	// Certificate pinning (SHA-256 hex of server DER cert; empty = disabled)
 	PinnedCertSHA256Str string = ""
@@ -270,6 +272,9 @@ type agentConfigBlob struct {
 	// as a string to match the -X injection convention used by every other
 	// runtime knob on this struct.
 	ContentLengthJitter string `json:"content_length_jitter"`
+	// Startup delay window in seconds (0/0 = disabled).
+	StartDelayMin string `json:"start_delay_min"`
+	StartDelayMax string `json:"start_delay_max"`
 	// Request-side transforms applied by the agent to outbound beacons.
 	MalleableRequestPrepend string            `json:"malleable_request_prepend"`
 	MalleableRequestAppend  string            `json:"malleable_request_append"`
@@ -623,5 +628,11 @@ func (b *agentConfigBlob) apply() {
 			}
 			ContentLengthJitter = v
 		}
+	}
+	if b.StartDelayMin != "" {
+		StartDelayMinStr = b.StartDelayMin
+	}
+	if b.StartDelayMax != "" {
+		StartDelayMaxStr = b.StartDelayMax
 	}
 }

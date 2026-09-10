@@ -230,7 +230,16 @@ func TestWriteConfigInjectFile(t *testing.T) {
 	if err := writeConfigInjectFile(dir, "BASE64BLOB==", "ab:cd"); err != nil {
 		t.Fatalf("writeConfigInjectFile: %v", err)
 	}
-	data, err := os.ReadFile(filepath.Join(dir, "aa_config_inject.go"))
+	// Filename is randomized per build (aa_*_inject.go, always sorting before
+	// agent.go); locate it via glob instead of a fixed name.
+	matches, err := filepath.Glob(filepath.Join(dir, "aa_*_inject.go"))
+	if err != nil || len(matches) != 1 {
+		t.Fatalf("expected exactly one inject file, got %v (err=%v)", matches, err)
+	}
+	if base := filepath.Base(matches[0]); strings.Compare(base, "agent.go") >= 0 {
+		t.Fatalf("inject file %s must sort before agent.go for init() ordering", base)
+	}
+	data, err := os.ReadFile(matches[0])
 	if err != nil {
 		t.Fatalf("inject file not written: %v", err)
 	}
