@@ -682,6 +682,7 @@ var zhTranslations = TranslationMap{
 	"users.created_at": "创建时间",
 	"users.admin":      "管理员",
 	"users.operator":   "用户",
+	"users.viewer":     "查看者",
 
 	"theme.light":       "亮色模式",
 	"theme.dark":        "暗色模式",
