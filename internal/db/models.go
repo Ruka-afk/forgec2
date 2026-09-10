@@ -122,9 +122,9 @@ type Implant struct {
 	City      string    `json:"city"`      // GeoIP city
 	Latitude  float64   `json:"latitude"`  // GeoIP latitude
 	Longitude float64   `json:"longitude"` // GeoIP longitude
-	LastSeen  time.Time `gorm:"index" json:"last_seen"`
-	Status    string    `gorm:"index" json:"status"`          // online, offline
-	Trusted   bool      `gorm:"default:false" json:"trusted"` // operator-approved agent
+	LastSeen  time.Time `gorm:"index;index:idx_implants_status_seen,priority:2" json:"last_seen"`
+	Status    string    `gorm:"index;index:idx_implants_status_seen,priority:1" json:"status"` // online, offline
+	Trusted   bool      `gorm:"default:false" json:"trusted"`                                  // operator-approved agent
 	// Force-offline: server-side service denial. A blocked implant's check-ins
 	// are refused (well-formed but taskless replies), its status pinned
 	// offline, and every attempt audited. Distinct from soft-delete:
@@ -168,10 +168,10 @@ type Implant struct {
 	EnvHoneypot    bool   `json:"env_honeypot" gorm:"default:false"`   // agent detected honeypot env
 	EnvClass       string `json:"env_class" gorm:"size:32;default:''"` // environment classification
 	// Protocol v2 identity & replay protection
-	IdentityPub string    `gorm:"size:64;default:''" json:"identity_pub,omitempty"` // base64 X25519 identity public key (registered)
-	Registered  bool      `gorm:"default:false" json:"registered"`                  // v2 registration handshake completed
-	LastSeq     uint64    `gorm:"default:0" json:"last_seq,omitempty"`              // last accepted beacon seq (replay window)
-	SecretID    string    `gorm:"size:64;default:''" json:"secret_id,omitempty"`    // v3 per-implant registration secret id (bound at registration)
+	IdentityPub string    `gorm:"size:64;default:''" json:"identity_pub,omitempty"`    // base64 X25519 identity public key (registered)
+	Registered  bool      `gorm:"default:false" json:"registered"`                     // v2 registration handshake completed
+	LastSeq     uint64    `gorm:"default:0" json:"last_seq,omitempty"`                 // last accepted beacon seq (replay window)
+	SecretID    string    `gorm:"size:64;default:'';index" json:"secret_id,omitempty"` // v3 per-implant registration secret id (bound at registration)
 	CreatedAt   time.Time `gorm:"index" json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	// Soft delete: operators can remove an agent from the UI without losing its
@@ -211,7 +211,7 @@ type KillSwitch struct {
 type Task struct {
 	ID       uint   `gorm:"primaryKey" json:"id"`
 	TenantID uint   `gorm:"index" json:"tenant_id"` // multi-tenant isolation (0 = legacy/unscoped)
-	AgentID  string `gorm:"index" json:"agent_id"`
+	AgentID  string `gorm:"index;index:idx_tasks_agent_status,priority:1" json:"agent_id"`
 	Type     string `json:"type"`
 	Command  string `json:"command"`
 	Shell    string `json:"shell"`
@@ -227,8 +227,8 @@ type Task struct {
 	// seal this task's result independently of the session key (P2). Empty when
 	// the task uses the normal channel encryption.
 	TaskKey  string `gorm:"column:task_key" json:"task_key,omitempty"`
-	Status   string `gorm:"index" json:"status"`
-	Priority int    `gorm:"default:1" json:"priority"` // 0=low, 1=normal, 2=high, 3=urgent
+	Status   string `gorm:"index;index:idx_tasks_agent_status,priority:2" json:"status"`
+	Priority int    `gorm:"default:1;index:idx_tasks_agent_status,priority:3" json:"priority"` // 0=low, 1=normal, 2=high, 3=urgent
 	Result   string `json:"result"`
 	Error    string `json:"error"`
 	// File transfer progress tracking (optimization)
@@ -254,15 +254,15 @@ type Task struct {
 	// LastResultID is the agent-side id of the most recently applied result.
 	// It gives durable idempotency for results re-resent after a dropped frame
 	// (survives server restarts, unlike the in-memory dedup cache).
-	LastResultID string    `gorm:"size:64;index" json:"last_result_id,omitempty"`
+	LastResultID string `gorm:"size:64;index" json:"last_result_id,omitempty"`
 	// IdempotencyKey is an operator-supplied dedup key: creating a task with
 	// a key that already has a live (pending/pending_approval/running) task
 	// on the same agent returns the existing task instead of a duplicate.
 	// Empty = no dedup. Terminal tasks never block reuse of a key.
 	IdempotencyKey string    `gorm:"size:64;index" json:"idempotency_key,omitempty"`
-	CreatedAt    time.Time `gorm:"index" json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	Agent        Implant   `gorm:"foreignKey:AgentID" json:"-"`
+	CreatedAt      time.Time `gorm:"index" json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	Agent          Implant   `gorm:"foreignKey:AgentID" json:"-"`
 }
 
 // SensitiveTaskTypes are task types whose Command/Data fields carry secrets
@@ -1539,26 +1539,26 @@ func (ChatMessage) TableName() string { return "chat_messages" }
 
 // AIChatSession — a persisted AI assistant conversation
 type AIChatSession struct {
-	ID              uint      `gorm:"primaryKey" json:"id"`
-	TenantID        uint      `gorm:"index" json:"tenant_id"`
-	OwnerID         uint      `gorm:"index" json:"owner_id"`
-	Owner           string    `gorm:"size:100;index" json:"owner"`
-	Title           string    `gorm:"size:255;not null;default:'New Chat'" json:"title"`
-	ProfileID       *uint     `gorm:"index" json:"profile_id,omitempty"`
-	ParentSessionID *uint     `gorm:"index" json:"parent_session_id,omitempty"`
-	ForkMessageID   *uint     `gorm:"index" json:"fork_message_id,omitempty"`
-	ContextAgentID  string    `gorm:"size:64;index" json:"context_agent_id,omitempty"`
-	WritePolicy     string    `gorm:"size:32;not null;default:'approval'" json:"write_policy"`
-	Draft           string    `gorm:"type:text" json:"draft,omitempty"`
+	ID              uint   `gorm:"primaryKey" json:"id"`
+	TenantID        uint   `gorm:"index" json:"tenant_id"`
+	OwnerID         uint   `gorm:"index" json:"owner_id"`
+	Owner           string `gorm:"size:100;index" json:"owner"`
+	Title           string `gorm:"size:255;not null;default:'New Chat'" json:"title"`
+	ProfileID       *uint  `gorm:"index" json:"profile_id,omitempty"`
+	ParentSessionID *uint  `gorm:"index" json:"parent_session_id,omitempty"`
+	ForkMessageID   *uint  `gorm:"index" json:"fork_message_id,omitempty"`
+	ContextAgentID  string `gorm:"size:64;index" json:"context_agent_id,omitempty"`
+	WritePolicy     string `gorm:"size:32;not null;default:'approval'" json:"write_policy"`
+	Draft           string `gorm:"type:text" json:"draft,omitempty"`
 	// Summary is a rolling LLM-compressed digest of older turns so long
 	// engagements survive trimConversationHistory truncation. SummaryUpToID
 	// watermarks the newest AIChatMessage ID folded into Summary.
 	Summary       string    `gorm:"type:text" json:"-"`
 	SummaryUpToID uint      `gorm:"default:0" json:"-"`
-	Pinned          bool      `gorm:"index;default:false" json:"pinned"`
-	Archived        bool      `gorm:"index;default:false" json:"archived"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	Pinned        bool      `gorm:"index;default:false" json:"pinned"`
+	Archived      bool      `gorm:"index;default:false" json:"archived"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 func (AIChatSession) TableName() string { return "ai_chat_sessions" }

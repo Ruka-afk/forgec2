@@ -1,0 +1,56 @@
+package server
+
+import (
+	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/internal/server/middleware"
+	"github.com/gin-gonic/gin"
+)
+
+func (s *Server) registerTaskRoutes(auth *gin.RouterGroup) {
+	tasksRead := auth.Group("/")
+	tasksRead.Use(middleware.RequirePermission(db.PermTasksRead))
+	{
+		tasksRead.GET("/tasks", s.handleTaskHistory)
+		tasksRead.GET("/tasks/export", s.handleExportTasks)
+		tasksRead.GET("/tasks/:taskId", s.handleGetTaskStatus)
+		tasksRead.POST("/tasks/batch-status", s.handleBatchTaskStatus)
+	}
+
+	tasksWrite := auth.Group("/")
+	tasksWrite.Use(middleware.RequirePermission(db.PermAgentsWrite))
+	{
+		tasksWrite.POST("/tasks/:taskId/approve", s.handleApproveTask)
+		tasksWrite.POST("/tasks/:taskId/reject", s.handleRejectTask)
+	}
+
+	auth.POST("/logout", s.handleLogout)
+}
+
+// registerCredentialRoutes registers credential management routes.
+
+func (s *Server) registerCredentialRoutes(auth *gin.RouterGroup) {
+	credsRead := auth.Group("/")
+	credsRead.Use(middleware.RequirePermission(db.PermCredsRead))
+	{
+		credsRead.GET("/credentials", s.handleCredentialsPage)
+		credsRead.GET("/credentials/export", s.handleExportCredentials)
+		credsRead.GET("/credentials/:cred_id", s.handleGetCredential)
+	}
+	credsWrite := auth.Group("/")
+	credsWrite.Use(middleware.RequirePermission(db.PermCredsWrite))
+	{
+		credsWrite.POST("/credentials/add", s.handleAddCredential)
+		credsWrite.PUT("/credentials/:cred_id", s.handleUpdateCredential)
+		credsWrite.POST("/credentials/batch/tags", s.handleBatchAddTags)
+		credsWrite.POST("/credentials/batch/verify", s.handleBatchVerifyCredentials)
+		credsWrite.POST("/credentials/:cred_id/confirm", s.handleToggleConfirmed)
+		credsWrite.POST("/credentials/:cred_id/usage", s.apiRecordUsage)
+	}
+	credsDelete := auth.Group("/")
+	credsDelete.Use(middleware.RequirePermission(db.PermCredsDelete))
+	{
+		credsDelete.DELETE("/credentials/:cred_id", s.handleDeleteCredential)
+	}
+}
+
+// registerUserRoutes registers documentation, AI, WebSocket, tokens, user management, SOCKS sessions, and scripting routes.

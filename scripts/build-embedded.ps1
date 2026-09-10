@@ -46,13 +46,23 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Frontend build failed" }
     Pop-Location
 
-    # 2. Copy output to webdist
-    Write-Host "==> Copying frontend output to webdist..." -ForegroundColor Cyan
+    # 2. Copy output to webdist (skip when byte-identical to avoid 258-file churn)
+    Write-Host "==> Syncing frontend output to webdist..." -ForegroundColor Cyan
+    $webdistFresh = $false
     if (Test-Path "internal/webdist/dist") {
-        Remove-Item -Recurse -Force "internal/webdist/dist"
+        node scripts/check-webdist.mjs >$null 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "webdist already fresh, skipping copy" -ForegroundColor DarkGray
+            $webdistFresh = $true
+        }
     }
-    New-Item -ItemType Directory -Path "internal/webdist/dist" | Out-Null
-    Copy-Item -Recurse -Path "frontend/out/*" -Destination "internal/webdist/dist/"
+    if (-not $webdistFresh) {
+        if (Test-Path "internal/webdist/dist") {
+            Remove-Item -Recurse -Force "internal/webdist/dist"
+        }
+        New-Item -ItemType Directory -Path "internal/webdist/dist" | Out-Null
+        Copy-Item -Recurse -Path "frontend/out/*" -Destination "internal/webdist/dist/"
+    }
 
     # 2.5. Validate source contracts, the freshly-built bundle and the embedded
     # copy together before compiling or restarting the backend.
