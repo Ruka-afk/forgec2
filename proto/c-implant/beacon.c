@@ -58,6 +58,9 @@
 #define RESP_CAP (12u * 1024u * 1024u)
 #define OUT_CAP (512u * 1024u)
 #define INFO_CAP 4096
+/* Cap queued result JSON (Go reenforcePendingBounds parity): drop newest
+ * beyond 4MB so offline task bursts cannot grow memory without bound. */
+#define RESULTS_CAP (4u * 1024u * 1024u)
 
 /* Runtime sleep interval (seconds), mutable via set_sleep task. */
 static int g_interval = INTERVAL;
@@ -1745,13 +1748,15 @@ int main(void) {
                                             }
                                             if (robj) {
                                                 size_t need = strlen(newres) + strlen(robj) + 2;
-                                                char *nr = (char *)realloc(newres, need);
+                                                if (need > RESULTS_CAP) { free(robj); robj = NULL; }
+                                                else { char *nr = (char *)realloc(newres, need);
                                                 if (nr) {
                                                     newres = nr;
                                                     if (newres[0]) strcat_s(newres, need, ",");
                                                     strcat_s(newres, need, robj);
                                                 }
                                                 free(robj);
+                                                }
                                             }
                                             free(rid);
                                             free_task(&t);

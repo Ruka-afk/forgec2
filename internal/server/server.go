@@ -167,6 +167,7 @@ type Server struct {
 	// Beacon deduplication: track recently processed beacon fingerprints
 	beaconDedupMu    sync.Mutex
 	beaconDedupCache map[string]time.Time
+	beaconDedupSweep time.Time
 
 	// Per-agent seq flood lockout (agentID → unlock time). Set by acceptSeq
 	// when a frame sequence jump exceeds the hard cap; guards the replay
@@ -184,6 +185,7 @@ type Server struct {
 	// dedupe on the agent-supplied result id instead.
 	resultDedupeMu    sync.Mutex
 	resultDedupeCache map[string]time.Time
+	resultDedupeSweep time.Time
 
 	// Phishing landing page rate limiting keyed by token+IP
 	landingLimiterMu    sync.Mutex

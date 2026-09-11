@@ -211,7 +211,7 @@ type KillSwitch struct {
 type Task struct {
 	ID       uint   `gorm:"primaryKey" json:"id"`
 	TenantID uint   `gorm:"index" json:"tenant_id"` // multi-tenant isolation (0 = legacy/unscoped)
-	AgentID  string `gorm:"index;index:idx_tasks_agent_status,priority:1" json:"agent_id"`
+	AgentID  string `gorm:"index;index:idx_tasks_agent_status,priority:1;index:idx_tasks_agent_created,priority:1" json:"agent_id"`
 	Type     string `json:"type"`
 	Command  string `json:"command"`
 	Shell    string `json:"shell"`
@@ -227,7 +227,7 @@ type Task struct {
 	// seal this task's result independently of the session key (P2). Empty when
 	// the task uses the normal channel encryption.
 	TaskKey  string `gorm:"column:task_key" json:"task_key,omitempty"`
-	Status   string `gorm:"index;index:idx_tasks_agent_status,priority:2" json:"status"`
+	Status   string `gorm:"index;index:idx_tasks_agent_status,priority:2;index:idx_tasks_status_created,priority:1" json:"status"`
 	Priority int    `gorm:"default:1;index:idx_tasks_agent_status,priority:3" json:"priority"` // 0=low, 1=normal, 2=high, 3=urgent
 	Result   string `json:"result"`
 	Error    string `json:"error"`
@@ -260,7 +260,7 @@ type Task struct {
 	// on the same agent returns the existing task instead of a duplicate.
 	// Empty = no dedup. Terminal tasks never block reuse of a key.
 	IdempotencyKey string    `gorm:"size:64;index" json:"idempotency_key,omitempty"`
-	CreatedAt      time.Time `gorm:"index" json:"created_at"`
+	CreatedAt      time.Time `gorm:"index;index:idx_tasks_agent_created,priority:2;index:idx_tasks_status_created,priority:2" json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 	Agent          Implant   `gorm:"foreignKey:AgentID" json:"-"`
 }

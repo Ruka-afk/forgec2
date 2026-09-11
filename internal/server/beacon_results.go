@@ -502,15 +502,8 @@ func (s *Server) processTaskAcknowledgements(agentID string, taskIDs []uint, now
 }
 
 // decrementPendingTasks releases one slot of the per-agent pending-task
-// counter, deleting the key at zero to avoid a per-agent memory leak.
+// counter. Kept as a thin alias of decPendingTasks (task_dispatch.go) so
+// beacon and relay paths share one delete-at-zero implementation.
 func (s *Server) decrementPendingTasks(agentID string) {
-	s.agentPendingTasksMu.Lock()
-	if n := s.agentPendingTasks[agentID]; n > 0 {
-		if n-1 <= 0 {
-			delete(s.agentPendingTasks, agentID)
-		} else {
-			s.agentPendingTasks[agentID] = n - 1
-		}
-	}
-	s.agentPendingTasksMu.Unlock()
+	s.decPendingTasks(agentID)
 }

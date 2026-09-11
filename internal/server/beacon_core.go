@@ -177,13 +177,25 @@ func (s *Server) isDuplicateBeacon(req beaconRequest) bool {
 	}
 	s.beaconDedupMu.Lock()
 	defer s.beaconDedupMu.Unlock()
-	// Bounded cache: force eviction if too large (anti-memory-exhaustion)
+	// Bounded cache: sweep expired entries at most once per window so a
+	// flood of fresh keys cannot trigger an O(n) scan on every beacon.
+	// If still over cap after the sweep (all-fresh flood), evict arbitrary
+	// oldest-first entries to hard-bound memory.
 	if len(s.beaconDedupCache) > MaxBeaconDedupEntries {
 		now := time.Now()
-		for k, t := range s.beaconDedupCache {
-			if now.Sub(t) > BeaconDedupWindow {
-				delete(s.beaconDedupCache, k)
+		if now.Sub(s.beaconDedupSweep) >= BeaconDedupWindow {
+			s.beaconDedupSweep = now
+			for k, t := range s.beaconDedupCache {
+				if now.Sub(t) > BeaconDedupWindow {
+					delete(s.beaconDedupCache, k)
+				}
 			}
+		}
+		for k := range s.beaconDedupCache {
+			if len(s.beaconDedupCache) <= MaxBeaconDedupEntries {
+				break
+			}
+			delete(s.beaconDedupCache, k)
 		}
 	}
 	if t, ok := s.beaconDedupCache[fp]; ok {
@@ -213,10 +225,19 @@ func (s *Server) isDuplicateResult(agentID string, r taskResult) bool {
 	}
 	if len(s.resultDedupeCache) > MaxBeaconDedupEntries {
 		now := time.Now()
-		for k, t := range s.resultDedupeCache {
-			if now.Sub(t) > BeaconDedupWindow {
-				delete(s.resultDedupeCache, k)
+		if now.Sub(s.resultDedupeSweep) >= BeaconDedupWindow {
+			s.resultDedupeSweep = now
+			for k, t := range s.resultDedupeCache {
+				if now.Sub(t) > BeaconDedupWindow {
+					delete(s.resultDedupeCache, k)
+				}
 			}
+		}
+		for k := range s.resultDedupeCache {
+			if len(s.resultDedupeCache) <= MaxBeaconDedupEntries {
+				break
+			}
+			delete(s.resultDedupeCache, k)
 		}
 	}
 	s.resultDedupeCache[key] = time.Now()
