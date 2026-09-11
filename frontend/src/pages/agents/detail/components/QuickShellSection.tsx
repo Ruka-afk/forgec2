@@ -8,7 +8,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { SectionCard } from "@/components/ui/section-card";
 import { timeAgo } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
-import { Send, Terminal } from "lucide-react";
+import { RotateCcw, Send, Terminal } from "lucide-react";
 
 interface QuickShellEntry {
   command: string;
@@ -94,6 +94,15 @@ export default memo(function QuickShellSection({
                 <div className="flex items-center gap-2 mb-1">
                   <Badge variant="secondary" className="text-(--fs-micro-sm) font-mono">{entry.shell}</Badge>
                   <span className="text-xs font-mono text-foreground">{entry.command}</span>
+                  <button
+                    type="button"
+                    onClick={() => { onCommandChange(entry.command); onShellChange(entry.shell); }}
+                    className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+                    aria-label={t("agents.detail_shell_reuse")}
+                    title={t("agents.detail_shell_reuse")}
+                  >
+                    <RotateCcw className="size-3" />
+                  </button>
                   <span className="text-(--fs-micro-sm) text-muted-foreground/100 ml-auto">{timeAgo(entry.timestamp, t)}</span>
                 </div>
                 <pre className="font-mono text-(--fs-micro-sm) text-muted-foreground whitespace-pre-wrap break-all max-h-20 overflow-y-auto">{entry.result}</pre>

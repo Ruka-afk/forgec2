@@ -76,7 +76,7 @@ export function useAgentQuickShell(agentId: string, os: string | undefined, succ
       }
     }
     if (!mountedRef.current) return;
-    setHistory((prev) => [entry, ...prev].slice(0, 5));
+    setHistory((prev) => [entry, ...prev].slice(0, 10));
     setCommand("");
     setSending(false);
     sendingRef.current = false;

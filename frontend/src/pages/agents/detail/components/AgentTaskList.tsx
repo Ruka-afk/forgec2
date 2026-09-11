@@ -6,7 +6,7 @@ import { StatusBadge } from "@/components/ui/status-indicator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { timeAgo, formatTime } from "@/lib/utils";
 import type { AgentTaskRecord } from "@/types/agent";
-import { ArrowDown, ArrowUp, Camera, CheckCircle, ChevronDown, Clipboard, Clock, Copy, Database, Download, Folder, Keyboard, ListChecks, Search, Shield, Skull, Terminal, Upload, XCircle } from "lucide-react";
+import { Activity, ArrowDown, ArrowUp, Camera, CheckCircle, ChevronDown, Clipboard, Clock, Copy, Database, Download, FileText, Folder, FolderPlus, GitBranch, Image, Info, Keyboard, Link2, ListChecks, Lock, Pencil, Search, Settings, Shield, ShieldCheck, Skull, Terminal, Trash2, Upload, Users, XCircle, Zap } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { useI18n } from "@/lib/i18n";
 import { api } from "@/lib/api";
@@ -40,7 +40,22 @@ function getTaskTypeIcon(type: string): React.ReactNode {
     case "clipboard_get": return <Clipboard className={s} />;
     case "creds_dump": return <Database className={s} />;
     case "privesc_check": return <Shield className={s} />;
-    case "sleep": return <Clock className={s} />;
+    case "sleep": case "set_sleep": return <Clock className={s} />;
+    case "wallpaper": return <Image className={s} />;
+    case "mkdir": return <FolderPlus className={s} />;
+    case "rename": return <Pencil className={s} />;
+    case "chmod": return <Lock className={s} />;
+    case "delete": return <Trash2 className={s} />;
+    case "read": return <FileText className={s} />;
+    case "netstat": return <Activity className={s} />;
+    case "users": return <Users className={s} />;
+    case "av": return <ShieldCheck className={s} />;
+    case "hostinfo": return <Info className={s} />;
+    case "beacon_now": return <Zap className={s} />;
+    case "download_url": return <Link2 className={s} />;
+    case "process_tree": return <GitBranch className={s} />;
+    case "screenshot_window": return <Camera className={s} />;
+    case "reg_get": case "reg_set": case "reg_delete": return <Settings className={s} />;
     case "hashdump": return <Database className={s} />;
     default: return <Terminal className={s} />;
   }
@@ -116,7 +131,7 @@ export default memo(function AgentTaskList({
   const [filter, setFilter] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [oldestFirst, setOldestFirst] = useState(false);
-  const [showAll, setShowAll] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(MAX_VISIBLE_TASKS);
   const { results, load, invalidate } = useFullTaskResults();
 
   // WS chunk updates evolve task.result over time; drop the stale full-result
@@ -172,8 +187,8 @@ export default memo(function AgentTaskList({
       list = list.filter((task) => (task.command || "").toLowerCase().includes(q) || (task.type || "").toLowerCase().includes(q));
     }
     if (oldestFirst) list = [...list].reverse();
-    return showAll ? list : list.slice(0, MAX_VISIBLE_TASKS);
-  }, [tasks, filter, query, oldestFirst, showAll]);
+    return list.slice(0, visibleCount);
+  }, [tasks, filter, query, oldestFirst, visibleCount]);
 
   if (tasks.length === 0) {
     return (
@@ -364,14 +379,14 @@ export default memo(function AgentTaskList({
           <div className="px-4 py-8 text-center text-xs text-muted-foreground/100">{t("agents.tasklist_no_match")}</div>
         )}
       </div>
-      {!showAll && tasks.length > MAX_VISIBLE_TASKS && (
+      {tasks.length > visibleCount && (
         <div className="px-4 py-2 border-t border-border/70">
           <button
             type="button"
-            onClick={() => setShowAll(true)}
+            onClick={() => setVisibleCount((c) => c + EXPANDED_VISIBLE_TASKS)}
             className="w-full py-1.5 rounded-lg text-xs font-medium text-primary hover:bg-muted/60 transition-colors"
           >
-            {t("agents.tasklist_load_more", { count: String(Math.min(tasks.length, EXPANDED_VISIBLE_TASKS) - MAX_VISIBLE_TASKS) })}
+            {t("agents.tasklist_load_more", { count: String(Math.min(EXPANDED_VISIBLE_TASKS, tasks.length - visibleCount)) })}
           </button>
         </div>
       )}

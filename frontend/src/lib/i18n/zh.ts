@@ -232,6 +232,7 @@ export const zh: Record<string, string> = {
     "agents.detail_retry": "重试",
     "agents.detail_save": "保存",
     "agents.detail_send": "发送",
+    "agents.detail_shell_reuse": "复用命令",
     "agents.detail_set_kill_date": "设置终止日期",
 
     "agents.detail_tags": "标签",

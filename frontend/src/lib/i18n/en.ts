@@ -232,6 +232,7 @@ export const en: Record<string, string> = {
     "agents.detail_retry": "Retry",
     "agents.detail_save": "Save",
     "agents.detail_send": "Send",
+    "agents.detail_shell_reuse": "Recall command",
     "agents.detail_set_kill_date": "Set Kill Date",
 
     "agents.detail_tags": "Tags",
