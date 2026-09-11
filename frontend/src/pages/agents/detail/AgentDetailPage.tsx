@@ -1,12 +1,13 @@
 
 import { useCallback, useEffect, useState, useMemo, useRef, memo, type ReactNode, lazy, Suspense } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { api, ApiError, pollTask } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadText } from "@/lib/download";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -47,6 +48,12 @@ const ScreenTriggerSection = lazy(() => import("./components/ScreenTriggerSectio
 const RegistrySection = lazy(() => import("./components/RegistrySection"));
 const ReconSection = lazy(() => import("./components/ReconSection"));
 const HostInfoCard = lazy(() => import("./components/HostInfoCard").then((m) => ({ default: m.HostInfoCard })));
+import {
+  AGENT_DETAIL_TABS,
+  isAgentDetailTabId,
+  sectionSupported,
+  type AgentDetailTabId,
+} from "./components/agent-detail-tabs";
 import {
   buildAgentCopyText,
   buildAgentMarkdown,
@@ -98,6 +105,25 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   const confirmOpenRef = useRef(confirmOpen);
   confirmOpenRef.current = confirmOpen;
   const [childrenExpanded, setChildrenExpanded] = usePersistedState(`agents.detail.${id}.children`, false);
+
+  // Tab state: ?tab= deep link wins, otherwise the per-agent remembered tab.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [persistedTab, setPersistedTab] = usePersistedState<AgentDetailTabId>(`agents.detail.${id}.tab`, "overview");
+  const urlTab = searchParams.get("tab");
+  const activeTab: AgentDetailTabId = isAgentDetailTabId(urlTab)
+    ? urlTab
+    : (isAgentDetailTabId(persistedTab) ? persistedTab : "overview");
+  const handleTabChange = useCallback((v: string) => {
+    if (!isAgentDetailTabId(v)) return;
+    setPersistedTab(v);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("tab", v);
+      return next;
+    }, { replace: true });
+  }, [setPersistedTab, setSearchParams]);
+  const handleTabChangeRef = useRef(handleTabChange);
+  handleTabChangeRef.current = handleTabChange;
 
   const { data, setData, loading, loadError, reload: loadDetail, reloadThrottled } = useAgentDetail<AgentDetailResponse>(id);
   const status = (data?.agent?.status || "offline") as AgentStatus;
@@ -201,6 +227,10 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
       else if (e.key === "f") navigate(`/agents/${id}/files`);
       else if (e.key === "d") navigate(`/agents/${id}/screen`);
       else if (e.key === "Escape") navigate("/agents");
+      else if (e.key >= "1" && e.key <= String(AGENT_DETAIL_TABS.length)) {
+        const tab = AGENT_DETAIL_TABS[Number(e.key) - 1];
+        if (tab) handleTabChangeRef.current(tab.id);
+      }
     };
     window.addEventListener("keydown", handleKeydown);
     return () => window.removeEventListener("keydown", handleKeydown);
@@ -500,76 +530,95 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
             return null;
           })()}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        {/* ── Main column: live sections ── */}
+        {/* ── Main column: tabbed live sections ── */}
         <div className="min-w-0">
-          <div className="flex gap-2 mb-4">
-            <Button size="sm" variant="outline" onClick={handleDiagnose} disabled={actionLoading === "diagnose" || status !== "online"}>{actionLoading === "diagnose" ? t("agents.detail_diagnosing") : t("agents.detail_diagnose")}</Button>
-            <span className="text-xs text-muted-foreground self-center">{t("agents.detail_diagnose_hint")}</span>
-          </div>
-          <AgentTaskList
-            tasks={tasks as AgentTaskRecord[]}
-            agentId={id}
-            expandedTaskId={expandedTask}
-            onToggleExpand={onToggleExpand}
-            totalTasks={totalTasks}
-            completedTasks={completedTasks}
-            pendingTasks={pendingTasks}
-            failedTasks={failedTasks}
-          />
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="mb-4">
+            <TabsList aria-label={t("agents.detail_tabs_aria")}>
+              {AGENT_DETAIL_TABS.map((tab, i) => (
+                <TabsTrigger key={tab.id} value={tab.id} title={`${i + 1}`}>
+                  {t(tab.labelKey)}
+                </TabsTrigger>
+              ))}
+            </TabsList>
 
-          {isC && (
-            <Banner tone="warning" className="mb-4">{t("agents.detail_c_implant_notice")}</Banner>
-          )}
+            <TabsContent value="overview">
+              <div className="flex gap-2 mb-4">
+                <Button size="sm" variant="outline" onClick={handleDiagnose} disabled={actionLoading === "diagnose" || status !== "online"}>{actionLoading === "diagnose" ? t("agents.detail_diagnosing") : t("agents.detail_diagnose")}</Button>
+                <span className="text-xs text-muted-foreground self-center">{t("agents.detail_diagnose_hint")}</span>
+              </div>
+              {isC && (
+                <Banner tone="warning" className="mb-4">{t("agents.detail_c_implant_notice")}</Banner>
+              )}
+              <Suspense fallback={null}><HostInfoCard agentId={id} online={status === "online"} /></Suspense>
+            </TabsContent>
 
-          {!isC && (
-          <AgentScreenshots
-            screenshots={screenshots}
-            newScreenshots={newScreenshots}
-            agentId={id}
-            lightboxIdx={lbOpen ? lbIndex : null}
-            onOpenLightbox={onOpenLightbox}
-            onCloseLightbox={onCloseLightbox}
-            onPrevLightbox={onPrevLightbox}
-            onNextLightbox={onNextLightbox}
-          />
-          )}
+            <TabsContent value="tasks">
+              <AgentTaskList
+                tasks={tasks as AgentTaskRecord[]}
+                agentId={id}
+                expandedTaskId={expandedTask}
+                onToggleExpand={onToggleExpand}
+                totalTasks={totalTasks}
+                completedTasks={completedTasks}
+                pendingTasks={pendingTasks}
+                failedTasks={failedTasks}
+              />
+            </TabsContent>
 
-          {!isC && (<Suspense fallback={null}><ScreenTriggerSection agentId={id} online={status === "online"} /></Suspense>)}
+            <TabsContent value="recon">
+              {sectionSupported("recon", { isCImplant: isC }) && (<Suspense fallback={null}><ReconSection agentId={id} online={status === "online"} /></Suspense>)}
+              <Suspense fallback={null}>
+                <ProcessSection
+                  agentId={id}
+                  online={status === "online"}
+                  processList={processList}
+                  loading={processLoading}
+                  loadFailed={loadFailed}
+                  expanded={processExpanded}
+                  onToggle={handleToggleProcess}
+                  onRefresh={refreshProcessList}
+                />
+              </Suspense>
+            </TabsContent>
 
-          {!isC && (<Suspense fallback={null}><RegistrySection agentId={id} online={status === "online"} /></Suspense>)}
+            <TabsContent value="evasion">
+              {sectionSupported("evasion", { isCImplant: isC }) && (<Suspense fallback={null}><EvasionSection agentId={id} online={status === "online"} /></Suspense>)}
+              {sectionSupported("inject", { isCImplant: isC }) && (<Suspense fallback={null}><InjectSection agentId={id} online={status === "online"} osType={agent.os} /></Suspense>)}
+            </TabsContent>
 
-          <Suspense fallback={null}>
-            <ProcessSection
-              agentId={id}
-              online={status === "online"}
-              processList={processList}
-              loading={processLoading}
-              loadFailed={loadFailed}
-              expanded={processExpanded}
-              onToggle={handleToggleProcess}
-              onRefresh={refreshProcessList}
-            />
-          </Suspense>
+            <TabsContent value="collect">
+              {sectionSupported("screenshots", { isCImplant: isC }) && (
+              <AgentScreenshots
+                screenshots={screenshots}
+                newScreenshots={newScreenshots}
+                agentId={id}
+                lightboxIdx={lbOpen ? lbIndex : null}
+                onOpenLightbox={onOpenLightbox}
+                onCloseLightbox={onCloseLightbox}
+                onPrevLightbox={onPrevLightbox}
+                onNextLightbox={onNextLightbox}
+              />
+              )}
 
-          {!isC && (<Suspense fallback={null}><EvasionSection agentId={id} online={status === "online"} /></Suspense>)}
+              {sectionSupported("screentrigger", { isCImplant: isC }) && (<Suspense fallback={null}><ScreenTriggerSection agentId={id} online={status === "online"} /></Suspense>)}
 
-          {!isC && (<Suspense fallback={null}><InjectSection agentId={id} online={status === "online"} osType={agent.os} /></Suspense>)}
+              {sectionSupported("registry", { isCImplant: isC }) && (<Suspense fallback={null}><RegistrySection agentId={id} online={status === "online"} /></Suspense>)}
 
-          <Suspense fallback={null}><TimelineSection agentId={id} online={status === "online"} /></Suspense>
+              {sectionSupported("browserhistory", { isCImplant: isC }) && (<Suspense fallback={null}><BrowserHistorySection agentId={id} online={status === "online"} /></Suspense>)}
 
-          {!isC && (<Suspense fallback={null}><BrowserHistorySection agentId={id} online={status === "online"} /></Suspense>)}
+              {sectionSupported("keylogger", { isCImplant: isC }) && (<Suspense fallback={null}><KeyloggerSection agentId={id} online={status === "online"} /></Suspense>)}
 
-          {!isC && (<Suspense fallback={null}><KeyloggerSection agentId={id} online={status === "online"} /></Suspense>)}
+              {sectionSupported("clipboard", { isCImplant: isC }) && (<Suspense fallback={null}><ClipboardSection agentId={id} online={status === "online"} /></Suspense>)}
 
-          {!isC && (<Suspense fallback={null}><ClipboardSection agentId={id} online={status === "online"} /></Suspense>)}
+              {sectionSupported("wallpaper", { isCImplant: isC }) && (<Suspense fallback={null}><WallpaperSection agentId={id} online={status === "online"} /></Suspense>)}
 
-          {!isC && (<Suspense fallback={null}><WallpaperSection agentId={id} online={status === "online"} /></Suspense>)}
+              {sectionSupported("webcammic", { isCImplant: isC }) && (<Suspense fallback={null}><WebcamMicSection agentId={id} online={status === "online"} /></Suspense>)}
+            </TabsContent>
 
-          {!isC && (<Suspense fallback={null}><WebcamMicSection agentId={id} online={status === "online"} /></Suspense>)}
-
-          {!isC && (<Suspense fallback={null}><ReconSection agentId={id} online={status === "online"} /></Suspense>)}
-
-          <Suspense fallback={null}><HostInfoCard agentId={id} online={status === "online"} /></Suspense>
+            <TabsContent value="timeline">
+              <Suspense fallback={null}><TimelineSection agentId={id} online={status === "online"} /></Suspense>
+            </TabsContent>
+          </Tabs>
         </div>
 
         {/* ── Right rail: reference + quick controls ── */}

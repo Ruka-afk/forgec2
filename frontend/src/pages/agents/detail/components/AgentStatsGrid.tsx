@@ -1,5 +1,6 @@
 
 import { useRef, memo } from "react";
+import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -123,7 +124,10 @@ export default memo(function AgentStatsGrid({
         <InfoRow label={t("agents.stats_last_seen")} value={lastSeen ? timeAgo(lastSeen, t) : "\u2014"} title={lastSeen ? formatTime(lastSeen) : undefined} />
         <InfoRow label={t("agents.stats_idle")} value={timeSinceLastSeen || "\u2014"} />
         <div className="pt-2 mt-2 border-t border-border">
-          <div className="text-(--fs-micro-sm) text-muted-foreground/100 mb-1.5">{t("agents.stats_quick_adjust")}</div>
+          <div className="text-(--fs-micro-sm) text-muted-foreground/100 mb-1.5 flex items-center justify-between">
+            <span>{t("agents.stats_quick_adjust")}</span>
+            {agentID && <Link to={`/agents/${agentID}/config`} className="text-primary hover:underline">{t("agents.stats_full_config")} &rarr;</Link>}
+          </div>
           <div className="flex items-center gap-1.5">
             <Input type="number" value={sleepValue} onChange={(e) => onSleepChange(Number(e.target.value))} min={0} max={86400}
               className="w-16 h-7 px-2 py-1 text-xs font-mono" placeholder={t("agents.sleep")} aria-label={t("agents.stats_sleep_seconds")} />
