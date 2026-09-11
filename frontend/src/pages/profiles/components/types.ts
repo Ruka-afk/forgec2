@@ -52,14 +52,14 @@ export interface ActiveMalleableConfig {
 }
 
 export const commonUAs = [
-  { label: "Chrome 120 (Windows)", value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
-  { label: "Edge 120 (Windows)", value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0.0 Safari/537.36 Edg/120.0.0.0" },
-  { label: "Firefox 121 (Windows)", value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0" },
+  { label: "Chrome 138 (Windows)", value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36" },
+  { label: "Edge 138 (Windows)", value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/138.0.0.0" },
+  { label: "Firefox 121 (Windows)", value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/140.0" },
   { label: "Cloudflare Health Check", value: "Mozilla/5.0 (compatible; Cloudflare-Health-Checks/1.0; +https://www.cloudflare.com/)" },
   { label: "GitHub Hookshot", value: "GitHub-Hookshot/abcd1234" },
-  { label: "Office 365", value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0.0 Safari/537.36 OPR/106.0.0.0" },
+  { label: "Office 365", value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 OPR/106.0.0.0" },
   { label: "Microsoft Teams", value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Teams/1.6.00.27573" },
-  { label: "Slack", value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0.0 Safari/537.36 Slack/4.36.0" },
+  { label: "Slack", value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Slack/4.36.0" },
   { label: "Zoom", value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Zoom/5.17.5" },
   { label: "Dropbox", value: "DropboxDesktopClient/187.4.6204 (Windows; 10.0; Win64; x64)" },
   { label: "Windows Update", value: "Windows-Update-Agent/10.0.19041.3636" },

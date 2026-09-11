@@ -245,14 +245,14 @@ func DefaultProfile() *Profile {
 		Name:        "default",
 		Description: "Default ForgeC2 beacon profile",
 		HttpGet: HTTPGet{
-			URI:  []string{"/api/v1/beacon"},
+			URI:  []string{"/collect"},
 			Verb: "GET",
 			Headers: map[string]string{
 				"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 			},
 		},
 		HttpPost: HTTPPost{
-			URI:  []string{"/api/v1/beacon"},
+			URI:  []string{"/collect"},
 			Verb: "POST",
 			Headers: map[string]string{
 				"Content-Type": "application/json",
@@ -321,7 +321,7 @@ func GoogleAnalyticsProfile() *Profile {
 			URI:  []string{"/collect", "/r/collect", "/j/collect"},
 			Verb: "GET",
 			Headers: map[string]string{
-				"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+				"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
 			},
 			Metadata: &TransformBlock{
 				Transforms: []Transform{

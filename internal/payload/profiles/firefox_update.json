@@ -1,8 +1,8 @@
 {
   "name": "firefox_update",
   "description": "Mimics Firefox browser update check traffic",
-  "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-  "beacon_uri": "/update/6/Firefox/121.0/20231215144220/WINNT_x86_64-msvc-x64/en-US/release/update.xml",
+  "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0",
+  "beacon_uri": "/update/6/Firefox/140.0/20250623131732/WINNT_x86_64-msvc-x64/en-US/release/update.xml",
   "method": "GET",
   "headers": {
     "Accept": "text/xml",

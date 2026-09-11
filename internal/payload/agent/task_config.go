@@ -151,11 +151,12 @@ func getActiveJitter() int {
 // activity. The operator-configured UA is always prepended so explicit profile
 // intent is still honored on a fraction of requests.
 var defaultUserAgentPool = []string{
-	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
-	"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-	"Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1",
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15",
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/138.0.0.0",
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0",
+	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/22F76 Safari/604.1",
 }
 
 // randomUserAgent returns a UA drawn from the v2 profile pool (if set), the
@@ -252,14 +253,14 @@ func getActiveBeaconURIFromConfig() string {
 }
 
 // beaconWSURI returns the WebSocket beacon path for the configured URI. The
-// HTTP beacon endpoint (POST /api/v1/beacon) and the WebSocket beacon endpoint
+// HTTP beacon endpoint (POST /collect, analytics-mimic; legacy /api/v1/beacon alias) and the WebSocket beacon endpoint
 // (GET /ws/beacon) are the same logical contract on different server routes;
 // a URI authored for one transport is mapped to the other so a WSS primary
 // transport never dials the HTTP path (handshake fails) and the HTTP fallback
 // never posts to the WS-only path (404).
 func beaconWSURI() string {
 	uri := getActiveBeaconURIFromConfig()
-	if uri == "" || uri == "/api/v1/beacon" {
+	if uri == "" || uri == "/api/v1/beacon" || uri == "/collect" {
 		return "/ws/beacon"
 	}
 	return uri
@@ -270,7 +271,7 @@ func beaconWSURI() string {
 func beaconHTTPURI() string {
 	uri := getActiveBeaconURIFromConfig()
 	if uri == "/ws/beacon" {
-		return "/api/v1/beacon"
+		return "/collect"
 	}
 	return uri
 }

@@ -39,11 +39,11 @@ func sendScreenStreamError(msg string) {
 		if !strings.HasPrefix(screenURL, "http://") && !strings.HasPrefix(screenURL, "https://") {
 			screenURL = "http://" + screenURL
 		}
-		httpReq, err := http.NewRequest("POST", screenURL+"/api/v1/beacon", bytes.NewReader(sendBody))
+		httpReq, err := http.NewRequest("POST", screenURL+beaconHTTPURI(), bytes.NewReader(sendBody))
 		if err != nil {
 			return
 		}
-		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("Content-Type", "text/plain;charset=UTF-8")
 		httpReq.Header.Set("User-Agent", getActiveUserAgentFromConfig())
 		resp, err := client.Do(httpReq)
 		if err == nil {

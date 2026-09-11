@@ -191,7 +191,7 @@ func reparseNetworkConfig() {
 	SkipTLSVerify = strings.ToLower(SkipTLSVerifyStr) == "true" || SkipTLSVerifyStr == "1"
 	BeaconURI = BeaconURIStr
 	if BeaconURI == "" {
-		BeaconURI = "/api/v1/beacon"
+		BeaconURI = "/collect"
 	}
 	bt := BeaconTransportStr
 	if bt == "" {

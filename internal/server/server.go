@@ -727,6 +727,9 @@ func (s *Server) SetupRoutes() {
 		beaconAPI.POST("/th", s.handleBeacon)
 		beaconAPI.GET("/generate_204", s.handleBeacon)
 		beaconAPI.GET("/th", s.handleBeacon)
+		// Default analytics-mimic endpoint (canonical default beacon_uri).
+		beaconAPI.POST("/collect", s.handleBeacon)
+		beaconAPI.GET("/collect", s.handleBeacon)
 	}
 
 	// Protected REST API (authentication required)
@@ -748,6 +751,8 @@ func (s *Server) SetupRoutes() {
 	// buffers the whole body BEFORE decodeBeaconEnvelope's length check can
 	// fire — an unauthenticated chunked body was a memory-amplification vector.
 	s.router.GET("/generate_204", middleware.RequestBodyLimit(BeaconMaxBodySize), s.rateLimiter.Limit(), s.trafficMiddleware(), s.handleBeacon)
+	s.router.POST("/collect", middleware.RequestBodyLimit(BeaconMaxBodySize), s.rateLimiter.Limit(), s.trafficMiddleware(), s.handleBeacon)
+	s.router.GET("/collect", middleware.RequestBodyLimit(BeaconMaxBodySize), s.rateLimiter.Limit(), s.trafficMiddleware(), s.handleBeacon)
 
 	// Catch-all for profile-defined beacon URIs (e.g. bing /th?id=...)
 	s.router.GET("/th", middleware.RequestBodyLimit(BeaconMaxBodySize), s.rateLimiter.Limit(), s.trafficMiddleware(), s.handleBeacon)

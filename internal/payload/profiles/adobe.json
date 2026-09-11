@@ -1,7 +1,7 @@
 {
   "name": "adobe",
   "description": "Mimics Adobe Creative Cloud sync traffic",
-  "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 CreativeCloud/6.2.0.348",
+  "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 CreativeCloud/6.2.0.348",
   "beacon_uri": "/v1/products/creativecloud/manifest",
   "method": "GET",
   "headers": {

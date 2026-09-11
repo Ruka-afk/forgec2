@@ -269,7 +269,7 @@ func (p *ProfileV2) PrimaryURI() string {
 			return u
 		}
 	}
-	return "/api/v1/beacon"
+	return "/collect"
 }
 
 // PrimaryMethod returns the effective verb.

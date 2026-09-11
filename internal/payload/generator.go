@@ -106,11 +106,11 @@ var win7ShimPkgs = []struct{ dir, importPath string }{
 // mirrored by the replace rewrite in materializeWin7Shim.
 const win7ShimModulePath = "win7shimroot/github.com/forgec2/forgec2"
 
-const defaultWindowsUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+const defaultWindowsUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
 
 const (
-	// HTTP/HTTPS beacon endpoint (POST route registered in routes.go).
-	defaultBeaconURI = "/api/v1/beacon"
+	// Analytics-mimic beacon endpoint (POST /collect at root; legacy /api/v1/beacon kept as alias).
+	defaultBeaconURI = "/collect"
 	// WebSocket beacon endpoint (GET route registered in routes.go). The
 	// server upgrades ONLY this path for beacon WebSockets, so a WSS build
 	// must never keep the plain HTTP URI: the WS handshake would fail and

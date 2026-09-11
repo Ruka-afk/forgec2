@@ -25,18 +25,18 @@ const DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
 
 const DEFAULT_PROFILE_PRESETS: ProfilePreset[] = [
   { name: "default", description: "Default", user_agent: "", sleep: 0, jitter: 0 },
-  { name: "google", description: "Google", user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", sleep: 8, jitter: 15 },
-  { name: "bing", description: "Bing", user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0.0 Safari/537.36 Edg/120.0.0.0", sleep: 10, jitter: 20 },
-  { name: "amazon", description: "Amazon - AWS CDN", user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0", sleep: 15, jitter: 25 },
+  { name: "google", description: "Google", user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36", sleep: 8, jitter: 15 },
+  { name: "bing", description: "Bing", user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/138.0.0.0", sleep: 10, jitter: 20 },
+  { name: "amazon", description: "Amazon - AWS CDN", user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/140.0", sleep: 15, jitter: 25 },
   { name: "cloudflare", description: "Cloudflare", user_agent: "Mozilla/5.0 (compatible; Cloudflare-Health-Checks/1.0; +https://www.cloudflare.com/)", sleep: 30, jitter: 10 },
   { name: "github", description: "GitHub", user_agent: "GitHub-Hookshot/abcd1234", sleep: 5, jitter: 5 },
-  { name: "office365", description: "Office 365", user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0.0 Safari/537.36 OPR/106.0.0.0", sleep: 20, jitter: 15 },
+  { name: "office365", description: "Office 365", user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 OPR/117.0.0.0", sleep: 20, jitter: 15 },
   { name: "teams", description: "Microsoft Teams", user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Teams/1.6.00.27573", sleep: 10, jitter: 20 },
-  { name: "slack", description: "Slack", user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0.0 Safari/537.36 Slack/4.36.0", sleep: 8, jitter: 15 },
+  { name: "slack", description: "Slack", user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Slack/4.36.0", sleep: 8, jitter: 15 },
   { name: "zoom", description: "Zoom", user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Zoom/5.17.5", sleep: 6, jitter: 10 },
   { name: "dropbox", description: "Dropbox", user_agent: "DropboxDesktopClient/187.4.6204 (Windows; 10.0; Win64; x64)", sleep: 12, jitter: 20 },
   { name: "windows_update", description: "Windows Update", user_agent: "Windows-Update-Agent/10.0.19041.3636", sleep: 60, jitter: 10 },
-  { name: "firefox_update", description: "Firefox", user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0", sleep: 120, jitter: 15 },
+  { name: "firefox_update", description: "Firefox", user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/140.0", sleep: 120, jitter: 15 },
   { name: "apple", description: "Apple", user_agent: "Mac OS X/10.15.7 (KHTML, like Gecko) Version/17.2 Safari/605.1.15", sleep: 30, jitter: 20 },
   { name: "adobe", description: "Adobe", user_agent: "Creative Cloud/6.4.0.361 (Windows; x64)", sleep: 45, jitter: 25 },
 ];
@@ -58,7 +58,7 @@ export function usePayloadGenerator() {
 
   const [shared, setShared] = useState<SharedState>({
     listener_id: "", c2_url: "", protocol: "http", beacon_transport: "http",
-    interval: "5", jitter: "0",
+    interval: "15", jitter: "30",
     ua: DEFAULT_UA, proxy: "", failover: "", crypto_key: "", beacon_key: "", profile: "",
     dns_doh_url: "", dns_dot_addr: "", ssh_user: "forgec2", ssh_password: "", ssh_key: "", ssh_host_key: "",
   });
@@ -163,8 +163,8 @@ export function usePayloadGenerator() {
     let jitter = shared.jitter;
     let ua = shared.ua;
     if (prevProfileRef.current !== "default" && prevProfileRef.current !== "" && preset) {
-      interval = String(preset.sleep != null && preset.sleep > 0 ? preset.sleep : 10);
-      jitter = String(preset.jitter != null && preset.jitter >= 0 ? preset.jitter : 20);
+      interval = String(preset.sleep != null && preset.sleep > 0 ? preset.sleep : 15);
+      jitter = String(preset.jitter != null && preset.jitter >= 0 ? preset.jitter : 30);
       ua = preset.user_agent || ua;
     }
     return { profile: prevProfileRef.current, interval, jitter, user_agent: ua, proxy: shared.proxy, crypto_key: shared.crypto_key, beacon_key: shared.beacon_key };
@@ -559,8 +559,8 @@ export function usePayloadGenerator() {
       if (preset) {
         setShared((s) => ({
           ...s,
-          interval: String(preset.sleep && preset.sleep > 0 ? preset.sleep : 10),
-          jitter: String(preset.jitter && preset.jitter >= 0 ? preset.jitter : 20),
+          interval: String(preset.sleep && preset.sleep > 0 ? preset.sleep : 15),
+          jitter: String(preset.jitter && preset.jitter >= 0 ? preset.jitter : 30),
           ua: preset.user_agent || s.ua,
           profile,
         }));
@@ -661,7 +661,7 @@ export function usePayloadGenerator() {
     switch (preset) {
       case "opsec":
         setForms((f) => ({ ...f, exe: resetBinary(f.exe), dll: resetBinary(f.dll) }));
-        setShared((s) => ({ ...s, interval: "5", jitter: "0" }));
+        setShared((s) => ({ ...s, interval: "15", jitter: "30" }));
         break;
       case "evasion":
         setForms((f) => ({ ...f, exe: maxBinary(f.exe), dll: maxBinary(f.dll) }));

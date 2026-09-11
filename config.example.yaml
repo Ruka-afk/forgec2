@@ -60,8 +60,8 @@ database:
   # dsn: "host=postgres user=forgec2 password=change_me dbname=forgec2 port=5432 sslmode=disable"
 
 implant:
-  default_interval: 5
-  default_jitter: 20
+  default_interval: 15
+  default_jitter: 30
   default_user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
   default_skip_tls: false
 

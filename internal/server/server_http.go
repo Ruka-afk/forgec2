@@ -71,7 +71,7 @@ func (s *Server) SetStaticFS(staticFS fs.FS) {
 			strings.Contains(c.GetHeader("Accept"), "application/json") ||
 			c.GetHeader("X-Requested-With") == "XMLHttpRequest" ||
 			c.GetHeader("X-CSRF-Token") != "" ||
-			path == "/th" || path == "/generate_204" || path == "/health" ||
+			path == "/th" || path == "/generate_204" || path == "/collect" || path == "/health" ||
 			path == "/ready" || path == "/metrics" ||
 			strings.HasPrefix(path, "/payloads/") ||
 			strings.HasPrefix(path, "/stage/") ||

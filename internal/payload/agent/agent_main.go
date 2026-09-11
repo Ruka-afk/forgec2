@@ -102,7 +102,7 @@ func init() {
 	Debug = strings.ToLower(DebugStr) == "true" || DebugStr == "1"
 	BeaconURI = BeaconURIStr
 	if BeaconURI == "" {
-		BeaconURI = "/api/v1/beacon"
+		BeaconURI = "/collect"
 	}
 	BeaconMethod = "POST" // FORCE POST �?GET with body is unreliable in Go's http client
 	bt := BeaconTransportStr
