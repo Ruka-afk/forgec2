@@ -28,8 +28,6 @@ func (s *Server) getAgentOrFail(c *gin.Context, id string) (db.Implant, bool) {
 	return agent, true
 }
 
-
-
 // TaskOption configures optional createTask behaviour.
 type TaskOption func(*taskOptions)
 type taskOptions struct {
@@ -186,6 +184,14 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 		Offset:  offset,
 		Size:    size,
 		Status:  "pending",
+	}
+	// Inherit the agent's tenant so tenant-scoped single-task reads
+	// (handleGetTaskStatus/apiGetTask) see the row. Previously tasks were
+	// always tenant 0 while operators sit on tenant 1, so list (agent-gated,
+	// no task-tenant filter) showed tasks that single-fetch 404d.
+	var ag db.Implant
+	if err := s.db.Select("tenant_id").Where("id = ?", agentID).First(&ag).Error; err == nil {
+		task.TenantID = ag.TenantID
 	}
 	if tOpts.idempotencyKey != "" {
 		task.IdempotencyKey = tOpts.idempotencyKey

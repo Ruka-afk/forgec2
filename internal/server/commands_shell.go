@@ -238,12 +238,35 @@ func (s *Server) handleGetTaskStatus(c *gin.Context) {
 	query := s.tenantScope(s.db.Preload("Agent"), c)
 	// The agent-scoped route must not expose a task belonging to a different
 	// agent. The global /tasks/:taskId route intentionally has no id parameter.
-	if agentID := strings.TrimSpace(c.Param("id")); agentID != "" {
+	agentID := strings.TrimSpace(c.Param("id"))
+	if agentID != "" {
 		query = query.Where("agent_id = ?", agentID)
 	}
 	if err := query.First(&task, taskID).Error; err != nil {
-		respondError(c, http.StatusNotFound, "task not found")
-		return
+		// Legacy fallback: pre-tenant tasks carry tenant 0 while operators
+		// sit on tenant 1, so the scoped query above 404s rows the agent
+		// list still shows (list gates on agent visibility, not task
+		// tenant). Retry unscoped but re-gate on agent visibility so no
+		// foreign-tenant task leaks: scoped route requires the agent to
+		// match, global route requires the task's agent to be visible.
+		fallback := s.db.Preload("Agent")
+		if agentID != "" {
+			fallback = fallback.Where("agent_id = ?", agentID)
+		}
+		if ferr := fallback.First(&task, taskID).Error; ferr != nil {
+			respondError(c, http.StatusNotFound, "task not found")
+			return
+		}
+		if agentID == "" {
+			var vis db.Implant
+			if verr := s.tenantScope(s.db.Select("id"), c).Where("id = ?", task.AgentID).First(&vis).Error; verr != nil {
+				respondError(c, http.StatusNotFound, "task not found")
+				return
+			}
+		} else if task.AgentID != agentID {
+			respondError(c, http.StatusNotFound, "task not found")
+			return
+		}
 	}
 	task = taskForOperator(task)
 

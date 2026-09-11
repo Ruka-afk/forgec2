@@ -197,6 +197,7 @@ export const en: Record<string, string> = {
     "agents.detail_diagnose_queued": "Diagnose queued ({count} tasks)",
     "agents.detail_diagnose_failed": "Diagnose failed",
     "agents.detail_diagnose_hint": "Hostinfo + ps + netstat + users + av in one click",
+    "agents.detail_c_implant_notice": "C implant supports shell / ps / files / hostinfo only — screenshots, keylogger, registry and other sections need the Go implant.",
     "agents.detail_kill_date_countdown": "Kill date in {days} days — agent will self-terminate",
     "agents.detail_kill_date_expired": "Kill date has passed — agent should have terminated",
     "agents.detail_kill_date_cleared": "Kill date cleared",

@@ -197,6 +197,7 @@ export const zh: Record<string, string> = {
     "agents.detail_diagnose_queued": "已下发诊断（{count} 个任务）",
     "agents.detail_diagnose_failed": "诊断下发失败",
     "agents.detail_diagnose_hint": "一键采集主机信息 + 进程 + 网络 + 用户 + 杀软",
+    "agents.detail_c_implant_notice": "C 植入端仅支持 shell / 进程 / 文件 / 主机信息——截图、键盘记录、注册表等需 Go 植入端。",
     "agents.detail_kill_date_countdown": "距自毁还有 {days} 天 — 到期将自动终止",
     "agents.detail_kill_date_expired": "自毁日期已过 — 代理应已终止",
     "agents.detail_kill_date_cleared": "终止日期已清除",

@@ -65,7 +65,7 @@ import { useAgentTaskSync } from "./hooks/useAgentTaskSync";
 import { usePersistedState } from "@/lib/hooks/usePersistedState";
 import { credActionBlockReason, credActionEndpoint, hasMimikatzModule, parseModuleNames } from "@/lib/cred-quality";
 import { sessionActionQuality } from "./components/session-quality";
-import { implantBlocksDest } from "@/lib/implant-version";
+import { implantBlocksDest, isCImplant } from "@/lib/implant-version";
 
 interface AgentDetailPageProps {
   agentId?: string;
@@ -258,6 +258,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   }, [data?.agent?.current_interval, data?.agent?.current_jitter]);
 
   const agent = data?.agent || ({} as AgentDetailModel);
+  const isC = isCImplant((agent as { version?: string; Version?: string }).version ?? (agent as { Version?: string }).Version);
   const tasks: TaskEntry[] = useMemo(() => data?.tasks || [], [data?.tasks]);
   const rawTags = agent.tags || "";
   const tagsList = useMemo(() => (rawTags ? rawTags.split(",").map((tag) => tag.trim()).filter(Boolean) : []), [rawTags]);
@@ -515,6 +516,11 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
             failedTasks={failedTasks}
           />
 
+          {isC && (
+            <Banner tone="warning" className="mb-4">{t("agents.detail_c_implant_notice")}</Banner>
+          )}
+
+          {!isC && (
           <AgentScreenshots
             screenshots={screenshots}
             newScreenshots={newScreenshots}
@@ -525,10 +531,11 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
             onPrevLightbox={onPrevLightbox}
             onNextLightbox={onNextLightbox}
           />
+          )}
 
-          <Suspense fallback={null}><ScreenTriggerSection agentId={id} online={status === "online"} /></Suspense>
+          {!isC && (<Suspense fallback={null}><ScreenTriggerSection agentId={id} online={status === "online"} /></Suspense>)}
 
-          <Suspense fallback={null}><RegistrySection agentId={id} online={status === "online"} /></Suspense>
+          {!isC && (<Suspense fallback={null}><RegistrySection agentId={id} online={status === "online"} /></Suspense>)}
 
           <Suspense fallback={null}>
             <ProcessSection
@@ -543,21 +550,21 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
             />
           </Suspense>
 
-          <Suspense fallback={null}><EvasionSection agentId={id} online={status === "online"} /></Suspense>
+          {!isC && (<Suspense fallback={null}><EvasionSection agentId={id} online={status === "online"} /></Suspense>)}
 
-          <Suspense fallback={null}><InjectSection agentId={id} online={status === "online"} osType={agent.os} /></Suspense>
+          {!isC && (<Suspense fallback={null}><InjectSection agentId={id} online={status === "online"} osType={agent.os} /></Suspense>)}
 
           <Suspense fallback={null}><TimelineSection agentId={id} online={status === "online"} /></Suspense>
 
-          <Suspense fallback={null}><BrowserHistorySection agentId={id} online={status === "online"} /></Suspense>
+          {!isC && (<Suspense fallback={null}><BrowserHistorySection agentId={id} online={status === "online"} /></Suspense>)}
 
-          <Suspense fallback={null}><KeyloggerSection agentId={id} online={status === "online"} /></Suspense>
+          {!isC && (<Suspense fallback={null}><KeyloggerSection agentId={id} online={status === "online"} /></Suspense>)}
 
-          <Suspense fallback={null}><ClipboardSection agentId={id} online={status === "online"} /></Suspense>
+          {!isC && (<Suspense fallback={null}><ClipboardSection agentId={id} online={status === "online"} /></Suspense>)}
 
-          <Suspense fallback={null}><WebcamMicSection agentId={id} online={status === "online"} /></Suspense>
+          {!isC && (<Suspense fallback={null}><WebcamMicSection agentId={id} online={status === "online"} /></Suspense>)}
 
-          <Suspense fallback={null}><ReconSection agentId={id} online={status === "online"} /></Suspense>
+          {!isC && (<Suspense fallback={null}><ReconSection agentId={id} online={status === "online"} /></Suspense>)}
 
           <Suspense fallback={null}><HostInfoCard agentId={id} online={status === "online"} /></Suspense>
         </div>

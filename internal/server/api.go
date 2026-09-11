@@ -147,8 +147,17 @@ func (s *Server) apiGetTask(c *gin.Context) {
 	var task db.Task
 	query := s.tenantScope(s.db, c)
 	if err := query.First(&task, taskID).Error; err != nil {
-		respondError(c, http.StatusNotFound, "task not found")
-		return
+		// Legacy fallback for pre-tenant tenant-0 rows (see
+		// handleGetTaskStatus): re-gate on agent visibility.
+		if ferr := s.db.First(&task, taskID).Error; ferr != nil {
+			respondError(c, http.StatusNotFound, "task not found")
+			return
+		}
+		var vis db.Implant
+		if verr := s.tenantScope(s.db.Select("id"), c).Where("id = ?", task.AgentID).First(&vis).Error; verr != nil {
+			respondError(c, http.StatusNotFound, "task not found")
+			return
+		}
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": task})
 }

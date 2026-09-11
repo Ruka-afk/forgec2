@@ -860,10 +860,16 @@ func (s *Server) handleAgentDiagnose(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
+	agent, ok := s.getAgentOrFail(c, id)
+	if !ok {
 		return
 	}
+	// C implant supports a subset (shell/ps/ls/read/hostinfo/...): netstat,
+	// users and av would always fail there, so only queue what it can run.
 	types := []string{"hostinfo", "ps", "netstat", "users", "av"}
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(agent.Version)), "c-") {
+		types = []string{"hostinfo", "ps"}
+	}
 	var ids []uint
 	for _, t := range types {
 		task, err := s.createTask(id, t, "", "", "", "", 0, 0, callerOpts(c)...)
