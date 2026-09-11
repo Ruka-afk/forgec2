@@ -12,9 +12,10 @@ export function implantBlocksDest(version?: string | null, quality?: string | nu
   return destNeedsKnownVersion(quality) && !knownImplantVersion(version);
 }
 
-/** C prototype implant (version c-*) supports only shell/ps/ls/read/hostinfo/
- * set_sleep/beacon_now/kill/download/upload/download_url. Everything else
- * (screenshots, keylogger, registry, BOF, tokens, …) needs the Go implant. */
+/** C prototype implant (version c-*) supports shell/ps/ls/read/hostinfo/
+ * netstat/users/av/mkdir/rename/delete + set_sleep/beacon_now/kill/download/
+ * upload/download_url. Everything else (screenshots, keylogger, registry,
+ * BOF, tokens, …) needs the Go implant. */
 export function isCImplant(version?: string | null): boolean {
   return knownImplantVersion(version).toLowerCase().startsWith("c-");
 }
