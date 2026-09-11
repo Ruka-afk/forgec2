@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { SafeImg } from "@/components/ui/safe-img";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Spinner } from "@/components/ui/spinner";
-import { CloudUpload, Download, FileText, FolderPlus, HardDrive, ImageIcon, Pencil, Usb, X } from "lucide-react";
+import { CloudUpload, Download, FileText, FolderPlus, HardDrive, ImageIcon, Lock, Pencil, Usb, X } from "lucide-react";
 import { downloadText } from "@/lib/download";
 import { safeImageSrc } from "@/lib/safeUrl";
 import { joinPath } from "@/lib/agent-files/types";
@@ -47,6 +47,12 @@ interface FilesDialogsProps {
   renameName: string;
   setRenameName: (v: string) => void;
   onRenameSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
+  // chmod
+  chmodTarget: string | null;
+  setChmodTarget: (v: string | null) => void;
+  chmodMode: string;
+  setChmodMode: (v: string) => void;
+  onChmodSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   // preview
   showPreview: boolean;
   setShowPreview: (v: boolean) => void;
@@ -65,6 +71,7 @@ export default memo(function FilesDialogs(props: FilesDialogsProps) {
     fileInputRef, onUploadSubmit, cancelUpload,
     showMkdir, setShowMkdir, mkdirName, setMkdirName, onMkdirSubmit,
     renameTarget, setRenameTarget, renameName, setRenameName, onRenameSubmit,
+    chmodTarget, setChmodTarget, chmodMode, setChmodMode, onChmodSubmit,
     showPreview, setShowPreview, previewContent, previewIsImage, selectedFile,
   } = props;
 
@@ -221,6 +228,38 @@ export default memo(function FilesDialogs(props: FilesDialogsProps) {
               </Button>
               <Button type="submit" disabled={!renameName.trim()} className="flex-1">
                 <Pencil className="size-4" /> {t("agents.files_rename")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={chmodTarget !== null} onOpenChange={(open) => { if (!open) setChmodTarget(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="size-4" />
+              {t("agents.files_chmod")}: {chmodTarget}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={onChmodSubmit} className="space-y-4">
+            <div>
+              <Label className="mb-1.5 block text-xs text-muted-foreground">{t("agents.files_chmod_placeholder")}</Label>
+              <Input
+                value={chmodMode}
+                onChange={(e) => setChmodMode(e.target.value)}
+                placeholder="644"
+                className="font-mono"
+                autoFocus
+              />
+              <p className="mt-1.5 text-xs text-muted-foreground">{t("agents.files_chmod_hint")}</p>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="secondary" onClick={() => setChmodTarget(null)} className="flex-1">
+                <X className="size-4" /> {t("common.cancel")}
+              </Button>
+              <Button type="submit" disabled={!chmodMode.trim()} className="flex-1">
+                <Lock className="size-4" /> {t("agents.files_chmod")}
               </Button>
             </DialogFooter>
           </form>

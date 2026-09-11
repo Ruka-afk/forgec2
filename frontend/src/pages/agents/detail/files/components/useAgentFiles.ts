@@ -20,6 +20,24 @@ import {
   type TransferProgress,
 } from "@/lib/agent-files/file-task";
 
+const LISTING_TTL_MS = 60_000;
+const LISTING_CACHE_CAP = 50;
+const PREVIEW_MAX_BYTES = 2 * 1024 * 1024;
+
+function storeListing(
+  cache: Map<string, { entries: FileEntry[]; at: number }>,
+  path: string,
+  items: FileEntry[],
+) {
+  cache.delete(path);
+  cache.set(path, { entries: items, at: Date.now() });
+  while (cache.size > LISTING_CACHE_CAP) {
+    const oldest = cache.keys().next();
+    if (oldest.done) break;
+    cache.delete(oldest.value);
+  }
+}
+
 export function useAgentFiles(agentId: string) {
   const { t } = useI18n();
   const [currentPath, setCurrentPath] = useState("C:\\");
@@ -48,6 +66,10 @@ export function useAgentFiles(agentId: string) {
   // the operator made while waiting (see deleteFile/mkdir/renameFile).
   const currentPathRef = useRef("");
   currentPathRef.current = currentPath;
+  // Served listings by path: every ls costs a full beacon round-trip
+  // (up to 90s), so repeat visits reuse the last fresh listing.
+  // Mutations reload with { refresh: true }, which drops the entry first.
+  const listingCacheRef = useRef(new Map<string, { entries: FileEntry[]; at: number }>());
 
   const showToast = useCallback((text: string, type: string = "info") => {
     if (type === "success") toast.success(text);
@@ -56,8 +78,18 @@ export function useAgentFiles(agentId: string) {
   }, []);
 
   const loadDirectory = useCallback(
-    async (path: string) => {
+    async (path: string, opts?: { refresh?: boolean }) => {
       if (!agentId) return;
+      if (!opts?.refresh) {
+        const hit = listingCacheRef.current.get(path);
+        if (hit && Date.now() - hit.at <= LISTING_TTL_MS) {
+          setEntries(hit.entries);
+          setCurrentPath(path);
+          setCurrentPathInput(path);
+          return;
+        }
+      }
+      listingCacheRef.current.delete(path);
       lsAbortRef.current?.abort();
       const ac = new AbortController();
       lsAbortRef.current = ac;
@@ -74,11 +106,8 @@ export function useAgentFiles(agentId: string) {
           if (st.status === "failed") throw new Error(st.error || t("agents.files_ls_failed"));
           items = parseLsListing(st.result || "");
         }
-        items.sort((a, b) => {
-          if (a.is_dir && !b.is_dir) return -1;
-          if (!a.is_dir && b.is_dir) return 1;
-          return a.name.localeCompare(b.name);
-        });
+        // Sorting lives in useFilesView; cache the raw listing as served.
+        storeListing(listingCacheRef.current, path, items);
         setEntries(items);
         setCurrentPath(path);
         setCurrentPathInput(path);
@@ -183,6 +212,11 @@ export function useAgentFiles(agentId: string) {
   const readFile = useCallback(
     async (filename: string) => {
       const path = joinPath(currentPath, filename, osType);
+      const knownSize = entries.find((e) => e.name === filename)?.size ?? 0;
+      if (knownSize > PREVIEW_MAX_BYTES) {
+        showToast(t("agents.files_preview_too_large"), "error");
+        return;
+      }
       try {
         const data = await api.post(paths.agents.filesRead(agentId), { path });
         let raw = "";
@@ -207,7 +241,7 @@ export function useAgentFiles(agentId: string) {
         showToast(String(err), "error");
       }
     },
-    [agentId, currentPath, osType, showToast, t],
+    [agentId, currentPath, entries, osType, showToast, t],
   );
 
   const deleteFile = useCallback(
@@ -227,7 +261,7 @@ export function useAgentFiles(agentId: string) {
         // Don't rewind a navigation the operator made while the poll was in
         // flight — the new location already loaded itself.
         if (currentPathRef.current !== pathAtStart) return;
-        await loadDirectory(pathAtStart);
+        await loadDirectory(pathAtStart, { refresh: true });
         if (selectedFile === filename) setSelectedFile(null);
       } catch (err) {
         showToast(String(err), "error");
@@ -253,7 +287,7 @@ export function useAgentFiles(agentId: string) {
         }
         showToast(t("agents.files_mkdir_done", { name }), "success");
         if (currentPathRef.current !== pathAtStart) return;
-        await loadDirectory(pathAtStart);
+        await loadDirectory(pathAtStart, { refresh: true });
       } catch (err) {
         showToast(String(err), "error");
       }
@@ -280,13 +314,38 @@ export function useAgentFiles(agentId: string) {
         }
         showToast(t("agents.files_rename_done", { filename }), "success");
         if (currentPathRef.current !== pathAtStart) return;
-        await loadDirectory(pathAtStart);
+        await loadDirectory(pathAtStart, { refresh: true });
         if (selectedFile === filename) setSelectedFile(null);
       } catch (err) {
         showToast(String(err), "error");
       }
     },
     [agentId, osType, selectedFile, loadDirectory, showToast, t],
+  );
+
+  const chmodFile = useCallback(
+    async (filename: string, mode: string) => {
+      const m = mode.trim();
+      if (!m) return;
+      const pathAtStart = currentPathRef.current;
+      const path = joinPath(pathAtStart, filename, osType);
+      try {
+        const data = await api.post(paths.agents.filesChmod(agentId), { path, mode: m });
+        if (isFileTaskAck(data)) {
+          const taskId = fileTaskId(data);
+          if (taskId) {
+            const st = await pollTask(agentId, taskId, { timeoutMs: 90_000 });
+            if (st.status === "failed") throw new Error(st.error || t("agents.files_chmod_failed"));
+          }
+        }
+        showToast(t("agents.files_chmod_done", { filename }), "success");
+        if (currentPathRef.current !== pathAtStart) return;
+        await loadDirectory(pathAtStart, { refresh: true });
+      } catch (err) {
+        showToast(String(err), "error");
+      }
+    },
+    [agentId, osType, loadDirectory, showToast, t],
   );
 
   // Uploads run through a serial queue: concurrent pushLocalFile calls used
@@ -376,32 +435,53 @@ export function useAgentFiles(agentId: string) {
       let ok = 0;
       let failed = 0;
       try {
-        for (let i = 0; i < filenames.length; i++) {
+        // Phase 1: dispatch every delete first — POSTs are fast and the
+        // agent executes on its own beacon cadence anyway.
+        const pending: { filename: string; taskId: number }[] = [];
+        for (const filename of filenames) {
           if (abort.signal.aborted) break;
-          const filename = filenames[i];
-          setBatchProgress({ done: i, total: filenames.length, current: filename });
           try {
             const data = await api.post(paths.agents.filesDelete(agentId), { path: joinPath(currentPath, filename, osType) });
             if (isFileTaskAck(data)) {
               const taskId = fileTaskId(data);
-              if (taskId) {
-                const st = await pollTask(agentId, taskId, { timeoutMs: 90_000, signal: abort.signal });
-                if (st.status === "failed") throw new Error(st.error || t("agents.files_delete_failed"));
-              }
+              if (taskId) pending.push({ filename, taskId });
+              else ok++;
+            } else {
+              ok++;
             }
-            ok++;
           } catch (err) {
             if (abort.signal.aborted) break;
             failed++;
             showToast(`${filename}: ${String(err)}`, "error");
           }
         }
+        // Phase 2: poll everything concurrently instead of serial 90s polls.
+        let finished = 0;
+        setBatchProgress({ done: 0, total: pending.length, current: pending[0]?.filename ?? "" });
+        await Promise.all(
+          pending.map(async (job) => {
+            try {
+              const st = await pollTask(agentId, job.taskId, { timeoutMs: 90_000, signal: abort.signal });
+              if (st.status === "failed") throw new Error(st.error || t("agents.files_delete_failed"));
+              ok++;
+            } catch (err) {
+              if (abort.signal.aborted) return;
+              failed++;
+              showToast(`${job.filename}: ${String(err)}`, "error");
+            } finally {
+              finished++;
+              if (!abort.signal.aborted) {
+                setBatchProgress({ done: finished, total: pending.length, current: job.filename });
+              }
+            }
+          }),
+        );
         if (abort.signal.aborted) {
           showToast(t("agents.files_batch_cancelled"), "info");
         } else {
           showToast(t("agents.files_batch_deleted", { ok, failed }), failed > 0 ? "error" : "success");
         }
-        await loadDirectory(currentPath);
+        await loadDirectory(currentPath, { refresh: true });
         setSelectedFile(null);
       } finally {
         batchAbortRef.current = null;
@@ -610,6 +690,7 @@ export function useAgentFiles(agentId: string) {
     cancelBatch,
     mkdir,
     renameFile,
+    chmodFile,
     uploadFile,
     cancelUpload,
     loadDrives,

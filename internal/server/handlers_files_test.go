@@ -16,6 +16,7 @@ import (
 
 	"github.com/forgec2/forgec2/internal/config"
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/internal/testutil"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -558,6 +559,38 @@ func TestReadFileToBase64(t *testing.T) {
 		}
 		if got != "" {
 			t.Fatalf("expected empty string for empty file, got %q", got)
+		}
+	})
+}
+
+func TestHandleFileChmod(t *testing.T) {
+	database := testutil.SetupTestDB(t)
+	s := newTestFileServer(t, database)
+	agent := seedImplant(t, database)
+
+	t.Run("missing args rejected", func(t *testing.T) {
+		w, c := newFormContext(http.MethodPost, "/agents/"+agent.ID+"/files/chmod", &url.Values{"path": {"C:\\x"}})
+		c.Params = gin.Params{{Key: "id", Value: agent.ID}}
+		s.handleFileChmod(c)
+		assertStatus(t, w, http.StatusBadRequest)
+	})
+
+	t.Run("valid request queues chmod task", func(t *testing.T) {
+		form := &url.Values{"path": {"C:\\x.txt"}, "mode": {"644"}}
+		w, c := newFormContext(http.MethodPost, "/agents/"+agent.ID+"/files/chmod", form)
+		c.Params = gin.Params{{Key: "id", Value: agent.ID}}
+		s.handleFileChmod(c)
+		m := assertSuccessJSON(t, w)
+		id, ok := m["task_id"].(float64)
+		if !ok || id == 0 {
+			t.Fatalf("expected task_id, got %s", w.Body.String())
+		}
+		var task db.Task
+		if err := database.First(&task, uint(id)).Error; err != nil {
+			t.Fatalf("task row missing: %v", err)
+		}
+		if task.Type != "chmod" || task.Command != "C:\\x.txt" || task.Data != "644" {
+			t.Errorf("bad task row: %+v", task)
 		}
 	})
 }

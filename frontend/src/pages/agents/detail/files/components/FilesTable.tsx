@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowDown, ArrowUp, Download, Eye, File, Folder, ImageIcon, Pencil, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Download, Eye, File, Folder, ImageIcon, Lock, Pencil, Trash2, X } from "lucide-react";
 import { formatSize, formatTimestamp, isImageFile, type FileEntry } from "@/lib/agent-files/types";
 import type { FileSortKey } from "./useFilesView";
 
@@ -27,6 +27,7 @@ interface FilesTableProps {
   onPreview: (name: string) => void;
   onDownload: (name: string) => void;
   onRename: (name: string) => void;
+  onChmod: (name: string) => void;
   onDelete: (name: string) => void;
   onBatchPull: () => void;
   onBatchDelete: () => void;
@@ -42,7 +43,7 @@ export default memo(function FilesTable(props: FilesTableProps) {
   const {
     t, sortedEntries, selected, allSelected, toggleSelect, selectAll, clearSelection,
     sortKey, sortDir, toggleSort, selectedFile, batchBusy, pullName,
-    onFileClick, onPreview, onDownload, onRename, onDelete,
+    onFileClick, onPreview, onDownload, onRename, onChmod, onDelete,
     onBatchPull, onBatchDelete, onCancelBatch,
     dragOver, onDragOver, onDragLeave, onDrop,
   } = props;
@@ -159,6 +160,14 @@ export default memo(function FilesTable(props: FilesTableProps) {
                       aria-label={t("agents.files_rename")}
                     >
                       <Pencil className="size-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => onChmod(entry.name)}
+                      aria-label={t("agents.files_chmod")}
+                    >
+                      <Lock className="size-4" />
                     </Button>
                     <Button
                       variant="ghost"

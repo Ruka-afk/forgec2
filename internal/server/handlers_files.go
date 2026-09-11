@@ -128,6 +128,30 @@ func (s *Server) handleFileRename(c *gin.Context) {
 	s.dispatchTask(c, task, "file_rename", srcPath+" -> "+dstPath)
 }
 
+func (s *Server) handleFileChmod(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	id := c.Param("id")
+	filePath := c.PostForm("path")
+	mode := c.PostForm("mode")
+	if mode == "" {
+		mode = c.PostForm("data")
+	}
+	if filePath == "" || mode == "" {
+		respondError(c, http.StatusBadRequest, "path and octal mode are required")
+		return
+	}
+
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "chmod", Command: filePath, Path: filePath, Data: mode})
+	if task == nil {
+		return
+	}
+
+	slog.Info("File chmod requested", "agent_id", id, "path", filePath, "mode", mode)
+	s.dispatchTask(c, task, "file_chmod", filePath+" "+mode)
+}
+
 func (s *Server) handleFileRead(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return

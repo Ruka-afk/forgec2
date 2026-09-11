@@ -176,6 +176,7 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/files/read", s.handleFileRead)
 		agentCmd.POST("/files/mkdir", s.handleFileMkdir)
 		agentCmd.POST("/files/rename", s.handleFileRename)
+		agentCmd.POST("/files/chmod", s.handleFileChmod)
 		agentCmd.POST("/files/upload", s.handleFileUploadFromAgent)
 		agentCmd.POST("/files/pull", s.handleFileUploadFromAgent)
 		agentCmd.GET("/files/exfil/:filename", s.handleFileExfilGet)

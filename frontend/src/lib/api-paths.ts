@@ -54,6 +54,7 @@ export const paths = {
     filesDelete: (id: string) => `/agents/${id}/files/delete`,
     filesMkdir: (id: string) => `/agents/${id}/files/mkdir`,
     filesRename: (id: string) => `/agents/${id}/files/rename`,
+    filesChmod: (id: string) => `/agents/${id}/files/chmod`,
     /** Queue implant→server exfil (path only — do not attach a file). */
     filesExfil: (id: string) => `/agents/${id}/files/pull`,
     filesExfilGet: (id: string, filename: string) =>

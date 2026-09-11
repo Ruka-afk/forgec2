@@ -30,6 +30,8 @@ export default function FilesPage() {
   const [mkdirName, setMkdirName] = useState("");
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
   const [renameName, setRenameName] = useState("");
+  const [chmodTarget, setChmodTarget] = useState<string | null>(null);
+  const [chmodMode, setChmodMode] = useState("644");
   const [dragOver, setDragOver] = useState(false);
   const { confirm, modal } = useConfirm();
 
@@ -75,6 +77,7 @@ export default function FilesPage() {
     cancelBatch,
     mkdir,
     renameFile,
+    chmodFile,
     uploadFile,
     cancelUpload,
     loadDrives,
@@ -148,7 +151,7 @@ export default function FilesPage() {
         onDrives={() => void loadDrives()}
         onMkdir={() => { setMkdirName(""); setShowMkdir(true); }}
         onUsb={() => void loadUsb()}
-        onRefresh={() => void loadDirectory(currentPath)}
+        onRefresh={() => void loadDirectory(currentPath, { refresh: true })}
       />
 
       <p className="text-xs text-muted-foreground">{t("agents.files_channel_hint")}</p>
@@ -254,6 +257,7 @@ export default function FilesPage() {
           onPreview={(name) => void readFile(name)}
           onDownload={(name) => void downloadFile(name)}
           onRename={(name) => { setRenameTarget(name); setRenameName(name); }}
+          onChmod={(name) => { setChmodTarget(name); setChmodMode("644"); }}
           onDelete={(name) => void handleDelete(name)}
           onBatchPull={() => void handleBatchPull()}
           onBatchDelete={() => void handleBatchDelete()}
@@ -297,6 +301,19 @@ export default function FilesPage() {
         setRenameTarget={setRenameTarget}
         renameName={renameName}
         setRenameName={setRenameName}
+        chmodTarget={chmodTarget}
+        setChmodTarget={setChmodTarget}
+        chmodMode={chmodMode}
+        setChmodMode={setChmodMode}
+        onChmodSubmit={(e) => {
+          e.preventDefault();
+          if (chmodTarget && chmodMode.trim()) {
+            const target = chmodTarget;
+            const mode = chmodMode;
+            setChmodTarget(null);
+            void chmodFile(target, mode);
+          }
+        }}
         onRenameSubmit={(e) => {
           e.preventDefault();
           if (renameTarget && renameName.trim()) {
