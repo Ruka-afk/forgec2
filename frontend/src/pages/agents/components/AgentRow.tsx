@@ -92,16 +92,17 @@ export const AgentRow = memo(function AgentRow({
       </TableCell>
       {visibleCols.hostname && (
       <TableCell className="py-1 px-2">
-        <div className="flex items-center gap-1 min-w-0">
-          <div className="min-w-0">
-            <Button
-              variant="link"
-              size="sm"
-              onClick={(e) => { e.stopPropagation(); onInteract(id); }}
-              className="font-mono text-xs text-primary hover:underline text-left p-0 h-auto justify-start"
-            >
-              {hostname}
-            </Button>
+        <div className="flex min-w-0 max-w-[180px] items-center gap-1 sm:max-w-[240px]">
+          <Button
+            variant="link"
+            size="sm"
+            onClick={(e) => { e.stopPropagation(); onInteract(id); }}
+            title={hostname}
+            className="h-auto min-w-0 flex-1 justify-start p-0 text-left font-mono text-xs text-primary hover:underline"
+          >
+            <span className="truncate">{hostname}</span>
+          </Button>
+          <span className="flex shrink-0 items-center">
             <Button
               variant="ghost"
               size="icon-xs"
@@ -130,12 +131,14 @@ export const AgentRow = memo(function AgentRow({
                 <LinkIcon className="size-4" />
               </span>
             )}
-          </div>
+          </span>
         </div>
       </TableCell>
       )}
       {visibleCols.username && (
-      <TableCell className="py-1 px-2 text-muted-foreground text-xs font-mono">{username}</TableCell>
+      <TableCell className="py-1 px-2 text-xs">
+        <span className="block max-w-[120px] truncate font-mono text-muted-foreground sm:max-w-[160px]" title={username}>{username}</span>
+      </TableCell>
       )}
       {visibleCols.os && (
       <TableCell className="py-1 px-2">
