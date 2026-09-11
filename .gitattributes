@@ -1,0 +1,5 @@
+# Keep embedded frontend bytes identical to frontend/out (LF) so check-webdist passes
+# on Windows with core.autocrlf=true. Without this, git checks out CRLF and the
+# byte-compare against the LF build output always reports stale.
+/internal/webdist/dist/** -text
+/frontend/out/** -text
