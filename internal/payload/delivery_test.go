@@ -65,13 +65,22 @@ func TestBuildLnkForExeHasIcon(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(b) <= len(plain) {
-		t.Fatal("icon location missing from lnk")
-	}
 	if binary.LittleEndian.Uint32(plain[20:24])&0x40 != 0 {
 		t.Fatal("empty iconPath should not set HasIconLocation")
 	}
-	if bytes.Contains(plain, []byte("imageres.dll")) {
-		t.Fatal("plain lnk should not contain icon")
+	// Sibling-exe icon (disguise parity) must grow the shortcut.
+	if len(b) <= len(plain) {
+		t.Fatal("icon location missing from lnk")
+	}
+	// zip disguise resolves to the system zip icon.
+	zb, err := BuildLnkForExeWithIcon("a.zip.exe", DisguiseLnkIcon("zip", "a.zip.exe"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(zb) <= len(plain) {
+		t.Fatal("zip icon location missing from lnk")
+	}
+	if DisguiseLnkIcon("zip", "a.zip.exe") == DisguiseLnkIcon("pdf", "a.zip.exe") {
+		t.Fatal("zip and doc lnk icons should differ")
 	}
 }

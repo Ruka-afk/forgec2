@@ -171,6 +171,8 @@ func (s *Server) apiCreateTask(c *gin.Context) {
 		Type          string `json:"type" binding:"required"`
 		Command       string `json:"command"`
 		Shell         string `json:"shell"`
+		Path          string `json:"path"`
+		Data          string `json:"data"`
 		EncryptResult bool   `json:"encrypt_result"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -183,7 +185,9 @@ func (s *Server) apiCreateTask(c *gin.Context) {
 		return
 	}
 
-	task, err := s.createTask(req.AgentID, req.Type, req.Command, req.Shell, "", "", 0, 0)
+	// Path/Data are optional but required by some types (rename/chmod need
+	// data); without them those types always 500d on missing parameters.
+	task, err := s.createTask(req.AgentID, req.Type, req.Command, req.Shell, req.Path, req.Data, 0, 0)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "task creation failed")
 		return

