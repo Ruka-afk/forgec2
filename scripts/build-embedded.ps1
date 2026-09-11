@@ -50,8 +50,14 @@ try {
     Write-Host "==> Syncing frontend output to webdist..." -ForegroundColor Cyan
     $webdistFresh = $false
     if (Test-Path "internal/webdist/dist") {
+        # Native stderr under $ErrorActionPreference=Stop becomes a
+        # terminating ErrorRecord; relax locally like the build step above.
+        $prevEAP2 = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
         node scripts/check-webdist.mjs >$null 2>&1
-        if ($LASTEXITCODE -eq 0) {
+        $checkCode = $LASTEXITCODE
+        $ErrorActionPreference = $prevEAP2
+        if ($checkCode -eq 0) {
             Write-Host "webdist already fresh, skipping copy" -ForegroundColor DarkGray
             $webdistFresh = $true
         }

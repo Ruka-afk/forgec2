@@ -138,20 +138,20 @@ type Implant struct {
 	// Multi-hop Proxy Chain (ParentAgentID is the next-hop toward C2, distinct from P2P parent_id)
 	ParentAgentID string `gorm:"size:36;default:''" json:"parent_agent_id,omitempty"`
 	// P2P Beacon Chaining
-	ParentID      string `gorm:"index" json:"parent_id"` // UUID of parent agent (empty if direct)
-	P2PMode       string `json:"p2p_mode"`               // "", "smb", "tcp" 锟?how child connects
-	P2PListenAddr string `json:"p2p_listen_addr"`        // smb pipe name or tcp addr for children
+	ParentID      string `gorm:"index" json:"parent_id"`                        // UUID of parent agent (empty if direct)
+	P2PMode       string `gorm:"column:p2p_mode" json:"p2p_mode"`               // "", "smb", "tcp" - how child connects
+	P2PListenAddr string `gorm:"column:p2p_listen_addr" json:"p2p_listen_addr"` // smb pipe name or tcp addr for children
 	// P2P Gossip Mesh
 	PeerCount int    `gorm:"default:0" json:"peer_count"`
 	BestRoute string `gorm:"default:''" json:"best_route"`
 	// Agent metadata (reported every beacon)
-	Version         string `json:"version"`          // agent build version
-	ProtocolVersion uint   `json:"protocol_version"` // wire protocol version
-	PID             int    `json:"pid"`              // agent process ID
-	ProcessName     string `json:"process_name"`     // e.g. forgec2.exe
-	Integrity       string `json:"integrity"`        // Low / Medium / High / System
-	Elevated        bool   `json:"elevated"`         // running as admin/root
-	Domain          string `json:"domain"`           // AD domain or workgroup
+	Version         string `json:"version"`               // agent build version
+	ProtocolVersion uint   `json:"protocol_version"`      // wire protocol version
+	PID             int    `gorm:"column:pid" json:"pid"` // agent process ID
+	ProcessName     string `json:"process_name"`          // e.g. forgec2.exe
+	Integrity       string `json:"integrity"`             // Low / Medium / High / System
+	Elevated        bool   `json:"elevated"`              // running as admin/root
+	Domain          string `json:"domain"`                // AD domain or workgroup
 	// Per-agent sleep config (server-side tracking)
 	CurrentInterval int    `json:"current_interval"`                // current sleep interval (seconds)
 	CurrentJitter   int    `json:"current_jitter"`                  // current jitter percentage

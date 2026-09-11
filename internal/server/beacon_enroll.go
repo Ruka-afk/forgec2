@@ -14,6 +14,10 @@ import (
 
 func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, now time.Time) (db.Implant, bool) {
 	req.Info = sanitizeInfo(req.Info)
+	// C + Go implants send hostname/username/ip base64 with encoding=base64.
+	// Decode once so both create and update paths store plaintext (previously
+	// the update path stored raw base64 because only the create path decoded).
+	applyDecodedBeaconIdentity(req.Info)
 	parseInt := func(key string) int {
 		if req.Info == nil {
 			return 0
