@@ -36,6 +36,7 @@ var (
 	procGetDeviceCaps          = gdi32.NewProc("GetDeviceCaps")
 	procGetForegroundWindow    = user32.NewProc("GetForegroundWindow")
 	procGetWindowTextW         = user32.NewProc("GetWindowTextW")
+	procSystemParametersInfoW  = user32.NewProc("SystemParametersInfoW")
 )
 
 // Shared process / thread / clipboard proc declarations

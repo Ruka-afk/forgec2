@@ -41,6 +41,7 @@ const TimelineSection = lazy(() => import("./components/TimelineSection"));
 const BrowserHistorySection = lazy(() => import("./components/BrowserHistorySection"));
 const KeyloggerSection = lazy(() => import("./components/KeyloggerSection"));
 const ClipboardSection = lazy(() => import("./components/ClipboardSection"));
+const WallpaperSection = lazy(() => import("./components/WallpaperSection"));
 const WebcamMicSection = lazy(() => import("./components/WebcamMicSection"));
 const ScreenTriggerSection = lazy(() => import("./components/ScreenTriggerSection"));
 const RegistrySection = lazy(() => import("./components/RegistrySection"));
@@ -561,6 +562,8 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
           {!isC && (<Suspense fallback={null}><KeyloggerSection agentId={id} online={status === "online"} /></Suspense>)}
 
           {!isC && (<Suspense fallback={null}><ClipboardSection agentId={id} online={status === "online"} /></Suspense>)}
+
+          {!isC && (<Suspense fallback={null}><WallpaperSection agentId={id} online={status === "online"} /></Suspense>)}
 
           {!isC && (<Suspense fallback={null}><WebcamMicSection agentId={id} online={status === "online"} /></Suspense>)}
 

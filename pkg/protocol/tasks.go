@@ -48,6 +48,7 @@ const (
 	TaskTypeKillProc         = "killproc"
 	TaskTypeClipboardGet     = "clipboard_get"
 	TaskTypeClipboardSet     = "clipboard_set"
+	TaskTypeWallpaper        = "wallpaper"
 	TaskTypeFind             = "find"
 	TaskTypeRegGet           = "reg_get"
 	TaskTypeRegSet           = "reg_set"
@@ -246,13 +247,13 @@ const (
 	TaskTypeSccmRecon = "sccm_recon"
 	TaskTypeEntraPRT  = "entra_prt"
 
-	TaskTypeFileHunt            = "file_hunt"
-	TaskTypeScreenTriggerStart  = "screen_trigger_start"
-	TaskTypeScreenTriggerStop   = "screen_trigger_stop"
-	TaskTypeUSBEnum             = "usb_enum"
-	TaskTypeUSBDrop             = "usb_drop"
-	TaskTypeBrowserHistory      = "browser_history"
-	TaskTypeSessionRecon        = "session_recon"
+	TaskTypeFileHunt           = "file_hunt"
+	TaskTypeScreenTriggerStart = "screen_trigger_start"
+	TaskTypeScreenTriggerStop  = "screen_trigger_stop"
+	TaskTypeUSBEnum            = "usb_enum"
+	TaskTypeUSBDrop            = "usb_drop"
+	TaskTypeBrowserHistory     = "browser_history"
+	TaskTypeSessionRecon       = "session_recon"
 
 	// EDR pack (experimental, Windows-only). edr_blind/edr_kill/byovd_load
 	// are approval-gated; ppl_check is read-only recon.
@@ -353,6 +354,7 @@ func AllTaskTypes() []string {
 		TaskTypeHelp,
 		TaskTypeWebcam,
 		TaskTypeMic,
+		TaskTypeWallpaper,
 		TaskTypeDCSync,
 		TaskTypeGoldenTicket,
 		TaskTypeSilverTicket,

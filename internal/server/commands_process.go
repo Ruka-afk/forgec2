@@ -179,6 +179,31 @@ func (s *Server) handleShutdown(c *gin.Context) {
 	s.createSimpleTask(c, c.Param("id"), simpleTaskDef{"shutdown", "shutdown", ""})
 }
 
+func (s *Server) handleWallpaper(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	id := c.Param("id")
+	img := c.PostForm("image")
+	if img == "" {
+		img = c.PostForm("command")
+	}
+	style := c.PostForm("style")
+	if style == "" {
+		style = c.PostForm("data")
+	}
+	if img == "" {
+		respondError(c, http.StatusBadRequest, "image URL or path is required")
+		return
+	}
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "wallpaper", Command: img, Data: style})
+	if task == nil {
+		return
+	}
+	slog.Info("Wallpaper requested", "agent_id", id, "image", img, "style", style)
+	s.dispatchTask(c, task, "wallpaper", img)
+}
+
 func (s *Server) handleListDrives(c *gin.Context) {
 	s.createSimpleTask(c, c.Param("id"), simpleTaskDef{"drives", "list_drives", ""})
 }

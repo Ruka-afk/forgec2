@@ -99,6 +99,7 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/reg/set", s.handleRegSet)
 		agentCmd.POST("/reg/delete", s.handleRegDelete)
 		agentCmd.POST("/reboot", s.handleReboot)
+		agentCmd.POST("/wallpaper", s.handleWallpaper)
 		agentCmd.POST("/shutdown", s.handleShutdown)
 		agentCmd.POST("/drives", s.handleListDrives)
 		agentCmd.POST("/beacon_now", s.handleBeaconNow)

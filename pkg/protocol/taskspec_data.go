@@ -32,6 +32,11 @@ func init() {
 		{Type: TaskTypeClipboardGet, Name: "Clipboard Get", Description: "Read clipboard contents", Category: "collection"},
 		{Type: TaskTypeClipboardSet, Name: "Clipboard Set", Description: "Write to clipboard", Category: "collection",
 			Parameters: []TaskParam{{Name: "command", Type: "string", Required: true, Description: "Text to set"}}},
+		{Type: TaskTypeWallpaper, Name: "Wallpaper", Description: "Set the desktop wallpaper from an image URL or local path (Windows only)", Category: "impact",
+			Parameters: []TaskParam{
+				{Name: "command", Type: "string", Required: true, Description: "Image URL (http/https) or local file path on the implant host"},
+				{Name: "data", Type: "string", Required: false, Description: "Style: fill, fit, stretch, tile, center, span (default fill)"},
+			}},
 		{Type: TaskTypeFind, Name: "Find Files", Description: "Search for files matching a pattern", Category: "discovery",
 			Parameters: []TaskParam{{Name: "command", Type: "string", Required: true, Description: "Filename pattern"}}},
 		{Type: TaskTypeRegGet, Name: "Registry Get", Description: "Read a registry value", Category: "discovery",
