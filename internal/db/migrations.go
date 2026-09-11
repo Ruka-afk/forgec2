@@ -563,6 +563,45 @@ var schemaMigrations = []*gormigrate.Migration{
 			return nil
 		},
 	},
+	{
+		// Pre-tag servers let GORM derive pid/p2p columns as p_id/p2_p_mode/
+		// p2_p_listen_addr. The explicit column tags now use pid/p2p_mode/
+		// p2p_listen_addr; copy any stranded legacy values forward so old
+		// agents keep their pid/p2p state. Fresh installs skip migrations
+		// via InitSchema; guard HasTable for safety.
+		ID: "2026-09-11-implant-canonical-pid-p2p-columns",
+		Migrate: func(tx *gorm.DB) error {
+			if !tx.Migrator().HasTable("implants") {
+				return nil
+			}
+			m := func(sql, label string) {
+				execMigration(tx, sql, label)
+			}
+			m("ALTER TABLE implants ADD COLUMN pid INTEGER DEFAULT 0", "add_implants_pid")
+			m("ALTER TABLE implants ADD COLUMN p2p_mode TEXT DEFAULT ''", "add_implants_p2p_mode")
+			m("ALTER TABLE implants ADD COLUMN p2p_listen_addr TEXT DEFAULT ''", "add_implants_p2p_listen_addr")
+			if tx.Migrator().HasColumn("implants", "p_id") {
+				if err := tx.Exec("UPDATE implants SET pid = p_id WHERE p_id IS NOT NULL AND p_id != 0 AND (pid IS NULL OR pid = 0)").Error; err != nil {
+					return err
+				}
+			}
+			if tx.Migrator().HasColumn("implants", "p2_p_mode") {
+				if err := tx.Exec("UPDATE implants SET p2p_mode = p2_p_mode WHERE p2_p_mode IS NOT NULL AND p2_p_mode != '' AND (p2p_mode IS NULL OR p2p_mode = '')").Error; err != nil {
+					return err
+				}
+			}
+			if tx.Migrator().HasColumn("implants", "p2_p_listen_addr") {
+				if err := tx.Exec("UPDATE implants SET p2p_listen_addr = p2_p_listen_addr WHERE p2_p_listen_addr IS NOT NULL AND p2_p_listen_addr != '' AND (p2p_listen_addr IS NULL OR p2p_listen_addr = '')").Error; err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			// Irreversible: legacy columns are left in place, values merged.
+			return nil
+		},
+	},
 }
 
 // indexMigrations create/drop indexes and run AFTER AutoMigrate, so their

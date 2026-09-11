@@ -235,11 +235,11 @@ func TestHandleAPIGetListener(t *testing.T) {
 	s := newListenerCRUDTestServer(t)
 
 	listener := db.Listener{
-		Name:   "api-detail-test",
-		Scheme: "http",
-		Host:   "127.0.0.1",
-		Port:   8443,
-		Status: "running",
+		Name:    "api-detail-test",
+		Scheme:  "http",
+		Host:    "127.0.0.1",
+		Port:    8443,
+		Status:  "running",
 		Enabled: true,
 	}
 	if err := s.db.Create(&listener).Error; err != nil {
@@ -307,11 +307,11 @@ func TestHandleDeleteListener(t *testing.T) {
 	s := newListenerCRUDTestServer(t)
 
 	listener := db.Listener{
-		Name:   "delete-me",
-		Scheme: "http",
-		Host:   "127.0.0.1",
-		Port:   9090,
-		Status: "stopped",
+		Name:    "delete-me",
+		Scheme:  "http",
+		Host:    "127.0.0.1",
+		Port:    9090,
+		Status:  "stopped",
 		Enabled: false,
 	}
 	if err := s.db.Create(&listener).Error; err != nil {
@@ -345,11 +345,11 @@ func TestHandleEnableDisableListener(t *testing.T) {
 	s := newListenerCRUDTestServer(t)
 
 	listener := db.Listener{
-		Name:   "toggle-me",
-		Scheme: "http",
-		Host:   "127.0.0.1",
-		Port:   7070,
-		Status: "stopped",
+		Name:    "toggle-me",
+		Scheme:  "http",
+		Host:    "127.0.0.1",
+		Port:    7070,
+		Status:  "stopped",
 		Enabled: false,
 	}
 	if err := s.db.Create(&listener).Error; err != nil {
@@ -393,11 +393,11 @@ func TestHandleUpdateListener(t *testing.T) {
 	s := newListenerCRUDTestServer(t)
 
 	listener := db.Listener{
-		Name:   "update-me",
-		Scheme: "http",
-		Host:   "127.0.0.1",
-		Port:   6060,
-		Status: "running",
+		Name:    "update-me",
+		Scheme:  "http",
+		Host:    "127.0.0.1",
+		Port:    6060,
+		Status:  "running",
 		Enabled: true,
 	}
 	if err := s.db.Create(&listener).Error; err != nil {
@@ -427,4 +427,30 @@ func TestHandleUpdateListener(t *testing.T) {
 			t.Errorf("expected port=9090, got %d", updated.Port)
 		}
 	})
+}
+
+func TestEnsureDefaultListener(t *testing.T) {
+	s := newListenerCRUDTestServer(t)
+	s.EnsureDefaultListener("127.0.0.1", 8001)
+	var count int64
+	s.db.Model(&db.Listener{}).Count(&count)
+	if count != 1 {
+		t.Fatalf("expected 1 seeded listener, got %d", count)
+	}
+	var l db.Listener
+	if err := s.db.First(&l, 1).Error; err != nil {
+		t.Fatalf("seeded listener missing: %v", err)
+	}
+	if !l.Enabled || l.Host != "127.0.0.1" || l.Port != 8001 || l.Scheme != "http" {
+		t.Errorf("bad seed row: %+v", l)
+	}
+	if _, err := s.resolveListener(l.ID); err != nil {
+		t.Errorf("seeded listener must resolve: %v", err)
+	}
+	// Second call is a no-op; pre-existing rows suppress seeding.
+	s.EnsureDefaultListener("127.0.0.1", 8001)
+	s.db.Model(&db.Listener{}).Count(&count)
+	if count != 1 {
+		t.Errorf("reseed must be a no-op, got %d rows", count)
+	}
 }

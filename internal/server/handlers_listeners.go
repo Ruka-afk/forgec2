@@ -647,3 +647,31 @@ func (s *Server) handleListenersPage(c *gin.Context) {
 
 	s.renderPageOrJSON(c, data)
 }
+
+// EnsureDefaultListener seeds a loopback HTTP listener matching the server's
+// own bind address when the listeners table is empty (fresh database), so
+// payload generation (one-liners, stagers) works without manual setup. It is
+// metadata only — no socket is bound here; the main HTTP server already
+// serves beacons on this address. Only an empty table triggers seeding, so
+// operators that delete every listener are never second-guessed.
+func (s *Server) EnsureDefaultListener(host string, port int) {
+	var count int64
+	if err := s.db.Model(&db.Listener{}).Count(&count).Error; err != nil || count > 0 {
+		return
+	}
+	if strings.TrimSpace(host) == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	if port <= 0 || port > 65535 {
+		port = 8000
+	}
+	l := db.Listener{
+		Name: "default", Scheme: "http", Type: "http", Protocol: "http",
+		Host: host, Port: port, Enabled: true, Status: "running",
+	}
+	if err := s.db.Create(&l).Error; err != nil {
+		slog.Warn("default listener seed failed", "err", err)
+		return
+	}
+	slog.Info("seeded default listener", "host", host, "port", port)
+}

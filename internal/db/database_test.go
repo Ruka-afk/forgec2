@@ -1516,3 +1516,47 @@ func TestGetPermissionsForRole(t *testing.T) {
 		t.Errorf("admin should have more permissions than user (admin=%d, user=%d)", adminCount, userCount)
 	}
 }
+
+func TestImplantCanonicalColumnsMigrationHealsLegacyNames(t *testing.T) {
+	database, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to open test database: %v", err)
+	}
+	// Simulate a pre-tag server schema: GORM-derived p_id / p2_p_mode names.
+	if err := database.Exec(`CREATE TABLE implants (id TEXT PRIMARY KEY, hostname TEXT, p_id INTEGER, p2_p_mode TEXT, p2_p_listen_addr TEXT)`).Error; err != nil {
+		t.Fatalf("failed to create legacy implants table: %v", err)
+	}
+	if err := database.Exec(`INSERT INTO implants (id, hostname, p_id, p2_p_mode, p2_p_listen_addr) VALUES ('ag-1','h',1234,'smb','pipe1')`).Error; err != nil {
+		t.Fatalf("failed to seed legacy row: %v", err)
+	}
+	var mig *gormigrate.Migration
+	for _, m := range Migrations {
+		if m.ID == "2026-09-11-implant-canonical-pid-p2p-columns" {
+			mig = m
+			break
+		}
+	}
+	if mig == nil {
+		t.Fatal("canonical columns migration not found")
+	}
+	if err := mig.Migrate(database); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	// Explicit column tags: GORM would otherwise derive p_id/p2_p_mode
+	// from these field names (the same quirk this migration fixes).
+	var row struct {
+		PID           int    `gorm:"column:pid"`
+		P2PMode       string `gorm:"column:p2p_mode"`
+		P2PListenAddr string `gorm:"column:p2p_listen_addr"`
+	}
+	if err := database.Table("implants").Select("pid, p2p_mode, p2p_listen_addr").Where("id = ?", "ag-1").Scan(&row).Error; err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if row.PID != 1234 || row.P2PMode != "smb" || row.P2PListenAddr != "pipe1" {
+		t.Errorf("legacy values not healed: %+v", row)
+	}
+	// Idempotent rerun must not error.
+	if err := mig.Migrate(database); err != nil {
+		t.Fatalf("rerun migrate: %v", err)
+	}
+}

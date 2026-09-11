@@ -72,11 +72,11 @@ func topologyLateralTouched(servicesJSON string) bool {
 // GET /api/topology/network
 func (s *Server) handleAPINetworkTopology(c *gin.Context) {
 	var agents []db.Implant
-	// NOTE: P2PMode maps to physical column "p2_p_mode" (GORM naming quirk
-	// for the P2PMode field). Select it bare — an "AS p2p_mode" alias cannot
-	// be matched back to the struct field by GORM's scan mapper.
+	// NOTE: P2PMode's physical column is "p2p_mode" (explicit column tag;
+	// pre-tag servers used GORM's derived "p2_p_mode"). Select it bare — an
+	// alias cannot be matched back to the struct field by GORM's scan mapper.
 	if err := s.db.
-		Select("id, hostname, ip, os, status, p2_p_mode, peer_count, parent_id, parent_agent_id").
+		Select("id, hostname, ip, os, status, p2p_mode, peer_count, parent_id, parent_agent_id").
 		Order("last_seen desc").Limit(300).Find(&agents).Error; err != nil {
 		slog.Error("topology/net: agent query failed", "err", err)
 	}

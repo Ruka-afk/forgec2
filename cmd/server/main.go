@@ -102,6 +102,10 @@ func main() {
 	// Create and start server
 	srv := server.New(cfg, database)
 
+	// Fresh databases have no listeners, which makes every generate flow
+	// fail with "Invalid listener configuration" — seed a loopback default.
+	srv.EnsureDefaultListener(cfg.Server.Host, cfg.Server.Port)
+
 	// Serve embedded frontend static files (strip dist/ prefix)
 	sub, err := fs.Sub(webdist.FrontendFS, "dist")
 	if err != nil {

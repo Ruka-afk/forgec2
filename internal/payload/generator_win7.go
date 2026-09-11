@@ -22,9 +22,10 @@ func win7Pins() []string {
 		"\tgolang.org/x/net v0.24.0",
 		"\tgolang.org/x/text v0.14.0",
 		"\tgithub.com/refraction-networking/utls v1.5.4",
-		// quic-go is only pulled for utls's QUIC transport-parameter helper
-		// (quicvarint); pin the era version utls itself requires.
-		"\tgithub.com/quic-go/quic-go v0.37.4",
+		// NOTE: no explicit quic-go pin even though utls imports its QUIC
+		// transport-parameter helper: `go mod tidy` re-adds it as an
+		// indirect requirement at the era version from utls's own go.mod,
+		// while an explicit pin trips the slim no-quic gate.
 		"\tgithub.com/Microsoft/go-winio v0.6.1",
 		"\tmodernc.org/sqlite v1.21.0",
 		"\tmodernc.org/libc v1.22.3",

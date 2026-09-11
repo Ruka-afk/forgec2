@@ -87,7 +87,7 @@ func TestHandleAPINetworkTopology_GraphComposition(t *testing.T) {
 	if got := nodeByID["host-10.0.1.55"].Group; got != "host-discovered" {
 		t.Fatalf("plain host should be host-discovered, got %q", got)
 	}
-	// Regression guard: the p2_p_mode column must populate P2PMode.
+	// Regression guard: the p2p_mode column must populate P2PMode.
 	if got := nodeByID["ag-child"].P2PMode; got != "smb" {
 		t.Fatalf("expected child p2p_mode=smb, got %q", got)
 	}
