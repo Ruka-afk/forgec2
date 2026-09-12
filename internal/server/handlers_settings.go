@@ -186,6 +186,9 @@ func (s *Server) validateAndSaveConfig(c *gin.Context, action string) bool {
 		respondError(c, http.StatusInternalServerError, "Failed to save config")
 		return false
 	}
+	// The file watcher applies the change asynchronously; audit the operator
+	// intent now so saves are traceable even if reload rejects them.
+	s.LogAuditRecord(c, action, "settings", "", "saved via console", true, nil)
 	return true
 }
 

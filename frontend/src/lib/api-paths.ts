@@ -231,6 +231,7 @@ export const paths = {
     notificationRoute: (id: string | number) => `/api/notification-routes/${id}`,
     notificationRouteTest: (id: string | number) => `/api/notification-routes/${id}/test`,
     beaconKey: "/settings/beacon-key",
+    reloadStatus: "/config/reload-status",
     totpStatus: "/settings/totp/status",
     totpGenerate: "/settings/totp/generate",
     totpEnable: "/settings/totp/enable",

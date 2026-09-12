@@ -632,18 +632,42 @@ func (s *Server) InitOptimizations(configPath string) {
 		s.cfg.CopyFrom(cfg)
 		s.configMu.Unlock()
 
-		for _, field := range changed {
-			switch field {
-			case "crypto.key", "server.jwt_secret", "crypto.loot_key", "crypto.extc2_key":
-				crypto.InitLootEncryption(s.cfg.Crypto.LootKey)
-				crypto.InitExtC2Encryption(s.cfg.Crypto.ExtC2Key)
-				slog.Info("Crypto primitives updated from reloaded config", "field", field)
-			case "crypto.csrf_key":
-				if err := middleware.InitCSRFSecret(s.cfg); err != nil {
-					slog.Error("Config reload: invalid crypto.csrf_key, keeping previous CSRF key", "err", err)
-				}
-			}
+		// Table-driven sync: every hot token either runs its Apply hook or
+		// is documented live-read (Apply == nil). Static tokens are rejected
+		// upstream in reload(); seeing one here is a programming error.
+		byToken := make(map[string]reloadGroup, len(reloadGroups()))
+		for _, g := range reloadGroups() {
+			byToken[g.Token] = g
 		}
+		outcome := &reloadOutcome{At: time.Now(), Failed: map[string]string{}}
+		for _, field := range changed {
+			g, ok := byToken[field]
+			if !ok {
+				outcome.Failed[field] = "unknown token (diffConfig/table drift)"
+				continue
+			}
+			if g.Mode != reloadHot {
+				outcome.Failed[field] = "static field requires restart"
+				continue
+			}
+			outcome.Changed = append(outcome.Changed, field)
+			if g.Apply == nil {
+				outcome.Applied = append(outcome.Applied, field)
+				continue
+			}
+			if err := g.Apply(s); err != nil {
+				slog.Error("Config reload hook failed, previous value kept where possible", "field", field, "err", err)
+				outcome.Failed[field] = err.Error()
+				continue
+			}
+			outcome.Applied = append(outcome.Applied, field)
+			slog.Info("Config reload hook applied", "field", field)
+		}
+		if len(outcome.Failed) == 0 {
+			outcome.Failed = nil
+		}
+		recordReloadOutcome(outcome)
+		s.LogAuditRecord(nil, "config_reload", "settings", "", "fields: "+strings.Join(outcome.Applied, ","), len(outcome.Failed) == 0, nil)
 
 		// Invalidate automation rule cache so next request fetches fresh rules
 		s.automationRulesMu.Lock()

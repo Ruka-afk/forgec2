@@ -377,6 +377,7 @@ func (s *Server) handleCreateListener(c *gin.Context) {
 	s.syncListenerProbe(&l)
 
 	s.broadcastListenerUpdate("created", &l)
+	s.LogAuditRecord(c, "listener_create", "listener", fmt.Sprintf("%d", l.ID), l.Name+" "+l.Scheme, true, nil)
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "listener": l})
 }
@@ -514,6 +515,7 @@ func (s *Server) handleUpdateListener(c *gin.Context) {
 	s.syncListenerProbe(&l)
 
 	s.broadcastListenerUpdate("updated", &l)
+	s.LogAuditRecord(c, "listener_update", "listener", id, l.Name+" "+l.Scheme, true, nil)
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "listener": l})
 }
@@ -555,6 +557,7 @@ func (s *Server) handleDeleteListener(c *gin.Context) {
 		return
 	}
 	s.broadcastListenerUpdate("deleted", &l)
+	s.LogAuditRecord(c, "listener_delete", "listener", id, l.Name+" "+l.Scheme, true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
@@ -581,6 +584,7 @@ func (s *Server) handleEnableListener(c *gin.Context) {
 	}
 	s.syncListenerProbe(&l)
 	s.broadcastListenerUpdate("enabled", &l)
+	s.LogAuditRecord(c, "listener_enable", "listener", id, l.Name+" "+l.Scheme, true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Listener enabled"})
 }
 
@@ -600,6 +604,7 @@ func (s *Server) handleDisableListener(c *gin.Context) {
 	s.stopExtraListener(listenerKey(&l))
 	s.syncListenerProbe(&l)
 	s.broadcastListenerUpdate("disabled", &l)
+	s.LogAuditRecord(c, "listener_disable", "listener", id, l.Name+" "+l.Scheme, true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Listener disabled"})
 }
 

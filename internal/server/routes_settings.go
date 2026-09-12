@@ -16,6 +16,7 @@ func (s *Server) registerSettingsRoutes(auth *gin.RouterGroup) {
 		// The beacon PSK lets the holder mint authenticating implants: gate it
 		// to roles that can actually build payloads.
 		settingsRead.GET("/settings/beacon-key", middleware.RequirePermission(db.PermAgentsWrite), s.handleGetBeaconKey)
+		settingsRead.GET("/config/reload-status", s.handleReloadStatus)
 	}
 	settingsWrite := auth.Group("/")
 	settingsWrite.Use(middleware.RequirePermission(db.PermSettingsWrite))

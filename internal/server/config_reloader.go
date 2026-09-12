@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -45,7 +46,12 @@ func (r *ConfigReloader) Start() error {
 	}
 	r.watcher = watcher
 
-	if err := watcher.Add(r.path); err != nil {
+	// Watch the parent directory, not the file: editors and config
+	// writers (including our own Save) often replace the file atomically
+	// via rename, which orphans a file watch and silently drops every later
+	// event. Directory watches survive renames; monitor() filters by name.
+	watchDir := filepath.Dir(r.path)
+	if err := watcher.Add(watchDir); err != nil {
 		watcher.Close()
 		return err
 	}
@@ -73,7 +79,18 @@ func (r *ConfigReloader) monitor() {
 	w := r.watcher
 	r.mu.Unlock()
 
+	var debounceMu sync.Mutex
 	var debounce *time.Timer
+	schedule := func() {
+		debounceMu.Lock()
+		defer debounceMu.Unlock()
+		if debounce != nil {
+			debounce.Stop()
+		}
+		debounce = time.AfterFunc(ConfigReloadDebounce, func() {
+			r.reload()
+		})
+	}
 
 	for {
 		select {
@@ -82,21 +99,18 @@ func (r *ConfigReloader) monitor() {
 				return
 			}
 
-			if event.Name != r.path {
+			if !sameConfigFile(event.Name, r.path) {
 				continue
 			}
 
-			if event.Op&(fsnotify.Write|fsnotify.Create) == 0 {
+			// Write/Create/Rename/Remove/Chmod all reschedule: renames and
+			// removals cover atomic-save editors, and a transient half-write
+			// simply fails validation and keeps the current config.
+			if event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename|fsnotify.Remove|fsnotify.Chmod) == 0 {
 				continue
 			}
 
-			if debounce != nil {
-				debounce.Stop()
-			}
-
-			debounce = time.AfterFunc(ConfigReloadDebounce, func() {
-				r.reload()
-			})
+			schedule()
 
 		case err, ok := <-w.Errors:
 			if !ok {
@@ -105,6 +119,30 @@ func (r *ConfigReloader) monitor() {
 			slog.Error("Config watcher error", "error", err)
 		}
 	}
+}
+
+// sameConfigFile matches the watched config path against an fsnotify
+// event name across symlinks, relative spellings and case (Windows).
+func sameConfigFile(eventName, watchPath string) bool {
+	if eventName == watchPath {
+		return true
+	}
+	absEvent, err1 := filepath.Abs(eventName)
+	absWatch, err2 := filepath.Abs(watchPath)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	if absEvent == absWatch {
+		return true
+	}
+	resolvedEvent, err1 := filepath.EvalSymlinks(absEvent)
+	resolvedWatch, err2 := filepath.EvalSymlinks(absWatch)
+	if err1 != nil || err2 != nil {
+		// Unresolvable (deleted mid-rename, dangling link): fall back to
+		// the absolute spelling instead of comparing two empty strings.
+		return absEvent == absWatch
+	}
+	return resolvedEvent == resolvedWatch
 }
 
 func (r *ConfigReloader) reload() {
@@ -194,8 +232,12 @@ func diffConfig(old, new *config.Config) (hotReloadable []string, staticOnly []s
 	if old.Server.BeaconKey != new.Server.BeaconKey {
 		hotReloadable = append(hotReloadable, "server.beacon_key")
 	}
+	// crypto.key only gates the ECDH-vs-XOR mode check at startup and
+	// crypto.backup_key is baked into the backup manager at construction
+	// (no live re-key path): rotation needs a restart, so reject loudly
+	// instead of pretending to apply it.
 	if old.Crypto.Key != new.Crypto.Key {
-		hotReloadable = append(hotReloadable, "crypto.key")
+		staticOnly = append(staticOnly, "crypto.key")
 	}
 	if old.Server.JWTSecret != new.Server.JWTSecret {
 		hotReloadable = append(hotReloadable, "server.jwt_secret")
@@ -213,10 +255,18 @@ func diffConfig(old, new *config.Config) (hotReloadable []string, staticOnly []s
 		hotReloadable = append(hotReloadable, "crypto.totp_key")
 	}
 	if old.Crypto.BackupKey != new.Crypto.BackupKey {
-		hotReloadable = append(hotReloadable, "crypto.backup_key")
+		staticOnly = append(staticOnly, "crypto.backup_key")
 	}
 	if old.Database.Driver != new.Database.Driver {
 		staticOnly = append(staticOnly, "database.driver")
+	}
+	if old.Database.DSN != new.Database.DSN {
+		staticOnly = append(staticOnly, "database.dsn")
+	}
+	if old.Server.DBMaxOpenConns != new.Server.DBMaxOpenConns ||
+		old.Server.DBMaxIdleConns != new.Server.DBMaxIdleConns ||
+		old.Server.DBConnMaxLifetime != new.Server.DBConnMaxLifetime {
+		hotReloadable = append(hotReloadable, "database.pool")
 	}
 	if old.Database.Path != new.Database.Path {
 		staticOnly = append(staticOnly, "database.path")
@@ -227,26 +277,36 @@ func diffConfig(old, new *config.Config) (hotReloadable []string, staticOnly []s
 	if old.Server.TLSEnabled != new.Server.TLSEnabled || old.Server.CertFile != new.Server.CertFile || old.Server.KeyFile != new.Server.KeyFile {
 		staticOnly = append(staticOnly, "server.tls")
 	}
-	if old.SIEM.Enabled != new.SIEM.Enabled || old.SIEM.URL != new.SIEM.URL {
+	if !reflect.DeepEqual(old.SIEM, new.SIEM) {
 		hotReloadable = append(hotReloadable, "siem")
 	}
-	if old.PasswordPolicy.MinLength != new.PasswordPolicy.MinLength {
+	if !reflect.DeepEqual(old.PasswordPolicy, new.PasswordPolicy) {
 		hotReloadable = append(hotReloadable, "password_policy")
 	}
-	if old.RateLimit.Login.MaxAttempts != new.RateLimit.Login.MaxAttempts {
+	if !reflect.DeepEqual(old.RateLimit.Login, new.RateLimit.Login) {
 		hotReloadable = append(hotReloadable, "rate_limit.login")
 	}
-	if old.Server.DNSEnabled != new.Server.DNSEnabled || old.Server.DNSDomain != new.Server.DNSDomain {
+	if !reflect.DeepEqual(old.RateLimit.API, new.RateLimit.API) {
+		hotReloadable = append(hotReloadable, "rate_limit.api")
+	}
+	if !reflect.DeepEqual(old.RateLimit.Beacon, new.RateLimit.Beacon) {
+		hotReloadable = append(hotReloadable, "rate_limit.beacon")
+	}
+	if !reflect.DeepEqual(old.RateLimit.ExtC2, new.RateLimit.ExtC2) {
+		hotReloadable = append(hotReloadable, "rate_limit.extc2")
+	}
+	if old.Server.DNSEnabled != new.Server.DNSEnabled || old.Server.DNSDomain != new.Server.DNSDomain || old.Server.DNSAddr != new.Server.DNSAddr {
 		staticOnly = append(staticOnly, "server.dns")
 	}
-	if old.Server.GRPCEnabled != new.Server.GRPCEnabled {
+	if old.Server.GRPCEnabled != new.Server.GRPCEnabled || old.Server.GRPCAddr != new.Server.GRPCAddr {
 		staticOnly = append(staticOnly, "server.grpc")
 	}
 	// Malleable profile rotation and other operator-tunable fields were
 	// previously not in the whitelist at all, so edits like rotating the
 	// profile were silently ignored ("no values differ, skipping" → C2 profile
-	// rotation never took effect). Treat them as hot-reloadable.
-	if old.Malleable.Enabled != new.Malleable.Enabled || old.Malleable.Prepend != new.Malleable.Prepend || old.Malleable.Append != new.Malleable.Append || old.Malleable.ProfileName != new.Malleable.ProfileName {
+	// rotation never took effect). Every field is live-read per request, so
+	// the whole block is hot-reloadable.
+	if !reflect.DeepEqual(old.Malleable, new.Malleable) {
 		hotReloadable = append(hotReloadable, "malleable")
 	}
 	if old.Server.GeoIPEnabled != new.Server.GeoIPEnabled {
@@ -280,8 +340,26 @@ func diffConfig(old, new *config.Config) (hotReloadable []string, staticOnly []s
 	if old.Server.QUICEnabled != new.Server.QUICEnabled || old.Server.QUICAddr != new.Server.QUICAddr {
 		staticOnly = append(staticOnly, "server.quic")
 	}
-	if old.Server.SSHEnabled != new.Server.SSHEnabled || old.Server.SSHPort != new.Server.SSHPort {
+	if old.Server.SSHEnabled != new.Server.SSHEnabled || old.Server.SSHPort != new.Server.SSHPort ||
+		old.Server.SSHAddr != new.Server.SSHAddr || old.Server.SSHHostKey != new.Server.SSHHostKey ||
+		old.Server.SSHUser != new.Server.SSHUser || old.Server.SSHPassword != new.Server.SSHPassword ||
+		old.Server.SSHKeyAuth != new.Server.SSHKeyAuth {
 		staticOnly = append(staticOnly, "server.ssh")
+	}
+	if old.Server.ClientCAFile != new.Server.ClientCAFile || old.Server.RequireClientCert != new.Server.RequireClientCert {
+		staticOnly = append(staticOnly, "server.mtls")
+	}
+	if old.Server.DataDir != new.Server.DataDir {
+		staticOnly = append(staticOnly, "server.data_dir")
+	}
+	if !reflect.DeepEqual(old.Listeners, new.Listeners) {
+		staticOnly = append(staticOnly, "server.listeners")
+	}
+	if !reflect.DeepEqual(old.Auth, new.Auth) {
+		staticOnly = append(staticOnly, "auth")
+	}
+	if old.Crypto.ForceECDH != new.Crypto.ForceECDH {
+		staticOnly = append(staticOnly, "crypto.force_ecdh")
 	}
 	// Whole-section comparisons for operator-tunable blocks. Previously edits
 	// here (implant minimums, two-man rule, monitoring thresholds, RoE, AI
@@ -308,6 +386,48 @@ func diffConfig(old, new *config.Config) (hotReloadable []string, staticOnly []s
 	}
 	if !reflect.DeepEqual(old.Integrations, new.Integrations) {
 		hotReloadable = append(hotReloadable, "integrations")
+	}
+	if !reflect.DeepEqual(old.Server.AllowedOrigins, new.Server.AllowedOrigins) {
+		hotReloadable = append(hotReloadable, "server.allowed_origins")
+	}
+	if !reflect.DeepEqual(old.Server.TrustedProxies, new.Server.TrustedProxies) {
+		hotReloadable = append(hotReloadable, "server.trusted_proxies")
+	}
+	if old.Server.CookieDomain != new.Server.CookieDomain {
+		hotReloadable = append(hotReloadable, "server.cookie_domain")
+	}
+	if old.Server.RequireTLSForAuth != new.Server.RequireTLSForAuth {
+		hotReloadable = append(hotReloadable, "server.require_tls_for_auth")
+	}
+	if old.Server.EnablePprof != new.Server.EnablePprof {
+		hotReloadable = append(hotReloadable, "server.enable_pprof")
+	}
+	if old.Server.EnableMetrics != new.Server.EnableMetrics {
+		hotReloadable = append(hotReloadable, "server.enable_metrics")
+	}
+	if old.Server.SocksListenHost != new.Server.SocksListenHost {
+		hotReloadable = append(hotReloadable, "server.socks_listen_host")
+	}
+	if old.Server.DNSObscure != new.Server.DNSObscure {
+		hotReloadable = append(hotReloadable, "server.dns_obscure")
+	}
+	if !reflect.DeepEqual(old.Server.AutoRecon, new.Server.AutoRecon) {
+		hotReloadable = append(hotReloadable, "server.auto_recon")
+	}
+	if old.Server.LPortFwdEnabled != new.Server.LPortFwdEnabled {
+		hotReloadable = append(hotReloadable, "server.lportfwd_enabled")
+	}
+	if old.Server.UpdateCheckEnabled != new.Server.UpdateCheckEnabled || old.Server.UpdateCheckRepo != new.Server.UpdateCheckRepo {
+		hotReloadable = append(hotReloadable, "server.update_check")
+	}
+	if !reflect.DeepEqual(old.Server.VantagePoints, new.Server.VantagePoints) {
+		hotReloadable = append(hotReloadable, "server.vantage_points")
+	}
+	if old.Crypto.MaxDecryptedPayloadSize != new.Crypto.MaxDecryptedPayloadSize {
+		hotReloadable = append(hotReloadable, "crypto.max_decrypted_payload_size")
+	}
+	if !reflect.DeepEqual(old.TLSFingerprint, new.TLSFingerprint) {
+		hotReloadable = append(hotReloadable, "server.tls_fingerprint")
 	}
 	if len(staticOnly) > 0 {
 		slog.Warn("Config file changed with non-hot-reloadable fields (restart required)", "fields", staticOnly)

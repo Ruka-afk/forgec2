@@ -83,6 +83,25 @@ func (rl *RateLimiter) Stop() {
 	})
 }
 
+// SetLimits updates the request quota and window live (hot-reload). Visitor
+// counters are preserved; only future windows use the new budget.
+func (rl *RateLimiter) SetLimits(limit int, window time.Duration) {
+	if limit <= 0 || window <= 0 {
+		return
+	}
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	rl.limit = limit
+	rl.window = window
+}
+
+// Snapshot returns the live quota for status reporting.
+func (rl *RateLimiter) Snapshot() (limit int, window time.Duration) {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	return rl.limit, rl.window
+}
+
 // Limit returns a middleware handler for rate limiting
 func (rl *RateLimiter) Limit() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -172,7 +191,9 @@ func ErrorHandler() gin.HandlerFunc {
 	}
 }
 
-// SecurityHeaders adds security headers to responses
+// SecurityHeaders adds security headers to responses.
+// NOTE: tlsEnabled is a startup snapshot — TLS listener binding itself
+// requires a restart (server.tls is static), so there is nothing to sync.
 func SecurityHeaders(tlsEnabled bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("X-Content-Type-Options", "nosniff")

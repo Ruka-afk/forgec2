@@ -38,6 +38,7 @@ const ModulesSection = lazy(() => import("./components/ModulesSection"));
 const EmergencySection = lazy(() => import("./components/EmergencySection"));
 const AccessSection = lazy(() => import("./components/AccessSection"));
 const TelemetrySection = lazy(() => import("./components/TelemetrySection"));
+const ReloadStatusCard = lazy(() => import("./components/ReloadStatusCard"));
 
 const SETTINGS_SECTION_KEYS = new Set([
   "profile", "theme", "language", "security", "access", "server", "agent",
@@ -375,7 +376,10 @@ export default function SettingsPage() {
                 />
                 <div className="mt-4"><ApiKeysSection /></div>
               </TabsContent>
-              <TabsContent value="server" className="mt-0"><ServerSection data={data} form={serverForm} setForm={setServerForm} saving={saving} onSave={handleSaveServer} /></TabsContent>
+              <TabsContent value="server" className="mt-0">
+                <ServerSection data={data} form={serverForm} setForm={setServerForm} saving={saving} onSave={handleSaveServer} />
+                <div className="mt-4"><Suspense fallback={null}><ReloadStatusCard /></Suspense></div>
+              </TabsContent>
               <TabsContent value="agent" className="mt-0"><AgentSection form={agentForm} setForm={setAgentForm} saving={saving} onSave={handleSaveAgent} /></TabsContent>
               <TabsContent value="malleable" className="mt-0"><Suspense fallback={null}><MalleableSection form={malleableForm} setForm={setMalleableForm} saving={saving} onSave={handleSaveMalleable} /></Suspense></TabsContent>
               <TabsContent value="database" className="mt-0"><Suspense fallback={null}><DatabaseSection data={data} saving={saving} onVacuum={handleVacuum} onBackup={handleBackup} onDownloadDB={handleDownloadDB} /></Suspense></TabsContent>

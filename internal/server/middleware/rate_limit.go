@@ -183,6 +183,26 @@ func (rl *APIRateLimiter) Stop() {
 	})
 }
 
+// SetCapacityRate updates the token-bucket budget live (hot-reload).
+// Existing buckets keep their token counts; only the ceiling and refill
+// rate change, so in-flight bursts are never retroactively punished.
+func (rl *APIRateLimiter) SetCapacityRate(capacity, rate float64) {
+	if capacity <= 0 || rate <= 0 {
+		return
+	}
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	rl.capacity = capacity
+	rl.rate = rate
+}
+
+// Snapshot returns the live budget for status reporting.
+func (rl *APIRateLimiter) Snapshot() (capacity, rate float64) {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	return rl.capacity, rl.rate
+}
+
 func (rl *APIRateLimiter) LimitByUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// WebSocket upgrades must not be rate-limited (long-lived connections).

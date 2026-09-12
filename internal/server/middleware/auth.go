@@ -26,6 +26,32 @@ const minJWTSecretLen = 32
 
 var jwtSecret atomic.Value
 
+// prevJWTSecret holds the pre-rotation signing key so in-flight operator
+// sessions survive a jwt_secret hot-reload. Entries expire after
+// jwtGracePeriod; rotation timestamps come from rotation time, not config.
+var prevJWTSecret atomic.Value // jwtGraceEntry | nil
+
+type jwtGraceEntry struct {
+	key     []byte
+	expires time.Time
+}
+
+// jwtGracePeriod bounds how long pre-rotation tokens stay valid.
+const jwtGracePeriod = 5 * time.Minute
+
+// jwtSigningKeys returns the current key first, then the unexpired previous
+// key (if any) for rotation grace.
+func jwtSigningKeys() [][]byte {
+	keys := [][]byte{}
+	if cur, ok := jwtSecret.Load().([]byte); ok && len(cur) > 0 {
+		keys = append(keys, cur)
+	}
+	if prev, ok := prevJWTSecret.Load().(jwtGraceEntry); ok && len(prev.key) > 0 && time.Now().Before(prev.expires) {
+		keys = append(keys, prev.key)
+	}
+	return keys
+}
+
 // trustedProxyIPs holds the operator-configured proxy IPs/CIDRs whose
 // X-Forwarded-* headers are trusted (set via SetTrustedProxyIPs).
 var trustedProxyIPs atomic.Value // []netip.Prefix
@@ -217,7 +243,7 @@ func InitJWTSecret(cfg *config.Config, configPath string) error {
 		}
 		secret = cfg.Server.JWTSecret
 	}
-	jwtSecret.Store([]byte(secret))
+	jwtRotateSecret(secret)
 	CookieSecure = cfg.Server.TLSEnabled
 	CookieDomain = cfg.Server.CookieDomain
 	RequireTLSForAuth = cfg.Server.RequireTLSForAuth
@@ -231,7 +257,45 @@ func InitJWTSecret(cfg *config.Config, configPath string) error {
 	return nil
 }
 
-// SetCookieWithSameSite sets a cookie with SameSite attribute.
+// jwtRotateSecret installs a new signing key, keeping the previous one for
+// jwtGracePeriod so hot-reload rotation does not kick every operator out.
+// Idempotent for identical values (file watcher double-fires, restarts).
+func jwtRotateSecret(secret string) {
+	if cur, ok := jwtSecret.Load().([]byte); ok && string(cur) == secret {
+		return
+	}
+	if cur, ok := jwtSecret.Load().([]byte); ok && len(cur) > 0 {
+		prevJWTSecret.Store(jwtGraceEntry{key: cur, expires: time.Now().Add(jwtGracePeriod)})
+	}
+	jwtSecret.Store([]byte(secret))
+}
+
+// parseClaimsWithGrace parses HMAC claims trying the current key first,
+// then the unexpired rotation-grace key, so hot-reload rotation does not
+// kick operators out mid-session.
+func parseClaimsWithGrace(tokenStr string, claims *Claims) (*jwt.Token, error) {
+	keys := jwtSigningKeys()
+	if len(keys) == 0 {
+		return nil, fmt.Errorf("no JWT signing key configured")
+	}
+	var lastErr error
+	for _, key := range keys {
+		token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
+			return key, nil
+		})
+		if err == nil && token.Valid {
+			return token, nil
+		}
+		lastErr = err
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("invalid token")
+	}
+	return nil, lastErr
+}
 // Gin's SetCookie does not support SameSite, so we use http.SetCookie directly.
 func SetCookieWithSameSite(c *gin.Context, name, value string, maxAge int, path string, secure, httpOnly bool, sameSite http.SameSite) {
 	domain := CookieDomain
@@ -368,12 +432,7 @@ func AuthRequired(database *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-			}
-			return jwtSecret.Load().([]byte), nil
-		})
+		token, err := parseClaimsWithGrace(tokenStr, &Claims{})
 		if err != nil || !token.Valid {
 			clearSessionCookie(c)
 			authFail(c, "Auth failed: invalid token", "path", c.Request.URL.Path, "ip", c.ClientIP(), "err", err)
@@ -595,17 +654,12 @@ func RequireAllPermissions(permissions ...string) gin.HandlerFunc {
 
 // ParseToken validates a JWT token string and returns the claims.
 func ParseToken(tokenStr string) (*Claims, error) {
-	token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return jwtSecret.Load().([]byte), nil
-	})
+	claims := &Claims{}
+	token, err := parseClaimsWithGrace(tokenStr, claims)
 	if err != nil {
 		return nil, err
 	}
-	claims, ok := token.Claims.(*Claims)
-	if !ok || !token.Valid {
+	if !token.Valid {
 		return nil, fmt.Errorf("invalid token claims")
 	}
 	return claims, nil

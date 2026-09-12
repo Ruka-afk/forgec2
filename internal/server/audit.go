@@ -116,6 +116,12 @@ func (s *Server) flushAuditEntries(entries []db.AuditLog) {
 	if len(entries) == 0 {
 		return
 	}
+	// Audit must never crash the server: tests and degraded states may
+	// call in without a database. Log and drop instead of panicking.
+	if s == nil || s.db == nil {
+		slog.Warn("Dropping audit entries: no database", "count", len(entries))
+		return
+	}
 	// Serialize appends so the read-last-entry + insert is atomic with respect
 	// to other appends (see auditChainMu docs).
 	auditChainMu.Lock()

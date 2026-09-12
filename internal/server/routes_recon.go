@@ -1,6 +1,7 @@
 package server
 
 import (
+	"net/http"
 	"net/http/pprof"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -95,24 +96,49 @@ func (s *Server) registerReconRoutes(auth *gin.RouterGroup) {
 }
 
 func (s *Server) registerDebugRoutes(auth *gin.RouterGroup) {
-	if s.cfg.Server.EnableMetrics {
-		auth.GET("/metrics", middleware.RequirePermission(db.PermSettingsRead), metricsPromHandler())
+	// Always registered; enabled flags are evaluated per request so
+	// toggling server.enable_metrics/enable_pprof takes effect on reload
+	// without a restart. Auth stays enforced regardless of the toggle.
+	auth.GET("/metrics", middleware.RequirePermission(db.PermSettingsRead), s.gatedMetricsHandler())
+	pprofGroup := auth.Group("/debug/pprof")
+	// pprof dumps process memory (JWT secret, loot keys, decrypted
+	// credentials) — admin only.
+	pprofGroup.Use(middleware.RequireRole(db.RoleAdmin))
+	pprofGroup.Use(s.gatedPprofHandler())
+	pprofGroup.GET("/", func(c *gin.Context) { pprof.Index(c.Writer, c.Request) })
+	pprofGroup.GET("/cmdline", func(c *gin.Context) { pprof.Cmdline(c.Writer, c.Request) })
+	pprofGroup.GET("/profile", func(c *gin.Context) { pprof.Profile(c.Writer, c.Request) })
+	pprofGroup.GET("/symbol", func(c *gin.Context) { pprof.Symbol(c.Writer, c.Request) })
+	pprofGroup.GET("/trace", func(c *gin.Context) { pprof.Trace(c.Writer, c.Request) })
+	pprofGroup.GET("/heap", func(c *gin.Context) { pprof.Handler("heap").ServeHTTP(c.Writer, c.Request) })
+	pprofGroup.GET("/goroutine", func(c *gin.Context) { pprof.Handler("goroutine").ServeHTTP(c.Writer, c.Request) })
+	pprofGroup.GET("/block", func(c *gin.Context) { pprof.Handler("block").ServeHTTP(c.Writer, c.Request) })
+	pprofGroup.GET("/mutex", func(c *gin.Context) { pprof.Handler("mutex").ServeHTTP(c.Writer, c.Request) })
+	pprofGroup.GET("/threadcreate", func(c *gin.Context) { pprof.Handler("threadcreate").ServeHTTP(c.Writer, c.Request) })
+}
+
+// gatedMetricsHandler wraps the prometheus handler with the live toggle.
+func (s *Server) gatedMetricsHandler() gin.HandlerFunc {
+	inner := metricsPromHandler()
+	return func(c *gin.Context) {
+		if !s.cfg.Server.EnableMetrics {
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "metrics disabled"})
+			c.Abort()
+			return
+		}
+		inner(c)
 	}
-	if s.cfg.Server.EnablePprof {
-		pprofGroup := auth.Group("/debug/pprof")
-		// pprof dumps process memory (JWT secret, loot keys, decrypted
-		// credentials) — admin only.
-		pprofGroup.Use(middleware.RequireRole(db.RoleAdmin))
-		pprofGroup.GET("/", func(c *gin.Context) { pprof.Index(c.Writer, c.Request) })
-		pprofGroup.GET("/cmdline", func(c *gin.Context) { pprof.Cmdline(c.Writer, c.Request) })
-		pprofGroup.GET("/profile", func(c *gin.Context) { pprof.Profile(c.Writer, c.Request) })
-		pprofGroup.GET("/symbol", func(c *gin.Context) { pprof.Symbol(c.Writer, c.Request) })
-		pprofGroup.GET("/trace", func(c *gin.Context) { pprof.Trace(c.Writer, c.Request) })
-		pprofGroup.GET("/heap", func(c *gin.Context) { pprof.Handler("heap").ServeHTTP(c.Writer, c.Request) })
-		pprofGroup.GET("/goroutine", func(c *gin.Context) { pprof.Handler("goroutine").ServeHTTP(c.Writer, c.Request) })
-		pprofGroup.GET("/block", func(c *gin.Context) { pprof.Handler("block").ServeHTTP(c.Writer, c.Request) })
-		pprofGroup.GET("/mutex", func(c *gin.Context) { pprof.Handler("mutex").ServeHTTP(c.Writer, c.Request) })
-		pprofGroup.GET("/threadcreate", func(c *gin.Context) { pprof.Handler("threadcreate").ServeHTTP(c.Writer, c.Request) })
+}
+
+// gatedPprofHandler aborts pprof requests while the live toggle is off.
+func (s *Server) gatedPprofHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !s.cfg.Server.EnablePprof {
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "pprof disabled"})
+			c.Abort()
+			return
+		}
+		c.Next()
 	}
 }
 

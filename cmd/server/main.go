@@ -40,7 +40,9 @@ func main() {
 	logWriter := server.SetupLogRotation(logDir)
 
 	var logHandler slog.Handler
-	handlerOpts := &slog.HandlerOptions{Level: slog.LevelInfo}
+	// Level gate is a shared var so config hot-reload can change verbosity
+	// without rebuilding the handler (see server.SetLogLevel).
+	handlerOpts := &slog.HandlerOptions{Level: server.LogLevelVar()}
 	switch strings.ToLower(*logFormat) {
 	case "json":
 		logHandler = slog.NewJSONHandler(logWriter, handlerOpts)
@@ -64,9 +66,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Apply log level from config
-	logLevel := parseLogLevel(cfg.Logging.Level)
-	handlerOpts.Level = logLevel
+	// Apply log level from config (also re-applied on every hot-reload).
+	if !server.SetLogLevel(cfg.Logging.Level) {
+		slog.Warn("Unknown logging.level, keeping info", "level", cfg.Logging.Level)
+	}
+
 	switch strings.ToLower(*logFormat) {
 	case "json":
 		logHandler = slog.NewJSONHandler(logWriter, handlerOpts)
@@ -81,7 +85,7 @@ func main() {
 	}
 
 	// Initialize database
-	database, err := db.InitDBWithDriver(cfg.Database.Driver, cfg.Database.DSN, cfg.Database.Path, logLevel, cfg.Server.DBMaxOpenConns, cfg.Server.DBMaxIdleConns, cfg.Server.DBConnMaxLifetime, cfg.Auth.DefaultPasswd)
+	database, err := db.InitDBWithDriver(cfg.Database.Driver, cfg.Database.DSN, cfg.Database.Path, server.LogLevelVar().Level(), cfg.Server.DBMaxOpenConns, cfg.Server.DBMaxIdleConns, cfg.Server.DBConnMaxLifetime, cfg.Auth.DefaultPasswd)
 	if err != nil {
 		slog.Error("Failed to initialize database", "err", err)
 		os.Exit(1)
@@ -145,18 +149,5 @@ func main() {
 			srv.Shutdown()
 			os.Exit(1)
 		}
-	}
-}
-
-func parseLogLevel(level string) slog.Level {
-	switch strings.ToLower(level) {
-	case "debug":
-		return slog.LevelDebug
-	case "warn":
-		return slog.LevelWarn
-	case "error":
-		return slog.LevelError
-	default:
-		return slog.LevelInfo
 	}
 }

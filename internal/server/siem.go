@@ -64,6 +64,35 @@ func NewSIEMWebhook(s *Server, url, token, actions string) *SIEMWebhook {
 	return sw
 }
 
+// UpdateConfig hot-swaps the webhook target, token, action filter and
+// enabled flag without dropping the queued batch or restarting flushLoop.
+func (sw *SIEMWebhook) UpdateConfig(enabled bool, url, token, actions string) {
+	var parsed map[string]bool
+	if actions != "" {
+		parsed = make(map[string]bool)
+		for _, a := range strings.Split(actions, ",") {
+			parsed[strings.TrimSpace(a)] = true
+		}
+	}
+	sw.batchMu.Lock()
+	defer sw.batchMu.Unlock()
+	sw.Enabled = enabled
+	sw.URL = url
+	sw.Token = token
+	sw.actions = parsed
+}
+
+// Snapshot returns the live endpoint summary for status reporting.
+func (sw *SIEMWebhook) Snapshot() (enabled bool, url string, actions string) {
+	sw.batchMu.Lock()
+	defer sw.batchMu.Unlock()
+	list := make([]string, 0, len(sw.actions))
+	for a := range sw.actions {
+		list = append(list, a)
+	}
+	return sw.Enabled, sw.URL, strings.Join(list, ",")
+}
+
 // ReloadRules re-loads user-authored correlation rules from the DB. If no
 // custom rules are configured (or the DB is unavailable) it falls back to the
 // built-in default rule set.
@@ -91,10 +120,13 @@ func (sw *SIEMWebhook) ReloadRules() {
 }
 
 func (sw *SIEMWebhook) Send(event SIEMEvent) {
-	if !sw.Enabled || sw.URL == "" {
+	sw.batchMu.Lock()
+	enabled, url, actions := sw.Enabled, sw.URL, sw.actions
+	sw.batchMu.Unlock()
+	if !enabled || url == "" {
 		return
 	}
-	if sw.actions != nil && !sw.actions[event.Action] {
+	if actions != nil && !actions[event.Action] {
 		return
 	}
 	alerts := sw.correlator.ProcessEvent(event)
