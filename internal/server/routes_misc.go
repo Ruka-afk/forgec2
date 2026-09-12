@@ -10,6 +10,7 @@ func (s *Server) registerMiscRoutes(auth *gin.RouterGroup) {
 	auth.GET("/api/update-check", s.handleUpdateCheck)
 	auth.GET("/api/update-check/version", s.handleCheckVersion)
 	auth.POST("/api/update-check/refresh", s.handleRefreshUpdateCheck)
+	auth.GET("/api/update-progress", s.handleUpdateProgress)
 
 	auth.POST("/api/update-check/hot-update", middleware.RequireRole(db.RoleAdmin), s.handleHotUpdate)
 

@@ -88,6 +88,22 @@ interface SystemAlertEvent {
 
 interface UpdateAvailableEvent {
   latest?: string;
+  current?: string;
+  download_url?: string;
+}
+
+interface UpdateProgressEvent {
+  stage?: string;
+  percent?: number;
+  downloaded?: number;
+  total?: number;
+  version?: string;
+  error?: string;
+}
+
+interface ServerRestartingEvent {
+  message?: string;
+  version?: string;
 }
 
 /** Payloads not yet modeled: widen as consumers migrate to typed access. */
@@ -108,6 +124,8 @@ export interface WSEventMap {
   credential_found: CredentialFoundEvent;
   system_alert: SystemAlertEvent;
   update_available: UpdateAvailableEvent;
+  update_progress: UpdateProgressEvent;
+  server_restarting: ServerRestartingEvent;
   build_update: UnmodeledEvent;
   listener_update: UnmodeledEvent;
   credential_update: UnmodeledEvent;

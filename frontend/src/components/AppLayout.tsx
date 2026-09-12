@@ -3,6 +3,7 @@ import { useEffect, useCallback, useRef } from "react";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import UpdateBanner from "@/components/UpdateBanner";
+import { UpdateDialog } from "@/components/UpdateDialog";
 import AgentStatusBanner from "@/components/AgentStatusBanner";
 import ShortcutsHelp from "@/components/ShortcutsHelp";
 import ScrollToTop from "@/components/ScrollToTop";
@@ -131,6 +132,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {!flush && (
               <>
                 <UpdateBanner />
+                <UpdateDialog />
                 <AgentStatusBanner />
               </>
             )}

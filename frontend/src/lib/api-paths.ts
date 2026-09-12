@@ -528,6 +528,10 @@ export const paths = {
     toggle: (id: string | number) => `/siem/rules/${id}/toggle`,
   },
   updateCheck: "/api/update-check",
+  updateVersion: "/api/update-check/version",
+  updateRefresh: "/api/update-check/refresh",
+  updateHotUpdate: "/api/update-check/hot-update",
+  updateProgress: "/api/update-progress",
   redirectors: {
     list: "/redirectors",
     one: (id: string | number) => `/redirectors/${id}`,

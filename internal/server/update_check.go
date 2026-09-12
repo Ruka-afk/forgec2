@@ -25,13 +25,73 @@ import (
 const defaultUpdateCheckURLFmt = "https://api.github.com/repos/%s/releases/latest"
 const defaultReleaseAssetsURLFmt = "https://api.github.com/repos/%s/releases/tags/%s"
 
-// updateCheckState holds the latest version check result
+// Hot-update stages for progress reporting.
+const (
+	updateStageIdle       = "idle"
+	updateStageChecking   = "checking"
+	updateStageDownloading = "downloading"
+	updateStageVerifying  = "verifying"
+	updateStageRestarting = "restarting"
+	updateStageFailed     = "failed"
+	updateStageDone       = "done"
+)
+
+// updateCheckState holds the latest version check result plus the
+// hot-update progress machine (all fields under mu).
 type updateCheckState struct {
-	mu            sync.RWMutex
+	mu              sync.RWMutex
 	LatestVersion string
 	CheckedAt     time.Time
 	Available     bool
 	Error         string
+	// Hot-update progress machine (idle until POST /hot-update).
+	Stage           string
+	Progress        int
+	DownloadedBytes int64
+	TotalBytes      int64
+	TargetVersion   string
+	LastError       string
+	UpdatedAt       time.Time
+}
+
+// setUpdateProgress records a progress step and broadcasts it. Broadcasts
+// are throttled to 5% increments (plus terminal stages) to avoid WS spam.
+func (s *Server) setUpdateProgress(stage string, progress int, downloaded, total int64, target, lastErr string) {
+	s.updateState.mu.Lock()
+	prevStage := s.updateState.Stage
+	prevProgress := s.updateState.Progress
+	s.updateState.Stage = stage
+	s.updateState.Progress = progress
+	s.updateState.DownloadedBytes = downloaded
+	s.updateState.TotalBytes = total
+	if target != "" {
+		s.updateState.TargetVersion = target
+	}
+	s.updateState.LastError = lastErr
+	s.updateState.UpdatedAt = time.Now()
+	version := s.updateState.TargetVersion
+	s.updateState.mu.Unlock()
+
+	terminal := stage == updateStageFailed || stage == updateStageDone || stage == updateStageRestarting
+	if !terminal && stage == prevStage && progress-prevProgress < 5 {
+		return
+	}
+	payload := map[string]interface{}{
+		"type":       "update_progress",
+		"stage":      stage,
+		"percent":    progress,
+		"downloaded": downloaded,
+		"total":      total,
+		"version":    version,
+	}
+	if lastErr != "" {
+		payload["error"] = lastErr
+	}
+	msg, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	s.broadcastToClients(msg)
 }
 
 // GitHubRelease is a minimal representation of a GitHub release
@@ -257,7 +317,9 @@ func (s *Server) handleHotUpdate(c *gin.Context) {
 
 	s.LogAuditRecord(c, "hot_update", "server", "self", fmt.Sprintf("hot update to %s triggered", latest), true, nil)
 
-	// Trigger async hot-update
+	// Trigger async hot-update; progress follows via WS update_progress
+	// and GET /api/update-progress (the process restarts on success).
+	s.setUpdateProgress(updateStageDownloading, 0, 0, 0, latest, "")
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -269,18 +331,42 @@ func (s *Server) handleHotUpdate(c *gin.Context) {
 		}
 	}()
 
-	c.JSON(http.StatusOK, gin.H{
+	c.JSON(http.StatusAccepted, gin.H{
 		"success":        true,
 		"message":        "Downloading and applying update, server will restart...",
 		"latest_version": latest,
+		"progress_url":   "/api/update-progress",
 	})
 }
 
-// performHotUpdate downloads the latest binary, replaces itself, and restarts
+// handleUpdateProgress returns the hot-update state machine for polling
+// fallback (WS disconnects, page refreshes mid-download).
+func (s *Server) handleUpdateProgress(c *gin.Context) {
+	s.updateState.mu.RLock()
+	defer s.updateState.mu.RUnlock()
+
+	c.JSON(http.StatusOK, gin.H{
+		"stage":      s.updateState.Stage,
+		"percent":    s.updateState.Progress,
+		"downloaded": s.updateState.DownloadedBytes,
+		"total":      s.updateState.TotalBytes,
+		"version":    s.updateState.TargetVersion,
+		"error":      s.updateState.LastError,
+		"updated_at": s.updateState.UpdatedAt,
+	})
+}
+
+// performHotUpdate downloads the latest binary, replaces itself, and restarts.
+// Progress is reported through setUpdateProgress (WS + GET /api/update-progress).
 func (s *Server) performHotUpdate(latest string) error {
+	fail := func(err error) error {
+		s.setUpdateProgress(updateStageFailed, 0, 0, 0, latest, err.Error())
+		return err
+	}
+	s.setUpdateProgress(updateStageDownloading, 0, 0, 0, latest, "")
 	assets, err := fetchReleaseAssets(s.cfg.Server.UpdateCheckRepo, latest)
 	if err != nil {
-		return fmt.Errorf("fetch release assets: %w", err)
+		return fail(fmt.Errorf("fetch release assets: %w", err))
 	}
 
 	// Find a matching binary for this platform
@@ -316,7 +402,7 @@ func (s *Server) performHotUpdate(latest string) error {
 		}
 	}
 	if downloadURL == "" {
-		return fmt.Errorf("no matching binary found in release assets")
+		return fail(fmt.Errorf("no matching binary found in release assets"))
 	}
 
 	exePath, err := os.Executable()
@@ -330,21 +416,22 @@ func (s *Server) performHotUpdate(latest string) error {
 
 	// Download to a temp file in the same directory
 	tmpPath := filepath.Join(filepath.Dir(exePath), ".update."+binName)
-	if err := downloadFile(downloadURL, tmpPath); err != nil {
-		return fmt.Errorf("download binary: %w", err)
+	if err := s.downloadUpdateFile(downloadURL, tmpPath, latest); err != nil {
+		return fail(fmt.Errorf("download binary: %w", err))
 	}
 
 	// Verify the downloaded file is valid
 	if fi, err := os.Stat(tmpPath); err != nil || fi.Size() == 0 {
 		os.Remove(tmpPath)
-		return fmt.Errorf("downloaded binary is invalid")
+		return fail(fmt.Errorf("downloaded binary is invalid"))
 	}
 
 	// Verify SHA-256 checksum if a checksum file was found
 	if checksumURL != "" {
+		s.setUpdateProgress(updateStageVerifying, 100, 0, 0, latest, "")
 		if err := verifyChecksum(tmpPath, checksumURL); err != nil {
 			os.Remove(tmpPath)
-			return fmt.Errorf("checksum verification failed: %w", err)
+			return fail(fmt.Errorf("checksum verification failed: %w", err))
 		}
 		slog.Info("Hot update: checksum verified")
 	}
@@ -362,7 +449,7 @@ start "" %s
 `, quoteCmd(tmpPath), quoteCmd(exePath), quoteCmd(tmpPath), quoteCmd(exePath))
 		if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
 			os.Remove(tmpPath)
-			return fmt.Errorf("create restart script: %w", err)
+			return fail(fmt.Errorf("create restart script: %w", err))
 		}
 		args = []string{"cmd", "/c", scriptPath}
 	} else {
@@ -376,7 +463,7 @@ exec %s "$@"
 `, quoteSh(tmpPath), quoteSh(exePath), quoteSh(tmpPath), quoteSh(exePath))
 		if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
 			os.Remove(tmpPath)
-			return fmt.Errorf("create restart script: %w", err)
+			return fail(fmt.Errorf("create restart script: %w", err))
 		}
 		args = []string{"/bin/sh", scriptPath}
 	}
@@ -393,13 +480,14 @@ exec %s "$@"
 	s.broadcastToClients(msg)
 
 	slog.Info("Starting hot update, server will restart", "version", latest)
+	s.setUpdateProgress(updateStageRestarting, 100, 0, 0, latest, "")
 
 	// Start the restart script and exit
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start restart script: %w", err)
+		return fail(fmt.Errorf("start restart script: %w", err))
 	}
 
 	// Graceful shutdown after a brief delay for the script to start
@@ -468,8 +556,23 @@ func fetchReleaseAssets(repo, tag string) ([]GitHubAsset, error) {
 	return nil, lastErr
 }
 
-// downloadFile downloads a URL to a local file path
-func downloadFile(url, dest string) error {
+// progressWriter reports download progress for hot-update broadcasting.
+type progressWriter struct {
+	total      int64
+	downloaded int64
+	onProgress func(downloaded, total int64)
+}
+
+func (w *progressWriter) Write(p []byte) (int, error) {
+	w.downloaded += int64(len(p))
+	if w.onProgress != nil {
+		w.onProgress(w.downloaded, w.total)
+	}
+	return len(p), nil
+}
+
+// downloadUpdateFile downloads with progress callbacks into setUpdateProgress.
+func (s *Server) downloadUpdateFile(url, dest, version string) error {
 	slog.Info("Downloading update binary", "url", url, "dest", dest)
 	client := &http.Client{Timeout: UpdateDownloadTimeout}
 	req, err := http.NewRequest("GET", url, nil)
@@ -494,12 +597,26 @@ func downloadFile(url, dest string) error {
 	}
 	defer out.Close()
 
-	written, err := io.Copy(out, resp.Body)
+	pw := &progressWriter{total: resp.ContentLength}
+	lastBroadcast := -1
+	pw.onProgress = func(downloaded, total int64) {
+		percent := -1
+		if total > 0 {
+			percent = int(downloaded * 100 / total)
+			if percent == lastBroadcast || (percent-lastBroadcast < 5 && percent < 100) {
+				return
+			}
+			lastBroadcast = percent
+		}
+		s.setUpdateProgress(updateStageDownloading, percent, downloaded, total, version, "")
+	}
+	written, err := io.Copy(out, io.TeeReader(resp.Body, pw))
 	if err != nil {
 		os.Remove(dest)
 		return err
 	}
 	slog.Info("Downloaded new binary", "size", written)
+	s.setUpdateProgress(updateStageDownloading, 100, written, written, version, "")
 	return nil
 }
 

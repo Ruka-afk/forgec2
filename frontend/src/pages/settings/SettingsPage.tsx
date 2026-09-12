@@ -23,6 +23,7 @@ import SecuritySection from "./components/SecuritySection";
 import ApiKeysSection from "./components/ApiKeysSection";
 import ServerSection from "./components/ServerSection";
 import AgentSection from "./components/AgentSection";
+import { openUpdateDialog } from "@/components/UpdateDialog";
 
 
 const MalleableSection = lazy(() => import("./components/MalleableSection"));
@@ -223,9 +224,10 @@ export default function SettingsPage() {
 
   const handleCheckUpdate = async () => {
     try {
-      const d = await api.get<{ update_available?: boolean; latest_version?: string }>(paths.updateCheck);
+      const d = await api.get<{ update_available?: boolean; latest_version?: string; download_url?: string }>(paths.updateCheck);
       if (d.update_available && d.latest_version) {
         toast.success(t("settings.toast.update_new", { version: String(d.latest_version) }));
+        openUpdateDialog({ latest: String(d.latest_version), downloadUrl: d.download_url });
       } else {
         toast.success(t("settings.toast.update_latest"));
       }

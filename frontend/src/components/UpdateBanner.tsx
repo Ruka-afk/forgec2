@@ -8,6 +8,7 @@ import { ArrowUpCircle, X } from "lucide-react";
 import { safeHref } from "@/lib/safeUrl";
 import { bannerSurface } from "@/components/ui/banner";
 import { cn } from "@/lib/utils";
+import { openUpdateDialog } from "@/components/UpdateDialog";
 
 const DISMISS_KEY = "forgec2_update_dismissed";
 
@@ -36,12 +37,14 @@ export default function UpdateBanner({ currentVersion }: { currentVersion?: stri
         } catch {
           toast.error(t("update_banner.toast.storage_failed"));
         }
-        if (dismissedVer === latest) return;
+        if (!latest || dismissedVer === latest) return;
         setInfo({
           latest,
           downloadUrl: safeHref(msg.download_url),
         });
         setDismissed(false);
+        // Push window: open the update dialog for the new version.
+        openUpdateDialog({ latest, downloadUrl: safeHref(msg.download_url) ?? undefined });
       }
     });
   }, [subscribe, t]);
@@ -69,6 +72,14 @@ export default function UpdateBanner({ currentVersion }: { currentVersion?: stri
         </span>
       </div>
       <div className="flex items-center gap-3 shrink-0 ml-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-info-foreground underline-offset-2 hover:underline hidden sm:inline-flex"
+          onClick={() => openUpdateDialog({ latest: info.latest, downloadUrl: info.downloadUrl ?? undefined })}
+        >
+          {t("update_banner.update_now")}
+        </Button>
         <a
           href={downloadHref}
           target="_blank"
