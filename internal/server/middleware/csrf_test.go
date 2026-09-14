@@ -21,7 +21,7 @@ func validCSRFToken(sessionToken, keyHex string) string {
 	if err != nil {
 		panic(err)
 	}
-	return deriveCSRFToken(sessionToken, b)
+	return DeriveCSRFToken(sessionToken, b)
 }
 
 func initSecrets(t *testing.T, jwtSecret string) {
@@ -106,6 +106,7 @@ func TestCSRFProtect_POST_RejectsMismatchedToken(t *testing.T) {
 	c.Request, _ = http.NewRequest(http.MethodPost, "/api/test", nil)
 	c.Request.Header.Set(csrfHeaderName, "wrong-token")
 	c.Request.AddCookie(sessionCookie("my-session-token"))
+	c.Request.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "wrong-cookie-token"})
 
 	CSRFProtect()(c)
 
@@ -122,8 +123,10 @@ func TestCSRFProtect_POST_AcceptsValidToken(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequest(http.MethodPost, "/api/test", nil)
-	c.Request.Header.Set(csrfHeaderName, validCSRFToken(sessionToken, csrfTestKeyHex))
+	validToken := validCSRFToken(sessionToken, csrfTestKeyHex)
+	c.Request.Header.Set(csrfHeaderName, validToken)
 	c.Request.AddCookie(sessionCookie(sessionToken))
+	c.Request.AddCookie(&http.Cookie{Name: csrfCookieName, Value: validToken})
 
 	CSRFProtect()(c)
 
@@ -142,9 +145,10 @@ func TestCSRFProtect_TokenBoundToDedicatedKey(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequest(http.MethodPost, "/api/test", nil)
-	legacyToken := deriveCSRFToken(sessionToken, []byte("test-secret-key-32chars-long!!!!"))
+	legacyToken := DeriveCSRFToken(sessionToken, []byte("test-secret-key-32chars-long!!!!"))
 	c.Request.Header.Set(csrfHeaderName, legacyToken)
 	c.Request.AddCookie(sessionCookie(sessionToken))
+	c.Request.AddCookie(&http.Cookie{Name: csrfCookieName, Value: legacyToken})
 
 	CSRFProtect()(c)
 

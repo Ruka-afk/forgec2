@@ -1,8 +1,6 @@
 package server
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -266,13 +264,7 @@ func (s *Server) handleLogin(c *gin.Context) {
 		return
 	}
 
-	var csrfBuf [32]byte
-	if _, err := rand.Read(csrfBuf[:]); err != nil {
-		slog.Error("Failed to generate CSRF token", "err", err)
-		respondError(c, http.StatusInternalServerError, "failed to generate security token")
-		return
-	}
-	csrfToken := hex.EncodeToString(csrfBuf[:])
+	csrfToken := middleware.DeriveCSRFToken(token, middleware.GetCSRFSecret())
 	middleware.SetCookieWithSameSite(c, "forgec2_csrf", csrfToken, 0, "/", middleware.CookieSecure, false, http.SameSiteLaxMode)
 
 	s.clearLoginLockout(clientIP)

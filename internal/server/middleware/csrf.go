@@ -41,6 +41,16 @@ func InitCSRFSecret(cfg *config.Config) error {
 	return nil
 }
 
+// GetCSRFSecret returns the raw CSRF secret bytes. Used by login handler
+// to derive the initial CSRF token that matches the session.
+func GetCSRFSecret() []byte {
+	v := csrfSecret.Load()
+	if v == nil {
+		return nil
+	}
+	return v.([]byte)
+}
+
 // CSRFProtect generates a CSRF token on GET requests and validates it on
 // mutating requests (POST, PUT, DELETE, PATCH). The token is delivered via
 // a cookie that JavaScript can read (HttpOnly=false) and must be echoed back
@@ -64,6 +74,7 @@ func CSRFProtect() gin.HandlerFunc {
 				return
 			}
 			headerToken := c.GetHeader(csrfHeaderName)
+			cookieToken, _ := c.Cookie(csrfCookieName)
 			sessionToken, err := c.Cookie("forgec2_session")
 			if sessionToken == "" || err != nil {
 				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
@@ -73,8 +84,10 @@ func CSRFProtect() gin.HandlerFunc {
 				return
 			}
 			secret := csrfSecret.Load().([]byte)
-			expected := deriveCSRFToken(sessionToken, secret)
-			if headerToken == "" || subtle.ConstantTimeCompare([]byte(headerToken), []byte(expected)) != 1 {
+			expected := DeriveCSRFToken(sessionToken, secret)
+			if headerToken == "" || cookieToken == "" ||
+				subtle.ConstantTimeCompare([]byte(headerToken), []byte(expected)) != 1 ||
+				subtle.ConstantTimeCompare([]byte(cookieToken), []byte(expected)) != 1 {
 				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 					"success": false,
 					"error":   "Missing or invalid CSRF token",
@@ -88,7 +101,7 @@ func CSRFProtect() gin.HandlerFunc {
 			sessionToken, err := c.Cookie("forgec2_session")
 			if err == nil && sessionToken != "" {
 				secret := csrfSecret.Load().([]byte)
-				token := deriveCSRFToken(sessionToken, secret)
+				token := DeriveCSRFToken(sessionToken, secret)
 				SetCookieWithSameSite(c, csrfCookieName, token, 0, "/", CookieSecure, false, http.SameSiteLaxMode)
 			}
 		}
@@ -97,7 +110,7 @@ func CSRFProtect() gin.HandlerFunc {
 	}
 }
 
-func deriveCSRFToken(sessionToken string, secret []byte) string {
+func DeriveCSRFToken(sessionToken string, secret []byte) string {
 	h := sha256.Sum256([]byte(sessionToken))
 	mac := hmac.New(sha256.New, secret)
 	mac.Write(h[:])
