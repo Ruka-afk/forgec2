@@ -1,7 +1,8 @@
 # C Implant (prototype)
 
 Wire-compatible C implementation of the ForgeC2 implant for Windows,
-built with mingw-w64. No Go toolchain, no runtime, ~120KB release binary.
+built with mingw-w64. No Go toolchain, no runtime, ~660KB release binary
+(SQLite amalgamation vendored for `wechat_history`).
 
 ## Status: working prototype, E2E verified
 
@@ -9,9 +10,12 @@ built with mingw-w64. No Go toolchain, no runtime, ~120KB release binary.
   live server (`/api/v1/beacon`), seq persistence + handshake recovery,
   requeue on failure, resync fast-forward
 - Tasks: shell, hostinfo/recon, file ops (upload/download/mkdir/rename/
-  delete/chmod), download_url, **set_sleep**, **wechat_history**, traffic jitter camouflage,
-  per-disguise LNK icons; unsupported types fail closed with
-  `unsupported in C implant`
+  delete/chmod), download_url, **set_sleep**, **wechat_history**,
+  system management (services, reg_get/reg_set/reg_delete, killproc,
+  suspend/resume, reboot/shutdown, window_list/window_close),
+  persistence (persistence_add/list/remove: registry Run, scheduled task,
+  startup folder), traffic jitter camouflage, per-disguise LNK icons;
+  unsupported types fail closed with `unsupported in C implant`
 - Crypto: X25519 via embedded constant-time ladder (`curve25519.c`),
   verified at startup against Go-stdlib vectors (`x25519_selftest`,
   fail closed); AES-GCM/HMAC/RNG via CNG (works back to Windows 7)
@@ -61,18 +65,19 @@ This script automates the full CSRF flow: login → GET to rotate CSRF cookie �
 | Go agent (full) | ~23.3 MB | 1× |
 | Go agent (slim/http-only) | ~17.0 MB | 0.7× |
 | Go agent (slim + Win7/go1.20) | ~14.9 MB | 0.6× |
-| **C implant (release, -Os+strip+gc-sections)** | **~120 KB** | **1/190×** |
-| C implant (release + UPX --best --lzma) | **~120 KB** | **1/190×** |
+| **C implant (release, -Os+strip+gc-sections)** | **~660 KB** | **1/36×** |
+| C implant (release + UPX --best --lzma) | **~660 KB** | **1/36×** |
 
-Note: The -Os+strip+gc-sections build yields ~120KB (vs ~197KB with -O2).
-UPX compression yields minimal further reduction on this binary due to
-already-stripped sections and high entropy.
+Note: The -Os+strip+gc-sections build yields ~660KB (vs ~197KB pre-SQLite).
+The bulk is the vendored SQLite amalgamation (`sqlite3.c`, required for
+`wechat_history`); UPX yields minimal further reduction on this binary due
+to already-stripped sections and high entropy.
 
 ## Gaps vs the Go agent (by design, for now)
 
 - Transports: HTTP only (no TCP/DNS/ICMP/WSS/gRPC/SSH/P2P/SMB)
 - No BOF/CLR/execute-assembly, no sleep masks, no PPID spoof
-- No screenshots/keylogging/persistence/sleep jitter beyond beacon interval
+- No screenshots/keylogging; no SOCKS/port-forwarding yet
 - No malleable request transforms (plain JSON inner bodies)
 - No auto self-update; redeploy manually
 
