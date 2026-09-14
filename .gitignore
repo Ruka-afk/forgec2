@@ -8,6 +8,7 @@ forgec2-server-linux-amd64
 forgec2-server-linux-arm64
 forgec2-server-darwin-amd64
 forgec2-server-darwin-arm64
+reset-password.exe
 
 # ForgeC2 specific
 data/
@@ -74,6 +75,13 @@ terminals/
 
 # Scripts (local dev only)
 dev_check.ps1
+proto/c-implant/build-e2e-local.bat
+proto/c-implant/build-e2e-fresh.bat
+proto/c-implant/build-release.bat
+proto/c-implant/sqlite3.c
+proto/c-implant/sqlite3.h
+proto/c-implant/sqlite-amalgamation-*/
+proto/c-implant/sqlite-amalgamation.zip
 
 # Session artifacts
 SUMMARY.md
