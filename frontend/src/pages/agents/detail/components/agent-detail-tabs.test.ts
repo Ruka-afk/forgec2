@@ -30,7 +30,7 @@ describe("agent-detail-tabs", () => {
     const sections: AgentDetailSection[] = [
       "diagnose", "tasks", "hostinfo", "recon", "process", "evasion",
       "inject", "screenshots", "screentrigger", "registry", "browserhistory",
-      "keylogger", "clipboard", "wallpaper", "webcammic", "timeline",
+      "wechathistory", "keylogger", "clipboard", "wallpaper", "webcammic", "timeline",
     ];
     for (const s of sections) {
       expect(isAgentDetailTabId(AGENT_DETAIL_SECTION_TABS[s])).toBe(true);
@@ -41,7 +41,7 @@ describe("agent-detail-tabs", () => {
     const sections: AgentDetailSection[] = [
       "diagnose", "tasks", "hostinfo", "recon", "process", "evasion",
       "inject", "screenshots", "screentrigger", "registry", "browserhistory",
-      "keylogger", "clipboard", "wallpaper", "webcammic", "timeline",
+      "wechathistory", "keylogger", "clipboard", "wallpaper", "webcammic", "timeline",
     ];
     for (const s of sections) {
       expect(sectionSupported(s, { isCImplant: false })).toBe(true);
@@ -49,7 +49,7 @@ describe("agent-detail-tabs", () => {
   });
 
   it("gates C implants to the core subset", () => {
-    for (const s of ["diagnose", "tasks", "hostinfo", "process", "timeline"] as const) {
+    for (const s of ["diagnose", "tasks", "hostinfo", "process", "timeline", "wechathistory"] as const) {
       expect(sectionSupported(s, { isCImplant: true })).toBe(true);
     }
     for (const s of [

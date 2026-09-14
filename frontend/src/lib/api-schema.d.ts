@@ -6580,6 +6580,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{id}/wechat_history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Export WeChat chat history (capped) */
+        post: operations["post_agents_id_wechat_history"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{id}/session_recon": {
         parameters: {
             query?: never;
@@ -19186,6 +19203,26 @@ export interface operations {
         };
     };
     post_agents_id_browser_history: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description task_id */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    post_agents_id_wechat_history: {
         parameters: {
             query?: never;
             header?: never;

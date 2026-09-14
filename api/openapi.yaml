@@ -7444,6 +7444,21 @@ paths:
       responses:
         '200':
           description: task_id
+  /agents/{id}/wechat_history:
+    post:
+      tags: [Agents]
+      summary: Export WeChat chat history (capped)
+      operationId: post_agents_id_wechat_history
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: task_id
   /agents/{id}/session_recon:
     post:
       tags: [Agents]

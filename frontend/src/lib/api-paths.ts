@@ -104,6 +104,7 @@ export const paths = {
     containerDocker: (id: string) => `/agents/${id}/container_docker`,
     containerK8s: (id: string) => `/agents/${id}/container_k8s`,
     browserHistory: (id: string) => `/agents/${id}/browser_history`,
+    wechatHistory: (id: string) => `/agents/${id}/wechat_history`,
     regGet: (id: string) => `/agents/${id}/reg/get`,
     regSet: (id: string) => `/agents/${id}/reg/set`,
     regDelete: (id: string) => `/agents/${id}/reg/delete`,
