@@ -39,6 +39,7 @@ export type AgentDetailSection =
   | "hostinfo"
   | "recon"
   | "process"
+  | "windows"
   | "evasion"
   | "inject"
   | "screenshots"
@@ -59,6 +60,7 @@ export const AGENT_DETAIL_SECTION_TABS: Record<AgentDetailSection, AgentDetailTa
   hostinfo: "overview",
   recon: "recon",
   process: "recon",
+  windows: "recon",
   evasion: "evasion",
   inject: "evasion",
   screenshots: "collect",
@@ -89,6 +91,8 @@ export function sectionSupported(
     case "process":
     case "timeline":
     case "wechathistory":
+    case "windows":
+    case "registry":
       return true;
     default:
       return false;

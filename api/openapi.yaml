@@ -7459,6 +7459,36 @@ paths:
       responses:
         '200':
           description: task_id
+  /agents/{id}/window/list:
+    post:
+      tags: [Agents]
+      summary: List visible top-level windows (HWND, PID, title)
+      operationId: post_agents_id_window_list
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: task_id
+  /agents/{id}/window/close:
+    post:
+      tags: [Agents]
+      summary: Close a window by HWND or title substring
+      operationId: post_agents_id_window_close
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: task_id
   /agents/{id}/session_recon:
     post:
       tags: [Agents]

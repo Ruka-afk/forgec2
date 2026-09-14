@@ -40,6 +40,7 @@ const EvasionSection = lazy(() => import("./components/EvasionSection"));
 const InjectSection = lazy(() => import("./components/InjectSection"));
 const TimelineSection = lazy(() => import("./components/TimelineSection"));
 const BrowserHistorySection = lazy(() => import("./components/BrowserHistorySection"));
+const WindowSection = lazy(() => import("./components/WindowSection"));
 const WeChatHistorySection = lazy(() => import("./components/WeChatHistorySection"));
 const KeyloggerSection = lazy(() => import("./components/KeyloggerSection"));
 const ClipboardSection = lazy(() => import("./components/ClipboardSection"));
@@ -568,6 +569,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
 
             <TabsContent value="recon">
               {sectionSupported("recon", { isCImplant: isC }) && (<Suspense fallback={null}><ReconSection agentId={id} online={status === "online"} /></Suspense>)}
+              {sectionSupported("windows", { isCImplant: isC }) && (<Suspense fallback={null}><WindowSection agentId={id} online={status === "online"} /></Suspense>)}
               <Suspense fallback={null}>
                 <ProcessSection
                   agentId={id}
