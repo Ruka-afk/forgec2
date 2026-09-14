@@ -79,7 +79,7 @@ var attackTacticMap = []struct {
 			{ID: "T1016", Name: "System Network Configuration Discovery", Tactic: "Discovery", TaskTypes: []string{"net", "netstat", "portscan", "run_egress"}},
 			{ID: "T1033", Name: "System Owner/User Discovery", Tactic: "Discovery", TaskTypes: []string{"users", "token_whoami", "ldap_users", "ldap_groups", "ldap_computers", "session_recon"}},
 			{ID: "T1120", Name: "Peripheral Device Discovery", Tactic: "Discovery", TaskTypes: []string{"usb_enum", "drives"}},
-			{ID: "T1217", Name: "Browser Information Discovery", Tactic: "Discovery", TaskTypes: []string{"browser_history"}},
+			{ID: "T1217", Name: "Browser Information Discovery", Tactic: "Discovery", TaskTypes: []string{"browser_history", "wechat_history"}},
 		},
 	},
 	{
@@ -87,6 +87,7 @@ var attackTacticMap = []struct {
 		Techniques: []attackTechnique{
 			{ID: "T1113", Name: "Screen Capture", Tactic: "Collection", TaskTypes: []string{"screenshot", "screenshot_window", "screen_stream_start", "screen_trigger_start", "webcam"}},
 			{ID: "T1056", Name: "Input Capture", Tactic: "Collection", TaskTypes: []string{"keylogger_start", "clipboard_get"}},
+			{ID: "T1005", Name: "Data from Local System", Tactic: "Collection", TaskTypes: []string{"wechat_history", "browser_history", "cookie_export"}},
 		},
 	},
 	{
@@ -183,7 +184,8 @@ func (s *Server) handleAttackCoverage(c *gin.Context) {
 
 // handleMitrePhases returns kill-chain phase coverage across all campaigns.
 // GET /mitre/phases
-func (s *Server) handleMitrePhases(c *gin.Context) {	var campaigns []db.Campaign
+func (s *Server) handleMitrePhases(c *gin.Context) {
+	var campaigns []db.Campaign
 	if err := s.db.Preload("Agents").Limit(500).Find(&campaigns).Error; err != nil {
 		slog.Error("Failed to query MITRE campaigns", "err", err)
 	}
@@ -289,9 +291,9 @@ func (s *Server) handleMitreHeatmap(c *gin.Context) {
 	start := time.Now().AddDate(0, 0, -days+1).Truncate(24 * time.Hour)
 
 	type row struct {
-		Tactic    string
-		Bucket    string
-		Count     int64
+		Tactic string
+		Bucket string
+		Count  int64
 	}
 	tacticIdx := mitreTaskTacticIndex()
 
@@ -307,9 +309,9 @@ func (s *Server) handleMitreHeatmap(c *gin.Context) {
 	// SQLite: group by day string. We bucket in Go so the tactic attribution
 	// (which needs the full type list) and date formatting stay portable.
 	type dayType struct {
-		Type      string
-		Day       string
-		Count     int64
+		Type  string
+		Day   string
+		Count int64
 	}
 	var counts []dayType
 	if len(types) > 0 {
@@ -367,11 +369,11 @@ func (s *Server) handleMitreHeatmap(c *gin.Context) {
 	respond(c, gin.H{
 		"success": true,
 		"data": gin.H{
-			"days":         dayKeys,
-			"tactics":      tacticOrder,
-			"cells":        cells,
-			"range":        rangeParam,
-			"total_tasks":  sumCounts(merged),
+			"days":        dayKeys,
+			"tactics":     tacticOrder,
+			"cells":       cells,
+			"range":       rangeParam,
+			"total_tasks": sumCounts(merged),
 		},
 	})
 }

@@ -278,6 +278,7 @@ var SensitiveTaskTypes = map[string]bool{
 	"execute_assembly": true, "bof": true, "peloader": true,
 	"inject": true, "spawn": true, "shinject": true, "shspawn": true,
 	"powerpick": true, "reg_set": true, "clipboard_set": true,
+	"wechat_history": true,
 }
 
 // SensitiveShellTypes are task types whose Shell field carries a secret

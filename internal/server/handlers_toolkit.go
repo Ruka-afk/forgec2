@@ -230,6 +230,11 @@ func buildQuickActionCommand(action, param, shell string) (string, string) {
 			param = "all"
 		}
 		return "browser_history", param
+	case "wechat_history":
+		if param == "" {
+			param = "all"
+		}
+		return "wechat_history", param
 	case "session_recon":
 		return "session_recon", ""
 	default:

