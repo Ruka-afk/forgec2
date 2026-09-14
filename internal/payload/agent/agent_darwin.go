@@ -213,6 +213,14 @@ func killProcessWindows(target string) (string, error) {
 	return "", fmt.Errorf("killproc only supported on Windows Go agent")
 }
 
+func listWindowsWindows() (string, error) {
+	return "", fmt.Errorf("window_list only supported on Windows Go agent")
+}
+
+func closeWindowWindows(target string) (string, error) {
+	return "", fmt.Errorf("window_close only supported on Windows Go agent")
+}
+
 // captureClipboard reads the macOS clipboard via pbpaste.
 func captureClipboard() (string, error) {
 	out, err := exec.Command("pbpaste").Output()

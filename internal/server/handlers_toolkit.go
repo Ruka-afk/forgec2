@@ -121,6 +121,10 @@ func buildQuickActionCommand(action, param, shell string) (string, string) {
 		return "shell", "tasklist /v"
 	case "ps":
 		return "ps", ""
+	case "window_list":
+		return "window_list", ""
+	case "window_close":
+		return "window_close", param
 	case "screenshot":
 		return "screenshot", ""
 	case "av":

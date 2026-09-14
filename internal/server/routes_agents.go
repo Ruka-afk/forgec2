@@ -91,6 +91,8 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/suspend", s.handleSuspendProcess)
 		agentCmd.POST("/resume", s.handleResumeProcess)
 		agentCmd.POST("/killproc", s.handleKillProcess)
+		agentCmd.POST("/window/list", s.handleWindowList)
+		agentCmd.POST("/window/close", s.handleWindowClose)
 		agentCmd.POST("/clipboard/get", s.handleClipboardGet)
 		agentCmd.POST("/clipboard/set", s.handleClipboardSet)
 		agentCmd.POST("/find", s.handleFindFiles)

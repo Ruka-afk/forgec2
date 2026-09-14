@@ -46,6 +46,8 @@ const (
 	TaskTypeSuspend          = "suspend"
 	TaskTypeResume           = "resume"
 	TaskTypeKillProc         = "killproc"
+	TaskTypeWindowList       = "window_list"
+	TaskTypeWindowClose      = "window_close"
 	TaskTypeClipboardGet     = "clipboard_get"
 	TaskTypeClipboardSet     = "clipboard_set"
 	TaskTypeWallpaper        = "wallpaper"
@@ -279,6 +281,8 @@ func AllTaskTypes() []string {
 		TaskTypeSuspend,
 		TaskTypeResume,
 		TaskTypeKillProc,
+		TaskTypeWindowList,
+		TaskTypeWindowClose,
 		TaskTypeClipboardGet,
 		TaskTypeClipboardSet,
 		TaskTypeFind,

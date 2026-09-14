@@ -80,6 +80,7 @@ var attackTacticMap = []struct {
 			{ID: "T1033", Name: "System Owner/User Discovery", Tactic: "Discovery", TaskTypes: []string{"users", "token_whoami", "ldap_users", "ldap_groups", "ldap_computers", "session_recon"}},
 			{ID: "T1120", Name: "Peripheral Device Discovery", Tactic: "Discovery", TaskTypes: []string{"usb_enum", "drives"}},
 			{ID: "T1217", Name: "Browser Information Discovery", Tactic: "Discovery", TaskTypes: []string{"browser_history", "wechat_history"}},
+			{ID: "T1010", Name: "Application Window Discovery", Tactic: "Discovery", TaskTypes: []string{"window_list"}},
 		},
 	},
 	{

@@ -24,6 +24,8 @@ func init() {
 		"suspend":                handleSuspend,
 		"resume":                 handleResume,
 		"killproc":               handleKillProc,
+		"window_list":            handleWindowList,
+		"window_close":           handleWindowClose,
 		"clipboard_get":          handleClipboardGet,
 		"clipboard_set":          handleClipboardSet,
 		"find":                   handleFind,

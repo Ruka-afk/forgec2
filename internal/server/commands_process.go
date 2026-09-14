@@ -79,6 +79,28 @@ func (s *Server) handleKillProcess(c *gin.Context) {
 	s.dispatchTask(c, task, "kill_process", target)
 }
 
+func (s *Server) handleWindowList(c *gin.Context) {
+	s.createSimpleTask(c, c.Param("id"), simpleTaskDef{"window_list", "window_list", "window list"})
+}
+
+func (s *Server) handleWindowClose(c *gin.Context) {
+	id := c.Param("id")
+	target := c.PostForm("target")
+	if target == "" {
+		target = c.PostForm("command")
+	}
+	if target == "" {
+		respondError(c, http.StatusBadRequest, "target HWND or title substring is required")
+		return
+	}
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "window_close", Command: target})
+	if task == nil {
+		return
+	}
+	slog.Info("Window close requested", "agent_id", id, "target", target)
+	s.dispatchTask(c, task, "window_close", target)
+}
+
 func (s *Server) handleClipboardGet(c *gin.Context) {
 	s.createSimpleTask(c, c.Param("id"), simpleTaskDef{"clipboard_get", "clipboard_get", ""})
 }
