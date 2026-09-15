@@ -50,26 +50,45 @@ func handleWeChatHistory(task Task, res *TaskResult) {
 	res.Output = out
 }
 
-func wechatDataRoots() []string {
+func wechatDataRoots() ([]string, []string) {
 	if runtime.GOOS != "windows" {
-		return nil
+		return nil, nil
 	}
-	appdata := os.Getenv("APPDATA")
-	if appdata == "" {
-		return nil
+	// Account containers to probe, oldest layout first:
+	//  - legacy (WeChat <= 3.x): %APPDATA%\Tencent\WeChat\<wxid>\Msg
+	//  - modern (WeChat >= 3.9 / 4.x default): %USERPROFILE%\Documents\WeChat Files\<wxid>\Msg
+	var containers []string
+	if appdata := os.Getenv("APPDATA"); appdata != "" {
+		containers = append(containers, filepath.Join(appdata, "Tencent", "WeChat"))
 	}
-	root := filepath.Join(appdata, "Tencent", "WeChat")
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		return nil
+	if home := os.Getenv("USERPROFILE"); home != "" {
+		containers = append(containers, filepath.Join(home, "Documents", "WeChat Files"))
 	}
+	return wechatMsgRoots(containers), containers
+}
+
+// wechatMsgRoots expands account containers into per-account Msg directories.
+// Pure (no env/OS reads) so it is unit-testable on any platform.
+func wechatMsgRoots(containers []string) []string {
 	var roots []string
-	for _, e := range entries {
-		if !e.IsDir() {
+	seen := make(map[string]struct{})
+	for _, container := range containers {
+		entries, err := os.ReadDir(container)
+		if err != nil {
 			continue
 		}
-		msgDir := filepath.Join(root, e.Name(), "Msg")
-		if _, err := os.Stat(msgDir); err == nil {
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			msgDir := filepath.Join(container, e.Name(), "Msg")
+			if _, err := os.Stat(msgDir); err != nil {
+				continue
+			}
+			if _, dup := seen[msgDir]; dup {
+				continue
+			}
+			seen[msgDir] = struct{}{}
 			roots = append(roots, msgDir)
 		}
 	}
@@ -88,16 +107,31 @@ func exportWeChatHistory(f wechatFilter) string {
 	var sb strings.Builder
 	sb.WriteString("=== wechat history ===\n")
 
-	roots := wechatDataRoots()
+	roots, probed := wechatDataRoots()
 	if len(roots) == 0 {
 		sb.WriteString("(WeChat data directory not found or not on Windows)\n")
+		// Diagnostic for the operator: which account containers were checked.
+		// `#` lines are ignored by the frontend parser. A custom FileStorage
+		// location (WeChat Settings -> File Management) is not discoverable
+		// here — check it manually when this lists only default paths.
+		if len(probed) > 0 {
+			fmt.Fprintf(&sb, "# probed: %s\n", strings.Join(probed, "; "))
+		}
 		return sb.String()
 	}
 
 	totalRows := 0
-	matched := 0
+	// Contact names are shared across all db files (the same wxid shows up in
+	// sharded message dbs), so index once and reuse.
+	contactIndex := make(map[string]string)
 
 	for _, msgRoot := range roots {
+		// Global cap, not per-file: without this the 200-row limit is applied
+		// to every db and a multi-db WeChat user gets 200 rows *per db*.
+		remaining := wechatHistoryMaxRows - totalRows
+		if remaining <= 0 {
+			break
+		}
 		entries, err := os.ReadDir(msgRoot)
 		if err != nil {
 			continue
@@ -107,20 +141,21 @@ func exportWeChatHistory(f wechatFilter) string {
 				continue
 			}
 			dbPath := filepath.Join(msgRoot, e.Name())
-			rows, err := queryWeChatDB(dbPath, f, startTime, endTime)
+			rows, err := queryWeChatDB(dbPath, f, startTime, endTime, remaining, contactIndex)
 			if err != nil {
 				fmt.Fprintf(&sb, "=== %s ===\nquery error: %v\n", e.Name(), err)
 				continue
 			}
-			if len(rows) > 0 {
-				matched++
-				for _, r := range rows {
-					totalRows++
-					// Output as JSON line for easy parsing
-					line, _ := json.Marshal(r)
-					sb.WriteString(string(line))
-					sb.WriteString("\n")
-				}
+			for _, r := range rows {
+				totalRows++
+				// Output as JSON line for easy parsing
+				line, _ := json.Marshal(r)
+				sb.WriteString(string(line))
+				sb.WriteString("\n")
+			}
+			remaining = wechatHistoryMaxRows - totalRows
+			if remaining <= 0 {
+				break
 			}
 		}
 	}
@@ -163,39 +198,54 @@ func copyLockedDBSrc(src string) (string, error) {
 	return dst, nil
 }
 
-func queryWeChatDB(dbPath string, f wechatFilter, startTime, endTime time.Time) ([]wechatMessage, error) {
-	tmp, err := copyLockedDBSrc(dbPath)
+func queryWeChatDB(dbPath string, f wechatFilter, startTime, endTime time.Time, limit int, contactIndex map[string]string) ([]wechatMessage, error) {
+	db, cleanup, err := openWeChatDB(dbPath)
 	if err != nil {
 		return nil, err
 	}
-	defer os.Remove(tmp)
+	defer cleanup()
 
-	db, err := sql.Open("sqlite", tmp)
-	if err != nil {
-		return nil, err
+	// Not every db carries a `contact` table — in newer WeChat layouts the
+	// names live in a separate db file. Index this one when it has them, and
+	// keep the shared index so nameless dbs can still be labeled later.
+	hasContact := hasWeChatTable(db, "contact")
+	if hasContact {
+		_ = loadContacts(db, contactIndex)
 	}
-	defer db.Close()
+
+	// A contact-only db has nothing to read, but its names are already in the
+	// shared index — skip silently rather than emitting a scary query error.
+	if !hasWeChatTable(db, "message") {
+		return nil, nil
+	}
 
 	// WeChat message table schema (typical):
 	// message: MsgId, CreateTime, TalkerId, Type, Content, IsSender, MsgSource
 	// contact: UserName, Alias, Remark, NickName, Type
-	query := `
-		SELECT m.MsgId, m.CreateTime, m.TalkerId, m.Type, m.Content, m.IsSender,
-		       IFNULL(c.NickName,''), IFNULL(c.Alias,''), IFNULL(c.Remark,'')
-		FROM message m
-		LEFT JOIN contact c ON m.TalkerId = c.UserName
-		WHERE m.CreateTime >= ? AND m.CreateTime <= ?
-	`
+	where := ` WHERE m.CreateTime >= ? AND m.CreateTime <= ?`
 	args := []interface{}{unixMilli(startTime), unixMilli(endTime)}
 
 	if f.Contact != "" && f.Contact != "all" {
-		query += ` AND (LOWER(IFNULL(c.NickName,'')) LIKE ? OR LOWER(IFNULL(c.Alias,'')) LIKE ? OR LOWER(IFNULL(c.Remark,'')) LIKE ? OR LOWER(m.TalkerId) LIKE ?)`
-		like := "%" + f.Contact + "%"
-		args = append(args, like, like, like, like)
+		if hasContact {
+			where += ` AND (LOWER(IFNULL(c.NickName,'')) LIKE ? ESCAPE '\' OR LOWER(IFNULL(c.Alias,'')) LIKE ? ESCAPE '\' OR LOWER(IFNULL(c.Remark,'')) LIKE ? ESCAPE '\' OR LOWER(m.TalkerId) LIKE ? ESCAPE '\')`
+			args = append(args, likeArg(f.Contact), likeArg(f.Contact), likeArg(f.Contact), likeArg(f.Contact))
+		} else {
+			where += ` AND LOWER(m.TalkerId) LIKE ? ESCAPE '\'`
+			args = append(args, likeArg(f.Contact))
+		}
 	}
 
+	var query string
+	if hasContact {
+		query = "SELECT m.MsgId, m.CreateTime, m.TalkerId, m.Type, m.Content, m.IsSender, " +
+			"IFNULL(c.NickName,''), IFNULL(c.Alias,''), IFNULL(c.Remark,'') " +
+			"FROM message m LEFT JOIN contact c ON m.TalkerId = c.UserName" + where
+	} else {
+		query = "SELECT m.MsgId, m.CreateTime, m.TalkerId, m.Type, m.Content, m.IsSender, '', '', '' " +
+			"FROM message m" + where
+	}
 	query += ` ORDER BY m.CreateTime DESC LIMIT ?`
-	args = append(args, wechatHistoryMaxRows)
+	args = append(args, limit)
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
@@ -206,8 +256,7 @@ func queryWeChatDB(dbPath string, f wechatFilter, startTime, endTime time.Time) 
 	var results []wechatMessage
 	for rows.Next() {
 		var msg wechatMessage
-		var msgID int64
-		var createTime int64
+		var msgID, createTime int64
 		var talkerID string
 		var nickName, alias, remark string
 		var isSender int
@@ -216,9 +265,120 @@ func queryWeChatDB(dbPath string, f wechatFilter, startTime, endTime time.Time) 
 		}
 		msg.ContactID = talkerID
 		msg.Time = time.UnixMilli(createTime).UTC().Format(time.RFC3339)
+		// Sender: IsSender==1 means "me". Previously this was dropped, which
+		// left the frontend's me/other filter and chat alignment broken.
+		msg.Sender = "other"
+		if isSender == 1 {
+			msg.Sender = "me"
+		}
+		// Contact display: global index > per-row JOIN names > raw wxid, with
+		// Remark > Alias > NickName precedence (matches the C beacon).
+		msg.Contact = contactIndex[talkerID]
+		if msg.Contact == "" {
+			switch {
+			case remark != "":
+				msg.Contact = remark
+			case alias != "":
+				msg.Contact = alias
+			case nickName != "":
+				msg.Contact = nickName
+			default:
+				msg.Contact = talkerID
+			}
+		}
 		results = append(results, msg)
 	}
-	return results, nil
+	return results, rows.Err()
+}
+
+// openWeChatDB opens a WeChat SQLite db, preferring a read-only open of the
+// live file (no 64MB temp copy) and falling back to a temp copy when WeChat
+// holds the db open/locked. The returned cleanup must be deferred; it closes
+// the db and removes the temp copy (when one was made).
+func openWeChatDB(path string) (*sql.DB, func(), error) {
+	if ro := openWeChatDBReadonly(path); ro != nil {
+		return ro, func() { ro.Close() }, nil
+	}
+	tmp, err := copyLockedDBSrc(path)
+	if err != nil {
+		return nil, func() {}, err
+	}
+	db, err := sql.Open("sqlite", tmp)
+	if err != nil {
+		os.Remove(tmp)
+		return nil, func() {}, err
+	}
+	return db, func() {
+		db.Close()
+		os.Remove(tmp)
+	}, nil
+}
+
+// openWeChatDBReadonly attempts a read-only open of the live db file. It
+// returns nil (never an error) when the file cannot be opened read-only so
+// callers fall back to a copy. immutable=1 lets SQLite open it read-only
+// without a journal/lock; if the driver rejects the DSN we just return nil.
+func openWeChatDBReadonly(path string) *sql.DB {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil
+	}
+	db, err := sql.Open("sqlite", "file:"+abs+"?mode=ro&immutable=1")
+	if err != nil {
+		return nil
+	}
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil
+	}
+	return db
+}
+
+// hasWeChatTable reports whether a table named name exists in the db.
+func hasWeChatTable(db *sql.DB, name string) bool {
+	var n int
+	err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", name).Scan(&n)
+	return err == nil && n > 0
+}
+
+// likeArg wraps s in wildcards and escapes any LIKE metacharacters it
+// contains (mirroring the C beacon), so a Contact filter like "50%" or "a_b"
+// cannot widen the match beyond its intent. Pairs with the ESCAPE '\'
+// clauses in the query.
+func likeArg(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return "%" + r.Replace(s) + "%"
+}
+
+// loadContacts indexes a db's `contact` table into idx (wxid -> friendly
+// name, Remark > Alias > NickName). A db without a contact table is a no-op,
+// not an error.
+func loadContacts(db *sql.DB, idx map[string]string) error {
+	rows, err := db.Query("SELECT UserName, IFNULL(NickName,''), IFNULL(Alias,''), IFNULL(Remark,'') FROM contact")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var uname, nick, alias, remark string
+		if rows.Scan(&uname, &nick, &alias, &remark) != nil {
+			continue
+		}
+		if uname == "" {
+			continue
+		}
+		label := remark
+		if label == "" {
+			label = alias
+		}
+		if label == "" {
+			label = nick
+		}
+		if label != "" {
+			idx[uname] = label
+		}
+	}
+	return rows.Err()
 }
 
 func parseWeChatRange(f wechatFilter) (time.Time, time.Time) {

