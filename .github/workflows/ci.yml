@@ -14,6 +14,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
+          cache: true
+          cache-dependency-path: go.sum
       - run: go mod download
       - name: Go format check (changed files)
         run: |
@@ -38,12 +40,19 @@ jobs:
       # The agent emits expected unsafe.Pointer vet warnings (Windows syscall
       # patterns); ignore only those while still failing on any other finding.
       - run: |
-          go vet ./internal/... ./pkg/... ./cmd/... 2>vet.err
-          grep -v "internal/payload/agent" vet.err || true
-          if grep -v "internal/payload/agent" vet.err >/dev/null; then
+          go vet ./internal/... ./pkg/... ./cmd/... 2>vet.err || true
+          grep -v "internal/payload/agent" vet.err > vet-filtered.err || true
+          cat vet-filtered.err
+          if grep -q . vet-filtered.err; then
             echo "go vet reported errors (excluding known agent warnings):"
             exit 1
           fi
+      - name: Upload vet output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vet-output
+          path: vet.err
       - run: go test ./internal/config/... ./internal/crypto/... ./internal/db/... ./internal/malleable/... ./internal/obfuscation/... ./internal/plugin/... ./internal/server/... ./pkg/... -count=1 -timeout 5m -coverprofile=coverage.out
       - run: go build ./...
       - run: go build -o checkopenapi ./cmd/checkopenapi
@@ -88,6 +97,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
+          cache: true
+          cache-dependency-path: go.sum
       - run: go mod download
       - name: Real agent builds (windows amd64/386 + linux ELF + token stagers)
         # Everything in the supporting `for` loops is fast (~10s each). The
@@ -111,7 +122,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
-      - run: go install golang.org/x/vuln/cmd/govulncheck@latest
+          cache: true
+          cache-dependency-path: go.sum
+      - run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
       - run: govulncheck ./...
 
   secrets:
@@ -142,17 +155,21 @@ jobs:
         run: node ../scripts/sync-win7shim.mjs --check
       - run: npx tsc --noEmit
       - run: npm run lint
-      - run: npm run check:i18n
-      - run: npm run check:css
-      - run: npm run check:paths
-      - run: npm run check:tokens
-      - run: npm run check:openapi-types
-      - run: npm run check:permissions
+      # 6 static checks run concurrently via the bundled `check:pre` script
+      # (package.json) instead of 6 sequential CI steps; `check:bundle` and the
+      # post-build webdist freshness check stay separate to preserve granularity.
+      - name: Static checks (css/tokens/i18n/paths/openapi/perms, concurrent)
+        run: npm run check:pre
       - run: npm run check:bundle
       - run: npm test
       - run: npm run build
       - name: Webdist freshness (internal/webdist/dist must match export)
         run: node ../scripts/check-webdist.mjs
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
       - name: Playwright smoke (static UI)

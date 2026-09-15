@@ -25,6 +25,8 @@ export default memo(function WindowSection({ agentId, online }: WindowSectionPro
   const [raw, setRaw] = useState("");
   const [collected, setCollected] = useState(false);
   const [query, setQuery] = useState("");
+  // Cap first paint: 500 table rows mount at once without virtualization.
+  const [renderLimit, setRenderLimit] = useState(100);
 
   const rows = useMemo(() => parseWindowList(raw), [raw]);
   const visible = useMemo(() => {
@@ -146,7 +148,7 @@ export default memo(function WindowSection({ agentId, online }: WindowSectionPro
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {visible.slice(0, 500).map((r) => (
+                    {visible.slice(0, renderLimit).map((r) => (
                       <TableRow key={r.hwnd}>
                         <TableCell className="font-mono text-xs text-muted-foreground">{r.hwnd}</TableCell>
                         <TableCell className="font-mono text-xs text-muted-foreground">{r.pid}</TableCell>
@@ -169,6 +171,13 @@ export default memo(function WindowSection({ agentId, online }: WindowSectionPro
                     ))}
                   </TableBody>
                 </Table>
+              </div>
+            )}
+            {visible.length > renderLimit && (
+              <div className="mt-2 flex items-center justify-center">
+                <Button size="sm" variant="outline" onClick={() => setRenderLimit((n) => n + 100)}>
+                  {t("agents.tasklist_load_more").replace("{count}", String(Math.min(100, visible.length - renderLimit)))}
+                </Button>
               </div>
             )}
             {visible.length > 500 && (

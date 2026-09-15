@@ -296,6 +296,7 @@ func parseClaimsWithGrace(tokenStr string, claims *Claims) (*jwt.Token, error) {
 	}
 	return nil, lastErr
 }
+
 // Gin's SetCookie does not support SameSite, so we use http.SetCookie directly.
 func SetCookieWithSameSite(c *gin.Context, name, value string, maxAge int, path string, secure, httpOnly bool, sameSite http.SameSite) {
 	domain := CookieDomain
@@ -672,12 +673,15 @@ func TokenHash(token string) string {
 
 func isSessionRevoked(database *gorm.DB, tokenStr string) bool {
 	hash := TokenHash(tokenStr)
-	var count int64
+	var one int
+	// LIMIT 1 point lookup on indexed token_hash: COUNT would scan all matches.
 	if err := database.Table("user_sessions").
+		Select("1").
 		Where("token_hash = ? AND revoked_at > ?", hash, time.Unix(0, 0)).
-		Count(&count).Error; err != nil {
+		Limit(1).
+		Find(&one).Error; err != nil {
 		slog.Warn("Session revocation check failed, allowing access", "err", err)
 		return false
 	}
-	return count > 0
+	return one == 1
 }

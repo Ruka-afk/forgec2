@@ -12,7 +12,12 @@ cd "$(git rev-parse --show-toplevel)"
 
 # Scan the whole working tree (cheap for this repo) so moves/renames of files
 # that carried secrets are caught too.
-if ! gitleaks detect --redact --no-banner --source . 2>/dev/null; then
+# Prefer the repo .gitleaks.toml (project-specific rules) when present.
+GITLEAKS_ARGS="--redact --no-banner --source ."
+if [ -f ".gitleaks.toml" ]; then
+  GITLEAKS_ARGS="--config .gitleaks.toml $GITLEAKS_ARGS"
+fi
+if ! gitleaks detect $GITLEAKS_ARGS 2>/dev/null; then
   echo "gitleaks: secret material detected — refusing to commit." >&2
   echo "Remove the secret, then 'git add' the fixed file and retry." >&2
   exit 1

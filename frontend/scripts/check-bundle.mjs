@@ -4,12 +4,13 @@
 // (e.g. an un-split import of a large chart/graph lib).
 //
 // Baseline measured 2026-08-18: 4.58MB JS + 0.16MB CSS (4.74MB total).
-// Threshold = 6.5MB (~37% headroom) for JS+CSS in out/ (Vite build output).
+// Threshold = 5.5MB (~16% headroom) for JS+CSS in out/ (Vite build output).
+// Keep headroom tight so accidental full-lib imports (icons, charts) fail fast.
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const LIMIT_BYTES = 6.5 * 1024 * 1024;
+const LIMIT_BYTES = 5.5 * 1024 * 1024;
 const staticDir = join(fileURLToPath(new URL(".", import.meta.url)), "..", "out");
 
 let total = 0;

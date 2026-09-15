@@ -297,62 +297,82 @@ function parseFilenameFromDisposition(cd: string | null, fallback = "download.bi
   return plain ? plain[1].trim() : fallback;
 }
 
+export interface RequestOpts {
+  retries?: number;
+  signal?: AbortSignal;
+  unwrap?: boolean;
+  timeout?: number;
+}
+
 export const api = {
-  get<T = Record<string, unknown>>(path: string, opts?: { retries?: number; signal?: AbortSignal; unwrap?: boolean; timeout?: number }): Promise<T> {
+  get<T = Record<string, unknown>>(path: string, opts?: RequestOpts): Promise<T> {
     return request<T>(path, { method: "GET", retries: opts?.retries ?? 0, signal: opts?.signal, unwrap: opts?.unwrap, timeout: opts?.timeout });
   },
 
-  post<T = Record<string, unknown>>(path: string, data?: Record<string, string>, opts?: { signal?: AbortSignal; timeout?: number }): Promise<T> {
+  post<T = Record<string, unknown>>(path: string, data?: Record<string, string>, opts?: RequestOpts): Promise<T> {
     const body = data ? new URLSearchParams(data).toString() : undefined;
     return request<T>(path, {
       method: "POST",
       headers: body ? { "Content-Type": "application/x-www-form-urlencoded" } : {},
       body,
+      retries: opts?.retries ?? 0,
       signal: opts?.signal,
       timeout: opts?.timeout,
+      unwrap: opts?.unwrap,
     });
   },
 
-  postJson<T = Record<string, unknown>>(path: string, body: unknown, opts?: { signal?: AbortSignal; timeout?: number }): Promise<T> {
-    return request<T>(path, { method: "POST", body, signal: opts?.signal, timeout: opts?.timeout });
+  postJson<T = Record<string, unknown>>(path: string, body: unknown, opts?: RequestOpts): Promise<T> {
+    return request<T>(path, { method: "POST", body, retries: opts?.retries ?? 0, signal: opts?.signal, timeout: opts?.timeout, unwrap: opts?.unwrap });
   },
 
-  postFormData<T = Record<string, unknown>>(path: string, body: FormData): Promise<T> {
-    return request<T>(path, { method: "POST", body, headers: {} });
+  postFormData<T = Record<string, unknown>>(path: string, body: FormData, opts?: RequestOpts): Promise<T> {
+    return request<T>(path, { method: "POST", body, headers: {}, retries: opts?.retries ?? 0, signal: opts?.signal, timeout: opts?.timeout, unwrap: opts?.unwrap });
   },
 
-  put<T = Record<string, unknown>>(path: string, data?: Record<string, string>): Promise<T> {
+  put<T = Record<string, unknown>>(path: string, data?: Record<string, string>, opts?: RequestOpts): Promise<T> {
     const body = data ? new URLSearchParams(data).toString() : undefined;
     return request<T>(path, {
       method: "PUT",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body,
+      retries: opts?.retries ?? 0,
+      signal: opts?.signal,
+      timeout: opts?.timeout,
+      unwrap: opts?.unwrap,
     });
   },
 
-  putJson<T = Record<string, unknown>>(path: string, body: unknown): Promise<T> {
-    return request<T>(path, { method: "PUT", body });
+  putJson<T = Record<string, unknown>>(path: string, body: unknown, opts?: RequestOpts): Promise<T> {
+    return request<T>(path, { method: "PUT", body, retries: opts?.retries ?? 0, signal: opts?.signal, timeout: opts?.timeout, unwrap: opts?.unwrap });
   },
 
-  del<T = Record<string, unknown>>(path: string): Promise<T> {
-    return request<T>(path, { method: "DELETE" });
+  del<T = Record<string, unknown>>(path: string, opts?: RequestOpts): Promise<T> {
+    return request<T>(path, { method: "DELETE", retries: opts?.retries ?? 0, signal: opts?.signal, timeout: opts?.timeout, unwrap: opts?.unwrap });
   },
 
-  async download(path: string, data?: Record<string, string>, fallbackFilename = "download.bin"): Promise<{ blob: Blob; filename: string }> {
+  async download(path: string, data?: Record<string, string>, fallbackFilename = "download.bin", opts?: RequestOpts): Promise<{ blob: Blob; filename: string }> {
     const body = data ? new URLSearchParams(data).toString() : undefined;
     const res = await request<Response>(path, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body,
       raw: true,
+      retries: opts?.retries ?? 0,
+      signal: opts?.signal,
+      // Downloads can be large: default to 60s unless the caller overrides.
+      timeout: opts?.timeout ?? 60000,
     });
     return { blob: await res.blob(), filename: parseFilenameFromDisposition(res.headers.get("Content-Disposition"), fallbackFilename) };
   },
 
-  async downloadGet(path: string, fallbackFilename = "download.bin"): Promise<{ blob: Blob; filename: string }> {
+  async downloadGet(path: string, fallbackFilename = "download.bin", opts?: RequestOpts): Promise<{ blob: Blob; filename: string }> {
     const res = await request<Response>(path, {
       method: "GET",
       raw: true,
+      retries: opts?.retries ?? 0,
+      signal: opts?.signal,
+      timeout: opts?.timeout ?? 60000,
     });
     return { blob: await res.blob(), filename: parseFilenameFromDisposition(res.headers.get("Content-Disposition"), fallbackFilename) };
   },
@@ -410,6 +430,13 @@ function pollTaskWithCancel(
   // at-rest ciphertext blob (e.g. during a key rotation window).
   let wsResult: string | undefined;
   let wsError: string | undefined;
+  // WS liveness drives REST backoff in tick(); wsComplete marks an explicitly
+  // complete server result (result_complete:true) — the only WS payload
+  // authoritative enough to skip the final detail fetch. Shared by finalFetch,
+  // the subscription callback, and tick() below.
+  let wsLive = false;
+  let wsComplete = false;
+  let pollAttempts = 0;
 
   const cleanup = () => {
     done = true;
@@ -440,6 +467,16 @@ function pollTaskWithCancel(
     error: plaintext(status.error),
   } as TaskStatus);
   const finalFetch = async (fallback: TaskStatus): Promise<TaskStatus> => {
+    // Skip the authoritative REST fetch only when the WebSocket already
+    // delivered an explicitly complete result (task_update with
+    // result_complete:true) or a terminal cancellation: the persisted detail
+    // cannot add anything. Streamed task_output accumulation is NOT enough —
+    // the persisted full result is authoritative (see api-stream.test.ts).
+    if (isTerminal(fallback.status)) {
+      const fb = operatorStatus(fallback);
+      if (fallback.status === "completed" && wsComplete && fb.result != null && fb.result !== "" && !atRestCipher(fb.result)) return fb;
+      if (fallback.status === "cancelled") return fb;
+    }
     try {
       const fetched = await api.get<TaskStatus>(paths.agents.task(agentId, taskId));
       // WebSocket delivery can win the race with the database-backed detail
@@ -476,6 +513,7 @@ function pollTaskWithCancel(
       let streamedOutput = "";
       unsub = subscribeTyped(["task_update", "task_output"], (ev) => {
         if (Number(ev.task_id) !== taskId) return;
+        wsLive = true;
         if ("status" in ev) {
           const status = String(ev.status) as TaskStatus["status"];
           // Most task_update results are short previews. Interactive shell
@@ -486,7 +524,7 @@ function pollTaskWithCancel(
             ? plaintext(ev.result as string | undefined)
             : undefined;
           const eventError = plaintext(ev.error as string | undefined);
-          if (eventResult != null) wsResult = eventResult;
+          if (eventResult != null) { wsResult = eventResult; wsComplete = true; }
           if (eventError != null) wsError = eventError;
           const partial = operatorStatus({
             id: taskId,
@@ -536,7 +574,13 @@ function pollTaskWithCancel(
         if (signal.aborted) return fail(new Error("cancelled"));
         if (process.env.NODE_ENV === "development") logger.debug("pollTask failed", { agentId, taskId }, err);
       }
-      timer = setTimeout(tick, intervalMs);
+      // WS live: the socket delivers terminal state promptly, so back off REST
+      // polling to 8s to cut ~5x requests. Otherwise exponential backoff
+      // 1.5s -> 2s -> 4s capped at 10s for disconnected/degraded sockets.
+      pollAttempts += 1;
+      const backoff = Math.min(intervalMs * Math.pow(1.5, Math.min(pollAttempts, 4)), 10000);
+      const nextDelay = wsLive ? Math.max(backoff, 8000) : backoff;
+      timer = setTimeout(tick, nextDelay);
     };
     tick();
   });

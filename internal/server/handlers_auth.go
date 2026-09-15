@@ -264,8 +264,13 @@ func (s *Server) handleLogin(c *gin.Context) {
 		return
 	}
 
-	csrfToken := middleware.DeriveCSRFToken(token, middleware.GetCSRFSecret())
-	middleware.SetCookieWithSameSite(c, "forgec2_csrf", csrfToken, 0, "/", middleware.CookieSecure, false, http.SameSiteLaxMode)
+	csrfSecret := middleware.GetCSRFSecret()
+	if csrfSecret == nil {
+		slog.Error("CSRF secret unavailable during login, skipping CSRF cookie")
+	} else {
+		csrfToken := middleware.DeriveCSRFToken(token, csrfSecret)
+		middleware.SetCookieWithSameSite(c, "forgec2_csrf", csrfToken, 0, "/", middleware.CookieSecure, false, http.SameSiteLaxMode)
+	}
 
 	s.clearLoginLockout(clientIP)
 	s.loginLockout.resetAccount(username)

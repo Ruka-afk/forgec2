@@ -1,0 +1,40 @@
+# ForgeC2 gitleaks config — extends default rules with project-specific key names.
+# Usage: gitleaks detect --config .gitleaks.toml
+# See scripts/gitleaks-pre-commit.sh for the pre-commit hook.
+
+[extend]
+useDefault = true
+
+# 64-hex-char key material assigned to ForgeC2 crypto fields
+[[rules]]
+id = "forgec2-crypto-key"
+description = "ForgeC2 crypto key (loot/extc2/backup/totp/csrf/beacon/jwt)"
+regex = '''(?i)(loot_key|extc2_key|backup_key|totp_key|csrf_key|beacon_key|jwt_secret)\s*[:=]\s*["']?[0-9a-f]{32,}["']?'''
+tags = ["forgec2", "key"]
+
+# OpenRouter / AI provider keys in config or env
+[[rules]]
+id = "forgec2-ai-key"
+description = "ForgeC2 AI provider API key"
+regex = '''(?i)(ai\.?api_key|FORGEC2_AI_API_KEY)\s*[:=]\s*["']?sk-(or-v1-)?[A-Za-z0-9\-_]{16,}["']?'''
+tags = ["forgec2", "api-key"]
+
+# ExtC2 API tokens
+[[rules]]
+id = "forgec2-extc2-token"
+description = "ForgeC2 ExtC2 API token"
+regex = '''(?i)(extc2.*api_token|FORGEC2_EXTC2.*TOKEN)\s*[:=]\s*["']?\S{16,}["']?'''
+tags = ["forgec2", "token"]
+
+[allowlist]
+description = "Allow example/placeholder values"
+paths = [
+  "config.example.yaml",
+  ".env.example",
+  '''\.md$''',
+]
+regexes = [
+  '''YOUR_SECRET''',
+  '''change_me''',
+  '''leave empty to auto-generate''',
+]

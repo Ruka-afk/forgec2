@@ -1,5 +1,5 @@
 
-import { memo, useState, type SyntheticEvent } from "react";
+import { memo, useMemo, useState, type SyntheticEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
@@ -38,7 +38,7 @@ function isCheckboxOrigin(e: SyntheticEvent): boolean {
 export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCountMap, activeId, onInteract, onDetails, onMenu, selected, onToggleSelect }: AgentGridProps) {
   const { t } = useI18n();
   const [visible, setVisible] = useState(GRID_PAGE);
-  const groups = groupBeaconsByHost(beacons);
+  const groups = useMemo(() => groupBeaconsByHost(beacons), [beacons]);
   const shown = groups.slice(0, visible);
   return (
     <div className="p-4">

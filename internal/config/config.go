@@ -18,8 +18,8 @@ import (
 
 // Config holds all configuration for ForgeC2
 type Config struct {
-	mu         sync.Mutex `yaml:"-"`
-	ConfigPath string     `yaml:"-"` // absolute path to the config file, set on Load
+	mu         sync.RWMutex `yaml:"-"`
+	ConfigPath string       `yaml:"-"` // absolute path to the config file, set on Load
 	Server     struct {
 		Port                 int           `yaml:"port"`
 		Host                 string        `yaml:"host"`
@@ -867,11 +867,21 @@ func (c *Config) Unlock() {
 	c.mu.Unlock()
 }
 
+// RLock acquires the config read lock for concurrent reads.
+func (c *Config) RLock() {
+	c.mu.RLock()
+}
+
+// RUnlock releases the config read lock.
+func (c *Config) RUnlock() {
+	c.mu.RUnlock()
+}
+
 // Save persists the config (e.g. after setting password)
 func (c *Config) Save(path string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
 	out, err := yaml.Marshal(c)
+	c.mu.RUnlock()
 	if err != nil {
 		return err
 	}
@@ -948,8 +958,8 @@ func (c *Config) LoadFromData(data []byte) error {
 // AllowedOrigin checks if the given origin hostname is in the configured allow list.
 // Returns false (deny) when no origins are configured.
 func (c *Config) AllowedOrigin(hostname string) bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	if len(c.Server.AllowedOrigins) == 0 {
 		return false
 	}

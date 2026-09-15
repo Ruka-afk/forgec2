@@ -24,11 +24,11 @@ var auditChainMu sync.Mutex
 // It replaces the value portion with "*****" to prevent secret leakage in audit logs.
 var sensitivePatterns = []*regexp.Regexp{
 	// JSON: "password":"secretvalue"
-	regexp.MustCompile(`"(password|secret|token|api_key|api_secret|jwt|session_key|loot_key|private_key)"\s*:\s*"[^"]+"`),
+	regexp.MustCompile(`"(password|passwd|secret|token|api_key|api_secret|api_token|jwt|session_key|session|cookie|loot_key|extc2_key|backup_key|totp_key|csrf_key|beacon_key|private_key|client_secret)"\s*:\s*"[^"]+"`),
 	// JSON with escaped quotes
-	regexp.MustCompile(`"(password|secret|token|api_key|api_secret|jwt|session_key|loot_key|private_key)"\s*:\s*'[^']+'`),
+	regexp.MustCompile(`"(password|passwd|secret|token|api_key|api_secret|api_token|jwt|session_key|session|cookie|loot_key|extc2_key|backup_key|totp_key|csrf_key|beacon_key|private_key|client_secret)"\s*:\s*'[^']+'`),
 	// URL-encoded or plain: password=secretvalue
-	regexp.MustCompile(`(?i)(password|secret|token|api_key|api_secret|jwt|session_key|loot_key|private_key)\s*[:=]\s*\S{4,}`),
+	regexp.MustCompile(`(?i)(password|passwd|secret|token|api_key|api_secret|api_token|jwt|session_key|session|cookie|loot_key|extc2_key|backup_key|totp_key|csrf_key|beacon_key|private_key|client_secret)\s*[:=]\s*\S{4,}`),
 	// Key material hex/blobs
 	regexp.MustCompile(`(?i)(-----BEGIN.*?KEY-----)(.|\n)*?(-----END.*?KEY-----)`),
 }
@@ -216,7 +216,9 @@ func (s *Server) AuditMiddleware() gin.HandlerFunc {
 
 // shouldLogAction determines if an action should be logged
 func shouldLogAction(path string) bool {
-	// Log authentication, agent management, credential access, and command actions
+	// Log authentication, agent management, credential access, and command actions.
+	// Settings/users/plugins/config changes go through LogOperatorAction, but the
+	// middleware also records them here so a direct API call cannot bypass audit.
 	actionsToLog := []string{
 		"/login",
 		"/logout",
@@ -225,6 +227,10 @@ func shouldLogAction(path string) bool {
 		"/tasks",
 		"/api/credentials/",
 		"/api/tasks/",
+		"/api/settings",
+		"/api/users",
+		"/api/plugins",
+		"/api/config",
 	}
 	for _, action := range actionsToLog {
 		if len(path) >= len(action) && path[:len(action)] == action {

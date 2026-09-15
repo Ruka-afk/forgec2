@@ -28,6 +28,8 @@ export default memo(function BrowserHistorySection({ agentId, online }: BrowserH
   const [raw, setRaw] = useState("");
   const [collected, setCollected] = useState(false);
   const [query, setQuery] = useState("");
+  // Cap first paint: 500 table rows mount at once without virtualization.
+  const [renderLimit, setRenderLimit] = useState(100);
 
   const rows = useMemo(() => parseBrowserHistory(raw), [raw]);
   const visible = useMemo(() => {
@@ -127,7 +129,7 @@ export default memo(function BrowserHistorySection({ agentId, online }: BrowserH
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {visible.slice(0, 500).map((r, i) => (
+                    {visible.slice(0, renderLimit).map((r, i) => (
                       <TableRow key={`${r.browser}-${r.url}-${i}`}>
                         <TableCell className="text-xs text-muted-foreground">{r.browser}</TableCell>
                         <TableCell className="min-w-0">
@@ -154,6 +156,13 @@ export default memo(function BrowserHistorySection({ agentId, online }: BrowserH
                     ))}
                   </TableBody>
                 </Table>
+              </div>
+            )}
+            {visible.length > renderLimit && (
+              <div className="mt-2 flex items-center justify-center">
+                <Button size="sm" variant="outline" onClick={() => setRenderLimit((n) => n + 100)}>
+                  {t("agents.tasklist_load_more").replace("{count}", String(Math.min(100, visible.length - renderLimit)))}
+                </Button>
               </div>
             )}
             {visible.length > 500 && (

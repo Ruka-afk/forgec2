@@ -2,7 +2,7 @@ package db
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -456,7 +456,7 @@ func encryptField(val *string) error {
 	enc, err := crypto.EncryptLoot(*val)
 	if err != nil {
 		// Keep plaintext; log so operators notice the vault is unencrypted.
-		log.Printf("[vault] loot encryption unavailable (%v) — storing plaintext", err)
+		slog.Warn("[vault] loot encryption unavailable — storing plaintext", "err", err)
 		return nil
 	}
 	*val = enc

@@ -25,6 +25,36 @@ type execResult struct {
 // executor runs plugin scripts with JSON input on stdin.
 type executor struct{}
 
+// maxPluginOutputBytes caps captured plugin stdout/stderr per stream so a
+// misbehaving plugin cannot OOM the server by emitting unbounded output.
+// Output beyond the cap is truncated and flagged via truncatedOutputNote.
+const maxPluginOutputBytes = 2 << 20 // 2 MiB per stream
+
+const truncatedOutputNote = "\n[forgec2: output truncated at 2 MiB]"
+
+// cappedBuffer is a bytes.Buffer that discards writes beyond max bytes.
+type cappedBuffer struct {
+	buf     bytes.Buffer
+	max     int
+	dropped int
+}
+
+func (b *cappedBuffer) Write(p []byte) (int, error) {
+	remaining := b.max - b.buf.Len()
+	if remaining <= 0 {
+		b.dropped += len(p)
+		return len(p), nil
+	}
+	if len(p) > remaining {
+		b.buf.Write(p[:remaining])
+		b.dropped += len(p) - remaining
+		return len(p), nil
+	}
+	return b.buf.Write(p)
+}
+
+func (b *cappedBuffer) Bytes() []byte { return b.buf.Bytes() }
+
 // run executes the plugin's entry script with the supplied input.
 func (e *executor) run(ctx context.Context, pluginDir string, m *Manifest, input map[string]interface{}, timeoutSecs int) (*execResult, error) {
 	timeout := timeoutSecs
@@ -68,7 +98,9 @@ func (e *executor) run(ctx context.Context, pluginDir string, m *Manifest, input
 	}
 	cmd.Stdin = bytes.NewReader(stdinData)
 
-	var stdout, stderr bytes.Buffer
+	var stdout, stderr cappedBuffer
+	stdout.max = maxPluginOutputBytes
+	stderr.max = maxPluginOutputBytes
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
@@ -90,6 +122,14 @@ func (e *executor) run(ctx context.Context, pluginDir string, m *Manifest, input
 	res := &execResult{
 		Stdout: stdout.Bytes(),
 		Stderr: stderr.Bytes(),
+	}
+	if stdout.dropped > 0 {
+		res.Stdout = append(res.Stdout, truncatedOutputNote...)
+		slog.Warn("plugin stdout truncated", "plugin", m.Name, "dropped_bytes", stdout.dropped)
+	}
+	if stderr.dropped > 0 {
+		res.Stderr = append(res.Stderr, truncatedOutputNote...)
+		slog.Warn("plugin stderr truncated", "plugin", m.Name, "dropped_bytes", stderr.dropped)
 	}
 	if cmd.ProcessState != nil {
 		res.ExitCode = cmd.ProcessState.ExitCode()

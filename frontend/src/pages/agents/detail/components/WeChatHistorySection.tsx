@@ -44,11 +44,14 @@ export default memo(function WeChatHistorySection({ agentId, online }: WeChatHis
   const [raw, setRaw] = useState("");
   const [collected, setCollected] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  // Cap first paint: chat bubbles are expensive (CopyButton + wrapping each).
+  const [renderLimit, setRenderLimit] = useState(100);
 
   useEffect(() => {
     setRaw("");
     setCollected(false);
     setSelected(null);
+    setRenderLimit(100);
   }, [agentId]);
 
   const meta = useMemo(() => parseWeChatHistoryWithMeta(raw), [raw]);
@@ -60,7 +63,7 @@ export default memo(function WeChatHistorySection({ agentId, online }: WeChatHis
     if (!active) return sorted;
     return sorted.filter((message) => (message.contactId || message.contact) === active.id);
   }, [sorted, active]);
-  const rendered = conversationMessages.slice(0, 500);
+  const rendered = conversationMessages.slice(0, renderLimit);
 
   const handleCollect = async () => {
     const output = await collect("wechat", paths.agents.wechatHistory(agentId), {
@@ -297,6 +300,13 @@ export default memo(function WeChatHistorySection({ agentId, online }: WeChatHis
                     ))}
                   </TableBody>
                 </Table>
+              </div>
+            )}
+            {conversationMessages.length > renderLimit && (
+              <div className="mt-2 flex items-center justify-center">
+                <Button size="sm" variant="outline" onClick={() => setRenderLimit((n) => n + 100)}>
+                  {t("agents.tasklist_load_more").replace("{count}", String(Math.min(100, conversationMessages.length - renderLimit)))}
+                </Button>
               </div>
             )}
             {conversationMessages.length > 500 && (

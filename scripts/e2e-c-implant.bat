@@ -13,8 +13,14 @@ if "%PORT%"=="" set PORT=8000
 set USER=%3
 if "%USER%"=="" set USER=labtest
 
+REM No default password: PASS must come from argv %4 or E2E_PASS env.
+REM A hardcoded default would bake a weak credential into CI logs and history.
 set PASS=%4
-if "%PASS%"=="" set PASS=labtest
+if "%PASS%"=="" set PASS=%E2E_PASS%
+if "%PASS%"=="" (
+    echo ERROR: password required ^(argv %%4 or E2E_PASS env^)
+    exit /b 1
+)
 
 set AGENT_ID=%5
 if "%AGENT_ID%"=="" (
@@ -45,6 +51,7 @@ echo [E2E] Logging in as %USER%...
 curl.exe -s -c "%COOKIE_JAR%" -d "username=%USER%&password=%PASS%" "%BASE_URL%/api/login" >nul
 if %ERRORLEVEL% neq 0 (
     echo [E2E] ERROR: Login failed
+    if exist "%COOKIE_JAR%" del /f /q "%COOKIE_JAR%"
     exit /b 1
 )
 echo [E2E] OK: Login succeeded
@@ -54,6 +61,7 @@ echo [E2E] Triggering CSRF cookie rotation...
 curl.exe -s -b "%COOKIE_JAR%" -c "%COOKIE_JAR%" -H "Accept: application/json" "%BASE_URL%/api/v1/tasks" >nul
 if %ERRORLEVEL% neq 0 (
     echo [E2E] ERROR: GET /api/v1/tasks failed
+    if exist "%COOKIE_JAR%" del /f /q "%COOKIE_JAR%"
     exit /b 1
 )
 echo [E2E] OK: CSRF cookie rotated
@@ -90,8 +98,15 @@ echo [E2E] OK: Task created: ID=%TASK_ID%
 
 REM 5. Poll for completion
 echo [E2E] Polling task %TASK_ID% for completion (timeout 60s)...
+set POLL_COUNT=0
+set MAX_POLL=20
 
 :POLL_LOOP
+set /a POLL_COUNT+=1
+if !POLL_COUNT! GTR %MAX_POLL% (
+    echo [E2E] ERROR: Poll timeout after %MAX_POLL% attempts (~60s)
+    goto :CLEANUP_FAIL
+)
 curl.exe -s -b "%COOKIE_JAR%" -H "Accept: application/json" "%BASE_URL%/api/v1/tasks/%TASK_ID%" > "%TEMP%\e2e-poll.json"
 if %ERRORLEVEL% neq 0 (
     echo [E2E] ERROR: Poll failed
@@ -129,3 +144,10 @@ if exist "%TEMP%\e2e-task-response.json" del /f /q "%TEMP%\e2e-task-response.jso
 if exist "%TEMP%\e2e-poll.json" del /f /q "%TEMP%\e2e-poll.json"
 if exist "%COOKIE_JAR%" del /f /q "%COOKIE_JAR%"
 exit /b 0
+
+:CLEANUP_FAIL
+if exist "%TEMP%\e2e-task.json" del /f /q "%TEMP%\e2e-task.json"
+if exist "%TEMP%\e2e-task-response.json" del /f /q "%TEMP%\e2e-task-response.json"
+if exist "%TEMP%\e2e-poll.json" del /f /q "%TEMP%\e2e-poll.json"
+if exist "%COOKIE_JAR%" del /f /q "%COOKIE_JAR%"
+exit /b 1

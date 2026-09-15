@@ -48,7 +48,11 @@ func GetCSRFSecret() []byte {
 	if v == nil {
 		return nil
 	}
-	return v.([]byte)
+	b, ok := v.([]byte)
+	if !ok || len(b) != 32 {
+		return nil
+	}
+	return b
 }
 
 // CSRFProtect generates a CSRF token on GET requests and validates it on
@@ -83,7 +87,14 @@ func CSRFProtect() gin.HandlerFunc {
 				})
 				return
 			}
-			secret := csrfSecret.Load().([]byte)
+			secret, ok := csrfSecret.Load().([]byte)
+			if !ok || len(secret) != 32 {
+				c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
+					"success": false,
+					"error":   "CSRF protection unavailable",
+				})
+				return
+			}
 			expected := DeriveCSRFToken(sessionToken, secret)
 			if headerToken == "" || cookieToken == "" ||
 				subtle.ConstantTimeCompare([]byte(headerToken), []byte(expected)) != 1 ||
@@ -100,9 +111,10 @@ func CSRFProtect() gin.HandlerFunc {
 		if method == "GET" || method == "HEAD" {
 			sessionToken, err := c.Cookie("forgec2_session")
 			if err == nil && sessionToken != "" {
-				secret := csrfSecret.Load().([]byte)
-				token := DeriveCSRFToken(sessionToken, secret)
-				SetCookieWithSameSite(c, csrfCookieName, token, 0, "/", CookieSecure, false, http.SameSiteLaxMode)
+				if secret, ok := csrfSecret.Load().([]byte); ok && len(secret) == 32 {
+					token := DeriveCSRFToken(sessionToken, secret)
+					SetCookieWithSameSite(c, csrfCookieName, token, 0, "/", CookieSecure, false, http.SameSiteLaxMode)
+				}
 			}
 		}
 
@@ -111,6 +123,9 @@ func CSRFProtect() gin.HandlerFunc {
 }
 
 func DeriveCSRFToken(sessionToken string, secret []byte) string {
+	if len(secret) == 0 {
+		return ""
+	}
 	h := sha256.Sum256([]byte(sessionToken))
 	mac := hmac.New(sha256.New, secret)
 	mac.Write(h[:])

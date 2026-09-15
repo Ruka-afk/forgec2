@@ -36,8 +36,8 @@ ForgeC2 includes the following built-in security measures:
 ### Authentication & Authorization
 
 - JWT + bcrypt password hashing
-- HttpOnly secure session cookies with `SameSite=Lax`
-- CSRF double-submit cookie protection (`forgec2_csrf` + `X-CSRF-Token` header)
+- Session cookie `forgec2_session` is HttpOnly + Secure (when TLS enabled) + `SameSite=Lax`
+- CSRF double-submit cookie protection (`forgec2_csrf` + `X-CSRF-Token` header, HMAC-SHA256 of the session bound with independent `crypto.csrf_key`). Note: `forgec2_csrf` is intentionally readable by JS (`HttpOnly=false`) so the frontend can echo it; the session cookie itself stays HttpOnly.
 - TOTP two-factor authentication with backup codes
 - Per-route RBAC permission system (agents, listeners, settings, plugins, etc.)
 - IP-based login lockout with progressive delay

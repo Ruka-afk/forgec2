@@ -21,7 +21,8 @@ func TestSetUpdateProgress(t *testing.T) {
 		s.updateState.DownloadedBytes, s.updateState.TotalBytes, s.updateState.TargetVersion
 	s.updateState.mu.RUnlock()
 	if stage != updateStageDownloading || progress != 10 || downloaded != 100 || total != 1000 || version != "v9.9.9" {
-		t.Fatalf("bad progress state: %+v", s.updateState)
+		t.Fatalf("bad progress state: stage=%q progress=%d downloaded=%d total=%d version=%q",
+			stage, progress, downloaded, total, version)
 	}
 
 	// Terminal failure records the error.
