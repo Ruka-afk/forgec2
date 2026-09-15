@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -54,17 +55,73 @@ func wechatDataRoots() ([]string, []string) {
 	if runtime.GOOS != "windows" {
 		return nil, nil
 	}
-	// Account containers to probe, oldest layout first:
-	//  - legacy (WeChat <= 3.x): %APPDATA%\Tencent\WeChat\<wxid>\Msg
-	//  - modern (WeChat >= 3.9 / 4.x default): %USERPROFILE%\Documents\WeChat Files\<wxid>\Msg
+	containers := wechatContainers()
+	return wechatMsgRoots(containers), containers
+}
+
+// wechatContainers returns candidate account-container dirs: the current
+// user's legacy + modern layouts plus every local profile's legacy, modern
+// and OneDrive-synced layouts. The agent often runs as SYSTEM or another
+// account than the WeChat login, in which case %APPDATA%/%USERPROFILE% point
+// at the wrong profile — enumerating C:\Users covers that.
+func wechatContainers() []string {
 	var containers []string
+	seen := make(map[string]struct{})
+	add := func(p string) {
+		if p == "" {
+			return
+		}
+		key := strings.ToLower(filepath.Clean(p))
+		if _, dup := seen[key]; dup {
+			return
+		}
+		seen[key] = struct{}{}
+		containers = append(containers, p)
+	}
 	if appdata := os.Getenv("APPDATA"); appdata != "" {
-		containers = append(containers, filepath.Join(appdata, "Tencent", "WeChat"))
+		add(filepath.Join(appdata, "Tencent", "WeChat"))
 	}
 	if home := os.Getenv("USERPROFILE"); home != "" {
-		containers = append(containers, filepath.Join(home, "Documents", "WeChat Files"))
+		add(filepath.Join(home, "Documents", "WeChat Files"))
 	}
-	return wechatMsgRoots(containers), containers
+	drive := os.Getenv("SystemDrive")
+	if drive == "" {
+		drive = `C:`
+	}
+	for _, p := range wechatProfileContainers(filepath.Join(drive+`\`, "Users")) {
+		add(p)
+	}
+	return containers
+}
+
+// wechatProfileContainers expands a Users root (e.g. C:\Users) into per-user
+// candidate containers. Pure (no env reads) so it is unit-testable.
+func wechatProfileContainers(usersRoot string) []string {
+	var out []string
+	if usersRoot == "" {
+		return out
+	}
+	entries, err := os.ReadDir(usersRoot)
+	if err != nil {
+		return out
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		// Service / template profiles never hold WeChat data.
+		if strings.HasPrefix(name, "Default") || name == "Public" || name == "All Users" {
+			continue
+		}
+		home := filepath.Join(usersRoot, name)
+		out = append(out,
+			filepath.Join(home, "AppData", "Roaming", "Tencent", "WeChat"),
+			filepath.Join(home, "Documents", "WeChat Files"),
+			filepath.Join(home, "OneDrive", "Documents", "WeChat Files"),
+		)
+	}
+	return out
 }
 
 // wechatMsgRoots expands account containers into per-account Msg directories.
@@ -85,10 +142,13 @@ func wechatMsgRoots(containers []string) []string {
 			if _, err := os.Stat(msgDir); err != nil {
 				continue
 			}
-			if _, dup := seen[msgDir]; dup {
+			// Windows paths are case-insensitive; env- and profile-derived
+			// spellings of the same dir must collapse.
+			key := strings.ToLower(msgDir)
+			if _, dup := seen[key]; dup {
 				continue
 			}
-			seen[msgDir] = struct{}{}
+			seen[key] = struct{}{}
 			roots = append(roots, msgDir)
 		}
 	}
@@ -110,12 +170,14 @@ func exportWeChatHistory(f wechatFilter) string {
 	roots, probed := wechatDataRoots()
 	if len(roots) == 0 {
 		sb.WriteString("(WeChat data directory not found or not on Windows)\n")
-		// Diagnostic for the operator: which account containers were checked.
-		// `#` lines are ignored by the frontend parser. A custom FileStorage
-		// location (WeChat Settings -> File Management) is not discoverable
-		// here — check it manually when this lists only default paths.
+		// Diagnostic for the operator: how many account containers were
+		// checked and which. `#` lines are ignored by the frontend parser.
+		// A custom FileStorage location (WeChat Settings -> File Management)
+		// is not discoverable here — check it manually when this lists only
+		// default paths.
+		fmt.Fprintf(&sb, "# probed: %d containers, %d roots\n", len(probed), len(roots))
 		if len(probed) > 0 {
-			fmt.Fprintf(&sb, "# probed: %s\n", strings.Join(probed, "; "))
+			fmt.Fprintf(&sb, "# containers: %s\n", strings.Join(probed, "; "))
 		}
 		return sb.String()
 	}
@@ -143,7 +205,7 @@ func exportWeChatHistory(f wechatFilter) string {
 			dbPath := filepath.Join(msgRoot, e.Name())
 			rows, err := queryWeChatDB(dbPath, f, startTime, endTime, remaining, contactIndex)
 			if err != nil {
-				fmt.Fprintf(&sb, "=== %s ===\nquery error: %v\n", e.Name(), err)
+				fmt.Fprintf(&sb, "=== %s ===\nquery error: %s\n", e.Name(), wechatExplainDBError(dbPath, err))
 				continue
 			}
 			for _, r := range rows {
@@ -208,14 +270,29 @@ func queryWeChatDB(dbPath string, f wechatFilter, startTime, endTime time.Time, 
 	// Not every db carries a `contact` table — in newer WeChat layouts the
 	// names live in a separate db file. Index this one when it has them, and
 	// keep the shared index so nameless dbs can still be labeled later.
-	hasContact := hasWeChatTable(db, "contact")
+	hasContact, err := wechatHasTable(db, "contact")
+	if err != nil {
+		return nil, err
+	}
 	if hasContact {
 		_ = loadContacts(db, contactIndex)
 	}
 
 	// A contact-only db has nothing to read, but its names are already in the
 	// shared index — skip silently rather than emitting a scary query error.
-	if !hasWeChatTable(db, "message") {
+	hasMsg, err := wechatHasTable(db, "message")
+	if err != nil {
+		return nil, err
+	}
+	if !hasMsg {
+		// Modern layout (WeChat >= 3.9 / 4.x): MSG + Name2ID tables.
+		hasNew, err := wechatHasTable(db, "MSG")
+		if err != nil {
+			return nil, err
+		}
+		if hasNew {
+			return queryWeChatMSGDB(db, f, startTime, endTime, limit, contactIndex)
+		}
 		return nil, nil
 	}
 
@@ -335,10 +412,208 @@ func openWeChatDBReadonly(path string) *sql.DB {
 }
 
 // hasWeChatTable reports whether a table named name exists in the db.
+// Unlike the old helper, an error (e.g. encrypted file) is propagated so
+// callers can report it instead of silently skipping the db.
 func hasWeChatTable(db *sql.DB, name string) bool {
+	ok, _ := wechatHasTable(db, name)
+	return ok
+}
+
+// wechatHasTable is the error-aware table probe. Table names are matched
+// case-insensitively by SQLite itself.
+func wechatHasTable(db *sql.DB, name string) (bool, error) {
 	var n int
-	err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", name).Scan(&n)
-	return err == nil && n > 0
+	if err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", name).Scan(&n); err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+// wechatExplainDBError turns raw sqlite open/query failures into operator
+// actionables. WeChat 4.x encrypts MicroMsg.db (key lives in the running
+// WeChat process), which surfaces as "file is not a database".
+func wechatExplainDBError(dbPath string, err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "not a database") {
+		return fmt.Sprintf("%s: database is encrypted or unsupported (WeChat 4.x encrypts message DBs; extract the key from the live WeChat process): %v",
+			filepath.Base(dbPath), err)
+	}
+	return fmt.Sprintf("%s: %v", filepath.Base(dbPath), err)
+}
+
+// queryWeChatMSGDB reads the modern message layout (WeChat >= 3.9 / 4.x):
+// MSG(TalkerId, CreateTime seconds, Type, IsSender, StrTalker, StrContent)
+// plus Name2ID (rowid == TalkerId) for room names. Missing optional columns
+// degrade gracefully; missing core columns are a descriptive error.
+func queryWeChatMSGDB(db *sql.DB, f wechatFilter, startTime, endTime time.Time, limit int, contactIndex map[string]string) ([]wechatMessage, error) {
+	cols, err := wechatTableColumns(db, "MSG")
+	if err != nil {
+		return nil, err
+	}
+	required := []string{"TalkerId", "Type", "IsSender", "CreateTime"}
+	var missing []string
+	for _, c := range required {
+		if !cols[strings.ToLower(c)] {
+			missing = append(missing, c)
+		}
+	}
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("MSG table has unexpected schema (missing %s)", strings.Join(missing, ", "))
+	}
+
+	hasStrTalker := cols["strtalker"]
+	hasStrContent := cols["strcontent"]
+
+	nameIdx := wechatName2IDIndex(db)
+
+	startSec := startTime.Unix()
+	endSec := endTime.Unix()
+	if startTime.IsZero() {
+		startSec = 0
+	}
+	where := ` WHERE m.CreateTime >= ? AND m.CreateTime <= ?`
+	args := []interface{}{startSec, endSec}
+	// NOTE: no SQL-side contact filter here. The room display name comes from
+	// the Name2ID mapping resolved in Go below; filtering on StrTalker in SQL
+	// would drop rows whose room name (not sender id) matches. The Go-side
+	// probe after the scan covers display + room + sender id.
+	selectTalker := `CAST(m.TalkerId AS TEXT)`
+	selectContent := `''`
+	if hasStrTalker {
+		selectTalker = `m.StrTalker`
+	}
+	if hasStrContent {
+		selectContent = `m.StrContent`
+	}
+	query := "SELECT m.TalkerId, m.CreateTime, " + selectTalker + ", m.Type, " + selectContent + ", m.IsSender" +
+		" FROM MSG m" + where + ` ORDER BY m.CreateTime DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	wantContact := f.Contact != "" && f.Contact != "all"
+	var results []wechatMessage
+	for rows.Next() {
+		var msg wechatMessage
+		var talkerID int64
+		var createTime int64
+		var strTalker, strContent string
+		var isSender int
+		if err := rows.Scan(&talkerID, &createTime, &strTalker, &msg.Type, &strContent, &isSender); err != nil {
+			continue
+		}
+		roomUser := ""
+		if name, ok := nameIdx[talkerID]; ok && name != "" {
+			roomUser = name
+		} else if strTalker != "" {
+			roomUser = strTalker
+		} else {
+			roomUser = strconv.FormatInt(talkerID, 10)
+		}
+		display := contactIndex[roomUser]
+		if display == "" {
+			display = roomUser
+		}
+		if wantContact {
+			probe := strings.ToLower(display + "\x00" + roomUser + "\x00" + strTalker)
+			if !strings.Contains(probe, f.Contact) {
+				continue
+			}
+		}
+		msg.ContactID = roomUser
+		msg.Contact = display
+		msg.Time = time.Unix(createTime, 0).UTC().Format(time.RFC3339)
+		msg.Content = strContent
+		msg.Sender = "other"
+		if isSender == 1 {
+			msg.Sender = "me"
+		}
+		results = append(results, msg)
+	}
+	return results, rows.Err()
+}
+
+// wechatTableColumns returns the lower-cased column names of a table.
+func wechatTableColumns(db *sql.DB, table string) (map[string]bool, error) {
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	cols := make(map[string]bool)
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notNull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notNull, &dflt, &pk); err != nil {
+			continue
+		}
+		cols[strings.ToLower(name)] = true
+	}
+	return cols, rows.Err()
+}
+
+// wechatName2IDIndex maps MSG.TalkerId (== Name2ID rowid) to room usernames.
+// The single value column is named differently per version (username vs
+// unknown), so it is resolved via PRAGMA instead of hard-coded.
+func wechatName2IDIndex(db *sql.DB) map[int64]string {
+	idx := make(map[int64]string)
+	cols, err := wechatTableColumns(db, "Name2ID")
+	if err != nil || len(cols) == 0 {
+		return idx
+	}
+	var valueCol string
+	// Prefer a username-like column; else take the first non-rowid column.
+	rows, err := db.Query("PRAGMA table_info(Name2ID)")
+	if err != nil {
+		return idx
+	}
+	var first string
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notNull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notNull, &dflt, &pk); err != nil {
+			continue
+		}
+		if first == "" {
+			first = name
+		}
+		if strings.Contains(strings.ToLower(name), "user") || strings.Contains(strings.ToLower(name), "name") {
+			valueCol = name
+			break
+		}
+	}
+	rows.Close()
+	if valueCol == "" {
+		valueCol = first
+	}
+	if valueCol == "" {
+		return idx
+	}
+	data, err := db.Query(fmt.Sprintf("SELECT rowid, \"%s\" FROM Name2ID", strings.ReplaceAll(valueCol, `"`, `""`)))
+	if err != nil {
+		return idx
+	}
+	defer data.Close()
+	for data.Next() {
+		var id int64
+		var name string
+		if err := data.Scan(&id, &name); err != nil || name == "" {
+			continue
+		}
+		idx[id] = name
+	}
+	return idx
 }
 
 // likeArg wraps s in wildcards and escapes any LIKE metacharacters it

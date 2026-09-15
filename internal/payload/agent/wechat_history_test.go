@@ -5,9 +5,11 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -259,9 +261,146 @@ func TestQueryWeChatDBContactFilterMatches(t *testing.T) {
 	}
 }
 
-// Both account layouts — legacy %APPDATA%\Tencent\WeChat and modern
-// %USERPROFILE%\Documents\WeChat Files — must be discovered, with missing
-// containers skipped and duplicates collapsed.
+// createWeChatMSGTestDB builds a modern-layout db: MSG + Name2ID tables,
+// no legacy message/contact tables.
+func createWeChatMSGTestDB(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "MSG_test.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open test db: %v", err)
+	}
+	defer db.Close()
+	for _, s := range []string{
+		`CREATE TABLE MSG (localId INTEGER PRIMARY KEY, TalkerId INTEGER, MsgSvrID INTEGER, Type INTEGER, SubType INTEGER, IsSender INTEGER, CreateTime INTEGER, Sequence INTEGER, StrTalker TEXT, StrContent TEXT)`,
+		`CREATE TABLE Name2ID (username TEXT PRIMARY KEY)`,
+	} {
+		if _, err := db.Exec(s); err != nil {
+			t.Fatalf("exec %q: %v", s, err)
+		}
+	}
+	return path
+}
+
+func seedName2ID(t *testing.T, path string, names ...string) {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+	for _, n := range names {
+		if _, err := db.Exec("INSERT INTO Name2ID (username) VALUES (?)", n); err != nil {
+			t.Fatalf("insert name2id: %v", err)
+		}
+	}
+}
+
+func seedMSG(t *testing.T, path string, talkerID int64, strTalker, content string, isSender int, base time.Time, n int) {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+	for i := 0; i < n; i++ {
+		if _, err := db.Exec(
+			"INSERT INTO MSG (TalkerId, Type, IsSender, CreateTime, StrTalker, StrContent) VALUES (?,?,?,?,?,?)",
+			talkerID, 1, isSender, base.Add(time.Duration(i)*time.Second).Unix(), strTalker, content+"#"+strconv.Itoa(i),
+		); err != nil {
+			t.Fatalf("insert msg: %v", err)
+		}
+	}
+}
+
+func TestQueryWeChatMSGDBReadsModernLayout(t *testing.T) {
+	path := createWeChatMSGTestDB(t)
+	base := time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
+	// rowid 1 -> room-a, rowid 2 -> room-b
+	seedName2ID(t, path, "room-a", "room-b")
+	seedMSG(t, path, 1, "wxid_sender", "hello", 0, base, 2)
+	seedMSG(t, path, 2, "wxid_other", "hi", 1, base, 1)
+	// TalkerId 99 has no Name2ID row -> falls back to StrTalker.
+	seedMSG(t, path, 99, "wxid_lonely", "yo", 0, base, 1)
+
+	idx := map[string]string{}
+	got, err := queryWeChatDB(path, wechatFilter{}, base.Add(-time.Hour), base.Add(time.Hour), 100, idx)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if len(got) != 4 {
+		t.Fatalf("want 4 rows, got %d", len(got))
+	}
+	byID := map[string]wechatMessage{}
+	for _, m := range got {
+		byID[m.ContactID] = m
+	}
+	if m := byID["room-a"]; m.Contact != "room-a" || m.Sender != "other" || m.Content != "hello#0" && m.Content != "hello#1" {
+		t.Errorf("room-a wrong: %+v", m)
+	}
+	if m := byID["room-b"]; m.Sender != "me" {
+		t.Errorf("room-b Sender=%q, want me", m.Sender)
+	}
+	if m := byID["wxid_lonely"]; m.Contact != "wxid_lonely" {
+		t.Errorf("missing Name2ID must fall back to StrTalker, got %+v", m)
+	}
+	// Contact filter matches the mapped room name.
+	got, err = queryWeChatDB(path, wechatFilter{Contact: "room-b"}, base.Add(-time.Hour), base.Add(time.Hour), 100, idx)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if len(got) != 1 || got[0].ContactID != "room-b" {
+		t.Fatalf("want only room-b, got %+v", got)
+	}
+}
+
+func TestQueryWeChatMSGDBRejectsBadSchema(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "MSG_bad.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if _, err := db.Exec(`CREATE TABLE MSG (Foo TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	base := time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
+	if _, err := queryWeChatDB(path, wechatFilter{}, base.Add(-time.Hour), base.Add(time.Hour), 100, map[string]string{}); err == nil {
+		t.Fatal("MSG table missing core columns must error, not silently skip")
+	}
+}
+
+func TestWeChatExplainDBErrorFlagsEncryption(t *testing.T) {
+	if got := wechatExplainDBError(`C:\x\MicroMsg.db`, errors.New("file is not a database")); !strings.Contains(got, "encrypted or unsupported") {
+		t.Fatalf("must flag encryption, got %q", got)
+	}
+	if got := wechatExplainDBError(`C:\x\MSG0.db`, errors.New("no such table: MSG")); strings.Contains(got, "encrypted") {
+		t.Fatalf("plain errors must not claim encryption, got %q", got)
+	}
+}
+
+func TestWeChatProfileContainersSkipsServiceProfiles(t *testing.T) {
+	root := t.TempDir()
+	for _, d := range []string{"alice", "bob", "Default", "Default User", "Public", "All Users"} {
+		if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A stray file must not become a container either.
+	if err := os.WriteFile(filepath.Join(root, "notadir"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := wechatProfileContainers(root)
+	if len(got) != 2*3 {
+		t.Fatalf("want 2 users x 3 layouts, got %v", got)
+	}
+	for _, p := range got {
+		if strings.Contains(p, "Default") || strings.Contains(p, "Public") || strings.Contains(p, "All Users") {
+			t.Fatalf("service profile leaked: %q", p)
+		}
+	}
+}
 func TestWeChatMsgRootsFindsBothLayouts(t *testing.T) {
 	mkContainer := func(t *testing.T, withMsg bool) string {
 		t.Helper()

