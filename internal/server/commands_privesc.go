@@ -84,6 +84,40 @@ func clampSleepString(sleep string, minInterval, minJitter int) string {
 	return fmt.Sprintf("%d,%d", interval, jitter)
 }
 
+// sleepMinimums returns the configured OPSEC floors for beacon timing
+// (implant.min_interval/min_jitter), sanitized. Every set_sleep entry point
+// funnels through these so no path can dial beaconing below the floors.
+func (s *Server) sleepMinimums() (minInterval, minJitter int) {
+	minInterval, minJitter = 1, 0
+	if s == nil || s.cfg == nil {
+		return minInterval, minJitter
+	}
+	s.configMu.RLock()
+	minInterval, minJitter = s.cfg.Implant.MinInterval, s.cfg.Implant.MinJitter
+	s.configMu.RUnlock()
+	if minInterval < 1 {
+		minInterval = 1
+	}
+	if minJitter < 0 {
+		minJitter = 0
+	}
+	return minInterval, minJitter
+}
+
+// clampSleepInts enforces the OPSEC floors on a parsed interval/jitter pair,
+// reporting whether clamping altered either value (callers audit overrides).
+func (s *Server) clampSleepInts(interval, jitter int) (int, int, bool) {
+	minInterval, minJitter := s.sleepMinimums()
+	outInterval, outJitter, changed := interval, jitter, false
+	if outInterval < minInterval {
+		outInterval, changed = minInterval, true
+	}
+	if outJitter < minJitter {
+		outJitter, changed = minJitter, true
+	}
+	return outInterval, outJitter, changed
+}
+
 func (s *Server) handleElevate(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return

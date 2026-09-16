@@ -241,6 +241,14 @@ type Task struct {
 	// task types when security.require_approval_for_dangerous is enabled.
 	ApprovedBy     string     `json:"approved_by,omitempty"`
 	ApprovedAt     *time.Time `json:"approved_at,omitempty"`
+	// Operator collaboration claim (who is working this task in the UI).
+	// Separate from ClaimedBy/ClaimedAt, which are the AGENT dispatch claim
+	// used by the beacon pipeline — sharing one column corrupted both.
+	OperatorClaimedBy string     `json:"operator_claimed_by,omitempty"`
+	OperatorClaimedAt *time.Time `json:"operator_claimed_at,omitempty"`
+	// ApprovalExpiresAt bounds pending_approval lifetime (auto-reject after
+	// ApprovalExpiryDuration). Set at creation for approval-gated tasks.
+	ApprovalExpiresAt *time.Time `gorm:"index" json:"approval_expires_at,omitempty"`
 	ClaimedBy      string     `gorm:"size:255" json:"claimed_by"`
 	ClaimedAt      time.Time  `json:"claimed_at"`
 	AcknowledgedAt *time.Time `gorm:"index" json:"acknowledged_at,omitempty"`
@@ -1844,6 +1852,9 @@ type AgentLock struct {
 	AgentID   string    `gorm:"uniqueIndex;size:36;not null" json:"agent_id"`
 	LockedBy  string    `gorm:"size:64;not null" json:"locked_by"`
 	LockedAt  time.Time `json:"locked_at"`
+	// ExpiresAt bounds the lock (default 15m, refreshed by holder heartbeat):
+	// a crashed browser must not pin an agent forever.
+	ExpiresAt time.Time `gorm:"index" json:"expires_at"`
 	Note      string    `gorm:"size:512" json:"note"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

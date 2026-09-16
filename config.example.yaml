@@ -48,6 +48,13 @@ roe:
   enabled: false
   allow_cidrs: []             # e.g. ["10.0.0.0/8", "192.168.0.0/16"]
   deny_cidrs: []              # e.g. ["10.0.0.1/32"] hospital / ICS exclusions
+  allow_domains: []           # e.g. ["corp.example.com"] suffix-matched hostnames
+  deny_domains: []            # e.g. ["evil.example.com"]
+  # Scope: network-operation types plus every dangerous type (credential
+  # theft, persistence, EDR antagonism, destructive ops). Destructive
+  # self-harm (uninstall/kill) is RoE-scoped like anything else; only
+  # set_sleep/help/hostinfo bypass. Command, Data and Path are all scanned
+  # (IPv4, IPv6 and hostnames).
 
 listeners:
   h2c:

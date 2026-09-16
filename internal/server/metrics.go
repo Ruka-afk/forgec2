@@ -22,9 +22,11 @@ type MetricsCollector struct {
 	RequestDuration     *prometheus.HistogramVec
 	BeaconDuration      *prometheus.HistogramVec
 	TaskExecuteDuration *prometheus.HistogramVec
-	AuditDroppedTotal   prometheus.Counter
-	EventDroppedTotal   *prometheus.CounterVec
-	VaultErrorsTotal    *prometheus.CounterVec
+	AuditDroppedTotal  prometheus.Counter
+	EventDroppedTotal  *prometheus.CounterVec
+	VaultErrorsTotal   *prometheus.CounterVec
+	TasksPendingByAgent *prometheus.GaugeVec
+	OldestPendingSeconds *prometheus.GaugeVec
 }
 
 func NewMetricsCollector(s *Server) *MetricsCollector {
@@ -90,6 +92,14 @@ func NewMetricsCollector(s *Server) *MetricsCollector {
 			Name: "forgec2_vault_errors_total",
 			Help: "Total number of vault crypto failures, by operation. An encrypt failure means output was dropped rather than stored as plaintext.",
 		}, []string{"op"}),
+		TasksPendingByAgent: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "forgec2_tasks_pending_by_agent",
+			Help: "Pending (undelivered) tasks per agent.",
+		}, []string{"agent_id"}),
+		OldestPendingSeconds: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "forgec2_oldest_pending_seconds",
+			Help: "Age of the oldest pending task per agent, in seconds.",
+		}, []string{"agent_id"}),
 	}
 }
 
@@ -109,6 +119,8 @@ func (mc *MetricsCollector) Register(reg prometheus.Registerer) {
 		mc.AuditDroppedTotal,
 		mc.EventDroppedTotal,
 		mc.VaultErrorsTotal,
+		mc.TasksPendingByAgent,
+		mc.OldestPendingSeconds,
 	}
 	for _, c := range collectors {
 		err := reg.Register(c)

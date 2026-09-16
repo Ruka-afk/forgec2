@@ -456,8 +456,8 @@ const TaskRow = memo(function TaskRow({ task, expanded, onToggle, onDetail, onCa
           ) : "-"}
         </TableCell>
         <TableCell className="max-sm:hidden py-3 px-4">
-          {task.claimed_by ? (
-            <OperatorBadge username={task.claimed_by} isCurrentUser={task.claimed_by === currentUsername} size="sm" />
+          {task.operator_claimed_by ? (
+            <OperatorBadge username={task.operator_claimed_by} isCurrentUser={task.operator_claimed_by === currentUsername} size="sm" />
           ) : (
             <span className="text-muted-foreground text-xs">-</span>
           )}
@@ -466,9 +466,9 @@ const TaskRow = memo(function TaskRow({ task, expanded, onToggle, onDetail, onCa
         <TableCell className="py-3 px-4 text-center">{getStatusBadge(task.status)}</TableCell>
         <TableCell className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-center gap-1">
-            {(!task.claimed_by || task.claimed_by === currentUsername) && (task.status === "pending" || task.status === "running") && (
+            {(!task.operator_claimed_by || task.operator_claimed_by === currentUsername) && (task.status === "pending" || task.status === "running") && (
               <>
-                {task.claimed_by !== currentUsername ? (
+                {task.operator_claimed_by !== currentUsername ? (
                    <Button variant="ghost" size="icon-xs" onClick={() => onClaim(task.id)} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-chart-3/20" title={t("tasks.claim")} aria-label={t("tasks.claim")}>
                      <Hand className="size-4" />
                    </Button>
@@ -479,7 +479,7 @@ const TaskRow = memo(function TaskRow({ task, expanded, onToggle, onDetail, onCa
                 )}
               </>
             )}
-            {(task.status === "pending" || task.status === "running") && !task.claimed_by && (
+            {(task.status === "pending" || task.status === "running") && !task.operator_claimed_by && (
                <Button variant="ghost" size="icon-xs" onClick={() => onCancel(task)} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10" title={t("tasks.cancel")} aria-label={t("tasks.cancel")}>
                 <Ban className="size-3" />
               </Button>

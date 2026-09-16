@@ -167,6 +167,26 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		return
 	}
 
+	// Bulk set_sleep commands pass through the same OPSEC floors as every
+	// other entry point (clamped, never rejected, so older consoles work).
+	command := req.Command
+	if req.TaskType == "set_sleep" {
+		if clamped, changed := func() (string, bool) {
+			minInterval, minJitter := s.sleepMinimums()
+			out := clampSleepString(req.Command, minInterval, minJitter)
+			return out, out != req.Command
+		}(); changed {
+			s.LogAuditRecord(c, "batch_sleep_clamped", "agent", "", "bulk set_sleep raised to OPSEC floors", true, nil)
+			command = clamped
+		}
+	}
+
+	// Collaboration locks: agents locked by another operator are skipped
+	// (one query for the whole batch). Locked skips are reported separately
+	// from validation failures so the operator knows to coordinate, unlock,
+	// or force via single-task endpoints.
+	lockedByOther := s.batchLockedByOther(uniqueIDs, operator)
+
 	tasks := make([]db.Task, 0, len(uniqueIDs))
 	validAgentIDs := make([]string, 0, len(uniqueIDs))
 
@@ -179,6 +199,7 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		task    db.Task
 	}
 	candidates := make([]batchCandidate, 0, len(uniqueIDs))
+	lockedSkipped := 0
 	for _, agentID := range uniqueIDs {
 		if !existingSet[agentID] {
 			continue
@@ -190,8 +211,18 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 			continue
 		}
 
-		if err := s.validateTaskCreation(c, agentID, req.TaskType, req.Command, callerUID); err != nil {
+		if err := s.validateTaskCreation(c, agentID, req.TaskType, command, req.Args, req.File, callerUID); err != nil {
 			slog.Warn("Batch command: validation failed", "agent_id", agentID, "err", err)
+			continue
+		}
+
+		// Collaboration locks apply to bulk writes too: skip agents locked
+		// by another operator (reported separately below) instead of
+		// stomping coordinated work. No force override on bulk — use the
+		// single-task endpoint with ?force for that.
+		if holder, ok := lockedByOther[agentID]; ok {
+			slog.Info("Batch command: agent locked, skipping", "agent_id", agentID, "locked_by", holder)
+			lockedSkipped++
 			continue
 		}
 
@@ -208,16 +239,24 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		}
 		s.agentPendingTasks[cand.agentID]++
 
-		tasks = append(tasks, db.Task{
+		status := s.resolveInitialTaskStatus(req.TaskType)
+		row := db.Task{
 			AgentID:   cand.agentID,
 			Type:      req.TaskType,
-			Command:   req.Command,
+			Command:   command,
 			Shell:     req.Shell,
 			Path:      req.File,
 			Data:      req.Args,
-			Status:    s.resolveInitialTaskStatus(req.TaskType),
+			Status:    status,
 			CreatedBy: operator,
-		})
+		}
+		// Approval-gated bulk tasks carry the same expiry as single creates
+		// so the sweeper treats both paths identically.
+		if status == TaskStatusPendingApproval {
+			exp := time.Now().Add(ApprovalExpiryDuration)
+			row.ApprovalExpiresAt = &exp
+		}
+		tasks = append(tasks, row)
 		validAgentIDs = append(validAgentIDs, cand.agentID)
 	}
 	s.agentPendingTasksMu.Unlock()
@@ -270,17 +309,17 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 	}
 
 	taskCount := len(tasks)
-	failedCount := len(uniqueIDs) - taskCount
+	failedCount := len(uniqueIDs) - taskCount - lockedSkipped
 
-	slog.Info("Batch command sent", "count", taskCount, "failed", failedCount, "type", req.TaskType, "command", req.Command)
-	s.LogAuditRecord(c, "batch_command", "agent", "", fmt.Sprintf("%s to %d agents (%d failed)", req.TaskType, taskCount, failedCount), true, nil)
+	slog.Info("Batch command sent", "count", taskCount, "failed", failedCount, "locked_skipped", lockedSkipped, "type", req.TaskType, "command", req.Command)
+	s.LogAuditRecord(c, "batch_command", "agent", "", fmt.Sprintf("%s to %d agents (%d failed, %d locked-skipped)", req.TaskType, taskCount, failedCount, lockedSkipped), true, nil)
 
 	s.pushBulkResult(BulkResult{
 		Timestamp: time.Now(),
 		Command:   req.Command,
 		TaskType:  req.TaskType,
 		Created:   taskCount,
-		Skipped:   0,
+		Skipped:   lockedSkipped,
 		Failed:    failedCount,
 		Operator:  operator,
 	})
@@ -289,6 +328,7 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		"success":       true,
 		"tasks_created": taskCount,
 		"failed":        failedCount,
+		"locked_skipped": lockedSkipped,
 	})
 }
 

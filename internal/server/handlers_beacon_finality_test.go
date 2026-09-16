@@ -342,8 +342,9 @@ func TestCancelRunningTaskInjectsAbortTask(t *testing.T) {
 }
 
 // TestCancelRunningTaskSkipsAbortWhenQueueFull verifies the abort injection
-// respects the per-agent pending cap: with a full queue the cancel still
-// succeeds but no abort task is injected (and the counter is untouched).
+// respects the per-agent pending cap INCLUDING its reserved headroom: with a
+// queue at/above cap+reserve the cancel still succeeds but no abort task is
+// injected (and the counter is untouched).
 func TestCancelRunningTaskSkipsAbortWhenQueueFull(t *testing.T) {
 	s, database := newBeaconFinalityTestServer(t)
 
@@ -356,10 +357,10 @@ func TestCancelRunningTaskSkipsAbortWhenQueueFull(t *testing.T) {
 	if err := database.Create(&task).Error; err != nil {
 		t.Fatalf("create task: %v", err)
 	}
-	// Simulate a drifted counter above the cap: cancel releases one slot
-	// (back to exactly max), so the best-effort abort injection must defer
-	// instead of pushing past the ceiling.
-	s.agentPendingTasks[uuid] = MaxPendingTasksPerAgent + 1
+	// Simulate a drifted counter above cap+reserve: cancel releases one slot
+	// (back to exactly cap+reserve), so even the reserved abort injection
+	// must defer instead of pushing past the ceiling.
+	s.agentPendingTasks[uuid] = MaxPendingTasksPerAgent + AbortReserveSlots + 1
 
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
@@ -381,8 +382,49 @@ func TestCancelRunningTaskSkipsAbortWhenQueueFull(t *testing.T) {
 		t.Errorf("full queue injected %d abort tasks, want 0", abortCount)
 	}
 	// Cancel released exactly one slot; the skipped abort added none back.
-	if n := s.agentPendingTasks[uuid]; n != MaxPendingTasksPerAgent {
-		t.Errorf("counter drifted: got %d, want %d", n, MaxPendingTasksPerAgent)
+	if n := s.agentPendingTasks[uuid]; n != MaxPendingTasksPerAgent+AbortReserveSlots {
+		t.Errorf("counter drifted: got %d, want %d", n, MaxPendingTasksPerAgent+AbortReserveSlots)
+	}
+}
+
+// TestCancelRunningTaskUsesAbortReserve verifies the reserved headroom: with
+// the queue exactly at the normal cap, cancelling a running task still queues
+// its abort and reports outcome=abort_queued.
+func TestCancelRunningTaskUsesAbortReserve(t *testing.T) {
+	s, database := newBeaconFinalityTestServer(t)
+
+	uuid := "eeee5555-5555-4333-8444-555555555555"
+	agent := db.Implant{ID: uuid, Hostname: "WS-03", IP: "10.0.0.10"}
+	if err := database.Create(&agent).Error; err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	task := db.Task{AgentID: uuid, Type: "shell", Command: "sleep 3600", Status: "running"}
+	if err := database.Create(&task).Error; err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	s.agentPendingTasks[uuid] = MaxPendingTasksPerAgent
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodPost, "/", nil)
+	c.Params = gin.Params{{Key: "id", Value: uuid}, {Key: "taskId", Value: strconv.FormatUint(uint64(task.ID), 10)}}
+	c.Set("user", "tester")
+
+	s.handleCancelTask(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("cancel status=%d body=%s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `"outcome":"abort_queued"`) {
+		t.Fatalf("expected outcome=abort_queued, body=%s", w.Body.String())
+	}
+	var abortCount int64
+	if err := database.Model(&db.Task{}).Where("type = ? AND agent_id = ?", "abort", uuid).Count(&abortCount).Error; err != nil {
+		t.Fatalf("count abort tasks: %v", err)
+	}
+	if abortCount != 1 {
+		t.Fatalf("reserved slot injected %d abort tasks, want 1", abortCount)
 	}
 }
 

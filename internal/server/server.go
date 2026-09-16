@@ -162,6 +162,11 @@ type Server struct {
 	auditLastHash string
 	auditDropped  atomic.Int64
 
+	// Backlog metric label hygiene: agents currently exported as per-agent
+	// gauge series, so drained agents can be pruned.
+	backlogAgents   map[string]struct{}
+	backlogAgentsMu sync.Mutex
+
 	// NTLM relay session tracking
 	ntlmRelays *ntlmRelayStore
 
@@ -383,6 +388,7 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		landingLimiterSince:   make(map[string]time.Time),
 		agentStatusCooldown:   make(map[string]time.Time),
 		ntlmRelays:            newNTLMRelayStore(),
+		backlogAgents:         make(map[string]struct{}),
 		extC2Channels:         make(map[string]*extC2WSChannel),
 		extC2Runners:          make(map[string]extC2Runner),
 		extC2TaskQueue:        make(map[string][]extC2Task),

@@ -33,6 +33,14 @@ const (
 	HostedPayloadTTL        = 24 * time.Hour   // hosted one-liner payload retention
 	MaxJSONBodySize         = 2 * 1024 * 1024  // 2 MB max for JSON/form request bodies
 	MaxPendingTasksPerAgent = 50               // max pending tasks per agent before rejecting new ones
+	// AbortReserveSlots are extra headroom slots beyond MaxPendingTasksPerAgent
+	// reserved for abort injections: cancelling a running task must be able to
+	// queue its abort even when the agent's backlog is full.
+	AbortReserveSlots = 2
+	// ApprovalExpiryDuration bounds how long a task waits in pending_approval
+	// before auto-reject. Stale approvals are a confused-deputy risk (the
+	// world changed since the operator hit "create").
+	ApprovalExpiryDuration = 24 * time.Hour
 	MaxCommandLength        = 10000            // max characters in a command string
 	MaxNotesLength          = 5000             // max characters in agent notes/tags
 	MaxChatMessageBytes     = 8 * 1024         // max bytes in a chat message

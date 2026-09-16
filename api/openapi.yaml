@@ -10624,6 +10624,16 @@ components:
         claimed_at:
           type: string
           format: date-time
+        operator_claimed_by:
+          type: string
+          description: Operator collaboration claim (UI); distinct from the beacon dispatch claim in claimed_by
+        operator_claimed_at:
+          type: string
+          format: date-time
+        approval_expires_at:
+          type: string
+          format: date-time
+          description: Auto-reject deadline for pending_approval tasks
         approved_by:
           type: string
         approved_at:

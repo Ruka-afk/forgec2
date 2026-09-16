@@ -231,7 +231,12 @@ func (s *Server) executeAction(action RuleAction, evt Event) {
 				targetAgent = params.AgentID
 			}
 			if targetAgent != "" && params.Interval > 0 {
-				cmd := fmt.Sprintf("%d,%d", params.Interval, params.Jitter)
+				interval, jitter, clamped := s.clampSleepInts(params.Interval, params.Jitter)
+				if clamped {
+					s.LogAuditRecord(nil, "automation_sleep_clamped", "agent", targetAgent,
+						"automation set_sleep raised to OPSEC floors", true, nil)
+				}
+				cmd := fmt.Sprintf("%d,%d", interval, jitter)
 				if err := s.db.Create(&db.Task{
 					AgentID:   targetAgent,
 					Type:      "set_sleep",

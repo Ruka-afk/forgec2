@@ -35,6 +35,10 @@ type TaskOption func(*taskOptions)
 type taskOptions struct {
 	callerUserID   uint
 	idempotencyKey string
+	// forceWrite bypasses another operator's collaboration lock; non-empty
+	// is the human-provided reason (audited). Only set for explicit admin
+	// overrides — see issueAgentTask.
+	forceWrite string
 }
 
 // WithCaller tags a createTask call with the operator user ID so the
@@ -49,6 +53,13 @@ func WithCaller(uid uint) TaskOption {
 // (double-clicks, retried automation, replayed API calls).
 func WithIdempotencyKey(key string) TaskOption {
 	return func(o *taskOptions) { o.idempotencyKey = key }
+}
+
+// WithForceWrite overrides another operator's collaboration lock with a
+// human reason (audited at creation). Callers must restrict this to explicit
+// admin overrides; system paths never set it.
+func WithForceWrite(reason string) TaskOption {
+	return func(o *taskOptions) { o.forceWrite = reason }
 }
 
 // callerOpts extracts the user_id from gin.Context and returns a WithCaller
@@ -71,7 +82,7 @@ func callerOpts(c *gin.Context) []TaskOption {
 // switch, adaptive OPSEC blocking, and the operator soft-lock. Centralizing
 // these keeps the single-task and batch paths consistent so neither can
 // bypass a gate.
-func (s *Server) validateTaskCreation(c *gin.Context, agentID, taskType, command string, callerUserID uint) error {
+func (s *Server) validateTaskCreation(c *gin.Context, agentID, taskType, command, data, path string, callerUserID uint) error {
 	if !IsKnownTaskType(taskType) && !protocol.ValidTaskType(taskType) {
 		return fmt.Errorf("unknown task type: %s", taskType)
 	}
@@ -79,7 +90,7 @@ func (s *Server) validateTaskCreation(c *gin.Context, agentID, taskType, command
 	// lportfwd opens a tunneled egress path through the teamserver; honor the
 	// server.lportfwd_enabled kill switch centrally so every creation path
 	// (handlers, bulk, automation, scripting) inherits it.
-	if err := s.checkRoE(agentID, taskType, command); err != nil {
+	if err := s.checkRoE(agentID, taskType, command, data, path); err != nil {
 		return err
 	}
 
@@ -130,7 +141,13 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 		opt(&tOpts)
 	}
 
-	if err := s.validateTaskCreation(nil, agentID, taskType, command, tOpts.callerUserID); err != nil {
+	if err := s.validateTaskCreation(nil, agentID, taskType, command, data, path, tOpts.callerUserID); err != nil {
+		return nil, err
+	}
+
+	// Collaboration lock: another operator's live lock blocks creation unless
+	// this call carries an explicit admin force override (audited inside).
+	if err := s.checkAgentLockForCreate(agentID, &tOpts); err != nil {
 		return nil, err
 	}
 
@@ -213,6 +230,10 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 	}
 
 	task.Status = s.resolveInitialTaskStatus(taskType)
+	if task.Status == TaskStatusPendingApproval {
+		exp := time.Now().Add(ApprovalExpiryDuration)
+		task.ApprovalExpiresAt = &exp
+	}
 	if err := s.db.Create(&task).Error; err != nil {
 		s.decPendingTasks(agentID)
 		// Close the SELECT-then-INSERT race at the database: a concurrent
@@ -304,13 +325,53 @@ func (s *Server) issueAgentTask(c *gin.Context, id string, spec TaskSpec) *db.Ta
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return nil
 	}
-	task, err := s.createTask(id, spec.Type, spec.Command, spec.Shell, spec.Path, spec.Data, spec.Offset, spec.Size,
-		append(callerOpts(c), WithIdempotencyKey(spec.IdempotencyKey))...)
+	opts := append(callerOpts(c), WithIdempotencyKey(spec.IdempotencyKey))
+	// Admin force override for another operator's collaboration lock. The
+	// reason is mandatory and audited inside createTask's lock gate.
+	if c.Query("force") == "true" && s.isAdmin(c) {
+		reason := strings.TrimSpace(c.Query("reason"))
+		if reason == "" {
+			reason = "no reason given"
+		}
+		opts = append(opts, WithForceWrite(reason))
+	}
+	task, err := s.createTask(id, spec.Type, spec.Command, spec.Shell, spec.Path, spec.Data, spec.Offset, spec.Size, opts...)
 	if err != nil {
 		respondTaskError(c, err)
 		return nil
 	}
 	return task
+}
+
+// checkAgentLockForCreate enforces another operator's live collaboration lock
+// on every createTask path (handlers, bulk, macros, scheduler): non-holders
+// get a 409 naming the holder, unless an explicit admin force override
+// (WithForceWrite) carries an audited reason. System/automation callers
+// (callerUserID == 0) bypass UI-level locks by design and are documented as
+// doing so; direct AI row inserts bypass all creation gates (pre-existing).
+func (s *Server) checkAgentLockForCreate(agentID string, tOpts *taskOptions) error {
+	var lock db.AgentLock
+	if err := s.db.Where("agent_id = ?", agentID).First(&lock).Error; err != nil {
+		return nil // no lock row: free to write
+	}
+	holder, live := lockHolderOf(&lock, time.Now())
+	if !live || holder == "" {
+		return nil
+	}
+	if tOpts.callerUserID != 0 {
+		var me string
+		if err := s.db.Model(&db.User{}).Where("id = ?", tOpts.callerUserID).Pluck("username", &me).Error; err == nil && me == holder {
+			return nil
+		}
+	} else {
+		return nil // system/automation path: not subject to UI locks
+	}
+	if tOpts.forceWrite != "" {
+		s.LogAuditRecord(nil, "collab_lock_force_write", "agent", agentID,
+			"task created on agent locked by "+holder+": "+tOpts.forceWrite, true, nil)
+		return nil
+	}
+	return fmt.Errorf("agent conflict: agent is locked by %s", holder)
 }
 
 // taskArgsHash is a short non-reversible fingerprint of a task's arguments
@@ -538,6 +599,98 @@ func (s *Server) failStaleAcknowledgedTasks() {
 	slog.Info("Failed stale acknowledged tasks with no result", "count", len(failIDs))
 }
 
+// rejectExpiredApprovals auto-rejects approval-gated tasks past their
+// expiry: a stale approval prompt is a confused-deputy risk (the world
+// changed since creation). Operators are notified once per sweep when any
+// were rejected.
+func (s *Server) rejectExpiredApprovals() {
+	now := time.Now()
+	var stale []db.Task
+	if err := s.db.Where("status = ? AND approval_expires_at IS NOT NULL AND approval_expires_at < ?",
+		TaskStatusPendingApproval, now).Limit(1000).Find(&stale).Error; err != nil {
+		slog.Error("Failed to find expired approvals", "error", err)
+		return
+	}
+	if len(stale) == 0 {
+		return
+	}
+	ids := make([]uint, len(stale))
+	for i, t := range stale {
+		ids[i] = t.ID
+	}
+	if err := s.db.Model(&db.Task{}).Where("id IN ? AND status = ?", ids, TaskStatusPendingApproval).
+		Updates(map[string]interface{}{
+			"status": "cancelled",
+			"error":  "approval expired without a second operator",
+		}).Error; err != nil {
+		slog.Error("Failed to reject expired approvals", "count", len(ids), "error", err)
+		return
+	}
+	for _, t := range stale {
+		t.Status = "cancelled"
+		t.Error = "approval expired without a second operator"
+		s.broadcastTaskUpdate(t.AgentID, t)
+		s.decPendingTasks(t.AgentID)
+	}
+	s.LogAuditRecord(nil, "approval_expired", "task", "", "auto-rejected stale approvals", true, nil)
+	s.DispatchNotification(&db.Notification{
+		Type:     "approval_expired",
+		Title:    "Stale task approvals auto-rejected",
+		Message:  fmt.Sprintf("%d tasks awaited approval past expiry and were cancelled", len(stale)),
+		Severity: "warning",
+	})
+	slog.Info("Auto-rejected expired approvals", "count", len(stale))
+}
+
+// updateTaskBacklogMetrics refreshes per-agent backlog gauges and warns when
+// an agent sits above 80% of its pending cap (early signal before the queue
+// starts refusing work, including abort injections).
+func (s *Server) updateTaskBacklogMetrics() {
+	if s.metrics == nil || s.db == nil {
+		return
+	}
+	var rows []struct {
+		AgentID string
+		Count   int
+		Oldest  time.Time
+	}
+	if err := s.db.Model(&db.Task{}).
+		Select("agent_id, COUNT(*) as count, MIN(created_at) as oldest").
+		Where("status = ?", "pending").
+		Group("agent_id").
+		Find(&rows).Error; err != nil {
+		slog.Error("Failed to compute task backlog metrics", "err", err)
+		return
+	}
+	seen := make(map[string]struct{}, len(rows))
+	now := time.Now()
+	for _, r := range rows {
+		seen[r.AgentID] = struct{}{}
+		s.metrics.TasksPendingByAgent.WithLabelValues(r.AgentID).Set(float64(r.Count))
+		s.metrics.OldestPendingSeconds.WithLabelValues(r.AgentID).Set(now.Sub(r.Oldest).Seconds())
+		if r.Count >= MaxPendingTasksPerAgent*8/10 {
+			slog.Warn("Agent task backlog above 80% of cap", "agent_id", r.AgentID, "pending", r.Count, "cap", MaxPendingTasksPerAgent)
+		}
+	}
+	// Prune series for agents that drained, so deleted-agent labels do not
+	// accumulate forever.
+	s.backlogAgentsMu.Lock()
+	if s.backlogAgents == nil {
+		s.backlogAgents = make(map[string]struct{})
+	}
+	for id := range s.backlogAgents {
+		if _, ok := seen[id]; !ok {
+			s.metrics.TasksPendingByAgent.DeleteLabelValues(id)
+			s.metrics.OldestPendingSeconds.DeleteLabelValues(id)
+			delete(s.backlogAgents, id)
+		}
+	}
+	for id := range seen {
+		s.backlogAgents[id] = struct{}{}
+	}
+	s.backlogAgentsMu.Unlock()
+}
+
 // reconcilePendingTaskCounts recomputes the in-memory pending task counter from the DB.
 func (s *Server) reconcilePendingTaskCounts() {
 	var results []struct {
@@ -583,10 +736,17 @@ func (s *Server) decPendingTasks(agentID string) {
 // (the AI assistant inserts Task rows directly). Callers must decPendingTasks
 // if the subsequent insert fails so the counter never drifts high.
 func (s *Server) trackPendingTask(agentID string) error {
+	return s.trackPendingTaskReserved(agentID, 0)
+}
+
+// trackPendingTaskReserved is trackPendingTask plus extra headroom slots for
+// priority injections (abort tasks): cancelling a running task must be able
+// to queue its abort even when the backlog is at the normal cap.
+func (s *Server) trackPendingTaskReserved(agentID string, extra int) error {
 	s.agentPendingTasksMu.Lock()
 	defer s.agentPendingTasksMu.Unlock()
-	if n := s.agentPendingTasks[agentID]; n >= MaxPendingTasksPerAgent {
-		return fmt.Errorf("agent %s has %d pending tasks (limit %d)", agentID, n, MaxPendingTasksPerAgent)
+	if n := s.agentPendingTasks[agentID]; n >= MaxPendingTasksPerAgent+extra {
+		return fmt.Errorf("agent %s has %d pending tasks (limit %d)", agentID, n, MaxPendingTasksPerAgent+extra)
 	}
 	s.agentPendingTasks[agentID]++
 	return nil

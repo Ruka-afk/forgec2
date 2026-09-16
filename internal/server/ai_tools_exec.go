@@ -1384,6 +1384,8 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 		if p.Jitter < 0 || p.Jitter > 100 {
 			return `{"error":"jitter must be 0-100"}`
 		}
+		// OPSEC floors apply to AI-driven sleep changes like any other entry.
+		p.Interval, p.Jitter, _ = s.clampSleepInts(p.Interval, p.Jitter)
 		allowExec := s.aiExecutionEnabled()
 		status := TaskStatusPendingApproval
 		if allowExec && s.resolveInitialTaskStatus("set_sleep") == "pending" {

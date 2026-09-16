@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/forgec2/forgec2/internal/config"
 	"github.com/forgec2/forgec2/internal/db"
@@ -245,5 +246,69 @@ func TestExpandedDangerousTypesRequireApproval(t *testing.T) {
 		if claimed := s.fetchPendingTasks("agent-" + tt); len(claimed) != 0 {
 			t.Fatalf("dangerous task type %q must not be claimable until approved, got %d", tt, len(claimed))
 		}
+	}
+}
+
+func TestApprovalExpirySetOnCreate(t *testing.T) {
+	s := newTasksTestServer(t)
+	s.cfg = &config.Config{}
+	s.cfg.Security.RequireApproval = true
+	task, err := s.createTask("agent-exp", "uninstall", "delete self", "", "", "", 0, 0)
+	if err != nil {
+		t.Fatalf("createTask: %v", err)
+	}
+	if task.Status != TaskStatusPendingApproval {
+		t.Fatalf("status = %q, want pending_approval", task.Status)
+	}
+	if task.ApprovalExpiresAt == nil {
+		t.Fatal("approval-gated task must carry an expiry")
+	}
+	if time.Until(*task.ApprovalExpiresAt) <= 23*time.Hour {
+		t.Fatalf("expiry too short: %v", *task.ApprovalExpiresAt)
+	}
+}
+
+func TestRejectExpiredApprovals(t *testing.T) {
+	s := newTasksTestServer(t)
+	seedAgent(t, s, "agent-exp")
+	past := time.Now().Add(-time.Hour)
+	future := time.Now().Add(time.Hour)
+	expired := seedTask(t, s, "agent-exp", "shell", "old", TaskStatusPendingApproval)
+	s.db.Model(&expired).Update("approval_expires_at", past)
+	fresh := seedTask(t, s, "agent-exp", "shell", "new", TaskStatusPendingApproval)
+	s.db.Model(&fresh).Update("approval_expires_at", future)
+	noexpiry := seedTask(t, s, "agent-exp", "shell", "legacy", TaskStatusPendingApproval)
+
+	s.rejectExpiredApprovals()
+
+	var reloadedExpired, reloadedFresh, reloadedLegacy db.Task
+	s.db.First(&reloadedExpired, expired.ID)
+	s.db.First(&reloadedFresh, fresh.ID)
+	s.db.First(&reloadedLegacy, noexpiry.ID)
+	if reloadedExpired.Status != "cancelled" {
+		t.Fatalf("expired approval status = %q, want cancelled", reloadedExpired.Status)
+	}
+	if reloadedFresh.Status != TaskStatusPendingApproval {
+		t.Fatalf("fresh approval status = %q, want pending_approval", reloadedFresh.Status)
+	}
+	if reloadedLegacy.Status != TaskStatusPendingApproval {
+		t.Fatalf("legacy approval without expiry must survive, got %q", reloadedLegacy.Status)
+	}
+}
+
+func TestAbortReservedSlotBeyondCap(t *testing.T) {
+	s := newTasksTestServer(t)
+	// Fill to the normal cap.
+	for i := 0; i < MaxPendingTasksPerAgent; i++ {
+		if err := s.trackPendingTask("agent-cap"); err != nil {
+			t.Fatalf("fill %d: %v", i, err)
+		}
+	}
+	if err := s.trackPendingTask("agent-cap"); err == nil {
+		t.Fatal("normal tracking past cap must fail")
+	}
+	// Abort injection still fits in its reserved headroom.
+	if err := s.trackPendingTaskReserved("agent-cap", AbortReserveSlots); err != nil {
+		t.Fatalf("reserved abort slot must fit: %v", err)
 	}
 }

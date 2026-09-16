@@ -195,6 +195,10 @@ func (s *Server) Run() error {
 		s.periodicRPortFwdCleanup()
 	}()
 	s.startMetricAlertLoop()
+	// Rebuild the in-memory pending counters from the DB before serving:
+	// otherwise every restart under-counts until the first 5-minute tick,
+	// wrongly admitting tasks past MaxPendingTasksPerAgent.
+	s.reconcilePendingTaskCounts()
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -215,7 +219,9 @@ func (s *Server) Run() error {
 					}()
 					s.requeueStaleTasks()
 					s.failStaleAcknowledgedTasks()
+					s.rejectExpiredApprovals()
 					s.reconcilePendingTaskCounts()
+					s.updateTaskBacklogMetrics()
 				}()
 			}
 		}

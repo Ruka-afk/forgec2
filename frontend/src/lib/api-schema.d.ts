@@ -9992,6 +9992,15 @@ export interface components {
             claimed_by?: string;
             /** Format: date-time */
             claimed_at?: string;
+            /** @description Operator collaboration claim (UI); distinct from the beacon dispatch claim in claimed_by */
+            operator_claimed_by?: string;
+            /** Format: date-time */
+            operator_claimed_at?: string;
+            /**
+             * Format: date-time
+             * @description Auto-reject deadline for pending_approval tasks
+             */
+            approval_expires_at?: string;
             approved_by?: string;
             /** Format: date-time */
             approved_at?: string;

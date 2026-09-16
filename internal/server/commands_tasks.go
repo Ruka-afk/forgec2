@@ -98,10 +98,9 @@ func (s *Server) handleCancelTask(c *gin.Context) {
 	// be queued and the agent may still execute ("already_executing").
 	outcome := "cancelled"
 	if wasRunning {
-		// Abort injection is best-effort: respect the per-agent pending cap
-		// like every other creation path (previously an uncapped manual
-		// increment that also leaked when the insert failed).
-		if err := s.trackPendingTask(agentID); err != nil {
+		// Abort injection uses reserved headroom past the normal cap: a full
+		// backlog must not block the recall of a running task.
+		if err := s.trackPendingTaskReserved(agentID, AbortReserveSlots); err != nil {
 			slog.Warn("Abort task skipped: agent pending queue full", "agent_id", agentID, "original_task", taskID)
 			outcome = "already_executing"
 		} else {

@@ -80,12 +80,15 @@ type Config struct {
 		AutoRecon            []string      `yaml:"auto_recon"`             // task types queued on first check-in (empty = disabled)
 	} `yaml:"server"`
 
-	// Roe is the rules-of-engagement gate: tasks whose command contains an IP
-	// outside AllowCIDRs (when set) or inside DenyCIDRs are refused.
+	// Roe is the rules-of-engagement gate: tasks whose command/data/path
+	// references an IP outside AllowCIDRs (when set) or inside DenyCIDRs are
+	// refused, and likewise for AllowDomains/DenyDomains (suffix match).
 	Roe struct {
-		Enabled    bool     `yaml:"enabled"`
-		AllowCIDRs []string `yaml:"allow_cidrs"`
-		DenyCIDRs  []string `yaml:"deny_cidrs"`
+		Enabled      bool     `yaml:"enabled"`
+		AllowCIDRs   []string `yaml:"allow_cidrs"`
+		DenyCIDRs    []string `yaml:"deny_cidrs"`
+		AllowDomains []string `yaml:"allow_domains"`
+		DenyDomains  []string `yaml:"deny_domains"`
 	} `yaml:"roe"`
 
 	Database struct {

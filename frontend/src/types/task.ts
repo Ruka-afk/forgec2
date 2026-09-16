@@ -16,6 +16,9 @@ export interface Task {
   approved_at?: string;
   claimed_by: string;
   claimed_at: string;
+  operator_claimed_by?: string;
+  operator_claimed_at?: string;
+  approval_expires_at?: string;
   acknowledged_at?: string;
   callback_url?: string;
   callback_method?: string;
