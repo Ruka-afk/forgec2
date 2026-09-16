@@ -10,6 +10,7 @@ import {
 } from "react";
 import { DEFAULT_WS_HOST, DEFAULT_WS_PORT } from "./constants";
 import { probeSessionExpiry } from "./api";
+import { logger } from "./logger";
 
 export interface WSMessage {
   type: string;
@@ -129,13 +130,14 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
 
       // Fan a message out to both subscription channels. Listeners are
       // fire-and-forget: a throwing listener is skipped so one bad subscriber
-      // cannot break the bus.
+      // cannot break the bus — but the failure is logged so broken
+      // subscribers are diagnosable instead of silently dead.
       const dispatch = (msg: WSMessage) => {
         for (const fn of listenersRef.current) {
-          try { fn(msg); } catch { /* listener error: skip */ }
+          try { fn(msg); } catch (err) { logger.warn("ws listener threw, skipped", err); }
         }
         for (const fn of globalListeners) {
-          try { fn(msg); } catch { /* listener error: skip */ }
+          try { fn(msg); } catch (err) { logger.warn("ws global listener threw, skipped", err); }
         }
       };
 
@@ -152,7 +154,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         setConnected(true);
         startHeartbeat();
       };
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         stopHeartbeat();
         setConnected(false);
         if (disposed) return;
@@ -160,8 +162,21 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         // checked from JS. An expired session is detected via the HTTP layer
         // (handleUnauthorized / probeSessionExpiry below) instead of redirecting
         // on every transient disconnect.
+        // Auth close codes mean the session is already dead: probe now instead
+        // of burning through ~10min of exponential backoff on a fake-live page.
+        // A reconnect is still scheduled (reset backoff) in case the probe
+        // finds the session alive.
+        if (event.code === 4401 || event.code === 1008) {
+          reconnectAttemptRef.current = 0;
+          probeSessionExpiry();
+          reconnectRef.current = setTimeout(connect, 1000);
+          return;
+        }
         if (reconnectAttemptRef.current < MAX_RECONNECT_ATTEMPTS) {
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptRef.current), MAX_RECONNECT_DELAY);
+          // Jittered backoff: without it every tab reconnects in lockstep
+          // after a backend restart (thundering herd).
+          const base = Math.min(1000 * Math.pow(2, reconnectAttemptRef.current), MAX_RECONNECT_DELAY);
+          const delay = Math.floor(base * (0.8 + Math.random() * 0.4));
           reconnectAttemptRef.current++;
           reconnectRef.current = setTimeout(connect, delay);
         } else {
@@ -183,8 +198,10 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
           const msg = JSON.parse(event.data) as WSMessage;
           if (msg.type === "pong") { lastPongRef.current = Date.now(); return; }
           dispatch(msg);
-        } catch {
-          // Silently ignore malformed WS frames
+        } catch (err) {
+          // Malformed frames used to vanish silently; log once per frame so
+          // protocol breakage is diagnosable (payload omitted: may be large).
+          logger.warn("ws malformed frame dropped", err);
         }
       };
     };

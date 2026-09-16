@@ -55,18 +55,18 @@ var upgrader = websocket.Upgrader{
 
 // WebSocketBeacon represents an active WebSocket beacon connection
 type WebSocketBeacon struct {
-	Conn       *websocket.Conn
-	AgentID    string
+	Conn    *websocket.Conn
+	AgentID string
 	// lastSeenNano is atomic: written from the read pump's pong handler,
 	// read by duplicate-connection checks on other goroutines (P3-10).
 	lastSeenNano atomic.Int64
-	Send       chan []byte
-	BatchQueue [][]byte
-	BatchMutex sync.Mutex
-	BatchTimer *time.Timer
-	flush      chan struct{}
-	closeOnce  sync.Once
-	compress   bool
+	Send         chan []byte
+	BatchQueue   [][]byte
+	BatchMutex   sync.Mutex
+	BatchTimer   *time.Timer
+	flush        chan struct{}
+	closeOnce    sync.Once
+	compress     bool
 }
 
 func (b *WebSocketBeacon) touchLastSeen() { b.lastSeenNano.Store(time.Now().UnixNano()) }
@@ -491,9 +491,9 @@ type WSOperatorSession struct {
 	// Outbound queue + dedicated writer goroutine: broadcasts must never do a
 	// synchronous socket write per session, or one wedged browser stalls every
 	// event-producing path (head-of-line blocking for ALL operators).
-	send     chan []byte
+	send      chan []byte
 	closeOnce sync.Once
-	done     chan struct{}
+	done      chan struct{}
 }
 
 func (s *WSOperatorSession) touchLastSeen() { s.lastSeenNano.Store(time.Now().UnixNano()) }
@@ -697,7 +697,12 @@ func (s *Server) handleOperatorWS(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "invalid token"})
 		return
 	}
-	if s.isSessionRevoked(tokenStr) {
+	revoked, err := s.isSessionRevoked(tokenStr)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "auth_unavailable"})
+		return
+	}
+	if revoked {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "session_revoked"})
 		return
 	}

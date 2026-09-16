@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -20,7 +21,7 @@ func TestSessionSummaryBelowThresholdNoop(t *testing.T) {
 		s.db.Create(&db.AIChatMessage{SessionID: 11, Role: role, Content: "hello"})
 	}
 	// AI not configured in this fixture (no API key) — must no-op safely.
-	s.maybeSummarizeSession(11)
+	s.maybeSummarizeSession(context.Background(), 11)
 	var session db.AIChatSession
 	s.db.First(&session, 11)
 	if session.Summary != "" || session.SummaryUpToID != 0 {

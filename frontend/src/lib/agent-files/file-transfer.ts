@@ -1,5 +1,5 @@
 import { API_BASE } from "@/lib/constants";
-import { api, getCsrfToken, pollTask } from "@/lib/api";
+import { api, getCsrfToken, handleUnauthorized, pollTask } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadBlob } from "@/lib/download";
 import { exfilBasename, fileTaskId, pullPlan, transferProgressAt, type TransferProgress } from "./file-task";
@@ -9,6 +9,9 @@ type TFn = (key: string, params?: Record<string, string | number>) => string;
 // Must match the server's MaxUploadSize (50MiB): larger files upload fully
 // only to be rejected with 400, so fail fast client-side instead.
 export const MAX_PUSH_BYTES = 50 * 1024 * 1024;
+
+// Upper bound for one push (50MB on a slow link); XHR has no default timeout.
+const UPLOAD_TIMEOUT_MS = 600_000;
 
 export async function pullRemoteFile(opts: {
   agentId: string;
@@ -65,6 +68,10 @@ export function pushLocalFile(opts: {
     xhr.open("POST", `${API_BASE}${paths.agents.filesPush(opts.agentId)}`);
     xhr.setRequestHeader("X-CSRF-Token", getCsrfToken());
     xhr.withCredentials = true;
+    // XHR (not fetch) is deliberate: only XHR reports upload progress.
+    // Bound the wait and surface auth expiry instead of a generic error:
+    // a 401 here previously read as "Upload failed (HTTP 401)".
+    xhr.timeout = UPLOAD_TIMEOUT_MS;
     const onAbort = () => {
       xhr.abort();
       reject(new DOMException("aborted", "AbortError"));
@@ -77,6 +84,11 @@ export function pushLocalFile(opts: {
       opts.signal?.removeEventListener("abort", onAbort);
       void (async () => {
         try {
+          if (xhr.status === 401) {
+            // Central session-expiry flow (debounced redirect to login);
+            // without this a 401 reads as a generic upload failure.
+            handleUnauthorized({ status: xhr.status });
+          }
           if (xhr.status < 200 || xhr.status >= 300) {
             throw new Error(opts.t("agents.files_upload_failed_status", { status: xhr.status }));
           }
@@ -96,6 +108,10 @@ export function pushLocalFile(opts: {
     xhr.addEventListener("error", () => {
       opts.signal?.removeEventListener("abort", onAbort);
       reject(new Error(opts.t("agents.files_upload_failed_network")));
+    });
+    xhr.addEventListener("timeout", () => {
+      opts.signal?.removeEventListener("abort", onAbort);
+      reject(new Error(opts.t("agents.files_upload_timed_out", { seconds: Math.round(UPLOAD_TIMEOUT_MS / 1000) })));
     });
     xhr.send(formData);
   });

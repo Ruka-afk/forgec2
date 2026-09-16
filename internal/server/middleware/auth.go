@@ -489,8 +489,16 @@ func AuthRequired(database *gorm.DB) gin.HandlerFunc {
 			}
 		}
 
-		// Per-session revocation check
-		if isSessionRevoked(database, tokenStr) {
+		// Per-session revocation check (fail closed: a DB error must not
+		// resurrect logged-out sessions; 503 for both JSON and browser
+		// clients to avoid a redirect loop when the DB is down).
+		revoked, err := isSessionRevoked(database, tokenStr)
+		if err != nil {
+			respondError(c, http.StatusServiceUnavailable, "auth_unavailable")
+			c.Abort()
+			return
+		}
+		if revoked {
 			clearSessionCookie(c)
 			if wantsJSONAuth(c) {
 				respondError(c, http.StatusUnauthorized, "session_revoked")
@@ -500,7 +508,6 @@ func AuthRequired(database *gorm.DB) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-
 		// Set user info in context
 		c.Set("user_id", user.ID)
 		c.Set("user", user.Username)
@@ -671,7 +678,10 @@ func TokenHash(token string) string {
 	return hex.EncodeToString(h[:])
 }
 
-func isSessionRevoked(database *gorm.DB, tokenStr string) bool {
+// isSessionRevoked reports whether a session token was revoked. A database
+// error is returned (never swallowed): callers must fail closed (503), so a
+// wedged database cannot resurrect logged-out sessions.
+func isSessionRevoked(database *gorm.DB, tokenStr string) (bool, error) {
 	hash := TokenHash(tokenStr)
 	var one int
 	// LIMIT 1 point lookup on indexed token_hash: COUNT would scan all matches.
@@ -680,8 +690,8 @@ func isSessionRevoked(database *gorm.DB, tokenStr string) bool {
 		Where("token_hash = ? AND revoked_at > ?", hash, time.Unix(0, 0)).
 		Limit(1).
 		Find(&one).Error; err != nil {
-		slog.Warn("Session revocation check failed, allowing access", "err", err)
-		return false
+		slog.Warn("Session revocation check failed", "err", err)
+		return false, err
 	}
-	return one == 1
+	return one == 1, nil
 }

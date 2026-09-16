@@ -41,6 +41,31 @@ function nowMs(): number {
   return Date.now();
 }
 
+/** SSE connect timeout for AI event streams. fetch() has no connect phase:
+ *  a hung TCP/TLS handshake stalls forever (the idle watchdog only watches
+ *  post-connect frames). The per-attempt controller below is aborted on
+ *  timeout, while the operator AbortSignal keeps propagating for the whole
+ *  stream lifetime (Stop button, idle watchdog, unmount). */
+const SSE_CONNECT_TIMEOUT_MS = 30_000;
+
+function fetchSSE(input: string, init: RequestInit, parent: AbortSignal): Promise<Response> {
+  const attempt = new AbortController();
+  const onParentAbort = () => attempt.abort(parent.reason);
+  if (parent.aborted) {
+    attempt.abort(parent.reason);
+  } else {
+    // Intentionally never removed: the parent is a per-message controller,
+    // so the listener dies with it; removing it after connect would break
+    // the Stop button for the rest of the stream.
+    parent.addEventListener("abort", onParentAbort);
+  }
+  const timer = window.setTimeout(
+    () => attempt.abort(new DOMException("SSE connect timeout", "TimeoutError")),
+    SSE_CONNECT_TIMEOUT_MS,
+  );
+  return fetch(input, { ...init, signal: attempt.signal }).finally(() => window.clearTimeout(timer));
+}
+
 export default function AIPage() {
   const { t } = useI18n();
   const { role: currentUserRole, can } = usePermissions();
@@ -559,12 +584,11 @@ export default function AIPage() {
 	  for (let attempt = 0; attempt < 4; attempt += 1) {
 		const headers: Record<string, string> = { Accept: "text/event-stream" };
 		if (lastEventId) headers["Last-Event-ID"] = lastEventId;
-		response = await fetch(`${API_BASE}${paths.ai.runEvents(backgroundRunId)}${lastEventId ? `?after=${encodeURIComponent(lastEventId)}` : ""}`, {
+		response = await fetchSSE(`${API_BASE}${paths.ai.runEvents(backgroundRunId)}${lastEventId ? `?after=${encodeURIComponent(lastEventId)}` : ""}`, {
 		  method: "GET",
 		  headers,
 		  credentials: "include",
-		  signal: controller.signal,
-		});
+		}, controller.signal);
 		if (response.status === 401) {
 		  const { handleUnauthorized } = await import("@/lib/api");
 		  handleUnauthorized(response);
@@ -763,11 +787,10 @@ export default function AIPage() {
 		await new Promise((resolve) => window.setTimeout(resolve, 600 * (reconnect + 1)));
 		const h: Record<string, string> = { Accept: "text/event-stream" };
 		if (lastEventId) h["Last-Event-ID"] = lastEventId;
-		currentResponse = await fetch(`${API_BASE}${paths.ai.runEvents(backgroundRunId)}?after=${encodeURIComponent(lastEventId || "0")}`, {
+		currentResponse = await fetchSSE(`${API_BASE}${paths.ai.runEvents(backgroundRunId)}?after=${encodeURIComponent(lastEventId || "0")}`, {
 		  headers: h,
 		  credentials: "include",
-		  signal: controller.signal,
-		});
+		}, controller.signal);
 		if (currentResponse.status === 401) {
 		  const { handleUnauthorized } = await import("@/lib/api");
 		  handleUnauthorized(currentResponse);

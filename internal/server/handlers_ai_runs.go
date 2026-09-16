@@ -586,8 +586,16 @@ func (s *Server) executeAIBackgroundRun(ctx context.Context, run db.AIChatRun, r
 	})
 	s.db.Model(&db.AIChatSession{}).Where("id = ?", run.SessionID).Update("updated_at", completed)
 	// Fold older turns into the rolling digest in the background (never
-	// blocks run completion; failures only log).
-	go s.maybeSummarizeSession(run.SessionID)
+	// blocks run completion; failures only log). Tracked so shutdown drains it.
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		ctx := s.ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		s.maybeSummarizeSession(ctx, run.SessionID)
+	}()
 	if status != aiRunStatusCompleted {
 		emit("error", errorMessage, true)
 	}

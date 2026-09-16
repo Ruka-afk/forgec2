@@ -89,7 +89,7 @@ func TestHandleLogout_RevokesSession(t *testing.T) {
 	}
 
 	// Verify session exists
-	if s.isSessionRevoked(token) {
+	if revoked, err := s.isSessionRevoked(token); err != nil || revoked {
 		t.Fatal("session should not be revoked before logout")
 	}
 
@@ -102,7 +102,7 @@ func TestHandleLogout_RevokesSession(t *testing.T) {
 	c.Set("user_id", user.ID)
 	s.handleLogout(c)
 
-	if !s.isSessionRevoked(token) {
+	if revoked, err := s.isSessionRevoked(token); err != nil || !revoked {
 		t.Fatal("session should be revoked after logout")
 	}
 }
@@ -494,13 +494,13 @@ func TestIsSessionRevoked(t *testing.T) {
 		t.Fatalf("create session: %v", err)
 	}
 
-	if s.isSessionRevoked(token) {
+	if revoked, err := s.isSessionRevoked(token); err != nil || revoked {
 		t.Error("session should not be revoked initially")
 	}
 
 	s.revokeSession(token)
 
-	if !s.isSessionRevoked(token) {
+	if revoked, err := s.isSessionRevoked(token); err != nil || !revoked {
 		t.Error("session should be revoked after revokeSession")
 	}
 }
@@ -522,7 +522,7 @@ func TestRevokeAllUserSessions(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		token := "multi-session-token-" + itoa(i)
-		if !s.isSessionRevoked(token) {
+		if revoked, err := s.isSessionRevoked(token); err != nil || !revoked {
 			t.Errorf("session %d should be revoked", i)
 		}
 	}

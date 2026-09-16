@@ -131,7 +131,8 @@ func TestSyncTrustedProxies(t *testing.T) {
 	}
 }
 
-// TestSyncDBPool verifies pool sizes apply to the live sql.DB.
+// TestSyncDBPool verifies pool sizes apply to the live sql.DB, and that
+// sqlite is clamped to 1/1 (single writer) even when configured higher.
 func TestSyncDBPool(t *testing.T) {
 	s := newTasksTestServer(t)
 	s.cfg = config.DefaultConfig()
@@ -145,8 +146,8 @@ func TestSyncDBPool(t *testing.T) {
 		t.Fatalf("sql db: %v", err)
 	}
 	stats := sqlDB.Stats()
-	if stats.MaxOpenConnections != 7 {
-		t.Fatalf("max open = %d, want 7", stats.MaxOpenConnections)
+	if stats.MaxOpenConnections != 1 {
+		t.Fatalf("sqlite max open = %d, want 1 (clamped)", stats.MaxOpenConnections)
 	}
 }
 

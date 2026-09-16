@@ -14,10 +14,12 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/config"
 	"github.com/forgec2/forgec2/internal/crypto"
+	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/payload"
 	"github.com/forgec2/forgec2/internal/plugin"
 	"github.com/forgec2/forgec2/internal/server/middleware"
@@ -152,6 +154,13 @@ type Server struct {
 	// Task result background worker pool: limits concurrent goroutines spawned
 	// for callbacks, plugin hooks, and token processing to prevent OOM under load.
 	taskWorkerSem chan struct{}
+
+	// Async audit pipeline: request paths enqueue, a single worker owns the
+	// hash chain (auditLastHash) and persists batches. auditQueue is nil
+	// until startAuditWorker runs (unit tests keep the sync fallback).
+	auditQueue    chan []db.AuditLog
+	auditLastHash string
+	auditDropped  atomic.Int64
 
 	// NTLM relay session tracking
 	ntlmRelays *ntlmRelayStore

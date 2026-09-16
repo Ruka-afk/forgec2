@@ -37,7 +37,12 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 		return
 	}
 
-	if s.isSessionRevoked(tokenStr) {
+	revoked, err := s.isSessionRevoked(tokenStr)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "auth_unavailable"})
+		return
+	}
+	if revoked {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "session_revoked"})
 		return
 	}

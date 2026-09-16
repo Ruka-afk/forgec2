@@ -279,20 +279,23 @@ func (s *Server) handleLogin(c *gin.Context) {
 	}
 
 	if s.pluginManager != nil {
+		// Copy values out: gin.Context must not be touched from another
+		// goroutine (data race on request state, masked as 500s by Recovery).
+		hookUserID, hookUsername, hookRole, hookIP := user.ID, user.Username, user.Role, clientIP
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
 			if err := s.pluginManager.ExecuteHook(s.ctx, plugin.Event{
 				Type:      plugin.EventUserLogin,
 				Timestamp: time.Now(),
-				UserID:    user.ID,
+				UserID:    hookUserID,
 				Payload: map[string]interface{}{
-					"username": user.Username,
-					"role":     user.Role,
-					"ip":       c.ClientIP(),
+					"username": hookUsername,
+					"role":     hookRole,
+					"ip":       hookIP,
 				},
 			}); err != nil {
-				slog.Warn("Hook errors on user_login event", "user_id", user.ID, "err", err)
+				slog.Warn("Hook errors on user_login event", "user_id", hookUserID, "err", err)
 			}
 		}()
 	}
@@ -319,19 +322,22 @@ func (s *Server) handleLogout(c *gin.Context) {
 	if s.pluginManager != nil {
 		uid, _ := c.Get("user_id")
 		userID, _ := uid.(uint)
+		// Copy values out: gin.Context must not be touched from another
+		// goroutine (data race on request state, masked as 500s by Recovery).
+		hookUserID, hookUsername, hookIP := userID, username, c.ClientIP()
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
 			if err := s.pluginManager.ExecuteHook(s.ctx, plugin.Event{
 				Type:      plugin.EventUserLogout,
 				Timestamp: time.Now(),
-				UserID:    userID,
+				UserID:    hookUserID,
 				Payload: map[string]interface{}{
-					"username": username,
-					"ip":       c.ClientIP(),
+					"username": hookUsername,
+					"ip":       hookIP,
 				},
 			}); err != nil {
-				slog.Warn("Hook errors on user_logout event", "username", username, "err", err)
+				slog.Warn("Hook errors on user_logout event", "username", hookUsername, "err", err)
 			}
 		}()
 	}

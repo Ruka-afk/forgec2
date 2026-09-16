@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bot, FileText, LoaderCircle, Paperclip, RefreshCw, Shield, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { API_BASE } from "@/lib/constants";
-import { api, getCsrfToken, unwrapBody } from "@/lib/api";
+import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { normalizeListEnvelope } from "@/lib/envelope";
@@ -108,15 +107,9 @@ export function AIContextPanel({
     try {
       const form = new FormData();
       Array.from(files).forEach((file) => form.append("files", file));
-      const response = await fetch(`${API_BASE}${paths.ai.attachments(sessionId)}`, {
-        method: "POST",
-        body: form,
-        credentials: "include",
-        headers: { "X-CSRF-Token": getCsrfToken() },
-      });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error((body as { error?: string }).error || `HTTP ${response.status}`);
-      const created = unwrapBody<AIAttachment[]>(body);
+      // Central api wrapper: CSRF double-submit, 60s default timeout for
+      // uploads, and 401 -> login redirect are handled inside.
+      const created = await api.postFormData<AIAttachment[]>(paths.ai.attachments(sessionId), form, { timeout: 60000 });
       setAttachments((current) => [...current, ...created]);
       onAttachmentIdsChange([...new Set([...selectedAttachmentIds, ...created.map((item) => item.id)])]);
       toast.success(t("ai.attachment_saved"));

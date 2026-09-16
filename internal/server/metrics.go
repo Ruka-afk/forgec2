@@ -11,17 +11,19 @@ import (
 )
 
 type MetricsCollector struct {
-	AgentsTotal        prometheus.Gauge
-	AgentsOnline       prometheus.Gauge
-	TasksTotal         prometheus.Counter
-	TasksPending       prometheus.Gauge
-	ListenersTotal     prometheus.Gauge
-	CredsTotal         prometheus.Gauge
-	UptimeSeconds      prometheus.GaugeFunc
-	SessionRekeysTotal *prometheus.CounterVec // label agent_id; lives server-side, fed from crypto.SessionManager stats
-	RequestDuration    *prometheus.HistogramVec
-	BeaconDuration     *prometheus.HistogramVec
+	AgentsTotal         prometheus.Gauge
+	AgentsOnline        prometheus.Gauge
+	TasksTotal          prometheus.Counter
+	TasksPending        prometheus.Gauge
+	ListenersTotal      prometheus.Gauge
+	CredsTotal          prometheus.Gauge
+	UptimeSeconds       prometheus.GaugeFunc
+	SessionRekeysTotal  *prometheus.CounterVec // label agent_id; lives server-side, fed from crypto.SessionManager stats
+	RequestDuration     *prometheus.HistogramVec
+	BeaconDuration      *prometheus.HistogramVec
 	TaskExecuteDuration *prometheus.HistogramVec
+	AuditDroppedTotal   prometheus.Counter
+	EventDroppedTotal   *prometheus.CounterVec
 }
 
 func NewMetricsCollector(s *Server) *MetricsCollector {
@@ -75,6 +77,14 @@ func NewMetricsCollector(s *Server) *MetricsCollector {
 			Help:    "Histogram of task execution durations (time between creation and completion).",
 			Buckets: []float64{0.1, 0.5, 1, 5, 10, 30, 60, 120, 300, 600},
 		}, []string{"type"}),
+		AuditDroppedTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "forgec2_audit_dropped_total",
+			Help: "Total number of audit log entries dropped (queue full or persist failure).",
+		}),
+		EventDroppedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "forgec2_event_dropped_total",
+			Help: "Total number of internal bus events dropped, by reason.",
+		}, []string{"reason"}),
 	}
 }
 
@@ -91,6 +101,8 @@ func (mc *MetricsCollector) Register(reg prometheus.Registerer) {
 		mc.RequestDuration,
 		mc.BeaconDuration,
 		mc.TaskExecuteDuration,
+		mc.AuditDroppedTotal,
+		mc.EventDroppedTotal,
 	}
 	for _, c := range collectors {
 		err := reg.Register(c)

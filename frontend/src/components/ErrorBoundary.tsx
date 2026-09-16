@@ -8,6 +8,9 @@ import { logger } from "@/lib/logger";
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
+  /** When this value changes, a latched error state resets. Route wrappers
+   *  pass the pathname so navigating away from a crashed page recovers. */
+  resetKey?: string | number;
 }
 
 interface State {
@@ -29,6 +32,12 @@ class ErrorBoundaryInner extends Component<Props, State> {
   // TelemetryCollector's window.error handler can capture them in production.
   componentDidCatch(error: Error, info: ErrorInfo) {
     logger.error("ErrorBoundary caught error", error, { componentStack: info.componentStack });
+  }
+
+  componentDidUpdate(prevProps: Props) {
+    if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
+      this.setState({ hasError: false, error: null });
+    }
   }
 
   render() {

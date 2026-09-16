@@ -46,9 +46,13 @@ func (s *Server) sessionSummaryBlock(sessionID uint) string {
 // maybeSummarizeSession folds the oldest unsummarized messages into the
 // session digest when past threshold. Fire-and-forget safe: all failures
 // only log. Never summarizes the newest tail (still sent verbatim).
-func (s *Server) maybeSummarizeSession(sessionID uint) {
+// ctx bounds the LLM call so shutdown/client cancel stops the spend.
+func (s *Server) maybeSummarizeSession(ctx context.Context, sessionID uint) {
 	if s == nil || s.db == nil || sessionID == 0 || !s.aiAssistReady() {
 		return
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 	var session db.AIChatSession
 	if err := s.db.Where("id = ?", sessionID).First(&session).Error; err != nil {
@@ -78,7 +82,7 @@ func (s *Server) maybeSummarizeSession(sessionID uint) {
 	}
 	system := `You maintain the rolling memory of a red-team C2 assistant conversation. Fold the new transcript into the existing summary and reply with ONLY the updated summary (plain prose, max 1500 chars). Preserve: operator goals, agents touched (ids/hostnames), actions taken and their outcomes, credentials findings (types only, never values), and open threads. Drop chatter and duplicate tool output.`
 	user := "Existing summary (may be empty):\n" + session.Summary + "\n\nNew transcript:\n" + transcript
-	text, err := s.aiOneShot(context.Background(), system, user, 800)
+	text, err := s.aiOneShot(ctx, system, user, 800)
 	if err != nil {
 		slog.Warn("AI session summary fold failed", "session", sessionID, "err", err)
 		return

@@ -402,6 +402,7 @@ export const en: Record<string, string> = {
     "agents.files_upload_file": "Upload File",
     "agents.files_uploading": "Uploading...",
     "agents.files_upload_too_large": "File exceeds the {max} upload limit",
+    "agents.files_upload_timed_out": "Upload timed out after {seconds}s",
     "agents.filter_link_aria": "Link filter",
     "agents.filter_os_aria": "OS filter",
     "agents.filter_status_aria": "Status filter",

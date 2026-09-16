@@ -216,6 +216,18 @@ func (s *Server) syncDBPool() error {
 	if err != nil {
 		return err
 	}
+	// SQLite is a single-writer database: a pool larger than 1 only
+	// manufactures SQLITE_BUSY contention under beacon load. Clamp here so a
+	// hot-reloaded postgres-oriented template cannot break it at runtime.
+	if s.cfg.Database.Driver == "sqlite" || s.cfg.Database.Driver == "" {
+		if s.cfg.Server.DBMaxOpenConns > 1 {
+			slog.Warn("Refusing to raise sqlite connection pool above 1 (single writer)",
+				"requested", s.cfg.Server.DBMaxOpenConns)
+		}
+		sqlDB.SetMaxOpenConns(1)
+		sqlDB.SetMaxIdleConns(1)
+		return nil
+	}
 	if s.cfg.Server.DBMaxOpenConns > 0 {
 		sqlDB.SetMaxOpenConns(s.cfg.Server.DBMaxOpenConns)
 	}

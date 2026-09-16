@@ -46,16 +46,19 @@ func (s *Server) revokeAllUserSessions(userID uint) {
 	}
 }
 
-func (s *Server) isSessionRevoked(token string) bool {
+// isSessionRevoked reports whether a session token was revoked. A database
+// error is returned (never swallowed): callers must fail closed (503), so a
+// wedged database cannot resurrect logged-out sessions.
+func (s *Server) isSessionRevoked(token string) (bool, error) {
 	hash := middleware.TokenHash(token)
 	var count int64
 	if err := s.db.Model(&db.UserSession{}).
 		Where("token_hash = ? AND revoked_at > ?", hash, time.Time{}).
 		Count(&count).Error; err != nil {
 		slog.Error("Failed to check if session is revoked", "err", err)
-		return false
+		return false, err
 	}
-	return count > 0
+	return count > 0, nil
 }
 
 func (s *Server) handleListUserSessions(c *gin.Context) {

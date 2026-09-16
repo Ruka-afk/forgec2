@@ -402,6 +402,7 @@ export const zh: Record<string, string> = {
     "agents.files_upload_file": "上传文件",
     "agents.files_uploading": "上传中...",
     "agents.files_upload_too_large": "文件超过 {max} 上传限制",
+    "agents.files_upload_timed_out": "上传超时（{seconds}秒无响应）",
     "agents.filter_link_aria": "链路筛选",
     "agents.filter_os_aria": "系统筛选",
     "agents.filter_status_aria": "状态筛选",

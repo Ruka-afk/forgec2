@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"log/slog"
@@ -8,16 +9,26 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-// auditChainMu serializes hash-chain appends. flushAuditEntries reads the last
-// entry and back-fills prev_hash; two concurrent flushes (beacon checkins run
-// in parallel) could otherwise read the same last hash and commit entries with
-// identical prev_hash values, silently breaking the tamper-evident chain.
+// Async audit pipeline tuning: request goroutines never touch the DB.
+// A single worker owns the hash chain (in-memory lastHash) and persists
+// batches. A full queue drops with a counter instead of blocking beacons.
+const (
+	auditQueueCap      = 4096
+	auditBatchMax      = 100
+	auditFlushInterval = time.Second
+	auditWriteTimeout  = 5 * time.Second
+)
+
+// auditChainMu serializes the synchronous fallback path (used when the async
+// worker is not running, e.g. unit tests constructing Server directly).
+// Production traffic always goes through the single async worker below.
 var auditChainMu sync.Mutex
 
 // sensitivePatterns matches common sensitive field names in JSON or URL-encoded data.
@@ -120,49 +131,185 @@ func (s *Server) flushAuditEntries(entries []db.AuditLog) {
 	// call in without a database. Log and drop instead of panicking.
 	if s == nil || s.db == nil {
 		slog.Warn("Dropping audit entries: no database", "count", len(entries))
+		s.auditNoteDropped(len(entries))
 		return
 	}
+	// No worker (unit tests, pre-Run): persist synchronously on the caller.
+	if s.auditQueue == nil {
+		s.flushAuditEntriesSync(entries)
+		return
+	}
+	select {
+	case s.auditQueue <- entries:
+	default:
+		s.auditNoteDropped(len(entries))
+		slog.Warn("Dropping audit entries: queue full", "count", len(entries), "cap", auditQueueCap)
+	}
+}
+
+// auditNoteDropped counts dropped entries (nil-safe for bare test Servers).
+func (s *Server) auditNoteDropped(n int) {
+	if s == nil {
+		return
+	}
+	s.auditDropped.Add(int64(n))
+	if s.metrics != nil && s.metrics.AuditDroppedTotal != nil {
+		s.metrics.AuditDroppedTotal.Add(float64(n))
+	}
+}
+
+// flushAuditEntriesSync is the synchronous fallback used when the async
+// worker is not running. Callers are request goroutines in tests only.
+func (s *Server) flushAuditEntriesSync(entries []db.AuditLog) {
 	// Serialize appends so the read-last-entry + insert is atomic with respect
-	// to other appends (see auditChainMu docs).
+	// to other synchronous appends.
 	auditChainMu.Lock()
 	defer auditChainMu.Unlock()
 
-	// Compute append-only hash chain for tamper detection within a transaction
-	// to ensure atomicity of the hash chain.
-	err := s.db.Transaction(func(tx *gorm.DB) error {
-		var lastHash string
-		var lastEntry db.AuditLog
-		if err := tx.Order("id DESC").First(&lastEntry).Error; err == nil {
-			lastHash = lastEntry.EntryHash
+	if err := s.persistAuditBatch(entries, ""); err != nil {
+		slog.Error("Failed to batch-create audit logs", "count", len(entries), "err", err)
+		s.auditNoteDropped(len(entries))
+		return
+	}
+	s.sendToSIEM(entries)
+}
+
+// auditEntryHash computes the tamper-evident chain hash for one entry.
+func auditEntryHash(e *db.AuditLog) string {
+	h := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%s|%s|%s|%t|%s|%s",
+		e.User, e.Action, e.Resource, e.AgentID, e.IP, e.Success, e.Error, e.Details)))
+	return fmt.Sprintf("%x", h)
+}
+
+// persistAuditBatch chains entries onto prevHash ("": read from DB) and
+// inserts them in a single bounded transaction.
+func (s *Server) persistAuditBatch(entries []db.AuditLog, prevHash string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), auditWriteTimeout)
+	defer cancel()
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		lastHash := prevHash
+		if lastHash == "" {
+			var lastEntry db.AuditLog
+			if err := tx.Order("id DESC").First(&lastEntry).Error; err == nil {
+				lastHash = lastEntry.EntryHash
+			}
 		}
 		for i := range entries {
 			entries[i].PrevHash = lastHash
-			h := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%s|%s|%s|%t|%s|%s",
-				entries[i].User, entries[i].Action, entries[i].Resource,
-				entries[i].AgentID, entries[i].IP, entries[i].Success,
-				entries[i].Error, entries[i].Details)))
-			entries[i].EntryHash = fmt.Sprintf("%x", h)
+			entries[i].EntryHash = auditEntryHash(&entries[i])
 			lastHash = entries[i].EntryHash
 		}
 		return tx.CreateInBatches(entries, 50).Error
 	})
-	if err != nil {
-		slog.Error("Failed to batch-create audit logs", "count", len(entries), "err", err)
+}
+
+// startAuditWorker launches the single async audit writer. Called from Run();
+// tests that never call Run keep the synchronous fallback.
+func (s *Server) startAuditWorker() {
+	if s.ctx == nil {
+		s.ctx = context.Background()
 	}
-	if s.siem != nil {
-		for _, logEntry := range entries {
-			s.siem.Send(SIEMEvent{
-				Timestamp: logEntry.CreatedAt,
-				Action:    logEntry.Action,
-				Resource:  logEntry.Resource,
-				AgentID:   logEntry.AgentID,
-				User:      logEntry.User,
-				IP:        logEntry.IP,
-				Success:   logEntry.Success,
-				Error:     logEntry.Error,
-				Details:   logEntry.Details,
-			})
+	s.auditQueue = make(chan []db.AuditLog, auditQueueCap)
+	if s.db != nil {
+		var lastEntry db.AuditLog
+		if err := s.db.Order("id DESC").First(&lastEntry).Error; err == nil {
+			s.auditLastHash = lastEntry.EntryHash
 		}
+	}
+	s.wg.Add(1)
+	go s.auditWorkerLoop()
+}
+
+func (s *Server) auditWorkerLoop() {
+	defer s.wg.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("Panic in audit worker, draining aborted", "recover", r)
+		}
+	}()
+	var pending []db.AuditLog
+	ticker := time.NewTicker(auditFlushInterval)
+	defer ticker.Stop()
+	flush := func() {
+		if len(pending) == 0 {
+			return
+		}
+		batch := pending
+		pending = nil
+		s.writeAuditBatchWithRetry(batch)
+	}
+	for {
+		select {
+		case <-s.ctx.Done():
+			// Drain remaining entries with a bounded budget, then exit so
+			// shutdown is never held hostage by a wedged database.
+			drainDeadline := time.After(auditWriteTimeout)
+		drain:
+			for {
+				select {
+				case entries := <-s.auditQueue:
+					pending = append(pending, entries...)
+					if len(pending) >= auditBatchMax {
+						flush()
+					}
+				case <-drainDeadline:
+					break drain
+				default:
+					break drain
+				}
+			}
+			flush()
+			return
+		case entries := <-s.auditQueue:
+			pending = append(pending, entries...)
+			if len(pending) >= auditBatchMax {
+				flush()
+			}
+		case <-ticker.C:
+			flush()
+		}
+	}
+}
+
+// writeAuditBatchWithRetry persists one batch, chaining onto the worker-owned
+// lastHash. Retries briefly, then drops with a counter (never blocks).
+func (s *Server) writeAuditBatchWithRetry(batch []db.AuditLog) {
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-s.ctx.Done():
+				s.auditNoteDropped(len(batch))
+				return
+			case <-time.After(time.Duration(attempt) * 100 * time.Millisecond):
+			}
+		}
+		if err = s.persistAuditBatch(batch, s.auditLastHash); err == nil {
+			s.auditLastHash = batch[len(batch)-1].EntryHash
+			s.sendToSIEM(batch)
+			return
+		}
+	}
+	slog.Error("Dropping audit batch after retries", "count", len(batch), "err", err)
+	s.auditNoteDropped(len(batch))
+}
+
+func (s *Server) sendToSIEM(entries []db.AuditLog) {
+	if s.siem == nil {
+		return
+	}
+	for _, logEntry := range entries {
+		s.siem.Send(SIEMEvent{
+			Timestamp: logEntry.CreatedAt,
+			Action:    logEntry.Action,
+			Resource:  logEntry.Resource,
+			AgentID:   logEntry.AgentID,
+			User:      logEntry.User,
+			IP:        logEntry.IP,
+			Success:   logEntry.Success,
+			Error:     logEntry.Error,
+			Details:   logEntry.Details,
+		})
 	}
 }
 

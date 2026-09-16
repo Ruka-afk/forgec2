@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
 import { createBrowserRouter, Outlet, Navigate, useLocation } from "react-router-dom";
 import { PageSpinner } from "@/components/ui/spinner";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import AppLayout from "@/components/AppLayout";
 import RouterErrorView from "@/components/RouterErrorView";
 import NotFound from "@/pages/NotFound";
@@ -145,9 +146,24 @@ function PermissionRoute({ children }: { children: React.ReactNode }) {
 
 function guard(name: string, Comp: ComponentType): ReactNode {
   return withSuspense(
-    <PermissionRoute key={name}>
-      <Comp />
-    </PermissionRoute>,
+    <RouteErrorBoundary routeKey={name}>
+      <PermissionRoute key={name}>
+        <Comp />
+      </PermissionRoute>
+    </RouteErrorBoundary>,
+  );
+}
+
+/** Per-route crash isolation: a rendering error takes down only its own
+ *  page (with retry), never the nav sidebar or sibling routes. resetKey on
+ *  the live pathname also recovers same-pattern navigation
+ *  (e.g. /agents/1 -> /agents/2). */
+function RouteErrorBoundary({ routeKey, children }: { routeKey: string; children: ReactNode }) {
+  const pathname = useLocation().pathname;
+  return (
+    <ErrorBoundary key={routeKey} resetKey={pathname}>
+      {children}
+    </ErrorBoundary>
   );
 }
 

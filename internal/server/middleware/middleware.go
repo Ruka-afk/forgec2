@@ -273,13 +273,16 @@ func CORS(allowedOrigins []string) gin.HandlerFunc {
 		}
 		if allowed {
 			c.Header("Access-Control-Allow-Origin", origin)
-		}
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
-		if allowed {
 			c.Header("Access-Control-Allow-Credentials", "true")
+			c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+			// X-CSRF-Token is required by CSRFProtect's double-submit check;
+			// omitting it here forces cross-origin deployments to fail
+			// preflight and tempts operators into Allow-Origin: *.
+			c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, X-CSRF-Token, X-Request-ID")
+			c.Header("Access-Control-Max-Age", "86400")
 		}
-		c.Header("Access-Control-Max-Age", "86400")
+		// No CORS headers at all for disallowed origins (previously the
+		// Allow-Methods/Headers/Max-Age were emitted unconditionally).
 
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(http.StatusNoContent)
@@ -328,6 +331,7 @@ func hostIsLoopback(host string) bool {
 	}
 	return false
 }
+
 type InFlightTracker struct {
 	wg sync.WaitGroup
 }

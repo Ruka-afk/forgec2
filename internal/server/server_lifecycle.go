@@ -131,8 +131,20 @@ func (s *Server) shutdown() {
 		s.ctxCancel()
 	}
 
-	// Wait for tracked goroutines to finish
-	s.wg.Wait()
+	// Wait for tracked goroutines to finish, bounded so a wedged worker
+	// cannot hang shutdown forever (the orchestrator would SIGKILL mid-WAL).
+	waitDone := make(chan struct{})
+	go func() {
+		defer close(waitDone)
+		s.wg.Wait()
+	}()
+	select {
+	case <-waitDone:
+		slog.Info("All background workers stopped")
+	case <-time.After(WorkerDrainTimeout):
+		slog.Error("Timed out waiting for background workers; proceeding to close DB",
+			"timeout", WorkerDrainTimeout, "stack", string(debug.Stack()))
+	}
 
 	// Close database connection
 	if s.db != nil {
@@ -154,6 +166,9 @@ func (s *Server) Run() error {
 		}
 		slog.Info("TLS certificate ready", "cert", certPath)
 	}
+
+	// async audit writer: request paths enqueue, single worker persists
+	s.startAuditWorker()
 
 	// start periodic cleanup
 	s.wg.Add(1)

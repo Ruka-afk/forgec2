@@ -260,6 +260,11 @@ const (
 	// ─── Server Lifecycle ───
 	GracefulShutdownTimeout = 15 * time.Second
 	InFlightDrainTimeout    = 5 * time.Second
+	// WorkerDrainTimeout bounds the final wait for background goroutines.
+	// A wedged worker must never hang shutdown forever (the orchestrator
+	// would SIGKILL mid-WAL and risk DB corruption); on timeout we log a
+	// goroutine dump and proceed to close the database.
+	WorkerDrainTimeout = 30 * time.Second
 	HTTPClientShortTimeout  = 30 * time.Second
 	HTTPClientLongTimeout   = 5 * time.Minute
 	HTTPMaxIdleConns        = 20

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -299,17 +300,32 @@ func (s *Server) submitBuild(job *BuildJob, fn func() (string, error), platform,
 }
 
 // ensureBuildQueue lazily starts the worker pool (safe for Server values
-// constructed literally in tests, which never submit builds).
+// constructed literally in tests, which never submit builds). Workers are
+// wg-tracked and exit on s.ctx so shutdown never hangs on a wedged build.
 func (s *Server) ensureBuildQueue() {
 	s.buildQueueOnce.Do(func() {
 		s.buildQueue = make(chan *queuedBuild, maxQueuedBuilds)
 		s.buildSem = make(chan struct{}, maxConcurrentBuilds)
+		ctx := s.ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
 		for i := 0; i < buildWorkers; i++ {
+			s.wg.Add(1)
 			go func() {
-				for q := range s.buildQueue {
-					s.buildSem <- struct{}{}
-					s.runBuildAndUpdateJob(q.job, q.buildFn, q.platform, q.format, q.c2URL, q.listenerID, q.filename)
-					<-s.buildSem
+				defer s.wg.Done()
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case q, ok := <-s.buildQueue:
+						if !ok {
+							return
+						}
+						s.buildSem <- struct{}{}
+						s.runBuildAndUpdateJob(q.job, q.buildFn, q.platform, q.format, q.c2URL, q.listenerID, q.filename)
+						<-s.buildSem
+					}
 				}
 			}()
 		}

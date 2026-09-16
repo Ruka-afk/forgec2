@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -123,6 +124,60 @@ func TestLogOperatorAction_EntersHashChain(t *testing.T) {
 	}
 	if after[1].PrevHash != after[0].EntryHash {
 		t.Fatalf("second entry prev_hash = %q, want first entry hash %q", after[1].PrevHash, after[0].EntryHash)
+	}
+}
+
+// Regression: the async worker must persist every enqueued entry with an
+// intact hash chain, and drain on context cancel.
+func TestAuditWorker_PersistsAndDrains(t *testing.T) {
+	s := newAuditTestServer(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	s.ctx = ctx
+	s.metrics = NewMetricsCollector(s)
+	s.startAuditWorker()
+
+	const writers = 4
+	const perWriter = 25
+	var wg sync.WaitGroup
+	for w := 0; w < writers; w++ {
+		wg.Add(1)
+		go func(w int) {
+			defer wg.Done()
+			entries := make([]db.AuditLog, 0, perWriter)
+			for i := 0; i < perWriter; i++ {
+				entries = append(entries, db.AuditLog{
+					User:    fmt.Sprintf("async-%d", w),
+					Action:  "async_test",
+					Success: true,
+					Details: fmt.Sprintf("writer=%d item=%d", w, i),
+				})
+			}
+			s.flushAuditEntries(entries)
+		}(w)
+	}
+	wg.Wait()
+	cancel()
+	s.wg.Wait()
+
+	var rows []db.AuditLog
+	if err := s.db.Order("id ASC").Find(&rows).Error; err != nil {
+		t.Fatalf("load audit rows: %v", err)
+	}
+	if len(rows) != writers*perWriter {
+		t.Fatalf("expected %d rows, got %d (dropped=%d)", writers*perWriter, len(rows), s.auditDropped.Load())
+	}
+	lastHash := ""
+	for i, row := range rows {
+		if i > 0 && row.PrevHash != lastHash {
+			t.Fatalf("row %d prev_hash mismatch", i)
+		}
+		if row.EntryHash == "" {
+			t.Fatalf("row %d has empty entry_hash", i)
+		}
+		lastHash = row.EntryHash
+	}
+	if got := s.auditDropped.Load(); got != 0 {
+		t.Fatalf("dropped = %d, want 0", got)
 	}
 }
 

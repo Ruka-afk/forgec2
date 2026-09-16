@@ -68,8 +68,8 @@ type Config struct {
 		EnablePprof          bool          `yaml:"enable_pprof"`           // expose /debug/pprof (default false; requires auth when enabled)
 		EnableMetrics        bool          `yaml:"enable_metrics"`         // expose /metrics (default false; requires auth when enabled)
 		SocksListenHost      string        `yaml:"socks_listen_host"`      // bind host for SOCKS/rportfwd (default 127.0.0.1)
-		DBMaxOpenConns       int           `yaml:"db_max_open_conns"`      // max open connections for PostgreSQL pool (default 25)
-		DBMaxIdleConns       int           `yaml:"db_max_idle_conns"`      // max idle connections for PostgreSQL pool (default 5)
+		DBMaxOpenConns       int           `yaml:"db_max_open_conns"`      // max open connections for PostgreSQL pool (default 1; sqlite must stay 1)
+		DBMaxIdleConns       int           `yaml:"db_max_idle_conns"`      // max idle connections for PostgreSQL pool (default 1; sqlite must stay 1)
 		DBConnMaxLifetime    time.Duration `yaml:"db_conn_max_lifetime"`   // max connection lifetime for PostgreSQL pool (default 30m)
 		DNSObscure           bool          `yaml:"dns_obscure"`            // XOR-obscure DNS C2 fragments (must match implant DNSObscure)
 		AutoRecon            []string      `yaml:"auto_recon"`             // task types queued on first check-in (empty = disabled)
@@ -283,8 +283,11 @@ func DefaultConfig() *Config {
 	cfg.Server.EnablePprof = false
 	cfg.Server.EnableMetrics = false
 	cfg.Server.SocksListenHost = "127.0.0.1"
-	cfg.Server.DBMaxOpenConns = 25
-	cfg.Server.DBMaxIdleConns = 5
+	cfg.Server.DBMaxOpenConns = 1
+	cfg.Server.DBMaxIdleConns = 1
+	// NOTE: sqlite is a single writer — the pool stays 1/1 (enforced by
+	// Validate and syncDBPool). Postgres operators must set
+	// server.db_max_open_conns / db_max_idle_conns explicitly.
 	cfg.Server.DBConnMaxLifetime = 30 * time.Minute
 	// lportfwd tunnels agent-local connections out through the teamserver.
 	// On by default (mirrors rportfwd/socks availability); operators can set
@@ -631,6 +634,9 @@ func (c *Config) Validate() error {
 	if c.Server.Port <= 0 || c.Server.Port > 65535 {
 		errs = append(errs, errors.New("server.port must be between 1 and 65535"))
 	}
+	if (c.Database.Driver == "" || c.Database.Driver == "sqlite") && c.Server.DBMaxOpenConns > 1 {
+		errs = append(errs, errors.New("server.db_max_open_conns must be 1 for sqlite (single writer; larger pools cause SQLITE_BUSY under load)"))
+	}
 	if c.Server.OfflineThreshold < 1 {
 		errs = append(errs, errors.New("server.offline_threshold must be >= 1 second"))
 	}
@@ -751,7 +757,7 @@ func (c *Config) Validate() error {
 		}
 	}
 	if c.Server.RequireTLSForAuth && !c.Server.TLSEnabled {
-		slog.Warn("server.require_tls_for_auth is enabled but server.tls_enabled is false — session cookies will NOT be secure over plain HTTP")
+		errs = append(errs, errors.New("server.require_tls_for_auth is true but server.tls_enabled is false — refusing to issue session cookies over plain HTTP (set tls_enabled: true or require_tls_for_auth: false)"))
 	}
 
 	// Rate limit validation

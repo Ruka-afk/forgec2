@@ -291,8 +291,16 @@ export function usePayloadGenerator() {
     if (shared.ssh_host_key) formData.set("ssh_host_key", shared.ssh_host_key);
     buildFormData(formData, opts?.extra);
     try {
-      // 1) Start the build (or synchronous request)
-      const res = await fetch(`${API_BASE}${paths.generate.binary(endpoint)}`, { method: "POST", body: formData, headers: { "X-CSRF-Token": getCsrfToken() }, credentials: "include" });
+      // 1) Start the build (or synchronous request). Same 120s bound as the
+      // donut flow: a hung server previously left the UI spinning forever.
+      const startController = new AbortController();
+      const startTimeout = window.setTimeout(() => startController.abort(), 120000);
+      let res: Response;
+      try {
+        res = await fetch(`${API_BASE}${paths.generate.binary(endpoint)}`, { method: "POST", body: formData, headers: { "X-CSRF-Token": getCsrfToken() }, credentials: "include", signal: startController.signal });
+      } finally {
+        window.clearTimeout(startTimeout);
+      }
       if (!res.ok) {
         handleUnauthorized(res);
         const ct = res.headers.get("content-type") || "";
