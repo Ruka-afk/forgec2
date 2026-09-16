@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"hash/fnv"
 	"log/slog"
 	"strconv"
@@ -289,6 +290,15 @@ func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconRespons
 
 	s.processTaskAcknowledgements(req.UUID, req.AckTaskIDs, now)
 	s.processTaskResults(agent, req.Results, req.UUID, now)
+
+	// Agent-side result drops (queue-full evictions, oversized singles) are
+	// reported here so gaps are operator-visible instead of silent: warn log
+	// plus an audit record the timeline view can show.
+	if req.DroppedResults > 0 {
+		slog.Warn("Agent dropped task results before sending", "agent_id", req.UUID, "dropped", req.DroppedResults)
+		s.LogAuditRecord(nil, "agent_result_gap", "agent", req.UUID,
+			fmt.Sprintf("agent discarded %d result(s) before delivery (queue-full/oversized)", req.DroppedResults), true, nil)
+	}
 
 	// Server-side traffic auto-adapt loop: queues a real set_sleep task when
 	// the observed beacon timing deviates from the agent's stored sleep config.

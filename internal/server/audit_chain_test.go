@@ -181,6 +181,23 @@ func TestAuditWorker_PersistsAndDrains(t *testing.T) {
 	}
 }
 
+// Regression: lateral-movement credentials in audit details must be masked
+// (pass/ticket/bare key), while ordinary text passes through.
+func TestSanitizeDetailsMasksCreds(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{`lateral smb user=admin pass=Secret123`, `lateral smb user=admin pass:*****`},
+		{`"ticket":"c81e728d9d4c2f636f067f5e modules"`, `ticket:*****`},
+		{`key=AKIAIOSFODNN7EXAMPLE data`, `key:***** data`},
+		{`password=Secret123`, `password:*****`},
+		{`clean operational note`, `clean operational note`},
+	}
+	for _, tc := range cases {
+		if got := sanitizeDetails(tc.in); got != tc.want {
+			t.Errorf("sanitizeDetails(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
 // TestHandleBuildList_SnapshotsFields ensures the build list reads job fields
 // without racing the build goroutine (values must round-trip through JSON).
 func TestHandleBuildList_SnapshotsFields(t *testing.T) {

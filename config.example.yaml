@@ -134,8 +134,9 @@ security:
   # Two-man rule for high-impact operations (kill/uninstall/lateral/ticket
   # forgery etc.): tasks of those types are created in "pending_approval"
   # state and require an operator DIFFERENT from the task creator to approve
-  # them before the agent executes them.
-  require_approval: false
+  # them before the agent executes them. Secure default is true; single-operator
+  # labs may set false explicitly (a startup warning is logged when off).
+  require_approval: true
 
 monitoring:
   # Metric alert bridge (OPT-IN): threshold checks over the Prometheus gauges

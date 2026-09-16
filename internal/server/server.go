@@ -544,6 +544,12 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		slog.Info("SIEM webhook enabled", "url", cfg.SIEM.URL)
 	}
 
+	// Two-man rule is secure-by-default; an explicit opt-out deserves a
+	// loud warning because dangerous tasks then execute on single dispatch.
+	if !cfg.Security.RequireApproval {
+		slog.Warn("security.require_approval is OFF: dangerous tasks (dcsync, lateral, persistence, …) execute without a second operator's approval")
+	}
+
 	// TLS fingerprint randomization (JARM/JA3)
 	s.initTLSFingerprint()
 

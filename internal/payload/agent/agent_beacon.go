@@ -106,6 +106,7 @@ func doBeacon() {
 		SocksData:       socksData,
 		Relayed:         relayedResults,
 		RelayedFrames:   p2pDrainChildFrames(),
+		DroppedResults:  int(takeDroppedResultsCount()),
 	}
 
 	body, _ := json.Marshal(req)

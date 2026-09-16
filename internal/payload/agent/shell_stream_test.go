@@ -67,6 +67,29 @@ func TestRunShellStreamingEmitsDeltas(t *testing.T) {
 	}
 }
 
+// TestStreamBufCapsAtMaxOutputSize proves the streaming sink cannot grow
+// without bound: writes past maxOutputSize are dropped and flagged.
+func TestStreamBufCapsAtMaxOutputSize(t *testing.T) {
+	sb := &streamBuf{}
+	chunk := make([]byte, 1024*1024)
+	if _, err := sb.Write(chunk); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if sb.wasTruncated() {
+		t.Fatal("1MB write must not truncate")
+	}
+	big := make([]byte, maxOutputSize)
+	if _, err := sb.Write(big); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if !sb.wasTruncated() {
+		t.Fatal("over-limit write must set truncated")
+	}
+	if got := len(sb.snapshot()); got != maxOutputSize {
+		t.Fatalf("buffer = %d bytes, want cap %d", got, maxOutputSize)
+	}
+}
+
 // TestEnqueuePartialResultShape verifies the wire contract: Partial=true,
 // base64 output, unique rid per chunk.
 func TestEnqueuePartialResultShape(t *testing.T) {

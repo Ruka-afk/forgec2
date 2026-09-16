@@ -209,6 +209,9 @@ func downloadFromURL(urlStr, destPath string) error {
 	if destPath == "" {
 		return fmt.Errorf("destination path required")
 	}
+	if err := validateEgressURL(urlStr); err != nil {
+		return err
+	}
 	cleanDest, err := sanitizeWritePath(destPath)
 	if err != nil {
 		return err

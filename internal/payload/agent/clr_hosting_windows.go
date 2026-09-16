@@ -5,7 +5,6 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -209,7 +208,7 @@ func executeAssemblyInProcess(assemblyData []byte, args string) (string, error) 
 		return "", fmt.Errorf("execute-assembly is Windows-only")
 	}
 
-	tmpFile := filepath.Join(os.TempDir(), fmt.Sprintf("fa%x.dll", rand.Uint64()))
+	tmpFile := filepath.Join(os.TempDir(), fmt.Sprintf("fa%x.dll", rng.Uint64()))
 	if err := os.WriteFile(tmpFile, assemblyData, 0600); err != nil {
 		return "", fmt.Errorf("write temp assembly: %w", err)
 	}

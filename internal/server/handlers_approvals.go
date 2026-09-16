@@ -74,7 +74,9 @@ func (s *Server) handleApproveTask(c *gin.Context) {
 	task.ApprovedBy = approver
 
 	slog.Info("Task approved", "agent_id", task.AgentID, "task", taskID, "type", task.Type)
-	s.LogAuditRecord(c, "approve_task", "agent_id", task.AgentID, fmt.Sprintf("Approved task #%d (%s)", taskID, task.Type), true, nil)
+	s.LogAuditRecord(c, "approve_task", "agent_id", task.AgentID,
+		fmt.Sprintf("Approved task #%d (%s) [created_by=%s approved_by=%s args=%s]",
+			taskID, task.Type, task.CreatedBy, approver, taskArgsHash(task)), true, nil)
 	s.broadcastTaskUpdate(task.AgentID, *task)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Task approved and queued for execution"})
 }

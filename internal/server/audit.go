@@ -35,11 +35,13 @@ var auditChainMu sync.Mutex
 // It replaces the value portion with "*****" to prevent secret leakage in audit logs.
 var sensitivePatterns = []*regexp.Regexp{
 	// JSON: "password":"secretvalue"
-	regexp.MustCompile(`"(password|passwd|secret|token|api_key|api_secret|api_token|jwt|session_key|session|cookie|loot_key|extc2_key|backup_key|totp_key|csrf_key|beacon_key|private_key|client_secret)"\s*:\s*"[^"]+"`),
+	regexp.MustCompile(`"(password|passwd|pass|secret|token|ticket|key|api_key|api_secret|api_token|jwt|session_key|session|cookie|loot_key|extc2_key|backup_key|totp_key|csrf_key|beacon_key|private_key|client_secret)"\s*:\s*"[^"]+"`),
 	// JSON with escaped quotes
-	regexp.MustCompile(`"(password|passwd|secret|token|api_key|api_secret|api_token|jwt|session_key|session|cookie|loot_key|extc2_key|backup_key|totp_key|csrf_key|beacon_key|private_key|client_secret)"\s*:\s*'[^']+'`),
-	// URL-encoded or plain: password=secretvalue
-	regexp.MustCompile(`(?i)(password|passwd|secret|token|api_key|api_secret|api_token|jwt|session_key|session|cookie|loot_key|extc2_key|backup_key|totp_key|csrf_key|beacon_key|private_key|client_secret)\s*[:=]\s*\S{4,}`),
+	regexp.MustCompile(`"(password|passwd|pass|secret|token|ticket|key|api_key|api_secret|api_token|jwt|session_key|session|cookie|loot_key|extc2_key|backup_key|totp_key|csrf_key|beacon_key|private_key|client_secret)"\s*:\s*'[^']+'`),
+	// URL-encoded or plain: password=secretvalue. Bare pass/ticket/key are
+	// included for lateral-movement credentials (user/pass/ticket in task
+	// args); cosmetic over-masking ("hotkey=") is acceptable, leakage is not.
+	regexp.MustCompile(`(?i)(password|passwd|pass|secret|token|ticket|key|api_key|api_secret|api_token|jwt|session_key|session|cookie|loot_key|extc2_key|backup_key|totp_key|csrf_key|beacon_key|private_key|client_secret)\s*[:=]\s*\S{4,}`),
 	// Key material hex/blobs
 	regexp.MustCompile(`(?i)(-----BEGIN.*?KEY-----)(.|\n)*?(-----END.*?KEY-----)`),
 }

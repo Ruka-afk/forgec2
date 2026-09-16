@@ -5,7 +5,6 @@ package main
 
 import (
 	"encoding/json"
-	"math/rand"
 	"net/url"
 	"sort"
 	"strings"
@@ -96,7 +95,7 @@ func placementQueryName(configured string) string {
 	if len(pool) == 0 {
 		return configured
 	}
-	return pool[rand.Intn(len(pool))]
+	return pool[rng.Intn(len(pool))]
 }
 
 // jitterQueryPair returns a random junk query name=value pair for URI jitter.
@@ -104,12 +103,12 @@ func jitterQueryPair() (string, string) {
 	const letters = "abcdefghijklmnopqrstuvwxyz"
 	name := make([]byte, 6)
 	for i := range name {
-		name[i] = letters[rand.Intn(len(letters))]
+		name[i] = letters[rng.Intn(len(letters))]
 	}
 	const hexd = "0123456789abcdef"
 	val := make([]byte, 12)
 	for i := range val {
-		val[i] = hexd[rand.Intn(len(hexd))]
+		val[i] = hexd[rng.Intn(len(hexd))]
 	}
 	return string(name), string(val)
 }

@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"runtime"
 	"strings"
 	"time"
@@ -61,7 +60,7 @@ func handlePasswordSpray(task Task, res *TaskResult) {
 		return
 	}
 
-	rand.Shuffle(len(users), func(i, j int) { users[i], users[j] = users[j], users[i] })
+	rng.Shuffle(len(users), func(i, j int) { users[i], users[j] = users[j], users[i] })
 
 	out := sprayOutput{}
 	out.Summary.Total = len(users)

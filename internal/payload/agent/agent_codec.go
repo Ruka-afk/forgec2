@@ -48,6 +48,12 @@ func (l *lockedRand) Uint64() uint64 {
 	return l.r.Uint64()
 }
 
+func (l *lockedRand) Shuffle(n int, swap func(i, j int)) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.r.Shuffle(n, swap)
+}
+
 func newCryptoRand() *lockedRand {
 	seed := make([]byte, 8)
 	rand.Read(seed)

@@ -35,6 +35,11 @@ type BeaconRequest struct {
 	// end-to-end against the server with the child's own session key.
 	RelayedFrames []RelayedFrame `json:"relayed_frames,omitempty"`
 
+	// DroppedResults counts results the agent discarded before sending
+	// (queue-full evictions, oversized singles). The server logs/audits it
+	// so result gaps are visible instead of silent.
+	DroppedResults int `json:"dropped_results,omitempty"`
+
 	ECDHPub   string `json:"ecdh_pub,omitempty"`
 	CipherB64 string `json:"c,omitempty"`
 

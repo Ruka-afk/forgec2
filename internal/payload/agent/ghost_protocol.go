@@ -68,6 +68,7 @@ func enterGhostMode(reason string) {
 		return
 	}
 	atomic.StoreInt32(&inGhostMode, 1)
+	requestBeaconWake()
 
 	logDebugf("Entering ghost mode: %s", reason)
 
@@ -90,6 +91,7 @@ func exitGhostMode() {
 	atomic.StoreInt32(&inGhostMode, 0)
 	ghostTrigger = ""
 	setSleepMode(SleepModeDefault)
+	requestBeaconWake()
 }
 
 func getGhostModeReason() string {

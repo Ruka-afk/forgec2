@@ -2,7 +2,18 @@ package main
 
 import (
 	"fmt"
+	"sync/atomic"
 )
+
+// droppedResults counts results discarded before sending (queue-full
+// evictions, oversized singles). Drained into each beacon frame so the
+// server can log/audit the gap instead of it going silent.
+var droppedResults atomic.Uint64
+
+// takeDroppedResultsCount returns and resets the drop counter.
+func takeDroppedResultsCount() uint64 {
+	return droppedResults.Swap(0)
+}
 
 func startTaskWorker() {
 	taskWorkerOnce.Do(func() {
@@ -114,10 +125,12 @@ func enqueueResult(r TaskResult) {
 		if Debug {
 			fmt.Printf("[!] dropping oversized task result (type=%s size=%d)\n", r.Type, len(r.Output))
 		}
+		droppedResults.Add(1)
 		return
 	}
 	if len(pendingResults) >= maxPendingResults {
 		pendingResults = pendingResults[1:]
+		droppedResults.Add(1)
 	}
 	pendingResults = append(pendingResults, r)
 }
@@ -138,6 +151,7 @@ func enqueueResults(results []TaskResult) {
 func reenforcePendingBounds() {
 	for len(pendingResults) > maxPendingResults {
 		pendingResults = pendingResults[1:]
+		droppedResults.Add(1)
 	}
 	totalBytes := 0
 	for i := range pendingResults {
@@ -146,6 +160,7 @@ func reenforcePendingBounds() {
 	for totalBytes > maxPendingResultBytes && len(pendingResults) > 0 {
 		totalBytes -= len(pendingResults[0].Output)
 		pendingResults = pendingResults[1:]
+		droppedResults.Add(1)
 	}
 }
 

@@ -39,16 +39,29 @@ const (
 var partialSeq uint64
 
 // streamBuf is a concurrency-safe byte sink doubling as cmd.Stdout/Stderr.
+// Like runShell's limitWriter it caps retained output at maxOutputSize (8MB):
+// an unbounded `find /` dump must OOM neither the buffer nor the snapshot
+// copies taken every flush tick. Excess bytes are dropped and flagged.
 type streamBuf struct {
-	mu sync.Mutex
-	b  []byte
+	mu        sync.Mutex
+	b         []byte
+	truncated bool
 }
 
 func (s *streamBuf) Write(p []byte) (int, error) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	orig := len(p)
+	if len(s.b) >= maxOutputSize {
+		s.truncated = true
+		return orig, nil
+	}
+	if rem := maxOutputSize - len(s.b); len(p) > rem {
+		p = p[:rem]
+		s.truncated = true
+	}
 	s.b = append(s.b, p...)
-	s.mu.Unlock()
-	return len(p), nil
+	return orig, nil
 }
 
 func (s *streamBuf) snapshot() []byte {
@@ -57,6 +70,12 @@ func (s *streamBuf) snapshot() []byte {
 	out := make([]byte, len(s.b))
 	copy(out, s.b)
 	return out
+}
+
+func (s *streamBuf) wasTruncated() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.truncated
 }
 
 // buildShellCmd mirrors runShell's per-platform construction exactly (UTF-8
@@ -154,6 +173,9 @@ func runShellStreaming(cmdStr, shell string, onDelta func(delta string)) (string
 		killProcessTree(cmd)
 	}
 	full := decodeShellOutput(sb.snapshot(), shell)
+	if sb.wasTruncated() {
+		full += "\n[output truncated at 8MB]"
+	}
 	return full, waitErr
 }
 

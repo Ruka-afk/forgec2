@@ -7,7 +7,9 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"runtime"
 	"strconv"
 	"strings"
@@ -17,7 +19,20 @@ import (
 func handleShell(task Task, res *TaskResult) {
 	// Streaming: deltas become Partial results after the 3 s first-flush gate
 	// inside runShellStreaming; fast commands never emit a single partial.
+	// Partial shipping stops after maxOutputSize cumulative bytes — the final
+	// result is capped by streamBuf anyway, and unbounded partials would just
+	// pile up in the pending queue for a firehose command.
+	var partialBytes int
+	var partialCut bool
 	out, err := runShellStreaming(task.Command, task.Shell, func(delta string) {
+		if partialCut {
+			return
+		}
+		partialBytes += len(delta)
+		if partialBytes > maxOutputSize {
+			partialCut = true
+			return
+		}
 		enqueuePartialResult(task, delta)
 	})
 	if err != nil {
@@ -184,8 +199,65 @@ func handleBOFInfection(task Task, res *TaskResult) {
 	}
 }
 
+// validateEgressURL gates operator-supplied download URLs against SSRF into
+// cloud metadata and link-local targets. Denied: non-http(s) schemes,
+// unresolvable hosts (fail closed), and hosts resolving into link-local or
+//ULA ranges (169.254.0.0/16 incl. v4-mapped, fe80::/10, fd00::/8).
+// Loopback stays allowed (local staging servers are a legitimate pattern);
+// cloud-credential tasks fetch metadata through their own code paths, never
+// these helpers. NOTE: resolve-then-connect has an inherent DNS-rebinding
+// TOCTOU; this raises the bar, it does not close it.
+func validateEgressURL(urlStr string) error {
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return fmt.Errorf("invalid download URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("download URL scheme must be http(s), got %q", u.Scheme)
+	}
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("download URL has no host")
+	}
+	var ip net.IP
+	if parsed := net.ParseIP(host); parsed != nil {
+		ip = parsed
+	} else {
+		addrs, err := net.LookupIP(host)
+		if err != nil || len(addrs) == 0 {
+			return fmt.Errorf("download host does not resolve: %s", host)
+		}
+		ip = addrs[0]
+	}
+	if isEgressDeniedIP(ip) {
+		return fmt.Errorf("download target %s resolves to a denied range (link-local/ULA)", host)
+	}
+	return nil
+}
+
+func isEgressDeniedIP(ip net.IP) bool {
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() {
+		return true
+	}
+	if ip4 := ip.To4(); ip4 != nil {
+		// 169.254.0.0/16 (cloud metadata lives at 169.254.169.254).
+		if ip4[0] == 169 && ip4[1] == 254 {
+			return true
+		}
+		return false
+	}
+	// IPv6 ULA fd00::/8.
+	if len(ip) == net.IPv6len && ip[0] == 0xfd {
+		return true
+	}
+	return false
+}
+
 // downloadBytes fetches raw bytes from an HTTP(S) URL into memory.
 func downloadBytes(urlStr string) ([]byte, error) {
+	if err := validateEgressURL(urlStr); err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequest("GET", urlStr, nil)
 	if err != nil {
 		return nil, err

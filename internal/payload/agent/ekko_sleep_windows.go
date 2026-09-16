@@ -7,7 +7,6 @@ import (
 	"crypto/cipher"
 	crand "crypto/rand"
 	"encoding/binary"
-	"math/rand"
 	"sync"
 	"time"
 )
@@ -90,7 +89,7 @@ func ekkoDecrypt(ciphertext []byte) []byte {
 
 // ekkoRandomJitter returns a random jitter percentage (0 to ekkoMaxJitter).
 func ekkoRandomJitter() time.Duration {
-	jitterPercent := rand.Intn(ekkoMaxJitter)
+	jitterPercent := rng.Intn(ekkoMaxJitter)
 	baseMs := int64(1000) // 1 second base
 	jitterMs := baseMs * int64(jitterPercent) / 100
 	return time.Duration(jitterMs) * time.Millisecond
@@ -184,7 +183,7 @@ func ekkoRetrieveEncrypted(offset *int) string {
 
 // getEkkoRandomDuration returns a random sleep duration with jitter.
 func getEkkoRandomDuration(baseMs int) time.Duration {
-	jitter := rand.Intn(ekkoMaxJitter*2) - ekkoMaxJitter
+	jitter := rng.Intn(ekkoMaxJitter*2) - ekkoMaxJitter
 	result := int64(baseMs) + int64(jitter)*int64(baseMs)/100
 	if result < 100 {
 		result = 100

