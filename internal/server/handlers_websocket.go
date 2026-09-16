@@ -426,7 +426,18 @@ func (s *Server) wsReadPump(beacon *WebSocketBeacon) {
 		message = s.stripBodyPadding(message)
 		env, req, kind := s.decodeBeaconEnvelope(message)
 		if kind == frameRejected {
-			slog.Warn("WebSocket beacon envelope rejected", "agent_id", beacon.AgentID)
+			// Same resync semantics as HTTP: a known agent with an unreadable
+			// frame gets the MAC-signed resync (+rekey) pushed down the
+			// socket instead of a silent drop.
+			if body, ok := s.resyncResponseFor(env); ok {
+				select {
+				case beacon.Send <- body:
+				default:
+					slog.Warn("WebSocket resync dropped: send channel full", "agent_id", beacon.AgentID)
+				}
+			} else {
+				slog.Warn("WebSocket beacon envelope rejected", "agent_id", beacon.AgentID)
+			}
 			continue
 		}
 

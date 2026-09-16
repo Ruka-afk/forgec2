@@ -219,8 +219,8 @@ func (sm *SessionManager) RemoveSession(agentID string) {
 
 // SessionStats is a snapshot of rekey activity across live sessions.
 type SessionStats struct {
-	ActiveSessions int   `json:"active_sessions"`
-	TotalRekeys    int   `json:"total_rekeys"`
+	ActiveSessions int `json:"active_sessions"`
+	TotalRekeys    int `json:"total_rekeys"`
 	RekeyCounts    []struct {
 		AgentID      string    `json:"agent_id"`
 		RekeyCount   int       `json:"rekey_count"`
@@ -416,4 +416,26 @@ func (sm *SessionManager) CleanupExpiredSessions(maxAge time.Duration) {
 			delete(sm.sessions, agentID)
 		}
 	}
+}
+
+// SessionsLastUsed snapshots agent -> last-use time for interval-aware
+// sweeping by the caller (e.g. long-sleep agents must not be evicted by a
+// static idle timeout). Copies timestamps only, never key material.
+func (sm *SessionManager) SessionsLastUsed() map[string]time.Time {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	out := make(map[string]time.Time, len(sm.sessions))
+	for id, sess := range sm.sessions {
+		if sess != nil {
+			out[id] = sess.LastUsed
+		}
+	}
+	return out
+}
+
+// DropSession removes one agent's session. Used by interval-aware sweeps.
+func (sm *SessionManager) DropSession(agentID string) {
+	sm.mu.Lock()
+	delete(sm.sessions, agentID)
+	sm.mu.Unlock()
 }

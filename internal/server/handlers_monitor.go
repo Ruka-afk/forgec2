@@ -194,8 +194,12 @@ func (m *MonitorCollector) checkAgentAlerts() {
 	var offlineIDs []string
 	for _, agent := range agents {
 		offlineFor := now.Sub(agent.LastSeen)
+		// Per-agent thresholds: long-sleep agents must not flap between
+		// check-ins (see offlineThresholdFor).
+		offlineThreshold := m.server.offlineThresholdFor(agent)
+		staleThreshold := m.server.staleThresholdFor(agent)
 		switch {
-		case offlineFor > m.server.staleThreshold():
+		case offlineFor > staleThreshold:
 			offlineIDs = append(offlineIDs, agent.ID)
 			m.server.broadcastAgentOffline(agent)
 			m.server.recordAgentStatusEvent(agent.ID, "offline")
@@ -228,7 +232,7 @@ func (m *MonitorCollector) checkAgentAlerts() {
 					slog.Warn("Monitor: offline hook backlog full, skipping agent", "agent", agent.ID)
 				}
 			}
-		case offlineFor > m.server.offlineThreshold() && agent.Status == "online":
+		case offlineFor > offlineThreshold && agent.Status == "online":
 			staleIDs = append(staleIDs, agent.ID)
 			m.server.recordAgentStatusEvent(agent.ID, "stale")
 		}
@@ -572,20 +576,37 @@ func (s *Server) handleGetAgentStatus(c *gin.Context) {
 		Offline int64 `json:"offline"`
 	}
 
-	offlineCutoff := time.Now().Add(-s.offlineThreshold())
-	staleCutoff := time.Now().Add(-s.staleThreshold())
-
-	if err := s.db.Raw(`
-		SELECT
-			COUNT(*) as total,
-			COALESCE(SUM(CASE WHEN last_seen > ? THEN 1 ELSE 0 END), 0) as online,
-			COALESCE(SUM(CASE WHEN last_seen > ? AND last_seen <= ? THEN 1 ELSE 0 END), 0) as stale,
-			COALESCE(SUM(CASE WHEN last_seen <= ? THEN 1 ELSE 0 END), 0) as offline
-		FROM implants WHERE deleted_at IS NULL`, offlineCutoff, offlineCutoff, staleCutoff, offlineCutoff,
-	).Scan(&stats).Error; err != nil {
+	// Per-agent thresholds (long-sleep agents use 3x their interval), counted
+	// in Go so the math stays identical across sqlite/postgres. Column-light:
+	// only what the status computation needs.
+	var rows []struct {
+		LastSeen        time.Time
+		CurrentInterval int
+	}
+	if err := s.db.Model(&db.Implant{}).Select("last_seen, current_interval").Find(&rows).Error; err != nil {
 		slog.Error("Failed to query agent status stats", "err", err)
 		respondError(c, http.StatusInternalServerError, "Failed to query agent status stats")
 		return
+	}
+	base := s.offlineThreshold()
+	now := time.Now()
+	for _, r := range rows {
+		stats.Total++
+		threshold := base
+		if r.CurrentInterval > 0 {
+			if d := 3 * time.Duration(r.CurrentInterval) * time.Second; d > threshold {
+				threshold = d
+			}
+		}
+		since := now.Sub(r.LastSeen)
+		switch {
+		case since < threshold:
+			stats.Online++
+		case since < threshold*StaleThresholdMultiplier:
+			stats.Stale++
+		default:
+			stats.Offline++
+		}
 	}
 
 	c.JSON(http.StatusOK, stats)

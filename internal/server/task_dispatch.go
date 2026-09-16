@@ -108,6 +108,19 @@ func (s *Server) validateTaskCreation(c *gin.Context, agentID, taskType, command
 	return nil
 }
 
+// isUniqueViolation reports whether err is a unique-constraint violation on
+// either supported driver (sqlite: "UNIQUE constraint failed", postgres:
+// "duplicate key value violates unique constraint" / SQLSTATE 23505).
+func isUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "UNIQUE constraint failed") ||
+		strings.Contains(msg, "duplicate key value") ||
+		strings.Contains(msg, "23505")
+}
+
 // createTask creates and persists a new pending task. Returns the task or error.
 func (s *Server) createTask(agentID, taskType, command, shell, path, data string, offset, size int64, opts ...TaskOption) (*db.Task, error) {
 	var tOpts taskOptions
@@ -200,6 +213,17 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 	task.Status = s.resolveInitialTaskStatus(taskType)
 	if err := s.db.Create(&task).Error; err != nil {
 		s.decPendingTasks(agentID)
+		// Close the SELECT-then-INSERT race at the database: a concurrent
+		// creation with the same key hits the partial unique index. Return
+		// the winner instead of an error so double-clicks/retries collapse.
+		if tOpts.idempotencyKey != "" && isUniqueViolation(err) {
+			var existing db.Task
+			if e2 := s.db.Where("agent_id = ? AND idempotency_key = ? AND status IN ?",
+				agentID, tOpts.idempotencyKey, []string{"pending", TaskStatusPendingApproval, "running"}).
+				Order("id DESC").First(&existing).Error; e2 == nil {
+				return &existing, nil
+			}
+		}
 		return nil, err
 	}
 	// lportfwd bookkeeping: register the operator-declared target so
@@ -302,6 +326,10 @@ func (s *Server) dispatchTask(c *gin.Context, task *db.Task, auditAction, detail
 // requeueStaleTasks retries only tasks whose delivery was never acknowledged,
 // capped at 3 delivery attempts; exhausted tasks are failed instead of
 // being requeued forever.
+//
+// The static StaleRunningTaskTimeout is a floor: agents with long sleep
+// intervals get max(static, 3x their interval) so a healthy long-sleep
+// agent's in-flight task is neither requeued nor failed prematurely.
 func (s *Server) requeueStaleTasks() {
 	cutoff := time.Now().Add(-StaleRunningTaskTimeout)
 
@@ -312,6 +340,7 @@ func (s *Server) requeueStaleTasks() {
 		slog.Error("Failed to find stale running tasks past attempt cap", "error", err)
 		return
 	}
+	exhaustedTasks = s.filterLongSleepTasks(exhaustedTasks, cutoff)
 	if len(exhaustedTasks) > 0 {
 		exhaustedIDs := make([]uint, len(exhaustedTasks))
 		for i, t := range exhaustedTasks {
@@ -342,6 +371,7 @@ func (s *Server) requeueStaleTasks() {
 		slog.Error("Failed to find stale running tasks", "error", err)
 		return
 	}
+	staleTasks = s.filterLongSleepTasks(staleTasks, cutoff)
 	if len(staleTasks) == 0 {
 		return
 	}
@@ -360,7 +390,56 @@ func (s *Server) requeueStaleTasks() {
 	slog.Info("Requeued stale running tasks to pending", "count", len(staleTasks))
 }
 
+// filterLongSleepTasks drops tasks whose agent sleeps so long that the
+// static cutoff has not actually elapsed for them yet: each task gets
+// max(StaleRunningTaskTimeout, 3x its agent's current interval). Agents
+// without a row or interval fall back to the static cutoff.
+func (s *Server) filterLongSleepTasks(tasks []db.Task, staticCutoff time.Time) []db.Task {
+	if len(tasks) == 0 {
+		return tasks
+	}
+	agentIDs := make([]string, 0, len(tasks))
+	seen := make(map[string]struct{}, len(tasks))
+	for _, t := range tasks {
+		if _, ok := seen[t.AgentID]; !ok {
+			seen[t.AgentID] = struct{}{}
+			agentIDs = append(agentIDs, t.AgentID)
+		}
+	}
+	intervals := make(map[string]int, len(agentIDs))
+	var rows []struct {
+		ID              string
+		CurrentInterval int
+	}
+	if err := s.db.Model(&db.Implant{}).Where("id IN ?", agentIDs).
+		Select("id, current_interval").Scan(&rows).Error; err != nil {
+		slog.Warn("Stale sweep: interval lookup failed, using static cutoff", "err", err)
+		return tasks
+	}
+	for _, r := range rows {
+		intervals[r.ID] = r.CurrentInterval
+	}
+	now := time.Now()
+	kept := tasks[:0]
+	for _, t := range tasks {
+		perTaskCutoff := staticCutoff
+		if iv := intervals[t.AgentID]; iv > 0 {
+			if d := now.Add(-3 * time.Duration(iv) * time.Second); d.Before(perTaskCutoff) {
+				perTaskCutoff = d
+			}
+		}
+		if t.ClaimedAt.Before(perTaskCutoff) {
+			kept = append(kept, t)
+		}
+	}
+	return kept
+}
+
 // failStaleAcknowledgedTasks marks tasks that were acknowledged but never produced a result.
+// Renewal first: if the agent beaconed after acknowledging (it's alive and
+// still working), the deadline is extended by one more window instead of
+// failing a healthy long task. At most one renewal per task — a wedged agent
+// that beacons forever without finishing still gets failed.
 func (s *Server) failStaleAcknowledgedTasks() {
 	cutoff := time.Now().Add(-AckedTaskResultTimeout)
 	var staleTasks []db.Task
@@ -371,29 +450,76 @@ func (s *Server) failStaleAcknowledgedTasks() {
 	if len(staleTasks) == 0 {
 		return
 	}
-	taskIDs := make([]uint, len(staleTasks))
-	for i, t := range staleTasks {
-		taskIDs[i] = t.ID
+	// Agent liveness per involved agent (single query).
+	agentIDs := make([]string, 0, len(staleTasks))
+	seenAgents := make(map[string]struct{}, len(staleTasks))
+	for _, t := range staleTasks {
+		if _, ok := seenAgents[t.AgentID]; !ok {
+			seenAgents[t.AgentID] = struct{}{}
+			agentIDs = append(agentIDs, t.AgentID)
+		}
+	}
+	lastSeen := make(map[string]time.Time, len(agentIDs))
+	var implants []struct {
+		ID       string
+		LastSeen time.Time
+	}
+	if err := s.db.Model(&db.Implant{}).Where("id IN ?", agentIDs).
+		Select("id, last_seen").Scan(&implants).Error; err != nil {
+		slog.Warn("Acked sweep: agent lookup failed, failing all stale", "err", err)
+	} else {
+		for _, im := range implants {
+			lastSeen[im.ID] = im.LastSeen
+		}
+	}
+	now := time.Now()
+	var failIDs []uint
+	var renewed int
+	for _, t := range staleTasks {
+		// Renew once: agent alive since ack, and within 2 windows of the ack
+		// (bounds wedged agents to a single extension).
+		if t.AcknowledgedAt != nil &&
+			now.Sub(*t.AcknowledgedAt) < 2*AckedTaskResultTimeout &&
+			lastSeen[t.AgentID].After(*t.AcknowledgedAt) {
+			if err := s.db.Model(&db.Task{}).Where("id = ? AND status = ?", t.ID, "running").
+				Update("acknowledged_at", now).Error; err != nil {
+				slog.Warn("Acked sweep: renewal failed", "task", t.ID, "err", err)
+			} else {
+				renewed++
+			}
+			continue
+		}
+		failIDs = append(failIDs, t.ID)
+	}
+	if renewed > 0 {
+		slog.Info("Renewed acked tasks for live agents", "count", renewed)
+	}
+	if len(failIDs) == 0 {
+		return
 	}
 	// Status guard plus keep any partial result: the previous unconditional
 	// update blanked "result" on tasks whose output arrived between SELECT
 	// and UPDATE, destroying real data.
-	if err := s.db.Model(&db.Task{}).Where("id IN ? AND status = ?", taskIDs, "running").
+	if err := s.db.Model(&db.Task{}).Where("id IN ? AND status = ?", failIDs, "running").
 		Updates(map[string]interface{}{
 			"status": "failed",
 			"error":  "task acknowledged but no result received within timeout",
 		}).Error; err != nil {
-		slog.Error("Failed to fail stale acknowledged tasks", "count", len(taskIDs), "error", err)
+		slog.Error("Failed to fail stale acknowledged tasks", "count", len(failIDs), "error", err)
 		return
 	}
-	for i := range staleTasks {
-		t := staleTasks[i]
+	failedByID := make(map[uint]db.Task, len(failIDs))
+	for _, t := range staleTasks {
+		failedByID[t.ID] = t
+	}
+	for _, id := range failIDs {
+		t := failedByID[id]
 		t.Status = "failed"
 		t.Error = "task acknowledged but no result received within timeout"
 		t.Result = ""
 		s.broadcastTaskUpdate(t.AgentID, t)
 	}
-	slog.Info("Failed stale acknowledged tasks with no result", "count", len(staleTasks))
+	slog.Info("Failed stale acknowledged tasks with no result", "count", len(failIDs))
 }
 
 // reconcilePendingTaskCounts recomputes the in-memory pending task counter from the DB.

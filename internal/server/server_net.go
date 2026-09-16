@@ -141,7 +141,18 @@ func (s *Server) handleTCPConnection(conn net.Conn) {
 
 		env, req, kind := s.decodeBeaconEnvelope(buf)
 		if kind == frameRejected {
-			return
+			// Length-prefixed resync instead of a bare close: the agent
+			// fast-forwards and re-handshakes on the same connection.
+			if body, ok := s.resyncResponseFor(env); ok {
+				syncBytes := s.applyMalleableWrapping(body)
+				if err := binary.Write(conn, binary.BigEndian, uint32(len(syncBytes))); err != nil {
+					return
+				}
+				if _, err := conn.Write(syncBytes); err != nil {
+					return
+				}
+			}
+			continue
 		}
 
 		var respBytes []byte

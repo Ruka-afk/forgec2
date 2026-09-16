@@ -193,7 +193,13 @@ func (s *Server) processRelayedEnvelopes(frames []relayedFrame, parentUUID, publ
 
 		childEnv, childReq, kind := s.decodeBeaconEnvelope(rf.Envelope)
 		if kind == frameRejected {
-			slog.Warn("P2P relay dropped: child frame rejected", "parent", parentUUID, "child", rf.AgentID)
+			// Embed the resync as this child's reply so relayed children
+			// recover exactly like direct ones.
+			if body, ok := s.resyncResponseFor(childEnv); ok {
+				replies = append(replies, relayedReply{AgentID: rf.AgentID, Envelope: body})
+			} else {
+				slog.Warn("P2P relay dropped: child frame rejected", "parent", parentUUID, "child", rf.AgentID)
+			}
 			continue
 		}
 

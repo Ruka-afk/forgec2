@@ -490,7 +490,10 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		}
 	}
 
-	// Periodic cleanup of stale ECDH sessions to prevent unbounded map growth
+	// Periodic cleanup of stale ECDH sessions to prevent unbounded map growth.
+	// Interval-aware: a session idle longer than max(30min, 3x its agent's
+	// sleep interval) is dropped. A static 30min cutoff would evict every
+	// legitimate long-sleep agent, forcing a re-handshake storm on wake.
 	if s.sessionManager != nil {
 		s.wg.Add(1)
 		go func() {
@@ -500,7 +503,7 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 			for {
 				select {
 				case <-ticker.C:
-					s.sessionManager.CleanupExpiredSessions(30 * time.Minute)
+					s.sweepECDHSessions()
 				case <-s.ctx.Done():
 					return
 				}

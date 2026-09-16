@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -79,11 +78,21 @@ func TestBadCiphertextDoesNotAdvanceReplayWindow(t *testing.T) {
 	})
 	tcpWriteFrame(t, conn, badFrame)
 
-	// The server must close the connection for the undecryptable frame.
+	// The server answers a MAC-signed resync (+rekey) instead of closing: the
+	// agent fast-forwards and re-handshakes on the same connection.
 	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	var msgLen uint32
-	if err := binary.Read(conn, binary.BigEndian, &msgLen); err == nil {
-		t.Fatalf("expected connection close for bad ciphertext, got frame length %d", msgLen)
+	resyncFrame := tcpReadFrame(t, conn)
+	var rs struct {
+		Seq     uint64 `json:"seq"`
+		Rekey   bool   `json:"rekey"`
+		ECDHPub string `json:"ecdh_pub"`
+		Mac     string `json:"mac"`
+	}
+	if err := encoding.Unmarshal(resyncFrame, &rs); err != nil || rs.ECDHPub == "" || !rs.Rekey {
+		t.Fatalf("expected resync with rekey for bad ciphertext, got %s (err=%v)", resyncFrame, err)
+	}
+	if !agent.verifyResponseMAC(rs.Seq, rs.ECDHPub, rs.Mac) {
+		t.Fatalf("resync MAC mismatch: %s", resyncFrame)
 	}
 
 	// The REAL agent reconnects and sends a valid frame with the SAME seq 2.
@@ -119,11 +128,16 @@ func TestBadCiphertextDoesNotAdvanceReplayWindow(t *testing.T) {
 		t.Fatalf("decrypt valid response: %v", err)
 	}
 
-	// A replay of the valid seq=2 frame must still be rejected.
+	// A replay of the valid seq=2 frame is rejected for processing but
+	// answered with a resync (not a close) so the agent recovers.
 	tcpWriteFrame(t, conn, validFrame)
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	if err := binary.Read(conn, binary.BigEndian, &msgLen); err == nil {
-		t.Fatalf("expected connection close for replayed seq=%d, got length %d", badSeq, msgLen)
+	replayResp := tcpReadFrame(t, conn)
+	var rrs struct {
+		ECDHPub string `json:"ecdh_pub"`
+		Rekey   bool   `json:"rekey"`
+	}
+	if err := encoding.Unmarshal(replayResp, &rrs); err != nil || rrs.ECDHPub == "" || !rrs.Rekey {
+		t.Fatalf("expected resync for replayed seq=%d, got %s (err=%v)", badSeq, replayResp, err)
 	}
 }
 

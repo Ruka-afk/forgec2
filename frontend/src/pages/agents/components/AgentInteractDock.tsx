@@ -139,9 +139,11 @@ export function AgentInteractDock({
   const cancelTask = useCallback(async (taskId: number) => {
     if (!id) return;
     try {
-      await api.post(paths.agents.cancelTask(id, taskId));
+      const res = await api.post<{ outcome?: string }>(paths.agents.cancelTask(id, taskId));
       setTasks((prev) => prev.map((tk) => (Number(tk.id) !== taskId ? tk : { ...tk, status: "cancelled", error: tk.error || "cancelled" })));
-      toast.success(t("agents.dock_task_cancelled"));
+      if (res?.outcome === "abort_queued") toast.success(t("agents.dock_task_cancel_abort_queued"));
+      else if (res?.outcome === "already_executing") toast.success(t("agents.dock_task_cancel_executing"));
+      else toast.success(t("agents.dock_task_cancelled"));
     } catch {
       toast.error(t("agents.dock_task_cancel_failed"));
     }

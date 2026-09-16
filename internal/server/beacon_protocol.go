@@ -158,9 +158,17 @@ const (
 // frame timestamp and server time.
 const beaconTsTolerance = 300 // seconds
 
-// maxSeqJump is the maximum accepted per-frame sequence advance before the
-// frame is rejected as a replay flood / desync indicator.
+// maxSeqJump is the base per-frame sequence advance before a frame is
+// rejected as a replay flood / desync indicator. acceptSeq scales it up with
+// the agent's sleep interval and time since its last accepted frame (a failed
+// beacon advances the agent counter by ~8, so a long outage legitimately
+// produces a large jump on recovery).
 const maxSeqJump = 1000
+
+// maxSeqJumpAbsolute caps the adaptive jump window: beyond this a frame is
+// rejected no matter how long the agent was silent (defense-in-depth against
+// a key-holding actor replay-flooding to burn the window).
+const maxSeqJumpAbsolute = 1 << 20
 
 // seqLockoutDuration is how long an agent stays locked out after a sequence
 // jump exceeds the hard cap in acceptSeq. The lockout is in-memory and clears

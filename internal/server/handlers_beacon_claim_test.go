@@ -91,14 +91,19 @@ func TestFetchRelayedChildTasksClaimsOnlyDispatchablePendingTasks(t *testing.T) 
 	if len(relayed) != 1 || relayed[0].AgentID != childID {
 		t.Fatalf("expected one child relay batch, got %+v", relayed)
 	}
-	if len(relayed[0].Tasks) != 2 {
-		t.Fatalf("expected two newly claimed tasks, got %+v", relayed[0].Tasks)
+	// Two newly claimed + the old unacked running task re-carried for
+	// lost-response recovery (status untouched: still running/claimed).
+	if len(relayed[0].Tasks) != 3 {
+		t.Fatalf("expected two claimed plus one recarried task, got %+v", relayed[0].Tasks)
 	}
 	if relayed[0].Tasks[0].ID != validUpload.ID || relayed[0].Tasks[0].PrevMAC != "previous" || relayed[0].Tasks[0].MAC != "current" {
 		t.Fatalf("upload integrity chain was not relayed: %+v", relayed[0].Tasks[0])
 	}
 	if relayed[0].Tasks[1].ID != shellTask.ID {
 		t.Fatalf("unexpected relayed task order: %+v", relayed[0].Tasks)
+	}
+	if relayed[0].Tasks[2].ID != oldRunning.ID {
+		t.Fatalf("unacked running task was not recarried last: %+v", relayed[0].Tasks)
 	}
 
 	var persistedOld, persistedInvalid db.Task
@@ -110,6 +115,41 @@ func TestFetchRelayedChildTasksClaimsOnlyDispatchablePendingTasks(t *testing.T) 
 	}
 	if persistedOld.Status != "running" || persistedInvalid.Status != "pending" {
 		t.Fatalf("non-dispatchable tasks were mutated: old=%+v invalid=%+v", persistedOld, persistedInvalid)
+	}
+	if persistedOld.ClaimedBy != parentID {
+		t.Fatalf("recarried task lost its claim: %+v", persistedOld)
+	}
+}
+
+func TestFetchPendingTasksRecarriesUnackedRunning(t *testing.T) {
+	database := testutil.SetupTestDB(t)
+	s := &Server{db: database}
+	agentID := "agent-recarry"
+
+	lost := db.Task{AgentID: agentID, Type: "shell", Status: "running", ClaimedBy: agentID, ClaimedAt: time.Now().Add(-time.Minute)}
+	acked := db.Task{AgentID: agentID, Type: "shell", Status: "running", ClaimedBy: agentID, ClaimedAt: time.Now().Add(-time.Minute)}
+	now := time.Now()
+	acked.AcknowledgedAt = &now
+	other := db.Task{AgentID: "other-agent", Type: "shell", Status: "running", ClaimedBy: "other-agent", ClaimedAt: time.Now().Add(-time.Minute)}
+	for _, task := range []*db.Task{&lost, &acked, &other} {
+		if err := database.Create(task).Error; err != nil {
+			t.Fatalf("create task: %v", err)
+		}
+	}
+
+	claimed := s.fetchPendingTasks(agentID)
+	if len(claimed) != 1 || claimed[0].ID != lost.ID {
+		t.Fatalf("expected only the lost unacked task recarried, got %+v", claimed)
+	}
+
+	// Re-carry must not mutate the claim: stale sweeps still key on the
+	// original claimed_at.
+	var reloaded db.Task
+	if err := database.First(&reloaded, lost.ID).Error; err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if reloaded.Status != "running" || reloaded.ClaimedBy != agentID {
+		t.Fatalf("recarry mutated the claim: %+v", reloaded)
 	}
 }
 
@@ -158,5 +198,41 @@ func TestTaskAcknowledgementPreventsStaleRequeue(t *testing.T) {
 	}
 	if reloadedUnacknowledged.AcknowledgedAt != nil {
 		t.Fatal("pending task acknowledgement should be ignored")
+	}
+}
+
+func TestRequeueStaleTasksRespectsLongSleep(t *testing.T) {
+	database := testutil.SetupTestDB(t)
+	s := &Server{db: database}
+
+	// Long-sleep agent (1h interval): a task claimed 30min ago is healthy.
+	sleepy := "agent-sleepy"
+	if err := database.Create(&db.Implant{ID: sleepy, CurrentInterval: 3600}).Error; err != nil {
+		t.Fatalf("create implant: %v", err)
+	}
+	sleepyTask := db.Task{AgentID: sleepy, Type: "shell", Status: "running", ClaimedBy: sleepy, ClaimedAt: time.Now().Add(-30 * time.Minute)}
+	// Chatty agent (default interval): a task claimed 30min ago is stale.
+	chatty := "agent-chatty"
+	chattyTask := db.Task{AgentID: chatty, Type: "shell", Status: "running", ClaimedBy: chatty, ClaimedAt: time.Now().Add(-30 * time.Minute)}
+	for _, task := range []*db.Task{&sleepyTask, &chattyTask} {
+		if err := database.Create(task).Error; err != nil {
+			t.Fatalf("create task: %v", err)
+		}
+	}
+
+	s.requeueStaleTasks()
+
+	var reloadedSleepy, reloadedChatty db.Task
+	if err := database.First(&reloadedSleepy, sleepyTask.ID).Error; err != nil {
+		t.Fatalf("load sleepy task: %v", err)
+	}
+	if err := database.First(&reloadedChatty, chattyTask.ID).Error; err != nil {
+		t.Fatalf("load chatty task: %v", err)
+	}
+	if reloadedSleepy.Status != "running" {
+		t.Fatalf("long-sleep agent task was requeued early: %+v", reloadedSleepy)
+	}
+	if reloadedChatty.Status != "pending" {
+		t.Fatalf("stale chatty task was not requeued: %+v", reloadedChatty)
 	}
 }

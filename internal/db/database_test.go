@@ -152,6 +152,54 @@ func TestUpgradePreservesLegacyAgentsData(t *testing.T) {
 	}
 }
 
+func TestIdempotencyUniqueIndexMigration(t *testing.T) {
+	database, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to open test database: %v", err)
+	}
+	if err := database.AutoMigrate(&Task{}); err != nil {
+		t.Fatalf("migrate tasks: %v", err)
+	}
+	// Pre-existing live duplicates must collapse (newest kept) before the
+	// UNIQUE index is created.
+	for i, st := range []string{"running", "running"} {
+		if err := database.Create(&Task{AgentID: "a1", Type: "shell", Status: st, IdempotencyKey: "op-dup"}).Error; err != nil {
+			t.Fatalf("seed %d: %v", i, err)
+		}
+	}
+
+	var mig *gormigrate.Migration
+	for _, m := range Migrations {
+		if m.ID == "2026-09-16-add-task-idempotency-unique-index" {
+			mig = m
+		}
+	}
+	if mig == nil {
+		t.Fatal("idempotency migration not registered")
+	}
+	if err := database.Transaction(func(tx *gorm.DB) error { return mig.Migrate(tx) }); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	var live int64
+	database.Model(&Task{}).Where("agent_id = ? AND idempotency_key = ? AND status IN ?", "a1", "op-dup", []string{"pending", "pending_approval", "running"}).Count(&live)
+	if live != 1 {
+		t.Fatalf("want 1 live row after dedup, got %d", live)
+	}
+	var cancelled int64
+	database.Model(&Task{}).Where("agent_id = ? AND status = ?", "a1", "cancelled").Count(&cancelled)
+	if cancelled != 1 {
+		t.Fatalf("want 1 cancelled dup, got %d", cancelled)
+	}
+	if !database.Migrator().HasIndex(&Task{}, "uidx_tasks_idem_live") {
+		t.Fatal("partial unique index missing after migration")
+	}
+	dup := &Task{AgentID: "a1", Type: "shell", Status: "pending", IdempotencyKey: "op-dup"}
+	if err := database.Create(dup).Error; err == nil {
+		t.Fatal("duplicate live key insert must violate the unique index")
+	}
+}
+
 func TestRenameMigrationSelfHealsStrandedAgentsData(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {

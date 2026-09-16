@@ -31,6 +31,12 @@ func (s *Server) cleanupOldData() {
 		slog.Error("Cleanup system metrics failed", "err", err)
 	}
 
+	// Agent status flaps (online/stale/offline) are append-only and would grow
+	// without bound on a flapping fleet; same retention as other telemetry.
+	if err := s.db.WithContext(s.ctx).Where("timestamp < ?", cutoff).Delete(&db.AgentStatusEvent{}).Error; err != nil {
+		slog.Error("Cleanup agent status events failed", "err", err)
+	}
+
 	// Periodic SQLite maintenance: VACUUM and ANALYZE to prevent bloat and
 	// keep query planner statistics fresh. Only runs if the DB is SQLite.
 	if sqlDB, err := s.db.DB(); err == nil {
@@ -184,6 +190,25 @@ func (s *Server) staleThreshold() time.Duration {
 	return s.offlineThreshold() * StaleThresholdMultiplier
 }
 
+// offlineThresholdFor scales the static offline threshold by the agent's own
+// sleep interval: an agent that beacons every 5 minutes must not flap
+// online/stale/offline between check-ins. Floor is the static threshold so
+// chatty agents keep tight detection.
+func (s *Server) offlineThresholdFor(a db.Implant) time.Duration {
+	base := s.offlineThreshold()
+	if a.CurrentInterval > 0 {
+		// 3x interval covers the beacon plus jitter and one missed cycle.
+		if d := 3 * time.Duration(a.CurrentInterval) * time.Second; d > base {
+			return d
+		}
+	}
+	return base
+}
+
+func (s *Server) staleThresholdFor(a db.Implant) time.Duration {
+	return s.offlineThresholdFor(a) * StaleThresholdMultiplier
+}
+
 // AgentStatusInfo holds display info for an agent's status
 type AgentStatusInfo struct {
 	Status    string // "online", "stale", "offline"
@@ -196,11 +221,11 @@ type AgentStatusInfo struct {
 
 func (s *Server) agentStatus(a db.Implant) AgentStatusInfo {
 	since := time.Since(a.LastSeen)
-	threshold := s.offlineThreshold()
+	threshold := s.offlineThresholdFor(a)
 	switch {
 	case since < threshold:
 		return AgentStatusInfo{"online", "Online", "bg-emerald-500", "bg-emerald-50", "text-emerald-700", "animate-pulse"}
-	case since < s.staleThreshold():
+	case since < s.staleThresholdFor(a):
 		return AgentStatusInfo{"stale", "Timeout", "bg-amber-500", "bg-amber-50", "text-amber-700", ""}
 	default:
 		return AgentStatusInfo{"offline", "Offline", "bg-red-500", "bg-red-50", "text-red-700", ""}

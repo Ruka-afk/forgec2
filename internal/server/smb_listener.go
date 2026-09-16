@@ -73,8 +73,19 @@ func (s *Server) handleSMBConnection(conn net.Conn) {
 
 		env, req, kind := s.decodeBeaconEnvelope(buf)
 		if kind == frameRejected {
-			slog.Error("SMB beacon envelope rejected", "remote", conn.RemoteAddr().String())
-			return
+			// Length-prefixed resync instead of a bare close, mirroring TCP.
+			if body, ok := s.resyncResponseFor(env); ok {
+				syncBytes := s.applyMalleableWrapping(body)
+				if err := binary.Write(conn, binary.BigEndian, uint32(len(syncBytes))); err != nil {
+					return
+				}
+				if _, err := conn.Write(syncBytes); err != nil {
+					return
+				}
+			} else {
+				slog.Error("SMB beacon envelope rejected", "remote", conn.RemoteAddr().String())
+			}
+			continue
 		}
 
 		var respBytes []byte

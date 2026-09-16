@@ -142,6 +142,8 @@ export const zh: Record<string, string> = {
     "agents.dock_task_cancel": "取消任务",
     "agents.dock_task_cancel_failed": "取消失败",
     "agents.dock_task_cancelled": "任务已取消",
+    "agents.dock_task_cancel_abort_queued": "任务已取消，中止信号已排队",
+    "agents.dock_task_cancel_executing": "任务已取消，但可能已在执行",
     "agents.dock_task_reject": "拒绝",
     "agents.dock_task_reject_failed": "拒绝失败",
     "agents.dock_task_rejected": "任务已拒绝",

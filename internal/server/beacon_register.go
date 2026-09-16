@@ -175,7 +175,10 @@ func (s *Server) processAuthFrame(env beaconEnvelope, kind beaconFrameKind) ([]b
 		}
 		slog.Info("Beacon registered (v3 per-implant secret)", "agent_id", env.UUID, "recovery", kind != frameRegister)
 	} else { // frameHandshake for an already-registered agent
-		accepted := s.acceptSeq(env.UUID, env.Seq)
+		// Handshakes bypass the flood lockout (a locked-out agent's only
+		// recovery path is the handshake itself) but keep replay/jump-cap
+		// checks via acceptHandshakeSeq.
+		accepted := s.acceptHandshakeSeq(env.UUID, env.Seq)
 		if !accepted {
 			slog.Warn("Beacon handshake rejected: replay or missing row", "agent_id", env.UUID, "seq", env.Seq)
 			return nil, false
@@ -331,16 +334,15 @@ func (s *Server) handleBeacon(c *gin.Context) {
 
 	env, req, kind := s.decodeBeaconEnvelope(raw)
 	if kind == frameRejected {
-		// A replay-rejected encrypted frame means the agent's sequence fell
-		// behind the server's. Reply with a MAC-signed resync carrying the
-		// server's current last_seq so the agent can fast-forward instead of
-		// being permanently locked out. Only attempted for genuine encrypted
-		// frames from a known agent (no row => buildResyncResponse returns false).
-		if env.CipherB64 != "" && isValidAgentID(env.UUID) {
-			if body, ok := s.buildResyncResponse(env.UUID, env.Seq); ok {
-				c.Data(http.StatusOK, "application/json", body)
-				return
-			}
+		// A rejected encrypted frame means the agent's sequence fell behind
+		// the server's or the server lost its session (restart/sweep). Reply
+		// with a MAC-signed resync (+rekey) so the agent fast-forwards and
+		// re-handshakes instead of being permanently locked out. Only
+		// attempted for genuine encrypted frames from a known agent (no row
+		// => resyncResponseFor returns false).
+		if body, ok := s.resyncResponseFor(env); ok {
+			c.Data(http.StatusOK, "application/json", body)
+			return
 		}
 		respondError(c, http.StatusBadRequest, "invalid beacon payload")
 		return

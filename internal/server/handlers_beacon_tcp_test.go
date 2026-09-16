@@ -476,22 +476,27 @@ func TestTCPBeaconRestartRecovery(t *testing.T) {
 	}
 	s.sessionManager = sm
 
-	// Encrypted frame is rejected (no session to decrypt).
+	// Encrypted frame is undecryptable (no session).
 	inner, _ := json.Marshal(map[string]interface{}{
 		"uuid": agent.uuid, "pv": 2,
 		"info": map[string]string{"hostname": "RESTART", "username": "u", "ip": "10.0.0.8"},
 	})
 	tcpWriteFrame(t, conn, []byte(agent.encryptedFrame(inner)))
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	var msgLen uint32
-	if err := binary.Read(conn, binary.BigEndian, &msgLen); err == nil {
-		t.Fatalf("expected close for undecryptable frame, got length %d", msgLen)
+	resyncFrame := tcpReadFrame(t, conn)
+	var rs struct {
+		Seq     uint64 `json:"seq"`
+		Rekey   bool   `json:"rekey"`
+		ECDHPub string `json:"ecdh_pub"`
+		Mac     string `json:"mac"`
+	}
+	if err := encoding.Unmarshal(resyncFrame, &rs); err != nil || rs.ECDHPub == "" || !rs.Rekey {
+		t.Fatalf("expected resync with rekey after restart, got %s (err=%v)", resyncFrame, err)
+	}
+	if !agent.verifyResponseMAC(rs.Seq, rs.ECDHPub, rs.Mac) {
+		t.Fatalf("resync MAC mismatch: %s", resyncFrame)
 	}
 
-	// Reconnect (fresh TCP session) and re-handshake.
-	conn.Close()
-	conn, done = tcpFrameConn(t, s)
-	defer done()
+	// Re-handshake on the same connection (no reconnect needed).
 	tcpWriteFrame(t, conn, []byte(agent.handshakeFrame()))
 	respFrame = tcpReadFrame(t, conn)
 	var hsResp struct {

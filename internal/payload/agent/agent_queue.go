@@ -12,10 +12,45 @@ func startTaskWorker() {
 	})
 }
 
+// seenTaskIDs dedupes redelivered tasks by ID. The server re-carries
+// unacknowledged running tasks on later beacons (lost-response recovery),
+// so without this every redelivery would execute twice. Bounded FIFO:
+// agent restarts clear it (at-least-once across restarts, matching the
+// server's requeue semantics). Guarded by pendingMu.
+const maxSeenTaskIDs = 2048
+
+var (
+	seenTaskIDs     = make(map[uint]struct{})
+	seenTaskIDOrder []uint
+)
+
+// markTaskSeenLocked records a task ID as accepted. Caller holds pendingMu.
+func markTaskSeenLocked(id uint) {
+	if _, ok := seenTaskIDs[id]; ok {
+		return
+	}
+	seenTaskIDs[id] = struct{}{}
+	seenTaskIDOrder = append(seenTaskIDOrder, id)
+	for len(seenTaskIDOrder) > maxSeenTaskIDs {
+		delete(seenTaskIDs, seenTaskIDOrder[0])
+		seenTaskIDOrder = seenTaskIDOrder[1:]
+	}
+}
+
 // enqueueTask hands a task to the execution pool without blocking the beacon
 // goroutine. When the queue is saturated the oldest waiting task is evicted
 // (and returned as an error result) so fresh commands are always accepted.
 func enqueueTask(task Task) {
+	pendingMu.Lock()
+	if _, dup := seenTaskIDs[task.ID]; dup {
+		// Redelivery of an accepted task: ack again so the server stops
+		// re-carrying it, but do not execute twice.
+		pendingTaskAcks = append(pendingTaskAcks, task.ID)
+		pendingMu.Unlock()
+		return
+	}
+	markTaskSeenLocked(task.ID)
+	pendingMu.Unlock()
 	if !insertTask(task) {
 		// Extremely rare: the queue stayed full through the eviction attempts.
 		// Ack the delivery so the server never re-fetches it, and surface a

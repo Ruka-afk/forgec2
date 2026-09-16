@@ -142,6 +142,8 @@ export const en: Record<string, string> = {
     "agents.dock_task_cancel": "Cancel task",
     "agents.dock_task_cancel_failed": "Cancel failed",
     "agents.dock_task_cancelled": "Task cancelled",
+    "agents.dock_task_cancel_abort_queued": "Task cancelled, abort signal queued",
+    "agents.dock_task_cancel_executing": "Task cancelled, but it may already be executing",
     "agents.dock_task_reject": "Reject",
     "agents.dock_task_reject_failed": "Reject failed",
     "agents.dock_task_rejected": "Task rejected",

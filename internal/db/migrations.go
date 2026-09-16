@@ -870,6 +870,52 @@ var indexMigrations = []*gormigrate.Migration{
 			return nil
 		},
 	},
+	{
+		ID: "2026-09-16-add-task-idempotency-unique-index",
+		Migrate: func(tx *gorm.DB) error {
+			// Collapse pre-existing live duplicates so the UNIQUE index can
+			// be created: keep the newest row per (agent, key), cancel the
+			// rest with an auditable reason. Terminal tasks never block keys.
+			live := []string{"pending", "pending_approval", "running"}
+			var dups []struct {
+				AgentID        string
+				IdempotencyKey string
+			}
+			if err := tx.Model(&Task{}).
+				Select("agent_id, idempotency_key").
+				Where("idempotency_key <> '' AND status IN ?", live).
+				Group("agent_id, idempotency_key").Having("COUNT(*) > 1").
+				Scan(&dups).Error; err != nil {
+				return err
+			}
+			for _, d := range dups {
+				var ids []uint
+				if err := tx.Model(&Task{}).
+					Where("agent_id = ? AND idempotency_key = ? AND status IN ?", d.AgentID, d.IdempotencyKey, live).
+					Order("id DESC").Pluck("id", &ids).Error; err != nil {
+					return err
+				}
+				if len(ids) > 1 {
+					if err := tx.Model(&Task{}).Where("id IN ?", ids[1:]).
+						Updates(map[string]interface{}{
+							"status": "cancelled",
+							"error":  "superseded by duplicate idempotency key (migration dedup)",
+						}).Error; err != nil {
+						return err
+					}
+				}
+			}
+			execMigration(tx, "CREATE UNIQUE INDEX IF NOT EXISTS uidx_tasks_idem_live ON tasks(agent_id, idempotency_key) WHERE status IN ('pending','pending_approval','running') AND idempotency_key <> ''", "uidx_tasks_idem_live")
+			if !tx.Migrator().HasIndex(&Task{}, "uidx_tasks_idem_live") {
+				return fmt.Errorf("partial unique index uidx_tasks_idem_live was not created")
+			}
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			execMigration(tx, "DROP INDEX IF EXISTS uidx_tasks_idem_live", "drop_uidx_tasks_idem_live")
+			return nil
+		},
+	},
 }
 
 // Migrations is the combined migration history, kept for tooling and tests.

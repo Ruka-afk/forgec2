@@ -79,6 +79,11 @@ func (s *Server) handleListenerBeacon(agentID string, reqJSON []byte) []byte {
 
 	env, req, kind := s.decodeBeaconEnvelope(raw)
 	if kind == frameRejected {
+		// Resync instead of nil: the caller's transport framing carries these
+		// bytes back, so desynced agents recover on every listener type.
+		if body, ok := s.resyncResponseFor(env); ok {
+			return body
+		}
 		return nil
 	}
 	if req.UUID == "" {

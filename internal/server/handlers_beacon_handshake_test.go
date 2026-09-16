@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -118,8 +119,69 @@ func TestV2HandshakeDoesNotClaimTasks(t *testing.T) {
 	}
 }
 
-// TestV2EncryptedBeaconDeliversTaskAfterRegistration proves the same task is
-// delivered once the agent re-beacons with the established session (encrypted).
+// TestDecryptFailureResyncsKnownAgent proves a lost server session (restart,
+// sweep) does not 400-loop the agent: an undecryptable encrypted frame from a
+// known implant gets the MAC-signed resync (+rekey) so the agent fast-forwards
+// and re-handshakes on the next beacon. Unknown UUIDs still get 400 (no
+// existence oracle).
+func TestDecryptFailureResyncsKnownAgent(t *testing.T) {
+	s, _ := v2TestServer(t)
+
+	agentUUID := "44444444-5555-4666-8666-888888888888"
+	agent := v3TestAgent(t, s, agentUUID)
+
+	w := v2Post(t, s, agent.registerFrame())
+	if w.Code != http.StatusOK {
+		t.Fatalf("registration: expected 200, got %d; body=%s", w.Code, w.Body.String())
+	}
+
+	// Simulate a server restart: session map is empty but the implant row
+	// (and reg secret) survive.
+	s.sessionManager.RemoveSession(agentUUID)
+
+	garbage := base64.StdEncoding.EncodeToString([]byte("not-aead-ciphertext"))
+	env, _ := json.Marshal(map[string]interface{}{
+		"uuid": agentUUID,
+		"seq":  4242,
+		"ts":   time.Now().Unix(),
+		"c":    garbage,
+	})
+	w = v2Post(t, s, string(env))
+	if w.Code != http.StatusOK {
+		t.Fatalf("lost-session beacon: expected 200 resync, got %d; body=%s", w.Code, w.Body.String())
+	}
+	var rs struct {
+		Seq     uint64 `json:"seq"`
+		LastSeq uint64 `json:"last_seq"`
+		Rekey   bool   `json:"rekey"`
+		ECDHPub string `json:"ecdh_pub"`
+		Mac     string `json:"mac"`
+	}
+	if err := encoding.Unmarshal(w.Body.Bytes(), &rs); err != nil {
+		t.Fatalf("resync parse: %v (body=%s)", err, w.Body.String())
+	}
+	if !rs.Rekey {
+		t.Fatalf("resync must request rekey: %s", w.Body.String())
+	}
+	if rs.ECDHPub == "" {
+		t.Fatalf("resync must carry ecdh_pub: %s", w.Body.String())
+	}
+	if !agent.verifyResponseMAC(rs.Seq, rs.ECDHPub, rs.Mac) {
+		t.Fatalf("resync MAC mismatch: %s", w.Body.String())
+	}
+
+	// Unknown agent with garbage ciphertext: still 400, no resync.
+	env, _ = json.Marshal(map[string]interface{}{
+		"uuid": "99999999-8888-4777-8777-666666666666",
+		"seq":  7,
+		"ts":   time.Now().Unix(),
+		"c":    garbage,
+	})
+	w = v2Post(t, s, string(env))
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("unknown agent: expected 400, got %d; body=%s", w.Code, w.Body.String())
+	}
+}
 func TestV2EncryptedBeaconDeliversTaskAfterRegistration(t *testing.T) {
 	s, database := v2TestServer(t)
 

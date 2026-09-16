@@ -264,7 +264,7 @@ const (
 	// A wedged worker must never hang shutdown forever (the orchestrator
 	// would SIGKILL mid-WAL and risk DB corruption); on timeout we log a
 	// goroutine dump and proceed to close the database.
-	WorkerDrainTimeout = 30 * time.Second
+	WorkerDrainTimeout      = 30 * time.Second
 	HTTPClientShortTimeout  = 30 * time.Second
 	HTTPClientLongTimeout   = 5 * time.Minute
 	HTTPMaxIdleConns        = 20
