@@ -1833,6 +1833,7 @@ export const zh: Record<string, string> = {
     "cred.toast.verify_success": "凭据已验证",
     "cred.verify": "验证",
     "cred.unconfirmed": "未确认",
+    "cred.undecryptable": "无法解密（密钥已轮换）",
     "cred.vault_title": "凭据保险库",
     "credentials.tags_ph": "高价值, 生产, dc",
 

@@ -282,6 +282,9 @@ type Server struct {
 	// JARM/JA3 continuous validation
 	tlsCertMonitor *TLSCertMonitor
 
+	// Hot-reloadable TLS server cert/key pair (mtime-checked per handshake)
+	tlsCerts *tlsCertLoader
+
 	// OPSEC adaptive threat manager
 	opsecAdaptive *opsec.AdaptiveManager
 
@@ -559,6 +562,10 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	// TLS certificate stability monitor
 	s.tlsCertMonitor = NewTLSCertMonitor(s.cfg.TLSFingerprint.JARMEnabled)
 
+	// Hot-reloadable server cert pair (eager load happens in configureTLS,
+	// preserving the old fail-fast timing when TLS is enabled).
+	s.tlsCerts = newTLSCertLoader(s.cfg.Server.CertFile, s.cfg.Server.KeyFile)
+
 	// OPSEC adaptive threat manager
 	s.opsecAdaptive = opsec.NewAdaptiveManager()
 	s.opsecAdaptive.StartDecayLoop()
@@ -710,6 +717,20 @@ func (s *Server) InitOptimizations(configPath string) {
 	if err != nil {
 		slog.Warn("Failed to initialize backup manager", "error", err)
 		return
+	}
+	s.backupManager.Sidecar = func() backupSidecar {
+		s.configMu.RLock()
+		defer s.configMu.RUnlock()
+		return backupSidecar{
+			Version:       "fbk1",
+			CreatedAt:     time.Now().UTC().Format(time.RFC3339),
+			KeyID:         s.backupKeyID(),
+			ServerVersion: ServerVersion,
+			Host:          s.cfg.Server.Host,
+			Port:          s.cfg.Server.Port,
+			TLSEnabled:    s.cfg.Server.TLSEnabled,
+			DBDriver:      s.cfg.Database.Driver,
+		}
 	}
 
 	if err := s.backupManager.Start("daily"); err != nil {

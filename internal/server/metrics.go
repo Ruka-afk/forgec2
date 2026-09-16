@@ -24,6 +24,7 @@ type MetricsCollector struct {
 	TaskExecuteDuration *prometheus.HistogramVec
 	AuditDroppedTotal   prometheus.Counter
 	EventDroppedTotal   *prometheus.CounterVec
+	VaultErrorsTotal    *prometheus.CounterVec
 }
 
 func NewMetricsCollector(s *Server) *MetricsCollector {
@@ -85,6 +86,10 @@ func NewMetricsCollector(s *Server) *MetricsCollector {
 			Name: "forgec2_event_dropped_total",
 			Help: "Total number of internal bus events dropped, by reason.",
 		}, []string{"reason"}),
+		VaultErrorsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "forgec2_vault_errors_total",
+			Help: "Total number of vault crypto failures, by operation. An encrypt failure means output was dropped rather than stored as plaintext.",
+		}, []string{"op"}),
 	}
 }
 
@@ -103,6 +108,7 @@ func (mc *MetricsCollector) Register(reg prometheus.Registerer) {
 		mc.TaskExecuteDuration,
 		mc.AuditDroppedTotal,
 		mc.EventDroppedTotal,
+		mc.VaultErrorsTotal,
 	}
 	for _, c := range collectors {
 		err := reg.Register(c)

@@ -7,8 +7,8 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -38,6 +38,24 @@ type BackupManager struct {
 	mu        sync.Mutex
 	ticker    *time.Ticker
 	stopCh    chan struct{}
+	// Sidecar, when set, supplies non-secret snapshot metadata written
+	// alongside each .fbk (key fingerprint, server identity). The restore
+	// path compares key_id up front for an early, explicit mismatch error.
+	Sidecar func() backupSidecar
+}
+
+// backupSidecar is the non-secret companion of a .fbk file. It deliberately
+// carries no key material or credentials — only identity needed to validate
+// a restore before attempting decryption.
+type backupSidecar struct {
+	Version       string `json:"version"`
+	CreatedAt     string `json:"created_at"`
+	KeyID         string `json:"key_id"`
+	ServerVersion string `json:"server_version"`
+	Host          string `json:"host"`
+	Port          int    `json:"port"`
+	TLSEnabled    bool   `json:"tls_enabled"`
+	DBDriver      string `json:"db_driver"`
 }
 
 func NewBackupManager(db *gorm.DB, dbPath, backupDir, key string) (*BackupManager, error) {
@@ -52,23 +70,26 @@ func NewBackupManager(db *gorm.DB, dbPath, backupDir, key string) (*BackupManage
 		}
 		backupKey = parsedKey
 	} else {
-		backupKey = make([]byte, backupKeySize)
-		if _, err := rand.Read(backupKey); err != nil {
-			return nil, err
-		}
-		slog.Warn("No backup encryption key provided, using random key - backups cannot be restored if key is lost")
+		// Refuse to run scheduled encrypted backups without a configured
+		// key: the old random-key fallback produced .fbk files that became
+		// permanently unrestorable after the next restart, discovered only
+		// at disaster time. Set crypto.backup_key explicitly.
+		return nil, fmt.Errorf("crypto.backup_key is not configured: scheduled encrypted backups refuse to start without it")
 	}
 
 	if err := os.MkdirAll(backupDir, 0700); err != nil {
 		return nil, err
 	}
 
+	// keyID fingerprints the actual key (not a date): restores and sidecars
+	// can name exactly which key generation they belong to.
+	sum := sha256.Sum256(backupKey)
 	return &BackupManager{
 		db:        db,
 		dbPath:    dbPath,
 		backupDir: backupDir,
 		key:       backupKey,
-		keyID:     fmt.Sprintf("k%s", time.Now().Format("20060102")),
+		keyID:     hex.EncodeToString(sum[:])[:8],
 	}, nil
 }
 
@@ -156,51 +177,33 @@ func (bm *BackupManager) PerformBackup() error {
 	start := time.Now()
 	slog.Info("Starting database backup")
 
-	backupPath := filepath.Join(os.TempDir(), fmt.Sprintf("forgec2_backup_%d.db", time.Now().UnixNano()))
-	defer os.Remove(backupPath)
+	// Snapshot inside the backup dir (same filesystem for the later rename,
+	// 0600 from creation). os.TempDir() may live on another volume and with
+	// looser ACLs.
+	snapshotPath := filepath.Join(bm.backupDir, fmt.Sprintf(".forgec2-snapshot-%d.tmp", time.Now().UnixNano()))
+	defer os.Remove(snapshotPath)
 
-	if err := bm.db.Exec("VACUUM INTO ?", backupPath).Error; err != nil {
-		slog.Warn("VACUUM INTO backup failed, falling back to file copy", "error", err)
-		if err := bm.db.Exec("BEGIN IMMEDIATE").Error; err != nil {
-			slog.Error("Failed to begin transaction", "error", err)
+	// VACUUM INTO is the only snapshot path: the old BEGIN IMMEDIATE +
+	// raw file-copy fallback held the write lock for the whole copy and
+	// risked WAL inconsistency. Retry briefly on busy, then fail loudly.
+	var vacErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt) * 500 * time.Millisecond)
 		}
-		dbFile, err := os.Open(bm.dbPath)
-		if err != nil {
-			if rerr := bm.db.Exec("ROLLBACK").Error; rerr != nil {
-				slog.Warn("Backup rollback failed", "error", rerr)
-			}
-			slog.Error("Failed to open database file", "error", err)
-			return err
+		if vacErr = bm.db.Exec("VACUUM INTO ?", snapshotPath).Error; vacErr == nil {
+			break
 		}
-		tmpFile, err := os.OpenFile(backupPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
-		if err != nil {
-			dbFile.Close()
-			if rerr := bm.db.Exec("ROLLBACK").Error; rerr != nil {
-				slog.Warn("Backup rollback failed", "error", rerr)
-			}
-			slog.Error("Failed to create temp backup file", "error", err)
-			return err
-		}
-		if _, err := io.Copy(tmpFile, dbFile); err != nil {
-			tmpFile.Close()
-			dbFile.Close()
-			if rerr := bm.db.Exec("ROLLBACK").Error; rerr != nil {
-				slog.Warn("Backup rollback failed", "error", rerr)
-			}
-			slog.Error("Failed to copy database file", "error", err)
-			return err
-		}
-		tmpFile.Close()
-		dbFile.Close()
-		if err := bm.db.Exec("ROLLBACK").Error; err != nil {
-			slog.Error("Failed to rollback transaction", "error", err)
-		}
+	}
+	if vacErr != nil {
+		slog.Error("VACUUM INTO backup failed after retries", "error", vacErr)
+		return vacErr
 	}
 
 	timestamp := time.Now().Format(backupTimestamp)
 	backupFile := filepath.Join(bm.backupDir, fmt.Sprintf("forgec2_backup_%s.fbk", timestamp))
 
-	data, err := os.ReadFile(backupPath)
+	data, err := os.ReadFile(snapshotPath)
 	if err != nil {
 		slog.Error("Failed to read backup file", "error", err)
 		return err
@@ -212,12 +215,27 @@ func (bm *BackupManager) PerformBackup() error {
 		return err
 	}
 
-	if err := os.WriteFile(backupFile, encryptedData, 0600); err != nil {
+	// Write atomically via temp + rename so a crash never leaves a half .fbk.
+	tmpOut := backupFile + ".tmp"
+	if err := os.WriteFile(tmpOut, encryptedData, 0600); err != nil {
 		slog.Error("Failed to write backup file", "error", err)
+		return err
+	}
+	if err := os.Rename(tmpOut, backupFile); err != nil {
+		os.Remove(tmpOut)
+		slog.Error("Failed to finalize backup file", "error", err)
 		return err
 	}
 
 	slog.Info("Backup completed", "file", backupFile, "size", len(encryptedData), "duration", time.Since(start))
+
+	if bm.Sidecar != nil {
+		if meta, err := json.MarshalIndent(bm.Sidecar(), "", "  "); err != nil {
+			slog.Warn("Failed to encode backup sidecar", "err", err)
+		} else if err := os.WriteFile(backupFile+".meta.json", meta, 0600); err != nil {
+			slog.Warn("Failed to write backup sidecar", "err", err)
+		}
+	}
 
 	bm.cleanupOldBackups()
 
@@ -257,9 +275,13 @@ func (bm *BackupManager) cleanupOldBackups() {
 	})
 
 	for i := 0; i < len(backupFiles)-keepCount; i++ {
-		if err := os.Remove(filepath.Join(bm.backupDir, backupFiles[i].Name())); err != nil {
-			slog.Warn("Failed to remove old backup", "file", backupFiles[i].Name(), "error", err)
+		name := backupFiles[i].Name()
+		if err := os.Remove(filepath.Join(bm.backupDir, name)); err != nil {
+			slog.Warn("Failed to remove old backup", "file", name, "error", err)
 		}
+		// Prune its sidecar with it so stale metadata cannot mislead a
+		// future restore's key_id check.
+		os.Remove(filepath.Join(bm.backupDir, name+".meta.json"))
 	}
 
 	slog.Info("Cleaned up old backups", "deleted", len(backupFiles)-keepCount, "remaining", keepCount)
@@ -398,13 +420,23 @@ func (s *Server) backupKeyHex() string {
 }
 
 // backupKey decodes backupKeyHex into the 32 raw key bytes used for .fbk
-// encryption/decryption.
-func (s *Server) backupKey() []byte {
-	hexKey := s.backupKeyHex()
-	b, err := hex.DecodeString(hexKey)
+// encryption/decryption. Strict: an invalid value is an error, never a
+// silent SHA-256 derivation — the old fallback masked misconfiguration and
+// produced unrestorable backups discovered only at disaster time.
+func (s *Server) backupKey() ([]byte, error) {
+	b, err := hex.DecodeString(s.backupKeyHex())
 	if err != nil || len(b) != backupKeySize {
-		h := sha256.Sum256([]byte(hexKey))
-		return h[:32]
+		return nil, fmt.Errorf("crypto.backup_key must be %d bytes (64 hex chars)", backupKeySize)
 	}
-	return b
+	return b, nil
+}
+
+// backupKeyID fingerprints the configured backup key for sidecar metadata.
+func (s *Server) backupKeyID() string {
+	b, err := hex.DecodeString(s.backupKeyHex())
+	if err != nil || len(b) != backupKeySize {
+		return ""
+	}
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])[:8]
 }

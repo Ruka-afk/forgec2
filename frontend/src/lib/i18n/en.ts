@@ -1833,6 +1833,7 @@ export const en: Record<string, string> = {
     "cred.toast.verify_success": "Credential verified",
     "cred.verify": "Verify",
     "cred.unconfirmed": "Unconfirmed",
+    "cred.undecryptable": "Undecryptable (key rotated)",
     "cred.vault_title": "Credential Vault",
     "credentials.tags_ph": "high-value, production, dc",
 

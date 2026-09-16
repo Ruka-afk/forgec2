@@ -48,6 +48,11 @@ type Config struct {
 		OfflineThreshold     int           `yaml:"offline_threshold"`      // seconds
 		SessionMaxAgeHours   int           `yaml:"session_max_age_hours"`  // JWT expiry
 		CleanupRetentionDays int           `yaml:"cleanup_retention_days"` // auto-purge cutoff
+		// AuditRetentionDays bounds audit_logs/opsec_history/circuit events
+		// separately: forensic timelines outlive operational data. Floor 90,
+		// default 365. The one-click maintenance purge never touches these
+		// tables regardless of this setting.
+		AuditRetentionDays int `yaml:"audit_retention_days"`
 		UpdateCheckRepo      string        `yaml:"update_check_repo"`      // GitHub repo for update checks (e.g. "owner/repo")
 		UpdateCheckEnabled   bool          `yaml:"update_check_enabled"`   // OPT-IN: phone home to GitHub releases (default OFF for egress hygiene)
 		VantagePoints        []string      `yaml:"vantage_points"`         // external proxy URLs for circuit breaker probing
@@ -278,6 +283,7 @@ func DefaultConfig() *Config {
 	cfg.Server.OfflineThreshold = 60
 	cfg.Server.SessionMaxAgeHours = 24
 	cfg.Server.CleanupRetentionDays = 30
+	cfg.Server.AuditRetentionDays = 365
 	cfg.Server.UpdateCheckRepo = "forgec2/forgec2"
 	cfg.Server.UpdateCheckEnabled = false // update checks phone home to api.github.com — opt-in only
 	cfg.Server.EnablePprof = false
@@ -654,6 +660,12 @@ func (c *Config) Validate() error {
 	}
 	if c.Server.CleanupRetentionDays > 3650 {
 		errs = append(errs, errors.New("server.cleanup_retention_days must be <= 3650 (10 years)"))
+	}
+	if c.Server.AuditRetentionDays < 0 {
+		errs = append(errs, errors.New("server.audit_retention_days must be >= 0"))
+	}
+	if c.Server.AuditRetentionDays > 3650 {
+		errs = append(errs, errors.New("server.audit_retention_days must be <= 3650 (10 years)"))
 	}
 	if c.Implant.DefaultInterval < 1 {
 		errs = append(errs, errors.New("implant.default_interval must be >= 1 second"))

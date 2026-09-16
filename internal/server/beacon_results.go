@@ -15,6 +15,28 @@ import (
 
 // ── Task result ingest ────────────────────────────────────────────────────
 
+// vaultNoteError counts a vault crypto failure for observability. Callers use
+// it alongside fail-closed handling (drop output, never store plaintext).
+func (s *Server) vaultNoteError(op string, err error, taskID uint, agentID string) {
+	if s.metrics != nil && s.metrics.VaultErrorsTotal != nil {
+		s.metrics.VaultErrorsTotal.WithLabelValues(op).Inc()
+	}
+	slog.Error("Vault crypto failure", "op", op, "task_id", taskID, "agent_id", agentID, "err", err)
+}
+
+// encryptTaskFieldsOrBlank encrypts a task copy's Result/Error for storage.
+// Fail-closed: on vault failure the output is dropped and replaced with a
+// vault-error marker so secrets never land in the DB as plaintext.
+func (s *Server) encryptTaskFieldsOrBlank(task *db.Task) error {
+	if err := task.EncryptTaskFields(); err != nil {
+		task.Result = ""
+		task.Error = "vault encryption unavailable"
+		s.vaultNoteError("encrypt-result", err, task.ID, task.AgentID)
+		return err
+	}
+	return nil
+}
+
 // taskResultTailCap bounds the streaming tail persisted for a running task
 // so a chatty long-running command cannot grow the DB without limit. The
 // final result overwrites this wholesale on completion.
@@ -356,7 +378,11 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			task.LastResultID = r.ResultID
 		}
 		dbTask := *task
-		dbTask.EncryptTaskFields()
+		if err := s.encryptTaskFieldsOrBlank(&dbTask); err != nil {
+			// The agent executed fine but the vault is broken: fail loudly
+			// (alerts fire) rather than storing the output as plaintext.
+			task.Status = "failed"
+		}
 		if err := s.db.Model(task).Updates(map[string]interface{}{
 			"status":         task.Status,
 			"result":         dbTask.Result,

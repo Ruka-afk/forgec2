@@ -275,9 +275,14 @@ const (
 	TaskWorkerPoolSize      = 32
 
 	// ─── Agent Offline / Stale ───
-	DefaultOfflineThresholdSec  = 60
-	StaleThresholdMultiplier    = 3
+	DefaultOfflineThresholdSec = 60
+	StaleThresholdMultiplier   = 3
 	DefaultCleanupRetentionDays = 30
+	// Retention tiers: forensic tables floor at 90d / default 365d; terminal
+	// task auto-delete floors at 90d regardless of ops retention.
+	DefaultAuditRetentionDays = 365
+	MinAuditRetentionDays     = 90
+	MinTaskRetentionDays      = 90
 
 	// ─── Backup ───
 	BackupRetainCount = 7

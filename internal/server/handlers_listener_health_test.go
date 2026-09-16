@@ -1,7 +1,11 @@
 package server
 
-import "testing"
-
+import (
+	"context"
+	"net"
+	"testing"
+	"time"
+)
 func TestListenerHealthTrackerCountsConsecutiveFailures(t *testing.T) {
 	tracker := &listenerHealthTracker{state: map[uint]*listenerHealth{}}
 
@@ -54,5 +58,70 @@ func TestListenerHealthTrackerPrunesAndSortsSnapshot(t *testing.T) {
 	}
 	if snapshot[0].ListenerID != 2 || snapshot[1].ListenerID != 9 {
 		t.Fatalf("snapshot order = [%d, %d], want [2, 9]", snapshot[0].ListenerID, snapshot[1].ListenerID)
+	}
+}
+
+func TestProbeSSHReadsBanner(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			_, _ = conn.Write([]byte("SSH-2.0-ForgeC2-test\r\n"))
+			conn.Close()
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if ok, err := probeSSH(ctx, ln.Addr().String()); !ok || err != nil {
+		t.Fatalf("probeSSH = %v, %v; want true, nil", ok, err)
+	}
+	if ok, _ := probeSSH(ctx, "127.0.0.1:1"); ok {
+		t.Fatal("probeSSH against closed port must fail")
+	}
+}
+
+func TestProbeH2CPriorKnowledge(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer c.Close()
+				// Read preface, answer with an empty SETTINGS frame.
+				buf := make([]byte, 24+9)
+				readFullForTest(c, buf)
+				_, _ = c.Write([]byte{0, 0, 0, 0x4, 0, 0, 0, 0, 0})
+			}(conn)
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if ok, err := probeH2C(ctx, ln.Addr().String()); !ok || err != nil {
+		t.Fatalf("probeH2C = %v, %v; want true, nil", ok, err)
+	}
+}
+
+func readFullForTest(conn net.Conn, buf []byte) {
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	for off := 0; off < len(buf); {
+		n, err := conn.Read(buf[off:])
+		if err != nil || n == 0 {
+			return
+		}
+		off += n
 	}
 }

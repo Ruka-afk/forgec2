@@ -12,6 +12,36 @@ import (
 
 // ── Retention cleanup + agent status thresholds ───────────────────────────
 
+// auditRetentionDays resolves the forensic retention: default 365, floor 90
+// (shorter windows would silently destroy the tamper chain investigators
+// rely on). Zero value (bare test configs) means default.
+func (s *Server) auditRetentionDays() int {
+	v := DefaultAuditRetentionDays
+	if s.cfg != nil {
+		v = s.cfg.Server.AuditRetentionDays
+		if v <= 0 {
+			v = DefaultAuditRetentionDays
+		}
+	}
+	if v < MinAuditRetentionDays {
+		v = MinAuditRetentionDays
+	}
+	return v
+}
+
+// taskRetentionDays floors terminal-task auto-deletion at 90 days so a
+// default 30-day ops retention cannot eat forensic task history.
+func (s *Server) taskRetentionDays() int {
+	v := s.cfg.Server.CleanupRetentionDays
+	if v < 1 {
+		v = DefaultCleanupRetentionDays
+	}
+	if v < MinTaskRetentionDays {
+		v = MinTaskRetentionDays
+	}
+	return v
+}
+
 // cleanupOldData removes old completed/failed tasks and old files (screenshots + uploads) to prevent bloat
 func (s *Server) cleanupOldData() {
 	retention := s.cfg.Server.CleanupRetentionDays
@@ -20,9 +50,19 @@ func (s *Server) cleanupOldData() {
 	}
 	cutoff := time.Now().AddDate(0, 0, -retention)
 
-	// delete old tasks
-	if err := s.db.WithContext(s.ctx).Where("created_at < ? AND status IN ?", cutoff, []string{"completed", "failed"}).Delete(&db.Task{}).Error; err != nil {
+	// delete old tasks (floored at 90 days regardless of ops retention)
+	taskCutoff := time.Now().AddDate(0, 0, -s.taskRetentionDays())
+	if err := s.db.WithContext(s.ctx).Where("created_at < ? AND status IN ?", taskCutoff, []string{"completed", "failed"}).Delete(&db.Task{}).Error; err != nil {
 		slog.Error("Cleanup tasks failed", "err", err)
+	}
+
+	// Forensic timelines outlive operational data: audit/opsec/circuit events
+	// use the separate (longer, floored) audit retention.
+	auditCutoff := time.Now().AddDate(0, 0, -s.auditRetentionDays())
+	for _, table := range []string{"audit_logs", "opsec_history", "circuit_breaker_events"} {
+		if err := s.db.WithContext(s.ctx).Table(table).Where("created_at < ?", auditCutoff).Delete(nil).Error; err != nil {
+			slog.Error("Cleanup forensic table failed", "table", table, "err", err)
+		}
 	}
 
 	// delete old system metrics (monitoring persists one row every 30s; without
@@ -248,10 +288,11 @@ func (s *Server) cleanupGhostAgents() {
 			if err := tx.Where("agent_id IN ?", ghostIDs).Delete(&db.Task{}).Error; err != nil {
 				return err
 			}
-			// Hard delete (Unscoped) so auto-cleanup never leaves an invisible
-			// soft-deleted tombstone that other views (dashboard stats, etc.)
-			// would still count. Consistent with manual beacon hard-delete.
-			return tx.Unscoped().Where("id IN ?", ghostIDs).Delete(&db.Implant{}).Error
+			// Soft delete (tombstone): the row keeps id/hostname/last_seen/
+			// listener_id for later forensics and lost-agent recovery.
+			// Hard deletes previously destroyed the only record of weak
+			// assets the moment they went quiet.
+			return tx.Where("id IN ?", ghostIDs).Delete(&db.Implant{}).Error
 		}); err != nil {
 			slog.Error("Failed to remove ghost agents", "err", err)
 		} else {
@@ -278,8 +319,8 @@ func (s *Server) cleanupGhostAgents() {
 			if err := tx.Where("agent_id IN ?", idStrs).Delete(&db.Task{}).Error; err != nil {
 				return err
 			}
-			// Hard delete, consistent with the ghost pass above and manual deletes.
-			return tx.Unscoped().Where("id IN ?", idStrs).Delete(&db.Implant{}).Error
+			// Soft delete (tombstone), same rationale as ghosts above.
+			return tx.Where("id IN ?", idStrs).Delete(&db.Implant{}).Error
 		}); err != nil {
 			slog.Error("Failed to remove stale agents", "err", err)
 		}

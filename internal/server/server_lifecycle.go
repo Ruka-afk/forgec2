@@ -170,6 +170,14 @@ func (s *Server) Run() error {
 	// async audit writer: request paths enqueue, single worker persists
 	s.startAuditWorker()
 
+	// vault re-encrypt: normalize previous-key loot rows after rotation
+	s.startVaultReencryptLoop()
+
+	// TLS expiry: startup check plus daily monitor (regenerate/upload take
+	// effect for new handshakes without restart via the cert loader).
+	s.checkTLSCertExpiry("startup")
+	s.startTLSCertMonitor()
+
 	// start periodic cleanup
 	s.wg.Add(1)
 	go func() {
@@ -475,7 +483,9 @@ func (s *Server) Run() error {
 		if err := s.configureTLS(s.httpServer); err != nil {
 			return err
 		}
-		return s.httpServer.ListenAndServeTLS(certPath, keyPath)
+		// Empty cert/key paths: the certificate comes from GetCertificate
+		// (hot-reloadable loader), not from files read once at startup.
+		return s.httpServer.ListenAndServeTLS("", "")
 	}
 	return s.httpServer.ListenAndServe()
 }

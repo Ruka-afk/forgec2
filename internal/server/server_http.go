@@ -159,8 +159,18 @@ func (s *Server) newHTTPServer(addr string) *http.Server {
 
 // configureTLS sets up the TLS configuration on the given http.Server,
 // including JARM/JA3 fingerprint randomization and optional mTLS.
+// The server certificate is served through the hot-reloadable loader:
+// regenerate/upload take effect for new handshakes without a restart.
 func (s *Server) configureTLS(srv *http.Server) error {
 	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+
+	if s.tlsCerts == nil {
+		s.tlsCerts = newTLSCertLoader(s.cfg.Server.CertFile, s.cfg.Server.KeyFile)
+	}
+	if err := s.tlsCerts.loadNow(); err != nil {
+		return fmt.Errorf("loading TLS server certificate: %w", err)
+	}
+	tlsConfig.GetCertificate = s.tlsCerts.GetCertificate
 
 	if s.tlsFingerprint != nil {
 		tlsConfig = s.tlsFingerprint.WrapTLSConfig(tlsConfig)

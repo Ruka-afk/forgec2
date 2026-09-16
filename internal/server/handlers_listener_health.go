@@ -4,11 +4,13 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -193,7 +195,7 @@ func (s *Server) probeListener(ctx context.Context, ln *db.Listener) *listenerHe
 	}
 
 	switch ln.Scheme {
-	case "http":
+	case "http", "tcp":
 		h.OK = probeTCP(ctx, h.Addr)
 		if !h.OK {
 			h.Error = "tcp connect failed"
@@ -210,12 +212,70 @@ func (s *Server) probeListener(ctx context.Context, ln *db.Listener) *listenerHe
 		if !ok {
 			h.Error = err.Error()
 		}
+	case "ssh":
+		ok, err := probeSSH(ctx, h.Addr)
+		h.OK = ok
+		if !ok {
+			h.Error = err.Error()
+		}
+	case "h2c":
+		ok, err := probeH2C(ctx, h.Addr)
+		h.OK = ok
+		if !ok {
+			h.Error = err.Error()
+		}
+	case "udp":
+		// UDP has no handshake: liveness = our own bound handle. A missing
+		// handle with an enabled row means the socket died unnoticed.
+		h.OK, h.Error = s.udpListenerLive(ln), ""
+		if !h.OK {
+			h.Error = "no live local UDP handle for enabled row"
+		}
+	case "quic":
+		// Same: QUIC flips running=false permanently on repeated accept
+		// errors, which this surfaces instead of a forever-green row.
+		h.OK, h.Error = s.quicListenerLive(), ""
+		if !h.OK {
+			h.Error = "QUIC listener not running"
+		}
 	default:
-		// tcp/tcp-smb? icmp/quic/grpc/ssh/extc2 — no cheap synthetic probe yet.
+		// icmp/grpc/smb and anything else: no cheap synthetic probe. Report
+		// the gap explicitly instead of a silent green.
 		h.Skipped = true
 		h.OK = true // do not count unknown transports as failures
+		h.Error = "no synthetic probe for scheme " + ln.Scheme + " (process state only)"
 	}
 	return h
+}
+
+// udpListenerLive reports whether this server holds a live UDP socket for
+// the row: an extra-listener handle, or the main server UDP socket when the
+// row matches the configured main address.
+func (s *Server) udpListenerLive(ln *db.Listener) bool {
+	key := "udp://" + net.JoinHostPort(ln.Host, strconv.Itoa(ln.Port))
+	s.extraListenersMu.Lock()
+	handle := s.extraListeners[key]
+	s.extraListenersMu.Unlock()
+	if handle != nil {
+		return true
+	}
+	return s.udpConn != nil
+}
+
+// quicListenerLive mirrors udpListenerLive for QUIC (main listener only;
+// extra QUIC listeners register in extraListeners when started via UI).
+func (s *Server) quicListenerLive() bool {
+	if s.quicListener != nil && s.quicListener.IsRunning() {
+		return true
+	}
+	s.extraListenersMu.Lock()
+	defer s.extraListenersMu.Unlock()
+	for key, handle := range s.extraListeners {
+		if len(key) >= 7 && key[:7] == "quic://" && handle != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func probeTCP(ctx context.Context, addr string) bool {
@@ -237,8 +297,21 @@ func probeTLS(ctx context.Context, addr string) (bool, error) {
 	defer conn.Close()
 	// InsecureVerify here is intentional: we only need the handshake to
 	// complete to prove a TLS listener is alive; self-signed C2 certs are
-	// expected to fail chain validation.
-	tlsConn := tls.Client(conn, &tls.Config{InsecureSkipVerify: true, ServerName: "probe"})
+	// expected to fail chain validation. VerifyConnection still rejects an
+	// EXPIRED leaf so a dead-cert listener cannot report healthy.
+	tlsConn := tls.Client(conn, &tls.Config{
+		InsecureSkipVerify: true,
+		ServerName:         "probe",
+		VerifyConnection: func(cs tls.ConnectionState) error {
+			if len(cs.PeerCertificates) == 0 {
+				return fmt.Errorf("peer presented no certificate")
+			}
+			if time.Now().After(cs.PeerCertificates[0].NotAfter) {
+				return fmt.Errorf("peer certificate expired")
+			}
+			return nil
+		},
+	})
 	if err := tlsConn.SetDeadline(time.Now().Add(listenerProbeTimeout)); err != nil {
 		return false, err
 	}
@@ -246,6 +319,55 @@ func probeTLS(ctx context.Context, addr string) (bool, error) {
 		return false, err
 	}
 	_ = tlsConn.Close()
+	return true, nil
+}
+
+// probeSSH dials and reads the server version banner ("SSH-2.0-...").
+// Any banner proves the SSH listener is accepting; the handshake itself is
+// never attempted.
+func probeSSH(ctx context.Context, addr string) (bool, error) {
+	dialer := net.Dialer{Timeout: listenerProbeTimeout}
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return false, err
+	}
+	defer conn.Close()
+	if err := conn.SetDeadline(time.Now().Add(listenerProbeTimeout)); err != nil {
+		return false, err
+	}
+	buf := make([]byte, 64)
+	n, err := conn.Read(buf)
+	if err != nil {
+		return false, err
+	}
+	if n < 4 || string(buf[:4]) != "SSH-" {
+		return false, fmt.Errorf("no SSH banner (got %q)", strings.TrimSpace(string(buf[:n])))
+	}
+	return true, nil
+}
+
+// probeH2C speaks minimal prior-knowledge HTTP/2: connection preface plus an
+// empty SETTINGS frame, then expects the server's SETTINGS frame back. Any
+// frame bytes prove the cleartext HTTP/2 listener is serving.
+func probeH2C(ctx context.Context, addr string) (bool, error) {
+	dialer := net.Dialer{Timeout: listenerProbeTimeout}
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return false, err
+	}
+	defer conn.Close()
+	if err := conn.SetDeadline(time.Now().Add(listenerProbeTimeout)); err != nil {
+		return false, err
+	}
+	preface := []byte("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n")
+	emptySettings := []byte{0, 0, 0, 0x4, 0, 0, 0, 0, 0}
+	if _, err := conn.Write(append(preface, emptySettings...)); err != nil {
+		return false, err
+	}
+	header := make([]byte, 9)
+	if _, err := io.ReadFull(conn, header); err != nil {
+		return false, err
+	}
 	return true, nil
 }
 

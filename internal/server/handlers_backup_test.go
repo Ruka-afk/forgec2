@@ -396,3 +396,89 @@ func TestHandleRestoreFromFile_RestoresEncryptedFbk(t *testing.T) {
 	verifySQL, _ := verify.DB()
 	verifySQL.Close()
 }
+
+func TestWriteRestoredDB_SavesPreRestoreCopy(t *testing.T) {
+	tmp := t.TempDir()
+	livePath := filepath.Join(tmp, "live.db")
+	if err := os.WriteFile(livePath, []byte("live-marker-bytes"), 0600); err != nil {
+		t.Fatalf("write live: %v", err)
+	}
+
+	src := testutil.SetupTestDB(t)
+	if err := src.Exec("CREATE TABLE probe_pre (id INTEGER PRIMARY KEY)").Error; err != nil {
+		t.Fatalf("create probe table: %v", err)
+	}
+	candidate := filepath.Join(tmp, "candidate.db")
+	if err := src.Exec("VACUUM INTO ?", candidate).Error; err != nil {
+		t.Fatalf("vacuum candidate: %v", err)
+	}
+	data, err := os.ReadFile(candidate)
+	if err != nil {
+		t.Fatalf("read candidate: %v", err)
+	}
+
+	if err := writeRestoredDB(bytes.NewReader(data), livePath); err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+	matches, err := filepath.Glob(livePath + ".pre-restore-*")
+	if err != nil || len(matches) != 1 {
+		t.Fatalf("expected 1 pre-restore copy, got %v (%v)", matches, err)
+	}
+	kept, err := os.ReadFile(matches[0])
+	if err != nil {
+		t.Fatalf("read pre-restore: %v", err)
+	}
+	if string(kept) != "live-marker-bytes" {
+		t.Fatalf("pre-restore copy does not hold the old live bytes: %q", kept)
+	}
+}
+
+func TestHandleRestoreFromFile_RejectsSidecarKeyMismatch(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	keyBytes := make([]byte, 32)
+	if _, err := rand.Read(keyBytes); err != nil {
+		t.Fatalf("rand: %v", err)
+	}
+	keyHex := hex.EncodeToString(keyBytes)
+
+	tmp := t.TempDir()
+	backupPath := filepath.Join(tmp, "backups", "forgec2_backup_20260101.fbk")
+	if err := os.MkdirAll(filepath.Dir(backupPath), 0700); err != nil {
+		t.Fatalf("create backup dir: %v", err)
+	}
+	if err := os.WriteFile(backupPath, []byte("opaque"), 0600); err != nil {
+		t.Fatalf("write fbk: %v", err)
+	}
+	// Sidecar sealed under some OTHER key generation.
+	meta := `{"version":"fbk1","created_at":"2026-01-01T00:00:00Z","key_id":"deadbeef","server_version":"dev"}`
+	if err := os.WriteFile(backupPath+".meta.json", []byte(meta), 0600); err != nil {
+		t.Fatalf("write sidecar: %v", err)
+	}
+
+	cfg := &config.Config{}
+	cfg.Database.Path = filepath.Join(tmp, "live.db")
+	cfg.Server.DataDir = tmp
+	cfg.Crypto.BackupKey = keyHex
+
+	s := &Server{db: testutil.SetupTestDB(t), cfg: cfg}
+
+	form := url.Values{}
+	form.Set("type", "file")
+	form.Set("name", "forgec2_backup_20260101.fbk")
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodPost, "/api/admin/backup/restore", strings.NewReader(form.Encode()))
+	c.Request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	c.Set("user_role", "admin")
+
+	s.handleRestoreFromFile(c)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 key mismatch, got %d; body=%s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "different key") {
+		t.Fatalf("expected explicit key-mismatch message, got %s", w.Body.String())
+	}
+}

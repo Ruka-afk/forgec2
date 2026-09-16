@@ -51,8 +51,16 @@ func TestInitLootEncryptionReentrant(t *testing.T) {
 
 	// Re-init with a different explicit key; a re-entrant init must take effect.
 	InitLootEncryption(strings.Repeat("ff", 32))
-	if dec, err := DecryptLoot(encA); err == nil {
-		t.Fatalf("ciphertext from the old key should fail to decrypt after re-init, got %q", dec)
+	// Rotation retains the previous key: old rows stay readable (prev-key
+	// fallback) instead of going dark.
+	if dec, err := DecryptLoot(encA); err != nil || dec != "secret-value" {
+		t.Fatalf("rotated-away ciphertext must stay readable via prev key, dec=%q err=%v", dec, err)
+	}
+	if _, state := DecryptLootState(encA); state != LootDecryptablePrevKey {
+		t.Fatalf("old-key ciphertext state = %v, want LootDecryptablePrevKey", state)
+	}
+	if LootKeyID() == PrevLootKeyID() {
+		t.Fatal("active and previous key fingerprints must differ after rotation")
 	}
 	InitLootEncryption(testHexKey)
 	if dec, err := DecryptLoot(encA); err != nil || dec != "secret-value" {
@@ -70,6 +78,55 @@ func TestInitLootEncryptionReentrant(t *testing.T) {
 	if decB != "secret-value" {
 		t.Fatalf("round-trip mismatch: got %q", decB)
 	}
+}
+
+func TestDecryptLootStateTristate(t *testing.T) {
+	InitLootEncryption(testHexKey)
+	if _, state := DecryptLootState(""); state != LootEmpty {
+		t.Fatalf("empty state = %v, want LootEmpty", state)
+	}
+	if plain, state := DecryptLootState("legacy-plaintext"); state != LootPlaintextLegacy || plain != "legacy-plaintext" {
+		t.Fatalf("legacy state = %v %q", state, plain)
+	}
+	enc, err := EncryptLoot("v")
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	if _, state := DecryptLootState(enc); state != LootDecryptable {
+		t.Fatalf("fresh ciphertext state = %v, want LootDecryptable", state)
+	}
+	if _, state := DecryptLootState("FC2ENC:!!!invalid-base64!!!"); state != LootUndecryptable {
+		t.Fatalf("garbage state = %v, want LootUndecryptable", state)
+	}
+}
+
+func TestReencryptLootNormalizesPrevKey(t *testing.T) {
+	InitLootEncryption(testHexKey)
+	enc, err := EncryptLoot("rotate-me")
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	InitLootEncryption(strings.Repeat("ab", 32))
+	normalized, changed, err := ReencryptLoot(enc)
+	if err != nil {
+		t.Fatalf("reencrypt: %v", err)
+	}
+	if !changed {
+		t.Fatal("previous-key value must be re-encrypted")
+	}
+	if _, state := DecryptLootState(normalized); state != LootDecryptable {
+		t.Fatalf("normalized state = %v, want LootDecryptable", state)
+	}
+	// Active-key values pass through untouched.
+	again, changed, err := ReencryptLoot(normalized)
+	if err != nil || changed || again != normalized {
+		t.Fatalf("active-key value must pass through: changed=%v err=%v", changed, err)
+	}
+	// Garbage errors out instead of being laundered.
+	if _, _, err := ReencryptLoot("FC2ENC:!!!invalid-base64!!!"); err == nil {
+		t.Fatal("garbage must error, not normalize")
+	}
+	InitLootEncryption(testHexKey)
 }
 
 func TestInitLootEncryptionExplicitKey(t *testing.T) {

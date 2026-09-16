@@ -116,7 +116,9 @@ func (s *Server) processRelayedResults(relayed []relayedData, parentUUID string,
 			// broadcasts. Encrypt only a copy destined for storage; mutating task
 			// here leaked FC2ENC ciphertext into interactive shell output.
 			dbTask := *task
-			dbTask.EncryptTaskFields()
+			if err := s.encryptTaskFieldsOrBlank(&dbTask); err != nil {
+				task.Status = "failed"
+			}
 			// Atomic first-final-wins: only pending/running/sent can transition to final
 			res := s.db.Model(&db.Task{}).Where("id = ? AND status IN ?", task.ID, []string{"pending", "running", "sent"}).Updates(map[string]interface{}{
 				"status": task.Status, "result": dbTask.Result, "error": dbTask.Error, "last_result_id": task.LastResultID,

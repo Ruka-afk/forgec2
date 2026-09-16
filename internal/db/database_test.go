@@ -3,6 +3,7 @@ package db
 import (
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -94,6 +95,41 @@ func TestCredentialTenantInheritanceAndBackfill(t *testing.T) {
 	}
 	if legacy.TenantID != team.ID {
 		t.Fatalf("legacy credential tenant = %d, want source implant tenant %d", legacy.TenantID, team.ID)
+	}
+}
+
+func TestVerifySQLiteFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "candidate.db")
+	database, err := gorm.Open(sqlite.Open(path), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if err := database.AutoMigrate(&Task{}); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if sqlDB, err := database.DB(); err == nil {
+		_ = sqlDB.Close()
+	}
+	if err := VerifySQLiteFile(path); err != nil {
+		t.Fatalf("valid file rejected: %v", err)
+	}
+	// Header-valid but corrupt body must fail (magic check alone is not
+	// sufficient — this is the truncated-restore case).
+	badPath := filepath.Join(t.TempDir(), "corrupt.db")
+	header := append([]byte("SQLite format 3\x00"), make([]byte, 4096)...)
+	if err := os.WriteFile(badPath, header, 0600); err != nil {
+		t.Fatalf("write corrupt: %v", err)
+	}
+	if err := VerifySQLiteFile(badPath); err == nil {
+		t.Fatal("corrupt file accepted")
+	}
+	// Non-database file must fail.
+	txtPath := filepath.Join(t.TempDir(), "notes.txt")
+	if err := os.WriteFile(txtPath, []byte("hello"), 0600); err != nil {
+		t.Fatalf("write txt: %v", err)
+	}
+	if err := VerifySQLiteFile(txtPath); err == nil {
+		t.Fatal("non-database file accepted")
 	}
 }
 

@@ -77,6 +77,39 @@ func isMigrationIgnorable(err error) bool {
 	return false
 }
 
+// VerifySQLiteFile opens a SQLite file read-mostly and runs integrity
+// checks without touching the live database: PRAGMA integrity_check must
+// report ok and the schema must contain at least one table. Used to vet a
+// restore candidate BEFORE it replaces the live DB.
+func VerifySQLiteFile(path string) error {
+	gdb, err := gorm.Open(glebarez.Open(path+"?mode=ro"), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		return fmt.Errorf("open candidate: %w", err)
+	}
+	sqlDB, err := gdb.DB()
+	if err != nil {
+		return fmt.Errorf("pool candidate: %w", err)
+	}
+	defer sqlDB.Close()
+	var result string
+	if err := gdb.Raw("PRAGMA integrity_check").Scan(&result).Error; err != nil {
+		return fmt.Errorf("integrity_check failed: %w", err)
+	}
+	if result != "ok" {
+		return fmt.Errorf("integrity_check reports corruption: %.120s", result)
+	}
+	var tables int64
+	if err := gdb.Table("sqlite_master").Where("type = 'table'").Count(&tables).Error; err != nil {
+		return fmt.Errorf("schema census failed: %w", err)
+	}
+	if tables == 0 {
+		return fmt.Errorf("candidate has no tables")
+	}
+	return nil
+}
+
 // withMigrationTx wraps a data-migration body in one transaction. gormigrate
 // runs with UseTransaction:false, so a mid-loop failure previously persisted
 // half the rows without recording the migration ID; the next startup replayed

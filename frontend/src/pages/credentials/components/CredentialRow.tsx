@@ -37,8 +37,14 @@ interface CredentialRowProps {
   t: (key: string) => string;
 }
 
-function CredentialRowInner({
-  entry,
+// A value that survived decryption as FC2ENC: ciphertext (wrong/rotated key
+// without fallback): show a red marker instead of the useless blob, and never
+// offer to copy it as if it were the secret.
+function isUndecryptable(value: string | undefined): boolean {
+  return !!value && value.startsWith("FC2ENC:");
+}
+
+function CredentialRowInner({  entry,
   isSelected,
   showPassword,
   showHash,
@@ -65,6 +71,9 @@ function CredentialRowInner({
       <TableCell className="py-3 px-4 font-medium text-foreground">{entry.username}</TableCell>
       <TableCell className="py-3 px-4 font-mono text-xs">
         {entry.password ? (
+          isUndecryptable(entry.password) ? (
+            <Badge variant="destructive">{t("cred.undecryptable")}</Badge>
+          ) : (
           <div className="flex items-center gap-1">
             <span className="text-muted-foreground">
               {showPassword ? entry.password : "????????"}
@@ -84,12 +93,16 @@ function CredentialRowInner({
               size="icon-xs"
             />
           </div>
+          )
         ) : (
           <span className="text-muted-foreground">-</span>
         )}
       </TableCell>
       <TableCell className="max-sm:hidden py-3 px-4 font-mono text-xs">
         {entry.hash ? (
+          isUndecryptable(entry.hash) ? (
+            <Badge variant="destructive">{t("cred.undecryptable")}</Badge>
+          ) : (
           <div className="flex items-center gap-1">
             <span
               className={`text-muted-foreground ${showHash ? "max-w-[220px] truncate" : ""}`}
@@ -112,6 +125,7 @@ function CredentialRowInner({
               size="icon-xs"
             />
           </div>
+          )
         ) : (
           <span className="text-muted-foreground">-</span>
         )}

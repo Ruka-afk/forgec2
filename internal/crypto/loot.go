@@ -4,6 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -16,10 +17,37 @@ import (
 var (
 	lootKeyMu sync.RWMutex
 	lootKey   []byte
+	// lootKeyID is the fingerprint (first 8 hex chars of SHA-256) of the
+	// active loot key. prevLootKey/prevLootKeyID retain the replaced key so
+	// a rotation does not orphan rows encrypted under it: reads fall back
+	// to it, and the re-encrypt job normalizes rows to the active key.
+	lootKeyID     string
+	prevLootKey   []byte
+	prevLootKeyID string
 
 	extc2KeyMu sync.RWMutex
 	extc2Key   []byte
 )
+
+// lootFingerprint identifies a key without exposing it.
+func lootFingerprint(key []byte) string {
+	sum := sha256.Sum256(key)
+	return hex.EncodeToString(sum[:])[:8]
+}
+
+// LootKeyID returns the fingerprint of the active loot key ("" if unset).
+func LootKeyID() string {
+	lootKeyMu.RLock()
+	defer lootKeyMu.RUnlock()
+	return lootKeyID
+}
+
+// PrevLootKeyID returns the fingerprint of the retained previous loot key.
+func PrevLootKeyID() string {
+	lootKeyMu.RLock()
+	defer lootKeyMu.RUnlock()
+	return prevLootKeyID
+}
 
 // InitLootEncryption initializes (or re-initializes) the loot encryption key.
 // It is intentionally re-entrant so config reloads / key rotation can install
@@ -39,7 +67,17 @@ func InitLootEncryption(lootKeyHex string) {
 	lootKeyMu.Lock()
 	defer lootKeyMu.Unlock()
 	if b, err := hex.DecodeString(lootKeyHex); err == nil && len(b) == 32 {
+		// Rotation: retain the replaced key so rows encrypted under it stay
+		// readable (and re-encryptable) until the background job normalizes
+		// them. Same value re-init is a no-op for the previous slot.
+		if lootKey != nil && lootKeyID != lootFingerprint(b) {
+			prevLootKey = lootKey
+			prevLootKeyID = lootKeyID
+			slog.Info("Loot key rotated, previous key retained for fallback reads",
+				"active", lootFingerprint(b), "prev", prevLootKeyID)
+		}
 		lootKey = b
+		lootKeyID = lootFingerprint(b)
 		return
 	}
 	if lootKey != nil {
@@ -90,25 +128,56 @@ func EncryptLoot(plaintext string) (string, error) {
 	return "FC2ENC:" + base64.StdEncoding.EncodeToString(append(nonce, ciphertext...)), nil
 }
 
-// DecryptLoot decrypts a ciphertext string using AES-256-GCM.
-// Falls back to returning the raw string if it's not encrypted (backward compat
-// with old plaintext credentials in the database).
-func DecryptLoot(s string) (string, error) {
+// LootState classifies a stored loot value for reads and rotation tooling.
+type LootState int
+
+const (
+	// LootEmpty: empty string, nothing stored.
+	LootEmpty LootState = iota
+	// LootPlaintextLegacy: stored without FC2ENC: marker (pre-encryption rows).
+	LootPlaintextLegacy
+	// LootDecryptable: FC2ENC: ciphertext readable with the active key.
+	LootDecryptable
+	// LootDecryptablePrevKey: readable only with the retained previous key;
+	// the re-encrypt job should normalize it to the active key.
+	LootDecryptablePrevKey
+	// LootUndecryptable: FC2ENC: ciphertext readable with neither key
+	// (wrong key after rotation without fallback, or corruption).
+	LootUndecryptable
+)
+
+// DecryptLootState decrypts s and reports how: legacy plaintext passes
+// through, FC2ENC: is tried against the active key then the retained
+// previous key. The returned error is non-nil only for LootUndecryptable
+// (and for uninitialized keys).
+func DecryptLootState(s string) (string, LootState) {
 	if s == "" {
-		return "", nil
+		return "", LootEmpty
 	}
 	lootKeyMu.RLock()
 	key := lootKey
+	prev := prevLootKey
 	lootKeyMu.RUnlock()
 	if key == nil {
-		return "", errors.New("loot encryption not initialized")
+		return "", LootUndecryptable
 	}
-	// Detect encrypted vs legacy plaintext
 	const marker = "FC2ENC:"
 	if len(s) < len(marker) || s[:len(marker)] != marker {
-		return s, nil // legacy plaintext
+		return s, LootPlaintextLegacy
 	}
-	data, err := base64.StdEncoding.DecodeString(s[len(marker):])
+	if plain, err := decryptLootWith(s[len(marker):], key); err == nil {
+		return plain, LootDecryptable
+	}
+	if prev != nil {
+		if plain, err := decryptLootWith(s[len(marker):], prev); err == nil {
+			return plain, LootDecryptablePrevKey
+		}
+	}
+	return "", LootUndecryptable
+}
+
+func decryptLootWith(body string, key []byte) (string, error) {
+	data, err := base64.StdEncoding.DecodeString(body)
 	if err != nil {
 		return "", fmt.Errorf("decryption failed: invalid ciphertext encoding: %w", err)
 	}
@@ -130,6 +199,43 @@ func DecryptLoot(s string) (string, error) {
 		return "", fmt.Errorf("decryption failed: %w", err)
 	}
 	return string(plaintext), nil
+}
+
+// ReencryptLoot normalizes s to the active key: values already decryptable
+// with it pass through untouched; previous-key values are re-encrypted.
+// Returns (normalized, changed, error). Undecryptable values error out.
+func ReencryptLoot(s string) (string, bool, error) {
+	plain, state := DecryptLootState(s)
+	switch state {
+	case LootEmpty, LootPlaintextLegacy, LootDecryptable:
+		return s, false, nil
+	case LootDecryptablePrevKey:
+		enc, err := EncryptLoot(plain)
+		if err != nil {
+			return "", false, err
+		}
+		return enc, true, nil
+	default:
+		return "", false, errors.New("loot value undecryptable with active or previous key")
+	}
+}
+
+// DecryptLoot decrypts a ciphertext string using AES-256-GCM.
+// Falls back to returning the raw string if it's not encrypted (backward compat
+// with old plaintext credentials in the database). FC2ENC: values are tried
+// against the active key first, then the retained previous key, so reads
+// survive a rotation until the re-encrypt job normalizes the row.
+func DecryptLoot(s string) (string, error) {
+	plain, state := DecryptLootState(s)
+	switch state {
+	case LootEmpty, LootPlaintextLegacy, LootDecryptable, LootDecryptablePrevKey:
+		return plain, nil
+	default:
+		if s == "" {
+			return "", nil
+		}
+		return "", errors.New("loot decryption failed: undecryptable with active or previous key")
+	}
 }
 
 func EncryptExtC2(plaintext string) (string, error) {

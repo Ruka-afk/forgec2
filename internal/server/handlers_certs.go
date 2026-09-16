@@ -94,7 +94,7 @@ func (s *Server) handleRegenerateCert(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"status":       "certificate regenerated",
+		"status":       "certificate regenerated (takes effect for new connections immediately, no restart needed)",
 		"subject":      cert.Subject.CommonName,
 		"issuer":       cert.Issuer.CommonName,
 		"expires_at":   cert.NotAfter,
@@ -146,6 +146,15 @@ func (s *Server) handleUploadCert(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "invalid certificate PEM format")
 		return
 	}
+	// Refuse already-expired certificates: installing one would silently
+	// break every TLS beacon at the next handshake.
+	if parsed, err := x509.ParseCertificate(certBlock.Bytes); err != nil {
+		respondError(c, http.StatusBadRequest, "certificate unparseable")
+		return
+	} else if time.Now().After(parsed.NotAfter) {
+		respondError(c, http.StatusBadRequest, "certificate already expired")
+		return
+	}
 
 	keyBlock, _ := pem.Decode(keyData)
 	if keyBlock == nil || (keyBlock.Type != "EC PRIVATE KEY" && keyBlock.Type != "RSA PRIVATE KEY") {
@@ -173,5 +182,5 @@ func (s *Server) handleUploadCert(c *gin.Context) {
 
 	s.LogAuditRecord(c, "upload_cert", "settings", "", "Uploaded custom TLS certificate", true, nil)
 
-	c.JSON(http.StatusOK, gin.H{"status": "certificate uploaded"})
+	c.JSON(http.StatusOK, gin.H{"status": "certificate uploaded (takes effect for new connections immediately, no restart needed)"})
 }

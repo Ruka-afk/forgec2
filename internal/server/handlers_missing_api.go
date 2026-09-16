@@ -424,12 +424,13 @@ func (s *Server) handleSettingsMaintenancePurge(c *gin.Context) {
 		name string
 		col  string
 	}{
-		{"audit_logs", "created_at"},
 		{"build_logs", "created_at"},
 		{"tasks", "created_at"},
 		{"chat_messages", "created_at"},
-		{"circuit_breaker_events", "created_at"},
-		{"opsec_history", "created_at"},
+		// NOTE: audit_logs / opsec_history / circuit_breaker_events are
+		// deliberately NOT purgable here. Forensic timelines are governed
+		// solely by server.audit_retention_days (floor 90d) in the automatic
+		// cleanup; a one-click UI purge must never erase the tamper chain.
 	}
 	for _, t := range tables {
 		var count int64
@@ -442,8 +443,8 @@ func (s *Server) handleSettingsMaintenancePurge(c *gin.Context) {
 		}
 	}
 
-	s.LogAuditRecord(c, "maintenance_purge", "system", "", fmt.Sprintf("Purged data older than %d days", retentionDays), true, nil)
-	respond(c, gin.H{"success": true, "retention_days": retentionDays, "purged": results})
+	s.LogAuditRecord(c, "maintenance_purge", "system", "", fmt.Sprintf("Purged data older than %d days (forensic tables excluded)", retentionDays), true, nil)
+	respond(c, gin.H{"success": true, "retention_days": retentionDays, "purged": results, "excluded": []string{"audit_logs", "opsec_history", "circuit_breaker_events"}})
 }
 
 // ── Agent Chain ──────────────────────────────────────────────────────

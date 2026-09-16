@@ -18,7 +18,9 @@ func TestTaskResultEncryptionAtRest(t *testing.T) {
 	defer crypto.InitLootEncryption("") // clear so other tests start clean
 
 	task := Task{Result: "secret-output-with-creds", Error: "explode"}
-	task.EncryptTaskFields()
+	if err := task.EncryptTaskFields(); err != nil {
+		t.Fatalf("EncryptTaskFields: %v", err)
+	}
 
 	if !strings.HasPrefix(task.Result, "FC2ENC:") {
 		t.Fatalf("Result should be encrypted at rest, got %q", task.Result)

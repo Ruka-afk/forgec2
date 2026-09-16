@@ -49,6 +49,12 @@ func (s *Server) startExtraListenersFromDB() {
 		slog.Info("Restoring extra listener from DB", "key", key, "scheme", scheme)
 		if err := s.startExtraListener(key, scheme); err != nil {
 			slog.Error("Failed to start extra listener from DB", "key", key, "err", err)
+			// Write the failure back immediately so the row does not claim
+			// "running" until the health loop flips it minutes later.
+			if uerr := s.db.Model(&db.Listener{}).Where("id = ?", l.ID).
+				Updates(map[string]interface{}{"status": "error"}).Error; uerr != nil {
+				slog.Error("Failed to persist listener error status", "listener_id", l.ID, "err", uerr)
+			}
 		}
 	}
 }
@@ -165,9 +171,16 @@ func (s *Server) startExtraListener(key, scheme string) error {
 	case "udp":
 		err = s.startExtraUDPListener(key)
 		return err
+	case "ssh":
+		err = s.startExtraSSHListener(key)
+		return err
 	default:
-		slog.Warn("Unknown extra listener scheme, skipping", "scheme", scheme, "key", key)
-		return nil
+		// Unknown schemes must fail loudly: silently returning nil used to
+		// leave a "running" DB row with nothing bound (creation callers treat
+		// nil as success). grpc/smb are intentionally not bindable here (see
+		// listenerSchemeHint); legacy rows with odd schemes now surface at
+		// startup instead of pretending to serve.
+		return fmt.Errorf("unsupported listener scheme %q (%s)", scheme, listenerSchemeHint(scheme))
 	}
 }
 
@@ -181,6 +194,13 @@ func (s *Server) startExtraHTTPListener(key, scheme string) error {
 		ReadHeaderTimeout: 10 * time.Second,
 		WriteTimeout:      HTTPWriteTimeout,
 		IdleTimeout:       HTTPIdleTimeout,
+	}
+	// Synchronous bind: ListenAndServe in a goroutine reported bind failures
+	// (e.g. port conflicts) only as background logs while the caller already
+	// recorded "running". Binding here makes failures synchronous.
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("binding extra %s listener %s: %w", scheme, addr, err)
 	}
 	s.extraListenersMu.Lock()
 	s.extraListeners[key] = srv
@@ -198,14 +218,15 @@ func (s *Server) startExtraHTTPListener(key, scheme string) error {
 			// Extra HTTPS listeners share the main server's TLS posture:
 			// JARM/JA3 fingerprint wrapping, mTLS requirements and TLS 1.2
 			// floor are applied identically to every termination point.
+			// The cert itself is hot-reloadable (see tlsCertLoader).
 			if cfgErr := s.configureTLS(srv); cfgErr != nil {
 				slog.Error("Extra HTTPS listener TLS config failed", "key", key, "addr", addr, "err", cfgErr)
 			}
 			slog.Info("Extra HTTPS listener started", "addr", addr, "key", key)
-			err = srv.ListenAndServeTLS(s.cfg.Server.CertFile, s.cfg.Server.KeyFile)
+			err = srv.ServeTLS(ln, "", "")
 		} else {
 			slog.Info("Extra HTTP listener started", "addr", addr, "key", key)
-			err = srv.ListenAndServe()
+			err = srv.Serve(ln)
 		}
 		if err != nil && err != http.ErrServerClosed {
 			slog.Error("Extra HTTP listener error", "key", key, "addr", addr, "err", err)

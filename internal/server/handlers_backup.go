@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 )
 
@@ -76,6 +78,16 @@ func verifyRestoredDB(dbPath string) error {
 	return nil
 }
 
+// verifyRestoredDBDeep runs the full gate on a restore candidate: magic,
+// size, SQLite open, PRAGMA integrity_check and schema census. A header-valid
+// but truncated/corrupt file must never replace the live database.
+func verifyRestoredDBDeep(dbPath string) error {
+	if err := verifyRestoredDB(dbPath); err != nil {
+		return err
+	}
+	return db.VerifySQLiteFile(dbPath)
+}
+
 // prepareRestoreSource returns a reader over the raw SQLite bytes of an upload
 // or on-disk backup. Plain SQLite files pass through untouched; encrypted .fbk
 // files (produced by the scheduled BackupManager) are decrypted with the
@@ -92,7 +104,11 @@ func (s *Server) prepareRestoreSource(src io.Reader, ext string) (io.Reader, err
 	if err != nil {
 		return nil, errors.New("failed to read backup file")
 	}
-	plaintext, err := decryptBackupData(data, s.backupKey())
+	key, err := s.backupKey()
+	if err != nil {
+		return nil, err
+	}
+	plaintext, err := decryptBackupData(data, key)
 	if err != nil {
 		return nil, errors.New("failed to decrypt backup (key mismatch or corrupt file)")
 	}
@@ -103,8 +119,10 @@ func (s *Server) prepareRestoreSource(src io.Reader, ext string) (io.Reader, err
 }
 
 // writeRestoredDB copies the source stream to a temp file in the database
-// directory, verifies it, then atomically swaps it over the live database.
-// The live database is left untouched if verification or the swap fails.
+// directory, verifies it (magic, size, open, integrity_check, schema), saves
+// a timestamped copy of the LIVE database first, then atomically swaps.
+// The live database is left untouched if any step fails, and the pre-restore
+// copy allows manual rollback.
 func writeRestoredDB(src io.Reader, dbPath string) error {
 	dir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(dir, 0700); err != nil {
@@ -126,8 +144,17 @@ func writeRestoredDB(src io.Reader, dbPath string) error {
 		return fmt.Errorf("close temp file: %w", err)
 	}
 
-	if err := verifyRestoredDB(tmpPath); err != nil {
+	if err := verifyRestoredDBDeep(tmpPath); err != nil {
 		return err
+	}
+
+	// Pre-restore safety copy of the live DB (pruned to the newest 3).
+	if _, err := os.Stat(dbPath); err == nil {
+		prePath := dbPath + ".pre-restore-" + time.Now().Format("20060102_150405")
+		if err := copyFile(dbPath, prePath); err != nil {
+			return fmt.Errorf("save pre-restore copy: %w", err)
+		}
+		prunePreRestores(dbPath, 3)
 	}
 
 	if err := os.Rename(tmpPath, dbPath); err != nil {
@@ -136,6 +163,47 @@ func writeRestoredDB(src io.Reader, dbPath string) error {
 
 	removeStaleDBArtifacts(dbPath)
 	return nil
+}
+
+// copyFile copies src to dst (0600). Used for pre-restore safety copies.
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
+}
+
+// prunePreRestores keeps the newest keep pre-restore copies next to dbPath.
+func prunePreRestores(dbPath string, keep int) {
+	dir := filepath.Dir(dbPath)
+	base := filepath.Base(dbPath) + ".pre-restore-"
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	var matches []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasPrefix(e.Name(), base) {
+			matches = append(matches, e.Name())
+		}
+	}
+	if len(matches) <= keep {
+		return
+	}
+	sort.Strings(matches)
+	for _, name := range matches[:len(matches)-keep] {
+		os.Remove(filepath.Join(dir, name))
+	}
 }
 
 func (s *Server) handleDBBackupList(c *gin.Context) {
@@ -324,6 +392,21 @@ func (s *Server) handleRestoreFromFile(c *gin.Context) {
 	if _, err := os.Stat(backupPath); err != nil {
 		respondError(c, http.StatusNotFound, "backup file not found")
 		return
+	}
+
+	// Sidecar pre-check for .fbk: a key_id mismatch means decryption is
+	// certain to fail — say so explicitly instead of the generic
+	// "key mismatch or corrupt file" after a wasted read.
+	if ext == ".fbk" {
+		if metaBytes, err := os.ReadFile(backupPath + ".meta.json"); err == nil {
+			var meta backupSidecar
+			if err := json.Unmarshal(metaBytes, &meta); err == nil && meta.KeyID != "" {
+				if active := s.backupKeyID(); active != "" && meta.KeyID != active {
+					respondError(c, http.StatusBadRequest, "backup was sealed with a different key (key_id "+meta.KeyID+", active "+active+")")
+					return
+				}
+			}
+		}
 	}
 
 	srcFile, err := os.Open(backupPath)

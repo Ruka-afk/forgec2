@@ -175,20 +175,35 @@ func (s *Server) parseAndStoreCredentials(agentID string, raw string, taskID uin
 
 	if len(batch) > 0 {
 		if err := database.CreateInBatches(batch, 50).Error; err != nil {
-			slog.Error("Failed to store credentials batch", "agent_id", agentID, "err", err)
-		} else {
-			slog.Info("Credentials stored in vault", "agent_id", agentID, "count", len(batch))
-			s.LogAuditRecord(nil, "credential_ingest", "credential", agentID,
-				"stored "+strconv.Itoa(len(batch))+" credentials (source="+parseCredentialSource(raw)+")", true, nil)
-			// Push the vault change to open dashboard sessions so the
-			// Credentials page refreshes without polling.
-			s.broadcastOperatorEvent(map[string]interface{}{
-				"type":     "credential_update",
-				"action":   "found",
-				"agent_id": agentID,
-				"count":    len(batch),
-			})
+			// Fail-closed per-row degrade: a vault outage must reject rows
+			// (never store plaintext), and a single bad row must not sink
+			// the batch. Retry rows individually and count the outcome.
+			stored, failed := 0, 0
+			for i := range batch {
+				if e := database.Create(&batch[i]).Error; e != nil {
+					failed++
+					slog.Error("Failed to store credential entry", "agent_id", agentID, "err", e)
+				} else {
+					stored++
+				}
+			}
+			if s.metrics != nil && s.metrics.VaultErrorsTotal != nil && failed > 0 {
+				s.metrics.VaultErrorsTotal.WithLabelValues("harvest-batch").Add(float64(failed))
+			}
+			slog.Warn("Credential batch partially stored", "agent_id", agentID, "stored", stored, "failed", failed, "batch_err", err)
+			return
 		}
+		slog.Info("Credentials stored in vault", "agent_id", agentID, "count", len(batch))
+		s.LogAuditRecord(nil, "credential_ingest", "credential", agentID,
+			"stored "+strconv.Itoa(len(batch))+" credentials (source="+parseCredentialSource(raw)+")", true, nil)
+		// Push the vault change to open dashboard sessions so the
+		// Credentials page refreshes without polling.
+		s.broadcastOperatorEvent(map[string]interface{}{
+			"type":     "credential_update",
+			"action":   "found",
+			"agent_id": agentID,
+			"count":    len(batch),
+		})
 	}
 }
 

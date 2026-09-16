@@ -2,7 +2,7 @@ package db
 
 import (
 	"encoding/json"
-	"log/slog"
+	"fmt"
 	"strings"
 	"time"
 
@@ -327,65 +327,78 @@ func (t *Task) AfterFind(_ *gorm.DB) error {
 	return nil
 }
 
+// reencryptField normalizes one sensitive field to active-key ciphertext:
+// plaintext is encrypted (failure aborts the write — fail-closed), readable
+// ciphertext is re-encrypted (normalizes previous-key rows on every write),
+// and unreadable ciphertext is kept as-is (still safe at rest; failing the
+// write would wedge status updates on rows the vault can no longer read).
+func reencryptField(val *string) error {
+	if *val == "" {
+		return nil
+	}
+	if strings.HasPrefix(*val, "FC2ENC:") {
+		if dec, err := crypto.DecryptLoot(*val); err == nil {
+			*val = dec
+			return encryptField(val)
+		}
+		return nil
+	}
+	return encryptField(val)
+}
+
 // encryptSensitiveFields is the BeforeCreate/BeforeUpdate counterpart of the
 // AfterFind decryption. Decrypt-then-encrypt keeps the hook idempotent: an
 // already-encrypted in-memory value normalizes back to ciphertext, and a
-// freshly built plaintext task is encrypted exactly once. If loot encryption
-// is unconfigured the original value is kept so no data is lost.
-func (t *Task) encryptSensitiveFields() {
+// freshly built plaintext task is encrypted exactly once.
+// Fail-closed: any encryption failure is returned so the write aborts instead
+// of persisting secrets as plaintext.
+func (t *Task) encryptSensitiveFields() error {
 	if SensitiveTaskTypes[t.Type] {
-		if t.Command != "" {
-			if dec, err := crypto.DecryptLoot(t.Command); err == nil {
-				if enc, err2 := crypto.EncryptLoot(dec); err2 == nil {
-					t.Command = enc
-				}
-			}
+		if err := reencryptField(&t.Command); err != nil {
+			return err
 		}
-		if t.Data != "" {
-			if dec, err := crypto.DecryptLoot(t.Data); err == nil {
-				if enc, err2 := crypto.EncryptLoot(dec); err2 == nil {
-					t.Data = enc
-				}
-			}
+		if err := reencryptField(&t.Data); err != nil {
+			return err
 		}
 	}
 	if SensitiveShellTypes[t.Type] {
-		if t.Shell != "" {
-			if dec, err := crypto.DecryptLoot(t.Shell); err == nil {
-				if enc, err2 := crypto.EncryptLoot(dec); err2 == nil {
-					t.Shell = enc
-				}
-			}
+		if err := reencryptField(&t.Shell); err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
 func (t *Task) BeforeCreate(_ *gorm.DB) error {
-	t.encryptSensitiveFields()
-	return nil
+	return t.encryptSensitiveFields()
 }
 
 func (t *Task) BeforeUpdate(_ *gorm.DB) error {
-	t.encryptSensitiveFields()
-	return nil
+	return t.encryptSensitiveFields()
 }
 
 // EncryptTaskFields encrypts Result/Error for storage. It is applied at the
 // explicit DB write sites (beacon results, extc2 results) so the ciphertext
 // persisted differs from the in-memory plaintext used for broadcasts,
-// callbacks, and credential parsing. If loot encryption is unconfigured the
-// original values are returned so no data is lost.
-func (t *Task) EncryptTaskFields() {
+// callbacks, and credential parsing.
+// Fail-closed: returns an error instead of leaving plaintext; callers must
+// drop the output (never persist it) on error.
+func (t *Task) EncryptTaskFields() error {
 	if t.Result != "" {
-		if enc, err := crypto.EncryptLoot(t.Result); err == nil {
-			t.Result = enc
+		enc, err := crypto.EncryptLoot(t.Result)
+		if err != nil {
+			return err
 		}
+		t.Result = enc
 	}
 	if t.Error != "" {
-		if enc, err := crypto.EncryptLoot(t.Error); err == nil {
-			t.Error = enc
+		enc, err := crypto.EncryptLoot(t.Error)
+		if err != nil {
+			return err
 		}
+		t.Error = enc
 	}
+	return nil
 }
 
 // AuditLog represents a security audit log entry
@@ -444,20 +457,17 @@ func (a *Implant) BeforeCreate(tx *gorm.DB) (err error) {
 
 // encryptField encrypts a single field value using loot encryption.
 //
-// Failure contract (mirrors Task.encryptSensitiveFields): when encryption is
-// unavailable (key unset / key rotation mismatch), the PLAINTEXT is kept so
-// harvested secrets are never silently dropped. Returning the error made
-// CreateInBatches abort the whole harvest batch — credentials permanently
-// lost on a config hiccup.
+// Failure contract (fail-closed): when encryption is unavailable (key unset /
+// misconfigured) an error is returned and the write MUST be aborted by the
+// caller — storing the secret in plaintext silently is worse than failing the
+// write loudly. Operators notice via the returned error, not log archaeology.
 func encryptField(val *string) error {
 	if *val == "" {
 		return nil
 	}
 	enc, err := crypto.EncryptLoot(*val)
 	if err != nil {
-		// Keep plaintext; log so operators notice the vault is unencrypted.
-		slog.Warn("[vault] loot encryption unavailable — storing plaintext", "err", err)
-		return nil
+		return fmt.Errorf("vault encryption unavailable, refusing plaintext store: %w", err)
 	}
 	*val = enc
 	return nil
@@ -494,6 +504,12 @@ func (c *CredentialEntry) BeforeCreate(tx *gorm.DB) error {
 		if err := tx.Select("id").Where("name = ?", DefaultTenantName).First(&tenant).Error; err == nil {
 			c.TenantID = tenant.ID
 		}
+	}
+	// Default 30-day review horizon for harvested loot (operator can extend
+	// per entry in the edit UI). Expired entries surface as "stale" in the
+	// lifecycle state machine instead of silently living forever.
+	if c.ExpiresAt.IsZero() {
+		c.ExpiresAt = time.Now().AddDate(0, 0, 30)
 	}
 	if err := encryptField(&c.Password); err != nil {
 		return err
