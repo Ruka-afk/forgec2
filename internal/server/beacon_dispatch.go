@@ -25,7 +25,10 @@ func (s *Server) fetchPendingTasks(uuid string, limits ...int) []task {
 
 	// Claim and return exactly the same rows. Querying all running tasks after
 	// an update can re-dispatch tasks claimed by an earlier beacon.
-	if err := s.db.Transaction(func(tx *gorm.DB) error {
+	// Busy-retried: under fleet bursts the single writer loses the race and
+	// a bare failure stalls delivery until the next check-in.
+	if err := s.withBusyRetry("claim", func() error {
+		return s.db.Transaction(func(tx *gorm.DB) error {
 		var pending []db.Task
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("agent_id = ? AND status = ?", uuid, "pending").
@@ -80,6 +83,7 @@ func (s *Server) fetchPendingTasks(uuid string, limits ...int) []task {
 			claimedTasks = append(claimedTasks, unacked...)
 		}
 		return nil
+		})
 	}); err != nil {
 		slog.Error("Failed to claim pending tasks", "agent_id", uuid, "error", err)
 	}
@@ -185,7 +189,8 @@ func (s *Server) fetchRelayedChildTasks(parentUUID string) []relayedTask {
 	}
 
 	var claimedTasks []db.Task
-	if err := s.db.Transaction(func(tx *gorm.DB) error {
+	if err := s.withBusyRetry("claim", func() error {
+		return s.db.Transaction(func(tx *gorm.DB) error {
 		var pending []db.Task
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("agent_id IN ? AND status = ?", childIDs, "pending").
@@ -232,6 +237,7 @@ func (s *Server) fetchRelayedChildTasks(parentUUID string) []relayedTask {
 			claimedTasks = append(claimedTasks, unacked...)
 		}
 		return nil
+		})
 	}); err != nil {
 		slog.Error("Failed to batch claim child tasks", "parent", parentUUID, "error", err)
 		return nil

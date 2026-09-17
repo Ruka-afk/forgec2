@@ -255,16 +255,19 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 		// Atomic update: only update if last_seen hasn't been changed by a concurrent beacon.
 		// Unscoped so the update still applies if the row was just restored from a
 		// soft-delete tombstone (deleted_at not yet cleared in this transaction's view).
-		updateErr := s.db.Transaction(func(tx *gorm.DB) error {
-			txResult := tx.Unscoped().Model(&db.Implant{}).Where("id = ? AND last_seen <= ?", agent.ID, agent.LastSeen).Updates(updates)
-			if txResult.Error != nil {
-				return txResult.Error
-			}
-			if txResult.RowsAffected == 0 {
-				slog.Warn("Concurrent beacon update conflict, retrying", "agent_id", agent.ID)
-			}
-			// Re-read to get consistent state
-			return tx.Where("id = ?", agent.ID).First(&agent).Error
+		// Busy-retried: this runs on every beacon against the single writer.
+		updateErr := s.withBusyRetry("enroll", func() error {
+			return s.db.Transaction(func(tx *gorm.DB) error {
+				txResult := tx.Unscoped().Model(&db.Implant{}).Where("id = ? AND last_seen <= ?", agent.ID, agent.LastSeen).Updates(updates)
+				if txResult.Error != nil {
+					return txResult.Error
+				}
+				if txResult.RowsAffected == 0 {
+					slog.Warn("Concurrent beacon update conflict, retrying", "agent_id", agent.ID)
+				}
+				// Re-read to get consistent state
+				return tx.Where("id = ?", agent.ID).First(&agent).Error
+			})
 		})
 		if updateErr != nil {
 			slog.Error("Failed to update agent", "agent_id", agent.ID, "error", updateErr)

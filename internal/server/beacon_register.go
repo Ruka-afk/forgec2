@@ -393,12 +393,14 @@ func (s *Server) handleBeacon(c *gin.Context) {
 				defer cancel()
 				country, city, lat, lon := s.lookupGeoIP(ctx, publicIP)
 				if country != "" {
-					result := s.db.Model(&db.Implant{}).
-						Where("id = ? AND (country != ? OR city != ?)", req.UUID, country, city).
-						Updates(map[string]interface{}{
-							"country": country, "city": city,
-							"latitude": lat, "longitude": lon,
-						})
+					result := s.withBusyRetryDB("enroll", func() *gorm.DB {
+						return s.db.Model(&db.Implant{}).
+							Where("id = ? AND (country != ? OR city != ?)", req.UUID, country, city).
+							Updates(map[string]interface{}{
+								"country": country, "city": city,
+								"latitude": lat, "longitude": lon,
+							})
+					})
 					if result.Error != nil {
 						slog.Error("Failed to update GeoIP data", "agent_id", req.UUID, "err", result.Error)
 					}

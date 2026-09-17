@@ -916,6 +916,26 @@ var indexMigrations = []*gormigrate.Migration{
 			return nil
 		},
 	},
+	{
+		ID: "2026-09-17-add-task-sweep-cover-indexes",
+		Migrate: func(tx *gorm.DB) error {
+			// Cover the three sweep predicates that previously fell back to
+			// full status='running' scans: acked-result (status,
+			// acknowledged_at), requeue/exhausted/sent (status, claimed_at,
+			// acknowledged_at, delivery_attempts), approvals (status,
+			// approval_expires_at).
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_tasks_status_acknowledged ON tasks(status, acknowledged_at)", "idx_tasks_status_acknowledged")
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_tasks_sweep_running ON tasks(status, claimed_at, acknowledged_at, delivery_attempts)", "idx_tasks_sweep_running")
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_tasks_approval_expiry ON tasks(status, approval_expires_at)", "idx_tasks_approval_expiry")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			execMigration(tx, "DROP INDEX IF EXISTS idx_tasks_status_acknowledged", "drop_idx_tasks_status_acknowledged")
+			execMigration(tx, "DROP INDEX IF EXISTS idx_tasks_sweep_running", "drop_idx_tasks_sweep_running")
+			execMigration(tx, "DROP INDEX IF EXISTS idx_tasks_approval_expiry", "drop_idx_tasks_approval_expiry")
+			return nil
+		},
+	},
 }
 
 // Migrations is the combined migration history, kept for tooling and tests.

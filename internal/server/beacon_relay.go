@@ -120,8 +120,10 @@ func (s *Server) processRelayedResults(relayed []relayedData, parentUUID string,
 				task.Status = "failed"
 			}
 			// Atomic first-final-wins: only pending/running/sent can transition to final
-			res := s.db.Model(&db.Task{}).Where("id = ? AND status IN ?", task.ID, []string{"pending", "running", "sent"}).Updates(map[string]interface{}{
-				"status": task.Status, "result": dbTask.Result, "error": dbTask.Error, "last_result_id": task.LastResultID,
+			res := s.withBusyRetryDB("result", func() *gorm.DB {
+				return s.db.Model(&db.Task{}).Where("id = ? AND status IN ?", task.ID, []string{"pending", "running", "sent"}).Updates(map[string]interface{}{
+					"status": task.Status, "result": dbTask.Result, "error": dbTask.Error, "last_result_id": task.LastResultID,
+				})
 			})
 			if res.Error != nil {
 				slog.Error("Failed to save relayed task result", "task_id", task.ID, "child", rd.AgentID, "error", res.Error)
@@ -149,7 +151,9 @@ func (s *Server) processRelayedResults(relayed []relayedData, parentUUID string,
 		verifiedIDs = append(verifiedIDs, id)
 	}
 	if len(verifiedIDs) > 0 {
-		if err := s.db.Model(&db.Implant{}).Where("id IN ?", verifiedIDs).Update("last_seen", now).Error; err != nil {
+		if err := s.withBusyRetryDB("enroll", func() *gorm.DB {
+			return s.db.Model(&db.Implant{}).Where("id IN ?", verifiedIDs).Update("last_seen", now)
+		}).Error; err != nil {
 			slog.Error("Failed to batch-update child agent last_seen", "parent", parentUUID, "error", err)
 		}
 	}
@@ -306,7 +310,9 @@ func (s *Server) bindRelayChildToParent(childID, parentUUID string) bool {
 	err := s.db.Unscoped().Where("id = ?", childID).First(&agent).Error
 	if err == gorm.ErrRecordNotFound {
 		row := db.Implant{ID: childID, ParentID: parentUUID, TenantID: s.defaultTenantID(), LastSeen: time.Now(), Status: "online"}
-		if cerr := s.db.Create(&row).Error; cerr != nil {
+		if cerr := s.withBusyRetryDB("enroll", func() *gorm.DB {
+			return s.db.Create(&row)
+		}).Error; cerr != nil {
 			// Concurrent create raced: re-check the winner's parent binding.
 			if rerr := s.db.Unscoped().Where("id = ?", childID).First(&agent).Error; rerr != nil {
 				slog.Debug("bindRelayChildToParent create raced", "child", childID, "error", cerr)

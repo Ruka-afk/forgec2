@@ -30,6 +30,7 @@ type MetricsCollector struct {
 	SocksDroppedTotal *prometheus.CounterVec
 	FileChainEventsTotal *prometheus.CounterVec
 	AgentResultGapsTotal prometheus.Counter
+	DbBusyRetriesTotal *prometheus.CounterVec
 }
 
 func NewMetricsCollector(s *Server) *MetricsCollector {
@@ -115,6 +116,10 @@ func NewMetricsCollector(s *Server) *MetricsCollector {
 			Name: "forgec2_agent_result_gaps_total",
 			Help: "Total task results the agent discarded before delivery (queue-full/oversized); per-task detail is in the agent_result_gap audit record.",
 		}),
+		DbBusyRetriesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "forgec2_db_busy_retries_total",
+			Help: "SQLite lock-contention retries on the beacon hot path, by operation.",
+		}, []string{"op"}),
 	}
 }
 
@@ -139,6 +144,7 @@ func (mc *MetricsCollector) Register(reg prometheus.Registerer) {
 		mc.SocksDroppedTotal,
 		mc.FileChainEventsTotal,
 		mc.AgentResultGapsTotal,
+		mc.DbBusyRetriesTotal,
 	}
 	for _, c := range collectors {
 		err := reg.Register(c)

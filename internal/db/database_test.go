@@ -1462,6 +1462,8 @@ func TestIsSQLiteLockError(t *testing.T) {
 	}{
 		{"database is locked", true},
 		{"database table is locked", true},
+		{"SQLITE_BUSY: database is locked", true},
+		{"database is busy (database is locked)", true},
 		{"SQL logic error: no such table: foo", false},
 		{"", false},
 	}

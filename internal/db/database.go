@@ -50,11 +50,22 @@ func (l lockAwareLogger) Error(ctx context.Context, msg string, data ...interfac
 }
 
 func isSQLiteLockError(err error) bool {
+	return IsSQLiteLockError(err)
+}
+
+// IsSQLiteLockError reports whether err is a SQLite lock-contention failure.
+// It covers both the extended messages ("database is locked") and the short
+// SQLITE_BUSY variants drivers surface, so callers share one matcher instead
+// of each hand-rolling substring checks that miss half the cases.
+func IsSQLiteLockError(err error) bool {
 	if err == nil {
 		return false
 	}
 	s := err.Error()
-	return strings.Contains(s, "database is locked") || strings.Contains(s, "database table is locked")
+	return strings.Contains(s, "database is locked") ||
+		strings.Contains(s, "database table is locked") ||
+		strings.Contains(s, "SQLITE_BUSY") ||
+		strings.Contains(s, "database is busy")
 }
 
 // execMigration runs a migration SQL statement and logs unexpected errors.

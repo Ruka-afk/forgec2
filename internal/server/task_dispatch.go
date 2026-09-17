@@ -457,6 +457,34 @@ func (s *Server) dispatchTask(c *gin.Context, task *db.Task, auditAction, detail
 	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
 }
 
+// flippedSet re-reads which of ids now carry status. It lets sweep passes
+// restrict side effects (broadcasts, counter decs) to rows their guarded
+// UPDATE actually flipped, instead of the stale SELECT list — a result
+// landing between the statements is skipped by the UPDATE guard yet would
+// otherwise still be broadcast as failed and double-dec the agent counter.
+// ok=false means the re-read itself failed; callers then fall back to the
+// full list (today's behavior) rather than dropping side effects.
+func (s *Server) flippedSet(ids []uint, status string) (map[uint]bool, bool) {
+	out := make(map[uint]bool, len(ids))
+	if len(ids) == 0 {
+		return out, true
+	}
+	var rows []struct {
+		ID uint
+	}
+	if err := s.db.Model(&db.Task{}).Select("id").Where("id IN ? AND status = ?", ids, status).Find(&rows).Error; err != nil {
+		slog.Warn("Sweep calibration re-read failed, keeping full side-effect set", "error", err)
+		for _, id := range ids {
+			out[id] = true
+		}
+		return out, false
+	}
+	for _, r := range rows {
+		out[r.ID] = true
+	}
+	return out, true
+}
+
 // maxSweepPasses bounds the per-sweep paging loop below: a fleet with more
 // than one LIMIT page of stale tasks drains progressively instead of
 // starving everything past the first 1000 rows every 5 minutes.
@@ -498,16 +526,32 @@ func (s *Server) requeueStaleTasksPass() bool {
 		for i, t := range sentTasks {
 			sentIDs[i] = t.ID
 		}
-		if err := s.db.Model(&db.Task{}).Where("id IN ? AND status = ?", sentIDs, "sent").
-			Updates(map[string]interface{}{
-				"status": "failed",
-				"error":  "legacy sent status retired (never dispatched)",
-			}).Error; err != nil {
-			slog.Error("Failed to retire legacy sent tasks", "count", len(sentIDs), "error", err)
+		res := s.withBusyRetryDB("sweep", func() *gorm.DB {
+			return s.db.Model(&db.Task{}).Where("id IN ? AND status = ?", sentIDs, "sent").
+				Updates(map[string]interface{}{
+					"status": "failed",
+					"error":  "legacy sent status retired (never dispatched)",
+				})
+		})
+		if res.Error != nil {
+			slog.Error("Failed to retire legacy sent tasks", "count", len(sentIDs), "error", res.Error)
 			return false
+		}
+		// Calibrate side effects to rows actually flipped: a concurrent
+		// transition narrows RowsAffected, and the skipped rows must get
+		// neither broadcast nor dec. Full batches skip the re-read.
+		flipped := make(map[uint]bool, len(sentIDs))
+		for _, id := range sentIDs {
+			flipped[id] = true
+		}
+		if res.RowsAffected != int64(len(sentIDs)) {
+			flipped, _ = s.flippedSet(sentIDs, "failed")
 		}
 		for i := range sentTasks {
 			t := sentTasks[i]
+			if !flipped[t.ID] {
+				continue
+			}
 			t.Status = "failed"
 			t.Error = "legacy sent status retired (never dispatched)"
 			s.broadcastTaskUpdate(t.AgentID, t)
@@ -533,17 +577,29 @@ func (s *Server) requeueStaleTasksPass() bool {
 		// Status guard in the UPDATE (not just the SELECT): a result landing
 		// between the two statements must not be stomped — previously a
 		// just-completed task could be flipped to "failed" here.
-		res := s.db.Model(&db.Task{}).Where("id IN ? AND status = ? AND acknowledged_at IS NULL", exhaustedIDs, "running").
-			Updates(map[string]interface{}{
-				"status": "failed",
-				"error":  "delivered but unacknowledged after 3 attempts",
-			})
+		res := s.withBusyRetryDB("sweep", func() *gorm.DB {
+			return s.db.Model(&db.Task{}).Where("id IN ? AND status = ? AND acknowledged_at IS NULL", exhaustedIDs, "running").
+				Updates(map[string]interface{}{
+					"status": "failed",
+					"error":  "delivered but unacknowledged after 3 attempts",
+				})
+		})
 		if res.Error != nil {
 			slog.Error("Failed to fail stale running tasks past attempt cap", "count", len(exhaustedIDs), "error", res.Error)
 			return false
 		}
+		flippedEx := make(map[uint]bool, len(exhaustedIDs))
+		for _, id := range exhaustedIDs {
+			flippedEx[id] = true
+		}
+		if res.RowsAffected != int64(len(exhaustedIDs)) {
+			flippedEx, _ = s.flippedSet(exhaustedIDs, "failed")
+		}
 		for i := range exhaustedTasks {
 			t := exhaustedTasks[i]
+			if !flippedEx[t.ID] {
+				continue
+			}
 			t.Status = "failed"
 			t.Error = "delivered but unacknowledged after 3 attempts"
 			s.broadcastTaskUpdate(t.AgentID, t)
@@ -572,12 +628,15 @@ func (s *Server) requeueStaleTasksPass() bool {
 	// Status guard: without it a result arriving between SELECT and UPDATE
 	// flipped a completed task back to "pending", re-delivering and
 	// double-executing it on the agent.
-	if err := s.db.Model(&db.Task{}).Where("id IN ? AND status = ? AND acknowledged_at IS NULL", taskIDs, "running").
-		Updates(map[string]interface{}{"status": "pending", "claimed_by": "", "claimed_at": time.Time{}, "delivery_attempts": gorm.Expr("delivery_attempts + 1")}).Error; err != nil {
-		slog.Error("Failed to requeue stale running tasks", "count", len(taskIDs), "error", err)
+	res := s.withBusyRetryDB("sweep", func() *gorm.DB {
+		return s.db.Model(&db.Task{}).Where("id IN ? AND status = ? AND acknowledged_at IS NULL", taskIDs, "running").
+			Updates(map[string]interface{}{"status": "pending", "claimed_by": "", "claimed_at": time.Time{}, "delivery_attempts": gorm.Expr("delivery_attempts + 1")})
+	})
+	if res.Error != nil {
+		slog.Error("Failed to requeue stale running tasks", "count", len(taskIDs), "error", res.Error)
 		return false
 	}
-	slog.Info("Requeued stale running tasks to pending", "count", len(staleTasks))
+	slog.Info("Requeued stale running tasks to pending", "count", res.RowsAffected)
 	// Requeued tasks stay in the pending/running count: no dec here.
 	return fullPage
 }
@@ -684,8 +743,10 @@ func (s *Server) failStaleAcknowledgedTasksPass() bool {
 		if t.AcknowledgedAt != nil &&
 			now.Sub(*t.AcknowledgedAt) < 2*AckedTaskResultTimeout &&
 			lastSeen[t.AgentID].After(*t.AcknowledgedAt) {
-			if err := s.db.Model(&db.Task{}).Where("id = ? AND status = ?", t.ID, "running").
-				Update("acknowledged_at", now).Error; err != nil {
+			if err := s.withBusyRetryDB("sweep", func() *gorm.DB {
+				return s.db.Model(&db.Task{}).Where("id = ? AND status = ?", t.ID, "running").
+					Update("acknowledged_at", now)
+			}).Error; err != nil {
 				slog.Warn("Acked sweep: renewal failed", "task", t.ID, "err", err)
 			} else {
 				renewed++
@@ -703,13 +764,23 @@ func (s *Server) failStaleAcknowledgedTasksPass() bool {
 	// Status guard plus keep any partial result: the previous unconditional
 	// update blanked "result" on tasks whose output arrived between SELECT
 	// and UPDATE, destroying real data.
-	if err := s.db.Model(&db.Task{}).Where("id IN ? AND status = ?", failIDs, "running").
-		Updates(map[string]interface{}{
-			"status": "failed",
-			"error":  "task acknowledged but no result received within timeout",
-		}).Error; err != nil {
-		slog.Error("Failed to fail stale acknowledged tasks", "count", len(failIDs), "error", err)
+	res := s.withBusyRetryDB("sweep", func() *gorm.DB {
+		return s.db.Model(&db.Task{}).Where("id IN ? AND status = ?", failIDs, "running").
+			Updates(map[string]interface{}{
+				"status": "failed",
+				"error":  "task acknowledged but no result received within timeout",
+			})
+	})
+	if res.Error != nil {
+		slog.Error("Failed to fail stale acknowledged tasks", "count", len(failIDs), "error", res.Error)
 		return false
+	}
+	flippedAck := make(map[uint]bool, len(failIDs))
+	for _, id := range failIDs {
+		flippedAck[id] = true
+	}
+	if res.RowsAffected != int64(len(failIDs)) {
+		flippedAck, _ = s.flippedSet(failIDs, "failed")
 	}
 	failedByID := make(map[uint]db.Task, len(failIDs))
 	for _, t := range staleTasks {
@@ -717,6 +788,9 @@ func (s *Server) failStaleAcknowledgedTasksPass() bool {
 	}
 	for _, id := range failIDs {
 		t := failedByID[id]
+		if !flippedAck[id] {
+			continue
+		}
 		t.Status = "failed"
 		t.Error = "task acknowledged but no result received within timeout"
 		t.Result = ""
@@ -748,15 +822,28 @@ func (s *Server) rejectExpiredApprovals() {
 	for i, t := range stale {
 		ids[i] = t.ID
 	}
-	if err := s.db.Model(&db.Task{}).Where("id IN ? AND status = ?", ids, TaskStatusPendingApproval).
-		Updates(map[string]interface{}{
-			"status": "cancelled",
-			"error":  "approval expired without a second operator",
-		}).Error; err != nil {
-		slog.Error("Failed to reject expired approvals", "count", len(ids), "error", err)
+	res := s.withBusyRetryDB("sweep", func() *gorm.DB {
+		return s.db.Model(&db.Task{}).Where("id IN ? AND status = ?", ids, TaskStatusPendingApproval).
+			Updates(map[string]interface{}{
+				"status": "cancelled",
+				"error":  "approval expired without a second operator",
+			})
+	})
+	if res.Error != nil {
+		slog.Error("Failed to reject expired approvals", "count", len(ids), "error", res.Error)
 		return
 	}
+	flippedAppr := make(map[uint]bool, len(ids))
+	for _, id := range ids {
+		flippedAppr[id] = true
+	}
+	if res.RowsAffected != int64(len(ids)) {
+		flippedAppr, _ = s.flippedSet(ids, "cancelled")
+	}
 	for _, t := range stale {
+		if !flippedAppr[t.ID] {
+			continue
+		}
 		t.Status = "cancelled"
 		t.Error = "approval expired without a second operator"
 		s.broadcastTaskUpdate(t.AgentID, t)

@@ -11,6 +11,7 @@ import (
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/plugin"
+	"gorm.io/gorm"
 )
 
 // ── Task result ingest ────────────────────────────────────────────────────
@@ -185,8 +186,10 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			}
 			appendTaskResultTail(task, r.Output)
 			task.UpdatedAt = now
-			if uerr := s.db.Model(&db.Task{}).Where("id = ?", task.ID).
-				Updates(map[string]interface{}{"result": task.Result, "updated_at": now}).Error; uerr != nil {
+			if uerr := s.withBusyRetryDB("result", func() *gorm.DB {
+				return s.db.Model(&db.Task{}).Where("id = ?", task.ID).
+					Updates(map[string]interface{}{"result": task.Result, "updated_at": now})
+			}).Error; uerr != nil {
 				slog.Error("Failed to persist partial task output", "agent_id", uuid, "task_id", r.TaskID, "error", uerr)
 			}
 			s.broadcastTaskUpdate(uuid, *task)
@@ -202,9 +205,11 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 		if r.Error != "" {
 			finalStatus = "failed"
 		}
-		claim := s.db.Model(&db.Task{}).
-			Where("id = ? AND status IN ?", task.ID, []string{"pending", "running", "sent"}).
-			Update("status", finalStatus)
+		claim := s.withBusyRetryDB("result", func() *gorm.DB {
+			return s.db.Model(&db.Task{}).
+				Where("id = ? AND status IN ?", task.ID, []string{"pending", "running", "sent"}).
+				Update("status", finalStatus)
+		})
 		if claim.Error != nil {
 			slog.Error("Failed to claim task finality", "agent_id", uuid, "task_id", r.TaskID, "error", claim.Error)
 			continue
@@ -233,7 +238,9 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			if r.Type == "screen_stream_start" && task.Status == "failed" {
 				s.BroadcastScreenMonitorError(uuid, task.Error)
 			}
-			if err := s.db.Save(task).Error; err != nil {
+			if err := s.withBusyRetryDB("result", func() *gorm.DB {
+				return s.db.Save(task)
+			}).Error; err != nil {
 				slog.Error("Failed to save screen control task", "task_id", task.ID, "error", err)
 			}
 			continue
@@ -289,7 +296,9 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 				}
 			}
 			if len(sleepUpdates) > 0 {
-				if err := s.db.Model(&db.Implant{}).Where("id = ?", uuid).Updates(sleepUpdates).Error; err != nil {
+				if err := s.withBusyRetryDB("result", func() *gorm.DB {
+					return s.db.Model(&db.Implant{}).Where("id = ?", uuid).Updates(sleepUpdates)
+				}).Error; err != nil {
 					slog.Error("Failed to update sleep settings on agent", "agent_id", uuid, "error", err)
 				} else {
 					s.broadcastAgentDataUpdate(uuid, sleepUpdates)
@@ -386,14 +395,16 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			// (alerts fire) rather than storing the output as plaintext.
 			task.Status = "failed"
 		}
-		if err := s.db.Model(task).Updates(map[string]interface{}{
-			"status":         task.Status,
-			"result":         dbTask.Result,
-			"error":          dbTask.Error,
-			"progress":       task.Progress,
-			"total_bytes":    task.TotalBytes,
-			"transferred":    task.Transferred,
-			"last_result_id": task.LastResultID,
+		if err := s.withBusyRetryDB("result", func() *gorm.DB {
+			return s.db.Model(task).Updates(map[string]interface{}{
+				"status":         task.Status,
+				"result":         dbTask.Result,
+				"error":          dbTask.Error,
+				"progress":       task.Progress,
+				"total_bytes":    task.TotalBytes,
+				"transferred":    task.Transferred,
+				"last_result_id": task.LastResultID,
+			})
 		}).Error; err != nil {
 			slog.Error("Failed to save task result", "task_id", task.ID, "agent_id", uuid, "type", r.Type, "error", err)
 		}
@@ -523,9 +534,11 @@ func (s *Server) processTaskAcknowledgements(agentID string, taskIDs []uint, now
 	if len(unique) == 0 {
 		return
 	}
-	if err := s.db.Model(&db.Task{}).
-		Where("id IN ? AND agent_id = ? AND status = ? AND acknowledged_at IS NULL", unique, agentID, "running").
-		Update("acknowledged_at", now).Error; err != nil {
+	if err := s.withBusyRetryDB("ack", func() *gorm.DB {
+		return s.db.Model(&db.Task{}).
+			Where("id IN ? AND agent_id = ? AND status = ? AND acknowledged_at IS NULL", unique, agentID, "running").
+			Update("acknowledged_at", now)
+	}).Error; err != nil {
 		slog.Error("Failed to acknowledge agent tasks", "agent_id", agentID, "count", len(unique), "error", err)
 	}
 }
