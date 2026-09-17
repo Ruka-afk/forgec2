@@ -6,6 +6,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 interface ChartDataProps<T> {
   data: T;
@@ -48,6 +49,9 @@ export function withChartData<T, P extends Record<string, unknown> = Record<stri
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
     const [visible, setVisible] = useState(false);
+    // Crash epoch: bumping it resets the render boundary below (via
+    // resetKey) so "retry" both refetches and remounts the crashed chart.
+    const [crashEpoch, setCrashEpoch] = useState(0);
     const ref = useRef<HTMLDivElement>(null);
     const transformRef = useRef(transform);
     transformRef.current = transform;
@@ -109,7 +113,20 @@ export function withChartData<T, P extends Record<string, unknown> = Record<stri
             <Button variant="link" size="sm" onClick={load} className="ml-2">{t("common.retry")}</Button>
           </div>
         ) : data != null ? (
-          <Wrapped data={data as T} loading={false} error={false} onRefresh={load} {...(rest as P)} />
+          // Render crashes (bad transform output, chart lib throwing on
+          // edge-case data) stay inside the widget: the dashboard keeps the
+          // other charts instead of blanking the page.
+          <ErrorBoundary
+            resetKey={crashEpoch}
+            fallback={(
+              <div className="h-24 flex items-center justify-center text-destructive text-xs" role="alert">
+                <AlertTriangle className="size-4 mr-2 inline" />{t("common.load_failed")}
+                <Button variant="link" size="sm" onClick={() => { setCrashEpoch((e) => e + 1); load(); }} className="ml-2">{t("common.retry")}</Button>
+              </div>
+            )}
+          >
+            <Wrapped data={data as T} loading={false} error={false} onRefresh={load} {...(rest as P)} />
+          </ErrorBoundary>
         ) : null}
       </div>
     );

@@ -21,6 +21,7 @@ const AgentDockFiles = lazy(() => import("./AgentDockFiles").then((m) => ({ defa
 const AgentDockCommands = lazy(() => import("./AgentDockCommands").then((m) => ({ default: m.AgentDockCommands })));
 const AgentDockShot = lazy(() => import("./AgentDockShot").then((m) => ({ default: m.AgentDockShot })));
 import { shouldRefreshDockShot } from "./dock-shot";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import { applyTaskEvent, canApproveOwnTask, canCancelTask, canReviewTask, isDockTaskEvent, shouldRevealTaskResult, taskEventId } from "./dock-tasks";
 import { diffChangeLines, diffResults, previousComparableTask, resultLooksComparable } from "./result-diff";
 import { useAppStore } from "@/lib/store";
@@ -285,22 +286,24 @@ export function AgentInteractDock({
           </TabsList>
           <TabsContent value="shell" keepMounted className="mt-0 min-h-0 flex-1 p-0">
             {id && (
-              <Suspense fallback={(
-                <div className="flex h-full items-center justify-center">
-                  <Spinner />
-                </div>
-              )}>
-                <ShellTerminal
-                  agentId={id}
-                  osType={osType}
-                  hostname={beacon.hostname}
-                  username={beacon.username}
-                  ip={beacon.ip}
-                  lastSeen={beacon.last_seen}
-                  status={beacon.status}
-                  className="flex h-full flex-col overflow-hidden bg-(--shell-terminal-bg) text-slate-100"
-                />
-              </Suspense>
+              <ErrorBoundary resetKey={id}>
+                <Suspense fallback={(
+                  <div className="flex h-full items-center justify-center">
+                    <Spinner />
+                  </div>
+                )}>
+                  <ShellTerminal
+                    agentId={id}
+                    osType={osType}
+                    hostname={beacon.hostname}
+                    username={beacon.username}
+                    ip={beacon.ip}
+                    lastSeen={beacon.last_seen}
+                    status={beacon.status}
+                    className="flex h-full flex-col overflow-hidden bg-(--shell-terminal-bg) text-slate-100"
+                  />
+                </Suspense>
+              </ErrorBoundary>
             )}
           </TabsContent>
           <TabsContent value="files" keepMounted className="mt-0 min-h-0 flex-1 p-0">

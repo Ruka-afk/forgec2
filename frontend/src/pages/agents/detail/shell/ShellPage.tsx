@@ -19,6 +19,7 @@ import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { agentIdentityTitle, pickAgentField } from "@/lib/shell-ui";
 import { agentDetailHref } from "../components/agent-detail-utils";
 import type { AgentStatus } from "@/types/agent";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 const ShellTerminal = lazy(() => import("@/components/ShellTerminal")); // xterm is heavy; spinner fallback at usage below
 
@@ -122,22 +123,24 @@ export default function AgentShellPage() {
         <p className="shrink-0 px-4 py-1.5 text-xs text-red-300" role="alert">{listError}</p>
       )}
       {agentId && (
-        <Suspense fallback={(
-          <div className="flex h-full items-center justify-center bg-(--shell-terminal-bg)">
-            <Spinner />
-          </div>
-        )}>
-          <ShellTerminal
-            agentId={agentId}
-            osType={osType}
-            hostname={hostname}
-            username={username}
-            ip={ip}
-            lastSeen={lastSeen}
-            status={status}
-            className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
-          />
-        </Suspense>
+        <ErrorBoundary resetKey={agentId}>
+          <Suspense fallback={(
+            <div className="flex h-full items-center justify-center bg-(--shell-terminal-bg)">
+              <Spinner />
+            </div>
+          )}>
+            <ShellTerminal
+              agentId={agentId}
+              osType={osType}
+              hostname={hostname}
+              username={username}
+              ip={ip}
+              lastSeen={lastSeen}
+              status={status}
+              className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
+            />
+          </Suspense>
+        </ErrorBoundary>
       )}
     </div>
   );
