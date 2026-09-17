@@ -259,9 +259,13 @@ func (s *Server) handleHealthCheck(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "db_unavailable"})
 		return
 	}
+	uptime := time.Since(s.startTime)
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "ok",
 		"version": ServerVersion,
-		"uptime":  time.Since(s.startTime).String(),
+		// uptime stays a Go duration string for existing consumers;
+		// uptime_seconds is the machine-readable twin for alerting.
+		"uptime":         uptime.String(),
+		"uptime_seconds": uptime.Seconds(),
 	})
 }

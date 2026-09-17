@@ -48,6 +48,12 @@ try {
 
     # 2. Copy output to webdist (skip when byte-identical to avoid 258-file churn)
     Write-Host "==> Syncing frontend output to webdist..." -ForegroundColor Cyan
+    if (-not (Test-Path "frontend/out")) {
+        throw "frontend/out missing after build — frontend build produced no output"
+    }
+    if (@(Get-ChildItem -Force "frontend/out").Count -eq 0) {
+        throw "frontend/out is empty after build — refusing to embed an empty bundle"
+    }
     $webdistFresh = $false
     if (Test-Path "internal/webdist/dist") {
         # Native stderr under $ErrorActionPreference=Stop becomes a
@@ -63,11 +69,17 @@ try {
         }
     }
     if (-not $webdistFresh) {
+        # Staged swap: a failed copy must never leave a half-removed dist
+        # behind (the next go build would embed the wreckage).
+        if (Test-Path "internal/webdist/dist.new") {
+            Remove-Item -Recurse -Force "internal/webdist/dist.new"
+        }
+        New-Item -ItemType Directory -Path "internal/webdist/dist.new" | Out-Null
+        Copy-Item -Recurse -Path "frontend/out/*" -Destination "internal/webdist/dist.new/"
         if (Test-Path "internal/webdist/dist") {
             Remove-Item -Recurse -Force "internal/webdist/dist"
         }
-        New-Item -ItemType Directory -Path "internal/webdist/dist" | Out-Null
-        Copy-Item -Recurse -Path "frontend/out/*" -Destination "internal/webdist/dist/"
+        Rename-Item -Path "internal/webdist/dist.new" -NewName "dist"
     }
 
     # 2.5. Validate source contracts, the freshly-built bundle and the embedded
@@ -91,13 +103,50 @@ try {
     cmd /c "taskkill /f /im forgec2-server.exe >nul 2>&1"
     Start-Sleep -Seconds 1
     $p = Start-Process -WindowStyle Hidden -FilePath ".\forgec2-server.exe" -ArgumentList "-config config.yaml" -PassThru
-    Start-Sleep -Seconds 3
 
-    # 5. Health check (port is overridable via $env:FORGEC2_PORT to match server.port)
+    # 5. Health check (port is overridable via $env:FORGEC2_PORT to match server.port).
+    # Retried like CI (30x1s): the server needs time for migrations + listener
+    # bring-up. Plain HTTP first, then self-signed HTTPS (default secure
+    # profile) — PS 5.1 has no -SkipCertificateCheck, so relax validation via
+    # ServicePointManager for the probe only.
     $healthPort = if ($env:FORGEC2_PORT) { $env:FORGEC2_PORT } else { "8000" }
-    $health = Invoke-RestMethod -Uri "http://127.0.0.1:$healthPort/health" -ErrorAction SilentlyContinue
+    $health = $null
+    for ($i = 0; $i -lt 30; $i++) {
+        Start-Sleep -Seconds 1
+        if ($p.HasExited) { break }
+        try {
+            $health = Invoke-RestMethod -Uri "http://127.0.0.1:$healthPort/health" -TimeoutSec 5 -ErrorAction Stop
+        } catch {
+            $health = $null
+        }
+        if ($null -ne $health -and $health.status -eq "ok") { break }
+        try {
+            add-type @"
+using System.Net;
+using System.Security.Cryptography.X509Certificates;
+public class TrustAllCertsPolicy : ICertificatePolicy {
+    public bool CheckValidationResult(ServicePoint srvPoint, X509Certificate certificate, WebRequest request, int certificateProblem) {
+        return true;
+    }
+}
+"@ -ErrorAction SilentlyContinue
+            [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
+            $health = Invoke-RestMethod -Uri "https://127.0.0.1:$healthPort/health" -TimeoutSec 5 -ErrorAction Stop
+        } catch {
+            $health = $null
+        }
+        if ($null -ne $health -and $health.status -eq "ok") { break }
+        $health = $null
+    }
     if ($null -eq $health -or $health.status -ne "ok") {
         Write-Warning "Server health check failed (PID $($p.Id))"
+        if (-not $p.HasExited) {
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+        }
+        if (Test-Path "logs/forgec2.log") {
+            Write-Host "--- logs/forgec2.log (tail) ---" -ForegroundColor Yellow
+            Get-Content "logs/forgec2.log" -Tail 30
+        }
         exit 1
     }
     Write-Host "Build + deploy complete (PID $($p.Id))" -ForegroundColor Green

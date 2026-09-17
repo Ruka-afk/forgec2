@@ -258,19 +258,23 @@ func (s *Server) handleLogin(c *gin.Context) {
 	}
 	middleware.SetCookieWithSameSite(c, "forgec2_session", token, maxAge, "/", middleware.CookieSecure, true, http.SameSiteLaxMode)
 
+	// Fail closed when the CSRF binding key is unavailable: issuing a session
+	// without its CSRF cookie only produces confusing 403s on every later
+	// mutation. Check before createSession so no orphaned session row is left.
+	csrfSecret := middleware.GetCSRFSecret()
+	if csrfSecret == nil {
+		slog.Error("CSRF secret unavailable during login, refusing session")
+		respondError(c, http.StatusInternalServerError, "server misconfigured (CSRF unavailable)")
+		return
+	}
 	if err := s.createSession(token, user.ID, c.ClientIP(), c.Request.UserAgent(), "", maxAge); err != nil {
 		slog.Error("Failed to create session during login", "user_id", user.ID, "err", err)
 		respondError(c, http.StatusInternalServerError, "failed to create session")
 		return
 	}
 
-	csrfSecret := middleware.GetCSRFSecret()
-	if csrfSecret == nil {
-		slog.Error("CSRF secret unavailable during login, skipping CSRF cookie")
-	} else {
-		csrfToken := middleware.DeriveCSRFToken(token, csrfSecret)
-		middleware.SetCookieWithSameSite(c, "forgec2_csrf", csrfToken, 0, "/", middleware.CookieSecure, false, http.SameSiteLaxMode)
-	}
+	csrfToken := middleware.DeriveCSRFToken(token, csrfSecret)
+	middleware.SetCookieWithSameSite(c, "forgec2_csrf", csrfToken, 0, "/", middleware.CookieSecure, false, http.SameSiteLaxMode)
 
 	s.clearLoginLockout(clientIP)
 	s.loginLockout.resetAccount(username)

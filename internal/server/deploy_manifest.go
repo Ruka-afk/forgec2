@@ -34,7 +34,9 @@ func GenerateDeployManifest(configPath string) *DeployManifest {
 		configHash := hashFile(configPath)
 
 		deployManifest = &DeployManifest{
-			Version:         "2.0.0",
+			// Single version source: the ServerVersion ldflag (dev by
+			// default). The old hardcoded literal drifted from releases.
+			Version:         ServerVersion,
 			GoVersion:       runtime.Version(),
 			BuildOS:         runtime.GOOS,
 			BuildArch:       runtime.GOARCH,

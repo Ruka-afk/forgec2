@@ -25,6 +25,12 @@ func newLoginTestServer(t *testing.T) *Server {
 	if err := middleware.InitJWTSecret(cfg, ""); err != nil {
 		t.Fatalf("InitJWTSecret() error = %v", err)
 	}
+	// Mirror production startup (InitCSRFSecret runs before serving): login
+	// now fails closed without the binding key.
+	cfg.Crypto.CsrfKey = strings.Repeat("cd", 32) // 64 hex chars = 32 bytes
+	if err := middleware.InitCSRFSecret(cfg); err != nil {
+		t.Fatalf("InitCSRFSecret() error = %v", err)
+	}
 	return &Server{
 		db:           newContractDB(t),
 		cfg:          cfg,
@@ -134,6 +140,53 @@ func TestHandleLogin_Success(t *testing.T) {
 	}
 	if updated.LastLogin.IsZero() {
 		t.Fatal("expected LastLogin to be set after successful login")
+	}
+}
+
+// TestHandleLogin_SetsSessionBoundCsrfCookie proves a successful login seeds
+// the double-submit CSRF cookie bound to the issued session (fail-closed
+// invariant: no session may exist without its CSRF counterpart).
+func TestHandleLogin_SetsSessionBoundCsrfCookie(t *testing.T) {
+	s := newLoginTestServer(t)
+
+	hash, err := middleware.HashPassword("correct_password")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	if err := s.db.Create(&db.User{Username: "csrf_user", PasswordHash: hash, Role: "admin", IsActive: true}).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	form := url.Values{}
+	form.Set("username", "csrf_user")
+	form.Set("password", "correct_password")
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.POST("/login", s.handleLogin)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusFound {
+		t.Fatalf("expected 302 redirect, got %d; body=%s", w.Code, w.Body.String())
+	}
+	var session, csrf string
+	for _, ck := range w.Result().Cookies() {
+		switch ck.Name {
+		case "forgec2_session":
+			session = ck.Value
+		case "forgec2_csrf":
+			csrf = ck.Value
+		}
+	}
+	if session == "" || csrf == "" {
+		t.Fatalf("missing cookies: session=%q csrf=%q", session, csrf)
+	}
+	if want := middleware.DeriveCSRFToken(session, middleware.GetCSRFSecret()); want != csrf {
+		t.Fatal("CSRF cookie is not bound to the issued session")
 	}
 }
 
