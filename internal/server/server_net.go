@@ -45,29 +45,51 @@ func (s *Server) periodicRPortFwdCleanup() {
 }
 
 // cleanupStaleLPortFwd drops tunneled lportfwd connections whose agent no
-// longer exists or is offline, mirroring the rportfwd sweep.
+// longer exists or is offline (LastSeen threshold, mirroring the rportfwd
+// sweep — the old Status=="online" check lagged on flapping agents), plus
+// legs idle past lportfwdConnIdleTimeout.
 func (s *Server) cleanupStaleLPortFwd() {
 	s.lportfwdMu.Lock()
-	agentIDs := make([]string, 0, len(s.lportfwdTargets))
-	for _, t := range s.lportfwdTargets {
-		agentIDs = append(agentIDs, t.agentID)
+	type leg struct {
+		key        string
+		agentID    string
+		connID     uint64
+		lastActive time.Time
+	}
+	legs := make([]leg, 0, len(s.lportfwdTargets))
+	seenAgents := make(map[string]bool)
+	for key, t := range s.lportfwdTargets {
+		legs = append(legs, leg{key: key, agentID: t.agentID, connID: connIDFromKey(key), lastActive: t.lastActive})
+		seenAgents[t.agentID] = true
 	}
 	s.lportfwdMu.Unlock()
-	if len(agentIDs) == 0 {
+	if len(legs) == 0 {
 		return
+	}
+	agentIDs := make([]string, 0, len(seenAgents))
+	for id := range seenAgents {
+		agentIDs = append(agentIDs, id)
 	}
 	var agents []db.Implant
 	if err := s.db.Where("id IN ?", agentIDs).Limit(len(agentIDs)).Find(&agents).Error; err != nil {
 		slog.Error("Failed to batch-load agents for lportfwd cleanup", "error", err)
 		return
 	}
-	online := make(map[string]bool, len(agents))
-	for i := range agents {
-		online[agents[i].ID] = agents[i].Status == "online"
+	byID := make(map[string]db.Implant, len(agents))
+	for _, a := range agents {
+		byID[a.ID] = a
 	}
-	for _, id := range agentIDs {
-		if !online[id] {
-			s.cleanupLPortFwdForAgent(id)
+	now := time.Now()
+	threshold := s.offlineThreshold() * 2
+	for _, l := range legs {
+		a, ok := byID[l.agentID]
+		if !ok || now.Sub(a.LastSeen) > threshold {
+			s.lportfwdClose(l.agentID, l.connID)
+			continue
+		}
+		if !l.lastActive.IsZero() && now.Sub(l.lastActive) > lportfwdConnIdleTimeout {
+			slog.Info("lportfwd: reaping idle leg", "agent_id", l.agentID, "conn", l.connID)
+			s.lportfwdClose(l.agentID, l.connID)
 		}
 	}
 }

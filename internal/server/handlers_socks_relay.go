@@ -48,6 +48,12 @@ type socksRelayEngine struct {
 	rportfwdBytes  map[string]int
 	rportfwdMu     sync.Mutex
 
+	// lportfwdFrames is the same dedicated-FIFO treatment for lportfwd
+	// data/close frames (see rportfwdFrames above).
+	lportfwdFrames map[string][]socksFrame
+	lportfwdBytes  map[string]int
+	lportfwdMu     sync.Mutex
+
 	// dropCounter, when set, counts silently-dropped frames by reason
 	// (outbound_overflow, control_overflow). Wired by the server after
 	// metrics init; nil in unit tests.
@@ -106,6 +112,16 @@ const (
 	rportfwdMaxBytesPerAgent  = 2 << 20
 )
 
+// lportfwd queue bounds: same isolation rationale as rportfwd. Close frames
+// bypass the byte/data caps (up to a large safety cap) so a full queue can
+// never swallow the teardown notification and leak both legs until the
+// 5-minute sweep.
+const (
+	lportfwdMaxFramesPerAgent = 500
+	lportfwdMaxBytesPerAgent  = 2 << 20
+	lportfwdMaxCloseFrames    = 2000
+)
+
 func newSocksRelayEngine() *socksRelayEngine {
 	return &socksRelayEngine{
 		sessions:       make(map[string]*socksRelaySession),
@@ -113,6 +129,8 @@ func newSocksRelayEngine() *socksRelayEngine {
 		controlFrames:  make(map[string][]socksFrame),
 		rportfwdFrames: make(map[string][]socksFrame),
 		rportfwdBytes:  make(map[string]int),
+		lportfwdFrames: make(map[string][]socksFrame),
+		lportfwdBytes:  make(map[string]int),
 	}
 }
 
@@ -461,7 +479,8 @@ func (e *socksRelayEngine) enqueueFrame(agentID string, f socksFrame) {
 
 // enqueueRPortFwdFrame queues a server→agent rportfwd frame on the dedicated
 // per-agent FIFO. Returns false on overflow (caller must close loudly —
-// dropping a data frame silently corrupts the TCP stream).
+// dropping a data frame silently corrupts the TCP stream). Close frames
+// bypass the byte/data caps so teardown is never swallowed by a full queue.
 func (e *socksRelayEngine) enqueueRPortFwdFrame(agentID string, f socksFrame) bool {
 	e.rportfwdMu.Lock()
 	defer e.rportfwdMu.Unlock()
@@ -469,14 +488,23 @@ func (e *socksRelayEngine) enqueueRPortFwdFrame(agentID string, f socksFrame) bo
 		e.rportfwdFrames = make(map[string][]socksFrame)
 		e.rportfwdBytes = make(map[string]int)
 	}
-	queued := e.rportfwdBytes[agentID] + len(f.Data)
-	if len(e.rportfwdFrames[agentID]) >= rportfwdMaxFramesPerAgent || queued > rportfwdMaxBytesPerAgent {
-		slog.Warn("Rportfwd queue full, dropping frame", "agent_id", agentID, "action", f.Action)
+	if f.Action != "rportfwd_close" {
+		queued := e.rportfwdBytes[agentID] + len(f.Data)
+		if len(e.rportfwdFrames[agentID]) >= rportfwdMaxFramesPerAgent || queued > rportfwdMaxBytesPerAgent {
+			slog.Warn("Rportfwd queue full, dropping frame", "agent_id", agentID, "action", f.Action)
+			e.noteDrop("rportfwd_overflow")
+			return false
+		}
+		e.rportfwdFrames[agentID] = append(e.rportfwdFrames[agentID], f)
+		e.rportfwdBytes[agentID] = queued
+		return true
+	}
+	if len(e.rportfwdFrames[agentID]) >= lportfwdMaxCloseFrames {
+		slog.Warn("Rportfwd close queue full, dropping close", "agent_id", agentID)
 		e.noteDrop("rportfwd_overflow")
 		return false
 	}
 	e.rportfwdFrames[agentID] = append(e.rportfwdFrames[agentID], f)
-	e.rportfwdBytes[agentID] = queued
 	return true
 }
 
@@ -493,6 +521,51 @@ func (e *socksRelayEngine) collectRPortFwdFrames(agentID string) []socksFrame {
 	copy(out, frames)
 	e.rportfwdFrames[agentID] = nil
 	e.rportfwdBytes[agentID] = 0
+	return out
+}
+
+// enqueueLPortFwdFrame queues a server→agent lportfwd frame on the dedicated
+// per-agent FIFO. Same contract as enqueueRPortFwdFrame: data overflow
+// returns false (caller closes loudly), closes bypass caps.
+func (e *socksRelayEngine) enqueueLPortFwdFrame(agentID string, f socksFrame) bool {
+	e.lportfwdMu.Lock()
+	defer e.lportfwdMu.Unlock()
+	if e.lportfwdFrames == nil {
+		e.lportfwdFrames = make(map[string][]socksFrame)
+		e.lportfwdBytes = make(map[string]int)
+	}
+	if f.Action != "lportfwd_close" {
+		queued := e.lportfwdBytes[agentID] + len(f.Data)
+		if len(e.lportfwdFrames[agentID]) >= lportfwdMaxFramesPerAgent || queued > lportfwdMaxBytesPerAgent {
+			slog.Warn("Lportfwd queue full, dropping frame", "agent_id", agentID, "action", f.Action)
+			e.noteDrop("lportfwd_overflow")
+			return false
+		}
+		e.lportfwdFrames[agentID] = append(e.lportfwdFrames[agentID], f)
+		e.lportfwdBytes[agentID] = queued
+		return true
+	}
+	if len(e.lportfwdFrames[agentID]) >= lportfwdMaxCloseFrames {
+		slog.Warn("Lportfwd close queue full, dropping close", "agent_id", agentID)
+		e.noteDrop("lportfwd_overflow")
+		return false
+	}
+	e.lportfwdFrames[agentID] = append(e.lportfwdFrames[agentID], f)
+	return true
+}
+
+// collectLPortFwdFrames drains the dedicated lportfwd FIFO for an agent.
+func (e *socksRelayEngine) collectLPortFwdFrames(agentID string) []socksFrame {
+	e.lportfwdMu.Lock()
+	defer e.lportfwdMu.Unlock()
+	frames := e.lportfwdFrames[agentID]
+	if len(frames) == 0 {
+		return nil
+	}
+	out := make([]socksFrame, len(frames))
+	copy(out, frames)
+	e.lportfwdFrames[agentID] = nil
+	e.lportfwdBytes[agentID] = 0
 	return out
 }
 
@@ -533,7 +606,10 @@ func (e *socksRelayEngine) collectPendingFrames(agentID string) []socksFrame {
 	// control queue so bulk tunnel data can't evict closes).
 	frames = append(frames, e.collectRPortFwdFrames(agentID)...)
 
-	// 3. Data frames from connections — minimize lock hold time
+	// 3. Lportfwd frames on their own dedicated FIFO (same rationale).
+	frames = append(frames, e.collectLPortFwdFrames(agentID)...)
+
+	// 4. Data frames from connections — minimize lock hold time
 	type connDrain struct {
 		connID   uint64
 		outbound [][]byte

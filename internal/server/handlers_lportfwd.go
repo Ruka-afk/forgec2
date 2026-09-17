@@ -19,8 +19,8 @@ import (
 // On lportfwd_connect this side dials the target, spawns a read pump that
 // converts target bytes into outbound frames for the agent, and registers the
 // connection so inbound data frames are written to the target. Frames toward
-// the agent ride the existing socksEngine queue (collectSocksFrames), so no
-// new transport machinery is introduced.
+// the agent ride a dedicated socksEngine FIFO (collectSocksFrames), isolated
+// from the SOCKS control queue so bulk transfer can't evict closes.
 
 const (
 	lportfwdDialTimeout    = 10 * time.Second
@@ -28,10 +28,21 @@ const (
 	lportfwdMaxFrameTarget = 256 // sanity cap on target string length
 )
 
+// lportfwdMaxConnsPerAgent caps simultaneous tunneled legs per agent: each
+// holds an FD plus a read-pump goroutine and beacon-queue backlog, so an
+// unbounded lportfwd_connect flood is an FD/goroutine exhaustion primitive
+// (rportfwd already caps at 64 per relay).
+const lportfwdMaxConnsPerAgent = 64
+
+// lportfwdConnIdleTimeout reaps tunneled legs idle this long. Without it a
+// forgotten session pins the FD, the pump goroutine and the queue backlog.
+const lportfwdConnIdleTimeout = 10 * time.Minute
+
 type lportfwdTarget struct {
-	agentID string
-	target  string
-	tcpConn net.Conn
+	agentID    string
+	target     string
+	tcpConn    net.Conn
+	lastActive time.Time
 }
 
 // processLPortFwdData handles one inbound frame from an agent. Called from
@@ -66,7 +77,7 @@ func connIDFromKey(key string) uint64 {
 func (s *Server) lportfwdConnect(agentID string, connID uint64, target string) {
 	if len(target) == 0 || len(target) > lportfwdMaxFrameTarget {
 		slog.Warn("lportfwd: rejecting connect with invalid target", "agent_id", agentID, "conn", connID)
-		s.socksEngine.enqueueFrame(agentID, socksFrame{ConnID: connID, Action: "lportfwd_close"})
+		s.socksEngine.enqueueLPortFwdFrame(agentID, socksFrame{ConnID: connID, Action: "lportfwd_close"})
 		return
 	}
 	// P1 fix: the connect frame is agent-controlled. Only dial targets the
@@ -75,17 +86,31 @@ func (s *Server) lportfwdConnect(agentID string, connID uint64, target string) {
 	// teamserver's network (127.0.0.1 admin ports, cloud metadata, ...).
 	if !s.lportfwdTargetAllowed(agentID, target) {
 		slog.Warn("lportfwd: rejecting undeclared or unsafe target", "agent_id", agentID, "conn", connID)
-		s.socksEngine.enqueueFrame(agentID, socksFrame{ConnID: connID, Action: "lportfwd_close"})
+		s.socksEngine.enqueueLPortFwdFrame(agentID, socksFrame{ConnID: connID, Action: "lportfwd_close"})
+		return
+	}
+	// Per-agent connection cap: each leg pins an FD + pump goroutine.
+	s.lportfwdMu.Lock()
+	connsForAgent := 0
+	for _, t := range s.lportfwdTargets {
+		if t.agentID == agentID {
+			connsForAgent++
+		}
+	}
+	s.lportfwdMu.Unlock()
+	if connsForAgent >= lportfwdMaxConnsPerAgent {
+		slog.Warn("lportfwd: at connection cap, refusing", "agent_id", agentID, "cap", lportfwdMaxConnsPerAgent)
+		s.socksEngine.enqueueLPortFwdFrame(agentID, socksFrame{ConnID: connID, Action: "lportfwd_close"})
 		return
 	}
 	conn, err := net.DialTimeout("tcp", target, lportfwdDialTimeout)
 	if err != nil {
 		slog.Info("lportfwd: target dial failed", "agent_id", agentID, "conn", connID, "target", target, "error", err)
-		s.socksEngine.enqueueFrame(agentID, socksFrame{ConnID: connID, Action: "lportfwd_close"})
+		s.socksEngine.enqueueLPortFwdFrame(agentID, socksFrame{ConnID: connID, Action: "lportfwd_close"})
 		return
 	}
 
-	t := &lportfwdTarget{agentID: agentID, target: target, tcpConn: conn}
+	t := &lportfwdTarget{agentID: agentID, target: target, tcpConn: conn, lastActive: time.Now()}
 	key := lportfwdKey(agentID, connID)
 	s.lportfwdMu.Lock()
 	// Duplicate connect for the same connID (replay/retry): close the existing
@@ -100,17 +125,28 @@ func (s *Server) lportfwdConnect(agentID string, connID uint64, target string) {
 	slog.Info("lportfwd: target connected", "agent_id", agentID, "conn", connID, "target", target)
 
 	// Read pump: target -> agent. Frames queue for the next beacon; when the
-	// target closes we tell the agent to drop its local leg.
+	// target closes we tell the agent to drop its local leg. Queue overflow
+	// closes loudly (dropped data would corrupt the TCP stream silently).
 	go func() {
 		buf := make([]byte, 16*1024)
 		for {
 			n, rerr := conn.Read(buf)
 			if n > 0 {
-				s.socksEngine.enqueueFrame(agentID, socksFrame{
+				ok := s.socksEngine.enqueueLPortFwdFrame(agentID, socksFrame{
 					ConnID: connID,
 					Action: "lportfwd_data",
 					Data:   append([]byte{}, buf[:n]...),
 				})
+				s.lportfwdMu.Lock()
+				if cur, tracked := s.lportfwdTargets[key]; tracked && cur == t {
+					cur.lastActive = time.Now()
+				}
+				s.lportfwdMu.Unlock()
+				if !ok {
+					slog.Warn("lportfwd: queue overflow, closing leg", "agent_id", agentID, "conn", connID)
+					s.lportfwdClose(agentID, connID)
+					return
+				}
 			}
 			if rerr != nil {
 				s.lportfwdClose(agentID, connID)
@@ -135,6 +171,11 @@ func (s *Server) lportfwdWrite(agentID string, connID uint64, data []byte) {
 		return
 	}
 	t.tcpConn.SetWriteDeadline(time.Time{})
+	s.lportfwdMu.Lock()
+	if cur, tracked := s.lportfwdTargets[lportfwdKey(agentID, connID)]; tracked && cur == t {
+		cur.lastActive = time.Now()
+	}
+	s.lportfwdMu.Unlock()
 }
 
 func (s *Server) lportfwdClose(agentID string, connID uint64) {
@@ -150,7 +191,9 @@ func (s *Server) lportfwdClose(agentID string, connID uint64) {
 	}
 	_ = t.tcpConn.Close()
 	// Tell the agent its local leg should close too (idempotent there).
-	s.socksEngine.enqueueFrame(agentID, socksFrame{ConnID: connID, Action: "lportfwd_close"})
+	// Close frames bypass the queue byte cap, so this notification can't be
+	// swallowed by a full backlog (which used to leak both legs).
+	s.socksEngine.enqueueLPortFwdFrame(agentID, socksFrame{ConnID: connID, Action: "lportfwd_close"})
 	slog.Info("lportfwd: connection closed", "agent_id", agentID, "conn", connID, "target", t.target)
 }
 
