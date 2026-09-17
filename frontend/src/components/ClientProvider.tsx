@@ -7,6 +7,7 @@ import ErrorBoundary from "./ErrorBoundary";
 import SessionTimeoutWarning from "./SessionTimeoutWarning";
 import RateLimitBanner from "./RateLimitBanner";
 import NetworkStatusBanner from "./NetworkStatusBanner";
+import WsOutboxToast from "./WsOutboxToast";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useAppStore } from "@/lib/store";
@@ -98,6 +99,7 @@ export default function ClientProvider({ children }: { children: React.ReactNode
             <SessionTimeoutWarning />
             <RateLimitBanner />
             <NetworkStatusBanner />
+            <WsOutboxToast />
           </WebSocketProvider>
         </I18nProvider>
       </ThemeProvider>

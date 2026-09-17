@@ -49,7 +49,7 @@ interface WSContextValue {
   connected: boolean;
   reconnectFailed: boolean;
   subscribe: (listener: WSListener) => () => void;
-  send: (data: unknown) => void;
+  send: (data: unknown, opts?: { critical?: boolean }) => void;
   reconnect: () => void;
 }
 
@@ -71,6 +71,11 @@ const BACKGROUND_RETRY_DELAY_MS = 60000;
 const HEARTBEAT_INTERVAL_MS = 30000;
 const HEARTBEAT_TIMEOUT_MS = 60000;
 const MAX_BUFFER_SIZE = 50;
+// Critical outbox (operator-intent frames like emergency arm/disarm): small,
+// flushed ahead of the normal buffer on reconnect, same overflow discipline.
+const MAX_CRITICAL_BUFFER_SIZE = 10;
+/** Dispatched on window when an offline send is shed (detail: {dropped}). */
+export const WS_OUTBOX_DROP_EVENT = "forgec2:ws-outbox-drop";
 
 export function WebSocketProvider({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState(false);
@@ -82,6 +87,8 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   const listenersRef = useRef<Set<WSListener>>(new Set());
   const reconnectAttemptRef = useRef(0);
   const sendBufferRef = useRef<string[]>([]);
+  const criticalBufferRef = useRef<string[]>([]);
+  const droppedOutboxRef = useRef(0);
   const connectRef = useRef<() => void>(() => {});
 
   const subscribe = useCallback((listener: WSListener) => {
@@ -91,17 +98,27 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const send = useCallback((data: unknown) => {
+  const send = useCallback((data: unknown, opts?: { critical?: boolean }) => {
     const raw = JSON.stringify(data);
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(raw);
-    } else {
-      if (sendBufferRef.current.length >= MAX_BUFFER_SIZE) {
-        sendBufferRef.current.shift();
-      }
-      sendBufferRef.current.push(raw);
+      return;
     }
+    // Offline: buffer for replay on reconnect. A shed frame is lost operator
+    // intent (previously silent) — count it, log it, and notify the UI layer
+    // via WS_OUTBOX_DROP_EVENT (sonner toasts with a stable id collapse).
+    const buf = opts?.critical ? criticalBufferRef.current : sendBufferRef.current;
+    const cap = opts?.critical ? MAX_CRITICAL_BUFFER_SIZE : MAX_BUFFER_SIZE;
+    if (buf.length >= cap) {
+      buf.shift();
+      droppedOutboxRef.current += 1;
+      logger.warn("ws outbox overflow, dropping oldest frame", { dropped: droppedOutboxRef.current, critical: !!opts?.critical });
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent(WS_OUTBOX_DROP_EVENT, { detail: { dropped: droppedOutboxRef.current } }));
+      }
+    }
+    buf.push(raw);
   }, []);
 
   useEffect(() => {
@@ -147,6 +164,11 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       ws.onopen = () => {
         reconnectAttemptRef.current = 0;
         setReconnectFailed(false);
+        // Critical intent first, then the normal backlog, both in order.
+        while (criticalBufferRef.current.length > 0) {
+          const buffered = criticalBufferRef.current.shift()!;
+          ws.send(buffered);
+        }
         while (sendBufferRef.current.length > 0) {
           const buffered = sendBufferRef.current.shift()!;
           ws.send(buffered);
@@ -171,6 +193,13 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
           probeSessionExpiry();
           reconnectRef.current = setTimeout(connect, 1000);
           return;
+        }
+        // Abnormal closure (backend gone OR session dead server-side): probe
+        // now instead of only after the ~10min backoff is exhausted. A dead
+        // backend just fails the fetch (reconnect path continues); a dead
+        // session 401s straight to /login through the debounced handler.
+        if (event.code === 1006) {
+          probeSessionExpiry();
         }
         if (reconnectAttemptRef.current < MAX_RECONNECT_ATTEMPTS) {
           // Jittered backoff: without it every tab reconnects in lockstep
@@ -212,9 +241,12 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
 
     // Hidden tabs throttle intervals (down to ~1/min), so heartbeat checks
     // can go stale. On return to the foreground, probe immediately: a dead
-    // socket is closed here and the reconnect path takes over.
+    // socket is closed here and the reconnect path takes over. Probe the
+    // session too — it may have expired while hidden with the socket
+    // nominally open (the cheap GET no-ops when everything is fine).
     const onVisibility = () => {
       if (document.visibilityState !== "visible") return;
+      probeSessionExpiry();
       const ws = wsRef.current;
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
       if (lastPongRef.current === 0 || Date.now() - lastPongRef.current > HEARTBEAT_TIMEOUT_MS) {

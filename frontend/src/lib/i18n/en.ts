@@ -2721,6 +2721,7 @@ export const en: Record<string, string> = {
     "nav.traffic": "Traffic Log",
     "nav.users": "User Mgmt",
     "network.offline": "You are offline. Some features may not work until connectivity is restored.",
+    "network.outbox_dropped": "{n} outgoing messages dropped while offline — retry the action after reconnect",
     "notfound.back": "Back to dashboard",
     "notfound.message": "The page you requested does not exist or is unavailable.",
     "notfound.title": "Page not found",

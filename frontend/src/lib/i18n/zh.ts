@@ -2721,6 +2721,7 @@ export const zh: Record<string, string> = {
     "nav.traffic": "流量日志",
     "nav.users": "用户管理",
     "network.offline": "您已离线。恢复网络连接前，部分功能可能无法使用。",
+    "network.outbox_dropped": "离线期间 {n} 条待发消息被丢弃——重连后请重试该操作",
     "notfound.back": "返回仪表盘",
     "notfound.message": "请求的页面不存在或暂不可用。",
     "notfound.title": "页面未找到",
