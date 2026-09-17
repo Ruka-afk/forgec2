@@ -3,7 +3,6 @@ package server
 import (
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -35,22 +34,15 @@ func (s *Server) frontHasDomain(d string) bool {
 func (s *Server) frontCheckDomain(domain string) frontDomainState {
 	st := frontDomainState{Domain: domain, LastCheck: time.Now().Format(time.RFC3339)}
 
-	// Validate: resolve DNS first and reject private/loopback IPs
-	ips, err := net.LookupHost(domain)
-	if err != nil {
+	// Full SSRF validation up front (DNS rebinding included): the old
+	// resolve-then-check raced the fetch and missed redirects entirely.
+	if err := validateExternalURL("https://" + domain); err != nil {
 		st.Error = sanitizeError(err, "Domain front operation")
 		st.Healthy = false
 		return st
 	}
-	for _, ip := range ips {
-		if parsed := net.ParseIP(ip); parsed != nil && (parsed.IsPrivate() || parsed.IsLoopback() || parsed.IsLinkLocalUnicast()) {
-			st.Error = "domain resolves to private IP: " + ip
-			st.Healthy = false
-			return st
-		}
-	}
 
-	resp, err := s.httpClient.Get("https://" + domain)
+	resp, err := ssrfSafeClient(s.httpClient).Get("https://" + domain)
 	if err != nil {
 		st.Error = sanitizeError(err, "Domain front operation")
 		st.Healthy = false
@@ -108,6 +100,18 @@ func (s *Server) handleAPIInfraFrontConfig(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, "invalid request")
 		return
+	}
+
+	// Validate every domain before storing: frontRefresh probes each one
+	// server-side, so an unvalidated list is a stored SSRF primitive.
+	for _, d := range req.Domains {
+		if strings.TrimSpace(d) == "" {
+			continue
+		}
+		if err := validateExternalURL("https://" + strings.TrimSpace(d)); err != nil {
+			respondError(c, http.StatusBadRequest, "blocked domain: "+sanitizeError(err, "domain"))
+			return
+		}
 	}
 
 	s.domainFrontMu.Lock()

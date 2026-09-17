@@ -318,7 +318,7 @@ func (s *Server) executeWebhook(params struct {
 		req.Header.Set("X-ForgeC2-Signature", hex.EncodeToString(h.Sum(nil)))
 	}
 
-	resp, err := s.httpClient.Do(req)
+	resp, err := ssrfSafeClient(s.httpClient).Do(req)
 	if err != nil {
 		// *url.Error embeds the full URL (may carry a webhook secret): log cause only.
 		slog.Error("Automation: webhook request failed", "error", err)

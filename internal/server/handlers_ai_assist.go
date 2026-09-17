@@ -333,7 +333,7 @@ func (s *Server) handleAISuggestNextSteps(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "agent_id required")
 		return
 	}
-	aid := s.resolveAgentID(strings.TrimSpace(req.AgentID))
+	aid := s.resolveVisibleAgentID(c, strings.TrimSpace(req.AgentID))
 	if aid == "" {
 		respondError(c, http.StatusNotFound, "agent not found")
 		return
@@ -534,7 +534,7 @@ func (s *Server) handleAIGeneratePlaybook(c *gin.Context) {
 	}
 
 	contextLine := ""
-	if aid := s.resolveAgentID(strings.TrimSpace(req.AgentID)); aid != "" {
+	if aid := s.resolveVisibleAgentID(c, strings.TrimSpace(req.AgentID)); aid != "" {
 		var agent db.Implant
 		if err := s.db.Where("id = ?", aid).First(&agent).Error; err == nil {
 			contextLine = fmt.Sprintf("\nTarget profile: os=%s arch=%s user=%s domain=%s integrity=%s elevated=%t",

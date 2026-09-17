@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
 	"runtime"
 	"strconv"
@@ -713,14 +712,10 @@ func (s *Server) handleTestSettingsWebhook(c *gin.Context) {
 		return
 	}
 
-	parsedURL, err := url.Parse(req.URL)
-	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
-		respondError(c, http.StatusBadRequest, "invalid webhook URL")
-		return
-	}
-	host := parsedURL.Hostname()
-	if isPrivateIP(host) {
-		respondError(c, http.StatusBadRequest, "webhook URL cannot target private/internal IPs")
+	// Full SSRF validation (scheme, ports, DNS resolution, cloud metadata):
+	// the old isPrivateIP-literal check missed DNS rebinding and redirects.
+	if err := validateExternalURL(req.URL); err != nil {
+		respondError(c, http.StatusBadRequest, "webhook URL blocked: "+sanitizeError(err, "webhook URL"))
 		return
 	}
 
@@ -736,7 +731,7 @@ func (s *Server) handleTestSettingsWebhook(c *gin.Context) {
 		return
 	}
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	resp, err := s.httpClient.Do(reqHTTP)
+	resp, err := ssrfSafeClient(s.httpClient).Do(reqHTTP)
 	if err != nil {
 		respondError(c, http.StatusBadGateway, sanitizeError(err, "Settings save"))
 		return

@@ -167,16 +167,12 @@ func (s *Server) handleLootPage(c *gin.Context) {
 }
 
 // deleteVisibleLootTask deletes one loot task row only when its owning agent
-// is visible to the caller. Returns true when a row was actually deleted.
+// is visible to the caller. Single statement: the old check-then-delete
+// could delete after a concurrent tenant reassignment. Returns true when a
+// row was actually deleted.
 func (s *Server) deleteVisibleLootTask(c *gin.Context, id string, types []string) bool {
-	var t db.Task
-	if err := s.db.Where("id = ? AND type IN ?", id, types).First(&t).Error; err != nil {
-		return false
-	}
-	if !s.agentVisible(c, t.AgentID) {
-		return false
-	}
-	res := s.db.Delete(&db.Task{}, "id = ? AND type IN ?", id, types)
+	res := s.db.Where("id = ? AND type IN ? AND agent_id IN (?)", id, types,
+		s.tenantScope(s.db.Model(&db.Implant{}).Select("id"), c)).Delete(&db.Task{})
 	return res.Error == nil && res.RowsAffected > 0
 }
 

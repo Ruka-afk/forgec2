@@ -135,7 +135,7 @@ type Config struct {
 		BackupKey               string `yaml:"backup_key"`                 // REQUIRED: 32-byte hex key for encrypted .fbk backups (independent)
 		TotpKey                 string `yaml:"totp_key"`                   // REQUIRED: 32-byte hex key for TOTP secrets / SMTP / SSH-redirector credentials (independent)
 		CsrfKey                 string `yaml:"csrf_key"`                   // REQUIRED: 32-byte hex key for CSRF token binding (independent)
-		ForceECDH               bool   `yaml:"force_ecdh"`                 // reject plaintext beacons when ECDH is enabled
+		ForceECDH               bool   `yaml:"force_ecdh"`                 // retained for config compat: v2 has no plaintext frames so refusal is unconditional and the flag cannot weaken anything
 		MaxDecryptedPayloadSize int    `yaml:"max_decrypted_payload_size"` // max bytes for decrypted beacon body (0 = default 10MB)
 	} `yaml:"crypto"`
 
@@ -371,9 +371,9 @@ func DefaultConfig() *Config {
 
 	cfg.Logging.Level = "info"
 
-	// Secure default: ECDH+AES-256-GCM beacon encryption enabled and plaintext
-	// beacons rejected. Operators who need legacy XOR or unencrypted beacons can
-	// explicitly override crypto.key / crypto.force_ecdh in config.yaml.
+	// Secure default: ECDH+AES-256-GCM beacon encryption enabled. Plaintext
+	// rejection is unconditional (v2 defines no plaintext frames), so
+	// crypto.force_ecdh is retained only for config compatibility.
 	cfg.Crypto.Key = "ecdh:"
 	cfg.Crypto.ForceECDH = true
 

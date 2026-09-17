@@ -39,6 +39,87 @@ func tenantScopedAdminContext(s *Server, t *testing.T, username string, tenantID
 	return c, w
 }
 
+// TestTenantScopeFailClosedOnLookupError proves a broken tenant lookup
+// (authenticated identity, DB error rather than a missing row) denies
+// everything instead of degrading to legacy global visibility.
+func TestTenantScopeFailClosedOnLookupError(t *testing.T) {
+	ginSetTestMode(t)
+	database := testutil.SetupTestDB(t)
+	s := &Server{db: database}
+	sqlDB, err := database.DB()
+	if err != nil {
+		t.Fatalf("sql db: %v", err)
+	}
+	sqlDB.Close()
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodGet, "/", nil)
+	c.Set("user", "someone")
+
+	if _, ok := s.lookupTenantID(c); ok {
+		t.Fatal("lookupTenantID on broken DB: ok=true, want false")
+	}
+}
+
+// TestTenantScopeLegacyUnscopedUnchanged proves contexts without identity
+// (tests, system paths) keep legacy global visibility.
+func TestTenantScopeLegacyUnscopedUnchanged(t *testing.T) {
+	ginSetTestMode(t)
+	s := initV3BeaconServer(t, testutil.SetupTestDB(t), tenantVisibilityMasterHex)
+	if err := s.db.Create(&db.Implant{ID: "t-leg", TenantID: 9}).Error; err != nil {
+		t.Fatalf("seed agent: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodGet, "/", nil)
+
+	var count int64
+	if err := s.tenantScope(s.db.Model(&db.Implant{}), c).Count(&count).Error; err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("legacy context saw %d rows, want 1", count)
+	}
+}
+
+// TestShellPageCrossTenant404 proves the shell page honors tenant scope
+// (previously an unscoped read: direct IDOR on other tenants' agents).
+func TestShellPageCrossTenant404(t *testing.T) {
+	ginSetTestMode(t)
+	s := initV3BeaconServer(t, testutil.SetupTestDB(t), tenantVisibilityMasterHex)
+	if err := s.db.Create(&db.Implant{ID: "t-shell", TenantID: 2, Hostname: "OTHER"}).Error; err != nil {
+		t.Fatalf("seed agent: %v", err)
+	}
+	c, w := tenantScopedAdminContext(s, t, "shell-viewer", 1)
+	c.Params = gin.Params{{Key: "id", Value: "t-shell"}}
+
+	s.handleShellPage(c)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("cross-tenant shell page status=%d, want 404", w.Code)
+	}
+}
+
+// TestResolveVisibleAgentIDScopesHostname proves hostname resolution (the
+// AI-assist path) stays inside the caller's tenant.
+func TestResolveVisibleAgentIDScopesHostname(t *testing.T) {
+	ginSetTestMode(t)
+	s := initV3BeaconServer(t, testutil.SetupTestDB(t), tenantVisibilityMasterHex)
+	if err := s.db.Create(&db.Implant{ID: "t-vis", TenantID: 2, Hostname: "SHARED-NAME"}).Error; err != nil {
+		t.Fatalf("seed agent: %v", err)
+	}
+	c, _ := tenantScopedAdminContext(s, t, "vis-viewer", 1)
+
+	if got := s.resolveVisibleAgentID(c, "SHARED-NAME"); got != "" {
+		t.Fatalf("resolved cross-tenant agent %q by hostname", got)
+	}
+	if got := s.resolveVisibleAgentID(c, "t-vis"); got != "" {
+		t.Fatalf("resolved cross-tenant agent %q by id", got)
+	}
+}
+
 // TestV3RegistrationAssignsDefaultTenant guards the root-cause bug: a fresh
 // v3 registration creates its implant row via ensureBeaconImplantRow, which
 // must NOT leave the row tenant-less (tenant_id=0) — otherwise tenantScope

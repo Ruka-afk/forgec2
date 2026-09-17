@@ -277,6 +277,12 @@ func (s *Server) handleDownloadURL(c *gin.Context) {
 	if url == "" {
 		url = c.PostForm("command")
 	}
+	// The implant fetches this URL onto disk: validate server-side like any
+	// other server-initiated fetch (cloud metadata / internal pivots out).
+	if err := validateExternalURL(url); err != nil {
+		respondError(c, http.StatusBadRequest, "blocked URL: "+sanitizeError(err, "download URL"))
+		return
+	}
 	task := s.issueAgentTask(c, id, TaskSpec{Type: "download_url", Command: url, Shell: dest, Path: dest})
 	if task == nil {
 		return

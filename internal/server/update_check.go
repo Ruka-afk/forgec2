@@ -168,7 +168,7 @@ func (s *Server) checkForUpdate() {
 // fetchLatestVersion calls the GitHub API and returns the latest tag
 func fetchLatestVersion(repo string) (string, error) {
 	url := fmt.Sprintf(defaultUpdateCheckURLFmt, repo)
-	client := &http.Client{Timeout: GitHubAPITimeout}
+	client := ssrfSafeClient(&http.Client{Timeout: GitHubAPITimeout})
 
 	backoff := []time.Duration{time.Second, 3 * time.Second}
 	var lastErr error
@@ -393,13 +393,18 @@ func (s *Server) performHotUpdate(latest string) error {
 			}
 		}
 	}
-	// Find a checksum file for integrity verification
+	// Find a checksum file for integrity verification. A release without one
+	// is refused below: self-replacing the service binary from an unsigned
+	// release is not an option, even when the operator explicitly updates.
 	for _, a := range assets {
 		name := strings.ToLower(a.Name)
 		if strings.HasSuffix(name, ".sha256") || strings.HasSuffix(name, ".checksum") {
 			checksumURL = a.BrowserDownloadURL
 			break
 		}
+	}
+	if checksumURL == "" {
+		return fail(fmt.Errorf("release has no checksum file; refusing unsigned hot update"))
 	}
 	if downloadURL == "" {
 		return fail(fmt.Errorf("no matching binary found in release assets"))
@@ -426,15 +431,13 @@ func (s *Server) performHotUpdate(latest string) error {
 		return fail(fmt.Errorf("downloaded binary is invalid"))
 	}
 
-	// Verify SHA-256 checksum if a checksum file was found
-	if checksumURL != "" {
-		s.setUpdateProgress(updateStageVerifying, 100, 0, 0, latest, "")
-		if err := verifyChecksum(tmpPath, checksumURL); err != nil {
-			os.Remove(tmpPath)
-			return fail(fmt.Errorf("checksum verification failed: %w", err))
-		}
-		slog.Info("Hot update: checksum verified")
+	// Verify SHA-256 checksum (mandatory: see above).
+	s.setUpdateProgress(updateStageVerifying, 100, 0, 0, latest, "")
+	if err := verifyChecksum(tmpPath, checksumURL); err != nil {
+		os.Remove(tmpPath)
+		return fail(fmt.Errorf("checksum verification failed: %w", err))
 	}
+	slog.Info("Hot update: checksum verified")
 
 	// Create a restart script
 	var scriptPath string
@@ -510,7 +513,7 @@ func quoteSh(p string) string {
 // fetchReleaseAssets gets the asset list for a given tag
 func fetchReleaseAssets(repo, tag string) ([]GitHubAsset, error) {
 	url := fmt.Sprintf(defaultReleaseAssetsURLFmt, repo, tag)
-	client := &http.Client{Timeout: GitHubAPITimeout}
+	client := ssrfSafeClient(&http.Client{Timeout: GitHubAPITimeout})
 
 	backoff := []time.Duration{time.Second, 3 * time.Second}
 	var lastErr error
@@ -574,7 +577,7 @@ func (w *progressWriter) Write(p []byte) (int, error) {
 // downloadUpdateFile downloads with progress callbacks into setUpdateProgress.
 func (s *Server) downloadUpdateFile(url, dest, version string) error {
 	slog.Info("Downloading update binary", "url", url, "dest", dest)
-	client := &http.Client{Timeout: UpdateDownloadTimeout}
+	client := ssrfSafeClient(&http.Client{Timeout: UpdateDownloadTimeout})
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return err
@@ -685,7 +688,7 @@ func (s *Server) handleUpdateCheck(c *gin.Context) {
 
 // verifyChecksum downloads a checksum file and verifies the SHA-256 of the binary.
 func verifyChecksum(binaryPath, checksumURL string) error {
-	client := &http.Client{Timeout: ChecksumDownloadTimeout}
+	client := ssrfSafeClient(&http.Client{Timeout: ChecksumDownloadTimeout})
 	req, err := http.NewRequest("GET", checksumURL, nil)
 	if err != nil {
 		return fmt.Errorf("create checksum request: %w", err)

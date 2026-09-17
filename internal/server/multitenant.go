@@ -1,6 +1,9 @@
 package server
 
 import (
+	"errors"
+	"log/slog"
+
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -10,41 +13,83 @@ import (
 // tenantScope calls (e.g. fan-out detail queries) cost one user lookup total.
 const tenantIDContextKey = "forgec2_tenant_id"
 
+// tenantResolution is the cached tenant lookup: tid 0 stays legacy-unscoped,
+// while ok=false marks a failed lookup (fail closed, never fail open).
+type tenantResolution struct {
+	tid uint
+	ok  bool
+}
+
 // currentTenantID returns the tenant ID for the authenticated operator, or 0 if
 // the user is unscoped (legacy / pre-multi-tenant). The result is cached in
 // the gin context: tenantScope-heavy handlers previously paid one SELECT per
 // call (4-5 per agent-detail page).
 func (s *Server) currentTenantID(c *gin.Context) uint {
-	if v, ok := c.Get(tenantIDContextKey); ok {
-		if tid, ok := v.(uint); ok {
-			return tid
-		}
-	}
-	tid := s.lookupTenantID(c)
-	c.Set(tenantIDContextKey, tid)
+	tid, _ := s.resolveTenant(c)
 	return tid
 }
 
-func (s *Server) lookupTenantID(c *gin.Context) uint {
+func (s *Server) resolveTenant(c *gin.Context) (uint, bool) {
+	if v, ok := c.Get(tenantIDContextKey); ok {
+		if r, ok := v.(tenantResolution); ok {
+			return r.tid, r.ok
+		}
+	}
+	tid, ok := s.lookupTenantID(c)
+	c.Set(tenantIDContextKey, tenantResolution{tid: tid, ok: ok})
+	return tid, ok
+}
+
+func (s *Server) lookupTenantID(c *gin.Context) (uint, bool) {
 	if u, ok := c.Get("user"); ok {
 		if name, ok := u.(string); ok && name != "" {
 			var user db.User
-			if err := s.db.Select("tenant_id").Where("username = ?", name).First(&user).Error; err == nil {
-				return user.TenantID
+			err := s.db.Select("tenant_id").Where("username = ?", name).First(&user).Error
+			if err == nil {
+				return user.TenantID, true
 			}
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				// Named identity with no user row (hand-built test contexts;
+				// production auth always loads the row first): legacy.
+				return 0, true
+			}
+			// Authenticated identity whose lookup errored (DB hiccup): fail
+			// closed. Returning legacy 0 here silently expanded a broken
+			// lookup into global visibility.
+			slog.Warn("Tenant lookup failed, denying scoped query", "user", name, "error", err)
+			return 0, false
 		}
 	}
-	return 0
+	// No identity in context (tests, system paths): legacy-unscoped.
+	return 0, true
 }
 
 // tenantScope restricts a query to the caller's tenant. A tenant ID of 0
 // (legacy / unscoped operators) is intentionally NOT restricted, preserving
 // pre-multi-tenant behavior until operators are explicitly assigned tenants.
+// A FAILED lookup denies everything (Where 1=0) instead of degrading to
+// global visibility.
 func (s *Server) tenantScope(query *gorm.DB, c *gin.Context) *gorm.DB {
-	if tid := s.currentTenantID(c); tid != 0 {
+	tid, ok := s.resolveTenant(c)
+	if !ok {
+		return query.Where("1 = 0")
+	}
+	if tid != 0 {
 		return query.Where("tenant_id = ?", tid)
 	}
 	return query
+}
+
+// resolveVisibleAgentID resolves an id-or-hostname within the caller's tenant
+// scope. The shared resolveAgentID stays unscoped for system paths (beacons,
+// sweeps); interactive handlers must use this so one tenant's operator cannot
+// pull another tenant's agent profile into AI prompts and pages.
+func (s *Server) resolveVisibleAgentID(c *gin.Context, idOrHost string) string {
+	var agent db.Implant
+	if err := s.tenantScope(s.db, c).Where("id = ? OR hostname = ?", idOrHost, idOrHost).First(&agent).Error; err != nil {
+		return ""
+	}
+	return agent.ID
 }
 
 // assignTenantToAgent sets the tenant on a newly created/registered implant so

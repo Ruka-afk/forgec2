@@ -264,6 +264,12 @@ func (s *Server) handleDownload(c *gin.Context) {
 		return
 	}
 
+	// Same SSRF gate as handleDownloadURL: the implant fetches this URL.
+	if err := validateExternalURL(fileURL); err != nil {
+		respondError(c, http.StatusBadRequest, "blocked URL: "+sanitizeError(err, "download URL"))
+		return
+	}
+
 	task := s.issueAgentTask(c, id, TaskSpec{Type: "download", Command: fileURL, Shell: targetPath, Path: targetPath})
 	if task == nil {
 		return

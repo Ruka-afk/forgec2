@@ -392,7 +392,7 @@ func trimConversationHistory(msgs []chatMessage) []chatMessage {
 
 func (s *Server) handleAIPendingTasks(c *gin.Context) {
 	var tasks []db.Task
-	if err := s.db.Where("status = ? AND created_by = ?", "pending_approval", "ai").Order("created_at desc").Limit(20).Find(&tasks).Error; err != nil {
+	if err := s.tenantScope(s.db.Where("status = ? AND created_by = ?", "pending_approval", "ai"), c).Order("created_at desc").Limit(20).Find(&tasks).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "query failed")
 		return
 	}

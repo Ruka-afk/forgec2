@@ -74,7 +74,9 @@ func validateCallbackMethod(method string) error {
 func (s *Server) handleShellPage(c *gin.Context) {
 	id := c.Param("id")
 	var agent db.Implant
-	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
+	// Tenant-scoped like every other agent route: the unscoped read was a
+	// direct IDOR on other tenants' agents. 404 text preserved.
+	if err := s.tenantScope(s.db, c).First(&agent, "id = ?", id).Error; err != nil {
 		c.String(http.StatusNotFound, "Agent not found")
 		return
 	}
