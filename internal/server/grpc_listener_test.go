@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/testutil"
 	"github.com/forgec2/forgec2/pkg/c2pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -70,6 +71,37 @@ func TestGRPCBeaconEnvelopeRoundTrip(t *testing.T) {
 	}
 	if string(resp.Payload) != `{"tasks":[],"seq":1}` {
 		t.Fatalf("unexpected response: %s", string(resp.Payload))
+	}
+}
+
+// TestGRPCProductionHandlerRejectsPlaintext wires the real beacon handler
+// (not a stub) and proves a plaintext frame ends the stream with no response.
+func TestGRPCProductionHandlerRejectsPlaintext(t *testing.T) {
+	ginSetTestMode(t)
+	s := initDNSBeaconServer(t, testutil.SetupTestDB(t))
+
+	addr := testFreeAddr(t)
+	srv := NewGRPCListener(addr)
+	srv.SetHandler(s.makeBeaconHandler("grpc"))
+	if err := srv.Start(); err != nil {
+		t.Fatalf("start grpc listener: %v", err)
+	}
+	defer srv.Stop()
+
+	_, cli := testGRPCDial(t, addr)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	stream, err := cli.Beacon(ctx)
+	if err != nil {
+		t.Fatalf("open stream: %v", err)
+	}
+	envelope := `{"uuid":"aaaaaaaa-bbbb-4333-8444-cccccccccccc","pv":1}`
+	if err := stream.Send(&c2pb.Envelope{Payload: []byte(envelope)}); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	if _, err := stream.Recv(); err == nil {
+		t.Fatal("expected stream to end without a response for plaintext")
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/testutil"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -91,6 +92,72 @@ func TestSSHBeaconListenerRoundTrip(t *testing.T) {
 	want := "resp:" + body
 	if string(got) != want {
 		t.Errorf("response mismatch: got %q want %q", string(got), want)
+	}
+}
+
+// TestSSHProductionHandlerRejectsPlaintext wires the real beacon handler
+// over a live SSH session and proves a plaintext frame gets no response.
+func TestSSHProductionHandlerRejectsPlaintext(t *testing.T) {
+	ginSetTestMode(t)
+	s := initDNSBeaconServer(t, testutil.SetupTestDB(t))
+
+	l := NewSSHBeaconListener(SSHListenerConfig{
+		Addr:     "127.0.0.1:0",
+		User:     "forgec2",
+		Password: "hunter2",
+		KeyAuth:  true,
+		HostKey:  testSSHHostKey(t),
+	})
+	l.SetHandler(s.makeBeaconHandler("ssh"))
+	if err := l.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer l.Stop()
+
+	client, err := ssh.Dial("tcp", l.Addr(), &ssh.ClientConfig{
+		User:            "forgec2",
+		Auth:            []ssh.AuthMethod{ssh.Password("hunter2")},
+		HostKeyCallback: acceptAnyHostKey,
+		Timeout:         10 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer client.Close()
+
+	session, err := client.NewSession()
+	if err != nil {
+		t.Fatalf("new session: %v", err)
+	}
+	defer session.Close()
+
+	stdout, err := session.StdoutPipe()
+	if err != nil {
+		t.Fatalf("stdout pipe: %v", err)
+	}
+	stdin, err := session.StdinPipe()
+	if err != nil {
+		t.Fatalf("stdin pipe: %v", err)
+	}
+	if err := session.Start("/bin/sh -c 'cat'"); err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+
+	body := `{"uuid":"cccccccc-dddd-4333-8444-eeeeeeeeeeee","pv":1}`
+	if _, err := stdin.Write([]byte(body)); err != nil {
+		t.Fatalf("write body: %v", err)
+	}
+	stdin.Close()
+
+	got, err := io.ReadAll(stdout)
+	if err != nil {
+		t.Fatalf("read response: %v", err)
+	}
+	if err := session.Wait(); err != nil {
+		t.Fatalf("session wait: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("plaintext over SSH must get no response, got %q", string(got))
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/testutil"
 	"github.com/quic-go/quic-go"
 )
 
@@ -83,5 +84,48 @@ func TestQUICBeaconRoundTrip(t *testing.T) {
 	}
 	if string(got) != "echo:ping" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+// TestQUICProductionHandlerRejectsPlaintext wires the real beacon handler
+// over a live QUIC stream and proves a plaintext frame gets no response.
+func TestQUICProductionHandlerRejectsPlaintext(t *testing.T) {
+	ginSetTestMode(t)
+	s := initDNSBeaconServer(t, testutil.SetupTestDB(t))
+
+	tlsCfg := testQUICTLS(t)
+	ln := NewQUICBeaconListener("127.0.0.1:0", tlsCfg)
+	ln.SetHandler(s.makeBeaconHandler("quic"))
+	if err := ln.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer ln.Close()
+
+	addr := ln.Addr()
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	conn, err := quic.DialAddr(ctx, addr, &tls.Config{
+		InsecureSkipVerify: true,
+		NextProtos:         []string{"h3", "fc2"},
+		MinVersion:         tls.VersionTLS13,
+	}, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.CloseWithError(0, "")
+	stream, err := conn.OpenStreamSync(ctx)
+	if err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	if _, err := stream.Write([]byte(`{"uuid":"bbbbbbbb-cccc-4333-8444-dddddddddddd","pv":1}`)); err != nil {
+		t.Fatal(err)
+	}
+	_ = stream.Close()
+	got, err := io.ReadAll(stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("plaintext over QUIC must get no response, got %q", got)
 	}
 }
