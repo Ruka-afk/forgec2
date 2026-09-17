@@ -187,7 +187,7 @@ func (s *Server) startGRPCListener() {
 			return
 		}
 	}
-	listener.SetHandler(s.makeBeaconHandler())
+	listener.SetHandler(s.makeBeaconHandler("grpc"))
 	if err := listener.Start(); err != nil {
 		slog.Error("Failed to start gRPC listener", "addr", addr, "err", err)
 	} else {

@@ -59,12 +59,28 @@ func (s *Server) startExtraListenersFromDB() {
 	}
 }
 
+// frameBudgetForTransport maps a listener transport to its tunnel frame
+// budget. Datagram transports (udp/icmp/dns) get small frames + a capped
+// total so one beacon's tunnel payload fits the link; stream transports
+// return zeros (64KB uncapped frames).
+func frameBudgetForTransport(transport string) (frameSize, budget int) {
+	switch transport {
+	case "udp", "icmp", "dns":
+		return SocksLowMTUFrameSize, SocksLowMTUBudget
+	default:
+		return 0, 0
+	}
+}
+
 // makeBeaconHandler creates a closure that wraps processBeacon for listener callbacks.
 // It enforces the same beacon_key auth and ECDH envelope semantics as the HTTP
 // beacon handler, so no listener transport (DNS, ICMP, gRPC, TCP) can bypass
 // authentication or downgrade to plaintext when ECDH is forced.
-func (s *Server) makeBeaconHandler() func(string, []byte) []byte {
-	return s.handleListenerBeacon
+func (s *Server) makeBeaconHandler(transport string) func(string, []byte) []byte {
+	frameSize, budget := frameBudgetForTransport(transport)
+	return func(agentID string, reqJSON []byte) []byte {
+		return s.handleListenerBeacon(agentID, reqJSON, frameSize, budget)
+	}
 }
 
 // handleListenerBeacon processes a beacon envelope received over a non-HTTP
@@ -72,7 +88,7 @@ func (s *Server) makeBeaconHandler() func(string, []byte) []byte {
 // handler (protocol v2: timestamp window, seq replay window, ECDH/AES-256-GCM
 // ciphertext, authenticated handshake/registration frames) and builds the
 // response with matching encryption semantics.
-func (s *Server) handleListenerBeacon(agentID string, reqJSON []byte) []byte {
+func (s *Server) handleListenerBeacon(agentID string, reqJSON []byte, frameSize, budget int) []byte {
 	raw := reqJSON
 	if len(raw) == 0 {
 		// No embedded payload: minimal envelope with just the UUID
@@ -97,7 +113,7 @@ func (s *Server) handleListenerBeacon(agentID string, reqJSON []byte) []byte {
 	}
 	var respJSON []byte
 	if kind == frameEncrypted {
-		resp := s.processBeacon(req, "")
+		resp := s.processBeaconWithBudget(req, "", frameSize, budget)
 		if s.sessionManager.NeedsRekey(req.UUID, BeaconSessionRekeyMessages) {
 			resp.Rekey = true
 		}
@@ -321,7 +337,7 @@ func (s *Server) startExtraDNSListener(key string) error {
 	}
 
 	dl := NewDNSBeaconListener(l.DNSDomain, l.Host, l.ID, addr)
-	dl.SetHandler(s.makeBeaconHandler())
+	dl.SetHandler(s.makeBeaconHandler("dns"))
 
 	// Start() binds synchronously and returns the bind error — calling it in
 	// a fire-and-forget goroutine meant a port conflict left a dead listener
@@ -351,7 +367,7 @@ func (s *Server) startExtraICMPListener(key string) error {
 	}
 
 	il := NewICMPBeaconListener(addr)
-	il.SetHandler(s.makeBeaconHandler())
+	il.SetHandler(s.makeBeaconHandler("icmp"))
 
 	if err := il.Start(); err != nil {
 		return fmt.Errorf("starting extra ICMP listener: %w", err)

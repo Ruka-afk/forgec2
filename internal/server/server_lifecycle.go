@@ -71,6 +71,12 @@ func (s *Server) shutdown() {
 		slog.Info("Shutting down TUN helpers")
 		s.tunEngine.stopAll()
 	}
+	if s.socksEngine != nil {
+		slog.Info("Shutting down SOCKS relays")
+		s.socksEngine.stopAll()
+	}
+	s.stopAllRPortFwd()
+	s.closeAllLPortFwd()
 	if s.httpServer != nil {
 		// Wait briefly for in-flight requests to drain before forced shutdown
 		done := make(chan struct{})
@@ -384,7 +390,7 @@ func (s *Server) Run() error {
 	// Start ICMP C2 listener if enabled
 	if s.cfg.Server.ICMPEnabled {
 		il := NewICMPBeaconListener(s.cfg.Server.ICMPAddr)
-		il.SetHandler(s.makeBeaconHandler())
+		il.SetHandler(s.makeBeaconHandler("icmp"))
 		if err := il.Start(); err != nil {
 			slog.Error("Failed to start ICMP listener", "err", err)
 		} else {
@@ -396,7 +402,7 @@ func (s *Server) Run() error {
 	if s.cfg.Server.DNSEnabled && s.cfg.Server.DNSDomain != "" {
 		dl := NewDNSBeaconListener(s.cfg.Server.DNSDomain, s.cfg.Server.Host, 0, s.cfg.Server.DNSAddr)
 		dl.SetObscure(s.cfg.Server.DNSObscure)
-		dl.SetHandler(s.makeBeaconHandler())
+		dl.SetHandler(s.makeBeaconHandler("dns"))
 		s.dnsListener = dl
 		s.wg.Add(1)
 		go func() {
@@ -426,7 +432,7 @@ func (s *Server) Run() error {
 			slog.Error("Failed to prepare SSH listener", "addr", sshAddr, "err", cfgErr)
 		} else {
 			sl := NewSSHBeaconListener(cfg)
-			sl.SetHandler(s.makeBeaconHandler())
+			sl.SetHandler(s.makeBeaconHandler("ssh"))
 			if err := sl.Start(); err != nil {
 				slog.Error("Failed to start SSH listener", "addr", sshAddr, "err", err)
 			} else {

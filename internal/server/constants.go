@@ -63,6 +63,12 @@ const (
 	SocksFastInterval   = 500             // ms – agent fast-poll when relay active
 	SocksCleanupTimeout = 5 * time.Minute // clean dead connections after 5 min
 	SocksMaxConns       = 256             // max concurrent connections per relay session
+	// Low-MTU transports (udp/icmp/dns) ride single datagrams: tunnel data
+	// for one beacon is split into ~1KB frames capped at ~4KB total, with
+	// the remainder requeued losslessly for the next beacon. Stream
+	// transports (http/tcp/grpc/quic/ssh/smb) keep 64KB uncapped frames.
+	SocksLowMTUFrameSize = 1024 // per-frame data cap on datagram transports
+	SocksLowMTUBudget    = 4096 // total tunnel data bytes per beacon on datagram transports
 
 	// ─── Query Limits ───
 	APIAgentListLimit      = 500

@@ -278,6 +278,12 @@ func (s *Server) fetchRelayedChildTasks(parentUUID string) []relayedTask {
 }
 
 func (s *Server) processSOCKSRelay(uuid string, socksData []socksFrame, resp *beaconResponse) {
+	s.processSOCKSRelayWithBudget(uuid, socksData, resp, 0, 0)
+}
+
+// processSOCKSRelayWithBudget is processSOCKSRelay with a tunnel frame
+// budget for datagram transports (frameSize/budget<=0 drains everything).
+func (s *Server) processSOCKSRelayWithBudget(uuid string, socksData []socksFrame, resp *beaconResponse, frameSize, budget int) {
 	// Process relay data coming FROM the agent (includes rportfwd frames)
 	if len(socksData) > 0 {
 		s.processAgentSocksData(uuid, socksData)
@@ -292,7 +298,7 @@ func (s *Server) processSOCKSRelay(uuid string, socksData []socksFrame, resp *be
 		}
 	}
 	// Collect pending relay frames going TO the agent
-	if frames := s.collectSocksFrames(uuid); len(frames) > 0 {
+	if frames := s.collectSocksFrames(uuid, frameSize, budget); len(frames) > 0 {
 		resp.SocksFrames = frames
 	}
 	// Hint agent to use fast polling when SOCKS is active

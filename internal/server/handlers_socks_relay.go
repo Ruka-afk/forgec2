@@ -223,6 +223,35 @@ func (e *socksRelayEngine) getSession(agentID string) *socksRelaySession {
 	return e.sessions[agentID]
 }
 
+// stopAll cancels every session listener and closes every relay connection.
+// Shutdown path: unlike stopSession it performs no DB writes (the store may
+// already be draining) — it only releases FDs and stops accept loops.
+func (e *socksRelayEngine) stopAll() {
+	e.mu.Lock()
+	sessions := make([]*socksRelaySession, 0, len(e.sessions))
+	for _, sess := range e.sessions {
+		sessions = append(sessions, sess)
+	}
+	conns := make([]*socksRelayConn, 0, len(e.connections))
+	for _, c := range e.connections {
+		conns = append(conns, c)
+	}
+	e.sessions = make(map[string]*socksRelaySession)
+	e.connections = make(map[uint64]*socksRelayConn)
+	e.mu.Unlock()
+	for _, sess := range sessions {
+		if sess.cancel != nil {
+			sess.cancel()
+		}
+		if sess.listener != nil {
+			_ = sess.listener.Close()
+		}
+	}
+	for _, c := range conns {
+		c.close()
+	}
+}
+
 // ─── Accept Loop (Operator → Server) ─────────────────────────────────────────
 
 func (e *socksRelayEngine) acceptLoop(s *Server, sess *socksRelaySession) {
@@ -446,6 +475,9 @@ func (e *socksRelayEngine) enqueueFrame(agentID string, f socksFrame) {
 		conn, ok := e.connections[f.ConnID]
 		e.mu.Unlock()
 		if !ok {
+			// Operator data for a dead leg (agent closed first): benign
+			// race, but counted so a spike is visible.
+			e.noteDrop("unknown_conn")
 			return
 		}
 		conn.mu.Lock()
@@ -509,18 +541,41 @@ func (e *socksRelayEngine) enqueueRPortFwdFrame(agentID string, f socksFrame) bo
 }
 
 // collectRPortFwdFrames drains the dedicated rportfwd FIFO for an agent,
-// preserving connect -> data -> close order per connection.
-func (e *socksRelayEngine) collectRPortFwdFrames(agentID string) []socksFrame {
+// preserving connect -> data -> close per connection. budget caps total data
+// bytes emitted (budget<=0 drains all); the unemitted remainder is requeued
+// losslessly at the head for the next beacon — this is what lets datagram
+// transports (udp/icmp/dns) carry the tunnel without MTU blowups.
+func (e *socksRelayEngine) collectRPortFwdFrames(agentID string, budget int) []socksFrame {
 	e.rportfwdMu.Lock()
 	defer e.rportfwdMu.Unlock()
-	frames := e.rportfwdFrames[agentID]
-	if len(frames) == 0 {
+	queued := e.rportfwdFrames[agentID]
+	if len(queued) == 0 {
 		return nil
 	}
-	out := make([]socksFrame, len(frames))
-	copy(out, frames)
-	e.rportfwdFrames[agentID] = nil
-	e.rportfwdBytes[agentID] = 0
+	if budget <= 0 {
+		out := make([]socksFrame, len(queued))
+		copy(out, queued)
+		e.rportfwdFrames[agentID] = nil
+		e.rportfwdBytes[agentID] = 0
+		return out
+	}
+	var out []socksFrame
+	used := 0
+	i := 0
+	for ; i < len(queued); i++ {
+		if used+len(queued[i].Data) > budget {
+			break
+		}
+		out = append(out, queued[i])
+		used += len(queued[i].Data)
+	}
+	rest := queued[i:]
+	e.rportfwdFrames[agentID] = rest
+	bytes := 0
+	for _, f := range rest {
+		bytes += len(f.Data)
+	}
+	e.rportfwdBytes[agentID] = bytes
 	return out
 }
 
@@ -555,17 +610,38 @@ func (e *socksRelayEngine) enqueueLPortFwdFrame(agentID string, f socksFrame) bo
 }
 
 // collectLPortFwdFrames drains the dedicated lportfwd FIFO for an agent.
-func (e *socksRelayEngine) collectLPortFwdFrames(agentID string) []socksFrame {
+// Same budget/requeue contract as collectRPortFwdFrames.
+func (e *socksRelayEngine) collectLPortFwdFrames(agentID string, budget int) []socksFrame {
 	e.lportfwdMu.Lock()
 	defer e.lportfwdMu.Unlock()
-	frames := e.lportfwdFrames[agentID]
-	if len(frames) == 0 {
+	queued := e.lportfwdFrames[agentID]
+	if len(queued) == 0 {
 		return nil
 	}
-	out := make([]socksFrame, len(frames))
-	copy(out, frames)
-	e.lportfwdFrames[agentID] = nil
-	e.lportfwdBytes[agentID] = 0
+	if budget <= 0 {
+		out := make([]socksFrame, len(queued))
+		copy(out, queued)
+		e.lportfwdFrames[agentID] = nil
+		e.lportfwdBytes[agentID] = 0
+		return out
+	}
+	var out []socksFrame
+	used := 0
+	i := 0
+	for ; i < len(queued); i++ {
+		if used+len(queued[i].Data) > budget {
+			break
+		}
+		out = append(out, queued[i])
+		used += len(queued[i].Data)
+	}
+	rest := queued[i:]
+	e.lportfwdFrames[agentID] = rest
+	bytes := 0
+	for _, f := range rest {
+		bytes += len(f.Data)
+	}
+	e.lportfwdBytes[agentID] = bytes
 	return out
 }
 
@@ -586,15 +662,27 @@ func (e *socksRelayEngine) dropConn(agentID string, connID uint64) {
 	e.controlFramesMu.Lock()
 	if len(e.controlFrames[agentID]) < 200 {
 		e.controlFrames[agentID] = append(e.controlFrames[agentID], socksFrame{ConnID: connID, Action: "close"})
+	} else {
+		// The teardown itself was shed: count it, or a full control queue
+		// hides agent-side leaks from every dashboard.
+		e.noteDrop("control_overflow")
 	}
 	e.controlFramesMu.Unlock()
 }
 
 // collectPendingFrames gathers all pending frames for an agent.
-func (e *socksRelayEngine) collectPendingFrames(agentID string) []socksFrame {
+// frameSize<=0 selects SocksMaxFrameSize; budget<=0 drains everything.
+// On datagram transports pass the low-MTU pair so one beacon's tunnel
+// payload fits the link; leftovers requeue losslessly, in order.
+func (e *socksRelayEngine) collectPendingFrames(agentID string, frameSize, budget int) []socksFrame {
+	if frameSize <= 0 {
+		frameSize = SocksMaxFrameSize
+	}
 	var frames []socksFrame
 
-	// 1. Control frames first (connect/close must arrive before data)
+	// 1. Control frames first (connect/close must arrive before data).
+	// Always fully drained: they are tiny setup/teardown signals, and
+	// holding a close for MTU reasons would stall teardown.
 	e.controlFramesMu.Lock()
 	if cf, ok := e.controlFrames[agentID]; ok && len(cf) > 0 {
 		frames = append(frames, cf...)
@@ -602,12 +690,28 @@ func (e *socksRelayEngine) collectPendingFrames(agentID string) []socksFrame {
 	}
 	e.controlFramesMu.Unlock()
 
+	// Track data bytes against the budget across the three data FIFOs.
+	used := 0
+	remaining := func() int {
+		if budget <= 0 {
+			return -1
+		}
+		return budget - used
+	}
+	account := func(n int) { used += n }
+
 	// 2. Rportfwd frames on their dedicated FIFO (isolated from the 200-slot
 	// control queue so bulk tunnel data can't evict closes).
-	frames = append(frames, e.collectRPortFwdFrames(agentID)...)
+	for _, f := range e.collectRPortFwdFrames(agentID, remaining()) {
+		frames = append(frames, f)
+		account(len(f.Data))
+	}
 
 	// 3. Lportfwd frames on their own dedicated FIFO (same rationale).
-	frames = append(frames, e.collectLPortFwdFrames(agentID)...)
+	for _, f := range e.collectLPortFwdFrames(agentID, remaining()) {
+		frames = append(frames, f)
+		account(len(f.Data))
+	}
 
 	// 4. Data frames from connections — minimize lock hold time
 	type connDrain struct {
@@ -644,8 +748,11 @@ func (e *socksRelayEngine) collectPendingFrames(agentID string) []socksFrame {
 		}
 		for len(merged) > 0 {
 			sz := len(merged)
-			if sz > SocksMaxFrameSize {
-				sz = SocksMaxFrameSize
+			if sz > frameSize {
+				sz = frameSize
+			}
+			if budget > 0 && used+sz > budget {
+				break
 			}
 			frames = append(frames, socksFrame{
 				ConnID: d.connID,
@@ -653,6 +760,33 @@ func (e *socksRelayEngine) collectPendingFrames(agentID string) []socksFrame {
 				Data:   merged[:sz],
 			})
 			merged = merged[sz:]
+			used += sz
+		}
+		if len(merged) > 0 {
+			// Budget cut the stream mid-connection: requeue the remainder
+			// at the head, in order, so the next beacon continues the
+			// byte stream exactly where this one stopped.
+			var rest [][]byte
+			for len(merged) > 0 {
+				sz := len(merged)
+				if sz > frameSize {
+					sz = frameSize
+				}
+				rest = append(rest, merged[:sz])
+				merged = merged[sz:]
+			}
+			e.mu.Lock()
+			if conn, ok := e.connections[d.connID]; ok && conn.agentID == agentID {
+				conn.mu.Lock()
+				conn.outbound = append(rest, conn.outbound...)
+				for _, c := range rest {
+					conn.outboundBytes += len(c)
+				}
+				conn.mu.Unlock()
+			} else {
+				e.noteDrop("mtu_requeue_orphan")
+			}
+			e.mu.Unlock()
 		}
 	}
 
@@ -672,12 +806,20 @@ func (e *socksRelayEngine) processAgentData(s *Server, agentID string, frames []
 			e.mu.Unlock()
 			slog.Warn("SOCKS relay: dropped frame for foreign conn id",
 				"agent_id", agentID, "conn", f.ConnID, "action", f.Action)
+			e.noteDrop("foreign_conn")
 			continue
 		}
 		e.mu.Unlock()
 		switch f.Action {
 		case "data":
-			if owned && len(f.Data) > 0 {
+			if !owned {
+				// Benign race (data in flight while the leg closed) but
+				// counted: a spike here means the agent is spraying stale
+				// conn IDs.
+				e.noteDrop("unknown_conn")
+				continue
+			}
+			if len(f.Data) > 0 {
 				conn.mu.Lock()
 				conn.tcpConn.SetWriteDeadline(time.Now().Add(SOCKSRelayWriteTimeout))
 				_, werr := conn.tcpConn.Write(f.Data)
@@ -708,10 +850,13 @@ func (e *socksRelayEngine) processAgentData(s *Server, agentID string, frames []
 			slog.Info("SOCKS relay: agent connected to target", "conn_id", f.ConnID)
 		case "udp_data":
 			if !owned || !conn.isUDP || conn.udpConn == nil || conn.udpClient == nil {
+				e.noteDrop("udp_drop")
 				continue
 			}
 			_, port, payload, err := decodeSocksUDPFrame(f.Data)
 			if err != nil {
+				slog.Warn("SOCKS relay: malformed UDP frame, dropping", "agent_id", agentID, "conn", f.ConnID)
+				e.noteDrop("udp_drop")
 				continue
 			}
 			_ = port
@@ -1033,10 +1178,24 @@ func (s *Server) processAgentSocksData(agentID string, frames []socksFrame) {
 }
 
 // collectSocksFrames gathers pending frames for an agent (called from processBeacon).
-func (s *Server) collectSocksFrames(agentID string) []socksFrame {
-	frames := s.socksEngine.collectPendingFrames(agentID)
+// frameSize/budget<=0 drains everything (stream transports); datagram
+// transports pass the low-MTU pair so one beacon fits the link.
+func (s *Server) collectSocksFrames(agentID string, frameSize, budget int) []socksFrame {
+	frames := s.socksEngine.collectPendingFrames(agentID, frameSize, budget)
 	if s.tunEngine != nil {
-		frames = append(frames, s.tunEngine.drain(agentID)...)
+		// Skip the TUN backlog once the datagram budget is spent; its
+		// remainder stays queued for the next beacon.
+		if budget <= 0 {
+			frames = append(frames, s.tunEngine.drain(agentID, 0)...)
+		} else {
+			used := 0
+			for _, f := range frames {
+				used += len(f.Data)
+			}
+			if remaining := budget - used; remaining > 0 {
+				frames = append(frames, s.tunEngine.drain(agentID, remaining)...)
+			}
+		}
 	}
 	return frames
 }

@@ -16,7 +16,7 @@ func TestRPortFwdDedicatedQueueIsolated(t *testing.T) {
 
 	s.sendRPortFwdFrame("a1", 1, "rportfwd_data", []byte("hello"))
 
-	if n := len(s.socksEngine.collectRPortFwdFrames("a1")); n != 1 {
+	if n := len(s.socksEngine.collectRPortFwdFrames("a1", 0)); n != 1 {
 		t.Fatalf("want 1 rportfwd frame, got %d", n)
 	}
 	s.socksEngine.controlFramesMu.Lock()
@@ -29,7 +29,7 @@ func TestRPortFwdDedicatedQueueIsolated(t *testing.T) {
 	s.sendRPortFwdFrame("a1", 1, "rportfwd_connect", []byte("h:1"))
 	s.sendRPortFwdFrame("a1", 1, "rportfwd_data", []byte("d"))
 	s.sendRPortFwdFrame("a1", 1, "rportfwd_close", nil)
-	frames := s.socksEngine.collectRPortFwdFrames("a1")
+	frames := s.socksEngine.collectRPortFwdFrames("a1", 0)
 	if len(frames) != 3 || frames[0].Action != "rportfwd_connect" || frames[2].Action != "rportfwd_close" {
 		t.Fatalf("rportfwd FIFO order broken: %+v", frames)
 	}
@@ -145,13 +145,48 @@ func TestRPortFwdWriteFailureCloses(t *testing.T) {
 		t.Fatal("write-failed conn must be removed")
 	}
 	closes := 0
-	for _, f := range s.socksEngine.collectRPortFwdFrames("a1") {
+	for _, f := range s.socksEngine.collectRPortFwdFrames("a1", 0) {
 		if f.ConnID == connID && f.Action == "rportfwd_close" {
 			closes++
 		}
 	}
 	if closes != 1 {
 		t.Fatalf("want exactly 1 rportfwd_close to agent, got %d", closes)
+	}
+}
+
+// TestRPortFwdStopAllDrains proves shutdown clears every relay, closes
+// listeners and operator legs, and is safe to run twice.
+func TestRPortFwdStopAllDrains(t *testing.T) {
+	s := newTasksTestServer(t)
+	s.socksEngine = newSocksRelayEngine()
+	s.rportfwdListeners = make(map[string]*rportfwdRelay)
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := ln.Addr().String()
+	client, server := net.Pipe()
+	defer client.Close()
+	r := &rportfwdRelay{server: s, agentID: "a9", stopCh: make(chan struct{}),
+		listener: &rportfwdListener{ln: ln, connMap: map[uint64]net.Conn{1: server}}}
+	s.rportfwdListeners["a9:1081"] = r
+	go r.acceptLoop()
+	time.Sleep(50 * time.Millisecond)
+
+	s.stopAllRPortFwd()
+	s.stopAllRPortFwd() // idempotent
+
+	s.rportfwdMu.Lock()
+	n := len(s.rportfwdListeners)
+	s.rportfwdMu.Unlock()
+	if n != 0 {
+		t.Fatalf("relays not cleared: %d", n)
+	}
+	if c, err := net.Dial("tcp", addr); err == nil {
+		c.Close()
+		t.Fatal("relay listener still accepting after stopAll")
 	}
 }
 

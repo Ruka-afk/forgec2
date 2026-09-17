@@ -69,7 +69,7 @@ func TestLPortFwdServerRelay(t *testing.T) {
 	var gotPong bool
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) && !gotPong {
-		for _, f := range s.collectSocksFrames(agentID) {
+		for _, f := range s.collectSocksFrames(agentID, 0, 0) {
 			if f.Action == "lportfwd_data" && string(f.Data) == "pong" {
 				gotPong = true
 			}
@@ -90,7 +90,7 @@ func TestLPortFwdServerRelay(t *testing.T) {
 		t.Fatal("connection still tracked after close")
 	}
 	var sawClose bool
-	for _, f := range s.collectSocksFrames(agentID) {
+	for _, f := range s.collectSocksFrames(agentID, 0, 0) {
 		if f.Action == "lportfwd_close" && f.ConnID == 42 {
 			sawClose = true
 		}
@@ -186,7 +186,7 @@ func TestLPortFwdConnFloodCapped(t *testing.T) {
 		t.Fatalf("over-cap connect must be refused, tracked=%v count=%d", tracked, n)
 	}
 	var sawClose bool
-	for _, f := range s.socksEngine.collectLPortFwdFrames(agentID) {
+	for _, f := range s.socksEngine.collectLPortFwdFrames(agentID, 0) {
 		if f.ConnID == 9999 && f.Action == "lportfwd_close" {
 			sawClose = true
 		}
@@ -250,7 +250,7 @@ func TestLPortFwdQueueOverflowClosesLeg(t *testing.T) {
 		t.Fatal("overflowed leg must be torn down loudly")
 	}
 	var sawClose bool
-	for _, f := range s.socksEngine.collectLPortFwdFrames(agentID) {
+	for _, f := range s.socksEngine.collectLPortFwdFrames(agentID, 0) {
 		if f.ConnID == 42 && f.Action == "lportfwd_close" {
 			sawClose = true
 		}
@@ -280,7 +280,7 @@ func TestLPortFwdCloseBypassesFullQueue(t *testing.T) {
 	s.lportfwdClose(agentID, 7)
 
 	var sawClose bool
-	for _, f := range s.socksEngine.collectLPortFwdFrames(agentID) {
+	for _, f := range s.socksEngine.collectLPortFwdFrames(agentID, 0) {
 		if f.ConnID == 7 && f.Action == "lportfwd_close" {
 			sawClose = true
 		}
@@ -320,5 +320,29 @@ func TestLPortFwdIdleReaped(t *testing.T) {
 	}
 	if !freshKept {
 		t.Fatal("active leg must survive the sweep")
+	}
+}
+
+// TestLPortFwdCloseAllDrains proves shutdown closes every tunneled leg and
+// clears the table, and is safe to run twice.
+func TestLPortFwdCloseAllDrains(t *testing.T) {
+	ginSetTestMode(t)
+	s := initV3BeaconServer(t, testutil.SetupTestDB(t), tenantVisibilityMasterHex)
+	const agentID = "lpf-drain"
+	c1, s1 := net.Pipe()
+	defer c1.Close()
+	c2, s2 := net.Pipe()
+	defer c2.Close()
+	s.lportfwdTargets[lportfwdKey(agentID, 1)] = &lportfwdTarget{agentID: agentID, tcpConn: s1, lastActive: time.Now()}
+	s.lportfwdTargets[lportfwdKey(agentID, 2)] = &lportfwdTarget{agentID: agentID, tcpConn: s2, lastActive: time.Now()}
+
+	s.closeAllLPortFwd()
+	s.closeAllLPortFwd() // idempotent
+
+	s.lportfwdMu.Lock()
+	n := len(s.lportfwdTargets)
+	s.lportfwdMu.Unlock()
+	if n != 0 {
+		t.Fatalf("targets not cleared: %d", n)
 	}
 }

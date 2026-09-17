@@ -248,6 +248,14 @@ func (s *Server) isDuplicateResult(agentID string, r taskResult) bool {
 // processBeacon contains the core beacon logic (registration, result processing,
 // task dispatch). It is shared between HTTP and TCP transports.
 func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconResponse {
+	return s.processBeaconWithBudget(req, publicIP, 0, 0)
+}
+
+// processBeaconWithBudget is processBeacon with a tunnel frame budget for
+// datagram transports (frameSize/budget<=0 drains everything). Relayed
+// children inherit the parent's budget: their replies nest inside the
+// parent's single response datagram.
+func (s *Server) processBeaconWithBudget(req beaconRequest, publicIP string, frameSize, budget int) beaconResponse {
 	now := time.Now()
 
 	// Dedup: skip recently processed identical beacons
@@ -308,7 +316,7 @@ func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconRespons
 		s.processRelayedResults(req.Relayed, req.UUID, now)
 	}
 
-	relayedReplies := s.processRelayedEnvelopes(req.RelayedFrames, req.UUID, publicIP, now, 0)
+	relayedReplies := s.processRelayedEnvelopes(req.RelayedFrames, req.UUID, publicIP, now, 0, frameSize, budget)
 
 	taskLimit := BeaconTaskFetchLimit
 	if req.TaskCapacity != nil && *req.TaskCapacity >= 0 && *req.TaskCapacity < taskLimit {
@@ -324,7 +332,7 @@ func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconRespons
 
 	s.enforceKillDate(agent, &resp, now)
 	s.enforceKillSwitch(agent, &resp)
-	s.processSOCKSRelay(req.UUID, req.SocksData, &resp)
+	s.processSOCKSRelayWithBudget(req.UUID, req.SocksData, &resp, frameSize, budget)
 
 	return resp
 }

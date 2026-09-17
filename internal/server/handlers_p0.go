@@ -330,12 +330,33 @@ func (r *rportfwdRelay) handleConn(operatorConn net.Conn) {
 func (r *rportfwdRelay) stop() {
 	r.stopOnce.Do(func() { close(r.stopCh) })
 	if r.listener != nil {
+		// Close the listener here, not only via the bind watcher goroutine:
+		// stop() must release the port even if the watcher already fired or
+		// the relay was assembled without bind(). Close is idempotent.
+		if r.listener.ln != nil {
+			_ = r.listener.ln.Close()
+		}
 		r.listener.mu.Lock()
 		for id, conn := range r.listener.connMap {
 			conn.Close()
 			delete(r.listener.connMap, id)
 		}
 		r.listener.mu.Unlock()
+	}
+}
+
+// stopAllRPortFwd stops every relay and clears the table. Shutdown path:
+// FDs + accept loops are released even for agents that never sent close.
+func (s *Server) stopAllRPortFwd() {
+	s.rportfwdMu.Lock()
+	relays := make([]*rportfwdRelay, 0, len(s.rportfwdListeners))
+	for _, r := range s.rportfwdListeners {
+		relays = append(relays, r)
+	}
+	s.rportfwdListeners = make(map[string]*rportfwdRelay)
+	s.rportfwdMu.Unlock()
+	for _, r := range relays {
+		r.stop()
 	}
 }
 

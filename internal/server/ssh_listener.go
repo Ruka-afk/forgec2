@@ -417,7 +417,7 @@ func (s *Server) startExtraSSHListener(key string) error {
 		return fmt.Errorf("preparing SSH listener: %w", err)
 	}
 	sl := NewSSHBeaconListener(cfg)
-	sl.SetHandler(s.makeBeaconHandler())
+	sl.SetHandler(s.makeBeaconHandler("ssh"))
 	if err := sl.Start(); err != nil {
 		return err
 	}

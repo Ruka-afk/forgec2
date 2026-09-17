@@ -197,6 +197,26 @@ func (s *Server) lportfwdClose(agentID string, connID uint64) {
 	slog.Info("lportfwd: connection closed", "agent_id", agentID, "conn", connID, "target", t.target)
 }
 
+// closeAllLPortFwd tears down every tunneled leg. Shutdown path: sockets +
+// pump goroutines are released even for agents that never sent close.
+// (Close notifications are still queued best-effort; the agent is going
+// away with the server anyway.)
+func (s *Server) closeAllLPortFwd() {
+	s.lportfwdMu.Lock()
+	type leg struct {
+		agentID string
+		connID  uint64
+	}
+	legs := make([]leg, 0, len(s.lportfwdTargets))
+	for key, t := range s.lportfwdTargets {
+		legs = append(legs, leg{agentID: t.agentID, connID: connIDFromKey(key)})
+	}
+	s.lportfwdMu.Unlock()
+	for _, l := range legs {
+		s.lportfwdClose(l.agentID, l.connID)
+	}
+}
+
 // cleanupLPortFwdForAgent tears down every tunneled connection belonging to an
 // agent that disconnected, so dead sockets don't linger until process exit.
 // Declared targets are dropped too — a reconnect must re-declare via a fresh

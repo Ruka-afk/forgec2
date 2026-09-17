@@ -140,6 +140,62 @@ func TestFileChainTaskIsolation(t *testing.T) {
 	}
 }
 
+// TestFileChainDowngradeRejected proves a MAC stripped mid-transfer fails
+// closed: once a chained link exists, an empty-MAC chunk is a downgrade
+// (compromised relay parent dodging HMAC), not legacy tolerance.
+func TestFileChainDowngradeRejected(t *testing.T) {
+	s := testServerForChain(t)
+	defer s.db.DB()
+
+	chainKey := buildChainKey(t, s, "agent-9")
+	chunk1 := []byte("chained first chunk")
+	mac1 := linkMAC(t, chainKey, make([]byte, 32), chunk1)
+	if err := s.verifyAndCommitChain("agent-9", 91, mac1, chunk1); err != nil {
+		t.Fatalf("verify chunk1: %v", err)
+	}
+	if err := s.verifyAndCommitChain("agent-9", 91, "", []byte("stripped chunk")); err == nil {
+		t.Fatal("stripped MAC mid-transfer must be rejected")
+	}
+	// The reset must clear chain state so a retry restarts from the seed.
+	macRetry := linkMAC(t, chainKey, make([]byte, 32), chunk1)
+	if err := s.verifyAndCommitChain("agent-9", 91, macRetry, chunk1); err != nil {
+		t.Fatalf("retry after reset should restart from seed: %v", err)
+	}
+}
+
+// TestFileChainTouchedRefreshed proves both commit paths refresh the sweep
+// timestamp: push chains and verified chunks must expire when abandoned,
+// not leak map entries forever.
+func TestFileChainTouchedRefreshed(t *testing.T) {
+	s := testServerForChain(t)
+	defer s.db.DB()
+
+	if _, _, err := s.chainForPush("agent-2", 77, []byte("push")); err != nil {
+		t.Fatalf("chainForPush: %v", err)
+	}
+	chainKey := buildChainKey(t, s, "agent-2")
+	mac := linkMAC(t, chainKey, make([]byte, 32), []byte("verify me"))
+	if err := s.verifyAndCommitChain("agent-2", 78, mac, []byte("verify me")); err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	s.fileChains.mu.Lock()
+	_, pushTouched := s.fileChains.touched[77]
+	_, verifyTouched := s.fileChains.touched[78]
+	s.fileChains.mu.Unlock()
+	if !pushTouched || !verifyTouched {
+		t.Fatalf("sweep timestamps missing: push=%v verify=%v", pushTouched, verifyTouched)
+	}
+	// Aged entries must sweep away entirely (no chains-without-touched).
+	s.fileChains.mu.Lock()
+	old := time.Now().Add(-time.Hour)
+	s.fileChains.touched[77] = old
+	s.fileChains.touched[78] = old
+	s.fileChains.mu.Unlock()
+	if n := s.fileChains.sweep(time.Minute); n != 2 {
+		t.Fatalf("sweep evicted %d, want 2", n)
+	}
+}
+
 func seedRelayChild(t *testing.T, s *Server, childID, parentID, taskType string) uint {
 	t.Helper()
 	if err := s.db.Create(&db.Implant{ID: childID, ParentID: parentID, Status: "online"}).Error; err != nil {

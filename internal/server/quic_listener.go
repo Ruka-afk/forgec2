@@ -215,7 +215,7 @@ func (s *Server) startQUICListener() {
 		return
 	}
 	l := NewQUICBeaconListener(s.cfg.Server.QUICAddr, tlsCfg)
-	l.SetHandler(s.makeBeaconHandler())
+	l.SetHandler(s.makeBeaconHandler("quic"))
 	if err := l.Start(); err != nil {
 		slog.Error("Failed to start QUIC listener", "addr", s.cfg.Server.QUICAddr, "err", err)
 		return
@@ -232,7 +232,7 @@ func (s *Server) startExtraQUICListener(key string) error {
 		return err
 	}
 	l := NewQUICBeaconListener(addr, tlsCfg)
-	l.SetHandler(s.makeBeaconHandler())
+	l.SetHandler(s.makeBeaconHandler("quic"))
 	if err := l.Start(); err != nil {
 		return err
 	}

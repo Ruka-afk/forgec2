@@ -170,7 +170,7 @@ func (e *tunEngine) udpLoop(sess *tunSession) {
 	}
 }
 
-func (e *tunEngine) drain(agentID string) []socksFrame {
+func (e *tunEngine) drain(agentID string, budget int) []socksFrame {
 	e.mu.Lock()
 	sess := e.sessions[agentID]
 	e.mu.Unlock()
@@ -189,8 +189,26 @@ func (e *tunEngine) drain(agentID string) []socksFrame {
 		return nil
 	}
 	frames := make([]socksFrame, 0, len(pending))
-	for _, pkt := range pending {
-		frames = append(frames, socksFrame{ConnID: 0, Action: "tun_data", Data: pkt})
+	used := 0
+	i := 0
+	for ; i < len(pending); i++ {
+		// budget<=0 drains all; otherwise cap total bytes, requeueing the
+		// remainder losslessly below.
+		if budget > 0 && used+len(pending[i]) > budget {
+			break
+		}
+		frames = append(frames, socksFrame{ConnID: 0, Action: "tun_data", Data: pending[i]})
+		used += len(pending[i])
+	}
+	if rest := pending[i:]; len(rest) > 0 {
+		// Budget cut the backlog: requeue the remainder at the head, in
+		// order, so packets cross in later beacons instead of dropping.
+		sess.mu.Lock()
+		sess.pending = append(rest, sess.pending...)
+		for _, pkt := range rest {
+			sess.pendingBytes += len(pkt)
+		}
+		sess.mu.Unlock()
 	}
 	return frames
 }

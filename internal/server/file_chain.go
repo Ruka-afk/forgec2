@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -106,32 +107,51 @@ func (s *Server) fileChainKey(agentID string) []byte {
 	return crypto.DeriveFileChainKey(s.deriveRegKey(agentID))
 }
 
+// fileChainNote counts a chain integrity event for observability.
+func (s *Server) fileChainNote(outcome string, taskID uint, agentID string) {
+	if s.metrics != nil && s.metrics.FileChainEventsTotal != nil {
+		s.metrics.FileChainEventsTotal.WithLabelValues(outcome).Inc()
+	}
+}
+
 // verifyAndCommitChain checks chunkData against the expected chain link. On
 // success it commits the new link and returns nil. On any failure (bad hex,
 // wrong MAC) the chain is reset so the transfer cannot silently continue.
 // The check+commit is performed under a single lock to prevent concurrent
 // chunks for the same task from interleaving and bypassing the chain.
 func (s *Server) verifyAndCommitChain(agentID string, taskID uint, expectedHex string, chunkData []byte) error {
+	fc := s.fileChains
+	if fc == nil {
+		return fmt.Errorf("file chain state not initialized")
+	}
 	if expectedHex == "" {
-		// Legacy agents that don't compute MACs: allow empty MAC. The first
-		// chunk in a-chain transfer carries no expected MAC; instead the
-		// server verifies the offset/sequence is contiguous (no gap) so a
-		// reordered chunk with an unverifiable MAC still cannot skip ahead.
+		// Legacy agents that don't compute MACs: allow empty MAC only while
+		// the transfer has no chained state. Once a MAC'd chunk committed,
+		// a stripped chunk is a downgrade (a compromised relay parent
+		// dropping MACs to dodge HMAC) and fails closed.
+		fc.mu.Lock()
+		_, chained := fc.chains[taskID]
+		fc.mu.Unlock()
+		if chained {
+			s.fileChainNote("downgrade_rejected", taskID, agentID)
+			slog.Warn("File chunk MAC stripped mid-transfer, rejecting", "agent_id", agentID, "task_id", taskID)
+			fc.reset(taskID)
+			return fmt.Errorf("chain MAC stripped mid-transfer")
+		}
+		s.fileChainNote("legacy_bypass", taskID, agentID)
 		return nil
 	}
 	want, err := hex.DecodeString(expectedHex)
 	if err != nil || len(want) != 32 {
-		s.fileChains.reset(taskID)
+		s.fileChainNote("mismatch", taskID, agentID)
+		fc.reset(taskID)
 		return fmt.Errorf("malformed chain MAC")
 	}
 	chainKey := s.fileChainKey(agentID)
 	if chainKey == nil {
-		s.fileChains.reset(taskID)
+		s.fileChainNote("mismatch", taskID, agentID)
+		fc.reset(taskID)
 		return fmt.Errorf("cannot derive file chain key")
-	}
-	fc := s.fileChains
-	if fc == nil {
-		return fmt.Errorf("file chain state not initialized")
 	}
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
@@ -142,9 +162,12 @@ func (s *Server) verifyAndCommitChain(agentID string, taskID uint, expectedHex s
 	got := crypto.FileChunkMAC(chainKey, prev, chunkData)
 	if subtle.ConstantTimeCompare(got, want) != 1 {
 		delete(fc.chains, taskID)
+		delete(fc.touched, taskID)
+		s.fileChainNote("mismatch", taskID, agentID)
 		return fmt.Errorf("chunk HMAC mismatch (tampered/reordered chunk)")
 	}
 	fc.chains[taskID] = want
+	fc.touched[taskID] = time.Now()
 	return nil
 }
 
@@ -167,6 +190,10 @@ func (s *Server) chainForPush(agentID string, taskID uint, chunkData []byte) (pr
 	}
 	mac := crypto.FileChunkMAC(chainKey, prev, chunkData)
 	fc.chains[taskID] = mac
+	// Push legs must refresh touched too, or the sweep never expires them
+	// (the old code only set chains — a slow drip of pushes leaked map
+	// entries forever).
+	fc.touched[taskID] = time.Now()
 	fc.mu.Unlock()
 	return hex.EncodeToString(prev), hex.EncodeToString(mac), nil
 }

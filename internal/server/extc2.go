@@ -259,6 +259,9 @@ func (s *Server) handleExternalC2WebSocket(c *gin.Context) {
 		s.extC2ChannelsMu.Unlock()
 		s.extC2TaskMu.Lock()
 		delete(s.extC2Notify, channelID)
+		// Drop the orphaned queue too: without this every reconnected
+		// channel leaks its undelivered tasks map entry forever.
+		delete(s.extC2TaskQueue, channelID)
 		s.extC2TaskMu.Unlock()
 	}()
 
@@ -286,12 +289,19 @@ func (s *Server) handleExternalC2WebSocket(c *gin.Context) {
 			tasks := s.extC2TaskQueue[channelID]
 			s.extC2TaskQueue[channelID] = nil
 			s.extC2TaskMu.Unlock()
-			for _, task := range tasks {
+			for i, task := range tasks {
 				msg, ok := marshalJSONSafe(task)
 				if !ok {
 					continue
 				}
-				ch.SendJSON(json.RawMessage(msg))
+				// A failed send must not silently eat the task: the queue
+				// was already drained above, so requeue this and the rest
+				// at the head for the next tick instead of losing them.
+				if err := ch.SendJSON(json.RawMessage(msg)); err != nil {
+					slog.Warn("External C2 WebSocket send failed, requeueing", "channel_id", channelID, "error", err)
+					s.requeueExtC2Tasks(channelID, tasks[i:])
+					break
+				}
 			}
 		}
 	}()
@@ -438,6 +448,29 @@ func (s *Server) QueueExtC2Task(channelID string, task extC2Task) {
 		queue = queue[1:]
 	}
 	s.extC2TaskQueue[channelID] = append(queue, task)
+	if ch, ok := s.extC2Notify[channelID]; ok {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	}
+}
+
+// requeueExtC2Tasks prepends unsent tasks back to the head of a channel
+// queue (bounded like QueueExtC2Task) so a failed push redelivers instead
+// of silently losing tasks the sender already drained.
+func (s *Server) requeueExtC2Tasks(channelID string, tasks []extC2Task) {
+	if len(tasks) == 0 {
+		return
+	}
+	s.extC2TaskMu.Lock()
+	defer s.extC2TaskMu.Unlock()
+	queue := append(tasks, s.extC2TaskQueue[channelID]...)
+	if len(queue) > MaxExtC2QueuePerChan {
+		slog.Warn("ExtC2 requeue over cap, dropping oldest tasks", "channel", channelID, "dropped", len(queue)-MaxExtC2QueuePerChan)
+		queue = queue[len(queue)-MaxExtC2QueuePerChan:]
+	}
+	s.extC2TaskQueue[channelID] = queue
 	if ch, ok := s.extC2Notify[channelID]; ok {
 		select {
 		case ch <- struct{}{}:

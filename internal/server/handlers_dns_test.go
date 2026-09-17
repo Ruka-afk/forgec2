@@ -43,7 +43,7 @@ func TestDNSBeaconRejectsPlaintext(t *testing.T) {
 	ginSetTestMode(t)
 	database := testutil.SetupTestDB(t)
 	s := initDNSBeaconServer(t, database)
-	h := s.makeBeaconHandler()
+	h := s.makeBeaconHandler("dns")
 
 	agentUUID := "99999999-8888-4333-8444-aaaaaaaaaaaa"
 	body := `{"uuid":"` + agentUUID + `","info":{"hostname":"DNS-PLAIN","username":"u","ip":"10.0.0.9"},"pv":1}`
@@ -70,7 +70,7 @@ func TestDNSBeaconV2RegisterAndEncrypted(t *testing.T) {
 	s.configMu.Lock()
 	s.cfg.Server.BeaconKey = masterKey
 	s.configMu.Unlock()
-	h := s.makeBeaconHandler()
+	h := s.makeBeaconHandler("dns")
 
 	agent := v3TestAgent(t, s, "aaaaaaaa-bbbb-4333-8444-cccccccccccc")
 
@@ -158,7 +158,7 @@ func TestDNSBeaconRejectsInvalidAgentID(t *testing.T) {
 	ginSetTestMode(t)
 	database := testutil.SetupTestDB(t)
 	s := initDNSBeaconServer(t, database)
-	h := s.makeBeaconHandler()
+	h := s.makeBeaconHandler("dns")
 
 	body := `{"uuid":"../../etc/passwd","info":{"hostname":"EVIL","username":"u","ip":"10.0.0.7"},"pv":1}`
 	respJSON := h("../../etc/passwd", []byte(body))
@@ -176,7 +176,7 @@ func TestDNSBeaconBadKeyRejected(t *testing.T) {
 	s.configMu.Lock()
 	s.cfg.Server.BeaconKey = "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899"
 	s.configMu.Unlock()
-	h := s.makeBeaconHandler()
+	h := s.makeBeaconHandler("dns")
 
 	// Handshake-shaped frame with no mac.
 	ts := time.Now().Unix()

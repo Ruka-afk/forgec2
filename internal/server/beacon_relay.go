@@ -175,7 +175,7 @@ const maxRelayDepth = 4
 // the old process-global counter misfired under concurrency (N simultaneous
 // parent beacons read as depth N and dropped legitimate relays), while true
 // nesting is flattened per round and can never legitimately exceed 1.
-func (s *Server) processRelayedEnvelopes(frames []relayedFrame, parentUUID, publicIP string, now time.Time, depth int) []relayedReply {
+func (s *Server) processRelayedEnvelopes(frames []relayedFrame, parentUUID, publicIP string, now time.Time, depth int, frameSize, budget int) []relayedReply {
 	if len(frames) == 0 {
 		return nil
 	}
@@ -221,10 +221,10 @@ func (s *Server) processRelayedEnvelopes(frames []relayedFrame, parentUUID, publ
 		var replyBytes []byte
 		var ok bool
 		if kind == frameEncrypted {
-			// Clip the child's nested relay fields: children relaying in turn
-			// is handled by the next beacon round, not recursive inlining.
-			childReq.RelayedFrames = nil
-			resp := s.processBeacon(childReq, publicIP)
+		// Clip the child's nested relay fields: children relaying in turn
+		// is handled by the next beacon round, not recursive inlining.
+		childReq.RelayedFrames = nil
+		resp := s.processBeaconWithBudget(childReq, publicIP, frameSize, budget)
 			if s.sessionManager != nil && s.sessionManager.NeedsRekey(rf.AgentID, BeaconSessionRekeyMessages) {
 				resp.Rekey = true
 			}
