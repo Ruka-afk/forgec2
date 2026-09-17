@@ -138,8 +138,15 @@ func (s *Server) processRelayedResults(relayed []relayedData, parentUUID string,
 		slog.Info("P2P relayed data processed for child", "parent", parentUUID, "child", rd.AgentID)
 	}
 
-	if len(childIDs) > 0 {
-		if err := s.db.Model(&db.Implant{}).Where("id IN ?", childIDs).Update("last_seen", now).Error; err != nil {
+	// last_seen advances only for verified children (present in childAgentMap
+	// with this parent binding). Unverified IDs must not move presence: a
+	// forged childID would otherwise paint topology/online status.
+	verifiedIDs := make([]string, 0, len(childAgentMap))
+	for id := range childAgentMap {
+		verifiedIDs = append(verifiedIDs, id)
+	}
+	if len(verifiedIDs) > 0 {
+		if err := s.db.Model(&db.Implant{}).Where("id IN ?", verifiedIDs).Update("last_seen", now).Error; err != nil {
 			slog.Error("Failed to batch-update child agent last_seen", "parent", parentUUID, "error", err)
 		}
 	}
@@ -150,9 +157,10 @@ func (s *Server) processRelayedResults(relayed []relayedData, parentUUID string,
 // Crypto.MaxDecryptedPayloadSize).
 const maxRelayEnvelopeSize = 16 << 20 // 16 MiB
 
-// maxRelayDepth bounds recursive P2P envelope relay nesting. Each parent hop
-// embeds child envelopes in its own envelope; an unbounded chain would let
-// frames recurse indefinitely server-side.
+// maxRelayDepth bounds P2P envelope relay nesting depth. Nested frames are
+// flattened per beacon round (a child's own RelayedFrames are clipped before
+// its request is processed), so legitimate traffic never nests; the bound is
+// defense-in-depth against a future path reintroducing recursion.
 const maxRelayDepth = 4
 
 // processRelayedEnvelopes handles opaque child envelopes forwarded by a P2P
@@ -162,23 +170,19 @@ const maxRelayDepth = 4
 // Valid frames are processed exactly like a direct beacon (registration,
 // handshake and encrypted frames all work), and the child's response
 // envelope is returned to the parent for verbatim forwarding.
-func (s *Server) processRelayedEnvelopes(frames []relayedFrame, parentUUID, publicIP string, now time.Time) []relayedReply {
+//
+// depth is the explicit nesting level (0 for a direct beacon's frames):
+// the old process-global counter misfired under concurrency (N simultaneous
+// parent beacons read as depth N and dropped legitimate relays), while true
+// nesting is flattened per round and can never legitimately exceed 1.
+func (s *Server) processRelayedEnvelopes(frames []relayedFrame, parentUUID, publicIP string, now time.Time, depth int) []relayedReply {
 	if len(frames) == 0 {
 		return nil
 	}
 
-	s.relayDepthMu.Lock()
-	s.relayDepth++
-	depth := s.relayDepth
-	s.relayDepthMu.Unlock()
-	defer func() {
-		s.relayDepthMu.Lock()
-		s.relayDepth--
-		s.relayDepthMu.Unlock()
-	}()
-
 	if depth > maxRelayDepth {
-		slog.Warn("P2P relay depth exceeded, dropping envelvelope relay", "parent", parentUUID, "depth", depth)
+		slog.Warn("P2P relay depth exceeded, dropping envelope relay", "parent", parentUUID, "depth", depth)
+		s.LogAuditRecord(nil, "relay_depth_exceeded", "agent", parentUUID, "dropping P2P envelope relay batch", true, nil)
 		return nil
 	}
 
@@ -235,6 +239,57 @@ func (s *Server) processRelayedEnvelopes(frames []relayedFrame, parentUUID, publ
 		replies = append(replies, relayedReply{AgentID: rf.AgentID, Envelope: replyBytes})
 	}
 	return replies
+}
+
+// reapOrphanedRelayChildren unbinds children of long-dead parents and
+// requeues their unacked tasks claimed by the dead parent. Without this a
+// parent outage starves its children: fetchRelayedChildTasks only serves the
+// bound parent, while the tasks sit running/claimed forever. A re-beaconing
+// parent re-binds children lazily via bindRelayChildToParent, so an
+// intervening unbind is self-healing.
+func (s *Server) reapOrphanedRelayChildren() {
+	var parents []db.Implant
+	if err := s.db.Where("id IN (?)", s.db.Model(&db.Implant{}).Select("DISTINCT parent_id").Where("parent_id <> ''")).Find(&parents).Error; err != nil {
+		slog.Error("Relay orphan sweep: parent lookup failed", "err", err)
+		return
+	}
+	now := time.Now()
+	for _, p := range parents {
+		// Dead = past twice its own effective offline threshold.
+		deadline := p.LastSeen.Add(2 * s.offlineThresholdFor(p))
+		if now.Before(deadline) {
+			continue
+		}
+		// Unbind its children (conditional: a concurrent re-beacon that
+		// flipped the parent back online does not stop this row-level
+		// update, but bindRelayChildToParent re-binds on next relay).
+		var childIDs []string
+		if err := s.db.Model(&db.Implant{}).Where("parent_id = ?", p.ID).Pluck("id", &childIDs).Error; err != nil {
+			continue
+		}
+		if len(childIDs) == 0 {
+			continue
+		}
+		if err := s.db.Model(&db.Implant{}).Where("parent_id = ?", p.ID).Update("parent_id", "").Error; err != nil {
+			slog.Error("Relay orphan sweep: unbind failed", "parent", p.ID, "err", err)
+			continue
+		}
+		// Requeue unacked tasks the dead parent had claimed so they become
+		// claimable again (by a new parent or direct beacon).
+		res := s.db.Model(&db.Task{}).
+			Where("agent_id IN ? AND status = ? AND claimed_by = ? AND acknowledged_at IS NULL", childIDs, "running", p.ID).
+			Updates(map[string]interface{}{
+				"status": "pending", "claimed_by": "", "claimed_at": time.Time{},
+				"delivery_attempts": gorm.Expr("delivery_attempts + 1"),
+			})
+		if res.Error != nil {
+			slog.Error("Relay orphan sweep: requeue failed", "parent", p.ID, "err", res.Error)
+			continue
+		}
+		slog.Info("Relay orphan sweep: unbound dead parent", "parent", p.ID,
+			"children", len(childIDs), "requeued", res.RowsAffected)
+		s.LogAuditRecord(nil, "relay_orphan_reap", "agent", p.ID, "unbound dead relay parent", true, nil)
+	}
 }
 
 // bindRelayChildToParent enforces/lazily binds the parent-child link for a

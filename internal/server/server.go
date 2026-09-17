@@ -68,6 +68,10 @@ type Server struct {
 	// P0-3: rportfwd (reverse port forward)
 	rportfwdListeners map[string]*rportfwdRelay
 	rportfwdMu        sync.Mutex
+	// rportfwdNextID allocates globally-unique operator conn IDs across all
+	// relays: per-relay counters restart at 1, so two relays for one agent
+	// would otherwise share connIDs and cross-deliver agent data frames.
+	rportfwdNextID atomic.Uint64
 
 	// lportfwd: agent-local listeners tunneled through the beacon; the
 	// teamserver dials the final target on the agent's behalf. Keyed by the
@@ -189,10 +193,8 @@ type Server struct {
 	seqLockoutMu sync.Mutex
 	seqLockout   map[string]time.Time
 
-	// P2P relay depth guard: bounds recursive envelope relay nesting so a
-	// maliciously deep parent chain cannot stack-overflow the handler.
-	relayDepthMu sync.Mutex
-	relayDepth   int
+	// P2P relay: nesting depth travels explicitly with processRelayedEnvelopes
+	// (see beacon_relay.go); no server-global counter is kept.
 
 	// Task result idempotency: agentID + result id → processed timestamp.
 	// Results re-sent after a dropped frame carry a new envelope seq, so
@@ -546,6 +548,9 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	s.metrics = NewMetricsCollector(s)
 	s.metrics.Register(prometheus.DefaultRegisterer)
 	r.Use(metricsMiddleware(s.metrics))
+	if s.socksEngine != nil {
+		s.socksEngine.SetDropCounter(s.metrics.SocksDroppedTotal)
+	}
 
 	if cfg.SIEM.Enabled && cfg.SIEM.URL != "" {
 		s.siem = NewSIEMWebhook(s, cfg.SIEM.URL, cfg.SIEM.Token, cfg.SIEM.Actions)

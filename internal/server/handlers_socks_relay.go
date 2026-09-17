@@ -14,6 +14,7 @@ import (
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
 	"gorm.io/gorm"
 )
 
@@ -37,6 +38,31 @@ type socksRelayEngine struct {
 
 	controlFrames   map[string][]socksFrame
 	controlFramesMu sync.Mutex
+
+	// rportfwdFrames is a dedicated per-agent FIFO for rportfwd
+	// connect/data/close frames. They must NOT share the 200-slot control
+	// queue: high-throughput tunnel data would evict closes (and vice
+	// versa), leaking one side of the tunnel. Ordering within this queue
+	// preserves connect -> data -> close per connection.
+	rportfwdFrames map[string][]socksFrame
+	rportfwdBytes  map[string]int
+	rportfwdMu     sync.Mutex
+
+	// dropCounter, when set, counts silently-dropped frames by reason
+	// (outbound_overflow, control_overflow). Wired by the server after
+	// metrics init; nil in unit tests.
+	dropCounter *prometheus.CounterVec
+}
+
+// SetDropCounter wires the drop metric. Safe to call once at startup.
+func (e *socksRelayEngine) SetDropCounter(c *prometheus.CounterVec) {
+	e.dropCounter = c
+}
+
+func (e *socksRelayEngine) noteDrop(reason string) {
+	if e.dropCounter != nil {
+		e.dropCounter.WithLabelValues(reason).Inc()
+	}
 }
 
 type socksRelaySession struct {
@@ -60,15 +86,33 @@ type socksRelayConn struct {
 	destAddr   string
 	mu         sync.Mutex
 	outbound   [][]byte
+	// outboundBytes bounds buffered-but-unsent data; beyond it the conn is
+	// closed instead of silently shedding bytes (a shed data frame corrupts
+	// the TCP stream without either end noticing).
+	outboundBytes int
 	closed     bool
 	lastActive time.Time
 }
 
+// socksMaxOutboundBytes caps per-connection buffered relay data (500 queued
+// 64KB chunks ≈ 32MB today). Past it, close loudly instead of corrupting.
+const socksMaxOutboundBytes = 2 << 20
+
+// rportfwd queue bounds: dedicated per-agent FIFO so high-throughput tunnel
+// data can't evict SOCKS closes (or vice versa). Same 2MB byte budget as
+// SOCKS outbound — overflow closes loudly instead of corrupting the stream.
+const (
+	rportfwdMaxFramesPerAgent = 500
+	rportfwdMaxBytesPerAgent  = 2 << 20
+)
+
 func newSocksRelayEngine() *socksRelayEngine {
 	return &socksRelayEngine{
-		sessions:      make(map[string]*socksRelaySession),
-		connections:   make(map[uint64]*socksRelayConn),
-		controlFrames: make(map[string][]socksFrame),
+		sessions:       make(map[string]*socksRelaySession),
+		connections:    make(map[uint64]*socksRelayConn),
+		controlFrames:  make(map[string][]socksFrame),
+		rportfwdFrames: make(map[string][]socksFrame),
+		rportfwdBytes:  make(map[string]int),
 	}
 }
 
@@ -373,19 +417,34 @@ func (e *socksRelayEngine) handleOperatorConn(s *Server, sess *socksRelaySession
 // ─── Frame Queue ─────────────────────────────────────────────────────────────
 
 // enqueueFrame adds a frame to the relay queue.
-// "data" frames go to the connection's outbound buffer.
-// Control frames (connect/close) go to the session-level control queue.
+// "data" frames go to the connection's outbound buffer, bounded by
+// socksMaxOutboundBytes: overflow closes the connection (with a close frame
+// to the agent) instead of silently corrupting the stream.
+// Control frames (connect/close) go to the session-level control queue,
+// bounded at 200 per agent; overflow is logged + counted, never silent.
 func (e *socksRelayEngine) enqueueFrame(agentID string, f socksFrame) {
 	if f.Action == "data" {
 		e.mu.Lock()
 		conn, ok := e.connections[f.ConnID]
 		e.mu.Unlock()
-		if ok {
-			conn.mu.Lock()
+		if !ok {
+			return
+		}
+		conn.mu.Lock()
+		overflow := conn.outboundBytes+len(f.Data) > socksMaxOutboundBytes
+		if !overflow {
 			if len(conn.outbound) < 500 {
 				conn.outbound = append(conn.outbound, f.Data)
+				conn.outboundBytes += len(f.Data)
+			} else {
+				overflow = true
 			}
-			conn.mu.Unlock()
+		}
+		conn.mu.Unlock()
+		if overflow {
+			slog.Warn("SOCKS relay: outbound overflow, closing conn", "conn", f.ConnID, "agent_id", agentID)
+			e.noteDrop("outbound_overflow")
+			e.dropConn(agentID, f.ConnID)
 		}
 		return
 	}
@@ -393,6 +452,67 @@ func (e *socksRelayEngine) enqueueFrame(agentID string, f socksFrame) {
 	e.controlFramesMu.Lock()
 	if len(e.controlFrames[agentID]) < 200 {
 		e.controlFrames[agentID] = append(e.controlFrames[agentID], f)
+	} else {
+		slog.Warn("SOCKS relay: control queue full, dropping frame", "agent_id", agentID, "action", f.Action)
+		e.noteDrop("control_overflow")
+	}
+	e.controlFramesMu.Unlock()
+}
+
+// enqueueRPortFwdFrame queues a server→agent rportfwd frame on the dedicated
+// per-agent FIFO. Returns false on overflow (caller must close loudly —
+// dropping a data frame silently corrupts the TCP stream).
+func (e *socksRelayEngine) enqueueRPortFwdFrame(agentID string, f socksFrame) bool {
+	e.rportfwdMu.Lock()
+	defer e.rportfwdMu.Unlock()
+	if e.rportfwdFrames == nil {
+		e.rportfwdFrames = make(map[string][]socksFrame)
+		e.rportfwdBytes = make(map[string]int)
+	}
+	queued := e.rportfwdBytes[agentID] + len(f.Data)
+	if len(e.rportfwdFrames[agentID]) >= rportfwdMaxFramesPerAgent || queued > rportfwdMaxBytesPerAgent {
+		slog.Warn("Rportfwd queue full, dropping frame", "agent_id", agentID, "action", f.Action)
+		e.noteDrop("rportfwd_overflow")
+		return false
+	}
+	e.rportfwdFrames[agentID] = append(e.rportfwdFrames[agentID], f)
+	e.rportfwdBytes[agentID] = queued
+	return true
+}
+
+// collectRPortFwdFrames drains the dedicated rportfwd FIFO for an agent,
+// preserving connect -> data -> close order per connection.
+func (e *socksRelayEngine) collectRPortFwdFrames(agentID string) []socksFrame {
+	e.rportfwdMu.Lock()
+	defer e.rportfwdMu.Unlock()
+	frames := e.rportfwdFrames[agentID]
+	if len(frames) == 0 {
+		return nil
+	}
+	out := make([]socksFrame, len(frames))
+	copy(out, frames)
+	e.rportfwdFrames[agentID] = nil
+	e.rportfwdBytes[agentID] = 0
+	return out
+}
+
+// dropConn removes a connection, closes its sockets, and tells the agent to
+// tear down its side. Lock order: e.mu first (briefly), then conn internals
+// via close() — never the reverse.
+func (e *socksRelayEngine) dropConn(agentID string, connID uint64) {
+	e.mu.Lock()
+	conn, ok := e.connections[connID]
+	if ok {
+		delete(e.connections, connID)
+	}
+	e.mu.Unlock()
+	if !ok {
+		return
+	}
+	conn.close()
+	e.controlFramesMu.Lock()
+	if len(e.controlFrames[agentID]) < 200 {
+		e.controlFrames[agentID] = append(e.controlFrames[agentID], socksFrame{ConnID: connID, Action: "close"})
 	}
 	e.controlFramesMu.Unlock()
 }
@@ -409,7 +529,11 @@ func (e *socksRelayEngine) collectPendingFrames(agentID string) []socksFrame {
 	}
 	e.controlFramesMu.Unlock()
 
-	// 2. Data frames from connections — minimize lock hold time
+	// 2. Rportfwd frames on their dedicated FIFO (isolated from the 200-slot
+	// control queue so bulk tunnel data can't evict closes).
+	frames = append(frames, e.collectRPortFwdFrames(agentID)...)
+
+	// 3. Data frames from connections — minimize lock hold time
 	type connDrain struct {
 		connID   uint64
 		outbound [][]byte
@@ -427,6 +551,7 @@ func (e *socksRelayEngine) collectPendingFrames(agentID string) []socksFrame {
 			snapshot := make([][]byte, len(conn.outbound))
 			copy(snapshot, conn.outbound)
 			conn.outbound = conn.outbound[:0]
+			conn.outboundBytes = 0
 			conn.mu.Unlock()
 			drained = append(drained, connDrain{connID: conn.connID, outbound: snapshot})
 		} else {
@@ -479,16 +604,23 @@ func (e *socksRelayEngine) processAgentData(s *Server, agentID string, frames []
 			if owned && len(f.Data) > 0 {
 				conn.mu.Lock()
 				conn.tcpConn.SetWriteDeadline(time.Now().Add(SOCKSRelayWriteTimeout))
-				if _, err := conn.tcpConn.Write(f.Data); err != nil {
-					slog.Warn("SOCKS relay: write to operator failed, closing conn",
-						"conn", f.ConnID, "error", err)
-					conn.tcpConn.Close()
-					conn.mu.Unlock()
+				_, werr := conn.tcpConn.Write(f.Data)
+				conn.tcpConn.SetWriteDeadline(time.Time{})
+				if werr == nil {
+					conn.lastActive = time.Now()
+				}
+				conn.mu.Unlock()
+				if werr != nil {
+					// Drop the entry (unlocked: dropConn closes the socket
+					// itself, preserving the e.mu -> conn.mu lock order):
+					// a closed-but-listed conn keeps occupying one of the
+					// 256 slots until the 5-minute sweep, and the agent
+					// keeps sending into the void.
+					slog.Warn("SOCKS relay: write to operator failed, dropping conn",
+						"conn", f.ConnID, "error", werr)
+					e.dropConn(agentID, f.ConnID)
 					continue
 				}
-				conn.tcpConn.SetWriteDeadline(time.Time{})
-				conn.lastActive = time.Now()
-				conn.mu.Unlock()
 				// Update stats
 				sess := e.getSession(agentID)
 				if sess != nil {
@@ -625,8 +757,10 @@ func (e *socksRelayEngine) startUDPAssociate(s *Server, sess *socksRelaySession,
 	// Hold the TCP control connection until the client disconnects.
 	tmp := make([]byte, 1)
 	_, _ = ctrl.Read(tmp)
-	udpConn.Close()
-	e.enqueueFrame(sess.agentID, socksFrame{ConnID: rc.connID, Action: "close"})
+	// Control gone: remove the entry now instead of leaving a dead UDP
+	// socket listed until the 5-minute sweep (dropConn also tells the agent
+	// to tear down its side).
+	e.dropConn(sess.agentID, rc.connID)
 }
 
 func encodeSocksUDPFrame(addr string, port int, payload []byte) []byte {

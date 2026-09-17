@@ -27,6 +27,7 @@ type MetricsCollector struct {
 	VaultErrorsTotal   *prometheus.CounterVec
 	TasksPendingByAgent *prometheus.GaugeVec
 	OldestPendingSeconds *prometheus.GaugeVec
+	SocksDroppedTotal *prometheus.CounterVec
 }
 
 func NewMetricsCollector(s *Server) *MetricsCollector {
@@ -100,6 +101,10 @@ func NewMetricsCollector(s *Server) *MetricsCollector {
 			Name: "forgec2_oldest_pending_seconds",
 			Help: "Age of the oldest pending task per agent, in seconds.",
 		}, []string{"agent_id"}),
+		SocksDroppedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "forgec2_socks_dropped_total",
+			Help: "Total number of SOCKS relay frames dropped, by reason.",
+		}, []string{"reason"}),
 	}
 }
 
@@ -121,6 +126,7 @@ func (mc *MetricsCollector) Register(reg prometheus.Registerer) {
 		mc.VaultErrorsTotal,
 		mc.TasksPendingByAgent,
 		mc.OldestPendingSeconds,
+		mc.SocksDroppedTotal,
 	}
 	for _, c := range collectors {
 		err := reg.Register(c)

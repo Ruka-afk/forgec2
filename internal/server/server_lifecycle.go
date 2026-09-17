@@ -222,6 +222,7 @@ func (s *Server) Run() error {
 					s.rejectExpiredApprovals()
 					s.reconcilePendingTaskCounts()
 					s.updateTaskBacklogMetrics()
+					s.reapOrphanedRelayChildren()
 				}()
 			}
 		}

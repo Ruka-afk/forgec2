@@ -308,7 +308,7 @@ func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconRespons
 		s.processRelayedResults(req.Relayed, req.UUID, now)
 	}
 
-	relayedReplies := s.processRelayedEnvelopes(req.RelayedFrames, req.UUID, publicIP, now)
+	relayedReplies := s.processRelayedEnvelopes(req.RelayedFrames, req.UUID, publicIP, now, 0)
 
 	taskLimit := BeaconTaskFetchLimit
 	if req.TaskCapacity != nil && *req.TaskCapacity >= 0 && *req.TaskCapacity < taskLimit {

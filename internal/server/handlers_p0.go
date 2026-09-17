@@ -34,8 +34,12 @@ func (s *Server) handleRPortFwdRelayStart(c *gin.Context) {
 	}
 
 	lport, err := strconv.Atoi(localPortStr)
-	if err != nil {
+	if err != nil || lport < 1 || lport > 65535 {
 		respondError(c, http.StatusBadRequest, "invalid port")
+		return
+	}
+	if _, _, err := net.SplitHostPort(forwardTarget); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid target, want host:port")
 		return
 	}
 
@@ -76,28 +80,34 @@ func (s *Server) handleRPortFwdStatus(c *gin.Context) {
 	}
 
 	s.rportfwdMu.Lock()
-	defer s.rportfwdMu.Unlock()
-
+	var active *rportfwdRelay
 	for _, relay := range s.rportfwdListeners {
-		if relay.agentID != id {
-			continue
+		if relay.agentID == id {
+			active = relay
+			break
 		}
-		c.JSON(http.StatusOK, gin.H{
-			"active": true,
-			"port":   relay.localPort,
-			"target": relay.forwardTarget,
-		})
+	}
+	var port int
+	var target string
+	if active != nil {
+		port = active.localPort
+		target = active.forwardTarget
+	}
+	s.rportfwdMu.Unlock()
+
+	if active == nil {
+		c.JSON(http.StatusOK, gin.H{"active": false})
 		return
 	}
-
-	c.JSON(http.StatusOK, gin.H{"active": false})
+	c.JSON(http.StatusOK, gin.H{
+		"active": true,
+		"port":   port,
+		"target": target,
+	})
 }
 
 // handleRPortFwdGlobalStatus returns status of all active reverse port forwards.
 func (s *Server) handleRPortFwdGlobalStatus(c *gin.Context) {
-	s.rportfwdMu.Lock()
-	defer s.rportfwdMu.Unlock()
-
 	type fwdInfo struct {
 		AgentID    string `json:"agent_id"`
 		LocalPort  int    `json:"local_port"`
@@ -106,6 +116,7 @@ func (s *Server) handleRPortFwdGlobalStatus(c *gin.Context) {
 		Protocol   string `json:"protocol"`
 		Active     bool   `json:"active"`
 	}
+	s.rportfwdMu.Lock()
 	forwards := make([]fwdInfo, 0, len(s.rportfwdListeners))
 	for _, relay := range s.rportfwdListeners {
 		host, portStr, _ := strings.Cut(relay.forwardTarget, ":")
@@ -122,6 +133,7 @@ func (s *Server) handleRPortFwdGlobalStatus(c *gin.Context) {
 			Active:     relay.listener != nil,
 		})
 	}
+	s.rportfwdMu.Unlock()
 	if forwards == nil {
 		forwards = []fwdInfo{}
 	}
@@ -161,7 +173,22 @@ type rportfwdRelay struct {
 	forwardTarget string
 	listener      *rportfwdListener
 	stopCh        chan struct{}
+	stopOnce      sync.Once
 }
+
+// rportfwdMaxConns caps simultaneous operator connections per relay: each
+// holds an FD plus beacon-queue backlog, so unbounded accepts are an FD
+// exhaustion primitive.
+const rportfwdMaxConns = 64
+
+// rportfwdConnIdleTimeout closes operator connections idle this long. Idle
+// tunnels otherwise pin FDs and beacon backlog forever.
+const rportfwdConnIdleTimeout = 10 * time.Minute
+
+// rportfwdWriteTimeout bounds a single write to the operator socket: the
+// lookup locks are released first, but a hung operator must not wedge the
+// beacon dispatch goroutine forever.
+const rportfwdWriteTimeout = 30 * time.Second
 
 type rportfwdListener struct {
 	ln      net.Listener
@@ -212,11 +239,32 @@ func (r *rportfwdRelay) acceptLoop() {
 	}
 	ln := r.listener.ln
 	slog.Info("Rportfwd relay listening", "addr", ln.Addr().String(), "target", r.forwardTarget, "agent_id", r.agentID)
+	backoff := time.Second
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			return
+			// Stopped: listener closed via stopCh.
+			select {
+			case <-r.stopCh:
+				return
+			default:
+			}
+			// Transient accept errors (EMFILE, ENFILE, ECONNABORTED) must
+			// back off, not spin or die: a single error used to kill the
+			// whole relay permanently.
+			slog.Warn("Rportfwd accept error, backing off", "addr", ln.Addr().String(), "err", err, "backoff", backoff)
+			select {
+			case <-r.stopCh:
+				return
+			case <-time.After(backoff):
+			}
+			backoff *= 2
+			if backoff > 30*time.Second {
+				backoff = 30 * time.Second
+			}
+			continue
 		}
+		backoff = time.Second
 		go r.handleConn(conn)
 	}
 }
@@ -233,8 +281,21 @@ func (r *rportfwdRelay) handleConn(operatorConn net.Conn) {
 	defer operatorConn.Close()
 
 	r.listener.mu.Lock()
-	r.listener.nextID++
-	connID := r.listener.nextID
+	if len(r.listener.connMap) >= rportfwdMaxConns {
+		r.listener.mu.Unlock()
+		slog.Warn("Rportfwd relay at connection cap, refusing", "agent_id", r.agentID, "cap", rportfwdMaxConns)
+		return
+	}
+	// Globally-unique conn ID across all relays: per-relay counters restart
+	// at 1, so two relays for one agent would otherwise share IDs and the
+	// agent's data frames would fan out to both operator sockets.
+	var connID uint64
+	if r.server != nil {
+		connID = r.server.rportfwdNextID.Add(1)
+	} else {
+		r.listener.nextID++
+		connID = r.listener.nextID
+	}
 	r.listener.connMap[connID] = operatorConn
 	r.listener.mu.Unlock()
 
@@ -250,6 +311,9 @@ func (r *rportfwdRelay) handleConn(operatorConn net.Conn) {
 	// Relay operator->agent via beacon frames
 	buf := make([]byte, 10240)
 	for {
+		// Idle tunnels are reaped: without a deadline a forgotten session
+		// pins the FD and the agent side forever.
+		_ = operatorConn.SetReadDeadline(time.Now().Add(rportfwdConnIdleTimeout))
 		n, err := operatorConn.Read(buf)
 		if n > 0 {
 			data := make([]byte, n)
@@ -264,7 +328,7 @@ func (r *rportfwdRelay) handleConn(operatorConn net.Conn) {
 }
 
 func (r *rportfwdRelay) stop() {
-	close(r.stopCh)
+	r.stopOnce.Do(func() { close(r.stopCh) })
 	if r.listener != nil {
 		r.listener.mu.Lock()
 		for id, conn := range r.listener.connMap {
@@ -275,44 +339,117 @@ func (r *rportfwdRelay) stop() {
 	}
 }
 
+// closeRPortFwdConn drops one operator leg. Used for loud overflow/close
+// handling without holding the global relay lock across socket I/O.
+func (s *Server) closeRPortFwdConn(agentID string, connID uint64) {
+	s.rportfwdMu.Lock()
+	var target net.Conn
+	for key, relay := range s.rportfwdListeners {
+		if !strings.HasPrefix(key, agentID+":") {
+			continue
+		}
+		if relay.listener == nil {
+			continue
+		}
+		relay.listener.mu.Lock()
+		if c, ok := relay.listener.connMap[connID]; ok {
+			delete(relay.listener.connMap, connID)
+			target = c
+		}
+		relay.listener.mu.Unlock()
+		if target != nil {
+			break
+		}
+	}
+	s.rportfwdMu.Unlock()
+	if target != nil {
+		_ = target.Close()
+	}
+}
+
 // sendRPortFwdFrame enqueues a frame for the agent to pick up on next beacon.
+// Overflow closes the operator leg loudly: dropping data silently corrupts
+// the TCP stream without either end noticing.
 func (s *Server) sendRPortFwdFrame(agentID string, connID uint64, action string, data []byte) {
-	s.socksEngine.enqueueFrame(agentID, socksFrame{
+	if s.socksEngine == nil {
+		return
+	}
+	ok := s.socksEngine.enqueueRPortFwdFrame(agentID, socksFrame{
 		ConnID: connID,
 		Action: action,
 		Data:   data,
 	})
+	if !ok {
+		s.closeRPortFwdConn(agentID, connID)
+	}
 }
 
 // processRPortFwdData handles rportfwd data coming FROM the agent back to the operator.
 func (s *Server) processRPortFwdData(agentID string, frame socksFrame) {
-	// Find the associated listener
+	switch frame.Action {
+	case "rportfwd_connected":
+		slog.Info("Rportfwd agent connected to target", "agent_id", agentID, "conn", frame.ConnID)
+		return
+	case "rportfwd_error", "rportfwd_close":
+		s.closeRPortFwdConn(agentID, frame.ConnID)
+		return
+	case "rportfwd_data":
+		// fall through to write path below
+	default:
+		return
+	}
+	if len(frame.Data) == 0 {
+		return
+	}
+	// Snapshot the socket under the locks, write outside: holding
+	// s.rportfwdMu across a blocking conn.Write stalls Start/Stop/Status
+	// and cleanup for every relay.
 	s.rportfwdMu.Lock()
-	defer s.rportfwdMu.Unlock()
+	var target net.Conn
 	for key, relay := range s.rportfwdListeners {
-		if strings.HasPrefix(key, agentID+":") {
-			// Write data to the operator's TCP connection
-			if relay.listener != nil {
-				relay.listener.mu.Lock()
-				conn, ok := relay.listener.connMap[frame.ConnID]
-				relay.listener.mu.Unlock()
-				if ok {
-					conn.Write(frame.Data)
-				}
-			}
+		if !strings.HasPrefix(key, agentID+":") {
+			continue
 		}
+		if relay.listener == nil {
+			continue
+		}
+		relay.listener.mu.Lock()
+		c, ok := relay.listener.connMap[frame.ConnID]
+		relay.listener.mu.Unlock()
+		if ok {
+			target = c
+			break
+		}
+	}
+	s.rportfwdMu.Unlock()
+	if target == nil {
+		return
+	}
+	_ = target.SetWriteDeadline(time.Now().Add(rportfwdWriteTimeout))
+	_, err := target.Write(frame.Data)
+	_ = target.SetWriteDeadline(time.Time{})
+	if err != nil {
+		slog.Warn("Rportfwd write to operator failed, closing", "agent_id", agentID, "conn", frame.ConnID, "error", err)
+		s.closeRPortFwdConn(agentID, frame.ConnID)
+		s.sendRPortFwdFrame(agentID, frame.ConnID, "rportfwd_close", nil)
 	}
 }
 
 // cleanupStaleRPortFwd removes stale rportfwd listeners on agent disconnect
 func (s *Server) cleanupStaleRPortFwd() {
+	// Snapshot under lock, DB + stop outside: holding rportfwdMu across a
+	// DB query stalls beacon dispatch and Start/Stop/Status for all relays.
 	s.rportfwdMu.Lock()
-	defer s.rportfwdMu.Unlock()
-
-	agentIDs := make([]string, 0, len(s.rportfwdListeners))
-	for _, relay := range s.rportfwdListeners {
+	snapshot := make(map[string]*rportfwdRelay, len(s.rportfwdListeners))
+	for key, relay := range s.rportfwdListeners {
+		snapshot[key] = relay
+	}
+	agentIDs := make([]string, 0, len(snapshot))
+	for _, relay := range snapshot {
 		agentIDs = append(agentIDs, relay.agentID)
 	}
+	s.rportfwdMu.Unlock()
+
 	agentMap := make(map[string]*db.Implant, len(agentIDs))
 	if len(agentIDs) > 0 {
 		var agents []db.Implant
@@ -325,14 +462,24 @@ func (s *Server) cleanupStaleRPortFwd() {
 		}
 	}
 
-	for key, relay := range s.rportfwdListeners {
+	var stale []string
+	for key, relay := range snapshot {
 		agent, ok := agentMap[relay.agentID]
 		if !ok {
-			relay.stop()
-			delete(s.rportfwdListeners, key)
+			stale = append(stale, key)
 			continue
 		}
 		if time.Since(agent.LastSeen) > s.offlineThreshold()*2 {
+			stale = append(stale, key)
+		}
+	}
+	if len(stale) == 0 {
+		return
+	}
+	s.rportfwdMu.Lock()
+	defer s.rportfwdMu.Unlock()
+	for _, key := range stale {
+		if relay, ok := s.rportfwdListeners[key]; ok {
 			relay.stop()
 			delete(s.rportfwdListeners, key)
 		}

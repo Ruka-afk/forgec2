@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/internal/testutil"
 	"github.com/forgec2/forgec2/pkg/encoding"
 )
 
@@ -239,5 +241,59 @@ func TestP2PRelayRejectsUnlinkedChild(t *testing.T) {
 	}
 	if childRow.ParentID != otherParent {
 		t.Fatalf("child parent_id changed to %q, want %q", childRow.ParentID, otherParent)
+	}
+}
+
+func TestReapOrphanedRelayChildren(t *testing.T) {
+	database := testutil.SetupTestDB(t)
+	s := &Server{db: database}
+
+	// Dead parent (offline far beyond thresholds) with a bound child holding
+	// an unacked task claimed by the dead parent; plus a live parent whose
+	// family must be untouched.
+	deadParent := "dead0000-0000-4000-8000-000000000001"
+	liveParent := "live0000-0000-4000-8000-000000000002"
+	orphan := "orphan000-0000-4000-8000-000000000003"
+	kept := "kept0000-0000-4000-8000-000000000004"
+	longAgo := time.Now().Add(-2 * time.Hour)
+	for _, imp := range []db.Implant{
+		{ID: deadParent, Hostname: "dead", Status: "offline", LastSeen: longAgo},
+		{ID: liveParent, Hostname: "live", Status: "online", LastSeen: time.Now()},
+		{ID: orphan, Hostname: "orphan", Status: "offline", ParentID: deadParent, LastSeen: longAgo},
+		{ID: kept, Hostname: "kept", Status: "online", ParentID: liveParent, LastSeen: time.Now()},
+	} {
+		if err := database.Create(&imp).Error; err != nil {
+			t.Fatalf("seed implant: %v", err)
+		}
+	}
+	stuck := db.Task{AgentID: orphan, Type: "shell", Status: "running", ClaimedBy: deadParent, ClaimedAt: longAgo}
+	other := db.Task{AgentID: kept, Type: "shell", Status: "running", ClaimedBy: liveParent, ClaimedAt: longAgo}
+	for _, task := range []*db.Task{&stuck, &other} {
+		if err := database.Create(task).Error; err != nil {
+			t.Fatalf("seed task: %v", err)
+		}
+	}
+
+	s.reapOrphanedRelayChildren()
+
+	var orphanRow db.Implant
+	database.First(&orphanRow, "id = ?", orphan)
+	if orphanRow.ParentID != "" {
+		t.Fatalf("orphan still bound to dead parent %q", orphanRow.ParentID)
+	}
+	var stuckRow db.Task
+	database.First(&stuckRow, stuck.ID)
+	if stuckRow.Status != "pending" || stuckRow.ClaimedBy != "" {
+		t.Fatalf("stuck task not requeued: %+v", stuckRow)
+	}
+	var keptRow db.Implant
+	database.First(&keptRow, "id = ?", kept)
+	if keptRow.ParentID != liveParent {
+		t.Fatalf("live family disturbed: %+v", keptRow)
+	}
+	var otherRow db.Task
+	database.First(&otherRow, other.ID)
+	if otherRow.Status != "running" || otherRow.ClaimedBy != liveParent {
+		t.Fatalf("live task disturbed: %+v", otherRow)
 	}
 }
