@@ -128,13 +128,7 @@ func (s *Server) executeAction(action RuleAction, evt Event) {
 			}
 			if targetAgent != "" {
 				expanded := s.expandTemplate(params.Command, evt)
-				if err := s.db.Create(&db.Task{
-					AgentID:   targetAgent,
-					Type:      "automation",
-					Command:   expanded,
-					Status:    "pending",
-					CreatedBy: "automation",
-				}).Error; err != nil {
+				if _, err := s.createSystemTask(targetAgent, "automation", expanded, "", "pending", "automation"); err != nil {
 					slog.Error("Automation: failed to create command task", "error", err)
 				}
 			}
@@ -237,13 +231,7 @@ func (s *Server) executeAction(action RuleAction, evt Event) {
 						"automation set_sleep raised to OPSEC floors", true, nil)
 				}
 				cmd := fmt.Sprintf("%d,%d", interval, jitter)
-				if err := s.db.Create(&db.Task{
-					AgentID:   targetAgent,
-					Type:      "set_sleep",
-					Command:   cmd,
-					Status:    "pending",
-					CreatedBy: "automation",
-				}).Error; err != nil {
+				if _, err := s.createSystemTask(targetAgent, "set_sleep", cmd, "", "pending", "automation"); err != nil {
 					slog.Error("Automation: failed to create set_sleep task", "error", err)
 				}
 			}

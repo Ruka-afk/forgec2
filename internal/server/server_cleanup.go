@@ -50,9 +50,11 @@ func (s *Server) cleanupOldData() {
 	}
 	cutoff := time.Now().AddDate(0, 0, -retention)
 
-	// delete old tasks (floored at 90 days regardless of ops retention)
+	// delete old tasks (floored at 90 days regardless of ops retention).
+	// cancelled joins completed/failed: it is terminal and otherwise grows
+	// forever. sent joins too as a backstop for legacy zombie rows.
 	taskCutoff := time.Now().AddDate(0, 0, -s.taskRetentionDays())
-	if err := s.db.WithContext(s.ctx).Where("created_at < ? AND status IN ?", taskCutoff, []string{"completed", "failed"}).Delete(&db.Task{}).Error; err != nil {
+	if err := s.db.WithContext(s.ctx).Where("created_at < ? AND status IN ?", taskCutoff, []string{"completed", "failed", "cancelled", "sent"}).Delete(&db.Task{}).Error; err != nil {
 		slog.Error("Cleanup tasks failed", "err", err)
 	}
 

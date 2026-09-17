@@ -261,34 +261,91 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 		s.clearLPortFwdDecl(agentID)
 	}
 	if s.pluginManager != nil {
-		s.wg.Add(1)
-		go func() {
-			defer s.wg.Done()
-			defer func() {
-				if r := recover(); r != nil {
-					// A panicking third-party hook must never take the
-					// teamserver down from a task-creation path.
-					slog.Error("Panic in task_created hook", "agent_id", agentID, "task_id", task.ID, "recover", r)
-				}
-			}()
-			if err := s.pluginManager.ExecuteHook(s.ctx, plugin.Event{
-				Type:      plugin.EventTaskCreated,
-				Timestamp: time.Now(),
-				AgentID:   agentID,
-				Payload: map[string]interface{}{
-					"task_id":   task.ID,
-					"task_type": taskType,
-					"command":   command,
-				},
-			}); err != nil {
-				slog.Warn("Hook errors on task_created event", "agent_id", agentID, "task_id", task.ID, "err", err)
-			}
-		}()
+		s.fireTaskCreatedHook(agentID, task.ID, taskType, command)
 	}
 	s.metrics.TasksTotal.Inc()
 	return &task, nil
 }
 
+// createSystemTask inserts a task from a non-operator path (automation
+// rules, AI tools, abort injection helpers) with the same accounting
+// createTask applies: per-agent cap via the shared counter, tenant
+// inheritance, the task_created plugin hook, and TasksTotal.
+//
+// Approval routing and broadcast stay the caller's job: the caller computes
+// status (pending vs pending_approval) before calling, and broadcasts when
+// appropriate. Operator-only gates (RoE, collab soft-lock) are intentionally
+// not applied — system paths are not interactive operators.
+func (s *Server) createSystemTask(agentID, taskType, command, shell, status, createdBy string) (*db.Task, error) {
+	if agentID == "" {
+		return nil, fmt.Errorf("agent id required")
+	}
+	if taskType == "" {
+		return nil, fmt.Errorf("task type required")
+	}
+	if status == "" {
+		status = "pending"
+	}
+	if status != "pending" && status != TaskStatusPendingApproval {
+		return nil, fmt.Errorf("invalid system task status %q", status)
+	}
+	if err := s.trackPendingTask(agentID); err != nil {
+		return nil, err
+	}
+	task := db.Task{
+		AgentID: agentID, Type: taskType, Command: command,
+		Shell: shell, Status: status, CreatedBy: createdBy,
+	}
+	// Same tenant inheritance as createTask: without it tenant-scoped
+	// single-task reads 404 on system-created rows.
+	var ag db.Implant
+	if err := s.db.Select("tenant_id").Where("id = ?", agentID).First(&ag).Error; err == nil {
+		task.TenantID = ag.TenantID
+	}
+	if status == TaskStatusPendingApproval {
+		exp := time.Now().Add(ApprovalExpiryDuration)
+		task.ApprovalExpiresAt = &exp
+	}
+	if err := s.db.Create(&task).Error; err != nil {
+		s.decPendingTasks(agentID)
+		return nil, err
+	}
+	s.fireTaskCreatedHook(agentID, task.ID, taskType, command)
+	if s.metrics != nil {
+		s.metrics.TasksTotal.Inc()
+	}
+	return &task, nil
+}
+
+// fireTaskCreatedHook runs the task_created plugin hook best-effort in the
+// background. Shared by createTask and createSystemTask so direct inserts
+// can't silently skip subscriber automation.
+func (s *Server) fireTaskCreatedHook(agentID string, taskID uint, taskType, command string) {
+	if s.pluginManager == nil {
+		return
+	}
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("Panic in task_created hook", "agent_id", agentID, "task_id", taskID, "recover", r)
+			}
+		}()
+		if err := s.pluginManager.ExecuteHook(s.ctx, plugin.Event{
+			Type:      plugin.EventTaskCreated,
+			Timestamp: time.Now(),
+			AgentID:   agentID,
+			Payload: map[string]interface{}{
+				"task_id":   taskID,
+				"task_type": taskType,
+				"command":   command,
+			},
+		}); err != nil {
+			slog.Warn("Hook errors on task_created event", "agent_id", agentID, "task_id", taskID, "err", err)
+		}
+	}()
+}
 // resolveInitialTaskStatus returns the status a newly created task should start
 // in. When operator approval is required and the task type is flagged, the task
 // waits in pending_approval; otherwise it is immediately pending. Centralizing
@@ -400,6 +457,11 @@ func (s *Server) dispatchTask(c *gin.Context, task *db.Task, auditAction, detail
 	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
 }
 
+// maxSweepPasses bounds the per-sweep paging loop below: a fleet with more
+// than one LIMIT page of stale tasks drains progressively instead of
+// starving everything past the first 1000 rows every 5 minutes.
+const maxSweepPasses = 5
+
 // requeueStaleTasks retries only tasks whose delivery was never acknowledged,
 // capped at 3 delivery attempts; exhausted tasks are failed instead of
 // being requeued forever.
@@ -408,15 +470,60 @@ func (s *Server) dispatchTask(c *gin.Context, task *db.Task, auditAction, detail
 // intervals get max(static, 3x their interval) so a healthy long-sleep
 // agent's in-flight task is neither requeued nor failed prematurely.
 func (s *Server) requeueStaleTasks() {
+	for pass := 0; pass < maxSweepPasses; pass++ {
+		if !s.requeueStaleTasksPass() {
+			return
+		}
+	}
+}
+
+// requeueStaleTasksPass runs one LIMIT page; it reports whether a full page
+// was seen (caller pages again to avoid starving large fleets).
+func (s *Server) requeueStaleTasksPass() bool {
 	cutoff := time.Now().Add(-StaleRunningTaskTimeout)
+	fullPage := false
+
+	// Legacy "sent" rows: nothing creates or claims sent anymore (fetch only
+	// moves pending→running), so any row still sitting in sent is a zombie.
+	// Fail it outright — never requeue, or ancient rows would resurrect and
+	// redeliver stale commands to live agents.
+	var sentTasks []db.Task
+	if err := s.db.Where("status = ? AND created_at < ? AND claimed_at < ?", "sent", cutoff, cutoff).Limit(1000).Find(&sentTasks).Error; err != nil {
+		slog.Error("Failed to find legacy sent tasks", "error", err)
+		return false
+	}
+	fullPage = len(sentTasks) == 1000
+	if len(sentTasks) > 0 {
+		sentIDs := make([]uint, len(sentTasks))
+		for i, t := range sentTasks {
+			sentIDs[i] = t.ID
+		}
+		if err := s.db.Model(&db.Task{}).Where("id IN ? AND status = ?", sentIDs, "sent").
+			Updates(map[string]interface{}{
+				"status": "failed",
+				"error":  "legacy sent status retired (never dispatched)",
+			}).Error; err != nil {
+			slog.Error("Failed to retire legacy sent tasks", "count", len(sentIDs), "error", err)
+			return false
+		}
+		for i := range sentTasks {
+			t := sentTasks[i]
+			t.Status = "failed"
+			t.Error = "legacy sent status retired (never dispatched)"
+			s.broadcastTaskUpdate(t.AgentID, t)
+			s.decPendingTasks(t.AgentID)
+		}
+		slog.Info("Retired legacy sent tasks", "count", len(sentIDs))
+	}
 
 	// Tasks already at the delivery-attempt cap: delivered repeatedly but
 	// never acknowledged. Fail them so they stop cycling through the queue.
 	var exhaustedTasks []db.Task
 	if err := s.db.Where("status = ? AND claimed_at < ? AND acknowledged_at IS NULL AND delivery_attempts >= 3", "running", cutoff).Limit(1000).Find(&exhaustedTasks).Error; err != nil {
 		slog.Error("Failed to find stale running tasks past attempt cap", "error", err)
-		return
+		return false
 	}
+	fullPage = len(exhaustedTasks) == 1000
 	exhaustedTasks = s.filterLongSleepTasks(exhaustedTasks, cutoff)
 	if len(exhaustedTasks) > 0 {
 		exhaustedIDs := make([]uint, len(exhaustedTasks))
@@ -426,19 +533,24 @@ func (s *Server) requeueStaleTasks() {
 		// Status guard in the UPDATE (not just the SELECT): a result landing
 		// between the two statements must not be stomped — previously a
 		// just-completed task could be flipped to "failed" here.
-		if err := s.db.Model(&db.Task{}).Where("id IN ? AND status = ? AND acknowledged_at IS NULL", exhaustedIDs, "running").
+		res := s.db.Model(&db.Task{}).Where("id IN ? AND status = ? AND acknowledged_at IS NULL", exhaustedIDs, "running").
 			Updates(map[string]interface{}{
 				"status": "failed",
 				"error":  "delivered but unacknowledged after 3 attempts",
-			}).Error; err != nil {
-			slog.Error("Failed to fail stale running tasks past attempt cap", "count", len(exhaustedIDs), "error", err)
-			return
+			})
+		if res.Error != nil {
+			slog.Error("Failed to fail stale running tasks past attempt cap", "count", len(exhaustedIDs), "error", res.Error)
+			return false
 		}
 		for i := range exhaustedTasks {
 			t := exhaustedTasks[i]
 			t.Status = "failed"
 			t.Error = "delivered but unacknowledged after 3 attempts"
 			s.broadcastTaskUpdate(t.AgentID, t)
+			// Failed tasks leave the pending/running count: without this
+			// the in-memory counter leaks until the next reconcile and
+			// falsely holds MaxPendingTasksPerAgent slots.
+			s.decPendingTasks(t.AgentID)
 		}
 		slog.Info("Failed stale running tasks past delivery-attempt cap", "count", len(exhaustedIDs))
 	}
@@ -446,11 +558,12 @@ func (s *Server) requeueStaleTasks() {
 	var staleTasks []db.Task
 	if err := s.db.Where("status = ? AND claimed_at < ? AND acknowledged_at IS NULL AND delivery_attempts < 3", "running", cutoff).Limit(1000).Find(&staleTasks).Error; err != nil {
 		slog.Error("Failed to find stale running tasks", "error", err)
-		return
+		return false
 	}
+	fullPage = fullPage || len(staleTasks) == 1000
 	staleTasks = s.filterLongSleepTasks(staleTasks, cutoff)
 	if len(staleTasks) == 0 {
-		return
+		return fullPage
 	}
 	taskIDs := make([]uint, len(staleTasks))
 	for i, t := range staleTasks {
@@ -462,9 +575,11 @@ func (s *Server) requeueStaleTasks() {
 	if err := s.db.Model(&db.Task{}).Where("id IN ? AND status = ? AND acknowledged_at IS NULL", taskIDs, "running").
 		Updates(map[string]interface{}{"status": "pending", "claimed_by": "", "claimed_at": time.Time{}, "delivery_attempts": gorm.Expr("delivery_attempts + 1")}).Error; err != nil {
 		slog.Error("Failed to requeue stale running tasks", "count", len(taskIDs), "error", err)
-		return
+		return false
 	}
 	slog.Info("Requeued stale running tasks to pending", "count", len(staleTasks))
+	// Requeued tasks stay in the pending/running count: no dec here.
+	return fullPage
 }
 
 // filterLongSleepTasks drops tasks whose agent sleeps so long that the
@@ -518,14 +633,25 @@ func (s *Server) filterLongSleepTasks(tasks []db.Task, staticCutoff time.Time) [
 // failing a healthy long task. At most one renewal per task — a wedged agent
 // that beacons forever without finishing still gets failed.
 func (s *Server) failStaleAcknowledgedTasks() {
+	for pass := 0; pass < maxSweepPasses; pass++ {
+		if !s.failStaleAcknowledgedTasksPass() {
+			return
+		}
+	}
+}
+
+// failStaleAcknowledgedTasksPass runs one LIMIT page; true means a full page
+// was seen and the caller should page again.
+func (s *Server) failStaleAcknowledgedTasksPass() bool {
 	cutoff := time.Now().Add(-AckedTaskResultTimeout)
 	var staleTasks []db.Task
 	if err := s.db.Where("status = ? AND acknowledged_at IS NOT NULL AND acknowledged_at < ?", "running", cutoff).Limit(1000).Find(&staleTasks).Error; err != nil {
 		slog.Error("Failed to find stale acknowledged tasks", "error", err)
-		return
+		return false
 	}
+	fullPage := len(staleTasks) == 1000
 	if len(staleTasks) == 0 {
-		return
+		return false
 	}
 	// Agent liveness per involved agent (single query).
 	agentIDs := make([]string, 0, len(staleTasks))
@@ -572,7 +698,7 @@ func (s *Server) failStaleAcknowledgedTasks() {
 		slog.Info("Renewed acked tasks for live agents", "count", renewed)
 	}
 	if len(failIDs) == 0 {
-		return
+		return fullPage
 	}
 	// Status guard plus keep any partial result: the previous unconditional
 	// update blanked "result" on tasks whose output arrived between SELECT
@@ -583,7 +709,7 @@ func (s *Server) failStaleAcknowledgedTasks() {
 			"error":  "task acknowledged but no result received within timeout",
 		}).Error; err != nil {
 		slog.Error("Failed to fail stale acknowledged tasks", "count", len(failIDs), "error", err)
-		return
+		return false
 	}
 	failedByID := make(map[uint]db.Task, len(failIDs))
 	for _, t := range staleTasks {
@@ -595,8 +721,12 @@ func (s *Server) failStaleAcknowledgedTasks() {
 		t.Error = "task acknowledged but no result received within timeout"
 		t.Result = ""
 		s.broadcastTaskUpdate(t.AgentID, t)
+		// Failed tasks leave the pending/running count (same leak as the
+		// exhausted path had): dec here, reconcile heals any guard race.
+		s.decPendingTasks(t.AgentID)
 	}
 	slog.Info("Failed stale acknowledged tasks with no result", "count", len(failIDs))
+	return fullPage
 }
 
 // rejectExpiredApprovals auto-rejects approval-gated tasks past their

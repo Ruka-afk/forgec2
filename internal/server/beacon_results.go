@@ -223,6 +223,9 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 		// Decrement per-agent pending task counter (delete key at zero to avoid leak) —
 		// reached exactly once per task thanks to the claim above.
 		s.decrementPendingTasks(uuid)
+		if s.metrics != nil {
+			s.metrics.TaskExecuteDuration.WithLabelValues(task.Type).Observe(now.Sub(task.CreatedAt).Seconds())
+		}
 		s.fileChains.reset(task.ID)
 		if r.Type == "screen_stream_start" || r.Type == "screen_stream_stop" {
 			task.Result = "processed"

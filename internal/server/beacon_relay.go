@@ -131,6 +131,9 @@ func (s *Server) processRelayedResults(relayed []relayedData, parentUUID string,
 				continue
 			}
 			s.decrementPendingTasks(rd.AgentID)
+			if s.metrics != nil {
+				s.metrics.TaskExecuteDuration.WithLabelValues(task.Type).Observe(now.Sub(task.CreatedAt).Seconds())
+			}
 			s.fileChains.reset(task.ID)
 			s.broadcastTaskUpdate(rd.AgentID, *task)
 			slog.Info("P2P relayed task result processed", "child", rd.AgentID, "task_id", r.TaskID)

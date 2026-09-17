@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -40,7 +41,7 @@ func (s *Server) handleCancelTask(c *gin.Context) {
 		return
 	}
 
-	if task.Status != "pending" && task.Status != TaskStatusPendingApproval && task.Status != "running" {
+	if task.Status != "pending" && task.Status != TaskStatusPendingApproval && task.Status != "running" && task.Status != "sent" {
 		respondError(c, http.StatusBadRequest, fmt.Sprintf("task is %s, cannot cancel", task.Status))
 		return
 	}
@@ -63,8 +64,11 @@ func (s *Server) handleCancelTask(c *gin.Context) {
 	if result.Error == nil && result.RowsAffected == 1 {
 		wasRunning = true
 	} else if result.Error == nil {
+		// "sent" is a legacy zombie status nothing claims anymore: let the
+		// operator cancel it like any other non-terminal row instead of
+		// leaving it permanently un-cancellable.
 		result = s.db.Model(&db.Task{}).
-			Where("id = ? AND status IN ?", taskID, []string{"pending", TaskStatusPendingApproval}).
+			Where("id = ? AND status IN ?", taskID, []string{"pending", TaskStatusPendingApproval, "sent"}).
 			Updates(map[string]interface{}{
 				"status": "cancelled",
 				"error":  "cancelled by operator",
@@ -114,11 +118,20 @@ func (s *Server) handleCancelTask(c *gin.Context) {
 				ClaimedAt: time.Now(),
 				CreatedBy: c.GetString("user"),
 			}
+			// Same tenant inheritance as createTask: without it
+			// tenant-scoped single-task reads 404 on the abort row.
+			var ag db.Implant
+			if err := s.db.Select("tenant_id").Where("id = ?", agentID).First(&ag).Error; err == nil {
+				abortTask.TenantID = ag.TenantID
+			}
 			if err := s.db.Create(&abortTask).Error; err != nil {
 				s.decPendingTasks(agentID)
 				slog.Error("Failed to inject abort task", "agent_id", agentID, "original_task", taskID, "err", err)
 				outcome = "already_executing"
 			} else {
+				if s.metrics != nil {
+					s.metrics.TasksTotal.Inc()
+				}
 				s.broadcastTaskUpdate(agentID, abortTask)
 				slog.Info("Abort task injected for cancelled running task", "agent_id", agentID, "original_task", taskID)
 				outcome = "abort_queued"
@@ -177,8 +190,14 @@ func (s *Server) handleRerunTask(c *gin.Context) {
 	}
 
 	// Clone the original task parameters (caller identity included so the
-	// soft-lock gate applies, like every other creation path).
-	newTask, err := s.createTask(agentID, original.Type, original.Command, original.Shell, original.Path, original.Data, original.Offset, original.Size, callerOpts(c)...)
+	// soft-lock gate applies, like every other creation path). The original
+	// idempotency key carries over: rerunning a live keyed task returns the
+	// live row instead of stacking a duplicate.
+	opts := callerOpts(c)
+	if key := strings.TrimSpace(original.IdempotencyKey); key != "" {
+		opts = append(opts, WithIdempotencyKey(key))
+	}
+	newTask, err := s.createTask(agentID, original.Type, original.Command, original.Shell, original.Path, original.Data, original.Offset, original.Size, opts...)
 	if err != nil {
 		respondTaskError(c, err)
 		return

@@ -180,8 +180,9 @@ func (s *Server) isDuplicateBeacon(req beaconRequest) bool {
 	defer s.beaconDedupMu.Unlock()
 	// Bounded cache: sweep expired entries at most once per window so a
 	// flood of fresh keys cannot trigger an O(n) scan on every beacon.
-	// If still over cap after the sweep (all-fresh flood), evict arbitrary
-	// oldest-first entries to hard-bound memory.
+	// If still over cap after the sweep (all-fresh flood), evict
+	// oldest-first to hard-bound memory. Per-beacon overshoot is tiny (one
+	// beacon inserts one key), so the scan stays O(cap).
 	if len(s.beaconDedupCache) > MaxBeaconDedupEntries {
 		now := time.Now()
 		if now.Sub(s.beaconDedupSweep) >= BeaconDedupWindow {
@@ -192,11 +193,19 @@ func (s *Server) isDuplicateBeacon(req beaconRequest) bool {
 				}
 			}
 		}
-		for k := range s.beaconDedupCache {
-			if len(s.beaconDedupCache) <= MaxBeaconDedupEntries {
+		for len(s.beaconDedupCache) > MaxBeaconDedupEntries {
+			oldestK := ""
+			var oldestT time.Time
+			first := true
+			for k, t := range s.beaconDedupCache {
+				if first || t.Before(oldestT) {
+					oldestK, oldestT, first = k, t, false
+				}
+			}
+			if first {
 				break
 			}
-			delete(s.beaconDedupCache, k)
+			delete(s.beaconDedupCache, oldestK)
 		}
 	}
 	if t, ok := s.beaconDedupCache[fp]; ok {
@@ -234,11 +243,19 @@ func (s *Server) isDuplicateResult(agentID string, r taskResult) bool {
 				}
 			}
 		}
-		for k := range s.resultDedupeCache {
-			if len(s.resultDedupeCache) <= MaxBeaconDedupEntries {
+		for len(s.resultDedupeCache) > MaxBeaconDedupEntries {
+			oldestK := ""
+			var oldestT time.Time
+			first := true
+			for k, t := range s.resultDedupeCache {
+				if first || t.Before(oldestT) {
+					oldestK, oldestT, first = k, t, false
+				}
+			}
+			if first {
 				break
 			}
-			delete(s.resultDedupeCache, k)
+			delete(s.resultDedupeCache, oldestK)
 		}
 	}
 	s.resultDedupeCache[key] = time.Now()
@@ -304,6 +321,9 @@ func (s *Server) processBeaconWithBudget(req beaconRequest, publicIP string, fra
 	// plus an audit record the timeline view can show.
 	if req.DroppedResults > 0 {
 		slog.Warn("Agent dropped task results before sending", "agent_id", req.UUID, "dropped", req.DroppedResults)
+		if s.metrics != nil {
+			s.metrics.AgentResultGapsTotal.Add(float64(req.DroppedResults))
+		}
 		s.LogAuditRecord(nil, "agent_result_gap", "agent", req.UUID,
 			fmt.Sprintf("agent discarded %d result(s) before delivery (queue-full/oversized)", req.DroppedResults), true, nil)
 	}
@@ -321,6 +341,17 @@ func (s *Server) processBeaconWithBudget(req beaconRequest, publicIP string, fra
 	taskLimit := BeaconTaskFetchLimit
 	if req.TaskCapacity != nil && *req.TaskCapacity >= 0 && *req.TaskCapacity < taskLimit {
 		taskLimit = *req.TaskCapacity
+	}
+	if taskLimit == 0 {
+		// A zero-capacity agent with backlog starves delivery until the cap
+		// 429s new work: debug-level so the stall is diagnosable without
+		// spamming the log on every healthy empty-queue beacon.
+		s.agentPendingTasksMu.Lock()
+		backlog := s.agentPendingTasks[req.UUID]
+		s.agentPendingTasksMu.Unlock()
+		if backlog > 0 {
+			slog.Debug("Agent reports zero task capacity with backlog", "agent_id", req.UUID, "backlog", backlog)
+		}
 	}
 	resp := beaconResponse{
 		Tasks:           s.fetchPendingTasks(req.UUID, taskLimit),

@@ -158,20 +158,13 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 		}
 		// Enforce the per-agent pending cap + counter parity with the
 		// manual dispatch path (dec happens on claim/cancel/reject).
-		if err := s.trackPendingTask(aid); err != nil {
+		task, err := s.createSystemTask(aid, "shell", ecArgs.Command, shell, status, "ai")
+		if err != nil {
 			b, _ := marshalJSONSafe(map[string]interface{}{"error": sanitizeError(err, "task")})
 			return string(b)
 		}
-		task := db.Task{
-			AgentID: aid, Type: "shell", Command: ecArgs.Command,
-			Shell: shell, Status: status, CreatedBy: "ai",
-		}
-		if err := s.db.Create(&task).Error; err != nil {
-			s.decPendingTasks(aid)
-			return `{"error":"failed to create task"}`
-		}
 		if status == "pending" {
-			s.broadcastTaskUpdate(aid, task)
+			s.broadcastTaskUpdate(aid, *task)
 		}
 		if sensitive && allowExec {
 			b, ok := marshalJSONSafe(map[string]interface{}{
@@ -621,21 +614,13 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 				results = append(results, bulkResult{AgentID: aid, Error: "agent not found"})
 				continue
 			}
-			if err := s.trackPendingTask(resolved); err != nil {
+			task, err := s.createSystemTask(resolved, "shell", p.Command, p.Shell, status, "ai")
+			if err != nil {
 				results = append(results, bulkResult{AgentID: resolved, Error: sanitizeError(err, "task")})
 				continue
 			}
-			task := db.Task{
-				AgentID: resolved, Type: "shell", Command: p.Command,
-				Shell: p.Shell, Status: status, CreatedBy: "ai",
-			}
-			if err := s.db.Create(&task).Error; err != nil {
-				s.decPendingTasks(resolved)
-				results = append(results, bulkResult{AgentID: resolved, Error: "create failed"})
-				continue
-			}
 			if status == "pending" {
-				s.broadcastTaskUpdate(resolved, task)
+				s.broadcastTaskUpdate(resolved, *task)
 			}
 			results = append(results, bulkResult{AgentID: resolved, TaskID: task.ID, Status: status})
 		}
@@ -1391,21 +1376,14 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 		if allowExec && s.resolveInitialTaskStatus("set_sleep") == "pending" {
 			status = "pending"
 		}
-		if err := s.trackPendingTask(aid); err != nil {
+		cmd := fmt.Sprintf("%d,%d", p.Interval, p.Jitter)
+		task, err := s.createSystemTask(aid, "set_sleep", cmd, "", status, "ai")
+		if err != nil {
 			b, _ := marshalJSONSafe(map[string]interface{}{"error": sanitizeError(err, "task")})
 			return string(b)
 		}
-		cmd := fmt.Sprintf("%d,%d", p.Interval, p.Jitter)
-		task := db.Task{
-			AgentID: aid, Type: "set_sleep", Command: cmd,
-			Status: status, CreatedBy: "ai",
-		}
-		if err := s.db.Create(&task).Error; err != nil {
-			s.decPendingTasks(aid)
-			return `{"error":"failed to create set_sleep task"}`
-		}
 		if status == "pending" {
-			s.broadcastTaskUpdate(aid, task)
+			s.broadcastTaskUpdate(aid, *task)
 		}
 		msg := "Sleep change queued."
 		if status == TaskStatusPendingApproval {
@@ -1444,19 +1422,13 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 		if allowExec && s.resolveInitialTaskStatus(taskType) == "pending" {
 			status = "pending"
 		}
-		if err := s.trackPendingTask(aid); err != nil {
+		task, err := s.createSystemTask(aid, taskType, "", "", status, "ai")
+		if err != nil {
 			b, _ := marshalJSONSafe(map[string]interface{}{"error": sanitizeError(err, "task")})
 			return string(b)
 		}
-		task := db.Task{
-			AgentID: aid, Type: taskType, Status: status, CreatedBy: "ai",
-		}
-		if err := s.db.Create(&task).Error; err != nil {
-			s.decPendingTasks(aid)
-			return `{"error":"failed to create collection task"}`
-		}
 		if status == "pending" {
-			s.broadcastTaskUpdate(aid, task)
+			s.broadcastTaskUpdate(aid, *task)
 		}
 		msg := "Collection task queued."
 		if status == TaskStatusPendingApproval {

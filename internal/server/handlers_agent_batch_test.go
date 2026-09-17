@@ -103,3 +103,53 @@ func TestBatchCommandDangerousTaskPendingWhenApprovalOff(t *testing.T) {
 		t.Fatalf("with approval off, dangerous batch task should be pending, got %q", stored.Status)
 	}
 }
+
+// TestBatchCommandIdempotencyKeyDedupesRetry proves a retried batch with the
+// same key is a per-agent no-op instead of duplicating work on every agent.
+func TestBatchCommandIdempotencyKeyDedupesRetry(t *testing.T) {
+	s := newTasksTestServer(t)
+	s.cfg = &config.Config{}
+	seedImplantForBatch(t, s, "batch-agent")
+	seedImplantForBatch(t, s, "batch-agent-2")
+
+	send := func() map[string]interface{} {
+		body, _ := json.Marshal(map[string]interface{}{
+			"agent_ids":       []string{"batch-agent", "batch-agent-2"},
+			"task_type":       "shell",
+			"command":         "whoami",
+			"idempotency_key": "batch-k1",
+		})
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request, _ = http.NewRequest(http.MethodPost, "/batch", bytes.NewReader(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Set("user_role", "admin")
+		c.Set("user", "alice")
+		s.handleBatchCommand(c)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+		}
+		var out map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		return out
+	}
+
+	first := send()
+	if first["tasks_created"] != float64(2) {
+		t.Fatalf("first batch created=%v, want 2", first["tasks_created"])
+	}
+	second := send()
+	if second["tasks_created"] != float64(0) {
+		t.Fatalf("retry created=%v, want 0", second["tasks_created"])
+	}
+	if second["deduped"] != float64(2) {
+		t.Fatalf("retry deduped=%v, want 2", second["deduped"])
+	}
+	var count int64
+	s.db.Model(&db.Task{}).Where("idempotency_key = ?", "batch-k1").Count(&count)
+	if count != 2 {
+		t.Fatalf("stored keyed rows=%d, want 2", count)
+	}
+}

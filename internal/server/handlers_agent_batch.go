@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -100,6 +101,10 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		Type     string   `json:"type"`
 		File     string   `json:"file"`
 		Args     string   `json:"args"`
+		// IdempotencyKey deduplicates retried batches: an agent already
+		// holding a live task with the key is skipped (same semantics as
+		// the single-task WithIdempotencyKey path).
+		IdempotencyKey string `json:"idempotency_key"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -148,13 +153,15 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 	var existingAgents []db.Implant
 	// Tenant gate: foreign-tenant ids simply miss the visible set and fall
 	// into failedCount below — no task is ever queued on another tenant's agent.
-	if err := s.tenantScope(s.db, c).Select("id").Where("id IN ?", uniqueIDs).Find(&existingAgents).Error; err != nil {
+	if err := s.tenantScope(s.db, c).Select("id", "tenant_id").Where("id IN ?", uniqueIDs).Find(&existingAgents).Error; err != nil {
 		handleQueryError(c, err, "Failed to query existing agents for batch")
 		return
 	}
 	existingSet := make(map[string]bool, len(existingAgents))
+	tenantByAgent := make(map[string]uint, len(existingAgents))
 	for _, a := range existingAgents {
 		existingSet[a.ID] = true
+		tenantByAgent[a.ID] = a.TenantID
 	}
 
 	// Build all tasks first, then batch-insert in a single DB call.
@@ -164,6 +171,12 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 	// bypass that ceiling by inserting straight into the DB.
 	if len(req.Command) > MaxCommandLength {
 		respondError(c, http.StatusBadRequest, fmt.Sprintf("command too long (max %d characters)", MaxCommandLength))
+		return
+	}
+
+	idempotencyKey := strings.TrimSpace(req.IdempotencyKey)
+	if len(idempotencyKey) > 64 {
+		respondError(c, http.StatusBadRequest, "idempotency key too long (max 64 characters)")
 		return
 	}
 
@@ -187,6 +200,24 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 	// or force via single-task endpoints.
 	lockedByOther := s.batchLockedByOther(uniqueIDs, operator)
 
+	// Idempotency pre-check (one query for the whole batch): agents already
+	// holding a live task with the key are skipped so a retried batch is a
+	// no-op per agent instead of duplicating work on every agent.
+	liveKeyHolders := make(map[string]bool)
+	if idempotencyKey != "" {
+		var live []db.Task
+		if err := s.db.Select("agent_id").Where("agent_id IN ? AND idempotency_key = ? AND status IN ?",
+			uniqueIDs, idempotencyKey, []string{"pending", TaskStatusPendingApproval, "running"}).
+			Find(&live).Error; err != nil {
+			slog.Error("Batch command: idempotency lookup failed", "err", err)
+			respondError(c, http.StatusInternalServerError, "failed to check idempotency")
+			return
+		}
+		for _, t := range live {
+			liveKeyHolders[t.AgentID] = true
+		}
+	}
+
 	tasks := make([]db.Task, 0, len(uniqueIDs))
 	validAgentIDs := make([]string, 0, len(uniqueIDs))
 
@@ -200,8 +231,16 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 	}
 	candidates := make([]batchCandidate, 0, len(uniqueIDs))
 	lockedSkipped := 0
+	dedupSkipped := 0
 	for _, agentID := range uniqueIDs {
 		if !existingSet[agentID] {
+			continue
+		}
+
+		// Idempotent retry: this agent already holds the live key.
+		if liveKeyHolders[agentID] {
+			slog.Info("Batch command: live idempotency key, skipping", "agent_id", agentID)
+			dedupSkipped++
 			continue
 		}
 
@@ -241,14 +280,18 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 
 		status := s.resolveInitialTaskStatus(req.TaskType)
 		row := db.Task{
-			AgentID:   cand.agentID,
-			Type:      req.TaskType,
-			Command:   command,
-			Shell:     req.Shell,
-			Path:      req.File,
-			Data:      req.Args,
-			Status:    status,
-			CreatedBy: operator,
+			AgentID:        cand.agentID,
+			Type:           req.TaskType,
+			Command:        command,
+			Shell:          req.Shell,
+			Path:           req.File,
+			Data:           req.Args,
+			Status:         status,
+			CreatedBy:      operator,
+			IdempotencyKey: idempotencyKey,
+			// Same tenant inheritance as createTask, or tenant-scoped
+			// single-task reads 404 on batched rows.
+			TenantID: tenantByAgent[cand.agentID],
 		}
 		// Approval-gated bulk tasks carry the same expiry as single creates
 		// so the sweeper treats both paths identically.
@@ -309,10 +352,13 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 	}
 
 	taskCount := len(tasks)
-	failedCount := len(uniqueIDs) - taskCount - lockedSkipped
+	failedCount := len(uniqueIDs) - taskCount - lockedSkipped - dedupSkipped
+	if failedCount < 0 {
+		failedCount = 0
+	}
 
-	slog.Info("Batch command sent", "count", taskCount, "failed", failedCount, "locked_skipped", lockedSkipped, "type", req.TaskType, "command", req.Command)
-	s.LogAuditRecord(c, "batch_command", "agent", "", fmt.Sprintf("%s to %d agents (%d failed, %d locked-skipped)", req.TaskType, taskCount, failedCount, lockedSkipped), true, nil)
+	slog.Info("Batch command sent", "count", taskCount, "failed", failedCount, "locked_skipped", lockedSkipped, "deduped", dedupSkipped, "type", req.TaskType, "command", req.Command)
+	s.LogAuditRecord(c, "batch_command", "agent", "", fmt.Sprintf("%s to %d agents (%d failed, %d locked-skipped, %d deduped)", req.TaskType, taskCount, failedCount, lockedSkipped, dedupSkipped), true, nil)
 
 	s.pushBulkResult(BulkResult{
 		Timestamp: time.Now(),
@@ -325,10 +371,11 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 	})
 
 	c.JSON(http.StatusOK, gin.H{
-		"success":       true,
-		"tasks_created": taskCount,
-		"failed":        failedCount,
+		"success":        true,
+		"tasks_created":  taskCount,
+		"failed":         failedCount,
 		"locked_skipped": lockedSkipped,
+		"deduped":        dedupSkipped,
 	})
 }
 

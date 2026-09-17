@@ -60,6 +60,46 @@ func TestCleanupOldDataPurgesStaleSystemMetrics(t *testing.T) {
 	}
 }
 
+func TestCleanupOldDataPurgesTerminalTasks(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Server.CleanupRetentionDays = 30
+	cfg.Server.DataDir = t.TempDir()
+	s := &Server{db: newCleanupTestDB(t), cfg: cfg}
+
+	if err := s.db.Create(&db.Implant{ID: "a", LastSeen: time.Now()}).Error; err != nil {
+		t.Fatalf("seed agent: %v", err)
+	}
+	old := time.Now().AddDate(0, 0, -120)
+	fresh := time.Now().Add(-time.Minute)
+	seed := []db.Task{
+		{AgentID: "a", Type: "shell", Status: "cancelled", CreatedAt: old},
+		{AgentID: "a", Type: "shell", Status: "sent", CreatedAt: old},
+		{AgentID: "a", Type: "shell", Status: "completed", CreatedAt: old},
+		{AgentID: "a", Type: "shell", Status: "cancelled", CreatedAt: fresh},
+		{AgentID: "a", Type: "shell", Status: "pending", CreatedAt: old},
+	}
+	for i := range seed {
+		if err := s.db.Create(&seed[i]).Error; err != nil {
+			t.Fatalf("seed task: %v", err)
+		}
+	}
+
+	s.cleanupOldData()
+
+	var remaining []db.Task
+	if err := s.db.Find(&remaining).Error; err != nil {
+		t.Fatalf("list tasks: %v", err)
+	}
+	if len(remaining) != 2 {
+		t.Fatalf("remaining=%d, want 2 (fresh cancelled + old pending)", len(remaining))
+	}
+	for _, task := range remaining {
+		if task.Status != "cancelled" && task.Status != "pending" {
+			t.Fatalf("unexpected survivor: %+v", task)
+		}
+	}
+}
+
 func TestSystemMetricsCreatedAtIndexApplied(t *testing.T) {
 	gdb := newCleanupTestDB(t)
 

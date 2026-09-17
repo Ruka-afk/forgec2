@@ -29,6 +29,7 @@ type MetricsCollector struct {
 	OldestPendingSeconds *prometheus.GaugeVec
 	SocksDroppedTotal *prometheus.CounterVec
 	FileChainEventsTotal *prometheus.CounterVec
+	AgentResultGapsTotal prometheus.Counter
 }
 
 func NewMetricsCollector(s *Server) *MetricsCollector {
@@ -110,6 +111,10 @@ func NewMetricsCollector(s *Server) *MetricsCollector {
 			Name: "forgec2_filechain_events_total",
 			Help: "File-transfer chain integrity events, by outcome (legacy_bypass, downgrade_rejected, mismatch).",
 		}, []string{"outcome"}),
+		AgentResultGapsTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "forgec2_agent_result_gaps_total",
+			Help: "Total task results the agent discarded before delivery (queue-full/oversized); per-task detail is in the agent_result_gap audit record.",
+		}),
 	}
 }
 
@@ -133,6 +138,7 @@ func (mc *MetricsCollector) Register(reg prometheus.Registerer) {
 		mc.OldestPendingSeconds,
 		mc.SocksDroppedTotal,
 		mc.FileChainEventsTotal,
+		mc.AgentResultGapsTotal,
 	}
 	for _, c := range collectors {
 		err := reg.Register(c)

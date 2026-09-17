@@ -16,6 +16,7 @@ import (
 	"github.com/forgec2/forgec2/internal/testutil"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	promtestutil "github.com/prometheus/client_golang/prometheus/testutil"
 	"gorm.io/gorm"
 )
 
@@ -120,6 +121,57 @@ func TestBroadcastTaskUpdateDecryptsAtRestResult(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for task broadcast")
+	}
+}
+
+// TestTaskExecuteDurationObserved proves task finalization feeds the
+// execution-duration histogram (previously declared but never observed,
+// so the panel was permanently empty).
+func TestTaskExecuteDurationObserved(t *testing.T) {
+	s, database := newBeaconFinalityTestServer(t)
+	s.metrics = NewMetricsCollector(s)
+
+	uuid := "eeee5555-6666-4333-8444-555555555555"
+	agent := db.Implant{ID: uuid, Hostname: "DUR-01", IP: "10.0.0.11"}
+	if err := database.Create(&agent).Error; err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	task := db.Task{AgentID: uuid, Type: "shell", Command: "whoami", Status: "running",
+		CreatedAt: time.Now().Add(-2 * time.Minute)}
+	if err := database.Create(&task).Error; err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	s.agentPendingTasks[uuid] = 1
+
+	s.processTaskResults(agent, []taskResult{
+		{TaskID: task.ID, Type: "shell", Output: "ok", ResultID: "rid-dur"},
+	}, uuid, time.Now())
+
+	if n := promtestutil.CollectAndCount(s.metrics.TaskExecuteDuration); n == 0 {
+		t.Fatal("TaskExecuteDuration has no observation after finalization")
+	}
+}
+
+// TestDedupEvictsOldestFirst proves an over-cap dedup cache evicts the
+// oldest entries (previously Go-map-random, so a fresh hot key could be
+// dropped while ancient ones survived).
+func TestDedupEvictsOldestFirst(t *testing.T) {
+	s, _ := newBeaconFinalityTestServer(t)
+	now := time.Now()
+	s.beaconDedupCache = make(map[string]time.Time, MaxBeaconDedupEntries+10)
+	for i := 0; i < MaxBeaconDedupEntries+5; i++ {
+		s.beaconDedupCache["fp-"+strconv.Itoa(i)] = now.Add(-time.Duration(MaxBeaconDedupEntries+5-i) * time.Millisecond)
+	}
+
+	req := beaconRequest{UUID: "dedup-agent", Seq: 9999}
+	if s.isDuplicateBeacon(req) {
+		t.Fatal("fresh beacon must not be a duplicate")
+	}
+	if _, ok := s.beaconDedupCache["fp-0"]; ok {
+		t.Fatal("oldest entry must be evicted first")
+	}
+	if len(s.beaconDedupCache) > MaxBeaconDedupEntries+1 {
+		t.Fatalf("cache still over cap: %d", len(s.beaconDedupCache))
 	}
 }
 
