@@ -1,5 +1,5 @@
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { I18nProvider } from "@/lib/i18n";
 import { ThemeProvider } from "@/lib/theme";
 import { WebSocketProvider } from "@/lib/wsContext";
@@ -15,6 +15,33 @@ import type { PermissionKey } from "@/lib/permission-keys";
 
 const CHUNK_ERROR_RE = /dynamically imported module|Loading chunk|Importing a module script|Failed to fetch dynamically/i;
 const RELOAD_FLAG = "chunkErrorReloadAt";
+const RELOAD_COUNT_FLAG = "chunkErrorReloadCount";
+// A broken redeploy must not trap every tab in a reload loop: after this many
+// auto-reloads the app stops and shows a static fallback with a manual escape.
+const MAX_CHUNK_RELOADS = 2;
+
+function chunkReloadsExhausted(): boolean {
+  try {
+    return Number(sessionStorage.getItem(RELOAD_COUNT_FLAG) || 0) >= MAX_CHUNK_RELOADS;
+  } catch {
+    return false;
+  }
+}
+
+/** Pure chunk-error policy (testable): throttle bursts, cap total reloads. */
+export function chunkReloadDecision(now = Date.now()): "reload" | "throttled" | "exhausted" {
+  let last = 0;
+  let count = 0;
+  try {
+    last = Number(sessionStorage.getItem(RELOAD_FLAG) || 0);
+    count = Number(sessionStorage.getItem(RELOAD_COUNT_FLAG) || 0);
+  } catch {
+    return "reload";
+  }
+  if (now - last < 15000) return "throttled";
+  if (count >= MAX_CHUNK_RELOADS) return "exhausted";
+  return "reload";
+}
 
 /**
  * After a redeploy the old hashed JS chunks are removed server-side; a tab
@@ -22,13 +49,23 @@ const RELOAD_FLAG = "chunkErrorReloadAt";
  * (404), which surfaces as blank views. Auto-reload once to pick up the new
  * build instead of leaving the operator with an empty screen.
  */
-function useChunkErrorReload() {
+function useChunkErrorReload(onExhausted: () => void) {
+  const exhaustedRef = useRef(onExhausted);
+  exhaustedRef.current = onExhausted;
   useEffect(() => {
     const reloadOnChunkError = () => {
-      const last = Number(sessionStorage.getItem(RELOAD_FLAG) || 0);
-      if (Date.now() - last < 15000) return;
-      sessionStorage.setItem(RELOAD_FLAG, String(Date.now()));
-      window.location.reload();
+      switch (chunkReloadDecision()) {
+        case "throttled":
+          return;
+        case "exhausted":
+          exhaustedRef.current();
+          return;
+        case "reload":
+          sessionStorage.setItem(RELOAD_FLAG, String(Date.now()));
+          sessionStorage.setItem(RELOAD_COUNT_FLAG, String(Number(sessionStorage.getItem(RELOAD_COUNT_FLAG) || 0) + 1));
+          window.location.reload();
+          return;
+      }
     };
     const onError = (e: ErrorEvent) => {
       if (CHUNK_ERROR_RE.test(String(e.message || ""))) reloadOnChunkError();
@@ -88,8 +125,31 @@ function useCurrentUserBootstrap() {
 }
 
 export default function ClientProvider({ children }: { children: React.ReactNode }) {
-  useChunkErrorReload();
+  // Static bilingual fallback: this renders above I18nProvider (and possibly
+  // with broken chunks), so no t() or design-system components here.
+  const [chunkDead, setChunkDead] = useState(() => chunkReloadsExhausted());
+  useChunkErrorReload(() => setChunkDead(true));
   useCurrentUserBootstrap();
+  if (chunkDead) {
+    const retry = () => {
+      try {
+        sessionStorage.removeItem(RELOAD_COUNT_FLAG);
+        sessionStorage.removeItem(RELOAD_FLAG);
+      } catch { /* storage unavailable: reload anyway */ }
+      window.location.reload();
+    };
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-6 text-center text-foreground">
+        <div>
+          <div className="mb-2 text-lg font-bold">New version failed to load / 新版本加载失败</div>
+          <div className="mb-4 text-sm text-muted-foreground">The updated app bundle looks broken. Ask your admin to check the deploy, or retry.<br />更新包可能已损坏。请联系管理员检查部署，或重试。</div>
+          <button type="button" onClick={retry} className="rounded-lg border border-border bg-card px-5 py-2 text-foreground">
+            Retry / 重试
+          </button>
+        </div>
+      </div>
+    );
+  }
   return (
     <ErrorBoundary>
       <ThemeProvider>

@@ -14,6 +14,7 @@ import { useForm } from "@/lib/hooks/useForm";
 import { isLoginSuccessResponse, parseLoginErrorBody, safeNextPath } from "@/lib/login";
 import { paths } from "@/lib/api-paths";
 import { z } from "zod";
+import TelemetryCollector from "@/components/TelemetryCollector";
 
 type LoginFormValues = {
   username: string;
@@ -285,6 +286,7 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Spinner /></div>}>
+      <TelemetryCollector />
       <LoginForm />
     </Suspense>
   );

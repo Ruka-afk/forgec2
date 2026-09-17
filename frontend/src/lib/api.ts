@@ -113,7 +113,11 @@ export function probeSessionExpiry(): void {
   if (typeof window === "undefined" || window.location.pathname === "/login") return;
   fetch(buildUrl(paths.auth.me), { credentials: "include" })
     .then((res) => handleUnauthorized(res))
-    .catch(() => { /* network blip: rely on the reconnect path */ });
+    .catch((err) => {
+      // Network blip: rely on the reconnect path. Logged (not swallowed) so
+      // a persistently failing probe is diagnosable in telemetry.
+      logger.debug("session probe failed", err);
+    });
 }
 
 interface RequestOptions {
