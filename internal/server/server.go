@@ -551,6 +551,9 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	if s.socksEngine != nil {
 		s.socksEngine.SetDropCounter(s.metrics.SocksDroppedTotal)
 	}
+	if s.tunEngine != nil {
+		s.tunEngine.SetDropCounter(s.metrics.SocksDroppedTotal)
+	}
 
 	if cfg.SIEM.Enabled && cfg.SIEM.URL != "" {
 		s.siem = NewSIEMWebhook(s, cfg.SIEM.URL, cfg.SIEM.Token, cfg.SIEM.Actions)

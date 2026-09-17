@@ -65,6 +65,12 @@ func (s *Server) shutdown() {
 		slog.Info("Shutting down QUIC listener")
 		s.quicListener.Close()
 	}
+	// Tunnel helpers own FDs + pump goroutines outside the listener set:
+	// SOCKS/rportfwd/lportfwd/TUN must drain here, not just transports.
+	if s.tunEngine != nil {
+		slog.Info("Shutting down TUN helpers")
+		s.tunEngine.stopAll()
+	}
 	if s.httpServer != nil {
 		// Wait briefly for in-flight requests to drain before forced shutdown
 		done := make(chan struct{})

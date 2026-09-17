@@ -40,6 +40,7 @@ func (s *Server) periodicRPortFwdCleanup() {
 		case <-ticker.C:
 			s.cleanupStaleRPortFwd()
 			s.cleanupStaleLPortFwd()
+			s.cleanupStaleTun()
 		}
 	}
 }

@@ -10,7 +10,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // tunEngine pairs a Linux implant TUN with a teamserver UDP helper.
@@ -21,6 +23,20 @@ import (
 type tunEngine struct {
 	mu       sync.Mutex
 	sessions map[string]*tunSession
+	// dropCounter counts silently-dropped packets by reason (tun_overflow,
+	// tun_oversize). Wired by the server after metrics init; nil in tests.
+	dropCounter *prometheus.CounterVec
+}
+
+// SetDropCounter wires the drop metric. Safe to call once at startup.
+func (e *tunEngine) SetDropCounter(c *prometheus.CounterVec) {
+	e.dropCounter = c
+}
+
+func (e *tunEngine) noteDrop(reason string) {
+	if e.dropCounter != nil {
+		e.dropCounter.WithLabelValues(reason).Inc()
+	}
 }
 
 type tunSession struct {
@@ -32,9 +48,31 @@ type tunSession struct {
 	lastPeer *net.UDPAddr
 	port     int
 	pending  [][]byte
-	mu       sync.Mutex
-	stop     chan struct{}
+	// pendingBytes bounds buffered-but-undrained packets; beyond it the
+	// oldest is shed loudly (logged + counted) instead of an unbounded
+	// 256×64KB≈16MB backlog per beacon.
+	pendingBytes int
+	lastActive   time.Time
+	mu           sync.Mutex
+	stop         chan struct{}
+	stopOnce     sync.Once
 }
+
+// TUN queue bounds: 256 packets AND a 2MB byte budget — a flood of max-size
+// datagrams must not build a 16MB backlog per beacon, and drops are logged +
+// counted instead of silent.
+const (
+	tunMaxPendingPackets = 256
+	tunMaxPendingBytes   = 2 << 20
+	// tunMaxPacketBytes rejects jumbo frames that can never be a single IP
+	// packet / UDP datagram on this helper.
+	tunMaxPacketBytes = 65535
+	// tunSessionIdleTimeout reaps helper sessions with no activity this long.
+	// TUN is long-lived by nature, so this is looser than the 10m leg idle
+	// used by rportfwd/lportfwd — it only catches dead agents that never
+	// sent tun_down.
+	tunSessionIdleTimeout = 30 * time.Minute
+)
 
 func newTunEngine() *tunEngine {
 	return &tunEngine{sessions: make(map[string]*tunSession)}
@@ -47,28 +85,44 @@ func (e *tunEngine) get(agentID string) *tunSession {
 }
 
 func (e *tunEngine) startUDP(s *Server, agentID, cidr string, port int) (int, error) {
+	// Reserve the agent slot first: without the placeholder, two concurrent
+	// starts both pass the existence check, both ListenUDP, and the loser
+	// leaks its socket + udpLoop goroutine (TOCTOU).
 	e.mu.Lock()
-	if sess, ok := e.sessions[agentID]; ok && sess.udpConn != nil {
+	if sess, ok := e.sessions[agentID]; ok {
+		if sess.udpConn != nil {
+			e.mu.Unlock()
+			return sess.port, nil
+		}
 		e.mu.Unlock()
-		return sess.port, nil
+		return 0, fmt.Errorf("tun helper for agent %s is already starting", agentID)
 	}
+	placeholder := &tunSession{agentID: agentID, cidr: cidr, status: "starting", lastActive: time.Now(), stop: make(chan struct{})}
+	e.sessions[agentID] = placeholder
 	e.mu.Unlock()
 
 	addr := &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: port}
 	pc, err := net.ListenUDP("udp", addr)
 	if err != nil {
+		e.mu.Lock()
+		if cur, ok := e.sessions[agentID]; ok && cur == placeholder {
+			delete(e.sessions, agentID)
+		}
+		e.mu.Unlock()
 		return 0, err
 	}
 	actual := pc.LocalAddr().(*net.UDPAddr).Port
 	sess := &tunSession{
-		agentID: agentID,
-		cidr:    cidr,
-		status:  "starting",
-		udpConn: pc,
-		port:    actual,
-		stop:    make(chan struct{}),
+		agentID: agentID, cidr: cidr, status: "starting",
+		udpConn: pc, port: actual, lastActive: time.Now(), stop: make(chan struct{}),
 	}
 	e.mu.Lock()
+	// A racing stop() may have removed the placeholder; don't resurrect.
+	if cur, ok := e.sessions[agentID]; !ok || cur != placeholder {
+		e.mu.Unlock()
+		_ = pc.Close()
+		return 0, fmt.Errorf("tun helper for agent %s was stopped during start", agentID)
+	}
 	e.sessions[agentID] = sess
 	e.mu.Unlock()
 	go e.udpLoop(sess)
@@ -104,8 +158,13 @@ func (e *tunEngine) udpLoop(sess *tunSession) {
 		copy(pkt, buf[:n])
 		sess.mu.Lock()
 		sess.lastPeer = peer
-		if len(sess.pending) < 256 {
+		sess.lastActive = time.Now()
+		if len(sess.pending) >= tunMaxPendingPackets || sess.pendingBytes+len(pkt) > tunMaxPendingBytes {
+			slog.Warn("tun helper: pending overflow, dropping packet", "agent_id", sess.agentID, "pending", len(sess.pending))
+			e.noteDrop("tun_overflow")
+		} else {
 			sess.pending = append(sess.pending, pkt)
+			sess.pendingBytes += len(pkt)
 		}
 		sess.mu.Unlock()
 	}
@@ -121,6 +180,10 @@ func (e *tunEngine) drain(agentID string) []socksFrame {
 	sess.mu.Lock()
 	pending := sess.pending
 	sess.pending = nil
+	sess.pendingBytes = 0
+	if len(pending) > 0 {
+		sess.lastActive = time.Now()
+	}
 	sess.mu.Unlock()
 	if len(pending) == 0 {
 		return nil
@@ -138,7 +201,7 @@ func (e *tunEngine) handleAgentFrame(agentID, action string, data []byte) {
 	e.mu.Unlock()
 	if sess == nil {
 		if action == "tun_up" || action == "tun_data" {
-			sess = &tunSession{agentID: agentID, status: "up"}
+			sess = &tunSession{agentID: agentID, status: "up", lastActive: time.Now(), stop: make(chan struct{})}
 			e.mu.Lock()
 			e.sessions[agentID] = sess
 			e.mu.Unlock()
@@ -151,18 +214,32 @@ func (e *tunEngine) handleAgentFrame(agentID, action string, data []byte) {
 		sess.mu.Lock()
 		sess.status = "up"
 		sess.iface = strings.TrimSpace(string(data))
+		sess.lastActive = time.Now()
 		sess.mu.Unlock()
 	case "tun_down":
 		sess.mu.Lock()
 		sess.status = "down"
+		sess.lastActive = time.Now()
 		sess.mu.Unlock()
 	case "tun_data":
+		if len(data) == 0 {
+			return
+		}
+		if len(data) > tunMaxPacketBytes {
+			slog.Warn("tun helper: oversize packet from agent, dropping", "agent_id", agentID, "bytes", len(data))
+			e.noteDrop("tun_oversize")
+			return
+		}
 		sess.mu.Lock()
 		pc, peer := sess.udpConn, sess.lastPeer
+		sess.lastActive = time.Now()
 		sess.mu.Unlock()
-		if pc != nil && peer != nil && len(data) > 0 {
-			_, _ = pc.WriteToUDP(data, peer)
+		if pc == nil || peer == nil {
+			slog.Warn("tun helper: data with no UDP peer, dropping", "agent_id", agentID)
+			e.noteDrop("tun_overflow")
+			return
 		}
+		_, _ = pc.WriteToUDP(data, peer)
 	}
 }
 
@@ -175,11 +252,87 @@ func (e *tunEngine) stop(agentID string) error {
 	}
 	delete(e.sessions, agentID)
 	e.mu.Unlock()
-	close(sess.stop)
+	// stopOnce: concurrent Stop + sweep double-close used to panic on a bare
+	// close(stopCh). The nil-guard covers auto-created sessions from
+	// handleAgentFrame, which never owned a UDP helper.
+	sess.stopOnce.Do(func() {
+		if sess.stop != nil {
+			close(sess.stop)
+		}
+	})
 	if sess.udpConn != nil {
 		_ = sess.udpConn.Close()
 	}
 	return nil
+}
+
+// stopAll tears down every helper. Used by server shutdown so UDP sockets
+// and udpLoop goroutines don't leak across the restart path.
+func (e *tunEngine) stopAll() {
+	e.mu.Lock()
+	agents := make([]string, 0, len(e.sessions))
+	for id := range e.sessions {
+		agents = append(agents, id)
+	}
+	e.mu.Unlock()
+	for _, id := range agents {
+		_ = e.stop(id)
+	}
+}
+
+// cleanupStaleTun reaps helper sessions for dead agents plus sessions idle
+// past tunSessionIdleTimeout. TUN previously had no periodic GC at all —
+// unlike SOCKS/rportfwd/lportfwd — so a dead agent with no explicit tun_down
+// leaked its UDP socket forever.
+func (s *Server) cleanupStaleTun() {
+	if s.tunEngine == nil {
+		return
+	}
+	s.tunEngine.mu.Lock()
+	type snapshot struct {
+		agentID    string
+		lastActive time.Time
+	}
+	snaps := make([]snapshot, 0, len(s.tunEngine.sessions))
+	agentSet := make(map[string]bool)
+	for id, sess := range s.tunEngine.sessions {
+		sess.mu.Lock()
+		la := sess.lastActive
+		sess.mu.Unlock()
+		snaps = append(snaps, snapshot{agentID: id, lastActive: la})
+		agentSet[id] = true
+	}
+	s.tunEngine.mu.Unlock()
+	if len(snaps) == 0 {
+		return
+	}
+	agentIDs := make([]string, 0, len(agentSet))
+	for id := range agentSet {
+		agentIDs = append(agentIDs, id)
+	}
+	var agents []db.Implant
+	if err := s.db.Where("id IN ?", agentIDs).Limit(len(agentIDs)).Find(&agents).Error; err != nil {
+		slog.Error("Failed to batch-load agents for tun cleanup", "error", err)
+		return
+	}
+	byID := make(map[string]db.Implant, len(agents))
+	for _, a := range agents {
+		byID[a.ID] = a
+	}
+	now := time.Now()
+	threshold := s.offlineThreshold() * 2
+	for _, sn := range snaps {
+		a, ok := byID[sn.agentID]
+		if !ok || now.Sub(a.LastSeen) > threshold {
+			slog.Info("tun helper: reaping session for dead agent", "agent_id", sn.agentID)
+			_ = s.tunEngine.stop(sn.agentID)
+			continue
+		}
+		if !sn.lastActive.IsZero() && now.Sub(sn.lastActive) > tunSessionIdleTimeout {
+			slog.Info("tun helper: reaping idle session", "agent_id", sn.agentID)
+			_ = s.tunEngine.stop(sn.agentID)
+		}
+	}
 }
 
 func (e *tunEngine) active(agentID string) bool {
@@ -203,6 +356,10 @@ func (s *Server) handleTunStart(c *gin.Context) {
 	cidr := strings.TrimSpace(c.PostForm("cidr"))
 	if cidr == "" {
 		cidr = "10.66.0.2/24"
+	}
+	if _, _, err := net.ParseCIDR(cidr); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid cidr, want e.g. 10.66.0.2/24")
+		return
 	}
 	port := 0
 	if v := c.PostForm("udp_port"); v != "" {
