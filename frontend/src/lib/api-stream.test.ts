@@ -221,4 +221,53 @@ describe("pollTask streaming", () => {
     const final = await p;
     expect(final.status).toBe("completed");
   });
+
+  it("fires onSoftTimeout once and keeps polling to the hard deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(api.get).mockResolvedValue({ id: 1, status: "running", result: "" });
+      let softCalls = 0;
+      const p = pollTask("agent-1", 1, {
+        intervalMs: 1000,
+        softTimeoutMs: 3000,
+        timeoutMs: 8000,
+        onSoftTimeout: () => { softCalls += 1; },
+      });
+      const settled: Array<string> = [];
+      p.then(() => settled.push("resolved"), () => settled.push("rejected"));
+
+      await vi.advanceTimersByTimeAsync(4000);
+      expect(softCalls).toBe(1);
+      expect(settled).toEqual([]);
+      // Still polling after the soft deadline: a late completion wins.
+      // (Re-mock: this test overrode the shared completed-flag mock above.)
+      vi.mocked(api.get).mockResolvedValue({ id: 1, status: "completed", result: "LATE" });
+      await vi.advanceTimersByTimeAsync(4000);
+      const final = await p;
+      expect(final.status).toBe("completed");
+      expect(final.result).toBe("LATE");
+      expect(settled).toEqual(["resolved"]);
+      await vi.advanceTimersByTimeAsync(10000);
+      expect(softCalls).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rejects at the hard deadline, not the soft one", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(api.get).mockResolvedValue({ id: 1, status: "running", result: "" });
+      const p = pollTask("agent-1", 1, { intervalMs: 1000, softTimeoutMs: 2000, timeoutMs: 5000 });
+      const settled: Array<string> = [];
+      p.then(() => settled.push("resolved"), () => settled.push("rejected"));
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(settled).toEqual([]);
+      await vi.advanceTimersByTimeAsync(10000);
+      await expect(p).rejects.toThrow("did not respond");
+      expect(settled).toEqual(["rejected"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

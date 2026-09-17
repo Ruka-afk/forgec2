@@ -51,4 +51,36 @@ describe("useTaskResult", () => {
     await act(async () => { first.resolve({ status: "completed", result: "stale" }); });
     expect(result.current.result).toBe("new-result");
   });
+
+  it("stalls instead of timing out at maxAttempts, then times out at the hard deadline", async () => {
+    vi.useFakeTimers();
+    vi.mocked(api.get).mockResolvedValue({ status: "running", result: "" });
+    const { result } = renderHook(() => useTaskResult("agent-1", 1000, 3));
+
+    act(() => result.current.start(11));
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    // Past 3 attempts: still tracking, flagged stalled, no false timeout.
+    expect(result.current.stalled).toBe(true);
+    expect(result.current.status).toBe("running");
+    expect(result.current.polling).toBe(true);
+
+    // A late completion still wins while stalled.
+    vi.mocked(api.get).mockResolvedValueOnce({ status: "completed", result: "late" });
+    await act(async () => { await vi.advanceTimersByTimeAsync(20000); });
+    expect(result.current.status).toBe("completed");
+    expect(result.current.result).toBe("late");
+  });
+
+  it("reports timeout only after the hard deadline", async () => {
+    vi.useFakeTimers();
+    vi.mocked(api.get).mockResolvedValue({ status: "running", result: "" });
+    const { result } = renderHook(() => useTaskResult("agent-1", 1000, 2));
+
+    act(() => result.current.start(11));
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(result.current.status).not.toBe("timeout");
+    await act(async () => { await vi.advanceTimersByTimeAsync(600_000); });
+    expect(result.current.status).toBe("timeout");
+    expect(result.current.polling).toBe(false);
+  });
 });

@@ -3,6 +3,7 @@ import type { Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { runTask, ApiError, formatThrownError } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { TASK_HARD_TIMEOUT_MS } from "@/lib/task-poll";
 import { fetchAgentBeaconTiming, loadCommandHistory, saveCommandHistory } from "@/lib/shell";
 import { getCompletions } from "@/lib/completions";
 import { highlightOutput } from "@/lib/highlight";
@@ -153,10 +154,15 @@ export default function ShellTerminal({
             method: "postJson",
             body: { command: cmd, shell: interpreterRef.current },
             checkOnline: true,
-            timeoutMs: 60000,
+            // Hard deadline matches the server sweep; the soft hint below
+            // replaces the old 60s false-timeout that invited double-execution.
+            timeoutMs: TASK_HARD_TIMEOUT_MS,
             signal: ac.signal,
             onStatus: (s) => {
               if (s.result) appendOutput(s.result, "");
+            },
+            onSoftTimeout: () => {
+              writeln(tRef.current("shell.still_running"), "90");
             },
           },
         );

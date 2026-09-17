@@ -1,6 +1,7 @@
 import { API_BASE } from "@/lib/constants";
 import { api, getCsrfToken, handleUnauthorized, pollTask } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { TASK_HARD_TIMEOUT_MS } from "@/lib/task-poll";
 import { downloadBlob } from "@/lib/download";
 import { exfilBasename, fileTaskId, pullPlan, transferProgressAt, type TransferProgress } from "./file-task";
 
@@ -35,7 +36,7 @@ export async function pullRemoteFile(opts: {
     });
     const taskId = fileTaskId(data);
     if (!taskId) throw new Error(opts.t("agents.files_pull_failed"));
-    const st = await pollTask(opts.agentId, taskId, { timeoutMs: 180_000, signal: opts.signal });
+    const st = await pollTask(opts.agentId, taskId, { timeoutMs: TASK_HARD_TIMEOUT_MS, signal: opts.signal });
     if (st.status === "failed") throw new Error(st.error || opts.t("agents.files_pull_failed"));
     offset += size;
     opts.onProgress?.(transferProgressAt(offset, plan));
@@ -96,7 +97,9 @@ export function pushLocalFile(opts: {
           try { ack = JSON.parse(xhr.responseText || "{}"); } catch { /* non-json */ }
           const taskId = fileTaskId(ack);
           if (taskId) {
-            const st = await pollTask(opts.agentId, taskId, { timeoutMs: 180_000, signal: opts.signal });
+            // Chunk tasks can legitimately take minutes on slow links: bound
+            // by the server sweep, not the old 180s false-timeout.
+            const st = await pollTask(opts.agentId, taskId, { timeoutMs: TASK_HARD_TIMEOUT_MS, signal: opts.signal });
             if (st.status === "failed") throw new Error(st.error || opts.t("agents.files_push_failed"));
           }
           resolve();

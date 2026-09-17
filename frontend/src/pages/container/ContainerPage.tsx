@@ -67,6 +67,9 @@ export default function ContainerPage() {
   };
 
   const statusLabel = () => {
+    if (taskPoll.stalled && (taskPoll.status === "pending" || taskPoll.status === "running")) {
+      return t("container.poll_stalled");
+    }
     switch (taskPoll.status) {
       case "pending": return t("container.poll_pending");
       case "running": return t("container.poll_running");

@@ -2,6 +2,7 @@ import { API_BASE } from "./constants";
 import { subscribeTyped } from "./typed-ws";
 import { logger } from "./logger";
 import { paths } from "./api-paths";
+import { TASK_HARD_TIMEOUT_MS, TASK_HIDDEN_POLL_MS, TASK_POLL_INTERVAL_MS, TASK_SOFT_TIMEOUT_MS } from "./task-poll";
 
 const TIMEOUT_MS = 30000;
 
@@ -404,7 +405,14 @@ interface PollTaskHandle {
 export async function pollTask(
   agentId: string,
   taskId: number,
-  opts: { intervalMs?: number; timeoutMs?: number; signal?: AbortSignal; onStatus?: (st: TaskStatus) => void } = {},
+  opts: {
+    intervalMs?: number;
+    timeoutMs?: number;
+    softTimeoutMs?: number;
+    signal?: AbortSignal;
+    onStatus?: (st: TaskStatus) => void;
+    onSoftTimeout?: () => void;
+  } = {},
 ): Promise<TaskStatus> {
   const h = pollTaskWithCancel(agentId, taskId, opts);
   return h.promise;
@@ -413,11 +421,24 @@ export async function pollTask(
 function pollTaskWithCancel(
   agentId: string,
   taskId: number,
-  opts: { intervalMs?: number; timeoutMs?: number; signal?: AbortSignal; onStatus?: (st: TaskStatus) => void } = {},
+  opts: {
+    intervalMs?: number;
+    timeoutMs?: number;
+    softTimeoutMs?: number;
+    signal?: AbortSignal;
+    onStatus?: (st: TaskStatus) => void;
+    onSoftTimeout?: () => void;
+  } = {},
 ): PollTaskHandle {
-  const intervalMs = opts.intervalMs ?? 1500;
-  const timeoutMs = opts.timeoutMs ?? 60000;
-  const deadline = Date.now() + timeoutMs;
+  const intervalMs = opts.intervalMs ?? TASK_POLL_INTERVAL_MS;
+  // Hard deadline matches the server stale sweep (StaleRunningTaskTimeout):
+  // rejecting earlier reports a live task dead and invites double-execution.
+  const timeoutMs = opts.timeoutMs ?? TASK_HARD_TIMEOUT_MS;
+  const softTimeoutMs = opts.softTimeoutMs ?? TASK_SOFT_TIMEOUT_MS;
+  const startTime = Date.now();
+  const deadline = startTime + timeoutMs;
+  const softDeadline = startTime + softTimeoutMs;
+  let softFired = false;
   const ac = new AbortController();
   const signal = opts.signal ?? ac.signal;
 
@@ -561,6 +582,14 @@ function pollTaskWithCancel(
       if (done) return;
       if (signal.aborted) return fail(new Error("cancelled"));
       if (Date.now() > deadline) return fail(new Error("Agent did not respond within the timeout (is it online?)"));
+      if (!softFired && Date.now() > softDeadline) {
+        softFired = true;
+        try {
+          opts.onSoftTimeout?.();
+        } catch {
+          // Caller hint must never break the poll loop.
+        }
+      }
       try {
         const st = operatorStatus(await api.get<TaskStatus>(paths.agents.task(agentId, taskId), { signal }));
         // A terminal WebSocket event may have completed the task while this
@@ -577,9 +606,13 @@ function pollTaskWithCancel(
       // WS live: the socket delivers terminal state promptly, so back off REST
       // polling to 8s to cut ~5x requests. Otherwise exponential backoff
       // 1.5s -> 2s -> 4s capped at 10s for disconnected/degraded sockets.
+      // Hidden tab: slow to a background cadence instead of stalling (the old
+      // hook stopped entirely) or hammering a throttled timer.
       pollAttempts += 1;
       const backoff = Math.min(intervalMs * Math.pow(1.5, Math.min(pollAttempts, 4)), 10000);
-      const nextDelay = wsLive ? Math.max(backoff, 8000) : backoff;
+      const nextDelay = document.hidden
+        ? Math.max(backoff, TASK_HIDDEN_POLL_MS)
+        : wsLive ? Math.max(backoff, 8000) : backoff;
       timer = setTimeout(tick, nextDelay);
     };
     tick();
@@ -611,8 +644,10 @@ interface RunTaskOptions {
   body?: Record<string, unknown> | Record<string, string>;
   intervalMs?: number;
   timeoutMs?: number;
+  softTimeoutMs?: number;
   checkOnline?: boolean;
   onStatus?: (st: TaskStatus) => void;
+  onSoftTimeout?: () => void;
   signal?: AbortSignal;
 }
 
@@ -640,8 +675,10 @@ export async function runTask(
   return pollTask(agentId, taskId, {
     intervalMs: opts.intervalMs,
     timeoutMs: opts.timeoutMs,
+    softTimeoutMs: opts.softTimeoutMs,
     signal: opts.signal,
     onStatus: opts.onStatus,
+    onSoftTimeout: opts.onSoftTimeout,
   });
 }
 
