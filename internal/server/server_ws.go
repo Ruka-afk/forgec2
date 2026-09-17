@@ -64,10 +64,11 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 
 	session := UserSession{Username: username, ConnectedAt: time.Now()}
 	client := &wsClientConn{
-		conn:    conn,
-		session: session,
-		ch:      make(chan []byte, wsWriteChanSize),
-		done:    make(chan struct{}),
+		conn:     conn,
+		session:  session,
+		tenantID: s.tenantIDForUser(username),
+		ch:       make(chan []byte, wsWriteChanSize),
+		done:     make(chan struct{}),
 	}
 
 	s.wsMutex.Lock()
@@ -185,8 +186,11 @@ type UserSession struct {
 type wsClientConn struct {
 	conn    *websocket.Conn
 	session UserSession
-	ch      chan []byte
-	done    chan struct{}
+	// tenantID scopes agent-bound broadcasts: 0 (legacy operators) receives
+	// everything, matching tenantScope semantics.
+	tenantID uint
+	ch       chan []byte
+	done     chan struct{}
 }
 
 const wsWriteChanSize = 64
@@ -223,9 +227,41 @@ func (s *Server) broadcastUserEvent(eventType, username string, session UserSess
 // broadcastToClients sends a message to all connected WebSocket clients.
 // Uses buffered channels so the caller never blocks on slow readers.
 func (s *Server) broadcastToClients(message []byte) {
+	s.broadcastToClientsWhere(message, nil)
+}
+
+// broadcastToTenant sends an agent-scoped message only to clients allowed to
+// see the agent: legacy (tenant 0) operators plus the agent's own tenant.
+// Previously every agent/task event fanned out to all connected operators,
+// disclosing other tenants' hostnames, IDs and task types over the socket.
+func (s *Server) broadcastToTenant(message []byte, agentID string) {
+	var agent db.Implant
+	if err := s.db.Select("tenant_id").Where("id = ?", agentID).First(&agent).Error; err != nil {
+		// Agent row gone (or DB hiccup): limit to legacy clients rather than
+		// dropping (availability) or fanning out (disclosure).
+		slog.Warn("Tenant broadcast: agent lookup failed, limiting to legacy clients", "agent_id", agentID, "error", err)
+		s.broadcastToClientsWhere(message, func(tid uint) bool { return tid == 0 })
+		return
+	}
+	if agent.TenantID == 0 {
+		s.broadcastToClients(message)
+		return
+	}
+	tid := agent.TenantID
+	s.broadcastToClientsWhere(message, func(clientTID uint) bool {
+		return clientTID == 0 || clientTID == tid
+	})
+}
+
+// broadcastToClientsWhere is broadcastToClients with a per-client tenant
+// filter (nil keeps everything).
+func (s *Server) broadcastToClientsWhere(message []byte, allow func(tid uint) bool) {
 	s.wsMutex.RLock()
 	clients := make([]*wsClientConn, 0, len(s.wsClients))
 	for _, client := range s.wsClients {
+		if allow != nil && !allow(client.tenantID) {
+			continue
+		}
 		clients = append(clients, client)
 	}
 	s.wsMutex.RUnlock()
@@ -266,7 +302,7 @@ func (s *Server) broadcastAgentOnline(agent db.Implant, isNew bool) {
 		slog.Error("Failed to marshal agent online notification", "err", err)
 		return
 	}
-	s.broadcastToClients(notification)
+	s.broadcastToTenant(notification, agent.ID)
 }
 
 // broadcastAgentOffline pushes agent offline events to all WebSocket clients.
@@ -285,7 +321,7 @@ func (s *Server) broadcastAgentOffline(agent db.Implant) {
 		slog.Error("Failed to marshal agent offline notification", "err", err)
 		return
 	}
-	s.broadcastToClients(notification)
+	s.broadcastToTenant(notification, agent.ID)
 }
 
 // suppressAgentStatusEvent ensures at most one status event per agent every 60 seconds.
@@ -331,7 +367,7 @@ func (s *Server) broadcastAgentDataUpdate(agentID string, data map[string]interf
 		slog.Error("Failed to marshal agent data update", "err", err)
 		return
 	}
-	s.broadcastToClients(notification)
+	s.broadcastToTenant(notification, agentID)
 }
 
 // broadcastTaskUpdate pushes task status (and result if completed) to WS clients
@@ -371,7 +407,7 @@ func (s *Server) broadcastTaskUpdate(agentID string, task db.Task) {
 		slog.Error("Failed to marshal task update", "err", err)
 		return
 	}
-	s.broadcastToClients(notification)
+	s.broadcastToTenant(notification, agentID)
 }
 
 // taskForOperator is the final storage-boundary guard for task output. Most DB
@@ -438,7 +474,7 @@ func (s *Server) broadcastTaskOutputFrames(agentID string, task db.Task) {
 			slog.Error("Failed to marshal task output frame", "err", err)
 			return
 		}
-		s.broadcastToClients(raw)
+		s.broadcastToTenant(raw, agentID)
 		start = end
 	}
 }

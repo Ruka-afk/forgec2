@@ -187,7 +187,7 @@ func (s *Server) handleTrafficProfileAutoAdapt(c *gin.Context) {
 		return
 	}
 
-	if err := s.db.Model(&db.Implant{}).Where("id = ?", agentID).Update("auto_adapt", req.Enabled).Error; err != nil {
+	if err := s.tenantScope(s.db.Model(&db.Implant{}), c).Where("id = ?", agentID).Update("auto_adapt", req.Enabled).Error; err != nil {
 		slog.Error("Failed to persist auto-adapt toggle", "agent_id", agentID, "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to update auto-adapt")
 		return

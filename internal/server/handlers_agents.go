@@ -373,7 +373,12 @@ func (s *Server) handleUpdateNote(c *gin.Context) {
 	}
 
 	if len(updates) > 0 {
-		if err := s.db.Model(&db.Implant{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+		// Ownership gate first, then a tenant-scoped write: the unscoped
+		// update was a direct IDOR write on other tenants' agents.
+		if _, ok := s.getAgentOrFail(c, id); !ok {
+			return
+		}
+		if err := s.tenantScope(s.db.Model(&db.Implant{}), c).Where("id = ?", id).Updates(updates).Error; err != nil {
 			respondError(c, http.StatusInternalServerError, "failed to update agent notes/tags")
 			return
 		}
@@ -703,15 +708,15 @@ func (s *Server) handleToggleAgentTrust(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
-	var agent db.Implant
-	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
-		respondError(c, http.StatusNotFound, "agent not found")
+	agent, ok := s.getAgentOrFail(c, id)
+	if !ok {
 		return
 	}
 	newTrusted := !agent.Trusted
 	// Targeted update: Save() here rewrote every column from a stale read and
 	// reverted concurrent beacon writes (last_seen/status/sleep settings).
-	if err := s.db.Model(&db.Implant{}).Where("id = ?", id).Update("trusted", newTrusted).Error; err != nil {
+	// Tenant-scoped like the gate above: unscoped read+write was an IDOR pair.
+	if err := s.tenantScope(s.db.Model(&db.Implant{}), c).Where("id = ?", id).Update("trusted", newTrusted).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to update agent trust status")
 		return
 	}
@@ -908,8 +913,8 @@ func (s *Server) handleSetKillDate(c *gin.Context) {
 	}
 
 	// Targeted update only -- a full-row Save() reverted concurrent beacon
-	// writes on this hot row.
-	if err := s.db.Model(&db.Implant{}).Where("id = ?", id).Update("kill_date", &kt).Error; err != nil {
+	// writes on this hot row. Tenant-scoped to match the gate above.
+	if err := s.tenantScope(s.db.Model(&db.Implant{}), c).Where("id = ?", id).Update("kill_date", &kt).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to save kill date")
 		return
 	}
@@ -933,8 +938,8 @@ func (s *Server) handleClearKillDate(c *gin.Context) {
 	}
 
 	// Targeted update only -- a full-row Save() reverted concurrent beacon
-	// writes on this hot row.
-	if err := s.db.Model(&db.Implant{}).Where("id = ?", id).Update("kill_date", nil).Error; err != nil {
+	// writes on this hot row. Tenant-scoped to match the gate above.
+	if err := s.tenantScope(s.db.Model(&db.Implant{}), c).Where("id = ?", id).Update("kill_date", nil).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to clear kill date")
 		return
 	}

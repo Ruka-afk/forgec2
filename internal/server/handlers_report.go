@@ -11,19 +11,33 @@ import (
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
+
+// reportAgentIDs scopes rows that carry only an agent_id (credentials,
+// findings, network hosts, SOCKS sessions) to the caller's tenant through
+// the owning implant — those tables have no tenant_id column of their own.
+func (s *Server) reportAgentIDs(c *gin.Context) *gorm.DB {
+	return s.tenantScope(s.db.Model(&db.Implant{}).Select("id"), c)
+}
+
+// reportUsernames scopes audit rows (owned by operator username) to the
+// caller's tenant, mirroring the dashboard aggregate pattern.
+func (s *Server) reportUsernames(c *gin.Context) *gorm.DB {
+	return s.tenantScope(s.db.Model(&db.User{}).Select("username"), c)
+}
 
 // reportSuccessRate computes the real task success rate (completed /
 // completed+failed) within a time range. It returns "N/A" when no terminal
 // task exists in range — a nominal "100%" would be a fabricated statistic.
-func (s *Server) reportSuccessRate(start, end time.Time) string {
+func (s *Server) reportSuccessRate(c *gin.Context, start, end time.Time) string {
 	var completed, failed int64
-	if err := s.db.Model(&db.Task{}).
+	if err := s.tenantScope(s.db.Model(&db.Task{}), c).
 		Where("created_at BETWEEN ? AND ? AND status = ?", start, end, "completed").
 		Count(&completed).Error; err != nil {
 		slog.Error("Report: failed to count completed tasks", "err", err)
 	}
-	if err := s.db.Model(&db.Task{}).
+	if err := s.tenantScope(s.db.Model(&db.Task{}), c).
 		Where("created_at BETWEEN ? AND ? AND status = ?", start, end, "failed").
 		Count(&failed).Error; err != nil {
 		slog.Error("Report: failed to count failed tasks", "err", err)
@@ -160,22 +174,22 @@ func (s *Server) handleGenerateReport(c *gin.Context) {
 	// Summary
 	var agentCount, taskCount, credCount, auditCount int64
 	if req.Include.Agents {
-		if err := s.db.Model(&db.Implant{}).Where("created_at BETWEEN ? AND ?", startDate, endDate).Count(&agentCount).Error; err != nil {
+		if err := s.tenantScope(s.db.Model(&db.Implant{}), c).Where("created_at BETWEEN ? AND ?", startDate, endDate).Count(&agentCount).Error; err != nil {
 			slog.Error("Failed to count agents in range", "err", err)
 		}
 	}
 	if req.Include.Tasks {
-		if err := s.db.Model(&db.Task{}).Where("created_at BETWEEN ? AND ?", startDate, endDate).Count(&taskCount).Error; err != nil {
+		if err := s.tenantScope(s.db.Model(&db.Task{}), c).Where("created_at BETWEEN ? AND ?", startDate, endDate).Count(&taskCount).Error; err != nil {
 			slog.Error("Failed to count tasks in range", "err", err)
 		}
 	}
 	if req.Include.Creds {
-		if err := s.db.Model(&db.CredentialEntry{}).Where("created_at BETWEEN ? AND ?", startDate, endDate).Count(&credCount).Error; err != nil {
+		if err := s.db.Model(&db.CredentialEntry{}).Where("agent_id IN (?) AND created_at BETWEEN ? AND ?", s.reportAgentIDs(c), startDate, endDate).Count(&credCount).Error; err != nil {
 			slog.Error("Failed to count creds in range", "err", err)
 		}
 	}
 	if req.Include.Audit {
-		if err := s.db.Model(&db.AuditLog{}).Where("created_at BETWEEN ? AND ?", startDate, endDate).Count(&auditCount).Error; err != nil {
+		if err := s.db.Model(&db.AuditLog{}).Where("user IN (?) AND created_at BETWEEN ? AND ?", s.reportUsernames(c), startDate, endDate).Count(&auditCount).Error; err != nil {
 			slog.Error("Failed to count audit logs in range", "err", err)
 		}
 	}
@@ -185,13 +199,13 @@ func (s *Server) handleGenerateReport(c *gin.Context) {
 		"total_tasks":  taskCount,
 		"total_creds":  credCount,
 		"total_audits": auditCount,
-		"success_rate": s.reportSuccessRate(startDate, endDate),
+		"success_rate": s.reportSuccessRate(c, startDate, endDate),
 	}
 
 	// Agents
 	if req.Include.Agents {
 		var agents []db.Implant
-		if err := s.db.Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Limit(5000).Find(&agents).Error; err != nil {
+		if err := s.tenantScope(s.db, c).Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Limit(5000).Find(&agents).Error; err != nil {
 			slog.Error("Report: failed to query agents", "err", err)
 		}
 		agentList := make([]gin.H, 0, len(agents))
@@ -212,7 +226,7 @@ func (s *Server) handleGenerateReport(c *gin.Context) {
 	// Tasks
 	if req.Include.Tasks {
 		var tasks []db.Task
-		if err := s.db.Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Limit(100).Find(&tasks).Error; err != nil {
+		if err := s.tenantScope(s.db, c).Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Limit(100).Find(&tasks).Error; err != nil {
 			slog.Error("Report: failed to query tasks", "err", err)
 		}
 		taskList := make([]gin.H, 0, len(tasks))
@@ -232,7 +246,7 @@ func (s *Server) handleGenerateReport(c *gin.Context) {
 	// Credentials
 	if req.Include.Creds {
 		var creds []db.CredentialEntry
-		if err := s.db.Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Limit(100).Find(&creds).Error; err != nil {
+		if err := s.db.Where("agent_id IN (?) AND created_at BETWEEN ? AND ?", s.reportAgentIDs(c), startDate, endDate).Order("created_at desc").Limit(100).Find(&creds).Error; err != nil {
 			slog.Error("Report: failed to query creds", "err", err)
 		}
 		credList := make([]gin.H, 0, len(creds))
@@ -252,7 +266,7 @@ func (s *Server) handleGenerateReport(c *gin.Context) {
 	// Audit
 	if req.Include.Audit {
 		var audits []db.AuditLog
-		if err := s.db.Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Limit(100).Find(&audits).Error; err != nil {
+		if err := s.db.Where("user IN (?) AND created_at BETWEEN ? AND ?", s.reportUsernames(c), startDate, endDate).Order("created_at desc").Limit(100).Find(&audits).Error; err != nil {
 			slog.Error("Report: failed to query audits", "err", err)
 		}
 		auditList := make([]gin.H, 0, len(audits))
@@ -497,7 +511,7 @@ func (s *Server) handleAPIGetReportAgents(c *gin.Context) {
 		return
 	}
 	var agents []db.Implant
-	if err := s.db.Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Find(&agents).Error; err != nil {
+	if err := s.tenantScope(s.db, c).Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Find(&agents).Error; err != nil {
 		slog.Error("Report: failed to get report agents", "err", err)
 	}
 	agentList := make([]gin.H, 0, len(agents))
@@ -518,7 +532,7 @@ func (s *Server) handleAPIGetReportTasks(c *gin.Context) {
 		return
 	}
 	var tasks []db.Task
-	if err := s.db.Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Limit(200).Find(&tasks).Error; err != nil {
+	if err := s.tenantScope(s.db, c).Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Limit(200).Find(&tasks).Error; err != nil {
 		slog.Error("Report: failed to get report tasks", "err", err)
 	}
 	var completed, failed, pending int
@@ -553,7 +567,7 @@ func (s *Server) handleAPIGetReportCredentials(c *gin.Context) {
 		return
 	}
 	var creds []db.CredentialEntry
-	if err := s.db.Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Limit(100).Find(&creds).Error; err != nil {
+	if err := s.db.Where("agent_id IN (?) AND created_at BETWEEN ? AND ?", s.reportAgentIDs(c), startDate, endDate).Order("created_at desc").Limit(100).Find(&creds).Error; err != nil {
 		slog.Error("Report: failed to get report creds", "err", err)
 	}
 	credList := make([]gin.H, 0, len(creds))
@@ -569,7 +583,7 @@ func (s *Server) handleAPIGetReportCredentials(c *gin.Context) {
 
 func (s *Server) handleAPIGetReportNetwork(c *gin.Context) {
 	var hosts []db.NetworkHost
-	if err := s.db.Order("last_seen desc").Limit(100).Find(&hosts).Error; err != nil {
+	if err := s.db.Where("agent_id IN (?)", s.reportAgentIDs(c)).Order("last_seen desc").Limit(100).Find(&hosts).Error; err != nil {
 		slog.Error("Report: failed to query network hosts", "err", err)
 	}
 	hostList := make([]gin.H, 0, len(hosts))
@@ -590,7 +604,7 @@ func (s *Server) handleAPIGetReportFindings(c *gin.Context) {
 		return
 	}
 	var creds []db.CredentialEntry
-	if err := s.db.Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Limit(50).Find(&creds).Error; err != nil {
+	if err := s.db.Where("agent_id IN (?) AND created_at BETWEEN ? AND ?", s.reportAgentIDs(c), startDate, endDate).Order("created_at desc").Limit(50).Find(&creds).Error; err != nil {
 		slog.Error("Report: failed to query findings creds", "err", err)
 	}
 	findings := make([]gin.H, 0)
@@ -604,7 +618,7 @@ func (s *Server) handleAPIGetReportFindings(c *gin.Context) {
 		})
 	}
 	var tasks []db.Task
-	if err := s.db.Where("status = ? AND created_at BETWEEN ? AND ?", "failed", startDate, endDate).Order("created_at desc").Limit(50).Find(&tasks).Error; err != nil {
+	if err := s.tenantScope(s.db, c).Where("status = ? AND created_at BETWEEN ? AND ?", "failed", startDate, endDate).Order("created_at desc").Limit(50).Find(&tasks).Error; err != nil {
 		slog.Error("Report: failed to query failed tasks", "err", err)
 	}
 	for _, t := range tasks {
@@ -675,7 +689,7 @@ func (s *Server) handleAPIExportReportHTML(c *gin.Context) {
 		req.Sections = []string{"summary", "agents", "tasks", "credentials", "network"}
 	}
 
-	report := s.buildReportData(req.StartDate, req.EndDate, req.Sections)
+	report := s.buildReportData(c, req.StartDate, req.EndDate, req.Sections)
 	html := generateHTMLReport(report)
 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
 }
@@ -720,7 +734,7 @@ func (s *Server) handleAPIDeleteReport(c *gin.Context) {
 }
 
 // buildReportData constructs a gin.H report matching the format expected by generateHTMLReport
-func (s *Server) buildReportData(startDate, endDate string, sections []string) gin.H {
+func (s *Server) buildReportData(c *gin.Context, startDate, endDate string, sections []string) gin.H {
 	start, _ := time.Parse("2006-01-02", startDate)
 	end, _ := time.Parse("2006-01-02", endDate)
 	end = end.Add(24*time.Hour - time.Second)
@@ -743,22 +757,22 @@ func (s *Server) buildReportData(startDate, endDate string, sections []string) g
 
 	var agentCount, taskCount, credCount, auditCount int64
 	if sectionSet["agents"] || sectionSet["summary"] {
-		if err := s.db.Model(&db.Implant{}).Where("created_at BETWEEN ? AND ?", start, end).Count(&agentCount).Error; err != nil {
+		if err := s.tenantScope(s.db.Model(&db.Implant{}), c).Where("created_at BETWEEN ? AND ?", start, end).Count(&agentCount).Error; err != nil {
 			slog.Error("Failed to count agents in range", "err", err)
 		}
 	}
 	if sectionSet["tasks"] || sectionSet["summary"] {
-		if err := s.db.Model(&db.Task{}).Where("created_at BETWEEN ? AND ?", start, end).Count(&taskCount).Error; err != nil {
+		if err := s.tenantScope(s.db.Model(&db.Task{}), c).Where("created_at BETWEEN ? AND ?", start, end).Count(&taskCount).Error; err != nil {
 			slog.Error("Failed to count tasks in range", "err", err)
 		}
 	}
 	if sectionSet["credentials"] || sectionSet["summary"] {
-		if err := s.db.Model(&db.CredentialEntry{}).Where("created_at BETWEEN ? AND ?", start, end).Count(&credCount).Error; err != nil {
+		if err := s.db.Model(&db.CredentialEntry{}).Where("agent_id IN (?) AND created_at BETWEEN ? AND ?", s.reportAgentIDs(c), start, end).Count(&credCount).Error; err != nil {
 			slog.Error("Failed to count creds in range", "err", err)
 		}
 	}
 	if sectionSet["audit"] || sectionSet["summary"] {
-		if err := s.db.Model(&db.AuditLog{}).Where("created_at BETWEEN ? AND ?", start, end).Count(&auditCount).Error; err != nil {
+		if err := s.db.Model(&db.AuditLog{}).Where("user IN (?) AND created_at BETWEEN ? AND ?", s.reportUsernames(c), start, end).Count(&auditCount).Error; err != nil {
 			slog.Error("Failed to count audit logs in range", "err", err)
 		}
 	}
@@ -768,12 +782,12 @@ func (s *Server) buildReportData(startDate, endDate string, sections []string) g
 		"total_tasks":  taskCount,
 		"total_creds":  credCount,
 		"total_audits": auditCount,
-		"success_rate": s.reportSuccessRate(start, end),
+		"success_rate": s.reportSuccessRate(c, start, end),
 	}
 
 	if sectionSet["agents"] {
 		var agents []db.Implant
-		if err := s.db.Where("created_at BETWEEN ? AND ?", start, end).Order("created_at desc").Find(&agents).Error; err != nil {
+		if err := s.tenantScope(s.db, c).Where("created_at BETWEEN ? AND ?", start, end).Order("created_at desc").Find(&agents).Error; err != nil {
 			slog.Error("Report: failed to query agents for export", "err", err)
 		}
 		agentList := make([]gin.H, 0, len(agents))
@@ -788,7 +802,7 @@ func (s *Server) buildReportData(startDate, endDate string, sections []string) g
 
 	if sectionSet["tasks"] {
 		var tasks []db.Task
-		if err := s.db.Where("created_at BETWEEN ? AND ?", start, end).Order("created_at desc").Limit(100).Find(&tasks).Error; err != nil {
+		if err := s.tenantScope(s.db, c).Where("created_at BETWEEN ? AND ?", start, end).Order("created_at desc").Limit(100).Find(&tasks).Error; err != nil {
 			slog.Error("Report: failed to query tasks for export", "err", err)
 		}
 		taskList := make([]gin.H, 0, len(tasks))
@@ -803,7 +817,7 @@ func (s *Server) buildReportData(startDate, endDate string, sections []string) g
 
 	if sectionSet["credentials"] {
 		var creds []db.CredentialEntry
-		if err := s.db.Where("created_at BETWEEN ? AND ?", start, end).Order("created_at desc").Limit(100).Find(&creds).Error; err != nil {
+		if err := s.db.Where("agent_id IN (?) AND created_at BETWEEN ? AND ?", s.reportAgentIDs(c), start, end).Order("created_at desc").Limit(100).Find(&creds).Error; err != nil {
 			slog.Error("Report: failed to query creds for export", "err", err)
 		}
 		credList := make([]gin.H, 0, len(creds))
@@ -818,7 +832,7 @@ func (s *Server) buildReportData(startDate, endDate string, sections []string) g
 
 	if sectionSet["audit"] {
 		var audits []db.AuditLog
-		if err := s.db.Where("created_at BETWEEN ? AND ?", start, end).Order("created_at desc").Limit(100).Find(&audits).Error; err != nil {
+		if err := s.db.Where("user IN (?) AND created_at BETWEEN ? AND ?", s.reportUsernames(c), start, end).Order("created_at desc").Limit(100).Find(&audits).Error; err != nil {
 			slog.Error("Report: failed to query audits for export", "err", err)
 		}
 		auditList := make([]gin.H, 0, len(audits))

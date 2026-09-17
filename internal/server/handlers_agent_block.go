@@ -51,7 +51,7 @@ func (s *Server) handleBlockAgent(c *gin.Context) {
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
-	if err := s.db.Model(&db.Implant{}).Where("id = ?", id).Updates(map[string]interface{}{
+	if err := s.tenantScope(s.db.Model(&db.Implant{}), c).Where("id = ?", id).Updates(map[string]interface{}{
 		"blocked":        true,
 		"blocked_reason": reason,
 		"status":         "offline",
@@ -82,7 +82,7 @@ func (s *Server) handleUnblockAgent(c *gin.Context) {
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
-	result := s.db.Model(&db.Implant{}).Where("id = ? AND blocked = ?", id, true).
+	result := s.tenantScope(s.db.Model(&db.Implant{}), c).Where("id = ? AND blocked = ?", id, true).
 		Updates(map[string]interface{}{"blocked": false, "blocked_reason": ""})
 	if result.Error != nil {
 		slog.Error("Failed to unblock agent", "agent_id", id, "error", result.Error)

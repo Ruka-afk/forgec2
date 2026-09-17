@@ -80,6 +80,18 @@ func (s *Server) tenantScope(query *gorm.DB, c *gin.Context) *gorm.DB {
 	return query
 }
 
+// tenantIDForUser resolves a username to its tenant ID outside a gin
+// context (WebSocket registration). Missing rows and lookup errors both
+// yield legacy 0 — the socket layer cannot fail closed here without
+// breaking pre-tenant operators, and per-agent fan-out still applies.
+func (s *Server) tenantIDForUser(username string) uint {
+	var user db.User
+	if err := s.db.Select("tenant_id").Where("username = ?", username).First(&user).Error; err != nil {
+		return 0
+	}
+	return user.TenantID
+}
+
 // resolveVisibleAgentID resolves an id-or-hostname within the caller's tenant
 // scope. The shared resolveAgentID stays unscoped for system paths (beacons,
 // sweeps); interactive handlers must use this so one tenant's operator cannot

@@ -1088,6 +1088,9 @@ func (s *Server) handleStopSocksRelay(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
 	if err := s.socksEngine.stopSession(s, id); err != nil {
 		respondErrorSafe(c, http.StatusBadRequest, err, "")
 		return
@@ -1099,6 +1102,9 @@ func (s *Server) handleStopSocksRelay(c *gin.Context) {
 
 func (s *Server) handleSocksRelayStatus(c *gin.Context) {
 	id := c.Param("id")
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
 	sess := s.socksEngine.getSession(id)
 	if sess == nil {
 		c.JSON(http.StatusOK, gin.H{"active": false})
@@ -1134,7 +1140,10 @@ func (s *Server) handleSocksRelayStatus(c *gin.Context) {
 
 func (s *Server) handleGetSocksSessions(c *gin.Context) {
 	var sessions []db.SocksSession
-	q := s.db.Order("created_at desc").Limit(50)
+	// SocksSession rows carry no tenant_id: scope through the owning agent
+	// (same agent-join pattern as the dashboard credential queries).
+	q := s.db.Where("agent_id IN (?)", s.tenantScope(s.db.Model(&db.Implant{}).Select("id"), c)).
+		Order("created_at desc").Limit(50)
 	if agentID := c.Query("agent_id"); agentID != "" {
 		q = q.Where("agent_id = ?", agentID)
 	}

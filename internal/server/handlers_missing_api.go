@@ -469,6 +469,9 @@ func (s *Server) handleAgentChainSet(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "agent_id is required")
 		return
 	}
+	if _, ok := s.getAgentOrFail(c, agentID); !ok {
+		return
+	}
 	if agentID == req.ParentID {
 		respondError(c, http.StatusBadRequest, "agent cannot be its own parent")
 		return
@@ -491,7 +494,7 @@ func (s *Server) handleAgentChainSet(c *gin.Context) {
 			cur = parent.ParentAgentID
 		}
 	}
-	if err := s.db.Model(&db.Implant{}).Where("id = ?", agentID).Update("parent_agent_id", req.ParentID).Error; err != nil {
+	if err := s.tenantScope(s.db.Model(&db.Implant{}), c).Where("id = ?", agentID).Update("parent_agent_id", req.ParentID).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Update agent chain"))
 		return
 	}
@@ -506,7 +509,10 @@ func (s *Server) handleAgentChainClear(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "agent_id is required")
 		return
 	}
-	if err := s.db.Model(&db.Implant{}).Where("id = ?", agentID).Update("parent_agent_id", "").Error; err != nil {
+	if _, ok := s.getAgentOrFail(c, agentID); !ok {
+		return
+	}
+	if err := s.tenantScope(s.db.Model(&db.Implant{}), c).Where("id = ?", agentID).Update("parent_agent_id", "").Error; err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Clear agent chain"))
 		return
 	}
@@ -524,13 +530,16 @@ func (s *Server) handleMeshRoute(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "agent_id is required")
 		return
 	}
+	if _, ok := s.getAgentOrFail(c, agentID); !ok {
+		return
+	}
 	var req struct {
 		ParentID string `json:"parent_id"`
 	}
 	_ = c.ShouldBindJSON(&req)
 	if req.ParentID != "" && req.ParentID != agentID {
 		// Persist the requested mesh route on the implant record.
-		if err := s.db.Model(&db.Implant{}).Where("id = ?", agentID).
+		if err := s.tenantScope(s.db.Model(&db.Implant{}), c).Where("id = ?", agentID).
 			Update("parent_id", req.ParentID).Error; err != nil {
 			respondError(c, http.StatusInternalServerError, sanitizeError(err, "Set mesh route"))
 			return

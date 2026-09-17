@@ -849,7 +849,7 @@ func (s *Server) BroadcastScreenshot(agentID string, base64Data string) {
 		return
 	}
 
-	s.broadcastToClients(message)
+	s.broadcastToTenant(message, agentID)
 }
 
 func (s *Server) latestScreenFrame(agentID string) (cachedScreenFrame, bool) {
@@ -877,7 +877,7 @@ func (s *Server) BroadcastScreenMonitorError(agentID, errorMessage string) {
 		slog.Error("Failed to marshal screen monitor error", "agent_id", agentID, "err", err)
 		return
 	}
-	s.broadcastToClients(message)
+	s.broadcastToTenant(message, agentID)
 }
 
 // handleAgentRemoteInput accepts remote desktop input events and queues a remote_input task.
