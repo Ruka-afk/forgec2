@@ -194,3 +194,121 @@ func TestTransformUnknown(t *testing.T) {
 		t.Fatal("unknown transform should return data unchanged")
 	}
 }
+
+func roundTrip(t *testing.T, typ, value string, original []byte) []byte {
+	t.Helper()
+	tb := &TransformBlock{Transforms: []Transform{{Type: typ, Value: value}}}
+	encoded, err := tb.Apply(original, true)
+	if err != nil {
+		t.Fatalf("%s encode error = %v", typ, err)
+	}
+	decoded, err := tb.Apply(encoded, false)
+	if err != nil {
+		t.Fatalf("%s decode error = %v", typ, err)
+	}
+	if !bytes.Equal(decoded, original) {
+		t.Fatalf("%s round trip: got %q, want %q", typ, decoded, original)
+	}
+	return encoded
+}
+
+func TestTransformBase64URL(t *testing.T) {
+	// Unpadded lengths exercise the padding-repair branch on decode.
+	for _, original := range [][]byte{[]byte(""), []byte("a"), []byte("ab"), []byte("abc"), []byte("hello world")} {
+		encoded := roundTrip(t, "base64url", "", original)
+		for _, b := range encoded {
+			if b == '+' || b == '/' {
+				t.Fatalf("base64url output not URL-safe: %q", encoded)
+			}
+		}
+	}
+}
+
+func TestTransformNetbiosU(t *testing.T) {
+	for _, original := range [][]byte{[]byte(""), []byte("A"), []byte("test"), []byte{0x00, 0xff, 0x80}} {
+		roundTrip(t, "netbiosu", "", original)
+	}
+	// Odd trailing byte is dropped, never panics.
+	tb := &TransformBlock{Transforms: []Transform{{Type: "netbiosu"}}}
+	if _, err := tb.Apply([]byte("ABC"), false); err != nil {
+		t.Fatalf("odd-length decode error = %v", err)
+	}
+}
+
+func TestTransformStrrep(t *testing.T) {
+	tb := &TransformBlock{Transforms: []Transform{{Type: "strrep", Value: "o:0"}}}
+	encoded, err := tb.Apply([]byte("foo boo"), true)
+	if err != nil {
+		t.Fatalf("encode error = %v", err)
+	}
+	if string(encoded) != "f00 b00" {
+		t.Fatalf("strrep encode = %q, want %q", encoded, "f00 b00")
+	}
+	decoded, err := tb.Apply(encoded, false)
+	if err != nil {
+		t.Fatalf("decode error = %v", err)
+	}
+	if string(decoded) != "foo boo" {
+		t.Fatalf("strrep round trip = %q, want %q", decoded, "foo boo")
+	}
+	// Empty old side is a documented no-op.
+	noop := &TransformBlock{Transforms: []Transform{{Type: "strrep", Value: ":x"}}}
+	out, err := noop.Apply([]byte("abc"), true)
+	if err != nil || string(out) != "abc" {
+		t.Fatalf("empty-old strrep = %q, %v; want unchanged", out, err)
+	}
+}
+
+func TestTransformCase(t *testing.T) {
+	tb := &TransformBlock{Transforms: []Transform{{Type: "case"}}}
+	encoded, err := tb.Apply([]byte("Hello World 123!"), true)
+	if err != nil {
+		t.Fatalf("encode error = %v", err)
+	}
+	if string(encoded) != "HELLO WORLD 123!" {
+		t.Fatalf("case encode = %q", encoded)
+	}
+	// Decode lowercases (one-way for mixed input by design).
+	decoded, err := tb.Apply(encoded, false)
+	if err != nil {
+		t.Fatalf("decode error = %v", err)
+	}
+	if string(decoded) != "hello world 123!" {
+		t.Fatalf("case decode = %q", decoded)
+	}
+}
+
+func TestTransformURLEncode(t *testing.T) {
+	for _, original := range [][]byte{[]byte(""), []byte("a b+c/d?e=f&g"), []byte("100%")} {
+		roundTrip(t, "urlencode", "", original)
+	}
+	// Illegal percent sequences decode to the input unchanged, never error.
+	tb := &TransformBlock{Transforms: []Transform{{Type: "urlencode"}}}
+	out, err := tb.Apply([]byte("%zz%"), false)
+	if err != nil || string(out) != "%zz%" {
+		t.Fatalf("bad-percent decode = %q, %v; want unchanged", out, err)
+	}
+}
+
+func TestTransformURIAppend(t *testing.T) {
+	tb := &TransformBlock{Transforms: []Transform{{Type: "uri_append", Value: ".php"}}}
+	encoded, err := tb.Apply([]byte("/index"), true)
+	if err != nil {
+		t.Fatalf("encode error = %v", err)
+	}
+	if string(encoded) != "/index.php" {
+		t.Fatalf("uri_append encode = %q", encoded)
+	}
+	decoded, err := tb.Apply(encoded, false)
+	if err != nil {
+		t.Fatalf("decode error = %v", err)
+	}
+	if string(decoded) != "/index" {
+		t.Fatalf("uri_append round trip = %q", decoded)
+	}
+	// Missing suffix on decode passes through untouched.
+	out, err := tb.Apply([]byte("/other"), false)
+	if err != nil || string(out) != "/other" {
+		t.Fatalf("suffix-less decode = %q, %v; want unchanged", out, err)
+	}
+}
