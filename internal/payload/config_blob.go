@@ -76,6 +76,7 @@ type agentConfigJSON struct {
 	UserAgents          string `json:"user_agents"`
 	JitterURI           string `json:"jitter_uri"`
 	ParameterNames      string `json:"parameter_names"`
+	RequestHeaderPool   string `json:"request_header_pool"`
 	// Pad is per-build random hex filler so the blob length varies per build
 	// even for identical configs. The agent ignores unknown fields.
 	Pad string `json:"pad,omitempty"`
@@ -259,6 +260,7 @@ func marshalConfigBlobJSON(cfg ImplantConfig, profile MalleableProfile) []byte {
 		UserAgents:              strings.Join(cfg.UserAgents, "\n"),
 		JitterURI:               map[bool]string{true: "true", false: "false"}[cfg.JitterURI],
 		ParameterNames:          strings.Join(cfg.ParameterNames, "\n"),
+		RequestHeaderPool:       strings.Join(cfg.RequestHeaderPool, "\n"),
 	}
 	raw, err := json.Marshal(bc)
 	if err != nil {

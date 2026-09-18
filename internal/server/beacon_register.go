@@ -255,6 +255,12 @@ func (s *Server) buildNetworkConfig(imp db.Implant, regKey []byte) (string, erro
 			nc.BeaconURIs = strings.Join(uris, ",")
 			nc.UserAgents = strings.Join(uas, "\n")
 		}
+		// Parameter-name pool + decoy header pool for per-beacon request
+		// jitter (same dynamic channel as the URI/UA pools).
+		if params, headers := s.profileJitterPools(); len(params) > 0 || len(headers) > 0 {
+			nc.ParameterNames = strings.Join(params, "\n")
+			nc.RequestHeaderPool = strings.Join(headers, "\n")
+		}
 		s.configMu.RLock()
 		nc.RequestPrepend = s.cfg.Malleable.RequestPrepend
 		nc.RequestAppend = s.cfg.Malleable.RequestAppend

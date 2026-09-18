@@ -4,6 +4,37 @@ import (
 	"testing"
 )
 
+// TestRandomPoolHeader proves per-beacon decoy selection: empty pool is a
+// no-op, functional headers never rotate, malformed lines are skipped.
+func TestRandomPoolHeader(t *testing.T) {
+	prev := RequestHeaderPoolStr
+	defer func() { RequestHeaderPoolStr = prev }()
+
+	RequestHeaderPoolStr = ""
+	if _, _, ok := randomPoolHeader(); ok {
+		t.Fatal("empty pool must not yield a header")
+	}
+
+	RequestHeaderPoolStr = "X-Trace: abc\nX-Req: 1\nContent-Type: text/plain\nnogood\n:empty\nHost: evil.example"
+	seen := make(map[string]bool)
+	for i := 0; i < 200; i++ {
+		name, value, ok := randomPoolHeader()
+		if !ok {
+			t.Fatal("valid pool must yield a header")
+		}
+		if name == "Content-Type" || name == "Host" {
+			t.Fatalf("functional header %q must never rotate", name)
+		}
+		seen[name+"="+value] = true
+	}
+	if !seen["X-Trace=abc"] || !seen["X-Req=1"] {
+		t.Fatalf("pool entries never picked: %v", seen)
+	}
+	if len(seen) != 2 {
+		t.Fatalf("unexpected picks: %v", seen)
+	}
+}
+
 // TestBuildPlacementValues verifies cover copies land at the right locations
 // with the chain applied, while the canonical body is untouched by this path.
 func TestBuildPlacementValues(t *testing.T) {

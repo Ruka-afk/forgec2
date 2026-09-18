@@ -138,6 +138,8 @@ type MalleableProfile struct {
 	RequestPrepend string            `json:"request_prepend,omitempty"`
 	RequestAppend  string            `json:"request_append,omitempty"`
 	RequestHeaders map[string]string `json:"request_headers,omitempty"`
+	// RequestHeaderPool rotates one extra decoy header per beacon.
+	RequestHeaderPool []string `json:"request_header_pool,omitempty"`
 	// v2: multi-URI rotation and full transform chains (CS parity).
 	BeaconURIs          []string `json:"beacon_uris,omitempty"`
 	URIs                []string `json:"uris,omitempty"`
@@ -264,6 +266,7 @@ type ImplantConfig struct {
 	MalleableClientMetadata string
 	MalleableClientID       string
 	BeaconURIs              []string
+	RequestHeaderPool       []string
 	Parameter               string
 	// Placements: JSON array of {target, chain} cover copies.
 	Placements string

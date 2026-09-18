@@ -56,6 +56,7 @@ func MigrateProfileJSON(raw []byte, fallbackName string) (*ProfileV2, error) {
 		RequestPrepend      string            `json:"request_prepend"`
 		RequestAppend       string            `json:"request_append"`
 		RequestHeaders      map[string]string `json:"request_headers"`
+		RequestHeaderPool   []string          `json:"request_header_pool"`
 		ServerOutput        string            `json:"server_output"`
 		ClientMetadata      string            `json:"client_metadata"`
 		ContentLengthJitter int               `json:"content_length_jitter"`
@@ -77,7 +78,8 @@ func MigrateProfileJSON(raw []byte, fallbackName string) (*ProfileV2, error) {
 		BeaconURI: v1.BeaconURI, Method: v1.Method, Headers: v1.Headers,
 		Sleep: v1.Sleep, Jitter: v1.Jitter, Prepend: v1.Prepend, Append: v1.Append,
 		RequestPrepend: v1.RequestPrepend, RequestAppend: v1.RequestAppend,
-		RequestHeaders: v1.RequestHeaders, ContentLengthJitter: v1.ContentLengthJitter,
+		RequestHeaders: v1.RequestHeaders, RequestHeaderPool: append([]string{}, v1.RequestHeaderPool...),
+		ContentLengthJitter: v1.ContentLengthJitter,
 	}
 	if v2.Name == "" {
 		v2.Name = fallbackName

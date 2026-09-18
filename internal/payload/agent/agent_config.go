@@ -68,6 +68,7 @@ var (
 	MalleableRequestPrepend string            = ""                            // bytes prepended to the agent's OUTGOING HTTP beacon body (server strips on inbound)
 	MalleableRequestAppend  string            = ""                            // bytes appended to the agent's OUTGOING HTTP beacon body (server strips on inbound)
 	MalleableRequestHeaders map[string]string = nil                           // extra request headers sent on outbound beacons (e.g. Host/Cookie shaping)
+	RequestHeaderPoolStr    string            = ""                            // v2 decoy header pool ("Name: value" lines, one random entry per beacon)
 	MalleableClientID       string            = ""                            // v2 client id chain (wire form, audit/preview)
 	MalleableClientMeta     string            = ""                            // v2 client metadata chain (wire form)
 	BeaconURIsStr           string            = ""                            // v2 comma-joined rotation list (primary is BeaconURI)
@@ -281,6 +282,7 @@ type agentConfigBlob struct {
 	MalleableRequestHeaders map[string]string `json:"malleable_request_headers"`
 	MalleableClientID       string            `json:"malleable_client_id"`
 	MalleableClientMeta     string            `json:"malleable_client_meta"`
+	RequestHeaderPool       string            `json:"request_header_pool"`
 	BeaconURIs              string            `json:"beacon_uris"`
 	Parameter               string            `json:"parameter"`
 	MalleablePlacement      string            `json:"malleable_placement"`
@@ -409,6 +411,12 @@ func applyServerNetworkConfig(b64 string) {
 	}
 	if nc.RequestHeaders != nil {
 		b.MalleableRequestHeaders = nc.RequestHeaders
+	}
+	if nc.RequestHeaderPool != "" {
+		b.RequestHeaderPool = nc.RequestHeaderPool
+	}
+	if nc.ParameterNames != "" {
+		b.ParameterNames = nc.ParameterNames
 	}
 	if nc.MalleablePlacement != "" {
 		b.MalleablePlacement = nc.MalleablePlacement
@@ -595,6 +603,9 @@ func (b *agentConfigBlob) apply() {
 	}
 	if b.MalleableRequestHeaders != nil {
 		MalleableRequestHeaders = b.MalleableRequestHeaders
+	}
+	if b.RequestHeaderPool != "" {
+		RequestHeaderPoolStr = b.RequestHeaderPool
 	}
 	if b.MalleableClientID != "" {
 		MalleableClientID = b.MalleableClientID

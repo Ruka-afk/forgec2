@@ -161,6 +161,83 @@ func (s *Server) profileBeaconPools() (uris []string, userAgents []string) {
 	return uris, userAgents
 }
 
+// profileJitterPools returns the per-beacon jitter pools from the active
+// profile: junk-query parameter names and decoy "Name: value" headers.
+// Sources: preset JitterCfg.ParameterNames, v2 parameter_names /
+// request_header_pool. Empty pools disable that axis.
+func (s *Server) profileJitterPools() (params []string, headers []string) {
+	s.configMu.RLock()
+	profileName := s.cfg.Malleable.ProfileName
+	s.configMu.RUnlock()
+	if profileName == "" {
+		return nil, nil
+	}
+	seenParam := make(map[string]bool)
+	addParam := func(p string) {
+		p = strings.TrimSpace(p)
+		if p == "" || strings.ContainsAny(p, " \t\r\n=&;") {
+			return
+		}
+		if !seenParam[p] {
+			seenParam[p] = true
+			params = append(params, p)
+		}
+	}
+	seenHeader := make(map[string]bool)
+	addHeader := func(line string) {
+		name, value, ok := splitPoolHeader(line)
+		if !ok || !fieldSafePoolValue(value) {
+			return
+		}
+		// Functional headers never rotate (framing/auth/routing); the agent
+		// enforces the same skip list, this keeps the delivered pool clean.
+		switch strings.ToLower(name) {
+		case "content-type", "content-length", "host", "cookie", "user-agent",
+			"authorization", "proxy-authorization":
+			return
+		}
+		if !seenHeader[line] {
+			seenHeader[line] = true
+			headers = append(headers, name+": "+value)
+		}
+	}
+	if profile, ok := malleable.PredefinedProfiles()[profileName]; ok {
+		for _, p := range profile.Jitter.ParameterNames {
+			addParam(p)
+		}
+		return params, headers
+	}
+	if v2 := s.loadV2Profile(profileName); v2 != nil {
+		for _, p := range v2.ParameterNames {
+			addParam(p)
+		}
+		for _, h := range v2.RequestHeaderPool {
+			addHeader(h)
+		}
+	}
+	return params, headers
+}
+
+// splitPoolHeader splits a "Name: value" pool line. Shared with the agent
+// parser convention (same wire, newline-joined).
+func splitPoolHeader(line string) (name, value string, ok bool) {
+	i := strings.Index(line, ":")
+	if i < 0 {
+		return "", "", false
+	}
+	name, value = strings.TrimSpace(line[:i]), strings.TrimSpace(line[i+1:])
+	if name == "" || value == "" {
+		return "", "", false
+	}
+	return name, value, true
+}
+
+// fieldSafePoolValue mirrors the agent-safe value check: no CTLs that could
+// split headers on the wire (validation already rejects these at load).
+func fieldSafePoolValue(v string) bool {
+	return !strings.ContainsAny(v, "\r\n")
+}
+
 // sanitizeProfileName strips a profile name to filesystem-safe characters
 // (shared by every data/profiles/<name>.json lookup).
 func sanitizeProfileName(name string) string {

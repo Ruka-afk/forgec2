@@ -29,6 +29,11 @@ type ProfileV2 struct {
 	RequestPrepend string            `json:"request_prepend,omitempty"`
 	RequestAppend  string            `json:"request_append,omitempty"`
 	RequestHeaders map[string]string `json:"request_headers,omitempty"`
+	// RequestHeaderPool rotates one extra decoy header per beacon ("Name:
+	// value" lines). Always-sent headers stay in RequestHeaders; only pool
+	// entries rotate. Functional headers (see agent poolSkipHeaders) never
+	// take effect even if listed.
+	RequestHeaderPool []string `json:"request_header_pool,omitempty"`
 	// Full transform chains (CS parity). Wire format is the same
 	// "name" or "name:value" ';'-joined string the agent already parses,
 	// but stored structured so the UI can edit step-by-step.
@@ -194,7 +199,30 @@ func ValidateProfileV2(p *ProfileV2) error {
 			return fmt.Errorf("request header %q contains unsafe characters", k)
 		}
 	}
+	for _, line := range p.RequestHeaderPool {
+		name, value, ok := splitPoolHeader(line)
+		if !ok {
+			return fmt.Errorf("request_header_pool entry %q must be 'Name: value'", line)
+		}
+		if !fieldSafeV2(name) || !fieldSafeV2(value) {
+			return fmt.Errorf("request_header_pool entry %q contains unsafe characters", line)
+		}
+	}
 	return nil
+}
+
+// splitPoolHeader splits a "Name: value" pool line. ok=false covers missing
+// colons, empty names, and empty values.
+func splitPoolHeader(line string) (name, value string, ok bool) {
+	i := strings.Index(line, ":")
+	if i < 0 {
+		return "", "", false
+	}
+	name, value = strings.TrimSpace(line[:i]), strings.TrimSpace(line[i+1:])
+	if name == "" || value == "" {
+		return "", "", false
+	}
+	return name, value, true
 }
 
 func fieldSafeV2(s string) bool {

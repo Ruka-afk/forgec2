@@ -210,6 +210,71 @@ func TestProfileBeaconPoolsEmpty(t *testing.T) {
 	}
 }
 
+// TestProfileJitterPoolsPreset proves preset parameter pools flow through.
+func TestProfileJitterPoolsPreset(t *testing.T) {
+	s := coverTestServer(t, "")
+	s.cfg.Malleable.ProfileName = "microsoft"
+
+	params, headers := s.profileJitterPools()
+	if len(params) == 0 {
+		t.Fatal("microsoft preset should contribute parameter names")
+	}
+	for _, p := range params {
+		if strings.ContainsAny(p, " \t\r\n=&;") {
+			t.Fatalf("param %q not wire-safe", p)
+		}
+	}
+	if len(headers) != 0 {
+		t.Fatalf("presets define no header pool, got %v", headers)
+	}
+}
+
+// TestProfileJitterPoolsV2File proves v2 parameter_names + request_header_pool
+// land in the pools (entry-level hostile filtering is unit-tested on
+// splitPoolHeader; file validation rejects bad files wholesale first).
+func TestProfileJitterPoolsV2File(t *testing.T) {
+	s := coverTestServer(t, `{"name":"t","parameter_names":["id","op id",""],"request_header_pool":["X-Trace: abc"]}`)
+	s.cfg.Malleable.ProfileName = "t"
+
+	params, headers := s.profileJitterPools()
+	if len(params) != 1 || params[0] != "id" {
+		t.Fatalf("params = %v, want [id]", params)
+	}
+	if len(headers) != 1 || headers[0] != "X-Trace: abc" {
+		t.Fatalf("headers = %v, want [X-Trace: abc]", headers)
+	}
+}
+
+// TestSplitPoolHeader pins the pool line grammar shared with the agent
+// parser (same wire, newline-joined).
+func TestSplitPoolHeader(t *testing.T) {
+	name, value, ok := splitPoolHeader("X-Trace: abc")
+	if !ok || name != "X-Trace" || value != "abc" {
+		t.Fatalf("got %q,%q,%v", name, value, ok)
+	}
+	if _, _, ok := splitPoolHeader("X-Trace: a:b:c"); !ok {
+		t.Fatal("values may contain colons")
+	} else {
+		name, value, _ := splitPoolHeader("X-Trace: a:b:c")
+		if name != "X-Trace" || value != "a:b:c" {
+			t.Fatalf("got %q,%q", name, value)
+		}
+	}
+	for _, bad := range []string{"", "nocolon", ":noval", "noname:", "   "} {
+		if _, _, ok := splitPoolHeader(bad); ok {
+			t.Fatalf("splitPoolHeader(%q) ok, want reject", bad)
+		}
+	}
+}
+
+// TestProfileJitterPoolsEmpty proves no profile means no jitter axes.
+func TestProfileJitterPoolsEmpty(t *testing.T) {
+	s := coverTestServer(t, "")
+	if params, headers := s.profileJitterPools(); len(params) != 0 || len(headers) != 0 {
+		t.Fatalf("empty profile pools = (%v,%v), want empty", params, headers)
+	}
+}
+
 // TestNoteMalleableEventCounts proves every failure is counted (logs are
 // throttled, metrics are not).
 func TestNoteMalleableEventCounts(t *testing.T) {

@@ -11,6 +11,20 @@ import (
 	"github.com/forgec2/forgec2/internal/malleable"
 )
 
+// splitPoolHeaderLine splits a "Name: value" pool line. Shared with the
+// agent-side parser (same wire convention, newline-joined in the blob).
+func splitPoolHeaderLine(line string) (name, value string, ok bool) {
+	i := strings.Index(line, ":")
+	if i < 0 {
+		return "", "", false
+	}
+	name, value = strings.TrimSpace(line[:i]), strings.TrimSpace(line[i+1:])
+	if name == "" || value == "" {
+		return "", "", false
+	}
+	return name, value, true
+}
+
 func defaultMalleableProfile() MalleableProfile {
 	return MalleableProfile{
 		Name:      "default",
@@ -129,6 +143,9 @@ func NormalizeImplantConfig(cfg *ImplantConfig, dataDir string) MalleableProfile
 	if cfg.MalleableRequestHeaders == nil {
 		cfg.MalleableRequestHeaders = profile.RequestHeaders
 	}
+	if len(cfg.RequestHeaderPool) == 0 {
+		cfg.RequestHeaderPool = append([]string{}, profile.RequestHeaderPool...)
+	}
 	// v2 chains: explicit per-build wins, else profile file.
 	// NOTE: ServerOutput is intentionally NOT auto-activated from the profile
 	// file: the agent would decode every response while the server only
@@ -153,6 +170,9 @@ func NormalizeImplantConfig(cfg *ImplantConfig, dataDir string) MalleableProfile
 	}
 	if len(cfg.ParameterNames) == 0 {
 		cfg.ParameterNames = append([]string{}, profile.ParameterNames...)
+	}
+	if len(cfg.RequestHeaderPool) == 0 {
+		cfg.RequestHeaderPool = append([]string{}, profile.RequestHeaderPool...)
 	}
 	// Working-hours window: explicit per-build form > profile > server
 	// default (implant.default_working_*).
@@ -399,6 +419,12 @@ func validateMalleableProfile(p MalleableProfile) error {
 			return fmt.Errorf("request header %q contains invalid characters", k)
 		}
 	}
+	for _, line := range p.RequestHeaderPool {
+		name, value, ok := splitPoolHeaderLine(line)
+		if !ok || !profileFieldSafe(name) || !profileFieldSafe(value) {
+			return fmt.Errorf("request_header_pool entry %q must be 'Name: value' with safe characters", line)
+		}
+	}
 	if p.Sleep < 0 || p.Sleep > 86400 {
 		return fmt.Errorf("sleep must be 0..86400")
 	}
@@ -490,7 +516,8 @@ func saveMalleableV2(dataDir string, v2 *malleable.ProfileV2) (MalleableProfile,
 		BeaconURI: v2.PrimaryURI(), Method: v2.PrimaryMethod(), Headers: v2.Headers,
 		Sleep: v2.Sleep, Jitter: v2.Jitter, Prepend: v2.Prepend, Append: v2.Append,
 		RequestPrepend: v2.RequestPrepend, RequestAppend: v2.RequestAppend,
-		RequestHeaders: v2.RequestHeaders, BeaconURIs: v2.BeaconURIs, URIs: v2.URIs,
+		RequestHeaders: v2.RequestHeaders, RequestHeaderPool: v2.RequestHeaderPool,
+		BeaconURIs: v2.BeaconURIs, URIs: v2.URIs,
 		ClientMetadata:      malleable.StepsToWire(v2.ClientMetadata),
 		ClientID:            malleable.StepsToWire(v2.ClientID),
 		ServerOutput:        malleable.StepsToWire(v2.ServerOutput),
