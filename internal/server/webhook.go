@@ -15,14 +15,28 @@ import (
 const webhookMaxRetries = 3
 
 func (s *Server) triggerWebhooks(evt Event) {
-	var webhooks []db.WebhookConfig
-	if err := s.db.Where("event_type = ? AND enabled = ?", string(evt.Type), true).Limit(200).Find(&webhooks).Error; err != nil {
-		slog.Error("Failed to query webhooks", "err", err)
-	}
-
-	for _, wh := range webhooks {
+	for _, wh := range s.webhooksForEvent(evt) {
 		go s.fireWebhook(wh, evt)
 	}
+}
+
+// webhooksForEvent loads enabled webhooks for the event type, contained to
+// the event's tenant: a webhook must never receive another tenant's event
+// data (payloads carry hostnames, IPs and finding details). Legacy
+// agent-less events (tenant 0) fire only legacy webhooks. Split out for
+// testability (fireWebhook itself does network I/O).
+func (s *Server) webhooksForEvent(evt Event) []db.WebhookConfig {
+	var webhooks []db.WebhookConfig
+	q := s.db.Where("event_type = ? AND enabled = ?", string(evt.Type), true)
+	if evt.TenantID != 0 {
+		q = q.Where("tenant_id = ?", evt.TenantID)
+	} else {
+		q = q.Where("tenant_id = ?", 0)
+	}
+	if err := q.Limit(200).Find(&webhooks).Error; err != nil {
+		slog.Error("Failed to query webhooks", "err", err)
+	}
+	return webhooks
 }
 
 func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) error {

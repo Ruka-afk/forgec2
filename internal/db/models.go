@@ -539,6 +539,23 @@ func (c *CredentialEntry) AfterFind(tx *gorm.DB) error {
 	return decryptField(&c.Hash)
 }
 
+// Webhook headers routinely carry Authorization bearer tokens: encrypt at
+// rest like credential secrets. Empty stays empty; legacy plaintext rows
+// pass through decryptField untouched, so no backfill migration is needed.
+func (w *WebhookConfig) BeforeCreate(tx *gorm.DB) error {
+	return encryptField(&w.Headers)
+}
+
+// BeforeUpdate encrypts webhook headers before updating the database.
+func (w *WebhookConfig) BeforeUpdate(tx *gorm.DB) error {
+	return encryptField(&w.Headers)
+}
+
+// AfterFind decrypts webhook headers after loading from the database.
+func (w *WebhookConfig) AfterFind(tx *gorm.DB) error {
+	return decryptField(&w.Headers)
+}
+
 // BeforeUpdate encrypts sensitive fields before updating the database.
 func (c *CredentialEntry) BeforeUpdate(tx *gorm.DB) error {
 	if err := encryptField(&c.Password); err != nil {
@@ -894,6 +911,9 @@ type WebhookConfig struct {
 	Method    string `gorm:"size:16;default:'POST'" json:"method"`
 	Headers   string `gorm:"type:text" json:"headers"`
 	Enabled   bool   `gorm:"default:true" json:"enabled"`
+	// TenantID contains webhook delivery: a webhook must never receive
+	// another tenant's event data (payloads carry hostnames and findings).
+	TenantID uint `gorm:"index" json:"tenant_id"`
 	// EventCount/LastTrigger track real deliveries (incremented only after a
 	// webhook push returns 2xx). Formerly fabricated as constant 0/"".
 	EventCount  int64      `gorm:"default:0" json:"event_count"`

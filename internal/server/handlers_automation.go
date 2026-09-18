@@ -265,7 +265,7 @@ func (s *Server) handleToggleAutomationRule(c *gin.Context) {
 
 func (s *Server) handleListWebhooks(c *gin.Context) {
 	var webhooks []db.WebhookConfig
-	if err := s.db.Limit(500).Find(&webhooks).Error; err != nil {
+	if err := s.tenantScope(s.db, c).Limit(500).Find(&webhooks).Error; err != nil {
 		slog.Error("Failed to list webhooks", "err", err)
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": webhooks})
@@ -281,6 +281,8 @@ func (s *Server) handleCreateWebhook(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, sanitizeError(err, "Webhook operation"))
 		return
 	}
+	// New webhooks belong to the operator's tenant; the body must not set it.
+	wh.TenantID = s.currentTenantID(c)
 	if err := s.db.Create(&wh).Error; err != nil {
 		slog.Error("Failed to create webhook", "err", err)
 		respondError(c, http.StatusInternalServerError, "failed to create webhook")
@@ -291,7 +293,12 @@ func (s *Server) handleCreateWebhook(c *gin.Context) {
 
 func (s *Server) handleDeleteWebhook(c *gin.Context) {
 	id := c.Param("id")
-	res := s.db.Delete(&db.WebhookConfig{}, id)
+	var existing db.WebhookConfig
+	if err := s.tenantScope(s.db, c).First(&existing, "id = ?", id).Error; err != nil {
+		respondError(c, http.StatusNotFound, "webhook not found")
+		return
+	}
+	res := s.tenantScope(s.db, c).Delete(&db.WebhookConfig{}, id)
 	if res.Error != nil {
 		slog.Error("Failed to delete webhook", "id", id, "err", res.Error)
 		respondError(c, http.StatusInternalServerError, "failed to delete webhook")
