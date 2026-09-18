@@ -1,31 +1,33 @@
 # ⚒️ ForgeC2
 
-> Command and control, forged for the modern red team.
+> 为现代红队铸造的命令与控制平台。
 
 [![CI](https://github.com/Ruka-afk/forgec2/actions/workflows/ci.yml/badge.svg)](https://github.com/Ruka-afk/forgec2/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Ruka-afk/forgec2)](https://github.com/Ruka-afk/forgec2/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**English** · [中文](README.zh.md)
+**中文** · [English](README.en.md)
 
-ForgeC2 is a self-hosted, single-binary C2 platform written in pure Go. One executable ships a hardened implant build pipeline with custom icons & JPG disguise, multi-protocol beaconing, an AI-assisted operations console with budget-aware context, and a full Vite + React web UI — no frontend server, no database engine, no dependencies to babysit.
+ForgeC2 是一个自托管的单二进制 C2 平台，纯 Go 编写。一个可执行文件里装下加固的植入体构建管线、多协议信标、预算可控的 AI 作战台和完整的 Vite + React Web 控制台——没有前端服务要守，没有数据库引擎要哄，没有依赖要哄着跑。
+
+> ⚠️ **仅限授权安全测试**：必须持有目标所有者的明确书面授权。详见文末[法律声明](#法律声明)。
 
 ---
 
-## What you get
+## 开箱即得
 
 | | |
 |---|---|
-| 🚀 **One binary, everything inside** | React console, REST API, beacon endpoints and SQLite — all served from a single port. Deploy with one file. |
-| 🧬 **On-demand payload factory** | EXE / DLL / PowerShell / ELF / macOS implants, XOR stagers, shellcode, Donut, and one-liners — generated in-browser, cross-compiled server-side. |
-| 📡 **Ten transports** | HTTP(S), WSS, gRPC, mTLS, H2C, TCP, DNS, ICMP, SSH — plus SMB/TCP P2P chaining and Discord/Slack external C2. |
-| 🤖 **AI copilot built in** | DeepSeek, OpenAI, Claude, or any OpenAI-compatible model — drive your engagement from chat with tool calling. |
-| 🛡️ **OPSEC as a feature** | Pre-flight rule engine, malleable C2 profiles, AMSI/ETW evasion, sleep masks, and a payload pipeline hardened against sloppy defaults. |
-| 🧩 **Extensible by design** | 40+ drop-in plugins, a JavaScript scripting engine, workflow automation, and a full OpenAPI surface. |
+| 🚀 **单文件即全部** | React 控制台、REST API、信标端点、SQLite——全部只占一个端口，一个文件即部署。 |
+| 🧬 **按需载荷工厂** | EXE / DLL / PowerShell / ELF / macOS 植入体、XOR stager、shellcode、Donut、一句话——浏览器里点，服务端交叉编译。 |
+| 📡 **九传输＋P2P/外部 C2** | HTTP(S)、WSS、gRPC、mTLS、H2C、TCP、DNS、ICMP、SSH，外加 SMB/TCP P2P 级联与 Discord/Slack 外部 C2。 |
+| 🤖 **内置 AI 副驾** | DeepSeek、OpenAI、Claude 或任何 OpenAI 兼容模型——在聊天里直接指挥整场行动，工具调用、预算可控。 |
+| 🛡️ **OPSEC 是功能** | 行动前规则引擎、可塑流量画像（malleable）、AMSI/ETW 对抗、睡眠掩码，以及处处防呆的载荷管线。 |
+| 🧩 **为扩展而生** | 40+ 即插插件、JavaScript 脚本引擎、工作流自动化、完整 OpenAPI 面。 |
 
 ---
 
-## Quick start
+## 快速开始
 
 **Linux**
 
@@ -40,71 +42,71 @@ chmod +x forgec2-server-linux-amd64
 .\forgec2-server.exe -config config.yaml
 ```
 
-Open `http://localhost:8000` — the server prints a freshly generated admin password to the console on first run.
+打开 `http://localhost:8000`——首次启动时服务端会在控制台打印新生成的管理员密码。
 
-### Build it yourself
+### 自己构建
 
 ```bash
 git clone https://github.com/Ruka-afk/forgec2.git && cd forgec2
 
-# requires Go 1.25+ and Node.js 20+
-powershell -File scripts/build-embedded.ps1   # frontend → embedded → binary
+# 需要 Go 1.25+ 和 Node.js 20+
+powershell -File scripts/build-embedded.ps1   # 前端 → 内嵌 → 二进制
 
-# one-line comprehensive verify + build + deploy (auto-fix, skip heavy)
+# 一行全验证 + 构建 + 部署（自动修、跳重型）
 powershell -File scripts/verify-all.ps1       # tsc + lint + vet + test + build + health
 
-# ...or containerized
+# ……或容器化
 docker compose up -d
 ```
 
 ---
 
-## The payload generator
+## 载荷工厂
 
-The centerpiece of ForgeC2 is a workspace-style generator that treats payload creation like a proper build pipeline:
+ForgeC2 的核心是一个工作台式的生成器，把载荷制作当正规构建管线对待：
 
-- **Sticky connection panel** — listener, C2 URLs, transport, malleable profile, beacon timing, and keys stay in view while you build
-- **Build status** — every artifact reports Ready / Compiling / Done / Failed with inline results
-- **Artifact families** — agent binaries (EXE, DLL, PS1, ELF, macOS), stagers, shellcode/Donut, one-liners, and one-click quick presets
-- **Custom icon & JPG disguise** — upload `.ico/.png` (≤256KB) or pick presets, `photo.jpg.exe` double-extension and `winres`-based `RT_ICON`/`VersionInfo` injection via `rsrc.syso`
-- **Transport-aware fields** — picking WSS, gRPC, SSH, DNS, ICMP, mTLS, or H2C reveals only the fields that transport actually needs
-- **Everything is i18n'd** — English and Chinese, with key coverage enforced in CI
+- **粘性连接面板**——监听器、C2 地址、传输、流量画像、信标节拍、密钥，构建时永远在视线内
+- **构建状态机**——每个产物报告 Ready / Compiling / Done / Failed，内联结果
+- **产物家族**——植入体（EXE、DLL、PS1、ELF、macOS）、stager、shellcode/Donut、一句话、一键快捷预设
+- **自定义图标与 JPG 伪装**——上传 `.ico/.png`（≤256KB）或选预设，`photo.jpg.exe` 双扩展名，`rsrc.syso` 注入 `RT_ICON`/`VersionInfo`
+- **传输感知表单**——选 WSS、gRPC、SSH、DNS、ICMP、mTLS、H2C 只露出该传输真正需要的字段
+- **全部双语**——中英 i18n，CI 强制键覆盖
 
-## Implant capabilities
+## 植入体能力
 
-50+ task types across the standard ops playbook:
+50+ 任务类型，覆盖标准作战手册：
 
-**Access** — shell, PowerShell, execute-assembly, BOF, PowerPick, PE/CLR loading, token steal/make/revert, credentials, mimikatz, kerberoast, DCSync
-**Lateral** — WMI, WinRM, PsExec, Pass-the-Hash, Pass-the-Ticket, SMB/TCP relay, SOCKS5, port forward, NTLM relay
-**Persistence** — registry, scheduled tasks, startup, WMI, services, COM hijack, IFEO
-**Evasion** — AMSI/ETW bypass, VEH unhook, hardware breakpoints, sleep masks, sandbox detection
-**Surveillance** — screenshot, live screen, window-titled keylogging, recording, clipboard, remote input
-**Recon** — cookie export, VPN/WiFi credentials, portscan, process tree, OS/domain discovery
+**立足**——shell、PowerShell、execute-assembly、BOF、PowerPick、PE/CLR 加载、令牌窃取/伪造/还原、凭据、mimikatz、kerberoast、DCSync
+**横向**——WMI、WinRM、PsExec、PTH、PTT、SMB/TCP 中继、SOCKS5、端口转发、NTLM relay
+**持久化**——注册表、计划任务、启动项、WMI、服务、COM 劫持、IFEO
+**对抗**——AMSI/ETW 绕过、VEH 脱钩、硬件断点、睡眠掩码、沙箱检测
+**监视**——截图、实时屏幕、窗口标题键盘记录、录制、剪贴板、远程输入
+**侦察**——cookie 导出、VPN/WiFi 凭据、端口扫描、进程树、OS/域发现
 
-Full per-task, per-OS capability matrix: [docs/CAPABILITY_MATRIX.md](docs/CAPABILITY_MATRIX.md)
-
----
-
-## Operations console
-
-- **60+ pages** — dashboard with live charts (heatmaps, OS distribution, task Gantt, geo, attack paths), agent fleet management, file browser, terminal, token lab, traffic profiles
-- **Agent detail** — one-click diagnose (`hostinfo/ps/netstat/users/av`), running AV chips (auto-collected), kill-date countdown, P2P chain, quick sleep, lazy-loaded screenshots
-- **Screen & AI** — Blob URL streaming (60% memory saving), WS-main + hash-skip for screen (80% bandwidth saving on static desktops), AI context budget bar + tool batch (expand/collapse/copy all) + pinned-first sessions
-- **Multi-operator** — RBAC roles, agent locking, task claiming, audit trail, tenant-isolated queries
-- **Automation** — workflow engine, task scheduler, auto-tagging, PDF report generation
-- **Teammate tools** — campaigns, phishing (SMTP + tracking), BloodHound ingestion, domain fronting, infrastructure redirectors
-- **Resilience** — circuit breaker for listener health, AES-GCM encrypted DB backups, graceful failover, corporate+EDR no longer blocks `screen_stream_start`
-
-## Security posture
-
-- Auto-generated admin password, JWT secret, and TLS material on first boot — no default credentials anywhere
-- JWT + bcrypt sessions, TOTP 2FA, CSRF double-submit, SameSite cookies, strict security headers
-- Rate limiting and IP lockout on auth, body-size caps, path-traversal guards, audit logging
-- Payload pipeline: crypto/rand entropy, randomized PE section names, in-place benign import injection, AMSI-aware macro generation
+完整分任务、分系统能力矩阵（含 C 植入体差异）：[docs/CAPABILITY_MATRIX.md](docs/CAPABILITY_MATRIX.md)
 
 ---
 
-## Architecture at a glance
+## 作战控制台
+
+- **60+ 页面**——实时图表仪表盘（热力图、OS 分布、任务甘特、地理、攻击路径）、舰队管理、文件浏览器、终端、令牌实验室、流量画像
+- **主机详情**——一键侦察（`hostinfo/ps/netstat/users/av`）、运行中 AV 芯片（自动采集）、kill-date 倒计时、P2P 链、快捷睡眠、懒加载截图
+- **屏幕与 AI**——Blob URL 流（省 60% 内存）、WS 主通道 + 哈希跳帧（静态桌面省 80% 带宽）、AI 上下文预算条＋工具批处理（展开/折叠/全复制）+ 置顶会话
+- **多人协同**——RBAC 角色、主机锁定、任务认领、审计链、租户隔离查询
+- **自动化**——工作流引擎、任务调度、自动打标、PDF 报告生成
+- **队友工具**——战役、钓鱼（SMTP + 追踪）、BloodHound 摄入、域名前置、基础设施重定向
+- **韧性**——监听器健康熔断、AES-GCM 加密数据库备份、优雅故障转移
+
+## 安全姿态
+
+- 首次启动自生成管理员密码、JWT 密钥、TLS 证书——全链路无默认口令
+- JWT + bcrypt 会话、TOTP 双因素、CSRF 双提交、SameSite Cookie、严格安全头
+- 登录限流与 IP 锁定、包体上限、路径穿越守卫、全量审计日志
+- 载荷管线：crypto/rand 熵、随机 PE 节名、原地良性导入注入、AMSI 感知的宏生成
+
+---
+
+## 架构一览
 
 ```
                     ┌────────────────────────────────────────────┐
@@ -123,48 +125,48 @@ Full per-task, per-OS capability matrix: [docs/CAPABILITY_MATRIX.md](docs/CAPABI
                     └────────────────────────────────────────────┘
 ```
 
-Deep dive: [ARCHITECTURE.md](ARCHITECTURE.md)
+深挖：[ARCHITECTURE.md](ARCHITECTURE.md)
 
 ---
 
-## Configuration
+## 配置
 
-Everything lives in one YAML file ([config.example.yaml](config.example.yaml) is the reference). Highlights:
+全部收敛在一个 YAML（[config.example.yaml](config.example.yaml) 为准）：
 
-| Key | Purpose |
+| 键 | 用途 |
 |---|---|
-| `server.port` / `server.tls_enabled` | Listen address and TLS termination |
-| `server.allowed_origins` / `cookie_domain` | Cross-domain deployment |
-| `implant.default_interval` / `default_jitter` | Beacon cadence defaults |
-| `ai.provider` / `api_key` / `model` | AI assistant backend |
-| `rate_limit.login.*` | Auth brute-force protection |
+| `server.port` / `server.tls_enabled` | 监听地址与 TLS 终结 |
+| `server.allowed_origins` / `cookie_domain` | 跨域部署 |
+| `implant.default_interval` / `default_jitter` | 信标节拍默认值 |
+| `ai.provider` / `api_key` / `model` | AI 助手后端 |
+| `rate_limit.login.*` | 登录爆破防护 |
 
-## Development
+## 开发
 
 ```bash
-go build ./cmd/server     # backend (avoid ./... hits data/e2e dual main)
-go test ./internal/...    # tests (run with -count=1)
-cd frontend && npm run dev  # UI hot-reload on :3000
+go build ./cmd/server     # 后端（别用 ./...，会撞上 data/e2e 双 main）
+go test ./internal/...    # 测试（带 -count=1 跑）
+cd frontend && npm run dev  # UI 热重载 :3000
 
-# comprehensive one-liner (see scripts/verify-all.ps1)
+# 全量一行流（见 scripts/verify-all.ps1）
 powershell -File scripts/verify-all.ps1  # vet + tsc + lint + test + build + webdist + health
 ```
 
-Repository hygiene is enforced by checks: `go vet` (payload/agent filtered), `gofmt -w` (changed files), OpenAPI validation, and frontend CSS/i18n/path/bundle gates (`npm run check` now parallel via `concurrently`).
+仓库卫生由检查门禁：`go vet`（过滤 payload/agent）、 changed 文件 `gofmt -w`、OpenAPI 校验、前端 CSS/i18n/路径/包体积门（`npm run check` 已并发化）。
 
-## Docs & versioning
+## 文档与版本
 
-- [CHANGELOG.md](CHANGELOG.md) — full release history (currently **v2.5.0**)
-- [docs/](docs/) — transport E2E labs, capability matrix, design docs
-- [CONTRIBUTING.md](CONTRIBUTING.md) — how to build, test, and ship code
-- [SECURITY.md](SECURITY.md) — vulnerability disclosure
-
----
-
-## Legal
-
-ForgeC2 is for **authorized security testing only**. You must have explicit written permission from the owner before using it against any system. See [LICENSE](LICENSE).
+- [CHANGELOG.md](CHANGELOG.md)——完整发布历史（当前 **v2.6.1**）
+- [docs/](docs/)——传输 E2E  lab、能力矩阵、设计文档
+- [CONTRIBUTING.md](CONTRIBUTING.md)——构建、测试、发版规范
+- [SECURITY.md](SECURITY.md)——漏洞披露
 
 ---
 
-*Forge your access. Control your narrative.*
+## 法律声明
+
+ForgeC2 仅用于**授权安全测试**。对任何系统使用前必须持有所有者的明确书面许可。见 [LICENSE](LICENSE)。
+
+---
+
+*Forge your access. Control your narrative.（铸访问，控叙事。）*

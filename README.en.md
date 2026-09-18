@@ -1,0 +1,172 @@
+# ⚒️ ForgeC2
+
+> Command and control, forged for the modern red team.
+
+[![CI](https://github.com/Ruka-afk/forgec2/actions/workflows/ci.yml/badge.svg)](https://github.com/Ruka-afk/forgec2/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Ruka-afk/forgec2)](https://github.com/Ruka-afk/forgec2/releases)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+[中文](README.md) · **English**
+
+ForgeC2 is a self-hosted, single-binary C2 platform written in pure Go. One executable ships a hardened implant build pipeline with custom icons & JPG disguise, multi-protocol beaconing, an AI-assisted operations console with budget-aware context, and a full Vite + React web UI — no frontend server, no database engine, no dependencies to babysit.
+
+> ⚠️ **Authorized security testing only.** You must hold explicit written permission from the system owner before using it against anything. See [Legal](#legal).
+
+---
+
+## What you get
+
+| | |
+|---|---|
+| 🚀 **One binary, everything inside** | React console, REST API, beacon endpoints and SQLite — all served from a single port. Deploy with one file. |
+| 🧬 **On-demand payload factory** | EXE / DLL / PowerShell / ELF / macOS implants, XOR stagers, shellcode, Donut, and one-liners — clicked together in-browser, cross-compiled server-side. |
+| 📡 **Nine transports + P2P / external C2** | HTTP(S), WSS, gRPC, mTLS, H2C, TCP, DNS, ICMP, SSH — plus SMB/TCP P2P chaining and Discord/Slack external C2. |
+| 🤖 **AI copilot built in** | DeepSeek, OpenAI, Claude, or any OpenAI-compatible model — run the whole engagement from chat, with tool calling and budget-aware context. |
+| 🛡️ **OPSEC as a feature** | Pre-flight rule engine, malleable C2 profiles, AMSI/ETW evasion, sleep masks, and a payload pipeline hardened against sloppy defaults. |
+| 🧩 **Extensible by design** | 40+ drop-in plugins, a JavaScript scripting engine, workflow automation, and a full OpenAPI surface. |
+
+---
+
+## Quick start
+
+**Linux**
+
+```bash
+chmod +x forgec2-server-linux-amd64
+./forgec2-server-linux-amd64 -config config.yaml
+```
+
+**Windows**
+
+```powershell
+.\forgec2-server.exe -config config.yaml
+```
+
+Open `http://localhost:8000` — on first boot the server prints a freshly generated admin password to the console.
+
+### Build it yourself
+
+```bash
+git clone https://github.com/Ruka-afk/forgec2.git && cd forgec2
+
+# requires Go 1.25+ and Node.js 20+
+powershell -File scripts/build-embedded.ps1   # frontend → embedded → binary
+
+# one-line comprehensive verify + build + deploy (auto-fix, skip heavy)
+powershell -File scripts/verify-all.ps1       # tsc + lint + vet + test + build + health
+
+# ...or containerized
+docker compose up -d
+```
+
+---
+
+## The payload generator
+
+The centerpiece of ForgeC2 is a workspace-style generator that treats payload creation like a proper build pipeline:
+
+- **Sticky connection panel** — listener, C2 URLs, transport, malleable profile, beacon timing, and keys stay in view while you build
+- **Build status** — every artifact reports Ready / Compiling / Done / Failed with inline results
+- **Artifact families** — agent binaries (EXE, DLL, PS1, ELF, macOS), stagers, shellcode/Donut, one-liners, and one-click quick presets
+- **Custom icon & JPG disguise** — upload `.ico/.png` (≤256KB) or pick presets, `photo.jpg.exe` double-extension and `winres`-based `RT_ICON`/`VersionInfo` injection via `rsrc.syso`
+- **Transport-aware fields** — picking WSS, gRPC, SSH, DNS, ICMP, mTLS, or H2C reveals only the fields that transport actually needs
+- **Everything is i18n'd** — English and Chinese, with key coverage enforced in CI
+
+## Implant capabilities
+
+50+ task types across the standard ops playbook:
+
+**Access** — shell, PowerShell, execute-assembly, BOF, PowerPick, PE/CLR loading, token steal/make/revert, credentials, mimikatz, kerberoast, DCSync
+**Lateral** — WMI, WinRM, PsExec, Pass-the-Hash, Pass-the-Ticket, SMB/TCP relay, SOCKS5, port forward, NTLM relay
+**Persistence** — registry, scheduled tasks, startup, WMI, services, COM hijack, IFEO
+**Evasion** — AMSI/ETW bypass, VEH unhook, hardware breakpoints, sleep masks, sandbox detection
+**Surveillance** — screenshot, live screen, window-titled keylogging, recording, clipboard, remote input
+**Recon** — cookie export, VPN/WiFi credentials, portscan, process tree, OS/domain discovery
+
+Full per-task, per-OS capability matrix (including C-implant deltas): [docs/CAPABILITY_MATRIX.md](docs/CAPABILITY_MATRIX.md)
+
+---
+
+## Operations console
+
+- **60+ pages** — dashboard with live charts (heatmaps, OS distribution, task Gantt, geo, attack paths), agent fleet management, file browser, terminal, token lab, traffic profiles
+- **Agent detail** — one-click diagnose (`hostinfo/ps/netstat/users/av`), running AV chips (auto-collected), kill-date countdown, P2P chain, quick sleep, lazy-loaded screenshots
+- **Screen & AI** — Blob URL streaming (60% memory saving), WS-main + hash-skip for screen (80% bandwidth saving on static desktops), AI context budget bar + tool batch (expand/collapse/copy all) + pinned-first sessions
+- **Multi-operator** — RBAC roles, agent locking, task claiming, audit trail, tenant-isolated queries
+- **Automation** — workflow engine, task scheduler, auto-tagging, PDF report generation
+- **Teammate tools** — campaigns, phishing (SMTP + tracking), BloodHound ingestion, domain fronting, infrastructure redirectors
+- **Resilience** — circuit breaker for listener health, AES-GCM encrypted DB backups, graceful failover
+
+## Security posture
+
+- Auto-generated admin password, JWT secret, and TLS material on first boot — no default credentials anywhere
+- JWT + bcrypt sessions, TOTP 2FA, CSRF double-submit, SameSite cookies, strict security headers
+- Rate limiting and IP lockout on auth, body-size caps, path-traversal guards, audit logging
+- Payload pipeline: crypto/rand entropy, randomized PE section names, in-place benign import injection, AMSI-aware macro generation
+
+---
+
+## Architecture at a glance
+
+```
+                    ┌────────────────────────────────────────────┐
+   Operators ─────▶ │  ForgeC2 (single binary, :8000)            │
+                    │  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
+                     │  │  Web UI  │  │   API    │  │  Beacon  │  │
+                     │  │React+Vite│  │ Gin REST │  │ endpoints│  │
+                     │  │ (embedded)│ │ + WS + AI│  │          │  │
+                    │  └──────────┘  └──────────┘  └──────────┘  │
+                    │  SQLite · Plugins · Scripting · OPSEC      │
+                    │  Build queue → cross-compiled implants     │
+                    └───────────┬────────────────────────────────┘
+                                │ HTTP(S)/WSS/gRPC/mTLS/H2C/TCP/DNS/ICMP/SSH
+                    ┌───────────▼────────────────────────────────┐
+                    │  Windows / Linux / macOS implants (P2P)     │
+                    └────────────────────────────────────────────┘
+```
+
+Deep dive: [ARCHITECTURE.md](ARCHITECTURE.md)
+
+---
+
+## Configuration
+
+Everything lives in one YAML file ([config.example.yaml](config.example.yaml) is the reference). Highlights:
+
+| Key | Purpose |
+|---|---|
+| `server.port` / `server.tls_enabled` | Listen address and TLS termination |
+| `server.allowed_origins` / `cookie_domain` | Cross-domain deployment |
+| `implant.default_interval` / `default_jitter` | Beacon cadence defaults |
+| `ai.provider` / `api_key` / `model` | AI assistant backend |
+| `rate_limit.login.*` | Auth brute-force protection |
+
+## Development
+
+```bash
+go build ./cmd/server     # backend (avoid ./... hits data/e2e dual main)
+go test ./internal/...    # tests (run with -count=1)
+cd frontend && npm run dev  # UI hot-reload on :3000
+
+# comprehensive one-liner (see scripts/verify-all.ps1)
+powershell -File scripts/verify-all.ps1  # vet + tsc + lint + test + build + webdist + health
+```
+
+Repository hygiene is enforced by checks: `go vet` (payload/agent filtered), `gofmt -w` (changed files), OpenAPI validation, and frontend CSS/i18n/path/bundle gates (`npm run check` now parallel via `concurrently`).
+
+## Docs & versioning
+
+- [CHANGELOG.md](CHANGELOG.md) — full release history (currently **v2.6.1**)
+- [docs/](docs/) — transport E2E labs, capability matrix, design docs
+- [CONTRIBUTING.md](CONTRIBUTING.md) — how to build, test, and ship code
+- [SECURITY.md](SECURITY.md) — vulnerability disclosure
+
+---
+
+## Legal
+
+ForgeC2 is for **authorized security testing only**. You must have explicit written permission from the owner before using it against any system. See [LICENSE](LICENSE).
+
+---
+
+*Forge your access. Control your narrative.*
