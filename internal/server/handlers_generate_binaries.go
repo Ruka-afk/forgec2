@@ -251,16 +251,14 @@ func (s *Server) buildImplantConfig(form *binaryGenForm) (payload.ImplantConfig,
 		beaconKey = s.serverBeaconKey()
 	}
 
-	// Malleable response wrapping: pull the server-wide profile prepend/append
-	// so generated agents embed the matching strip tokens. Explicit per-build
-	// profile values (if the form ever exposes them) would win via
+	// Malleable response wrapping: pull the agent-symmetric cover pair so
+	// generated agents embed matching strip tokens (see effectiveCoverTokens:
+	// raw v2/preset bytes would brick parsing). Explicit per-build profile
+	// values (if the form ever exposes them) would win via
 	// NormalizeImplantConfig.
 	prepend, appendBytes := "", ""
 	if s != nil {
-		s.configMu.RLock()
-		prepend = s.cfg.Malleable.Prepend
-		appendBytes = s.cfg.Malleable.Append
-		s.configMu.RUnlock()
+		prepend, appendBytes = s.effectiveCoverTokens()
 	}
 
 	// v3: per-implant registration secret. When no explicit per-build beacon

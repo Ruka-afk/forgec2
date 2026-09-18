@@ -31,6 +31,7 @@ type MetricsCollector struct {
 	FileChainEventsTotal *prometheus.CounterVec
 	AgentResultGapsTotal prometheus.Counter
 	DbBusyRetriesTotal *prometheus.CounterVec
+	MalleableEventsTotal *prometheus.CounterVec
 }
 
 func NewMetricsCollector(s *Server) *MetricsCollector {
@@ -120,6 +121,10 @@ func NewMetricsCollector(s *Server) *MetricsCollector {
 			Name: "forgec2_db_busy_retries_total",
 			Help: "SQLite lock-contention retries on the beacon hot path, by operation.",
 		}, []string{"op"}),
+		MalleableEventsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "forgec2_malleable_events_total",
+			Help: "Malleable profile failures (encode_fail, profile_load_fail) that leave traffic uncovered, by outcome and profile.",
+		}, []string{"outcome", "profile"}),
 	}
 }
 
@@ -145,6 +150,7 @@ func (mc *MetricsCollector) Register(reg prometheus.Registerer) {
 		mc.FileChainEventsTotal,
 		mc.AgentResultGapsTotal,
 		mc.DbBusyRetriesTotal,
+		mc.MalleableEventsTotal,
 	}
 	for _, c := range collectors {
 		err := reg.Register(c)

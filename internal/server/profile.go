@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/forgec2/forgec2/internal/malleable"
 	"github.com/gin-gonic/gin"
@@ -47,12 +50,15 @@ func (s *Server) applyMalleableProfile(c *gin.Context, body []byte) {
 		statusCode = http.StatusOK
 	}
 
+	// Agent-symmetric cover pair (never v2/preset bytes directly: the agent
+	// strips exactly the pair it learned, anything else bricks parsing).
 	wrapped := string(body)
-	if mp.Prepend != "" {
-		wrapped = mp.Prepend + wrapped
+	prepend, appendStr := s.effectiveCoverTokens()
+	if prepend != "" {
+		wrapped = prepend + wrapped
 	}
-	if mp.Append != "" {
-		wrapped = wrapped + mp.Append
+	if appendStr != "" {
+		wrapped = wrapped + appendStr
 	}
 
 	for k, v := range mp.Headers {
@@ -67,6 +73,92 @@ func (s *Server) applyMalleableProfile(c *gin.Context, body []byte) {
 
 	c.Status(statusCode)
 	c.Writer.WriteString(wrapped)
+}
+
+// sanitizeProfileName strips a profile name to filesystem-safe characters
+// (shared by every data/profiles/<name>.json lookup).
+func sanitizeProfileName(name string) string {
+	return strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
+			return r
+		}
+		return '_'
+	}, strings.TrimSpace(name))
+}
+
+// loadV2Profile reads and migrates a v2/v1 profile file by name. Nil on any
+// failure (missing file, bad JSON, bad chain) — callers treat nil as
+// "no file profile" and fall back to presets or bare config.
+func (s *Server) loadV2Profile(name string) *malleable.ProfileV2 {
+	sanitized := sanitizeProfileName(name)
+	if sanitized == "" {
+		return nil
+	}
+	raw, err := os.ReadFile(filepath.Join(s.profileDataDir(), "profiles", sanitized+".json"))
+	if err != nil {
+		// Missing file is the normal case for preset names: silent.
+		return nil
+	}
+	v2, err := malleable.MigrateProfileJSON(raw, sanitized)
+	if err != nil || v2 == nil {
+		// Present-but-broken file: every beacon would hit this, so count
+		// every failure but warn throttled — otherwise a bad deploy either
+		// floods the log or fails silently fleet-wide.
+		s.noteMalleableEvent("profile_load_fail", sanitized)
+		return nil
+	}
+	return v2
+}
+
+// malleableWarnThrottle bounds failure warnings: a broken profile fails on
+// every beacon, so unthrottled warns would flood the log.
+var (
+	malleableWarnMu sync.Mutex
+	malleableWarnAt = map[string]time.Time{}
+)
+
+// noteMalleableEvent counts a malleable failure for observability and warns
+// throttled (5 min per outcome+profile) so broken profiles are visible
+// without log-flooding the beacon hot path.
+func (s *Server) noteMalleableEvent(outcome, profile string) {
+	if s.metrics != nil && s.metrics.MalleableEventsTotal != nil {
+		s.metrics.MalleableEventsTotal.WithLabelValues(outcome, profile).Inc()
+	}
+	key := outcome + "\x00" + profile
+	now := time.Now()
+	malleableWarnMu.Lock()
+	last, ok := malleableWarnAt[key]
+	if !ok || now.Sub(last) >= 5*time.Minute {
+		malleableWarnAt[key] = now
+		ok = false
+	}
+	malleableWarnMu.Unlock()
+	if !ok {
+		slog.Warn("Malleable profile failure", "outcome", outcome, "profile", profile)
+	}
+}
+
+// effectiveCoverTokens returns the prepend/append pair the server wraps
+// around beacon bodies AND the agent strips on read. Single source for all
+// four sites (HTTP wrap, raw wrap, registration push, build bake): the pair
+// is atomic because the agent strips exactly one pair — mixing mp.Prepend
+// with a v2 file's Append (or vice versa) bricks live agents.
+//
+// Precedence: explicit mp.Prepend/mp.Append win as a pair whenever either is
+// set; otherwise the active v2 file's pair; named presets define no raw
+// bytes (cover via transform chains the agent decodes on HTTP) so they
+// resolve empty — raw transports under a preset stay bare by construction.
+func (s *Server) effectiveCoverTokens() (prepend, appendStr string) {
+	s.configMu.RLock()
+	mpPre, mpApp, profileName := s.cfg.Malleable.Prepend, s.cfg.Malleable.Append, s.cfg.Malleable.ProfileName
+	s.configMu.RUnlock()
+	if mpPre != "" || mpApp != "" {
+		return mpPre, mpApp
+	}
+	if v2 := s.loadV2Profile(profileName); v2 != nil {
+		return v2.Prepend, v2.Append
+	}
+	return "", ""
 }
 
 // profileDataDir resolves the profiles directory without panicking on a
@@ -245,17 +337,20 @@ func (s *Server) stripBodyPadding(raw []byte) []byte {
 // framing for links that do not use a profile.
 func (s *Server) applyMalleableWrapping(body []byte) []byte {
 	s.configMu.RLock()
-	mp := s.cfg.Malleable
+	enabled := s.cfg.Malleable.Enabled
 	s.configMu.RUnlock()
-	if !mp.Enabled {
+	if !enabled {
 		return body
 	}
+	// Agent-symmetric pair: raw agents strip exactly these bytes. Never v2 or
+	// preset bytes directly — the agent never learns those strip tokens.
+	prepend, appendStr := s.effectiveCoverTokens()
 	wrapped := string(body)
-	if mp.Prepend != "" {
-		wrapped = mp.Prepend + wrapped
+	if prepend != "" {
+		wrapped = prepend + wrapped
 	}
-	if mp.Append != "" {
-		wrapped = wrapped + mp.Append
+	if appendStr != "" {
+		wrapped = wrapped + appendStr
 	}
 	return []byte(wrapped)
 }
@@ -263,22 +358,8 @@ func (s *Server) applyMalleableWrapping(body []byte) []byte {
 // applyV2FileProfile loads a v2/v1 profile file by name and applies its
 // ServerOutput chain. Returns (body, contentType, headers, ok).
 func (s *Server) applyV2FileProfile(name string, body []byte) ([]byte, string, map[string]string, bool) {
-	dir := s.profileDataDir()
-	sanitized := strings.Map(func(r rune) rune {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
-			return r
-		}
-		return '_'
-	}, strings.TrimSpace(name))
-	if sanitized == "" || sanitized == "default" {
-		return nil, "", nil, false
-	}
-	raw, err := os.ReadFile(filepath.Join(dir, "profiles", sanitized+".json"))
-	if err != nil {
-		return nil, "", nil, false
-	}
-	v2, err := malleable.MigrateProfileJSON(raw, sanitized)
-	if err != nil || v2 == nil {
+	v2 := s.loadV2Profile(name)
+	if v2 == nil || sanitizeProfileName(name) == "default" {
 		return nil, "", nil, false
 	}
 	out := body
@@ -289,13 +370,29 @@ func (s *Server) applyV2FileProfile(name string, body []byte) ([]byte, string, m
 		}
 		if enc, err := tb.Apply(body, true); err == nil {
 			out = enc
+		} else {
+			// The agent cannot decode what was never encoded: count it and
+			// fall back to the symmetric cover pair instead of a raw body.
+			s.noteMalleableEvent("encode_fail", sanitizeProfileName(name))
+			prepend, appendStr := s.effectiveCoverTokens()
+			if prepend != "" {
+				out = append([]byte(prepend), out...)
+			}
+			if appendStr != "" {
+				out = append(out, []byte(appendStr)...)
+			}
 		}
 	} else {
-		if v2.Prepend != "" {
-			out = append([]byte(v2.Prepend), out...)
+		// Agent-symmetric pair, never v2.Prepend/Append raw: the agent strips
+		// exactly effectiveCoverTokens (see its doc). A v2 file whose own
+		// pair differs only takes effect when mp.* are both empty — then the
+		// helper returns the v2 pair and everything stays symmetric.
+		prepend, appendStr := s.effectiveCoverTokens()
+		if prepend != "" {
+			out = append([]byte(prepend), out...)
 		}
-		if v2.Append != "" {
-			out = append(out, []byte(v2.Append)...)
+		if appendStr != "" {
+			out = append(out, []byte(appendStr)...)
 		}
 	}
 	headers := map[string]string{}
@@ -311,22 +408,8 @@ func (s *Server) applyV2FileProfile(name string, body []byte) ([]byte, string, m
 
 // v2RespDecodeWire returns the agent wire form of a file profile's ServerOutput.
 func (s *Server) v2RespDecodeWire(name string) string {
-	dir := s.profileDataDir()
-	sanitized := strings.Map(func(r rune) rune {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
-			return r
-		}
-		return '_'
-	}, strings.TrimSpace(name))
-	if sanitized == "" {
-		return ""
-	}
-	raw, err := os.ReadFile(filepath.Join(dir, "profiles", sanitized+".json"))
-	if err != nil {
-		return ""
-	}
-	v2, err := malleable.MigrateProfileJSON(raw, sanitized)
-	if err != nil || v2 == nil {
+	v2 := s.loadV2Profile(name)
+	if v2 == nil {
 		return ""
 	}
 	return malleable.StepsToWire(v2.ServerOutput)
@@ -338,6 +421,15 @@ func (s *Server) applyProfilePreset(c *gin.Context, body []byte, profile *mallea
 		transformed, err := profile.HttpPost.Output.Apply(body, true)
 		if err == nil {
 			body = transformed
+		} else {
+			s.noteMalleableEvent("encode_fail", profile.Name)
+			prepend, appendStr := s.effectiveCoverTokens()
+			if prepend != "" {
+				body = append([]byte(prepend), body...)
+			}
+			if appendStr != "" {
+				body = append(body, []byte(appendStr)...)
+			}
 		}
 	}
 

@@ -245,28 +245,32 @@ func (s *Server) buildNetworkConfig(imp db.Implant, regKey []byte) (string, erro
 		}
 	}
 	if s != nil {
+		// Agent-symmetric cover pair (never raw v2/preset bytes: the live
+		// agent strips exactly effectiveCoverTokens — see its doc). Computed
+		// outside the config lock below: the helper takes RLock itself.
+		nc.MalleablePrepend, nc.MalleableAppend = s.effectiveCoverTokens()
 		s.configMu.RLock()
-		nc.MalleablePrepend = s.cfg.Malleable.Prepend
-		nc.MalleableAppend = s.cfg.Malleable.Append
 		nc.RequestPrepend = s.cfg.Malleable.RequestPrepend
 		nc.RequestAppend = s.cfg.Malleable.RequestAppend
 		nc.RequestHeaders = s.cfg.Malleable.RequestHeaders
 		nc.MalleablePlacement = s.cfg.Malleable.Placements
+		profileName := s.cfg.Malleable.ProfileName
+		s.configMu.RUnlock()
 		// Deliver the active profile's output transforms so the live agent can
 		// decode the transformed beacon response (otherwise the preset C2
-		// pipeline is dead for the live agent).
-		if s.cfg.Malleable.ProfileName != "" {
-			if profile, ok := malleable.PredefinedProfiles()[s.cfg.Malleable.ProfileName]; ok {
+		// pipeline is dead for the live agent). Probed outside the lock:
+		// applyV2FileProfile does file IO and nested config reads.
+		if profileName != "" {
+			if profile, ok := malleable.PredefinedProfiles()[profileName]; ok {
 				nc.MalleableRespDecode = profile.HttpPostOutputString()
-			} else if out, _, _, ok := s.applyV2FileProfile(s.cfg.Malleable.ProfileName, []byte{}); ok {
+			} else if out, _, _, ok := s.applyV2FileProfile(profileName, []byte{}); ok {
 				_ = out
 				// Reload the v2 chain as wire form for the agent.
-				if wire := s.v2RespDecodeWire(s.cfg.Malleable.ProfileName); wire != "" {
+				if wire := s.v2RespDecodeWire(profileName); wire != "" {
 					nc.MalleableRespDecode = wire
 				}
 			}
 		}
-		s.configMu.RUnlock()
 	}
 	// Only override sleep values when the server holds authoritative ones
 	// (otherwise leave 0 so the agent keeps its compile-time interval/jitter).
