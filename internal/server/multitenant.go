@@ -122,6 +122,30 @@ func (s *Server) ruleMayFireOn(ruleTenantID uint, agentID string) bool {
 	return ruleTenantID == agentTenant
 }
 
+// automationTarget resolves the final target agent for an automation action
+// and enforces tenant containment: the target must belong to the event's
+// tenant. Returns "" when the action must be skipped (no target, missing
+// agent, or cross-tenant reference). Legacy events (tenant 0) stay unscoped.
+func (s *Server) automationTarget(evt Event, paramAgentID string) string {
+	target := evt.AgentID
+	if paramAgentID != "" {
+		target = paramAgentID
+	}
+	if target == "" {
+		return ""
+	}
+	if evt.TenantID != 0 {
+		tid, ok := s.agentTenantOf(target)
+		if !ok || tid != evt.TenantID {
+			slog.Warn("Automation: cross-tenant target blocked", "agent", target, "tenant", evt.TenantID)
+			s.LogAuditRecord(nil, "automation_blocked_cross_tenant", "agent", target,
+				"action referenced foreign-tenant agent", true, nil)
+			return ""
+		}
+	}
+	return target
+}
+
 // tenantIDForUser resolves a username to its tenant ID outside a gin
 // context (WebSocket registration). Missing rows and lookup errors both
 // yield legacy 0 — the socket layer cannot fail closed here without

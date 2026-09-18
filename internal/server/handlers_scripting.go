@@ -189,6 +189,7 @@ func (s *Server) handleAPIExecuteScript(c *gin.Context) {
 	caller := scripting.Caller{
 		Username: c.GetString("username"),
 		Role:     c.GetString("user_role"),
+		TenantID: s.currentTenantID(c),
 	}
 
 	if req.ScriptID != "" {

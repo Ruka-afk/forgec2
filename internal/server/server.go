@@ -655,6 +655,21 @@ func (s *Server) dispatchEvent(evt Event, includeAlert bool) {
 		s.TriggerAlertForEvent(evt)
 	}
 	rules := s.loadAutomationRules()
+	// Attribute the event once, only when a rule could fire: the tenant
+	// rides the event into ruleMayFireOn, executeAction targeting, and
+	// the scripting bridge caller.
+	needTenant := false
+	for _, rule := range rules {
+		if rule.Enabled && rule.EventType == string(evt.Type) {
+			needTenant = true
+			break
+		}
+	}
+	if needTenant && evt.AgentID != "" {
+		if tid, ok := s.agentTenantOf(evt.AgentID); ok {
+			evt.TenantID = tid
+		}
+	}
 	for _, rule := range rules {
 		if rule.Enabled && rule.EventType == string(evt.Type) && s.ruleMayFireOn(rule.TenantID, evt.AgentID) {
 			s.evaluateRule(evt, rule)

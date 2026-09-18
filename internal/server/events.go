@@ -26,6 +26,9 @@ type Event struct {
 	AgentHost string
 	AgentIP   string
 	AgentOS   string
+	// TenantID attributes the event to a tenant for automation containment
+	// (rule firing + action targeting + script reach). 0 is legacy global.
+	TenantID  uint
 	TaskID    uint
 	User      string
 	Timestamp time.Time

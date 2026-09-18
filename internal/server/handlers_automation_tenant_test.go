@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/internal/scripting"
 	"github.com/gin-gonic/gin"
 )
 
@@ -36,6 +37,155 @@ func taskCountFor(t *testing.T, s *Server, agentID string) int64 {
 		t.Fatalf("count tasks: %v", err)
 	}
 	return n
+}
+
+// TestAutomationTargetCrossTenantBlocked (P0-2) proves an action's
+// params.agent_id override cannot redirect a task into another tenant:
+// the fire gate (ruleMayFireOn) only validated the EVENT's agent.
+func TestAutomationTargetCrossTenantBlocked(t *testing.T) {
+	s := mustTenantServer(t)
+	seedTenantAgent(t, s, "hp-own", 1)
+	seedTenantAgent(t, s, "hp-foreign", 2)
+	rule := db.AutomationRule{
+		ID: "hp-xredir-rule", Name: "xredir", Enabled: true,
+		EventType: string(EventImplantCheckin),
+		Actions:   `[{"type":"command","params":{"command":"whoami","agent_id":"hp-foreign"}}]`,
+		TenantID:  1,
+	}
+	if err := s.db.Create(&rule).Error; err != nil {
+		t.Fatalf("seed rule: %v", err)
+	}
+	s.invalidateAutomationCache()
+
+	s.dispatchEvent(Event{Type: EventImplantCheckin, AgentID: "hp-own"}, false)
+
+	if n := taskCountFor(t, s, "hp-foreign"); n != 0 {
+		t.Fatalf("cross-tenant redirect fired: %d tasks on foreign agent, want 0", n)
+	}
+	var blocked int64
+	s.db.Model(&db.AuditLog{}).Where("action = ?", "automation_blocked_cross_tenant").Count(&blocked)
+	if blocked == 0 {
+		t.Fatalf("no automation_blocked_cross_tenant audit row")
+	}
+}
+
+// TestAutomationTargetSameTenantOK guards the gate: an explicit same-tenant
+// params.agent_id still delivers.
+func TestAutomationTargetSameTenantOK(t *testing.T) {
+	s := mustTenantServer(t)
+	seedTenantAgent(t, s, "hp-evt", 1)
+	seedTenantAgent(t, s, "hp-target", 1)
+	rule := db.AutomationRule{
+		ID: "hp-ownredir-rule", Name: "ownredir", Enabled: true,
+		EventType: string(EventImplantCheckin),
+		Actions:   `[{"type":"command","params":{"command":"whoami","agent_id":"hp-target"}}]`,
+		TenantID:  1,
+	}
+	if err := s.db.Create(&rule).Error; err != nil {
+		t.Fatalf("seed rule: %v", err)
+	}
+	s.invalidateAutomationCache()
+
+	s.dispatchEvent(Event{Type: EventImplantCheckin, AgentID: "hp-evt"}, false)
+
+	if n := taskCountFor(t, s, "hp-target"); n != 1 {
+		t.Fatalf("same-tenant redirect did not fire: %d tasks, want 1", n)
+	}
+}
+
+// TestAutomationRunMacroCrossTenantBlocked proves a rule cannot execute
+// another tenant's macro playbook by ID.
+func TestAutomationRunMacroCrossTenantBlocked(t *testing.T) {
+	s := mustTenantServer(t)
+	seedTenantAgent(t, s, "hm-agent", 1)
+	foreign := db.CommandMacro{Name: "hm-foreign-macro", Steps: `[{"command":"whoami"}]`, TenantID: 2}
+	if err := s.db.Create(&foreign).Error; err != nil {
+		t.Fatalf("seed macro: %v", err)
+	}
+	rule := db.AutomationRule{
+		ID: "hm-macro-rule", Name: "macrorule", Enabled: true,
+		EventType: string(EventImplantCheckin),
+		Actions:   `[{"type":"run_macro","params":{"macro_id":` + uitoa(foreign.ID) + `}}]`,
+		TenantID:  1,
+	}
+	if err := s.db.Create(&rule).Error; err != nil {
+		t.Fatalf("seed rule: %v", err)
+	}
+	s.invalidateAutomationCache()
+
+	s.dispatchEvent(Event{Type: EventImplantCheckin, AgentID: "hm-agent"}, false)
+
+	var runs int64
+	s.db.Model(&db.MacroRun{}).Where("macro_id = ?", foreign.ID).Count(&runs)
+	if runs != 0 {
+		t.Fatalf("foreign macro executed: %d runs, want 0", runs)
+	}
+}
+
+// TestAutomationRunMacroSameTenantOK guards the gate: an own-tenant macro
+// still runs on the triggering agent.
+func TestAutomationRunMacroSameTenantOK(t *testing.T) {
+	s := mustTenantServer(t)
+	seedTenantAgent(t, s, "hm-agent-ok", 1)
+	own := db.CommandMacro{Name: "hm-own-macro", Steps: `[{"command":"whoami"}]`, TenantID: 1}
+	if err := s.db.Create(&own).Error; err != nil {
+		t.Fatalf("seed macro: %v", err)
+	}
+	rule := db.AutomationRule{
+		ID: "hm-macro-rule-ok", Name: "macroruleok", Enabled: true,
+		EventType: string(EventImplantCheckin),
+		Actions:   `[{"type":"run_macro","params":{"macro_id":` + uitoa(own.ID) + `}}]`,
+		TenantID:  1,
+	}
+	if err := s.db.Create(&rule).Error; err != nil {
+		t.Fatalf("seed rule: %v", err)
+	}
+	s.invalidateAutomationCache()
+
+	s.dispatchEvent(Event{Type: EventImplantCheckin, AgentID: "hm-agent-ok"}, false)
+
+	var runs int64
+	s.db.Model(&db.MacroRun{}).Where("macro_id = ?", own.ID).Count(&runs)
+	if runs != 1 {
+		t.Fatalf("own macro did not run: %d runs, want 1", runs)
+	}
+}
+
+// TestScriptBridgeTenantScope (P0-1) proves the goja bridge honors the
+// caller tenant on every data path automation scripts can reach.
+func TestScriptBridgeTenantScope(t *testing.T) {
+	s := mustTenantServer(t)
+	seedTenantAgent(t, s, "hs-own", 1)
+	seedTenantAgent(t, s, "hs-foreign", 2)
+	br := &scriptingBridge{s: s}
+	// Admin role isolates the tenant logic from role-permission seeding.
+	scoped := scripting.Caller{Username: "t", Role: db.RoleAdmin, TenantID: 1}
+
+	agents, err := br.Query(scoped, "agents", map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("query agents: %v", err)
+	}
+	if rows, ok := agents.([]map[string]interface{}); !ok || len(rows) != 1 || rows[0]["id"] != "hs-own" {
+		t.Fatalf("query agents leaked: %+v", agents)
+	}
+	if n, err := br.Query(scoped, "count_agents", map[string]interface{}{}); err != nil || n != int64(1) {
+		t.Fatalf("count_agents=%v err=%v, want 1", n, err)
+	}
+	if _, err := br.GetAgent(scoped, "hs-foreign"); err == nil {
+		t.Fatalf("GetAgent returned foreign agent")
+	}
+	if _, err := br.SendTask(scoped, "hs-foreign", "shell", "whoami"); err == nil {
+		t.Fatalf("SendTask dispatched to foreign agent")
+	}
+	listed, err := br.ListAgents(scoped)
+	if err != nil || len(listed) != 1 || listed[0]["id"] != "hs-own" {
+		t.Fatalf("ListAgents leaked: %+v err=%v", listed, err)
+	}
+	// Legacy callers (tenant 0) keep the global view.
+	legacy := scripting.Caller{Username: "t", Role: db.RoleAdmin}
+	if n, err := br.Query(legacy, "count_agents", map[string]interface{}{}); err != nil || n != int64(2) {
+		t.Fatalf("legacy count_agents=%v err=%v, want 2", n, err)
+	}
 }
 
 // TestAutomationTriggerCrossTenantBlocked proves a tenant-2 rule never fires

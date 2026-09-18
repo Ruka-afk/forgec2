@@ -20,6 +20,9 @@ import (
 type Caller struct {
 	Username string
 	Role     string
+	// TenantID scopes data access: 0 is the legacy global view, non-zero
+	// restricts bridge reads/writes to that tenant's rows.
+	TenantID uint
 }
 
 // Bridge is the server-side capability layer scripts call through. Every
@@ -75,7 +78,9 @@ func NewScriptEngine() *ScriptEngine {
 		vm:     vm,
 		events: make(map[string][]*eventCallback),
 	}
-	e.registerAPI(vm, Caller{Role: "admin"})
+	// Dormant template VM (no e.vm call sites): keep its captured caller at
+	// the lowest privilege so a future wiring cannot inherit admin reach.
+	e.registerAPI(vm, Caller{Username: "system", Role: "user"})
 	return e
 }
 

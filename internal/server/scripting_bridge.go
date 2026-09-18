@@ -13,6 +13,7 @@ import (
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/scripting"
+	"gorm.io/gorm"
 )
 
 const (
@@ -42,6 +43,23 @@ func (b *scriptingBridge) hasPerm(caller scripting.Caller, perm string) bool {
 	return db.RoleHasPermissionDB(b.s.db, caller.Role, perm)
 }
 
+// scopeImplants restricts an implant query to the caller's tenant. Legacy
+// callers (TenantID 0 — pre-tenant rules, system paths) stay unscoped;
+// scoped callers see only their own tenant's rows (directly invisible,
+// never an error, matching the HTTP tenantScope contract).
+func (b *scriptingBridge) scopeImplants(q *gorm.DB, caller scripting.Caller) *gorm.DB {
+	if caller.TenantID != 0 {
+		return q.Where("tenant_id = ?", caller.TenantID)
+	}
+	return q
+}
+
+// tenantAgentIDs returns a sub-query of the caller's visible agent IDs for
+// scoping task/credential reads that join through agent_id.
+func (b *scriptingBridge) tenantAgentIDs(caller scripting.Caller) *gorm.DB {
+	return b.scopeImplants(b.s.db.Model(&db.Implant{}).Select("id"), caller)
+}
+
 func (b *scriptingBridge) SendTask(caller scripting.Caller, agentID, taskType, params string) (uint64, error) {
 	if !b.hasPerm(caller, db.PermAgentsWrite) {
 		return 0, errors.New("permission denied: agents.write required")
@@ -50,7 +68,7 @@ func (b *scriptingBridge) SendTask(caller scripting.Caller, agentID, taskType, p
 		return 0, errors.New("agent_id is required")
 	}
 	var agent db.Implant
-	if err := b.s.db.First(&agent, "id = ?", agentID).Error; err != nil {
+	if err := b.scopeImplants(b.s.db, caller).First(&agent, "id = ?", agentID).Error; err != nil {
 		return 0, errors.New("agent not found")
 	}
 	task, err := b.s.createTask(agentID, taskType, params, "", "", "", 0, 0)
@@ -76,7 +94,7 @@ func (b *scriptingBridge) GetAgent(caller scripting.Caller, agentID string) (map
 		return nil, errors.New("permission denied: agents.read required")
 	}
 	var agent db.Implant
-	if err := b.s.db.First(&agent, "id = ?", agentID).Error; err != nil {
+	if err := b.scopeImplants(b.s.db, caller).First(&agent, "id = ?", agentID).Error; err != nil {
 		return nil, errors.New("agent not found")
 	}
 	return implantSummary(&agent), nil
@@ -87,7 +105,7 @@ func (b *scriptingBridge) ListAgents(caller scripting.Caller) ([]map[string]inte
 		return nil, errors.New("permission denied: agents.read required")
 	}
 	var agents []db.Implant
-	if err := b.s.db.Order("last_seen desc").Limit(scriptQueryLimit).Find(&agents).Error; err != nil {
+	if err := b.scopeImplants(b.s.db.Order("last_seen desc"), caller).Limit(scriptQueryLimit).Find(&agents).Error; err != nil {
 		return nil, err
 	}
 	out := make([]map[string]interface{}, 0, len(agents))
@@ -182,7 +200,7 @@ func (b *scriptingBridge) Query(caller scripting.Caller, kind string, args map[s
 		if !b.hasPerm(caller, db.PermAgentsRead) {
 			return nil, errors.New("permission denied: agents.read required")
 		}
-		q := b.s.db.Order("last_seen desc")
+		q := b.scopeImplants(b.s.db.Order("last_seen desc"), caller)
 		if status := argString(args, "status"); status != "" {
 			q = q.Where("status = ?", status)
 		}
@@ -202,6 +220,9 @@ func (b *scriptingBridge) Query(caller scripting.Caller, kind string, args map[s
 			return nil, errors.New("permission denied: agents.read required")
 		}
 		q := b.s.db.Order("created_at desc").Limit(queryLimit(args))
+		if caller.TenantID != 0 {
+			q = q.Where("agent_id IN (?)", b.tenantAgentIDs(caller))
+		}
 		if agentID := argString(args, "agent_id"); agentID != "" {
 			q = q.Where("agent_id = ?", agentID)
 		}
@@ -216,6 +237,9 @@ func (b *scriptingBridge) Query(caller scripting.Caller, kind string, args map[s
 			return nil, errors.New("permission denied: credentials.read required")
 		}
 		q := b.s.db.Order("created_at desc").Limit(queryLimit(args))
+		if caller.TenantID != 0 {
+			q = q.Where("agent_id IN (?)", b.tenantAgentIDs(caller))
+		}
 		if agentID := argString(args, "agent_id"); agentID != "" {
 			q = q.Where("agent_id = ?", agentID)
 		}
@@ -230,7 +254,7 @@ func (b *scriptingBridge) Query(caller scripting.Caller, kind string, args map[s
 			return nil, errors.New("permission denied: agents.read required")
 		}
 		var count int64
-		q := b.s.db.Model(&db.Implant{})
+		q := b.scopeImplants(b.s.db.Model(&db.Implant{}), caller)
 		if status := argString(args, "status"); status != "" {
 			q = q.Where("status = ?", status)
 		}

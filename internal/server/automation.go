@@ -123,10 +123,7 @@ func (s *Server) executeAction(action RuleAction, evt Event) {
 			return
 		}
 		if params.Command != "" {
-			targetAgent := evt.AgentID
-			if params.AgentID != "" {
-				targetAgent = params.AgentID
-			}
+			targetAgent := s.automationTarget(evt, params.AgentID)
 			if targetAgent != "" {
 				expanded := s.expandTemplate(params.Command, evt)
 				if _, err := s.createSystemTask(targetAgent, "automation", expanded, "", "pending", "automation"); err != nil {
@@ -186,7 +183,9 @@ func (s *Server) executeAction(action RuleAction, evt Event) {
 			// permissions: they can read agents/credentials and queue tasks
 			// (the same powers rule authors already have via other actions),
 			// but cannot reach the network (httpRequest stays admin-only).
-			caller := scripting.Caller{Username: "automation", Role: db.RoleUser}
+			// Tenant flows through the event (P0-2 fills evt.TenantID at
+			// fire time): scripts inherit exactly the firing tenant's reach.
+			caller := scripting.Caller{Username: "automation", Role: db.RoleUser, TenantID: evt.TenantID}
 			if params.ScriptID != "" {
 				engine.Execute(params.ScriptID, context, caller)
 			} else if params.Code != "" {
@@ -200,10 +199,7 @@ func (s *Server) executeAction(action RuleAction, evt Event) {
 			Command string `json:"command"`
 		}
 		if err := json.Unmarshal(action.Params, &params); err == nil {
-			targetAgent := evt.AgentID
-			if params.AgentID != "" {
-				targetAgent = params.AgentID
-			}
+			targetAgent := s.automationTarget(evt, params.AgentID)
 			if targetAgent != "" && params.Type != "" {
 				expanded := s.expandTemplate(params.Command, evt)
 				task, err := s.createTask(targetAgent, params.Type, expanded, "", "", "", 0, 0)
@@ -221,10 +217,7 @@ func (s *Server) executeAction(action RuleAction, evt Event) {
 			Jitter   int    `json:"jitter"`
 		}
 		if err := json.Unmarshal(action.Params, &params); err == nil {
-			targetAgent := evt.AgentID
-			if params.AgentID != "" {
-				targetAgent = params.AgentID
-			}
+			targetAgent := s.automationTarget(evt, params.AgentID)
 			if targetAgent != "" && params.Interval > 0 {
 				interval, jitter, clamped := s.clampSleepInts(params.Interval, params.Jitter)
 				if clamped {
@@ -249,6 +242,14 @@ func (s *Server) executeAction(action RuleAction, evt Event) {
 		var macro db.CommandMacro
 		if err := s.db.First(&macro, params.MacroID).Error; err != nil {
 			slog.Error("Automation: macro not found for run_macro action", "macro_id", params.MacroID, "error", err)
+			return
+		}
+		// Macro rows are tenant assets too: a rule must not execute (or
+		// probe the existence of) another tenant's playbook.
+		if evt.TenantID != 0 && macro.TenantID != evt.TenantID {
+			slog.Warn("Automation: cross-tenant macro blocked", "macro_id", params.MacroID, "tenant", evt.TenantID)
+			s.LogAuditRecord(nil, "automation_blocked_cross_tenant", "macro", fmt.Sprint(params.MacroID),
+				"run_macro referenced foreign-tenant macro", true, nil)
 			return
 		}
 		targetAgent := evt.AgentID
@@ -602,6 +603,9 @@ func (s *Server) dispatchScheduledRules() {
 		evt := Event{
 			Type:    EventSchedule,
 			AgentID: rule.AgentID,
+			// Targeted schedules inherit the rule's tenant; agent-less
+			// schedules stay legacy 0 (ruleMayFireOn already gates firing).
+			TenantID: rule.TenantID,
 		}
 		if rule.AgentID != "" {
 			var implant db.Implant
