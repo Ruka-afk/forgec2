@@ -95,12 +95,14 @@ var tlsProfiles = []tlsProfile{
 		minVersion: tls.VersionTLS12,
 		maxVersion: tls.VersionTLS13,
 		cipherSuites: []uint16{
-			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
 			tls.TLS_AES_128_GCM_SHA256,
 			tls.TLS_AES_256_GCM_SHA384,
 			tls.TLS_CHACHA20_POLY1305_SHA256,
@@ -112,31 +114,54 @@ var tlsProfiles = []tlsProfile{
 type TLSFingerprintManager struct {
 	mu        sync.RWMutex
 	profiles  []tlsProfile
+	pool      []int // indices into profiles eligible for rotation
 	current   int
 	rotateAt  time.Time
 	enabled   bool
 	rotateDur time.Duration
 }
 
-func NewTLSFingerprintManager(jarmEnabled, ja3Enabled bool, rotateInterval string) *TLSFingerprintManager {
+func profileIndexByName(name string) int {
+	for i, p := range tlsProfiles {
+		if p.name == name {
+			return i
+		}
+	}
+	return -1
+}
+
+// NewTLSFingerprintManager builds the rotation manager. A profileName of ""
+// or "random" rotates across all browser profiles; a known name pins the
+// pool to it (rotation becomes a no-op). Unknown names fall back to the
+// full pool (config validation rejects them at startup separately).
+func NewTLSFingerprintManager(jarmEnabled, ja3Enabled bool, rotateInterval, profileName string) *TLSFingerprintManager {
 	if !jarmEnabled && !ja3Enabled {
 		return nil
 	}
 
 	dur := 24 * time.Hour
 	if rotateInterval != "" {
-		if parsed, err := time.ParseDuration(rotateInterval); err == nil {
+		if parsed, err := time.ParseDuration(rotateInterval); err == nil && parsed > 0 {
 			dur = parsed
 		}
 	}
 
+	pool := make([]int, len(tlsProfiles))
+	for i := range tlsProfiles {
+		pool[i] = i
+	}
+	if idx := profileIndexByName(profileName); idx >= 0 {
+		pool = []int{idx}
+	}
+
 	tfm := &TLSFingerprintManager{
 		profiles:  tlsProfiles,
+		pool:      pool,
 		enabled:   true,
 		rotateDur: dur,
 		rotateAt:  time.Now().Add(dur),
 	}
-	tfm.current = rand.Intn(len(tfm.profiles))
+	tfm.current = pool[rand.Intn(len(pool))]
 	return tfm
 }
 
@@ -160,17 +185,74 @@ func (tfm *TLSFingerprintManager) rotate() {
 		return
 	}
 	prev := tfm.current
-	for tfm.current == prev && len(tfm.profiles) > 1 {
-		tfm.current = rand.Intn(len(tfm.profiles))
+	cands := make([]int, 0, len(tfm.pool))
+	for _, next := range tfm.pool {
+		if next != prev {
+			cands = append(cands, next)
+		}
 	}
+	if len(cands) > 0 {
+		tfm.current = cands[rand.Intn(len(cands))]
+	}
+	// Single-entry pool (pinned profile): current unchanged, deadline extends.
 	tfm.rotateAt = time.Now().Add(tfm.rotateDur)
 	slog.Info("TLS fingerprint rotated", "profile", tfm.profiles[tfm.current].name)
 }
 
-// WrapTLSConfig applies the current browser-like profile to the server TLS
-// config: version range, ordered cipher suites, and ALPN. The returned
-// config is a clone; the caller's base config is untouched.
-func (tfm *TLSFingerprintManager) WrapTLSConfig(base *tls.Config) *tls.Config {
+// maybeRotate advances the profile when the deadline passed. Called from the
+// per-handshake path so rotation is self-driving (no background goroutine to
+// leak across listener restarts); the fast path is a single RLock.
+func (tfm *TLSFingerprintManager) maybeRotate() {
+	if tfm == nil || !tfm.enabled {
+		return
+	}
+	tfm.mu.RLock()
+	expired := time.Now().After(tfm.rotateAt)
+	tfm.mu.RUnlock()
+	if expired {
+		tfm.rotate()
+	}
+}
+
+// currentConfig clones base with the active profile applied. Pure per-call
+// allocation: safe to hand to concurrent handshakes.
+func (tfm *TLSFingerprintManager) currentConfig(base *tls.Config) *tls.Config {
+	tfm.maybeRotate()
+	tfm.mu.RLock()
+	p := tfm.profiles[tfm.current]
+	tfm.mu.RUnlock()
+
+	cfg := base.Clone()
+	profileCfg := p.tlsConfig()
+	cfg.MinVersion = profileCfg.MinVersion
+	cfg.MaxVersion = profileCfg.MaxVersion
+	cfg.CipherSuites = profileCfg.CipherSuites
+	cfg.NextProtos = profileCfg.NextProtos
+	return cfg
+}
+
+// Live wraps a listener TLS config so every handshake negotiates the CURRENT
+// profile: crypto/tls invokes GetConfigForClient per handshake, which mints a
+// fresh clone. Without this, WrapTLSConfig's one-time clone baked the startup
+// profile forever (rotation changed nothing on the wire).
+//
+// QUIC is intentionally excluded: quic-go ignores GetConfigForClient and pins
+// ALPN to h3/fc2, so profile NextProtos would break it (see Snapshot usage).
+func (tfm *TLSFingerprintManager) Live(base *tls.Config) *tls.Config {
+	if tfm == nil || !tfm.enabled {
+		return base
+	}
+	shim := base.Clone()
+	shim.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
+		return tfm.currentConfig(base), nil
+	}
+	return shim
+}
+
+// Snapshot applies the current browser-like profile to a TLS config ONCE,
+// for transports that cannot negotiate per handshake (QUIC ignores
+// GetConfigForClient and pins its own ALPN). Prefer Live everywhere else.
+func (tfm *TLSFingerprintManager) Snapshot(base *tls.Config) *tls.Config {
 	if tfm == nil || !tfm.enabled {
 		return base
 	}
@@ -189,10 +271,15 @@ func (tfm *TLSFingerprintManager) WrapTLSConfig(base *tls.Config) *tls.Config {
 
 func (s *Server) initTLSFingerprint() {
 	if s.cfg.TLSFingerprint.JARMEnabled || s.cfg.TLSFingerprint.JA3Enabled {
+		rotateInterval := s.cfg.TLSFingerprint.JA3Rotate
+		if rotateInterval == "" {
+			rotateInterval = s.cfg.TLSFingerprint.JARMRotate
+		}
 		s.tlsFingerprint = NewTLSFingerprintManager(
 			s.cfg.TLSFingerprint.JARMEnabled,
 			s.cfg.TLSFingerprint.JA3Enabled,
-			s.cfg.TLSFingerprint.JARMRotate,
+			rotateInterval,
+			s.cfg.TLSFingerprint.JA3Profile,
 		)
 		if s.tlsFingerprint != nil {
 			slog.Info("Server TLS fingerprint rotation enabled (cipher order/version/ALPN)",

@@ -356,6 +356,10 @@ func TestValidate(t *testing.T) {
 		{"crypto.key legacy xor hex is rejected", func(c *Config) { c.Crypto.Key = strings.Repeat("ab", 32) }, true, "crypto.key"},
 		{"crypto.key ecdh accepted", func(c *Config) { c.Crypto.Key = "ecdh:" }, false, ""},
 		{"crypto.key ecdh with suffix accepted", func(c *Config) { c.Crypto.Key = "ecdh:anything" }, false, ""},
+		{"ja3_profile empty accepted", func(c *Config) { c.TLSFingerprint.JA3Profile = "" }, false, ""},
+		{"ja3_profile random accepted", func(c *Config) { c.TLSFingerprint.JA3Profile = "random" }, false, ""},
+		{"ja3_profile chrome accepted", func(c *Config) { c.TLSFingerprint.JA3Profile = "chrome" }, false, ""},
+		{"ja3_profile unknown rejected", func(c *Config) { c.TLSFingerprint.JA3Profile = "opera" }, true, "ja3_profile"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

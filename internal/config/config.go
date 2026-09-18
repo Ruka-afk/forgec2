@@ -794,6 +794,9 @@ func (c *Config) Validate() error {
 	if c.Malleable.Enabled && c.Malleable.StatusCode != 0 && (c.Malleable.StatusCode < 100 || c.Malleable.StatusCode > 599) {
 		errs = append(errs, errors.New("malleable.status_code must be between 100 and 599 or 0 for default"))
 	}
+	if p := c.TLSFingerprint.JA3Profile; p != "" && p != "random" && p != "chrome" && p != "firefox" && p != "edge" && p != "safari" {
+		errs = append(errs, errors.New("tls_fingerprint.ja3_profile must be empty, random, chrome, firefox, edge or safari"))
+	}
 	if c.PasswordPolicy.MinLength < 4 {
 		errs = append(errs, errors.New("password_policy.min_length must be >= 4"))
 	}

@@ -180,7 +180,7 @@ func (s *Server) startGRPCListener() {
 				}
 			}
 
-			listener.SetTLS(credentials.NewTLS(tlsCfg))
+			listener.SetTLS(credentials.NewTLS(s.tlsFingerprint.Live(tlsCfg)))
 			slog.Info("gRPC TLS credentials loaded", "cert", s.cfg.Server.CertFile)
 		} else {
 			slog.Error("gRPC TLS load failed; refusing to start in insecure mode", "err", err)

@@ -268,7 +268,7 @@ func (s *Server) startExtraTCPListener(key, scheme string) error {
 			Certificates: []tls.Certificate{cert},
 			MinVersion:   tls.VersionTLS12,
 		}
-		ln, err = tls.Listen("tcp", addr, tlsCfg)
+		ln, err = tls.Listen("tcp", addr, s.tlsFingerprint.Live(tlsCfg))
 	} else {
 		ln, err = net.Listen("tcp", addr)
 	}

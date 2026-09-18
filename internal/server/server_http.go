@@ -173,7 +173,7 @@ func (s *Server) configureTLS(srv *http.Server) error {
 	tlsConfig.GetCertificate = s.tlsCerts.GetCertificate
 
 	if s.tlsFingerprint != nil {
-		tlsConfig = s.tlsFingerprint.WrapTLSConfig(tlsConfig)
+		tlsConfig = s.tlsFingerprint.Live(tlsConfig)
 	}
 
 	if s.cfg.Server.RequireClientCert && s.cfg.Server.ClientCAFile != "" {
