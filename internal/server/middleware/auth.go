@@ -405,10 +405,20 @@ func AuthRequired(database *gorm.DB) gin.HandlerFunc {
 				if ak.ExpiresAt.IsZero() || time.Now().Before(ak.ExpiresAt) {
 					var user db.User
 					if database.Where("id = ? AND is_active = ?", ak.UserID, true).First(&user).Error == nil {
+						// Scoped keys are source-bound: a stolen key is only
+						// useful from the owner's networks.
+						if !db.KeyCIDRAllows(ak.AllowedCIDRs, clientIP) {
+							authFail(c, "Auth failed: API key not allowed from this IP", "path", c.Request.URL.Path, "ip", clientIP)
+							return
+						}
 						database.Model(&ak).Update("last_used", time.Now())
 						c.Set("user_id", user.ID)
 						c.Set("user", user.Username)
 						c.Set("user_role", user.Role)
+						// nil = legacy full-access key; non-nil = capability
+						// set enforced by RequirePermission/RequireRole.
+						c.Set("api_key_scopes", db.KeyScopeSet(ak.Scopes))
+						c.Set("api_key_id", ak.ID)
 						// API-key requests carry no session cookie; CSRFProtect
 						// skips validation for them (the bearer header itself
 						// is not attachable cross-origin).
@@ -572,8 +582,30 @@ func HashPassword(password string) (string, error) {
 }
 
 // RequireRole returns middleware that restricts access to specified roles
+// apiKeyScopes returns the capability set for API-key callers: nil means
+// either a session caller or a legacy full-access key (unconstrained).
+func apiKeyScopes(c *gin.Context) (map[string]bool, bool) {
+	if !c.GetBool("auth_via_api_key") {
+		return nil, false
+	}
+	if v, ok := c.Get("api_key_scopes"); ok {
+		if set, ok := v.(map[string]bool); ok {
+			return set, true
+		}
+	}
+	return nil, true
+}
+
 func RequireRole(allowedRoles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Capability keys never satisfy identity-role gates, even when the
+		// owner is an admin: role routes (pprof, debug) are off-limits to
+		// scoped keys by construction. Legacy full keys pass through.
+		if set, isKey := apiKeyScopes(c); isKey && set != nil {
+			respondError(c, http.StatusForbidden, "scoped API key denied")
+			c.Abort()
+			return
+		}
 		role, exists := c.Get("user_role")
 		if !exists {
 			respondError(c, http.StatusForbidden, "access denied")
@@ -604,6 +636,21 @@ func RequireRole(allowedRoles ...string) gin.HandlerFunc {
 
 func RequirePermission(permissions ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Scoped keys are capability-bound: at least one required perm
+		// must be in the key's set. Checked BEFORE the admin shortcut so
+		// an admin owner's scoped key cannot escape its bounds. Legacy
+		// full keys (nil set) fall through to role logic unchanged.
+		if set, isKey := apiKeyScopes(c); isKey && set != nil {
+			for _, perm := range permissions {
+				if set[perm] {
+					c.Next()
+					return
+				}
+			}
+			respondError(c, http.StatusForbidden, "API key scope denied")
+			c.Abort()
+			return
+		}
 		role, exists := c.Get("user_role")
 		if !exists {
 			respondError(c, http.StatusForbidden, "access denied")

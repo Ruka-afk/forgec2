@@ -21467,6 +21467,10 @@ export interface operations {
                         last_used?: string;
                         expires_at?: string;
                         active?: boolean;
+                        /** @description Comma-separated permission scopes; empty means full access */
+                        scopes?: string;
+                        /** @description Comma-separated source CIDRs; empty means any source */
+                        allowed_cidrs?: string;
                         created_at?: string;
                     }[];
                 };
@@ -21486,6 +21490,10 @@ export interface operations {
                     name: string;
                     /** @description RFC3339 expiry timestamp */
                     expires_at?: string;
+                    /** @description Permission scopes (e.g. agents.read); empty means full access */
+                    scopes?: string[];
+                    /** @description Comma-separated source CIDRs or IPs; empty means any source */
+                    allowed_cidrs?: string;
                 };
             };
         };
@@ -21504,6 +21512,8 @@ export interface operations {
                             /** @description Plaintext API key (shown once) */
                             key?: string;
                             prefix?: string;
+                            scopes?: string;
+                            allowed_cidrs?: string;
                             created_at?: string;
                             expires_at?: string;
                         };

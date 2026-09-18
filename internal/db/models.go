@@ -58,6 +58,10 @@ const (
 	PermAIUse              = "ai.use"
 	PermAIConfigure        = "ai.configure"
 	PermAIKnowledgeManage  = "ai.knowledge.manage"
+	// PermBulkExport gates bulk secret exports (credential/task/handover/
+	// report bundles) for API-key callers. Session operators use TOTP
+	// step-up instead; the scope exists so automation keys must opt in.
+	PermBulkExport = "bulk_export"
 )
 
 var RolePermissionsMap = map[string][]string{
@@ -1965,8 +1969,14 @@ type ApiKey struct {
 	LastUsed  time.Time `json:"last_used"`
 	ExpiresAt time.Time `json:"expires_at"`
 	Active    bool      `gorm:"default:true" json:"active"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	// Scopes bounds the key to a comma-separated subset of Perm* values.
+	// Empty string is a legacy full-access key (owner role decides).
+	Scopes string `gorm:"size:1024;default:''" json:"scopes"`
+	// AllowedCIDRs optionally binds the key to source networks
+	// (comma-separated CIDRs or bare IPs). Empty means any source.
+	AllowedCIDRs string    `gorm:"size:1024;default:''" json:"allowed_cidrs,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 func (ApiKey) TableName() string { return "api_keys" }

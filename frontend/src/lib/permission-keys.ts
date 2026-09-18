@@ -13,6 +13,7 @@ export type PermissionKey =
   | "audit.read"
   | "automation.read"
   | "automation.write"
+  | "bulk_export"
   | "campaigns.read"
   | "campaigns.write"
   | "credentials.delete"

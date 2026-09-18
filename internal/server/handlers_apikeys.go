@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -14,13 +15,15 @@ import (
 )
 
 type apiKeyResponse struct {
-	ID        uint   `json:"id"`
-	Name      string `json:"name"`
-	Prefix    string `json:"prefix"`
-	LastUsed  string `json:"last_used,omitempty"`
-	ExpiresAt string `json:"expires_at,omitempty"`
-	Active    bool   `json:"active"`
-	CreatedAt string `json:"created_at"`
+	ID           uint   `json:"id"`
+	Name         string `json:"name"`
+	Prefix       string `json:"prefix"`
+	LastUsed     string `json:"last_used,omitempty"`
+	ExpiresAt    string `json:"expires_at,omitempty"`
+	Active       bool   `json:"active"`
+	Scopes       string `json:"scopes,omitempty"`
+	AllowedCIDRs string `json:"allowed_cidrs,omitempty"`
+	CreatedAt    string `json:"created_at"`
 }
 
 func generateAPIKey() (plaintext string, hash string, prefix string, err error) {
@@ -35,10 +38,32 @@ func generateAPIKey() (plaintext string, hash string, prefix string, err error) 
 	return plaintext, hash, prefix, nil
 }
 
+// keyCreatorMayGrant ensures a key never exceeds its creator's own reach:
+// every scope must be in the creator's role grants. bulk_export is a
+// key-admin privilege (the route already requires settings.write), so any
+// creator reaching this handler may grant it. Admins may grant everything.
+func (s *Server) keyCreatorMayGrant(c *gin.Context, scopesCSV string) bool {
+	if c.GetString("user_role") == db.RoleAdmin {
+		return true
+	}
+	role := c.GetString("user_role")
+	for _, p := range strings.Split(scopesCSV, ",") {
+		if p == "" || p == db.PermBulkExport {
+			continue
+		}
+		if !db.RoleHasPermissionDB(s.db, role, p) {
+			return false
+		}
+	}
+	return true
+}
+
 func (s *Server) handleCreateAPIKey(c *gin.Context) {
 	var req struct {
-		Name      string `json:"name"`
-		ExpiresAt string `json:"expires_at,omitempty"`
+		Name         string   `json:"name"`
+		ExpiresAt    string   `json:"expires_at,omitempty"`
+		Scopes       []string `json:"scopes,omitempty"`
+		AllowedCIDRs string   `json:"allowed_cidrs,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, "invalid request")
@@ -46,6 +71,22 @@ func (s *Server) handleCreateAPIKey(c *gin.Context) {
 	}
 	if req.Name == "" {
 		respondError(c, http.StatusBadRequest, "name is required")
+		return
+	}
+	// Scopes are a subset of Perm* values; empty = legacy full-access key.
+	// A key can never grant more than its creator holds.
+	scopes, err := db.NormalizeKeyScopes(req.Scopes)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	if scopes != "" && !s.keyCreatorMayGrant(c, scopes) {
+		respondError(c, http.StatusForbidden, "cannot grant scopes the creator lacks")
+		return
+	}
+	cidrs, err := db.NormalizeKeyCIDRs(req.AllowedCIDRs)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -63,12 +104,14 @@ func (s *Server) handleCreateAPIKey(c *gin.Context) {
 	}
 
 	apiKey := db.ApiKey{
-		UserID:    userID,
-		Name:      req.Name,
-		KeyHash:   hash,
-		Prefix:    prefix,
-		Active:    true,
-		CreatedAt: time.Now(),
+		UserID:       userID,
+		Name:         req.Name,
+		KeyHash:      hash,
+		Prefix:       prefix,
+		Scopes:       scopes,
+		AllowedCIDRs: cidrs,
+		Active:       true,
+		CreatedAt:    time.Now(),
 	}
 
 	if req.ExpiresAt != "" {
@@ -91,12 +134,14 @@ func (s *Server) handleCreateAPIKey(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"id":         apiKey.ID,
-			"name":       apiKey.Name,
-			"key":        plaintext,
-			"prefix":     prefix,
-			"created_at": apiKey.CreatedAt.Format(time.RFC3339),
-			"expires_at": apiKey.ExpiresAt.Format(time.RFC3339),
+			"id":            apiKey.ID,
+			"name":          apiKey.Name,
+			"key":           plaintext,
+			"prefix":        prefix,
+			"scopes":        apiKey.Scopes,
+			"allowed_cidrs": apiKey.AllowedCIDRs,
+			"created_at":    apiKey.CreatedAt.Format(time.RFC3339),
+			"expires_at":    apiKey.ExpiresAt.Format(time.RFC3339),
 		},
 		"message": "Store this key securely - it will not be shown again",
 	})
@@ -118,11 +163,13 @@ func (s *Server) handleListAPIKeys(c *gin.Context) {
 	resp := make([]apiKeyResponse, len(keys))
 	for i, k := range keys {
 		resp[i] = apiKeyResponse{
-			ID:        k.ID,
-			Name:      k.Name,
-			Prefix:    k.Prefix,
-			Active:    k.Active,
-			CreatedAt: k.CreatedAt.Format(time.RFC3339),
+			ID:           k.ID,
+			Name:         k.Name,
+			Prefix:       k.Prefix,
+			Active:       k.Active,
+			Scopes:       k.Scopes,
+			AllowedCIDRs: k.AllowedCIDRs,
+			CreatedAt:    k.CreatedAt.Format(time.RFC3339),
 		}
 		if !k.LastUsed.IsZero() {
 			resp[i].LastUsed = k.LastUsed.Format(time.RFC3339)
@@ -186,13 +233,15 @@ func (s *Server) handleRotateAPIKey(c *gin.Context) {
 	}
 
 	newKey := db.ApiKey{
-		UserID:    oldKey.UserID,
-		Name:      oldKey.Name,
-		KeyHash:   hash,
-		Prefix:    prefix,
-		ExpiresAt: oldKey.ExpiresAt,
-		Active:    true,
-		CreatedAt: time.Now(),
+		UserID:       oldKey.UserID,
+		Name:         oldKey.Name,
+		KeyHash:      hash,
+		Prefix:       prefix,
+		Scopes:       oldKey.Scopes,
+		AllowedCIDRs: oldKey.AllowedCIDRs,
+		ExpiresAt:    oldKey.ExpiresAt,
+		Active:       true,
+		CreatedAt:    time.Now(),
 	}
 
 	if err := s.db.Create(&newKey).Error; err != nil {

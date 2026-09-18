@@ -9058,6 +9058,12 @@ paths:
                       type: string
                     active:
                       type: boolean
+                    scopes:
+                      type: string
+                      description: Comma-separated permission scopes; empty means full access
+                    allowed_cidrs:
+                      type: string
+                      description: Comma-separated source CIDRs; empty means any source
                     created_at:
                       type: string
     post:
@@ -9080,6 +9086,14 @@ paths:
                 expires_at:
                   type: string
                   description: RFC3339 expiry timestamp
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                  description: Permission scopes (e.g. agents.read); empty means full access
+                allowed_cidrs:
+                  type: string
+                  description: Comma-separated source CIDRs or IPs; empty means any source
       responses:
         '200':
           description: Created
@@ -9101,6 +9115,10 @@ paths:
                         type: string
                         description: Plaintext API key (shown once)
                       prefix:
+                        type: string
+                      scopes:
+                        type: string
+                      allowed_cidrs:
                         type: string
                       created_at:
                         type: string
