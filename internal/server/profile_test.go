@@ -3,12 +3,15 @@ package server
 import (
 	"bytes"
 	"encoding/binary"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/forgec2/forgec2/internal/config"
+	"github.com/gin-gonic/gin"
 	promtestutil "github.com/prometheus/client_golang/prometheus/testutil"
 )
 
@@ -273,6 +276,94 @@ func TestProfileJitterPoolsEmpty(t *testing.T) {
 	if params, headers := s.profileJitterPools(); len(params) != 0 || len(headers) != 0 {
 		t.Fatalf("empty profile pools = (%v,%v), want empty", params, headers)
 	}
+}
+
+// TestDecoyHeadersRotatePerBeacon proves profile-active replies carry a
+// family Server banner, an X-Request-Id and a Cache-Control variant.
+func TestDecoyHeadersRotatePerBeacon(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := coverTestServer(t, "")
+	s.cfg.Malleable.Enabled = true
+	s.cfg.Malleable.ProfileName = "microsoft"
+	body := []byte(`{"ok":true}`)
+
+	seenServer := make(map[string]bool)
+	for i := 0; i < 20; i++ {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		s.applyMalleableProfile(c, body)
+		seenServer[w.Header().Get("Server")] = true
+		if rid := w.Header().Get("X-Request-Id"); len(rid) != 16 {
+			t.Fatalf("X-Request-Id = %q, want 16 hex chars", rid)
+		}
+		if cc := w.Header().Get("Cache-Control"); cc != "no-store" && cc != "private, max-age=0" {
+			t.Fatalf("Cache-Control = %q, want rotated variant", cc)
+		}
+	}
+	for srv := range seenServer {
+		if !strings.HasPrefix(srv, "Microsoft") {
+			t.Fatalf("microsoft Server banner = %q", srv)
+		}
+	}
+}
+
+// TestDecoyHeadersExplicitWins proves operator-configured headers override
+// decoys, and that bare config (no profile) sends no decoys.
+func TestDecoyHeadersExplicitWins(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := coverTestServer(t, "")
+	s.cfg.Malleable.Enabled = true
+	s.cfg.Malleable.ProfileName = "microsoft"
+	s.cfg.Malleable.Headers = map[string]string{"Server": "custom/9.9"}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	s.applyMalleableProfile(c, []byte(`{}`))
+	if got := w.Header().Get("Server"); got != "custom/9.9" {
+		t.Fatalf("Server = %q, want explicit custom/9.9", got)
+	}
+
+	plain := coverTestServer(t, "")
+	plain.cfg.Malleable.Enabled = true
+	w2 := httptest.NewRecorder()
+	c2, _ := gin.CreateTestContext(w2)
+	plain.applyMalleableProfile(c2, []byte(`{}`))
+	if got := w2.Header().Get("X-Request-Id"); got != "" {
+		t.Fatalf("bare config X-Request-Id = %q, want none", got)
+	}
+}
+
+// TestJitterBeaconResponseBounds proves the reply delay stays within the
+// configured cap and is skipped when disabled.
+func TestJitterBeaconResponseBounds(t *testing.T) {
+	old := beaconJitterSleep
+	var slept []time.Duration
+	beaconJitterSleep = func(d time.Duration) { slept = append(slept, d) }
+	defer func() { beaconJitterSleep = old }()
+
+	s := coverTestServer(t, "")
+	s.cfg.Malleable.RespJitterMs = 150
+	for i := 0; i < 50; i++ {
+		s.jitterBeaconResponse()
+	}
+	if len(slept) != 50 {
+		t.Fatalf("sleeps = %d, want 50", len(slept))
+	}
+	for _, d := range slept {
+		if d < 0 || d > 150*time.Millisecond {
+			t.Fatalf("jitter %v out of [0,150ms]", d)
+		}
+	}
+
+	slept = nil
+	s.cfg.Malleable.RespJitterMs = 0
+	s.jitterBeaconResponse()
+	if len(slept) != 0 {
+		t.Fatal("disabled jitter must not sleep")
+	}
+
+	bare := &Server{}
+	bare.jitterBeaconResponse() // nil cfg must not panic
 }
 
 // TestNoteMalleableEventCounts proves every failure is counted (logs are

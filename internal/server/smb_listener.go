@@ -107,6 +107,7 @@ func (s *Server) handleSMBConnection(conn net.Conn) {
 			}
 		}
 		respBytes = s.applyMalleableWrapping(respBytes)
+		s.jitterBeaconResponse()
 		if err := binary.Write(conn, binary.BigEndian, uint32(len(respBytes))); err != nil {
 			return
 		}

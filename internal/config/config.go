@@ -158,6 +158,10 @@ type Config struct {
 		// Placements: JSON array [{target,chain}] cover copies, e.g.
 		// [{"target":"cookie:SESSION","chain":"base64"}].
 		Placements string `yaml:"placements"`
+		// RespJitterMs caps the random per-beacon reply delay (0..N ms) that
+		// decorrelates response timing. 0 disables. Applies to beacon replies
+		// on HTTP/TCP/UDP transports.
+		RespJitterMs int `yaml:"resp_jitter_ms"`
 	} `yaml:"malleable"`
 
 	AI struct {
@@ -347,6 +351,7 @@ func DefaultConfig() *Config {
 	cfg.Malleable.Enabled = false
 	cfg.Malleable.StatusCode = 200
 	cfg.Malleable.ContentType = "application/json"
+	cfg.Malleable.RespJitterMs = 150
 	cfg.Malleable.Headers = map[string]string{
 		"Server": "nginx/1.24.0",
 	}
@@ -793,6 +798,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Malleable.Enabled && c.Malleable.StatusCode != 0 && (c.Malleable.StatusCode < 100 || c.Malleable.StatusCode > 599) {
 		errs = append(errs, errors.New("malleable.status_code must be between 100 and 599 or 0 for default"))
+	}
+	if c.Malleable.RespJitterMs < 0 || c.Malleable.RespJitterMs > 5000 {
+		errs = append(errs, errors.New("malleable.resp_jitter_ms must be between 0 and 5000"))
 	}
 	if p := c.TLSFingerprint.JA3Profile; p != "" && p != "random" && p != "chrome" && p != "firefox" && p != "edge" && p != "safari" {
 		errs = append(errs, errors.New("tls_fingerprint.ja3_profile must be empty, random, chrome, firefox, edge or safari"))

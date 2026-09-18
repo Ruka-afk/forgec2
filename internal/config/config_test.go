@@ -360,6 +360,9 @@ func TestValidate(t *testing.T) {
 		{"ja3_profile random accepted", func(c *Config) { c.TLSFingerprint.JA3Profile = "random" }, false, ""},
 		{"ja3_profile chrome accepted", func(c *Config) { c.TLSFingerprint.JA3Profile = "chrome" }, false, ""},
 		{"ja3_profile unknown rejected", func(c *Config) { c.TLSFingerprint.JA3Profile = "opera" }, true, "ja3_profile"},
+		{"resp_jitter negative rejected", func(c *Config) { c.Malleable.RespJitterMs = -1 }, true, "resp_jitter_ms"},
+		{"resp_jitter over cap rejected", func(c *Config) { c.Malleable.RespJitterMs = 5001 }, true, "resp_jitter_ms"},
+		{"resp_jitter zero disables", func(c *Config) { c.Malleable.RespJitterMs = 0 }, false, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

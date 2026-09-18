@@ -203,6 +203,7 @@ func (s *Server) handleTCPConnection(conn net.Conn) {
 		// transport so raw TCP links are not distinguishable by an un-wrapped
 		// JSON envelope on the wire (I2). The agent strips these bytes on read.
 		respBytes = s.applyMalleableWrapping(respBytes)
+		s.jitterBeaconResponse()
 		if err := binary.Write(conn, binary.BigEndian, uint32(len(respBytes))); err != nil {
 			return
 		}
@@ -273,6 +274,7 @@ func (s *Server) handleUDPBeacon(data []byte, addr net.Addr) []byte {
 	}
 	// Mirror the TCP transport's optional malleable cover (a no-op unless a
 	// malleable profile with prepend/append is configured).
+	s.jitterBeaconResponse()
 	return s.applyMalleableWrapping(resp)
 }
 

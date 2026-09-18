@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"log/slog"
+	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -24,6 +26,14 @@ func (s *Server) applyMalleableProfile(c *gin.Context, body []byte) {
 		c.Data(http.StatusOK, "application/json", body)
 		return
 	}
+
+	// Explicit operator headers first: they win over every decoy and every
+	// profile branch below (previously a preset silently dropped them).
+	for k, v := range mp.Headers {
+		c.Header(k, v)
+	}
+	// Per-beacon response decoys fill the gaps the operator left open.
+	s.applyDecoyHeaders(c, mp.ProfileName)
 
 	// Apply named profile preset if set
 	if mp.ProfileName != "" {
@@ -61,10 +71,7 @@ func (s *Server) applyMalleableProfile(c *gin.Context, body []byte) {
 		wrapped = wrapped + appendStr
 	}
 
-	for k, v := range mp.Headers {
-		c.Header(k, v)
-	}
-
+	// Explicit headers were already written up front (shared by all branches).
 	ct := mp.ContentType
 	if ct == "" {
 		ct = "application/json"
@@ -236,6 +243,68 @@ func splitPoolHeader(line string) (name, value string, ok bool) {
 // split headers on the wire (validation already rejects these at load).
 func fieldSafePoolValue(v string) bool {
 	return !strings.ContainsAny(v, "\r\n")
+}
+
+// decoyServerPools maps profile families to plausible Server banners. A
+// microsoft profile answering as nginx is worse camouflage than none.
+var decoyServerPools = map[string][]string{
+	"microsoft":  {"Microsoft-IIS/10.0", "Microsoft-IIS/8.5", "Microsoft-HTTPAPI/2.0"},
+	"cloudflare": {"cloudflare"},
+	"google":     {"gws", "Google-Analytics"},
+	"akamai":     {"AkamaiGHost"},
+	"":           {"nginx/1.24.0", "Apache/2.4.58", "Microsoft-IIS/10.0", "cloudflare"},
+}
+
+var decoyCacheControls = []string{"no-store", "private, max-age=0"}
+
+// applyDecoyHeaders sets per-beacon randomized response headers: a family
+// Server banner, an X-Request-Id, and a Cache-Control variant. Keys already
+// present on the wire (explicit operator headers, written first) are left
+// untouched. No profile active means no decoys (bare static behavior).
+func (s *Server) applyDecoyHeaders(c *gin.Context, profileName string) {
+	if profileName == "" {
+		return
+	}
+	has := func(name string) bool {
+		return c.Writer.Header().Get(name) != ""
+	}
+	lower := strings.ToLower(profileName)
+	pool := decoyServerPools[""]
+	for family, candidates := range decoyServerPools {
+		if family != "" && strings.Contains(lower, family) {
+			pool = candidates
+			break
+		}
+	}
+	if !has("Server") {
+		c.Header("Server", pool[rand.Intn(len(pool))])
+	}
+	if !has("X-Request-Id") {
+		c.Header("X-Request-Id", fmt.Sprintf("%016x", rand.Uint64()))
+	}
+	if !has("Cache-Control") {
+		c.Header("Cache-Control", decoyCacheControls[rand.Intn(len(decoyCacheControls))])
+	}
+}
+
+// beaconJitterSleep sleeps between attempts. Overridden in tests to avoid
+// real-time waits.
+var beaconJitterSleep = time.Sleep
+
+// jitterBeaconResponse decorrelates reply timing with a random 0..N ms delay
+// (N = malleable.resp_jitter_ms, 0 disables). Identical envelopes then differ
+// in arrival timing beacon to beacon. Cheap: one timer per reply.
+func (s *Server) jitterBeaconResponse() {
+	maxMs := 0
+	if s != nil && s.cfg != nil {
+		s.configMu.RLock()
+		maxMs = s.cfg.Malleable.RespJitterMs
+		s.configMu.RUnlock()
+	}
+	if maxMs <= 0 {
+		return
+	}
+	beaconJitterSleep(time.Duration(rand.Intn(maxMs+1)) * time.Millisecond)
 }
 
 // sanitizeProfileName strips a profile name to filesystem-safe characters
