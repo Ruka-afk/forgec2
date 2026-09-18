@@ -393,6 +393,15 @@ func diffConfig(old, new *config.Config) (hotReloadable []string, staticOnly []s
 	if !reflect.DeepEqual(old.Server.TrustedProxies, new.Server.TrustedProxies) {
 		hotReloadable = append(hotReloadable, "server.trusted_proxies")
 	}
+	// Operator-plane CIDRs are read live per request: no Apply step needed.
+	if !reflect.DeepEqual(old.Server.OperatorAllowedCIDRs, new.Server.OperatorAllowedCIDRs) {
+		hotReloadable = append(hotReloadable, "server.operator_allowed_cidrs")
+	}
+	// Operator mTLS touches the TLS listener (ClientAuth) and the cached CA
+	// pool: rotation needs a restart, so reject loudly instead of half-applying.
+	if old.Server.OperatorMTLS != new.Server.OperatorMTLS || old.Server.OperatorClientCAFile != new.Server.OperatorClientCAFile {
+		staticOnly = append(staticOnly, "server.operator_mtls")
+	}
 	if old.Server.CookieDomain != new.Server.CookieDomain {
 		hotReloadable = append(hotReloadable, "server.cookie_domain")
 	}

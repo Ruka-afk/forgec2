@@ -7,9 +7,12 @@ import (
 )
 
 func (s *Server) registerPublicRoutes() {
-	s.router.GET("/login", s.handleLoginPage)
-	s.router.POST("/login", middleware.RequestBodyLimit(MaxJSONBodySize), s.handleLogin)
-	s.router.POST("/api/login", middleware.RequestBodyLimit(MaxJSONBodySize), s.handleLogin)
+	// Login endpoints sit on the operator plane: the IP allowlist and mTLS
+	// gates apply before any credential processing. Beacon, payload,
+	// phishing and health routes below stay world-reachable by design.
+	s.router.GET("/login", s.operatorPlaneGuard(), s.handleLoginPage)
+	s.router.POST("/login", s.operatorPlaneGuard(), middleware.RequestBodyLimit(MaxJSONBodySize), s.handleLogin)
+	s.router.POST("/api/login", s.operatorPlaneGuard(), middleware.RequestBodyLimit(MaxJSONBodySize), s.handleLogin)
 	healthRateLimiter := middleware.NewRateLimiter(s.ctx, 30, time.Minute)
 	s.router.GET("/health", healthRateLimiter.Limit(), s.handleHealthCheck)
 	s.router.GET("/ready", healthRateLimiter.Limit(), s.handleReadyCheck)
@@ -28,7 +31,7 @@ func (s *Server) registerPublicRoutes() {
 	s.router.GET("/ws", wsRateLimiter.Limit(), s.handleWebSocket)
 	s.router.GET("/ws/beacon", wsRateLimiter.Limit(), s.handleWebSocketBeacon)
 	s.router.GET("/extc2/ws", wsRateLimiter.Limit(), s.handleExternalC2WebSocket)
-	s.router.GET("/ws/operator", wsRateLimiter.Limit(), s.handleOperatorWS)
+	s.router.GET("/ws/operator", wsRateLimiter.Limit(), s.operatorPlaneGuard(), s.handleOperatorWS)
 
 }
 

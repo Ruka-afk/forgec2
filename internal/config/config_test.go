@@ -228,6 +228,38 @@ func TestValidateRejectsWeakDefaultPassword(t *testing.T) {
 	}
 }
 
+func TestValidateOperatorPlane(t *testing.T) {
+	newValid := func() *Config {
+		cfg := DefaultConfig()
+		setValidCryptoKeys(cfg)
+		return cfg
+	}
+	cfg := newValid()
+	cfg.Server.OperatorAllowedCIDRs = []string{"10.0.0.0/8", "203.0.113.7", "::1"}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("valid operator CIDRs rejected: %v", err)
+	}
+	cfg.Server.OperatorAllowedCIDRs = []string{"999.1.1.1"}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() should reject garbage operator CIDR")
+	}
+	cfg = newValid()
+	cfg.Server.OperatorMTLS = true
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() should reject operator_mtls without TLS/CA")
+	}
+	cfg.Server.TLSEnabled = true
+	cfg.Server.CertFile = "data/server.crt"
+	cfg.Server.KeyFile = "data/server.key"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() should reject operator_mtls without CA file")
+	}
+	cfg.Server.OperatorClientCAFile = "data/op-ca.crt"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("valid operator mTLS rejected: %v", err)
+	}
+}
+
 // setValidCryptoKeys fills all REQUIRED storage keys so tests exercising
 // unrelated validation rules pass the required-key checks.
 func setValidCryptoKeys(c *Config) {

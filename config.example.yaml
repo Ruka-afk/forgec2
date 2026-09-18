@@ -19,6 +19,14 @@ server:
   socks_listen_host: "127.0.0.1"
   allowed_origins: []
   # trusted_proxies: ["127.0.0.1", "10.0.0.0/8"]  # reverse proxy IPs/CIDRs for X-Forwarded-For (empty = use direct client IP)
+  # --- Operator-plane hardening (P1-4). Login + authenticated API/UI only;
+  # beacons, payloads, phishing, extc2 and health stay world-reachable.
+  # operator_allowed_cidrs: ["10.8.0.0/24", "203.0.113.7"]  # empty = disabled
+  # operator_mtls: false                # require verified client certs on the operator plane (needs TLS)
+  # operator_client_ca_file: ""         # PEM CA bundle for operator certs (independent from beacon mTLS CA)
+  # Issue operator certs with: openssl req -x509 -newkey rsa:3072 -keyout op-ca.key -out op-ca.crt -days 365 -nodes -subj "/CN=fc2-operator-ca"
+  #   then per operator: openssl req -newkey rsa:2048 -keyout op.key -out op.csr -nodes -subj "/CN=alice" && openssl x509 -req -in op.csr -CA op-ca.crt -CAkey op-ca.key -CAcreateserial -out op.crt -days 90
+  #   use with: curl --cert op.crt --key op.key https://teamserver:8000/api/...
   cookie_domain: ""
   beacon_key: ""
   # Egress hygiene: update checks phone home to api.github.com — opt-in only.

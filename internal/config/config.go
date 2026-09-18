@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -21,63 +22,66 @@ type Config struct {
 	mu         sync.RWMutex `yaml:"-"`
 	ConfigPath string       `yaml:"-"` // absolute path to the config file, set on Load
 	Server     struct {
-		Port                 int           `yaml:"port"`
-		Host                 string        `yaml:"host"`
-		TLSEnabled           bool          `yaml:"tls_enabled"`
-		CertFile             string        `yaml:"cert_file"`
-		KeyFile              string        `yaml:"key_file"`
-		ClientCAFile         string        `yaml:"client_ca_file"`      // mTLS: CA cert file for client verification
-		RequireClientCert    bool          `yaml:"require_client_cert"` // mTLS: require client certificate for beacon auth
-		JWTSecret            string        `yaml:"jwt_secret"`
-		TCPEnabled           bool          `yaml:"tcp_enabled"`
-		TCPAddr              string        `yaml:"tcp_addr"`
-		SMBEnabled           bool          `yaml:"smb_enabled"`
-		SMBPipe              string        `yaml:"smb_pipe"`
-		DataDir              string        `yaml:"data_dir"`
-		DNSEnabled           bool          `yaml:"dns_enabled"`
-		DNSDomain            string        `yaml:"dns_domain"`
-		DNSAddr              string        `yaml:"dns_addr"`
-		GRPCEnabled          bool          `yaml:"grpc_enabled"`
-		GRPCAddr             string        `yaml:"grpc_addr"`
-		ICMPEnabled          bool          `yaml:"icmp_enabled"`
-		ICMPAddr             string        `yaml:"icmp_addr"`
-		UDPEnabled           bool          `yaml:"udp_enabled"`
-		UDPAddr              string        `yaml:"udp_addr"`
-		QUICEnabled          bool          `yaml:"quic_enabled"`
-		QUICAddr             string        `yaml:"quic_addr"`
-		OfflineThreshold     int           `yaml:"offline_threshold"`      // seconds
-		SessionMaxAgeHours   int           `yaml:"session_max_age_hours"`  // JWT expiry
-		CleanupRetentionDays int           `yaml:"cleanup_retention_days"` // auto-purge cutoff
+		Port                 int    `yaml:"port"`
+		Host                 string `yaml:"host"`
+		TLSEnabled           bool   `yaml:"tls_enabled"`
+		CertFile             string `yaml:"cert_file"`
+		KeyFile              string `yaml:"key_file"`
+		ClientCAFile         string `yaml:"client_ca_file"`      // mTLS: CA cert file for client verification
+		RequireClientCert    bool   `yaml:"require_client_cert"` // mTLS: require client certificate for beacon auth
+		JWTSecret            string `yaml:"jwt_secret"`
+		TCPEnabled           bool   `yaml:"tcp_enabled"`
+		TCPAddr              string `yaml:"tcp_addr"`
+		SMBEnabled           bool   `yaml:"smb_enabled"`
+		SMBPipe              string `yaml:"smb_pipe"`
+		DataDir              string `yaml:"data_dir"`
+		DNSEnabled           bool   `yaml:"dns_enabled"`
+		DNSDomain            string `yaml:"dns_domain"`
+		DNSAddr              string `yaml:"dns_addr"`
+		GRPCEnabled          bool   `yaml:"grpc_enabled"`
+		GRPCAddr             string `yaml:"grpc_addr"`
+		ICMPEnabled          bool   `yaml:"icmp_enabled"`
+		ICMPAddr             string `yaml:"icmp_addr"`
+		UDPEnabled           bool   `yaml:"udp_enabled"`
+		UDPAddr              string `yaml:"udp_addr"`
+		QUICEnabled          bool   `yaml:"quic_enabled"`
+		QUICAddr             string `yaml:"quic_addr"`
+		OfflineThreshold     int    `yaml:"offline_threshold"`      // seconds
+		SessionMaxAgeHours   int    `yaml:"session_max_age_hours"`  // JWT expiry
+		CleanupRetentionDays int    `yaml:"cleanup_retention_days"` // auto-purge cutoff
 		// AuditRetentionDays bounds audit_logs/opsec_history/circuit events
 		// separately: forensic timelines outlive operational data. Floor 90,
 		// default 365. The one-click maintenance purge never touches these
 		// tables regardless of this setting.
-		AuditRetentionDays int `yaml:"audit_retention_days"`
-		UpdateCheckRepo      string        `yaml:"update_check_repo"`      // GitHub repo for update checks (e.g. "owner/repo")
-		UpdateCheckEnabled   bool          `yaml:"update_check_enabled"`   // OPT-IN: phone home to GitHub releases (default OFF for egress hygiene)
-		VantagePoints        []string      `yaml:"vantage_points"`         // external proxy URLs for circuit breaker probing
-		SSHEnabled           bool          `yaml:"ssh_enabled"`            // enable SSH transport listener
-		SSHPort              int           `yaml:"ssh_port"`               // SSH listener port (default 2222)
-		LPortFwdEnabled      bool          `yaml:"lportfwd_enabled"`       // allow agents to open tunneled local port forwards (default true, set below)
-		SSHAddr              string        `yaml:"ssh_addr"`               // SSH listener addr (default :ssh_port)
-		SSHHostKey           string        `yaml:"ssh_host_key"`           // path to SSH host key (auto-generated if missing)
-		SSHUser              string        `yaml:"ssh_user"`               // SSH user for agent auth
-		SSHPassword          string        `yaml:"ssh_password"`           // SSH password (empty = any password or key-only)
-		SSHKeyAuth           bool          `yaml:"ssh_key_auth"`           // allow public key authentication
-		GeoIPEnabled         bool          `yaml:"geoip_enabled"`          // enable GeoIP lookup via ip-api.com (opt-in)
-		AllowedOrigins       []string      `yaml:"allowed_origins"`        // allowed WebSocket/CORS origins (default: localhost,127.0.0.1,::1)
-		TrustedProxies       []string      `yaml:"trusted_proxies"`        // trusted reverse proxy IPs/CIDRs for X-Forwarded-For (empty = trust none, use direct client IP)
-		CookieDomain         string        `yaml:"cookie_domain"`          // domain for session/CSRF cookies (for cross-origin deployments)
-		BeaconKey            string        `yaml:"beacon_key"`             // optional pre-shared key for agent beacon auth (X-Beacon-Key header)
-		RequireTLSForAuth    bool          `yaml:"require_tls_for_auth"`   // require TLS before issuing session cookies (strongly recommended in production)
-		EnablePprof          bool          `yaml:"enable_pprof"`           // expose /debug/pprof (default false; requires auth when enabled)
-		EnableMetrics        bool          `yaml:"enable_metrics"`         // expose /metrics (default false; requires auth when enabled)
-		SocksListenHost      string        `yaml:"socks_listen_host"`      // bind host for SOCKS/rportfwd (default 127.0.0.1)
-		DBMaxOpenConns       int           `yaml:"db_max_open_conns"`      // max open connections for PostgreSQL pool (default 1; sqlite must stay 1)
-		DBMaxIdleConns       int           `yaml:"db_max_idle_conns"`      // max idle connections for PostgreSQL pool (default 1; sqlite must stay 1)
-		DBConnMaxLifetime    time.Duration `yaml:"db_conn_max_lifetime"`   // max connection lifetime for PostgreSQL pool (default 30m)
-		DNSObscure           bool          `yaml:"dns_obscure"`            // XOR-obscure DNS C2 fragments (must match implant DNSObscure)
-		AutoRecon            []string      `yaml:"auto_recon"`             // task types queued on first check-in (empty = disabled)
+		AuditRetentionDays   int           `yaml:"audit_retention_days"`
+		UpdateCheckRepo      string        `yaml:"update_check_repo"`       // GitHub repo for update checks (e.g. "owner/repo")
+		UpdateCheckEnabled   bool          `yaml:"update_check_enabled"`    // OPT-IN: phone home to GitHub releases (default OFF for egress hygiene)
+		VantagePoints        []string      `yaml:"vantage_points"`          // external proxy URLs for circuit breaker probing
+		SSHEnabled           bool          `yaml:"ssh_enabled"`             // enable SSH transport listener
+		SSHPort              int           `yaml:"ssh_port"`                // SSH listener port (default 2222)
+		LPortFwdEnabled      bool          `yaml:"lportfwd_enabled"`        // allow agents to open tunneled local port forwards (default true, set below)
+		SSHAddr              string        `yaml:"ssh_addr"`                // SSH listener addr (default :ssh_port)
+		SSHHostKey           string        `yaml:"ssh_host_key"`            // path to SSH host key (auto-generated if missing)
+		SSHUser              string        `yaml:"ssh_user"`                // SSH user for agent auth
+		SSHPassword          string        `yaml:"ssh_password"`            // SSH password (empty = any password or key-only)
+		SSHKeyAuth           bool          `yaml:"ssh_key_auth"`            // allow public key authentication
+		GeoIPEnabled         bool          `yaml:"geoip_enabled"`           // enable GeoIP lookup via ip-api.com (opt-in)
+		AllowedOrigins       []string      `yaml:"allowed_origins"`         // allowed WebSocket/CORS origins (default: localhost,127.0.0.1,::1)
+		TrustedProxies       []string      `yaml:"trusted_proxies"`         // trusted reverse proxy IPs/CIDRs for X-Forwarded-For (empty = trust none, use direct client IP)
+		OperatorAllowedCIDRs []string      `yaml:"operator_allowed_cidrs"`  // operator-plane IP allowlist for login + authenticated API/UI (empty = disabled; beacons/payloads/phishing/health unaffected)
+		OperatorMTLS         bool          `yaml:"operator_mtls"`           // require verified client certs on the operator plane (needs TLS + operator_client_ca_file; beacons unaffected)
+		OperatorClientCAFile string        `yaml:"operator_client_ca_file"` // PEM CA bundle verifying operator client certs (independent from beacon mTLS CA)
+		CookieDomain         string        `yaml:"cookie_domain"`           // domain for session/CSRF cookies (for cross-origin deployments)
+		BeaconKey            string        `yaml:"beacon_key"`              // optional pre-shared key for agent beacon auth (X-Beacon-Key header)
+		RequireTLSForAuth    bool          `yaml:"require_tls_for_auth"`    // require TLS before issuing session cookies (strongly recommended in production)
+		EnablePprof          bool          `yaml:"enable_pprof"`            // expose /debug/pprof (default false; requires auth when enabled)
+		EnableMetrics        bool          `yaml:"enable_metrics"`          // expose /metrics (default false; requires auth when enabled)
+		SocksListenHost      string        `yaml:"socks_listen_host"`       // bind host for SOCKS/rportfwd (default 127.0.0.1)
+		DBMaxOpenConns       int           `yaml:"db_max_open_conns"`       // max open connections for PostgreSQL pool (default 1; sqlite must stay 1)
+		DBMaxIdleConns       int           `yaml:"db_max_idle_conns"`       // max idle connections for PostgreSQL pool (default 1; sqlite must stay 1)
+		DBConnMaxLifetime    time.Duration `yaml:"db_conn_max_lifetime"`    // max connection lifetime for PostgreSQL pool (default 30m)
+		DNSObscure           bool          `yaml:"dns_obscure"`             // XOR-obscure DNS C2 fragments (must match implant DNSObscure)
+		AutoRecon            []string      `yaml:"auto_recon"`              // task types queued on first check-in (empty = disabled)
 	} `yaml:"server"`
 
 	// Roe is the rules-of-engagement gate: tasks whose command/data/path
@@ -778,6 +782,25 @@ func (c *Config) Validate() error {
 	}
 	if c.Server.RequireTLSForAuth && !c.Server.TLSEnabled {
 		errs = append(errs, errors.New("server.require_tls_for_auth is true but server.tls_enabled is false — refusing to issue session cookies over plain HTTP (set tls_enabled: true or require_tls_for_auth: false)"))
+	}
+
+	// Operator-plane hardening validation. CIDRs are checked with netip
+	// (bare IPs accepted, normalized server-side); mTLS needs TLS plus a
+	// CA bundle path (the file itself is loaded at startup like cert_file).
+	for _, cidr := range c.Server.OperatorAllowedCIDRs {
+		if _, err := netip.ParsePrefix(cidr); err != nil {
+			if _, err2 := netip.ParseAddr(cidr); err2 != nil {
+				errs = append(errs, fmt.Errorf("server.operator_allowed_cidrs entry %q is not a CIDR or IP: %v", cidr, err2))
+			}
+		}
+	}
+	if c.Server.OperatorMTLS {
+		if !c.Server.TLSEnabled {
+			errs = append(errs, errors.New("server.operator_mtls is true but server.tls_enabled is false — client certificates require TLS"))
+		}
+		if strings.TrimSpace(c.Server.OperatorClientCAFile) == "" {
+			errs = append(errs, errors.New("server.operator_mtls is true but server.operator_client_ca_file is empty"))
+		}
 	}
 
 	// Rate limit validation

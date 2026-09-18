@@ -189,6 +189,14 @@ func (s *Server) configureTLS(srv *http.Server) error {
 		tlsConfig.ClientCAs = caPool
 		tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
 		slog.Info("mTLS enabled for beacon connections", "ca", s.cfg.Server.ClientCAFile)
+	} else if s.cfg.Server.OperatorMTLS {
+		// Operator mTLS only REQUESTS a client certificate at the TLS layer
+		// so cert-less beacons keep working on the shared listener; the
+		// operatorPlaneGuard middleware enforces verification on operator
+		// routes. NOTE: the CertificateRequest changes the server-side
+		// (JARM) fingerprint flight — expected when this is enabled.
+		tlsConfig.ClientAuth = tls.RequestClientCert
+		slog.Info("Operator mTLS requested (enforced on operator routes)")
 	}
 
 	srv.TLSConfig = tlsConfig

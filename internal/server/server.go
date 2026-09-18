@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"io"
 	"io/fs"
@@ -291,6 +292,11 @@ type Server struct {
 
 	// Hot-reloadable TLS server cert/key pair (mtime-checked per handshake)
 	tlsCerts *tlsCertLoader
+
+	// Operator-plane mTLS: cached CA pool verifying operator client certs.
+	// Loaded once at startup (restart to rotate); nil until then.
+	operatorCAPool     *x509.CertPool
+	operatorCALoadOnce sync.Once
 
 	// OPSEC adaptive threat manager
 	opsecAdaptive *opsec.AdaptiveManager
@@ -779,6 +785,7 @@ func (s *Server) SetupRoutes() {
 
 	// Protected routes
 	auth := s.router.Group("/")
+	auth.Use(s.operatorPlaneGuard())
 	auth.Use(middleware.AuthRequired(s.db))
 	auth.Use(middleware.CSRFProtect())
 	auth.Use(middleware.RequestBodyLimit(MaxJSONBodySize))

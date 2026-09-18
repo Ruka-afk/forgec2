@@ -66,6 +66,10 @@ func TestDiffConfigTokenCoverage(t *testing.T) {
 		{"server.cleanup_retention_days", "hot", func(c *config.Config) { c.Server.CleanupRetentionDays++ }},
 		{"server.allowed_origins", "hot", func(c *config.Config) { c.Server.AllowedOrigins = append(c.Server.AllowedOrigins, "x") }},
 		{"server.trusted_proxies", "hot", func(c *config.Config) { c.Server.TrustedProxies = append(c.Server.TrustedProxies, "x") }},
+		{"server.operator_allowed_cidrs", "hot", func(c *config.Config) {
+			c.Server.OperatorAllowedCIDRs = append(c.Server.OperatorAllowedCIDRs, "10.0.0.0/8")
+		}},
+		{"server.operator_mtls", "static", func(c *config.Config) { c.Server.OperatorMTLS = !c.Server.OperatorMTLS }},
 		{"server.cookie_domain", "hot", func(c *config.Config) { c.Server.CookieDomain += "x" }},
 		{"server.require_tls_for_auth", "hot", func(c *config.Config) { c.Server.RequireTLSForAuth = !c.Server.RequireTLSForAuth }},
 		{"server.enable_pprof", "hot", func(c *config.Config) { c.Server.EnablePprof = !c.Server.EnablePprof }},
