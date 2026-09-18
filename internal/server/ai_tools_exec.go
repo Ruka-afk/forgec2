@@ -233,7 +233,7 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 
 	case "list_listeners":
 		var listeners []db.Listener
-		if err := s.db.Order("created_at desc").Limit(500).Find(&listeners).Error; err != nil {
+		if err := s.aiTenantScope(s.db.Order("created_at desc"), reqCtx).Limit(500).Find(&listeners).Error; err != nil {
 			slog.Error("AI: failed to list listeners", "err", err)
 		}
 		var out []map[string]interface{}
@@ -389,7 +389,7 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 
 	case "list_macros":
 		var macros []db.CommandMacro
-		s.db.Order("name").Limit(AutomationRuleLimit).Find(&macros)
+		s.aiTenantScope(s.db.Order("name"), reqCtx).Limit(AutomationRuleLimit).Find(&macros)
 		var out []map[string]interface{}
 		for _, m := range macros {
 			var steps []interface{}
@@ -420,11 +420,11 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 		}
 		var macro db.CommandMacro
 		if p.MacroID != nil && *p.MacroID != 0 {
-			if err := s.db.First(&macro, *p.MacroID).Error; err != nil {
+			if err := s.aiTenantScope(s.db, reqCtx).First(&macro, *p.MacroID).Error; err != nil {
 				return `{"error":"macro not found"}`
 			}
 		} else if p.MacroName != "" {
-			if err := s.db.Where("name = ?", p.MacroName).First(&macro).Error; err != nil {
+			if err := s.aiTenantScope(s.db, reqCtx).Where("name = ?", p.MacroName).First(&macro).Error; err != nil {
 				return `{"error":"macro not found by name"}`
 			}
 		} else {
@@ -1143,6 +1143,11 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 			Enabled:   true,
 			Status:    "running",
 		}
+		// AI-created listeners belong to the principal's tenant when the
+		// caller is an authenticated operator; system paths stay legacy 0.
+		if reqCtx != nil && reqCtx.Principal.UserID != 0 {
+			l.TenantID = reqCtx.Principal.TenantID
+		}
 		if l.Name == "" {
 			l.Name = fmt.Sprintf("Listener %d", l.Port)
 		}
@@ -1205,7 +1210,7 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 			return `{"error":"numeric listener_id required"}`
 		}
 		var l db.Listener
-		if err := s.db.First(&l, p.ListenerID).Error; err != nil {
+		if err := s.aiTenantScope(s.db, reqCtx).First(&l, p.ListenerID).Error; err != nil {
 			return `{"error":"listener not found"}`
 		}
 		bindChanged := false
@@ -1278,7 +1283,7 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 			return `{"error":"numeric listener_id required"}`
 		}
 		var agentCount int64
-		s.db.Model(&db.Implant{}).Where("listener_id = ?", p.ListenerID).Count(&agentCount)
+		s.aiTenantScope(s.db.Model(&db.Implant{}), reqCtx).Where("listener_id = ?", p.ListenerID).Count(&agentCount)
 		if agentCount > 0 {
 			b, _ := marshalJSONSafe(map[string]interface{}{
 				"error":       fmt.Sprintf("cannot delete: %d agents still reference this listener", agentCount),
@@ -1287,7 +1292,7 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 			return string(b)
 		}
 		var l db.Listener
-		if err := s.db.First(&l, p.ListenerID).Error; err == nil {
+		if err := s.aiTenantScope(s.db, reqCtx).First(&l, p.ListenerID).Error; err == nil {
 			s.stopExtraListener(listenerKey(&l))
 			if s.circuitBreaker != nil {
 				s.circuitBreaker.UnregisterTarget(listenerTargetID(&l))
@@ -1295,7 +1300,7 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 		} else {
 			return `{"error":"listener not found"}`
 		}
-		if err := s.db.Delete(&db.Listener{}, p.ListenerID).Error; err != nil {
+		if err := s.aiTenantScope(s.db, reqCtx).Delete(&db.Listener{}, p.ListenerID).Error; err != nil {
 			return `{"error":"failed to delete listener"}`
 		}
 		s.broadcastListenerUpdate("deleted", &l)

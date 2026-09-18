@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -236,6 +237,28 @@ func TestReportCredsScopedToTenant(t *testing.T) {
 	}
 	if strings.Contains(body, "g1-creds-b") {
 		t.Fatalf("foreign cred leaked: %s", body)
+	}
+}
+
+// TestAIAnalyzeResultCrossTenant404 proves one tenant cannot feed another
+// tenant's raw task output into the LLM via a model-supplied task ID.
+func TestAIAnalyzeResultCrossTenant404(t *testing.T) {
+	s := mustTenantServer(t)
+	s.cfg.AI.Enabled = true
+	s.cfg.AI.APIKey = "test-key"
+	seedTenantAgent(t, s, "g1-analyze", 2)
+	task := db.Task{AgentID: "g1-analyze", Type: "shell", Status: "completed", Result: "secret-output"}
+	if err := s.db.Create(&task).Error; err != nil {
+		t.Fatalf("seed task: %v", err)
+	}
+
+	c, w := tenantScopedAdminContext(s, t, "g1-viewer", 1)
+	body, _ := json.Marshal(map[string]uint{"task_id": task.ID})
+	c.Request, _ = http.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	s.handleAIAnalyzeResult(c)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status=%d body=%s, want 404", w.Code, w.Body.String())
 	}
 }
 

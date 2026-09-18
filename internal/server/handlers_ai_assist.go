@@ -225,6 +225,12 @@ func (s *Server) handleAIAnalyzeResult(c *gin.Context) {
 		respondError(c, http.StatusNotFound, "task not found")
 		return
 	}
+	// Tenant gate: the task ID is caller-supplied and the result feeds an LLM
+	// prompt — without this one tenant analyzes another's raw output.
+	if s.resolveVisibleAgentID(c, task.AgentID) == "" {
+		respondError(c, http.StatusNotFound, "task not found")
+		return
+	}
 	if strings.TrimSpace(task.Result) == "" && strings.TrimSpace(task.Error) == "" {
 		respondError(c, http.StatusBadRequest, "task has no result to analyze yet")
 		return

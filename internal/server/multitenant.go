@@ -80,6 +80,48 @@ func (s *Server) tenantScope(query *gorm.DB, c *gin.Context) *gorm.DB {
 	return query
 }
 
+// aiTenantScope restricts a query to the AI principal's tenant, mirroring
+// resolveAIAgentID semantics: authenticated principals (UserID != 0) see
+// only their own tenant's rows — including tenant 0, which resolveAIAgentID
+// treats as a real scope (not legacy fail-open). Anonymous/system paths
+// (nil ctx or UserID 0) stay unscoped.
+func (s *Server) aiTenantScope(q *gorm.DB, reqCtx *aiReqCtx) *gorm.DB {
+	if reqCtx != nil && reqCtx.Principal.UserID != 0 {
+		return q.Where("tenant_id = ?", reqCtx.Principal.TenantID)
+	}
+	return q
+}
+
+// agentTenantOf resolves an agent's tenant for event attribution. ok=false
+// when the row is missing.
+func (s *Server) agentTenantOf(agentID string) (uint, bool) {
+	if agentID == "" {
+		return 0, false
+	}
+	var tid uint
+	if err := s.db.Model(&db.Implant{}).Select("tenant_id").Where("id = ?", agentID).First(&tid).Error; err != nil {
+		return 0, false
+	}
+	return tid, true
+}
+
+// ruleMayFireOn decides whether an automation rule may fire for an event
+// attributed to agentID. Strict equality (0==0 legacy included): a rule
+// must never read another tenant's event data (webhook payloads carry
+// hostnames, creds findings, task outputs) nor act on its agents.
+func (s *Server) ruleMayFireOn(ruleTenantID uint, agentID string) bool {
+	if agentID == "" {
+		// Agent-less events (schedules without target): fire only legacy
+		// rules, which predate tenants.
+		return ruleTenantID == 0
+	}
+	agentTenant, ok := s.agentTenantOf(agentID)
+	if !ok {
+		return false
+	}
+	return ruleTenantID == agentTenant
+}
+
 // tenantIDForUser resolves a username to its tenant ID outside a gin
 // context (WebSocket registration). Missing rows and lookup errors both
 // yield legacy 0 — the socket layer cannot fail closed here without

@@ -37,6 +37,7 @@ type AutomationRule struct {
 	LastRun       time.Time       `json:"last_run"`
 	NextRun       time.Time       `json:"next_run"`
 	CreatedBy     string          `json:"created_by"`
+	TenantID      uint            `json:"tenant_id"`
 	CreatedAt     string          `json:"created_at"`
 }
 
@@ -387,6 +388,7 @@ func (s *Server) loadAutomationRules() []AutomationRule {
 			RunCount:      dr.RunCount,
 			LastTriggered: dr.LastTriggered,
 			CreatedBy:     dr.CreatedBy,
+			TenantID:      dr.TenantID,
 			CreatedAt:     dr.CreatedAt.Format(time.RFC3339),
 		})
 	}
@@ -433,6 +435,7 @@ func (s *Server) saveAutomationRule(rule AutomationRule) error {
 		RunCount:        rule.RunCount,
 		CooldownSeconds: rule.Cooldown,
 		CreatedBy:       rule.CreatedBy,
+		TenantID:        rule.TenantID,
 	}
 	if rule.LastTriggered.After(dbRule.LastTriggered) {
 		dbRule.LastTriggered = rule.LastTriggered
@@ -608,6 +611,12 @@ func (s *Server) dispatchScheduledRules() {
 				evt.AgentOS = implant.OS
 				evt.User = implant.Username
 			}
+		}
+		// Tenant gate: a rule may only fire for events attributed to its
+		// own tenant's agents. Agent-less schedule rules fire only when
+		// legacy (tenant 0) — they cannot be attributed to any tenant.
+		if !s.ruleMayFireOn(rule.TenantID, evt.AgentID) {
+			continue
 		}
 		s.evaluateRule(evt, rule)
 

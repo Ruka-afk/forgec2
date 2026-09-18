@@ -78,7 +78,7 @@ func (s *Server) collectSituation(reqCtx *aiReqCtx) aiSituation {
 		}
 	}
 	if hasPermission(db.PermListenersRead) {
-		s.db.Model(&db.Listener{}).Where("enabled = ?", true).Count(&out.ListenersActive)
+		s.aiTenantScope(s.db.Model(&db.Listener{}), reqCtx).Where("enabled = ?", true).Count(&out.ListenersActive)
 	}
 	if hasPermission(db.PermTasksRead) {
 		tasks := s.db.Model(&db.Task{})

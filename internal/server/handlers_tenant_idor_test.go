@@ -318,7 +318,7 @@ func TestTenantIDOR_CollabLock(t *testing.T) {
 func TestTenantIDOR_ListenerDetailFiltersAgents(t *testing.T) {
 	s := newIDORTestServer(t)
 	seedIDORTenants(t, s)
-	lis := db.Listener{Name: "main", Scheme: "http", Host: "0.0.0.0", Port: 8443}
+	lis := db.Listener{Name: "main", Scheme: "http", Host: "0.0.0.0", Port: 8443, TenantID: 1}
 	if err := s.db.Create(&lis).Error; err != nil {
 		t.Fatalf("seed listener: %v", err)
 	}
@@ -338,6 +338,18 @@ func TestTenantIDOR_ListenerDetailFiltersAgents(t *testing.T) {
 	}
 	if resp.Total != 1 || len(resp.Agents) != 1 || resp.Agents[0].ID != "agent-a" {
 		t.Fatalf("listener leaked foreign agents: total=%d %+v", resp.Total, resp.Agents)
+	}
+
+	// New semantics (H3): unowned (tenant-0) listener rows are directly
+	// invisible to scoped operators — not just agent-filtered.
+	legacy := db.Listener{Name: "legacy", Scheme: "http", Host: "0.0.0.0", Port: 18443}
+	if err := s.db.Create(&legacy).Error; err != nil {
+		t.Fatalf("seed legacy listener: %v", err)
+	}
+	c2, w2 := opCtx(http.MethodGet, "/x", "alice-op", "", gin.Params{{Key: "id", Value: fmt.Sprint(legacy.ID)}})
+	s.handleAPIGetListener(c2)
+	if w2.Code != http.StatusNotFound {
+		t.Fatalf("legacy listener detail: expected 404, got %d; body=%s", w2.Code, w2.Body.String())
 	}
 }
 

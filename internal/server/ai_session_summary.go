@@ -27,10 +27,30 @@ const (
 	aiSummaryMaxChars = 2000
 )
 
-// sessionSummaryBlock loads the stored digest for prompt injection. Empty
-// when the session has nothing summarized yet.
-func (s *Server) sessionSummaryBlock(sessionID uint) string {
+// sessionVisibleTo gates digest reads and folds on session ownership.
+// Legacy unscoped operators (tenant 0) see everything, mirroring
+// tenantScope; scoped operators see only their own tenant's sessions.
+// Unassigned (tenant-0) rows are invisible to scoped operators — no
+// backfill, by decision: silent cross-tenant memory reads are worse than
+// losing a legacy digest view.
+func (s *Server) sessionVisibleTo(sessionID uint, p aiPrincipal) bool {
 	if s == nil || s.db == nil || sessionID == 0 {
+		return false
+	}
+	if p.TenantID == 0 {
+		return true
+	}
+	var tid uint
+	if err := s.db.Model(&db.AIChatSession{}).Where("id = ?", sessionID).Pluck("tenant_id", &tid).Error; err != nil {
+		return false
+	}
+	return tid == p.TenantID
+}
+
+// sessionSummaryBlock loads the stored digest for prompt injection. Empty
+// when the session has nothing summarized yet or the caller may not see it.
+func (s *Server) sessionSummaryBlock(sessionID uint, p aiPrincipal) string {
+	if !s.sessionVisibleTo(sessionID, p) {
 		return ""
 	}
 	var summary string
@@ -47,8 +67,11 @@ func (s *Server) sessionSummaryBlock(sessionID uint) string {
 // session digest when past threshold. Fire-and-forget safe: all failures
 // only log. Never summarizes the newest tail (still sent verbatim).
 // ctx bounds the LLM call so shutdown/client cancel stops the spend.
-func (s *Server) maybeSummarizeSession(ctx context.Context, sessionID uint) {
+func (s *Server) maybeSummarizeSession(ctx context.Context, sessionID uint, p aiPrincipal) {
 	if s == nil || s.db == nil || sessionID == 0 || !s.aiAssistReady() {
+		return
+	}
+	if !s.sessionVisibleTo(sessionID, p) {
 		return
 	}
 	if ctx == nil {
@@ -105,6 +128,6 @@ func (s *Server) maybeSummarizeSession(ctx context.Context, sessionID uint) {
 
 // sessionSummaryForPrompt is the injection helper used at both prompt build
 // sites (background runs and legacy streaming chat).
-func (s *Server) sessionSummaryForPrompt(sessionID uint) string {
-	return s.sessionSummaryBlock(sessionID)
+func (s *Server) sessionSummaryForPrompt(sessionID uint, p aiPrincipal) string {
+	return s.sessionSummaryBlock(sessionID, p)
 }

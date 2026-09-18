@@ -239,8 +239,8 @@ type Task struct {
 	// Two-man approval tracking: ApprovedBy is the operator that approved a
 	// pending_approval task. Enforced to differ from CreatedBy for dangerous
 	// task types when security.require_approval_for_dangerous is enabled.
-	ApprovedBy     string     `json:"approved_by,omitempty"`
-	ApprovedAt     *time.Time `json:"approved_at,omitempty"`
+	ApprovedBy string     `json:"approved_by,omitempty"`
+	ApprovedAt *time.Time `json:"approved_at,omitempty"`
 	// Operator collaboration claim (who is working this task in the UI).
 	// Separate from ClaimedBy/ClaimedAt, which are the AGENT dispatch claim
 	// used by the beacon pipeline — sharing one column corrupted both.
@@ -249,9 +249,9 @@ type Task struct {
 	// ApprovalExpiresAt bounds pending_approval lifetime (auto-reject after
 	// ApprovalExpiryDuration). Set at creation for approval-gated tasks.
 	ApprovalExpiresAt *time.Time `gorm:"index" json:"approval_expires_at,omitempty"`
-	ClaimedBy      string     `gorm:"size:255" json:"claimed_by"`
-	ClaimedAt      time.Time  `json:"claimed_at"`
-	AcknowledgedAt *time.Time `gorm:"index" json:"acknowledged_at,omitempty"`
+	ClaimedBy         string     `gorm:"size:255" json:"claimed_by"`
+	ClaimedAt         time.Time  `json:"claimed_at"`
+	AcknowledgedAt    *time.Time `gorm:"index" json:"acknowledged_at,omitempty"`
 	// DeliveryAttempts counts how many times a stale running task has been
 	// requeued without ever being acknowledged; at 3 it is failed outright.
 	DeliveryAttempts int `gorm:"default:0" json:"delivery_attempts"`
@@ -450,6 +450,8 @@ type Listener struct {
 
 	// ICMP-specific: the bind address (e.g. "0.0.0.0")
 	ICMPAddr string `gorm:"size:255" json:"icmp_addr"`
+
+	TenantID uint `gorm:"index" json:"tenant_id"`
 
 	CreatedAt time.Time `gorm:"index" json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -970,8 +972,9 @@ type CommandMacro struct {
 	ID          uint      `gorm:"primaryKey" json:"id"`
 	Name        string    `gorm:"uniqueIndex;size:128" json:"name"`
 	Description string    `json:"description"`
-	Steps       string    `gorm:"type:text" json:"steps"`
+	Steps       string    `json:"type:text" json:"steps"`
 	CreatedBy   string    `json:"created_by"`
+	TenantID    uint      `gorm:"index" json:"tenant_id"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
@@ -1068,6 +1071,7 @@ type AutomationRule struct {
 	CooldownSeconds int       `gorm:"default:0" json:"cooldown_seconds"`
 	LastTriggered   time.Time `json:"last_triggered"`
 	CreatedBy       string    `gorm:"size:100" json:"created_by"`
+	TenantID        uint      `gorm:"index" json:"tenant_id"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }
@@ -1848,10 +1852,10 @@ func (Redirector) TableName() string { return "redirectors" }
 // AgentLock represents a collaboration lock placed on an agent by an operator.
 // Used to prevent two operators from driving the same agent simultaneously.
 type AgentLock struct {
-	ID        string    `gorm:"primaryKey;size:36" json:"id"`
-	AgentID   string    `gorm:"uniqueIndex;size:36;not null" json:"agent_id"`
-	LockedBy  string    `gorm:"size:64;not null" json:"locked_by"`
-	LockedAt  time.Time `json:"locked_at"`
+	ID       string    `gorm:"primaryKey;size:36" json:"id"`
+	AgentID  string    `gorm:"uniqueIndex;size:36;not null" json:"agent_id"`
+	LockedBy string    `gorm:"size:64;not null" json:"locked_by"`
+	LockedAt time.Time `json:"locked_at"`
 	// ExpiresAt bounds the lock (default 15m, refreshed by holder heartbeat):
 	// a crashed browser must not pin an agent forever.
 	ExpiresAt time.Time `gorm:"index" json:"expires_at"`

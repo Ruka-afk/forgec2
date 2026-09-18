@@ -67,12 +67,22 @@ func parseMacroSteps(raw string) ([]MacroStep, error) {
 
 func (s *Server) handleListMacros(c *gin.Context) {
 	var macros []db.CommandMacro
-	if err := s.db.Order("name").Find(&macros).Error; err != nil {
+	if err := s.tenantScope(s.db, c).Order("name").Find(&macros).Error; err != nil {
 		slog.Error("Failed to list macros", "err", err)
 		respondError(c, http.StatusInternalServerError, "query failed")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "macros": macros})
+}
+
+// loadMacroScoped reads one macro honoring tenant visibility (same contract
+// as loadListenerScoped: foreign rows are directly invisible, never 403).
+func (s *Server) loadMacroScoped(c *gin.Context, id string) (db.CommandMacro, bool) {
+	var macro db.CommandMacro
+	if err := s.tenantScope(s.db, c).First(&macro, id).Error; err != nil {
+		return db.CommandMacro{}, false
+	}
+	return macro, true
 }
 
 func (s *Server) handleCreateMacro(c *gin.Context) {
@@ -99,6 +109,7 @@ func (s *Server) handleCreateMacro(c *gin.Context) {
 		Description: req.Description,
 		Steps:       string(raw),
 		CreatedBy:   s.currentUsername(c),
+		TenantID:    s.currentTenantID(c),
 	}
 	if err := s.db.Create(&macro).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create macro")
@@ -110,8 +121,7 @@ func (s *Server) handleCreateMacro(c *gin.Context) {
 
 func (s *Server) handleUpdateMacro(c *gin.Context) {
 	id := c.Param("id")
-	var macro db.CommandMacro
-	if err := s.db.First(&macro, id).Error; err != nil {
+	if _, ok := s.loadMacroScoped(c, id); !ok {
 		respondError(c, http.StatusNotFound, "macro not found")
 		return
 	}
@@ -138,7 +148,7 @@ func (s *Server) handleUpdateMacro(c *gin.Context) {
 		"description": req.Description,
 		"steps":       string(raw),
 	}
-	if err := s.db.Model(&db.CommandMacro{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+	if err := s.tenantScope(s.db.Model(&db.CommandMacro{}), c).Where("id = ?", id).Updates(updates).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to update macro")
 		return
 	}
@@ -148,7 +158,7 @@ func (s *Server) handleUpdateMacro(c *gin.Context) {
 
 func (s *Server) handleDeleteMacro(c *gin.Context) {
 	id := c.Param("id")
-	res := s.db.Delete(&db.CommandMacro{}, id)
+	res := s.tenantScope(s.db, c).Delete(&db.CommandMacro{}, id)
 	if res.Error != nil {
 		respondError(c, http.StatusInternalServerError, "failed to delete macro")
 		return

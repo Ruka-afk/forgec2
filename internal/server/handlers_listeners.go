@@ -33,7 +33,7 @@ func (s *Server) broadcastListenerUpdate(action string, l *db.Listener) {
 func (s *Server) handleListListeners(c *gin.Context) {
 	p := parsePagination(c, 20, 100)
 
-	query := s.db.Model(&db.Listener{})
+	query := s.tenantScope(s.db.Model(&db.Listener{}), c)
 
 	if tag := c.Query("tag"); tag != "" {
 		query = query.Where("tags LIKE ? ESCAPE '\\'", "%"+escapeLike(tag)+"%")
@@ -65,8 +65,8 @@ func (s *Server) handleListListeners(c *gin.Context) {
 
 func (s *Server) handleListenerDetail(c *gin.Context) {
 	id := c.Param("id")
-	var listener db.Listener
-	if err := s.db.First(&listener, id).Error; err != nil {
+	listener, ok := s.loadListenerScoped(c, id)
+	if !ok {
 		c.String(http.StatusNotFound, "Listener not found")
 		return
 	}
@@ -103,8 +103,8 @@ func (s *Server) handleListenerDetail(c *gin.Context) {
 // GET /api/listeners/:id
 func (s *Server) handleAPIGetListener(c *gin.Context) {
 	id := c.Param("id")
-	var listener db.Listener
-	if err := s.db.First(&listener, id).Error; err != nil {
+	listener, ok := s.loadListenerScoped(c, id)
+	if !ok {
 		respondError(c, http.StatusNotFound, "listener not found")
 		return
 	}
@@ -362,6 +362,8 @@ func (s *Server) handleCreateListener(c *gin.Context) {
 
 	l.Enabled = true
 	l.Status = "running"
+	// New listeners belong to the operator's tenant; the body must not set it.
+	l.TenantID = s.currentTenantID(c)
 	if err := s.db.Create(&l).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Listener create"))
 		return
@@ -382,10 +384,22 @@ func (s *Server) handleCreateListener(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "listener": l})
 }
 
+// loadListenerScoped reads one listener honoring tenant visibility:
+// legacy operators (tid 0) see all rows, scoped operators only their own
+// tenant's. ok=false doubles as "not found" — foreign rows are directly
+// invisible, never 403.
+func (s *Server) loadListenerScoped(c *gin.Context, id string) (db.Listener, bool) {
+	var l db.Listener
+	if err := s.tenantScope(s.db, c).First(&l, id).Error; err != nil {
+		return db.Listener{}, false
+	}
+	return l, true
+}
+
 func (s *Server) handleUpdateListener(c *gin.Context) {
 	id := c.Param("id")
-	var l db.Listener
-	if err := s.db.First(&l, id).Error; err != nil {
+	l, ok := s.loadListenerScoped(c, id)
+	if !ok {
 		respondError(c, http.StatusNotFound, "listener not found")
 		return
 	}
@@ -539,15 +553,17 @@ func (s *Server) handleDeleteListener(c *gin.Context) {
 	}
 
 	// Load listener to stop any running extra listener
-	var l db.Listener
-	if err := s.db.First(&l, id).Error; err == nil {
-		s.stopExtraListener(listenerKey(&l))
-		if s.circuitBreaker != nil {
-			s.circuitBreaker.UnregisterTarget(listenerTargetID(&l))
-		}
+	l, ok := s.loadListenerScoped(c, id)
+	if !ok {
+		respondError(c, http.StatusNotFound, "listener not found")
+		return
+	}
+	s.stopExtraListener(listenerKey(&l))
+	if s.circuitBreaker != nil {
+		s.circuitBreaker.UnregisterTarget(listenerTargetID(&l))
 	}
 
-	result := s.db.Delete(&db.Listener{}, id)
+	result := s.tenantScope(s.db, c).Delete(&db.Listener{}, id)
 	if result.Error != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(result.Error, "Listener delete"))
 		return
@@ -563,8 +579,8 @@ func (s *Server) handleDeleteListener(c *gin.Context) {
 
 func (s *Server) handleEnableListener(c *gin.Context) {
 	id := c.Param("id")
-	var l db.Listener
-	if err := s.db.First(&l, id).Error; err != nil {
+	l, ok := s.loadListenerScoped(c, id)
+	if !ok {
 		respondError(c, http.StatusNotFound, "listener not found")
 		return
 	}
@@ -590,8 +606,8 @@ func (s *Server) handleEnableListener(c *gin.Context) {
 
 func (s *Server) handleDisableListener(c *gin.Context) {
 	id := c.Param("id")
-	var l db.Listener
-	if err := s.db.First(&l, id).Error; err != nil {
+	l, ok := s.loadListenerScoped(c, id)
+	if !ok {
 		respondError(c, http.StatusNotFound, "listener not found")
 		return
 	}

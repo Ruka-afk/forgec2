@@ -656,7 +656,7 @@ func (s *Server) dispatchEvent(evt Event, includeAlert bool) {
 	}
 	rules := s.loadAutomationRules()
 	for _, rule := range rules {
-		if rule.Enabled && rule.EventType == string(evt.Type) {
+		if rule.Enabled && rule.EventType == string(evt.Type) && s.ruleMayFireOn(rule.TenantID, evt.AgentID) {
 			s.evaluateRule(evt, rule)
 		}
 	}

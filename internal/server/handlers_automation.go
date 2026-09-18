@@ -114,6 +114,17 @@ func ssrfSafeClient(base *http.Client) *http.Client {
 
 func (s *Server) handleAutomationPage(c *gin.Context) {
 	rules := s.loadAutomationRules()
+	// The page embeds rule action params (webhook URLs carry secrets):
+	// scoped operators only render their own tenant's rules.
+	if tid := s.currentTenantID(c); tid != 0 {
+		kept := make([]AutomationRule, 0, len(rules))
+		for _, r := range rules {
+			if r.TenantID == tid {
+				kept = append(kept, r)
+			}
+		}
+		rules = kept
+	}
 	var webhooks []db.WebhookConfig
 	if err := s.db.Limit(500).Find(&webhooks).Error; err != nil {
 		slog.Error("Failed to list webhooks for automation page", "err", err)
@@ -129,11 +140,11 @@ func (s *Server) handleAutomationPage(c *gin.Context) {
 func (s *Server) handleListAutomationRules(c *gin.Context) {
 	p := parsePagination(c, 50, 200)
 	var total int64
-	if err := s.db.Model(&db.AutomationRule{}).Count(&total).Error; err != nil {
+	if err := s.tenantScope(s.db.Model(&db.AutomationRule{}), c).Count(&total).Error; err != nil {
 		slog.Error("Failed to count automation rules", "err", err)
 	}
 	var dbRules []db.AutomationRule
-	if err := s.db.Offset(p.Offset).Limit(p.PageSize).Find(&dbRules).Error; err != nil {
+	if err := s.tenantScope(s.db, c).Offset(p.Offset).Limit(p.PageSize).Find(&dbRules).Error; err != nil {
 		slog.Error("Failed to list automation rules", "err", err)
 	}
 	var rules []AutomationRule
@@ -158,6 +169,7 @@ func (s *Server) handleListAutomationRules(c *gin.Context) {
 			Conditions: conditions,
 			Actions:    actions,
 			CreatedAt:  dr.CreatedAt.Format(time.RFC3339),
+			TenantID:   dr.TenantID,
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": rules, "total": total, "page": p.Page, "page_size": p.PageSize})
@@ -172,6 +184,8 @@ func (s *Server) handleSaveAutomationRule(c *gin.Context) {
 	if rule.ID == "" {
 		rule.ID = fmt.Sprintf("rule_%d", time.Now().UnixNano())
 	}
+	// New rules belong to the operator's tenant; the body must not set it.
+	rule.TenantID = s.currentTenantID(c)
 	if rule.CreatedAt == "" {
 		rule.CreatedAt = time.Now().Format(time.RFC3339)
 	}
@@ -182,6 +196,22 @@ func (s *Server) handleSaveAutomationRule(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": rule})
 }
 
+// loadAutomationRuleScoped reads one rule from the automation cache and
+// enforces tenant visibility: legacy operators (tid 0) see all, scoped
+// operators only their own tenant's. ok=false doubles as "not found".
+func (s *Server) loadAutomationRuleScoped(c *gin.Context, ruleID string) (AutomationRule, bool) {
+	tid := s.currentTenantID(c)
+	for _, r := range s.loadAutomationRules() {
+		if r.ID == ruleID {
+			if tid != 0 && r.TenantID != tid {
+				return AutomationRule{}, false
+			}
+			return r, true
+		}
+	}
+	return AutomationRule{}, false
+}
+
 func (s *Server) handleUpdateAutomationRule(c *gin.Context) {
 	ruleID := c.Param("id")
 	var rule AutomationRule
@@ -189,7 +219,15 @@ func (s *Server) handleUpdateAutomationRule(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, sanitizeError(err, "Rule operation"))
 		return
 	}
+	existing, ok := s.loadAutomationRuleScoped(c, ruleID)
+	if !ok {
+		respondError(c, http.StatusNotFound, "Rule not found")
+		return
+	}
 	rule.ID = ruleID
+	// Tenant is immutable from the API: keep the stored value so an
+	// omitted/zeroed body field cannot move the rule across tenants.
+	rule.TenantID = existing.TenantID
 	if err := s.saveAutomationRule(rule); err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Rule operation"))
 		return
@@ -199,6 +237,10 @@ func (s *Server) handleUpdateAutomationRule(c *gin.Context) {
 
 func (s *Server) handleDeleteAutomationRule(c *gin.Context) {
 	ruleID := c.Param("id")
+	if _, ok := s.loadAutomationRuleScoped(c, ruleID); !ok {
+		respondError(c, http.StatusNotFound, "Rule not found")
+		return
+	}
 	if err := s.deleteAutomationRule(ruleID); err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Rule operation"))
 		return
@@ -208,21 +250,14 @@ func (s *Server) handleDeleteAutomationRule(c *gin.Context) {
 
 func (s *Server) handleToggleAutomationRule(c *gin.Context) {
 	ruleID := c.Param("id")
-	rules := s.loadAutomationRules()
-	found := false
-	for i, r := range rules {
-		if r.ID == ruleID {
-			rules[i].Enabled = !r.Enabled
-			if err := s.saveAutomationRule(rules[i]); err != nil {
-				respondError(c, http.StatusInternalServerError, sanitizeError(err, "Rule operation"))
-				return
-			}
-			found = true
-			break
-		}
-	}
-	if !found {
+	r, ok := s.loadAutomationRuleScoped(c, ruleID)
+	if !ok {
 		respondError(c, http.StatusNotFound, "rule not found")
+		return
+	}
+	r.Enabled = !r.Enabled
+	if err := s.saveAutomationRule(r); err != nil {
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Rule operation"))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})

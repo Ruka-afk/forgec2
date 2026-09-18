@@ -521,7 +521,7 @@ func (s *Server) executeAIBackgroundRun(ctx context.Context, run db.AIChatRun, r
 		sysPrompt += "\n\n" + contextText
 	}
 	// Rolling memory: older turns already folded into the session digest.
-	if summary := s.sessionSummaryForPrompt(run.SessionID); summary != "" {
+	if summary := s.sessionSummaryForPrompt(run.SessionID, principal); summary != "" {
 		sysPrompt += "\n\n" + summary
 	}
 	// Inject live situation snapshot for runs to match legacy chat parity (tenant-aware)
@@ -594,7 +594,7 @@ func (s *Server) executeAIBackgroundRun(ctx context.Context, run db.AIChatRun, r
 		if ctx == nil {
 			ctx = context.Background()
 		}
-		s.maybeSummarizeSession(ctx, run.SessionID)
+		s.maybeSummarizeSession(ctx, run.SessionID, principal)
 	}()
 	if status != aiRunStatusCompleted {
 		emit("error", errorMessage, true)
