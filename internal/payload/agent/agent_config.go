@@ -398,6 +398,8 @@ func applyServerNetworkConfig(b64 string) {
 		MalleableAppend:     nc.MalleableAppend,
 		MalleableRespDecode: nc.MalleableRespDecode,
 		BeaconURI:           nc.BeaconURI,
+		BeaconURIs:          nc.BeaconURIs,
+		UserAgents:          nc.UserAgents,
 	}
 	if nc.RequestPrepend != "" {
 		b.MalleableRequestPrepend = nc.RequestPrepend

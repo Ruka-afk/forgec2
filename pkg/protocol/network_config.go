@@ -50,6 +50,13 @@ type NetworkConfig struct {
 	RequestAppend  string            `json:"request_append"`
 	RequestHeaders map[string]string `json:"request_headers"`
 	BeaconURI      string            `json:"beacon_uri"`
+	// BeaconURIs is the comma-joined per-beacon URI rotation pool from the
+	// active profile. Empty disables rotation (fixed BeaconURI). Old agents
+	// ignore unknown fields, so adding it is wire-compatible.
+	BeaconURIs string `json:"beacon_uris,omitempty"`
+	// UserAgents is the newline-joined User-Agent rotation pool. Empty keeps
+	// the single UserAgent + built-in pool behavior.
+	UserAgents string `json:"user_agents,omitempty"`
 	// v2 placements JSON [{target,chain}] cover copies; empty = body only.
 	MalleablePlacement string `json:"malleable_placement"`
 }

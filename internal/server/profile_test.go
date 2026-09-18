@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/forgec2/forgec2/internal/config"
@@ -129,6 +130,85 @@ func coverTestServer(t *testing.T, profileJSON string) *Server {
 }
 
 const coverV1Profile = `{"name":"t","prepend":"<PRE>","append":"<APP>"}`
+
+// TestProfileBeaconPoolsPreset proves a named preset yields its request URIs
+// and User-Agent for per-beacon rotation.
+func TestProfileBeaconPoolsPreset(t *testing.T) {
+	s := coverTestServer(t, "")
+	s.cfg.Malleable.ProfileName = "microsoft"
+
+	uris, uas := s.profileBeaconPools()
+	foundURI := false
+	for _, u := range uris {
+		if u == "/common/oauth2/token" {
+			foundURI = true
+		}
+		if !strings.HasPrefix(u, "/") {
+			t.Fatalf("pool URI %q must stay path-only", u)
+		}
+	}
+	if !foundURI || len(uris) < 2 {
+		t.Fatalf("preset URIs = %v, want pool including /common/oauth2/token", uris)
+	}
+	if len(uas) == 0 {
+		t.Fatal("preset should contribute a User-Agent")
+	}
+}
+
+// TestPoolFiltersRejectHostileEntries proves the pool sanitizers drop
+// absolute URLs, whitespace URIs, blank UAs and header-injecting UAs.
+func TestPoolFiltersRejectHostileEntries(t *testing.T) {
+	for _, u := range []string{"", "   ", "https://evil.example/x", "http://a/b", "/has space", "/tab\there", "no-leading-slash"} {
+		if got, ok := filterPoolURI(u); ok {
+			t.Errorf("filterPoolURI(%q) = %q, want reject", u, got)
+		}
+	}
+	if got, ok := filterPoolURI("  /ok  "); !ok || got != "/ok" {
+		t.Errorf("filterPoolURI trims valid URI: %q,%v", got, ok)
+	}
+	for _, ua := range []string{"", "   ", "bad\r\ninjected", "x\ny"} {
+		if got, ok := filterPoolUA(ua); ok {
+			t.Errorf("filterPoolUA(%q) = %q, want reject", ua, got)
+		}
+	}
+	if got, ok := filterPoolUA("  UA-One  "); !ok || got != "UA-One" {
+		t.Errorf("filterPoolUA trims valid UA: %q,%v", got, ok)
+	}
+}
+
+// TestProfileBeaconPoolsV2File proves v2 BeaconURIs/URIs/UserAgents land in
+// the pools.
+func TestProfileBeaconPoolsV2File(t *testing.T) {
+	s := coverTestServer(t, `{"name":"t","beacon_uris":["/c1","/c2"],"uris":["/c3"],"user_agents":["UA-One"]}`)
+	s.cfg.Malleable.ProfileName = "t"
+
+	uris, uas := s.profileBeaconPools()
+	wantURIs := map[string]bool{"/c1": true, "/c2": true, "/c3": true}
+	if len(uris) != len(wantURIs) {
+		t.Fatalf("URIs = %v, want %v", uris, wantURIs)
+	}
+	for _, u := range uris {
+		if !wantURIs[u] {
+			t.Fatalf("unexpected URI %q", u)
+		}
+	}
+	if len(uas) != 1 || uas[0] != "UA-One" {
+		t.Fatalf("UAs = %v, want [UA-One]", uas)
+	}
+}
+
+// TestProfileBeaconPoolsEmpty proves no profile means no rotation (fixed
+// values preserved, zero behavior change for existing fleets).
+func TestProfileBeaconPoolsEmpty(t *testing.T) {
+	s := coverTestServer(t, "")
+	if uris, uas := s.profileBeaconPools(); len(uris) != 0 || len(uas) != 0 {
+		t.Fatalf("empty profile pools = (%v,%v), want empty", uris, uas)
+	}
+	s.cfg.Malleable.ProfileName = "no-such-profile"
+	if uris, uas := s.profileBeaconPools(); len(uris) != 0 || len(uas) != 0 {
+		t.Fatalf("missing profile pools = (%v,%v), want empty", uris, uas)
+	}
+}
 
 // TestNoteMalleableEventCounts proves every failure is counted (logs are
 // throttled, metrics are not).

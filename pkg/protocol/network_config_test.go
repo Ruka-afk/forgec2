@@ -25,6 +25,8 @@ func TestNetworkConfigEncryptRoundTrip(t *testing.T) {
 		MalleablePrepend: "<html>",
 		MalleableAppend:  "</html>",
 		BeaconURI:        "/api/v1/beacon",
+		BeaconURIs:       "/collect,/batch",
+		UserAgents:       "Mozilla/5.0\nCustomAgent/2.0",
 	}
 	b64, err := EncryptNetworkConfig(secret, nc)
 	if err != nil {
@@ -42,6 +44,9 @@ func TestNetworkConfigEncryptRoundTrip(t *testing.T) {
 	}
 	if got.MalleablePrepend != nc.MalleablePrepend || got.MalleableAppend != nc.MalleableAppend {
 		t.Errorf("malleable mismatch: %+v", got)
+	}
+	if got.BeaconURIs != nc.BeaconURIs || got.UserAgents != nc.UserAgents {
+		t.Errorf("rotation pools mismatch: %+v", got)
 	}
 	if got.SkipTLSVerify != nc.SkipTLSVerify || got.Proxy != nc.Proxy {
 		t.Errorf("proxy/tls mismatch: %+v", got)

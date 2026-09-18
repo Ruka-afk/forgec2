@@ -75,6 +75,92 @@ func (s *Server) applyMalleableProfile(c *gin.Context, body []byte) {
 	c.Writer.WriteString(wrapped)
 }
 
+// filterPoolURI keeps a rotation URI only if it stays path-only on the
+// already-connected C2 host. Defense in depth: profile validation rejects
+// these first, but rotation must never steer beacons at absolute URLs even
+// if validation ever relaxes.
+func filterPoolURI(u string) (string, bool) {
+	u = strings.TrimSpace(u)
+	if u == "" || !strings.HasPrefix(u, "/") || strings.ContainsAny(u, " \t\r\n") {
+		return "", false
+	}
+	return u, true
+}
+
+// filterPoolUA drops blank or header-injecting User-Agent pool entries.
+func filterPoolUA(ua string) (string, bool) {
+	ua = strings.TrimSpace(ua)
+	if ua == "" || strings.ContainsAny(ua, "\r\n") {
+		return "", false
+	}
+	return ua, true
+}
+
+// profileBeaconPools returns the per-beacon rotation pools from the active
+// profile: request URIs and User-Agent strings. Empty pools disable that
+// rotation axis (agent keeps its fixed value). Entries are sanitized so a
+// hostile profile file cannot steer beacons at exfiltration targets — URIs
+// stay path-only on the already-connected C2 host.
+func (s *Server) profileBeaconPools() (uris []string, userAgents []string) {
+	s.configMu.RLock()
+	profileName := s.cfg.Malleable.ProfileName
+	s.configMu.RUnlock()
+	if profileName == "" {
+		return nil, nil
+	}
+	seenURI := make(map[string]bool)
+	addURI := func(u string) {
+		u, ok := filterPoolURI(u)
+		if !ok {
+			return
+		}
+		if !seenURI[u] {
+			seenURI[u] = true
+			uris = append(uris, u)
+		}
+	}
+	seenUA := make(map[string]bool)
+	addUA := func(ua string) {
+		ua, ok := filterPoolUA(ua)
+		if !ok {
+			return
+		}
+		if !seenUA[ua] {
+			seenUA[ua] = true
+			userAgents = append(userAgents, ua)
+		}
+	}
+	if profile, ok := malleable.PredefinedProfiles()[profileName]; ok {
+		for _, u := range profile.HttpPost.URI {
+			addURI(u)
+		}
+		for _, u := range profile.HttpGet.URI {
+			addURI(u)
+		}
+		addUA(profile.HttpPost.Headers["User-Agent"])
+		addUA(profile.HttpGet.Headers["User-Agent"])
+		return uris, userAgents
+	}
+	if v2 := s.loadV2Profile(profileName); v2 != nil {
+		for _, u := range v2.BeaconURIs {
+			addURI(u)
+		}
+		for _, u := range v2.URIs {
+			addURI(u)
+		}
+		if v2.BeaconURI != "" {
+			addURI(v2.BeaconURI)
+		}
+		for _, ua := range v2.UserAgents {
+			addUA(ua)
+		}
+		if v2.UserAgent != "" {
+			addUA(v2.UserAgent)
+		}
+	}
+	return uris, userAgents
+}
+
 // sanitizeProfileName strips a profile name to filesystem-safe characters
 // (shared by every data/profiles/<name>.json lookup).
 func sanitizeProfileName(name string) string {

