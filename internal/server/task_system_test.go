@@ -77,3 +77,30 @@ func TestCreateSystemTaskApprovalExpiry(t *testing.T) {
 		t.Fatal("pending_approval system task needs an expiry")
 	}
 }
+
+// TestCreateTaskClampsSetSleep proves operator-created set_sleep tasks are
+// bounded agent-safe: huge intervals park agents for years, huge jitter
+// swings sleeps negative (floored to zero) into a tight beacon loop.
+func TestCreateTaskClampsSetSleep(t *testing.T) {
+	s := newTasksTestServer(t)
+	cases := []struct {
+		in, want string
+	}{
+		{"60,10", "60,10"},
+		{"0,0", "1,0"},
+		{"-5,-10", "1,0"},
+		{"999999999,999999", "86400,100"},
+		{"30,500", "30,100"},
+		{"not-a-pair", "not-a-pair"},
+		{"abc,def", "abc,def"},
+	}
+	for i, tc := range cases {
+		task, err := s.createTask("clamp-agent", "set_sleep", tc.in, "", "", "", 0, 0)
+		if err != nil {
+			t.Fatalf("case %d (%q): %v", i, tc.in, err)
+		}
+		if task.Command != tc.want {
+			t.Errorf("case %d (%q): command=%q, want %q", i, tc.in, task.Command, tc.want)
+		}
+	}
+}

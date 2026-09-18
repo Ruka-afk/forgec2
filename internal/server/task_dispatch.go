@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -153,6 +154,20 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 
 	if len(command) > MaxCommandLength {
 		return nil, fmt.Errorf("command too long (max %d characters)", MaxCommandLength)
+	}
+
+	// set_sleep bounds: the agent rejects interval <= 0 but honors absurd
+	// values — a huge interval parks the agent for years, a huge jitter
+	// swings sleeps negative (floored to zero) into a beacon-hammering tight
+	// loop. Clamp centrally so every creation path (operator API, batch,
+	// macros, scheduler, rerun) inherits the same floors/ceilings as the
+	// automation and AI paths already enforce.
+	if taskType == "set_sleep" {
+		var err error
+		command, err = clampSetSleepCommand(command)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Idempotency: a live task with the same key short-circuits creation.
@@ -346,6 +361,35 @@ func (s *Server) fireTaskCreatedHook(agentID string, taskID uint, taskType, comm
 		}
 	}()
 }
+// clampSetSleepCommand bounds a set_sleep "interval,jitter" command to the
+// agent-safe range (interval 1..86400s, jitter 0..100%). Malformed input
+// passes through untouched so downstream validation still reports the
+// original error (same contract as clampSleepString).
+func clampSetSleepCommand(command string) (string, error) {
+	parts := strings.Split(command, ",")
+	if len(parts) != 2 {
+		return command, nil
+	}
+	interval, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
+	jitter, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if err1 != nil || err2 != nil {
+		return command, nil
+	}
+	if interval < 1 {
+		interval = 1
+	}
+	if interval > 86400 {
+		interval = 86400
+	}
+	if jitter < 0 {
+		jitter = 0
+	}
+	if jitter > 100 {
+		jitter = 100
+	}
+	return fmt.Sprintf("%d,%d", interval, jitter), nil
+}
+
 // resolveInitialTaskStatus returns the status a newly created task should start
 // in. When operator approval is required and the task type is flagged, the task
 // waits in pending_approval; otherwise it is immediately pending. Centralizing

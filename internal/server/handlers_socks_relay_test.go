@@ -165,6 +165,54 @@ func TestSocksStopAllDrains(t *testing.T) {
 	}
 }
 
+// TestSocksFastModeOnlyWithTraffic proves an idle-but-open session does not
+// pin the agent at fast-poll cadence: the hint fires only while frames flow
+// either way (frames in the response re-arm fast mode agent-side anyway).
+func TestSocksFastModeOnlyWithTraffic(t *testing.T) {
+	newEngine := func() *socksRelayEngine {
+		e := newSocksRelayEngine()
+		e.sessions["fast-agent"] = &socksRelaySession{agentID: "fast-agent", port: 1080}
+		return e
+	}
+
+	// Idle session, no frames either way: no hint.
+	s := &Server{socksEngine: newEngine()}
+	resp := &beaconResponse{}
+	s.processSOCKSRelay("fast-agent", nil, resp)
+	if resp.SocksFastMode {
+		t.Fatal("idle session must not request fast polling")
+	}
+	if len(resp.SocksFrames) != 0 {
+		t.Fatalf("idle session produced %d frames", len(resp.SocksFrames))
+	}
+
+	// Queued outbound frame: hint set.
+	s = &Server{socksEngine: newEngine()}
+	if !s.socksEngine.enqueueRPortFwdFrame("fast-agent", socksFrame{ConnID: 1, Action: "rportfwd_data", Data: []byte("hi")}) {
+		t.Fatal("enqueue must fit")
+	}
+	resp = &beaconResponse{}
+	s.processSOCKSRelay("fast-agent", nil, resp)
+	if !resp.SocksFastMode {
+		t.Fatal("outbound backlog must request fast polling")
+	}
+	if len(resp.SocksFrames) != 1 {
+		t.Fatalf("got %d frames, want 1", len(resp.SocksFrames))
+	}
+
+	// Inbound data alone (operator leg live, nothing queued yet): hint set.
+	s = &Server{socksEngine: newEngine(), db: newTasksTestServer(t).db}
+	client, server := net.Pipe()
+	s.socksEngine.connections[9] = &socksRelayConn{connID: 9, tcpConn: server, agentID: "fast-agent", lastActive: time.Now()}
+	client.Close() // writes fail fast; the hint depends on traffic, not delivery
+	defer server.Close()
+	resp = &beaconResponse{}
+	s.processSOCKSRelay("fast-agent", []socksFrame{{ConnID: 9, Action: "data", Data: []byte("x")}}, resp)
+	if !resp.SocksFastMode {
+		t.Fatal("inbound traffic must request fast polling")
+	}
+}
+
 // TestSocksDropsCounted proves formerly-silent frame sheds are visible in
 // SocksDroppedTotal: unknown-conn data (either direction), foreign-conn
 // replay attempts, and malformed UDP datagrams.

@@ -307,8 +307,13 @@ func (s *Server) processSOCKSRelayWithBudget(uuid string, socksData []socksFrame
 	if frames := s.collectSocksFrames(uuid, frameSize, budget); len(frames) > 0 {
 		resp.SocksFrames = frames
 	}
-	// Hint agent to use fast polling when SOCKS is active
-	if s.hasActiveSocks(uuid) || (s.tunEngine != nil && s.tunEngine.active(uuid)) {
+	// Fast-poll hint only while traffic flows in either direction: an idle
+	// but open session used to pin the agent at 500ms beacons indefinitely
+	// (OPSEC burn with zero benefit). Frames in this response re-arm fast
+	// mode agent-side on their own; inbound frames mean the operator leg is
+	// live. A newly opened operator connection waits for the next normal
+	// beacon — use beacon_now for interactive setup.
+	if len(resp.SocksFrames) > 0 || len(socksData) > 0 {
 		resp.SocksFastMode = true
 	}
 }
