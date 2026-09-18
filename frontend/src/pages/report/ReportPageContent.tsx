@@ -1,7 +1,7 @@
 
 import { useState, useMemo } from "react";
 import { paths } from "@/lib/api-paths";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { downloadBlob, downloadText } from "@/lib/download";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
@@ -30,6 +30,11 @@ export default function ReportPage() {
   const [viewingReport, setViewingReport] = useState<{ name: string; content: string } | null>(null);
   const [loadingReport, setLoadingReport] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
+  // Bulk secret exports (report HTML, handover bundle) require TOTP step-up
+  // when the operator enrolled 2FA. Enrollment is cached per page visit.
+  const [totpEnrolled, setTotpEnrolled] = useState<boolean | null>(null);
+  const [stepUp, setStepUp] = useState<{ path: string; filename: string; key: string } | null>(null);
+  const [stepUpCode, setStepUpCode] = useState("");
 
   const { t } = useI18n();
   const {
@@ -92,17 +97,62 @@ export default function ReportPage() {
     await generateReport(sections);
   };
 
-  const downloadReport = async (path: string, fallbackFilename: string, key: string) => {
+  const doDownload = async (path: string, fallbackFilename: string, key: string, withCode: string | null) => {
     if (downloading) return;
     setDownloading(key);
     try {
-      const { blob, filename } = await api.downloadGet(path, fallbackFilename);
+      const url = withCode ? `${path}${path.includes("?") ? "&" : "?"}totp_code=${encodeURIComponent(withCode)}` : path;
+      const { blob, filename } = await api.downloadGet(url, fallbackFilename);
       downloadBlob(blob, filename);
-    } catch {
-      toast.error(t("report.toast.download_failed"));
+    } catch (e) {
+      // Step-up rejection reopens the prompt so a typo doesn't force the
+      // operator to restart the export. Matched on the server's stable
+      // English constant (ApiError drops the totp_required body flag);
+      // any other 403 (e.g. permission denied) stays a plain toast.
+      if (e instanceof ApiError && e.status === 403 && e.message.includes("TOTP")) {
+        setStepUp({ path, filename: fallbackFilename, key });
+        setStepUpCode("");
+        if (withCode) {
+          toast.error(t("report.stepup_invalid"));
+        } else {
+          toast.error(t("report.toast.download_failed"));
+        }
+      } else {
+        toast.error(t("report.toast.download_failed"));
+      }
     } finally {
       setDownloading(null);
     }
+  };
+
+  const downloadReport = async (path: string, fallbackFilename: string, key: string) => {
+    if (downloading || stepUp) return;
+    try {
+      let enrolled = totpEnrolled;
+      if (enrolled === null) {
+        const d = await api.get(paths.settings.totpStatus) as Record<string, unknown>;
+        enrolled = (d.totp_enabled ?? false) as boolean;
+        setTotpEnrolled(enrolled);
+      }
+      if (enrolled) {
+        setStepUpCode("");
+        setStepUp({ path, filename: fallbackFilename, key });
+        return;
+      }
+    } catch {
+      // Status check failed: fall through to a direct attempt; the server
+      // is the enforcement point and will 403 with totp_required if needed.
+    }
+    await doDownload(path, fallbackFilename, key, null);
+  };
+
+  const submitStepUp = async () => {
+    if (!stepUp || stepUpCode.trim().length < 6) return;
+    const pending = stepUp;
+    const code = stepUpCode.trim();
+    setStepUp(null);
+    setStepUpCode("");
+    await doDownload(pending.path, pending.filename, pending.key, code);
   };
 
   const handleExportPDF = async () => {
@@ -482,6 +532,32 @@ export default function ReportPage() {
         </div>
       </div>
       </Tabs>
+
+      <Dialog open={!!stepUp} onOpenChange={(open) => { if (!open) setStepUp(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldCheck className="size-4 shrink-0" />{t("report.stepup_title")}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{t("report.stepup_desc")}</p>
+          <Label htmlFor="stepup-code">{t("report.stepup_placeholder")}</Label>
+          <Input
+            id="stepup-code"
+            value={stepUpCode}
+            onChange={(e) => setStepUpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            onKeyDown={(e) => { if (e.key === "Enter") void submitStepUp(); }}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            autoFocus
+            placeholder="123456"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStepUp(null)}>{t("common.cancel")}</Button>
+            <Button onClick={() => void submitStepUp()} disabled={stepUpCode.trim().length < 6}>{t("report.stepup_confirm")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!viewingReport} onOpenChange={(open) => { if (!open) setViewingReport(null); }}>
         <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">

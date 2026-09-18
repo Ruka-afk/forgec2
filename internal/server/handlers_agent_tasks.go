@@ -103,6 +103,9 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 
 // handleExportTasks exports tasks as CSV for reporting
 func (s *Server) handleExportTasks(c *gin.Context) {
+	if !s.requireExportStepUp(c, "task_export", "task") {
+		return
+	}
 	var tasks []db.Task
 	query := s.db.WithContext(s.ctx).Preload("Agent").
 		Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"})
@@ -140,6 +143,7 @@ func (s *Server) handleExportTasks(c *gin.Context) {
 
 	c.Header("Content-Type", "text/csv; charset=utf-8")
 	c.Header("Content-Disposition", `attachment; filename="forgec2_tasks_`+time.Now().Format("2006-01-02")+`.csv"`)
+	s.LogAuditRecord(c, "task_export", "task", "", "tasks exported as CSV", true, nil)
 	c.String(http.StatusOK, buf.String())
 }
 

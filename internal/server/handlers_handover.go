@@ -20,12 +20,15 @@ import (
 // and has_password/has_hash markers only; the live vault stays the source of
 // truth for reusable secrets. GET /api/handover/export?days=30
 func (s *Server) handleHandoverExport(c *gin.Context) {
+	if !s.requireExportStepUp(c, "handover_export", "system") {
+		return
+	}
 	days := atoiDefault(c.Query("days"), 30)
 	if days < 1 || days > 365 {
 		days = 30
 	}
 	since := time.Now().AddDate(0, 0, -days)
-	iocs, _, err := s.extractIOCs(days, false)
+	iocs, _, err := s.extractIOCs(days, false, s.reportAgentIDs(c))
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to extract indicators")
 		return
@@ -58,7 +61,7 @@ func (s *Server) handleHandoverExport(c *gin.Context) {
 
 	// ── Agents ──
 	var agents []db.Implant
-	s.db.Order("hostname").Find(&agents)
+	s.tenantScope(s.db, c).Order("hostname").Find(&agents)
 	agentCount = int64(len(agents))
 	type handoverAgent struct {
 		ID        string `json:"id"`
@@ -95,7 +98,7 @@ func (s *Server) handleHandoverExport(c *gin.Context) {
 	// materialized multi-MB blobs × 50k rows in RAM before each was cut to
 	// 4 KiB. SUBSTR caps it at the source; only needed columns are scanned.
 	var tasks []db.Task
-	s.db.Select("id, agent_id, type, command, status, error, created_at, updated_at, created_by, SUBSTR(result, 1, 4100) AS result").
+	s.tenantScope(s.db, c).Select("id, agent_id, type, command, status, error, created_at, updated_at, created_by, SUBSTR(result, 1, 4100) AS result").
 		Where("created_at >= ?", since).Order("created_at asc").Limit(50000).Find(&tasks)
 	taskCount = int64(len(tasks))
 	tw, err := zw.Create("tasks.jsonl")
@@ -133,7 +136,7 @@ func (s *Server) handleHandoverExport(c *gin.Context) {
 		Notes     string
 		CreatedAt time.Time
 	}
-	s.db.Model(&db.CredentialEntry{}).
+	s.tenantScope(s.db.Model(&db.CredentialEntry{}), c).
 		Select("id, agent_id, domain, username, type, source, hash, confirmed, tags, notes, created_at, (password <> '') AS has_password").
 		Order("created_at asc").Find(&creds)
 	credCount = int64(len(creds))
@@ -161,8 +164,14 @@ func (s *Server) handleHandoverExport(c *gin.Context) {
 	addJSON("credentials.sanitized.json", credsOut)
 
 	// ── Network hosts discovered ──
+	// NetworkHost carries no tenant column: contain through the owning
+	// agent (same pattern as the report network section).
 	var hosts []db.NetworkHost
-	s.db.Order("updated_at desc").Limit(20000).Find(&hosts)
+	hostQuery := s.db.Order("updated_at desc").Limit(20000)
+	if tid := s.currentTenantID(c); tid != 0 {
+		hostQuery = hostQuery.Where("agent_id IN (?)", s.reportAgentIDs(c))
+	}
+	hostQuery.Find(&hosts)
 	hostCount = int64(len(hosts))
 	addJSON("network_hosts.json", hosts)
 
@@ -172,8 +181,10 @@ func (s *Server) handleHandoverExport(c *gin.Context) {
 	addJSON("iocs.stix2.json", buildStixBundle(iocs, stamp))
 
 	// ── Audit trail in range ──
+	// Audit rows belong to operator usernames: contain through the
+	// caller's tenant (reportUsernames mirrors the dashboard pattern).
 	var audits []db.AuditLog
-	s.db.Where("created_at >= ?", since).Order("created_at asc").Limit(50000).Find(&audits)
+	s.db.Where("user IN (?) AND created_at >= ?", s.reportUsernames(c), since).Order("created_at asc").Limit(50000).Find(&audits)
 	addJSON("audit.jsonl", audits)
 
 	// ── Screenshot manifest (filenames only; binaries stay on server) ──
@@ -183,7 +194,7 @@ func (s *Server) handleHandoverExport(c *gin.Context) {
 	}
 	shots := make([]shotRef, 0)
 	var shotAgents []db.Implant
-	s.db.Select("id").Find(&shotAgents)
+	s.tenantScope(s.db, c).Select("id").Find(&shotAgents)
 	for _, a := range shotAgents {
 		for _, m := range s.listScreenshotModTimes(a.ID) {
 			shots = append(shots, shotRef{AgentID: a.ID, File: m.name})
@@ -192,7 +203,9 @@ func (s *Server) handleHandoverExport(c *gin.Context) {
 	addJSON("screenshots.manifest.json", shots)
 
 	// ── AI engagement memory ──
-	if notes := s.cfg.AI.EngagementNotes; notes != "" {
+	// Engagement notes are operator-global memory: only legacy operators
+	// see them; scoped operators get a bundle limited to their tenant.
+	if notes := s.cfg.AI.EngagementNotes; notes != "" && s.currentTenantID(c) == 0 {
 		addJSON("engagement_notes.txt", map[string]interface{}{"notes": notes})
 	}
 
@@ -218,6 +231,6 @@ credential vault remains the source of truth for reusable secrets.
 		_, _ = w.Write([]byte(readme))
 	}
 
-	s.LogAuditRecord(nil, "handover_export", "system", "",
+	s.LogAuditRecord(c, "handover_export", "system", "",
 		fmt.Sprintf("Handover bundle exported (%d agents, %d tasks, %d creds, %d IOCs)", agentCount, taskCount, credCount, iocCount), true, nil)
 }

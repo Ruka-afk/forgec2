@@ -895,6 +895,9 @@ func checkExportRateLimit(ip string) bool {
 }
 
 func (s *Server) handleExportCredentials(c *gin.Context) {
+	if !s.requireExportStepUp(c, "credential_export", "credential") {
+		return
+	}
 	if !checkExportRateLimit(c.ClientIP()) {
 		respondError(c, http.StatusTooManyRequests, "export rate limit exceeded, try again later")
 		return
@@ -903,7 +906,7 @@ func (s *Server) handleExportCredentials(c *gin.Context) {
 	s.LogAuditRecord(c, "credential_export", "credential", "", "credentials exported as CSV", true, nil)
 
 	var creds []db.CredentialEntry
-	query := s.db.WithContext(s.ctx).Order("created_at desc").Limit(5000)
+	query := s.tenantScope(s.db.WithContext(s.ctx), c).Order("created_at desc").Limit(5000)
 
 	tagFilter := c.Query("tag")
 	expiryFilter := c.Query("expiry")

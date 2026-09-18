@@ -367,7 +367,7 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 		if p.Days <= 0 || p.Days > 365 {
 			p.Days = 30
 		}
-		entries, _, err := s.extractIOCs(p.Days, false)
+		entries, _, err := s.extractIOCs(p.Days, false, s.principalAgentIDs(reqCtx))
 		if err != nil {
 			return fmt.Sprintf(`{"error":%q}`, err.Error())
 		}
@@ -1081,7 +1081,7 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 		default:
 			return `{"error":"invalid scope (full|executive|technical|coverage)"}`
 		}
-		md, sections, err := s.buildAIMarkdownReport(p.Scope)
+		md, sections, err := s.buildAIMarkdownReport(p.Scope, s.principalAgentIDs(reqCtx))
 		if err != nil {
 			return `{"error":"failed to build report: ` + sanitizeError(err, "report") + `"}`
 		}

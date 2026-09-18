@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
+	"gorm.io/gorm"
 )
 
 // mitreCoverageCounts summarizes technique coverage: how many tactics have at
@@ -50,7 +51,7 @@ func (s *Server) mitreCoverageCounts() (coveredTactics, gapTactics int, usedType
 //	coverage   -- MITRE ATT&CK gap analysis only
 //
 // Returns the markdown body and the ordered list of included section keys.
-func (s *Server) buildAIMarkdownReport(scope string) (string, []string, error) {
+func (s *Server) buildAIMarkdownReport(scope string, agentScope *gorm.DB) (string, []string, error) {
 	now := time.Now()
 	since := now.AddDate(0, 0, -30)
 
@@ -108,7 +109,7 @@ func (s *Server) buildAIMarkdownReport(scope string) (string, []string, error) {
 		}
 	}
 
-	iocs, _, err := s.extractIOCs(30, false)
+	iocs, _, err := s.extractIOCs(30, false, agentScope)
 	if err != nil {
 		return "", nil, err
 	}

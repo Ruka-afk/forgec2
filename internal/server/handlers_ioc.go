@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // IOC extraction: scan task results/commands plus credential and network-host
@@ -149,7 +150,7 @@ func (s *Server) handleListIOCs(c *gin.Context) {
 	typeFilter := c.Query("type")
 	includePrivate := c.Query("include_private") == "true"
 
-	entries, totalScanned, err := s.extractIOCs(days, includePrivate)
+	entries, totalScanned, err := s.extractIOCs(days, includePrivate, s.reportAgentIDs(c))
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to extract indicators")
 		return
@@ -172,7 +173,7 @@ func (s *Server) handleListIOCs(c *gin.Context) {
 
 // extractIOCs scans task results/commands in the window and returns merged,
 // count-ranked indicators.
-func (s *Server) extractIOCs(days int, includePrivate bool) ([]iocEntry, int, error) {
+func (s *Server) extractIOCs(days int, includePrivate bool, agentScope *gorm.DB) ([]iocEntry, int, error) {
 	since := time.Now().AddDate(0, 0, -days)
 	acc := &iocAccumulator{items: map[string]*iocEntry{}}
 
@@ -181,10 +182,14 @@ func (s *Server) extractIOCs(days int, includePrivate bool) ([]iocEntry, int, er
 		Result    string
 		CreatedAt time.Time
 	}
-	if err := s.db.Table("tasks").
+	taskQuery := s.db.Table("tasks").
 		Select("command, result, created_at").
 		Where("created_at >= ?", since).
-		Order("created_at desc").Limit(20000).Scan(&rows).Error; err != nil {
+		Order("created_at desc").Limit(20000)
+	if agentScope != nil {
+		taskQuery = taskQuery.Where("agent_id IN (?)", agentScope)
+	}
+	if err := taskQuery.Scan(&rows).Error; err != nil {
 		return nil, 0, fmt.Errorf("scan task indicators: %w", err)
 	}
 	scanned := len(rows)
@@ -203,8 +208,12 @@ func (s *Server) extractIOCs(days int, includePrivate bool) ([]iocEntry, int, er
 		Hostname  string
 		CreatedAt time.Time
 	}
-	if err := s.db.Table("network_hosts").
-		Select("ip, hostname, created_at").Limit(10000).Scan(&hosts).Error; err != nil {
+	hostQuery := s.db.Table("network_hosts").
+		Select("ip, hostname, created_at").Limit(10000)
+	if agentScope != nil {
+		hostQuery = hostQuery.Where("agent_id IN (?)", agentScope)
+	}
+	if err := hostQuery.Scan(&hosts).Error; err != nil {
 		return nil, 0, fmt.Errorf("scan network-host indicators: %w", err)
 	}
 	for _, h := range hosts {
@@ -229,7 +238,7 @@ func (s *Server) handleExportIOCs(c *gin.Context) {
 	}
 	includePrivate := c.Query("include_private") == "true"
 
-	entries, _, err := s.extractIOCs(days, includePrivate)
+	entries, _, err := s.extractIOCs(days, includePrivate, s.reportAgentIDs(c))
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to extract indicators")
 		return

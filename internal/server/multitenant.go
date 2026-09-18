@@ -146,6 +146,16 @@ func (s *Server) automationTarget(evt Event, paramAgentID string) string {
 	return target
 }
 
+// principalAgentIDs scopes table scans that carry no tenant column of
+// their own (joined through agent_id) to an AI principal's tenant.
+// Returns nil for anonymous/system paths (global view, unchanged).
+func (s *Server) principalAgentIDs(reqCtx *aiReqCtx) *gorm.DB {
+	if reqCtx != nil && reqCtx.Principal.UserID != 0 {
+		return s.db.Model(&db.Implant{}).Select("id").Where("tenant_id = ?", reqCtx.Principal.TenantID)
+	}
+	return nil
+}
+
 // tenantIDForUser resolves a username to its tenant ID outside a gin
 // context (WebSocket registration). Missing rows and lookup errors both
 // yield legacy 0 — the socket layer cannot fail closed here without

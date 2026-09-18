@@ -660,6 +660,9 @@ func (s *Server) handleAPIGetReportHistory(c *gin.Context) {
 // what it actually returns: a printable HTML report an operator can save to
 // PDF via the browser.
 func (s *Server) handleAPIExportReportHTML(c *gin.Context) {
+	if !s.requireExportStepUp(c, "report_export", "report") {
+		return
+	}
 	startDate, endDate, err := parseReportDates(c)
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err.Error())
@@ -691,6 +694,7 @@ func (s *Server) handleAPIExportReportHTML(c *gin.Context) {
 
 	report := s.buildReportData(c, req.StartDate, req.EndDate, req.Sections)
 	html := generateHTMLReport(report)
+	s.LogAuditRecord(c, "report_export", "report", "", "report exported as HTML ("+template+")", true, nil)
 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
 }
 
