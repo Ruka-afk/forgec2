@@ -255,6 +255,39 @@ func (s *Server) handleDBBackup(c *gin.Context) {
 		return
 	}
 
+	// Manual backups are encrypted (.fbk) by default: a plaintext database
+	// copy concentrates every secret the loot layer encrypts at rest
+	// (bcrypt hashes, host inventory, task output, webhook URLs, AI chats).
+	// Pass ?encrypt=false for an explicit plaintext snapshot (audited).
+	if c.Query("encrypt") == "false" {
+		s.handleDBBackupPlaintext(c)
+		return
+	}
+	if s.backupManager == nil {
+		respondError(c, http.StatusInternalServerError, "encrypted backups unavailable: set crypto.backup_key (64 hex chars), or pass ?encrypt=false for an explicit plaintext snapshot")
+		return
+	}
+	name, size, err := s.backupManager.createBackup()
+	if err != nil {
+		slog.Error("Failed to create encrypted backup", "error", err)
+		respondError(c, http.StatusInternalServerError, "failed to create backup")
+		return
+	}
+	slog.Info("Database backup created", "file", name, "size", size)
+	s.LogAuditRecord(c, "db_backup", "system", "", "encrypted database backup "+name, true, nil)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": backupEntry{
+			Name:    name,
+			Size:    size,
+			ModTime: time.Now().UTC().Format(time.RFC3339),
+		},
+	})
+}
+
+// handleDBBackupPlaintext is the explicit plaintext opt-out (?encrypt=false).
+// Same VACUUM INTO snapshot discipline, audited as plaintext.
+func (s *Server) handleDBBackupPlaintext(c *gin.Context) {
 	dir := s.backupDir()
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create backup directory")
@@ -280,7 +313,8 @@ func (s *Server) handleDBBackup(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Database backup created", "path", backupPath, "size", fi.Size())
+	slog.Info("Database backup created", "path", backupPath, "size", fi.Size(), "encrypted", false)
+	s.LogAuditRecord(c, "db_backup", "system", "", "plaintext database backup "+backupName+" (explicit ?encrypt=false opt-out)", true, nil)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": backupEntry{

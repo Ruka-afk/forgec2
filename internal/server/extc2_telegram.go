@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -52,7 +53,14 @@ func (t *TelegramExternalC2) Start() error {
 	channelID := "extc2-telegram-" + t.chatID
 	slog.Info("Telegram External C2 starting", "chat_id", t.chatID)
 	if t.server.cfg == nil || strings.TrimSpace(t.server.cfg.Crypto.ExtC2Key) == "" {
-		slog.Warn("Telegram ExtC2 running WITHOUT result HMAC: set crypto.extc2_key to require signed results")
+		// Fail closed: without the HMAC key, relayed results cannot be
+		// authenticated — and Telegram inbound has no other sender check.
+		// (Approved semantic change: open relay is worse than a hard error.)
+		slog.Error("Telegram ExtC2 refused: crypto.extc2_key is empty, relayed results would be unauthenticated")
+		t.mu.Lock()
+		t.running = false
+		t.mu.Unlock()
+		return fmt.Errorf("crypto.extc2_key is required for Telegram External C2")
 	}
 
 	t.server.extC2ChannelsMu.Lock()
@@ -149,6 +157,12 @@ func (t *TelegramExternalC2) connectAndRun(channelID string) {
 				t.offset = u.UpdateID + 1
 			}
 			if u.Message == nil || strings.TrimSpace(u.Message.Text) == "" {
+				continue
+			}
+			// Sender check BEFORE any result processing: anyone who finds
+			// the bot username could otherwise inject result frames.
+			if !t.senderAllowed(u.Message.Chat.ID) {
+				slog.Warn("Telegram ExtC2 message dropped: sender not in configured chat", "chat_id", u.Message.Chat.ID)
 				continue
 			}
 			t.processMessage(u.Message.Text, channelID)
@@ -270,4 +284,19 @@ type telegramUpdate struct {
 
 type telegramMessage struct {
 	Text string `json:"text"`
+	Chat struct {
+		ID int64 `json:"id"`
+	} `json:"chat"`
+}
+
+// senderAllowed verifies an inbound message came from the configured chat.
+// The Bot API always reports numeric chat IDs; a non-numeric configured
+// value (or any mismatch, including zero) drops the message. This is the
+// Telegram equivalent of Discord/Slack's channel-membership check.
+func (t *TelegramExternalC2) senderAllowed(chatID int64) bool {
+	want, err := strconv.ParseInt(strings.TrimSpace(t.chatID), 10, 64)
+	if err != nil || want == 0 {
+		return false
+	}
+	return chatID != 0 && chatID == want
 }

@@ -134,10 +134,53 @@ func TestTelegramResultHMACGate(t *testing.T) {
 		t.Fatal("forged HMAC must be rejected")
 	}
 
-	// Unkeyed channel (legacy) accepts any result for back-compat.
+	// Unkeyed channel is FAIL CLOSED (approved semantic change): without
+	// extc2_key, relayed results cannot be authenticated at all.
 	s.cfg.Crypto.ExtC2Key = ""
-	if !s.verifyExtC2ResultHMAC(agentID, taskID, resultID, result, "") {
-		t.Fatal("empty extc2_key must allow unauthenticated results (legacy)")
+	if s.verifyExtC2ResultHMAC(agentID, taskID, resultID, result, "") {
+		t.Fatal("empty extc2_key must reject unauthenticated results (fail closed)")
+	}
+	if s.verifyExtC2ResultHMAC(agentID, taskID, resultID, result, validMAC) {
+		t.Fatal("keyless channel must reject even well-formed MACs")
 	}
 	_ = tg
+}
+
+// TestTelegramSenderAllowed proves inbound Telegram messages are gated on
+// the configured numeric chat: strangers (and unparseable configs) drop.
+func TestTelegramSenderAllowed(t *testing.T) {
+	database := testutil.SetupTestDB(t)
+	sm, _ := crypto.NewSessionManager()
+	s := &Server{db: database, cfg: &config.Config{}, sessionManager: sm}
+	tg := NewTelegramExternalC2(s, "test-bot-token", "-1001234567890")
+	if !tg.senderAllowed(-1001234567890) {
+		t.Fatal("configured chat must pass")
+	}
+	if tg.senderAllowed(999888777) {
+		t.Fatal("stranger chat must drop")
+	}
+	if tg.senderAllowed(0) {
+		t.Fatal("zero chat must drop")
+	}
+	bad := NewTelegramExternalC2(s, "test-bot-token", "@somehandle")
+	if bad.senderAllowed(-1001234567890) {
+		t.Fatal("non-numeric configured chat must fail closed")
+	}
+}
+
+// TestExtC2StartRequiresKey proves all three relay channels refuse to run
+// without the HMAC key (fail closed at Start, not warn-and-run).
+func TestExtC2StartRequiresKey(t *testing.T) {
+	database := testutil.SetupTestDB(t)
+	sm, _ := crypto.NewSessionManager()
+	s := &Server{db: database, cfg: &config.Config{}, sessionManager: sm}
+	if err := NewTelegramExternalC2(s, "tok", "-1001").Start(); err == nil {
+		t.Fatal("telegram Start without key must fail")
+	}
+	if err := NewDiscordExternalC2(s, "tok", "chan").Start(); err == nil {
+		t.Fatal("discord Start without key must fail")
+	}
+	if err := NewSlackExternalC2(s, "tok", "chan").Start(); err == nil {
+		t.Fatal("slack Start without key must fail")
+	}
 }

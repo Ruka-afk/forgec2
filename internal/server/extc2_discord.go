@@ -50,9 +50,13 @@ func (d *DiscordExternalC2) Start() error {
 	channelID := "extc2-discord-" + d.channelID
 	slog.Info("Discord External C2 starting", "channel_id", d.channelID)
 	if d.server.cfg == nil || strings.TrimSpace(d.server.cfg.Crypto.ExtC2Key) == "" {
-		// Without extc2_key the relayed-result HMAC gate is disabled and
-		// anyone who can post in the channel can forge task output.
-		slog.Warn("Discord ExtC2 running WITHOUT result HMAC: set crypto.extc2_key to require signed results")
+		// Fail closed like Telegram/Slack: without the HMAC key, channel
+		// membership alone cannot authenticate relayed results.
+		slog.Error("Discord ExtC2 refused: crypto.extc2_key is empty, relayed results would be unauthenticated")
+		d.mu.Lock()
+		d.running = false
+		d.mu.Unlock()
+		return fmt.Errorf("crypto.extc2_key is required for Discord External C2")
 	}
 
 	d.server.extC2ChannelsMu.Lock()

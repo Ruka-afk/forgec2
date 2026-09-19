@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
@@ -80,6 +82,13 @@ func (s *Server) handleConfigureTelegramC2(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, "bot_token and chat_id are required")
+		return
+	}
+	// Inbound sender checks compare numeric chat IDs (the only form the Bot
+	// API reports): reject @usernames/handles at configure time so the
+	// channel cannot be born unverifiable.
+	if id, err := strconv.ParseInt(strings.TrimSpace(req.ChatID), 10, 64); err != nil || id == 0 {
+		respondError(c, http.StatusBadRequest, "chat_id must be the numeric chat ID (e.g. -1001234567890), not a username")
 		return
 	}
 

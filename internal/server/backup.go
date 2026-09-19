@@ -174,6 +174,14 @@ func (bm *BackupManager) PerformBackup() error {
 	}
 	bm.mu.Unlock()
 
+	_, _, err := bm.createBackup()
+	return err
+}
+
+// createBackup runs one encrypted backup immediately, independent of the
+// schedule. Used by PerformBackup (scheduled) and the manual backup
+// endpoint. Returns the .fbk filename and size.
+func (bm *BackupManager) createBackup() (string, int64, error) {
 	start := time.Now()
 	slog.Info("Starting database backup")
 
@@ -197,7 +205,7 @@ func (bm *BackupManager) PerformBackup() error {
 	}
 	if vacErr != nil {
 		slog.Error("VACUUM INTO backup failed after retries", "error", vacErr)
-		return vacErr
+		return "", 0, vacErr
 	}
 
 	timestamp := time.Now().Format(backupTimestamp)
@@ -206,25 +214,25 @@ func (bm *BackupManager) PerformBackup() error {
 	data, err := os.ReadFile(snapshotPath)
 	if err != nil {
 		slog.Error("Failed to read backup file", "error", err)
-		return err
+		return "", 0, err
 	}
 
 	encryptedData, err := bm.encrypt(data)
 	if err != nil {
 		slog.Error("Failed to encrypt backup", "error", err)
-		return err
+		return "", 0, err
 	}
 
 	// Write atomically via temp + rename so a crash never leaves a half .fbk.
 	tmpOut := backupFile + ".tmp"
 	if err := os.WriteFile(tmpOut, encryptedData, 0600); err != nil {
 		slog.Error("Failed to write backup file", "error", err)
-		return err
+		return "", 0, err
 	}
 	if err := os.Rename(tmpOut, backupFile); err != nil {
 		os.Remove(tmpOut)
 		slog.Error("Failed to finalize backup file", "error", err)
-		return err
+		return "", 0, err
 	}
 
 	slog.Info("Backup completed", "file", backupFile, "size", len(encryptedData), "duration", time.Since(start))
@@ -239,7 +247,7 @@ func (bm *BackupManager) PerformBackup() error {
 
 	bm.cleanupOldBackups()
 
-	return nil
+	return filepath.Base(backupFile), int64(len(encryptedData)), nil
 }
 
 func (bm *BackupManager) encrypt(data []byte) ([]byte, error) {

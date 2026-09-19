@@ -3647,6 +3647,8 @@ export const en: Record<string, string> = {
     "settings.agent.working_start": "Working Start",
     "settings.backup": "Backup",
     "settings.backup.create": "Create Backup",
+    "settings.backup.encrypted": "encrypted",
+    "settings.backup.plaintext": "plaintext",
     "settings.backup.download": "Download backup {name}",
     "settings.backup.download_failed": "Failed to download backup",
     "settings.backup.empty_message": "Create one to get started.",

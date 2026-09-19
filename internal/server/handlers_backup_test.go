@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/forgec2/forgec2/internal/config"
+	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/testutil"
 	"github.com/gin-gonic/gin"
 )
@@ -36,11 +37,22 @@ func TestHandleDBBackup_ProducesValidSnapshot(t *testing.T) {
 		t.Fatalf("create placeholder db file: %v", err)
 	}
 
+	keyBytes := make([]byte, 32)
+	if _, err := rand.Read(keyBytes); err != nil {
+		t.Fatalf("rand: %v", err)
+	}
+	keyHex := hex.EncodeToString(keyBytes)
+
 	cfg := &config.Config{}
 	cfg.Database.Path = dbPath
 	cfg.Server.DataDir = tmp
 
 	s := &Server{db: d, cfg: cfg}
+	bm, err := NewBackupManager(d, dbPath, filepath.Join(tmp, "backups"), keyHex)
+	if err != nil {
+		t.Fatalf("NewBackupManager: %v", err)
+	}
+	s.backupManager = bm
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -58,13 +70,37 @@ func TestHandleDBBackup_ProducesValidSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read backup dir: %v", err)
 	}
-	if len(entries) != 1 {
-		t.Fatalf("expected exactly 1 backup file, got %d", len(entries))
+	// Encrypted .fbk by default (P0-2): exactly one .fbk, no plaintext .db.
+	var fbk string
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".fbk") {
+			fbk = e.Name()
+		}
+		if strings.HasSuffix(e.Name(), ".db") {
+			t.Fatalf("plaintext .db backup produced by default: %s", e.Name())
+		}
 	}
-	backupPath := filepath.Join(backupDir, entries[0].Name())
+	if fbk == "" {
+		t.Fatalf("no .fbk backup produced, dir: %v", entries)
+	}
+	enc, err := os.ReadFile(filepath.Join(backupDir, fbk))
+	if err != nil {
+		t.Fatalf("read fbk: %v", err)
+	}
+	if isSQLiteFile(bufio.NewReader(bytes.NewReader(enc))) {
+		t.Fatalf(".fbk payload is plaintext sqlite")
+	}
+	plain, err := decryptBackupData(enc, keyBytes)
+	if err != nil {
+		t.Fatalf("decrypt fbk: %v", err)
+	}
+	decPath := filepath.Join(tmp, "decrypted.db")
+	if err := os.WriteFile(decPath, plain, 0600); err != nil {
+		t.Fatalf("write decrypted: %v", err)
+	}
 
 	verify := testutil.SetupTestDB(t)
-	if err := verify.Exec("ATTACH DATABASE ? AS bak", backupPath).Error; err != nil {
+	if err := verify.Exec("ATTACH DATABASE ? AS bak", decPath).Error; err != nil {
 		t.Fatalf("attach backup: %v", err)
 	}
 	var n int
@@ -81,6 +117,86 @@ func TestHandleDBBackup_ProducesValidSnapshot(t *testing.T) {
 	}
 	if err := verifySQL.Close(); err != nil {
 		t.Fatalf("close verify db: %v", err)
+	}
+}
+
+// TestHandleDBBackup_RequiresKeyForEncryptedDefault proves the manual
+// endpoint fails closed (not plaintext) when no backup manager/key exists.
+func TestHandleDBBackup_RequiresKeyForEncryptedDefault(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	d := testutil.SetupTestDB(t)
+	tmp := t.TempDir()
+	dbPath := filepath.Join(tmp, "forgec2.db")
+	if err := os.WriteFile(dbPath, []byte("placeholder"), 0600); err != nil {
+		t.Fatalf("create placeholder db file: %v", err)
+	}
+	cfg := &config.Config{}
+	cfg.Database.Path = dbPath
+	cfg.Server.DataDir = tmp
+	s := &Server{db: d, cfg: cfg} // no backupManager: no crypto.backup_key
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodPost, "/api/admin/backup", nil)
+	c.Set("user_role", "admin")
+	s.handleDBBackup(c)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d; body=%s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "backup_key") {
+		t.Fatalf("error must name crypto.backup_key: %s", w.Body.String())
+	}
+}
+
+// TestHandleDBBackup_PlaintextOptOut proves ?encrypt=false still yields a
+// restorable plaintext snapshot and audits the opt-out explicitly.
+func TestHandleDBBackup_PlaintextOptOut(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	d := testutil.SetupTestDB(t)
+	if err := d.Exec("CREATE TABLE probe_plain (id INTEGER PRIMARY KEY)").Error; err != nil {
+		t.Fatalf("create probe table: %v", err)
+	}
+	tmp := t.TempDir()
+	dbPath := filepath.Join(tmp, "forgec2.db")
+	if err := os.WriteFile(dbPath, []byte("placeholder"), 0600); err != nil {
+		t.Fatalf("create placeholder db file: %v", err)
+	}
+	cfg := &config.Config{}
+	cfg.Database.Path = dbPath
+	cfg.Server.DataDir = tmp
+	s := &Server{db: d, cfg: cfg}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodPost, "/api/admin/backup?encrypt=false", nil)
+	c.Set("user_role", "admin")
+	c.Set("user", "backup-op")
+	s.handleDBBackup(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+	}
+	entries, err := os.ReadDir(filepath.Join(tmp, "backups"))
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("expected exactly 1 backup file, got %v err %v", entries, err)
+	}
+	if !strings.HasSuffix(entries[0].Name(), ".db") {
+		t.Fatalf("opt-out must produce .db, got %s", entries[0].Name())
+	}
+	raw, err := os.ReadFile(filepath.Join(tmp, "backups", entries[0].Name()))
+	if err != nil {
+		t.Fatalf("read backup: %v", err)
+	}
+	if !isSQLiteFile(bufio.NewReader(bytes.NewReader(raw))) {
+		t.Fatalf("opt-out backup is not plaintext sqlite")
+	}
+	var audited int64
+	if err := s.db.Model(&db.AuditLog{}).Where("action = ?", "db_backup").Count(&audited).Error; err != nil {
+		t.Fatalf("count audit: %v", err)
+	}
+	if audited == 0 {
+		t.Fatalf("no db_backup audit row for plaintext opt-out")
 	}
 }
 

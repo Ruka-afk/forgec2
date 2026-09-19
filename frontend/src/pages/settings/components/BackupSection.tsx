@@ -7,6 +7,7 @@ import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { Archive, Clock, Download, HardDrive, RefreshCw, Upload } from "lucide-react";
@@ -146,7 +147,14 @@ export default function BackupSection() {
                 <div className="flex items-center gap-3 min-w-0">
                   <Archive className="size-4 text-muted-foreground shrink-0" />
                   <div className="min-w-0">
-                    <div className="text-sm font-medium text-foreground truncate">{b.name}</div>
+                    <div className="text-sm font-medium text-foreground truncate">
+                      {b.name}{" "}
+                      {b.name.endsWith(".fbk") ? (
+                        <Badge variant="success" className="text-(--fs-micro)">{t("settings.backup.encrypted")}</Badge>
+                      ) : (
+                        <Badge variant="warning" className="text-(--fs-micro)">{t("settings.backup.plaintext")}</Badge>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Clock className="size-3" />
                       <span>{formatTime(b.mod_time)}</span>

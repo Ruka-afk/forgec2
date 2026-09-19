@@ -351,8 +351,9 @@ func extC2ResultMAC(key, agentID string, taskID uint, resultID, result string) s
 
 // verifyExtC2ResultHMAC gates relayed results: with extc2_key configured,
 // only messages carrying a valid tag are accepted, so anyone who can post in
-// the channel cannot forge operator-visible task output. Empty key keeps the
-// legacy open behaviour (a startup warning is emitted by the listeners).
+// the channel cannot forge operator-visible task output. An empty key now
+// FAILS CLOSED (approved semantic change): every ExtC2 Start() refuses to
+// run without it, so reaching here keyless means misconfiguration.
 func (s *Server) verifyExtC2ResultHMAC(agentID string, taskID uint, resultID, result, macHex string) bool {
 	key := ""
 	if s.cfg != nil {
@@ -363,7 +364,7 @@ func (s *Server) verifyExtC2ResultHMAC(agentID string, taskID uint, resultID, re
 		s.configMu.RUnlock()
 	}
 	if strings.TrimSpace(key) == "" {
-		return true
+		return false
 	}
 	expected := extC2ResultMAC(key, agentID, taskID, resultID, result)
 	return subtle.ConstantTimeCompare([]byte(expected), []byte(strings.ToLower(strings.TrimSpace(macHex)))) == 1

@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -44,7 +45,13 @@ func (sc *SlackExternalC2) Start() error {
 	channelID := "extc2-slack-" + sc.channelID
 	slog.Info("Slack External C2 starting", "channel_id", sc.channelID)
 	if sc.server.cfg == nil || strings.TrimSpace(sc.server.cfg.Crypto.ExtC2Key) == "" {
-		slog.Warn("Slack ExtC2 running WITHOUT result HMAC: set crypto.extc2_key to require signed results")
+		// Fail closed like Telegram/Discord: without the HMAC key, channel
+		// membership alone cannot authenticate relayed results.
+		slog.Error("Slack ExtC2 refused: crypto.extc2_key is empty, relayed results would be unauthenticated")
+		sc.mu.Lock()
+		sc.running = false
+		sc.mu.Unlock()
+		return errors.New("crypto.extc2_key is required for Slack External C2")
 	}
 
 	sc.client = slack.New(sc.botToken, slack.OptionHTTPClient(&http.Client{Timeout: 10 * time.Second}))

@@ -3661,6 +3661,8 @@ export const zh: Record<string, string> = {
     "settings.agent.working_start": "工作开始",
     "settings.backup": "备份",
     "settings.backup.create": "创建备份",
+    "settings.backup.encrypted": "已加密",
+    "settings.backup.plaintext": "明文",
     "settings.backup.download": "下载备份 {name}",
     "settings.backup.download_failed": "下载备份失败",
     "settings.backup.empty_message": "创建一个备份以开始使用。",
