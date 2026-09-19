@@ -60,7 +60,7 @@ func (s *Server) handleNetCommand(c *gin.Context) {
 	if task == nil {
 		return
 	}
-	slog.Info("Net command requested", "agent_id", id, "command", command)
+	slog.Info("Net command requested", "agent_id", id, "command", truncateString(command, 100))
 	s.LogAuditRecord(c, "net", "agent", id, "Net: "+command, true, nil)
 	s.dispatchTask(c, task, "net", "Net: "+command)
 }
@@ -84,7 +84,7 @@ func (s *Server) handleBOF(c *gin.Context) {
 	if task == nil {
 		return
 	}
-	slog.Info("BOF execution requested", "agent_id", id, "file", filename, "size", size, "args", args)
+	slog.Info("BOF execution requested", "agent_id", id, "file", filename, "size", size, "args", truncateString(args, 100))
 	s.LogAuditRecord(c, "bof", "agent", id, fmt.Sprintf("BOF: %s (%d bytes) args=%s", filename, size, args), true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID, "message": fmt.Sprintf("BOF %s dispatched", filename)})
 }

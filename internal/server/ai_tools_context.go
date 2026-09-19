@@ -249,7 +249,7 @@ func parseExecuteCommandArgs(argsJSON string) executeCommandArgs {
 		WaitForResult *bool  `json:"wait_for_result"`
 	}
 	if err := json.Unmarshal([]byte(argsJSON), &raw); err != nil {
-		slog.Error("ai: failed to unmarshal execute command args", "error", err, "args", argsJSON)
+		slog.Error("ai: failed to unmarshal execute command args", "error", err, "args", truncateString(argsJSON, 100))
 	}
 	out := executeCommandArgs{
 		AgentID:       raw.AgentID,

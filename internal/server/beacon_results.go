@@ -142,7 +142,7 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			continue
 		}
 
-		slog.Info("Processing task result", "task_id", r.TaskID, "type", r.Type, "has_output", r.Output != "", "has_error", r.Error != "", "error_message", r.Error)
+		slog.Info("Processing task result", "task_id", r.TaskID, "type", r.Type, "has_output", r.Output != "", "has_error", r.Error != "", "error_message", truncateString(r.Error, 100))
 
 		task, ok := taskMap[r.TaskID]
 		if !ok {

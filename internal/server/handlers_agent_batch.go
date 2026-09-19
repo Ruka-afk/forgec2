@@ -357,7 +357,7 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		failedCount = 0
 	}
 
-	slog.Info("Batch command sent", "count", taskCount, "failed", failedCount, "locked_skipped", lockedSkipped, "deduped", dedupSkipped, "type", req.TaskType, "command", req.Command)
+	slog.Info("Batch command sent", "count", taskCount, "failed", failedCount, "locked_skipped", lockedSkipped, "deduped", dedupSkipped, "type", req.TaskType, "command", truncateString(req.Command, 100))
 	s.LogAuditRecord(c, "batch_command", "agent", "", fmt.Sprintf("%s to %d agents (%d failed, %d locked-skipped, %d deduped)", req.TaskType, taskCount, failedCount, lockedSkipped, dedupSkipped), true, nil)
 
 	s.pushBulkResult(BulkResult{

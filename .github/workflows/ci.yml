@@ -151,6 +151,11 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      # Supply-chain gate: fail on high/critical advisories. The tree is
+      # kept clean via `npm audit fix` (non-breaking); moderate/low remain
+      # advisory-only to avoid blocking on breaking-change upgrades.
+      - name: npm audit (high and above)
+        run: npm audit --audit-level=high
       - name: Win7 shim mirror freshness
         run: node ../scripts/sync-win7shim.mjs --check
       - run: npx tsc --noEmit
