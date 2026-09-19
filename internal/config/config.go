@@ -120,6 +120,9 @@ type Config struct {
 	Auth struct {
 		PasswordHash  string `yaml:"password_hash"`    // bcrypt hash, set on first run
 		DefaultPasswd string `yaml:"default_password"` // plaintext; used only on first boot if password_hash is empty
+		// SessionMaxConcurrent caps live sessions per user (0 = unlimited).
+		// Overflow evicts the oldest session first (audited).
+		SessionMaxConcurrent int `yaml:"session_max_concurrent"`
 	} `yaml:"auth"`
 
 	PasswordPolicy struct {
@@ -845,6 +848,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Auth.DefaultPasswd != "" && isWeakDefaultPassword(c.Auth.DefaultPasswd) {
 		errs = append(errs, errors.New("auth.default_password is too weak — set a strong password or leave it empty to auto-generate a random one on first boot"))
+	}
+	if c.Auth.SessionMaxConcurrent < 0 {
+		errs = append(errs, errors.New("auth.session_max_concurrent must be >= 0 (0 = unlimited)"))
 	}
 	if c.Socks.Enabled {
 		for _, dest := range c.Socks.AllowedDests {

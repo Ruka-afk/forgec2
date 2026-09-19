@@ -1081,7 +1081,7 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 		default:
 			return `{"error":"invalid scope (full|executive|technical|coverage)"}`
 		}
-		md, sections, err := s.buildAIMarkdownReport(p.Scope, s.principalAgentIDs(reqCtx))
+		md, sections, err := s.buildAIMarkdownReport(p.Scope, reqCtx)
 		if err != nil {
 			return `{"error":"failed to build report: ` + sanitizeError(err, "report") + `"}`
 		}

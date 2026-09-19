@@ -45,7 +45,7 @@ func (s *Server) handleTimelinePage(c *gin.Context) {
 
 // handleTimelineData returns timeline events as JSON
 func (s *Server) handleTimelineData(c *gin.Context) {
-	events := s.buildTimelineEvents(c.Query("type"), c.Query("user"), c.Query("agent"), c.Query("from"), c.Query("to"))
+	events := s.buildTimelineEvents(c, c.Query("type"), c.Query("user"), c.Query("agent"), c.Query("from"), c.Query("to"))
 
 	c.JSON(http.StatusOK, gin.H{
 		"events": events,
@@ -53,8 +53,12 @@ func (s *Server) handleTimelineData(c *gin.Context) {
 	})
 }
 
-// buildTimelineEvents returns unified timeline events (audit logs + tasks) filtered by type/user/agent/date range.
-func (s *Server) buildTimelineEvents(filterType, filterUser, filterAgent, dateFrom, dateTo string) []TimelineEvent {
+// buildTimelineEvents returns unified timeline events (audit logs + tasks)
+// filtered by type/user/agent/date range, contained to the caller's tenant:
+// audit rows through their operator's tenant, tasks/agents through the
+// owning implant (reportAgentIDs/reportUsernames pattern). Legacy operators
+// keep the global view.
+func (s *Server) buildTimelineEvents(c *gin.Context, filterType, filterUser, filterAgent, dateFrom, dateTo string) []TimelineEvent {
 	limit := 200
 
 	// Get audit logs
@@ -69,7 +73,8 @@ func (s *Server) buildTimelineEvents(filterType, filterUser, filterAgent, dateFr
 		Success   bool
 	}
 
-	query := s.db.Table("audit_logs").Select("id, created_at as timestamp, user, action, details, agent_id, ip, success")
+	query := s.db.Table("audit_logs").Select("id, created_at as timestamp, user, action, details, agent_id, ip, success").
+		Where("user IN (?)", s.reportUsernames(c))
 
 	if filterType != "" && filterType != "audit" {
 		// Skip audit logs if filtering by other types
@@ -103,7 +108,8 @@ func (s *Server) buildTimelineEvents(filterType, filterUser, filterAgent, dateFr
 		Status    string
 	}
 
-	taskQuery := s.db.Table("tasks").Select("id, created_at as timestamp, agent_id, type, command, result, status")
+	taskQuery := s.db.Table("tasks").Select("id, created_at as timestamp, agent_id, type, command, result, status").
+		Where("agent_id IN (?)", s.reportAgentIDs(c))
 
 	if filterType == "" || filterType == "task" {
 		if filterAgent != "" {
@@ -145,7 +151,7 @@ func (s *Server) buildTimelineEvents(filterType, filterUser, filterAgent, dateFr
 			ID       string
 			Hostname string
 		}
-		if err := s.db.Table("implants").Select("id, hostname").Where("id IN ?", ids).Find(&agents).Error; err != nil {
+		if err := s.db.Table("implants").Select("id, hostname").Where("id IN ?", ids).Where("id IN (?)", s.reportAgentIDs(c)).Find(&agents).Error; err != nil {
 			slog.Error("Timeline: failed to query agents", "err", err)
 		}
 		for _, a := range agents {
@@ -200,13 +206,14 @@ func (s *Server) buildTimelineEvents(filterType, filterUser, filterAgent, dateFr
 // handleTimelineExport exports timeline as CSV
 func (s *Server) handleTimelineExport(c *gin.Context) {
 	// Accept filters from both query string and form body (frontend uses POST download)
-	events := s.buildTimelineEvents(
+	events := s.buildTimelineEvents(c,
 		c.Request.FormValue("type"),
 		c.Request.FormValue("user"),
 		c.Request.FormValue("agent"),
 		c.Request.FormValue("from"),
 		c.Request.FormValue("to"),
 	)
+	s.LogAuditRecord(c, "timeline_export", "timeline", "", "timeline exported as CSV", true, nil)
 
 	// Generate CSV
 	c.Header("Content-Disposition", "attachment; filename=timeline_export.csv")

@@ -86,6 +86,9 @@ auth:
   # SECURE DEFAULT: leave empty — a random strong password is generated and
   # printed to the console on first start (never commit a default password).
   default_password: ""
+  # Max live sessions per user (0 = unlimited). Overflow evicts the oldest
+  # session first (audited as session_evict). Recommended: 5.
+  # session_max_concurrent: 5
 
 password_policy:
   min_length: 8

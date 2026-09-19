@@ -51,12 +51,21 @@ func (s *Server) mitreCoverageCounts() (coveredTactics, gapTactics int, usedType
 //	coverage   -- MITRE ATT&CK gap analysis only
 //
 // Returns the markdown body and the ordered list of included section keys.
-func (s *Server) buildAIMarkdownReport(scope string, agentScope *gorm.DB) (string, []string, error) {
+// reqCtx carries the caller's tenant: authenticated AI principals see only
+// their own tenant's rows (tenant 0 included, mirroring resolveAIAgentID);
+// nil/anonymous callers keep the legacy global view.
+func (s *Server) buildAIMarkdownReport(scope string, reqCtx *aiReqCtx) (string, []string, error) {
 	now := time.Now()
 	since := now.AddDate(0, 0, -30)
+	scoped := reqCtx != nil && reqCtx.Principal.UserID != 0
+	agentScope := s.principalAgentIDs(reqCtx)
 
 	var agents []db.Implant
-	if err := s.db.Order("last_seen desc").Limit(200).Find(&agents).Error; err != nil {
+	agentQuery := s.db.Order("last_seen desc").Limit(200)
+	if scoped {
+		agentQuery = agentQuery.Where("id IN (?)", agentScope)
+	}
+	if err := agentQuery.Find(&agents).Error; err != nil {
 		return "", nil, fmt.Errorf("load agents: %w", err)
 	}
 	online, elevated := 0, 0
@@ -74,32 +83,42 @@ func (s *Server) buildAIMarkdownReport(scope string, agentScope *gorm.DB) (strin
 	}
 
 	var totT, okT, failT, actT int64
-	if err := s.db.Model(&db.Task{}).Where("created_at >= ?", since).Count(&totT).Error; err != nil {
+	scopedTasks := func(q *gorm.DB) *gorm.DB {
+		if scoped {
+			return q.Where("agent_id IN (?)", agentScope)
+		}
+		return q
+	}
+	if err := scopedTasks(s.db.Model(&db.Task{})).Where("created_at >= ?", since).Count(&totT).Error; err != nil {
 		return "", nil, fmt.Errorf("count recent tasks: %w", err)
 	}
-	if err := s.db.Model(&db.Task{}).Where("created_at >= ? AND status = ?", since, "completed").Count(&okT).Error; err != nil {
+	if err := scopedTasks(s.db.Model(&db.Task{})).Where("created_at >= ? AND status = ?", since, "completed").Count(&okT).Error; err != nil {
 		return "", nil, fmt.Errorf("count completed tasks: %w", err)
 	}
-	if err := s.db.Model(&db.Task{}).Where("created_at >= ? AND status = ?", since, "failed").Count(&failT).Error; err != nil {
+	if err := scopedTasks(s.db.Model(&db.Task{})).Where("created_at >= ? AND status = ?", since, "failed").Count(&failT).Error; err != nil {
 		return "", nil, fmt.Errorf("count failed tasks: %w", err)
 	}
-	if err := s.db.Model(&db.Task{}).Where("status IN ?", []string{"pending", TaskStatusPendingApproval}).Count(&actT).Error; err != nil {
+	if err := scopedTasks(s.db.Model(&db.Task{})).Where("status IN ?", []string{"pending", TaskStatusPendingApproval}).Count(&actT).Error; err != nil {
 		return "", nil, fmt.Errorf("count queued tasks: %w", err)
 	}
 
 	var totC, valC, invC int64
-	if err := s.db.Model(&db.CredentialEntry{}).Count(&totC).Error; err != nil {
+	if err := scopedTasks(s.db.Model(&db.CredentialEntry{})).Count(&totC).Error; err != nil {
 		return "", nil, fmt.Errorf("count credentials: %w", err)
 	}
-	if err := s.db.Model(&db.CredentialEntry{}).Where("verify_status = ?", "valid").Count(&valC).Error; err != nil {
+	if err := scopedTasks(s.db.Model(&db.CredentialEntry{})).Where("verify_status = ?", "valid").Count(&valC).Error; err != nil {
 		return "", nil, fmt.Errorf("count valid credentials: %w", err)
 	}
-	if err := s.db.Model(&db.CredentialEntry{}).Where("verify_status = ?", "invalid").Count(&invC).Error; err != nil {
+	if err := scopedTasks(s.db.Model(&db.CredentialEntry{})).Where("verify_status = ?", "invalid").Count(&invC).Error; err != nil {
 		return "", nil, fmt.Errorf("count invalid credentials: %w", err)
 	}
 
 	var listeners []db.Listener
-	if err := s.db.Order("created_at desc").Limit(100).Find(&listeners).Error; err != nil {
+	listenerQuery := s.db.Order("created_at desc").Limit(100)
+	if scoped {
+		listenerQuery = listenerQuery.Where("tenant_id = ?", reqCtx.Principal.TenantID)
+	}
+	if err := listenerQuery.Find(&listeners).Error; err != nil {
 		return "", nil, fmt.Errorf("load listeners: %w", err)
 	}
 	lisEnabled := 0

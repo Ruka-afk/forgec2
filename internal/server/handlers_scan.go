@@ -254,10 +254,20 @@ func (s *Server) handleProcessScanResult(c *gin.Context) {
 func (s *Server) handleExportScanResults(c *gin.Context) {
 	taskID := c.Param("taskId")
 
+	// Task-level gate: scan results inherit the owning task's tenant.
+	// Task IDs are sequential integers — without this, any operator could
+	// dump any tenant's recon output by enumeration.
+	var task db.Task
+	if err := s.tenantScope(s.db, c).Select("id").First(&task, "id = ?", taskID).Error; err != nil {
+		respondError(c, http.StatusNotFound, "task not found")
+		return
+	}
+
 	var results []db.ScanResult
-	if err := s.db.WithContext(s.ctx).Where("task_id = ?", taskID).Order("port asc").Find(&results).Error; err != nil {
+	if err := s.db.WithContext(s.ctx).Where("task_id = ?", task.ID).Order("port asc").Find(&results).Error; err != nil {
 		slog.Error("Failed to query scan results for export", "err", err)
 	}
+	s.LogAuditRecord(c, "scan_export", "task", taskID, "scan results exported as CSV", true, nil)
 
 	// Build CSV
 	var b strings.Builder

@@ -29,6 +29,46 @@ func (s *Server) createSession(token string, userID uint, ip, userAgent, deviceF
 	return nil
 }
 
+// enforceSessionCap evicts the oldest live sessions beyond
+// auth.session_max_concurrent (0 = unlimited). Called at login, after the
+// new session row exists, so the fresh login always survives. Returns the
+// number evicted (audited by the caller).
+func (s *Server) enforceSessionCap(userID uint, maxConcurrent int) int {
+	if maxConcurrent < 1 {
+		return 0
+	}
+	var ids []uint
+	if err := s.db.Model(&db.UserSession{}).
+		Where("user_id = ? AND revoked_at <= ? AND expires_at > ?", userID, time.Unix(0, 0), time.Now()).
+		Order("id ASC").Pluck("id", &ids).Error; err != nil {
+		slog.Error("Failed to list sessions for cap enforcement", "user_id", userID, "err", err)
+		return 0
+	}
+	if len(ids) <= maxConcurrent {
+		return 0
+	}
+	victims := ids[:len(ids)-maxConcurrent]
+	if err := s.db.Model(&db.UserSession{}).Where("id IN ?", victims).Update("revoked_at", time.Now()).Error; err != nil {
+		slog.Error("Failed to evict excess sessions", "user_id", userID, "err", err)
+		return 0
+	}
+	return len(victims)
+}
+
+// isKnownLoginIP reports whether the user has ever logged in from ip
+// (any session row, any state). First sighting is audit-worthy.
+func (s *Server) isKnownLoginIP(userID uint, ip string) bool {
+	if ip == "" {
+		return true
+	}
+	var n int64
+	if err := s.db.Model(&db.UserSession{}).Where("user_id = ? AND ip = ?", userID, ip).Count(&n).Error; err != nil {
+		slog.Error("Failed to check login IP history", "user_id", userID, "err", err)
+		return true // fail open on DB error: login must not break
+	}
+	return n > 0
+}
+
 func (s *Server) revokeSession(token string) bool {
 	hash := middleware.TokenHash(token)
 	if err := s.db.Model(&db.UserSession{}).Where("token_hash = ?", hash).

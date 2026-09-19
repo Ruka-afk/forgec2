@@ -267,6 +267,9 @@ func (s *Server) handleLogin(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "server misconfigured (CSRF unavailable)")
 		return
 	}
+	// New-IP sighting must be evaluated BEFORE createSession inserts the
+	// current login's own row (which would otherwise always self-match).
+	newIP := !s.isKnownLoginIP(user.ID, clientIP)
 	if err := s.createSession(token, user.ID, c.ClientIP(), c.Request.UserAgent(), "", maxAge); err != nil {
 		slog.Error("Failed to create session during login", "user_id", user.ID, "err", err)
 		respondError(c, http.StatusInternalServerError, "failed to create session")
@@ -305,6 +308,21 @@ func (s *Server) handleLogin(c *gin.Context) {
 	}
 
 	s.LogAuditRecord(c, "login", "auth", username, "Login successful", true, nil)
+	// First login ever from this address is worth an audit row even when
+	// everything else checks out (session-theft / credential-sharing signal).
+	if newIP {
+		s.LogAuditRecord(c, "login_new_ip", "auth", username, "First login from "+clientIP, true, nil)
+		slog.Warn("First login from new IP", "username", username, "ip", clientIP)
+	}
+	// Concurrency cap: evict oldest beyond auth.session_max_concurrent
+	// (0 = unlimited). Runs after insert so the fresh login survives.
+	s.configMu.RLock()
+	maxConcurrent := s.cfg.Auth.SessionMaxConcurrent
+	s.configMu.RUnlock()
+	if evicted := s.enforceSessionCap(user.ID, maxConcurrent); evicted > 0 {
+		s.LogAuditRecord(c, "session_evict", "auth", username, fmt.Sprintf("Evicted %d oldest session(s) over the concurrency cap", evicted), true, nil)
+		slog.Warn("Evicted excess sessions", "username", username, "evicted", evicted)
+	}
 	slog.Info("Login successful, session cookie set",
 		"username", username,
 		"role", user.Role,
