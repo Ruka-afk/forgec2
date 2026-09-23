@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"runtime"
 	"sync"
 )
 
@@ -57,6 +58,20 @@ func PrevLootKeyID() string {
 // of the JWT secret.
 //
 // A valid key is always adopted. An empty/invalid value is only allowed to
+// Wipe zeroes key material in place. Best-effort by construction: Go's GC
+// may retain copies elsewhere on the heap (no mlock, no guaranteed erasure),
+// so this narrows heap-dump exposure rather than eliminating it. Call it
+// wherever a key buffer is genuinely dropped (never on retained/rotated
+// keys that fallback reads still need).
+func Wipe(b []byte) {
+	for i := range b {
+		b[i] = 0
+	}
+	// KeepAlive defeats dead-store elimination of the loop above: the
+	// slice must still be live here, so the zeroes must have happened.
+	runtime.KeepAlive(b)
+}
+
 // CLEAR the key when no key is currently active (e.g. first init with no
 // configured key) so encryption fails loudly. If a key is ALREADY active, an
 // empty/invalid reload value is ignored (with a warning) rather than silently
@@ -211,6 +226,27 @@ func ReencryptLoot(s string) (string, bool, error) {
 		return s, false, nil
 	case LootDecryptablePrevKey:
 		enc, err := EncryptLoot(plain)
+		if err != nil {
+			return "", false, err
+		}
+		return enc, true, nil
+	default:
+		return "", false, errors.New("loot value undecryptable with active or previous key")
+	}
+}
+
+// EncryptLootPlaintext seals a legacy plaintext value with the active key.
+// Only LootPlaintextLegacy inputs are touched (changed=true); empty strings
+// and already-sealed FC2ENC: values pass through with changed=false, and
+// undecryptable ciphertext errors out. Used by the vault plaintext sweep to
+// migrate pre-encryption rows that the write-path hook never re-touches.
+func EncryptLootPlaintext(s string) (string, bool, error) {
+	_, state := DecryptLootState(s)
+	switch state {
+	case LootEmpty, LootDecryptable, LootDecryptablePrevKey:
+		return s, false, nil
+	case LootPlaintextLegacy:
+		enc, err := EncryptLoot(s)
 		if err != nil {
 			return "", false, err
 		}

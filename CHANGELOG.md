@@ -4,6 +4,28 @@ All notable changes to ForgeC2 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Security
+
+- Server security debt (P2): force-logout/disable revoke live operator WebSocket sessions; rate-limit login and public downloads; redact URL secrets in request logs; gate screenshots; expand audit `shouldLogAction` coverage; RD route permission gates + tenant checks
+- OTA closed loop (P4-4): generate-time ldflags pin `updatePinnedPubKeyHex`; wire `SetUpdateSigningKeyFile` to `server.data_dir`; `crypto.require_release_signature` fail-closed hot-update gate (hot-reloadable); self-update verify failures classified as Error without success exit
+- QUIC/gRPC listener hardening (P4-1): stream caps, keepalive/`MaxConnectionAge`, accept-loop backoff, send/recv size limits
+
+### Added
+
+- Maturity blueprint `docs/MATURITY_BLUEPRINT.md` (Phase A) with Phase B P4-* mapping
+- Generated command reference `docs/COMMAND_REFERENCE.md` via `scripts/gen-command-reference.mjs` (+ `--check` freshness gate)
+- Plugin Unix process-group kill (Setpgid) alongside Windows Job Object (P4-3)
+- CI: `./internal/payload/...` tests; darwin amd64/arm64 agent cross-compile smoke; tag releases require `RELEASE_SIGNING_KEY`
+- `scripts/build-agent.ps1` multi-GOOS matrix (linux/darwin)
+
+### Changed
+
+- gofmt debt cleared across `internal`, `cmd`, `pkg` (P3)
+- Engine hardening: Makefile vet gate, security docs, setup-dev keys, go mod tidy, drop orphan scripts
+- Capability matrix refreshed for v2.6.1 transports/plugins/OTA
+
 ## [2.6.1] - 2026-09-06
 
 ### Added
