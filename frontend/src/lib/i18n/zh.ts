@@ -2497,6 +2497,7 @@ export const zh: Record<string, string> = {
     "listeners.health_fails": "连续失败 {n}",
     "listeners.health_healthy": "健康",
     "listeners.health_last_probe": "上次探测 {time}",
+    "listeners.health_trend": "近期健康",
     "listeners.health_unknown": "未知",
     "listeners.health_unmonitored": "未监测",
     "listeners.health_unstable": "不稳定",

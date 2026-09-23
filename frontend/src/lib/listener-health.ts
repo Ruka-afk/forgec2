@@ -64,3 +64,45 @@ export function translateHealthStatus(
       return t("listeners.health_unknown");
   }
 }
+
+/** One polled observation of a listener's circuit-breaker status. */
+export interface HealthSample {
+  /** Epoch ms when this sample was observed on the client. */
+  t: number;
+  status: string;
+}
+
+/** Ring-buffer cap so long-lived list pages stay bounded. */
+export const HEALTH_HISTORY_MAX = 48;
+
+/**
+ * Merge one poll tick into the per-listener sample history.
+ *
+ * - Always records a sample when status changes (so transitions are visible).
+ * - Otherwise only records when `minIntervalMs` has elapsed (avoids a bar per
+ *   identical poll when the list refresh cadence is faster than probes).
+ * - Returns `prev` unchanged when nothing was appended (stable React refs).
+ */
+export function appendHealthSamples(
+  prev: Record<string, HealthSample[]>,
+  health: Record<string, ListenerHealth>,
+  opts: { now?: number; max?: number; minIntervalMs?: number } = {},
+): Record<string, HealthSample[]> {
+  const now = opts.now ?? Date.now();
+  const max = Math.max(2, opts.max ?? HEALTH_HISTORY_MAX);
+  const minIntervalMs = opts.minIntervalMs ?? 14_000;
+  let changed = false;
+  const next: Record<string, HealthSample[]> = { ...prev };
+
+  for (const key of Object.keys(health)) {
+    const status = healthIndicatorStatus(health[key]?.status);
+    const samples = next[key] ?? [];
+    const last = samples[samples.length - 1];
+    if (last && last.status === status && now - last.t < minIntervalMs) continue;
+    const appended = [...samples, { t: now, status }];
+    next[key] = appended.length > max ? appended.slice(appended.length - max) : appended;
+    changed = true;
+  }
+
+  return changed ? next : prev;
+}

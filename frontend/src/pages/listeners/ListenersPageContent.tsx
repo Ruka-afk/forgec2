@@ -41,6 +41,7 @@ export default function ListenersPageContent() {
     setError,
     agentCountMap,
     healthByTarget,
+    healthHistory,
     creating,
     createListener,
     updateListener,
@@ -333,7 +334,11 @@ export default function ListenersPageContent() {
                       <StatusBadge status={enabled ? "online" : "offline"} />
                     </TableCell>
                     <TableCell className="py-3 px-3 sm:py-4 sm:px-4">
-                      <ListenerHealthCell health={health} onReset={health ? () => void resetHealth(id) : undefined} />
+                      <ListenerHealthCell
+                        health={health}
+                        samples={healthHistory[id]}
+                        onReset={health ? () => void resetHealth(id) : undefined}
+                      />
                     </TableCell>
                     <TableCell className="max-sm:hidden py-3 px-3 sm:py-4 sm:px-4 text-xs text-muted-foreground max-w-[150px] truncate">{notes}</TableCell>
                      <TableCell className="py-3 px-4 sm:py-4 sm:px-6 text-right">

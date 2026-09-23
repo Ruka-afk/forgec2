@@ -9,13 +9,19 @@ import { useWS } from "@/lib/wsContext";
 import { useI18n } from "@/lib/i18n";
 import type { CreateListenerForm, EditListenerForm, Listener } from "./types";
 import { emptyCreateForm, emptyEditForm } from "./types";
-import { indexListenerHealth, type ListenerHealth } from "@/lib/listener-health";
+import {
+  appendHealthSamples,
+  indexListenerHealth,
+  type HealthSample,
+  type ListenerHealth,
+} from "@/lib/listener-health";
 
 export function useListenersData() {
   const { t } = useI18n();
   const { subscribe } = useWS();
   const [agentCountMap, setAgentCountMap] = useState<Record<string, number>>({});
   const [creating, setCreating] = useState(false);
+  const [healthHistory, setHealthHistory] = useState<Record<string, HealthSample[]>>({});
 
   const { data: listenersData, loading, error, setError, refresh: loadListeners } = useApiResource<Listener[]>({
     fetcher: async () => {
@@ -44,6 +50,14 @@ export function useListenersData() {
     () => indexListenerHealth(healthData ?? []),
     [healthData],
   );
+
+  // Client-side history: the API only returns the latest probe state, so we
+  // accumulate samples on each poll tick to drive the health sparkline.
+  useEffect(() => {
+    if (!healthData) return;
+    const map = indexListenerHealth(healthData);
+    setHealthHistory((prev) => appendHealthSamples(prev, map));
+  }, [healthData]);
 
   const resetHealth = useCallback(
     async (listenerId: string) => {
@@ -190,6 +204,7 @@ export function useListenersData() {
     setError,
     agentCountMap,
     healthByTarget,
+    healthHistory,
     creating,
     loadListeners,
     resetHealth,

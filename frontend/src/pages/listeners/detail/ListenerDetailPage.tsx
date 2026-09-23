@@ -1,6 +1,6 @@
 import { PageContainer } from "@/components/ui/page-container";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
@@ -13,6 +13,20 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Activity, Plug } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
+import { POLL } from "@/lib/polling";
+import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { firstArray } from "@/lib/envelope";
+import {
+  appendHealthSamples,
+  healthForListener,
+  indexListenerHealth,
+  translateHealthStatus,
+  type HealthSample,
+  type ListenerHealth,
+} from "@/lib/listener-health";
+import { HealthSparkline } from "@/components/ui/health-sparkline";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import { formatTime } from "@/lib/utils";
 
 interface ListenerDetail {
   ID?: string;
@@ -54,6 +68,8 @@ export default function ListenerDetailPage() {
   const [agents, setAgents] = useState<ListenerAgent[]>([]);
   const [stats, setStats] = useState({ total: 0, active: 0 });
   const [loading, setLoading] = useState(true);
+  const [health, setHealth] = useState<ListenerHealth | undefined>(undefined);
+  const [healthSamples, setHealthSamples] = useState<HealthSample[]>([]);
   const { t } = useI18n();
 
   const loadDetail = useCallback(async () => {
@@ -73,7 +89,33 @@ export default function ListenerDetailPage() {
     }
   }, [id]);
 
+  const loadHealth = useCallback(async () => {
+    if (!id) return;
+    try {
+      const data = await api.get(paths.circuitBreaker.detail);
+      const rows = firstArray(data, ["listeners", "data"]) as ListenerHealth[];
+      const found = healthForListener(indexListenerHealth(rows), id);
+      setHealth(found);
+      if (found) {
+        setHealthSamples((prev) => {
+          const keyed = indexListenerHealth([found]);
+          const merged = appendHealthSamples({ [id]: prev }, keyed);
+          return merged[id] ?? prev;
+        });
+      }
+    } catch {
+      // Keep last known health; detail page should stay usable offline.
+    }
+  }, [id]);
+
   useEffect(() => { loadDetail(); }, [loadDetail]);
+  useEffect(() => { void loadHealth(); }, [loadHealth]);
+  useVisibleInterval(() => { void loadHealth(); }, POLL.listeners);
+
+  const healthLabel = useMemo(
+    () => (health ? translateHealthStatus(t, health.status) : t("listeners.health_unmonitored")),
+    [health, t],
+  );
 
   if (loading) {
     return <PageContainer><PageSpinner /></PageContainer>;
@@ -102,9 +144,25 @@ export default function ListenerDetailPage() {
     <PageContainer title={name} subtitle={`${scheme}://${host}:${port}`}>
       <div className="flex items-center gap-x-4 mb-6">
         <div>
-          
+
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          {health && (
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+              <StatusIndicator
+                status={health.status || "unknown"}
+                variant="dot"
+                label={healthLabel}
+                size="sm"
+              />
+              {health.last_probe && (
+                <span className="font-mono text-(--fs-micro-sm)">
+                  {formatTime(health.last_probe)}
+                </span>
+              )}
+              <HealthSparkline samples={healthSamples} width={88} height={18} />
+            </span>
+          )}
           {isEnabled ? (
             <Badge variant="default">{t("listener.enabled")}</Badge>
           ) : (
@@ -123,6 +181,17 @@ export default function ListenerDetailPage() {
               <div><span className="text-muted-foreground">{t("listener.transport_type")}</span> <span className="text-foreground">{listener.type || scheme}</span></div>
               <div><span className="text-muted-foreground">{t("listener.notes")}</span> <span className="text-foreground">{notes}</span></div>
               <div><span className="text-muted-foreground">{t("listener.created")}</span> <span className="text-foreground">{createdAt}</span></div>
+              <div>
+                <span className="text-muted-foreground">{t("listeners.col_health")}</span>{" "}
+                <span className="text-foreground">
+                  {health ? healthLabel : t("listeners.health_unmonitored")}
+                </span>
+                {healthSamples.length >= 2 && (
+                  <div className="mt-1.5">
+                    <HealthSparkline samples={healthSamples} width={160} height={22} />
+                  </div>
+                )}
+              </div>
             </div>
             <div className="mt-6 flex gap-2">
                <Button render={<Link to={`/generate?listener_id=${id}`} />} className="flex-1">{t("listener.generate_implant")}</Button>

@@ -2497,6 +2497,7 @@ export const en: Record<string, string> = {
     "listeners.health_fails": "{n} consecutive fails",
     "listeners.health_healthy": "Healthy",
     "listeners.health_last_probe": "Last probe {time}",
+    "listeners.health_trend": "Recent health",
     "listeners.health_unknown": "Unknown",
     "listeners.health_unmonitored": "Not probed",
     "listeners.health_unstable": "Unstable",

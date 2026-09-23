@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  appendHealthSamples,
   healthForListener,
   healthIndicatorStatus,
   indexListenerHealth,
@@ -67,5 +68,37 @@ describe("health labels", () => {
     expect(healthIndicatorStatus("closed")).toBe("unknown");
     expect(translateHealthStatus(t, "healthy")).toBe("listeners.health_healthy");
     expect(translateHealthStatus(t, undefined, false)).toBe("listeners.health_unmonitored");
+  });
+});
+
+describe("appendHealthSamples", () => {
+  const health = (status: string): Record<string, ListenerHealth> => ({
+    "3": { target: "3", status },
+  });
+
+  it("records first sample and keeps prev ref when unchanged within min interval", () => {
+    const first = appendHealthSamples({}, health("healthy"), { now: 1000, minIntervalMs: 14_000 });
+    expect(first["3"]).toHaveLength(1);
+    const again = appendHealthSamples(first, health("healthy"), { now: 2000, minIntervalMs: 14_000 });
+    expect(again).toBe(first);
+  });
+
+  it("appends on status change even inside the min interval", () => {
+    const first = appendHealthSamples({}, health("healthy"), { now: 1000, minIntervalMs: 14_000 });
+    const next = appendHealthSamples(first, health("burned"), { now: 1500, minIntervalMs: 14_000 });
+    expect(next["3"]).toHaveLength(2);
+    expect(next["3"]?.[1]?.status).toBe("burned");
+  });
+
+  it("caps history at max", () => {
+    let samples: ReturnType<typeof appendHealthSamples> = {};
+    for (let i = 0; i < 10; i++) {
+      samples = appendHealthSamples(samples, health(i % 2 === 0 ? "healthy" : "unstable"), {
+        now: i * 20_000,
+        max: 4,
+        minIntervalMs: 0,
+      });
+    }
+    expect(samples["3"]).toHaveLength(4);
   });
 });

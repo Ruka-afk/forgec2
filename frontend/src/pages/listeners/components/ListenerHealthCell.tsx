@@ -4,19 +4,22 @@ import { formatTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { HealthSparkline } from "@/components/ui/health-sparkline";
 import { RotateCw } from "lucide-react";
 import {
   healthIndicatorStatus,
   translateHealthStatus,
+  type HealthSample,
   type ListenerHealth,
 } from "@/lib/listener-health";
 
 interface ListenerHealthCellProps {
   health?: ListenerHealth;
+  samples?: HealthSample[];
   onReset?: () => void;
 }
 
-export function ListenerHealthCell({ health, onReset }: ListenerHealthCellProps) {
+export function ListenerHealthCell({ health, samples, onReset }: ListenerHealthCellProps) {
   const { t } = useI18n();
   if (!health) {
     return (
@@ -52,6 +55,9 @@ export function ListenerHealthCell({ health, onReset }: ListenerHealthCellProps)
         />
         <TooltipContent className="max-w-xs">{tip}</TooltipContent>
       </Tooltip>
+      {samples && samples.length >= 2 && (
+        <HealthSparkline samples={samples} className="hidden sm:inline-flex" />
+      )}
       {fails > 0 && (
         <span className={`font-mono text-(--fs-micro-sm) ${fails >= 3 ? "text-destructive" : "text-warning"}`}>
           {fails}
