@@ -8,7 +8,7 @@
 - **Aliases:** 3
 - **Approval-gated:** 57
 - **Parameters (total):** 70
-- **Constants without specs:** shell_output
+- **Constants without specs:** shell_output (intentional: RESULT-type only, not dispatchable — see pkg/protocol/tasks.go)
 
 ## Categories
 

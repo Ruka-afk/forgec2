@@ -214,7 +214,10 @@ function render(specs, constCount, missingConsts) {
   lines.push(`- **Approval-gated:** ${approvalCount}`);
   lines.push(`- **Parameters (total):** ${totalParams}`);
   if (missingConsts.length) {
-    lines.push(`- **Constants without specs:** ${missingConsts.join(", ")}`);
+    lines.push(
+      `- **Constants without specs:** ${missingConsts.join(", ")} ` +
+        `(intentional: RESULT-type only, not dispatchable — see pkg/protocol/tasks.go)`,
+    );
   }
   lines.push("");
   lines.push("## Categories");

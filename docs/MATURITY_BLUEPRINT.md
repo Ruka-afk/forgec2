@@ -456,7 +456,9 @@ credential-access, defense-evasion, lateral-movement, privesc, persistence,
 c2, impact, other`。每个条目含 type、aliases、parameters、approval 标记。
 
 当前生成物摘要（v2.6.1）：**217** 任务类型、**57** approval-gated、**3** 别名、
-**70** 参数；`shell_output` 常量尚无 spec（见手册页脚）。
+**70** 参数。手册页脚列出的唯一无 spec 常量是 `shell_output` —— 这是**故意的**：
+它是 implant 交互式 shell 回传的 RESULT 类型，不可派发（见
+`pkg/protocol/tasks.go:410` 与 `docs/COMMAND_REFERENCE.md` 页脚），不是覆盖缺口。
 
 ---
 
