@@ -55,6 +55,45 @@ func (b *cappedBuffer) Write(p []byte) (int, error) {
 
 func (b *cappedBuffer) Bytes() []byte { return b.buf.Bytes() }
 
+// sanitizePluginPATH strips PATH entries a plugin could abuse for binary
+// hijacking: empty entries (imply CWD on Unix), "." and relative entries
+// (resolved against the plugin dir / CWD at exec time), and duplicates.
+// Absolute entries are kept verbatim so interpreters keep resolving. When
+// nothing survives, a locked-down system default is returned instead of an
+// empty PATH (which would imply CWD everywhere).
+func sanitizePluginPATH(raw string) string {
+	seen := make(map[string]bool)
+	var kept []string
+	for _, e := range strings.Split(raw, string(os.PathListSeparator)) {
+		e = strings.TrimSpace(e)
+		if e == "" || e == "." {
+			continue
+		}
+		if !filepath.IsAbs(e) {
+			continue
+		}
+		key := e
+		if os.PathListSeparator == ';' {
+			key = strings.ToLower(e)
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		kept = append(kept, e)
+	}
+	if len(kept) > 0 {
+		return strings.Join(kept, string(os.PathListSeparator))
+	}
+	if os.PathListSeparator == ';' {
+		if sysroot := os.Getenv("SystemRoot"); sysroot != "" {
+			return filepath.Join(sysroot, "System32") + ";" + sysroot
+		}
+		return `C:\Windows\System32;C:\Windows`
+	}
+	return "/usr/local/bin:/usr/bin:/bin"
+}
+
 // run executes the plugin's entry script with the supplied input.
 func (e *executor) run(ctx context.Context, pluginDir string, m *Manifest, input map[string]interface{}, timeoutSecs int) (*execResult, error) {
 	timeout := timeoutSecs
@@ -68,6 +107,8 @@ func (e *executor) run(ctx context.Context, pluginDir string, m *Manifest, input
 	args := interpreterArgs(m.Interpreter, m.Entry)
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Dir = pluginDir
+	// New process group on Unix so timeout/guard can kill the whole tree.
+	isolateProcessGroup(cmd)
 
 	// Plugin scripts run with a minimal environment instead of inheriting the
 	// full server environment: secrets, tokens and machine context in env vars
@@ -76,7 +117,7 @@ func (e *executor) run(ctx context.Context, pluginDir string, m *Manifest, input
 	// Go toolchain variables (GOCACHE/GOPATH/GOROOT) are injected explicitly so
 	// "go run" plugins still compile without leaking anything sensitive.
 	env := []string{
-		"PATH=" + os.Getenv("PATH"),
+		"PATH=" + sanitizePluginPATH(os.Getenv("PATH")),
 		"LANG=C.UTF-8",
 		"HOME=" + os.TempDir(),
 		"TMPDIR=" + os.TempDir(),
@@ -105,9 +146,9 @@ func (e *executor) run(ctx context.Context, pluginDir string, m *Manifest, input
 	cmd.Stderr = &stderr
 
 	// Start the process explicitly so a process-tree guard can be attached
-	// (Windows Job Object with KILL_ON_JOB_CLOSE) before it does any work.
-	// On timeout the guard release below also terminates surviving children,
-	// not just the main process.
+	// (Windows Job Object with KILL_ON_JOB_CLOSE; Unix process-group kill)
+	// before it does any work. On timeout the guard release below also
+	// terminates surviving children, not just the main process.
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start plugin %q: %w", m.Name, err)
 	}

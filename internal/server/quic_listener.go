@@ -17,6 +17,10 @@ import (
 
 const quicMaxBeacon = 16 * 1024 * 1024
 
+// quicMaxIncomingStreams bounds streams accepted per QUIC connection
+// (one beacon cycle per stream; well above any realistic agent duty cycle).
+const quicMaxIncomingStreams = 16
+
 // QUICBeaconListener accepts QUIC (TLS 1.3) connections and treats each
 // stream as one beacon cycle: read request until EOF, run the shared
 // envelope handler, write the response. ALPN is h3/fc2 so the handshake
@@ -55,6 +59,9 @@ func (l *QUICBeaconListener) Start() error {
 	ln, err := quic.ListenAddr(l.addr, l.tlsCfg, &quic.Config{
 		MaxIdleTimeout:  30 * time.Second,
 		KeepAlivePeriod: 10 * time.Second,
+		// Cap concurrent streams per connection so one peer cannot pin
+		// unbounded server goroutines (beacon streams are short-lived).
+		MaxIncomingStreams: quicMaxIncomingStreams,
 	})
 	if err != nil {
 		return err

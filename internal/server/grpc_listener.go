@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
@@ -53,7 +54,26 @@ func (l *GRPCListener) Start() error {
 		return err
 	}
 
-	opts := []grpc.ServerOption{grpc.MaxRecvMsgSize(GRPCMaxRecvMsgSize), grpc.ForceServerCodec(c2pb.JSONCodec)}
+	opts := []grpc.ServerOption{
+		grpc.MaxRecvMsgSize(GRPCMaxRecvMsgSize),
+		grpc.MaxSendMsgSize(GRPCMaxRecvMsgSize),
+		grpc.ForceServerCodec(c2pb.JSONCodec),
+		// Dead-client hygiene: ping aggressively enough to reap half-open
+		// streams; enforce a floor so peers cannot disable keepalive entirely
+		// and pin server goroutines.
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			Time:    30 * time.Second,
+			Timeout: 10 * time.Second,
+			// Recycle long-lived streams so config/cert rotation takes effect
+			// without waiting for an idle agent.
+			MaxConnectionAge:      10 * time.Minute,
+			MaxConnectionAgeGrace: 30 * time.Second,
+		}),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime:             10 * time.Second,
+			PermitWithoutStream: true,
+		}),
+	}
 	mode := "insecure"
 	if l.tlsCreds != nil {
 		opts = append(opts, grpc.Creds(l.tlsCreds))

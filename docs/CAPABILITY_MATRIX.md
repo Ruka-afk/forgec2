@@ -1,7 +1,9 @@
 # ForgeC2 Capability Matrix
 
-> Status of implant tasks / transports as of v2.4.1.  
-> Quality: **Core** (production) · **Hardened** (usable OPSEC) · **Scripted** (PS/external) · **Experimental** · **Stub** (Windows-only or incomplete).
+> Status of implant tasks / transports as of **v2.6.1**.  
+> Quality: **Core** (production) · **Hardened** (usable OPSEC) · **Scripted** (PS/external) · **Experimental** · **Stub** (Windows-only or incomplete).  
+> Command inventory: generate with `node scripts/gen-command-reference.mjs` → `docs/COMMAND_REFERENCE.md`.  
+> Architecture blueprint: `docs/MATURITY_BLUEPRINT.md`.
 
 ## Transports
 
@@ -11,11 +13,11 @@
 | TCP | Yes | Yes | Yes | Core |
 | DNS | Yes (+ DoH/DoT fields) | Yes | Yes | Hardened |
 | WSS | Yes (Beacon Transport) | Yes | Yes | Hardened — persistent WS + binary frames + ping |
-| gRPC | Yes (Beacon Transport) | Yes | Yes | Experimental — `grpcs://` TLS when server certs on; `grpc://` lab insecure |
+| gRPC | Yes (Beacon Transport) | Yes | Yes | Hardened — `grpcs://` TLS + keepalive/`MaxConnectionAge`; `grpc://` lab insecure only; mTLS when client CA set |
 | SSH | Yes (+ creds + host-key pin) | Yes | Yes | Experimental — host key pin via ldflag/auto server key; empty pin = lab ignore |
 | ICMP | Yes | Yes (FC2I fragments) | Win/Linux | Hardened — envelopes split across Echo payloads |
 | UDP | Yes (experimental) | Yes (`udp_enabled`) | Yes | Experimental — one datagram per beacon |
-| QUIC | Yes (experimental) | Yes (`quic_enabled`, TLS 1.3 ALPN h3/fc2) | Yes | Experimental — stream-framed v2 envelope |
+| QUIC | Yes (experimental) | Yes (`quic_enabled`, TLS 1.3 ALPN h3/fc2) | Yes | Hardened — stream-framed v2 envelope; MaxIncomingStreams cap; path migration off; accept-loop backoff |
 | mTLS / h2c | Selector only | Partial | Code present | Experimental |
 | SMB P2P | P2P mode | Win pipe / Unix socket | Yes | Hardened |
 
@@ -116,11 +118,26 @@ Rebuild implants after changing placement/header/timing fields — old agents ke
 4. After implant code changes, **regenerate** payloads (sleep/config alone is not enough).  
 5. Upload `Invoke-Mimikatz.ps1` under **Settings → Modules** before credential dumps.
 
+## Plugins & OTA
+
+| Feature | Quality | Notes |
+|---------|---------|-------|
+| Manifest plugins (command/hook/report) | Hardened | 52 packaged; stdin JSON; env scrub + PATH allowlist; 2 MiB output cap |
+| Plugin process isolation | Hardened | Windows Job Object KILL_ON_JOB_CLOSE; Unix Setpgid + group kill (P4-3) |
+| goja JS scripting | Hardened | DB-persisted scripts |
+| OTA self_update | Hardened | Ed25519 pin (`updatePinnedPubKeyHex`); bare URL refused; server sign API under Admin |
+| Hot update (server) | Hardened | `crypto.update_signing_key` optional release signature |
+
 ## Regenerating this matrix
 
 When adding task types, update:
 
 - `pkg/protocol/tasks.go`
+- `pkg/protocol/taskspec_data.go` (metadata — single source of truth)
 - `internal/payload/agent/task_registry.go`
-- `internal/server/tasktypes.go`
-- This document
+- `internal/server/tasktypes.go` (if API surface changes)
+- This document + regenerate `docs/COMMAND_REFERENCE.md`:
+
+```bash
+node scripts/gen-command-reference.mjs
+```
