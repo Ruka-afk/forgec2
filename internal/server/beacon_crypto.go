@@ -362,6 +362,8 @@ func (s *Server) decodeBeaconEnvelope(raw []byte) (envelope beaconEnvelope, req 
 		slog.Warn("Beacon rejected: invalid agent ID", "agent_id", envelope.UUID)
 		return beaconEnvelope{}, beaconRequest{}, frameRejected
 	}
+	// Canonicalize before session/DB/AAD use: DNS delivers bare hex UUIDs.
+	envelope.UUID = normalizeAgentID(envelope.UUID)
 
 	// Timestamp window: reject stale or clock-skewed frames.
 	now := time.Now().Unix()
@@ -450,5 +452,24 @@ func isValidAgentID(id string) bool {
 	if err != nil {
 		return false
 	}
-	return strings.EqualFold(u.String(), check)
+	// Accept the canonical dashed form and the 32-char hex form (DNS qname
+	// labels[0] uses bare hex with no dashes).
+	if strings.EqualFold(u.String(), check) {
+		return true
+	}
+	return len(check) == 32 && strings.EqualFold(strings.ReplaceAll(u.String(), "-", ""), check)
+}
+
+// normalizeAgentID returns the canonical lowercase dashed form of an agent ID
+// that has already passed isValidAgentID. DNS transports deliver bare 32-hex
+// IDs; session lookup, DB queries and AAD all expect the dashed form.
+func normalizeAgentID(id string) string {
+	check := strings.TrimPrefix(id, "ws_")
+	if check == id {
+		check = strings.TrimPrefix(id, "unknown-")
+	}
+	if u, err := uuid.Parse(check); err == nil {
+		return u.String()
+	}
+	return id
 }
