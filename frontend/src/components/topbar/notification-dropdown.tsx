@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { nowTime } from "@/lib/utils";
+import { useAppStore } from "@/lib/store";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,7 @@ function formatNotifTime(raw: string): string {
 export function NotificationDropdown() {
   const { t } = useI18n();
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const setUnreadNotifications = useAppStore((s) => s.setUnreadNotifications);
 
   const loadNotifications = useCallback(() => {
     api.get(paths.notifications.list("page=1&pageSize=20"))
@@ -153,6 +155,9 @@ export function NotificationDropdown() {
   );
 
   const unreadCount = notifications.filter((n) => !n.read).length;
+  useEffect(() => {
+    setUnreadNotifications(unreadCount);
+  }, [unreadCount, setUnreadNotifications]);
   const markAllRead = () => {
     // Optimistic with rollback: on failure the badge must not lie about
     // server-side unread state until the next reload. Rollback restores the

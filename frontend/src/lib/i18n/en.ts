@@ -2700,6 +2700,7 @@ export const en: Record<string, string> = {
     "nav.listeners": "Listeners",
     "nav.loot": "Loot",
     "nav.macros": "Macros",
+    "nav.notifications": "Notifications",
 
     "nav.ntlm": "NTLM",
     "nav.opsec": "OPSEC Guard",

@@ -39,4 +39,7 @@ export interface AppStore {
   focusMode: boolean;
   toggleFocusMode: () => void;
   setFocusMode: (b: boolean) => void;
+  /** Unread notification count shared by TopBar dropdown and Sidebar badge. */
+  unreadNotifications: number;
+  setUnreadNotifications: (n: number) => void;
 }

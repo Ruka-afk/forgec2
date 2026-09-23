@@ -9,14 +9,14 @@ import {
   Radio, Server, Cloud, Box, Wrench, Code, Key,
   Route, IdCard, Archive, SatelliteDish, ArrowLeftRight,
   FileCode, Puzzle, Network, Crosshair, ClipboardList,
-  Plug, Users, Settings, ListOrdered,
+  Plug, Users, Settings, ListOrdered, Bell,
 } from "lucide-react";
 
 interface NavItemDef {
   href: string;
   labelKey: string;
   icon: LucideIcon;
-  badge?: "agents" | "listeners";
+  badge?: "agents" | "listeners" | "notifications";
   /** When false, omitted from the sidebar (still in Ctrl+K). */
   sidebar?: boolean;
   /**
@@ -48,6 +48,7 @@ export const NAV_SECTIONS: NavSectionDef[] = [
       { href: "/agents", labelKey: "nav.beacons", icon: Bug, badge: "agents", perms: ["agents.read"] },
       { href: "/listeners", labelKey: "nav.listeners", icon: Radio, badge: "listeners", perms: ["listeners.read"] },
       { href: "/timeline", labelKey: "nav.events", icon: Clock, perms: ["agents.read"] },
+      { href: "/notifications", labelKey: "nav.notifications", icon: Bell, badge: "notifications", perms: ["notifications.read"] },
     ],
   },
   {

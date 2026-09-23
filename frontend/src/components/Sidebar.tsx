@@ -86,7 +86,7 @@ const SidebarLogo = memo(function SidebarLogo({
   );
 });
 
-const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection, pathname, stats, t, searchQuery, permissions }: {
+const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection, pathname, stats, t, searchQuery, permissions, unreadNotifications }: {
   collapsed: boolean;
   sections: Record<string, boolean>;
   toggleSection: (key: string) => void;
@@ -95,6 +95,7 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
   t: (key: string, params?: Record<string, string | number>) => string;
   searchQuery: string;
   permissions: readonly PermissionKey[] | null | undefined;
+  unreadNotifications: number;
 }) {
   function isActive(href: string) {
     if (href === "/dashboard") return pathname === "/dashboard";
@@ -159,6 +160,9 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
                   {collapsed && item.badge === "listeners" && stats != null && (stats.total_listeners ?? 0) > 0 && (
                     <StatusDot tone="success" size="xs" className="absolute -top-1 -right-2" />
                   )}
+                  {collapsed && item.badge === "notifications" && unreadNotifications > 0 && (
+                    <StatusDot tone="warning" size="xs" className="absolute -top-1 -right-2" />
+                  )}
                 </span>
                 {!collapsed && (
                   <>
@@ -171,6 +175,11 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
                     {item.badge === "listeners" && stats != null && (
                       <Badge variant="secondary" className="px-1.5 py-px text-(--fs-micro) leading-none rounded bg-primary/10 text-primary font-mono">
                         {stats.total_listeners ?? 0}
+                      </Badge>
+                    )}
+                    {item.badge === "notifications" && unreadNotifications > 0 && (
+                      <Badge variant="secondary" className="px-1.5 py-px text-(--fs-micro) leading-none rounded bg-warning/20 text-warning font-mono">
+                        {unreadNotifications > 99 ? "99+" : unreadNotifications}
                       </Badge>
                     )}
                   </>
@@ -257,7 +266,7 @@ export default function Sidebar() {
   const { t } = useI18n();
   const [sections, setSections] = useState<Record<string, boolean>>(defaultSections);
   const [searchQuery, setSearchQuery] = useState("");
-  const stats = useAppStore((s) => s.stats);
+const stats = useAppStore((s) => s.stats);
   const fetchStats = useAppStore((s) => s.fetchStats);
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed);
   const isMobile = useAppStore((s) => s.isMobile);
@@ -269,6 +278,7 @@ export default function Sidebar() {
   const setOnlineUsers = useAppStore((s) => s.setOnlineUsers);
   const currentUsername = useAppStore((s) => s.currentUsername);
   const permissions = useAppStore((s) => s.currentPermissions);
+  const unreadNotifications = useAppStore((s) => s.unreadNotifications);
 
   useEffect(() => { Promise.resolve().then(() => setSections(getSavedSections())); }, []);
 
@@ -338,6 +348,7 @@ export default function Sidebar() {
             t={t}
             searchQuery={searchQuery}
             permissions={permissions}
+            unreadNotifications={unreadNotifications}
           />
         </ScrollArea>
       </div>

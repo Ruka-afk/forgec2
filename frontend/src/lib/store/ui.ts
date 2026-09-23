@@ -15,6 +15,8 @@ interface UiSlice {
   focusMode: boolean;
   toggleFocusMode: () => void;
   setFocusMode: (b: boolean) => void;
+  unreadNotifications: number;
+  setUnreadNotifications: (n: number) => void;
 }
 
 // Legacy localStorage keys — read once to seed values for users who set prefs
@@ -54,6 +56,7 @@ export const createUiSlice: StateCreator<AppStore, [], [], UiSlice> = (set, get)
   commandPaletteOpen: false,
   density: legacyDensity() ?? "comfortable",
   focusMode: legacyBool(FOCUS_LEGACY_KEY) ?? false,
+  unreadNotifications: 0,
 
   toggleSidebar: () => {
     const { isMobile, mobileMenuOpen, sidebarCollapsed } = get();
@@ -61,11 +64,11 @@ export const createUiSlice: StateCreator<AppStore, [], [], UiSlice> = (set, get)
     else set({ sidebarCollapsed: !sidebarCollapsed });
   },
 
-  setMobileMenuOpen: (open: boolean) => set({ mobileMenuOpen: open }),
-  setIsMobile: (mobile: boolean) =>
+  setMobileMenuOpen: (open) => set({ mobileMenuOpen: open }),
+  setIsMobile: (mobile) =>
     set({ isMobile: mobile, mobileMenuOpen: mobile ? false : get().mobileMenuOpen }),
 
-  setCommandPaletteOpen: (open: boolean | ((v: boolean) => boolean)) =>
+  setCommandPaletteOpen: (open) =>
     set((state) => ({
       commandPaletteOpen: typeof open === "function" ? (open as (v: boolean) => boolean)(state.commandPaletteOpen) : open,
     })),
@@ -82,5 +85,9 @@ export const createUiSlice: StateCreator<AppStore, [], [], UiSlice> = (set, get)
   setFocusMode: (b) => {
     applyFocus(b);
     set({ focusMode: b });
+  },
+  setUnreadNotifications: (n) => {
+    const clamped = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+    if (get().unreadNotifications !== clamped) set({ unreadNotifications: clamped });
   },
 });

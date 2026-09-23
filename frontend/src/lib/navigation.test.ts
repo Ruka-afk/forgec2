@@ -62,9 +62,11 @@ describe("navigation single source", () => {
 
   it("does not advertise merged routes as sidebar destinations", () => {
     const hrefs = NAV_ITEMS.map((i) => i.href);
-    for (const dead of ["/builds", "/profiles", "/packer", "/stager", "/tasks", "/notifications", "/files"]) {
+    for (const dead of ["/builds", "/profiles", "/packer", "/stager", "/tasks", "/files"]) {
       expect(hrefs).not.toContain(dead);
     }
+    // /notifications is intentionally reachable again (sidebar unread badge).
+    expect(hrefs).toContain("/notifications");
   });
 
   it("pins the four core operational destinations", () => {
@@ -76,6 +78,7 @@ describe("navigation single source", () => {
       "/agents",
       "/listeners",
       "/timeline",
+      "/notifications",
     ]);
   });
 

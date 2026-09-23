@@ -2700,6 +2700,7 @@ export const zh: Record<string, string> = {
     "nav.listeners": "监听器管理",
     "nav.loot": "战利品",
     "nav.macros": "任务宏",
+    "nav.notifications": "通知",
 
     "nav.ntlm": "NTLM",
     "nav.opsec": "OPSEC 守卫",
