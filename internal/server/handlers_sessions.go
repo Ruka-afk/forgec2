@@ -164,9 +164,13 @@ func (s *Server) handleRevokeSession(c *gin.Context) {
 	}
 	if err := s.db.Model(&db.UserSession{}).Where("id = ?", sessionID).
 		Update("revoked_at", time.Now()).Error; err != nil {
+		s.LogAuditRecord(c, "session_revoke", "user", userID,
+			fmt.Sprintf("Failed to revoke session %s for user %s", sessionID, userID), false, err)
 		respondError(c, http.StatusInternalServerError, "Failed to revoke session")
 		return
 	}
+	s.LogAuditRecord(c, "session_revoke", "user", userID,
+		fmt.Sprintf("Revoked session %s (ip=%s)", sessionID, session.IP), true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Session revoked"})
 }
 
@@ -181,9 +185,13 @@ func (s *Server) handleRevokeAllUserSessions(c *gin.Context) {
 		Where("user_id = ? AND revoked_at = ?", userID, time.Time{}).
 		Update("revoked_at", time.Now())
 	if err := result.Error; err != nil {
+		s.LogAuditRecord(c, "session_revoke_all", "user", userID,
+			fmt.Sprintf("Failed to revoke all sessions for user %s", userID), false, err)
 		respondError(c, http.StatusInternalServerError, "Failed to revoke sessions")
 		return
 	}
+	s.LogAuditRecord(c, "session_revoke_all", "user", userID,
+		fmt.Sprintf("Revoked %d session(s) for user %s", result.RowsAffected, userID), true, nil)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": fmt.Sprintf("Revoked %d sessions", result.RowsAffected),
