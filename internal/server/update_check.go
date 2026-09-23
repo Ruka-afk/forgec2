@@ -440,11 +440,12 @@ func (s *Server) performHotUpdate(latest string) error {
 		return fail(fmt.Errorf("fetch checksum file: %w", err))
 	}
 	// Release signature (Ed25519 over the exact checksum-file bytes) when
-	// crypto.update_signing_key is configured. Without it, verification
-	// rests on same-origin checksums alone — logged loudly, still allowed
-	// for operators who have not adopted release signing yet.
+	// crypto.update_signing_key is configured. Without a key: refuse when
+	// crypto.require_release_signature is set (fail closed), otherwise warn
+	// and fall back to same-origin checksums only (upgrade compatibility).
 	s.configMu.RLock()
 	signingKey := s.cfg.Crypto.UpdateSigningKey
+	requireSig := s.cfg.Crypto.RequireReleaseSignature
 	s.configMu.RUnlock()
 	if strings.TrimSpace(signingKey) != "" {
 		sig, err := fetchReleaseSignature(checksumURL)
@@ -457,8 +458,11 @@ func (s *Server) performHotUpdate(latest string) error {
 			return fail(fmt.Errorf("release signature rejected: %w", err))
 		}
 		slog.Info("Hot update: release signature verified")
+	} else if requireSig {
+		os.Remove(tmpPath)
+		return fail(fmt.Errorf("hot update refused: crypto.require_release_signature is set but crypto.update_signing_key is empty"))
 	} else {
-		slog.Warn("Hot update without release signature: set crypto.update_signing_key to require signed releases")
+		slog.Warn("Hot update without release signature: set crypto.update_signing_key (and crypto.require_release_signature=true) to require signed releases")
 	}
 	if err := verifyChecksumBytes(tmpPath, checksumData, binName); err != nil {
 		os.Remove(tmpPath)

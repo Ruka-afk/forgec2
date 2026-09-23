@@ -31,6 +31,13 @@ func buildLdflags(cfg ImplantConfig, profile MalleableProfile, goos string) (str
 		// region before hashing so verification succeeds on the unmodified binary.
 		flags += ` -X "main.SelfCheckSHA256Str=` + selfCheckPlaceholder + `"`
 	}
+	// Compile-time OTA trust root: pin the teamserver update-signing public key
+	// so every implant can verify self_update signatures before any config_push.
+	// Public material only (safe on argv). On failure leave the pin empty so
+	// the agent stays fail-closed until a later config_push supplies the key.
+	if pub, err := UpdateSigningPublicKeyHex(); err == nil && pub != "" {
+		flags += ` -X "main.updatePinnedPubKeyHex=` + pub + `"`
+	}
 	return flags, blob, sConfigKey
 }
 

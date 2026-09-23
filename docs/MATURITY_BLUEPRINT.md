@@ -140,11 +140,14 @@ Tasks/Timeline、Lateral、Evasion、Plugins、OPSEC、Workflow、Audit。
 
 ### 2.8 OTA / Lifecycle（`update_signing.go`, `commands_evasion.go`, `agent_lifecycle.go`）
 
-服务端持有 `data/update_signing.key`（私钥不出目录）；`POST
-/api/update-signing/sign` 与 `POST /agents/:id/self_update` 组成推送链：
+服务端持有 `data/update_signing.key`（路径跟随 `server.data_dir`，私钥不出目录）；
+`POST /api/update-signing/sign` 与 `POST /agents/:id/self_update` 组成推送链：
 sha256 → Ed25519 签名 → JSON envelope `{url,signature}` → agent **仅用 pin 公钥**
-验证 → 下载替换。`PushUpdateKey` 把公钥写入 config_push，保证跨重启仍 pin。
-Server 自身 hot update 走 `update_check.go` + 可选 `crypto.update_signing_key`。
+验证 → 下载替换。`buildLdflags` 在 generate 时注入 `-X main.updatePinnedPubKeyHex`
+（构建即钉钥）；`PushUpdateKey` 可再经 config_push 保证跨重启仍 pin。
+验签失败按 Error 上报且不 `os.Exit` 成功路径。Server 自身 hot update 走
+`update_check.go` + `crypto.update_signing_key`（可选 `require_release_signature`
+强制无公钥拒绝热更）；tag 发布 CI 强制 `RELEASE_SIGNING_KEY` 签出 `.sig`。
 
 ### 2.9 Audit / Safety（`opsec/guard.go`, approval gates, ROE）
 
@@ -416,13 +419,25 @@ DB_PASSWORD=… docker compose --profile postgres up -d
 | DNS | `dns_enabled`, `dns_domain` | 53/udp |
 | gRPC | `grpc_enabled` + TLS | 自定 |
 
-### 5.4 OTA 密钥
+### 5.4 OTA 密钥（两条独立信任根）
+
+**A. Agent self_update**（`data/update_signing.key`，server 自动生成）
+
+- 构建时 `buildLdflags` 注入 `-X main.updatePinnedPubKeyHex=<pub>`（闭合环）。
+- 运行期可再经 `config_push` + `push_update_key` 推送/覆写 pin（持久化 `update.key`）。
+- 信封 `{url, signature}` 由 `SignUpdateHash(sha256)` 签出；agent fail-closed 验签 + TOCTOU 复检。
+- key 路径跟随 `server.data_dir`（与 `stager.key` 一致）。
+
+**B. Server 热更新**（`RELEASE_SIGNING_KEY` ↔ `crypto.update_signing_key`）
 
 ```powershell
-go run ./cmd/sign-release          # 打印 update_signing_key=
-# 写入 config.yaml crypto.update_signing_key
-# 生成 implant 时 -ldflags "-X main.updatePinnedPubKeyHex=..."
+go run ./cmd/sign-release -gen     # 打印 RELEASE_SIGNING_KEY / update_signing_key
+# 私钥进 GitHub Secret；公钥写入 config.yaml crypto.update_signing_key
+# CI 对每个 *.sha256 产出 detached .sig；tag 发布强制要求 secret（release.yml）
+# performHotUpdate 无公钥时拒绝热更（fail-closed）或显式 allow 例外
 ```
+
+两套密钥**不可互换**（A 签 SHA-256 摘要；B 签 checksum 文件原文）。
 
 ---
 
@@ -473,7 +488,7 @@ c2, impact, other`。每个条目含 type、aliases、parameters、approval 标�
 | 安全与合规加固 | **8.0** | TLS1.3/ECDH/GCM/Ed25519 pin/ROE/approval/审计；扣分：ChaCha20 可选路径未默认、生产需人工加固 compose |
 | 可维护性/更新性 | **8.5** | 单一 TaskSpec 真源、CI 门禁、gofmt 清债、OTA 签名链闭环；扣分：matrix 手工段仍存 |
 | 额外加分 | **8.0** | HTTP/3、别名史、多语言插件、跨平台构建已有；扣分：模块化代理/WASM、Win TUN 未打包 |
-| **综合** | **8.2** | P3 工程债已清 + P4-1/2/3 落地；继续 P4-4/5 可到 8.5+ |
+| **综合** | **8.5** | P3 工程债已清 + P4 全落地（含 OTA 构建钉钥/CI 门禁、darwin 交叉编译） |
 
 ---
 
@@ -484,7 +499,7 @@ c2, impact, other`。每个条目含 type、aliases、parameters、approval 标�
 | P4-1 | QUIC/gRPC 硬化 | `quic_listener.go`, `grpc_listener.go`, `transport_quic.go` |
 | P4-2 | matrix 刷新 + 命令手册 | `CAPABILITY_MATRIX.md`, `gen-command-reference.mjs` |
 | P4-3 | 插件进程/环境隔离 | `plugin/executor.go`, `job_other.go` |
-| P4-4 | OTA 闭环（已有主体，补文档/门禁） | `agent_lifecycle.go`, `update_signing.go` |
-| P4-5 | 非 Win stub 可行子集 | `tun_*`, capability notes |
+| P4-4 | OTA 闭环（钉钥 ldflags + CI/release 门禁 + key 路径 + 验签分类） | `generator_ldflags.go`, `cmd/server/main.go`, `task_recon.go`, `ci.yml`, `release.yml` |
+| P4-5 | 非 Win stub 可行子集（0 新 stub；darwin 双架构交叉编译门禁 + 构建矩阵） | `ci.yml` smoke, `scripts/build-agent.ps1`, `tun_*` |
 
 *生成说明：设计评审通过后按 P4-* 拆 PR；每个逻辑单元 commit+push。*

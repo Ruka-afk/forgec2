@@ -437,12 +437,18 @@ func handleSelfUpdate(task Task, res *TaskResult) {
 		return
 	}
 	result := selfUpdate(task.Command)
-	if strings.HasPrefix(result, "failed") || strings.HasPrefix(result, "self_update:") {
+	// Verification failures must be reported as errors (and must not exit as
+	// success). Only a clean platform replace path is allowed to exit.
+	if strings.HasPrefix(result, "failed") ||
+		strings.HasPrefix(result, "self_update:") ||
+		strings.Contains(result, "signature verification failed") ||
+		strings.Contains(result, "no update signing key pinned") ||
+		strings.Contains(result, "refused") {
 		res.Error = result
-	} else {
-		res.Output = result
-		sendTaskResult(*res)
-		time.Sleep(500 * time.Millisecond)
-		os.Exit(0)
+		return
 	}
+	res.Output = result
+	sendTaskResult(*res)
+	time.Sleep(500 * time.Millisecond)
+	os.Exit(0)
 }

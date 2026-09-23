@@ -53,7 +53,7 @@ jobs:
         with:
           name: vet-output
           path: vet.err
-      - run: go test ./internal/config/... ./internal/crypto/... ./internal/db/... ./internal/malleable/... ./internal/obfuscation/... ./internal/plugin/... ./internal/server/... ./pkg/... -count=1 -timeout 5m -coverprofile=coverage.out
+      - run: go test ./internal/config/... ./internal/crypto/... ./internal/db/... ./internal/malleable/... ./internal/obfuscation/... ./internal/payload/... ./internal/plugin/... ./internal/server/... ./pkg/... -count=1 -timeout 5m -coverprofile=coverage.out
       - run: go build ./...
       - run: go build -o checkopenapi ./cmd/checkopenapi
       - name: OpenAPI check (core paths + min coverage)
@@ -105,6 +105,12 @@ jobs:
         # garble obfuscated path stays manual (needs $GOPATH/bin + takes ~3min).
         run: |
           FORGEC2_SMOKE_BUILD=1 go test ./internal/payload/... -count=1 -timeout 15m -run 'TestSmokeGenerateWindowsEXE|TestSmokeLinuxELFSmoke|TestSmokeTokenStagerBuild' -v
+      - name: Cross-compile agent for darwin (link-only gate)
+        # darwin has no smoke test; keep a pure-Go link check so stub
+        # regressions fail CI before a macOS generate is attempted.
+        run: |
+          GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -o "$RUNNER_TEMP/agent-darwin" ./internal/payload/agent/
+          GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o "$RUNNER_TEMP/agent-darwin-arm64" ./internal/payload/agent/
 
   lint:
     runs-on: ubuntu-latest

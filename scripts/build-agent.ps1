@@ -5,11 +5,13 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Push-Location $root
 try {
-    # Agent implant is Windows/amd64 only (syscall stubs, Windows APIs, unsafe.Pointer alignment).
-    # Cross-compilation for other targets is expected to fail.
-    # This script verifies the primary payload builds cleanly.
+    # Agent compiles for windows/amd64, linux/amd64, and darwin/amd64
+    # (platform files + !windows stubs). Verify all three link targets.
+    # agent_stager is windows-only by build tag — verify that separately.
     $targets = @(
-        @{ GOOS="windows"; GOARCH="amd64"; dir="internal/payload/agent"; out="forgec2-agent.exe" }
+        @{ GOOS="windows"; GOARCH="amd64"; dir="internal/payload/agent"; out="forgec2-agent.exe" },
+        @{ GOOS="linux"; GOARCH="amd64"; dir="internal/payload/agent"; out="forgec2-agent-linux" },
+        @{ GOOS="darwin"; GOARCH="amd64"; dir="internal/payload/agent"; out="forgec2-agent-darwin" }
     )
 
     # Verify Windows stager too

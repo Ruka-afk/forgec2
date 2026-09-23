@@ -258,6 +258,12 @@ func diffConfig(old, new *config.Config) (hotReloadable []string, staticOnly []s
 	if old.Crypto.UpdateSigningKey != new.Crypto.UpdateSigningKey {
 		hotReloadable = append(hotReloadable, "crypto.update_signing_key")
 	}
+	if old.Crypto.RequireReleaseSignature != new.Crypto.RequireReleaseSignature {
+		hotReloadable = append(hotReloadable, "crypto.require_release_signature")
+	}
+	if old.Crypto.RequireReleaseSignature != new.Crypto.RequireReleaseSignature {
+		hotReloadable = append(hotReloadable, "crypto.require_release_signature")
+	}
 	if old.Crypto.BackupKey != new.Crypto.BackupKey {
 		staticOnly = append(staticOnly, "crypto.backup_key")
 	}

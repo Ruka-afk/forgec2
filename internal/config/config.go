@@ -144,6 +144,8 @@ type Config struct {
 		CsrfKey                 string `yaml:"csrf_key"`                   // REQUIRED: 32-byte hex key for CSRF token binding (independent)
 		ForceECDH               bool   `yaml:"force_ecdh"`                 // retained for config compat: v2 has no plaintext frames so refusal is unconditional and the flag cannot weaken anything
 		MaxDecryptedPayloadSize int    `yaml:"max_decrypted_payload_size"` // max bytes for decrypted beacon body (0 = default 10MB)
+		UpdateSigningKey        string `yaml:"update_signing_key"`         // OPTIONAL: 32-byte hex Ed25519 pubkey; when set, hot updates require a detached "<checksum>.sig" release signature (empty = checksum-only + warning unless require_release_signature)
+		RequireReleaseSignature bool   `yaml:"require_release_signature"`  // when true, refuse hot updates if update_signing_key is empty or the detached .sig fails verification (default false for upgrade compat; set true in production)
 	} `yaml:"crypto"`
 
 	Malleable struct {
@@ -907,6 +909,15 @@ func (c *Config) Validate() error {
 		}
 		if _, err := hex.DecodeString(k.val); err != nil {
 			errs = append(errs, fmt.Errorf("%s must be a valid hex string", k.name))
+		}
+	}
+	// Release-signing key is OPTIONAL (empty = checksum-only hot updates with
+	// a warning); when set it must be a 32-byte Ed25519 public key in hex.
+	if c.Crypto.UpdateSigningKey != "" {
+		if len(c.Crypto.UpdateSigningKey) != 64 {
+			errs = append(errs, errors.New("crypto.update_signing_key must be a 64-character hex string (32-byte Ed25519 public key)"))
+		} else if _, err := hex.DecodeString(c.Crypto.UpdateSigningKey); err != nil {
+			errs = append(errs, errors.New("crypto.update_signing_key must be a valid hex string"))
 		}
 	}
 

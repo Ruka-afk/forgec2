@@ -102,6 +102,9 @@ func main() {
 		slog.Error("Stager key initialization failed", "err", err)
 		os.Exit(1)
 	}
+	// OTA self_update signing key lives with the data dir (same as stager.key)
+	// so pins survive restarts regardless of the process working directory.
+	payload.SetUpdateSigningKeyFile(filepath.Join(dataDir, "update_signing.key"))
 
 	// Create and start server
 	srv := server.New(cfg, database)
