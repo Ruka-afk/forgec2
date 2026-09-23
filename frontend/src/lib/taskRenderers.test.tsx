@@ -5,6 +5,11 @@ import {
   getTaskRenderer,
   registeredRendererTypes,
   HostInfoResultView,
+  PsResultView,
+  NetstatResultView,
+  CredsResultView,
+  parseNetstatRows,
+  parseCredRows,
 } from "./taskRenderers";
 
 describe("taskRenderers registry", () => {
@@ -60,5 +65,83 @@ describe("HostInfoResultView", () => {
     );
     expect(html).toContain("<pre");
     expect(html).toContain("plain shell output");
+  });
+});
+
+describe("PsResultView", () => {
+  const sample = [
+    "ProcessId Name         WorkingSetMB",
+    "--------- ----         ------------",
+    "1234      chrome.exe   512.5",
+    "56        svchost.exe  100",
+  ].join("\n");
+
+  it("renders a process table from Format-Table output", () => {
+    const html = renderToString(<PsResultView result={sample} taskType="ps" />);
+    expect(html).toContain("ps-renderer");
+    expect(html).toContain("chrome.exe");
+    expect(html).toContain("1234");
+  });
+
+  it("falls back to raw when no rows parse", () => {
+    const html = renderToString(<PsResultView result="" taskType="ps" />);
+    expect(html).toContain("<pre");
+  });
+});
+
+describe("parseNetstatRows / NetstatResultView", () => {
+  const windows = [
+    "  Proto  Local Address          Foreign Address        State           PID",
+    "  TCP    0.0.0.0:135            0.0.0.0:0              LISTENING       1234",
+    "  TCP    10.0.0.5:49152         93.184.216.34:443      ESTABLISHED     5678",
+  ].join("\n");
+
+  it("parses Windows netstat lines", () => {
+    const rows = parseNetstatRows(windows);
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+    expect(rows[0].proto).toBe("tcp");
+    expect(rows[0].local).toContain("135");
+    expect(rows[0].state.toUpperCase()).toContain("LISTEN");
+  });
+
+  it("renders connection table", () => {
+    const html = renderToString(<NetstatResultView result={windows} taskType="netstat" />);
+    expect(html).toContain("netstat-renderer");
+    expect(html).toContain("LISTENING");
+  });
+
+  it("falls back when nothing parses", () => {
+    const html = renderToString(<NetstatResultView result="not netstat" taskType="netstat" />);
+    expect(html).toContain("<pre");
+  });
+});
+
+describe("parseCredRows / CredsResultView", () => {
+  it("parses simple domain\\user:password lines", () => {
+    const rows = parseCredRows("CORP\\admin:P@ssw0rd\nuser2:secret123");
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+    expect(rows[0].username).toBeTruthy();
+    expect(rows[0].kind).toBe("password");
+  });
+
+  it("parses SAM hash lines", () => {
+    const rows = parseCredRows("Administrator:500:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0:::");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].kind).toBe("hash");
+    expect(rows[0].secret).toBe("31d6cfe0d16ae931b73c59d7e0c089c0");
+  });
+
+  it("masks secrets in the table view", () => {
+    const html = renderToString(
+      <CredsResultView result="CORP\\admin:P@ssw0rd!" taskType="creds" />,
+    );
+    expect(html).toContain("creds-renderer");
+    expect(html).not.toContain("P@ssw0rd!");
+    expect(html).toContain("admin");
+  });
+
+  it("falls back when no credentials parse", () => {
+    const html = renderToString(<CredsResultView result="no creds here" taskType="creds" />);
+    expect(html).toContain("<pre");
   });
 });
