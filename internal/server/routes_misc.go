@@ -1,6 +1,8 @@
 package server
 
 import (
+	"time"
+
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
@@ -21,7 +23,16 @@ func (s *Server) registerMiscRoutes(auth *gin.RouterGroup) {
 	}
 
 	s.router.GET("/stage/:token", s.handleServeStage)
-	s.router.GET("/screenshots/:agent_id/:filename", middleware.AuthRequired(s.db), middleware.RequirePermission(db.PermAgentsRead), s.handleServeScreenshot)
+	// Screenshots sit on s.router (blob path) rather than the auth group, so
+	// they must re-apply the operator-plane guard and a dedicated rate limit —
+	// AuthRequired alone left CIDR/mTLS allowlist and per-user budget bypassed.
+	screenshotRate := middleware.NewRateLimiter(s.ctx, 120, time.Minute)
+	s.router.GET("/screenshots/:agent_id/:filename",
+		s.operatorPlaneGuard(),
+		middleware.AuthRequired(s.db),
+		middleware.RequirePermission(db.PermAgentsRead),
+		screenshotRate.Limit(),
+		s.handleServeScreenshot)
 }
 
 // registerAutomationRoutes registers automation rules and BOF repository routes.
