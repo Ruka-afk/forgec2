@@ -312,3 +312,33 @@ func TestTransformURIAppend(t *testing.T) {
 		t.Fatalf("suffix-less decode = %q, %v; want unchanged", out, err)
 	}
 }
+
+// TestTransformChainDecodeReversed proves multi-step chains decode in
+// reverse order (encode order inverted), matching the Go agent and Cobalt
+// Strike output-block semantics. Previously decode ran forward, so any chain
+// with 2+ order-sensitive steps (e.g. base64;xor) never round-tripped and
+// placement decodes silently missed.
+func TestTransformChainDecodeReversed(t *testing.T) {
+	chains := [][]Transform{
+		{{Type: "base64"}, {Type: "xor", Value: "secret"}},
+		{{Type: "base64"}, {Type: "xor", Value: "k"}, {Type: "prepend", Value: "data:"}},
+		{{Type: "print"}, {Type: "mask", Value: "m;k"}},
+		{{Type: "netbios"}, {Type: "urlencode"}},
+		{{Type: "base64url"}, {Type: "strrep", Value: "a:b"}, {Type: "append", Value: "!"}},
+	}
+	original := []byte(`{"type":"beacon","id":"AbC123+/=="}`)
+	for i, chain := range chains {
+		tb := &TransformBlock{Transforms: chain}
+		enc, err := tb.Apply(original, true)
+		if err != nil {
+			t.Fatalf("chain %d encode: %v", i, err)
+		}
+		dec, err := tb.Apply(enc, false)
+		if err != nil {
+			t.Fatalf("chain %d decode: %v", i, err)
+		}
+		if !bytes.Equal(dec, original) {
+			t.Fatalf("chain %d round trip: got %q, want %q", i, dec, original)
+		}
+	}
+}

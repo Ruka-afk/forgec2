@@ -84,9 +84,9 @@ func TestP2PRelayDeliversEncryptedChildReply(t *testing.T) {
 	// Parent wraps the child envelope ([]byte JSON field = base64 on the wire)
 	// and sends its own encrypted beacon.
 	parentInner, _ := json.Marshal(map[string]interface{}{
-		"uuid":          parentUUID,
-		"pv":            2,
-		"info":          map[string]string{"hostname": "PARENT", "username": "p", "ip": "10.0.0.1"},
+		"uuid": parentUUID,
+		"pv":   2,
+		"info": map[string]string{"hostname": "PARENT", "username": "p", "ip": "10.0.0.1"},
 		"relayed_frames": []map[string]interface{}{
 			{"agent_id": childUUID, "envelope": base64.StdEncoding.EncodeToString([]byte(childFrame))},
 		},

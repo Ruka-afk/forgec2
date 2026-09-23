@@ -13,7 +13,7 @@ func newRegSecretServer(t *testing.T, key []byte) *Server {
 	t.Helper()
 	database := testutil.SetupTestDB(t)
 	return &Server{
-		db:        database,
+		db:         database,
 		regSecrets: crypto.NewRegSecretStore(key),
 	}
 }

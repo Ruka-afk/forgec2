@@ -37,14 +37,14 @@ var huntSkipDirNames = map[string]bool{
 }
 
 type huntOpts struct {
-	root      string
-	patterns  []string
-	maxFiles  int
-	maxDepth  int
-	maxBytes  int64
-	download  bool
-	maxDL     int
-	totalDL   int64
+	root     string
+	patterns []string
+	maxFiles int
+	maxDepth int
+	maxBytes int64
+	download bool
+	maxDL    int
+	totalDL  int64
 }
 
 func handleFileHunt(task Task, res *TaskResult) {

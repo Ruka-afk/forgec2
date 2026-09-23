@@ -22,8 +22,8 @@ func newStageTestServer(t *testing.T, dataDir string) (*Server, *gorm.DB) {
 	cfg := &config.Config{}
 	cfg.Server.DataDir = dataDir
 	s := &Server{
-		db:          database,
-		cfg:         cfg,
+		db:           database,
+		cfg:          cfg,
 		eventManager: NewEventManager(database),
 	}
 	r := gin.New()

@@ -19,5 +19,5 @@ func (sd *SandboxDetector) checkVMMACEnhanced() bool       { return false }
 func (sd *SandboxDetector) checkDiskSizeSmall() bool       { return false }
 func (sd *SandboxDetector) checkRAMSizeSmall() bool        { return false }
 
-func (ad *AntiDebug) IsDebuggerPresent() bool        { return false }
+func (ad *AntiDebug) IsDebuggerPresent() bool          { return false }
 func (ad *AntiDebug) CheckRemoteDebuggerPresent() bool { return false }

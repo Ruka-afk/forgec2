@@ -1,7 +1,9 @@
 package server
 
 import (
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"net/http"
@@ -36,6 +38,12 @@ type ProbeResult struct {
 	Burned       bool
 	Timestamp    time.Time
 	Error        string
+	// CertFingerprint is the SHA-256 hex of the leaf certificate presented
+	// by an https/tls target ("" when no certificate was captured). Probes
+	// intentionally skip chain verification (self-signed redirectors are
+	// normal), so this fingerprint is the operator's only signal to notice
+	// a MITM or an unexpected cert rotation on a redirector.
+	CertFingerprint string
 }
 
 type CircuitBreaker struct {
@@ -168,6 +176,14 @@ func (cb *CircuitBreaker) probeTarget(target ProbeTarget) ProbeResult {
 	result.TCPOK = true
 	if target.Scheme == "https" || target.Scheme == "tls" {
 		result.TLSOK = true
+		// Record what the other end presented: with verification skipped,
+		// the leaf fingerprint is the only MITM/rotation signal available.
+		if tlsConn, ok := conn.(*tls.Conn); ok {
+			if state := tlsConn.ConnectionState(); len(state.PeerCertificates) > 0 {
+				sum := sha256.Sum256(state.PeerCertificates[0].Raw)
+				result.CertFingerprint = hex.EncodeToString(sum[:])
+			}
+		}
 		// TLS handshake completion is the health signal for https/tls;
 		// a GET would need a matching certificate to avoid false burns.
 		result.ResponseTime = time.Since(start)

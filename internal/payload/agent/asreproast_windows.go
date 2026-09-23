@@ -135,20 +135,20 @@ type principalName struct {
 }
 
 type kdcReqBody struct {
-	KDCOptions []byte         `asn1:"tag:0"`
-	CName      principalName  `asn1:"tag:1,optional"`
-	Realm      string         `asn1:"tag:2"`
-	SName      principalName  `asn1:"tag:3,optional"`
-	Till       time.Time      `asn1:"tag:5,generalized"`
-	Nonce      int            `asn1:"tag:7"`
-	EType      []int          `asn1:"tag:8"`
+	KDCOptions []byte        `asn1:"tag:0"`
+	CName      principalName `asn1:"tag:1,optional"`
+	Realm      string        `asn1:"tag:2"`
+	SName      principalName `asn1:"tag:3,optional"`
+	Till       time.Time     `asn1:"tag:5,generalized"`
+	Nonce      int           `asn1:"tag:7"`
+	EType      []int         `asn1:"tag:8"`
 }
 
 type kdcReq struct {
-	Pvno    int          `asn1:"tag:1"`
-	MsgType int          `asn1:"tag:2"`
-	Padata  []paData     `asn1:"tag:3,optional"`
-	ReqBody kdcReqBody   `asn1:"tag:4"`
+	Pvno    int        `asn1:"tag:1"`
+	MsgType int        `asn1:"tag:2"`
+	Padata  []paData   `asn1:"tag:3,optional"`
+	ReqBody kdcReqBody `asn1:"tag:4"`
 }
 
 type encryptedData struct {

@@ -324,8 +324,8 @@ func reflectDLL(dllData []byte) (uintptr, error) {
 		relocAddr := allocAddr + uintptr(dataDirAddr)
 		sizeOfBlock := ^uint32(0)
 		for sizeOfBlock > 0 {
-		// Map IMAGE_BASE_RELOCATION block in the loaded image memory
-	reloc := (*imageBaseRelocation)(unsafe.Pointer(relocAddr))
+			// Map IMAGE_BASE_RELOCATION block in the loaded image memory
+			reloc := (*imageBaseRelocation)(unsafe.Pointer(relocAddr))
 			if reloc.virtualAddress == 0 {
 				break
 			}
@@ -339,7 +339,7 @@ func reflectDLL(dllData []byte) (uintptr, error) {
 
 			for j := uint32(0); j < numEntries; j++ {
 				// Read 16-bit relocation entry: top 4 bits = type, bottom 12 bits = offset
-			entry := *(*uint16)(unsafe.Pointer(entriesStart + uintptr(j)*2))
+				entry := *(*uint16)(unsafe.Pointer(entriesStart + uintptr(j)*2))
 				typ := uint8((entry >> 12) & 0x0F)
 				offset := uint32(entry & 0x0FFF)
 
@@ -351,12 +351,12 @@ func reflectDLL(dllData []byte) (uintptr, error) {
 
 				if is64Bit && typ == relBasedDir64 {
 					// Apply 64-bit base relocation: read old value, add delta, write back
-				oldVal := *(*uint64)(unsafe.Pointer(relocPtr))
+					oldVal := *(*uint64)(unsafe.Pointer(relocPtr))
 					newVal := oldVal + imageBaseDelta
 					*(*uint64)(unsafe.Pointer(relocPtr)) = newVal
 				} else if !is64Bit && typ == relBasedHighlow {
 					// Apply 32-bit highlow relocation: adjust 32-bit address with delta
-				oldVal := *(*uint32)(unsafe.Pointer(relocPtr))
+					oldVal := *(*uint32)(unsafe.Pointer(relocPtr))
 					newVal := uint32(uint64(oldVal) + imageBaseDelta)
 					*(*uint32)(unsafe.Pointer(relocPtr)) = newVal
 				}
@@ -435,8 +435,8 @@ func resolveImports(imageBase uintptr, dd imageDataDirectory) {
 	importStart := imageBase + uintptr(dd.virtualAddress)
 	idx := uint32(0)
 	for {
-	// Walk IMAGE_IMPORT_DESCRIPTOR array for each imported DLL
-	impDesc := (*imageImportDescriptor)(unsafe.Pointer(importStart + uintptr(idx)*uintptr(unsafe.Sizeof(imageImportDescriptor{}))))
+		// Walk IMAGE_IMPORT_DESCRIPTOR array for each imported DLL
+		impDesc := (*imageImportDescriptor)(unsafe.Pointer(importStart + uintptr(idx)*uintptr(unsafe.Sizeof(imageImportDescriptor{}))))
 		if impDesc.name == 0 {
 			break
 		}
@@ -467,8 +467,8 @@ func resolveImports(imageBase uintptr, dd imageDataDirectory) {
 
 		i := uint32(0)
 		for {
-		// Read 64-bit IMAGE_THUNK_DATA entry (RVA or ordinal)
-		thunkVal := *(*uint64)(unsafe.Pointer(thunkAddr + uintptr(i)*8))
+			// Read 64-bit IMAGE_THUNK_DATA entry (RVA or ordinal)
+			thunkVal := *(*uint64)(unsafe.Pointer(thunkAddr + uintptr(i)*8))
 			if thunkVal == 0 {
 				break
 			}
@@ -486,7 +486,7 @@ func resolveImports(imageBase uintptr, dd imageDataDirectory) {
 				}
 			}
 
-		// Write resolved function address into IAT (first thunk)
+			// Write resolved function address into IAT (first thunk)
 			if funcAddr != 0 {
 				*(*uint64)(unsafe.Pointer(firstThunkAddr + uintptr(i)*8)) = uint64(funcAddr)
 			}

@@ -163,7 +163,7 @@ func (s *Server) evaluateTaskFailureRate(cfg *config.Config) (metricAlertHit, bo
 		return metricAlertHit{}, false
 	}
 	return metricAlertHit{
-		Rule:   "task_failure_rate",
+		Rule: "task_failure_rate",
 		Detail: fmt.Sprintf("task failure rate %.1f%% (%d/%d over %dm) > threshold %.0f%%",
 			pct, failed, total, cfg.Monitoring.FailureWindowMinutes, cfg.Monitoring.TaskFailureRateMaxPct),
 	}, true
@@ -171,7 +171,8 @@ func (s *Server) evaluateTaskFailureRate(cfg *config.Config) (metricAlertHit, bo
 
 // startMetricAlertLoop launches the periodic evaluator when the bridge is
 // enabled and a metrics collector exists. Called from the server lifecycle.
-func (s *Server) startMetricAlertLoop() {	if s.cfg == nil || !s.cfg.Monitoring.AlertsEnabled || s.metrics == nil {
+func (s *Server) startMetricAlertLoop() {
+	if s.cfg == nil || !s.cfg.Monitoring.AlertsEnabled || s.metrics == nil {
 		return
 	}
 	if s.ctx == nil {

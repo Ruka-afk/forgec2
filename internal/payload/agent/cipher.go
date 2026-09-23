@@ -23,9 +23,9 @@ const (
 )
 
 var (
-	errShortData      = errors.New("cipher data too short")
-	errNoSessionKey   = errors.New("ECDH session not established")
-	errNoIdentityKey  = errors.New("identity key not loaded")
+	errShortData     = errors.New("cipher data too short")
+	errNoSessionKey  = errors.New("ECDH session not established")
+	errNoIdentityKey = errors.New("identity key not loaded")
 )
 
 // --- v2 key derivation (standard-library HKDF-SHA256, mirrors internal/crypto) ---

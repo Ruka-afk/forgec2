@@ -4,14 +4,14 @@ import "testing"
 
 func TestResolveBuildArch(t *testing.T) {
 	cases := []struct {
-		goos, arch   string
-		want         string
-		wantErr      bool
+		goos, arch string
+		want       string
+		wantErr    bool
 	}{
 		{"windows", "amd64", "amd64", false},
 		{"windows", "x86_64", "amd64", false},
 		{"windows", "arm64", "arm64", false},
-		{"windows", "386", "", true},   // 32-bit Windows not supported
+		{"windows", "386", "", true}, // 32-bit Windows not supported
 		{"windows", "x86", "", true},
 		{"linux", "arm", "arm", false},
 		{"linux", "386", "", true},
@@ -39,14 +39,14 @@ func TestResolveBuildArch(t *testing.T) {
 
 func TestClampBeaconTiming(t *testing.T) {
 	cases := []struct {
-		inI, inJ       int
-		wantI, wantJ   int
+		inI, inJ     int
+		wantI, wantJ int
 	}{
 		{10, 20, 10, 20},
-		{10, 200, 10, 100}, // jitter capped at 100
-		{10, -5, 10, 0},    // negative jitter -> 0
-		{0, 10, 1, 10},     // interval < 1 -> 1
-		{-3, 10, 1, 10},    // negative interval -> 1
+		{10, 200, 10, 100},      // jitter capped at 100
+		{10, -5, 10, 0},         // negative jitter -> 0
+		{0, 10, 1, 10},          // interval < 1 -> 1
+		{-3, 10, 1, 10},         // negative interval -> 1
 		{100000, 50, 86400, 50}, // interval capped at 86400
 	}
 	for _, c := range cases {

@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
-	"github.com/gin-gonic/gin"
 	"github.com/forgec2/forgec2/internal/util"
+	"github.com/gin-gonic/gin"
 )
 
 // handleCollabAgents returns the list of agents along with their current

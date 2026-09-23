@@ -18,6 +18,7 @@ import (
 	"github.com/gorilla/websocket"
 	"gorm.io/gorm"
 )
+
 // smTest returns a fresh session manager for tests.
 func smTest(t *testing.T) *crypto.SessionManager {
 	t.Helper()

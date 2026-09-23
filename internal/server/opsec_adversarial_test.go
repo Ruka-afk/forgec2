@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"crypto/rand"
@@ -615,5 +615,3 @@ func base64Encode(data []byte) string {
 	}
 	return string(result)
 }
-
-

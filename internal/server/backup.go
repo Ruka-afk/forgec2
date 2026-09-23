@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/crypto"
 	"gorm.io/gorm"
 )
 
@@ -336,10 +337,14 @@ func (bm *BackupManager) RotateKey(newKeyHex string) error {
 			return fmt.Errorf("key rotation aborted: failed to write re-encrypted backup %s: %w", file.Name(), err)
 		}
 		reencrypted++
+		// Best-effort hygiene: the plaintext existed only for this loop.
+		crypto.Wipe(plaintext)
 	}
 
 	bm.key = parsedKey
 	bm.keyID = fmt.Sprintf("k%s", time.Now().Format("20060102"))
+	// The old key is genuinely dropped here (no fallback reads against it).
+	crypto.Wipe(oldKey)
 	slog.Info("Backup key rotated", "reencrypted", reencrypted)
 	return nil
 }

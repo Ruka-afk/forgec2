@@ -8,12 +8,12 @@ import (
 
 func TestMacroAMSIByPassGeneratesWorkingVBA(t *testing.T) {
 	cfg := MacroConfig{
-		PayloadType:  "powershell",
-		C2URL:        "http://127.0.0.1:8080/p",
-		AMSIBypass:   true,
+		PayloadType:    "powershell",
+		C2URL:          "http://127.0.0.1:8080/p",
+		AMSIBypass:     true,
 		SandboxEvasion: true,
-		SplitStrings: true,
-		Delay:        3,
+		SplitStrings:   true,
+		Delay:          3,
 	}
 	out, err := GenerateMacroVBA(cfg)
 	if err != nil {

@@ -185,7 +185,7 @@ func findSyscallNum(funcName string) (uint32, error) {
 			funcAddr := base + uintptr(funcRVA)
 
 			// Read function code bytes to find "mov eax, SSN" (0xB8) + "syscall" (0x0F 0x05)
-		code := (*[32]byte)(unsafe.Pointer(funcAddr))[:]
+			code := (*[32]byte)(unsafe.Pointer(funcAddr))[:]
 			for k := 0; k < len(code)-5; k++ {
 				if code[k] == 0xB8 {
 					ssn := uint32(code[k+1]) | uint32(code[k+2])<<8 | uint32(code[k+3])<<16 | uint32(code[k+4])<<24

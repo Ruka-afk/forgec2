@@ -174,24 +174,38 @@ func (s *Server) handleValidateProfile(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, sanitizeError(err, "Profile validation"))
 		return
 	}
-	// Round-trip sample through the ServerOutput chain.
-	sample := `{"type":"beacon","id":"abc"}`
-	encoded := sample
+	// Round-trip samples through the ServerOutput chain. Two samples: a
+	// lowercase one plus a mixed-case/base64-alphabet one shaped like a real
+	// encrypted envelope. Lossy chains (notably "case", which uppercases on
+	// encode and lowercases on decode) pass the first and corrupt the second.
+	samples := []string{
+		`{"type":"beacon","id":"abc"}`,
+		`{"type":"beacon","id":"AbC123","data":"XyZ+/==9q8w7E"}`,
+	}
+	encoded := samples[0]
 	if len(v2.ServerOutput) > 0 {
 		tb := &malleable.TransformBlock{}
 		for _, st := range v2.ServerOutput {
 			tb.Transforms = append(tb.Transforms, malleable.Transform{Type: st.Type, Value: st.Value})
 		}
-		if enc, err := tb.Apply([]byte(sample), true); err == nil {
+		if enc, err := tb.Apply([]byte(samples[0]), true); err == nil {
 			encoded = string(enc)
-			if dec, err := tb.Apply(enc, false); err != nil || string(dec) != sample {
+			if dec, err := tb.Apply(enc, false); err != nil || string(dec) != samples[0] {
 				warnings = append(warnings, "server_output chain does not round-trip")
+			} else if enc2, err := tb.Apply([]byte(samples[1]), true); err != nil {
+				warnings = append(warnings, "server_output encode failed on envelope-shaped input: "+err.Error())
+			} else if dec2, err := tb.Apply(enc2, false); err != nil || string(dec2) != samples[1] {
+				warnings = append(warnings, "server_output chain is lossy for mixed-case envelopes (e.g. contains 'case'): it validates on lowercase input but will corrupt real beacon responses")
 			}
 		} else {
 			warnings = append(warnings, "server_output encode failed: "+err.Error())
 		}
+		// The C implant decodes no server_output transforms: any non-empty
+		// chain bricks C beacons once the server encodes with it.
+		warnings = append(warnings, "server_output is not decoded by the C implant: C beacons will fail against a server encoding responses with this chain — keep C implants on plain profiles")
 	}
-	// Round-trip each placement chain the same way.
+	// Round-trip each placement chain against both samples as well: a chain
+	// that is lossy on envelope-shaped input must not silently ship.
 	for _, pl := range v2.Placements {
 		tb := &malleable.TransformBlock{}
 		for _, st := range malleable.ParseWire(pl.Chain) {
@@ -200,13 +214,16 @@ func (s *Server) handleValidateProfile(c *gin.Context) {
 		if len(tb.Transforms) == 0 {
 			continue
 		}
-		enc, err := tb.Apply([]byte(sample), true)
-		if err != nil {
-			warnings = append(warnings, "placement "+pl.Target+" encode failed: "+err.Error())
-			continue
-		}
-		if dec, err := tb.Apply(enc, false); err != nil || string(dec) != sample {
-			warnings = append(warnings, "placement "+pl.Target+" chain does not round-trip")
+		for _, s := range samples {
+			enc, err := tb.Apply([]byte(s), true)
+			if err != nil {
+				warnings = append(warnings, "placement "+pl.Target+" encode failed: "+err.Error())
+				break
+			}
+			if dec, err := tb.Apply(enc, false); err != nil || string(dec) != s {
+				warnings = append(warnings, "placement "+pl.Target+" chain does not round-trip")
+				break
+			}
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
@@ -216,7 +233,7 @@ func (s *Server) handleValidateProfile(c *gin.Context) {
 			"client_metadata": malleable.StepsToWire(v2.ClientMetadata),
 			"client_id":       malleable.StepsToWire(v2.ClientID),
 		},
-		"sample":   gin.H{"input": sample, "encoded": encoded},
+		"sample":   gin.H{"input": samples[0], "encoded": encoded},
 		"warnings": warnings,
 	}})
 }

@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
-	"github.com/gin-gonic/gin"
 	"github.com/forgec2/forgec2/internal/util"
 	"github.com/forgec2/forgec2/pkg/protocol"
+	"github.com/gin-gonic/gin"
 )
 
 const bloodHoundDir = "data/bloodhound"

@@ -34,7 +34,7 @@ func buildTestPE64(withSlack bool, importRVA uint32) []byte {
 	// Section header at 0x188 (pe+24+0xF0).
 	sec := 0x188
 	copy(data[sec:], ".idata")
-	binary.LittleEndian.PutUint32(data[sec+8:], 0x100)  // VirtualSize
+	binary.LittleEndian.PutUint32(data[sec+8:], 0x100)   // VirtualSize
 	binary.LittleEndian.PutUint32(data[sec+12:], 0x1000) // VirtualAddress
 	binary.LittleEndian.PutUint32(data[sec+16:], 0x100)  // SizeOfRawData
 	binary.LittleEndian.PutUint32(data[sec+20:], 0x200)  // PointerToRawData

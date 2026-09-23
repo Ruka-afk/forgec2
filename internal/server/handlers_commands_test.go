@@ -51,7 +51,7 @@ func TestValidateCommandArg(t *testing.T) {
 
 func TestClampSleepString(t *testing.T) {
 	cases := []struct {
-		in, want string
+		in, want   string
 		minI, minJ int
 	}{
 		{"5,5", "30,20", 30, 20},

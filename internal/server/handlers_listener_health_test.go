@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 )
+
 func TestListenerHealthTrackerCountsConsecutiveFailures(t *testing.T) {
 	tracker := &listenerHealthTracker{state: map[uint]*listenerHealth{}}
 

@@ -228,10 +228,10 @@ func (s *Server) processRelayedEnvelopes(frames []relayedFrame, parentUUID, publ
 		var replyBytes []byte
 		var ok bool
 		if kind == frameEncrypted {
-		// Clip the child's nested relay fields: children relaying in turn
-		// is handled by the next beacon round, not recursive inlining.
-		childReq.RelayedFrames = nil
-		resp := s.processBeaconWithBudget(childReq, publicIP, frameSize, budget)
+			// Clip the child's nested relay fields: children relaying in turn
+			// is handled by the next beacon round, not recursive inlining.
+			childReq.RelayedFrames = nil
+			resp := s.processBeaconWithBudget(childReq, publicIP, frameSize, budget)
 			if s.sessionManager != nil && s.sessionManager.NeedsRekey(rf.AgentID, BeaconSessionRekeyMessages) {
 				resp.Rekey = true
 			}

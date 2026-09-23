@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	iffTun  = 0x0001
-	iffNoPi = 0x1000
+	iffTun    = 0x0001
+	iffNoPi   = 0x1000
 	tunSetIff = 0x400454ca
 )
 

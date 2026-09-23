@@ -19,8 +19,8 @@ type LBStrategy string
 
 const (
 	LBRoundRobin LBStrategy = "round_robin"
-	LBPickFirst   LBStrategy = "pick_first"
-	LBWeighted    LBStrategy = "weighted"
+	LBPickFirst  LBStrategy = "pick_first"
+	LBWeighted   LBStrategy = "weighted"
 )
 
 type GRPCLBConfig struct {

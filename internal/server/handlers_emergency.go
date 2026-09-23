@@ -194,9 +194,9 @@ func (s *Server) handleKillSwitch(c *gin.Context) {
 			"user", user.Username,
 			"uninstall_tasks_dispatched", dispatched)
 		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"message": "Kill switch armed. All implants will self-destruct on next beacon.",
-			"armed":   true,
+			"success":          true,
+			"message":          "Kill switch armed. All implants will self-destruct on next beacon.",
+			"armed":            true,
 			"tasks_dispatched": dispatched,
 		})
 	case "disarm":
@@ -239,9 +239,9 @@ func (s *Server) handleKillSwitch(c *gin.Context) {
 			"Fleet kill-switch disarmed by "+user.Username+".", "kill_switch")
 		slog.Warn("KILL SWITCH DISARMED", "user", user.Username, "uninstall_tasks_reclaimed", reclaimed)
 		c.JSON(http.StatusOK, gin.H{
-			"success":  true,
-			"message":  "Kill switch has been disarmed.",
-			"armed":    false,
+			"success":   true,
+			"message":   "Kill switch has been disarmed.",
+			"armed":     false,
 			"reclaimed": reclaimed,
 		})
 	default:

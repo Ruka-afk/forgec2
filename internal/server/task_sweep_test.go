@@ -164,6 +164,7 @@ func TestSweepSkipsCompletedRace(t *testing.T) {
 		t.Fatalf("pending counter=%d, want 1 (no phantom dec)", n)
 	}
 }
+
 // TestSweepRetiresSentZombie proves legacy "sent" rows (nothing creates or
 // claims sent anymore) are failed, never requeued: resurrecting them would
 // redeliver stale commands to live agents.

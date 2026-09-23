@@ -12,8 +12,8 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/forgec2/forgec2/pkg/c2pb"
 	"github.com/forgec2/forgec2/internal/util"
+	"github.com/forgec2/forgec2/pkg/c2pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"

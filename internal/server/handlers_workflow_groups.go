@@ -67,25 +67,25 @@ func (s *Server) handleAPIWorkflowsExecute(c *gin.Context) {
 			respondError(c, http.StatusInternalServerError, "invalid scope_ids")
 			return
 		}
-	if wf.ScopeType == "agents" {
-		if err := s.db.Where("id IN ?", ids).Limit(AgentQueryLimit).Find(&targetAgents).Error; err != nil {
-			slog.Error("Workflow: failed to query target agents by IDs", "err", err)
+		if wf.ScopeType == "agents" {
+			if err := s.db.Where("id IN ?", ids).Limit(AgentQueryLimit).Find(&targetAgents).Error; err != nil {
+				slog.Error("Workflow: failed to query target agents by IDs", "err", err)
+			}
+		} else if wf.ScopeType == "tags" {
+			if err := s.db.Distinct("implants.*").Joins("JOIN agent_tag_assignments ON agent_tag_assignments.implant_id = implants.id").
+				Where("agent_tag_assignments.agent_tag_id IN ?", ids).Limit(AgentQueryLimit).Find(&targetAgents).Error; err != nil {
+				slog.Error("Workflow: failed to query target agents by tags", "err", err)
+			}
+		} else {
+			if err := s.db.Distinct("implants.*").Joins("JOIN agent_group_assignments ON agent_group_assignments.implant_id = implants.id").
+				Where("agent_group_assignments.agent_group_id IN ?", ids).Limit(AgentQueryLimit).Find(&targetAgents).Error; err != nil {
+				slog.Error("Workflow: failed to query target agents by groups", "err", err)
+			}
 		}
-	} else if wf.ScopeType == "tags" {
-		if err := s.db.Distinct("implants.*").Joins("JOIN agent_tag_assignments ON agent_tag_assignments.implant_id = implants.id").
-			Where("agent_tag_assignments.agent_tag_id IN ?", ids).Limit(AgentQueryLimit).Find(&targetAgents).Error; err != nil {
-			slog.Error("Workflow: failed to query target agents by tags", "err", err)
+	default:
+		if err := s.db.Where("last_seen > ?", time.Now().Add(-30*time.Minute)).Limit(AgentQueryLimit).Find(&targetAgents).Error; err != nil {
+			slog.Error("Workflow: failed to query recent agents", "err", err)
 		}
-	} else {
-		if err := s.db.Distinct("implants.*").Joins("JOIN agent_group_assignments ON agent_group_assignments.implant_id = implants.id").
-			Where("agent_group_assignments.agent_group_id IN ?", ids).Limit(AgentQueryLimit).Find(&targetAgents).Error; err != nil {
-			slog.Error("Workflow: failed to query target agents by groups", "err", err)
-		}
-	}
-default:
-	if err := s.db.Where("last_seen > ?", time.Now().Add(-30*time.Minute)).Limit(AgentQueryLimit).Find(&targetAgents).Error; err != nil {
-		slog.Error("Workflow: failed to query recent agents", "err", err)
-	}
 	}
 
 	agentIDs := make([]string, len(targetAgents))

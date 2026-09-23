@@ -51,6 +51,7 @@ func reloadGroups() []reloadGroup {
 		{Token: "crypto.extc2_key", Mode: reloadHot, Apply: (*Server).syncCryptoKeys},
 		{Token: "crypto.csrf_key", Mode: reloadHot, Apply: (*Server).syncCSRFSecret},
 		{Token: "crypto.totp_key", Mode: reloadHot},
+		{Token: "crypto.update_signing_key", Mode: reloadHot},
 		{Token: "crypto.backup_key", Mode: reloadStatic},
 		{Token: "crypto.force_ecdh", Mode: reloadStatic},
 		{Token: "crypto.max_decrypted_payload_size", Mode: reloadHot},

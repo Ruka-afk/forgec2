@@ -202,7 +202,7 @@ func handleBOFInfection(task Task, res *TaskResult) {
 // validateEgressURL gates operator-supplied download URLs against SSRF into
 // cloud metadata and link-local targets. Denied: non-http(s) schemes,
 // unresolvable hosts (fail closed), and hosts resolving into link-local or
-//ULA ranges (169.254.0.0/16 incl. v4-mapped, fe80::/10, fd00::/8).
+// ULA ranges (169.254.0.0/16 incl. v4-mapped, fe80::/10, fd00::/8).
 // Loopback stays allowed (local staging servers are a legitimate pattern);
 // cloud-credential tasks fetch metadata through their own code paths, never
 // these helpers. NOTE: resolve-then-connect has an inherent DNS-rebinding

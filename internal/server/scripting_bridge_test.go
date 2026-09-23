@@ -25,14 +25,14 @@ func initScriptingBridgeServer(t *testing.T) *Server {
 		metrics:             NewMetricsCollector(nil),
 	}
 	if err := s.db.Create(&db.Implant{
-		ID:             "script-test-agent",
-		Hostname:       "victim-01",
-		Username:       "alice",
-		OS:             "windows",
-		Arch:           "amd64",
-		IP:             "10.0.0.5",
-		Status:         "online",
-		LastSeen:       time.Now(),
+		ID:              "script-test-agent",
+		Hostname:        "victim-01",
+		Username:        "alice",
+		OS:              "windows",
+		Arch:            "amd64",
+		IP:              "10.0.0.5",
+		Status:          "online",
+		LastSeen:        time.Now(),
 		CurrentInterval: 60,
 	}).Error; err != nil {
 		t.Fatalf("seed implant: %v", err)

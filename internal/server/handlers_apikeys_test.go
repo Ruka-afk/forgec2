@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -107,5 +108,63 @@ func TestExportStepUpAPIKeyScopes(t *testing.T) {
 	s.handleExportCredentials(c)
 	if w.Code != http.StatusOK {
 		t.Fatalf("bulk_export key got %d body=%s, want 200", w.Code, w.Body.String())
+	}
+}
+
+// TestListAPIKeysFlagsLegacy proves the list endpoint flags hygiene risks:
+// empty scopes => legacy_full_access, empty CIDRs => unrestricted_source,
+// so operators and automation can spot over-privileged keys.
+func TestListAPIKeysFlagsLegacy(t *testing.T) {
+	s := mustTenantServer(t)
+	owner := db.User{Username: "ak-flag-owner", Role: "admin", TenantID: 1, IsActive: true}
+	if err := s.db.Create(&owner).Error; err != nil {
+		t.Fatalf("seed owner: %v", err)
+	}
+	seed := []db.ApiKey{
+		{UserID: owner.ID, Name: "legacy", KeyHash: "h1", Prefix: "fc2_legacy", Scopes: "", AllowedCIDRs: "", Active: true},
+		{UserID: owner.ID, Name: "scoped", KeyHash: "h2", Prefix: "fc2_scoped", Scopes: "agents.read", AllowedCIDRs: "10.0.0.0/8", Active: true},
+	}
+	for i := range seed {
+		if err := s.db.Create(&seed[i]).Error; err != nil {
+			t.Fatalf("seed key: %v", err)
+		}
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodGet, "/api/api-keys", nil)
+	c.Set("user_id", owner.ID)
+	s.handleListAPIKeys(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list got %d body=%s, want 200", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Success bool `json:"success"`
+		Data    []struct {
+			Name               string `json:"name"`
+			LegacyFullAccess   bool   `json:"legacy_full_access"`
+			UnrestrictedSource bool   `json:"unrestricted_source"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	byName := map[string]struct {
+		legacy bool
+		open   bool
+	}{}
+	for _, k := range resp.Data {
+		byName[k.Name] = struct {
+			legacy bool
+			open   bool
+		}{k.LegacyFullAccess, k.UnrestrictedSource}
+	}
+	leg, ok := byName["legacy"]
+	if !ok || !leg.legacy || !leg.open {
+		t.Fatalf("legacy key flags = %+v, want both true (resp=%s)", leg, w.Body.String())
+	}
+	sc, ok := byName["scoped"]
+	if !ok || sc.legacy || sc.open {
+		t.Fatalf("scoped key flags = %+v, want both false (resp=%s)", sc, w.Body.String())
 	}
 }

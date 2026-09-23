@@ -13,22 +13,22 @@ import (
 )
 
 var (
-	procGetLogicalDrives     = k32.NewProc("GetLogicalDrives")
-	procGetDriveTypeW        = k32.NewProc("GetDriveTypeW")
-	procGetDiskFreeSpaceExW  = k32.NewProc("GetDiskFreeSpaceExW")
+	procGetLogicalDrives      = k32.NewProc("GetLogicalDrives")
+	procGetDriveTypeW         = k32.NewProc("GetDriveTypeW")
+	procGetDiskFreeSpaceExW   = k32.NewProc("GetDiskFreeSpaceExW")
 	procGetVolumeInformationW = k32.NewProc("GetVolumeInformationW")
 )
 
 const (
-	driveUnknown     = 0
-	driveNoRoot      = 1
-	driveRemovable   = 2
-	driveFixed       = 3
-	driveRemote      = 4
-	driveCDROM       = 5
-	driveRAMDisk     = 6
-	fileAttrHidden   = 0x2
-	fileAttrSystem   = 0x4
+	driveUnknown   = 0
+	driveNoRoot    = 1
+	driveRemovable = 2
+	driveFixed     = 3
+	driveRemote    = 4
+	driveCDROM     = 5
+	driveRAMDisk   = 6
+	fileAttrHidden = 0x2
+	fileAttrSystem = 0x4
 )
 
 func driveTypeName(t uint32) string {
@@ -51,11 +51,11 @@ func driveTypeName(t uint32) string {
 }
 
 type winVolume struct {
-	root   string
-	kind   uint32
-	label  string
-	free   uint64
-	total  uint64
+	root  string
+	kind  uint32
+	label string
+	free  uint64
+	total uint64
 }
 
 func listWinVolumes() []winVolume {

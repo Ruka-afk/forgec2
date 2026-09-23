@@ -11,26 +11,26 @@ import (
 )
 
 type MetricsCollector struct {
-	AgentsTotal         prometheus.Gauge
-	AgentsOnline        prometheus.Gauge
-	TasksTotal          prometheus.Counter
-	TasksPending        prometheus.Gauge
-	ListenersTotal      prometheus.Gauge
-	CredsTotal          prometheus.Gauge
-	UptimeSeconds       prometheus.GaugeFunc
-	SessionRekeysTotal  *prometheus.CounterVec // label agent_id; lives server-side, fed from crypto.SessionManager stats
-	RequestDuration     *prometheus.HistogramVec
-	BeaconDuration      *prometheus.HistogramVec
-	TaskExecuteDuration *prometheus.HistogramVec
-	AuditDroppedTotal  prometheus.Counter
-	EventDroppedTotal  *prometheus.CounterVec
-	VaultErrorsTotal   *prometheus.CounterVec
-	TasksPendingByAgent *prometheus.GaugeVec
+	AgentsTotal          prometheus.Gauge
+	AgentsOnline         prometheus.Gauge
+	TasksTotal           prometheus.Counter
+	TasksPending         prometheus.Gauge
+	ListenersTotal       prometheus.Gauge
+	CredsTotal           prometheus.Gauge
+	UptimeSeconds        prometheus.GaugeFunc
+	SessionRekeysTotal   *prometheus.CounterVec // label agent_id; lives server-side, fed from crypto.SessionManager stats
+	RequestDuration      *prometheus.HistogramVec
+	BeaconDuration       *prometheus.HistogramVec
+	TaskExecuteDuration  *prometheus.HistogramVec
+	AuditDroppedTotal    prometheus.Counter
+	EventDroppedTotal    *prometheus.CounterVec
+	VaultErrorsTotal     *prometheus.CounterVec
+	TasksPendingByAgent  *prometheus.GaugeVec
 	OldestPendingSeconds *prometheus.GaugeVec
-	SocksDroppedTotal *prometheus.CounterVec
+	SocksDroppedTotal    *prometheus.CounterVec
 	FileChainEventsTotal *prometheus.CounterVec
 	AgentResultGapsTotal prometheus.Counter
-	DbBusyRetriesTotal *prometheus.CounterVec
+	DbBusyRetriesTotal   *prometheus.CounterVec
 	MalleableEventsTotal *prometheus.CounterVec
 }
 

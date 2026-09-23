@@ -16,17 +16,24 @@ type dnsTestWriter struct {
 	msgs []*dns.Msg
 }
 
-func (w *dnsTestWriter) LocalAddr() net.Addr  { return &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 53} }
-func (w *dnsTestWriter) RemoteAddr() net.Addr { return &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 5353} }
+func (w *dnsTestWriter) LocalAddr() net.Addr {
+	return &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 53}
+}
+func (w *dnsTestWriter) RemoteAddr() net.Addr {
+	return &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 5353}
+}
 func (w *dnsTestWriter) WriteMsg(m *dns.Msg) error {
 	w.msgs = append(w.msgs, m)
 	return nil
 }
-func (w *dnsTestWriter) Write(b []byte) (int, error) { w.msgs = append(w.msgs, nil); return len(b), nil }
-func (w *dnsTestWriter) Close() error                { return nil }
-func (w *dnsTestWriter) TsigStatus() error           { return nil }
-func (w *dnsTestWriter) TsigTimersOnly(bool)         {}
-func (w *dnsTestWriter) Hijack()                     {}
+func (w *dnsTestWriter) Write(b []byte) (int, error) {
+	w.msgs = append(w.msgs, nil)
+	return len(b), nil
+}
+func (w *dnsTestWriter) Close() error        { return nil }
+func (w *dnsTestWriter) TsigStatus() error   { return nil }
+func (w *dnsTestWriter) TsigTimersOnly(bool) {}
+func (w *dnsTestWriter) Hijack()             {}
 
 func fragQName(domain, agentID string, total, idx int, payload []byte) string {
 	enc := base32.StdEncoding.EncodeToString(payload)

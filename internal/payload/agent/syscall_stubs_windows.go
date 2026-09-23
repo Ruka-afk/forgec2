@@ -595,9 +595,9 @@ func ntBuildPipeName(pipeName string) (*uint16, *ntUnicodeString) {
 func ntBuildObjAttr(pipeName string, secDesc uintptr) (*uint16, *ntUnicodeString, *ntObjectAttributes) {
 	buf, us := ntBuildPipeName(pipeName)
 	oa := &ntObjectAttributes{
-		Length:            uint32(unsafe.Sizeof(ntObjectAttributes{})),
-		ObjectName:        us,
-		Attributes:        0x40, // OBJ_CASE_INSENSITIVE
+		Length:             uint32(unsafe.Sizeof(ntObjectAttributes{})),
+		ObjectName:         us,
+		Attributes:         0x40, // OBJ_CASE_INSENSITIVE
 		SecurityDescriptor: secDesc,
 	}
 	return buf, us, oa

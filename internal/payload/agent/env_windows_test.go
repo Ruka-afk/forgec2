@@ -20,10 +20,10 @@ func liveDetector(t *testing.T) *EnvironmentDetector {
 	// is hermetic: it must not depend on the test host's uptime, profile
 	// freshness, or virtualization.
 	return &EnvironmentDetector{
-		cpuCores: 8,
-		totalRAM: 16 * 1024 * 1024 * 1024,
-		users:    3,
-		services: 80,
+		cpuCores:        8,
+		totalRAM:        16 * 1024 * 1024 * 1024,
+		users:           3,
+		services:        80,
 		stubEnv:         true,
 		stubUptimeMin:   120,
 		stubRecentFiles: 10,

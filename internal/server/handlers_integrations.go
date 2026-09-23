@@ -102,16 +102,16 @@ func (s *Server) handleIntegrationsList(c *gin.Context) {
 		}
 		if !found {
 			integrations = append(integrations, map[string]interface{}{
-				"id":          0,
-				"type":        "slack",
-				"name":        "Slack (config)",
-				"enabled":     slackCfg.Enabled,
-				"endpoint":    "",
-				"event_count": 0,
+				"id":           0,
+				"type":         "slack",
+				"name":         "Slack (config)",
+				"enabled":      slackCfg.Enabled,
+				"endpoint":     "",
+				"event_count":  0,
 				"last_trigger": "",
-				"status":      map[bool]string{true: "ok", false: "disabled"}[slackCfg.Enabled],
-				"configured":  slackCfg.BotToken != "" && slackCfg.AppToken != "",
-				"readonly":    true,
+				"status":       map[bool]string{true: "ok", false: "disabled"}[slackCfg.Enabled],
+				"configured":   slackCfg.BotToken != "" && slackCfg.AppToken != "",
+				"readonly":     true,
 			})
 		}
 	}

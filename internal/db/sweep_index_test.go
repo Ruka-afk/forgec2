@@ -81,7 +81,7 @@ func TestSweepPredicatesUseIndex(t *testing.T) {
 	}
 	for name, q := range queries {
 		var details []string
-		rows, err := database.Raw("EXPLAIN QUERY PLAN "+q).Rows()
+		rows, err := database.Raw("EXPLAIN QUERY PLAN " + q).Rows()
 		if err != nil {
 			t.Fatalf("%s: explain: %v", name, err)
 		}

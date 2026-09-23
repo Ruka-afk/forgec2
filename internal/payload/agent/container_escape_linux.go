@@ -223,8 +223,8 @@ func probeKubernetesAPI(token, ns string) (string, error) {
 		var res struct {
 			Items []struct {
 				Metadata struct {
-					Name      string            `json:"name"`
-					Namespace string            `json:"namespace"`
+					Name      string `json:"name"`
+					Namespace string `json:"namespace"`
 				} `json:"metadata"`
 			} `json:"items"`
 		}

@@ -83,21 +83,21 @@ type socksRelaySession struct {
 }
 
 type socksRelayConn struct {
-	connID     uint64
-	tcpConn    net.Conn
-	udpConn    *net.UDPConn
-	udpClient  *net.UDPAddr
-	isUDP      bool
-	agentID    string
-	destAddr   string
-	mu         sync.Mutex
-	outbound   [][]byte
+	connID    uint64
+	tcpConn   net.Conn
+	udpConn   *net.UDPConn
+	udpClient *net.UDPAddr
+	isUDP     bool
+	agentID   string
+	destAddr  string
+	mu        sync.Mutex
+	outbound  [][]byte
 	// outboundBytes bounds buffered-but-unsent data; beyond it the conn is
 	// closed instead of silently shedding bytes (a shed data frame corrupts
 	// the TCP stream without either end noticing).
 	outboundBytes int
-	closed     bool
-	lastActive time.Time
+	closed        bool
+	lastActive    time.Time
 }
 
 // socksMaxOutboundBytes caps per-connection buffered relay data (500 queued

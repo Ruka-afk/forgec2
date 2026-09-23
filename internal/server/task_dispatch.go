@@ -361,6 +361,7 @@ func (s *Server) fireTaskCreatedHook(agentID string, taskID uint, taskType, comm
 		}
 	}()
 }
+
 // clampSetSleepCommand bounds a set_sleep "interval,jitter" command to the
 // agent-safe range (interval 1..86400s, jitter 0..100%). Malformed input
 // passes through untouched so downstream validation still reports the

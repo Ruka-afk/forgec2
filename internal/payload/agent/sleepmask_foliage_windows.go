@@ -6,8 +6,8 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/sha256"
 	crand "crypto/rand"
+	"crypto/sha256"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -21,15 +21,15 @@ const (
 )
 
 type foliageCtx struct {
-	mu               sync.Mutex
-	key              [32]byte
-	iv               [aes.BlockSize]byte
-	pages            []foliagePage
-	pageHashes       [][]byte
-	vehHandle        uintptr
-	cbHandle         uintptr
-	ready            bool
-	encrypted        bool
+	mu                sync.Mutex
+	key               [32]byte
+	iv                [aes.BlockSize]byte
+	pages             []foliagePage
+	pageHashes        [][]byte
+	vehHandle         uintptr
+	cbHandle          uintptr
+	ready             bool
+	encrypted         bool
 	integrityFailures int32
 }
 
@@ -297,7 +297,9 @@ func fEncryptPagesLocked(pages []foliagePage) {
 		tmp := make([]byte, len(buf))
 		copy(tmp, buf)
 		stream.XORKeyStream(buf, tmp)
-		for j := range tmp { tmp[j] = 0 }
+		for j := range tmp {
+			tmp[j] = 0
+		}
 
 		procVirtualProtect.Call(p.base, p.size, uintptr(old), uintptr(unsafe.Pointer(&old)))
 	}
@@ -335,7 +337,9 @@ func fDecryptPages(pages []foliagePage) {
 		tmp := make([]byte, len(buf))
 		copy(tmp, buf)
 		stream.XORKeyStream(buf, tmp)
-		for j := range tmp { tmp[j] = 0 }
+		for j := range tmp {
+			tmp[j] = 0
+		}
 
 		procVirtualProtect.Call(p.base, p.size, uintptr(old), uintptr(unsafe.Pointer(&old)))
 	}

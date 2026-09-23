@@ -27,11 +27,11 @@ func TestBuildNetworkConfigDeliveredDecryptable(t *testing.T) {
 
 	// Listener the implant is associated with.
 	if err := s.db.Create(&db.Listener{
-		ID:     7,
-		Name:   "l7",
-		Scheme: "https",
-		Host:   "c2.example.com",
-		Port:   8443,
+		ID:      7,
+		Name:    "l7",
+		Scheme:  "https",
+		Host:    "c2.example.com",
+		Port:    8443,
 		Enabled: true,
 	}).Error; err != nil {
 		t.Fatalf("create listener: %v", err)

@@ -30,11 +30,11 @@ func TestHandleListListeners_Empty(t *testing.T) {
 		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
 	}
 	var resp struct {
-		Success  bool           `json:"success"`
-		Data     []db.Listener  `json:"data"`
-		Total    int64          `json:"total"`
-		Page     int            `json:"page"`
-		PageSize int            `json:"page_size"`
+		Success  bool          `json:"success"`
+		Data     []db.Listener `json:"data"`
+		Total    int64         `json:"total"`
+		Page     int           `json:"page"`
+		PageSize int           `json:"page_size"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())

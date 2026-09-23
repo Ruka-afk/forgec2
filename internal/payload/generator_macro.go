@@ -228,7 +228,7 @@ func GenerateMacroVBA(config MacroConfig) (string, error) {
 		// cb = Len(si) = 80): cb + 3 pointers + 8 DWORDs + 2 WORDs + pointer.
 		sb.WriteString(fmt.Sprintf("Private Type %s\n", startupInfo))
 		siFieldTypes := []string{
-			"Long", // cb
+			"Long",                          // cb
 			"LongPtr", "LongPtr", "LongPtr", // lpReserved, lpDesktop, lpTitle
 			"Long", "Long", "Long", "Long", "Long", "Long", "Long", "Long", // dwX .. dwFlags
 			"Integer", "Integer", // wShowWindow, cbReserved2

@@ -10,13 +10,13 @@ import (
 )
 
 type TrafficProfile struct {
-	BaselineInterval   int    // seconds — observed normal interval
-	BaselineJitter     int    // percentage
-	BaselineTLS        string // TLS fingerprint name
-	BaselineUserAgent  string
-	CurrentInterval    int
-	CurrentJitter      int
-	AdaptRate          float64 // how aggressively to adapt (0.0-1.0)
+	BaselineInterval  int    // seconds — observed normal interval
+	BaselineJitter    int    // percentage
+	BaselineTLS       string // TLS fingerprint name
+	BaselineUserAgent string
+	CurrentInterval   int
+	CurrentJitter     int
+	AdaptRate         float64 // how aggressively to adapt (0.0-1.0)
 }
 
 type AdaptationSuggestion struct {

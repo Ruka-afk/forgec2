@@ -201,6 +201,30 @@ const (
 	userCacheTTL  = 5 * time.Minute
 )
 
+type authCacheEntry struct {
+	user      db.User
+	expiresAt time.Time
+}
+
+// globalUserCache is shared by every AuthRequired instance (web UI, REST
+// API, misc routes) so a single invalidation covers all of them. Entries
+// are short-TTL replicas of the users table: disable/force-logout paths
+// must call InvalidateUserCache, otherwise a disabled user keeps the cached
+// record (and their sessions) until TTL expiry.
+var (
+	globalUserCacheMu sync.RWMutex
+	globalUserCache   = make(map[uint]authCacheEntry)
+)
+
+// InvalidateUserCache drops a user's cached record so the next request
+// re-reads the users table. Call it whenever a user's active state,
+// role, or ForceLogoutAt changes (disable, force-logout, delete).
+func InvalidateUserCache(userID uint) {
+	globalUserCacheMu.Lock()
+	delete(globalUserCache, userID)
+	globalUserCacheMu.Unlock()
+}
+
 // Claims for JWT
 type Claims struct {
 	UserID   uint   `json:"user_id"`
@@ -383,13 +407,6 @@ func clearSessionCookie(c *gin.Context) {
 
 // AuthRequired middleware for web UI - validates JWT + DB user active
 func AuthRequired(database *gorm.DB) gin.HandlerFunc {
-	type cacheEntry struct {
-		user      db.User
-		expiresAt time.Time
-	}
-	var cacheMu sync.RWMutex
-	userCache := make(map[uint]cacheEntry)
-
 	return func(c *gin.Context) {
 		// API key authentication (X-API-Key header)
 		if apiKey := c.GetHeader("X-API-Key"); apiKey != "" {
@@ -457,11 +474,13 @@ func AuthRequired(database *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Verify user still exists and is active (with short TTL cache)
+		// Verify user still exists and is active (with short TTL shared
+		// cache — see InvalidateUserCache: admin disable/force-logout
+		// paths evict the entry so the change takes effect immediately).
 		var user db.User
-		cacheMu.RLock()
-		entry, cached := userCache[claims.UserID]
-		cacheMu.RUnlock()
+		globalUserCacheMu.RLock()
+		entry, cached := globalUserCache[claims.UserID]
+		globalUserCacheMu.RUnlock()
 		if cached && time.Now().Before(entry.expiresAt) {
 			user = entry.user
 		} else {
@@ -470,19 +489,19 @@ func AuthRequired(database *gorm.DB) gin.HandlerFunc {
 				authFail(c, "Auth failed: user not found or inactive", "user_id", claims.UserID, "username", claims.Username)
 				return
 			}
-			cacheMu.Lock()
-			userCache[claims.UserID] = cacheEntry{user: user, expiresAt: time.Now().Add(userCacheTTL)}
+			globalUserCacheMu.Lock()
+			globalUserCache[claims.UserID] = authCacheEntry{user: user, expiresAt: time.Now().Add(userCacheTTL)}
 			// Amortized sweep: drop expired entries once the cache grows
 			// past a threshold so it cannot grow unbounded over long uptimes.
-			if len(userCache) > 2048 {
+			if len(globalUserCache) > 2048 {
 				now := time.Now()
-				for id, e := range userCache {
+				for id, e := range globalUserCache {
 					if now.After(e.expiresAt) {
-						delete(userCache, id)
+						delete(globalUserCache, id)
 					}
 				}
 			}
-			cacheMu.Unlock()
+			globalUserCacheMu.Unlock()
 		}
 
 		// Force-logout check: if user's ForceLogoutAt > token IssuedAt, session was invalidated

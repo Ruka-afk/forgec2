@@ -31,7 +31,7 @@ func TestDiffConfigTokenCoverage(t *testing.T) {
 		{"crypto.extc2_key", "hot", func(c *config.Config) { c.Crypto.ExtC2Key += "x" }},
 		{"crypto.csrf_key", "hot", func(c *config.Config) { c.Crypto.CsrfKey += "x" }},
 		{"crypto.totp_key", "hot", func(c *config.Config) { c.Crypto.TotpKey += "x" }},
-		{"crypto.backup_key", "static", func(c *config.Config) { c.Crypto.BackupKey += "x" }},
+		{"crypto.update_signing_key", "hot", func(c *config.Config) { c.Crypto.UpdateSigningKey += "x" }}, {"crypto.backup_key", "static", func(c *config.Config) { c.Crypto.BackupKey += "x" }},
 		{"crypto.force_ecdh", "static", func(c *config.Config) { c.Crypto.ForceECDH = !c.Crypto.ForceECDH }},
 		{"crypto.max_decrypted_payload_size", "hot", func(c *config.Config) { c.Crypto.MaxDecryptedPayloadSize++ }},
 		{"database.driver", "static", func(c *config.Config) { c.Database.Driver += "x" }},

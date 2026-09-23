@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -27,19 +28,19 @@ const defaultReleaseAssetsURLFmt = "https://api.github.com/repos/%s/releases/tag
 
 // Hot-update stages for progress reporting.
 const (
-	updateStageIdle       = "idle"
-	updateStageChecking   = "checking"
+	updateStageIdle        = "idle"
+	updateStageChecking    = "checking"
 	updateStageDownloading = "downloading"
-	updateStageVerifying  = "verifying"
-	updateStageRestarting = "restarting"
-	updateStageFailed     = "failed"
-	updateStageDone       = "done"
+	updateStageVerifying   = "verifying"
+	updateStageRestarting  = "restarting"
+	updateStageFailed      = "failed"
+	updateStageDone        = "done"
 )
 
 // updateCheckState holds the latest version check result plus the
 // hot-update progress machine (all fields under mu).
 type updateCheckState struct {
-	mu              sync.RWMutex
+	mu            sync.RWMutex
 	LatestVersion string
 	CheckedAt     time.Time
 	Available     bool
@@ -433,7 +434,33 @@ func (s *Server) performHotUpdate(latest string) error {
 
 	// Verify SHA-256 checksum (mandatory: see above).
 	s.setUpdateProgress(updateStageVerifying, 100, 0, 0, latest, "")
-	if err := verifyChecksum(tmpPath, checksumURL); err != nil {
+	checksumData, _, err := fetchChecksumFile(checksumURL, tmpPath)
+	if err != nil {
+		os.Remove(tmpPath)
+		return fail(fmt.Errorf("fetch checksum file: %w", err))
+	}
+	// Release signature (Ed25519 over the exact checksum-file bytes) when
+	// crypto.update_signing_key is configured. Without it, verification
+	// rests on same-origin checksums alone — logged loudly, still allowed
+	// for operators who have not adopted release signing yet.
+	s.configMu.RLock()
+	signingKey := s.cfg.Crypto.UpdateSigningKey
+	s.configMu.RUnlock()
+	if strings.TrimSpace(signingKey) != "" {
+		sig, err := fetchReleaseSignature(checksumURL)
+		if err != nil {
+			os.Remove(tmpPath)
+			return fail(fmt.Errorf("release signature unavailable: %w", err))
+		}
+		if err := verifyReleaseSignature(checksumData, string(sig), signingKey); err != nil {
+			os.Remove(tmpPath)
+			return fail(fmt.Errorf("release signature rejected: %w", err))
+		}
+		slog.Info("Hot update: release signature verified")
+	} else {
+		slog.Warn("Hot update without release signature: set crypto.update_signing_key to require signed releases")
+	}
+	if err := verifyChecksumBytes(tmpPath, checksumData, binName); err != nil {
 		os.Remove(tmpPath)
 		return fail(fmt.Errorf("checksum verification failed: %w", err))
 	}
@@ -505,7 +532,7 @@ func quoteCmd(p string) string {
 	return `"` + strings.ReplaceAll(p, `"`, `""`) + `"`
 }
 
-// quoteSh wraps a path in single quotes with POSIX escaping (`'` -> `'\''`).
+// quoteSh wraps a path in single quotes with POSIX escaping (`'` -> `'\”`).
 func quoteSh(p string) string {
 	return "'" + strings.ReplaceAll(p, `'`, `'\''`) + "'"
 }
@@ -688,21 +715,39 @@ func (s *Server) handleUpdateCheck(c *gin.Context) {
 
 // verifyChecksum downloads a checksum file and verifies the SHA-256 of the binary.
 func verifyChecksum(binaryPath, checksumURL string) error {
+	data, binName, err := fetchChecksumFile(checksumURL, binaryPath)
+	if err != nil {
+		return err
+	}
+	return verifyChecksumBytes(binaryPath, data, binName)
+}
+
+// fetchChecksumFile downloads the checksum file (capped) and derives the
+// expected asset filename from the downloaded binary path.
+func fetchChecksumFile(checksumURL, binaryPath string) ([]byte, string, error) {
 	client := ssrfSafeClient(&http.Client{Timeout: ChecksumDownloadTimeout})
 	req, err := http.NewRequest("GET", checksumURL, nil)
 	if err != nil {
-		return fmt.Errorf("create checksum request: %w", err)
+		return nil, "", fmt.Errorf("create checksum request: %w", err)
 	}
 	req.Header.Set("User-Agent", "ForgeC2/"+ServerVersion)
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("download checksum: %w", err)
+		return nil, "", fmt.Errorf("download checksum: %w", err)
 	}
 	defer resp.Body.Close()
 	checksumData, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	if err != nil {
-		return fmt.Errorf("read checksum: %w", err)
+		return nil, "", fmt.Errorf("read checksum: %w", err)
 	}
+	return checksumData, filepath.Base(binaryPath), nil
+}
+
+// verifyChecksumBytes checks the binary against the checksum file bytes.
+// Multi-line sha256sum files are matched by FILENAME (first-line-only
+// matching verified against the wrong asset when a release lists several);
+// a single bare hash retains the legacy accept path.
+func verifyChecksumBytes(binaryPath string, checksumData []byte, binName string) error {
 
 	// Compute hash of the downloaded binary
 	f, err := os.Open(binaryPath)
@@ -716,11 +761,84 @@ func verifyChecksum(binaryPath, checksumURL string) error {
 	}
 	actualHash := hex.EncodeToString(h.Sum(nil))
 
-	// Parse expected hash from checksum file (supports "hash  filename" or bare hash)
-	expectedHash := strings.TrimSpace(strings.SplitN(string(checksumData), "  ", 2)[0])
-	expectedHash = strings.TrimSpace(strings.SplitN(expectedHash, "\t", 2)[0])
+	// Parse expected hash: prefer the line naming our asset (sha256sum
+	// "<hash>  <filename>" format); a lone bare hash keeps working.
+	expectedHash, err := matchChecksumLine(string(checksumData), binName)
+	if err != nil {
+		return err
+	}
 	if !strings.EqualFold(actualHash, expectedHash) {
 		return fmt.Errorf("hash mismatch: expected %s, got %s", expectedHash, actualHash)
 	}
 	return nil
+}
+
+// matchChecksumLine extracts the expected hex digest for binName from
+// sha256sum-style content. Lines are "<hash><spaces><[* ]filename>"; a
+// single bare hash (no filename) is accepted as the legacy format.
+func matchChecksumLine(content, binName string) (string, error) {
+	var fallback string
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) == 1 {
+			if fallback == "" {
+				fallback = fields[0]
+			}
+			continue
+		}
+		name := strings.TrimLeft(fields[1], "*")
+		if name == binName || filepath.Base(name) == filepath.Base(binName) {
+			return fields[0], nil
+		}
+	}
+	if fallback != "" {
+		return fallback, nil
+	}
+	return "", fmt.Errorf("checksum file has no entry for %s", binName)
+}
+
+// verifyReleaseSignature checks the detached Ed25519 signature (hex) over
+// the exact checksum-file bytes against the configured release signing key
+// (crypto.update_signing_key, 64 hex chars = 32-byte pubkey).
+func verifyReleaseSignature(checksumData []byte, sigHex, pubHex string) error {
+	sig, err := hex.DecodeString(strings.TrimSpace(sigHex))
+	if err != nil || len(sig) != ed25519.SignatureSize {
+		return fmt.Errorf("malformed release signature (want %d-byte hex)", ed25519.SignatureSize)
+	}
+	pub, err := hex.DecodeString(strings.TrimSpace(pubHex))
+	if err != nil || len(pub) != ed25519.PublicKeySize {
+		return fmt.Errorf("malformed update signing key (want %d-byte hex)", ed25519.PublicKeySize)
+	}
+	if !ed25519.Verify(pub, checksumData, sig) {
+		return fmt.Errorf("release signature verification failed")
+	}
+	return nil
+}
+
+// fetchReleaseSignature downloads the detached signature asset. Convention:
+// "<checksumURL>.sig" (release pipeline signs each "<bin>.sha256" file).
+func fetchReleaseSignature(checksumURL string) ([]byte, error) {
+	client := ssrfSafeClient(&http.Client{Timeout: ChecksumDownloadTimeout})
+	req, err := http.NewRequest("GET", checksumURL+".sig", nil)
+	if err != nil {
+		return nil, fmt.Errorf("create signature request: %w", err)
+	}
+	req.Header.Set("User-Agent", "ForgeC2/"+ServerVersion)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("download signature: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("signature asset missing (status %d)", resp.StatusCode)
+	}
+	sig, err := io.ReadAll(io.LimitReader(resp.Body, 1024))
+	if err != nil {
+		return nil, fmt.Errorf("read signature: %w", err)
+	}
+	return sig, nil
 }

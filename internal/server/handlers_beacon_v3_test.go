@@ -348,7 +348,9 @@ func TestTCPBeaconV3SecretCannotImpersonateOtherAgent(t *testing.T) {
 		withSecretID(id)
 	tcpWriteFrame(t, connA, []byte(agentA.registerFrame()))
 	respA := tcpReadFrame(t, connA)
-	var regRespA struct{ RegOK bool `json:"reg_ok"` }
+	var regRespA struct {
+		RegOK bool `json:"reg_ok"`
+	}
 	if err := encoding.Unmarshal(respA, &regRespA); err != nil || !regRespA.RegOK {
 		t.Fatalf("agent A registration failed: %v (body=%s)", err, respA)
 	}

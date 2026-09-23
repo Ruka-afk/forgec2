@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/forgec2/forgec2/internal/db"
-	"github.com/gin-gonic/gin"
 	"github.com/forgec2/forgec2/internal/util"
+	"github.com/gin-gonic/gin"
 )
 
 // handleAutoTagRules lists all auto-tag rules.

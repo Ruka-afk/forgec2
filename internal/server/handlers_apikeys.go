@@ -23,7 +23,12 @@ type apiKeyResponse struct {
 	Active       bool   `json:"active"`
 	Scopes       string `json:"scopes,omitempty"`
 	AllowedCIDRs string `json:"allowed_cidrs,omitempty"`
-	CreatedAt    string `json:"created_at"`
+	// LegacyFullAccess flags pre-scope keys (empty scopes = owner's full
+	// powers) so operators and automation can spot and rotate them.
+	// UnrestrictedSource flags keys with no CIDR allowlist (any source).
+	LegacyFullAccess   bool   `json:"legacy_full_access"`
+	UnrestrictedSource bool   `json:"unrestricted_source"`
+	CreatedAt          string `json:"created_at"`
 }
 
 func generateAPIKey() (plaintext string, hash string, prefix string, err error) {
@@ -163,13 +168,15 @@ func (s *Server) handleListAPIKeys(c *gin.Context) {
 	resp := make([]apiKeyResponse, len(keys))
 	for i, k := range keys {
 		resp[i] = apiKeyResponse{
-			ID:           k.ID,
-			Name:         k.Name,
-			Prefix:       k.Prefix,
-			Active:       k.Active,
-			Scopes:       k.Scopes,
-			AllowedCIDRs: k.AllowedCIDRs,
-			CreatedAt:    k.CreatedAt.Format(time.RFC3339),
+			ID:                 k.ID,
+			Name:               k.Name,
+			Prefix:             k.Prefix,
+			Active:             k.Active,
+			Scopes:             k.Scopes,
+			AllowedCIDRs:       k.AllowedCIDRs,
+			LegacyFullAccess:   strings.TrimSpace(k.Scopes) == "",
+			UnrestrictedSource: strings.TrimSpace(k.AllowedCIDRs) == "",
+			CreatedAt:          k.CreatedAt.Format(time.RFC3339),
 		}
 		if !k.LastUsed.IsZero() {
 			resp[i].LastUsed = k.LastUsed.Format(time.RFC3339)

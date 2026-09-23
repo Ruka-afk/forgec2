@@ -254,6 +254,10 @@ func diffConfig(old, new *config.Config) (hotReloadable []string, staticOnly []s
 	if old.Crypto.TotpKey != new.Crypto.TotpKey {
 		hotReloadable = append(hotReloadable, "crypto.totp_key")
 	}
+	// Signing key is read live per hot-update: no Apply step needed.
+	if old.Crypto.UpdateSigningKey != new.Crypto.UpdateSigningKey {
+		hotReloadable = append(hotReloadable, "crypto.update_signing_key")
+	}
 	if old.Crypto.BackupKey != new.Crypto.BackupKey {
 		staticOnly = append(staticOnly, "crypto.backup_key")
 	}

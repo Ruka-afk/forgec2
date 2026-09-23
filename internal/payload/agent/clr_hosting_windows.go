@@ -297,9 +297,9 @@ func executeAssemblyWithStdoutCapture(host uintptr, assemblyPath, args string) (
 			tnPtr, _ := syscall.UTF16PtrFromString(tn)
 			mnPtr, _ := syscall.UTF16PtrFromString(mn)
 
-		// Resolve ICLRRuntimeHost::ExecuteInDefaultAppDomain from vtable
-		vtable := *(*uintptr)(unsafe.Pointer(host))
-		fn := *(*uintptr)(unsafe.Pointer(vtable + uintptr(clrExecInDefaultVtableIdx)*8))
+			// Resolve ICLRRuntimeHost::ExecuteInDefaultAppDomain from vtable
+			vtable := *(*uintptr)(unsafe.Pointer(host))
+			fn := *(*uintptr)(unsafe.Pointer(vtable + uintptr(clrExecInDefaultVtableIdx)*8))
 
 			hr, _, _ := syscall.Syscall6(fn, 6,
 				host,

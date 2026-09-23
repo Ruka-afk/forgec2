@@ -87,8 +87,8 @@ func (c *smbConn) Close() error {
 	return syscallNtCloseHandle(c.sm, c.handle)
 }
 
-func (c *smbConn) LocalAddr() net.Addr                { return c.localAddr }
-func (c *smbConn) RemoteAddr() net.Addr               { return c.remoteAddr }
+func (c *smbConn) LocalAddr() net.Addr  { return c.localAddr }
+func (c *smbConn) RemoteAddr() net.Addr { return c.remoteAddr }
 
 func (c *smbConn) SetDeadline(t time.Time) error {
 	c.mu.Lock()

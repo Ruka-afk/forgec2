@@ -26,7 +26,7 @@ const (
 	ChannelID = "channel_id"
 
 	// Panic recovery
-	Panic   = "panic"
-	Stack   = "stack"
+	Panic     = "panic"
+	Stack     = "stack"
 	Recovered = "err"
 )

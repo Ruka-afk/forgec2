@@ -98,9 +98,9 @@ func (s *Server) executeAIWebSearchTool(reqCtx *aiReqCtx, argsJSON string) strin
 	// Build results: single aggregated result with citation
 	results := []map[string]string{
 		{
-			"title":   fmt.Sprintf("Search: %s", q),
-			"url":     searchURL,
-			"snippet": clean,
+			"title":    fmt.Sprintf("Search: %s", q),
+			"url":      searchURL,
+			"snippet":  clean,
 			"citation": fmt.Sprintf("[web: %s]", searchURL),
 		},
 	}

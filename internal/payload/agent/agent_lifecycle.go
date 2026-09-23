@@ -37,7 +37,7 @@ func uninstallSelf() (string, error) {
 	// (auto-install: WindowsUpdate/AdobeUpdateTask/svchost.exe and explicit:
 	// ForgeC2/ForgeC2Update/ForgeC2.exe) so nothing is left behind regardless
 	// of which install path was used.
-		if runtime.GOOS == "windows" {
+	if runtime.GOOS == "windows" {
 		for _, name := range []string{persistencePrefix, "WindowsUpdate"} {
 			runShell(`reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v `+name+` /f`, "cmd.exe")
 		}

@@ -33,9 +33,9 @@ func TestValidateExternalURLRejectsInternalTargets(t *testing.T) {
 
 func TestValidateExternalURLAcceptsPublic(t *testing.T) {
 	for _, u := range []string{
-		"https://8.8.8.8/",          // public literal IP
-		"http://example.com/bof.o",  // public hostname (may need DNS)
-		"https://1.1.1.1/x",         // public literal
+		"https://8.8.8.8/",         // public literal IP
+		"http://example.com/bof.o", // public hostname (may need DNS)
+		"https://1.1.1.1/x",        // public literal
 	} {
 		if err := validateExternalURL(u); err != nil {
 			t.Errorf("validateExternalURL(%q) should pass, got %v", u, err)

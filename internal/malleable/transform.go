@@ -10,18 +10,31 @@ import (
 var base64URL = base64.URLEncoding
 
 // Apply applies the transform chain to data.
-// Each transform is applied in sequence, passing the output of one as input to the next.
+// Encode applies steps in order; decode applies them in REVERSE order, so
+// decode(encode(x)) == x for multi-step chains. This matches the Go agent
+// (agentApplyTransforms with encode=false) and Cobalt Strike's output-block
+// semantics. Single-step chains are unaffected by the order.
 func (tb *TransformBlock) Apply(data []byte, encode bool) ([]byte, error) {
 	if tb == nil || len(tb.Transforms) == 0 {
 		return data, nil
 	}
 
 	current := data
-	for _, t := range tb.Transforms {
+	if encode {
+		for _, t := range tb.Transforms {
+			var err error
+			current, err = applySingle(current, t, true)
+			if err != nil {
+				return nil, fmt.Errorf("transform %q: %v", t.Type, err)
+			}
+		}
+		return current, nil
+	}
+	for i := len(tb.Transforms) - 1; i >= 0; i-- {
 		var err error
-		current, err = applySingle(current, t, encode)
+		current, err = applySingle(current, tb.Transforms[i], false)
 		if err != nil {
-			return nil, fmt.Errorf("transform %q: %v", t.Type, err)
+			return nil, fmt.Errorf("transform %q: %v", tb.Transforms[i].Type, err)
 		}
 	}
 	return current, nil
@@ -101,10 +114,22 @@ func applySingle(data []byte, t Transform, encode bool) ([]byte, error) {
 		return printableDecode(string(data))
 
 	case "append":
-		return append(data, []byte(t.Value)...), nil
+		if encode {
+			return append(data, []byte(t.Value)...), nil
+		}
+		if v := t.Value; v != "" && len(data) >= len(v) && string(data[len(data)-len(v):]) == v {
+			return data[:len(data)-len(v)], nil
+		}
+		return data, nil
 
 	case "prepend":
-		return append([]byte(t.Value), data...), nil
+		if encode {
+			return append([]byte(t.Value), data...), nil
+		}
+		if v := t.Value; v != "" && len(data) >= len(v) && string(data[:len(v)]) == v {
+			return data[len(v):], nil
+		}
+		return data, nil
 
 	case "xor":
 		return xorData(data, t.Value), nil
