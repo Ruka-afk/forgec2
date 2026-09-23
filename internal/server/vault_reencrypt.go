@@ -77,7 +77,7 @@ func (s *Server) runVaultReencryptOnce() (scanned, reencrypted, failed int64) {
 				Value string
 			}
 			var rows []row
-			q := s.db.Table(col.table).Select("id, " + col.column + " AS value").
+			q := s.db.Table(col.table).Select("id, "+col.column+" AS value").
 				Where(col.column+" LIKE 'FC2ENC:%' AND id > ?", lastID)
 			if col.extraWhere != "" {
 				q = q.Where(col.extraWhere, col.extraArgs...)
