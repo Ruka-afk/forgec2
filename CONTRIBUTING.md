@@ -4,7 +4,7 @@ Thank you for your interest in contributing to ForgeC2. This document outlines t
 
 ## Prerequisites
 
-- **Go 1.22+**
+- **Go 1.25+**
 - **Node.js 20+**
 - **PowerShell** (Windows) or **Bash** (Linux/macOS)
 - **Docker** (optional, for containerized builds)
@@ -132,7 +132,7 @@ internal/
   infrastructure/        — Redirector config generation
   testutil/              — Test helpers (SetupTestDB, NewGinTestServer)
 frontend/
-  src/app/               — Next.js App Router pages
+  src/pages/             — Vite + React pages
   src/components/        — React components
   src/components/ui/     — shadcn/ui primitives
   src/lib/               — Utilities, API client, i18n, hooks

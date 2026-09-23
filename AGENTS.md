@@ -14,10 +14,10 @@ The `bash` tool runs **PowerShell 5.1**, not bash. Adapt accordingly:
 ForgeC2 is a mature Go (net/http + sqlite) C2 server plus a Vite + React TypeScript frontend.
 - Server binary: `forgec2-server.exe` (built with `go build ./cmd/server`).
 - Default: port **8000**, config `config.yaml`, sqlite DB `data/db/forgec2.db` (users `admin`/`labtest`).
-- Version: 2.5.0.
+- Version: 2.6.1 (see CHANGELOG.md).
 
 ## Frontend build & embedding (IMPORTANT)
-The frontend is **Vite**, NOT Next.js (README is inaccurate on this).
+The frontend is **Vite** (not Next.js).
 - Build: `npm run dev` for dev; production: `npm run build` → outputs to `frontend/out`.
 - Frontend is embedded into the Go server via `//go:embed all:dist` in `internal/webdist/webdist.go`, which embeds the directory `internal/webdist/dist`.
 - **Canonical sync script**: `scripts/build-embedded.ps1` (uses `Remove-Item` + `Copy-Item -Recurse frontend/out/*` → `internal/webdist/dist`; includes assets). Use this, NOT robocopy directly.
@@ -41,7 +41,7 @@ go test ./internal/config/... ./internal/crypto/... ./internal/db/... ./internal
 - CI requires **gofmt** on all changed Go files.
 
 ## Build caveats
-- `go build ./...` has a **pre-existing failure** in `data/e2e/` (`reset_lab_user.go:30 func main()` and `gen_lab_exe.go:33 func main()` redeclare `main`) — unrelated to normal changes. Build the server binary with `go build ./cmd/server` only. Both files have `//go:build ignore` tags.
+- `go build ./...` passes (the `data/e2e/` helpers have `//go:build ignore` tags).
 - Go version: **1.25.0** (go.mod).
 - sqlite driver is **`github.com/glebarez/sqlite`** (pure Go, no cgo). Any DB-verification temp program MUST use this driver, NOT `gorm.io/driver/sqlite` (which needs cgo).
 
@@ -56,7 +56,7 @@ go test ./internal/config/... ./internal/crypto/... ./internal/db/... ./internal
 - One-click script: `scripts/e2e-c-implant.bat <HOST> <PORT> <USER> <PASS> <AGENT_ID> [TASK_TYPE] [COMMAND]`
 - Supported task types: `shell` (default), `wechat_history`
 - Release build: `proto/c-implant/build-release.bat` (uses `-Os -s -Wl,--strip-all -ffunction-sections -fdata-sections -Wl,--gc-sections`)
-- Local E2E secrets: `proto/c-implant/build-e2e-local.bat` (gitignored, holds real secrets for local testing only)
+- Local E2E build: `proto/c-implant/build-e2e-local.bat` (gitignored; takes `SECRET_ID`/`SECRET_B64` from env vars or args — no secret is stored in the file)
 - Tracked template `build-e2e.bat` contains placeholders only (`YOUR_SECRET_ID`, `YOUR_SECRET_B64`, port 8001).
 
 ## Reset Password
@@ -76,32 +76,4 @@ Or build: `go build -o reset-password.exe ./cmd/reset-password`
 ## Misc
 - `scripts/setup-dev.sh` generates `config.yaml` (port 8000).
 - `scripts/gitleaks-pre-commit.sh` runs a gitleaks scan pre-commit.
-- Frontend source lives under `frontend/src/app/(main)/` and `frontend/src/lib/`; i18n strings in `frontend/src/lib/i18n/en.ts` and `zh.ts`.
-
-## Testing
-Backend test suite via CI (`.github/workflows/ci.yml`):
-```
-go test ./internal/config/... ./internal/crypto/... ./internal/db/... ./internal/malleable/... ./internal/obfuscation/... ./internal/plugin/... ./internal/server/... ./pkg/... -count=1 -timeout 5m
-```
-- `go vet ./internal/... ./pkg/... ./cmd/...` — but **ignore `internal/payload/agent`** (known unsafe.Pointer warnings; also filtered in CI).
-- CI requires **gofmt** on all changed Go files.
-
-## Build caveats
-- `go build ./...` has a **pre-existing failure** in `data/e2e/` (`reset_lab_user.go:30 func main()` and `gen_lab_exe.go:33 func main()` redeclare `main`) — unrelated to normal changes. Build the server binary with `go build ./cmd/server` only. Both files have `//go:build ignore` tags.
-- Go version: **1.25.0** (go.mod).
-- sqlite driver is **`github.com/glebarez/sqlite`** (pure Go, no cgo). Any DB-verification temp program MUST use this driver, NOT `gorm.io/driver/sqlite` (which needs cgo).
-
-## Deploying the server
-1. `npm run build` (from `frontend/`)
-2. Sync dist via `scripts/build-embedded.ps1`
-3. `go build -o forgec2-server.exe ./cmd/server`
-4. Kill running instance: `taskkill /f /im forgec2-server.exe`
-5. Start detached (NO redirect flags — they break the process):
-   `Start-Process -WindowStyle Hidden -FilePath ".\forgec2-server.exe" -ArgumentList "-config config.yaml" -PassThru`
-6. Logs go to `logs/forgec2.log`.
-7. Verify with `GET /health` (expects `ok`).
-
-## Misc
-- `scripts/setup-dev.sh` generates `config.yaml` (port 8000).
-- `scripts/gitleaks-pre-commit.sh` runs a gitleaks scan pre-commit.
-- Frontend source lives under `frontend/src/app/(main)/` and `frontend/src/lib/`; i18n strings in `frontend/src/lib/i18n/en.ts` and `zh.ts`.
+- Frontend source lives under `frontend/src/pages/` and `frontend/src/lib/`; i18n strings in `frontend/src/lib/i18n/en.ts` and `zh.ts`.

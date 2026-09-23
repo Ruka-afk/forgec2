@@ -144,7 +144,7 @@ Everything lives in one YAML file ([config.example.yaml](config.example.yaml) is
 ## Development
 
 ```bash
-go build ./cmd/server     # backend (avoid ./... hits data/e2e dual main)
+go build ./cmd/server     # backend (or go build ./... for everything)
 go test ./internal/...    # tests (run with -count=1)
 cd frontend && npm run dev  # UI hot-reload on :3000
 

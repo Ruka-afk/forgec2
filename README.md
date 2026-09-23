@@ -144,7 +144,7 @@ ForgeC2 的核心是一个工作台式的生成器，把载荷制作当正规构
 ## 开发
 
 ```bash
-go build ./cmd/server     # 后端（别用 ./...，会撞上 data/e2e 双 main）
+go build ./cmd/server     # 后端（或 go build ./... 全量）
 go test ./internal/...    # 测试（带 -count=1 跑）
 cd frontend && npm run dev  # UI 热重载 :3000
 
