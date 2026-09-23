@@ -54,4 +54,4 @@ export function matchShortcut(e: KeyboardEvent, s: ShortcutDef): boolean {
   );
 }
 
-export const DASHBOARD_RANGES = ["24h", "7d", "30d"] as const;
+export const DASHBOARD_RANGES = ["1h", "24h", "7d", "30d"] as const;

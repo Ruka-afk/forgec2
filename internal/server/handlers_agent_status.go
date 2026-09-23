@@ -23,6 +23,8 @@ func (s *Server) handleAgentStatusHistory(c *gin.Context) {
 		startTime = time.Now().AddDate(0, 0, -7)
 	case "30d":
 		startTime = time.Now().AddDate(0, 0, -30)
+	case "1h":
+		startTime = time.Now().Add(-time.Hour)
 	default:
 		startTime = time.Now().Add(-24 * time.Hour)
 	}

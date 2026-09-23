@@ -60,6 +60,22 @@ func TestHandleDashboardActivityHeatmap(t *testing.T) {
 			query:  "?range=30d",
 			minLen: 1,
 		},
+		{
+			name: "with data 1h",
+			seed: []db.Task{
+				{AgentID: "a1", Status: "completed", CreatedAt: time.Now().Add(-10 * time.Minute)},
+			},
+			query:  "?range=1h",
+			minLen: 1,
+		},
+		{
+			name: "1h excludes older task",
+			seed: []db.Task{
+				{AgentID: "a1", Status: "completed", CreatedAt: time.Now().Add(-2 * time.Hour)},
+			},
+			query:  "?range=1h",
+			minLen: 1,
+		},
 	}
 
 	for _, tc := range tests {
@@ -86,6 +102,15 @@ func TestHandleDashboardActivityHeatmap(t *testing.T) {
 			}
 			if len(resp) < tc.minLen {
 				t.Errorf("expected at least %d heatmap entries, got %d", tc.minLen, len(resp))
+			}
+			if tc.name == "1h excludes older task" {
+				total := 0
+				for _, p := range resp {
+					total += p.Count
+				}
+				if total != 0 {
+					t.Errorf("expected zero activity in 1h range for 2h-old task, got %d", total)
+				}
 			}
 		})
 	}

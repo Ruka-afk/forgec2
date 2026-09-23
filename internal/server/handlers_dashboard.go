@@ -89,6 +89,9 @@ func (s *Server) handleDashboardActivityHeatmap(c *gin.Context) {
 	case "30d":
 		days = 30
 		startTime = time.Now().AddDate(0, 0, -30)
+	case "1h":
+		days = 1
+		startTime = time.Now().Add(-time.Hour)
 	default:
 		days = 1
 		startTime = time.Now().Add(-24 * time.Hour)
@@ -204,6 +207,14 @@ func (s *Server) handleDashboardListenerTraffic(c *gin.Context) {
 			labels = append(labels, d.Format("01-02"))
 			bucketStarts = append(bucketStarts, dayStart.AddDate(0, 0, -i))
 		}
+	case "1h":
+		points = 12
+		fiveMin := time.Now().Truncate(5 * time.Minute)
+		for i := 11; i >= 0; i-- {
+			ts := time.Now().Add(-time.Duration(i) * 5 * time.Minute)
+			labels = append(labels, ts.Format("15:04"))
+			bucketStarts = append(bucketStarts, fiveMin.Add(-time.Duration(i)*5*time.Minute))
+		}
 	default:
 		points = 24
 		hourStart := time.Now().Truncate(time.Hour)
@@ -220,11 +231,15 @@ func (s *Server) handleDashboardListenerTraffic(c *gin.Context) {
 	// Bucket sovereignty: each point covers [bucketStart, nextBucketStart),
 	// which keeps label and value boundaries aligned.
 	if s.trafficBytes != nil {
+		bucketStep := time.Hour
+		switch rangeParam {
+		case "1h":
+			bucketStep = 5 * time.Minute
+		case "7d", "30d":
+			bucketStep = 24 * time.Hour
+		}
 		for i := 0; i < points; i++ {
-			end := bucketStarts[i].Add(time.Hour)
-			if rangeParam != "24h" {
-				end = bucketStarts[i].Add(24 * time.Hour)
-			}
+			end := bucketStarts[i].Add(bucketStep)
 			if i+1 < points {
 				end = bucketStarts[i+1]
 			}
@@ -363,6 +378,8 @@ func (s *Server) handleDashboardTaskGantt(c *gin.Context) {
 		startTime = time.Now().AddDate(0, 0, -7)
 	case "30d":
 		startTime = time.Now().AddDate(0, 0, -30)
+	case "1h":
+		startTime = time.Now().Add(-time.Hour)
 	default:
 		startTime = time.Now().Add(-24 * time.Hour)
 	}
