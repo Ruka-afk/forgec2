@@ -4,9 +4,9 @@
 
 | Version | Supported |
 |---------|-----------|
-| 2.4.x   | Yes       |
-| 2.3.x   | Yes       |
-| < 2.3   | No        |
+| 2.6.x   | Yes       |
+| 2.5.x   | Yes       |
+| < 2.5   | No        |
 
 ## Reporting a Vulnerability
 
@@ -77,6 +77,8 @@ ForgeC2 includes the following built-in security measures:
 
 ## Known Limitations
 
-- Single-user admin panel (no multi-tenant isolation)
+- Multi-tenant isolation is enforced per-entity (tenant_id scoping with
+  regression tests), but tenant 0 remains a legacy/unscoped global view —
+  treat it as privileged.
 - SQLite database (not suitable for high-concurrency production without careful tuning)
 - No built-in WAF or DDoS protection (use external reverse proxy)

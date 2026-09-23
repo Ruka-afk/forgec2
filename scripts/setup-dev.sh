@@ -29,16 +29,36 @@ echo "Node: $(node --version)"
 echo "npm:  $(npm --version)"
 echo ""
 
-# Create config.yaml if not present
+# Create config.yaml if not present.
+# The generated file must pass Config.Validate() on first boot: TLS on (the
+# default require_tls_for_auth refuses plain-HTTP cookies), crypto.key
+# "ecdh:" (legacy XOR/plaintext modes no longer exist), the logging section
+# (not "log:"), and all five REQUIRED 32-byte-hex storage keys (empty values
+# are rejected — the legacy JWT-derivation cascade was removed).
+gen_hex_key() {
+  if command -v openssl &>/dev/null; then
+    openssl rand -hex 32
+  else
+    head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n'
+  fi
+}
+
 if [ ! -f config.yaml ]; then
   echo "Creating default config.yaml..."
-  JWT_SECRET=$(head -c 32 /dev/urandom | base64 | tr -d '/+=' | head -c 32)
+  JWT_SECRET=$(gen_hex_key)
+  BEACON_KEY=$(gen_hex_key)
+  LOOT_KEY=$(gen_hex_key)
+  EXTC2_KEY=$(gen_hex_key)
+  BACKUP_KEY=$(gen_hex_key)
+  TOTP_KEY=$(gen_hex_key)
+  CSRF_KEY=$(gen_hex_key)
   cat > config.yaml <<EOF
 server:
   port: 8000
   host: "127.0.0.1"
-  tls_enabled: false
+  tls_enabled: true
   jwt_secret: "$JWT_SECRET"
+  beacon_key: "$BEACON_KEY"
   data_dir: "data"
 
 database:
@@ -50,13 +70,18 @@ implant:
   default_jitter: 25
 
 crypto:
-  key: "xorc2key123456789012345678901234"
+  key: "ecdh:"
+  loot_key: "$LOOT_KEY"
+  extc2_key: "$EXTC2_KEY"
+  backup_key: "$BACKUP_KEY"
+  totp_key: "$TOTP_KEY"
+  csrf_key: "$CSRF_KEY"
 
-log:
+logging:
   level: "info"
-  file: ""
 EOF
-  echo "  config.yaml created (edit to taste)"
+  chmod 600 config.yaml
+  echo "  config.yaml created (edit to taste; secrets are 0600)"
 else
   echo "config.yaml already exists, skipping."
 fi
@@ -102,9 +127,9 @@ go build -ldflags="-s -w" -o forgec2-server.exe ./cmd/server
 echo "  Binary ready: forgec2-server.exe"
 echo ""
 
-# Run tests
-echo "Running tests..."
-go test ./... -count=1 -timeout 120s 2>&1 || true
+# Run backend tests (CI package set)
+echo "Running backend tests..."
+go test ./internal/config/... ./internal/crypto/... ./internal/db/... ./internal/malleable/... ./internal/obfuscation/... ./internal/plugin/... ./internal/server/... ./pkg/... -count=1 -timeout 5m 2>&1 || true
 echo ""
 
 echo "=== Setup Complete ==="

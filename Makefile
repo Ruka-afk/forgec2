@@ -13,9 +13,13 @@ build:
 	go build -ldflags="$(LDFLAGS)" -trimpath -buildvcs=false -o $(BINARY).exe ./cmd/server
 
 # go vet includes the agent, which emits expected unsafe.Pointer warnings
-# (Windows syscall patterns). Filter those while still failing on real findings.
+# (Windows syscall patterns). Filter those while still FAILING on real findings
+# elsewhere. (The old `go vet ./... 2>&1 | grep -v ... || true` pipe could never
+# fail — the exit status came from grep and `|| true` forced 0 — so `make vet`
+# was a no-op gate. This mirrors the correct check in .github/workflows/ci.yml.)
 vet:
-	go vet ./... 2>&1 | grep -v "internal/payload/agent" || true
+	go vet ./internal/... ./pkg/... ./cmd/... 2>vet.err
+	@if [ -n "$$(grep -v 'internal/payload/agent' vet.err)" ]; then echo 'go vet findings (excluding known agent warnings):'; grep -v 'internal/payload/agent' vet.err; exit 1; else echo 'go vet clean (agent-only warnings ignored)'; fi
 
 vet-strict:
 	go vet ./...
@@ -91,6 +95,9 @@ clean:
 	rm -rf internal/webdist/dist
 	rm -f $(BINARY) $(BINARY).exe
 	rm -f $(BINARY)-linux-amd64 $(BINARY)-windows-amd64.exe $(BINARY)-darwin-amd64
+	# Stray root artifacts: editor/editor-backup binaries and generated agent
+	# payloads that accumulate at the repo root and risk accidental commit.
+	rm -f $(BINARY).exe~ agent agent.exe cbeacon.exe cbeacon-release.exe
 
 # ---------- Help ----------
 

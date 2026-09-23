@@ -1,6 +1,6 @@
 # Architecture
 
-ForgeC2 is a single-binary C2 framework with an embedded Next.js web console. This document describes the system architecture, component interactions, and data flows.
+ForgeC2 is a single-binary C2 framework with an embedded Vite-built web console. This document describes the system architecture, component interactions, and data flows.
 
 ## System Overview
 
@@ -35,7 +35,7 @@ ForgeC2 is a single-binary C2 framework with an embedded Next.js web console. Th
 │                                                         │
 │  ┌────────────────────────────────────────────────────┐  │
 │  │              Embedded Frontend (SPA)                │  │
-│  │         //go:embed all:dist (Next.js static)        │  │
+│  │         //go:embed all:dist (Vite static)          │  │
 │  └────────────────────────────────────────────────────┘  │
 └──────────────────────────┬──────────────────────────────┘
                            │
@@ -160,7 +160,16 @@ Request flows through these middleware in order:
 
 - ECDH key exchange during agent registration
 - Per-session AES-256-GCM encryption
-- Loot encrypted at rest with server-derived key
+- Loot encrypted at rest (AES-256-GCM) with the independent `crypto.loot_key`
+  (never derived from the JWT secret); legacy plaintext rows are sealed by a
+  boot-time vault sweep, new writes are encrypted fail-closed by model hooks
+
+### Audit Pipeline
+
+- Request goroutines enqueue; a single async worker owns the hash chain and
+  persists batches (never blocks beacons)
+- A full queue drops with a counter (`audit_dropped_total`); queue depth and
+  drops are exposed on the authed `GET /api/v1/health` for alerting
 
 ## Deployment Architecture
 
@@ -188,4 +197,4 @@ services:
       - ./data:/app/data
 ```
 
-3-stage build: Node 20 (frontend) → Go 1.22 (backend with embedded FS) → Alpine (runtime, ~20 MB)
+3-stage build: Node 20 (frontend) → Go 1.25 (backend with embedded FS) → distroless static (runtime)

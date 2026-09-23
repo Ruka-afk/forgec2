@@ -104,7 +104,7 @@
 | Header order determinism + UA pool | Hardened | Fixed browser order, sorted custom keys, per-beacon UA rotation (profile pool + built-ins) |
 | URI jitter + param-name rotation + work window | Hardened | Junk query per beacon; query names rotate through pool; `work_start/end/tz` gates beacons |
 | CS `.profile` import + Validate (dry-run) | Hardened | `POST /api/generate/profile/import-text`, `/api/generate/profile/validate` |
-| Response output chains | Experimental | `server_output` encodes only via matching global preset; per-file chains preview-only until global preset matches |
+| Response output chains | Experimental | `server_output` encodes only via matching global preset; per-file chains preview-only until global preset matches; server/agent engines aligned (reverse-order decode, `print` hex parity, prepend/append strip); Validate endpoint round-trips mixed-case envelopes and warns on lossy `case` chains + C-implant incompatibility (C decodes nothing) |
 
 Rebuild implants after changing placement/header/timing fields — old agents keep the old shape.
 
