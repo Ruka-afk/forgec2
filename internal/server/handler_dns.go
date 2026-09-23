@@ -80,6 +80,7 @@ func (s *Server) handleDNSStart(c *gin.Context) {
 	s.cfg.Unlock()
 
 	dl := NewDNSBeaconListener(domain, s.cfg.Server.Host, 0, addr)
+	dl.SetObscure(s.cfg.Server.DNSObscure)
 	dl.SetHandler(s.makeBeaconHandler("dns"))
 
 	if err := dl.Start(); err != nil {

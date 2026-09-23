@@ -64,6 +64,10 @@ func TestDNSBeaconRejectsPlaintext(t *testing.T) {
 // encrypted exchange over the DNS listener handler.
 func TestDNSBeaconV2RegisterAndEncrypted(t *testing.T) {
 	ginSetTestMode(t)
+	// Task results are encrypted at rest: init the global loot key like the
+	// other beacon-path tests, otherwise this test only passes when an
+	// earlier test file happened to set it (order-dependent failure).
+	crypto.InitLootEncryption(testStorageKeyHex)
 	database := testutil.SetupTestDB(t)
 	s := initDNSBeaconServer(t, database)
 	const masterKey = "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899"

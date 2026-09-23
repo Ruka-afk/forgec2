@@ -268,7 +268,7 @@ func (s *Server) startUDPListener() {
 // datagram bytes (or nil to send nothing). It reuses the shared raw-listener
 // beacon core so UDP behaves identically to TCP/ICMP at the envelope level.
 func (s *Server) handleUDPBeacon(data []byte, addr net.Addr) []byte {
-	resp := s.handleListenerBeacon("", data, SocksLowMTUFrameSize, SocksLowMTUBudget)
+	resp := s.handleListenerBeacon("udp", "", data, SocksLowMTUFrameSize, SocksLowMTUBudget)
 	if len(resp) == 0 {
 		return nil
 	}

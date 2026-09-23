@@ -79,7 +79,7 @@ func frameBudgetForTransport(transport string) (frameSize, budget int) {
 func (s *Server) makeBeaconHandler(transport string) func(string, []byte) []byte {
 	frameSize, budget := frameBudgetForTransport(transport)
 	return func(agentID string, reqJSON []byte) []byte {
-		return s.handleListenerBeacon(agentID, reqJSON, frameSize, budget)
+		return s.handleListenerBeacon(transport, agentID, reqJSON, frameSize, budget)
 	}
 }
 
@@ -88,7 +88,7 @@ func (s *Server) makeBeaconHandler(transport string) func(string, []byte) []byte
 // handler (protocol v2: timestamp window, seq replay window, ECDH/AES-256-GCM
 // ciphertext, authenticated handshake/registration frames) and builds the
 // response with matching encryption semantics.
-func (s *Server) handleListenerBeacon(agentID string, reqJSON []byte, frameSize, budget int) []byte {
+func (s *Server) handleListenerBeacon(transport, agentID string, reqJSON []byte, frameSize, budget int) []byte {
 	raw := reqJSON
 	if len(raw) == 0 {
 		// No embedded payload: minimal envelope with just the UUID
@@ -104,8 +104,10 @@ func (s *Server) handleListenerBeacon(agentID string, reqJSON []byte, frameSize,
 		// Resync instead of nil: the caller's transport framing carries these
 		// bytes back, so desynced agents recover on every listener type.
 		if body, ok := s.resyncResponseFor(env); ok {
+			slog.Info("Listener beacon resync", "transport", transport, "agent", env.UUID, "seq", env.Seq, "body_len", len(body))
 			return body
 		}
+		slog.Info("Listener beacon rejected nil", "transport", transport, "agent", env.UUID, "cipher", env.CipherB64 != "")
 		return nil
 	}
 	if req.UUID == "" {
@@ -337,6 +339,7 @@ func (s *Server) startExtraDNSListener(key string) error {
 	}
 
 	dl := NewDNSBeaconListener(l.DNSDomain, l.Host, l.ID, addr)
+	dl.SetObscure(s.cfg.Server.DNSObscure)
 	dl.SetHandler(s.makeBeaconHandler("dns"))
 
 	// Start() binds synchronously and returns the bind error — calling it in

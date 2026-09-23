@@ -47,16 +47,16 @@ type dnsFragState struct {
 // It handles TXT-type DNS queries for agent beaconing and A-type queries for stub resolution.
 type DNSBeaconListener struct {
 	sync.RWMutex
-	Domain  string // e.g. "c2.example.com"
-	ID      uint   // listener DB ID
-	Addr    string // e.g. ":53" or ":5353"
-	server  *dns.Server
+	Domain    string // e.g. "c2.example.com"
+	ID        uint   // listener DB ID
+	Addr      string // e.g. ":53" or ":5353"
+	server    *dns.Server
 	tcpServer *dns.Server
-	pc      net.PacketConn
-	handler func(string, []byte) []byte // fn(agentID, requestJSON) → responseJSON
-	AgentIP string
-	running bool
-	wg      sync.WaitGroup
+	pc        net.PacketConn
+	handler   func(string, []byte) []byte // fn(agentID, requestJSON) → responseJSON
+	AgentIP   string
+	running   bool
+	wg        sync.WaitGroup
 
 	// obscure enables deterministic XOR obscuring of DNS fragments and
 	// responses, keyed by the agent UUID (which the server learns from the
@@ -513,6 +513,12 @@ func (dl *DNSBeaconListener) processBeacon(agentID string, requestData []byte, m
 	}
 
 	respJSON := dl.handler(agentID, reqJSON)
+	slog.Debug("DNS beacon handled",
+		"agent", agentID,
+		"req_len", len(requestData),
+		"resp_len", len(respJSON),
+		"obscure", dl.obscure,
+		"complete", len(requestData) > 0)
 	// Obscure the response payload (XOR keyed by the agent UUID) when enabled.
 	if dl.obscure {
 		respJSON = xorBytesServer(respJSON, []byte(agentID))

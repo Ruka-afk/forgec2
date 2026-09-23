@@ -407,7 +407,11 @@ func (s *Server) Run() error {
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
-			dl.Start()
+			// Start() binds synchronously before returning; surface bind
+			// failures instead of logging "starting" with a dead listener.
+			if err := dl.Start(); err != nil {
+				slog.Error("DNS C2 listener failed to start", "domain", s.cfg.Server.DNSDomain, "addr", s.cfg.Server.DNSAddr, "err", err)
+			}
 		}()
 	}
 
