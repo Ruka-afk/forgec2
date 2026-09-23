@@ -2,7 +2,7 @@ import { PageContainer } from "@/components/ui/page-container";
 import { PageToolbar } from "@/components/ui/page-toolbar";
 import { ErrorState } from "@/components/ui/error-state";
 
-import { Suspense, useState, useCallback, useEffect, memo, useMemo, useRef, createElement } from "react";
+import { Suspense, useState, useCallback, useEffect, memo, useMemo, useRef, createElement, type SyntheticEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { downloadText } from "@/lib/download";
@@ -56,6 +56,29 @@ import NLQueryDialog from "./components/NLQueryDialog";
 
 type SortKey = "created_at" | "type" | "command" | "status";
 
+/** Tailwind sm = 640px; cards replace the table below that breakpoint. */
+const NARROW_MQ = "(max-width: 639px)";
+
+function useIsNarrow() {
+  const [narrow, setNarrow] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(NARROW_MQ).matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(NARROW_MQ);
+    const onChange = () => setNarrow(mq.matches);
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return narrow;
+}
+
+/** True when a click bubbled up from a checkbox (Base UI re-dispatches on a sibling input). */
+function isCheckboxOrigin(e: SyntheticEvent): boolean {
+  const target = e.target as HTMLElement | null;
+  return !!target?.closest?.('[role="checkbox"], input[type="checkbox"]');
+}
+
 function TasksPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useI18n();
   const [searchParams] = useSearchParams();
@@ -76,6 +99,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
   const [detailTask, setDetailTask] = useState<Task | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const isNarrow = useIsNarrow();
 
   const toggleSort = useCallback((key: SortKey) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -334,10 +358,9 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
     offsetTop,
     totalHeight,
   } = useVirtualWindow({ count: tasks.length, rowHeight: TASK_ROW_H, threshold: 25 });
-  // Windowing assumes fixed-height rows; an expanded detail row breaks the
-  // scrollTop→index math (skipped rows / dead scroll area). Render fully
-  // while any row is expanded.
-  const windowingActive = virtualized && expandedRows.size === 0;
+  // Windowing assumes fixed-height table rows; expanded detail rows and the
+  // variable-height mobile card list both break scrollTop→index math.
+  const windowingActive = !isNarrow && virtualized && expandedRows.size === 0;
 
   const sortedTasks = useMemo(() => {
     const list = [...tasks];
@@ -485,8 +508,49 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
           <div
             ref={scrollRef}
             onScroll={onScroll}
-            className={windowingActive ? "overflow-auto max-h-[min(70vh,720px)]" : "overflow-x-auto"}
+            className={
+              isNarrow
+                ? ""
+                : windowingActive
+                  ? "overflow-auto max-h-[min(70vh,720px)]"
+                  : "overflow-x-auto"
+            }
           >
+          {isNarrow ? (
+            <div className="divide-y divide-border" data-testid="tasks-mobile-cards">
+              <div className="flex items-center justify-between gap-2 px-3 py-2 bg-muted/40 border-b border-border">
+                <span className="text-xs text-muted-foreground">
+                  {selectedIds.size > 0 ? t("tasks.selected_count", { n: selectedIds.size }) : t("tasks.select_all")}
+                </span>
+                <Checkbox
+                  aria-label={t("tasks.select_all")}
+                  checked={allOnPageSelected}
+                  indeterminate={selectedIds.size > 0 && !allOnPageSelected}
+                  onCheckedChange={(v) => toggleSelectAll(v !== false)}
+                />
+              </div>
+              {sortedTasks.map((task) => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  expanded={expandedRows.has(task.id)}
+                  selected={selectedIds.has(task.id)}
+                  onToggleSelect={toggleSelect}
+                  onToggle={toggleRow}
+                  onDetail={setDetailTask}
+                  onCancel={handleCancel}
+                  onRerun={handleRerun}
+                  onApprove={handleApprove}
+                  onReject={handleReject}
+                  onClaim={handleClaim}
+                  onRelease={handleRelease}
+                  getAgentName={getAgentName}
+                  getTypeBadge={getTypeBadge}
+                  getStatusBadge={getStatusBadge}
+                />
+              ))}
+            </div>
+          ) : (
           <Table className="text-sm">
             <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90 border-b border-border">
               <TableRow>
@@ -550,6 +614,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
               )}
             </TableBody>
           </Table>
+          )}
           </div>
         </DataState>
       </Card>
@@ -640,65 +705,201 @@ const TaskRow = memo(function TaskRow({ task, expanded, selected, onToggleSelect
         <TableCell className="max-sm:hidden py-3 px-4 text-xs text-muted-foreground font-mono">{calcDuration(task.created_at, task.updated_at)}</TableCell>
         <TableCell className="py-3 px-4 text-center">{getStatusBadge(task.status)}</TableCell>
         <TableCell className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center justify-center gap-1">
-            {(!task.operator_claimed_by || task.operator_claimed_by === currentUsername) && (task.status === "pending" || task.status === "running") && (
-              <>
-                {task.operator_claimed_by !== currentUsername ? (
-                   <Button variant="ghost" size="icon-xs" onClick={() => onClaim(task.id)} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-chart-3/20" title={t("tasks.claim")} aria-label={t("tasks.claim")}>
-                     <Hand className="size-4" />
-                   </Button>
-                 ) : (
-                   <Button variant="ghost" size="icon-xs" onClick={() => onRelease(task.id)} className="text-muted-foreground hover:text-warning hover:bg-warning/15" title={t("tasks.release")} aria-label={t("tasks.release")}>
-                    <Hand className="size-4" />
-                  </Button>
-                )}
-              </>
-            )}
-            {(task.status === "pending" || task.status === "running") && !task.operator_claimed_by && (
-               <Button variant="ghost" size="icon-xs" onClick={() => onCancel(task)} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10" title={t("tasks.cancel")} aria-label={t("tasks.cancel")}>
-                <Ban className="size-3" />
-              </Button>
-            )}
-            {(task.status === "completed" || task.status === "failed" || task.status === "cancelled") && (
-               <Button variant="ghost" size="icon-xs" onClick={() => onRerun(task)} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-chart-3/20" title={t("tasks.rerun")} aria-label={t("tasks.rerun")}>
-                <RotateCw className="size-4" />
-              </Button>
-            )}
-            {task.status === "pending_approval" && (
-              <>
-                 <Button variant="ghost" size="icon-xs" onClick={() => onApprove(task)} className="text-muted-foreground hover:text-success hover:bg-success/15" title={t("tasks.approve")} aria-label={t("tasks.approve")}>
-                  <Check className="size-4" />
-                </Button>
-                 <Button variant="ghost" size="icon-xs" onClick={() => onReject(task)} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10" title={t("tasks.reject")} aria-label={t("tasks.reject")}>
-                  <X className="size-4" />
-                </Button>
-              </>
-            )}
-          </div>
+          <TaskActions
+            task={task}
+            onCancel={onCancel}
+            onRerun={onRerun}
+            onApprove={onApprove}
+            onReject={onReject}
+            onClaim={onClaim}
+            onRelease={onRelease}
+          />
         </TableCell>
       </TableRow>
       {expanded && task.result && (
         <TableRow>
           <TableCell colSpan={10} className="px-4 py-3 bg-card">
-            <div className="relative">
-              <div className="absolute top-2 right-2 flex items-center gap-1">
-                <CopyButton text={task.result} label={t("tasks.detail_output")} size="xs" title={t("common.copy")} className="bg-secondary text-muted-foreground hover:text-foreground px-2 py-1 rounded" />
-                <Button variant="ghost" size="xs" onClick={() => downloadText(task.result, `task_${task.id}_result.txt`)} className="text-xs text-muted-foreground hover:text-foreground bg-secondary px-2 py-1 rounded" aria-label={t("common.download")}>
-                  <Download className="size-3.5" />
-                </Button>
-                <Button variant="ghost" size="xs" onClick={() => onDetail(task)} className="text-xs text-muted-foreground hover:text-foreground bg-secondary px-2 py-1 rounded">
-                  <Maximize2 className="size-4" />{t("tasks.full_view")}
-                </Button>
-              </div>
-              <TaskResultView type={task.type} result={task.result} />
-              <AIAnalysisButton taskId={Number(task.id) || 0} />
-            </div>
+            <ExpandedResult task={task} onDetail={onDetail} />
           </TableCell>
         </TableRow>
       )}
     </>
   );
 });
+
+type TaskCardProps = {
+  task: Task;
+  expanded: boolean;
+  selected: boolean;
+  onToggleSelect: (id: number, checked: boolean) => void;
+  onToggle: (id: number) => void;
+  onDetail: (task: Task) => void;
+  onCancel: (task: Task) => void;
+  onRerun: (task: Task) => void;
+  onApprove: (task: Task) => void;
+  onReject: (task: Task) => void;
+  onClaim: (taskId: number) => void;
+  onRelease: (taskId: number) => void;
+  getAgentName: (id: string) => string | undefined;
+  getTypeBadge: (t: string) => React.ReactNode;
+  getStatusBadge: (s: string) => React.ReactNode;
+};
+
+/** Narrow-screen list item: keeps every column the desktop table shows. */
+const TaskCard = memo(function TaskCard({ task, expanded, selected, onToggleSelect, onToggle, onDetail, onCancel, onRerun, onApprove, onReject, onClaim, onRelease, getAgentName, getTypeBadge, getStatusBadge }: TaskCardProps) {
+  const currentUsername = useAppStore((s) => s.currentUsername);
+  const { t } = useI18n();
+  return (
+    <article
+      role="button"
+      tabIndex={0}
+      aria-label={`${getAgentName(task.agent_id) || task.agent_id || ""} ${task.type} ${task.status}`}
+      onClick={(e) => { if (isCheckboxOrigin(e)) return; onDetail(task); }}
+      onKeyDown={(e) => {
+        if (isCheckboxOrigin(e as unknown as SyntheticEvent)) return;
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onDetail(task); }
+      }}
+      className={`p-3 cursor-pointer hover:bg-muted/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 ${selected ? "bg-primary/5" : ""}`}
+      data-testid="task-card"
+      aria-selected={selected}
+    >
+      <div className="flex items-start gap-2.5">
+        <Checkbox
+          aria-label={t("tasks.select_item")}
+          checked={selected}
+          onCheckedChange={(v) => onToggleSelect(task.id, v === true)}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          className="mt-0.5 shrink-0"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {getStatusBadge(task.status)}
+            {getTypeBadge(task.type)}
+            <span className="font-medium text-sm text-foreground truncate min-w-0">
+              {getAgentName(task.agent_id) || task.agent_id?.substring(0, 8)}
+            </span>
+            <span className="ml-auto text-xs font-mono text-muted-foreground whitespace-nowrap shrink-0">
+              {task.created_at ? formatTime(task.created_at) : "-"}
+            </span>
+          </div>
+          <div className="mt-1.5 font-mono text-xs text-muted-foreground break-all">
+            {task.command || "-"}
+          </div>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <span className="font-mono">{calcDuration(task.created_at, task.updated_at)}</span>
+            {task.operator_claimed_by ? (
+              <OperatorBadge username={task.operator_claimed_by} isCurrentUser={task.operator_claimed_by === currentUsername} size="sm" />
+            ) : (
+              <span>{t("tasks.col_claimed_by")}: -</span>
+            )}
+            {task.result && (
+              <Button
+                variant="link"
+                size="sm"
+                onClick={(e) => { e.stopPropagation(); onToggle(task.id); }}
+                aria-expanded={expanded}
+                aria-label={expanded ? t("tasks.collapse") : t("tasks.expand")}
+                className="text-xs text-primary hover:underline flex items-center gap-1 p-0 h-auto"
+              >
+                {expanded ? <ChevronUp className="size-2.5" /> : <ChevronDown className="size-2.5" />}
+                {expanded ? t("tasks.collapse") : t("tasks.expand")}
+              </Button>
+            )}
+          </div>
+          <div className="mt-2 flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
+            <TaskActions
+              task={task}
+              onCancel={onCancel}
+              onRerun={onRerun}
+              onApprove={onApprove}
+              onReject={onReject}
+              onClaim={onClaim}
+              onRelease={onRelease}
+            />
+          </div>
+          {expanded && task.result && (
+            <div className="mt-2 border-t border-border pt-2" onClick={(e) => e.stopPropagation()}>
+              <ExpandedResult task={task} onDetail={onDetail} />
+            </div>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+});
+
+/** Shared claim/cancel/rerun/approve/reject icon buttons (row + card). */
+function TaskActions({ task, onCancel, onRerun, onApprove, onReject, onClaim, onRelease }: {
+  task: Task;
+  onCancel: (task: Task) => void;
+  onRerun: (task: Task) => void;
+  onApprove: (task: Task) => void;
+  onReject: (task: Task) => void;
+  onClaim: (taskId: number) => void;
+  onRelease: (taskId: number) => void;
+}) {
+  const currentUsername = useAppStore((s) => s.currentUsername);
+  const { t } = useI18n();
+  return (
+    <div className="flex items-center justify-end gap-1">
+      {(!task.operator_claimed_by || task.operator_claimed_by === currentUsername) && (task.status === "pending" || task.status === "running") && (
+        <>
+          {task.operator_claimed_by !== currentUsername ? (
+            <Button variant="ghost" size="icon-xs" onClick={() => onClaim(task.id)} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-chart-3/20" title={t("tasks.claim")} aria-label={t("tasks.claim")}>
+              <Hand className="size-4" />
+            </Button>
+          ) : (
+            <Button variant="ghost" size="icon-xs" onClick={() => onRelease(task.id)} className="text-muted-foreground hover:text-warning hover:bg-warning/15" title={t("tasks.release")} aria-label={t("tasks.release")}>
+              <Hand className="size-4" />
+            </Button>
+          )}
+        </>
+      )}
+      {(task.status === "pending" || task.status === "running") && !task.operator_claimed_by && (
+        <Button variant="ghost" size="icon-xs" onClick={() => onCancel(task)} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10" title={t("tasks.cancel")} aria-label={t("tasks.cancel")}>
+          <Ban className="size-3" />
+        </Button>
+      )}
+      {(task.status === "completed" || task.status === "failed" || task.status === "cancelled") && (
+        <Button variant="ghost" size="icon-xs" onClick={() => onRerun(task)} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-chart-3/20" title={t("tasks.rerun")} aria-label={t("tasks.rerun")}>
+          <RotateCw className="size-4" />
+        </Button>
+      )}
+      {task.status === "pending_approval" && (
+        <>
+          <Button variant="ghost" size="icon-xs" onClick={() => onApprove(task)} className="text-muted-foreground hover:text-success hover:bg-success/15" title={t("tasks.approve")} aria-label={t("tasks.approve")}>
+            <Check className="size-4" />
+          </Button>
+          <Button variant="ghost" size="icon-xs" onClick={() => onReject(task)} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10" title={t("tasks.reject")} aria-label={t("tasks.reject")}>
+            <X className="size-4" />
+          </Button>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Inline expanded result with copy / download / full-view toolbar. */
+function ExpandedResult({ task, onDetail }: { task: Task; onDetail: (task: Task) => void }) {
+  const { t } = useI18n();
+  if (!task.result) return null;
+  return (
+    <div className="relative">
+      <div className="absolute top-2 right-2 flex items-center gap-1">
+        <CopyButton text={task.result} label={t("tasks.detail_output")} size="xs" title={t("common.copy")} className="bg-secondary text-muted-foreground hover:text-foreground px-2 py-1 rounded" />
+        <Button variant="ghost" size="xs" onClick={() => downloadText(task.result, `task_${task.id}_result.txt`)} className="text-xs text-muted-foreground hover:text-foreground bg-secondary px-2 py-1 rounded" aria-label={t("common.download")}>
+          <Download className="size-3.5" />
+        </Button>
+        <Button variant="ghost" size="xs" onClick={() => onDetail(task)} className="text-xs text-muted-foreground hover:text-foreground bg-secondary px-2 py-1 rounded">
+          <Maximize2 className="size-4" />{t("tasks.full_view")}
+        </Button>
+      </div>
+      <TaskResultView type={task.type} result={task.result} />
+      <AIAnalysisButton taskId={Number(task.id) || 0} />
+    </div>
+  );
+}
 
 // TaskResultView routes structured payloads through the pluggable renderer
 // registry and keeps the classic text view for everything unregistered.
