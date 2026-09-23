@@ -6,7 +6,7 @@ import { useI18n } from "@/lib/i18n";
 import { useAppStore } from "@/lib/store";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { isEditableTarget } from "@/pages/agents/components/interact-workspace";
-import { Search, Server } from "lucide-react";
+import { Search, Server, Terminal } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,14 @@ interface PaletteItem {
 
 function normalize(s: string): string {
   return s.toLowerCase().replace(/[-_/]/g, " ");
+}
+
+/** Every whitespace token must appear in the haystack (substring match). */
+function matchesQuery(q: string, ...parts: string[]): boolean {
+  const tokens = q.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+  const hay = normalize(parts.filter(Boolean).join(" "));
+  return tokens.every((tok) => hay.includes(tok));
 }
 
 export default function CommandPalette() {
@@ -56,19 +64,33 @@ export default function CommandPalette() {
     const q = normalize(query.trim());
     if (!q) return [];
     const out: PaletteItem[] = [];
+    const shellLabel = t("agents.shell_title");
     for (const agent of agents) {
       const id = agent.id;
       if (!id) continue;
-      const haystack = normalize([agent.hostname, agent.ip, agent.username, agent.os].filter(Boolean).join(" "));
-      if (!haystack.includes(q)) continue;
-      out.push({
-        href: `/agents/${id}`,
-        label: agent.hostname ?? id,
-        section: t("palette.agents"),
-        icon: Server,
-        subtitle: [agent.username, agent.ip].filter(Boolean).join(" \u00b7 "),
-      });
-      if (out.length === 6) break;
+      const name = agent.hostname || id;
+      const meta = [agent.username, agent.ip].filter(Boolean).join(" \u00b7 ");
+      const base = [agent.hostname, agent.ip, agent.username, agent.os].filter(Boolean).join(" ");
+      if (matchesQuery(q, base, name, meta, id)) {
+        out.push({
+          href: `/agents/${id}`,
+          label: name,
+          section: t("palette.agents"),
+          icon: Server,
+          subtitle: meta,
+        });
+      }
+      const shellHay = `${base} shell ${shellLabel} ${name} ${shellLabel}`;
+      if (matchesQuery(q, shellHay, `${name} ${shellLabel}`, meta, `/agents/${id}/shell`)) {
+        out.push({
+          href: `/agents/${id}/shell`,
+          label: `${name} → ${shellLabel}`,
+          section: t("palette.agents"),
+          icon: Terminal,
+          subtitle: meta || shellLabel,
+        });
+      }
+      if (out.length >= 8) break;
     }
     return out;
   }, [agents, query, t]);
@@ -76,8 +98,8 @@ export default function CommandPalette() {
   const filtered = useMemo(() => {
     const q = normalize(query.trim());
     if (!q) return items;
-    return [...items, ...agentItems].filter(
-      (i) => normalize(i.label).includes(q) || normalize(i.href).includes(q) || normalize(i.section).includes(q) || (i.subtitle && normalize(i.subtitle).includes(q)),
+    return [...items, ...agentItems].filter((i) =>
+      matchesQuery(q, i.label, i.href, i.section, i.subtitle ?? ""),
     );
   }, [items, agentItems, query]);
 

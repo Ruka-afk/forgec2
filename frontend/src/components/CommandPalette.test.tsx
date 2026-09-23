@@ -17,6 +17,7 @@ vi.mock("@/lib/i18n", () => ({
       if (key === "palette.title") return "Command palette";
       if (key === "palette.no_results") return "No results";
       if (key === "palette.agents") return "Agents";
+      if (key === "agents.shell_title") return "Shell";
       return key;
     },
   }),
@@ -71,9 +72,9 @@ describe("CommandPalette", () => {
     render(<CommandPalette />);
     const input = screen.getByLabelText(/type to jump/i);
     fireEvent.change(input, { target: { value: "desktop-win" } });
-    expect(screen.getByText("desktop-win11")).toBeTruthy();
-    expect(screen.getByText("corp\\jdoe · 10.0.1.5")).toBeTruthy();
-    expect(screen.queryByText("srv-linux-01")).toBeNull();
+    expect(screen.getAllByText("desktop-win11").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("corp\\jdoe · 10.0.1.5").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/srv-linux-01/)).toBeNull();
   });
 
   it("navigates to the agent page on selection", () => {
@@ -83,6 +84,25 @@ describe("CommandPalette", () => {
     fireEvent.change(input, { target: { value: "srv-linux" } });
     fireEvent.click(screen.getByText("srv-linux-01"));
     expect(pushMock).toHaveBeenCalledWith("/agents/a2");
+  });
+
+  it("offers a shell deep link for matching agents", () => {
+    useAppStore.setState({ commandPaletteOpen: true });
+    render(<CommandPalette />);
+    const input = screen.getByLabelText(/type to jump/i);
+    fireEvent.change(input, { target: { value: "desktop-win shell" } });
+    fireEvent.click(screen.getByText(/desktop-win11 → Shell/));
+    expect(pushMock).toHaveBeenCalledWith("/agents/a1/shell");
+  });
+
+  it("lists shell actions when only shell is queried", () => {
+    useAppStore.setState({ commandPaletteOpen: true });
+    render(<CommandPalette />);
+    const input = screen.getByLabelText(/type to jump/i);
+    fireEvent.change(input, { target: { value: "shell" } });
+    expect(screen.getByText(/desktop-win11 → Shell/)).toBeTruthy();
+    expect(screen.getByText(/srv-linux-01 → Shell/)).toBeTruthy();
+    expect(screen.queryByText("nav.dashboard")).toBeNull();
   });
 
   it("closes on Escape", () => {
