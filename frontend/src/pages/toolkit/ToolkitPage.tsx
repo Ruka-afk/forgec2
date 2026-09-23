@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, formatThrownError } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { fetchAgentListCached } from "@/lib/agents";
@@ -14,6 +15,7 @@ import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
+import TemplatesPanel from "./components/TemplatesPanel";
 
 interface ToolkitAgent {
   id?: string;
@@ -40,6 +42,7 @@ interface RecentTask {
 export default function ToolkitPage() {
   const { t } = useI18n();
   const [selectedAgent, setSelectedAgent] = useState("");
+  const [activeTab, setActiveTab] = useState<"commands" | "templates">("commands");
   const [agentInfo, setAgentInfo] = useState<Record<string, unknown> | null>(null);
   const runAction = async (action: string, param = "") => {
     if (!selectedAgent) {
@@ -194,6 +197,13 @@ export default function ToolkitPage() {
         </div>
       </>}>
 
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v === "templates" ? "templates" : "commands")}>
+        <TabsList>
+          <TabsTrigger value="commands">{t("toolkit.tab_commands")}</TabsTrigger>
+          <TabsTrigger value="templates">{t("toolkit.tab_templates")}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="commands">
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
         <div className="xl:col-span-3 space-y-4">
           <Card className="p-4">
@@ -270,6 +280,29 @@ export default function ToolkitPage() {
           </Card>
         </div>
       </div>
+        </TabsContent>
+
+        <TabsContent value="templates">
+          <TemplatesPanel
+            selectedAgent={selectedAgent}
+            onRun={(command) => {
+              if (!selectedAgent) {
+                toast.error(t("toolkit.toast.select_agent_first"));
+                return;
+              }
+              void (async () => {
+                try {
+                  await api.postJson(paths.agents.command(selectedAgent), { command });
+                  toast.success(t("templates.toast.run_dispatched", { name: command.slice(0, 40) }));
+                  loadData();
+                } catch (e) {
+                  toast.error(formatThrownError(e));
+                }
+              })();
+            }}
+          />
+        </TabsContent>
+      </Tabs>
     </PageContainer>
   );
 }

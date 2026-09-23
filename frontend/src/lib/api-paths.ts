@@ -509,6 +509,11 @@ export const paths = {
     results: "/toolkit/results",
     action: (agentId: string) => `/toolkit/agents/${agentId}/action`,
   },
+  templates: {
+    list: "/api/templates",
+    one: (id: string | number) => `/api/templates/${id}`,
+    byCategory: (category: string) => `/api/templates/category/${encodeURIComponent(category)}`,
+  },
   traffic: {
     api: "/api/traffic",
   },
