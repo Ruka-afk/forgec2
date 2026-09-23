@@ -1,4 +1,4 @@
-import { memo, type ReactNode, type RefObject } from "react";
+import { Fragment, memo, type ReactNode, type RefObject } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -9,12 +9,59 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowLeftRight, Plus, Radio } from "lucide-react";
 import { AgentRow } from "./AgentRow";
+import { hostKey } from "./groupBeaconsByHost";
+import { StatusBadge } from "@/components/ui/status-indicator";
+import type { AgentStatus } from "@/types/agent";
 import type { Beacon } from "./types";
 import type { AgentMenuPoint } from "./agent-menu-actions";
 import type { AgentSortKey } from "./useAgentFilters";
 import type { AgentTag } from "./useAgentData";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;
+
+interface TableHostGroup {
+  key: string;
+  hostname: string;
+  ip: string;
+  os: string;
+  status: AgentStatus;
+  sessions: Beacon[];
+}
+
+function statusRank(status?: string): number {
+  if (status === "online") return 2;
+  if (status === "stale") return 1;
+  return 0;
+}
+
+/** Group by host while preserving the active sort order of sessions. */
+function groupSessionsByHost(beacons: Beacon[]): TableHostGroup[] {
+  const order: string[] = [];
+  const buckets = new Map<string, Beacon[]>();
+  for (const beacon of beacons) {
+    const key = hostKey(beacon);
+    const list = buckets.get(key);
+    if (list) list.push(beacon);
+    else {
+      buckets.set(key, [beacon]);
+      order.push(key);
+    }
+  }
+  return order.map((key) => {
+    const sessions = buckets.get(key) ?? [];
+    const primary = sessions.reduce((best, cur) =>
+      statusRank(cur.status) > statusRank(best.status) ? cur : best,
+    sessions[0]!);
+    return {
+      key,
+      hostname: primary.hostname || primary.ip || key,
+      ip: primary.ip || primary.public_ip || "",
+      os: primary.os || "",
+      status: (primary.status || "offline") as AgentStatus,
+      sessions,
+    };
+  });
+}
 
 interface AgentsTableProps {
   t: TKey;
@@ -50,6 +97,7 @@ interface AgentsTableProps {
   agentLocks: Record<string, string>;
   operatorPresence: Record<string, string[]>;
   tagsByAgent: Record<string, AgentTag[]>;
+  groupByHost?: boolean;
 }
 
 /** Virtualized agents table card with sortable header + pagination. */
@@ -63,7 +111,10 @@ export default memo(function AgentsTable(props: AgentsTableProps) {
     statusFilter, osFilter, page, total, setPage,
     onSelectAgent, onMenu, onQuickNav, onEditNotes,
     taskCountMap, agentLocks, operatorPresence, tagsByAgent,
+    groupByHost = false,
   } = props;
+
+  const hostGroups = groupByHost ? groupSessionsByHost(visibleBeacons) : null;
 
   const allVisibleSelected = beacons.length > 0 && beacons.every((b) => b.id && selected.has(b.id));
   const someVisibleSelected = selected.size > 0 && !allVisibleSelected;
@@ -134,7 +185,44 @@ export default memo(function AgentsTable(props: AgentsTableProps) {
               <TableCell colSpan={emptyColSpan} style={{ height: agentOffsetTop, padding: 0, border: 0 }} />
             </TableRow>
           )}
-          {!loading && visibleBeacons.map((beacon) => (
+          {!loading && hostGroups && hostGroups.map((group) => (
+            <Fragment key={group.key}>
+              <TableRow className="bg-muted/40 hover:bg-muted/50">
+                <TableCell colSpan={emptyColSpan} className="py-2 px-3 sm:px-4">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <StatusBadge status={group.status} variant="dot" size="sm" pulse={group.status === "online"} />
+                    <span className="truncate text-sm font-semibold text-foreground">{group.hostname}</span>
+                    {group.ip && <span className="hidden truncate font-mono text-(--fs-micro-sm) text-muted-foreground sm:inline">{group.ip}</span>}
+                    {group.os && <span className="hidden text-(--fs-micro-sm) text-muted-foreground md:inline">{group.os}</span>}
+                    {group.sessions.length > 1 && (
+                      <span className="shrink-0 rounded-md bg-primary/10 px-1.5 py-0.5 text-(--fs-micro-sm) font-medium text-primary">
+                        {t("agents.group_host_sessions", { n: group.sessions.length })}
+                      </span>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+              {group.sessions.map((beacon) => (
+                <AgentRow
+                  key={beacon.id || ""}
+                  beacon={beacon}
+                  isSelected={selected.has(beacon.id || "")}
+                  onToggleSelect={toggleSelect}
+                  onInteract={onSelectAgent}
+                  onDetails={onSelectAgent}
+                  onMenu={onMenu}
+                  onQuickNav={onQuickNav}
+                  onEditNotes={onEditNotes}
+                  taskCount={taskCountMap[beacon.id || ""] ?? 0}
+                  lockUser={agentLocks[beacon.id || ""] || null}
+                  presenceUsers={operatorPresence[beacon.id || ""] || null}
+                  visibleCols={visibleCols}
+                  tags={tagsByAgent[beacon.id || ""] || []}
+                />
+              ))}
+            </Fragment>
+          ))}
+          {!loading && !hostGroups && visibleBeacons.map((beacon) => (
             <AgentRow
               key={beacon.id || ""}
               beacon={beacon}

@@ -631,6 +631,8 @@ export const en: Record<string, string> = {
     "agents.n_selected": "{n} selected",
     "agents.n_tasks": "{n} tasks",
     "agents.grid_show_more": "Show {shown} of {total}",
+    "agents.group_by_host": "Group by host",
+    "agents.group_host_sessions": "{n} sessions on this host",
     "agents.n_failed": "{n} failed",
     "agents.tasklist_result_truncated": "output truncated",
     "agents.new": "New",

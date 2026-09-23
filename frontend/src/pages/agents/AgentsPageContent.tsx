@@ -86,6 +86,7 @@ export default function AgentsPageContent() {
     page, setPage, sortKey, sortDir, toggleSort, setSortKey, setSortDir,
     linkedFilter, setLinkedFilter, tagFilter, setTagFilter,
     autoRefresh, setAutoRefresh, viewMode, setViewMode,
+    groupByHost, setGroupByHost,
     visibleCols, setVisibleCols,
     sortedBeacons,
   } = useAgentFilters(beacons);
@@ -141,10 +142,12 @@ export default function AgentsPageContent() {
     return () => ro.disconnect();
   }, [agentVirtualized, agentScrollRef]);
 
-  const visibleBeacons = useMemo(
-    () => (agentVirtualized ? sortedBeacons.slice(agentVirtStart, agentVirtEnd) : sortedBeacons),
-    [sortedBeacons, agentVirtualized, agentVirtStart, agentVirtEnd],
-  );
+  const visibleBeacons = useMemo(() => {
+    // Host grouping needs the full ordered list (header rows break fixed-height
+    // virtualization), so force non-virtualized rendering while grouped.
+    if (groupByHost || !agentVirtualized) return sortedBeacons;
+    return sortedBeacons.slice(agentVirtStart, agentVirtEnd);
+  }, [sortedBeacons, groupByHost, agentVirtualized, agentVirtStart, agentVirtEnd]);
 
   const loadBeacons = useCallback(() => {
     loadBeaconsRaw(searchQuery, statusFilter, osFilter, page, 50, tagFilter, linkedFilter, sortKey, sortDir);
@@ -281,6 +284,8 @@ export default function AgentsPageContent() {
         onToggleAutoRefresh={() => setAutoRefresh((p) => !p)}
         effectiveViewMode={effectiveViewMode}
         onToggleView={() => setViewMode((p) => p === "table" ? "grid" : "table")}
+        groupByHost={groupByHost}
+        onToggleGroupByHost={() => setGroupByHost((p) => !p)}
         onRefresh={() => { setPage(1); loadBeacons(); }}
       />}
     >
@@ -346,6 +351,7 @@ export default function AgentsPageContent() {
           sortKey,
           sortDir,
           viewMode,
+          groupByHost,
           page_size_page: page,
         })}
         applyState={(s) => {
@@ -359,6 +365,7 @@ export default function AgentsPageContent() {
           }
           if (s.sortDir === "asc" || s.sortDir === "desc") setSortDir(s.sortDir);
           if (s.viewMode === "table" || s.viewMode === "grid") setViewMode(s.viewMode);
+          setGroupByHost(s.groupByHost === true);
           setPage(1);
         }}
       />
@@ -379,7 +386,7 @@ export default function AgentsPageContent() {
         visibleCols={visibleCols}
         loading={loading}
         emptyColSpan={emptyColSpan}
-        agentVirtualized={agentVirtualized}
+        agentVirtualized={agentVirtualized && !groupByHost}
         agentScrollRef={agentScrollRef}
         onAgentScroll={onAgentScroll}
         agentOffsetTop={agentOffsetTop}
@@ -398,6 +405,7 @@ export default function AgentsPageContent() {
         agentLocks={agentLocks}
         operatorPresence={operatorPresence}
         tagsByAgent={tagsByAgent}
+        groupByHost={groupByHost}
       />
       )}
 

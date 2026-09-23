@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Download, Grip, History, ListChecks, ListOrdered, Pause, Play, Plus, RefreshCw } from "lucide-react";
+import { Download, Grip, History, Layers, ListChecks, ListOrdered, Pause, Play, Plus, RefreshCw } from "lucide-react";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;
 
@@ -17,6 +17,8 @@ interface AgentsToolbarProps {
   onToggleAutoRefresh: () => void;
   effectiveViewMode: "table" | "grid";
   onToggleView: () => void;
+  groupByHost: boolean;
+  onToggleGroupByHost: () => void;
   onRefresh: () => void;
 }
 
@@ -24,7 +26,7 @@ interface AgentsToolbarProps {
 export default memo(function AgentsToolbar({
   t, bulkMode, onToggleBulk, showResults, onToggleResults,
   exporting, onExport, autoRefresh, onToggleAutoRefresh,
-  effectiveViewMode, onToggleView, onRefresh,
+  effectiveViewMode, onToggleView, groupByHost, onToggleGroupByHost, onRefresh,
 }: AgentsToolbarProps) {
   return (
     <>
@@ -85,6 +87,21 @@ export default memo(function AgentsToolbar({
       >
         {effectiveViewMode === "table" ? <Grip className="size-4" /> : <ListOrdered className="size-4" />}
       </Button>
+      {effectiveViewMode === "table" && (
+      <Button
+        variant="outline"
+        onClick={onToggleGroupByHost}
+        aria-pressed={groupByHost}
+        title={t("agents.group_by_host")}
+        className={`hidden h-9 min-h-[2.75rem] min-w-[2.75rem] gap-2 rounded-lg px-3 sm:inline-flex sm:h-10 transition-all ${
+          groupByHost
+            ? "bg-primary text-primary-foreground border-primary hover:bg-primary/80"
+            : "text-muted-foreground"
+        }`}
+      >
+        <Layers className="size-4" />
+      </Button>
+      )}
       <Button
         variant="outline"
         onClick={onRefresh}

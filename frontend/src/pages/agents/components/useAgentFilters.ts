@@ -19,6 +19,7 @@ export function useAgentFilters(beacons: Beacon[]) {
   const [tagFilter, setTagFilter] = useState("");
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
+  const [groupByHost, setGroupByHost] = useState(false);
   const [visibleCols, setVisibleCols] = useState<Record<string, boolean>>({
     hostname: true, username: true, os: true, ip: true, last_seen: true,
     window: true, lock: true, tasks: true, status: true, version: true,
@@ -51,6 +52,7 @@ export function useAgentFilters(beacons: Beacon[]) {
     tagFilter, setTagFilter,
     autoRefresh, setAutoRefresh,
     viewMode, setViewMode,
+    groupByHost, setGroupByHost,
     visibleCols, setVisibleCols,
     sortedBeacons,
   };

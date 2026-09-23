@@ -631,6 +631,8 @@ export const zh: Record<string, string> = {
     "agents.n_selected": "已选 {n} 个",
     "agents.n_tasks": "{n} 个任务",
     "agents.grid_show_more": "显示 {shown}/{total}",
+    "agents.group_by_host": "按主机分组",
+    "agents.group_host_sessions": "该主机 {n} 个会话",
     "agents.n_failed": "{n} 个失败",
     "agents.tasklist_result_truncated": "输出过长，已截断",
     "agents.new": "新建",
