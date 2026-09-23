@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -145,16 +146,29 @@ func (s *Server) handleRDWebSocket(c *gin.Context) {
 		return
 	}
 
+	agentID := c.Query("agent_id")
+	if agentID == "" {
+		respondError(c, http.StatusBadRequest, "agent_id required")
+		return
+	}
+	// Tenant scoping before upgrade: a cross-tenant operator must not get
+	// a live frame stream (or be able to inject input) for an invisible agent.
+	if _, ok := s.getAgentOrFail(c, agentID); !ok {
+		return
+	}
+	// operatorID comes from the authenticated session, never from a query
+	// string — otherwise one operator can overwrite another's map entry
+	// (steal frames / drop their connection) by spoofing user_id.
+	uid, ok := currentUserID(c)
+	if !ok {
+		respondError(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	operatorID := strconv.FormatUint(uint64(uid), 10)
+
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		slog.Error("RD WebSocket upgrade failed", "error", err)
-		return
-	}
-
-	agentID := c.Query("agent_id")
-	operatorID := c.Query("user_id")
-	if agentID == "" || operatorID == "" {
-		conn.Close()
 		return
 	}
 
@@ -196,6 +210,11 @@ func (s *Server) handleRDAPIGetFrame(c *gin.Context) {
 		return
 	}
 	agentID := c.Param("id")
+	// Tenant scoping: frames are agent screen content — same visibility
+	// rule as any other agent read.
+	if _, ok := s.getAgentOrFail(c, agentID); !ok {
+		return
+	}
 
 	// Get frame from the frame buffer
 	frame := getFrameBuffer(agentID)
@@ -226,6 +245,10 @@ func (s *Server) handleRDAPIScreenshot(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
+	// Tenant scoping before issuing a task against the agent.
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
 	task := s.issueAgentTask(c, id, TaskSpec{Type: "screenshot", Command: "screenshot"})
 	if task == nil {
 		return

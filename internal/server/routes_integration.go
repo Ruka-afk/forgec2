@@ -83,9 +83,21 @@ func (s *Server) registerIntegrationRoutes(auth *gin.RouterGroup) {
 		linkWrite.POST("/agents/:id/unlink", s.handleUnlinkAgent)
 	}
 
-	auth.GET("/ws/remote-desktop", s.handleRDWebSocket)
-	auth.GET("/rd/:id/frame", s.handleRDAPIGetFrame)
-	auth.POST("/rd/:id/screenshot", s.handleRDAPIScreenshot)
+	// Remote desktop: screens + input relay. Gate with the same
+	// agents.read/write permissions as the rest of the agent surface —
+	// previously these three routes only ran AuthRequired (any logged-in
+	// session, including viewers) with no tenant check in the handlers.
+	rdRead := auth.Group("/")
+	rdRead.Use(middleware.RequirePermission(db.PermAgentsRead))
+	{
+		rdRead.GET("/ws/remote-desktop", s.handleRDWebSocket)
+		rdRead.GET("/rd/:id/frame", s.handleRDAPIGetFrame)
+	}
+	rdWrite := auth.Group("/")
+	rdWrite.Use(middleware.RequirePermission(db.PermAgentsWrite))
+	{
+		rdWrite.POST("/rd/:id/screenshot", s.handleRDAPIScreenshot)
+	}
 }
 
 // registerAPIKeyRoutes registers API key management routes (admin only).
