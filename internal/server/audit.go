@@ -160,6 +160,17 @@ func (s *Server) auditNoteDropped(n int) {
 	}
 }
 
+// auditQueueDepth reports the number of batches waiting in the async audit
+// queue (0 when the worker is not running). Surfaced on the authed
+// /api/v1/health endpoint so operators can alert on backlog before drops
+// start; nil-safe for bare test Servers.
+func (s *Server) auditQueueDepth() int {
+	if s == nil {
+		return 0
+	}
+	return len(s.auditQueue)
+}
+
 // flushAuditEntriesSync is the synchronous fallback used when the async
 // worker is not running. Callers are request goroutines in tests only.
 func (s *Server) flushAuditEntriesSync(entries []db.AuditLog) {
@@ -368,6 +379,8 @@ func shouldLogAction(path string) bool {
 	// Log authentication, agent management, credential access, and command actions.
 	// Settings/users/plugins/config changes go through LogOperatorAction, but the
 	// middleware also records them here so a direct API call cannot bypass audit.
+	// Prefixes must match real route paths (see routes_*.go): user management
+	// lives under /users/..., settings writes under /settings/..., not /api/*.
 	actionsToLog := []string{
 		"/login",
 		"/logout",
@@ -380,6 +393,17 @@ func shouldLogAction(path string) bool {
 		"/api/users",
 		"/api/plugins",
 		"/api/config",
+		// Sensitive writes previously missing from the prefix whitelist.
+		"/users/",           // add/edit/toggle/password/force-logout/session revoke
+		"/settings/",        // password, malleable, backup/restore, JWT, TOTP, certs
+		"/api/listeners",    // listener create/update/enable/disable/delete
+		"/api/api-keys",     // API key create/revoke/rotate
+		"/api/scripts",      // script save/delete/execute
+		"/api/automation/",  // automation rule CRUD
+		"/api/webhooks",     // webhook create/delete/test
+		"/api/update-check", // includes admin hot-update
+		"/extc2/",           // external C2 channel config
+		"/integrations",     // integration create/update/delete/toggle
 	}
 	for _, action := range actionsToLog {
 		if len(path) >= len(action) && path[:len(action)] == action {
@@ -405,6 +429,18 @@ func getActionType(path string) string {
 	}
 	if len(path) >= 6 && path[:6] == "/tasks" {
 		return "view_tasks"
+	}
+	if len(path) >= 7 && path[:7] == "/users/" {
+		return "user_management"
+	}
+	if len(path) >= 10 && path[:10] == "/settings/" {
+		return "settings_change"
+	}
+	if len(path) >= 14 && path[:14] == "/api/listeners" {
+		return "listener_manage"
+	}
+	if len(path) >= 13 && path[:13] == "/api/api-keys" {
+		return "api_key_manage"
 	}
 	return "api_access"
 }
