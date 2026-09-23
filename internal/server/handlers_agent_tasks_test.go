@@ -118,8 +118,8 @@ func TestAPI_BulkTaskStatus_Success(t *testing.T) {
 		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
 	}
 	var resp struct {
-		Success bool                       `json:"success"`
-		Data    map[uint]db.Task           `json:"data"`
+		Success bool             `json:"success"`
+		Data    map[uint]db.Task `json:"data"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
@@ -216,5 +216,93 @@ func TestHandleTaskHistory_Renders(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "badcommand") {
 		t.Fatalf("expected failed task in rendered page, body=%s", w.Body.String())
+	}
+}
+
+func TestHandleTaskHistory_KeywordSearch(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{}
+	cfg.Server.OfflineThreshold = 60
+	s := &Server{db: testutil.SetupTestDB(t), cfg: cfg}
+
+	match := seedTask(t, s, "agent-1", "shell", "whoami", "completed")
+	match.Result = "corp\\admin"
+	if err := s.db.Save(&match).Error; err != nil {
+		t.Fatalf("save result: %v", err)
+	}
+	seedTask(t, s, "agent-1", "shell", "hostname", "completed")
+	fail := seedTask(t, s, "agent-1", "shell", "netstat", "failed")
+	fail.Error = "access denied by edr"
+	if err := s.db.Save(&fail).Error; err != nil {
+		t.Fatalf("save error: %v", err)
+	}
+
+	cases := []struct {
+		q    string
+		want string
+	}{
+		{"whoami", "whoami"},         // command
+		{"corp\\admin", "whoami"},    // result body
+		{"access denied", "netstat"}, // error body
+	}
+	for _, tc := range cases {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request, _ = http.NewRequest(http.MethodGet, "/tasks?q="+tc.q, nil)
+		s.handleTaskHistory(c)
+		if w.Code != http.StatusOK {
+			t.Fatalf("q=%q: expected 200, got %d; body=%s", tc.q, w.Code, w.Body.String())
+		}
+		if !strings.Contains(w.Body.String(), tc.want) {
+			t.Fatalf("q=%q: expected %q in body, got %s", tc.q, tc.want, w.Body.String())
+		}
+	}
+
+	// Non-matching keyword must not return unrelated rows.
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodGet, "/tasks?q=zzz-no-match", nil)
+	s.handleTaskHistory(c)
+	if strings.Contains(w.Body.String(), "whoami") || strings.Contains(w.Body.String(), "netstat") {
+		t.Fatalf("q=zzz-no-match should return no task commands, body=%s", w.Body.String())
+	}
+}
+
+func TestHandleTaskHistory_ClaimedByFilter(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{}
+	cfg.Server.OfflineThreshold = 60
+	s := &Server{db: testutil.SetupTestDB(t), cfg: cfg}
+
+	mine := seedTask(t, s, "agent-1", "shell", "mine-cmd", "pending")
+	mine.OperatorClaimedBy = "alice"
+	if err := s.db.Save(&mine).Error; err != nil {
+		t.Fatalf("save claim: %v", err)
+	}
+	seedTask(t, s, "agent-1", "shell", "unclaimed-cmd", "pending")
+
+	// claimed_by=alice
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodGet, "/tasks?claimed_by=alice", nil)
+	s.handleTaskHistory(c)
+	if !strings.Contains(w.Body.String(), "mine-cmd") {
+		t.Fatalf("claimed_by=alice should include mine-cmd, body=%s", w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "unclaimed-cmd") {
+		t.Fatalf("claimed_by=alice should exclude unclaimed-cmd, body=%s", w.Body.String())
+	}
+
+	// claimed_by=me resolves against the session user.
+	w = httptest.NewRecorder()
+	c, _ = gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodGet, "/tasks?claimed_by=me", nil)
+	c.Set("user", "alice")
+	s.handleTaskHistory(c)
+	if !strings.Contains(w.Body.String(), "mine-cmd") {
+		t.Fatalf("claimed_by=me should include alice's task, body=%s", w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "unclaimed-cmd") {
+		t.Fatalf("claimed_by=me should exclude unclaimed-cmd, body=%s", w.Body.String())
 	}
 }

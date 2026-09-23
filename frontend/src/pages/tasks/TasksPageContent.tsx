@@ -13,6 +13,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-indicator";
 import { Badge } from "@/components/ui/badge";
 import { DataState } from "@/components/ui/data-state";
+import { Checkbox } from "@/components/ui/checkbox";
 import OperatorBadge from "@/components/OperatorBadge";
 import { useAppStore } from "@/lib/store";
 import { paths } from "@/lib/api-paths";
@@ -21,9 +22,13 @@ import { csvCell } from "@/lib/csv";
 import { formatTime } from "@/lib/utils";
 import { useVirtualWindow } from "@/lib/hooks/useVirtualWindow";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { useDebounce } from "@/lib/hooks/useDebounce";
 import { POLL } from "@/lib/polling";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { useWS } from "@/lib/wsContext";
+import { SearchInput } from "@/components/SearchInput";
+import SavedViewPicker from "@/components/SavedViewPicker";
+import { CopyButton } from "@/components/ui/copy-button";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,7 +48,7 @@ import {
 } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Ban, Check, ChevronDown, ChevronUp, FileSpreadsheet, Hand, Inbox, Maximize2, RotateCw, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Ban, Check, ChevronDown, ChevronUp, Download, FileSpreadsheet, Hand, Inbox, Maximize2, RotateCw, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import type { Task } from "@/types/task";
 import { getTaskRenderer } from "@/lib/taskRenderers";
 import AIAnalysisButton from "./components/AIAnalysisPanel";
@@ -63,6 +68,10 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
   const [statusFilter, setStatusFilter] = useState("");
   const [agentFilter, setAgentFilter] = useState(searchParams.get("agent_id") || "");
   const [typeFilter, setTypeFilter] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const searchQuery = useDebounce(searchInput, 300);
+  const [claimedFilter, setClaimedFilter] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [detailTask, setDetailTask] = useState<Task | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
@@ -108,16 +117,26 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
     if (statusFilter) params.set("status", statusFilter);
     if (agentFilter) params.set("agent", agentFilter);
     if (typeFilter) params.set("type", typeFilter);
+    if (searchQuery) params.set("q", searchQuery);
+    if (claimedFilter) params.set("claimed_by", claimedFilter);
     api.get(paths.tasks.list(params.toString()), { signal: ac.signal })
       .then((data: Record<string, unknown>) => {
         if (ac.signal.aborted) return;
-        setTasks(firstArray(data, ["tasks", "data", "Tasks"]) as Task[]);
+        const list = firstArray(data, ["tasks", "data", "Tasks"]) as Task[];
+        setTasks(list);
         setTotal(firstNumber(data, ["total", "Total"], 0));
+        // Drop selections that scrolled off / no longer exist after a reload.
+        setSelectedIds((prev) => {
+          if (prev.size === 0) return prev;
+          const live = new Set(list.map((tk) => tk.id));
+          const next = new Set([...prev].filter((id) => live.has(id)));
+          return next.size === prev.size ? prev : next;
+        });
       })
       .catch((e) => {
         if (ac.signal.aborted) return;
         if (background) {
-          // Keep existing data on background poll failure — don't blank the table or spam toasts.
+          // Keep existing data on background poll failure �?don't blank the table or spam toasts.
           return;
         }
         setTasks([]);
@@ -129,7 +148,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
       .finally(() => {
         if (!ac.signal.aborted) setLoading(false);
       });
-  }, [page, statusFilter, agentFilter, typeFilter, t]);
+  }, [page, statusFilter, agentFilter, typeFilter, searchQuery, claimedFilter, t]);
 
   useEffect(() => { loadTasks(); }, [loadTasks]);
 
@@ -220,6 +239,91 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
     } catch { toast.error(t("tasks.toast_release_failed")); }
   }, [loadTasks, t]);
 
+  const toggleSelect = useCallback((id: number, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const allOnPageSelected = tasks.length > 0 && tasks.every((tk) => selectedIds.has(tk.id));
+  const toggleSelectAll = useCallback((checked: boolean) => {
+    setSelectedIds(checked ? new Set(tasks.map((tk) => tk.id)) : new Set());
+  }, [tasks]);
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  /** Cancel every selected still-cancellable task; failures are aggregated. */
+  const handleBulkCancel = useCallback(async () => {
+    const targets = tasks.filter(
+      (tk) => selectedIds.has(tk.id)
+        && (tk.status === "pending" || tk.status === "running" || tk.status === "sent" || tk.status === "pending_approval"),
+    );
+    if (targets.length === 0) {
+      toast.info(t("tasks.bulk_no_cancellable"));
+      return;
+    }
+    let ok = 0;
+    let fail = 0;
+    await Promise.all(targets.map((tk) =>
+      api.post(paths.agents.cancelTask(tk.agent_id, tk.id))
+        .then(() => { ok += 1; })
+        .catch(() => { fail += 1; }),
+    ));
+    if (fail > 0) toast.error(t("tasks.bulk_cancel_partial", { ok, fail }));
+    else toast.success(t("tasks.bulk_cancel_done", { ok }));
+    clearSelection();
+    loadTasks();
+  }, [tasks, selectedIds, loadTasks, clearSelection, t]);
+
+  /** Rerun every selected terminal task (completed/failed/cancelled). */
+  const handleBulkRerun = useCallback(async () => {
+    const targets = tasks.filter(
+      (tk) => selectedIds.has(tk.id)
+        && (tk.status === "completed" || tk.status === "failed" || tk.status === "cancelled"),
+    );
+    if (targets.length === 0) {
+      toast.info(t("tasks.bulk_no_rerunnable"));
+      return;
+    }
+    let ok = 0;
+    let fail = 0;
+    await Promise.all(targets.map((tk) =>
+      api.post(paths.agents.rerunTask(tk.agent_id, tk.id))
+        .then(() => { ok += 1; })
+        .catch(() => { fail += 1; }),
+    ));
+    if (fail > 0) toast.error(t("tasks.bulk_rerun_partial", { ok, fail }));
+    else toast.success(t("tasks.bulk_rerun_done", { ok }));
+    clearSelection();
+    loadTasks();
+  }, [tasks, selectedIds, loadTasks, clearSelection, t]);
+
+  const applySavedState = useCallback((state: Record<string, unknown>) => {
+    if (typeof state.status === "string") setStatusFilter(state.status);
+    if (typeof state.agent === "string") setAgentFilter(state.agent);
+    if (typeof state.type === "string") setTypeFilter(state.type);
+    if (typeof state.q === "string") setSearchInput(state.q);
+    if (typeof state.claimed === "string") setClaimedFilter(state.claimed);
+    if (typeof state.sortKey === "string" && (state.sortKey === "created_at" || state.sortKey === "type" || state.sortKey === "command" || state.sortKey === "status")) {
+      setSortKey(state.sortKey);
+    }
+    if (state.sortDir === "asc" || state.sortDir === "desc") setSortDir(state.sortDir);
+    setPage(1);
+  }, []);
+
+  const getSavedState = useCallback(() => ({
+    status: statusFilter,
+    agent: agentFilter,
+    type: typeFilter,
+    q: searchInput,
+    claimed: claimedFilter,
+    sortKey,
+    sortDir,
+  }), [statusFilter, agentFilter, typeFilter, searchInput, claimedFilter, sortKey, sortDir]);
+
   const TASK_ROW_H = 52;
   const {
     scrollRef,
@@ -285,7 +389,16 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
       )}
 
       <PageToolbar>
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col sm:flex-row gap-3 sm:flex-wrap sm:items-center">
+          <SearchInput
+            id="task-search"
+            value={searchInput}
+            onChange={setSearchInput}
+            onClear={() => { setSearchInput(""); setPage(1); }}
+            placeholder={t("tasks.search_placeholder")}
+            className="w-full sm:w-56"
+            label={t("tasks.search_placeholder")}
+          />
           <Select value={statusFilter || "all"} onValueChange={(val) => { setStatusFilter(val === "all" ? "" : val ?? ""); setPage(1); }}>
             <SelectTrigger aria-label={t("tasks.status_filter")}>
               <SelectValue />
@@ -325,7 +438,31 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
               <SelectItem value="creds">creds</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={claimedFilter || "all"} onValueChange={(val) => { setClaimedFilter(val === "all" ? "" : val ?? ""); setPage(1); }}>
+            <SelectTrigger aria-label={t("tasks.claimed_filter")} className="min-w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("tasks.claimed_all")}</SelectItem>
+              <SelectItem value="me">{t("tasks.claimed_mine")}</SelectItem>
+            </SelectContent>
+          </Select>
+          <SavedViewPicker page="tasks" getState={getSavedState} applyState={applySavedState} />
         </div>
+        {selectedIds.size > 0 && (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
+            <span className="text-xs font-medium text-primary">{t("tasks.selected_count", { n: selectedIds.size })}</span>
+            <Button size="sm" variant="secondary" onClick={() => void handleBulkCancel()}>
+              <Ban className="size-3.5" /> {t("tasks.bulk_cancel")}
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => void handleBulkRerun()}>
+              <RotateCw className="size-3.5" /> {t("tasks.bulk_rerun")}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={clearSelection}>
+              <X className="size-3.5" /> {t("tasks.clear_selection")}
+            </Button>
+          </div>
+        )}
       </PageToolbar>
 
       <Card className="overflow-hidden">
@@ -353,6 +490,14 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
           <Table className="text-sm">
             <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90 border-b border-border">
               <TableRow>
+                <TableHead className="w-10 py-3 px-3">
+                  <Checkbox
+                    aria-label={t("tasks.select_all")}
+                    checked={allOnPageSelected}
+                    indeterminate={selectedIds.size > 0 && !allOnPageSelected}
+                    onCheckedChange={(v) => toggleSelectAll(v !== false)}
+                  />
+                </TableHead>
                 <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal min-w-[140px] cursor-pointer select-none" tabIndex={0} role="columnheader" aria-sort={sortKey === "created_at" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} onClick={() => toggleSort("created_at")} onKeyDown={handleSortKeyDown("created_at")}>
                   {t("tasks.col_time")} {sortIcon("created_at")}
                 </TableHead>
@@ -375,15 +520,32 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
             <TableBody className="divide-y divide-border">
               {windowingActive && offsetTop > 0 && (
                 <TableRow aria-hidden className="hover:bg-transparent">
-                  <TableCell colSpan={9} style={{ height: offsetTop, padding: 0, border: 0 }} />
+                  <TableCell colSpan={10} style={{ height: offsetTop, padding: 0, border: 0 }} />
                 </TableRow>
               )}
               {visibleTasks.map((task) => (
-                <TaskRow key={task.id} task={task} expanded={expandedRows.has(task.id)} onToggle={toggleRow} onDetail={setDetailTask} onCancel={handleCancel} onRerun={handleRerun} onApprove={handleApprove} onReject={handleReject} onClaim={handleClaim} onRelease={handleRelease} getAgentName={getAgentName} getTypeBadge={getTypeBadge} getStatusBadge={getStatusBadge} />
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  expanded={expandedRows.has(task.id)}
+                  selected={selectedIds.has(task.id)}
+                  onToggleSelect={toggleSelect}
+                  onToggle={toggleRow}
+                  onDetail={setDetailTask}
+                  onCancel={handleCancel}
+                  onRerun={handleRerun}
+                  onApprove={handleApprove}
+                  onReject={handleReject}
+                  onClaim={handleClaim}
+                  onRelease={handleRelease}
+                  getAgentName={getAgentName}
+                  getTypeBadge={getTypeBadge}
+                  getStatusBadge={getStatusBadge}
+                />
               ))}
               {windowingActive && totalHeight - offsetTop - visibleTasks.length * TASK_ROW_H > 0 && (
                 <TableRow aria-hidden className="hover:bg-transparent">
-                  <TableCell colSpan={9} style={{ height: totalHeight - offsetTop - visibleTasks.length * TASK_ROW_H, padding: 0, border: 0 }} />
+                  <TableCell colSpan={10} style={{ height: totalHeight - offsetTop - visibleTasks.length * TASK_ROW_H, padding: 0, border: 0 }} />
                 </TableRow>
               )}
             </TableBody>
@@ -408,9 +570,11 @@ export default function TasksPageWrapper({ embedded = false }: { embedded?: bool
   );
 }
 
-const TaskRow = memo(function TaskRow({ task, expanded, onToggle, onDetail, onCancel, onRerun, onApprove, onReject, onClaim, onRelease, getAgentName, getTypeBadge, getStatusBadge }: {
+const TaskRow = memo(function TaskRow({ task, expanded, selected, onToggleSelect, onToggle, onDetail, onCancel, onRerun, onApprove, onReject, onClaim, onRelease, getAgentName, getTypeBadge, getStatusBadge }: {
   task: Task;
   expanded: boolean;
+  selected: boolean;
+  onToggleSelect: (id: number, checked: boolean) => void;
   onToggle: (id: number) => void;
   onDetail: (task: Task) => void;
   onCancel: (task: Task) => void;
@@ -427,7 +591,18 @@ const TaskRow = memo(function TaskRow({ task, expanded, onToggle, onDetail, onCa
   const { t } = useI18n();
   return (
     <>
-      <TableRow className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => onDetail(task)}>
+      <TableRow
+        className="hover:bg-muted/50 transition-colors cursor-pointer"
+        onClick={() => onDetail(task)}
+        aria-selected={selected}
+      >
+        <TableCell className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
+          <Checkbox
+            aria-label={t("tasks.select_item")}
+            checked={selected}
+            onCheckedChange={(v) => onToggleSelect(task.id, v === true)}
+          />
+        </TableCell>
         <TableCell className="max-sm:hidden py-3 px-4 font-mono text-xs text-muted-foreground whitespace-nowrap">{task.created_at ? formatTime(task.created_at) : "-"}</TableCell>
         <TableCell className="max-sm:hidden py-3 px-4"><div className="font-medium text-foreground text-sm">{getAgentName(task.agent_id) || task.agent_id?.substring(0, 8)}</div></TableCell>
         <TableCell className="max-sm:hidden py-3 px-4">{getTypeBadge(task.type)}</TableCell>
@@ -504,11 +679,17 @@ const TaskRow = memo(function TaskRow({ task, expanded, onToggle, onDetail, onCa
       </TableRow>
       {expanded && task.result && (
         <TableRow>
-          <TableCell colSpan={9} className="px-4 py-3 bg-card">
+          <TableCell colSpan={10} className="px-4 py-3 bg-card">
             <div className="relative">
-               <Button variant="ghost" size="xs" onClick={() => onDetail(task)} className="absolute top-2 right-2 text-xs text-muted-foreground hover:text-foreground bg-secondary px-2 py-1 rounded">
-                <Maximize2 className="size-4" />{t("tasks.full_view")}
-              </Button>
+              <div className="absolute top-2 right-2 flex items-center gap-1">
+                <CopyButton text={task.result} label={t("tasks.detail_output")} size="xs" title={t("common.copy")} className="bg-secondary text-muted-foreground hover:text-foreground px-2 py-1 rounded" />
+                <Button variant="ghost" size="xs" onClick={() => downloadText(task.result, `task_${task.id}_result.txt`)} className="text-xs text-muted-foreground hover:text-foreground bg-secondary px-2 py-1 rounded" aria-label={t("common.download")}>
+                  <Download className="size-3.5" />
+                </Button>
+                <Button variant="ghost" size="xs" onClick={() => onDetail(task)} className="text-xs text-muted-foreground hover:text-foreground bg-secondary px-2 py-1 rounded">
+                  <Maximize2 className="size-4" />{t("tasks.full_view")}
+                </Button>
+              </div>
               <TaskResultView type={task.type} result={task.result} />
               <AIAnalysisButton taskId={Number(task.id) || 0} />
             </div>
@@ -561,7 +742,15 @@ function TaskDetailModal({ task, onClose, getAgentName, getStatusBadge, getTypeB
           </div>
           {task.result && (
             <div>
-              <h3 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">{t("tasks.detail_output")}</h3>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("tasks.detail_output")}</h3>
+                <div className="flex items-center gap-1">
+                  <CopyButton text={task.result} label={t("tasks.detail_output")} size="xs" title={t("common.copy")} className="text-muted-foreground hover:text-foreground" />
+                  <Button variant="ghost" size="xs" onClick={() => downloadText(task.result, `task_${task.id}_result.txt`)} className="text-xs text-muted-foreground hover:text-foreground" aria-label={t("common.download")}>
+                    <Download className="size-3.5" />
+                  </Button>
+                </div>
+              </div>
               <div className="bg-card rounded-lg p-4 max-h-96 overflow-y-auto">
                 <TaskResultView type={task.type} result={task.result} />
               </div>

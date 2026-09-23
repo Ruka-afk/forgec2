@@ -18,6 +18,7 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 	filterStatus := c.Query("status")
 	filterAgent := c.Query("agent")
 	filterQuery := c.Query("q")
+	filterClaimed := c.Query("claimed_by")
 
 	// Build query with filters
 	silentTypes := []string{"screen_stream_start", "screen_stream_stop", "ls"}
@@ -35,7 +36,21 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 		query = query.Where("agent_id = ?", filterAgent)
 	}
 	if filterQuery != "" {
-		query = query.Where("command LIKE ? ESCAPE '\\'", "%"+escapeLike(filterQuery)+"%")
+		// Keyword search spans command + result + error so operators can find
+		// failed output without opening every row.
+		like := "%" + escapeLike(filterQuery) + "%"
+		query = query.Where(
+			"(command LIKE ? ESCAPE '\\' OR result LIKE ? ESCAPE '\\' OR error LIKE ? ESCAPE '\\')",
+			like, like, like,
+		)
+	}
+	if filterClaimed != "" {
+		// "me" resolves to the calling operator; anything else is a username.
+		claimant := filterClaimed
+		if filterClaimed == "me" {
+			claimant = c.GetString("user")
+		}
+		query = query.Where("operator_claimed_by = ?", claimant)
 	}
 
 	var total int64
@@ -90,6 +105,7 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 		"FilterStatus":   filterStatus,
 		"FilterAgent":    filterAgent,
 		"FilterQuery":    filterQuery,
+		"FilterClaimed":  filterClaimed,
 		"HasFailedTasks": failedCount > 0,
 		"TaskTypes":      taskTypes,
 		"Agents":         agents,
