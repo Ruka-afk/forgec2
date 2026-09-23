@@ -12,7 +12,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/forgec2/forgec2/internal/util"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -698,23 +697,8 @@ func (s *Server) sendOperatorSyncSnapshot(conn *websocket.Conn) {
 // Requires a valid forgec2_session cookie (unlike agent beacons which use the
 // transport envelope for auth).
 func (s *Server) handleOperatorWS(c *gin.Context) {
-	tokenStr, err := c.Cookie("forgec2_session")
-	if err != nil || tokenStr == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "no session token"})
-		return
-	}
-	claims, err := middleware.ParseToken(tokenStr)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "invalid token"})
-		return
-	}
-	revoked, err := s.isSessionRevoked(tokenStr)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "auth_unavailable"})
-		return
-	}
-	if revoked {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "session_revoked"})
+	claims, tokenStr, ok := s.authenticateOperatorWS(c)
+	if !ok {
 		return
 	}
 
@@ -752,6 +736,13 @@ func (s *Server) handleOperatorWS(c *gin.Context) {
 		defer s.wg.Done()
 		session.writePump()
 	}()
+
+	// Re-check force-logout/disable/revoke while the socket is live so an
+	// admin action during the session actually disconnects the operator.
+	s.startWSAuthRecheck(tokenStr, claims, session.done, func() {
+		session.closeOnce.Do(func() { close(session.done) })
+		conn.Close()
+	})
 
 	defer func() {
 		session.closeOnce.Do(func() { close(session.done) })

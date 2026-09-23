@@ -9,7 +9,6 @@ import (
 
 	"github.com/forgec2/forgec2/internal/crypto"
 	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
@@ -26,27 +25,10 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 		return
 	}
 
-	tokenStr, err := c.Cookie("forgec2_session")
-	if err != nil || tokenStr == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "no session token"})
+	claims, tokenStr, ok := s.authenticateOperatorWS(c)
+	if !ok {
 		return
 	}
-	claims, err := middleware.ParseToken(tokenStr)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "invalid token"})
-		return
-	}
-
-	revoked, err := s.isSessionRevoked(tokenStr)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "auth_unavailable"})
-		return
-	}
-	if revoked {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "session_revoked"})
-		return
-	}
-
 	username := claims.Username
 
 	conn, err := s.wsUpgrader.Upgrade(c.Writer, c.Request, nil)
@@ -80,6 +62,11 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 	}
 	s.wsClients[conn] = client
 	s.wsMutex.Unlock()
+
+	// Re-check force-logout/disable/revoke while the socket is live.
+	s.startWSAuthRecheck(tokenStr, claims, client.done, func() {
+		conn.Close()
+	})
 
 	// Writer goroutine: drains the buffered channel and writes to the socket.
 	// Tracked by the shutdown WaitGroup: hijacked WS conns are invisible to
