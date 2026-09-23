@@ -30,9 +30,9 @@ const (
 	// registration secret that binds to exactly one agent on first check-in
 	// (see bindRegSecret), so re-serving an older build to a second operator
 	// would hand out an implant that can never register.
-	HostedPayloadTTL        = 24 * time.Hour   // hosted one-liner payload retention
-	MaxJSONBodySize         = 2 * 1024 * 1024  // 2 MB max for JSON/form request bodies
-	MaxPendingTasksPerAgent = 50               // max pending tasks per agent before rejecting new ones
+	HostedPayloadTTL        = 24 * time.Hour  // hosted one-liner payload retention
+	MaxJSONBodySize         = 2 * 1024 * 1024 // 2 MB max for JSON/form request bodies
+	MaxPendingTasksPerAgent = 50              // max pending tasks per agent before rejecting new ones
 	// AbortReserveSlots are extra headroom slots beyond MaxPendingTasksPerAgent
 	// reserved for abort injections: cancelling a running task must be able to
 	// queue its abort even when the agent's backlog is full.
@@ -41,15 +41,16 @@ const (
 	// before auto-reject. Stale approvals are a confused-deputy risk (the
 	// world changed since the operator hit "create").
 	ApprovalExpiryDuration = 24 * time.Hour
-	MaxCommandLength        = 10000            // max characters in a command string
-	MaxNotesLength          = 5000             // max characters in agent notes/tags
-	MaxChatMessageBytes     = 8 * 1024         // max bytes in a chat message
-	MaxShellcodeSize        = 10 * 1024 * 1024 // 10 MB max decoded shellcode payload
-	MaxTechniqueLength      = 64               // max characters in an injection/spawn technique name
-	MaxTargetLength         = 128              // max characters in a spawn target executable
+	MaxCommandLength       = 10000            // max characters in a command string
+	MaxNotesLength         = 5000             // max characters in agent notes/tags
+	MaxChatMessageBytes    = 8 * 1024         // max bytes in a chat message
+	MaxShellcodeSize       = 10 * 1024 * 1024 // 10 MB max decoded shellcode payload
+	MaxTechniqueLength     = 64               // max characters in an injection/spawn technique name
+	MaxTargetLength        = 128              // max characters in a spawn target executable
 
 	// ─── Map Size Limits ───
 	MaxWSConnections     = 256              // max concurrent WebSocket dashboard clients
+	MaxOperatorWSConns   = 64               // max concurrent operator /ws/operator sockets
 	MaxExtC2QueuePerChan = 200              // max queued tasks per ext C2 channel before dropping
 	MaxBuildJobs         = 50               // max concurrent build jobs
 	MaxScreenMonitors    = 100              // max screen monitor registrations
@@ -57,6 +58,11 @@ const (
 	MaxExtraListeners    = 64               // max dynamically created listeners
 	MaxDomainFrontStatus = 128              // max domain fronting entries
 	StaleMapCleanupAge   = 30 * time.Minute // clean map entries older than this
+
+	// Public (unauthenticated) route budgets — IP-based, independent of the
+	// failure lockout so even successful requests cannot be flooded.
+	PublicDownloadRate = 60 // max public payload/stage downloads per IP per window
+	LoginRequestRate   = 10 // max login POSTs per IP per window (lockout handles failures)
 
 	// SOCKS Relay
 	SocksMaxFrameSize   = 64 * 1024       // 64 KB per relay frame
@@ -289,8 +295,8 @@ const (
 	TaskWorkerPoolSize      = 32
 
 	// ─── Agent Offline / Stale ───
-	DefaultOfflineThresholdSec = 60
-	StaleThresholdMultiplier   = 3
+	DefaultOfflineThresholdSec  = 60
+	StaleThresholdMultiplier    = 3
 	DefaultCleanupRetentionDays = 30
 	// Retention tiers: forensic tables floor at 90d / default 365d; terminal
 	// task auto-delete floors at 90d regardless of ops retention.

@@ -614,6 +614,14 @@ func (t *operatorSessionTracker) ActiveOperatorsForAgent(agentID string, exclude
 	return names
 }
 
+// TotalCount returns the number of open operator sockets (including ones
+// that have missed heartbeats but have not yet been reaped).
+func (t *operatorSessionTracker) TotalCount() int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return len(t.sessions)
+}
+
 // ActiveOperatorCount returns the number of operators connected and seen
 // within operatorHeartbeatTimeout.
 func (t *operatorSessionTracker) ActiveOperatorCount() int {
@@ -699,6 +707,13 @@ func (s *Server) sendOperatorSyncSnapshot(conn *websocket.Conn) {
 func (s *Server) handleOperatorWS(c *gin.Context) {
 	claims, tokenStr, ok := s.authenticateOperatorWS(c)
 	if !ok {
+		return
+	}
+
+	// Cap concurrent operator sockets: a runaway reconnect loop (or scripted
+	// flood of valid sessions) must not exhaust FDs / writer goroutines.
+	if s.operatorSessions.TotalCount() >= MaxOperatorWSConns {
+		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "operator_ws_limit"})
 		return
 	}
 

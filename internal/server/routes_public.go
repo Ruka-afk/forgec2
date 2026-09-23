@@ -10,16 +10,22 @@ func (s *Server) registerPublicRoutes() {
 	// Login endpoints sit on the operator plane: the IP allowlist and mTLS
 	// gates apply before any credential processing. Beacon, payload,
 	// phishing and health routes below stay world-reachable by design.
+	// The login rate limiter bounds request volume per IP; the failure
+	// lockout inside handleLogin still governs bad-password attempts.
+	loginRateLimiter := middleware.NewRateLimiter(s.ctx, LoginRequestRate, LoginRateWindow)
 	s.router.GET("/login", s.operatorPlaneGuard(), s.handleLoginPage)
-	s.router.POST("/login", s.operatorPlaneGuard(), middleware.RequestBodyLimit(MaxJSONBodySize), s.handleLogin)
-	s.router.POST("/api/login", s.operatorPlaneGuard(), middleware.RequestBodyLimit(MaxJSONBodySize), s.handleLogin)
+	s.router.POST("/login", s.operatorPlaneGuard(), loginRateLimiter.Limit(), middleware.RequestBodyLimit(MaxJSONBodySize), s.handleLogin)
+	s.router.POST("/api/login", s.operatorPlaneGuard(), loginRateLimiter.Limit(), middleware.RequestBodyLimit(MaxJSONBodySize), s.handleLogin)
 	healthRateLimiter := middleware.NewRateLimiter(s.ctx, 30, time.Minute)
 	s.router.GET("/health", healthRateLimiter.Limit(), s.handleHealthCheck)
 	s.router.GET("/ready", healthRateLimiter.Limit(), s.handleReadyCheck)
 	s.router.GET("/lang/set", s.handleSetLanguage)
 	langRateLimiter := middleware.NewRateLimiter(s.ctx, 10, time.Minute)
 	s.router.POST("/lang/set", middleware.RequestBodyLimit(MaxJSONBodySize), langRateLimiter.Limit(), s.handleSetLanguage)
-	s.router.GET("/payloads/:id/:filename", s.handleServePayload)
+	// Public download paths are world-reachable by design (implants fetch
+	// them) but must not be hammerable into disk/CPU exhaustion.
+	downloadRateLimiter := middleware.NewRateLimiter(s.ctx, PublicDownloadRate, time.Minute)
+	s.router.GET("/payloads/:id/:filename", downloadRateLimiter.Limit(), s.handleServePayload)
 	// Public phishing landing (credential capture) — no auth by design
 	s.router.GET("/phishing/l/:token", s.handlePhishingLanding)
 	s.router.POST("/phishing/l/:token", middleware.RequestBodyLimit(MaxJSONBodySize), s.handlePhishingLanding)

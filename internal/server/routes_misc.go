@@ -22,7 +22,8 @@ func (s *Server) registerMiscRoutes(auth *gin.RouterGroup) {
 		miscWrite.POST("/api/agents/:id/profile-rotate", s.handleProfileRotate)
 	}
 
-	s.router.GET("/stage/:token", s.handleServeStage)
+	stageDownloadRate := middleware.NewRateLimiter(s.ctx, PublicDownloadRate, time.Minute)
+	s.router.GET("/stage/:token", stageDownloadRate.Limit(), s.handleServeStage)
 	// Screenshots sit on s.router (blob path) rather than the auth group, so
 	// they must re-apply the operator-plane guard and a dedicated rate limit —
 	// AuthRequired alone left CIDR/mTLS allowlist and per-user budget bypassed.
