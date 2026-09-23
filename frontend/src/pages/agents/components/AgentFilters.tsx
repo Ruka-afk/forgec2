@@ -96,15 +96,19 @@ export function AgentFilters({
               <span className="hidden sm:inline">{t("agents.columns")}</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[160px]">
-              {Object.entries(visibleCols).map(([key, vis]) => (
-                <DropdownMenuItem key={key} onClick={() => setVisibleCols((p) => ({ ...p, [key]: !vis }))} className="capitalize">
+              {Object.entries(visibleCols).map(([key, vis]) => {
+                const labelKey = key === "username" ? "agents.col_user" : `agents.col_${key}`;
+                const label = t(labelKey);
+                return (
+                <DropdownMenuItem key={key} onClick={() => setVisibleCols((p) => ({ ...p, [key]: !vis }))}>
                   <Checkbox
                     checked={vis}
                     onCheckedChange={(checked) => setVisibleCols((p) => ({ ...p, [key]: !!checked }))}
                   />
-                  <span>{key.replace("_", " ")}</span>
+                  <span>{label !== labelKey ? label : key.replace("_", " ")}</span>
                 </DropdownMenuItem>
-              ))}
+                );
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
           <div className="hidden sm:flex items-center gap-1.5 ml-auto text-(--fs-xs-sm)">

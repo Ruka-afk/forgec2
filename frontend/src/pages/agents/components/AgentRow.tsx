@@ -231,6 +231,20 @@ export const AgentRow = memo(function AgentRow({
         )}
       </TableCell>
       )}
+      {visibleCols.sleep && (
+      <TableCell className="py-1 px-2 text-xs font-mono text-muted-foreground text-right max-sm:hidden">
+        {typeof beacon.current_interval === "number" && beacon.current_interval > 0
+          ? `${beacon.current_interval}s`
+          : "-"}
+      </TableCell>
+      )}
+      {visibleCols.jitter && (
+      <TableCell className="py-1 px-2 text-xs font-mono text-muted-foreground text-right max-sm:hidden">
+        {typeof beacon.current_jitter === "number" && beacon.current_jitter >= 0
+          ? `${beacon.current_jitter}%`
+          : "-"}
+      </TableCell>
+      )}
       {visibleCols.status && (
       <TableCell className="py-1 px-2">
         <StatusBadge status={status} variant="dot" size="sm" pulse={status === "online"} />

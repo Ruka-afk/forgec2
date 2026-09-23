@@ -22,6 +22,7 @@ export function useAgentFilters(beacons: Beacon[]) {
   const [visibleCols, setVisibleCols] = useState<Record<string, boolean>>({
     hostname: true, username: true, os: true, ip: true, last_seen: true,
     window: true, lock: true, tasks: true, status: true, version: true,
+    sleep: true, jitter: true,
   });
 
   useEffect(() => { setPage(1); }, [searchInput]);

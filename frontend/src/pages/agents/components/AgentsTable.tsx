@@ -109,6 +109,12 @@ export default memo(function AgentsTable(props: AgentsTableProps) {
             <TableHead className="text-center py-3 px-3 sm:py-3.5 sm:px-4 max-sm:hidden">{t("agents.col_tasks")}</TableHead>
             )}
             {visibleCols.version && <TableHead className="text-left py-3 px-3 sm:py-3.5 sm:px-4 max-sm:hidden">{t("agents.col_version")}</TableHead>}
+            {visibleCols.sleep && (
+            <TableHead className="text-right py-3 px-3 sm:py-3.5 sm:px-4 max-sm:hidden">{t("agents.col_sleep")}</TableHead>
+            )}
+            {visibleCols.jitter && (
+            <TableHead className="text-right py-3 px-3 sm:py-3.5 sm:px-4 max-sm:hidden">{t("agents.col_jitter")}</TableHead>
+            )}
             {visibleCols.status && sortableHead("status", "agents.col_status")}
             <TableHead className="text-right py-3 px-4 sm:py-3.5 sm:px-5">{t("agents.col_actions")}</TableHead>
           </TableRow>
