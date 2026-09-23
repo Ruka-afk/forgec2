@@ -116,6 +116,30 @@ func (s *Server) handleToggleUser(c *gin.Context) {
 		return
 	}
 	user.IsActive = !user.IsActive
+	// Evict the shared auth cache so the change takes effect on the next
+	// request instead of at TTL expiry (up to 5 minutes of stale access).
+	middleware.InvalidateUserCache(user.ID)
+	if !user.IsActive {
+		// Bump ForceLogoutAt AND revoke live session rows in one
+		// transaction. Without the session revoke, a later re-enable +
+		// login clears force_logout_at and pre-disable JWTs would
+		// resurrect (session row never marked revoked).
+		now := time.Now()
+		err := s.db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Model(&user).Update("force_logout_at", now).Error; err != nil {
+				return err
+			}
+			return tx.Model(&db.UserSession{}).
+				Where("user_id = ? AND revoked_at = ?", user.ID, time.Time{}).
+				Update("revoked_at", now).Error
+		})
+		if err != nil {
+			slog.Error("Failed to bump force_logout_at / revoke sessions on disable", "user_id", user.ID, "err", err)
+			respondError(c, http.StatusInternalServerError, "failed to disable user")
+			return
+		}
+		user.ForceLogoutAt = now
+	}
 	status := "enabled"
 	if !user.IsActive {
 		status = "disabled"
@@ -174,6 +198,8 @@ func (s *Server) handleEditUser(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to update user")
 		return
 	}
+	// Role/username changes must not linger in the shared auth cache.
+	middleware.InvalidateUserCache(user.ID)
 	currentUser, _ := c.Get("user")
 	usernameEU, _ := currentUser.(string)
 	s.LogAuditRecord(c, "user_edit", "auth", usernameEU,
@@ -201,12 +227,28 @@ func (s *Server) handleForceLogoutUser(c *gin.Context) {
 		return
 	}
 
-	// Set ForceLogoutAt to now
+	// Set ForceLogoutAt AND revoke every live session row atomically.
+	// Without the session revoke, a later login clears force_logout_at
+	// (handlers_auth.go) and pre-force-logout JWTs would resurrect: the
+	// auth middleware checks force_logout_at before isSessionRevoked, and
+	// the session row was never marked revoked.
 	now := time.Now()
-	if err := s.db.Model(&target).Update("force_logout_at", now).Error; err != nil {
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&target).Update("force_logout_at", now).Error; err != nil {
+			return err
+		}
+		return tx.Model(&db.UserSession{}).
+			Where("user_id = ? AND revoked_at = ?", target.ID, time.Time{}).
+			Update("revoked_at", now).Error
+	})
+	if err != nil {
+		slog.Error("Force logout transaction failed", "user_id", target.ID, "err", err)
 		respondError(c, http.StatusInternalServerError, "failed to force logout user")
 		return
 	}
+	// Evict the shared auth cache: without this the stale cached record
+	// (with the old ForceLogoutAt) keeps sessions alive until TTL expiry.
+	middleware.InvalidateUserCache(target.ID)
 
 	usernameFL, _ := currentUser.(string)
 	s.LogAuditRecord(c, "user_force_logout", "auth", usernameFL,
@@ -259,6 +301,9 @@ func (s *Server) handleDeleteUser(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "Failed to delete user")
 		return
 	}
+	// Evict the shared auth cache: the deleted user's cached record would
+	// otherwise keep their sessions alive until TTL expiry.
+	middleware.InvalidateUserCache(user.ID)
 
 	usernameDU, _ := currentUser.(string)
 	s.LogAuditRecord(c, "user_delete", "auth", usernameDU,
@@ -302,7 +347,10 @@ func (s *Server) handleSetUserPassword(c *gin.Context) {
 		return
 	}
 
-	s.revokeAllUserSessions(uint(id))
+	if err := s.revokeAllUserSessions(uint(id)); err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to revoke sessions")
+		return
+	}
 	currentUser, _ := c.Get("user")
 	usernameSU, _ := currentUser.(string)
 	s.LogAuditRecord(c, "user_password_set", "auth", usernameSU,

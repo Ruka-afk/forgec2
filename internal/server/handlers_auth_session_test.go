@@ -518,7 +518,9 @@ func TestRevokeAllUserSessions(t *testing.T) {
 		}
 	}
 
-	s.revokeAllUserSessions(userID)
+	if err := s.revokeAllUserSessions(userID); err != nil {
+		t.Fatalf("revokeAllUserSessions: %v", err)
+	}
 
 	for i := 0; i < 3; i++ {
 		token := "multi-session-token-" + itoa(i)

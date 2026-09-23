@@ -79,11 +79,16 @@ func (s *Server) revokeSession(token string) bool {
 	return true
 }
 
-func (s *Server) revokeAllUserSessions(userID uint) {
+// revokeAllUserSessions revokes every live session for userID. Returns the
+// underlying error so security-critical callers (force-logout, disable)
+// can fail closed instead of leaving resurrectable session rows behind.
+func (s *Server) revokeAllUserSessions(userID uint) error {
 	if err := s.db.Model(&db.UserSession{}).Where("user_id = ? AND revoked_at = ?", userID, time.Time{}).
 		Update("revoked_at", time.Now()).Error; err != nil {
 		slog.Error("Failed to revoke all user sessions", "user_id", userID, "err", err)
+		return err
 	}
+	return nil
 }
 
 // isSessionRevoked reports whether a session token was revoked. A database
