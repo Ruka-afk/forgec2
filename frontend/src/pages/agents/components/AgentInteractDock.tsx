@@ -84,9 +84,11 @@ export function AgentInteractDock({
 
   // Load the task list as soon as the dock mounts (or the agent changes);
   // WS only pushes events after that, so without this an idle agent would
-  // show an empty list until something new happens.
+  // show an empty list until something new happens. This is the first load,
+  // so it shows progress — the "no tasks" state must not be rendered before
+  // the request lands. Reconnect refreshes (below) stay silent.
   useEffect(() => {
-    void loadTasks(true);
+    void loadTasks();
   }, [loadTasks]);
 
   useEffect(() => {

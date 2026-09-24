@@ -62,6 +62,8 @@ export default function PasswordSprayPage() {
   const [password, setPassword] = useState("");
   const [pickedVault, setPickedVault] = useState("");
   const [vaultPasswords, setVaultPasswords] = useState<{ id: number; label: string; password: string; domain: string }[]>([]);
+  const [vaultLoading, setVaultLoading] = useState(true);
+  const [vaultError, setVaultError] = useState<string | null>(null);
   const [domain, setDomain] = useState("");
   const [dc, setDc] = useState("");
   const [delayMs, setDelayMs] = useState("500");
@@ -76,6 +78,7 @@ export default function PasswordSprayPage() {
 
   useEffect(() => {
     let alive = true;
+    setVaultLoading(true);
     api
       .get<{ vault_entries: { id: number; domain: string; username: string; password: string }[] }>(paths.credentials.list())
       .then((d) => {
@@ -90,8 +93,16 @@ export default function PasswordSprayPage() {
           opts.push({ id: e.id, label: `${e.domain ? `${e.domain}\\` : ""}${e.username || ""}`, password: e.password, domain: e.domain });
         }
         setVaultPasswords(opts.slice(0, 50));
+        setVaultError(null);
       })
-      .catch(() => toast.error(t("spray.vault_load_failed")));
+      .catch(() => {
+        if (!alive) return;
+        setVaultError(t("spray.vault_load_failed"));
+        toast.error(t("spray.vault_load_failed"));
+      })
+      .finally(() => {
+        if (alive) setVaultLoading(false);
+      });
     return () => {
       alive = false;
     };
@@ -205,7 +216,11 @@ export default function PasswordSprayPage() {
                 <SelectValue placeholder={t("spray.vault_pick")} />
               </SelectTrigger>
               <SelectContent>
-                {vaultPasswords.length === 0 ? (
+                {vaultLoading ? (
+                  <div className="px-2 py-1.5 text-sm text-muted-foreground">{t("common.loading")}</div>
+                ) : vaultError ? (
+                  <div className="px-2 py-1.5 text-sm text-destructive">{t("spray.vault_load_failed")}</div>
+                ) : vaultPasswords.length === 0 ? (
                   <div className="px-2 py-1.5 text-sm text-muted-foreground">{t("spray.vault_empty")}</div>
                 ) : (
                   vaultPasswords.map((o) => (

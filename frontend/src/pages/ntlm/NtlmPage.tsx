@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
+import { DataError } from "@/components/ui/data-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { IconBadge } from "@/components/ui/icon-badge";
 import { ErrorState } from "@/components/ui/error-state";
@@ -49,7 +50,7 @@ export default function NtlmPage() {
   });
   const agents = (agentsData?.agents || agentsData || []) as Agent[];
 
-  const { data: relayData, refresh: loadRelayStatus } = useApiResource<{ active: Record<string, unknown>[]; count: number; running: boolean }>({
+  const { data: relayData, loading: relayLoading, error: relayError, refresh: loadRelayStatus } = useApiResource<{ active: Record<string, unknown>[]; count: number; running: boolean }>({
     fetcher: async () => {
       const data = await api.get<{ active: Record<string, unknown>[]; count: number; running: boolean }>("/ntlm/relay_status");
       return data;
@@ -59,7 +60,6 @@ export default function NtlmPage() {
     errorMessage: t("ntlm.toast.relay_status_failed"),
   });
   const relayStatus = relayData ?? { active: [], count: 0, running: false };
-
   const getAgentId = (a: Agent) => a.id || "";
   const getHostname = (a: Agent) => a.hostname || "";
   const getIP = (a: Agent) => a.ip || "";
@@ -278,16 +278,32 @@ export default function NtlmPage() {
           </div>
 
           <div className="mb-4 flex items-center gap-x-3">
-            <StatusDot tone={relayStatus.running ? "success" : "muted"} size="md" pulse={relayStatus.running} />
-            <span className="text-sm font-medium text-foreground">
-              {relayStatus.running ? `${relayStatus.count} ${t("ntlm.sessions_active")}` : t("ntlm.sessions_inactive")}
-            </span>
+            {relayLoading ? (
+              <>
+                <Spinner size="sm" />
+                <span className="text-sm text-muted-foreground">{t("common.loading")}</span>
+              </>
+            ) : relayError ? (
+              <>
+                <StatusDot tone="destructive" size="md" />
+                <span className="text-sm font-medium text-destructive">{t("ntlm.relay_status_unknown")}</span>
+              </>
+            ) : (
+              <>
+                <StatusDot tone={relayStatus.running ? "success" : "muted"} size="md" pulse={relayStatus.running} />
+                <span className="text-sm font-medium text-foreground">
+                  {relayStatus.running ? `${relayStatus.count} ${t("ntlm.sessions_active")}` : t("ntlm.sessions_inactive")}
+                </span>
+              </>
+            )}
               <Button variant="outline" size="sm" onClick={loadRelayStatus} className="ml-auto">
               <RefreshCw className="size-4 mr-1" />{t("ntlm.refresh")}
             </Button>
           </div>
 
-          {relayStatus.active.length === 0 ? (
+          {relayError ? (
+            <DataError message={relayError} onRetry={() => { void loadRelayStatus(); }} className="py-8" />
+          ) : relayStatus.active.length === 0 ? (
             <EmptyState icon={Database} title={t("ntlm.no_sessions")} message={t("ntlm.no_sessions_hint")} />
           ) : (
             <Table>

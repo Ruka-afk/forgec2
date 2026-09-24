@@ -36,6 +36,7 @@ export default function ModulesSection() {
   const { t } = useI18n();
   const [modules, setModules] = useState<ModuleInfo[]>([]);
   const [agents, setAgents] = useState<AgentOption[]>([]);
+  const [agentsLoading, setAgentsLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [deploying, setDeploying] = useState(false);
@@ -60,10 +61,13 @@ export default function ModulesSection() {
   }, [t]);
 
   const loadAgents = useCallback(async () => {
+    setAgentsLoading(true);
     try {
       setAgents((await fetchAgentListCached()) as AgentOption[]);
     } catch {
       setAgents([]);
+    } finally {
+      setAgentsLoading(false);
     }
   }, []);
 
@@ -231,7 +235,9 @@ export default function ModulesSection() {
                     <SelectValue placeholder={t("settings.modules.deploy_agent_placeholder")} />
                   </SelectTrigger>
                   <SelectContent>
-                    {agents.length === 0 ? (
+                    {agentsLoading ? (
+                      <SelectItem value="__loading" disabled>{t("common.loading")}</SelectItem>
+                    ) : agents.length === 0 ? (
                       <SelectItem value="__none" disabled>{t("settings.modules.no_agents")}</SelectItem>
                     ) : (
                       agents.map((a) => (

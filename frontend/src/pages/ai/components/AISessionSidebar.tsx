@@ -4,6 +4,7 @@ import { useI18n } from "@/lib/i18n";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Archive, LoaderCircle, MessageSquare, Pencil, Pin, Plus, Search, Trash2 } from "lucide-react";
 
 interface AISession {
@@ -22,6 +23,8 @@ interface AISessionSidebarProps {
   onRename: (id: number, currentTitle: string) => void;
   onNewChat: () => void;
 	onPin?: (id: number, pinned: boolean) => void;
+  sessionsError?: string | null;
+  sessionsLoading?: boolean;
 	onArchive?: (id: number) => void;
   selectingSessionId?: number | null;
 	runStatuses?: Record<number, string>;
@@ -37,7 +40,7 @@ function formatSessionWhen(iso: string): string {
   return d.toLocaleDateString();
 }
 
-export default function AISessionSidebar({ sessions, activeSessionId, onSelect, onDelete, onRename, onNewChat, onPin, onArchive, selectingSessionId, runStatuses = {} }: AISessionSidebarProps) {
+export default function AISessionSidebar({ sessions, sessionsLoading = false, sessionsError = null, activeSessionId, onSelect, onDelete, onRename, onNewChat, onPin, onArchive, selectingSessionId, runStatuses = {} }: AISessionSidebarProps) {
   const { t } = useI18n();
   const { confirm, modal } = useConfirm();
   const [query, setQuery] = useState("");
@@ -88,7 +91,15 @@ export default function AISessionSidebar({ sessions, activeSessionId, onSelect, 
       )}
       {modal}
       <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
-        {filtered.length === 0 ? (
+        {sessionsLoading ? (
+          <div className="space-y-2 p-2">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-11 w-full rounded-xl" />
+            ))}
+          </div>
+        ) : sessionsError ? (
+          <div className="px-4 py-10 text-center text-xs text-destructive">{sessionsError}</div>
+        ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/80 px-4 py-10 text-center">
             <div className="mb-3 flex size-9 items-center justify-center rounded-xl bg-card text-muted-foreground shadow-xs">
               <MessageSquare className="size-4" />

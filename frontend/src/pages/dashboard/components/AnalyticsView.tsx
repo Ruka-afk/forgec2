@@ -99,7 +99,13 @@ export default function AnalyticsView({
           <CardTitle className="text-sm font-semibold text-foreground">{t("dashboard.recent_tasks")}</CardTitle>
         </CardHeader>
         <div className="divide-y divide-border">
-          {recent.length === 0 ? (
+          {stats === null ? (
+            <div className="p-(--card-spacing) space-y-2">
+              {[1, 2, 3, 4].map((i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
+          ) : recent.length === 0 ? (
             <div className="p-(--card-spacing) text-center text-muted-foreground text-sm">
               <EmptyState icon={Inbox} title={t("dashboard.no_tasks")} />
             </div>

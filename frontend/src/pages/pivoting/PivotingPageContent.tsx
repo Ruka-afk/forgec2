@@ -16,7 +16,7 @@ import { StatusDot } from "@/components/ui/status-dot";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ArrowDown, ArrowLeftRight, ArrowRight, ArrowUp, Check, Info, Network, Play, PlusCircle, Radio, RotateCw, Route, Square, X } from "lucide-react";
+import { ArrowDown, ArrowLeftRight, ArrowRight, ArrowUp, Check, Info, Network, Play, PlusCircle, Radio, RotateCw, Route, Square, TriangleAlert, X } from "lucide-react";
 import { formatCreated } from "./components/types";
 import { formatBytes } from "@/lib/utils";
 import { usePivotingData } from "./components/usePivotingData";
@@ -29,6 +29,7 @@ export default function PivotingPageContent() {
     sessions,
     agents,
     loading,
+    partialFailures,
     rportForwards,
     loadData,
     startRelay: startRelayApi,
@@ -135,6 +136,12 @@ export default function PivotingPageContent() {
       {throughAgent && (
         <Banner tone="info" icon={<Route className="size-4" />} className="animate-fade-in" action={<Button variant="ghost" size="icon" onClick={() => setThroughAgent("")} className="text-info hover:text-primary" aria-label={t("common.clear")}><X className="size-4" /></Button>}>
           {t("pivoting.routing_strip")}: <strong className="font-mono">{throughAgent.substring(0, 12)}</strong>
+        </Banner>
+      )}
+
+      {!loading && partialFailures.length > 0 && (
+        <Banner tone="warning" icon={<TriangleAlert className="size-4" />} className="mb-4 animate-fade-in">
+          {t("pivoting.partial_load_failed", { sources: partialFailures.join(", ") })}
         </Banner>
       )}
 
@@ -300,7 +307,11 @@ export default function PivotingPageContent() {
             <p className="text-sm text-muted-foreground mb-4">
               {t("pivoting.direct_socks_desc")}
             </p>
-            {agents.length > 0 ? (              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <Spinner size="sm" />
+              </div>
+            ) : agents.length > 0 ? (              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {agents.map(a => (                  <Card key={a.id} className="hover:border-warning/40 dark:hover:border-warning hover:shadow-sm transition-all">
                     <CardContent className="p-4">
                       <div className="flex justify-between items-center mb-1">
@@ -343,7 +354,11 @@ export default function PivotingPageContent() {
               <span>{t("pivoting.active_reverse_forwards")}</span>
               <Badge variant="secondary">{rportForwards.filter(r => r.active).length} {t("pivoting.active")}</Badge>
             </div>
-            {rportForwards.length === 0 ? (
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <Spinner size="sm" />
+              </div>
+            ) : rportForwards.length === 0 ? (
               <EmptyState icon={ArrowLeftRight} title={t("pivoting.empty_rportfwd_title")} />
             ) : (
               <div className="space-y-3">

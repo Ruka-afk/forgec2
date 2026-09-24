@@ -110,6 +110,8 @@ export function useAISessions(
 ) {
   const { t } = useI18n();
   const [sessions, setSessions] = useState<AISession[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<{ id: number; current: string } | null>(null);
@@ -119,12 +121,17 @@ export function useAISessions(
   const restoredRef = useRef(false);
 
   const loadSessions = useCallback(async () => {
+    setSessionsLoading(true);
     try {
       const data = await api.get(paths.ai.sessions);
       const list = Array.isArray(data) ? data : ((data as { data?: AISession[] })?.data ?? []);
       setSessions(list as AISession[]);
+      setSessionsError(null);
     } catch (e) {
+      setSessionsError(e instanceof Error ? e.message : t("ai.toast.load_sessions_failed"));
       toast.error(e instanceof Error ? e.message : t("ai.toast.load_sessions_failed"));
+    } finally {
+      setSessionsLoading(false);
     }
   }, [t]);
 
@@ -220,6 +227,8 @@ export function useAISessions(
 
   return {
     sessions,
+    sessionsLoading,
+    sessionsError,
     setSessions,
     activeSessionId,
     setActiveSessionId,

@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -101,6 +102,7 @@ export default function MacrosPageContent() {
   const [macros, setMacros] = useState<Macro[]>([]);
   const [runs, setRuns] = useState<MacroRun[]>([]);
   const [loading, setLoading] = useState(true);
+  const [runsLoading, setRunsLoading] = useState(true);
   const [agents, setAgents] = useState<Agent[]>([]);
 
   // Editor dialog state
@@ -132,11 +134,14 @@ export default function MacrosPageContent() {
   }, []);
 
   const loadRuns = useCallback(async () => {
+    setRunsLoading(true);
     try {
       const d = await api.get<{ runs?: MacroRun[] }>(paths.macros.runs());
       setRuns(d.runs || []);
     } catch {
       /* keep previous list */
+    } finally {
+      setRunsLoading(false);
     }
   }, []);
 
@@ -327,7 +332,13 @@ export default function MacrosPageContent() {
           <h3 className="text-sm font-semibold text-foreground">{t("macros.runs_title")}</h3>
           <Button variant="ghost" size="xs" onClick={() => void loadRuns()}>{t("common.refresh")}</Button>
         </div>
-        {runs.length === 0 ? (
+        {runsLoading ? (
+          <div className="space-y-2 p-5">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-8 w-full" />
+            ))}
+          </div>
+        ) : runs.length === 0 ? (
           <EmptyState icon={Play} title={t("macros.runs_empty")} />
         ) : (
           <div className="divide-y divide-border max-h-80 overflow-y-auto">

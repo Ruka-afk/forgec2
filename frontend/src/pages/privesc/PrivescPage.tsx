@@ -25,6 +25,7 @@ import { Bot, ChevronDown, CircleAlert, Info, CircleQuestionMark, Eye, FileCode,
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { EmptyState } from "@/components/ui/empty-state";
+import { DataError } from "@/components/ui/data-state";
 
 interface PrivescAgent {
   id?: string;
@@ -77,7 +78,8 @@ export default function PrivescPage() {
   const [agents, setAgents] = useState<PrivescAgent[]>([]);
   const [history, setHistory] = useState<PrivescHistory[]>([]);
   const [findings, setFindings] = useState<PrivescFinding[]>([]);
-  const [, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedAgent, setSelectedAgent] = useState("");
   const [checkType, setCheckType] = useState("all");
   const [running, setRunning] = useState(false);
@@ -114,14 +116,16 @@ export default function PrivescPage() {
       setAgents((data.agents || []) as PrivescAgent[]);
       setHistory((data.history || []) as PrivescHistory[]);
       setFindings((data.findings || []) as PrivescFinding[]);
-    } catch {
+      setLoadError(null);
+    } catch (err) {
       setAgents([]);
       setHistory([]);
       setFindings([]);
+      setLoadError(err instanceof Error ? err.message : t("privesc.load_failed"));
     }
     setLoading(false);
     loadBusyRef.current = false;
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     return () => {
@@ -281,7 +285,13 @@ export default function PrivescPage() {
           </div>
         </div>
         <div className="divide-y divide-border max-h-[400px] overflow-y-auto">
-          {findings.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Spinner size="sm" />
+            </div>
+          ) : loadError ? (
+            <DataError message={loadError} onRetry={() => { setLoading(true); void loadData(); }} className="py-10" />
+          ) : findings.length === 0 ? (
             <EmptyState icon={ShieldCheck} title={t("privesc.no_findings")} message={t("privesc.no_findings_hint")} />
           ) : findings.filter((f) => statusFilter === "all" || f.severity === statusFilter).map((f, i) => {
             const fid = f.id || String(i);

@@ -156,6 +156,8 @@ export default function AIPage() {
 
   const {
     sessions,
+    sessionsLoading,
+    sessionsError,
     setSessions,
     activeSessionId,
     setActiveSessionId,
@@ -1023,6 +1025,8 @@ export default function AIPage() {
       sidebar={
         <AISessionSidebar
           sessions={sessions}
+          sessionsLoading={sessionsLoading}
+          sessionsError={sessionsError}
           activeSessionId={activeSessionId}
               onSelect={(id) => { void handleSelectSession(id); }}
           onDelete={(id) => { void handleDeleteSession(id); }}
@@ -1041,6 +1045,8 @@ export default function AIPage() {
         <SheetContent side="left" className="w-[min(20rem,88vw)] p-0">
           <AISessionSidebar
             sessions={sessions}
+            sessionsLoading={sessionsLoading}
+            sessionsError={sessionsError}
             activeSessionId={activeSessionId}
               onSelect={(id) => { void handleSelectSession(id); setSidebarOpen(false); }}
             onDelete={(id) => { void handleDeleteSession(id); }}

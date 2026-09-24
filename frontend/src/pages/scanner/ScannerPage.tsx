@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/ui/empty-state";
+import { DataError } from "@/components/ui/data-state";
 import { Crosshair, FileCode, FileSpreadsheet, History, Inbox, Info, Play, Radar } from "lucide-react";
 
 interface ScanAgent {
@@ -94,6 +95,7 @@ interface ScannerData {
 export default function ScannerPage() {
   const [data, setData] = useState<ScannerData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedAgent, setSelectedAgent] = useState("");
   const [targetAddr, setTargetAddr] = useState("");
   const [scanType, setScanType] = useState("tcp_connect");
@@ -114,11 +116,13 @@ export default function ScannerPage() {
         active_scans: (result.active_scans || []) as ActiveScan[],
         history: (result.history || []) as ScanHistory[],
       });
-    } catch {
+      setLoadError(null);
+    } catch (err) {
       setData({ agents: [], results: [], active_scans: [], history: [] });
+      setLoadError(err instanceof Error ? err.message : t("scanner.load_failed"));
     }
     setLoading(false);
-  }, []);
+  }, [t]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -340,8 +344,7 @@ export default function ScannerPage() {
                   ))}</TableRow>
                 ))}</TableBody>
               </Table>
-            ) : data?.results && data.results.length > 0 ? (
-              <Table className="text-sm">
+            ) : data?.results && data.results.length > 0 ? (              <Table className="text-sm">
                 <TableHeader className="bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90 sticky top-0 z-10 border-b border-border">
                   <TableRow className="hover:bg-transparent">
                     <TableHead>IP</TableHead>
@@ -367,13 +370,21 @@ export default function ScannerPage() {
                   ))}
                 </TableBody>
               </Table>
+            ) : loadError ? (
+              <DataError message={loadError} onRetry={() => { setLoading(true); void loadData(); }} className="py-10" />
             ) : (
               <EmptyState icon={Inbox} title={t("scanner.no_results")} />
             )}
           </TabsContent>
 
           <TabsContent value="active" className="mt-0">
-            {data?.active_scans && data.active_scans.length > 0 ? (
+            {loading ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-20 w-full rounded-lg" />
+                ))}
+              </div>
+            ) : data?.active_scans && data.active_scans.length > 0 ? (
               <div className="space-y-3">
                 {data.active_scans.map((scan, i) => {
                   const scanId = scan.id || String(i);
@@ -402,7 +413,13 @@ export default function ScannerPage() {
           </TabsContent>
 
           <TabsContent value="history" className="mt-0">
-            {data?.history && data.history.length > 0 ? (
+            {loading ? (
+              <div className="space-y-2">
+                {[1, 2, 3, 4].map((i) => (
+                  <Skeleton key={i} className="h-8 w-full" />
+                ))}
+              </div>
+            ) : data?.history && data.history.length > 0 ? (
               <Table>
                 <TableHeader>
                   <TableRow>

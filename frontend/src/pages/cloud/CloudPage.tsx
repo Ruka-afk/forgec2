@@ -48,25 +48,44 @@ export default function CloudPage() {
   const [provider, setProvider] = useState("aws");
   const [stealing, setStealing] = useState(false);
   const [results, setResults] = useState<CloudCred[]>([]);
+  const [resultsLoading, setResultsLoading] = useState(false);
+  const [resultsFor, setResultsFor] = useState("");
   const [selectedAgentResults, setSelectedAgentResults] = useState("");
   const [pollNote, setPollNote] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadResults = useCallback(async (agentId: string, quiet = false): Promise<number> => {
     if (!agentId) return 0;
+    setResultsLoading(true);
     try {
       const data: CloudResultsResponse = await api.get<CloudResultsResponse>(`/cloud/${agentId}/results`);
       const list = data.results || [];
       setResults(list);
+      setResultsFor(agentId);
       return list.length;
     } catch {
       if (!quiet) toast.error(t("cloud.load_results_failed"));
+      // Drop the rows: keeping another agent's credentials on screen (or the
+      // previous agent's) after a failed load misattributes them.
+      setResults([]);
+      setResultsFor("");
       return -1;
+    } finally {
+      setResultsLoading(false);
     }
   }, [t]);
 
   useEffect(() => {
-    if (selectedAgentResults) loadResults(selectedAgentResults);
+    if (!selectedAgentResults) {
+      setResults([]);
+      setResultsFor("");
+      return;
+    }
+    // Clear before loading so one agent's credentials are never shown under
+    // another agent's name while the request is in flight.
+    setResults([]);
+    setResultsFor("");
+    void loadResults(selectedAgentResults);
   }, [selectedAgentResults, loadResults]);
 
   useEffect(() => () => {
@@ -191,7 +210,13 @@ export default function CloudPage() {
             </SelectContent>
           </Select>
         </div>
-        {results.length > 0 ? (
+        {resultsLoading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-8 w-full" />
+            ))}
+          </div>
+        ) : resultsFor === selectedAgentResults && results.length > 0 ? (
           <Table>
             <TableHeader>
               <TableRow className="bg-muted">

@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { ArrowRight, Bug, Link, Pencil, X } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
+import { DataError } from "@/components/ui/data-state";
 import { useI18n } from "@/lib/i18n";
 import {
   Dialog,
@@ -42,6 +44,8 @@ export default function ChainPage() {
   const { agents } = useAgentList();
   const [selectedAgent, setSelectedAgent] = useState<string>("");
   const [chain, setChain] = useState<string[]>([]);
+  const [chainLoading, setChainLoading] = useState(false);
+  const [chainError, setChainError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
@@ -58,14 +62,22 @@ export default function ChainPage() {
   const loadChain = useCallback(async (agentId: string) => {
     if (!agentId) {
       setChain([]);
+      setChainLoading(false);
       return;
     }
+    setChainLoading(true);
+    setChainError(null);
     try {
       const data = await api.get<{ chain: string[] }>(paths.agents.chain(agentId));
       setChain(data.chain || []);
-    } catch {
+    } catch (err) {
+      // chain === [] means "direct to C2". Rendering that while the request is
+      // in flight (or after it failed) states a routing fact we do not know.
       setChain([]);
+      setChainError(err instanceof Error ? err.message : t("chain.load_proxy_failed"));
       toast.error(t("chain.load_proxy_failed"));
+    } finally {
+      setChainLoading(false);
     }
   }, [t]);
 
@@ -141,7 +153,13 @@ export default function ChainPage() {
           {/* Current Configuration */}
           <Card className="p-(--card-spacing) mb-6">
             <h3 className="text-sm font-semibold text-foreground mb-3">{t("chain.current_chain")}</h3>
-            {chain.length > 0 ? (
+            {chainLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Spinner size="sm" />{t("common.loading")}
+              </div>
+            ) : chainError ? (
+              <DataError message={chainError} onRetry={() => { void loadChain(selectedAgent); }} className="py-6" />
+            ) : chain.length > 0 ? (
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 {chain.map((id, idx) => {
                   const info = getAgentInfo(id);

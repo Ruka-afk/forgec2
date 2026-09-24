@@ -9,6 +9,7 @@ import { POLL } from "@/lib/polling";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -54,7 +55,7 @@ export default function ActiveMissions({ className = "" }: { className?: string 
 
   useVisibleInterval(() => setNow(Date.now()), POLL.clockTick);
 
-  const { data, error, refresh: load } = useApiResource<{ missions: Mission[] }>({
+  const { data, loading, error, refresh: load } = useApiResource<{ missions: Mission[] }>({
     fetcher: async () => {
       const data = await api.get<{ missions: Mission[] }>(paths.dashboard.activeMissions);
       return { missions: data?.missions || [] };
@@ -93,6 +94,12 @@ export default function ActiveMissions({ className = "" }: { className?: string 
       {error ? (
         <div className="p-(--card-spacing)">
           <ErrorState title={t("common.error")} message={error} />
+        </div>
+      ) : loading ? (
+        <div className="p-(--card-spacing) space-y-2">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-8 w-full" />
+          ))}
         </div>
       ) : active.length === 0 ? (
         <div className="p-(--card-spacing)">

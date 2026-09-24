@@ -566,7 +566,9 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
           </div>
           {/* Right panel - profile editor */}
           <div className="flex-1 min-w-0">
-            {selectedIdx < 0 ? (
+            {loadingProfiles ? (
+              <div className="flex items-center justify-center py-16 sm:py-20"><Spinner size="sm" /></div>
+            ) : selectedIdx < 0 ? (
                 <EmptyState icon={FileEdit} title={t("profiles.empty_title")} />
             ) : (
               <div className="space-y-5">

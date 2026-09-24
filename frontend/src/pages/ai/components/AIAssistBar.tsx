@@ -35,6 +35,8 @@ interface AIAssistBarProps {
 export function AIAssistBar({ sessionId, disabled, onInsertPrompt }: AIAssistBarProps) {
   const { t } = useI18n();
   const [macros, setMacros] = useState<PlaybookMacro[]>([]);
+  const [macrosLoading, setMacrosLoading] = useState(true);
+  const [macrosError, setMacrosError] = useState<string | null>(null);
   const [review, setReview] = useState<RunReview | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewing, setReviewing] = useState(false);
@@ -45,13 +47,20 @@ export function AIAssistBar({ sessionId, disabled, onInsertPrompt }: AIAssistBar
       try {
         const payload = await api.get<unknown>(paths.macros.list);
         const list = normalizeListEnvelope(payload, ["macros", "data"]) as PlaybookMacro[];
-        if (!cancelled) setMacros(Array.isArray(list) ? list : []);
-      } catch {
-        if (!cancelled) setMacros([]);
+        if (!cancelled) {
+          setMacros(Array.isArray(list) ? list : []);
+          setMacrosError(null);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setMacros([]);
+        setMacrosError(err instanceof Error ? err.message : t("ai.playbook_empty"));
+      } finally {
+        if (!cancelled) setMacrosLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [t]);
 
   const handleReview = async () => {
     if (sessionId == null) return;
@@ -72,7 +81,7 @@ export function AIAssistBar({ sessionId, disabled, onInsertPrompt }: AIAssistBar
     <>
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <Select
-          disabled={disabled || macros.length === 0}
+          disabled={disabled || macrosLoading || macrosError !== null || macros.length === 0}
           onValueChange={(v) => {
             const macro = macros.find((m) => String(m.id) === v);
             if (macro) onInsertPrompt(t("ai.playbook_prompt", { name: macro.name, id: macro.id }));
@@ -80,7 +89,7 @@ export function AIAssistBar({ sessionId, disabled, onInsertPrompt }: AIAssistBar
         >
           <SelectTrigger className="h-8 w-52 text-xs" aria-label={t("ai.playbook_picker")}>
             <BookOpen className="size-3.5" />
-            <SelectValue placeholder={macros.length === 0 ? t("ai.playbook_empty") : t("ai.playbook_picker")} />
+            <SelectValue placeholder={macrosLoading ? t("common.loading") : macrosError ? t("ai.playbook_unknown") : macros.length === 0 ? t("ai.playbook_empty") : t("ai.playbook_picker")} />
           </SelectTrigger>
           <SelectContent>
             {macros.map((m) => (

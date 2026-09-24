@@ -41,13 +41,16 @@ interface Props {
 export function RuleDialog({ open, onOpenChange, ruleForm, setRuleForm, sendingTest, onTestWebhook, onSave }: Props) {
   const { t } = useI18n();
   const [macros, setMacros] = useState<MacroOption[]>([]);
+  const [macrosLoading, setMacrosLoading] = useState(false);
 
   // Load macro options when the run_macro action is picked.
   useEffect(() => {
     if (!open || ruleForm.action_type !== "run_macro") return;
+    setMacrosLoading(true);
     api.get<{ macros?: MacroOption[] }>(paths.macros.list)
       .then((d) => setMacros(d.macros || []))
-      .catch(() => setMacros([]));
+      .catch(() => setMacros([]))
+      .finally(() => setMacrosLoading(false));
   }, [open, ruleForm.action_type]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -105,14 +108,18 @@ export function RuleDialog({ open, onOpenChange, ruleForm, setRuleForm, sendingT
                   value={ruleForm.macro_id != null ? String(ruleForm.macro_id) : ""}
                   onValueChange={(v) => setRuleForm({ ...ruleForm, macro_id: v ? Number(v) : null })}
                 >
-                  <SelectTrigger className="w-full mt-1" aria-label={t("auto.macro_select")}><SelectValue placeholder={t("auto.macro_select_ph")} /></SelectTrigger>
+                  <SelectTrigger className="w-full mt-1" aria-label={t("auto.macro_select")}><SelectValue placeholder={macrosLoading ? t("common.loading") : t("auto.macro_select_ph")} /></SelectTrigger>
                   <SelectContent>
-                    {macros.map((m) => (
+                    {macrosLoading ? (
+                      <SelectItem value="__loading" disabled>{t("common.loading")}</SelectItem>
+                    ) : macros.length === 0 ? (
+                      <SelectItem value="__none" disabled>{t("auto.macro_none_hint")}</SelectItem>
+                    ) : macros.map((m) => (
                       <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {macros.length === 0 && (
+                {!macrosLoading && macros.length === 0 && (
                   <p className="text-xs text-muted-foreground mt-1">{t("auto.macro_none_hint")}</p>
                 )}
               </div>

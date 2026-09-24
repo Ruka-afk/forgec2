@@ -16,17 +16,27 @@ export function usePivotingData() {
     sessions: RelaySession[];
     agents: PivotAgent[];
     rportForwards: RPortForwardStatus[];
+    partialFailures: string[];
   }>({
     fetcher: async () => {
-      const [sessData, agentsData, rportData] = await Promise.all([
-        api.get(paths.socks.sessions).catch(() => null),
-        api.get(paths.agents.list("status=online")).catch(() => null),
-        api.get(paths.rportfwd.status).catch(() => null),
+      // Each source is fetched independently so one failure does not blank the
+      // others, but a failure is still reported: silently mapping it to [] made
+      // a dead endpoint look like "no relays / no forwards".
+      const settled = await Promise.all([
+        api.get(paths.socks.sessions).then((d) => ({ ok: true as const, d })).catch(() => ({ ok: false as const, d: null })),
+        api.get(paths.agents.list("status=online")).then((d) => ({ ok: true as const, d })).catch(() => ({ ok: false as const, d: null })),
+        api.get(paths.rportfwd.status).then((d) => ({ ok: true as const, d })).catch(() => ({ ok: false as const, d: null })),
       ]);
+      const [sess, agentsRes, rport] = settled;
       return {
-        sessions: sessData ? normalizeListEnvelope(sessData, ["sessions", "data"]) as RelaySession[] : [],
-        agents: agentsData ? normalizeListEnvelope(agentsData, ["agents", "data"]) as PivotAgent[] : [],
-        rportForwards: rportData ? normalizeListEnvelope(rportData, ["forwards", "data"]) as RPortForwardStatus[] : [],
+        sessions: sess.ok ? normalizeListEnvelope(sess.d, ["sessions", "data"]) as RelaySession[] : [],
+        agents: agentsRes.ok ? normalizeListEnvelope(agentsRes.d, ["agents", "data"]) as PivotAgent[] : [],
+        rportForwards: rport.ok ? normalizeListEnvelope(rport.d, ["forwards", "data"]) as RPortForwardStatus[] : [],
+        partialFailures: [
+          ...(sess.ok ? [] : ["sessions"]),
+          ...(agentsRes.ok ? [] : ["agents"]),
+          ...(rport.ok ? [] : ["rportForwards"]),
+        ],
       };
     },
     pollMs: POLL.pivoting,
@@ -36,6 +46,7 @@ export function usePivotingData() {
   const sessions = data?.sessions ?? [];
   const agents = data?.agents ?? [];
   const rportForwards = data?.rportForwards ?? [];
+  const partialFailures = data?.partialFailures ?? [];
 
   const startRelay = useCallback(
     async (selectedAgent: string, relayPort: number, relayHost: string, relayProtocol: string) => {
@@ -157,6 +168,7 @@ export function usePivotingData() {
     sessions,
     agents,
     loading,
+    partialFailures,
     rportForwards,
     loadData,
     startRelay,
