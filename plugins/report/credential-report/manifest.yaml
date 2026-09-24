@@ -20,3 +20,7 @@ params:
       description: Report title
 config:
     redact_passwords: "true"
+digest: sha256:6bb34f4f7fca5fd1117c8178ee2a88b01f10f379b518597b4d47a67c539c9082
+signature: cb4b7822db0e30b1824b6e1cf65963cc1a50f20faaa9480e42d77a025690c9ccbc7ad2969363386d51d0401891bfec384c1ef393332367296af6028a3dbedd09
+includes:
+    - lib

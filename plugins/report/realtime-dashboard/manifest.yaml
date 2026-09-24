@@ -23,3 +23,7 @@ params:
       required: false
       default: "30"
       description: Auto-refresh interval in seconds
+digest: sha256:e9962aa3d2d3cf57f00598b681460cac9551754ae30358825bfc2a90146e33ab
+signature: cdf649446b3ea7daa96bcc1eb29c6300335ea98dae19808936247a07817cd565d0943766e11e32cd61893793614435924e3d217c2ac46f19758bd72966ef6a06
+includes:
+    - lib

@@ -10,3 +10,7 @@ timeout: 30
 params: []
 config:
     include_offline: "true"
+digest: sha256:1bee18f9d2289413b5b0721b0b679bfc2257f578273b5938d528f76c4c52b4d7
+signature: 059f5cfa3e89daeca8ef907fbec183430145ec2fba1398e0d817afa04dcbf4deca46b63277d1f10a03e06ea1d1fcd9ba728a5c3ce56a185747dc3084dee35908
+includes:
+    - lib

@@ -13,3 +13,7 @@ events:
 config:
     log_file: ""
     notify_new_only: true
+digest: sha256:af6ca47b1704dbd273efaf6cbc66e9332fd3f7f20a74f15494b3863b865e97a4
+signature: dc78d85974cb2048e7ff3bc9cec1b276884449e6ef0a9b0278687b549f0fcfaa0faa1a45f4141dc8891874e758cb8a6a5b14b227dc0db5eddd524f7db5eb230e
+includes:
+    - lib

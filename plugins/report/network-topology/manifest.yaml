@@ -18,3 +18,7 @@ params:
       required: false
       default: Network Topology Report
       description: Report title
+digest: sha256:2a187a05736e707960732032c8a913ce3d5781032ff4fc2bfbd08b29864cce08
+signature: 9e6e001cb4a8aa12595f16eefb1c1ed74115bf7e784e266de92e65b6f1a1d5fc54fdee24f39a81b90e5432d1a8648ab7d8c60afa20f21046549c0e004b75cd09
+includes:
+    - lib

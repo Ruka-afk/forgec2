@@ -12,3 +12,7 @@ params:
       type: string
       required: false
       description: Focus on specific agent
+digest: sha256:600ad8314e06ca6e74c7f554866c4197584f5a99670025fa5b07549427a84eb3
+signature: a06e14bc867359365d8228bbe1d89f113ccc70a36f99e51da0eb7fd1635ee5c6c55ddd4a0fb06e59fc1f144ec7cbaf8d9463d2cd043f04139055b15734005808
+includes:
+    - lib

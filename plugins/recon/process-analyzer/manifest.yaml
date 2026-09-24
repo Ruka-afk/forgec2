@@ -10,3 +10,7 @@ timeout: 30
 params: []
 config:
     security_tool_keywords: MsSense,SENSE,cylance,cyltray,symcorp,symantec,mcafee,mcshield,avp,avg,avpui,cb,cbrps,cylance,bulwark,deep-security,osquery,sysmon,winaudit,procmon,procmon64,wireshark,fiddler,processhacker
+digest: sha256:a8edccd26c5a76e80725e97faca9d5edb9baade2c092d27e3d7fe8977339e593
+signature: e8bb5a47dc04e705bcc12eff92a48b2a431700c2442f409b77cdb9412508d6a56a728a820b59b6547658dd38fde968036c8753797c4a4e3ba303368c8b32f708
+includes:
+    - lib

@@ -17,3 +17,7 @@ params:
       required: false
       default: "500"
       description: Maximum events to analyze
+digest: sha256:33223fc5d727ef168ac3d57fa1ad1c06376a504ab40bf27dadd3c6bbd0c4b45d
+signature: 72c0da1c4b71a671c60314b0fb140a754390f832226b0c4571559346a088acdfa0879568f7a54f060f15f828a587f9db52825971581fb89406eff6542a9d2d02
+includes:
+    - lib

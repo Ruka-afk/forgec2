@@ -25,3 +25,7 @@ params:
       description: Hours of history to include (0 = all)
 config:
     max_events: "500"
+digest: sha256:44dfd1b5c74bdfb272769a8a0ce9aaa6e642f446bf32778bcab8354c4af8cb2a
+signature: ae270a5f9d0fc82bf2eac3c26be6e7db6959437424c43f89b857c48be1da05f5a83f77d2f85c24a7069a6c755b7104a89fd7a95e6654a3e3fa650d09de072400
+includes:
+    - lib

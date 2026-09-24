@@ -24,3 +24,7 @@ params:
       description: Connection timeout in seconds
 config:
     max_ports: 100
+digest: sha256:7e1c185b3ef8234e16e0fcc3790b4b1779747425238ab8aaca3edcb95f74cc0a
+signature: a73cad26b97b542effb339dcc575610df9407cba6e8b8691ba1329ced40aea6cc3d865922bd55550f5d5b766cd495451a38039d01e7836c34385dd6408428807
+includes:
+    - lib

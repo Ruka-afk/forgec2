@@ -27,3 +27,7 @@ params:
       type: string
       required: false
       description: Filter to specific agent
+digest: sha256:8e9e3803e6ff4c6447e14717200a0fc80ff6cecbab378e67bdd896124386a580
+signature: b9529f3b26dcab8b00d00ecf959ba83f7b21ec63c2a4c6259f102e61a542b39d5eefba1bc419d39584187f7fdba7604f51192d3342391fb8d0d16387b5afed02
+includes:
+    - lib

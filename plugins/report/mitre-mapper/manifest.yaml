@@ -18,3 +18,7 @@ params:
       required: false
       default: MITRE ATT&CK Mapping
       description: Report title
+digest: sha256:f2490530fb12565fbf957ae57cfa399ccc067a742c19cd5bebea81975f85ef1b
+signature: b2b9da9744a62d74937954256eba006d16f9e4f68a6f3c1166fa32bb19777b1f90a1e0e1f3190c6ce9c93c7cd42d228be9f46fea7afb979de1c158edf3178506
+includes:
+    - lib

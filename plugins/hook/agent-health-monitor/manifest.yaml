@@ -14,3 +14,7 @@ events:
 config:
     log_file: ""
     max_offline_seconds: "600"
+digest: sha256:15bf7835c727d65875f23d80deb96c8709990da9f21d0611d61a48791b2623a2
+signature: 3afd565f85d9d3b7580eb82946b1af158408abd04999e0c3164a2ff855839499e9f8b05572a69972e963fcfd9478ea56d704cf3f59967e45767656bfe67e960b
+includes:
+    - lib

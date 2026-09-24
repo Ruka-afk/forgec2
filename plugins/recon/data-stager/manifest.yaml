@@ -16,3 +16,7 @@ params:
       type: string
       required: false
       description: Directory path to analyze
+digest: sha256:1ca44a0d53d50b93f3351804e9dc39ee61d8bfe2bfb99b42b0700a4160172c20
+signature: 46040d87242c0dadb24144cc9317e5252c152bc5836cb7d612388faa429a23871c3c6433d4186588e64719c02daf350afcd5c79daba7ffd882e9a8bb62eb9d0e
+includes:
+    - lib

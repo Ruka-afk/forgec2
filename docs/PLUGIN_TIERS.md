@@ -56,27 +56,37 @@ int run(const unsigned char *in, int len) {
 ```yaml
 digest: "sha256:<hex>"     # canonical hash over every package file
 signature: "<hex>"         # Ed25519 signature over that digest string
-publisher: "acme-labs"
+publisher: "forgec2"
+includes: ["lib"]          # shared paths (relative to the scanned tree) that
+                           # also belong to this package
 ```
 
-The digest covers the entry point and every helper file (the manifest itself
-and `*.sig` sidecars are excluded), so editing a library invalidates the
-package. The server verifies it on load and on install:
+The digest covers the entry point and every helper file, plus anything named in
+`includes` (the bundled plugins all import `lib/`, which can read and write the
+SQLite database — leaving it out would let a tampered helper satisfy every
+signature). Runtime noise (`__pycache__`, `*.pyc`, `*.sig`, VCS/editor files)
+is excluded, and the plugin environment sets `PYTHONDONTWRITEBYTECODE=1` so a
+first run cannot invalidate its own signature.
+
+The server verifies it on load and on install:
 
 ```bash
 go run ./cmd/sign-plugin -gen                        # once, offline
-PLUGIN_SIGNING_KEY=<seed> go run ./cmd/sign-plugin plugins/recon/hostinfo
-go run ./cmd/sign-plugin -verify -key <pubkey> plugins/recon/hostinfo
+PLUGIN_SIGNING_KEY=<seed> go run ./cmd/sign-plugin -root plugins -include lib plugins/recon/ad-recon
+go run ./cmd/sign-plugin -verify -key <pubkey> -root plugins plugins/recon/ad-recon
 ```
+
+The 52 bundled plugins ship signed by a project key whose private half was
+discarded at release, so those signatures are permanent and unforgeable. The
+matching public key is in `config.example.yaml`:
 
 ```yaml
 plugins:
-  trusted_keys: ["<64-hex-pubkey>"]   # or FORGEC2_PLUGIN_TRUSTED_KEYS
-  require_signed: true                # refuse unsigned packages
-  max_concurrent: 4                   # simultaneous plugin processes
+  trusted_keys: ["<bundled-or-your-pubkey-hex>"]  # or FORGEC2_PLUGIN_TRUSTED_KEYS
+  require_signed: true                            # refuse unsigned packages
+  max_concurrent: 4                               # simultaneous plugin processes
 ```
 
-With `trusted_keys` set, a signed package is verified against them; a
-digest-only package is accepted with a warning (pin it out of band). Set
-`require_signed: true` to refuse unsigned packages entirely. The bundled
-plugins ship unsigned, so enabling strict mode means signing them first.
+Changing any bundled plugin file (or `lib/`) without re-signing makes the server
+refuse to load it — that is the point, and `go test ./internal/plugin/` fails
+too (`TestBundledPluginsVerifyUnderStrictPolicy`).

@@ -12,3 +12,7 @@ params:
       type: string
       required: false
       description: Specific agent to audit
+digest: sha256:b2757ccb0ae4c6ce24e3d8a27c820d20267748f7d5618eddc75b3d957b614f6e
+signature: 6bbb5fded87c52d869dec9e4508fa610725ef0b19dc98091a96abd76d75720104a07f0bd96089c082fdfca94c04a7fc80956d876e25a150a326b6d56a7fa4f09
+includes:
+    - lib

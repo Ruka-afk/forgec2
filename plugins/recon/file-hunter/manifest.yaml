@@ -17,3 +17,7 @@ params:
       required: false
       default: "100"
       description: Maximum results per agent
+digest: sha256:694782647c31aade0187d2edac161c52836de1975db64ecb50aec55105e5fc11
+signature: e767514708d95c286cb0b259a6d56e6b805639c187b2499d4cac91612fd2ad6217fd04c4d8e084d9895f05e8b6ea218b14340a06b923c55aa1bea94f77f62108
+includes:
+    - lib

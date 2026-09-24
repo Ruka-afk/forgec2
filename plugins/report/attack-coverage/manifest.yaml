@@ -18,3 +18,7 @@ params:
       required: false
       default: ATT&CK Coverage Dashboard
       description: Report title
+digest: sha256:2d026ad74028829b4fde4747b4bcc3559ff2503b13daba6aa46cc7f46a409ff8
+signature: 0da9aba790405b17f90ea674f684059c185714ff70084bfdf3a8f49b1873fadaca25c87ceb6d7e57d1f7cee3c8c0070c1469fac27a369c19af818bc2efe3c405
+includes:
+    - lib

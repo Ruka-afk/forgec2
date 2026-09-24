@@ -11,3 +11,7 @@ params: []
 config:
     check_audit_logs: "true"
     check_task_traces: "true"
+digest: sha256:ed2f1d451f84522edc66c8e4dfe1e8171d14d6a083e5d89209463d601fc4d74f
+signature: 5d8d607d1a2c5071c4d644c6233f56a5400fb53dc631fdb4e16879eafe4f350ad7cddd3d36d34b0976cc9fcaa77b6b83b730297624fdecea74604e818614990b
+includes:
+    - lib

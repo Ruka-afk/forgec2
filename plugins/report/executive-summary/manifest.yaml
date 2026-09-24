@@ -23,3 +23,7 @@ params:
       required: false
       default: "0"
       description: Time window in hours (0 = all time)
+digest: sha256:eac3ade3227b90978440629a3ee146bc4fb20204ed2529954479b7cb71b1345f
+signature: d5f9ab922d2c17c3ba579b772f5cbec0360ed4c35a6b729c007f502cc95a81b74ae98bcc42c23d978761e7d291671a2165fb6e1df1990ff52c2fbc033a43d40e
+includes:
+    - lib

@@ -18,3 +18,7 @@ params:
       required: false
       default: Exfiltration Plan
       description: Report title
+digest: sha256:7210312e7ac17e43a27678756415edff833c10e31b851999e702c293bf9cd295
+signature: 3dfeea9a247111fb616fdf4d9da0f0e1026a705805b48f40f5cef0748f11fb29094fa6e239b095a3e770aa956eaae1db4c15955e455798743ddb1119302e560a
+includes:
+    - lib

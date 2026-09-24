@@ -18,3 +18,7 @@ events:
 config:
     log_file: ""
     verbose: "true"
+digest: sha256:9b6c048fe65028923598a56d129e2774802b631ca12c4548860752da623fc8e6
+signature: 4fa10c6d775ddca14f59ad7b9f7df69146e77335a84dab998f4465bfafbff549c0330dd65017aaedb910e2a0bca500047f3ae9c8731b4fe07e7fe6f47fd49709
+includes:
+    - lib

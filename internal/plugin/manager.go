@@ -29,6 +29,7 @@ const hookBreakerCooldown = time.Minute
 // pendingPlugin is one manifest discovered on disk, waiting for its turn in
 // the dependency-ordered registration pass.
 type pendingPlugin struct {
+	root     string
 	dir      string
 	manifest *Manifest
 }
@@ -119,10 +120,13 @@ func (m *Manager) LoadFromDisk(dir string) error {
 	m.pluginDir = dir
 	m.mu.Unlock()
 
-	return m.loadFromDir(dir)
+	return m.loadFromDir(dir, dir)
 }
 
-func (m *Manager) loadFromDir(dir string) error {
+// loadFromDir scans dir (and nested directories) for plugin packages. root is
+// the directory LoadFromDisk was called with: it anchors manifest.Includes for
+// every nested package, so a recursive descent must not change the trust root.
+func (m *Manager) loadFromDir(dir, root string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -144,11 +148,11 @@ func (m *Manager) loadFromDir(dir string) error {
 				slog.Warn("Failed to load plugin manifest", "path", manifestPath, "err", err)
 				continue
 			}
-			batch = append(batch, pendingPlugin{dir: pluginDir, manifest: manifest})
+			batch = append(batch, pendingPlugin{root: root, dir: pluginDir, manifest: manifest})
 			continue
 		}
 		// Allow nested directories (e.g. plugins/example/portscan).
-		if err := m.loadFromDir(pluginDir); err != nil {
+		if err := m.loadFromDir(pluginDir, root); err != nil {
 			slog.Warn("Failed to load plugins from subdirectory", "dir", pluginDir, "err", err)
 		}
 	}
@@ -165,7 +169,7 @@ func (m *Manager) loadFromDir(dir string) error {
 		slog.Warn("Plugin dependency problem", "dir", dir, "err", pErr)
 	}
 	for _, p := range ordered {
-		if err := m.registerAtDir(p.manifest, p.dir); err != nil {
+		if err := m.registerAtDir(p.manifest, p.dir, p.root); err != nil {
 			slog.Warn("Failed to register plugin", "name", p.manifest.Name, "err", err)
 		}
 	}
@@ -262,7 +266,14 @@ func topoSortPlugins(batch []pendingPlugin, loaded map[string]bool) ([]pendingPl
 
 // Register persists a plugin manifest and loads it into memory.
 func (m *Manager) Register(manifest *Manifest) error {
-	return m.registerAtDir(manifest, m.pluginDirFor(manifest.Name))
+	dir := m.pluginDirFor(manifest.Name)
+	m.mu.RLock()
+	root := m.pluginDir
+	m.mu.RUnlock()
+	if root == "" {
+		root = filepath.Dir(dir)
+	}
+	return m.registerAtDir(manifest, dir, root)
 }
 
 // checkRegistration rejects duplicate names, self-dependencies and requires
@@ -291,13 +302,13 @@ func (m *Manager) checkRegistration(manifest *Manifest) error {
 	return nil
 }
 
-func (m *Manager) registerAtDir(manifest *Manifest, pluginDir string) error {
+func (m *Manager) registerAtDir(manifest *Manifest, pluginDir, root string) error {
 	if err := manifest.Validate(); err != nil {
 		return err
 	}
 	// Package trust: a digest mismatch or a signature that no trusted key
 	// vouches for is fatal before the plugin becomes callable.
-	if err := m.VerifyPackage(pluginDir, manifest); err != nil {
+	if err := m.VerifyPackage(pluginDir, root, manifest); err != nil {
 		return err
 	}
 	entryPath := filepath.Join(pluginDir, manifest.Entry)

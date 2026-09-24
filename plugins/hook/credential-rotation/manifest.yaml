@@ -14,3 +14,7 @@ config:
     log_file: ""
     max_age_days: 30
     warning_age_days: 14
+digest: sha256:d3f7c5ff905914ea3907a39fbce4695fd896f6e8ae814de990813b91d1afa433
+signature: bc594bda81009a3ca419cc86128cf5bd52278c821c68ac32187809f1b86a3f1848b94f0729b2515a3d64bb7847e3f8433e95c771e3c5a2c4daffdbe0f43a3b07
+includes:
+    - lib

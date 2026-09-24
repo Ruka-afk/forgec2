@@ -17,3 +17,7 @@ params:
       required: false
       default: "false"
       description: Only show listening ports
+digest: sha256:fa134ebe98b5e8acc884df0ff7de0d06b499d316489e3465555fdcb43306ec27
+signature: 82c7da273ca03e1e537eee8352b1f260aadc749b7eed7af7472ba5d752acd239a43d003261444fd0168d5168d006219910047fb9a8bb0836095b64dfe1889d01
+includes:
+    - lib

@@ -12,3 +12,7 @@ params:
       type: string
       required: false
       description: Specific agent to enumerate AD from
+digest: sha256:5b5dceb0e85e2a9a55704a3a1d77b289478d722cfd7650ae9986f396b741fba4
+signature: 8b7ad73dfc56f25681b85d0ed496c16311b76f95705d62b4b08894fcc2bc574fed70ba8b9ebd2899dea3109ab381351af03593c1ab659b5f4cf02ec25c6f3e03
+includes:
+    - lib

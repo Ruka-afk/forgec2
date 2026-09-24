@@ -20,3 +20,7 @@ params:
       description: Group assets by field (os, status, domain, country)
 config:
     show_offline: "true"
+digest: sha256:21e886feff1c9676c1e55c9a5de518fffb0372500286e34890b841fbeb66b7b7
+signature: a1e5405bc307aad1b8c214177a6ef6309161a0de928d1af85fbe34ab175ada55ccb61494b6b51069302dfb1a0b41d67c35e6787ec566857fb70af00b50894b04
+includes:
+    - lib

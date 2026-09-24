@@ -21,3 +21,7 @@ params:
 config:
     include_recommendations: "true"
     include_timeline: "true"
+digest: sha256:ad15e0a484ff9196c170fe12c35b547b24e9d9736db681b2218a10c58300dc06
+signature: a89a1efc8549ed5f939a32e3da9f7584ef7ec867f7c98d09bfb0e2b526dc8f5a8313c5125c6395904463e5456a201b9578b29396ae7c69befb1f670764457b09
+includes:
+    - lib

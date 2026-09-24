@@ -18,3 +18,7 @@ params:
       required: false
       default: Security Posture Assessment
       description: Report title
+digest: sha256:a9b1f94b87ce84912addd85883b1a4a523b9226ad8a845e261b52cd9a2e0557f
+signature: 830511d5ef7062ef1d07fe83b1b0481fbf6ece60bf4e149eca0d208becc2e20ab7151928ab289d208832c3e3238c5fe7bd121218f5d6f62f41af4d83dc5c7600
+includes:
+    - lib

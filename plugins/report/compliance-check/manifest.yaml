@@ -23,3 +23,7 @@ params:
       required: false
       default: cis
       description: Framework to check against (cis, nist, both)
+digest: sha256:78c91972ff7a8754cf0fefcfad06345f451729803d9be25a4a17d964ea159d64
+signature: c324de9fc86ebb127544ccd0f8692e87a74e6f78b8a4f8c1eba479b2868079e8619a796219caf42c11e3021f3ce1163b3ab19e2878164642a15145a80cc73c02
+includes:
+    - lib

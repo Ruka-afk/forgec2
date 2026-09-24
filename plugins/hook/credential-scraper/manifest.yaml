@@ -13,3 +13,7 @@ events:
     - task.result
 config:
     log_file: ""
+digest: sha256:432fec204acde0096002ae99ebbe83334ed2459f97ff7f326a0a27901b173654
+signature: 24a2e31aa6ea10d8a9edd51ea47bb2d9b6b713607d84d7eb174b5602d2ee826b19861375dfb4a79d132cb6bf80aad64cbaca0ef0499e98f668eaaf684f976705
+includes:
+    - lib

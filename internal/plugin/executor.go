@@ -209,6 +209,9 @@ func (e *executor) run(ctx context.Context, pluginDir string, m *Manifest, input
 		"TMPDIR=" + os.TempDir(),
 		"TMP=" + os.TempDir(),
 		"TEMP=" + os.TempDir(),
+		// Do not let a plugin write __pycache__ into its own directory: runtime
+		// artifacts would otherwise invalidate the package digest on first run.
+		"PYTHONDONTWRITEBYTECODE=1",
 		"GOCACHE=" + filepath.Join(os.TempDir(), "forgec2-plugin-gocache"),
 		"GOPATH=" + filepath.Join(os.TempDir(), "forgec2-plugin-gopath"),
 		"PLUGIN_NAME=" + m.Name,

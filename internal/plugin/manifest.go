@@ -36,6 +36,12 @@ type Manifest struct {
 	Digest    string `yaml:"digest,omitempty" json:"digest,omitempty"`
 	Signature string `yaml:"signature,omitempty" json:"signature,omitempty"`
 	Publisher string `yaml:"publisher,omitempty" json:"publisher,omitempty"`
+	// Includes lists extra paths inside the package tree whose files also
+	// belong to the package, given relative to the directory the loader
+	// scanned (e.g. ["lib"] for a shared helper library). Without it a
+	// tampered shared helper would satisfy the digest while owning the whole
+	// server account.
+	Includes []string `yaml:"includes,omitempty" json:"includes,omitempty"`
 }
 
 // ManifestParam defines a user-configurable parameter for a plugin.
@@ -95,6 +101,15 @@ func (m *Manifest) Validate() error {
 	}
 	if isWasmInterpreter(m.Interpreter) && !strings.HasSuffix(strings.ToLower(m.Entry), ".wasm") {
 		return fmt.Errorf("wasm plugins must point at a .wasm module (entry %q)", m.Entry)
+	}
+	for _, inc := range m.Includes {
+		inc = strings.TrimSpace(inc)
+		if inc == "" {
+			continue
+		}
+		if filepath.IsAbs(inc) || strings.Contains(inc, "..") {
+			return fmt.Errorf("includes entry %q must be a relative path without '..'", inc)
+		}
 	}
 	return nil
 }

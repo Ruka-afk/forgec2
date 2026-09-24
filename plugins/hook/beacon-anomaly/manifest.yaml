@@ -16,3 +16,7 @@ config:
     log_file: ""
     size_threshold: 5
     timing_threshold: 3
+digest: sha256:58406fce036493f9b9cf713b6478cc77f2be48f4d9ad000b867d54c881c0f408
+signature: 21859ad44e4465e44f1cbdd73d83b81a537b8db200dd185e882f2df4374fb4decde5dda6d66380f23cc63bb90057032658b7f02136ab09605e12fb88baa0b30f
+includes:
+    - lib

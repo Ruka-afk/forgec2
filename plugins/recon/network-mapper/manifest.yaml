@@ -10,3 +10,7 @@ timeout: 30
 params: []
 config:
     max_display_hosts: "50"
+digest: sha256:a6fcd1c8f716f93e8dd027bfac495a6236473c354cc853fcb24af1b6469aac59
+signature: 7aebfb870bd8015636bbcf3fb3dc082146b9ae73088bcc06ab266bdb01fe2bacb663c80e0e926866b414142de84d763291d0e6b028710ac892d3d4d8bd531408
+includes:
+    - lib

@@ -18,3 +18,7 @@ config:
     log_file: ""
     webhook_type: generic
     webhook_url: ""
+digest: sha256:6cc3fb417d832ed3704a89eafcb9c9a2949f357fc68b24deeb2b1f11184b591a
+signature: 5dd61c012b4ada5e0bbdcbc61aac099392aab50c48c14281dad05ada8425705b88bd3c48df27e0a1c6ad4fd84d4312c57386c2b666d224b84947882cb3b71a0f
+includes:
+    - lib

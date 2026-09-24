@@ -12,3 +12,7 @@ params:
       type: string
       required: false
       description: Specific agent to scan
+digest: sha256:d05ed7b4b8bc6a0c801aa81f581dd2bfde89092a95228ba7eb5e03e295109a20
+signature: c24f6fd3c35a9f1385dd698880f29ca57abf14692b985a872165caaec5790fe8a73f390b0e5e008029e334cee5fb66e2fc7dcf09d9a90b220104b2dc078d2707
+includes:
+    - lib

@@ -12,3 +12,7 @@ params:
       type: string
       required: false
       description: Specific agent to analyze
+digest: sha256:34ae5b98d72f114b1318ca5896ccddc790a5fe09be82f23ca20d193e4698a9f6
+signature: f49e190f90adc80d29467e96cb5a84b734dc6b1da82d91279bea4aa6591ff42ae178ba934b1293d3832d1c0f358465688a78958d04199539f4821700789f0500
+includes:
+    - lib

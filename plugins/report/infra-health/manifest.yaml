@@ -18,3 +18,7 @@ params:
       required: false
       default: Infrastructure Health Report
       description: Report title
+digest: sha256:b9b95166230d04361366f27bc77868e46d580aa4f30dcb17198bdb62bbee6f4e
+signature: e82eab209623ae06280b99fbf7048c7d56da022432e0859ad26b1c6cbe492b1095eee9d828d67baea7ce7f60d480cde23fd7ff1fa59f2bc63c36d8275fdbea0d
+includes:
+    - lib

@@ -12,3 +12,7 @@ params:
       type: string
       required: false
       description: Specific agent to enumerate
+digest: sha256:a1575ce0b98cd87ff3a7afa6e0a30d87824b13dd763b85f6c4abb5989b81e62d
+signature: ef3916f3d7b3ad39b9cd0b8005fc31b661311a3e4438484e25f3cb28ed2d677acbb2350493d375d24f53955d57e6c36ada96c791ebb139afe339d42dbde2e507
+includes:
+    - lib

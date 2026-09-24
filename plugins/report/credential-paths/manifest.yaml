@@ -18,3 +18,7 @@ params:
       required: false
       default: Credential Attack Paths
       description: Report title
+digest: sha256:d3b0e9ceb570fcd680a92314f5c4466d6c5e440fb110fb404a80513dd6441490
+signature: a3a0c0e1798a718bc78560f8f8474b187768256b1570d0177b4a593a2da258ae51b5fa082ea1e32dcbd1e5c40bec5c2a4544a7cb90dad22e84d5ad4634eb2c0e
+includes:
+    - lib

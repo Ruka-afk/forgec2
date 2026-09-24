@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/forgec2/forgec2/internal/plugin"
 )
@@ -34,6 +35,8 @@ func main() {
 	gen := flag.Bool("gen", false, "generate a plugin signing keypair and print seed+pubkey")
 	verify := flag.Bool("verify", false, "verify a stamped package instead of signing it")
 	keyHex := flag.String("key", "", "trusted Ed25519 public key (hex) for -verify")
+	root := flag.String("root", "", "package tree root that anchors manifest includes (e.g. plugins); defaults to the package directory")
+	includeFlag := flag.String("include", "", "comma-separated shared paths to record in manifest.includes (relative to -root)")
 	flag.Parse()
 
 	if *gen {
@@ -60,7 +63,7 @@ func main() {
 		}
 		policy := plugin.VerificationPolicy(trusted, false)
 		for _, dir := range flag.Args() {
-			status, err := plugin.VerifyPackageWithPolicy(dir, mustManifest(dir), policy)
+			status, err := plugin.VerifyPackageWithPolicy(dir, packageRoot(dir, *root), mustManifest(dir), policy)
 			switch {
 			case err != nil:
 				fmt.Printf("FAIL %s: %v\n", dir, err)
@@ -83,7 +86,17 @@ func main() {
 
 	for _, dir := range flag.Args() {
 		manifest := mustManifest(dir)
-		digest, err := plugin.PackageDigest(dir)
+		if *includeFlag != "" {
+			for _, inc := range strings.Split(*includeFlag, ",") {
+				if inc = strings.TrimSpace(inc); inc != "" {
+					manifest.Includes = appendUnique(manifest.Includes, inc)
+				}
+			}
+		}
+		if err := manifest.Validate(); err != nil {
+			fail("%s: %v", dir, err)
+		}
+		digest, err := plugin.PackageDigest(dir, manifest.Includes, packageRoot(dir, *root))
 		if err != nil {
 			fail("%s: %v", dir, err)
 		}
@@ -94,6 +107,25 @@ func main() {
 		}
 		fmt.Printf("signed %s (digest %s)\n", dir, digest)
 	}
+}
+
+// packageRoot resolves the tree root that anchors manifest includes. Without
+// -root a package has no shared paths, so the package directory itself is the
+// root and includes stay inert.
+func packageRoot(dir, root string) string {
+	if root != "" {
+		return root
+	}
+	return dir
+}
+
+func appendUnique(list []string, v string) []string {
+	for _, existing := range list {
+		if existing == v {
+			return list
+		}
+	}
+	return append(list, v)
 }
 
 func mustManifest(dir string) *plugin.Manifest {
