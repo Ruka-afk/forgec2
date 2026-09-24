@@ -246,8 +246,28 @@ func (s *Server) handleDBBackupList(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": backups})
 }
 
+// requireSQLiteDB rejects SQLite-only maintenance endpoints when the server
+// runs on another driver, so operators get an explicit reason instead of an
+// opaque SQL failure (or a restore that silently writes an unreadable file).
+func (s *Server) requireSQLiteDB(c *gin.Context) bool {
+	if isSQLiteDB(s.db) {
+		return true
+	}
+	driver := "unknown"
+	if s.db != nil && s.db.Dialector != nil {
+		driver = s.db.Dialector.Name()
+	}
+	slog.Warn("SQLite-only maintenance endpoint refused", "endpoint", c.Request.URL.Path, "driver", driver)
+	s.LogAuditRecord(c, "db_maintenance_unsupported", "system", "", "driver="+driver, false, errNonSQLiteBackup)
+	respondError(c, http.StatusNotImplemented, errNonSQLiteBackup.Error())
+	return false
+}
+
 func (s *Server) handleDBBackup(c *gin.Context) {
 	if !s.requireOperator(c) {
+		return
+	}
+	if !s.requireSQLiteDB(c) {
 		return
 	}
 	if _, err := os.Stat(s.cfg.Database.Path); err != nil {
@@ -327,6 +347,9 @@ func (s *Server) handleDBBackupPlaintext(c *gin.Context) {
 
 func (s *Server) handleDBRestore(c *gin.Context) {
 	if !s.requireOperator(c) {
+		return
+	}
+	if !s.requireSQLiteDB(c) {
 		return
 	}
 	restoreType := c.PostForm("type")

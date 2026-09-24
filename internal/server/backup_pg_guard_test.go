@@ -1,0 +1,115 @@
+package server
+
+import (
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/forgec2/forgec2/internal/config"
+	"github.com/forgec2/forgec2/internal/testutil"
+	"github.com/gin-gonic/gin"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
+)
+
+// newFakePostgresDB builds a *gorm.DB whose dialector reports "postgres"
+// without a live server (automatic ping disabled). The maintenance guards
+// must key off driver identity, not connectivity.
+func newFakePostgresDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	conn, err := gorm.Open(postgres.Open("host=127.0.0.1 port=1 user=none dbname=none sslmode=disable connect_timeout=1"),
+		&gorm.Config{
+			Logger:                 gormlogger.Default.LogMode(gormlogger.Silent),
+			DisableAutomaticPing:   true,
+			SkipDefaultTransaction: true,
+		})
+	if err != nil {
+		t.Skipf("postgres dialector unavailable: %v", err)
+	}
+	return conn
+}
+
+func operatorCtxFor(method, path string) (*gin.Context, *httptest.ResponseRecorder) {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(method, path, nil)
+	c.Request.Header.Set("Accept", "application/json")
+	c.Set("user", "pg-admin")
+	c.Set("user_role", "admin")
+	return c, w
+}
+
+// TestSQLiteOnlyMaintenanceRefusedOnPostgres proves backup, restore and VACUUM
+// answer 501 with actionable guidance on a non-SQLite driver instead of
+// failing with a cryptic SQL error (or "restoring" a file nothing reads).
+func TestSQLiteOnlyMaintenanceRefusedOnPostgres(t *testing.T) {
+	ginSetTestMode(t)
+	s := &Server{db: newFakePostgresDB(t), cfg: config.DefaultConfig()}
+
+	c, w := operatorCtxFor(http.MethodPost, "/settings/db/backup")
+	s.handleDBBackup(c)
+	assertNotImplemented(t, "backup", w)
+
+	c, w = operatorCtxFor(http.MethodPost, "/settings/db/restore")
+	s.handleDBRestore(c)
+	assertNotImplemented(t, "restore", w)
+
+	c, w = operatorCtxFor(http.MethodPost, "/settings/db/vacuum")
+	s.handleDBVacuum(c)
+	assertNotImplemented(t, "vacuum", w)
+}
+
+func assertNotImplemented(t *testing.T, name string, w *httptest.ResponseRecorder) {
+	t.Helper()
+	if w.Code != http.StatusNotImplemented {
+		t.Fatalf("%s: status=%d, want 501; body=%s", name, w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "SQLite only") {
+		t.Fatalf("%s: body lacks the SQLite-only explanation: %s", name, w.Body.String())
+	}
+}
+
+// TestBackupManagerRefusesNonSQLite proves the scheduled path refuses too,
+// instead of logging a cryptic VACUUM failure on every tick.
+func TestBackupManagerRefusesNonSQLite(t *testing.T) {
+	bm := &BackupManager{db: newFakePostgresDB(t), backupDir: t.TempDir()}
+	if _, _, err := bm.createBackup(); !errors.Is(err, errNonSQLiteBackup) {
+		t.Fatalf("createBackup error = %v, want errNonSQLiteBackup", err)
+	}
+	if err := bm.Start("daily"); !errors.Is(err, errNonSQLiteBackup) {
+		t.Fatalf("Start error = %v, want errNonSQLiteBackup", err)
+	}
+}
+
+// TestSQLiteMaintenanceStillWorks guards the guard: SQLite deployments keep the
+// full backup path.
+func TestSQLiteMaintenanceStillWorks(t *testing.T) {
+	ginSetTestMode(t)
+	database := testutil.SetupTestDB(t)
+	if !isSQLiteDB(database) {
+		t.Skip("test database is not SQLite")
+	}
+	cfg := config.DefaultConfig()
+	cfg.Server.DataDir = t.TempDir()
+	s := &Server{db: database, cfg: cfg}
+
+	c, w := operatorCtxFor(http.MethodPost, "/settings/db/backup")
+	if !s.requireSQLiteDB(c) {
+		t.Fatalf("SQLite deployment refused maintenance: %s", w.Body.String())
+	}
+}
+
+// TestIsSQLiteDBHandlesNil guards the helper against a nil handle (callers
+// include bare test servers).
+func TestIsSQLiteDBHandlesNil(t *testing.T) {
+	if isSQLiteDB(nil) {
+		t.Fatal("nil db must not be treated as SQLite")
+	}
+}
+
+// keep time imported for the gorm open options above on all build paths.
+var _ = time.Second

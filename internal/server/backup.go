@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -94,7 +95,27 @@ func NewBackupManager(db *gorm.DB, dbPath, backupDir, key string) (*BackupManage
 	}, nil
 }
 
+// errNonSQLiteBackup is returned by every backup/restore/vacuum path when the
+// server runs on a non-SQLite driver. Those paths are implemented on top of
+// SQLite's VACUUM INTO plus file replacement: on PostgreSQL they would either
+// fail with a confusing SQL error or, worse, "restore" by writing a file that
+// nothing reads. Refusing loudly is the honest behaviour until a driver-aware
+// logical dump path exists.
+var errNonSQLiteBackup = errors.New("database backup/restore/vacuum are implemented for SQLite only; use an external PostgreSQL backup tool (pg_dump/pgBackRest) for this deployment")
+
+// isSQLiteDB reports whether the live connection is SQLite.
+func isSQLiteDB(db *gorm.DB) bool {
+	if db == nil || db.Dialector == nil {
+		return false
+	}
+	return db.Dialector.Name() == "sqlite"
+}
+
 func (bm *BackupManager) Start(cronSchedule string) error {
+	if !isSQLiteDB(bm.db) {
+		slog.Warn("Scheduled backups disabled: non-SQLite driver", "driver", bm.db.Dialector.Name())
+		return errNonSQLiteBackup
+	}
 	bm.mu.Lock()
 	if bm.running {
 		bm.mu.Unlock()
@@ -183,6 +204,9 @@ func (bm *BackupManager) PerformBackup() error {
 // schedule. Used by PerformBackup (scheduled) and the manual backup
 // endpoint. Returns the .fbk filename and size.
 func (bm *BackupManager) createBackup() (string, int64, error) {
+	if !isSQLiteDB(bm.db) {
+		return "", 0, errNonSQLiteBackup
+	}
 	start := time.Now()
 	slog.Info("Starting database backup")
 

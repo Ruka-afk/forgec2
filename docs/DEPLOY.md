@@ -12,11 +12,21 @@ docker compose up -d --build
 curl -k https://127.0.0.1:8000/health   # {"status":"ok",...}
 ```
 
-Secrets (JWT, beacon key, TLS cert) auto-generate on first run. Data persists
-in the `forgec2_data` volume. No `.env` needed unless you want overrides
-(see `.env.example`). Postgres is opt-in:
+Secrets (JWT, beacon key, TLS cert) auto-generate on first run. Missing storage
+keys (`crypto.loot_key` / `extc2_key` / `backup_key` / `totp_key` / `csrf_key`)
+are generated at startup and written back to `config.yaml`, so the example
+config is a working first start; set them explicitly (or via `FORGEC2_*` env)
+when the config file is mounted read-only. Data persists in the
+`forgec2_data` volume (`FORGEC2_DATA_DIR=/data`, which also anchors logs and
+backups). No `.env` needed unless you want overrides (see `.env.example`).
+Postgres is opt-in:
 `docker compose --profile postgres up -d --build` (set `DB_PASSWORD`,
 `FORGEC2_DB_DRIVER=postgres`, `FORGEC2_DB_DSN`).
+
+> **Postgres backup caveat:** the built-in database backup/restore/VACUUM
+> endpoints are SQLite-only (they use `VACUUM INTO` plus file replacement).
+> On a Postgres deployment they return `501` with this explanation instead of
+> pretending to work — schedule `pg_dump`/`pgBackRest` yourself.
 
 ### Production overlay
 

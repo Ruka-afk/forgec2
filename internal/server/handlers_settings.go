@@ -517,6 +517,9 @@ func (s *Server) handleRegenerateJWT(c *gin.Context) {
 }
 
 func (s *Server) handleDBVacuum(c *gin.Context) {
+	if !s.requireSQLiteDB(c) {
+		return
+	}
 	var dbSize int64
 	rawDB, err := s.db.DB()
 	if err != nil {

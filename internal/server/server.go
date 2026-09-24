@@ -747,6 +747,14 @@ func (s *Server) InitOptimizations(configPath string) {
 
 	backupDir := filepath.Join(s.cfg.Server.DataDir, "backups")
 
+	if !isSQLiteDB(s.db) {
+		// Backups are implemented on SQLite's VACUUM INTO; on other drivers the
+		// endpoints answer 501 with guidance instead of pretending to work.
+		slog.Warn("Built-in database backups disabled for non-SQLite driver; use an external backup tool",
+			"driver", s.db.Dialector.Name())
+		return
+	}
+
 	var err error
 	s.backupManager, err = NewBackupManager(s.db, s.cfg.Database.Path, backupDir, s.backupKeyHex())
 	if err != nil {
