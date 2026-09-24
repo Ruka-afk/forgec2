@@ -18,6 +18,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Card } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useI18n } from "@/lib/i18n";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { formatTime } from "@/lib/utils";
 
 interface Token {
@@ -56,6 +57,7 @@ interface Process {
 
 export default function AgentTokenPage() {
   const { t } = useI18n();
+  const { confirm, modal } = useConfirm();
   const params = useParams();
   const agentId = params.id as string;
   const [tokens, setTokens] = useState<Token[]>([]);
@@ -168,6 +170,8 @@ export default function AgentTokenPage() {
       setActiveAction(null);
     }
   };  const handleDrop = async (tokenId: string) => {
+    const ok = await confirm({ title: t("agents.token_drop_title"), message: t("agents.token_drop_confirm"), danger: true });
+    if (!ok) return;
     setActiveAction(`drop-${tokenId}`);
     try {
       await api.del(paths.agents.tokenOne(agentId, tokenId));
@@ -466,6 +470,7 @@ export default function AgentTokenPage() {
             </TableBody>
           </Table>
         </div>      </Card>
+      {modal}
     </PageContainer>
   );
 }

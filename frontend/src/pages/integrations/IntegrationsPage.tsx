@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { useMutation } from "@/lib/hooks/useMutation";
 import { POLL } from "@/lib/polling";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -33,6 +34,7 @@ interface Integration {
 
 export default function IntegrationsPage() {
   const { t } = useI18n();
+  const { confirm, modal } = useConfirm();
   const [testResult, setTestResult] = useState("");
 
   const [formType, setFormType] = useState("slack");
@@ -122,6 +124,8 @@ export default function IntegrationsPage() {
 
   async function deleteIntegration(id?: number) {
     if (!id) return;
+    const ok = await confirm({ title: t("integrations.delete_title"), message: t("integrations.delete_confirm"), danger: true });
+    if (!ok) return;
     try {
       await api.del(paths.integrations.one(id));
       toast.success(t("integrations.toast.deleted"));
@@ -262,6 +266,7 @@ export default function IntegrationsPage() {
           </Card>
         </>
       )}
+      {modal}
     </PageContainer>
   );
 }

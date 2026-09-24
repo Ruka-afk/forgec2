@@ -7,6 +7,7 @@ import { paths } from "@/lib/api-paths";
 import { downloadJSON } from "@/lib/download";
 import { nowTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
 import { DataError } from "@/components/ui/data-state";
@@ -29,6 +30,7 @@ import { useProfilesData } from "./components/useProfilesData";
 
 export default function ProfilesPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useI18n();
+  const { confirm, modal } = useConfirm();
   const {
     malleableForm,
     setMalleableForm,
@@ -168,6 +170,8 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
       toast.error(t("profiles.toast.delete_default_forbidden") || "cannot delete default profile");
       return;
     }
+    const ok = await confirm({ title: t("profiles.delete_title"), message: t("profiles.delete_confirm", { name }), danger: true });
+    if (!ok) return;
     try {
       await api.del(paths.generate.profileDelete(name));
     } catch (err: unknown) {
@@ -880,6 +884,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {modal}
     </PageContainer>
   );
 }

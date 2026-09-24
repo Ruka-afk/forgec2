@@ -5,6 +5,7 @@ import { api, ApiError } from "@/lib/api";
 import { downloadBlob, downloadText } from "@/lib/download";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { PageContainer } from "@/components/ui/page-container";
 import { Spinner } from "@/components/ui/spinner";
 import { StatCard } from "@/components/ui/animated-stat-card";
@@ -37,6 +38,7 @@ export default function ReportPage() {
   const [stepUpCode, setStepUpCode] = useState("");
 
   const { t } = useI18n();
+  const { confirm, modal } = useConfirm();
   const {
     stats,
     loading,
@@ -164,6 +166,8 @@ export default function ReportPage() {
   };
 
   const handleDeleteReport = async (id: string) => {
+    const ok = await confirm({ title: t("report.delete_title"), message: t("report.delete_confirm"), danger: true });
+    if (!ok) return;
     await deleteReport(id);
   };
 
@@ -577,6 +581,7 @@ export default function ReportPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {modal}
     </PageContainer>
   );
 }

@@ -17,13 +17,14 @@
     "check:webdist": "node ../scripts/check-webdist.mjs",
     "check:i18n": "node scripts/check-i18n.mjs",
     "check:paths": "node scripts/check-api-paths.mjs",
+    "check:native-dialogs": "node scripts/check-native-dialogs.mjs",
     "check:openapi-types": "node scripts/check-openapi-types.mjs",
     "check:permissions": "node scripts/check-permissions.mjs",
     "check:bundle": "node scripts/check-bundle.mjs",
     "gen:openapi": "openapi-typescript ../api/openapi.yaml -o src/lib/api-schema.d.ts",
     "gen:permissions": "node scripts/gen-permissions.mjs",
-    "check": "npx concurrently -n css,tokens,i18n,paths,openapi,perms,webdist,bundle \"npm:check:css\" \"npm:check:tokens\" \"npm:check:i18n\" \"npm:check:paths\" \"npm:check:openapi-types\" \"npm:check:permissions\" \"npm:check:webdist\" \"npm:check:bundle\"",
-    "check:pre": "npx concurrently -n css,tokens,i18n,paths,openapi,perms \"npm:check:css\" \"npm:check:tokens\" \"npm:check:i18n\" \"npm:check:paths\" \"npm:check:openapi-types\" \"npm:check:permissions\"",
+    "check": "npx concurrently -n css,tokens,i18n,paths,dialogs,openapi,perms,webdist,bundle \"npm:check:css\" \"npm:check:tokens\" \"npm:check:i18n\" \"npm:check:paths\" \"npm:check:native-dialogs\" \"npm:check:openapi-types\" \"npm:check:permissions\" \"npm:check:webdist\" \"npm:check:bundle\"",
+    "check:pre": "npx concurrently -n css,tokens,i18n,paths,dialogs,openapi,perms \"npm:check:css\" \"npm:check:tokens\" \"npm:check:i18n\" \"npm:check:paths\" \"npm:check:native-dialogs\" \"npm:check:openapi-types\" \"npm:check:permissions\"",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run check"
   },
   "dependencies": {

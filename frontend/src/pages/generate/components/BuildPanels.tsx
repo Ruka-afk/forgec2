@@ -11,6 +11,7 @@ import { CopyButton } from "@/components/ui/copy-button";
 import type { BinaryForm, UnixForm, PS1Form, StagerForm, ShellcodeForm, DonutForm, BinaryVariant, UnixVariant, StagerVariant } from "@/types/generate";
 import { AppWindow, Apple, Binary, CheckCircle2, Disc, Download, HardDrive, Info, Package, PackageOpen, Puzzle, Terminal, Wand2 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { toast } from "sonner";
 import { AdvancedSection, FieldLabel, PayloadCard } from "./PayloadCard";
 import { BuildResult, BuildStatusBadge } from "./BuildResult";
 
@@ -98,7 +99,7 @@ export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setF
             <Input type="file" accept=".ico,.png" onChange={(e) => {
               const file = e.target.files?.[0] || null;
               if (!file) { setForm({ ...form, icon_file: null, icon_b64: "" }); return; }
-              if (file.size > 256 * 1024) { alert(t("generate.toast.icon_too_large")); return; }
+              if (file.size > 256 * 1024) { toast.error(t("generate.toast.icon_too_large")); return; }
               const reader = new FileReader();
               reader.onload = () => {
                 const b64 = (reader.result as string).split(",")[1] || "";
