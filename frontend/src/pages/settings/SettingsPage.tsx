@@ -95,7 +95,7 @@ export default function SettingsPage() {
   }, []);
 
   const {
-    totpStatus, totpSecret, totpQR, totpBackupCodes,
+    totpStatus, totpStatusError, reloadTotpStatus, totpSecret, totpQR, totpBackupCodes,
     totpCode, setTotpCode, showTotpSetup,
     totpEnablePassword, setTotpEnablePassword,
     totpDisablePassword, setTotpDisablePassword, totpDisableCode, setTotpDisableCode,
@@ -368,7 +368,8 @@ export default function SettingsPage() {
               <TabsContent value="security" className="mt-0">
                 <SecuritySection
                   data={data} passwordForm={passwordForm} setPasswordForm={setPasswordForm}
-                  totpStatus={totpStatus} totpSecret={totpSecret} totpQR={totpQR} totpBackupCodes={totpBackupCodes}
+                  totpStatus={totpStatus} totpStatusError={totpStatusError} onReloadTOTP={() => { void reloadTotpStatus(); }}
+                  totpSecret={totpSecret} totpQR={totpQR} totpBackupCodes={totpBackupCodes}
                   totpCode={totpCode} setTotpCode={setTotpCode} showTotpSetup={showTotpSetup}
                   totpEnablePassword={totpEnablePassword} setTotpEnablePassword={setTotpEnablePassword}
                   totpDisablePassword={totpDisablePassword} setTotpDisablePassword={setTotpDisablePassword}

@@ -12,7 +12,7 @@ import { SafeImg } from "@/components/ui/safe-img";
 import { AlertTriangle, Check, CheckCircle, Key, Lock, QrCode, RotateCw, Save, Shield, X } from "lucide-react";
 
 export default function SecuritySection({
-  data, passwordForm, setPasswordForm, totpStatus, totpSecret, totpQR, totpBackupCodes,
+  data, passwordForm, setPasswordForm, totpStatus, totpStatusError, onReloadTOTP, totpSecret, totpQR, totpBackupCodes,
   totpCode, setTotpCode, showTotpSetup,
   totpEnablePassword, setTotpEnablePassword,
   totpDisablePassword, setTotpDisablePassword, totpDisableCode, setTotpDisableCode,
@@ -22,6 +22,8 @@ export default function SecuritySection({
   passwordForm: PasswordForm;
   setPasswordForm: React.Dispatch<React.SetStateAction<PasswordForm>>;
   totpStatus: boolean | null;
+  totpStatusError: string | null;
+  onReloadTOTP: () => void;
   totpSecret: string;
   totpQR: string;
   totpBackupCodes: string;
@@ -87,7 +89,18 @@ export default function SecuritySection({
         <div className="border-t border-border pt-6">
           <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2"><Shield className="size-4" />{t("settings.security.two_factor")}</h3>
 
-          {totpStatus === null ? (
+          {totpStatusError ? (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-destructive/10 rounded-lg border border-destructive/20">
+              <AlertTriangle className="size-4 text-destructive shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-destructive">{t("settings.security.totp_status_unknown")}</div>
+                <div className="text-xs text-muted-foreground">{t("settings.security.totp_status_unknown_hint")}</div>
+              </div>
+              <Button variant="outline" size="sm" onClick={onReloadTOTP} className="shrink-0">
+                <RotateCw className="size-4" />{t("common.try_again")}
+              </Button>
+            </div>
+          ) : totpStatus === null ? (
             <div className="flex items-center gap-3 p-4 bg-muted rounded-lg border border-border">
               <Spinner size="sm" />
               <span className="text-sm text-muted-foreground">{t("settings.security.loading_totp")}</span>

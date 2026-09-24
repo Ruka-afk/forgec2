@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 export function useTOTP(t: (key: string) => string, setSaving: (v: boolean) => void, activeSection: string) {
   const [totpStatus, setTotpStatus] = useState<boolean | null>(null);
+  const [totpStatusError, setTotpStatusError] = useState<string | null>(null);
   const [totpSecret, setTotpSecret] = useState("");
   const [totpQR, setTotpQR] = useState("");
   const [totpBackupCodes, setTotpBackupCodes] = useState("");
@@ -14,19 +15,28 @@ export function useTOTP(t: (key: string) => string, setSaving: (v: boolean) => v
   const [totpDisablePassword, setTotpDisablePassword] = useState("");
   const [totpDisableCode, setTotpDisableCode] = useState("");
 
-  useEffect(() => {
-    const controller = new AbortController();
-    if (activeSection === "security") {
-      api.get(paths.settings.totpStatus, { signal: controller.signal })
-        .then((d: Record<string, unknown>) => {
-          if (!controller.signal.aborted) setTotpStatus((d.totp_enabled ?? false) as boolean);
-        })
-        .catch((error: unknown) => {
-          if (!controller.signal.aborted && (!(error instanceof Error) || error.name !== "AbortError")) setTotpStatus(false);
-        });
+  const loadTotpStatus = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const d = await api.get(paths.settings.totpStatus, { signal });
+      if (signal?.aborted) return;
+      setTotpStatus((d.totp_enabled ?? false) as boolean);
+      setTotpStatusError(null);
+    } catch (error: unknown) {
+      if (signal?.aborted) return;
+      if (error instanceof Error && error.name === "AbortError") return;
+      // Leave totpStatus null. A failed query means "unknown" — reporting it as
+      // false rendered the "2FA is not enabled" panel and invited the operator
+      // to believe their account is unprotected.
+      setTotpStatusError(t("settings.toast.totp_status_failed"));
     }
+  }, [t]);
+
+  useEffect(() => {
+    if (activeSection !== "security") return;
+    const controller = new AbortController();
+    void loadTotpStatus(controller.signal);
     return () => controller.abort();
-  }, [activeSection]);
+  }, [activeSection, loadTotpStatus]);
 
   const handleGenerateTOTP = useCallback(async () => {
     try {
@@ -63,7 +73,8 @@ export function useTOTP(t: (key: string) => string, setSaving: (v: boolean) => v
   }, [totpDisablePassword, totpDisableCode, t, setSaving]);
 
   return {
-    totpStatus, totpSecret, totpQR, totpBackupCodes,
+    totpStatus, totpStatusError, reloadTotpStatus: loadTotpStatus,
+    totpSecret, totpQR, totpBackupCodes,
     totpCode, setTotpCode, showTotpSetup,
     totpEnablePassword, setTotpEnablePassword,
     totpDisablePassword, setTotpDisablePassword,
