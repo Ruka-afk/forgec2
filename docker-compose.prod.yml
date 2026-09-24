@@ -1,0 +1,36 @@
+# Production overlay — hardens the base compose for real deployments.
+#
+# Usage (from repo root, after `cp config.example.yaml config.yaml`):
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Secrets required (set in .env — see .env.example):
+#   FORGEC2_JWT_SECRET   32+ byte random hex (openssl rand -hex 32)
+# Storage keys (loot/extc2/backup/totp/csrf) should be set explicitly rather
+# than left to first-run auto-generation so backups/restores stay portable.
+
+services:
+  forgec2:
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /home/nonroot
+    environment:
+      - FORGEC2_JWT_SECRET=${FORGEC2_JWT_SECRET:?set FORGEC2_JWT_SECRET in .env (openssl rand -hex 32)}
+      - FORGEC2_LOOT_KEY=${FORGEC2_LOOT_KEY:-}
+      - FORGEC2_EXTC2_KEY=${FORGEC2_EXTC2_KEY:-}
+      - FORGEC2_BACKUP_KEY=${FORGEC2_BACKUP_KEY:-}
+      - FORGEC2_TOTP_KEY=${FORGEC2_TOTP_KEY:-}
+      - FORGEC2_CSRF_KEY=${FORGEC2_CSRF_KEY:-}
+      - FORGEC2_HOST=${FORGEC2_HOST:-0.0.0.0}
+      - FORGEC2_PORT=${FORGEC2_PORT:-8000}
+      - TZ=${TZ:-UTC}
+    # Resource ceiling so a runaway listener/plugin cannot pin the host.
+    mem_limit: ${FORGEC2_MEM_LIMIT:-1g}
+    pids_limit: ${FORGEC2_PIDS_LIMIT:-512}
+    restart: unless-stopped
+    # Extra listener ports — uncomment only the transports enabled in config.yaml:
+    # ports:
+    #   - "443:443"
+    #   - "8443:8443"
+    #   - "53:53/udp"
+    #   - "4433:4433/udp"   # QUIC

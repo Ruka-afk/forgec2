@@ -18,6 +18,20 @@ in the `forgec2_data` volume. No `.env` needed unless you want overrides
 `docker compose --profile postgres up -d --build` (set `DB_PASSWORD`,
 `FORGEC2_DB_DRIVER=postgres`, `FORGEC2_DB_DSN`).
 
+### Production overlay
+
+`docker-compose.prod.yml` hardens the base stack for real deployments:
+`read_only` rootfs (+ tmpfs for `/tmp` and home), `mem_limit` / `pids_limit`,
+`FORGEC2_JWT_SECRET` required, storage keys forwarded from `.env`, bind
+`0.0.0.0` by default.
+
+```bash
+cp config.example.yaml config.yaml
+cp .env.example .env            # then set FORGEC2_JWT_SECRET=$(openssl rand -hex 32)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+curl -fsS https://127.0.0.1:8000/health
+```
+
 ## Option B — Linux, bare binary
 
 ```bash

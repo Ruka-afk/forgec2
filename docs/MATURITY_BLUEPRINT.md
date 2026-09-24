@@ -381,21 +381,12 @@ go build -o forgec2-server.exe ./cmd/server
 ### 5.2 Docker Compose（生产拓扑）
 
 现有 `docker-compose.yml` 已含：`cap_drop: ALL`、`no-new-privileges`、healthcheck、
-可选 Postgres profile。建议生产叠加：
+可选 Postgres profile。**生产加固已落地**为 overlay 文件
+`docker-compose.prod.yml`（read_only + tmpfs、mem/pids 上限、强制
+`FORGEC2_JWT_SECRET`、存储密钥透传、默认 `0.0.0.0`）：
 
-```yaml
-# 片段：生产加固示例（加入 forgec2 服务）
-services:
-  forgec2:
-    # … 继承现有 build/ports/volumes …
-    read_only: true
-    tmpfs:
-      - /tmp
-      - /data/runtime
-    environment:
-      - FORGEC2_JWT_SECRET=${FORGEC2_JWT_SECRET:?set me}
-    # 额外 listener 端口按 config.yaml 启用项映射
-    # ports: ["443:443", "8443:8443", "53:53/udp", "4433:4433/udp"]  # QUIC
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
 ```bash
