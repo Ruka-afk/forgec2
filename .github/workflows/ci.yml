@@ -164,6 +164,10 @@ jobs:
         run: npm audit --audit-level=high
       - name: Win7 shim mirror freshness
         run: node ../scripts/sync-win7shim.mjs --check
+      - name: Docs freshness (command reference + capability matrix)
+        run: |
+          node ../scripts/gen-command-reference.mjs --check
+          node ../scripts/gen-capability-matrix.mjs --check
       - run: npx tsc --noEmit
       - run: npm run lint
       # 6 static checks run concurrently via the bundled `check:pre` script

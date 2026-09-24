@@ -49,6 +49,7 @@ forgec2/
 ├── frontend/                   # Vite + React TS（src/pages, src/lib）
 ├── scripts/
 │   ├── gen-command-reference.mjs   # ★ 从 taskspec 生成命令手册
+│   ├── gen-capability-matrix.mjs   # ★ 向 CAPABILITY_MATRIX 注入任务清单段
 │   ├── build-embedded.ps1 / check-webdist.mjs / migrate-taskspec.mjs
 │   └── …
 ├── docs/
@@ -440,6 +441,8 @@ go run ./cmd/sign-release -gen     # 打印 RELEASE_SIGNING_KEY / update_signing
 ```bash
 node scripts/gen-command-reference.mjs          # → docs/COMMAND_REFERENCE.md
 node scripts/gen-command-reference.mjs --check  # CI freshness gate
+node scripts/gen-capability-matrix.mjs          # inject matrix task inventory
+node scripts/gen-capability-matrix.mjs --check  # CI freshness gate
 ```
 
 分类（与 registry Category 一致）：`execution, discovery, collection,

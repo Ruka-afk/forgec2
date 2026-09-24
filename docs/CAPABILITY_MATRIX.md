@@ -3,6 +3,7 @@
 > Status of implant tasks / transports as of **v2.6.1**.  
 > Quality: **Core** (production) · **Hardened** (usable OPSEC) · **Scripted** (PS/external) · **Experimental** · **Stub** (Windows-only or incomplete).  
 > Command inventory: generate with `node scripts/gen-command-reference.mjs` → `docs/COMMAND_REFERENCE.md`.  
+> Task inventory markers: `node scripts/gen-capability-matrix.mjs` (CI `--check`).  
 > Architecture blueprint: `docs/MATURITY_BLUEPRINT.md`.
 
 ## Transports
@@ -128,6 +129,32 @@ Rebuild implants after changing placement/header/timing fields — old agents ke
 | OTA self_update | Hardened | Ed25519 pin (`updatePinnedPubKeyHex`); bare URL refused; server sign API under Admin |
 | Hot update (server) | Hardened | `crypto.update_signing_key` optional release signature |
 
+
+## Task inventory (generated)
+
+<!-- BEGIN GENERATED TASK INVENTORY -->
+
+> **Generated** from `pkg/protocol/taskspec_data.go` by `node scripts/gen-capability-matrix.mjs`. Do not edit inside these markers.
+
+- **Dispatchable task types:** 217 · **aliases:** 3 · **approval-gated:** 57
+
+| Category | Types |
+|----------|-------|
+| Execution (29) | `bof`, `bof_infection`, `chmod`, `clr_exec_assembly`, `clr_powershell`, `container_docker`, `container_k8s`, `download_url`, `execute_assembly`, `inject`, `inject_methods`, `interactive_shell_start`, `interactive_shell_stop`, `interactive_shell_write`, `killproc`, `mkdir`, `peloader`, `powerpick`, `reflectdll_inject`, `rename`, `resume`, `scp_upload`, `shell`, `shinject`, `shspawn`, `spawn`, `suspend`, `upload`, `window_close` |
+| Discovery (34) | `adcs_find`, `adcs_full_audit`, `av`, `cert_store_list`, `container_detect`, `drives`, `edr_status`, `file_hunt`, `find`, `find_delegation`, `hostinfo`, `ldap_acl`, `ldap_computers`, `ldap_groups`, `ldap_query`, `ldap_spn`, `ldap_users`, `ls`, `net`, `netstat`, `portscan`, `ppl_check`, `process_tree`, `ps`, `reg_get`, `run_egress`, `sccm_recon`, `services`, `session_recon`, `sharphound`, `token_whoami`, `usb_enum`, `users`, `window_list` |
+| Collection (17) | `browser_history`, `clipboard_get`, `clipboard_set`, `cookie_export`, `download`, `keylogger_dump`, `keylogger_start`, `keylogger_stop`, `mic`, `read`, `remote_input`, `screen_trigger_start`, `screen_trigger_stop`, `screenshot`, `screenshot_window`, `webcam`, `wechat_history` |
+| Credential Access (37) | `adcs_esc1`, `adcs_esc2`, `adcs_esc3`, `adcs_esc4`, `adcs_esc5`, `adcs_esc6`, `adcs_esc7`, `adcs_esc8`, `adcs_request`, `asreproast`, `bronze_bit`, `browser_steal`, `cloud_steal`, `coerce_dfs`, `coerce_petitpotam`, `coerce_printerbug`, `constrained_deleg`, `cred_check`, `creds`, `dcsync`, `dcsync_machine`, `dpapi_blob`, `dpapi_browser`, `dpapi_masterkey`, `entra_prt`, `golden_ticket`, `kerberoast`, `mimikatz`, `ntlm_help`, `password_spray`, `rbcd`, `relay_ntlm_start`, `relay_ntlm_stop`, `shadow_creds`, `silver_ticket`, `vpn_creds`, `wifi_creds` |
+| Defense Evasion (29) | `amsi_bypass`, `amsi_hardware_bp`, `blockdlls`, `byovd_load`, `cleanup`, `edr_blind`, `edr_kill`, `enum_callbacks`, `etw_bypass`, `etw_hardware_bp`, `etwti`, `imgload`, `kernel_callback`, `kill_av`, `log_wipe`, `lsa_bypass`, `migrate`, `objcb`, `protect_process`, `reg_delete`, `reg_set`, `run_evasion`, `sandbox_detect`, `sandbox_detect_advanced`, `self_delete`, `set_sleep_mask`, `set_sleep_mask_advanced`, `track_wipe`, `unhook_ntdll` |
+| Lateral Movement (10) | `lateral`, `lateral_dcom`, `lateral_psexec`, `lateral_winrm`, `lateral_wmi`, `pass_the_hash`, `pass_the_ticket`, `ssh_keygen`, `ssh_lateral`, `usb_drop` |
+| Privilege Escalation (15) | `computerdefaults`, `container_escape`, `elevate`, `elevate_printnightmare`, `eventvwr`, `fodhelper`, `juicy_potato`, `named_pipe_impersonate`, `privesc_check`, `slui`, `token_list_procs`, `token_make`, `token_revert`, `token_steal`, `uac_bypass` |
+| Persistence (4) | `adminsdholder`, `persistence_add`, `persistence_list`, `persistence_remove` |
+| C2 / Session (27) | `beacon_now`, `clear_kill_date`, `config_push`, `get_sleep_mode`, `ghost_mode_exit`, `ghost_mode_status`, `gossip_discover`, `help`, `kill`, `lportfwd_start`, `lportfwd_stop`, `profile_rotate`, `rportfwd_start`, `rportfwd_stop`, `self_update`, `set_c2_mode`, `set_kill_date`, `set_sleep`, `set_sleep_mode`, `set_working_hours`, `socks`, `ssh_tunnel`, `tun_start`, `tun_stop`, `tunnel_add_route`, `tunnel_remove_route`, `uninstall` |
+| Impact (4) | `delete`, `reboot`, `shutdown`, `wallpaper` |
+| Other (11) | `amsi_session_bypass`, `etw_ntrace_bypass`, `execute_assembly_forkrun`, `lateral_list`, `lateral_scf`, `list_inject_methods`, `net_enum_hosts`, `net_scan_smb`, `rev2self`, `screen_stream_start`, `screen_stream_stop` |
+
+Full per-command parameters, aliases and help: [`COMMAND_REFERENCE.md`](COMMAND_REFERENCE.md).
+
+<!-- END GENERATED TASK INVENTORY -->
 ## Regenerating this matrix
 
 When adding task types, update:
@@ -136,8 +163,11 @@ When adding task types, update:
 - `pkg/protocol/taskspec_data.go` (metadata — single source of truth)
 - `internal/payload/agent/task_registry.go`
 - `internal/server/tasktypes.go` (if API surface changes)
-- This document + regenerate `docs/COMMAND_REFERENCE.md`:
+- This document (hand-written sections) + regenerate generated artifacts:
 
 ```bash
-node scripts/gen-command-reference.mjs
+node scripts/gen-capability-matrix.mjs   # inject task inventory between markers
+node scripts/gen-command-reference.mjs   # docs/COMMAND_REFERENCE.md
+node scripts/gen-capability-matrix.mjs --check
+node scripts/gen-command-reference.mjs --check
 ```
