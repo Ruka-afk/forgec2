@@ -11,6 +11,7 @@ import { firstNumber, normalizeListEnvelope } from "@/lib/envelope";
 import { toast } from "sonner";
 import { useWS } from "@/lib/wsContext";
 import { useUrlState } from "@/lib/hooks/useUrlState";
+import { useRefreshGate } from "@/lib/hooks/useRefreshGate";
 import { formatTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { Spinner } from "@/components/ui/spinner";
@@ -124,10 +125,14 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
   // reconnect bursts don't spam one toast per failed refresh.
   const loadGenRef = useRef(0);
   const lastErrorToastRef = useRef(0);
+  // WebSocket refreshes must not replace the rendered build cards with
+  // skeletons, and a failed refresh must not reset the success-rate KPI to a
+  // fake 0%. Only the initial load and filter changes show progress.
+  const { beginRefresh, markLoaded } = useRefreshGate();
 
-  const loadBuilds = useCallback(async () => {
+  const loadBuilds = useCallback(async (opts?: { showLoading?: boolean }) => {
     const gen = ++loadGenRef.current;
-    setLoading(true);
+    if (beginRefresh(opts?.showLoading)) setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams();
@@ -163,13 +168,11 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
         agents.forEach(a => { const v = a.version || "unknown"; counts[v] = (counts[v] || 0) + 1; });
         setVersionDist(Object.entries(counts).map(([version, count]) => ({ version, count })).sort((a, b) => b.count - a.count));
       }
+      markLoaded();
     } catch (e) {
       if (gen !== loadGenRef.current) return;
-      setBuilds([]);
-      setTotal(0);
-      setSuccessCount(0);
-      setFailedCount(0);
-      setAvgDuration(0);
+      // Keep the last good rows and counters: zeroing them turned a transient
+      // refresh failure into a fabricated "0 builds, 0% success" reading.
       const msg = e instanceof Error ? e.message : t("builds.toast.load_failed");
       setError(msg);
       if (Date.now() - lastErrorToastRef.current > 30_000) {
@@ -179,9 +182,9 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
     } finally {
       if (gen === loadGenRef.current) setLoading(false);
     }
-  }, [filterPlatform, filterStatus, t]);
+  }, [filterPlatform, filterStatus, t, beginRefresh, markLoaded]);
 
-  useEffect(() => { loadBuilds(); }, [loadBuilds]);
+  useEffect(() => { loadBuilds({ showLoading: true }); }, [loadBuilds]);
 
   const pageCount = Math.max(1, Math.ceil(builds.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
@@ -255,7 +258,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
             <Button render={<Link to="/generate" />}>
               <Plus className="size-4" /> {t("builds.new_build")}
             </Button>
-            <Button variant="secondary" onClick={loadBuilds}>
+            <Button variant="secondary" onClick={() => loadBuilds({ showLoading: true })}>
               <RefreshCw className="size-4" /> {t("builds.refresh")}
             </Button>
           </div>

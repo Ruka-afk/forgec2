@@ -4,7 +4,8 @@ import { toast } from "sonner";
 import { useWS } from "@/lib/wsContext";
 import { useI18n } from "@/lib/i18n";
 import { paths } from "@/lib/api-paths";
-import { emptyCredentialData, normalizeCredentialData, type CredentialData } from "./types";
+import { useRefreshGate } from "@/lib/hooks/useRefreshGate";
+import { normalizeCredentialData, type CredentialData } from "./types";
 
 export function useCredentialsData() {
   const { t } = useI18n();
@@ -19,18 +20,21 @@ export function useCredentialsData() {
   // response overwriting fresher vault data. Callers now join the same
   // in-flight fetch instead.
   const inflightRef = useRef<Promise<void> | null>(null);
+  // A WebSocket-driven refresh must not swap the populated vault for a
+  // skeleton, and a failed refresh must not wipe the rows already on screen.
+  const { beginRefresh, markLoaded } = useRefreshGate();
 
   const loadData = useCallback(async (signal?: AbortSignal) => {
     if (!signal && inflightRef.current) return inflightRef.current;
     const run = (async () => {
-      if (!signal) setLoading(true);
+      if (!signal && beginRefresh()) setLoading(true);
       setError(null);
       try {
         const result = await api.get(paths.credentials.list("format=json"), { signal });
         setData(normalizeCredentialData(result as Parameters<typeof normalizeCredentialData>[0]));
+        markLoaded();
       } catch (e) {
         if (signal?.aborted) return;
-        setData(emptyCredentialData());
         const msg = e instanceof Error ? e.message : t("cred.toast.load_failed");
         setError(msg);
         toast.error(msg);
@@ -44,7 +48,7 @@ export function useCredentialsData() {
       });
     }
     return run;
-  }, [t]);
+  }, [t, beginRefresh, markLoaded]);
 
   useEffect(() => {
     const controller = new AbortController();
