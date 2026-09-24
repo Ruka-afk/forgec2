@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Live UI e2e in CI: a new `live-e2e` job builds the real server (embedded webdist), boots it on plain HTTP with a seeded admin, and runs `frontend/e2e/live.spec.ts` through `playwright.live.config.ts`, so login, session cookies, CSRF and the agents API are exercised end to end instead of only against the static export
 - WASM plugin tier (`interpreter: wasm`, wazero): untrusted plugins run with no WASI (no files, sockets, env or clock), a 16 MiB linear-memory cap, the existing timeout/quota discipline, capped logs and result. ABI v1 is documented in `docs/PLUGIN_TIERS.md` (`run(ptr,len) -> (ptr,len)` plus an optional `forgec2.log`)
 - Plugin package trust: manifests may carry a canonical `digest` (`sha256:` over every package file, plus any `includes` shared paths such as `lib/`) and an Ed25519 `signature` over that digest; the server verifies both on load and install, and `plugins.require_signed` turns "unsigned" into a refusal. Generate/verify with the new `cmd/sign-plugin` (`-gen`, `-root`, `-include`, `-verify -key <pubkey>`)
 - The 52 bundled plugins are now signed with a project key whose private half was discarded at release, and `config.example.yaml` ships its public key with `require_signed: true` — so an out-of-the-box install refuses unsigned third-party plugins while the bundled set still loads

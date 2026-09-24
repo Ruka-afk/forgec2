@@ -268,3 +268,63 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Playwright smoke (static UI)
         run: npm run test:e2e
+
+  live-e2e:
+    name: Live UI e2e (real Go server)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+          cache-dependency-path: go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm --prefix frontend ci
+      # The server embeds internal/webdist/dist, which the frontend job proves
+      # byte-identical to frontend/out — so the real binary serves the real UI.
+      - name: Build server
+        run: go build -o "$RUNNER_TEMP/forgec2-server" ./cmd/server
+      - name: Prepare e2e config (plain HTTP + seeded admin)
+        run: |
+          E2E_PASS="S1mokeC2-$(openssl rand -hex 8)-9z!Z"
+          echo "$E2E_PASS" > "$RUNNER_TEMP/e2e-pass.txt"
+          sed -e 's/^  tls_enabled:.*/  tls_enabled: false/' \
+              -e 's/^  require_tls_for_auth:.*/  require_tls_for_auth: false/' \
+              -e "s/^  default_password:.*/  default_password: $E2E_PASS/" \
+              config.example.yaml > config.e2e.yaml
+      - name: Start server
+        run: |
+          "$RUNNER_TEMP/forgec2-server" -config config.e2e.yaml > "$RUNNER_TEMP/server.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/server.pid"
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:8000/health | grep -q ok; then break; fi
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:8000/health || { cat "$RUNNER_TEMP/server.log"; exit 1; }
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-live-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Playwright live (login + agents)
+        working-directory: frontend
+        env:
+          FORGEC2_E2E_BASE: http://127.0.0.1:8000
+          FORGEC2_E2E_USER: admin
+        run: |
+          export FORGEC2_E2E_PASS="$(cat "$RUNNER_TEMP/e2e-pass.txt")"
+          npx playwright test --config=playwright.live.config.ts
+      - name: Server log (on failure)
+        if: failure()
+        run: cat "$RUNNER_TEMP/server.log"
+      - name: Stop server
+        if: always()
+        run: kill "$(cat "$RUNNER_TEMP/server.pid")" || true
