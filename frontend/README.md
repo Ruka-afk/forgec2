@@ -30,11 +30,14 @@ npm run build
 ## 项目结构
 
 ```
-src/app/          — 页面路由
-src/components/   — React 组件
+src/main.tsx       — 入口，挂载 RouterProvider
+src/router.tsx     — 路由表（52 条主路由，页面级 React.lazy 分包）
+src/pages/         — 页面（按路由分目录，页面私有逻辑放同目录 components/）
+src/components/    — React 组件
 src/components/ui/ — shadcn/ui 原语
-src/lib/          — 工具函数、API 客户端、i18n、hooks
-src/types/        — TypeScript 类型定义
+src/lib/           — 工具函数、API 客户端、i18n、hooks
+src/styles/        — globals.css（Tailwind 4 入口与设计 token）
+src/types/         — TypeScript 类型定义
 ```
 
 ## 关键特性

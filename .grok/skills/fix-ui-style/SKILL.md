@@ -1,6 +1,6 @@
 ---
 name: fix-ui-style
-description: Fix ForgeC2 Next.js UI styling — Tailwind, dark mode, theme toggle, layout consistency
+description: Fix ForgeC2 UI styling — Tailwind tokens, dark mode, theme toggle, layout consistency
 license: MIT
 compatibility: grok
 metadata:
@@ -12,19 +12,22 @@ metadata:
 
 Pages look unstyled, dark mode broken, theme toggle missing, or layout inconsistent between dashboard and toolkit pages on **`:3000`**.
 
-## CSS architecture (Next.js)
+## CSS architecture (Vite + Tailwind v4)
 
 | Layer | File | Role |
 |-------|------|------|
-| Tailwind JIT | `frontend/public/js/tailwind.min.js` | Utility classes via `<Script>` in `app/layout.tsx` |
-| Global CSS | `frontend/src/app/globals.css` | Base styles |
-| Legacy CSS | `frontend/public/css/layout.css` | `.ui-card`, `.nav-active`, shared with Go templates |
-| Dark mode | `darkMode: 'class'` | Toggle `dark` on `<html>` via `frontend/src/lib/theme.tsx` |
+| Tailwind | `frontend/src/styles/globals.css` | Tailwind v4 via PostCSS; design tokens live here |
+| Primitives | `frontend/src/components/ui/` | shadcn/ui (base-nova, `@base-ui/react`) |
+| Dark mode | `.dark` class on `<html>` | Toggled by `src/lib/theme.tsx`, hydrated by the inline script in `frontend/index.html` |
+
+> Do NOT use a CDN Tailwind build or Font Awesome; the project builds Tailwind
+> locally and uses lucide-react icons (`size-4` utility, see
+> `docs/frontend-style-conventions.md`).
 
 **Dashboard reference pattern:**
 
 ```
-bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm
+bg-card text-foreground border border-border rounded-lg p-(--card-spacing) shadow-sm
 ```
 
 ## Theme toggle
@@ -32,25 +35,25 @@ bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded
 | File | What to check |
 |------|---------------|
 | `frontend/src/lib/theme.tsx` | `ThemeProvider`, `localStorage forgec2_theme` |
-| `frontend/src/app/layout.tsx` | Inline `theme-init` script (hydration) |
+| `frontend/index.html` | Inline theme-init script (avoids a flash before hydration) |
 | `frontend/src/components/TopBar.tsx` | Light / Dark / System menu |
 | `frontend/src/components/ClientProvider.tsx` | Wraps `ThemeProvider` |
 
-## Language / RTL
+## Language
 
 | File | Role |
 |------|------|
-| `frontend/src/lib/i18n.tsx` | `setLocale`, `dir` for Arabic RTL |
-| `frontend/src/components/TopBar.tsx` | Language menu |
+| `frontend/src/lib/i18n/index.tsx` | `useI18n()`, `setLocale`, `t()` |
+| `frontend/src/lib/i18n/en.ts` / `zh.ts` | Locale blocks — keys must exist in BOTH |
 
 ## Fix checklist
 
 | Step | Action |
 |------|--------|
-| 1 | Match existing page patterns in `frontend/src/app/dashboard/page.tsx` |
-| 2 | Use `dark:` variants for all bg/border/text |
-| 3 | Add missing i18n keys to `frontend/src/lib/i18n.tsx` |
-| 4 | `cd frontend && npm run build` (or `npm run dev`) |
+| 1 | Match existing page patterns in `frontend/src/pages/dashboard/` |
+| 2 | Use design tokens for color (`--primary`, `--chart-*`); raw hex is blocked by `check:tokens` |
+| 3 | Add missing i18n keys to BOTH `en.ts` and `zh.ts` |
+| 4 | `cd frontend && npm run verify` |
 | 5 | Hard refresh browser |
 
 ## Common symptoms
@@ -58,16 +61,11 @@ bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded
 | Symptom | Fix |
 |---------|-----|
 | No dark mode | Check `ThemeProvider` + `document.documentElement.classList` |
-| Raw i18n keys shown | Add key to all locales in `i18n.tsx` |
-| Sidebar overlap | `AppLayout.tsx` uses `ml-56` + fixed sidebar |
-| Font Awesome missing | `layout.tsx` links `/css/font-awesome.min.css` |
-
-## Legacy note
-
-Go template styling (`internal/server/templates/static/css/`) applies only to `:8080` HTML fallback. Primary UI is Next.js.
+| Raw i18n keys shown | Add the key to both locale blocks; `check:i18n` lists what's missing |
+| Sidebar overlap | `AppLayout` owns the shell; don't add page-level offsets |
 
 ## Verify
 
 - `/dashboard` and `/toolkit` cards look consistent in light and dark
 - Theme toggle persists after reload
-- Arabic locale sets `dir="rtl"` on `<html>`
+- `npm run verify` is green

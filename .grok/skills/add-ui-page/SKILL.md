@@ -1,6 +1,6 @@
 ---
 name: add-ui-page
-description: Add a new ForgeC2 Next.js page (App Router route, layout nav, i18n, API wiring)
+description: Add a new ForgeC2 page (Vite + React Router route, layout nav, i18n, API wiring)
 license: MIT
 compatibility: grok
 metadata:
@@ -12,20 +12,18 @@ metadata:
 
 ### 1. Create page
 
-**File:** `frontend/src/app/your-page/page.tsx`
+**File:** `frontend/src/pages/your-page/YourPage.tsx`
 
 ```tsx
-"use client";
-
-import { apiGet } from "@/lib/api";
+import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
 export default function YourPage() {
   const { t } = useI18n();
-  // fetch via apiGet("/your-api-path")
+  // fetch via api.get(paths.your.endpoint)
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">
+      <h1 className="text-2xl font-semibold text-foreground">
         {t("yourpage.title")}
       </h1>
     </div>
@@ -33,9 +31,13 @@ export default function YourPage() {
 }
 ```
 
-### 2. Optional layout wrapper
+Then register it in `frontend/src/router.tsx` (pages are lazy-loaded there)
+and add the path to `paths` in `frontend/src/lib/api-paths.ts`.
 
-If the page needs the sidebar, ensure it's under a route group using `AppLayout` (most pages inherit from parent `layout.tsx` in `frontend/src/app/(main)/` or similar — check existing pages).
+### 2. Layout wrapper
+
+The app shell is global: `AppLayout` wraps the router outlet, so every page
+already has the sidebar and top bar. No per-page layout file is needed.
 
 ### 3. Navigation
 
@@ -47,38 +49,43 @@ If the page needs the sidebar, ensure it's under a route group using `AppLayout`
 
 ### 4. i18n
 
-**File:** `frontend/src/lib/i18n.tsx` — add keys for en, zh, ja (minimum):
+**File:** `frontend/src/lib/i18n/en.ts` and `frontend/src/lib/i18n/zh.ts` — add
+the key to BOTH locale blocks (en and zh; `check:i18n` fails otherwise):
 
 ```ts
 "nav.yourpage": "Your Page",
 "yourpage.title": "Your Page",
 ```
 
-See `add-i18n` skill for full locale coverage.
-
 ### 5. Go API (if new endpoint)
 
-If the page needs a new backend route, use `add-api-endpoint` skill. Existing pages call Go via:
+Pages call Go directly on the same origin through the typed client — there is no
+Next.js-style proxy:
 
-```
-/api/go?p=/your-path&format=json
+```ts
+await api.get(paths.your.endpoint);
+await api.postJson(paths.your.action, { ... });
 ```
 
-Handlers should call `s.renderPageOrJSON()` — it returns JSON for the Next.js proxy.
+`check:api-paths` rejects bare string paths, so add every new path to
+`frontend/src/lib/api-paths.ts`. Handlers answer a `{success, data}` envelope;
+`api.ts` unwraps `data` for you.
 
 ### 6. Build & test
 
 ```powershell
 cd frontend
-npm run dev
-# or npm run build && npx next start -p 3000
+npm run dev      # Vite dev server, /api proxied to the Go server on :8000
+npm run verify   # typecheck + lint + vitest + all check:* gates
 ```
 
-> All new pages are Next.js-only. Go backend no longer serves HTML templates or static assets.
+> This is a Vite SPA, not Next.js. The Go server embeds the production build
+> (`internal/webdist/dist`); sync it with `scripts/build-embedded.ps1` before
+> pushing, or the `check:webdist` pre-push hook fails.
 
 ## Verify
 
-- Page loads at `http://localhost:3000/your-page`
-- Sidebar highlights active nav
-- API calls succeed (Network tab → `/api/go?p=...`)
-- i18n keys render (not raw key names)
+- Page loads in the running app and the sidebar highlights the active nav item
+- API calls succeed (Network tab → `/api/...`)
+- i18n keys render in both locales (not raw key names)
+- `npm run verify` is green

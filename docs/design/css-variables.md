@@ -1,6 +1,6 @@
 # CSS Variables → Figma Style Mapping
 
-## Source: `frontend/src/app/globals.css`
+## Source: `frontend/src/styles/globals.css`
 
 ### Background / Surface
 

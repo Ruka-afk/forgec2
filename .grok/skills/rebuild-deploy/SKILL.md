@@ -10,7 +10,7 @@ metadata:
 
 ## When to use
 
-Use after changing Go handlers/API, Next.js pages (`frontend/src/`), or embedded frontend assets.
+Use after changing Go handlers/API, frontend pages (`frontend/src/`), or embedded frontend assets.
 
 ## Architecture
 
@@ -18,7 +18,8 @@ Single binary — all-in-one process:
 
 | Component | Port | Build |
 |-----------|------|-------|
-| Go server (with embedded Next.js UI) | 8000 | `powershell -File scripts/build-embedded.ps1` |
+| Go server (with embedded Vite UI) | 8000 | `powershell -File scripts/build-embedded.ps1` |
+| Vite dev server (proxies /api to :8000) | 5173 | `cd frontend && npm run dev` |
 
 ## Windows — full restart (recommended)
 
@@ -26,7 +27,9 @@ Single binary — all-in-one process:
 powershell -File scripts\build-embedded.ps1
 ```
 
-`build-embedded.ps1` builds Next.js frontend → copies to embed directory → compiles Go binary → restarts server → runs health check.
+`build-embedded.ps1` regenerates the OpenAPI types → syncs the win7 shim → builds
+the Vite frontend → copies `frontend/out` to the embed directory → runs every
+`check:*` gate → compiles the Go binary → restarts the server.
 
 ## Manual steps
 
@@ -62,12 +65,12 @@ Invoke-RestMethod http://127.0.0.1:8000/health
 # Terminal 1 — API with live reload
 go run ./cmd/server -config config.yaml
 
-# Terminal 2 — Next.js hot reload (proxies API to Go on :8000)
+# Terminal 2 — Vite hot reload (proxies API to Go on :8000)
 cd frontend
 npm run dev
 ```
 
-Open **http://localhost:3000** (Next.js hot-reload) or **http://localhost:8000** (single binary).
+Open **http://localhost:5173** (Vite hot-reload) or **http://localhost:8000** (single binary).
 
 ## Backend-only rebuild (no frontend changes)
 

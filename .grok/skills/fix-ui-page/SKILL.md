@@ -1,6 +1,6 @@
 ---
 name: fix-ui-page
-description: Fix ForgeC2 Next.js UI page issues — button handlers, API wiring, tabs. Use for frontend bugs on :3000.
+description: Fix ForgeC2 UI page issues — button handlers, API wiring, tabs. Use for frontend bugs on the Vite SPA.
 license: MIT
 compatibility: grok
 metadata:
@@ -10,7 +10,7 @@ metadata:
 
 ## When to use
 
-Button clicks do nothing, API calls fail, tabs don't switch, or page changes don't appear after edits on the **Next.js UI** (`:3000`).
+Button clicks do nothing, API calls fail, tabs don't switch, or page changes don't appear after edits on the **frontend** (`src/pages/**`).
 
 **CSS / theme issues** → use `fix-ui-style` skill.
 
@@ -18,19 +18,19 @@ Button clicks do nothing, API calls fail, tabs don't switch, or page changes don
 
 | Layer | Path |
 |-------|------|
-| Pages | `frontend/src/app/<route>/page.tsx` |
-| Components | `frontend/src/components/` |
-| API client | `frontend/src/lib/api.ts` (`apiGet`, `apiPostJson`, `apiSend`, `apiDelete`) |
-| Proxy | `frontend/src/app/api/go/route.ts` → Go `:8080` |
-| i18n | `frontend/src/lib/i18n.tsx` |
+| Pages | `frontend/src/pages/<route>/<Page>.tsx` (registered in `src/router.tsx`) |
+| Components | `frontend/src/components/` (page-private ones live in `src/pages/<route>/components/`) |
+| API client | `frontend/src/lib/api.ts` (`api.get`, `api.post`, `api.postJson`, `api.del`) |
+| API paths | `frontend/src/lib/api-paths.ts` (`paths.*`) — enforced by `check:api-paths` |
+| i18n | `frontend/src/lib/i18n/index.tsx` + `en.ts` / `zh.ts` |
 | Theme | `frontend/src/lib/theme.tsx` |
 
 ## Button / action checklist
 
 1. **Handler**: wire `onClick` or form `onSubmit` in the page component (React, not `data-action`).
-2. **API call**: use `apiGet("/path")` or `apiPostJson("/path", body)` — paths match Go routes (e.g. `/agents/batch`).
-3. **Credentials**: `api.ts` helpers include `credentials: "include"` for session cookies.
-4. **Feedback**: toast, `actionMsg` banner, or `ConfirmModal` from `@/components/UI`.
+2. **API call**: use `api.get(paths.your.endpoint)` / `api.postJson(paths.your.action, body)` — paths must live in `api-paths.ts`, not inline strings.
+3. **Credentials**: `api.ts` helpers send session cookies and the CSRF header on mutations.
+4. **Feedback**: `toast` from sonner for transient results, `<Banner>` for persistent status, `useConfirm()` for destructive actions.
 5. **Reload data**: call your `load*` function after mutation, don't rely on `location.reload()`.
 
 ## Tabs checklist
@@ -43,18 +43,16 @@ Button clicks do nothing, API calls fail, tabs don't switch, or page changes don
 
 ```powershell
 cd frontend
-npm run build    # production
-# or npm run dev  # development (hot reload)
+npm run verify   # typecheck + lint + vitest + every check:* gate
 ```
 
-If Go handler changed too: `go build -o forgec2-server.exe ./cmd/server` and restart API.
+Then sync the embedded bundle before pushing (`scripts/build-embedded.ps1` from
+the repo root) — the `check:webdist` pre-push hook fails otherwise.
 
-## Legacy Go templates
-
-Old `data-action` + `layout.js` pattern still exists in `internal/server/templates/static/js/` for `:8080` fallback. **Do not use for new UI work** — edit Next.js instead.
+If a Go handler changed too: `go build -o forgec2-server.exe ./cmd/server` and restart the API.
 
 ## Verify
 
-- DevTools → Network: `/api/go?p=...` returns 200
+- DevTools → Network: the `/api/...` request returns 200 and the UI updates
 - No console errors on click
-- Hard refresh if testing production build (`next start`)
+- `npm run verify` is green

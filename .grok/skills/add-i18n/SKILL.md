@@ -1,6 +1,6 @@
 ---
 name: add-i18n
-description: Add internationalization keys to ForgeC2 following locales.go en/zh/ja/ko/ar pattern
+description: Add internationalization keys to ForgeC2 following the locales.go / i18n en+zh pattern
 license: MIT
 compatibility: grok
 metadata:
@@ -14,21 +14,19 @@ Replace hardcoded UI strings or add translations for a new page/feature.
 
 ## Supported languages
 
-Defined in `internal/server/locales.go`:
+Two, on both the server and the frontend.
 
-| Code | Map variable |
-|------|--------------|
-| `en` | `enTranslations` |
-| `zh` | `zhTranslations` |
-| `ja` | `jaTranslations` |
-| `ko` | `koTranslations` |
-| `ar` | `arTranslations` |
+| Code | Server (`internal/server/locales.go`) | Frontend (`frontend/src/lib/i18n/`) |
+|------|--------------------------------------|--------------------------------------|
+| `en` | `enTranslations` | `en.ts` |
+| `zh` | `zhTranslations` | `zh.ts` |
 
-`SupportedLanguages` and `translations` map wire these together. `ar` is RTL.
+`SupportedLanguages` and `translations` wire these together on the server;
+`check:i18n` fails if a `t()` key is missing from either frontend block.
 
 ## Add a new key
 
-Add the same key to **all five** `*Translations` maps:
+Add the same key to **both** maps:
 
 ```go
 // enTranslations
@@ -36,20 +34,11 @@ Add the same key to **all five** `*Translations` maps:
 
 // zhTranslations
 "myfeature.title": "我的功能",
-
-// jaTranslations
-"myfeature.title": "マイ機能",
-
-// koTranslations
-"myfeature.title": "내 기능",
-
-// arTranslations
-"myfeature.title": "ميزتي",
 ```
 
 ## Usage patterns
 
-### Next.js frontend (`frontend/src/lib/i18n.tsx`)
+### Frontend (`frontend/src/lib/i18n/index.tsx`, keys in `en.ts` + `zh.ts`)
 
 ```tsx
 const { t } = useI18n();
