@@ -38,6 +38,17 @@ describe("credActionAllowed", () => {
     expect(credActionBlockReason("creds", false)).toBeNull();
     expect(credActionEndpoint("creds_dump")).toBe("creds");
     expect(CRED_HARVEST_ACTIONS.some((a) => a.quality === "core")).toBe(false);
+
     expect(CRED_HARVEST_ACTIONS.find((a) => a.action === "mimikatz")?.requiresMimikatzModule).toBe(true);
+  });
+
+  it("keeps module-dependent actions blocked but honest when availability is unknown", () => {
+    // null = the module list could not be read. Blocked (never enabled on
+    // unverified state), but the reason is "unknown", not "missing".
+    expect(credActionAllowed("mimikatz", null)).toBe(false);
+    expect(credActionBlockReason("mimikatz", null)).toBe("module_status_unknown");
+    // Actions that do not need the module stay available.
+    expect(credActionAllowed("creds", null)).toBe(true);
+    expect(credActionBlockReason("creds", null)).toBeNull();
   });
 });

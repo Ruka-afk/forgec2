@@ -73,7 +73,7 @@ import { useAgentNotes } from "./hooks/useAgentNotes";
 import { useAgentDangerActions } from "./hooks/useAgentDangerActions";
 import { useAgentTaskSync } from "./hooks/useAgentTaskSync";
 import { usePersistedState } from "@/lib/hooks/usePersistedState";
-import { credActionBlockReason, credActionEndpoint, hasMimikatzModule, parseModuleNames } from "@/lib/cred-quality";
+import { credActionBlockReason, credActionEndpoint, hasMimikatzModule, parseModuleNames, type ModuleAvailability } from "@/lib/cred-quality";
 import { sessionActionQuality } from "./components/session-quality";
 import { implantBlocksDest, isCImplant } from "@/lib/implant-version";
 
@@ -173,7 +173,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   }, [lbOpen, lbIndex, screenshots.length]);
 
   const [credCount, setCredCount] = useState<number | null>(null);
-  const [mimikatzReady, setMimikatzReady] = useState(false);
+  const [mimikatzReady, setMimikatzReady] = useState<ModuleAvailability>(null);
   const [avProducts, setAvProducts] = useState<string[]>([]);
   const [avFetched, setAvFetched] = useState(false);
 
@@ -251,7 +251,9 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     const controller = new AbortController();
     api.get(paths.modules.list, { signal: controller.signal })
       .then((r) => setMimikatzReady(hasMimikatzModule(parseModuleNames(r))))
-      .catch(() => setMimikatzReady(false));
+      // Leave availability unknown: a failed module-list query must not assert
+      // that the agent is missing mimikatz.
+      .catch(() => setMimikatzReady(null));
     return () => controller.abort();
   }, []);
 
@@ -318,8 +320,13 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
 
   const quickAction = useCallback(
     async (action: string, label: string) => {
-      if (credActionBlockReason(action, mimikatzReady) === "missing_module") {
+      const reason = credActionBlockReason(action, mimikatzReady);
+      if (reason === "missing_module") {
         toast.error(t("cred.missing_module"));
+        return;
+      }
+      if (reason === "module_status_unknown") {
+        toast.error(t("cred.module_status_unknown"));
         return;
       }
       if (implantBlocksDest(agent.version, sessionActionQuality(action))) {

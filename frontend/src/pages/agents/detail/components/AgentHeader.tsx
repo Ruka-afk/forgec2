@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useI18n } from "@/lib/i18n";
+import type { ModuleAvailability } from "@/lib/cred-quality";
 import { isExperimentalDesktop, sessionActionQuality, type SessionActionQuality } from "./session-quality";
 import { implantBlocksDest, knownImplantVersion } from "@/lib/implant-version";
 import { rebuildPayloadHref } from "@/lib/generate-query";
@@ -41,7 +42,7 @@ interface AgentHeaderProps {
   actionLoading: string | null;
   onQuickAction: (action: string, label: string) => void;
   credCount: number | null;
-  mimikatzReady?: boolean;
+  mimikatzReady?: ModuleAvailability;
   avProducts?: string[];
   onKill: () => void;
   onUninstall: () => void;
@@ -51,7 +52,7 @@ interface AgentHeaderProps {
 
 export default memo(function AgentHeader({
   agent, agentId, status,
-  actionLoading, onQuickAction, credCount, mimikatzReady = false, avProducts = [], onKill, onUninstall, onMigrate, onPopOut,
+  actionLoading, onQuickAction, credCount, mimikatzReady = null, avProducts = [], onKill, onUninstall, onMigrate, onPopOut,
 }: AgentHeaderProps) {
   const { t } = useI18n();
   const hostname = agent.hostname || "\u2014";
@@ -213,10 +214,15 @@ export default memo(function AgentHeader({
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-4">
         {quickActions.map((item) => {
-          const blocked = "needsModule" in item && item.needsModule && !mimikatzReady;
+          const needsModule = "needsModule" in item && item.needsModule;
+          // mimikatzReady === null means the module list could not be read.
+          // Stay disabled (never act on unverified state) but do not claim the
+          // module is missing.
+          const moduleUnknown = !!needsModule && mimikatzReady === null;
+          const blocked = !!needsModule && mimikatzReady === false;
           const quality = sessionActionQuality(item.action);
           const versionBlocked = implantBlocksDest(agent.version, quality);
-          const disabled = status !== "online" || actionLoading !== null || blocked || versionBlocked;
+          const disabled = status !== "online" || actionLoading !== null || blocked || moduleUnknown || versionBlocked;
           return (
           <Tooltip key={item.action}>
             <TooltipTrigger render={
@@ -241,8 +247,10 @@ export default memo(function AgentHeader({
               )}
             </TooltipTrigger>
             <TooltipContent>
-              {blocked
-                ? t("cred.missing_module")
+              {moduleUnknown
+                ? t("cred.module_status_unknown")
+                : blocked
+                  ? t("cred.missing_module")
                 : versionBlocked
                   ? t("agents.version_unknown_dest")
                 : item.action === "privesc_check"

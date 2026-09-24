@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Banner } from "@/components/ui/banner";
 import { PageContainer } from "@/components/ui/page-container";
+import { DataError } from "@/components/ui/data-state";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CalendarCheck, Cog, Boxes, FolderOpen, Puzzle, Server, Settings } from "lucide-react";
@@ -46,6 +47,7 @@ export default function AgentPersistencePage() {
   const id = params?.id as string;
   const [agent, setAgent] = useState<AgentDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [queuedMethods, setQueuedMethods] = useState<string[]>([]);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [listOutput, setListOutput] = useState<string | null>(null);
@@ -57,7 +59,11 @@ export default function AgentPersistencePage() {
     try {
       const data = await api.get(paths.agents.one(id));
       setAgent(data.agent || data);
+      setLoadError(null);
     } catch {
+      // Distinguish "could not load" from "no such agent": a failed request used
+      // to render the not-found page, which reads as a deleted implant.
+      setLoadError(t("agents.persistence_load_failed"));
       toast.error(t("agents.persistence_load_failed"));
     } finally {
       setLoading(false);
@@ -156,14 +162,18 @@ export default function AgentPersistencePage() {
   if (!agent) {
     return (
       <PageContainer>
-        <div className="text-center py-20">
-          <Bug className="size-4" aria-hidden="true" />
-          <h2 className="text-xl font-semibold text-foreground mb-2">{t("agents.persistence_not_found_title")}</h2>
-          <p className="text-sm text-muted-foreground mb-6">{t("agents.persistence_not_found_desc")}</p>
-          <Button render={<Link to="/agents" />}>
-              {t("agents.persistence_back_to_agents")}
-          </Button>
-        </div>
+        {loadError ? (
+          <DataError message={loadError} onRetry={() => { setLoading(true); void loadAgent(); }} />
+        ) : (
+          <div className="text-center py-20">
+            <Bug className="size-4" aria-hidden="true" />
+            <h2 className="text-xl font-semibold text-foreground mb-2">{t("agents.persistence_not_found_title")}</h2>
+            <p className="text-sm text-muted-foreground mb-6">{t("agents.persistence_not_found_desc")}</p>
+            <Button render={<Link to="/agents" />}>
+                {t("agents.persistence_back_to_agents")}
+            </Button>
+          </div>
+        )}
       </PageContainer>
     );
   }

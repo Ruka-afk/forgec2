@@ -16,6 +16,7 @@ import {
   hasMimikatzModule,
   parseModuleNames,
   type CredActionQuality,
+  type ModuleAvailability,
 } from "@/lib/cred-quality";
 
 function QualityMark({ quality }: { quality: CredActionQuality }) {
@@ -41,7 +42,7 @@ export function CredHarvestCard() {
   const { t } = useI18n();
   const [agents, setAgents] = useState<Array<{ id: string; hostname: string; status?: string }>>([]);
   const [agentId, setAgentId] = useState("");
-  const [hasModule, setHasModule] = useState(false);
+  const [hasModule, setHasModule] = useState<ModuleAvailability>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -59,7 +60,10 @@ export function CredHarvestCard() {
       setAgents(list);
       setAgentId((prev) => prev || list.find((a) => a.status === "online")?.id || list[0]?.id || "");
     } catch {
-      setHasModule(false);
+      // Unknown, not "missing". Reporting the module as absent on a failed
+      // module-list query told the operator their agent lacks mimikatz and
+      // disabled every harvest action for a reason that may not exist.
+      setHasModule(null);
     }
   }, []);
 
@@ -70,8 +74,13 @@ export function CredHarvestCard() {
       toast.error(t("cred.harvest_need_agent"));
       return;
     }
-    if (credActionBlockReason(action, hasModule) === "missing_module") {
+    const reason = credActionBlockReason(action, hasModule);
+    if (reason === "missing_module") {
       toast.error(t("cred.missing_module"));
+      return;
+    }
+    if (reason === "module_status_unknown") {
+      toast.error(t("cred.module_status_unknown"));
       return;
     }
     const def = CRED_HARVEST_ACTIONS.find((a) => a.action === action);
@@ -109,7 +118,7 @@ export function CredHarvestCard() {
         </div>
         <div className="flex flex-wrap gap-2">
           {CRED_HARVEST_ACTIONS.map((a) => {
-            const blocked = credActionBlockReason(a.action, hasModule) === "missing_module";
+            const reason = credActionBlockReason(a.action, hasModule);
             const allowed = credActionAllowed(a.action, hasModule);
             return (
               <Button
@@ -118,7 +127,7 @@ export function CredHarvestCard() {
                 variant="outline"
                 size="sm"
                 disabled={!agentId || !allowed || busy !== null}
-                title={blocked ? t("cred.missing_module") : undefined}
+                title={reason === "module_status_unknown" ? t("cred.module_status_unknown") : reason === "missing_module" ? t("cred.missing_module") : undefined}
                 onClick={() => { void harvest(a.action); }}
                 className="h-auto flex-col items-start gap-0.5 px-3 py-2"
               >
@@ -131,12 +140,13 @@ export function CredHarvestCard() {
           })}
         </div>
       </div>
-      {!hasModule && (
+      {hasModule === null ? (
+        <p className="mt-3 text-xs text-destructive">{t("cred.module_status_unknown")}</p>
+      ) : !hasModule ? (
         <p className="mt-3 text-xs text-warning">
           {t("cred.missing_module")}
         </p>
-      )}
-      {hasModule && (
+      ) : (
         <Badge variant="outline" className="mt-3 text-(--fs-micro-sm)">{t("cred.module_ready")}</Badge>
       )}
     </Card>

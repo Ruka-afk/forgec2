@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Activity, Plug } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
+import { DataError } from "@/components/ui/data-state";
 import { POLL } from "@/lib/polling";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { firstArray } from "@/lib/envelope";
@@ -68,6 +69,7 @@ export default function ListenerDetailPage() {
   const [agents, setAgents] = useState<ListenerAgent[]>([]);
   const [stats, setStats] = useState({ total: 0, active: 0 });
   const [loading, setLoading] = useState(true);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [health, setHealth] = useState<ListenerHealth | undefined>(undefined);
   const [healthSamples, setHealthSamples] = useState<HealthSample[]>([]);
   const { t } = useI18n();
@@ -77,17 +79,21 @@ export default function ListenerDetailPage() {
     try {
       const data = await api.get(paths.listeners.one(id));
       setListener(data.listener || data);
+      setDetailError(null);
       const a: ListenerAgent[] = (data.agents || []) as ListenerAgent[];
       setAgents(a);
       setStats({ total: a.length, active: a.filter(ag => (ag.status) === "online").length });
     } catch {
+      // A failed request is not proof the listener was deleted. Keep them
+      // separate so a 500 does not render as "listener not found".
       setListener(null);
       setAgents([]);
       setStats({ total: 0, active: 0 });
+      setDetailError(t("listeners.load_failed"));
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, t]);
 
   const loadHealth = useCallback(async () => {
     if (!id) return;
@@ -124,10 +130,14 @@ export default function ListenerDetailPage() {
   if (!listener) {
     return (
       <PageContainer>
-        <div className="text-center py-20 text-muted-foreground">
-          <Plug className="size-4 mx-auto" />
-          <p className="mt-2">{t("listeners.not_found")}</p>
-        </div>
+        {detailError ? (
+          <DataError message={detailError} onRetry={() => { setLoading(true); void loadDetail(); }} />
+        ) : (
+          <div className="text-center py-20 text-muted-foreground">
+            <Plug className="size-4 mx-auto" />
+            <p className="mt-2">{t("listeners.not_found")}</p>
+          </div>
+        )}
       </PageContainer>
     );
   }

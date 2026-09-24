@@ -12,6 +12,8 @@ export function useCampaignData() {
   const [loading, setLoading] = useState(true);
   const [selectedCampaign, setSelectedCampaign] = useState<string | null>(null);
   const [campaignStats, setCampaignStats] = useState<CampaignStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   const loadCampaigns = useCallback(
@@ -39,11 +41,20 @@ export function useCampaignData() {
 
   const loadCampaignDetail = useCallback(
     async (id: string, signal?: AbortSignal) => {
+      // campaignStats === null used to mean both "loading" and "failed", so a
+      // failed detail fetch left the detail panel spinning forever.
+      setStatsLoading(true);
+      setStatsError(null);
       try {
         const data = await api.get<{ stats?: CampaignStats }>(paths.campaigns.one(id), { signal });
+        if (signal?.aborted) return;
         setCampaignStats(data.stats || null);
       } catch {
-        if (!signal?.aborted) toast.error(t("campaign.toast.load_stats_failed"));
+        if (signal?.aborted) return;
+        setStatsError(t("campaign.toast.load_stats_failed"));
+        toast.error(t("campaign.toast.load_stats_failed"));
+      } finally {
+        if (!signal?.aborted) setStatsLoading(false);
       }
     },
     [t],
@@ -121,6 +132,8 @@ export function useCampaignData() {
     selectedCampaign,
     setSelectedCampaign,
     campaignStats,
+    statsLoading,
+    statsError,
     creating,
     loadCampaigns,
     loadCampaignDetail,

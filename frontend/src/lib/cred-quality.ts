@@ -52,15 +52,25 @@ export function credActionDef(action: string): CredDumpAction | undefined {
   return CRED_DUMP_ACTIONS.find((a) => a.action === action);
 }
 
-export function credActionAllowed(action: string, hasModule: boolean): boolean {
+/**
+ * Mimikatz module availability. `null` means UNKNOWN — the module list could
+ * not be read. It is not the same as `false`: reporting a failed query as
+ * "module missing" told operators their agent lacked the module and disabled
+ * the credential actions for a reason that may not exist.
+ */
+export type ModuleAvailability = boolean | null;
+
+export function credActionAllowed(action: string, hasModule: ModuleAvailability): boolean {
   const def = credActionDef(action);
   if (!def) return true;
   if (!def.requiresMimikatzModule) return true;
-  return hasModule;
+  // Unknown stays blocked: never enable an action on unverified state.
+  return hasModule === true;
 }
 
-export function credActionBlockReason(action: string, hasModule: boolean): "missing_module" | null {
-  return credActionAllowed(action, hasModule) ? null : "missing_module";
+export function credActionBlockReason(action: string, hasModule: ModuleAvailability): "missing_module" | "module_status_unknown" | null {
+  if (credActionAllowed(action, hasModule)) return null;
+  return hasModule === null ? "module_status_unknown" : "missing_module";
 }
 
 export function credActionEndpoint(action: string): string {

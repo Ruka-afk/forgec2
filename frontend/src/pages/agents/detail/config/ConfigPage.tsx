@@ -9,6 +9,7 @@ import { Spinner, PageSpinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { PageContainer } from "@/components/ui/page-container";
+import { DataError } from "@/components/ui/data-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,9 +54,10 @@ const defaultConfig: EffectiveConfig = {
 export default function AgentConfigPage() {
   const { id } = useParams<{ id: string }>();
   const { t } = useI18n();
-  const [effective, setEffective] = useState<EffectiveConfig>(defaultConfig);
+  const [effective, setEffective] = useState<EffectiveConfig | null>(null);
   const [hasPending, setHasPending] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [editSleep, setEditSleep] = useState("");
   const [editJitter, setEditJitter] = useState("");
@@ -84,8 +86,12 @@ export default function AgentConfigPage() {
       const data = await api.get<ConfigResponse>(paths.agents.config(id));
       setEffective(data.effective);
       setHasPending(data.has_pending);
+      setLoadError(null);
       resetForm(data.effective);
     } catch {
+      // effective stays null. Defaulting it to defaultConfig rendered the
+      // placeholder as if it were this agent's real configuration.
+      setLoadError(t("agents.config_load_failed"));
       toast.error(t("agents.config_load_failed"));
     } finally {
       setLoading(false);
@@ -150,6 +156,14 @@ export default function AgentConfigPage() {
 
   if (loading) {
     return <PageContainer><PageSpinner /></PageContainer>;
+  }
+
+  if (!effective) {
+    return (
+      <PageContainer>
+        <DataError message={loadError || t("agents.config_load_failed")} onRetry={() => { setLoading(true); void loadConfig(); }} />
+      </PageContainer>
+    );
   }
 
   return (

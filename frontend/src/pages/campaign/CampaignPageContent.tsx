@@ -35,7 +35,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, Check, Clock, ListChecks, ListTodo, Play, Plus, Trash2, Zap } from "lucide-react";
+import { ArrowLeft, Check, Clock, ListChecks, ListTodo, Play, Plus, RefreshCw, Trash2, TriangleAlert, Zap } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -64,10 +64,13 @@ export default function CampaignPageContent() {
     selectedCampaign,
     setSelectedCampaign,
     campaignStats,
+    statsLoading,
+    statsError,
     creating,
     createCampaign,
     deleteCampaign,
     updateStatus,
+    loadCampaignDetail,
   } = useCampaignData();
 
   const [showCreate, setShowCreate] = useState(false);
@@ -135,6 +138,9 @@ export default function CampaignPageContent() {
           key={selected.id}
           campaign={selected}
           stats={campaignStats}
+          statsLoading={statsLoading}
+          statsError={statsError}
+          onRetryStats={() => { if (selected.id) void loadCampaignDetail(selected.id); }}
           onBack={() => setSelectedCampaign(null)}
           onDelete={() => handleDelete(selected.id)}
           onStatusChange={(s) => handleStatusChange(selected.id, s)}
@@ -186,10 +192,13 @@ export default function CampaignPageContent() {
 }
 
 function CampaignDetailView({
-  campaign, stats, onBack, onDelete, onStatusChange, formatTime,
+  campaign, stats, statsLoading, statsError, onRetryStats, onBack, onDelete, onStatusChange, formatTime,
 }: {
   campaign: Campaign;
   stats: CampaignStats | null;
+  statsLoading: boolean;
+  statsError: string | null;
+  onRetryStats: () => void;
   onBack: () => void;
   onDelete: () => void;
   onStatusChange: (s: string) => void;
@@ -496,6 +505,14 @@ function CampaignDetailView({
             )}
           </Card>
         </>
+      ) : statsError ? (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-destructive/10 rounded-lg border border-destructive/20">
+          <TriangleAlert className="size-4 text-destructive shrink-0" />
+          <p className="flex-1 text-sm text-destructive">{statsError}</p>
+          <Button variant="outline" size="sm" onClick={onRetryStats} disabled={statsLoading} className="shrink-0">
+            <RefreshCw className="size-4" />{t("common.try_again")}
+          </Button>
+        </div>
       ) : (
         <p className="text-center text-muted-foreground py-8">
           <Spinner size="sm" /> {t("campaign.loading_stats")}
