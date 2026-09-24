@@ -355,9 +355,9 @@ func (s *Server) handleBeacon(c *gin.Context) {
 		// A rejected encrypted frame means the agent's sequence fell behind
 		// the server's or the server lost its session (restart/sweep). Reply
 		// with a MAC-signed resync (+rekey) so the agent fast-forwards and
-		// re-handshakes instead of being permanently locked out. Only
-		// attempted for genuine encrypted frames from a known agent (no row
-		// => resyncResponseFor returns false).
+		// re-handshakes instead of being permanently locked out. resyncResponseFor
+		// answers only AEAD-authenticated frames and frames from agents whose
+		// session the server no longer holds, so this is not a UUID oracle.
 		if body, ok := s.resyncResponseFor(env); ok {
 			c.Data(http.StatusOK, "application/json", body)
 			return

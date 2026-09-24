@@ -258,8 +258,23 @@ func (s *Server) buildResyncResponse(agentID string, seq uint64) ([]byte, bool) 
 // frame, so every transport can answer identically: the agent re-handshakes
 // instead of error-looping. Returns false for garbage frames (no CipherB64,
 // invalid ID) and unknown agents.
+//
+// Two rejection classes may earn a resync:
+//   - the ciphertext authenticated but the sequence window rejected it
+//     (envelope.authed): a genuinely desynced real agent, and
+//   - the server holds no session for that UUID any more (restart / sweep):
+//     the agent cannot possibly decrypt, so a resync + rekey is the only way
+//     it learns to re-handshake.
+//
+// A frame that failed AEAD while the server still holds a live session is
+// unauthenticated garbage. Answering it would turn every transport into a
+// "does this UUID exist?" oracle (MAC-signed response for known agents only)
+// and a free response amplifier, so it is dropped.
 func (s *Server) resyncResponseFor(env beaconEnvelope) ([]byte, bool) {
 	if env.CipherB64 == "" || !isValidAgentID(env.UUID) {
+		return nil, false
+	}
+	if !env.authed && s.sessionManager != nil && s.sessionManager.HasSession(env.UUID) {
 		return nil, false
 	}
 	return s.buildResyncResponse(env.UUID, env.Seq)
@@ -385,8 +400,10 @@ func (s *Server) decodeBeaconEnvelope(raw []byte) (envelope beaconEnvelope, req 
 			// resync gate keys on env.CipherB64 != "" to distinguish "could
 			// not decrypt at all" (unknown session: server restarted or the
 			// entry was swept) from garbage. With the envelope, a known agent
-			// gets the MAC-signed resync + rekey signal and re-handshakes on
-			// the next beacon instead of 400-looping forever.
+			// whose session the server no longer holds gets the MAC-signed
+			// resync + rekey signal and re-handshakes on the next beacon
+			// instead of 400-looping forever. While a live session exists for
+			// that UUID, resyncResponseFor refuses to answer.
 			return envelope, beaconRequest{}, frameRejected
 		}
 
@@ -402,6 +419,9 @@ func (s *Server) decodeBeaconEnvelope(raw []byte) (envelope beaconEnvelope, req 
 			// not decrypt at all" from "decrypt ok but sequence behind" —
 			// only the latter gets the MAC-signed resync response that lets
 			// a desynced agent fast-forward instead of being locked out.
+			// authed marks this frame as AEAD-verified so the resync path can
+			// trust it.
+			envelope.authed = true
 			return envelope, beaconRequest{}, frameRejected
 		}
 

@@ -183,21 +183,28 @@ func (s *Server) startGRPCListener() {
 				MinVersion:   tls.VersionTLS12,
 			}
 
-			// mTLS: load client CA for mutual TLS verification
-			if s.cfg.Server.ClientCAFile != "" && s.cfg.Server.RequireClientCert {
-				caCert, caErr := os.ReadFile(s.cfg.Server.ClientCAFile)
-				if caErr != nil {
-					slog.Warn("gRPC mTLS: failed to load client CA", "err", caErr)
-				} else {
-					caPool := x509.NewCertPool()
-					if !caPool.AppendCertsFromPEM(caCert) {
-						slog.Warn("gRPC mTLS: failed to parse client CA")
-					} else {
-						tlsCfg.ClientCAs = caPool
-						tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
-						slog.Info("gRPC mTLS enabled", "client_ca", s.cfg.Server.ClientCAFile)
-					}
+			// mTLS: load client CA for mutual TLS verification. Every failure
+			// mode is fatal — starting the listener without client auth would
+			// silently downgrade a deployment that asked for mTLS.
+			if s.cfg.Server.RequireClientCert {
+				caPath := s.cfg.Server.ClientCAFile
+				if caPath == "" {
+					slog.Error("gRPC mTLS required but server.client_ca_file is empty; refusing to start")
+					return
 				}
+				caCert, caErr := os.ReadFile(caPath)
+				if caErr != nil {
+					slog.Error("gRPC mTLS: failed to load client CA; refusing to start insecure", "path", caPath, "err", caErr)
+					return
+				}
+				caPool := x509.NewCertPool()
+				if !caPool.AppendCertsFromPEM(caCert) {
+					slog.Error("gRPC mTLS: no valid certs in client CA; refusing to start insecure", "path", caPath)
+					return
+				}
+				tlsCfg.ClientCAs = caPool
+				tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
+				slog.Info("gRPC mTLS enabled", "client_ca", caPath)
 			}
 
 			listener.SetTLS(credentials.NewTLS(s.tlsFingerprint.Live(tlsCfg)))

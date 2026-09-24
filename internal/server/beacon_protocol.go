@@ -153,6 +153,12 @@ type beaconEnvelope struct {
 	IdentityPub string `json:"id_pub,omitempty"`    // registration: agent identity public key
 	RegHMAC     string `json:"reg_hmac,omitempty"`  // registration: HMAC(regKey, uuid||id_pub||ts)
 	SecretID    string `json:"secret_id,omitempty"` // v3 registration: per-implant secret id ("" = legacy v2 master-key path)
+
+	// authed marks a rejected frame whose ciphertext passed AEAD
+	// authentication (only the sequence window rejected it). Server-internal:
+	// json ignores it, and resyncResponseFor uses it to tell a genuinely
+	// desynced agent apart from unauthenticated garbage.
+	authed bool
 }
 
 // beaconFrameKind classifies a decoded envelope.

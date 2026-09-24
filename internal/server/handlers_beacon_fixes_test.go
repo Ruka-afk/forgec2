@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -78,21 +79,14 @@ func TestBadCiphertextDoesNotAdvanceReplayWindow(t *testing.T) {
 	})
 	tcpWriteFrame(t, conn, badFrame)
 
-	// The server answers a MAC-signed resync (+rekey) instead of closing: the
-	// agent fast-forwards and re-handshakes on the same connection.
+	// The server must NOT answer unauthenticated garbage with a MAC-signed
+	// resync: this agent's session is still live, so a resync here would be a
+	// "does this UUID exist?" oracle plus a free response amplifier. The
+	// connection is simply closed.
 	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	resyncFrame := tcpReadFrame(t, conn)
-	var rs struct {
-		Seq     uint64 `json:"seq"`
-		Rekey   bool   `json:"rekey"`
-		ECDHPub string `json:"ecdh_pub"`
-		Mac     string `json:"mac"`
-	}
-	if err := encoding.Unmarshal(resyncFrame, &rs); err != nil || rs.ECDHPub == "" || !rs.Rekey {
-		t.Fatalf("expected resync with rekey for bad ciphertext, got %s (err=%v)", resyncFrame, err)
-	}
-	if !agent.verifyResponseMAC(rs.Seq, rs.ECDHPub, rs.Mac) {
-		t.Fatalf("resync MAC mismatch: %s", resyncFrame)
+	var probeLen uint32
+	if err := binary.Read(conn, binary.BigEndian, &probeLen); err == nil {
+		t.Fatalf("bad ciphertext must not be answered (got frame len=%d)", probeLen)
 	}
 
 	// The REAL agent reconnects and sends a valid frame with the SAME seq 2.
