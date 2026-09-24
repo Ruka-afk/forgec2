@@ -3,6 +3,10 @@ on:
   push:
     branches: [main, dev]
   pull_request:
+  schedule:
+    # Weekly fuzz campaign (Mon 03:17 UTC). Seed corpora live in the repo, so a
+    # crash is reproducible locally with a plain `go test -run=^$ -fuzz=...`.
+    - cron: '17 3 * * 1'
 
 jobs:
   go:
@@ -53,7 +57,21 @@ jobs:
         with:
           name: vet-output
           path: vet.err
-      - run: go test ./internal/config/... ./internal/crypto/... ./internal/db/... ./internal/malleable/... ./internal/obfuscation/... ./internal/payload/... ./internal/plugin/... ./internal/server/... ./pkg/... -count=1 -timeout 5m -coverprofile=coverage.out
+      # scripting + cmd were previously untested here even though both ship
+      # tests; keep the list explicit so runtime stays predictable.
+      - name: Unit tests + coverage
+        run: go test ./internal/config/... ./internal/crypto/... ./internal/db/... ./internal/malleable/... ./internal/obfuscation/... ./internal/payload/... ./internal/plugin/... ./internal/scripting/... ./internal/server/... ./pkg/... ./cmd/... -count=1 -timeout 8m -coverprofile=coverage.out
+      - name: Coverage floor
+        # Ratcheting floor: current total is ~35%. Lower this only after adding
+        # tests, never to make a regression pass.
+        run: |
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub("%", "", $3); print $3}')
+          echo "total statement coverage: ${total}%"
+          floor=33
+          awk -v t="$total" -v f="$floor" 'BEGIN { exit (t+0 >= f+0) ? 0 : 1 }' || {
+            echo "coverage ${total}% is below the ${floor}% floor"
+            exit 1
+          }
       - run: go build ./...
       - run: go build -o checkopenapi ./cmd/checkopenapi
       - name: OpenAPI check (core paths + min coverage)
@@ -89,6 +107,67 @@ jobs:
           chmod +x scripts/ci-api-smoke.sh
           scripts/ci-api-smoke.sh
           kill $(cat /tmp/forgec2-smoke.pid) || true
+
+  race:
+    name: Race detector (concurrency-sensitive packages)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+          cache-dependency-path: go.sum
+      - run: go mod download
+      # The server runs beacon handlers, plugin workers, audit/SIEM queues and
+      # WebSocket fan-out concurrently; -race is the only gate that catches a
+      # shared-state regression there.
+      - name: go test -race
+        run: go test -race ./internal/server/... ./internal/plugin/... ./internal/scripting/... ./internal/payload/agent/... ./internal/db/... -count=1 -timeout 20m
+
+  fuzz:
+    name: Fuzz campaign
+    # Seed corpora run as part of the normal test pass; the actual fuzzing only
+    # happens on the weekly schedule (or manual dispatch) to keep PRs fast.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+          cache-dependency-path: go.sum
+      - run: go mod download
+      - name: Fuzz beacon parsing
+        run: go test ./internal/server/ -run='^$' -fuzz=FuzzBeaconRequestParsing -fuzztime=60s
+      - name: Fuzz beacon identity decode
+        run: go test ./internal/server/ -run='^$' -fuzz=FuzzDecodeBeaconIdentity -fuzztime=60s
+      - name: Fuzz malleable transforms
+        run: go test ./internal/malleable/ -run='^$' -fuzz=FuzzTransformChainDecode -fuzztime=60s
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-crashers
+          path: |
+            internal/server/testdata/fuzz/
+            internal/malleable/testdata/fuzz/
+
+  docker:
+    name: Docker build + compose validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate compose files
+        env:
+          # The production overlay requires an explicit JWT secret.
+          FORGEC2_JWT_SECRET: ci-validation-only-not-a-secret
+        run: |
+          docker compose -f docker-compose.yml config > /dev/null
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml config > /dev/null
+          docker compose --profile postgres -f docker-compose.yml config > /dev/null
+      - name: Build image
+        run: docker build -t forgec2:ci .
 
   smoke:
     runs-on: ubuntu-latest

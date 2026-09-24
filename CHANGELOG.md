@@ -30,6 +30,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - Built-in database backup/restore/VACUUM are explicitly SQLite-only: on other drivers the endpoints answer `501` with guidance (use `pg_dump`/`pgBackRest`) and the scheduled backup job stays disabled instead of failing cryptically
+- CI: `internal/scripting` + `cmd` packages are now part of the test run, a 33% statement-coverage floor is enforced (current total ~35%), a dedicated `-race` job covers server/plugin/scripting/agent/db, a weekly fuzz campaign exercises the beacon and malleable fuzz targets, and a new job validates all compose files plus the production overlay and builds the image
+- Release: CycloneDX SBOM (`forgec2-server-linux-amd64.sbom.json`) and SLSA-style build provenance attestations ship with tag releases, and release notes are lifted from the matching `CHANGELOG.md` section
+
+### Known limitations
+- GitHub Actions and container base images are still referenced by mutable tags (Dependabot tracks them); pinning to commit SHAs/digests is the remaining supply-chain step.
 
 ## [2.6.2] - 2026-09-24
 

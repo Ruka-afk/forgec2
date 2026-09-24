@@ -7,6 +7,9 @@ on:
 
 permissions:
   contents: write
+  # Required for actions/attest-build-provenance (SLSA-style build attestation).
+  id-token: write
+  attestations: write
 
 jobs:
   webdist:
@@ -90,11 +93,24 @@ jobs:
           name: forgec2-server-${{ matrix.goos }}-${{ matrix.goarch }}
           path: forgec2-server-${{ matrix.goos }}-${{ matrix.goarch }}*
 
+      - name: Generate SBOM (CycloneDX, Go modules)
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        run: |
+          go run github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.9.0 \
+            mod -licenses -output forgec2-server-linux-amd64.sbom.json .
+
+      - name: Attest build provenance
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: forgec2-server-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
+
   create-release:
     needs: goreleaser
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           pattern: forgec2-server-*
@@ -102,10 +118,27 @@ jobs:
 
       - name: Generate release notes
         run: |
-          echo "## ForgeC2 Server" > release-notes.md
-          echo "" >> release-notes.md
-          echo "Prebuilt binaries for \`${{ github.ref_name }}\`:" >> release-notes.md
-          ls forgec2-server-* | grep -v '.sha256$' | sed 's/^/- /' >> release-notes.md
+          {
+            echo "## ForgeC2 Server"
+            echo ""
+            echo "Prebuilt binaries for \`${{ github.ref_name }}\`:"
+            ls forgec2-server-* 2>/dev/null | grep -vE '\.sha256$|\.sig$|sbom' | sed 's/^/- /'
+            echo ""
+            echo "Every binary ships a \`.sha256\` checksum and a detached Ed25519 \`.sig\`"
+            echo "(verify with \`go run ./cmd/sign-release <file.sha256>\`). A CycloneDX SBOM is"
+            echo "attached as \`forgec2-server-linux-amd64.sbom.json\`."
+            echo ""
+            echo "### Changelog"
+            echo ""
+            # Lift the matching CHANGELOG section so release notes track the repo
+            # instead of being maintained twice.
+            awk -v tag="${{ github.ref_name }}" '
+              $0 == "## [" tag "]" {in_section=1; next}
+              /^## \[/ && in_section {exit}
+              in_section {print}
+            ' CHANGELOG.md
+          } > release-notes.md
+          test -s release-notes.md
 
       - name: Create release
         uses: softprops/action-gh-release@v2
