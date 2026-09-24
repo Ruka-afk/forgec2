@@ -18,7 +18,14 @@ services:
     environment:
       - FORGEC2_JWT_SECRET=${FORGEC2_JWT_SECRET:-}
       - FORGEC2_AI_API_KEY=${FORGEC2_AI_API_KEY:-}
-      - FORGEC2_HOST=${FORGEC2_HOST:-127.0.0.1} # change to 0.0.0.0 for production access
+      # Persistent state root: DB, keys, backups, logs, artifacts. Must match
+      # the volume mount below, otherwise state lands in the container's
+      # working directory and is lost on recreate.
+      - FORGEC2_DATA_DIR=/data
+      # 0.0.0.0 so the published port is actually reachable; the healthcheck
+      # still runs inside the container, so loopback-only binding breaks
+      # `docker compose up` + published ports without any visible error.
+      - FORGEC2_HOST=${FORGEC2_HOST:-0.0.0.0} # use 127.0.0.1 to keep the API container-local
       - FORGEC2_PORT=${FORGEC2_PORT:-8000}
       # SQLite is the default (zero-config). For Postgres, set
       # FORGEC2_DB_DRIVER=postgres + FORGEC2_DB_DSN and enable the profile below:

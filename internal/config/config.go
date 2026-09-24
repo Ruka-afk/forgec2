@@ -483,6 +483,75 @@ func isWeakDefaultPassword(s string) bool {
 	return false
 }
 
+// EnsureStorageKeys generates any missing independent storage key
+// (loot/extc2/backup/totp/csrf) and persists the config when possible.
+// Auto-generation previously happened only when the config file was missing,
+// so the documented "cp config.example.yaml config.yaml" path produced a
+// config that failed Validate() with five "key is required" errors. Keys
+// supplied via FORGEC2_* env vars are left untouched (env wins), and a
+// read-only config file is not fatal: the generated values are used for this
+// process and a warning explains the consequence (data encrypted under an
+// ephemeral key).
+func (c *Config) EnsureStorageKeys() error {
+	targets := []struct {
+		name  string
+		field *string
+	}{
+		{"loot key", &c.Crypto.LootKey},
+		{"ExtC2 key", &c.Crypto.ExtC2Key},
+		{"backup key", &c.Crypto.BackupKey},
+		{"TOTP key", &c.Crypto.TotpKey},
+		{"CSRF key", &c.Crypto.CsrfKey},
+	}
+	changed := false
+	for _, t := range targets {
+		if *t.field != "" {
+			continue
+		}
+		key := make([]byte, 32)
+		if _, err := rand.Read(key); err != nil {
+			return err
+		}
+		*t.field = hex.EncodeToString(key)
+		changed = true
+		slog.Warn("Storage key auto-generated", "key", t.name,
+			"hint", "set it explicitly in config.yaml or via the matching FORGEC2_* env var to keep it stable across restarts")
+	}
+	if !changed || c.ConfigPath == "" {
+		return nil
+	}
+	if err := c.Save(c.ConfigPath); err != nil {
+		slog.Warn("Storage keys generated but config could not be persisted; they stay valid for this process only",
+			"path", c.ConfigPath, "err", err)
+	}
+	return nil
+}
+
+// applyDataDirEnv honours FORGEC2_DATA_DIR (used by the container images,
+// where the persistent volume is /data but the default data_dir is relative).
+// Paths that still hold their data-dir-derived defaults are re-pointed at the
+// new root; explicit operator values are preserved.
+func applyDataDirEnv(cfg *Config) {
+	dir := strings.TrimSpace(os.Getenv("FORGEC2_DATA_DIR"))
+	if dir == "" || dir == cfg.Server.DataDir {
+		return
+	}
+	oldDir := cfg.Server.DataDir
+	rebase := func(path *string, suffix string) {
+		// Compare normalized forms: YAML on Windows commonly carries
+		// "data/db/forgec2.db" while filepath.Join produces backslashes.
+		if *path == "" || filepath.Clean(*path) == filepath.Clean(filepath.Join(oldDir, suffix)) {
+			*path = filepath.Join(dir, suffix)
+		}
+	}
+	rebase(&cfg.Database.Path, filepath.Join("db", "forgec2.db"))
+	rebase(&cfg.Server.CertFile, "server.crt")
+	rebase(&cfg.Server.KeyFile, "server.key")
+	rebase(&cfg.Server.SSHHostKey, "ssh_host_key")
+	cfg.Server.DataDir = dir
+	slog.Info("server.data_dir overridden from environment", "data_dir", dir)
+}
+
 // Load loads config from file, creates default if not exists
 func Load(path string) (*Config, error) {
 	cfg := DefaultConfig()
@@ -530,6 +599,10 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 	cfg.ConfigPath = path
+
+	// Container deployments keep the persistent volume at /data while the
+	// default data_dir is relative to the working directory.
+	applyDataDirEnv(cfg)
 
 	// Env override for JWT secret (takes precedence over config file)
 	if envSecret := os.Getenv("FORGEC2_JWT_SECRET"); envSecret != "" {

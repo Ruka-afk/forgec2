@@ -13,6 +13,9 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+      # Working directory only. All durable state (DB, keys, backups, logs,
+      # artifacts) lives under FORGEC2_DATA_DIR=/data on the named volume, so
+      # tmpfs here cannot swallow it.
       - /home/nonroot
     environment:
       - FORGEC2_JWT_SECRET=${FORGEC2_JWT_SECRET:?set FORGEC2_JWT_SECRET in .env (openssl rand -hex 32)}
@@ -21,6 +24,7 @@ services:
       - FORGEC2_BACKUP_KEY=${FORGEC2_BACKUP_KEY:-}
       - FORGEC2_TOTP_KEY=${FORGEC2_TOTP_KEY:-}
       - FORGEC2_CSRF_KEY=${FORGEC2_CSRF_KEY:-}
+      - FORGEC2_DATA_DIR=/data
       - FORGEC2_HOST=${FORGEC2_HOST:-0.0.0.0}
       - FORGEC2_PORT=${FORGEC2_PORT:-8000}
       - TZ=${TZ:-UTC}

@@ -1,6 +1,12 @@
 # ForgeC2 example configuration — copy to config.yaml and customize.
 # Sensitive values: leave empty to auto-generate on first run, or set via env:
 #   FORGEC2_JWT_SECRET, FORGEC2_AI_API_KEY, FORGEC2_DB_DRIVER, FORGEC2_DB_DSN
+#
+# Storage keys (crypto.loot_key / extc2_key / backup_key / totp_key / csrf_key)
+# also ship empty. The server generates any missing key at startup and writes
+# it back to this file, so `cp config.example.yaml config.yaml` is a working
+# first start. Set them explicitly (or via the matching FORGEC2_* env var) when
+# the config file is mounted read-only, or to keep keys stable/portable.
 
 server:
   port: 8000
@@ -10,7 +16,7 @@ server:
   key_file: data/server.key
   require_tls_for_auth: true   # refuse to issue session cookies over plain HTTP
   jwt_secret: ""
-  data_dir: data
+  data_dir: data                # container deployments set FORGEC2_DATA_DIR=/data so state lands on the persistent volume
   offline_threshold: 60
   session_max_age_hours: 24
   cleanup_retention_days: 30

@@ -36,6 +36,10 @@ func main() {
 	logDir := "logs"
 	if *logFile != "" {
 		logDir = filepath.Dir(*logFile)
+	} else if dataDir := os.Getenv("FORGEC2_DATA_DIR"); dataDir != "" {
+		// Container deployments: keep logs beside the rest of the state in the
+		// persistent volume instead of the (often tmpfs) working directory.
+		logDir = filepath.Join(dataDir, "logs")
 	}
 	logWriter := server.SetupLogRotation(logDir)
 
@@ -58,6 +62,13 @@ func main() {
 	cfg, err := config.Load(*configPath)
 	if err != nil {
 		slog.Error("Failed to load config", "err", err)
+		os.Exit(1)
+	}
+
+	// Fill any missing independent storage key before validation: operators
+	// routinely start from config.example.yaml, which ships them empty.
+	if err := cfg.EnsureStorageKeys(); err != nil {
+		slog.Error("Failed to generate storage keys", "err", err)
 		os.Exit(1)
 	}
 
