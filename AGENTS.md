@@ -14,7 +14,7 @@ The `bash` tool runs **PowerShell 5.1**, not bash. Adapt accordingly:
 ForgeC2 is a mature Go (net/http + sqlite) C2 server plus a Vite + React TypeScript frontend.
 - Server binary: `forgec2-server.exe` (built with `go build ./cmd/server`).
 - Default: port **8000**, config `config.yaml`, sqlite DB `data/db/forgec2.db` (users `admin`/`labtest`).
-- Version: 2.6.1 (see CHANGELOG.md).
+- Version: 2.6.2 (see CHANGELOG.md; single source `VERSION`).
 
 ## Frontend build & embedding (IMPORTANT)
 The frontend is **Vite** (not Next.js).

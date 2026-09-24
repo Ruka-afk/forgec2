@@ -156,7 +156,7 @@ powershell -File scripts/verify-all.ps1  # vet + tsc + lint + test + build + web
 
 ## 文档与版本
 
-- [CHANGELOG.md](CHANGELOG.md)——完整发布历史（当前 **v2.6.1**）
+- [CHANGELOG.md](CHANGELOG.md)——完整发布历史（当前 **v2.6.2**）
 - [docs/](docs/)——传输 E2E  lab、能力矩阵、设计文档
 - [CONTRIBUTING.md](CONTRIBUTING.md)——构建、测试、发版规范
 - [SECURITY.md](SECURITY.md)——漏洞披露

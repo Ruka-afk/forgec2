@@ -156,7 +156,7 @@ Repository hygiene is enforced by checks: `go vet` (payload/agent filtered), `go
 
 ## Docs & versioning
 
-- [CHANGELOG.md](CHANGELOG.md) — full release history (currently **v2.6.1**)
+- [CHANGELOG.md](CHANGELOG.md) — full release history (currently **v2.6.2**)
 - [docs/](docs/) — transport E2E labs, capability matrix, design docs
 - [CONTRIBUTING.md](CONTRIBUTING.md) — how to build, test, and ship code
 - [SECURITY.md](SECURITY.md) — vulnerability disclosure

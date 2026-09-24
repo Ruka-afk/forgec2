@@ -1,9 +1,9 @@
 # ForgeC2 Capability Matrix
 
-> Status of implant tasks / transports as of **v2.6.1**.  
+> Status of implant tasks / transports as of **v2.6.2**.
 > Quality: **Core** (production) · **Hardened** (usable OPSEC) · **Scripted** (PS/external) · **Experimental** · **Stub** (Windows-only or incomplete).  
 > Command inventory: generate with `node scripts/gen-command-reference.mjs` → `docs/COMMAND_REFERENCE.md`.  
-> Task inventory markers: `node scripts/gen-capability-matrix.mjs` (CI `--check`).  
+> Task inventory markers + version stamp: `node scripts/gen-capability-matrix.mjs` (CI `--check`; source `VERSION`).  
 > Architecture blueprint: `docs/MATURITY_BLUEPRINT.md`.
 
 ## Transports
@@ -166,8 +166,10 @@ When adding task types, update:
 - This document (hand-written sections) + regenerate generated artifacts:
 
 ```bash
-node scripts/gen-capability-matrix.mjs   # inject task inventory between markers
+node scripts/gen-capability-matrix.mjs   # inject task inventory + VERSION stamp
 node scripts/gen-command-reference.mjs   # docs/COMMAND_REFERENCE.md
 node scripts/gen-capability-matrix.mjs --check
 node scripts/gen-command-reference.mjs --check
 ```
+
+Version header is stamped from the root `VERSION` file (`cat VERSION`).

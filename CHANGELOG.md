@@ -6,25 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.6.2] - 2026-09-24
+
 ### Security
 
 - Server security debt (P2): force-logout/disable revoke live operator WebSocket sessions; rate-limit login and public downloads; redact URL secrets in request logs; gate screenshots; expand audit `shouldLogAction` coverage; RD route permission gates + tenant checks
 - OTA closed loop (P4-4): generate-time ldflags pin `updatePinnedPubKeyHex`; wire `SetUpdateSigningKeyFile` to `server.data_dir`; `crypto.require_release_signature` fail-closed hot-update gate (hot-reloadable); self-update verify failures classified as Error without success exit
 - QUIC/gRPC listener hardening (P4-1): stream caps, keepalive/`MaxConnectionAge`, accept-loop backoff, send/recv size limits
+- Production compose hardening (C1): `docker-compose.prod.yml` overlay with `read_only` rootfs, tmpfs for `/tmp`+`/home/nonroot`, memory/pids limits, required `FORGEC2_JWT_SECRET`, storage key passthrough, default bind `0.0.0.0`
+- Optional session AEAD (C2): `crypto.session_cipher` selects AES-GCM (default) or ChaCha20-Poly1305; negotiated via handshake `sc` field; unknown config values normalize to AES-GCM; agents without `sc` stay on AES-GCM
 
 ### Added
 
 - Maturity blueprint `docs/MATURITY_BLUEPRINT.md` (Phase A) with Phase B P4-* mapping
 - Generated command reference `docs/COMMAND_REFERENCE.md` via `scripts/gen-command-reference.mjs` (+ `--check` freshness gate)
+- Generated capability-matrix task inventory via `scripts/gen-capability-matrix.mjs` (+ CI `--check` with command-reference)
 - Plugin Unix process-group kill (Setpgid) alongside Windows Job Object (P4-3)
 - CI: `./internal/payload/...` tests; darwin amd64/arm64 agent cross-compile smoke; tag releases require `RELEASE_SIGNING_KEY`
 - `scripts/build-agent.ps1` multi-GOOS matrix (linux/darwin)
+- Root `VERSION` file as single source for docs/matrix version stamp
 
 ### Changed
 
 - gofmt debt cleared across `internal`, `cmd`, `pkg` (P3)
 - Engine hardening: Makefile vet gate, security docs, setup-dev keys, go mod tidy, drop orphan scripts
-- Capability matrix refreshed for v2.6.1 transports/plugins/OTA
+- Capability matrix refreshed for v2.6.1 transports/plugins/OTA; v2.6.2 header stamped from `VERSION`
+- Docs, README, and OpenAPI version bumped to 2.6.2
 
 ## [2.6.1] - 2026-09-06
 

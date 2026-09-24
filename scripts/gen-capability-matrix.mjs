@@ -1,6 +1,7 @@
 // gen-capability-matrix.mjs — inject the TaskSpec-derived task inventory into
-// docs/CAPABILITY_MATRIX.md between HTML markers. Hand-written sections
-// (transports, quality notes, product modules) stay outside the markers.
+// docs/CAPABILITY_MATRIX.md between HTML markers, and stamp the status-line
+// version from the root VERSION file. Hand-written sections (transports,
+// quality notes, product modules) stay outside the markers.
 //
 // Usage (repo root):
 //   node scripts/gen-capability-matrix.mjs
@@ -18,9 +19,18 @@ const dataPath = path.join(repoRoot, "pkg", "protocol", "taskspec_data.go");
 const constsPath = path.join(repoRoot, "pkg", "protocol", "tasks.go");
 const tasktypesPath = path.join(repoRoot, "internal", "server", "tasktypes.go");
 const outPath = path.join(repoRoot, "docs", "CAPABILITY_MATRIX.md");
+const versionPath = path.join(repoRoot, "VERSION");
 
 const BEGIN = "<!-- BEGIN GENERATED TASK INVENTORY -->";
 const END = "<!-- END GENERATED TASK INVENTORY -->";
+const VERSION_LINE_RE =
+  /^> Status of implant tasks \/ transports as of \*\*v[0-9]+\.[0-9]+\.[0-9]+\*\*\.\s*$/m;
+
+function readVersion() {
+  if (!fs.existsSync(versionPath)) return null;
+  const v = readUtf8(versionPath).trim();
+  return /^\d+\.\d+\.\d+$/.test(v) ? v : null;
+}
 
 const CATEGORY_ORDER = [
   "execution",
@@ -230,6 +240,16 @@ function renderInventory(specs, dangerous) {
   return lines.join("\n");
 }
 
+function stampVersion(doc, version) {
+  if (!version) return doc;
+  const line = `> Status of implant tasks / transports as of **v${version}**.`;
+  if (VERSION_LINE_RE.test(doc)) {
+    return doc.replace(VERSION_LINE_RE, line);
+  }
+  // Insert after the H1 title if the status line is missing.
+  return doc.replace(/^(# .*\n)/m, `$1\n${line}  \n`);
+}
+
 function applySection(doc, section) {
   const bi = doc.indexOf(BEGIN);
   const ei = doc.indexOf(END);
@@ -254,7 +274,8 @@ function main() {
   const section = renderInventory(specs, dangerous);
 
   const existing = fs.existsSync(outPath) ? readUtf8(outPath) : "";
-  const next = applySection(existing, section);
+  let next = applySection(existing, section);
+  next = stampVersion(next, readVersion());
 
   if (check) {
     if (existing !== next) {
@@ -269,7 +290,8 @@ function main() {
 
   fs.writeFileSync(outPath, next, "utf8");
   console.log(
-    `wrote ${path.relative(process.cwd(), outPath)} inventory: ${specs.length} specs`,
+    `wrote ${path.relative(process.cwd(), outPath)} inventory: ${specs.length} specs` +
+      (readVersion() ? ` version: v${readVersion()}` : ""),
   );
 }
 

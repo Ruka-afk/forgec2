@@ -1,4 +1,4 @@
-# ForgeC2 Maturity Blueprint (v2.6.1)
+# ForgeC2 Maturity Blueprint (v2.6.2)
 
 >对标 Cobalt Strike / Sliver / Mythic / Havoc 的高成熟度 C2 架构蓝图。
 >本文是 **设计 + 现有实现引用** 的单一入口；实现细节以源码为准。
@@ -49,7 +49,7 @@ forgec2/
 ├── frontend/                   # Vite + React TS（src/pages, src/lib）
 ├── scripts/
 │   ├── gen-command-reference.mjs   # ★ 从 taskspec 生成命令手册
-│   ├── gen-capability-matrix.mjs   # ★ 向 CAPABILITY_MATRIX 注入任务清单段
+│   ├── gen-capability-matrix.mjs   # ★ 向 CAPABILITY_MATRIX 注入任务清单段（+ VERSION stamp）
 │   ├── build-embedded.ps1 / check-webdist.mjs / migrate-taskspec.mjs
 │   └── …
 ├── docs/
@@ -449,7 +449,7 @@ node scripts/gen-capability-matrix.mjs --check  # CI freshness gate
 credential-access, defense-evasion, lateral-movement, privesc, persistence,
 c2, impact, other`。每个条目含 type、aliases、parameters、approval 标记。
 
-当前生成物摘要（v2.6.1）：**217** 任务类型、**57** approval-gated、**3** 别名、
+当前生成物摘要（v2.6.2）：**217** 任务类型、**57** approval-gated、**3** 别名、
 **70** 参数。手册页脚列出的唯一无 spec 常量是 `shell_output` —— 这是**故意的**：
 它是 implant 交互式 shell 回传的 RESULT 类型，不可派发（见
 `pkg/protocol/tasks.go:410` 与 `docs/COMMAND_REFERENCE.md` 页脚），不是覆盖缺口。
@@ -482,7 +482,7 @@ c2, impact, other`。每个条目含 type、aliases、parameters、approval 标�
 | 稳定性/健壮性 | **8.5** | 队列/退避/kill-switch/限长/recover 齐全；P4-1 后 QUIC stream cap + gRPC keepalive/MaxConnectionAge；P4-3 后 Unix 进程组 kill；扣分：仍非 WASM 沙箱 |
 | 生态成熟度 | **7.5** | 命令>50、别名、manifest+goja、en/zh；扣分：插件非 WASM 沙箱、依赖宿主解释器 |
 | 安全与合规加固 | **8.5** | TLS1.3/ECDH/GCM/Ed25519 pin/ROE/approval/审计；`crypto.session_cipher` 可选 ChaCha20-Poly1305（握手 `sc` 协商，默认 AES-GCM 向后兼容）；`docker-compose.prod.yml` 生产加固 overlay 已落地；扣分：ChaCha20 非默认（需重建可解析 `sc` 的 agent） |
-| 可维护性/更新性 | **8.5** | 单一 TaskSpec 真源、CI 门禁、gofmt 清债、OTA 签名链闭环；matrix 任务清单由 TaskSpec 生成段 + `--check`；扣分：matrix 其余手写段仍人工维护 |
+| 可维护性/更新性 | **8.5** | 单一 TaskSpec 真源、CI 门禁、gofmt 清债、OTA 签名链闭环；matrix 任务清单由 TaskSpec 生成段 + `--check`；版本行由根 `VERSION` 单源 stamp；扣分：matrix 其余手写段仍人工维护 |
 | 额外加分 | **8.0** | HTTP/3、别名史、多语言插件、跨平台构建已有；扣分：模块化代理/WASM、Win TUN 未打包 |
 | **综合** | **8.5** | P3 工程债已清 + P4 全落地（含 OTA 构建钉钥/CI 门禁、darwin 交叉编译）；Phase C：生产 compose + 可选会话 ChaCha20 + matrix 生成段 |
 
