@@ -1,9 +1,11 @@
 package server
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -151,9 +153,9 @@ func (s *Server) handleAPIExecuteScript(c *gin.Context) {
 		return
 	}
 	var req struct {
-		ScriptID string                 `json:"script_id"`
-		Code     string                 `json:"code"`
-		Context  map[string]interface{} `json:"context"`
+		ScriptID string `json:"script_id"`
+		Code     string `json:"code"`
+		AgentID  string `json:"agent_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, "invalid request")
@@ -161,28 +163,52 @@ func (s *Server) handleAPIExecuteScript(c *gin.Context) {
 	}
 
 	context := map[string]interface{}{
-		"agents":      []interface{}{},
-		"tasks":       []interface{}{},
-		"credentials": []interface{}{},
+		"agents":      []db.Implant{},
+		"tasks":       []db.Task{},
+		"credentials": []db.CredentialEntry{},
 	}
 
 	var agents []db.Implant
 	if err := s.db.Select("id, hostname, ip, os, status").Limit(100).Find(&agents).Error; err != nil {
 		slog.Error("Scripting: failed to query agents", "err", err)
 	}
-	context["agents"] = agents
+	if agents != nil {
+		context["agents"] = agents
+	}
 
 	var tasks []db.Task
 	if err := s.db.Select("id, agent_id, type, command, status").Order("created_at desc").Limit(50).Find(&tasks).Error; err != nil {
 		slog.Error("Scripting: failed to query tasks", "err", err)
 	}
-	context["tasks"] = tasks
+	if tasks != nil {
+		context["tasks"] = tasks
+	}
 
 	var creds []db.CredentialEntry
 	if err := s.db.Select("agent_id, domain, username, type, source").Limit(50).Find(&creds).Error; err != nil {
 		slog.Error("Scripting: failed to query credentials", "err", err)
 	}
-	context["credentials"] = creds
+	if creds != nil {
+		context["credentials"] = creds
+	}
+
+	// Optional target agent. When set, the `agents` global is narrowed to that
+	// one host so a script written against a single target cannot silently fan
+	// out across the fleet. The lookup is tenant-scoped, so a foreign agent id
+	// is indistinguishable from a missing one.
+	targetAgentID := strings.TrimSpace(req.AgentID)
+	if targetAgentID != "" {
+		var target db.Implant
+		if err := s.tenantScope(s.db.Model(&db.Implant{}), c).
+			Select("id, hostname, ip, os, status").
+			Where("id = ?", targetAgentID).
+			First(&target).Error; err != nil {
+			respondError(c, http.StatusNotFound, "agent not found")
+			return
+		}
+		context["agent_id"] = target.ID
+		context["agents"] = []db.Implant{target}
+	}
 
 	engine := scripting.GetEngine()
 	var result scripting.ExecutionResult
@@ -192,6 +218,7 @@ func (s *Server) handleAPIExecuteScript(c *gin.Context) {
 		TenantID: s.currentTenantID(c),
 	}
 
+	scriptLabel := "inline"
 	if req.ScriptID != "" {
 		if uid, err := strconv.ParseUint(req.ScriptID, 10, 64); err == nil {
 			var row db.Script
@@ -202,6 +229,7 @@ func (s *Server) handleAPIExecuteScript(c *gin.Context) {
 				if err := s.db.Save(&row).Error; err != nil {
 					slog.Error("Failed to update script run count", "script_id", uid, "err", err)
 				}
+				scriptLabel = row.Name
 			}
 		}
 		result = engine.Execute(req.ScriptID, context, caller)
@@ -212,40 +240,84 @@ func (s *Server) handleAPIExecuteScript(c *gin.Context) {
 		return
 	}
 
-	s.LogAuditRecord(c, "execute_script", "scripting", req.ScriptID, "Script executed", result.Success, nil)
+	var execErr error
+	if !result.Success {
+		execErr = errors.New(result.Error)
+	}
+	s.LogAuditRecord(c, "execute_script", "scripting", targetAgentID,
+		scriptRunDetails(scriptLabel, targetAgentID), result.Success, execErr)
 	c.JSON(http.StatusOK, gin.H{"success": true, "result": result})
 }
 
-func (s *Server) handleAPIScriptsHistory(c *gin.Context) {
-	var tasks []db.Task
-	s.db.Where("type LIKE ?", "script_execute%").
-		Order("created_at desc").
-		Limit(50).
-		Find(&tasks)
+// scriptRunDetails renders the audit `details` string for a script execution.
+// The run-history endpoint parses it back, so both sides must agree.
+func scriptRunDetails(scriptLabel, agentID string) string {
+	label := strings.Join(strings.Fields(scriptLabel), " ")
+	if label == "" {
+		label = "inline"
+	}
+	if len(label) > 80 {
+		label = label[:80]
+	}
+	if agentID != "" {
+		return "script=" + label + " agent=" + agentID
+	}
+	return "script=" + label
+}
 
-	type historyEntry struct {
-		ID        uint      `json:"id"`
-		AgentID   string    `json:"agent_id"`
-		Type      string    `json:"type"`
-		Command   string    `json:"command"`
-		Status    string    `json:"status"`
-		Result    string    `json:"result"`
-		CreatedAt time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
+func parseScriptRunDetails(details string) (string, string) {
+	rest, ok := strings.CutPrefix(details, "script=")
+	if !ok {
+		return "", ""
+	}
+	label, agentID, found := strings.Cut(rest, " agent=")
+	if !found {
+		return rest, ""
+	}
+	return label, agentID
+}
+
+// handleAPIScriptsHistory serves the scripting run history from the audit log.
+// Script execution runs in-process through the Goja engine and never creates a
+// task row, so the task table could never hold this data; the audit log is the
+// only durable record of who ran what, when, and whether it succeeded.
+func (s *Server) handleAPIScriptsHistory(c *gin.Context) {
+	var logs []db.AuditLog
+	if err := s.auditTenantScope(s.db.Model(&db.AuditLog{}), c).
+		Where("action = ?", "execute_script").
+		Order("created_at DESC").
+		Limit(50).
+		Find(&logs).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "script history"))
+		return
 	}
 
-	entries := make([]historyEntry, len(tasks))
-	for i, t := range tasks {
-		entries[i] = historyEntry{
-			ID:        t.ID,
-			AgentID:   t.AgentID,
-			Type:      t.Type,
-			Command:   t.Command,
-			Status:    t.Status,
-			Result:    t.Result,
-			CreatedAt: t.CreatedAt,
-			UpdatedAt: t.UpdatedAt,
+	type historyEntry struct {
+		ID         uint      `json:"id"`
+		ScriptName string    `json:"script_name"`
+		AgentID    string    `json:"agent_id"`
+		User       string    `json:"user"`
+		Status     string    `json:"status"`
+		Error      string    `json:"error"`
+		CreatedAt  time.Time `json:"created_at"`
+	}
+
+	entries := make([]historyEntry, 0, len(logs))
+	for _, l := range logs {
+		scriptName, agentID := parseScriptRunDetails(l.Details)
+		status := "success"
+		if !l.Success {
+			status = "failed"
 		}
+		entries = append(entries, historyEntry{
+			ID:         l.ID,
+			ScriptName: scriptName,
+			AgentID:    agentID,
+			User:       l.User,
+			Status:     status,
+			Error:      l.Error,
+			CreatedAt:  l.CreatedAt,
+		})
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "history": entries})

@@ -5,6 +5,8 @@ import { paths } from "@/lib/api-paths";
 import { fetchAgentListCached } from "@/lib/agents";
 import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { useConfirm } from "@/lib/hooks/useConfirm";
+import { usePermissions } from "@/lib/hooks/usePermissions";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageSpinner, Spinner } from "@/components/ui/spinner";
@@ -20,22 +22,14 @@ import { Badge } from "@/components/ui/badge";
 import { BookOpen, Code, Eraser, History, Layers, Play, Save, Terminal, Trash2, X } from "lucide-react";
 
 import type { Agent } from "@/types/agent";
-
-interface SavedScript {
-  id?: string;
-  name?: string;
-  code?: string;
-  created_at?: string;
-}
-
-interface RunHistory {
-  id?: string;
-  script_name?: string;
-  agent_hostname?: string;
-  status?: string;
-  output?: string;
-  created_at?: string;
-}
+import {
+  extractRunHistory,
+  extractSavedScripts,
+  normalizeScriptOutput,
+  scriptRunError,
+  type SavedScript,
+  type ScriptRun,
+} from "./components/script-run";
 
 interface ScriptTemplate {
   labelKey: string;
@@ -44,36 +38,105 @@ interface ScriptTemplate {
 }
 
 const defaultTemplates: ScriptTemplate[] = [
-  { labelKey: "scripting.tpl_agent_enum", descKey: "scripting.tpl_agent_enum_desc", code: "forgec2.log('Enumerating agents...')\nlocal agents = forgec2.get_agents()\nfor i, a in ipairs(agents) do\n  forgec2.log(a.hostname .. ' @ ' .. a.ip)\nend\nforgec2.set_output('Found ' .. #agents .. ' agents')" },
-  { labelKey: "scripting.tpl_cred_harvest", descKey: "scripting.tpl_cred_harvest_desc", code: "forgec2.log('Harvesting credentials...')\nlocal creds = forgec2.get_credentials()\nfor i, c in ipairs(creds) do\n  forgec2.log(c.username .. '@' .. c.target)\nend\nforgec2.set_output('Found ' .. #creds .. ' credentials')" },
-  { labelKey: "scripting.tpl_bulk_task", descKey: "scripting.tpl_bulk_task_desc", code: "forgec2.log('Creating bulk tasks...')\nlocal agents = forgec2.get_agents()\nlocal cmd = 'whoami /all'\nfor i, a in ipairs(agents) do\n  forgec2.create_task(a.id, 'exec', cmd)\nend\nforgec2.set_output('Tasks created for ' .. #agents .. ' agents')" },
-  { labelKey: "scripting.tpl_sleep_check", descKey: "scripting.tpl_sleep_check_desc", code: "forgec2.log('Sleeping 30s for callbacks...')\nforgec2.sleep(30000)\nlocal agents = forgec2.get_agents()\nforgec2.log('Active after sleep: ' .. #agents)\nforgec2.set_output('Callback check complete')" },
-  { labelKey: "scripting.tpl_net_discovery", descKey: "scripting.tpl_net_discovery_desc", code: "forgec2.log('Starting network discovery...')\nlocal agents = forgec2.get_agents()\nfor i, a in ipairs(agents) do\n  forgec2.create_task(a.id, 'powershell', 'Test-NetComputer -Port 445')\nend\nforgec2.set_output('Discovery tasks queued')" },
+  {
+    labelKey: "scripting.tpl_agent_enum",
+    descKey: "scripting.tpl_agent_enum_desc",
+    code: `// Enumerate every agent your permissions can see
+var agents = listAgents();
+log("Agents: " + agents.length);
+for (var i = 0; i < agents.length; i++) {
+  log(agents[i].hostname + " @ " + agents[i].ip + " [" + agents[i].status + "]");
+}
+"Found " + agents.length + " agents";`,
+  },
+  {
+    labelKey: "scripting.tpl_cred_harvest",
+    descKey: "scripting.tpl_cred_harvest_desc",
+    code: `// Read the credential vault (requires credentials.read)
+var creds = query("credentials", {});
+log("Credentials: " + creds.length);
+for (var i = 0; i < creds.length; i++) {
+  log(creds[i].username + "@" + creds[i].domain);
+}
+"Found " + creds.length + " credentials";`,
+  },
+  {
+    labelKey: "scripting.tpl_bulk_task",
+    descKey: "scripting.tpl_bulk_task_desc",
+    code: `// Queue a task on every visible agent (requires agents.write)
+var agents = listAgents();
+var queued = 0;
+for (var i = 0; i < agents.length; i++) {
+  sendTask(agents[i].id, "shell", "whoami /all");
+  queued++;
+}
+"Queued " + queued + " tasks";`,
+  },
+  {
+    labelKey: "scripting.tpl_sleep_check",
+    descKey: "scripting.tpl_sleep_check_desc",
+    code: `// Stay resident briefly, then report the fleet
+sleep(5000);
+var agents = listAgents();
+"Still tracking " + agents.length + " agents after 5s";`,
+  },
+  {
+    labelKey: "scripting.tpl_net_discovery",
+    descKey: "scripting.tpl_net_discovery_desc",
+    code: `// Probe port 445 from every visible agent
+var agents = listAgents();
+var queued = 0;
+for (var i = 0; i < agents.length; i++) {
+  sendTask(agents[i].id, "shell", "powershell -c Test-NetConnection -ComputerName 10.0.0.1 -Port 445");
+  queued++;
+}
+"Discovery queued on " + queued + " agents";`,
+  },
+];
+
+const starterCode = `// JavaScript sandbox. Context globals: agents, tasks, credentials
+log("Script started");
+var agents = listAgents();
+"Tracking " + agents.length + " agents";`;
+
+const apiRefs = [
+  "agents / tasks / credentials",
+  "log(...)",
+  "listAgents()",
+  "getAgent(agentId)",
+  "sendTask(agentId, type, params)",
+  "query('agents'|'tasks'|'credentials'|'count_agents', args)",
+  "httpRequest(method, { url, headers, body })",
+  "sleep(ms)",
+  "on(event, fn) / off(event)",
 ];
 
 export default function ScriptingPage() {
   const { t } = useI18n();
+  const { role } = usePermissions();
+  const { confirm, modal } = useConfirm();
+  const canRun = role === "admin";
   const [selectedAgent, setSelectedAgent] = useState("");
+  const [scriptId, setScriptId] = useState<string | null>(null);
   const [scriptName, setScriptName] = useState("");
-  const [scriptCode, setScriptCode] = useState("-- Lua Script Example\nforgec2.log('Starting batch operation')\n\nlocal agents = forgec2.get_agents()\nforgec2.log('Agents: ' .. tostring(#agents))\n\nforgec2.set_output('Script execution complete')");
+  const [scriptCode, setScriptCode] = useState(starterCode);
   const [scriptOutput, setScriptOutput] = useState(t("scripting.waiting"));
   const [running, setRunning] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
 
-  const { data, loading, refresh: loadData } = useApiResource<{ agents: Agent[]; savedScripts: SavedScript[]; runHistory: RunHistory[] }>({
+  const { data, loading, refresh: loadData } = useApiResource<{ agents: Agent[]; savedScripts: SavedScript[]; runHistory: ScriptRun[] }>({
     fetcher: async () => {
       let failed = 0;
       const [agentData, scriptData, historyData] = await Promise.all([
         fetchAgentListCached().catch(() => { failed++; return [] as Agent[]; }),
-        api.get(paths.scripts.list).catch(() => { failed++; return { scripts: [] as SavedScript[] }; }),
-        api.get(paths.scripts.history).catch(() => { return { history: [] }; }),
+        api.get<unknown>(paths.scripts.list).catch(() => { failed++; return []; }),
+        api.get<unknown>(paths.scripts.history).catch(() => ({ history: [] })),
       ]);
       if (failed > 0) toast.error(t("scripting.toast.load_failed"));
-      const scriptRes = scriptData as { scripts?: SavedScript[]; data?: SavedScript[] };
       return {
         agents: agentData,
-        savedScripts: (scriptRes.scripts || scriptRes.data || []) as SavedScript[],
-        runHistory: (historyData.history || []) as RunHistory[],
+        savedScripts: extractSavedScripts(scriptData),
+        runHistory: extractRunHistory(historyData),
       };
     },
     toastThrottleMs: 0,
@@ -86,54 +149,66 @@ export default function ScriptingPage() {
   const handleSaveScript = async () => {
     if (!scriptName.trim() || !scriptCode.trim()) return;
     try {
-      await api.postJson(paths.scripts.list, { name: scriptName, code: scriptCode });
+      const saved = await api.postJson<{ id?: string | number }>(paths.scripts.list, {
+        ...(scriptId ? { id: scriptId } : {}),
+        name: scriptName,
+        code: scriptCode,
+      });
+      if (saved?.id !== undefined && saved?.id !== null) setScriptId(String(saved.id));
       loadData();
     } catch { toast.error(t("scripting.toast.save_failed")); }
   };
 
-  const handleDeleteScript = async (scriptId: string) => {
+  const handleDeleteScript = async (target: SavedScript) => {
+    const id = target.id;
+    if (!id) return;
+    const ok = await confirm({
+      title: t("scripting.delete_title"),
+      message: t("scripting.delete_message", { name: target.name || t("scripting.untitled") }),
+      danger: true,
+    });
+    if (!ok) return;
     try {
-      await api.del(paths.scripts.one(scriptId));
+      await api.del(paths.scripts.one(id));
+      if (scriptId === id) setScriptId(null);
       loadData();
     } catch { toast.error(t("scripting.toast.delete_failed")); }
   };
 
   const handleLoadScript = (script: SavedScript) => {
+    setScriptId(script.id ?? null);
     setScriptName(script.name || "");
     setScriptCode(script.code || "");
   };
 
   const handleRunScript = async () => {
-    if (!selectedAgent || !scriptCode.trim()) return;
+    if (!canRun || !scriptCode.trim()) return;
     setRunning(true);
     setScriptOutput(t("scripting.executing"));
     try {
-      const data = await api.postJson(paths.scripts.execute, { agent_id: selectedAgent, code: scriptCode, name: scriptName });
-      setScriptOutput((data.output || data.result || data.error || t("scripting.no_output")) as string);
-      loadData();
+      const payload = await api.postJson<unknown>(paths.scripts.execute, {
+        ...(scriptId ? { script_id: scriptId } : { code: scriptCode }),
+        ...(selectedAgent ? { agent_id: selectedAgent } : {}),
+        name: scriptName,
+      });
+      const failure = scriptRunError(payload);
+      setScriptOutput(normalizeScriptOutput(payload, t("scripting.no_output")));
+      if (failure) toast.error(t("scripting.exec_failed"));
     } catch {
       setScriptOutput(t("scripting.exec_failed"));
     }
     setRunning(false);
+    loadData();
   };
 
   const handleApplyTemplate = (template: ScriptTemplate) => {
+    setScriptId(null);
     setScriptName(t(template.labelKey));
     setScriptCode(template.code);
     setShowTemplates(false);
   };
 
   const lineNumbers = scriptCode.split("\n").length;
-
-  const apiRefs = [
-    "forgec2.log(msg)",
-    "forgec2.get_agents()",
-    "forgec2.create_task(agent, type, cmd)",
-    "forgec2.get_tasks()",
-    "forgec2.get_credentials()",
-    "forgec2.sleep(ms)",
-    "forgec2.set_output(str)",
-  ];
 
   if (loading) {
     return <PageContainer title={t("scripting.title")} subtitle={t("scripting.subtitle")}><PageSpinner /></PageContainer>;
@@ -155,7 +230,7 @@ export default function ScriptingPage() {
               <Layers className="size-4" />
               <span className="text-sm font-semibold text-foreground">{t("scripting.script_library")}</span>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => setShowTemplates(false)} className="text-muted-foreground hover:text-foreground">
+            <Button variant="ghost" size="sm" onClick={() => setShowTemplates(false)} className="text-muted-foreground hover:text-foreground" aria-label={t("common.close")}>
               <X className="size-4" />
             </Button>
           </div>
@@ -203,6 +278,10 @@ export default function ScriptingPage() {
                       })}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground mt-2">{t("scripting.target_agent_hint")}</p>
+                  {!canRun && (
+                    <p className="text-xs text-destructive mt-2">{t("scripting.admin_only")}</p>
+                  )}
                 </div>
               </Card>
 
@@ -219,7 +298,7 @@ export default function ScriptingPage() {
                         <Button variant="ghost" size="sm" onClick={() => handleLoadScript(s)} className="text-sm text-muted-foreground hover:text-primary truncate text-left flex-1 justify-start">
                           {s.name || t("scripting.untitled")}
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => s.id && handleDeleteScript(s.id)} className="text-muted-foreground hover:text-destructive ml-2">
+                        <Button variant="ghost" size="sm" onClick={() => handleDeleteScript(s)} className="text-muted-foreground hover:text-destructive ml-2" aria-label={t("scripting.delete_title")}>
                           <Trash2 className="size-4" />
                         </Button>
                       </div>
@@ -251,8 +330,8 @@ export default function ScriptingPage() {
                     <Button variant="outline" size="sm" onClick={handleSaveScript} disabled={!scriptName.trim()}>
                       <Save className="size-4" />{t("scripting.save")}
                     </Button>
-                    <Button size="sm" onClick={handleRunScript} disabled={running || !selectedAgent || !scriptCode.trim()}
-                      >
+                    <Button size="sm" onClick={handleRunScript} disabled={running || !canRun || !scriptCode.trim()}
+                      title={canRun ? undefined : t("scripting.admin_only")}>
                       {running ? <Spinner size="xs" className="mr-1" /> : <Play className="size-4" />}
                       {running ? t("scripting.running") : t("scripting.run")}
                     </Button>
@@ -266,7 +345,7 @@ export default function ScriptingPage() {
                   </div>
                   <Textarea
                     value={scriptCode}
-                    onChange={e => setScriptCode(e.target.value)}
+                    onChange={e => { setScriptCode(e.target.value); setScriptId(null); }}
                     className="flex-1 h-72 p-4 font-mono text-sm bg-background text-chart-1 resize-none focus:outline-none leading-5 border-none rounded-none"
                     placeholder={t("scripting.code_ph")}
                     spellCheck={false}
@@ -300,18 +379,21 @@ export default function ScriptingPage() {
               <div className="divide-y divide-border">
                 {runHistory.map((run, i) => (
                   <div key={run.id || i} className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-medium text-foreground">{run.script_name || "Unknown"}</span>
-                        <span className="text-xs text-muted-foreground">{run.agent_hostname || "Unknown"}</span>
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="text-sm font-medium text-foreground truncate">{run.script_name || t("scripting.untitled")}</span>
+                        {run.user && <span className="text-xs text-muted-foreground">{t("scripting.history_user", { user: run.user })}</span>}
+                        {run.agent_id && <span className="text-xs text-muted-foreground font-mono truncate">{run.agent_id}</span>}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={(run.status || "") === "success" ? "success" : "destructive"} className="text-(--fs-micro-sm) px-2 py-0.5 rounded-full">{run.status || "completed"}</Badge>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge variant={run.status === "failed" ? "destructive" : "success"} className="text-(--fs-micro-sm) px-2 py-0.5 rounded-full">
+                          {run.status === "failed" ? t("scripting.status_failed") : t("scripting.status_success")}
+                        </Badge>
                         <span className="text-xs text-muted-foreground">{run.created_at || ""}</span>
                       </div>
                     </div>
-                    {run.output && (
-                      <pre className="text-xs font-mono text-muted-foreground bg-background rounded-lg p-3 mt-2 max-h-32 overflow-y-auto whitespace-pre-wrap">{run.output}</pre>
+                    {run.error && (
+                      <pre className="text-xs font-mono text-destructive bg-background rounded-lg p-3 mt-2 max-h-32 overflow-y-auto whitespace-pre-wrap">{run.error}</pre>
                     )}
                   </div>
                 ))}
@@ -321,7 +403,7 @@ export default function ScriptingPage() {
         </TabsContent>
       </Tabs>
       </div>
+      {modal}
     </PageContainer>
   );
 }
-
