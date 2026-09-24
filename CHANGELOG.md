@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Plugin package trust: manifests may carry a canonical `digest` (`sha256:` over every package file) plus an Ed25519 `signature` over that digest; the server verifies both on load and install, and `plugins.require_signed` turns "unsigned" into a refusal. Generate/verify with the new `cmd/sign-plugin` (`-gen`, `-verify -key <pubkey>`)
+- Plugin execution quota: `plugins.max_concurrent` (default 4, env `FORGEC2_PLUGINS_MAX_CONCURRENT`) bounds simultaneous plugin processes, so event bursts cannot fan out interpreters
+
 ### Security
 
 - Agent no longer downgrades to cleartext when every configured C2 URL is encrypted: the WSS→HTTP fallback, the DNS→HTTP fallback and transport failover/rotation refuse `http`/`ws`/`h2c`/`tcp`/`udp`/`dns` for such an implant (configure at least one cleartext URL to keep lab failover)

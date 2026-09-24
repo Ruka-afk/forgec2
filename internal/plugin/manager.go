@@ -45,6 +45,9 @@ type Manager struct {
 	// hookTrippedAt marks when the breaker tripped (cooldown probes).
 	hookFails     map[string]int
 	hookTrippedAt map[string]time.Time
+	// trust holds the package-verification policy (trusted signing keys and
+	// whether unsigned packages are refused).
+	trust trustPolicy
 }
 
 // NewManager creates a new plugin manager backed by the given database.
@@ -53,10 +56,20 @@ func NewManager(database *gorm.DB) *Manager {
 		db:            database,
 		plugins:       make(map[string]Plugin),
 		pluginDir:     "plugins",
-		exec:          &executor{},
+		exec:          newExecutor(defaultMaxConcurrentPlugins),
 		hookFails:     make(map[string]int),
 		hookTrippedAt: make(map[string]time.Time),
 	}
+}
+
+// SetMaxConcurrent caps how many plugin processes may run simultaneously.
+func (m *Manager) SetMaxConcurrent(n int) {
+	if n <= 0 {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.exec = newExecutor(n)
 }
 
 // hookAllowed reports whether a plugin's hook may run. Tripped plugins are
@@ -280,6 +293,11 @@ func (m *Manager) checkRegistration(manifest *Manifest) error {
 
 func (m *Manager) registerAtDir(manifest *Manifest, pluginDir string) error {
 	if err := manifest.Validate(); err != nil {
+		return err
+	}
+	// Package trust: a digest mismatch or a signature that no trusted key
+	// vouches for is fatal before the plugin becomes callable.
+	if err := m.VerifyPackage(pluginDir, manifest); err != nil {
 		return err
 	}
 	if _, err := exec.LookPath(manifest.Interpreter); err != nil {

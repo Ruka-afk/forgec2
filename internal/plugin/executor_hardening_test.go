@@ -108,6 +108,41 @@ func TestPluginStdoutStaysCapped(t *testing.T) {
 	}
 }
 
+// TestPluginConcurrencyQuota proves the executor refuses new runs instead of
+// fanning out interpreters once the server-wide slot budget is exhausted.
+func TestPluginConcurrencyQuota(t *testing.T) {
+	interp := requireHostInterpreter(t)
+	dir := t.TempDir()
+	writeTempPlugin(t, dir, "slow.py", "import time\ntime.sleep(2)\n")
+	m := &Manifest{Name: "slow", Interpreter: interp, Entry: "slow.py"}
+
+	// One slot, two concurrent runs: exactly one may be in flight.
+	e := newExecutor(1)
+	if err := e.acquire(context.Background()); err != nil {
+		t.Fatalf("first acquire: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	if err := e.acquire(ctx); err == nil {
+		t.Fatal("second acquire succeeded despite a full quota")
+	}
+	e.release()
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := e.run(context.Background(), dir, m, map[string]interface{}{}, 10)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("run after release failed: %v", err)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("run did not complete after releasing the slot")
+	}
+}
+
 // TestPluginGuardRefusesNilProcess proves guard attachment reports failure
 // rather than silently returning an empty guard, which is what lets the
 // executor refuse the run.

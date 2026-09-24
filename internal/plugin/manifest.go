@@ -28,6 +28,14 @@ type Manifest struct {
 	// LoadFromDisk topologically sorts a directory batch by these and refuses
 	// plugins whose dependencies are missing or cyclic.
 	Requires []string `yaml:"requires,omitempty" json:"requires,omitempty"`
+
+	// Package trust (schema v2). Digest is the canonical "sha256:<hex>" hash
+	// over every package file; Signature is an Ed25519 signature over that
+	// digest string. Verified on load/install when plugins.trusted_keys is
+	// configured; plugins.require_signed makes an unsigned package fatal.
+	Digest    string `yaml:"digest,omitempty" json:"digest,omitempty"`
+	Signature string `yaml:"signature,omitempty" json:"signature,omitempty"`
+	Publisher string `yaml:"publisher,omitempty" json:"publisher,omitempty"`
 }
 
 // ManifestParam defines a user-configurable parameter for a plugin.

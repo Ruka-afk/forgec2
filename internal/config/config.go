@@ -21,7 +21,18 @@ import (
 type Config struct {
 	mu         sync.RWMutex `yaml:"-"`
 	ConfigPath string       `yaml:"-"` // absolute path to the config file, set on Load
-	Server     struct {
+	Plugins    struct {
+		// TrustedKeys are hex Ed25519 public keys that may sign plugin
+		// packages (manifest `signature` over the package `digest`).
+		TrustedKeys []string `yaml:"trusted_keys"`
+		// RequireSigned refuses unsigned plugin packages. Off by default so
+		// the bundled plugins keep loading; turn it on once keys are set.
+		RequireSigned bool `yaml:"require_signed"`
+		// MaxConcurrent caps simultaneously running plugin processes across
+		// the server (0 = built-in default).
+		MaxConcurrent int `yaml:"max_concurrent"`
+	} `yaml:"plugins"`
+	Server struct {
 		Port                 int    `yaml:"port"`
 		Host                 string `yaml:"host"`
 		TLSEnabled           bool   `yaml:"tls_enabled"`
@@ -527,6 +538,21 @@ func (c *Config) EnsureStorageKeys() error {
 	return nil
 }
 
+// splitAndTrim splits a comma-separated env value, dropping empty entries.
+func splitAndTrim(raw string) []string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 // applyDataDirEnv honours FORGEC2_DATA_DIR (used by the container images,
 // where the persistent volume is /data but the default data_dir is relative).
 // Paths that still hold their data-dir-derived defaults are re-pointed at the
@@ -676,6 +702,26 @@ func Load(path string) (*Config, error) {
 	// Env override for AI API key (takes precedence over config file)
 	if envAIKey := os.Getenv("FORGEC2_AI_API_KEY"); envAIKey != "" {
 		cfg.AI.APIKey = envAIKey
+	}
+
+	// Plugin trust via env: comma-separated hex Ed25519 public keys, a boolean
+	// strictness switch, and the concurrency ceiling.
+	if envKeys := os.Getenv("FORGEC2_PLUGIN_TRUSTED_KEYS"); envKeys != "" {
+		cfg.Plugins.TrustedKeys = splitAndTrim(envKeys)
+	}
+	if envSigned := os.Getenv("FORGEC2_PLUGINS_REQUIRE_SIGNED"); envSigned != "" {
+		if v, err := strconv.ParseBool(envSigned); err == nil {
+			cfg.Plugins.RequireSigned = v
+		} else {
+			slog.Warn("Ignoring FORGEC2_PLUGINS_REQUIRE_SIGNED: not a boolean", "value", envSigned)
+		}
+	}
+	if envConc := os.Getenv("FORGEC2_PLUGINS_MAX_CONCURRENT"); envConc != "" {
+		if v, err := strconv.Atoi(envConc); err == nil && v >= 0 {
+			cfg.Plugins.MaxConcurrent = v
+		} else {
+			slog.Warn("Ignoring FORGEC2_PLUGINS_MAX_CONCURRENT: not a non-negative integer", "value", envConc)
+		}
 	}
 
 	// Env overrides for critical settings

@@ -612,6 +612,19 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	// Initialize plugin execution manager
 	s.pluginManager = plugin.NewManager(database)
 	s.pluginManager.SetMarketplace(s.marketplace)
+	// Package trust: verify manifests against the operator's Ed25519 plugin
+	// signing keys before anything becomes callable. Unsigned packages still
+	// load (with a warning) unless plugins.require_signed is set, so the
+	// bundled plugins keep working out of the box.
+	if keys, err := plugin.ParseTrustedPluginKeys(s.cfg.Plugins.TrustedKeys); err != nil {
+		slog.Error("Invalid plugins.trusted_keys; plugin signature verification is disabled", "err", err)
+	} else if len(keys) > 0 || s.cfg.Plugins.RequireSigned {
+		s.pluginManager.SetTrust(keys, s.cfg.Plugins.RequireSigned)
+		slog.Info("Plugin package trust enabled", "trusted_keys", len(keys), "require_signed", s.cfg.Plugins.RequireSigned)
+	}
+	if maxConc := s.cfg.Plugins.MaxConcurrent; maxConc > 0 {
+		s.pluginManager.SetMaxConcurrent(maxConc)
+	}
 	pluginDir := filepath.Join(s.cfg.Server.DataDir, "plugins")
 	if err := os.MkdirAll(pluginDir, 0750); err != nil {
 		slog.Warn("Failed to create plugin data directory", "dir", pluginDir, "err", err)

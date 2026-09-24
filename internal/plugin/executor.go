@@ -23,7 +23,42 @@ type execResult struct {
 }
 
 // executor runs plugin scripts with JSON input on stdin.
-type executor struct{}
+type executor struct {
+	// slots bounds concurrent plugin processes; nil means the executor runs
+	// without a quota (used by tests that exercise a single run).
+	slots chan struct{}
+}
+
+func newExecutor(maxConcurrent int) *executor {
+	if maxConcurrent <= 0 {
+		maxConcurrent = defaultMaxConcurrentPlugins
+	}
+	return &executor{slots: make(chan struct{}, maxConcurrent)}
+}
+
+// acquire reserves an execution slot, honouring ctx cancellation so a saturated
+// server rejects plugin work instead of queueing it without bound.
+func (e *executor) acquire(ctx context.Context) error {
+	if e.slots == nil {
+		return nil
+	}
+	select {
+	case e.slots <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (e *executor) release() {
+	if e.slots == nil {
+		return
+	}
+	select {
+	case <-e.slots:
+	default:
+	}
+}
 
 // maxPluginOutputBytes caps captured plugin stdout/stderr per stream so a
 // misbehaving plugin cannot OOM the server by emitting unbounded output.
@@ -34,6 +69,12 @@ const maxPluginOutputBytes = 2 << 20 // 2 MiB per stream
 // A manifest may request less, never more: an untrusted manifest asking for a
 // multi-hour run must not pin a worker (and its process tree) indefinitely.
 const maxPluginTimeoutSecs = 300
+
+// defaultMaxConcurrentPlugins bounds how many plugin processes may run at the
+// same time. Hooks fire on beacon-driven paths, so without a cap a burst of
+// events (or several concurrent reports) can fan out an unbounded number of
+// interpreters.
+const defaultMaxConcurrentPlugins = 4
 
 // pluginWaitDelay bounds how long Wait blocks after the context fires when a
 // grandchild inherited the stdout/stderr pipes. Without it, cmd.Wait hangs
@@ -130,6 +171,13 @@ func (e *executor) run(ctx context.Context, pluginDir string, m *Manifest, input
 
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	defer cancel()
+
+	// Concurrency quota: cap simultaneous interpreters so event bursts cannot
+	// fan out an unbounded number of processes.
+	if err := e.acquire(ctx); err != nil {
+		return nil, fmt.Errorf("plugin %q not started: execution queue full or cancelled: %w", m.Name, err)
+	}
+	defer e.release()
 
 	args := interpreterArgs(m.Interpreter, m.Entry)
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
