@@ -475,6 +475,7 @@ c2, impact, other`。每个条目含 type、aliases、parameters、approval 标�
 | **中** | 静态签名（AMSI/ETW patch 字节） | `decodeBypassPatch` 运行时解码；HWBP 备选路径；D2-4 插件/脚本沙箱边界收紧 |
 | **中** | TLS 降级（阻断加密链路诱发明文回退） | D2-2b：全 TLS 配置的 implant 拒绝 WSS/DNS→HTTP 与明文 failover/rotation；https→http 跳转被拒 |
 | **中** | 凭据 dump 落盘残留 | uninstall 清理；approval；loot 加密 |
+| **中** | 备份静默失效（无人察觉直到恢复时） | `backup.retain`/`schedule` 可配置；`/api/v1/health` 暴露 age/last_error；`forgec2_backup_age_seconds` + 成功/失败计数（D-4） |
 | **中** | C implant 与文档漂移 | matrix 标明子集；E2E 分轨 |
 | **低** | 文档过期（matrix 曾停 v2.4.1） | P4-2 刷新 + 生成命令手册 |
 | **低** | 根目录构建杂物 | gitignore + 清理脚本 |
@@ -489,9 +490,9 @@ c2, impact, other`。每个条目含 type、aliases、parameters、approval 标�
 | 稳定性/健壮性 | **9.0** | 队列/退避/kill-switch/限长/recover 齐全；QUIC stream cap + gRPC keepalive/MaxConnectionAge；Unix 进程组 kill；D2-4 插件 guard fail-closed + WaitDelay + timeout 硬上限；扣分：仍非 WASM 沙箱、无插件 CPU/IO 配额 |
 | 生态成熟度 | **8.8** | 命令>50、别名、manifest+goja、en/zh；D2-4 脚本 require 宿主机逃逸已封、事件回调有界；D4-1 插件包 digest+Ed25519 签名信任链 + `cmd/sign-plugin` + 并发配额；D4-2 **WASM 不可信插件层**（wazero，无 WASI、16 MiB 内存上限、超时，ABI v1 见 `docs/PLUGIN_TIERS.md`）；D4-3 52 个内置插件全部签名（项目私钥已销毁）、`includes` 覆盖共享 `lib/`、示例配置默认 `require_signed: true`；扣分：WASM 层暂无官方 SDK/示例模块 |
 | 安全与合规加固 | **9.0** | TLS1.3/ECDH/GCM/Ed25519 pin/ROE/approval/审计；可选 ChaCha20-Poly1305；生产 compose；D2-1 `/api/v1` operator guard；D2-2 审计租户隔离；D2-3 gRPC mTLS fail-closed + resync oracle 关闭；扣分：ChaCha20 非默认、mTLS 仅全局而非 per-listener |
-| 可维护性/更新性 | **9.0** | 单一 TaskSpec 真源、CI 门禁、gofmt 清债、OTA 签名链闭环；matrix 任务清单生成段 + `--check`；版本行由 `VERSION` 单源 stamp；D2-4 契约测试（storage keys/compose/PG 备份边界）；D3 CI 含 `-race` job、33% 覆盖率下限、定时 fuzz、Docker/Compose 校验、SBOM + provenance；扣分：matrix 其余手写段仍人工维护、GitHub Action/基础镜像仍是可变 tag |
+| 可维护性/更新性 | **9.2** | 单一 TaskSpec 真源、CI 门禁、gofmt 清债、OTA 签名链闭环；matrix 任务清单生成段 + `--check`；版本行由 `VERSION` 单源 stamp；D3 CI 含 `-race` job、33% 覆盖率下限、定时 fuzz、Docker/Compose 校验、**真实服务端 live UI e2e**；发布含 SBOM + provenance；扣分：GitHub Action/基础镜像仍是可变 tag |
 | 额外加分 | **8.0** | HTTP/3、别名史、多语言插件、跨平台构建已有；扣分：模块化代理/WASM、Win TUN 未打包 |
-| **综合** | **9.3** | P3 工程债已清 + P4 全落地 + Phase C + **D-2 服务端 P0**（operator guard/审计租户/gRPC mTLS fail-closed/resync oracle/插件脚本 fail-closed/存储密钥与 compose 契约/PG 备份边界）+ **D-2b agent fail-closed**（禁明文降级、DNS 校验、证书 pin、响应上限）+ **D-3 供应链**（race/覆盖率/fuzz/docker 门禁、SBOM + provenance）+ **D-4 插件生态**（包签名信任链、共享 lib 覆盖、并发配额、WASM 不可信层、52 插件已签名且默认强制验签） |
+| **综合** | **9.4** | P3 工程债已清 + P4 全落地 + Phase C + **D-2 服务端 P0**（operator guard/审计租户/gRPC mTLS fail-closed/resync oracle/插件脚本 fail-closed/存储密钥与 compose 契约/PG 备份边界）+ **D-2b agent fail-closed**（禁明文降级、DNS 校验、证书 pin、响应上限）+ **D-3 供应链**（race/覆盖率/fuzz/docker/live-e2e 门禁、SBOM + provenance）+ **D-4 插件生态**（包签名信任链、共享 lib 覆盖、并发配额、WASM 不可信层、52 插件已签名且默认强制验签）+ **D-5 备份可运维性**（可配置保留/调度 + 新鲜度指标与 health 暴露） |
 
 ---
 
