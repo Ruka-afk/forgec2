@@ -14,6 +14,45 @@ import (
 	"github.com/dop251/goja_nodejs/require"
 )
 
+// scriptSourceLimit caps stored/executed script source. A script lives in the
+// server process, so an unbounded body is both a memory and a parse-time
+// denial-of-service vector.
+const scriptSourceLimit = 1 << 20 // 1 MiB
+
+// scriptEventTimeout bounds one event callback. Callbacks run on the engine's
+// single exec mutex; without a bound, one runaway handler stalls every other
+// script's event dispatch.
+const scriptEventTimeout = 30 * time.Second
+
+// scriptParseTimeout bounds the top-level pass that collects a script's event
+// subscriptions. Parsing and registration are cheap; anything slower is a
+// runaway script.
+const scriptParseTimeout = 10 * time.Second
+
+// validateScriptSource enforces the source cap for every entry point that
+// accepts operator-supplied JavaScript.
+func validateScriptSource(code string) error {
+	if len(code) > scriptSourceLimit {
+		return fmt.Errorf("script too large: %d bytes (max %d)", len(code), scriptSourceLimit)
+	}
+	return nil
+}
+
+// errHostModulesDisabled is returned by the script module loader for every
+// file-backed require().
+var errHostModulesDisabled = errors.New("require() of host modules is disabled in ForgeC2 scripts")
+
+// newScriptRegistry builds the require() registry used by script VMs.
+// console/util are Go-registered core modules and still resolve; anything
+// that would read a file from the host is refused, so a script cannot load or
+// evaluate server-side JS/JSON or walk out of the capability bridge. Scripts
+// get console plus the explicit bridge API and nothing else.
+func newScriptRegistry() *require.Registry {
+	return require.NewRegistry(require.WithLoader(func(string) ([]byte, error) {
+		return nil, errHostModulesDisabled
+	}))
+}
+
 // Caller identifies who triggered a script execution. The bridge uses it to
 // enforce permissions: admin callers get full access, everyone else is
 // limited to the permissions of their role.
@@ -70,8 +109,7 @@ func init() {
 
 func NewScriptEngine() *ScriptEngine {
 	vm := goja.New()
-	registry := new(require.Registry)
-	registry.Enable(vm)
+	newScriptRegistry().Enable(vm)
 	console.Enable(vm)
 
 	e := &ScriptEngine{
@@ -276,6 +314,9 @@ func (e *ScriptEngine) LoadScript(id uint, name, code string) error {
 }
 
 func (e *ScriptEngine) reparseEvents(s *LoadedScript) error {
+	if err := validateScriptSource(s.Code); err != nil {
+		return err
+	}
 	vm := goja.New()
 	events := make(map[string]bool)
 	vm.Set("on", func(call goja.FunctionCall) goja.Value {
@@ -283,9 +324,22 @@ func (e *ScriptEngine) reparseEvents(s *LoadedScript) error {
 		events[eventType] = true
 		return goja.Undefined()
 	})
-	_, err := vm.RunString(s.Code)
-	if err != nil {
-		return fmt.Errorf("script parse error: %w", err)
+	done := make(chan error, 1)
+	go func() {
+		_, err := vm.RunString(s.Code)
+		done <- err
+	}()
+	timer := time.NewTimer(scriptParseTimeout)
+	defer timer.Stop()
+	select {
+	case err := <-done:
+		if err != nil {
+			return fmt.Errorf("script parse error: %w", err)
+		}
+	case <-timer.C:
+		vm.Interrupt("script parse timeout")
+		<-done
+		return fmt.Errorf("script parse timeout (%s)", scriptParseTimeout)
 	}
 	s.Events = make([]string, 0, len(events))
 	for evt := range events {
@@ -331,9 +385,34 @@ func (e *ScriptEngine) FireEvent(eventType string, data interface{}) {
 		if dataValue == nil {
 			dataValue = goja.Undefined()
 		}
-		if _, err := ec.cb(goja.Undefined(), dataValue); err != nil {
+		e.runEventCallback(ec, eventType, dataValue)
+	}
+}
+
+// runEventCallback invokes one handler under a wall-clock bound. The handler
+// owns the engine's exec mutex, so an unbounded (or uninterruptible) callback
+// would otherwise block event dispatch for every other script.
+func (e *ScriptEngine) runEventCallback(ec *eventCallback, eventType string, data goja.Value) {
+	done := make(chan error, 1)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				done <- fmt.Errorf("panic: %v", r)
+			}
+		}()
+		_, err := ec.cb(goja.Undefined(), data)
+		done <- err
+	}()
+	timer := time.NewTimer(scriptEventTimeout)
+	defer timer.Stop()
+	select {
+	case err := <-done:
+		if err != nil {
 			slog.Error("script event handler error", "event", eventType, "error", err)
 		}
+	case <-timer.C:
+		ec.vm.Interrupt("script event handler timeout")
+		slog.Error("script event handler timeout", "event", eventType, "timeout", scriptEventTimeout)
 	}
 }
 
@@ -442,9 +521,11 @@ func (e *ScriptEngine) ExecuteCode(code string, context map[string]interface{}, 
 }
 
 func (e *ScriptEngine) executeScript(code string, scriptCtx map[string]interface{}, caller Caller) ExecutionResult {
+	if err := validateScriptSource(code); err != nil {
+		return ExecutionResult{Success: false, Error: err.Error()}
+	}
 	vm := goja.New()
-	registry := new(require.Registry)
-	registry.Enable(vm)
+	newScriptRegistry().Enable(vm)
 	console.Enable(vm)
 
 	for k, v := range scriptCtx {
