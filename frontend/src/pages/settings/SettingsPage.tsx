@@ -9,9 +9,11 @@ import { PageContainer } from "@/components/ui/page-container";
 import { ErrorState } from "@/components/ui/error-state";
 import { Permission } from "@/components/ui/permission";
 import { PageSpinner } from "@/components/ui/spinner";
+import { DataError } from "@/components/ui/data-state";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchInput } from "@/components/SearchInput";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Bell, Bot, Cpu, Database, FileCode, Globe, Lock, Palette, Server, Shield, User, Users, Wrench, Archive, Radio, AlertTriangle, Activity, ScanSearch, SearchX } from "lucide-react";
 import { useTOTP } from "./components/useTOTP";
@@ -63,6 +65,8 @@ export default function SettingsPage() {
   const {
     data,
     loading,
+    error: settingsError,
+    loaded: settingsLoaded,
     loadSettings,
     agentForm,
     setAgentForm,
@@ -236,6 +240,14 @@ export default function SettingsPage() {
 
   if (loading) return <PageContainer title={t("settings.title")} subtitle={t("settings.subtitle")}><PageSpinner /></PageContainer>;
 
+  const settingsUnread = !settingsLoaded;
+  const retrySettings = () => { void loadSettings(); };
+  const gateSettingsData = (content: React.ReactNode) => (
+    settingsUnread
+      ? <DataError message={settingsError ?? t("settings.toast.load_failed")} onRetry={retrySettings} />
+      : content
+  );
+
   const sections = [
     { key: "profile", label: t("settings.profile"), icon: <User className="size-4" /> },
     { key: "theme", label: t("settings.theme"), icon: <Palette className="size-4" /> },
@@ -293,6 +305,16 @@ export default function SettingsPage() {
       </PageContainer>
     }>
     <PageContainer variant="wide" title={t("settings.title")} subtitle={t("settings.subtitle")}>
+
+      {settingsLoaded && settingsError && (
+        <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-foreground">
+          <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1">{t("settings.refresh_failed_stale", { message: settingsError })}</span>
+          <Button onClick={retrySettings} size="sm" variant="outline" className="min-h-11 px-4 sm:min-h-7 sm:px-2.5">
+            {t("common.try_again")}
+          </Button>
+        </div>
+      )}
 
       <Tabs value={activeSection} onValueChange={handleSectionChange} orientation="vertical">
         <div className="grid gap-4 lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-start lg:gap-6">
@@ -361,7 +383,7 @@ export default function SettingsPage() {
             </div>
 
             <div className="mx-auto max-w-5xl space-y-6">
-              <TabsContent value="profile" className="mt-0"><ProfileSection data={data} /></TabsContent>
+              <TabsContent value="profile" className="mt-0">{gateSettingsData(<ProfileSection data={data} />)}</TabsContent>
               <TabsContent value="theme" className="mt-0"><ThemeSection theme={theme} onApplyTheme={handleApplyTheme} /></TabsContent>
               <TabsContent value="language" className="mt-0"><LanguageSection language={language} onSetLanguage={handleSetLanguage} /></TabsContent>
               <TabsContent value="access" className="mt-0"><Suspense fallback={null}><AccessSection /></Suspense></TabsContent>
@@ -380,19 +402,19 @@ export default function SettingsPage() {
                 <div className="mt-4"><ApiKeysSection /></div>
               </TabsContent>
               <TabsContent value="server" className="mt-0">
-                <ServerSection data={data} form={serverForm} setForm={setServerForm} saving={saving} onSave={handleSaveServer} />
+                <ServerSection data={data} form={serverForm} setForm={setServerForm} saving={saving} onSave={handleSaveServer} settingsLoaded={settingsLoaded} />
                 <div className="mt-4"><Suspense fallback={null}><ReloadStatusCard /></Suspense></div>
               </TabsContent>
-              <TabsContent value="agent" className="mt-0"><AgentSection form={agentForm} setForm={setAgentForm} saving={saving} onSave={handleSaveAgent} /></TabsContent>
-              <TabsContent value="malleable" className="mt-0"><Suspense fallback={null}><MalleableSection form={malleableForm} setForm={setMalleableForm} saving={saving} onSave={handleSaveMalleable} /></Suspense></TabsContent>
-              <TabsContent value="database" className="mt-0"><Suspense fallback={null}><DatabaseSection data={data} saving={saving} onVacuum={handleVacuum} onBackup={handleBackup} onDownloadDB={handleDownloadDB} /></Suspense></TabsContent>
+              <TabsContent value="agent" className="mt-0"><AgentSection form={agentForm} setForm={setAgentForm} saving={saving} onSave={handleSaveAgent} settingsLoaded={settingsLoaded} /></TabsContent>
+              <TabsContent value="malleable" className="mt-0"><Suspense fallback={null}><MalleableSection form={malleableForm} setForm={setMalleableForm} saving={saving} onSave={handleSaveMalleable} settingsLoaded={settingsLoaded} /></Suspense></TabsContent>
+              <TabsContent value="database" className="mt-0"><Suspense fallback={null}>{gateSettingsData(<DatabaseSection data={data} saving={saving} onVacuum={handleVacuum} onBackup={handleBackup} onDownloadDB={handleDownloadDB} />)}</Suspense></TabsContent>
               <TabsContent value="backup" className="mt-0"><Suspense fallback={null}><BackupSection /></Suspense></TabsContent>
               <TabsContent value="maintenance" className="mt-0"><Suspense fallback={null}><MaintenanceSection purgeDays={purgeDays} setPurgeDays={setPurgeDays} saving={saving} onPurge={handlePurge} onPurgeScreenshots={async () => { if (await confirmPurge({ message: t("settings.confirm.purge_screenshots"), confirmText: t("settings.btn.purge") })) handlePurge("screenshots"); }} /></Suspense></TabsContent>
               <TabsContent value="notifications" className="mt-0"><Suspense fallback={null}><NotificationsSection /></Suspense></TabsContent>
-              <TabsContent value="about" className="mt-0"><Suspense fallback={null}><AboutSection data={data} onCheckUpdate={handleCheckUpdate} /></Suspense></TabsContent>
+              <TabsContent value="about" className="mt-0"><Suspense fallback={null}>{gateSettingsData(<AboutSection data={data} onCheckUpdate={handleCheckUpdate} />)}</Suspense></TabsContent>
               <TabsContent value="extc2" className="mt-0"><Suspense fallback={null}><ExtC2Section /></Suspense></TabsContent>
               <TabsContent value="siem" className="mt-0"><Suspense fallback={null}><SIEMRulesSection /></Suspense></TabsContent>
-              <TabsContent value="certificates" className="mt-0"><Suspense fallback={null}><CertificatesSection data={data} saving={saving} onRefresh={loadSettings} /></Suspense></TabsContent>
+              <TabsContent value="certificates" className="mt-0"><Suspense fallback={null}>{gateSettingsData(<CertificatesSection data={data} saving={saving} onRefresh={loadSettings} />)}</Suspense></TabsContent>
               <TabsContent value="modules" className="mt-0"><Suspense fallback={null}><ModulesSection /></Suspense></TabsContent>
               <TabsContent value="emergency" className="mt-0"><Suspense fallback={null}><EmergencySection /></Suspense></TabsContent>
               <TabsContent value="telemetry" className="mt-0"><Suspense fallback={null}><TelemetrySection /></Suspense></TabsContent>

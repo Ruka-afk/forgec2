@@ -10,13 +10,14 @@ import { Info, Lock, Save, Server, Unlock } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
 export default function ServerSection({
-  data, form, setForm, saving, onSave,
+  data, form, setForm, saving, onSave, settingsLoaded,
 }: {
   data: SettingsData;
   form: ServerForm;
   setForm: React.Dispatch<React.SetStateAction<ServerForm>>;
   saving: boolean;
   onSave: (e: React.FormEvent) => void;
+  settingsLoaded: boolean;
 }) {
   const { t } = useI18n();
   return (
@@ -48,10 +49,16 @@ export default function ServerSection({
             <div>
               <span className="block text-xs text-muted-foreground mb-1.5">{t("settings.server.tls")}</span>
               <div className="h-11 flex items-center">
-                <span className={`inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg ${data.tls_enabled ? "bg-success/15 text-success" : "bg-secondary text-muted-foreground"}`}>
-                  {data.tls_enabled ? <Lock className="size-3 mr-1" /> : <Unlock className="size-3 mr-1" />}
-                  {data.tls_enabled ? t("settings.server.enabled") : t("settings.server.disabled")}
-                </span>
+                {!settingsLoaded ? (
+                  <span className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-secondary text-muted-foreground">
+                    <Lock className="size-3 mr-1" />{t("status.unknown")}
+                  </span>
+                ) : (
+                  <span className={`inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg ${data.tls_enabled ? "bg-success/15 text-success" : "bg-secondary text-muted-foreground"}`}>
+                    {data.tls_enabled ? <Lock className="size-3 mr-1" /> : <Unlock className="size-3 mr-1" />}
+                    {data.tls_enabled ? t("settings.server.enabled") : t("settings.server.disabled")}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -85,10 +92,10 @@ export default function ServerSection({
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Button type="submit" size="lg" disabled={saving} className="px-6 text-sm font-medium transition-colors disabled:opacity-50">
+            <Button type="submit" size="lg" disabled={saving || !settingsLoaded} className="px-6 text-sm font-medium transition-colors disabled:opacity-50">
               <Save className="size-4" />{t("settings.server.save")}
             </Button>
-            <span className="text-xs text-muted-foreground"><Info className="size-4" />{t("settings.server.restart_hint")}</span>
+            <span className="text-xs text-muted-foreground"><Info className="size-4" />{settingsLoaded ? t("settings.server.restart_hint") : t("settings.unread_save_blocked")}</span>
           </div>
         </form>
       </div>

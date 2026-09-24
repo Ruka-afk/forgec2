@@ -10,12 +10,13 @@ import { AlertTriangle, Save, Shield } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
 export default function MalleableSection({
-  form, setForm, saving, onSave,
+  form, setForm, saving, onSave, settingsLoaded,
 }: {
   form: MalleableForm;
   setForm: React.Dispatch<React.SetStateAction<MalleableForm>>;
   saving: boolean;
   onSave: (e: React.FormEvent) => void;
+  settingsLoaded: boolean;
 }) {
   const { t } = useI18n();
   return (
@@ -56,9 +57,12 @@ export default function MalleableSection({
             <AlertTriangle className="size-4" />
             {t("settings.malleable.warning")}
           </div>
-          <Button type="submit" size="lg" disabled={saving} className="px-6 text-sm font-medium transition-colors disabled:opacity-50">
-            <Save className="size-4" />{t("settings.malleable.save")}
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="submit" size="lg" disabled={saving || !settingsLoaded} className="px-6 text-sm font-medium transition-colors disabled:opacity-50">
+              <Save className="size-4" />{t("settings.malleable.save")}
+            </Button>
+            {!settingsLoaded && <span className="text-xs text-muted-foreground">{t("settings.unread_save_blocked")}</span>}
+          </div>
         </form>
       </div>
     </Card>

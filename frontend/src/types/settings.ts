@@ -34,6 +34,7 @@ export interface SettingsData {
   malleable_enabled?: boolean;
   malleable_status?: number;
   malleable_ct?: string;
+  malleable_headers?: string;
   malleable_prepend?: string;
   malleable_append?: string;
   offline_threshold?: number;

@@ -38,6 +38,7 @@ export function useSettingsData() {
   const [data, setData] = useState<SettingsData>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const [agentForm, setAgentForm] = useState<AgentForm>(defaultAgentForm);
   const [serverForm, setServerForm] = useState<ServerForm>(defaultServerForm);
   const [malleableForm, setMalleableForm] = useState<MalleableForm>(defaultMalleableForm);
@@ -72,10 +73,11 @@ export function useSettingsData() {
         enabled: d.malleable_enabled ?? false,
         status_code: d.malleable_status ?? 200,
         content_type: d.malleable_ct ?? "application/json",
-        headers_text: "",
+        headers_text: d.malleable_headers ?? "",
         prepend: d.malleable_prepend ?? "",
         append: d.malleable_append ?? "",
       });
+      setLoaded(true);
       try {
         const storedTheme = localStorage.getItem("forgec2_theme");
         if (storedTheme) setTheme(storedTheme);
@@ -104,6 +106,7 @@ export function useSettingsData() {
     setData,
     loading,
     error,
+    loaded,
     loadSettings,
     agentForm,
     setAgentForm,

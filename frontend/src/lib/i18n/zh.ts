@@ -4078,6 +4078,8 @@ export const zh: Record<string, string> = {
     "settings.toast.jwt_regenerated": "JWT 密钥已重新生成",
     "settings.toast.load_backups_failed": "加载备份失败",
     "settings.toast.load_failed": "加载设置失败",
+    "settings.unread_save_blocked": "设置加载成功前无法保存 — 此时保存会用默认值覆盖服务器上的真实配置。",
+    "settings.refresh_failed_stale": "刷新设置失败，当前显示的是上次成功加载的值。{message}",
     "settings.toast.malleable_saved": "Malleable C2 配置已保存",
     "settings.toast.notifications_save_failed": "保存通知目标失败",
     "settings.toast.notifications_saved": "通知目标已保存",

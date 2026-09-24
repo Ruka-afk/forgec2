@@ -4063,6 +4063,8 @@ export const en: Record<string, string> = {
     "settings.toast.jwt_regenerated": "JWT key regenerated",
     "settings.toast.load_backups_failed": "Failed to load backups",
     "settings.toast.load_failed": "Failed to load settings",
+    "settings.unread_save_blocked": "Saving is blocked until these settings load — saving now would overwrite the server with defaults.",
+    "settings.refresh_failed_stale": "Could not refresh settings, showing the last values that loaded successfully. {message}",
     "settings.toast.malleable_saved": "Malleable C2 profile saved",
     "settings.toast.notifications_save_failed": "Failed to save notification targets",
     "settings.toast.notifications_saved": "Notification targets saved",
