@@ -34,7 +34,7 @@ forgec2/
 │   │   ├── agent_stager/       #   stager（分阶段加载）
 │   │   ├── loader/             #   reflective loader 辅助
 │   │   └── update_signing.go   #   server 侧 OTA 私钥托管
-│   ├── plugin/                 # manifest 插件运行时（stdin JSON / 进程 guard）
+│   ├── plugin/                 # manifest 插件运行时（stdin JSON / 进程 guard / WASM 层 / 包签名）
 │   ├── scripting/              # goja JS 引擎
 │   ├── server/                 # Gin + listeners + handlers + opsec/
 │   └── webdist/                # go:embed 前端产物
@@ -129,8 +129,13 @@ cover traffic + jitter + work window）。所有 patch 使用**运行时解码�
 三类型：`command` / `hook` / `report`。Manifest YAML 声明 interpreter、
 timeout、events、依赖拓扑。执行：stdin JSON、**清空敏感 env**、PATH 去劫持
 （`sanitizePluginPATH`）、stdout/stderr 2MiB cap、Windows Job Object
-KILL_ON_JOB_CLOSE。52 个打包插件；goja 提供嵌入 JS。缺口：Unix 侧
-process-tree kill（见 P4-3）、可选 WASM 沙箱。
+KILL_ON_JOB_CLOSE + Unix Setpgid、guard 挂载失败即拒绝执行、timeout 300s
+服务端上限、并发配额（`plugins.max_concurrent`）。52 个打包插件；goja 提供
+嵌入 JS（D2-4 后 require 宿主机逃逸已封、事件回调有界）。**D4-1**：manifest
+可带 `digest`（全包文件 sha256）+ Ed25519 `signature`，服务端按
+`plugins.trusted_keys` 验签，`require_signed` 可拒绝未签名包，`cmd/sign-plugin`
+负责签发。**D4-2**：`interpreter: wasm` 走 wazero 不可信层（无 WASI、16MiB
+内存上限、超时、日志/结果封顶），ABI v1 见 `docs/PLUGIN_TIERS.md`。
 
 ### 2.7 Frontend / Operator UX（`frontend/`）
 
@@ -482,11 +487,11 @@ c2, impact, other`。每个条目含 type、aliases、parameters、approval 标�
 |------|----|------|
 | 功能成熟度 | **8.5** | 217 任务、11 传输、52 插件、malleable v2、双语言 UI；扣分：C-implant 子集、部分 lateral/tun 非 Win stub |
 | 稳定性/健壮性 | **9.0** | 队列/退避/kill-switch/限长/recover 齐全；QUIC stream cap + gRPC keepalive/MaxConnectionAge；Unix 进程组 kill；D2-4 插件 guard fail-closed + WaitDelay + timeout 硬上限；扣分：仍非 WASM 沙箱、无插件 CPU/IO 配额 |
-| 生态成熟度 | **7.5** | 命令>50、别名、manifest+goja、en/zh；D2-4 脚本 require 宿主机逃逸已封、事件回调有界；扣分：插件非 WASM 沙箱、依赖宿主解释器、无包签名 |
+| 生态成熟度 | **8.5** | 命令>50、别名、manifest+goja、en/zh；D2-4 脚本 require 宿主机逃逸已封、事件回调有界；D4-1 插件包 digest+Ed25519 签名信任链 + `cmd/sign-plugin` + 并发配额；D4-2 **WASM 不可信插件层**（wazero，无 WASI、16 MiB 内存上限、超时，ABI v1 见 `docs/PLUGIN_TIERS.md`）；扣分：52 个内置插件仍是 native 未签名层、WASM 层暂无官方 SDK/示例模块 |
 | 安全与合规加固 | **9.0** | TLS1.3/ECDH/GCM/Ed25519 pin/ROE/approval/审计；可选 ChaCha20-Poly1305；生产 compose；D2-1 `/api/v1` operator guard；D2-2 审计租户隔离；D2-3 gRPC mTLS fail-closed + resync oracle 关闭；扣分：ChaCha20 非默认、mTLS 仅全局而非 per-listener |
 | 可维护性/更新性 | **9.0** | 单一 TaskSpec 真源、CI 门禁、gofmt 清债、OTA 签名链闭环；matrix 任务清单生成段 + `--check`；版本行由 `VERSION` 单源 stamp；D2-4 契约测试（storage keys/compose/PG 备份边界）；D3 CI 含 `-race` job、33% 覆盖率下限、定时 fuzz、Docker/Compose 校验、SBOM + provenance；扣分：matrix 其余手写段仍人工维护、GitHub Action/基础镜像仍是可变 tag |
 | 额外加分 | **8.0** | HTTP/3、别名史、多语言插件、跨平台构建已有；扣分：模块化代理/WASM、Win TUN 未打包 |
-| **综合** | **9.0** | P3 工程债已清 + P4 全落地 + Phase C（生产 compose / 可选会话 ChaCha20 / matrix 生成段）+ **Phase D-2 服务端 P0 安全收口**（operator guard 覆盖 `/api/v1`、审计租户隔离、gRPC mTLS fail-closed、resync oracle 关闭、插件/脚本 fail-closed、存储密钥与 compose 契约、PG 备份显式边界）+ **D-2b agent fail-closed**（禁明文降级、DNS 响应校验、证书 pin 修复、响应体上限）+ **D-3 供应链**（race/覆盖率/fuzz/docker 门禁、SBOM + provenance、CHANGELOG 驱动 release notes） |
+| **综合** | **9.2** | P3 工程债已清 + P4 全落地 + Phase C（生产 compose / 可选会话 ChaCha20 / matrix 生成段）+ **Phase D-2 服务端 P0 安全收口**（operator guard 覆盖 `/api/v1`、审计租户隔离、gRPC mTLS fail-closed、resync oracle 关闭、插件/脚本 fail-closed、存储密钥与 compose 契约、PG 备份显式边界）+ **D-2b agent fail-closed**（禁明文降级、DNS 响应校验、证书 pin 修复、响应体上限）+ **D-3 供应链**（race/覆盖率/fuzz/docker 门禁、SBOM + provenance、CHANGELOG 驱动 release notes）+ **D-4 插件生态**（包签名信任链、并发配额、WASM 不可信层） |
 
 ---
 
