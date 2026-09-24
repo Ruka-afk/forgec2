@@ -3840,6 +3840,7 @@ export const en: Record<string, string> = {
     "settings.notifications.empty_message": "Add one below to get started",
     "settings.notifications.empty_title": "No notification targets",
     "settings.notifications.enabled": "Enabled",
+    "settings.notifications.load_blocked": "Existing targets could not be read, so adding and saving are disabled — saving now would delete every target that is already configured.",
     "settings.notifications.enabled_option": "Enabled",
     "settings.notifications.from": "From",
     "settings.notifications.hmac_placeholder": "HMAC secret key",

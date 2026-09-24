@@ -3853,6 +3853,7 @@ export const zh: Record<string, string> = {
     "settings.notifications.disabled_option": "已禁用",
     "settings.notifications.empty_message": "在下方添加一个以开始使用",
     "settings.notifications.empty_title": "未配置通知目标",
+    "settings.notifications.load_blocked": "无法读取已有通知目标，因此已禁用添加和保存 — 此时保存会删除所有已配置的目标。",
     "settings.notifications.enabled": "已启用",
     "settings.notifications.enabled_option": "已启用",
     "settings.notifications.from": "发件人",

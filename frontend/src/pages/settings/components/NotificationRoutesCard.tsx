@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Spinner } from "@/components/ui/spinner";
+import { DataError } from "@/components/ui/data-state";
 import { FlaskConical, Route as RouteIcon, Trash2 } from "lucide-react";
 
 interface NotificationRoute {
@@ -40,19 +41,21 @@ export default function NotificationRoutesCard() {
   const { confirm, modal } = useConfirm();
   const [routes, setRoutes] = useState<NotificationRoute[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | number | null>(null);
   const [testingId, setTestingId] = useState<string | number | null>(null);
 
   const load = useCallback(async () => {
+    setLoadError(null);
     try {
       const d = await api.get<{ routes?: NotificationRoute[] }>(paths.settings.notificationRoutes);
       setRoutes(d.routes || []);
-    } catch {
-      setRoutes([]);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : t("settings.toast.load_failed"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -125,6 +128,8 @@ export default function NotificationRoutesCard() {
       <div className="p-(--card-spacing) space-y-4">
         {loading ? (
           <div className="py-8 text-center"><Spinner /></div>
+        ) : loadError ? (
+          <DataError message={loadError} onRetry={() => { setLoading(true); void load(); }} />
         ) : (
           <>
             {routes.length === 0 && (

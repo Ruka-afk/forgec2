@@ -23,10 +23,14 @@ export function useProfilesData() {
   const [loadingProfiles, setLoadingProfiles] = useState(true);
   const [activeConfig, setActiveConfig] = useState<ActiveMalleableConfig>(emptyActiveConfig);
   const [loadingActiveConfig, setLoadingActiveConfig] = useState(true);
+  const [activeConfigError, setActiveConfigError] = useState<string | null>(null);
+  const [malleableLoaded, setMalleableLoaded] = useState(false);
+  const [malleableError, setMalleableError] = useState<string | null>(null);
   const [profilesError, setProfilesError] = useState<string | null>(null);
 
   const loadActiveConfig = useCallback(async () => {
     setLoadingActiveConfig(true);
+    setActiveConfigError(null);
     try {
       const data = await api.get<ActiveMalleableConfig>(paths.integrations.malleable);
       setActiveConfig({
@@ -41,26 +45,30 @@ export function useProfilesData() {
         prepend: (data.prepend ?? "") as string,
         append: (data.append ?? "") as string,
       });
-    } catch {
-      /* active config optional */
+    } catch (e) {
+      setActiveConfigError(e instanceof Error ? e.message : t("profiles.toast.load_failed"));
     } finally {
       setLoadingActiveConfig(false);
     }
-  }, []);
+  }, [t]);
 
   const loadMalleableSettings = useCallback(async () => {
+    setMalleableError(null);
     try {
-      const d = await api.get(paths.settings.root);
+      const d = await api.get<Record<string, unknown>>(paths.settings.root);
       setMalleableForm({
         enabled: (d.malleable_enabled ?? false) as boolean,
         status_code: (d.malleable_status ?? 200) as number,
         content_type: (d.malleable_ct ?? "application/json") as string,
-        headers_text: "",
+        headers_text: (d.malleable_headers ?? "") as string,
         prepend: (d.malleable_prepend ?? "") as string,
         append: (d.malleable_append ?? "") as string,
       });
-    } catch {
-      toast.error(t("profiles.toast.load_failed"));
+      setMalleableLoaded(true);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : t("profiles.toast.load_failed");
+      setMalleableError(msg);
+      toast.error(msg);
     }
   }, [t]);
 
@@ -104,6 +112,9 @@ export function useProfilesData() {
     activeConfig,
     setActiveConfig,
     loadingActiveConfig,
+    activeConfigError,
+    malleableLoaded,
+    malleableError,
     profilesError,
     loadActiveConfig,
     loadMalleableSettings,

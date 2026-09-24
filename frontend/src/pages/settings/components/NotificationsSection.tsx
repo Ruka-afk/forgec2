@@ -5,6 +5,7 @@ import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { EmptyState } from "@/components/ui/empty-state";
+import { DataError } from "@/components/ui/data-state";
 import { Spinner } from "@/components/ui/spinner";
 import { Card } from "@/components/ui/card";
 import { CardHeaderRow } from "@/components/ui/card-header-row";
@@ -48,20 +49,29 @@ export default function NotificationsSection() {
   const [targets, setTargets] = useState<NotificationTarget[]>([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [testingIdx, setTestingIdx] = useState<number | null>(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadError(null);
     api.get(paths.settings.webhooks)
       .then((d: Record<string, unknown>) => {
+        if (cancelled) return;
         const dd = d.data as Record<string, unknown> | undefined;
-        if (dd?.notifications) {
-          setTargets(dd.notifications as NotificationTarget[]);
-        }
+        setTargets((dd?.notifications as NotificationTarget[] | undefined) ?? []);
       })
-      .catch(() => { /* no saved config yet */ })
-      .finally(() => setLoading(false));
-  }, []);
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setLoadError(e instanceof Error ? e.message : t("settings.toast.load_failed"));
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [t, reloadNonce]);
 
   const handleSave = async () => {
+    if (loadError) return;
     setSaving(true);
     try {
       await api.postJson(paths.settings.webhooks, { notifications: targets });
@@ -105,8 +115,7 @@ export default function NotificationsSection() {
     });
   };
 
-  const addTarget = () => setTargets((prev) => [...prev, emptyTarget()]);
-  const removeTarget = (idx: number) => setTargets((prev) => prev.filter((_, i) => i !== idx));
+  const addTarget = () => setTargets((prev) => [...prev, emptyTarget()]);  const removeTarget = (idx: number) => setTargets((prev) => prev.filter((_, i) => i !== idx));
 
   return (
     <Card className="overflow-hidden">
@@ -118,8 +127,15 @@ export default function NotificationsSection() {
       ) : (<>
       <CardHeaderRow icon={Bell} tone="info" accent={false} title={t("settings.notifications.title")} description={t("settings.notifications.subtitle")} />
 
+      {loadError && (
+        <div className="px-(--card-spacing) pt-(--card-spacing)">
+          <DataError message={loadError} onRetry={() => setReloadNonce((n) => n + 1)} />
+          <p className="text-xs text-muted-foreground text-center -mt-2">{t("settings.notifications.load_blocked")}</p>
+        </div>
+      )}
+
       <div className="p-(--card-spacing) space-y-4">
-        {targets.length === 0 && (
+        {targets.length === 0 && !loadError && (
           <div className="text-center text-xs text-muted-foreground py-6">
             <EmptyState icon={Bell} title={t("settings.notifications.empty_title")} message={t("settings.notifications.empty_message")} />
           </div>
@@ -227,11 +243,11 @@ export default function NotificationsSection() {
         ))}
 
         <div className="flex items-center justify-between pt-2">
-          <Button onClick={addTarget} className="px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5">
+          <Button onClick={addTarget} disabled={!!loadError} className="px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 disabled:opacity-50">
             <Plus className="size-4" /> {t("settings.notifications.add_target")}
           </Button>
           {targets.length > 0 && (
-            <Button onClick={handleSave} disabled={saving} className="px-4 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5">
+            <Button onClick={handleSave} disabled={saving || !!loadError} className="px-4 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 disabled:opacity-50">
               {saving ? <Spinner size="xs" /> : <Save className="size-4" />}
               {saving ? t("settings.notifications.saving") : t("settings.notifications.save_all")}
             </Button>

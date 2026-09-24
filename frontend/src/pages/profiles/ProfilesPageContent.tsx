@@ -43,6 +43,9 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
     loadingProfiles,
     activeConfig,
     loadingActiveConfig,
+    activeConfigError,
+    malleableLoaded,
+    malleableError,
     profilesError,
     loadActiveConfig,
     loadMalleableSettings,
@@ -106,6 +109,10 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
 
   const handleSaveMalleable = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!malleableLoaded) {
+      toast.error(t("settings.unread_save_blocked"));
+      return;
+    }
     setSavingMalleable(true);
     try {
       await api.post(paths.settings.malleable, {
@@ -342,6 +349,8 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
               <Spinner color="emerald" />
               <span className="ml-3 text-sm text-muted-foreground">{t("profiles.loading_active")}</span>
             </div>
+          ) : activeConfigError ? (
+            <DataError message={activeConfigError} onRetry={() => { void loadActiveConfig(); }} />
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
@@ -471,9 +480,20 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                 <AlertTriangle className="size-4" />
                 {t("profiles.camouflage_warning")}
               </div>
-              <Button type="submit" size="lg" disabled={savingMalleable} className="px-6 bg-primary hover:bg-primary/80 text-primary-foreground text-sm font-medium transition-colors disabled:opacity-50">
-                <Save className="size-4" />{t("profiles.save_profile")}
-              </Button>
+              {malleableError && !malleableLoaded && (
+                <div role="alert" className="p-3 bg-destructive/10 rounded-lg border border-destructive/25 text-xs text-destructive flex flex-wrap items-center gap-2">
+                  <span className="min-w-0 flex-1">{t("settings.unread_save_blocked")}</span>
+                  <Button type="button" size="sm" variant="outline" onClick={() => { void loadMalleableSettings(); }}>
+                    {t("common.try_again")}
+                  </Button>
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-3">
+                <Button type="submit" size="lg" disabled={savingMalleable || !malleableLoaded} className="px-6 bg-primary hover:bg-primary/80 text-primary-foreground text-sm font-medium transition-colors disabled:opacity-50">
+                  <Save className="size-4" />{t("profiles.save_profile")}
+                </Button>
+                {!malleableLoaded && <span className="text-xs text-muted-foreground">{t("common.loading")}</span>}
+              </div>
             </form>
           </CardContent>
         </Card>
