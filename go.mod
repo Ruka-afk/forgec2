@@ -22,6 +22,7 @@ require (
 	github.com/refraction-networking/utls v1.6.7
 	github.com/slack-go/slack v0.27.0
 	github.com/tc-hib/winres v0.1.6
+	github.com/tetratelabs/wazero v1.12.0
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	golang.org/x/crypto v0.53.0
 	golang.org/x/net v0.56.0

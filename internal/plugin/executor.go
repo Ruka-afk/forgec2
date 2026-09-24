@@ -179,6 +179,17 @@ func (e *executor) run(ctx context.Context, pluginDir string, m *Manifest, input
 	}
 	defer e.release()
 
+	// WASM tier: no child process, no host interpreter — the module runs
+	// inside the sandboxed runtime with no WASI, capped memory and the same
+	// timeout/quota discipline as native plugins.
+	if isWasmInterpreter(m.Interpreter) {
+		res, err := e.runWasmPlugin(ctx, pluginDir, m, input)
+		if err != nil {
+			return res, err
+		}
+		return res, nil
+	}
+
 	args := interpreterArgs(m.Interpreter, m.Entry)
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Dir = pluginDir

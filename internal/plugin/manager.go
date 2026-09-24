@@ -300,11 +300,17 @@ func (m *Manager) registerAtDir(manifest *Manifest, pluginDir string) error {
 	if err := m.VerifyPackage(pluginDir, manifest); err != nil {
 		return err
 	}
-	if _, err := exec.LookPath(manifest.Interpreter); err != nil {
+	entryPath := filepath.Join(pluginDir, manifest.Entry)
+	if isWasmInterpreter(manifest.Interpreter) {
+		// A WASM plugin has no interpreter to look up, but a missing module is
+		// a hard error: it can never run.
+		if _, err := os.Stat(entryPath); err != nil {
+			return fmt.Errorf("wasm module not found: %s", manifest.Entry)
+		}
+	} else if _, err := exec.LookPath(manifest.Interpreter); err != nil {
 		slog.Warn("Plugin interpreter not found on PATH; plugin will be registered but may fail at runtime",
 			"plugin", manifest.Name, "interpreter", manifest.Interpreter, "error", err)
 	}
-	entryPath := filepath.Join(pluginDir, manifest.Entry)
 	if _, err := os.Stat(entryPath); os.IsNotExist(err) {
 		slog.Warn("Plugin entry file not found; plugin will be registered but may fail at runtime",
 			"plugin", manifest.Name, "entry", manifest.Entry)

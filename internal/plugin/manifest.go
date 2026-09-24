@@ -51,7 +51,8 @@ type ManifestParam struct {
 var ValidPluginTypes = []string{"command", "hook", "report"}
 
 // ValidInterpreters lists the interpreters the executor can invoke.
-var ValidInterpreters = []string{"python", "python3", "powershell", "pwsh", "bash", "sh", "go"}
+// "wasm" selects the sandboxed tier (no child process, no WASI).
+var ValidInterpreters = []string{"python", "python3", "powershell", "pwsh", "bash", "sh", "go", "wasm"}
 
 // LoadManifest reads and parses a manifest.yaml file.
 func LoadManifest(path string) (*Manifest, error) {
@@ -91,6 +92,9 @@ func (m *Manifest) Validate() error {
 	}
 	if strings.Contains(m.Entry, "..") {
 		return fmt.Errorf("entry path must not contain '..'")
+	}
+	if isWasmInterpreter(m.Interpreter) && !strings.HasSuffix(strings.ToLower(m.Entry), ".wasm") {
+		return fmt.Errorf("wasm plugins must point at a .wasm module (entry %q)", m.Entry)
 	}
 	return nil
 }

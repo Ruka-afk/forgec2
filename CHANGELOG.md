@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- WASM plugin tier (`interpreter: wasm`, wazero): untrusted plugins run with no WASI (no files, sockets, env or clock), a 16 MiB linear-memory cap, the existing timeout/quota discipline, capped logs and result. ABI v1 is documented in `docs/PLUGIN_TIERS.md` (`run(ptr,len) -> (ptr,len)` plus an optional `forgec2.log`)
 - Plugin package trust: manifests may carry a canonical `digest` (`sha256:` over every package file) plus an Ed25519 `signature` over that digest; the server verifies both on load and install, and `plugins.require_signed` turns "unsigned" into a refusal. Generate/verify with the new `cmd/sign-plugin` (`-gen`, `-verify -key <pubkey>`)
 - Plugin execution quota: `plugins.max_concurrent` (default 4, env `FORGEC2_PLUGINS_MAX_CONCURRENT`) bounds simultaneous plugin processes, so event bursts cannot fan out interpreters
 
