@@ -420,6 +420,7 @@ type AuditLog struct {
 	Action    string    `gorm:"index" json:"action"`       // action type: login, logout, command, delete, etc.
 	Resource  string    `json:"resource"`                  // affected resource
 	AgentID   string    `gorm:"index" json:"agent_id"`     // related agent ID if applicable
+	TenantID  uint      `gorm:"index" json:"tenant_id"`    // owning tenant; 0 = legacy/unscoped (visible to all)
 	IP        string    `json:"ip"`                        // client IP address
 	Success   bool      `json:"success"`                   // whether the action succeeded
 	Error     string    `json:"error"`                     // error message if failed

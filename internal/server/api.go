@@ -339,13 +339,7 @@ func (s *Server) apiDashboardStats(c *gin.Context) {
 		return s.db.WithContext(ctx).Model(&db.Listener{}).Count(&totalListeners).Error
 	})
 	g.Go(func() error {
-		query := s.db.WithContext(ctx).Model(&db.AuditLog{})
-		if tid != 0 {
-			tenantUsers := s.db.WithContext(ctx).Model(&db.User{}).
-				Select("username").Where("tenant_id = ?", tid)
-			query = query.Where("user IN (?)", tenantUsers)
-		}
-		return query.Count(&totalAudits).Error
+		return s.auditTenantScope(s.db.WithContext(ctx).Model(&db.AuditLog{}), c).Count(&totalAudits).Error
 	})
 	var onlineUsersList []UserSession
 	g.Go(func() error {
@@ -456,7 +450,7 @@ func (s *Server) apiListAuditLogs(c *gin.Context) {
 		return
 	}
 	var logs []db.AuditLog
-	query := s.db.Order("created_at desc")
+	query := s.auditTenantScope(s.db, c).Order("created_at desc")
 
 	if action := c.Query("action"); action != "" {
 		query = query.Where("action = ?", action)

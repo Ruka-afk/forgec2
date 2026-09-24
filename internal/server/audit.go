@@ -86,6 +86,7 @@ func (s *Server) LogAuditRecords(c *gin.Context, entries []auditEntry) {
 
 func (s *Server) buildAuditEntries(c *gin.Context, entries []auditEntry) []db.AuditLog {
 	var user, ip string
+	tenantID := uint(0)
 	if c != nil {
 		if u, exists := c.Get("user"); exists {
 			if us, ok := u.(string); ok {
@@ -99,6 +100,13 @@ func (s *Server) buildAuditEntries(c *gin.Context, entries []auditEntry) []db.Au
 		ip = c.ClientIP()
 		if ip == "" {
 			ip = c.Request.RemoteAddr
+		}
+		// Stamp the owning tenant so audit reads can be scoped. A failed
+		// tenant lookup stays 0 (legacy/unscoped) rather than inventing a
+		// scope: the entry is still written, and the fallback stays visible
+		// to unscoped admins instead of vanishing.
+		if tid, ok := s.resolveTenant(c); ok {
+			tenantID = tid
 		}
 	} else {
 		user = "system"
@@ -115,6 +123,7 @@ func (s *Server) buildAuditEntries(c *gin.Context, entries []auditEntry) []db.Au
 			Action:   e.action,
 			Resource: e.resource,
 			AgentID:  e.agentID,
+			TenantID: tenantID,
 			IP:       ip,
 			Success:  e.success,
 			Error:    sanitizeDetails(errorMsg),
@@ -188,6 +197,9 @@ func (s *Server) flushAuditEntriesSync(entries []db.AuditLog) {
 }
 
 // auditEntryHash computes the tamper-evident chain hash for one entry.
+// TenantID is deliberately NOT part of the chain input: entries written
+// before the column existed hash over the same field set, so adding tenant
+// scoping does not invalidate historical EntryHash values.
 func auditEntryHash(e *db.AuditLog) string {
 	h := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%s|%s|%s|%t|%s|%s",
 		e.User, e.Action, e.Resource, e.AgentID, e.IP, e.Success, e.Error, e.Details)))

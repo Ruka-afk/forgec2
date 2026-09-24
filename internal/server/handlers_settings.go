@@ -482,7 +482,8 @@ func (s *Server) handlePurgeAuditLogs(c *gin.Context) {
 		days = 730
 	}
 	cutoff := time.Now().AddDate(0, 0, -days)
-	result := s.db.Where("created_at < ?", cutoff).Delete(&db.AuditLog{})
+	result := s.auditTenantScope(s.db.Model(&db.AuditLog{}), c).
+		Where("created_at < ?", cutoff).Delete(&db.AuditLog{})
 	if result.Error != nil {
 		respondError(c, http.StatusInternalServerError, "Failed to purge audit logs")
 		return
@@ -603,7 +604,7 @@ func (s *Server) handleGetAuditLogs(c *gin.Context) {
 	action := c.DefaultQuery("action", "")
 	user := c.DefaultQuery("user", "")
 
-	query := s.db.Model(&db.AuditLog{}).Order("created_at DESC")
+	query := s.auditTenantScope(s.db.Model(&db.AuditLog{}), c).Order("created_at DESC")
 
 	if search != "" {
 		query = query.Where("(user LIKE ? ESCAPE '\\' OR resource LIKE ? ESCAPE '\\' OR details LIKE ? ESCAPE '\\')",

@@ -424,8 +424,8 @@ func TestAPIDashboardStatsUsesOwnershipAwareScopes(t *testing.T) {
 		&db.CredentialEntry{AgentID: "dashboard-a2", Username: "two"},
 		&db.TokenEntry{AgentID: "dashboard-a1", Username: "one"},
 		&db.TokenEntry{AgentID: "dashboard-a2", Username: "two"},
-		&db.AuditLog{User: "dashboard-admin", Action: "view", Resource: "dashboard", Success: true},
-		&db.AuditLog{User: "other-admin", Action: "view", Resource: "dashboard", Success: true},
+		&db.AuditLog{User: "dashboard-admin", Action: "view", Resource: "dashboard", TenantID: 1, Success: true},
+		&db.AuditLog{User: "other-admin", Action: "view", Resource: "dashboard", TenantID: 2, Success: true},
 		&db.Listener{Name: "global-http", Scheme: "http", Host: "127.0.0.1", Port: 8080},
 	} {
 		if err := s.db.Create(row).Error; err != nil {

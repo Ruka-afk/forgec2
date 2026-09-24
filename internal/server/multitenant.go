@@ -80,6 +80,21 @@ func (s *Server) tenantScope(query *gorm.DB, c *gin.Context) *gorm.DB {
 	return query
 }
 
+// auditTenantScope restricts audit-log reads to the caller's own tenant plus
+// legacy (tenant_id = 0) entries, which predate tenant stamping and stay
+// visible to every tenant. Unscoped operators (tenant 0, e.g. legacy admin)
+// keep the global view, and a failed tenant lookup denies everything.
+func (s *Server) auditTenantScope(query *gorm.DB, c *gin.Context) *gorm.DB {
+	tid, ok := s.resolveTenant(c)
+	if !ok {
+		return query.Where("1 = 0")
+	}
+	if tid != 0 {
+		return query.Where("tenant_id = ? OR tenant_id = 0", tid)
+	}
+	return query
+}
+
 // aiTenantScope restricts a query to the AI principal's tenant, mirroring
 // resolveAIAgentID semantics: authenticated principals (UserID != 0) see
 // only their own tenant's rows — including tenant 0, which resolveAIAgentID
