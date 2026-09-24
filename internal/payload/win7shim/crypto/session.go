@@ -120,6 +120,7 @@ func (sm *SessionManager) Cipher() string {
 	}
 	return sm.cipher
 }
+
 // GetPublicKey returns the server's public key for distribution to agents
 func (sm *SessionManager) GetPublicKey() []byte {
 	if sm == nil {

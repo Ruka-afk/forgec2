@@ -153,6 +153,15 @@ func doBeacon() {
 					fmt.Printf("[!] DNS beacon failed (%d/%d consecutive failures)\n", dnsConsecutiveFailures, dnsFallbackThreshold)
 				}
 				if dnsConsecutiveFailures >= dnsFallbackThreshold {
+					// Do not downgrade to cleartext HTTP when the implant was
+					// configured exclusively with encrypted C2 URLs.
+					if c2URLListSecureOnly() {
+						if Debug {
+							fmt.Println("[!] DNS failure threshold reached; cleartext HTTP fallback refused (all configured C2 URLs are encrypted)")
+						}
+						dnsConsecutiveFailures = 0
+						break
+					}
 					if Debug {
 						fmt.Println("[!] DNS failure threshold reached, falling back to HTTP")
 					}

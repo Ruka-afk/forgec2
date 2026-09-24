@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
+- Agent no longer downgrades to cleartext when every configured C2 URL is encrypted: the WSS→HTTP fallback, the DNS→HTTP fallback and transport failover/rotation refuse `http`/`ws`/`h2c`/`tcp`/`udp`/`dns` for such an implant (configure at least one cleartext URL to keep lab failover)
+- HTTP(S)/mTLS beacon clients refuse a redirect from an encrypted origin to `http://`; cleartext lab origins keep normal redirect behaviour
+- Agent certificate pinning now actually authenticates self-signed teamserver certificates: the pin replaces chain validation (plus a hostname check when a server name is known) instead of failing before the pin is consulted
+- Agent DNS answers are validated before use: response bit, rcode, transaction ID, question name and question type must match the outstanding query
+- Agent beacon responses are size-capped (16 MiB) so a hostile endpoint cannot make the implant buffer unbounded data
 - Operator-plane guard now covers the authenticated `/api/v1` REST surface (only `/api/v1/health` is exempt for probes); `operator_allowed_cidrs` and operator mTLS can no longer be bypassed via API-key/session automation routes
 - Audit logs are tenant-scoped: `AuditLog.TenantID` is stamped on write, and both audit read surfaces (operator page + `/api/v1/audit`) plus retention purge return the caller's own tenant plus legacy `tenant_id = 0` rows; the tamper-evident hash chain input is unchanged so historical `EntryHash` values stay verifiable
 - gRPC mTLS is fail-closed: a missing/unreadable/unparseable `client_ca_file` with `require_client_cert` refuses to start the listener instead of silently serving without client authentication

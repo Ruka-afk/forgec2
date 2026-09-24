@@ -176,7 +176,7 @@ func sendDNSUDP(dnsServer, qname string) []byte {
 		return nil
 	}
 
-	return parseDNSResponse(resp[:n], qtype)
+	return parseDNSResponse(resp[:n], qtype, binary.BigEndian.Uint16(pkt[0:2]), qname)
 }
 
 // sendDNSDoH sends a DNS query via DNS-over-HTTPS (RFC 8484).
@@ -209,7 +209,7 @@ func sendDNSDoH(dohURL, qname string) []byte {
 		return nil
 	}
 
-	return parseDNSResponse(body, qtype)
+	return parseDNSResponse(body, qtype, binary.BigEndian.Uint16(pkt[0:2]), qname)
 }
 
 // sendDNSDoT sends a DNS query via DNS-over-TLS (RFC 7858).
@@ -251,7 +251,7 @@ func sendDNSDoT(dotAddr, qname string) []byte {
 		return nil
 	}
 
-	return parseDNSResponse(respBody, qtype)
+	return parseDNSResponse(respBody, qtype, binary.BigEndian.Uint16(pkt[0:2]), qname)
 }
 
 // sendDNSTCP sends a DNS query over a plain TCP connection (RFC 1035
@@ -292,7 +292,7 @@ func sendDNSTCP(dnsServer, qname string) []byte {
 		return nil
 	}
 
-	return parseDNSResponse(respBody, qtype)
+	return parseDNSResponse(respBody, qtype, binary.BigEndian.Uint16(pkt[0:2]), qname)
 }
 
 // hexEncodedUUID converts UUID with dashes to a hex-only string
@@ -344,16 +344,68 @@ func encodeDNSName(name string) []byte {
 	return buf
 }
 
-// parseDNSResponse parses a DNS response packet for TXT (16) or AAAA (28) records.
-func parseDNSResponse(pkt []byte, qtype uint16) []byte {
+// readDNSName decodes the (uncompressed) name at offset and returns it without
+// a trailing dot, or "" when the encoding is malformed.
+func readDNSName(pkt []byte, offset int) string {
+	var sb strings.Builder
+	hops := 0
+	for offset < len(pkt) {
+		c := pkt[offset]
+		if c == 0 {
+			return sb.String()
+		}
+		if c&0xC0 == 0xC0 {
+			// Compression pointers are legal in questions; follow one hop.
+			if offset+1 >= len(pkt) {
+				return ""
+			}
+			ptr := int(binary.BigEndian.Uint16(pkt[offset:offset+2]) & 0x3FFF)
+			hops++
+			if ptr >= len(pkt) || hops > 4 {
+				return ""
+			}
+			offset = ptr
+			continue
+		}
+		if int(c) > 63 || offset+1+int(c) > len(pkt) {
+			return ""
+		}
+		sb.Write(pkt[offset+1 : offset+1+int(c)])
+		sb.WriteByte('.')
+		offset += 1 + int(c)
+	}
+	return ""
+}
+
+// parseDNSResponse parses a DNS response packet for TXT (16) or AAAA (28)
+// records. txid and qname come from the query that was just sent: a hostile or
+// stale resolver/cache must not be able to feed the agent a response for a
+// different question. The tunnel payload itself stays AEAD-authenticated, so
+// this is about refusing misdirected/spoofed answers, not about trusting the
+// record contents.
+func parseDNSResponse(pkt []byte, qtype, txid uint16, qname string) []byte {
 	if len(pkt) < 12 {
+		return nil
+	}
+	// QR=0 means this is a query, not a response.
+	if pkt[2]&0x80 == 0 {
+		return nil
+	}
+	// Only NOERROR carries tunnel data; NXDOMAIN/SERVFAIL/etc. are failures.
+	if rcode := pkt[3] & 0x0F; rcode != 0 {
+		return nil
+	}
+	// Transaction ID must match the outstanding query (0 disables the check
+	// for callers that do not track it).
+	if txid != 0 && binary.BigEndian.Uint16(pkt[0:2]) != txid {
 		return nil
 	}
 
 	ancount := binary.BigEndian.Uint16(pkt[6:8])
 	offset := 12
 
-	// Skip question section
+	// Skip question section, validating it against what we asked.
+	qStart := offset
 	for offset < len(pkt) {
 		if pkt[offset] == 0 {
 			offset++
@@ -364,6 +416,18 @@ func parseDNSResponse(pkt []byte, qtype uint16) []byte {
 			break
 		}
 		offset += int(pkt[offset]) + 1
+	}
+	if offset+4 > len(pkt) {
+		return nil
+	}
+	if qname != "" {
+		asked := readDNSName(pkt, qStart)
+		if asked == "" || !strings.EqualFold(strings.TrimSuffix(asked, "."), strings.TrimSuffix(qname, ".")) {
+			return nil
+		}
+	}
+	if gotQType := binary.BigEndian.Uint16(pkt[offset : offset+2]); gotQType != qtype {
+		return nil
 	}
 	offset += 4 // skip QTYPE + QCLASS
 

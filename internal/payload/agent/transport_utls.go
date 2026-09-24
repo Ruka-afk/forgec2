@@ -71,7 +71,7 @@ func utlsDialContext(ctx context.Context, network, addr string) (net.Conn, error
 		cfg.RootCAs = mtlsCAPool
 	}
 	if len(pinnedCertSHA256) > 0 {
-		cfg.VerifyPeerCertificate = verifyPinnedCert
+		cfg.VerifyPeerCertificate = pinnedCertVerifier(serverName)
 	}
 
 	uconn := utls.UClient(rawConn, cfg, utlsClientHello())
@@ -127,7 +127,7 @@ func (c *utlsCreds) ClientHandshake(ctx context.Context, authority string, rawCo
 		cfg.RootCAs = mtlsCAPool
 	}
 	if len(pinnedCertSHA256) > 0 {
-		cfg.VerifyPeerCertificate = verifyPinnedCert
+		cfg.VerifyPeerCertificate = pinnedCertVerifier(serverName)
 	}
 	uconn := utls.UClient(rawConn, cfg, utlsClientHello())
 	if err := uconn.Handshake(); err != nil {

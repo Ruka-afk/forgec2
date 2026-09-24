@@ -62,7 +62,7 @@ var mtlsClient = &http.Client{
 		if len(via) >= 3 {
 			return http.ErrUseLastResponse
 		}
-		return nil
+		return rejectCleartextRedirect(req, via)
 	},
 }
 

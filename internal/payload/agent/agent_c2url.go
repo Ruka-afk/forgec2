@@ -80,6 +80,82 @@ func c2UseTLS(scheme string) bool {
 	return false
 }
 
+// tlsOnlySchemes are the C2 URL schemes that always carry transport
+// encryption. A scheme absent from this list is treated as cleartext for
+// downgrade decisions.
+var tlsOnlySchemes = map[string]bool{
+	"https":    true,
+	"wss":      true,
+	"grpcs":    true,
+	"mtls":     true,
+	"tls":      true,
+	"quic":     true,
+	"ssh":      true,
+	"grpc+tls": true,
+}
+
+// c2URLListSecureOnly reports whether every configured C2 URL uses an
+// encrypted scheme. Such an implant must never silently fall back to a
+// cleartext transport: a network attacker who can block TLS would otherwise
+// downgrade the agent onto http:// / ws:// / h2c:// / tcp:// / udp:// / DNS and
+// read (or rewrite) the beacon stream. Operators who want lab-style
+// cleartext failover keep today's behaviour by configuring at least one
+// cleartext URL.
+func c2URLListSecureOnly() bool {
+	urls := c2URLsSnapshot()
+	if len(urls) == 0 {
+		raw := strings.TrimSpace(C2URL)
+		if raw == "" {
+			return false
+		}
+		if i := strings.IndexByte(raw, ','); i >= 0 {
+			raw = strings.TrimSpace(raw[:i])
+		}
+		urls = []string{raw}
+	}
+	secure := 0
+	for _, raw := range urls {
+		_, scheme, ok := c2DialHostPort(raw)
+		if !ok || scheme == "" {
+			// A bare host:port has no transport; the HTTP transport decides
+			// (http by default), so it cannot make the list "secure only".
+			return false
+		}
+		if tlsOnlySchemes[scheme] {
+			secure++
+		} else {
+			return false
+		}
+	}
+	return secure > 0
+}
+
+// c2SecureOnlyTransportAllowed reports whether the agent may switch to the
+// named transport while in secure-only mode.
+func c2SecureOnlyTransportAllowed(name string) bool {
+	if !c2URLListSecureOnly() {
+		return true
+	}
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "quic", "ssh", "grpc", "wss", "mtls":
+		return true
+	case "http":
+		// Allowed only when an actual encrypted HTTP-family URL exists.
+		for _, raw := range c2URLsSnapshot() {
+			if _, scheme, ok := c2DialHostPort(raw); ok {
+				switch scheme {
+				case "https", "wss", "grpcs", "mtls":
+					return true
+				}
+			}
+		}
+		return false
+	default:
+		// tcp/udp/dns/icmp/h2c have no encrypted form in the candidate list.
+		return false
+	}
+}
+
 func transportSchemes(name string) []string {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "tcp":

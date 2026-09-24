@@ -306,9 +306,32 @@ func init() {
 			if len(via) >= 3 {
 				return http.ErrUseLastResponse
 			}
-			return nil
+			return rejectCleartextRedirect(req, via)
 		},
 	}
+}
+
+// rejectCleartextRedirect refuses a redirect that would move a beacon from an
+// encrypted origin to a cleartext one. A TLS C2 whose certificate is valid
+// never needs to hand the session to http://, so honouring that hop only
+// helps whoever controls the network path. Lab (cleartext) origins keep their
+// normal redirect behaviour.
+func rejectCleartextRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) == 0 || req == nil || req.URL == nil {
+		return nil
+	}
+	if !strings.EqualFold(req.URL.Scheme, "http") {
+		return nil
+	}
+	prev := via[len(via)-1]
+	if prev == nil || prev.URL == nil {
+		return nil
+	}
+	switch strings.ToLower(prev.URL.Scheme) {
+	case "https", "wss":
+		return fmt.Errorf("refusing cleartext redirect from %s://%s to %s", prev.URL.Scheme, prev.URL.Host, req.URL.String())
+	}
+	return nil
 }
 
 func verifySelfIntegrity() {

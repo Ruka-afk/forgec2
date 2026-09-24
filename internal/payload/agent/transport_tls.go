@@ -39,12 +39,33 @@ func newAgentTLSConfig(serverName string) *tls.Config {
 		cfg.ServerName = serverName
 	}
 	if len(pinnedCertSHA256) > 0 {
-		cfg.VerifyPeerCertificate = verifyPinnedCert
+		// A pin replaces chain validation: the standard verifier would reject a
+		// self-signed teamserver certificate before VerifyPeerCertificate ran,
+		// which made pinning useless on exactly the deployments that need it
+		// (ForgeC2 auto-generates a self-signed cert). Verification moves into
+		// the callback below, which is mandatory and additionally checks the
+		// hostname when one is configured.
+		cfg.InsecureSkipVerify = true
+		// Read ServerName at verification time: quic-go fills it in after the
+		// config is built, and the pin check should still see the real name.
+		cfg.VerifyPeerCertificate = func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+			return verifyPinnedCert(rawCerts, cfg.ServerName)
+		}
 	}
 	return cfg
 }
 
-func verifyPinnedCert(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+// pinnedCertVerifier adapts verifyPinnedCert to the stdlib/utls callback
+// signature, binding the expected hostname for this dial.
+func pinnedCertVerifier(serverName string) func([][]byte, [][]*x509.Certificate) error {
+	return func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+		return verifyPinnedCert(rawCerts, serverName)
+	}
+}
+
+// verifyPinnedCert authenticates the peer by leaf-certificate hash and, when a
+// server name is configured, by DNS name. Both checks are mandatory.
+func verifyPinnedCert(rawCerts [][]byte, serverName string) error {
 	if len(rawCerts) == 0 {
 		return fmt.Errorf("no server certificate presented")
 	}
@@ -52,6 +73,15 @@ func verifyPinnedCert(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 	if !bytes.Equal(certHash[:], pinnedCertSHA256) {
 		return fmt.Errorf("certificate pin mismatch: got %s, want %s",
 			hex.EncodeToString(certHash[:]), hex.EncodeToString(pinnedCertSHA256))
+	}
+	if serverName != "" {
+		leaf, err := x509.ParseCertificate(rawCerts[0])
+		if err != nil {
+			return fmt.Errorf("pinned certificate could not be parsed: %w", err)
+		}
+		if err := leaf.VerifyHostname(serverName); err != nil {
+			return fmt.Errorf("pinned certificate does not cover %q: %w", serverName, err)
+		}
 	}
 	return nil
 }
