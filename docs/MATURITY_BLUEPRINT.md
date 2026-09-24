@@ -463,8 +463,9 @@ c2, impact, other`。每个条目含 type、aliases、parameters、approval 标�
 | **严重** | OTA 私钥泄露 → 供应链投毒 | 私钥仅 `data/update_signing.key`；agent pin 编译期公钥；轮换 + 指纹审计 |
 | **严重** | 明文 lab 协议误上生产 | `grpc://` TLS 失败拒绝降级；文档/启动 banner 警告 |
 | **高** | 危险任务无 approval 直达 | registry 级 `RequiresApproval` + API/UI 双闸；测试覆盖 |
-| **高** | 插件逃逸读取 server env | 已清 env + PATH 消毒；P4-3 进程树 + 可选网络隔离 |
-| **高** | Beacon 重放/跨 implant 冒用 | reg_secret 隔离 + seq 窗 + HMAC 覆盖 uuid |
+| **高** | 插件逃逸读取 server env | 已清 env + PATH 消毒；P4-3 进程树 + 可选网络隔离；D2-4 guard fail-closed + WaitDelay + 300s timeout 上限 |
+| **高** | Beacon 重放/跨 implant 冒用 | reg_secret 隔离 + seq 窗 + HMAC 覆盖 uuid；D2-3 resync 仅对 AEAD 已验证或会话已丢失的帧签发 |
+| **高** | 操作平面策略被 API 绕过 | D2-1 `/api/v1` 接入 operator guard（仅 health 豁免）；审计按租户隔离（D2-2） |
 | **中** | QUIC/gRPC 资源耗尽 | MaxIncomingStreams、msg size cap、accept backoff |
 | **中** | 静态签名（AMSI/ETW patch 字节） | `decodeBypassPatch` 运行时解码；HWBP 备选路径 |
 | **中** | 凭据 dump 落盘残留 | uninstall 清理；approval；loot 加密 |
@@ -479,12 +480,12 @@ c2, impact, other`。每个条目含 type、aliases、parameters、approval 标�
 | 维度 | 分 | 理由 |
 |------|----|------|
 | 功能成熟度 | **8.5** | 217 任务、11 传输、52 插件、malleable v2、双语言 UI；扣分：C-implant 子集、部分 lateral/tun 非 Win stub |
-| 稳定性/健壮性 | **8.5** | 队列/退避/kill-switch/限长/recover 齐全；P4-1 后 QUIC stream cap + gRPC keepalive/MaxConnectionAge；P4-3 后 Unix 进程组 kill；扣分：仍非 WASM 沙箱 |
-| 生态成熟度 | **7.5** | 命令>50、别名、manifest+goja、en/zh；扣分：插件非 WASM 沙箱、依赖宿主解释器 |
-| 安全与合规加固 | **8.5** | TLS1.3/ECDH/GCM/Ed25519 pin/ROE/approval/审计；`crypto.session_cipher` 可选 ChaCha20-Poly1305（握手 `sc` 协商，默认 AES-GCM 向后兼容）；`docker-compose.prod.yml` 生产加固 overlay 已落地；扣分：ChaCha20 非默认（需重建可解析 `sc` 的 agent） |
-| 可维护性/更新性 | **8.5** | 单一 TaskSpec 真源、CI 门禁、gofmt 清债、OTA 签名链闭环；matrix 任务清单由 TaskSpec 生成段 + `--check`；版本行由根 `VERSION` 单源 stamp；扣分：matrix 其余手写段仍人工维护 |
+| 稳定性/健壮性 | **9.0** | 队列/退避/kill-switch/限长/recover 齐全；QUIC stream cap + gRPC keepalive/MaxConnectionAge；Unix 进程组 kill；D2-4 插件 guard fail-closed + WaitDelay + timeout 硬上限；扣分：仍非 WASM 沙箱、无插件 CPU/IO 配额 |
+| 生态成熟度 | **7.5** | 命令>50、别名、manifest+goja、en/zh；D2-4 脚本 require 宿主机逃逸已封、事件回调有界；扣分：插件非 WASM 沙箱、依赖宿主解释器、无包签名 |
+| 安全与合规加固 | **9.0** | TLS1.3/ECDH/GCM/Ed25519 pin/ROE/approval/审计；可选 ChaCha20-Poly1305；生产 compose；D2-1 `/api/v1` operator guard；D2-2 审计租户隔离；D2-3 gRPC mTLS fail-closed + resync oracle 关闭；扣分：ChaCha20 非默认、mTLS 仅全局而非 per-listener |
+| 可维护性/更新性 | **8.5** | 单一 TaskSpec 真源、CI 门禁、gofmt 清债、OTA 签名链闭环；matrix 任务清单生成段 + `--check`；版本行由 `VERSION` 单源 stamp；D2-4 契约测试（storage keys/compose/PG 备份边界）；扣分：matrix 其余手写段仍人工维护、CI 仍无 race/覆盖率阈值 |
 | 额外加分 | **8.0** | HTTP/3、别名史、多语言插件、跨平台构建已有；扣分：模块化代理/WASM、Win TUN 未打包 |
-| **综合** | **8.5** | P3 工程债已清 + P4 全落地（含 OTA 构建钉钥/CI 门禁、darwin 交叉编译）；Phase C：生产 compose + 可选会话 ChaCha20 + matrix 生成段 |
+| **综合** | **8.8** | P3 工程债已清 + P4 全落地 + Phase C（生产 compose / 可选会话 ChaCha20 / matrix 生成段）+ **Phase D-2 服务端 P0 安全收口**（operator guard 覆盖 `/api/v1`、审计租户隔离、gRPC mTLS fail-closed、resync oracle 关闭、插件/脚本 fail-closed、存储密钥与 compose 契约、PG 备份显式边界） |
 
 ---
 

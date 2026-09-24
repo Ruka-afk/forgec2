@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+
+- Operator-plane guard now covers the authenticated `/api/v1` REST surface (only `/api/v1/health` is exempt for probes); `operator_allowed_cidrs` and operator mTLS can no longer be bypassed via API-key/session automation routes
+- Audit logs are tenant-scoped: `AuditLog.TenantID` is stamped on write, and both audit read surfaces (operator page + `/api/v1/audit`) plus retention purge return the caller's own tenant plus legacy `tenant_id = 0` rows; the tamper-evident hash chain input is unchanged so historical `EntryHash` values stay verifiable
+- gRPC mTLS is fail-closed: a missing/unreadable/unparseable `client_ca_file` with `require_client_cert` refuses to start the listener instead of silently serving without client authentication
+- Beacon resync no longer answers unauthenticated frames while the server still holds that agent's session (UUID-existence oracle / response amplifier); AEAD-verified replays and genuinely lost sessions still receive the resync + rekey
+- Plugin execution is fail-closed: a process guard that cannot be attached now kills the plugin and refuses the run, `Cmd.WaitDelay` bounds `Wait` when a grandchild holds the output pipes, the guard is released as soon as the context fires, and manifest timeouts are clamped to a 300s server ceiling
+- Goja scripts can no longer `require()` host modules (deny-all source loader; `console` still available), script source is capped at 1 MiB, and top-level/event execution is time-bounded (10s parse / 30s callback)
+
+### Fixed
+
+- Fresh installs from `config.example.yaml` boot again: missing `crypto.loot_key` / `extc2_key` / `backup_key` / `totp_key` / `csrf_key` are generated at startup and persisted (idempotent, env vars win, read-only configs keep working with a warning)
+- `FORGEC2_DATA_DIR` now rebases `data_dir` and every derived path (DB, TLS cert/key, SSH host key); compose sets it to `/data` so state and logs live on the persistent volume instead of the tmpfs working directory
+- Base compose binds `0.0.0.0` by default, so published ports are actually reachable
+- Prometheus request-duration labels use the route template (`unmatched` for NoRoute) instead of the raw URL path, removing high-cardinality series and per-request id leakage
+
+### Changed
+
+- Built-in database backup/restore/VACUUM are explicitly SQLite-only: on other drivers the endpoints answer `501` with guidance (use `pg_dump`/`pgBackRest`) and the scheduled backup job stays disabled instead of failing cryptically
+
 ## [2.6.2] - 2026-09-24
 
 ### Security
