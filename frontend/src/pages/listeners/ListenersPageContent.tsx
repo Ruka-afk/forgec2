@@ -23,7 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeftRight, Check, Copy, Info, Pencil, Plug, Plus, Power, SlidersHorizontal, Trash2, Radio, Globe, Network, Flame } from "lucide-react";
+import { ArrowLeftRight, Check, Copy, Info, Pencil, Plug, Plus, Power, SlidersHorizontal, Trash2, Radio, Globe, Network, Flame, AlertTriangle } from "lucide-react";
 import type { Listener } from "./components/types";
 import { emptyCreateForm, emptyEditForm } from "./components/types";
 import { useListenersData } from "./components/useListenersData";
@@ -40,7 +40,10 @@ export default function ListenersPageContent() {
     error,
     setError,
     agentCountMap,
+    agentCountError,
     healthByTarget,
+    healthLoading,
+    healthError,
     healthHistory,
     creating,
     createListener,
@@ -220,10 +223,24 @@ export default function ListenersPageContent() {
         />
       )}
 
+      {healthError && (
+        <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-foreground">
+          <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1">{t("listeners.health_unavailable", { message: healthError })}</span>
+        </div>
+      )}
+
+      {agentCountError && (
+        <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-foreground">
+          <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1">{t("listeners.agent_counts_unavailable", { message: agentCountError })}</span>
+        </div>
+      )}
+
       <MetricGrid count={6}>
         <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.total")} value={loading ? "…" : total} icon={<Plug className="size-5" />} /></Card>
         <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.running")} value={loading ? "…" : enabledCount} tone="success" icon={<Power className="size-5" />} trend={enabledCount === total && total > 0 ? t("dashboard.all_online") : undefined} /></Card>
-        <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.burned")} value={loading ? "…" : burnedCount} tone={burnedCount > 0 ? "destructive" : "muted"} icon={<Flame className="size-5" />} /></Card>
+        <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.burned")} value={loading || healthLoading ? "…" : burnedCount} tone={burnedCount > 0 ? "destructive" : "muted"} icon={<Flame className="size-5" />} />{!loading && !healthLoading && healthError && <p className="mt-1 text-(--fs-micro-sm) text-warning-foreground">{t("listeners.health_unknown_burned")}</p>}</Card>
         <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.http")} value={loading ? "…" : httpCount} icon={<Globe className="size-5" />} /></Card>
         <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.tcp")} value={loading ? "…" : tcpCount} icon={<Network className="size-5" />} /></Card>
         <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.dns")} value={loading ? "…" : dnsCount} tone="primary" icon={<Radio className="size-5" />} /></Card>
@@ -328,7 +345,7 @@ export default function ListenersPageContent() {
                     </TableCell>
                     <TableCell className="max-sm:hidden py-3 px-3 sm:py-4 sm:px-4 font-mono text-xs text-muted-foreground">{scheme}://{host}:{port}</TableCell>
                     <TableCell className="max-sm:hidden py-3 px-3 sm:py-4 sm:px-4 text-center">
-                      <span className="text-xs font-mono text-muted-foreground">{agentCountMap[id] ?? 0}</span>
+                      <span className="text-xs font-mono text-muted-foreground">{agentCountError ? t("status.unknown") : (agentCountMap[id] ?? 0)}</span>
                     </TableCell>
                     <TableCell className="py-3 px-3 sm:py-4 sm:px-4">
                       <StatusBadge status={enabled ? "online" : "offline"} />

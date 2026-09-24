@@ -39,6 +39,7 @@ interface OpsHomeData {
   loading: boolean;
   error: string | null;
   refresh: () => void;
+  partialFailures: string[];
 }
 
 export function useOpsHomeData(): OpsHomeData {
@@ -49,7 +50,7 @@ export function useOpsHomeData(): OpsHomeData {
     loading,
     error,
     refresh: refreshData,
-  } = useApiResource<Pick<OpsHomeData, "agents" | "healthByTarget" | "failedTasks" | "pendingTasks" | "approvalTasks" | "loot">>({
+  } = useApiResource<Pick<OpsHomeData, "agents" | "healthByTarget" | "failedTasks" | "pendingTasks" | "approvalTasks" | "loot" | "partialFailures">>({
     fetcher: useCallback(async (signal) => {
       const settled = await Promise.allSettled([
         api.get(paths.agents.list("page=1&pageSize=50"), { signal }),
@@ -62,6 +63,7 @@ export function useOpsHomeData(): OpsHomeData {
 
       const [agentsRes, healthRes, failedRes, pendingRes, approvalRes, lootRes] = settled;
       let failedLoads = 0;
+      const partialFailures: string[] = [];
       let agents: NormalizedAgent[] = [];
       let healthByTarget: Record<string, ListenerHealth> = {};
       let failedTasks: Task[] = [];
@@ -75,6 +77,7 @@ export function useOpsHomeData(): OpsHomeData {
           .filter((a) => a.id);
       } else {
         failedLoads += 1;
+        partialFailures.push(t("dashboard.source_agents"));
       }
 
       if (healthRes.status === "fulfilled") {
@@ -82,35 +85,40 @@ export function useOpsHomeData(): OpsHomeData {
         healthByTarget = indexListenerHealth(list);
       } else {
         failedLoads += 1;
+        partialFailures.push(t("dashboard.source_listener_health"));
       }
 
       if (failedRes.status === "fulfilled") {
         failedTasks = normalizeListEnvelope(failedRes.value, ["tasks", "data", "Tasks"]) as Task[];
       } else {
         failedLoads += 1;
+        partialFailures.push(t("dashboard.source_failed_tasks"));
       }
 
       if (pendingRes.status === "fulfilled") {
         pendingTasks = normalizeListEnvelope(pendingRes.value, ["tasks", "data", "Tasks"]) as Task[];
       } else {
         failedLoads += 1;
+        partialFailures.push(t("dashboard.source_pending_tasks"));
       }
 
       if (approvalRes.status === "fulfilled") {
         approvalTasks = normalizeListEnvelope(approvalRes.value, ["tasks", "data", "Tasks"]) as Task[];
       } else {
         failedLoads += 1;
+        partialFailures.push(t("dashboard.source_approvals"));
       }
 
       if (lootRes.status === "fulfilled") {
         loot = normalizeLootData(lootRes.value as Record<string, unknown>);
       } else {
         failedLoads += 1;
+        partialFailures.push(t("dashboard.source_loot"));
       }
 
       if (failedLoads === settled.length) throw new Error("all-ops-endpoints-failed");
-      return { agents, healthByTarget, failedTasks, pendingTasks, approvalTasks, loot };
-    }, []),
+      return { agents, healthByTarget, failedTasks, pendingTasks, approvalTasks, loot, partialFailures };
+    }, [t]),
     pollMs: POLL.opsHome,
     errorMessage: t("dashboard.ops_load_failed"),
   });
@@ -124,6 +132,7 @@ export function useOpsHomeData(): OpsHomeData {
     loot: data?.loot ?? emptyLootData(),
     loading,
     error,
+    partialFailures: data?.partialFailures ?? [],
     refresh: () => {
       void refreshData();
     },

@@ -20,6 +20,7 @@ export function useListenersData() {
   const { t } = useI18n();
   const { subscribe } = useWS();
   const [agentCountMap, setAgentCountMap] = useState<Record<string, number>>({});
+  const [agentCountError, setAgentCountError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [healthHistory, setHealthHistory] = useState<Record<string, HealthSample[]>>({});
 
@@ -35,13 +36,18 @@ export function useListenersData() {
   });
   const listeners = listenersData ?? [];
 
-  const { data: healthData, refresh: loadHealth } = useApiResource<ListenerHealth[]>({
+  const {
+    data: healthData,
+    loading: healthLoading,
+    error: healthError,
+    refresh: loadHealth,
+  } = useApiResource<ListenerHealth[]>({
     fetcher: async (signal) => {
       const data = await api.get(paths.circuitBreaker.detail, { signal });
       return firstArray(data, ["listeners", "data"]) as ListenerHealth[];
     },
     pollMs: POLL.listeners,
-    errorMessage: "",
+    errorMessage: t("listeners.health_load_failed"),
   });
   const loadHealthRef = useRef(loadHealth);
   loadHealthRef.current = loadHealth;
@@ -181,10 +187,14 @@ export function useListenersData() {
           if (lid && lid !== "0") map[lid] = (map[lid] || 0) + 1;
         });
         setAgentCountMap(map);
+        setAgentCountError(null);
       })
-      .catch(() => setAgentCountMap({}));
+      .catch((e: unknown) => {
+        setAgentCountMap({});
+        setAgentCountError(e instanceof Error ? e.message : t("listeners.agent_count_failed"));
+      });
     return () => controller.abort();
-  }, []);
+  }, [t]);
 
   // Live registry updates: refresh when another operator changes a listener
   // or when the WS reconnects (sync snapshot).
@@ -203,7 +213,10 @@ export function useListenersData() {
     error,
     setError,
     agentCountMap,
+    agentCountError,
     healthByTarget,
+    healthLoading,
+    healthError,
     healthHistory,
     creating,
     loadListeners,

@@ -24,6 +24,7 @@ export function CookieProxyCard() {
   const [agents, setAgents] = useState<Array<{ id: string; hostname: string; status?: string }>>([]);
   const [agentId, setAgentId] = useState("");
   const [status, setStatus] = useState<ProxyStatus | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const loadAgents = useCallback(async () => {
@@ -38,13 +39,16 @@ export function CookieProxyCard() {
 
   const refresh = useCallback(async (id: string) => {
     if (!id) return;
+    setStatusError(null);
     try {
       const res = await api.get<ProxyStatus>(paths.agents.cookieProxy(id));
       setStatus(res as ProxyStatus);
-    } catch {
+    } catch (e) {
+      // Unknown, not stopped: a running proxy must not look like an idle one.
       setStatus(null);
+      setStatusError(e instanceof Error ? e.message : t("cred.cookie_proxy_status_failed"));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => { void loadAgents(); }, [loadAgents]);
   useEffect(() => { void refresh(agentId); }, [agentId, refresh]);
@@ -121,7 +125,7 @@ export function CookieProxyCard() {
           <Button type="button" size="sm" disabled={!agentId || busy} onClick={() => { void start(); }}>
             {t("cred.cookie_proxy_start")}
           </Button>
-          <Button type="button" size="sm" variant="outline" disabled={!agentId || busy} onClick={() => { void stop(); }}>
+          <Button type="button" size="sm" variant="outline" disabled={!agentId || busy || !!statusError} onClick={() => { void stop(); }}>
             {t("cred.cookie_proxy_stop")}
           </Button>
           <Button type="button" size="sm" variant="outline" disabled={!agentId} onClick={() => { void downloadJar(); }}>
@@ -132,6 +136,11 @@ export function CookieProxyCard() {
           </Button>
         </div>
       </div>
+      {statusError && (
+        <Banner tone="warning" className="mt-3">
+          {t("cred.cookie_proxy_status_unknown", { message: statusError })}
+        </Banner>
+      )}
       {status?.running && (
         <Banner tone="info" className="mt-3">
           {t("cred.cookie_proxy_listen", { host: status.host || "127.0.0.1", port: String(status.port || 0) })}

@@ -44,7 +44,9 @@ function lsCalls() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockedGet.mockResolvedValue({});
+  // The agent must report a recognisable OS: the hook deliberately refuses to
+  // browse when it cannot tell Windows from Linux.
+  mockedGet.mockResolvedValue({ agent: { os: "Windows" } });
   mockedPost.mockResolvedValue(lsResult(["a.txt"]));
 });
 
@@ -133,5 +135,34 @@ describe("useAgentFiles listing cache", () => {
     await flush(1);
     expect(mockedPost.mock.calls.length).toBe(before);
     expect(result.current.showPreview).toBe(false);
+  });
+
+  it("does not browse, and never assumes Windows, when OS detection fails", async () => {
+    mockedGet.mockRejectedValueOnce(new Error("agent endpoint down"));
+    const { result } = renderHook(() => useAgentFiles("agent-1"));
+    await flush();
+
+    expect(lsCalls()).toHaveLength(0);
+    expect(result.current.osError).toBe("agent endpoint down");
+    expect(result.current.entries).toHaveLength(0);
+  });
+
+  it("does not browse when the agent reports an unrecognised OS", async () => {
+    mockedGet.mockResolvedValueOnce({ agent: { os: "Plan9" } });
+    const { result } = renderHook(() => useAgentFiles("agent-1"));
+    await flush();
+
+    expect(lsCalls()).toHaveLength(0);
+    expect(result.current.osError).toBe("agents.files_detect_os_unknown");
+  });
+
+  it("uses POSIX paths and separators for a reported Linux agent", async () => {
+    mockedGet.mockResolvedValueOnce({ agent: { os: "linux" } });
+    const { result } = renderHook(() => useAgentFiles("agent-1"));
+    await flush();
+
+    expect(lsCalls()).toHaveLength(1);
+    expect(lsCalls()[0]?.[1]).toEqual({ path: "/" });
+    expect(result.current.osError).toBeNull();
   });
 });

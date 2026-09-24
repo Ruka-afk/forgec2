@@ -4,15 +4,26 @@ export const SHELL_TERM_BG = "#0b1220";
 export const SHELL_FONT_KEY = "forgec2_shell_fontsize";
 export const SHELL_HISTORY_KEY = "forgec2_shell_history";
 
+const WINDOWS_INTERPRETERS = ["cmd.exe", "powershell.exe"];
+const LINUX_INTERPRETERS = ["/bin/sh", "/bin/bash", "/bin/zsh", "sh", "bash", "zsh"];
+
+/** True when the OS was positively identified, not merely absent. */
+export function isKnownOs(osType?: string): boolean {
+  return osType === "windows" || osType === "linux";
+}
+
 export function defaultInterpreter(osType?: string): string {
+  if (!isKnownOs(osType)) return "";
   return osType === "linux" ? "/bin/sh" : "cmd.exe";
 }
 
 export function interpreterOptions(osType?: string): string[] {
-  return osType === "linux" ? ["/bin/sh", "/bin/bash"] : ["cmd.exe", "powershell.exe"];
+  if (!isKnownOs(osType)) return [...WINDOWS_INTERPRETERS, ...LINUX_INTERPRETERS];
+  return osType === "linux" ? [...LINUX_INTERPRETERS.slice(0, 2)] : [...WINDOWS_INTERPRETERS];
 }
 
 export function quickCommands(osType?: string): string[] {
+  if (!isKnownOs(osType)) return ["whoami", "hostname"];
   return osType === "linux"
     ? ["whoami", "id", "uname -a", "hostname", "ps aux", "ip addr"]
     : ["whoami", "hostname", "ipconfig", "systeminfo", "netstat -ano", "tasklist"];
@@ -26,10 +37,14 @@ export function sessionPromptLabel(opts: {
 }): string {
   const host = (opts.hostname || "").trim() || "agent";
   const user = (opts.username || "").trim();
-  const interp = opts.interpreter || defaultInterpreter(opts.osType);
-  if (interp.toLowerCase().includes("powershell")) return `PS ${host}>`;
-  if (opts.osType === "linux") return `${user || "root"}@${host}$`;
-  return user ? `${host}\\${user}>` : `${host}>`;
+  const interp = (opts.interpreter || defaultInterpreter(opts.osType)).toLowerCase();
+  if (interp.includes("powershell")) return `PS ${host}>`;
+  if (interp.includes("cmd")) return user ? `${host}\\${user}>` : `${host}>`;
+  if (opts.osType === "linux" || LINUX_INTERPRETERS.some((i) => interp === i || interp.endsWith(`/${i}`))) {
+    return `${user || "root"}@${host}$`;
+  }
+  // OS never confirmed: do not dress an unknown agent up as a Windows shell.
+  return `${host}>`;
 }
 
 export function sessionPromptSeq(opts: {

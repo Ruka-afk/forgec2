@@ -44,6 +44,7 @@ interface AgentHeaderProps {
   credCount: number | null;
   mimikatzReady?: ModuleAvailability;
   avProducts?: string[];
+  avStatus?: "unknown" | "empty" | "products";
   onKill: () => void;
   onUninstall: () => void;
   onMigrate?: () => void;
@@ -52,7 +53,7 @@ interface AgentHeaderProps {
 
 export default memo(function AgentHeader({
   agent, agentId, status,
-  actionLoading, onQuickAction, credCount, mimikatzReady = null, avProducts = [], onKill, onUninstall, onMigrate, onPopOut,
+  actionLoading, onQuickAction, credCount, mimikatzReady = null, avProducts = [], avStatus = "unknown", onKill, onUninstall, onMigrate, onPopOut,
 }: AgentHeaderProps) {
   const { t } = useI18n();
   const hostname = agent.hostname || "\u2014";
@@ -152,11 +153,17 @@ export default memo(function AgentHeader({
                       <span className="text-(--fs-micro-sm) uppercase tracking-wide text-success">AV</span>
                       <span className="text-foreground">{avProducts.join(", ")}</span>
                     </span>
-                  ) : status === "online" ? (
+                  ) : status === "online" && avStatus === "empty" ? (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
                       <Shield className="size-3 text-muted-foreground" />
                       <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/100">AV</span>
                       <span className="text-muted-foreground text-xs">{t("hostinfo.no_security_products")}</span>
+                    </span>
+                  ) : status === "online" ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/25 bg-warning/10 px-2.5 py-1">
+                      <Shield className="size-3 text-warning" />
+                      <span className="text-(--fs-micro-sm) uppercase tracking-wide text-warning">AV</span>
+                      <span className="text-warning-foreground text-xs">{t("hostinfo.av_status_unknown")}</span>
                     </span>
                   ) : null}
                 </div>

@@ -176,6 +176,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   const [mimikatzReady, setMimikatzReady] = useState<ModuleAvailability>(null);
   const [avProducts, setAvProducts] = useState<string[]>([]);
   const [avFetched, setAvFetched] = useState(false);
+  const [avStatus, setAvStatus] = useState<"unknown" | "empty" | "products">("unknown");
 
   const { processList, loading: processLoading, loadFailed, expanded: processExpanded, setExpanded: setProcessExpanded, load: loadProcessList, refresh: refreshProcessList } = useAgentProcessTree(
     id,
@@ -277,9 +278,17 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
         const sec = parsed.sections?.security || (parsed.sections as Record<string, unknown>)?.Security as unknown as { av_products?: Array<{ name?: string }> } || {};
         const av = Array.isArray(sec.av_products) ? sec.av_products : [];
         const names = av.map((a) => String(a.name || "")).filter(Boolean);
-        if (!cancelled) { setAvProducts(names); setAvFetched(true); }
+        if (!cancelled) {
+          setAvProducts(names);
+          setAvStatus(names.length > 0 ? "products" : "empty");
+          setAvFetched(true);
+        }
       } catch (e) {
-        if ((e as Error).name !== "AbortError" && !cancelled) setAvFetched(true);
+        // A failed probe must not read as "this host has no security products".
+        if ((e as Error).name !== "AbortError" && !cancelled) {
+          setAvStatus("unknown");
+          setAvFetched(true);
+        }
       }
     })();
     return () => { cancelled = true; controller.abort(); };
@@ -525,6 +534,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
         credCount={credCount}
         mimikatzReady={mimikatzReady}
         avProducts={avProducts}
+        avStatus={avStatus}
         onKill={handleKill}
         onUninstall={handleUninstall}
         onMigrate={handleMigrate}

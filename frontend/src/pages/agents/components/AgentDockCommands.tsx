@@ -28,10 +28,11 @@ export function AgentDockCommands({ agentId, intervalHint, jitterHint, onQueued 
   );
   const [busy, setBusy] = useState<DockCommandKind | "socks" | null>(null);
   const [socksPort, setSocksPort] = useState("1080");
-  const [socksOn, setSocksOn] = useState(false);
+  const [socksOn, setSocksOn] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    setSocksOn(null);
     socksRelayStatus(agentId)
       .then((st) => {
         if (cancelled) return;
@@ -39,7 +40,8 @@ export function AgentDockCommands({ agentId, intervalHint, jitterHint, onQueued 
         if (st.port) setSocksPort(String(st.port));
       })
       .catch(() => {
-        if (!cancelled) setSocksOn(false);
+        // Unknown, not stopped: offering "start" here would start a second relay.
+        if (!cancelled) setSocksOn(null);
       });
     return () => { cancelled = true; };
   }, [agentId]);
@@ -107,7 +109,8 @@ export function AgentDockCommands({ agentId, intervalHint, jitterHint, onQueued 
         type="button"
         variant="ghost"
         size="xs"
-        disabled={!!busy}
+        disabled={!!busy || socksOn === null}
+        title={socksOn === null ? t("agents.dock_socks_status_unknown") : undefined}
         onClick={() => {
           if (socksOn) {
             setBusy("socks");
@@ -137,7 +140,7 @@ export function AgentDockCommands({ agentId, intervalHint, jitterHint, onQueued 
         }}
       >
         <Network className="size-3.5" />
-        {socksOn ? t("agents.dock_socks_stop") : t("agents.dock_cmd_socks")}
+        {socksOn === null ? t("agents.dock_socks_unknown") : socksOn ? t("agents.dock_socks_stop") : t("agents.dock_cmd_socks")}
       </Button>
     </div>
   );

@@ -4,6 +4,7 @@ import {
   defaultInterpreter,
   decodeShellWhitespace,
   interpreterOptions,
+  isKnownOs,
   operatorErrorText,
   pickAgentField,
   quickCommands,
@@ -26,6 +27,26 @@ describe("shell-ui", () => {
     expect(sessionPromptLabel({ osType: "windows", hostname: "PC", interpreter: "powershell.exe" })).toBe("PS PC>");
     expect(sessionPromptLabel({ osType: "linux", hostname: "box", username: "root" })).toBe("root@box$");
     expect(sessionPromptLabel({ osType: "windows" })).toBe("agent>");
+  });
+
+  it("does not dress an unknown-OS agent up as a Windows shell", () => {
+    expect(isKnownOs("windows")).toBe(true);
+    expect(isKnownOs("linux")).toBe(true);
+    expect(isKnownOs("")).toBe(false);
+    expect(isKnownOs(undefined)).toBe(false);
+
+    // No interpreter is invented, and the options span both families.
+    expect(defaultInterpreter("")).toBe("");
+    expect(defaultInterpreter(undefined)).toBe("");
+    expect(interpreterOptions("")).toEqual(expect.arrayContaining(["cmd.exe", "/bin/sh"]));
+    expect(quickCommands("")).toEqual(["whoami", "hostname"]);
+
+    // The prompt follows the interpreter actually in use, not a guessed OS.
+    expect(sessionPromptLabel({ osType: "", hostname: "PC", username: "alice" })).toBe("PC>");
+    expect(sessionPromptLabel({ osType: "", hostname: "box", username: "root" })).toBe("box>");
+    expect(sessionPromptLabel({ osType: "", hostname: "box", interpreter: "/bin/bash" })).toBe("root@box$");
+    expect(sessionPromptLabel({ osType: "", hostname: "box", interpreter: "cmd.exe" })).toBe("box>");
+    expect(sessionPromptLabel({ osType: "", hostname: "box", interpreter: "powershell.exe" })).toBe("PS box>");
   });
 
   it("formats identity and agent fields", () => {

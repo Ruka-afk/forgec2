@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageContainer } from "@/components/ui/page-container";
+import { DataError } from "@/components/ui/data-state";
 import { Progress } from "@/components/ui/progress";
 import { Spinner } from "@/components/ui/spinner";
 import { useConfirm } from "@/lib/hooks/useConfirm";
@@ -64,6 +65,7 @@ export default function FilesPage() {
     showUsb,
     setShowUsb,
     osType,
+    osError,
     quickPaths,
     loadDirectory,
     navigateTo,
@@ -143,6 +145,14 @@ export default function FilesPage() {
 
   return (
     <PageContainer className="h-full gap-3 px-4 py-3 sm:px-6">
+      {osError && (
+        <DataError
+          message={osError}
+          onRetry={() => { window.location.reload(); }}
+        />
+      )}
+      {!osError && (
+      <>
       <FilesToolbar
         t={t}
         agentId={id}
@@ -330,6 +340,8 @@ export default function FilesPage() {
         selectedFile={selectedFile}
       />
       {modal}
+      </>
+      )}
     </PageContainer>
   );
 }

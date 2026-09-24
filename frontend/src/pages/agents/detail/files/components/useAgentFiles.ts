@@ -60,6 +60,7 @@ export function useAgentFiles(agentId: string) {
   const [usbOutput, setUsbOutput] = useState("");
   const [showUsb, setShowUsb] = useState(false);
   const [osType, setOsType] = useState<"windows" | "linux">("windows");
+  const [osError, setOsError] = useState<string | null>(null);
   const uploadAbortRef = useRef<AbortController | null>(null);
   const lsAbortRef = useRef<AbortController | null>(null);
   // Live mirror of currentPath: long polls must not rewind a navigation
@@ -122,31 +123,40 @@ export function useAgentFiles(agentId: string) {
     [agentId, showToast, t],
   );
 
-  const detectOs = useCallback(async (): Promise<"windows" | "linux"> => {
-    if (!agentId) return "windows";
+  const detectOs = useCallback(async (): Promise<"windows" | "linux" | null> => {
+    if (!agentId) return null;
     try {
       const data = await api.get<{
         Agent?: { os?: string; OS?: string };
         agent?: { os?: string; OS?: string };
       }>(`${paths.agents.one(agentId)}?format=json`);
       const agentData = data.agent || data.Agent || {};
-      const os = String(agentData.os || agentData.OS || "windows").toLowerCase();
+      const os = String(agentData.os || agentData.OS || "").toLowerCase();
       if (os.includes("linux") || os.includes("darwin") || os.includes("unix")) {
         setOsType("linux");
         return "linux";
       }
-    } catch {
-      toast.error(t("agents.files_detect_os_failed"));
+      if (os.includes("win")) {
+        setOsType("windows");
+        return "windows";
+      }
+      setOsError(t("agents.files_detect_os_unknown"));
+      return null;
+    } catch (e) {
+      // Guessing "windows" here would send C:\ paths and Windows path semantics
+      // to a Linux agent, so stay unknown and block browsing instead.
+      setOsError(e instanceof Error ? e.message : t("agents.files_detect_os_failed"));
+      return null;
     }
-    return "windows";
   }, [agentId, t]);
 
   useEffect(() => {
     if (!agentId) return;
     let cancelled = false;
     (async () => {
+      setOsError(null);
       const os = await detectOs();
-      if (cancelled) return;
+      if (cancelled || os === null) return;
       const initialPath = os === "linux" ? "/" : "C:\\";
       // Sync the visible path immediately: if the first ls fails (agent
       // offline), the input would otherwise keep showing "C:\" on Linux.
@@ -677,6 +687,7 @@ export function useAgentFiles(agentId: string) {
     showUsb,
     setShowUsb,
     osType,
+    osError,
     quickPaths,
     loadDirectory,
     navigateTo,

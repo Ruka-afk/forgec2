@@ -41,7 +41,10 @@ interface AgentShellMeta {
 
 function guessOs(os?: string): string {
   const v = (os || "").toLowerCase();
-  return v.includes("linux") || v.includes("darwin") ? "linux" : "windows";
+  if (v.includes("linux") || v.includes("darwin") || v.includes("unix")) return "linux";
+  if (v.includes("win")) return "windows";
+  // Never claim Windows for an agent that did not report a recognisable OS.
+  return "";
 }
 
 function metaFromSummary(a: AgentSummary): AgentShellMeta {
@@ -181,7 +184,7 @@ export default function AgentShellPage() {
   const resolveMeta = useCallback(
     (agentId: string): AgentShellMeta =>
       metaByAgent[agentId] || listMeta[agentId] || {
-        osType: "windows",
+        osType: "",
         hostname: "",
         username: "",
         ip: "",

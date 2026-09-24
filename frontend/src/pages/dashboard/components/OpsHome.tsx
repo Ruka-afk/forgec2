@@ -15,7 +15,7 @@ import { MetricGrid } from "@/components/ui/metric-grid";
 import { DataError } from "@/components/ui/data-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Archive, Bug, Radio, Clock, ListChecks, Terminal, Wand2 } from "lucide-react";
+import { Archive, Bug, Radio, Clock, ListChecks, Terminal, Wand2, AlertTriangle } from "lucide-react";
 import type { DashboardStats } from "@/types/agent";
 import { useOpsHomeData } from "./useOpsHomeData";
 import {
@@ -72,7 +72,7 @@ function QuickLaunch() {
 
 export default memo(function OpsHome() {
   const { t } = useI18n();
-  const { agents, healthByTarget, failedTasks, pendingTasks, approvalTasks, loot, loading, error, refresh } = useOpsHomeData();
+  const { agents, healthByTarget, failedTasks, pendingTasks, approvalTasks, loot, loading, error, partialFailures, refresh } = useOpsHomeData();
 
   const sessions = useMemo(() => splitSessions(agents), [agents]);
   const unhealthy = useMemo(() => pickUnhealthyListeners(healthByTarget), [healthByTarget]);
@@ -81,12 +81,21 @@ export default memo(function OpsHome() {
     [failedTasks, pendingTasks, approvalTasks],
   );
   const lootItems = useMemo(() => flattenLoot(loot), [loot]);
+  const healthUnknown = partialFailures.includes(t("dashboard.source_listener_health"));
 
   return (
     <div className="space-y-5">
       {error && <DataError message={error} onRetry={refresh} className="mb-2" />}
 
-      <DashboardStatTiles loading={loading} unhealthyCount={unhealthy.length} lootCount={lootItems.length} online={sessions.online.length} total={agents.length} />
+      {partialFailures.length > 0 && (
+        <div role="alert" className="mb-2 flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-foreground">
+          <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1">{t("dashboard.partial_load_failed", { sources: partialFailures.join(", ") })}</span>
+          <Button onClick={refresh} size="sm" variant="outline" className="min-h-11 px-4 sm:min-h-7 sm:px-2.5">{t("common.try_again")}</Button>
+        </div>
+      )}
+
+      <DashboardStatTiles loading={loading} healthUnknown={healthUnknown} unhealthyCount={unhealthy.length} lootCount={lootItems.length} online={sessions.online.length} total={agents.length} />
 
       <QuickLaunch />
 
@@ -136,9 +145,11 @@ export default memo(function OpsHome() {
           )}
         </Panel>
 
-        <Panel title={t("dashboard.listener_health")} href="/listeners" linkLabel={t("dashboard.view_all")} count={unhealthy.length}>
+        <Panel title={t("dashboard.listener_health")} href="/listeners" linkLabel={t("dashboard.view_all")} count={healthUnknown ? undefined : unhealthy.length}>
           {loading ? (
             <div className="p-4 space-y-2"><Skeleton className="h-8" /><Skeleton className="h-8" /></div>
+          ) : healthUnknown ? (
+            <div className="p-5"><EmptyState icon={AlertTriangle} title={t("dashboard.health_unknown")} message={t("dashboard.health_unknown_hint")} /></div>
           ) : unhealthy.length === 0 ? (
             <div className="p-5"><EmptyState icon={Radio} title={t("dashboard.no_unhealthy_listeners")} /></div>
           ) : (
@@ -230,8 +241,9 @@ export default memo(function OpsHome() {
   );
 });
 
-const DashboardStatTiles = memo(function DashboardStatTiles({ loading, unhealthyCount, lootCount, online, total }: {
+const DashboardStatTiles = memo(function DashboardStatTiles({ loading, healthUnknown, unhealthyCount, lootCount, online, total }: {
   loading: boolean;
+  healthUnknown: boolean;
   unhealthyCount: number;
   lootCount: number;
   online: number;
@@ -263,7 +275,7 @@ const DashboardStatTiles = memo(function DashboardStatTiles({ loading, unhealthy
       </Link>
       <Link to="/listeners">
         <Card interactive className="p-4 hover:ring-1 hover:ring-primary/20">
-          <StatTile label={t("dashboard.unhealthy_count")} value={loading ? "…" : unhealthyCount} tone={unhealthyCount > 0 ? "destructive" : "success"} icon={<Radio className="size-5" />} trend={unhealthyCount === 0 ? t("dashboard.all_healthy") : undefined} />
+          <StatTile label={t("dashboard.unhealthy_count")} value={loading || healthUnknown ? "…" : unhealthyCount} tone={healthUnknown ? "muted" : unhealthyCount > 0 ? "destructive" : "success"} icon={<Radio className="size-5" />} trend={healthUnknown ? t("dashboard.health_unknown") : unhealthyCount === 0 ? t("dashboard.all_healthy") : undefined} />
         </Card>
       </Link>
       <Link to="/loot">
