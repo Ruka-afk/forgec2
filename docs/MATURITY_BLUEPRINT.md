@@ -478,10 +478,10 @@ c2, impact, other`。每个条目含 type、aliases、parameters、approval 标�
 | 功能成熟度 | **8.5** | 217 任务、11 传输、52 插件、malleable v2、双语言 UI；扣分：C-implant 子集、部分 lateral/tun 非 Win stub |
 | 稳定性/健壮性 | **8.5** | 队列/退避/kill-switch/限长/recover 齐全；P4-1 后 QUIC stream cap + gRPC keepalive/MaxConnectionAge；P4-3 后 Unix 进程组 kill；扣分：仍非 WASM 沙箱 |
 | 生态成熟度 | **7.5** | 命令>50、别名、manifest+goja、en/zh；扣分：插件非 WASM 沙箱、依赖宿主解释器 |
-| 安全与合规加固 | **8.0** | TLS1.3/ECDH/GCM/Ed25519 pin/ROE/approval/审计；扣分：ChaCha20 可选路径未默认、生产需人工加固 compose |
-| 可维护性/更新性 | **8.5** | 单一 TaskSpec 真源、CI 门禁、gofmt 清债、OTA 签名链闭环；扣分：matrix 手工段仍存 |
+| 安全与合规加固 | **8.5** | TLS1.3/ECDH/GCM/Ed25519 pin/ROE/approval/审计；`crypto.session_cipher` 可选 ChaCha20-Poly1305（握手 `sc` 协商，默认 AES-GCM 向后兼容）；`docker-compose.prod.yml` 生产加固 overlay 已落地；扣分：ChaCha20 非默认（需重建可解析 `sc` 的 agent） |
+| 可维护性/更新性 | **8.5** | 单一 TaskSpec 真源、CI 门禁、gofmt 清债、OTA 签名链闭环；matrix 任务清单由 TaskSpec 生成段 + `--check`；扣分：matrix 其余手写段仍人工维护 |
 | 额外加分 | **8.0** | HTTP/3、别名史、多语言插件、跨平台构建已有；扣分：模块化代理/WASM、Win TUN 未打包 |
-| **综合** | **8.5** | P3 工程债已清 + P4 全落地（含 OTA 构建钉钥/CI 门禁、darwin 交叉编译） |
+| **综合** | **8.5** | P3 工程债已清 + P4 全落地（含 OTA 构建钉钥/CI 门禁、darwin 交叉编译）；Phase C：生产 compose + 可选会话 ChaCha20 + matrix 生成段 |
 
 ---
 

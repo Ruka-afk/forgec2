@@ -245,6 +245,7 @@ func (s *Server) buildResyncResponse(agentID string, seq uint64) ([]byte, bool) 
 		ECDHPub:         serverPub,
 		Rekey:           true,
 		Mac:             computeAuthMAC(regKey, agentID, strconv.FormatUint(seq, 10), serverPub),
+		SessionCipher:   s.sessionManager.Cipher(),
 	}
 	respBytes, ok := marshalJSONSafe(resp)
 	if !ok {

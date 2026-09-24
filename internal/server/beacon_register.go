@@ -133,6 +133,7 @@ func (s *Server) processAuthFrame(env beaconEnvelope, kind beaconFrameKind) ([]b
 			Reregister:      true,
 			ECDHPub:         serverPub,
 			Mac:             computeAuthMAC(regKey, env.UUID, strconv.FormatUint(env.Seq, 10), serverPub),
+			SessionCipher:   s.sessionManager.Cipher(),
 		}
 		// Honor a fleet kill-switch even on the re-register handshake.
 		s.enforceKillSwitch(imp, &resp)
@@ -209,6 +210,7 @@ func (s *Server) processAuthFrame(env beaconEnvelope, kind beaconFrameKind) ([]b
 		RegOK:           needRegister,
 		ECDHPub:         serverPub,
 		Mac:             computeAuthMAC(regKey, env.UUID, strconv.FormatUint(env.Seq, 10), serverPub),
+		SessionCipher:   s.sessionManager.Cipher(),
 	}
 	// Deliver the live network config (encrypted under the per-implant secret)
 	// on registration so the implant can override its compile-time defaults.

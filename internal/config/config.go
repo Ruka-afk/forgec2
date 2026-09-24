@@ -146,6 +146,11 @@ type Config struct {
 		MaxDecryptedPayloadSize int    `yaml:"max_decrypted_payload_size"` // max bytes for decrypted beacon body (0 = default 10MB)
 		UpdateSigningKey        string `yaml:"update_signing_key"`         // OPTIONAL: 32-byte hex Ed25519 pubkey; when set, hot updates require a detached "<checksum>.sig" release signature (empty = checksum-only + warning unless require_release_signature)
 		RequireReleaseSignature bool   `yaml:"require_release_signature"`  // when true, refuse hot updates if update_signing_key is empty or the detached .sig fails verification (default false for upgrade compat; set true in production)
+		// SessionCipher selects the beacon session AEAD: "" / "aes-gcm" (default)
+		// or "chacha20" (ChaCha20-Poly1305). Agreed at handshake via the MAC'd
+		// auth response field sc; both suites use a 12-byte nonce so the wire
+		// framing is identical. Changing the value requires agents that parse sc.
+		SessionCipher string `yaml:"session_cipher"`
 	} `yaml:"crypto"`
 
 	Malleable struct {
@@ -883,6 +888,11 @@ func (c *Config) Validate() error {
 	}
 	if c.Crypto.MaxDecryptedPayloadSize > 104857600 {
 		errs = append(errs, errors.New("crypto.max_decrypted_payload_size must be <= 104857600 (100MB)"))
+	}
+	switch c.Crypto.SessionCipher {
+	case "", "aes-gcm", "chacha20", "chacha20-poly1305":
+	default:
+		errs = append(errs, fmt.Errorf("crypto.session_cipher must be \"\", \"aes-gcm\", or \"chacha20\" (got %q)", c.Crypto.SessionCipher))
 	}
 	// Crypto validation — storage keys are REQUIRED and must be 32-byte hex.
 	// The legacy SHA-256(jwt_secret) derivation cascade was removed (breaking

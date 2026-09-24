@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+
+	"golang.org/x/crypto/chacha20poly1305"
 )
 
 const (
@@ -158,7 +160,12 @@ func getIdentityKeyFilePath() string {
 	return filepath.Join(dir, "identity.key")
 }
 
-// --- ECDH + AES-256-GCM Session (forward-secret encryption) ---
+// --- ECDH session AEAD (forward-secret encryption) ---
+
+const (
+	sessionCipherAESGCM   = "aes-gcm"
+	sessionCipherChaCha20 = "chacha20"
+)
 
 // ecdhSession manages a single ECDH session with the server. It is shared by
 // the beacon loop, quick-result senders and task executor goroutines, so every
@@ -166,7 +173,10 @@ func getIdentityKeyFilePath() string {
 type ecdhSession struct {
 	mu         sync.RWMutex
 	privateKey *ecdh.PrivateKey
-	sessionKey []byte // AES-256-GCM key derived from ECDH shared secret
+	sessionKey []byte // AEAD key derived from ECDH shared secret
+	// suite is the AEAD for this session ("aes-gcm" default / "chacha20"),
+	// set from the MAC'd auth response field sc (empty = AES-GCM).
+	suite string
 }
 
 // newECDSession generates a new ECDH key pair for session initiation
@@ -186,6 +196,19 @@ func (es *ecdhSession) publicKeyB64() string {
 	es.mu.RLock()
 	defer es.mu.RUnlock()
 	return base64.StdEncoding.EncodeToString(es.privateKey.PublicKey().Bytes())
+}
+
+// setSuite records the AEAD suite advertised by the server's auth response.
+// Must be called before establish* so subsequent encrypt/decrypt pick it up.
+func (es *ecdhSession) setSuite(suite string) {
+	es.mu.Lock()
+	defer es.mu.Unlock()
+	switch suite {
+	case sessionCipherChaCha20, "chacha20-poly1305":
+		es.suite = sessionCipherChaCha20
+	default:
+		es.suite = sessionCipherAESGCM
+	}
 }
 
 // establishFromServerKey completes the ECDH handshake using the server's public
@@ -257,16 +280,29 @@ func (es *ecdhSession) invalidate() {
 		es.privateKey = k
 	}
 	es.sessionKey = nil
+	es.suite = sessionCipherAESGCM
 }
 
-// encryptAESGCM encrypts plaintext with AES-256-GCM using the session key.
-// AAD binds the frame to its agent/sequence (v2 replay protection).
-// Returns: base64(nonce + ciphertext)
+// encryptAESGCM encrypts plaintext with the session AEAD suite (AES-GCM or
+// ChaCha20-Poly1305). AAD binds the frame to its agent/sequence (v2 replay
+// protection). Returns: base64(nonce + ciphertext)
 func (es *ecdhSession) encryptAESGCMWithAAD(plaintext []byte, aad []byte) (string, error) {
 	es.mu.RLock()
 	defer es.mu.RUnlock()
 	if es.sessionKey == nil {
 		return "", errNoSessionKey
+	}
+
+	if es.suite == sessionCipherChaCha20 {
+		aead, err := chacha20poly1305.New(es.sessionKey)
+		if err != nil {
+			return "", err
+		}
+		nonce := make([]byte, aead.NonceSize())
+		if _, err := rand.Read(nonce); err != nil {
+			return "", err
+		}
+		return base64.StdEncoding.EncodeToString(aead.Seal(nonce, nonce, plaintext, aad)), nil
 	}
 
 	block, err := aes.NewCipher(es.sessionKey)
@@ -289,8 +325,8 @@ func (es *ecdhSession) encryptAESGCMWithAAD(plaintext []byte, aad []byte) (strin
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
-// decryptAESGCMWithAAD decrypts base64(nonce + ciphertext) with AES-256-GCM,
-// authenticating the same AAD used at encryption time.
+// decryptAESGCMWithAAD decrypts base64(nonce + ciphertext) with the session
+// AEAD suite, authenticating the same AAD used at encryption time.
 func (es *ecdhSession) decryptAESGCMWithAAD(encoded string, aad []byte) ([]byte, error) {
 	es.mu.RLock()
 	defer es.mu.RUnlock()
@@ -301,6 +337,18 @@ func (es *ecdhSession) decryptAESGCMWithAAD(encoded string, aad []byte) ([]byte,
 	data, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
 		return nil, err
+	}
+
+	if es.suite == sessionCipherChaCha20 {
+		aead, err := chacha20poly1305.New(es.sessionKey)
+		if err != nil {
+			return nil, err
+		}
+		nonceSize := aead.NonceSize()
+		if len(data) < nonceSize {
+			return nil, errShortData
+		}
+		return aead.Open(nil, data[:nonceSize], data[nonceSize:], aad)
 	}
 
 	block, err := aes.NewCipher(es.sessionKey)

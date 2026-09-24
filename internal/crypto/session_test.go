@@ -70,6 +70,60 @@ func TestSessionManagerEncryptDecrypt(t *testing.T) {
 	}
 }
 
+func TestSessionManagerChaCha20RoundTrip(t *testing.T) {
+	sm, err := NewSessionManagerWithCipher(time.Minute, SessionCipherChaCha20)
+	if err != nil {
+		t.Fatalf("NewSessionManagerWithCipher: %v", err)
+	}
+	if sm.Cipher() != SessionCipherChaCha20 {
+		t.Fatalf("Cipher() = %q, want %q", sm.Cipher(), SessionCipherChaCha20)
+	}
+	curve := ecdh.X25519()
+	agentKey, _ := curve.GenerateKey(rand.Reader)
+	if err := sm.EstablishSession("agent-chacha", agentKey.PublicKey().Bytes()); err != nil {
+		t.Fatalf("EstablishSession: %v", err)
+	}
+	sess := sm.GetSession("agent-chacha")
+	if sess == nil || sess.Cipher != SessionCipherChaCha20 {
+		t.Fatalf("session suite = %+v, want chacha20", sess)
+	}
+
+	aad := []byte("agent-chacha\x001")
+	plaintext := []byte("chacha20 session payload")
+	ct, err := sm.EncryptWithAAD("agent-chacha", plaintext, aad)
+	if err != nil {
+		t.Fatalf("EncryptWithAAD: %v", err)
+	}
+	pt, err := sm.DecryptWithAAD("agent-chacha", ct, aad)
+	if err != nil {
+		t.Fatalf("DecryptWithAAD: %v", err)
+	}
+	if !bytes.Equal(pt, plaintext) {
+		t.Fatalf("roundtrip = %q, want %q", pt, plaintext)
+	}
+
+	// Cross-suite ciphertext must fail to open under the wrong AEAD.
+	if _, err := sm.DecryptWithAAD("agent-chacha", ct, []byte("wrong-aad")); err == nil {
+		t.Fatal("expected AAD mismatch to fail decrypt")
+	}
+}
+
+func TestNormalizeSessionCipher(t *testing.T) {
+	cases := map[string]string{
+		"":                  SessionCipherAESGCM,
+		"aes-gcm":           SessionCipherAESGCM,
+		"chacha20":          SessionCipherChaCha20,
+		"chacha20-poly1305": SessionCipherChaCha20,
+		"rc4":               SessionCipherAESGCM,
+		"Chacha20":          SessionCipherAESGCM,
+	}
+	for in, want := range cases {
+		if got := NormalizeSessionCipher(in); got != want {
+			t.Errorf("NormalizeSessionCipher(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestSessionManagerEncryptB64DecryptB64(t *testing.T) {
 	sm, _ := NewSessionManager()
 	curve := ecdh.X25519()

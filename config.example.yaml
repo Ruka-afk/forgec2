@@ -108,6 +108,7 @@ crypto:
   csrf_key: ""                 # REQUIRED: 64-char hex (32-byte) HMAC key binding CSRF tokens to sessions; fresh installs auto-generate (or FORGEC2_CSRF_KEY). Previously re-used the JWT secret — now independent.
   # update_signing_key: ""       # OPTIONAL: 64-char hex (32-byte) Ed25519 PUBLIC key; when set, hot updates require a detached "<checksum>.sig" release signature (empty = checksum-only + warning). Generate offline: go run ./cmd/sign-release -gen (keep the seed in GitHub Secrets as RELEASE_SIGNING_KEY; the release workflow signs automatically).
   # require_release_signature: false  # when true, refuse hot updates if update_signing_key is empty (fail closed). Recommended for production; tag CI already refuses to ship unsigned releases.
+  # session_cipher: ""           # OPTIONAL: "" or "aes-gcm" (default) or "chacha20" — session AEAD suite (ChaCha20-Poly1305 when chacha20). Agreed at handshake (auth field sc); wire framing identical (12-byte nonce). Changing this requires rebuilt agents that parse sc.
 
 malleable:
   enabled: false

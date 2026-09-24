@@ -489,12 +489,12 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 
 	// Beacon payload encryption via ECDH session (cfg.Crypto.Key = "ecdh:")
 	if strings.HasPrefix(cfg.Crypto.Key, "ecdh:") {
-		sm, err := crypto.NewSessionManager()
+		sm, err := crypto.NewSessionManagerWithCipher(crypto.DefaultSessionMaxAge, cfg.Crypto.SessionCipher)
 		if err != nil {
 			slog.Error("Failed to initialize ECDH session manager, falling back to XOR", "err", err)
 		} else {
 			s.sessionManager = sm
-			slog.Info("ECDH session encryption enabled")
+			slog.Info("ECDH session encryption enabled", "session_cipher", sm.Cipher())
 		}
 	}
 

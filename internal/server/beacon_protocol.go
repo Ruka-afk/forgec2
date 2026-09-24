@@ -131,6 +131,13 @@ type beaconResponse struct {
 	// rotate C2 endpoints / malleable profile without rebuilding the implant.
 	// Empty for v2 (master-key) implants, which carry their config embedded.
 	NetworkConfig string `json:"network_config,omitempty"`
+
+	// SessionCipher is the session AEAD suite for subsequent encrypted frames
+	// ("aes-gcm" or "chacha20"). Set on MAC'd auth responses so the agent can
+	// pick the matching AEAD. Not covered by the response MAC (which signs
+	// ecdh_pub only) — tampering worst-case forces a decrypt failure / rekey.
+	// Empty means the default AES-GCM (older servers / upgrade compat).
+	SessionCipher string `json:"sc,omitempty"`
 }
 
 // beaconEnvelope is the top-level transport envelope shared by HTTP, TCP and

@@ -9,6 +9,8 @@ import (
 	"errors"
 	"sync"
 	"time"
+
+	"golang.org/x/crypto/chacha20poly1305"
 )
 
 const (
@@ -20,6 +22,12 @@ const (
 	// sessionEvictionSample is how many entries are sampled when evicting at
 	// capacity, keeping the cost of a full-cache handshake O(sample).
 	sessionEvictionSample = 32
+
+	// Session AEAD suites. Wire format is identical for both (nonce||ct,
+	// 12-byte nonce); the suite is agreed at handshake so decrypt knows which
+	// AEAD to use. Empty / AES-GCM is the default for upgrade compatibility.
+	SessionCipherAESGCM   = "aes-gcm"
+	SessionCipherChaCha20 = "chacha20"
 )
 
 var (
@@ -35,7 +43,10 @@ type SessionManager struct {
 	sessions    map[string]*Session
 	maxAge      time.Duration
 	maxSessions int
-	mu          sync.RWMutex
+	// cipher is the AEAD suite stamped onto every new Session at
+	// EstablishSession (SessionCipherAESGCM or SessionCipherChaCha20).
+	cipher string
+	mu     sync.RWMutex
 }
 
 // Session represents a single agent session with PFS
@@ -45,6 +56,10 @@ type Session struct {
 	CreatedAt    time.Time
 	MessageCount int
 	LastUsed     time.Time
+	// Cipher is the AEAD suite for this session ("" / aes-gcm / chacha20).
+	// Stamped from SessionManager.cipher at EstablishSession so a live session
+	// keeps its suite even if the operator later flips the config.
+	Cipher string
 	// RekeyCount / LastRekeyAt track session rotations: every EstablishSession
 	// that overwrites an existing session for the agent is a rekey (driven by
 	// the server's message-count threshold or by restart recovery).
@@ -57,8 +72,14 @@ func NewSessionManager() (*SessionManager, error) {
 	return NewSessionManagerWithConfig(DefaultSessionMaxAge)
 }
 
-// NewSessionManagerWithConfig creates a session manager with a custom session max age
+// NewSessionManagerWithConfig creates a new session manager with a custom session max age
 func NewSessionManagerWithConfig(maxAge time.Duration) (*SessionManager, error) {
+	return NewSessionManagerWithCipher(maxAge, SessionCipherAESGCM)
+}
+
+// NewSessionManagerWithCipher creates a session manager that stamps suite onto
+// every new Session. Empty suite is normalized to AES-GCM.
+func NewSessionManagerWithCipher(maxAge time.Duration, suite string) (*SessionManager, error) {
 	curve := ecdh.X25519()
 	privateKey, err := curve.GenerateKey(rand.Reader)
 	if err != nil {
@@ -72,7 +93,32 @@ func NewSessionManagerWithConfig(maxAge time.Duration) (*SessionManager, error) 
 		sessions:    make(map[string]*Session),
 		maxAge:      maxAge,
 		maxSessions: DefaultMaxSessions,
+		cipher:      NormalizeSessionCipher(suite),
 	}, nil
+}
+
+// NormalizeSessionCipher maps a config/wire cipher name to a known suite.
+// Unknown values fall back to AES-GCM so a typo cannot brick every beacon.
+func NormalizeSessionCipher(suite string) string {
+	switch suite {
+	case SessionCipherChaCha20, "chacha20-poly1305":
+		return SessionCipherChaCha20
+	default:
+		return SessionCipherAESGCM
+	}
+}
+
+// Cipher returns the AEAD suite stamped onto new sessions.
+func (sm *SessionManager) Cipher() string {
+	if sm == nil {
+		return SessionCipherAESGCM
+	}
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	if sm.cipher == "" {
+		return SessionCipherAESGCM
+	}
+	return sm.cipher
 }
 
 // GetPublicKey returns the server's public key for distribution to agents
@@ -133,6 +179,10 @@ func (sm *SessionManager) EstablishSession(agentID string, agentPublicKey []byte
 
 	// Bump rekey bookkeeping when overwriting an existing session
 	// (rekey / restart recovery per the v2 semantics above).
+	suite := sm.cipher
+	if suite == "" {
+		suite = SessionCipherAESGCM
+	}
 	if existing, ok := sm.sessions[agentID]; ok {
 		existing.RekeyCount++
 		existing.LastRekeyAt = time.Now()
@@ -142,6 +192,7 @@ func (sm *SessionManager) EstablishSession(agentID string, agentPublicKey []byte
 			CreatedAt:    time.Now(),
 			MessageCount: 0,
 			LastUsed:     time.Now(),
+			Cipher:       suite,
 			RekeyCount:   existing.RekeyCount,
 			LastRekeyAt:  existing.LastRekeyAt,
 		}
@@ -155,6 +206,7 @@ func (sm *SessionManager) EstablishSession(agentID string, agentPublicKey []byte
 		CreatedAt:    time.Now(),
 		MessageCount: 0,
 		LastUsed:     time.Now(),
+		Cipher:       suite,
 	}
 	sm.mu.Unlock()
 
@@ -281,35 +333,29 @@ func (sm *SessionManager) Encrypt(agentID string, plaintext []byte) ([]byte, err
 	return sm.EncryptWithAAD(agentID, plaintext, nil)
 }
 
-// EncryptWithAAD encrypts data using AES-256-GCM with the session key and
-// authenticates the provided additional data (protocol v2 binds agentID and
-// sequence number so ciphertext cannot be transplanted across frames).
+// EncryptWithAAD encrypts data with the session's AEAD suite and authenticates
+// the provided additional data (protocol v2 binds agentID and sequence number
+// so ciphertext cannot be transplanted across frames).
 func (sm *SessionManager) EncryptWithAAD(agentID string, plaintext, aad []byte) ([]byte, error) {
 	session := sm.GetSession(agentID)
 	if session == nil {
 		return nil, ErrNoSession
 	}
 
-	block, err := aes.NewCipher(session.SessionKey)
-	if err != nil {
-		return nil, err
-	}
-
-	aesGCM, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-
-	nonce := make([]byte, aesGCM.NonceSize())
+	nonceSize := sessionNonceSize(session.Cipher)
+	nonce := make([]byte, nonceSize)
 	if _, err := rand.Read(nonce); err != nil {
 		return nil, err
 	}
 
-	ciphertext := aesGCM.Seal(nonce, nonce, plaintext, aad)
+	ciphertext, err := sealSession(session.Cipher, session.SessionKey, nonce, plaintext, aad)
+	if err != nil {
+		return nil, err
+	}
 
 	sm.IncrementMessageCount(agentID)
 
-	return ciphertext, nil
+	return append(nonce, ciphertext...), nil
 }
 
 // EncryptB64 encrypts and returns base64-encoded ciphertext
@@ -331,6 +377,37 @@ func (sm *SessionManager) EncryptB64WithAAD(agentID string, plaintext, aad []byt
 	return base64.StdEncoding.EncodeToString(raw), nil
 }
 
+// sessionNonceSize returns the AEAD nonce length for a suite (12 for both
+// AES-GCM and ChaCha20-Poly1305).
+func sessionNonceSize(suite string) int {
+	_ = aes.BlockSize // keep crypto/aes import for AES-GCM seal path
+	return 12
+}
+
+// sealSession authenticates+encrypts under suite. Output is ciphertext only
+// (caller prepends the nonce).
+func sealSession(suite string, key, nonce, plaintext, aad []byte) ([]byte, error) {
+	if NormalizeSessionCipher(suite) == SessionCipherChaCha20 {
+		aead, err := chacha20poly1305.New(key)
+		if err != nil {
+			return nil, err
+		}
+		if len(nonce) != aead.NonceSize() {
+			return nil, ErrCiphertextTooShort
+		}
+		return aead.Seal(nil, nonce, plaintext, aad), nil
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	aesGCM, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	return aesGCM.Seal(nil, nonce, plaintext, aad), nil
+}
+
 // decryptAESGCM authenticates and decrypts AES-256-GCM ciphertext (raw bytes
 // of nonce(12)+ciphertext) using the provided key. It does not touch session
 // bookkeeping, so callers can test a candidate key without committing to it.
@@ -341,23 +418,41 @@ func decryptAESGCM(key, ciphertext []byte) ([]byte, error) {
 // decryptAESGCMWithAAD authenticates and decrypts AES-256-GCM ciphertext with
 // the provided AAD, using the provided key (see decryptAESGCM).
 func decryptAESGCMWithAAD(key, ciphertext, aad []byte) ([]byte, error) {
+	return openSession(SessionCipherAESGCM, key, ciphertext, aad)
+}
+
+// openSession authenticates+decrypts nonce||ct under suite.
+func openSession(suite string, key, ciphertext, aad []byte) ([]byte, error) {
+	if NormalizeSessionCipher(suite) == SessionCipherChaCha20 {
+		aead, err := chacha20poly1305.New(key)
+		if err != nil {
+			return nil, err
+		}
+		nonceSize := aead.NonceSize()
+		if len(ciphertext) < nonceSize {
+			return nil, ErrCiphertextTooShort
+		}
+		nonce, body := ciphertext[:nonceSize], ciphertext[nonceSize:]
+		plaintext, err := aead.Open(nil, nonce, body, aad)
+		if err != nil {
+			return nil, ErrDecryptFailed
+		}
+		return plaintext, nil
+	}
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}
-
 	aesGCM, err := cipher.NewGCM(block)
 	if err != nil {
 		return nil, err
 	}
-
 	nonceSize := aesGCM.NonceSize()
 	if len(ciphertext) < nonceSize {
 		return nil, ErrCiphertextTooShort
 	}
-
-	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
-	plaintext, err := aesGCM.Open(nil, nonce, ciphertext, aad)
+	nonce, body := ciphertext[:nonceSize], ciphertext[nonceSize:]
+	plaintext, err := aesGCM.Open(nil, nonce, body, aad)
 	if err != nil {
 		return nil, ErrDecryptFailed
 	}
@@ -370,15 +465,15 @@ func (sm *SessionManager) Decrypt(agentID string, ciphertext []byte) ([]byte, er
 	return sm.DecryptWithAAD(agentID, ciphertext, nil)
 }
 
-// DecryptWithAAD decrypts data with the session key, authenticating the
-// provided additional data (protocol v2 frame binding).
+// DecryptWithAAD decrypts data with the session's AEAD suite, authenticating
+// the provided additional data (protocol v2 frame binding).
 func (sm *SessionManager) DecryptWithAAD(agentID string, ciphertext, aad []byte) ([]byte, error) {
 	session := sm.GetSession(agentID)
 	if session == nil {
 		return nil, ErrNoSession
 	}
 
-	plaintext, err := decryptAESGCMWithAAD(session.SessionKey, ciphertext, aad)
+	plaintext, err := openSession(session.Cipher, session.SessionKey, ciphertext, aad)
 	if err != nil {
 		return nil, err
 	}

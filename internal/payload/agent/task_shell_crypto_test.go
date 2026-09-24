@@ -5,6 +5,64 @@ import (
 	"testing"
 )
 
+func TestShellSessionChaCha20RoundTrip(t *testing.T) {
+	server, err := newECDSession()
+	if err != nil {
+		t.Fatalf("server session: %v", err)
+	}
+	client, err := newECDSession()
+	if err != nil {
+		t.Fatalf("client session: %v", err)
+	}
+	server.setSuite("chacha20")
+	client.setSuite("chacha20")
+	if err := client.establishFromServerKey(server.publicKeyB64()); err != nil {
+		t.Fatalf("client establish: %v", err)
+	}
+	if err := server.establishFromServerKey(client.publicKeyB64()); err != nil {
+		t.Fatalf("server establish: %v", err)
+	}
+	aad := []byte("agent-x\x0042")
+	ct, err := server.encryptAESGCMWithAAD([]byte("chacha-whoami"), aad)
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	pt, err := client.decryptAESGCMWithAAD(ct, aad)
+	if err != nil {
+		t.Fatalf("decrypt: %v", err)
+	}
+	if string(pt) != "chacha-whoami" {
+		t.Fatalf("plaintext = %q", pt)
+	}
+}
+
+func TestShellSessionSuiteMismatchFails(t *testing.T) {
+	server, err := newECDSession()
+	if err != nil {
+		t.Fatalf("server session: %v", err)
+	}
+	client, err := newECDSession()
+	if err != nil {
+		t.Fatalf("client session: %v", err)
+	}
+	server.setSuite("chacha20")
+	client.setSuite("")
+	if err := client.establishFromServerKey(server.publicKeyB64()); err != nil {
+		t.Fatalf("client establish: %v", err)
+	}
+	if err := server.establishFromServerKey(client.publicKeyB64()); err != nil {
+		t.Fatalf("server establish: %v", err)
+	}
+	aad := []byte("agent-x\x001")
+	ct, err := server.encryptAESGCMWithAAD([]byte("mismatch"), aad)
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	if _, err := client.decryptAESGCMWithAAD(ct, aad); err == nil {
+		t.Fatal("expected decrypt failure under suite mismatch")
+	}
+}
+
 // TestExecuteTaskDecryptsShell proves token_make's password (carried in the
 // Shell field) is decrypted in executeTask like Command/Data. A decrypt
 // failure surfaces as "task payload decryption failed"; reaching the handler
