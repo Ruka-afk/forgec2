@@ -6,6 +6,7 @@ package plugin
 import (
 	"errors"
 	"os"
+	"sync"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -60,11 +61,14 @@ func (j *windowsJob) release() {
 // processGuard attaches a started plugin process to a job object so the whole
 // process tree dies with the plugin run.
 type processGuard struct {
-	job *windowsJob
+	mu   sync.Mutex
+	job  *windowsJob
+	done bool
 }
 
-// attachProcessGuard binds the process to a fresh job object. Non-fatal on
-// failure: the plugin still runs, just without tree-kill guarantees.
+// attachProcessGuard binds the process to a fresh job object. Failure is
+// fatal for the run: the caller kills the process and refuses the plugin
+// rather than executing it without tree-kill guarantees.
 func attachProcessGuard(p *os.Process) (*processGuard, error) {
 	if p == nil || p.Pid <= 0 {
 		return nil, errors.New("no process to guard")
@@ -85,9 +89,15 @@ func attachProcessGuard(p *os.Process) (*processGuard, error) {
 	return &processGuard{job: job}, nil
 }
 
-// release kills the process tree. Safe to call multiple times.
+// release kills the process tree. Safe to call multiple times or concurrently
+// (the timeout watchdog and the main wait path both call it).
 func (g *processGuard) release() {
-	if g != nil && g.job != nil {
+	if g == nil {
+		return
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.job != nil {
 		g.job.release()
 		g.job = nil
 	}

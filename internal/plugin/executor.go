@@ -30,6 +30,16 @@ type executor struct{}
 // Output beyond the cap is truncated and flagged via truncatedOutputNote.
 const maxPluginOutputBytes = 2 << 20 // 2 MiB per stream
 
+// maxPluginTimeoutSecs is the server-enforced ceiling on plugin runtimes.
+// A manifest may request less, never more: an untrusted manifest asking for a
+// multi-hour run must not pin a worker (and its process tree) indefinitely.
+const maxPluginTimeoutSecs = 300
+
+// pluginWaitDelay bounds how long Wait blocks after the context fires when a
+// grandchild inherited the stdout/stderr pipes. Without it, cmd.Wait hangs
+// past the timeout and the guard never runs.
+const pluginWaitDelay = 5 * time.Second
+
 const truncatedOutputNote = "\n[forgec2: output truncated at 2 MiB]"
 
 // cappedBuffer is a bytes.Buffer that discards writes beyond max bytes.
@@ -94,12 +104,29 @@ func sanitizePluginPATH(raw string) string {
 	return "/usr/local/bin:/usr/bin:/bin"
 }
 
+// clampPluginTimeout applies the server-enforced ceiling to a requested
+// runtime. Non-positive values fall back to the manifest default.
+func clampPluginTimeout(requested, manifestDefault int) int {
+	t := requested
+	if t <= 0 {
+		t = manifestDefault
+	}
+	if t > maxPluginTimeoutSecs {
+		return maxPluginTimeoutSecs
+	}
+	return t
+}
+
 // run executes the plugin's entry script with the supplied input.
 func (e *executor) run(ctx context.Context, pluginDir string, m *Manifest, input map[string]interface{}, timeoutSecs int) (*execResult, error) {
-	timeout := timeoutSecs
-	if timeout <= 0 {
-		timeout = m.DefaultTimeout()
+	requested := timeoutSecs
+	if requested <= 0 {
+		requested = m.DefaultTimeout()
 	}
+	if requested > maxPluginTimeoutSecs {
+		slog.Warn("plugin timeout clamped to server maximum", "plugin", m.Name, "requested_s", requested, "max_s", maxPluginTimeoutSecs)
+	}
+	timeout := clampPluginTimeout(timeoutSecs, m.DefaultTimeout())
 
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	defer cancel()
@@ -152,10 +179,32 @@ func (e *executor) run(ctx context.Context, pluginDir string, m *Manifest, input
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start plugin %q: %w", m.Name, err)
 	}
+	// A grandchild that inherited the stdout/stderr pipes keeps Wait blocked
+	// after the context fires; WaitDelay caps that and then force-closes them.
+	cmd.WaitDelay = pluginWaitDelay
+
 	guard, guardErr := attachProcessGuard(cmd.Process)
 	if guardErr != nil {
-		slog.Warn("plugin process guard unavailable", "plugin", m.Name, "error", guardErr)
+		// Fail closed: without tree-kill the plugin (and anything it spawns)
+		// can outlive its timeout. Kill what we started and refuse the run.
+		slog.Error("plugin process guard unavailable, refusing run", "plugin", m.Name, "error", guardErr)
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return nil, fmt.Errorf("plugin %q refused: process isolation unavailable: %w", m.Name, guardErr)
 	}
+
+	// Release the guard the moment the context is done instead of waiting for
+	// Wait to return: timeout enforcement must not depend on a well-behaved
+	// process tree.
+	guardDone := make(chan struct{})
+	defer close(guardDone)
+	go func() {
+		select {
+		case <-ctx.Done():
+			guard.release()
+		case <-guardDone:
+		}
+	}()
 
 	runErr := cmd.Wait()
 	guard.release()

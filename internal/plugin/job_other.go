@@ -4,40 +4,51 @@
 package plugin
 
 import (
+	"errors"
 	"os"
+	"sync"
 	"syscall"
 )
 
 // processGuard kills the plugin's entire process group on release so
 // interpreter children (shells, go run toolchains) cannot outlive a
-// timeout or failed run.
+// timeout or failed run. release is safe to call concurrently: the timeout
+// watchdog and the main wait path both call it.
 type processGuard struct {
 	pgid int
-	done bool
+	once sync.Once
 }
 
-// attachProcessGuard puts the child in its own process group (Setpgid)
-// before it does work. Must be called after cmd.Start (pid is known).
+// attachProcessGuard verifies the child leads its own process group (set via
+// Setpgid before Start). Returns an error when no guard can be established —
+// the caller then refuses the run rather than executing without tree-kill.
 func attachProcessGuard(p *os.Process) (*processGuard, error) {
-	if p == nil {
-		return &processGuard{}, nil
+	if p == nil || p.Pid <= 0 {
+		return nil, errors.New("no process to guard")
 	}
-	// Best-effort: if the child already called setpgid differently, fail soft —
-	// CommandContext timeout still stops the main process.
-	if err := syscall.Kill(-p.Pid, 0); err == nil {
-		// Already in a killable group with this pgid.
-		return &processGuard{pgid: p.Pid}, nil
+	// The child was started with Setpgid, so its pid is also the pgid. Probe
+	// the group; ESRCH here normally means the process already exited, which
+	// is not a containment failure (there is nothing left to contain).
+	if err := syscall.Kill(-p.Pid, 0); err != nil {
+		if errors.Is(err, syscall.ESRCH) {
+			return &processGuard{pgid: p.Pid}, nil
+		}
+		return nil, err
 	}
-	g := &processGuard{pgid: p.Pid}
-	return g, nil
+	return &processGuard{pgid: p.Pid}, nil
 }
 
-// release terminates the process group (negative pid). Safe to call twice.
+// release terminates the process group (negative pid). Safe to call twice or
+// concurrently.
 func (g *processGuard) release() {
-	if g == nil || g.done || g.pgid <= 0 {
+	if g == nil {
 		return
 	}
-	g.done = true
-	// SIGKILL the group; ignore ESRCH (already exited).
-	_ = syscall.Kill(-g.pgid, syscall.SIGKILL)
+	g.once.Do(func() {
+		if g.pgid <= 0 {
+			return
+		}
+		// SIGKILL the group; ignore ESRCH (already exited).
+		_ = syscall.Kill(-g.pgid, syscall.SIGKILL)
+	})
 }
