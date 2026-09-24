@@ -17,17 +17,6 @@ export interface BOFFile {
   created_at?: string;
 }
 
-export interface BOFLibraryItem {
-  id?: number | string;
-  name?: string;
-  description?: string;
-  arch?: string;
-  author?: string;
-  size?: number;
-  created_by?: string;
-  created_at?: string;
-}
-
 export interface Execution {
   ID?: string;
   id?: string | number;
@@ -48,6 +37,9 @@ export interface Execution {
   elapsed?: string;
 }
 
+// The server's repo index is a curated list of collections: name, description
+// and URL only. There is no backend for per-item ratings, categories,
+// architectures, star counts or import state, so the type does not pretend.
 export interface RepoItem {
   ID?: string;
   id?: string;
@@ -59,20 +51,6 @@ export interface RepoItem {
   url?: string;
   Author?: string;
   author?: string;
-  Stars?: number;
-  stars?: number;
-  Downloads?: number;
-  downloads?: number;
-  Category?: string;
-  category?: string;
-  Architecture?: string;
-  architecture?: string;
-  Rating?: number;
-  rating?: number;
-  Reviews?: number;
-  reviews?: number;
-  Imported?: boolean;
-  imported?: boolean;
 }
 
 export interface QuickBOF {
