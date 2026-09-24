@@ -831,8 +831,13 @@ func (s *Server) SetupRoutes() {
 		beaconAPI.GET("/collect", s.handleBeacon)
 	}
 
-	// Protected REST API (authentication required)
+	// Protected REST API (authentication required). The operator-plane guard
+	// (operator_allowed_cidrs + operator mTLS) applies here too: these routes
+	// are the scripting/automation surface, so leaving them outside the guard
+	// let any authenticated caller bypass the operator network policy.
+	// /api/v1/health stays exempt so container/orchestrator probes keep working.
 	restAPI := s.router.Group("/api/v1")
+	restAPI.Use(s.operatorPlaneGuardExcept("/api/v1/health"))
 	restAPI.Use(middleware.AuthRequired(s.db))
 	restAPI.Use(middleware.CSRFProtect())
 	restAPI.Use(middleware.RequestBodyLimit(MaxJSONBodySize))

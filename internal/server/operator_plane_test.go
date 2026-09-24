@@ -155,6 +155,32 @@ func TestOperatorPlaneGuardMTLS(t *testing.T) {
 	}
 }
 
+// TestOperatorPlaneGuardExceptPath proves exempted paths (health probes) skip
+// the operator network policy while every other path on the same route group
+// stays guarded.
+func TestOperatorPlaneGuardExceptPath(t *testing.T) {
+	s := planeTestServer(t)
+	s.cfg.Server.OperatorAllowedCIDRs = []string{"10.0.0.0/8"}
+
+	guard := s.operatorPlaneGuardExcept("/api/v1/health")
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	c.Request.RemoteAddr = "192.168.1.9:4444"
+	guard(c)
+	if c.IsAborted() {
+		t.Fatalf("exempt /api/v1/health denied: code=%d body=%s", w.Code, w.Body.String())
+	}
+
+	c, w = planeCtx("192.168.1.9:4444")
+	c.Request.URL.Path = "/api/v1/agents"
+	guard(c)
+	if !c.IsAborted() || w.Code != http.StatusForbidden {
+		t.Fatalf("non-exempt path not denied: aborted=%v code=%d", c.IsAborted(), w.Code)
+	}
+}
+
 func TestConfigureTLSOperatorMTLSRequestsCert(t *testing.T) {
 	dir := t.TempDir()
 	// Minimal self-signed server cert so the loader succeeds.

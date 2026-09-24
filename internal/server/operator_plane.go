@@ -102,7 +102,26 @@ func (s *Server) verifyOperatorCert(state *tls.ConnectionState) bool {
 // operatorPlaneGuard enforces operator_allowed_cidrs and operator_mtls on
 // the operator surface. Both are fail-closed; both are no-ops when unset.
 func (s *Server) operatorPlaneGuard() gin.HandlerFunc {
+	return s.operatorPlaneGuardExcept()
+}
+
+// operatorPlaneGuardExcept is operatorPlaneGuard with exact-path exemptions.
+// Exempted paths skip the IP/mTLS policy but keep every other guard on their
+// route group (auth, CSRF, rate limits), so only machine-to-machine probes
+// (e.g. /api/v1/health from a container healthcheck) stay reachable from
+// outside the operator network.
+func (s *Server) operatorPlaneGuardExcept(exempt ...string) gin.HandlerFunc {
+	skip := make(map[string]struct{}, len(exempt))
+	for _, p := range exempt {
+		if p != "" {
+			skip[p] = struct{}{}
+		}
+	}
 	return func(c *gin.Context) {
+		if _, ok := skip[c.Request.URL.Path]; ok {
+			c.Next()
+			return
+		}
 		var allowlist []string
 		var mtls bool
 		if s.cfg != nil {

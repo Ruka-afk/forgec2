@@ -168,7 +168,14 @@ func metricsMiddleware(mc *MetricsCollector) gin.HandlerFunc {
 		c.Next()
 		duration := time.Since(start).Seconds()
 		status := c.Writer.Status()
-		mc.RequestDuration.WithLabelValues(c.Request.Method, c.Request.URL.Path, itoa(status)).Observe(duration)
+		// Label the route template, never the raw path: raw paths embed
+		// per-request identifiers (payload ids, phishing tokens, generated
+		// task ids) and explode label cardinality on unmatched routes.
+		route := c.FullPath()
+		if route == "" {
+			route = "unmatched"
+		}
+		mc.RequestDuration.WithLabelValues(c.Request.Method, route, itoa(status)).Observe(duration)
 	}
 }
 
