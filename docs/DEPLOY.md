@@ -28,6 +28,25 @@ Postgres is opt-in:
 > On a Postgres deployment they return `501` with this explanation instead of
 > pretending to work — schedule `pg_dump`/`pgBackRest` yourself.
 
+### Backups
+
+Encrypted snapshots (`<data_dir>/backups/*.fbk`, AES-256-GCM) run on a schedule:
+
+```yaml
+backup:
+  retain: 14          # snapshots kept (0 = default 7)
+  schedule: "daily"   # hourly | daily | weekly | monthly
+```
+
+Env equivalents: `FORGEC2_BACKUP_RETAIN`, `FORGEC2_BACKUP_SCHEDULE`.
+
+Freshness is observable, so a stalled job is not discovered at restore time:
+
+- `GET /api/v1/health` → `backup: { retain, age_seconds, last_success, last_failure, last_error }`
+- Prometheus: `forgec2_backup_age_seconds`, `forgec2_backup_success_total`, `forgec2_backup_failures_total`
+
+Alert on `forgec2_backup_age_seconds` exceeding ~2× your schedule interval.
+
 ### Production overlay
 
 `docker-compose.prod.yml` hardens the base stack for real deployments:

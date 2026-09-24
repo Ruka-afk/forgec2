@@ -32,6 +32,9 @@ type MetricsCollector struct {
 	AgentResultGapsTotal prometheus.Counter
 	DbBusyRetriesTotal   *prometheus.CounterVec
 	MalleableEventsTotal *prometheus.CounterVec
+	BackupAgeSeconds     prometheus.Gauge
+	BackupFailuresTotal  prometheus.Counter
+	BackupSuccessTotal   prometheus.Counter
 }
 
 func NewMetricsCollector(s *Server) *MetricsCollector {
@@ -125,6 +128,18 @@ func NewMetricsCollector(s *Server) *MetricsCollector {
 			Name: "forgec2_malleable_events_total",
 			Help: "Malleable profile failures (encode_fail, profile_load_fail) that leave traffic uncovered, by outcome and profile.",
 		}, []string{"outcome", "profile"}),
+		BackupAgeSeconds: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "forgec2_backup_age_seconds",
+			Help: "Seconds since the last successful encrypted database backup (0 when backups are disabled or none has succeeded yet).",
+		}),
+		BackupFailuresTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "forgec2_backup_failures_total",
+			Help: "Total failed backup attempts (scheduled or manual).",
+		}),
+		BackupSuccessTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "forgec2_backup_success_total",
+			Help: "Total successful encrypted database backups.",
+		}),
 	}
 }
 
@@ -151,6 +166,9 @@ func (mc *MetricsCollector) Register(reg prometheus.Registerer) {
 		mc.AgentResultGapsTotal,
 		mc.DbBusyRetriesTotal,
 		mc.MalleableEventsTotal,
+		mc.BackupAgeSeconds,
+		mc.BackupFailuresTotal,
+		mc.BackupSuccessTotal,
 	}
 	for _, c := range collectors {
 		err := reg.Register(c)
@@ -230,5 +248,15 @@ func (s *Server) updateMetricsFromDB() {
 				c.Add(float64(entry.RekeyCount))
 			}
 		}
+	}
+
+	// Backup freshness: a backup job that silently stopped working is the
+	// failure mode operators discover far too late.
+	if s.metrics.BackupAgeSeconds != nil {
+		age := 0.0
+		if s.backupManager != nil {
+			age = s.backupManager.Health().AgeSeconds
+		}
+		s.metrics.BackupAgeSeconds.Set(age)
 	}
 }

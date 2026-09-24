@@ -288,10 +288,19 @@ func (s *Server) handleDBBackup(c *gin.Context) {
 		return
 	}
 	name, size, err := s.backupManager.createBackup()
+	s.backupManager.noteBackupResult(err)
 	if err != nil {
+		if s.metrics != nil {
+			if s.metrics.BackupFailuresTotal != nil {
+				s.metrics.BackupFailuresTotal.Inc()
+			}
+		}
 		slog.Error("Failed to create encrypted backup", "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to create backup")
 		return
+	}
+	if s.metrics != nil && s.metrics.BackupSuccessTotal != nil {
+		s.metrics.BackupSuccessTotal.Inc()
 	}
 	slog.Info("Database backup created", "file", name, "size", size)
 	s.LogAuditRecord(c, "db_backup", "system", "", "encrypted database backup "+name, true, nil)

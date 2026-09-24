@@ -37,6 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Backups became observable and tunable: `backup.retain` (was a hard-coded 7 snapshots) and `backup.schedule` are configurable via config or `FORGEC2_BACKUP_RETAIN` / `FORGEC2_BACKUP_SCHEDULE`; `GET /api/v1/health` reports `backup.{retain,age_seconds,last_success,last_failure,last_error}` and Prometheus gains `forgec2_backup_age_seconds`, `forgec2_backup_success_total`, `forgec2_backup_failures_total`, so a silently stalled backup job is visible instead of discovered at restore time
 - Built-in database backup/restore/VACUUM are explicitly SQLite-only: on other drivers the endpoints answer `501` with guidance (use `pg_dump`/`pgBackRest`) and the scheduled backup job stays disabled instead of failing cryptically
 - CI: `internal/scripting` + `cmd` packages are now part of the test run, a 33% statement-coverage floor is enforced (current total ~35%), a dedicated `-race` job covers server/plugin/scripting/agent/db, a weekly fuzz campaign exercises the beacon and malleable fuzz targets, and a new job validates all compose files plus the production overlay and builds the image
 - Release: CycloneDX SBOM (`forgec2-server-linux-amd64.sbom.json`) and SLSA-style build provenance attestations ship with tag releases, and release notes are lifted from the matching `CHANGELOG.md` section

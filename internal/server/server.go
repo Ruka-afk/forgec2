@@ -788,8 +788,15 @@ func (s *Server) InitOptimizations(configPath string) {
 			DBDriver:      s.cfg.Database.Driver,
 		}
 	}
+	if retain := s.cfg.Backup.Retain; retain > 0 {
+		s.backupManager.SetRetention(retain)
+	}
 
-	if err := s.backupManager.Start("daily"); err != nil {
+	schedule := s.cfg.Backup.Schedule
+	if schedule == "" {
+		schedule = "daily"
+	}
+	if err := s.backupManager.Start(schedule); err != nil {
 		slog.Warn("Failed to start backup manager", "error", err)
 	}
 }

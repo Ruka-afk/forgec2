@@ -32,6 +32,12 @@ type Config struct {
 		// the server (0 = built-in default).
 		MaxConcurrent int `yaml:"max_concurrent"`
 	} `yaml:"plugins"`
+	Backup struct {
+		// Retain is how many encrypted .fbk snapshots to keep (0 = 7).
+		Retain int `yaml:"retain"`
+		// Schedule is hourly/daily/weekly/monthly (default daily).
+		Schedule string `yaml:"schedule"`
+	} `yaml:"backup"`
 	Server struct {
 		Port                 int    `yaml:"port"`
 		Host                 string `yaml:"host"`
@@ -722,6 +728,18 @@ func Load(path string) (*Config, error) {
 		} else {
 			slog.Warn("Ignoring FORGEC2_PLUGINS_MAX_CONCURRENT: not a non-negative integer", "value", envConc)
 		}
+	}
+
+	// Backup retention / schedule via env.
+	if envRetain := os.Getenv("FORGEC2_BACKUP_RETAIN"); envRetain != "" {
+		if v, err := strconv.Atoi(envRetain); err == nil && v >= 0 {
+			cfg.Backup.Retain = v
+		} else {
+			slog.Warn("Ignoring FORGEC2_BACKUP_RETAIN: not a non-negative integer", "value", envRetain)
+		}
+	}
+	if envSchedule := os.Getenv("FORGEC2_BACKUP_SCHEDULE"); envSchedule != "" {
+		cfg.Backup.Schedule = envSchedule
 	}
 
 	// Env overrides for critical settings

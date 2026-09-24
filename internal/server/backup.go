@@ -40,10 +40,85 @@ type BackupManager struct {
 	mu        sync.Mutex
 	ticker    *time.Ticker
 	stopCh    chan struct{}
+	// retain is how many encrypted .fbk snapshots to keep (>=1). The previous
+	// hard-coded 7 made retention a non-operational decision.
+	retain int
+	// lastSuccess / lastFailure back the freshness metrics, so a silently
+	// failing backup job is visible in Prometheus and /ready.
+	lastSuccess time.Time
+	lastFailure time.Time
+	lastError   string
 	// Sidecar, when set, supplies non-secret snapshot metadata written
 	// alongside each .fbk (key fingerprint, server identity). The restore
 	// path compares key_id up front for an early, explicit mismatch error.
 	Sidecar func() backupSidecar
+}
+
+// defaultBackupRetention keeps the historical behaviour when the operator has
+// not chosen a retention count.
+const defaultBackupRetention = 7
+
+// SetRetention configures how many encrypted snapshots are kept.
+func (bm *BackupManager) SetRetention(n int) {
+	if n < 1 {
+		return
+	}
+	bm.mu.Lock()
+	bm.retain = n
+	bm.mu.Unlock()
+}
+
+func (bm *BackupManager) retention() int {
+	bm.mu.Lock()
+	defer bm.mu.Unlock()
+	if bm.retain < 1 {
+		return defaultBackupRetention
+	}
+	return bm.retain
+}
+
+// BackupHealth is the operator-facing view of backup freshness.
+type BackupHealth struct {
+	Enabled     bool      `json:"enabled"`
+	Retain      int       `json:"retain"`
+	LastSuccess time.Time `json:"last_success,omitempty"`
+	LastFailure time.Time `json:"last_failure,omitempty"`
+	LastError   string    `json:"last_error,omitempty"`
+	AgeSeconds  float64   `json:"age_seconds"`
+	SnapshotDir string    `json:"snapshot_dir"`
+}
+
+// Health reports the current backup freshness. Before the first successful run
+// it reports a zero age, which callers treat as "not yet proven".
+func (bm *BackupManager) Health() BackupHealth {
+	bm.mu.Lock()
+	last := bm.lastSuccess
+	bm.mu.Unlock()
+	h := BackupHealth{
+		Retain:      bm.retention(),
+		LastSuccess: last,
+		SnapshotDir: bm.backupDir,
+	}
+	bm.mu.Lock()
+	h.LastFailure = bm.lastFailure
+	h.LastError = bm.lastError
+	bm.mu.Unlock()
+	if !last.IsZero() {
+		h.AgeSeconds = time.Since(last).Seconds()
+	}
+	return h
+}
+
+func (bm *BackupManager) noteBackupResult(err error) {
+	bm.mu.Lock()
+	if err != nil {
+		bm.lastFailure = time.Now()
+		bm.lastError = err.Error()
+	} else {
+		bm.lastSuccess = time.Now()
+		bm.lastError = ""
+	}
+	bm.mu.Unlock()
 }
 
 // backupSidecar is the non-secret companion of a .fbk file. It deliberately
@@ -197,6 +272,7 @@ func (bm *BackupManager) PerformBackup() error {
 	bm.mu.Unlock()
 
 	_, _, err := bm.createBackup()
+	bm.noteBackupResult(err)
 	return err
 }
 
@@ -289,7 +365,7 @@ func (bm *BackupManager) cleanupOldBackups() {
 		return
 	}
 
-	keepCount := 7
+	keepCount := bm.retention()
 	var backupFiles []os.FileInfo
 
 	for _, file := range files {

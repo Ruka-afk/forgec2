@@ -122,6 +122,13 @@ plugins:
   # Simultaneously running plugin processes (0 = default 4).
   max_concurrent: 4
 
+backup:
+  # Encrypted database snapshots (.fbk). Retention used to be a hard-coded 7.
+  retain: 14                    # 0 = built-in default (7)
+  schedule: "daily"             # hourly | daily | weekly | monthly
+  # Freshness is exported as forgec2_backup_age_seconds and reported by
+  # GET /api/v1/health (`backup.age_seconds`), so a stalled job is visible.
+
 crypto:
   key: "ecdh:"                 # REQUIRED: "ecdh:" enables ECDH+AES-256-GCM beacon encryption. The legacy XOR/plaintext modes were removed from the v2/v3 beacon protocol �?the server refuses to start with any other value (built implants cannot authenticate).
   force_ecdh: true             # reject plaintext beacons when ECDH is enabled

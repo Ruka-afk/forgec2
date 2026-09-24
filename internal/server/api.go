@@ -502,6 +502,21 @@ func (s *Server) apiHealth(c *gin.Context) {
 		}
 	}
 
+	// Backup freshness: an operator (or monitor) should be able to see that the
+	// last snapshot is stale without shelling into the box.
+	if s.backupManager != nil {
+		bh := s.backupManager.Health()
+		health["backup"] = gin.H{
+			"retain":       bh.Retain,
+			"age_seconds":  bh.AgeSeconds,
+			"last_success": bh.LastSuccess,
+			"last_failure": bh.LastFailure,
+			"last_error":   bh.LastError,
+		}
+	} else {
+		health["backup"] = gin.H{"enabled": false}
+	}
+
 	c.JSON(http.StatusOK, health)
 }
 
