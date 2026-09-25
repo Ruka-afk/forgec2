@@ -39,6 +39,7 @@ interface AIConfigPanelProps {
   allowExecute: boolean;
   setAllowExecute: (v: boolean) => void;
   configSaving: boolean;
+  configLoaded: boolean;
   onClose: () => void;
   onSave: () => void;
 }
@@ -51,7 +52,7 @@ export function AIConfigPanel(props: AIConfigPanelProps) {
     provider, setProvider, model, setModel, apiKey, setApiKey,
     endpoint, setEndpoint, systemPrompt, setSystemPrompt,
     engagementNotes, setEngagementNotes,
-    allowExecute, setAllowExecute, configSaving, onClose, onSave,
+    allowExecute, setAllowExecute, configSaving, configLoaded, onClose, onSave,
   } = props;
   const changeProvider = (nextProvider: string) => {
     const knownDefault = Object.values(PROVIDER_DEFAULT_MODELS).includes(model);
@@ -147,7 +148,12 @@ export function AIConfigPanel(props: AIConfigPanelProps) {
             <span className="block text-(--fs-xs-sm) text-warning mt-0.5">{t("ai.allow_execute_warn")}</span>
           </span>
         </Label>
-        <Button type="button" onClick={onSave} size="lg" disabled={configSaving} className="sticky bottom-4 w-full shadow-lg">
+        {!configLoaded && (
+          <p role="alert" className="rounded-lg border border-destructive/25 bg-destructive/10 p-3 text-xs text-destructive">
+            {t("ai.config_unread_save_blocked")}
+          </p>
+        )}
+        <Button type="button" onClick={onSave} size="lg" disabled={configSaving || !configLoaded} className="sticky bottom-4 w-full shadow-lg">
           {configSaving ? <><Spinner size="xs" className="mr-2" />{t("common.saving")}</> : t("common.save")}
         </Button>
       </div>

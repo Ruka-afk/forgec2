@@ -31,9 +31,15 @@ interface ListenerBreakerConfigDialogProps {
 export function ListenerBreakerConfigDialog({ open, onOpenChange }: ListenerBreakerConfigDialogProps) {
   const { t } = useI18n();
   const [form, setForm] = useState<BreakerConfig>(EMPTY_CONFIG);
+  // The form is prefilled from the server; until that read succeeds the values
+  // on screen are placeholders, so saving them would reset the real thresholds.
+  const [configLoaded, setConfigLoaded] = useState(false);
+  const [configError, setConfigError] = useState<string | null>(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   const { mutate: save, isPending: saving } = useMutation({
     fn: async () => {
+      if (!configLoaded) throw new Error("breaker config unread");
       await api.postJson(paths.circuitBreaker.config, form);
     },
     onSuccess: () => {
@@ -46,21 +52,27 @@ export function ListenerBreakerConfigDialog({ open, onOpenChange }: ListenerBrea
   useEffect(() => {
     if (!open) return;
     const controller = new AbortController();
+    setConfigLoaded(false);
+    setConfigError(null);
     api
       .get<Partial<BreakerConfig>>(paths.circuitBreaker.config, { signal: controller.signal })
       .then((data) => {
+        if (controller.signal.aborted) return;
         setForm({
           failure_threshold: data.failure_threshold ?? EMPTY_CONFIG.failure_threshold,
           cooldown_seconds: data.cooldown_seconds ?? EMPTY_CONFIG.cooldown_seconds,
           half_open_max_reqs: data.half_open_max_reqs ?? EMPTY_CONFIG.half_open_max_reqs,
           health_check_seconds: data.health_check_seconds ?? EMPTY_CONFIG.health_check_seconds,
         });
+        setConfigLoaded(true);
       })
-      .catch(() => {
-        if (!controller.signal.aborted) toast.error(t("cb.load_failed"));
+      .catch((e: unknown) => {
+        if (controller.signal.aborted) return;
+        setConfigError(e instanceof Error ? e.message : t("cb.load_failed"));
+        toast.error(t("cb.load_failed"));
       });
     return () => controller.abort();
-  }, [open, t]);
+  }, [open, t, reloadNonce]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -69,6 +81,16 @@ export function ListenerBreakerConfigDialog({ open, onOpenChange }: ListenerBrea
           <DialogTitle>{t("cb.config_title")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          {configError && (
+            <div role="alert" className="rounded-lg border border-destructive/25 bg-destructive/10 p-3 text-xs text-destructive">
+              <p className="font-medium">{t("cb.config_unread")}</p>
+              <p className="mt-1 text-muted-foreground">{configError}</p>
+              <Button type="button" size="sm" variant="outline" className="mt-2" onClick={() => setReloadNonce((n) => n + 1)}>
+                {t("common.try_again")}
+              </Button>
+            </div>
+          )}
+          <fieldset disabled={!configLoaded} className="space-y-4">
           <div>
             <Label>{t("cb.failure_threshold")}</Label>
             <Input
@@ -113,10 +135,11 @@ export function ListenerBreakerConfigDialog({ open, onOpenChange }: ListenerBrea
             />
             <p className="mt-1 text-(--fs-micro-sm) text-muted-foreground">{t("cb.health_check_desc")}</p>
           </div>
+          </fieldset>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t("common.cancel")}</Button>
-          <Button onClick={() => void save()} disabled={saving}>{t("cb.save_config")}</Button>
+          <Button onClick={() => void save()} disabled={saving || !configLoaded}>{t("cb.save_config")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -52,9 +52,10 @@ export function PendingAITasks({ activeSessionId, onTaskFeedback }: PendingAITas
     const data = await api.get<{ tasks?: PendingTask[] }>(paths.ai.pendingTasks, { signal });
     return data.tasks || [];
   }, []);
-  const { data, loading, refresh } = useApiResource<PendingTask[]>({
+  const { data, loading, refresh, error } = useApiResource<PendingTask[]>({
     fetcher: fetchTasks,
     pollMs: 10000,
+    errorMessage: t("ai.approvals_load_failed"),
   });
   const tasks = data || [];
 
@@ -101,6 +102,17 @@ export function PendingAITasks({ activeSessionId, onTaskFeedback }: PendingAITas
     }
   };
 
+  // A failed read must not look like "nothing is waiting for approval".
+  if (error) {
+    return (
+      <div role="alert" className="rounded-lg border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        <span className="font-medium">{t("ai.approvals_unreadable", { message: error })}</span>{" "}
+        <button type="button" onClick={() => { void refresh(); }} className="underline underline-offset-2">
+          {t("common.try_again")}
+        </button>
+      </div>
+    );
+  }
   if (loading && tasks.length === 0) return null;
   if (tasks.length === 0) return null;
 

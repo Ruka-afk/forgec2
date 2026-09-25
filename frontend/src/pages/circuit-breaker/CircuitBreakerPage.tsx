@@ -7,6 +7,7 @@ import { POLL } from "@/lib/polling";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageSpinner } from "@/components/ui/spinner";
+import { DataError } from "@/components/ui/data-state";
 import { StatCard } from "@/components/ui/animated-stat-card";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { toast } from "sonner";
@@ -61,7 +62,7 @@ export default function CircuitBreakerPage() {
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [configForm, setConfigForm] = useState<BreakerConfig>(config);
 
-  const { data, loading, refresh } = useApiResource<{
+  const { data, loading, error, refresh } = useApiResource<{
     listeners: ListenerDetail[];
     config?: Partial<BreakerConfig>;
     events: BreakerEvent[];
@@ -84,6 +85,9 @@ export default function CircuitBreakerPage() {
   });
   const listeners = data?.listeners ?? [];
   const events = data?.events ?? [];
+  // Thresholds are prefilled from the server; until they load, the form holds
+  // placeholders that would reset the real breaker configuration on save.
+  const configLoaded = data?.config?.failure_threshold !== undefined;
 
   useEffect(() => {
     const cfg = data?.config;
@@ -94,6 +98,10 @@ export default function CircuitBreakerPage() {
   }, [data]);
 
   const handleSaveConfig = async () => {
+    if (!configLoaded) {
+      toast.error(t("cb.config_unread"));
+      return;
+    }
     try {
       await api.postJson(paths.circuitBreaker.config, configForm);
       setConfig(configForm);
@@ -123,6 +131,14 @@ export default function CircuitBreakerPage() {
   const unstableCount = listeners.filter(l => l.status === "unstable").length;
 
   if (loading) return <PageContainer title={t("cb.title")} subtitle={t("cb.subtitle")}><PageSpinner /></PageContainer>;
+
+  if (error) {
+    return (
+      <PageContainer title={t("cb.title")} subtitle={t("cb.subtitle")}>
+        <DataError message={error} onRetry={refresh} />
+      </PageContainer>
+    );
+  }
 
   return (
     <>
@@ -294,6 +310,12 @@ export default function CircuitBreakerPage() {
             <DialogTitle>{t("cb.config_title")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {!configLoaded && (
+              <p role="alert" className="rounded-lg border border-destructive/25 bg-destructive/10 p-3 text-xs text-destructive">
+                {t("cb.config_unread")}
+              </p>
+            )}
+            <fieldset disabled={!configLoaded} className="space-y-4">
             <div>
               <Label>{t("cb.failure_threshold")}</Label>
               <Input aria-label={t("circuit_breaker.threshold_label")} name="input-0" type="number" className="mt-1" value={configForm.failure_threshold} onChange={(e) => setConfigForm({ ...configForm, failure_threshold: parseInt(e.target.value) || 3 })} min={1} />
@@ -314,10 +336,11 @@ export default function CircuitBreakerPage() {
               <Input aria-label={t("circuit_breaker.health_check_label")} name="input-3" type="number" className="mt-1" value={configForm.health_check_seconds} onChange={(e) => setConfigForm({ ...configForm, health_check_seconds: parseInt(e.target.value) || 60 })} min={5} />
               <p className="text-(--fs-micro-sm) text-muted-foreground mt-1">{t("cb.health_check_desc")}</p>
             </div>
+            </fieldset>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowConfigModal(false)}>{t("common.cancel")}</Button>
-            <Button onClick={handleSaveConfig}>{t("cb.save_config")}</Button>
+            <Button onClick={handleSaveConfig} disabled={!configLoaded}>{t("cb.save_config")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

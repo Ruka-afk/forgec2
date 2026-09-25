@@ -60,4 +60,43 @@ describe("useAIConfig", () => {
     expect(result.current.showSettings).toBe(false);
     expect(getMock).toHaveBeenCalledTimes(2);
   });
+
+  it("never reports a failed config read as 'AI disabled with no key'", async () => {
+    getMock.mockRejectedValueOnce(new Error("ai endpoint down"));
+
+    const { result } = renderHook(() => useAIConfig());
+    await waitFor(() => expect(getMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.configError).toBe("ai endpoint down"));
+
+    // The defaults stay put, but the caller is told they are not real.
+    expect(result.current.configLoaded).toBe(false);
+    expect(result.current.configLoading).toBe(false);
+  });
+
+  it("refuses to save while the configuration is still unread", async () => {
+    getMock.mockRejectedValueOnce(new Error("ai endpoint down"));
+
+    const { result } = renderHook(() => useAIConfig());
+    await waitFor(() => expect(result.current.configError).toBe("ai endpoint down"));
+
+    await act(async () => {
+      await result.current.handleSaveConfig();
+    });
+
+    expect(postJsonMock).not.toHaveBeenCalled();
+  });
+
+  it("allows the save once a real configuration has loaded", async () => {
+    getMock.mockResolvedValue({ AIConfig: { enabled: true, provider: "deepseek", model: "deepseek-chat", has_api_key: true } });
+    postJsonMock.mockResolvedValueOnce({ success: true });
+
+    const { result } = renderHook(() => useAIConfig());
+    await waitFor(() => expect(result.current.configLoaded).toBe(true));
+
+    await act(async () => {
+      await result.current.handleSaveConfig();
+    });
+
+    expect(postJsonMock).toHaveBeenCalledTimes(1);
+  });
 });

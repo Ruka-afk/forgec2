@@ -7,7 +7,7 @@ import { useConfirm } from "@/lib/hooks/useConfirm";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { useMutation } from "@/lib/hooks/useMutation";
 import { POLL } from "@/lib/polling";
-import { DataSpinner } from "@/components/ui/data-state";
+import { DataError, DataSpinner } from "@/components/ui/data-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FieldError } from "@/components/ui/field-error";
 import { PageContainer } from "@/components/ui/page-container";
@@ -51,7 +51,7 @@ export default function DomainFrontingPage() {
     onError: () => toast.error(t("domain_fronting.toast.config_save_failed")),
   });
 
-  const { data, loading, refresh: fetchStatus } = useApiResource<{ domains: FrontDomain[]; auto_failover?: boolean }>({
+  const { data, loading, error, refresh: fetchStatus } = useApiResource<{ domains: FrontDomain[]; auto_failover?: boolean }>({
     fetcher: async () => {
       const data = await api.postJson(paths.domainFront.list, {});
       return data as { domains: FrontDomain[]; auto_failover?: boolean };
@@ -61,6 +61,15 @@ export default function DomainFrontingPage() {
   });
   const domains = data?.domains ?? [];
   const autoFailover = data?.auto_failover ?? true;
+  // Every mutator below POSTs the whole domain list, so an unread payload must
+  // not be treated as "no domains" — that would wipe the real configuration.
+  const configUnread = loading || !!error;
+
+  const guardUnread = (): boolean => {
+    if (!configUnread) return false;
+    toast.error(t("domain_fronting.config_unread"));
+    return true;
+  };
 
   const handleCheck = async () => {
     setChecking(true);
@@ -76,6 +85,7 @@ export default function DomainFrontingPage() {
   };
 
   const addDomain = () => {
+    if (guardUnread()) return;
     const d = newDomain.trim();
     if (!d || !HOSTNAME_RE.test(d)) {
       setDomainError(t("domain_fronting.domain_invalid"));
@@ -92,12 +102,14 @@ export default function DomainFrontingPage() {
   };
 
   const removeDomain = async (domain: string) => {
+    if (guardUnread()) return;
     if (!(await confirm({ message: t("domain_fronting.remove_domain", { domain }) }))) return;
     const updated = domains.filter((x) => x.domain !== domain).map((x) => x.domain);
     saveConfig(updated, autoFailover);
   };
 
   const toggleAutoFailover = () => {
+    if (guardUnread()) return;
     saveConfig(domains.map((x) => x.domain), !autoFailover);
   };
 
@@ -112,6 +124,8 @@ export default function DomainFrontingPage() {
         </Button>
       </>}>
 
+      {error && <DataError message={error} onRetry={fetchStatus} className="mb-4" />}
+
       {/* Auto-failover toggle */}
       <Card className="p-(--card-spacing) flex items-center justify-between">
         <div>
@@ -120,14 +134,16 @@ export default function DomainFrontingPage() {
             {t("domain_fronting.auto_failover_desc")}
           </div>
         </div>
-        <Switch checked={autoFailover} onCheckedChange={toggleAutoFailover} disabled={saving} />
+        <Switch checked={autoFailover} onCheckedChange={toggleAutoFailover} disabled={saving || configUnread} />
       </Card>
 
       {/* Active domain indicator */}
       <Card className="p-(--card-spacing)">
         <div className="text-sm text-muted-foreground mb-1">{t("domain_fronting.current_active_domain")}</div>
         <div className="flex items-center gap-3">
-          {domains.filter((d) => d.active).length > 0 ? (
+          {configUnread ? (
+            <span className="text-sm text-muted-foreground">{t("status.unknown")}</span>
+          ) : domains.filter((d) => d.active).length > 0 ? (
             <span className="text-lg font-semibold text-foreground">
               {domains.find((d) => d.active)?.domain}
             </span>
@@ -135,7 +151,7 @@ export default function DomainFrontingPage() {
             <span className="text-sm text-muted-foreground">{t("domain_fronting.no_domain")}</span>
           )}
           {domains.filter((d) => d.active && d.healthy).length > 0 && (
-<Badge variant="success">
+            <Badge variant="success">
               {t("domain_fronting.healthy")}
             </Badge>
           )}
@@ -144,12 +160,14 @@ export default function DomainFrontingPage() {
 
       {/* Domain list */}
       <Card className="overflow-hidden">
-        <CardHeaderRow accent={false} title={t("domain_fronting.front_domains")} action={<span className="text-xs text-muted-foreground">{t("domain_fronting.domains_count", { count: domains.length })}</span>} />
+        <CardHeaderRow accent={false} title={t("domain_fronting.front_domains")} action={configUnread ? <span className="text-xs text-muted-foreground">{t("status.unknown")}</span> : <span className="text-xs text-muted-foreground">{t("domain_fronting.domains_count", { count: domains.length })}</span>} />
 
         {loading ? (
           <div className="p-(--card-spacing)">
             <DataSpinner message={t("common.loading")} />
           </div>
+        ) : error ? (
+          <DataError message={error} onRetry={fetchStatus} />
         ) : domains.length === 0 ? (
           <EmptyState icon={Cloud} title={t("domain_fronting.empty_title")} message={t("domain_fronting.empty_message")} />
         ) : (
@@ -227,6 +245,9 @@ export default function DomainFrontingPage() {
 
         {/* Add domain form */}
         <div className="px-4 py-3 border-t border-border bg-muted/50">
+          {error && (
+            <p className="mb-2 text-xs text-destructive">{t("domain_fronting.config_unread")}</p>
+          )}
           <div className="flex items-center gap-2">
             <Input
               aria-label={t("domain_fronting.domain_ph")}
@@ -236,11 +257,12 @@ export default function DomainFrontingPage() {
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setNewDomain(e.target.value); if (domainError) setDomainError(""); }}
               onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === "Enter" && addDomain()}
               placeholder={t("domain_fronting.domain_ph")}
+              disabled={configUnread}
               className="flex-1"
             />
             <Button
               onClick={addDomain}
-              disabled={!newDomain.trim() || saving}
+              disabled={!newDomain.trim() || saving || configUnread}
             >
               <Plus className="size-4" />
               {t("domain_fronting.add")}

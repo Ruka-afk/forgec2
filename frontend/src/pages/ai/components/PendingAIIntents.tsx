@@ -31,7 +31,7 @@ export function PendingAIIntents({ activeSessionId }: { activeSessionId: number 
     const payload = await api.get<unknown>(`${paths.ai.intents}?status=pending`, { signal });
     return normalizeListEnvelope(payload, ["intents", "data"]) as AIExecutionIntent[];
   }, []);
-	const { data, refresh } = useApiResource({ fetcher: fetchIntents, pollMs: 5000 });
+	const { data, refresh, error } = useApiResource({ fetcher: fetchIntents, pollMs: 5000, errorMessage: t("ai.approvals_load_failed") });
 	const allIntents = data ?? [];
 	const intents = activeSessionId == null ? allIntents : allIntents.filter((intent) => intent.session_id === activeSessionId);
 
@@ -59,6 +59,17 @@ export function PendingAIIntents({ activeSessionId }: { activeSessionId: number 
     }
   };
 
+  // A failed read must not look like "nothing is waiting for approval".
+  if (error) {
+    return (
+      <div role="alert" className="flex justify-center">
+        <Button variant="outline" size="sm" onClick={() => { void refresh(); }} className="gap-1.5 border-destructive/40 text-destructive">
+          <ShieldCheck className="size-4" />
+          {t("ai.approvals_unreadable", { message: error })}
+        </Button>
+      </div>
+    );
+  }
   if (intents.length === 0) return null;
   return (
     <>

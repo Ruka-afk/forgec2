@@ -20,12 +20,15 @@ export function useAIConfig() {
   const [showSettings, setShowSettings] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
   const [configLoading, setConfigLoading] = useState(true);
+  const [configLoaded, setConfigLoaded] = useState(false);
+  const [configError, setConfigError] = useState<string | null>(null);
   const loadSeqRef = useRef(0);
   const saveLockRef = useRef(false);
 
   const loadConfig = useCallback(async () => {
     const seq = ++loadSeqRef.current;
     setConfigLoading(true);
+    setConfigError(null);
     try {
       const data = await api.get(paths.ai.root);
       if (seq !== loadSeqRef.current) return;
@@ -40,9 +43,14 @@ export function useAIConfig() {
         setAllowExecute(Boolean(cfg.allow_execute));
         setHasApiKey(Boolean(cfg.has_api_key));
       }
+      setConfigLoaded(true);
     } catch (e) {
       if (seq !== loadSeqRef.current) return;
-      toast.error(e instanceof Error ? e.message : t("ai.toast.load_config_failed"));
+      // Never leave the defaults in place as if they were the real config:
+      // they would report a working AI setup as disabled and API-key-less.
+      const msg = e instanceof Error ? e.message : t("ai.toast.load_config_failed");
+      setConfigError(msg);
+      toast.error(msg);
     } finally {
       if (seq === loadSeqRef.current) setConfigLoading(false);
     }
@@ -54,6 +62,10 @@ export function useAIConfig() {
 
   const handleSaveConfig = async () => {
     if (saveLockRef.current) return;
+    if (!configLoaded) {
+      toast.error(t("ai.config_unread"));
+      return;
+    }
     saveLockRef.current = true;
     try {
       setConfigSaving(true);
@@ -109,5 +121,7 @@ export function useAIConfig() {
     handleSaveConfig,
     hasApiKey,
     configLoading,
+    configLoaded,
+    configError,
   };
 }

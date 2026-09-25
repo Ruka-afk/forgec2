@@ -102,7 +102,7 @@ export default function AIPage() {
     endpoint, setEndpoint, systemPrompt, setSystemPrompt,
     engagementNotes, setEngagementNotes,
     allowExecute, setAllowExecute, configSaving, showSettings, setShowSettings,
-    handleSaveConfig, hasApiKey, configLoading,
+    handleSaveConfig, hasApiKey, configLoading, configLoaded, configError, loadConfig,
   } = useAIConfig();
 
   const adjustTextarea = () => {
@@ -1082,6 +1082,7 @@ export default function AIPage() {
             allowExecute={allowExecute}
             setAllowExecute={setAllowExecute}
             configSaving={configSaving}
+            configLoaded={configLoaded}
             onClose={() => setShowSettings(false)}
             onSave={handleSaveConfig}
           />
@@ -1123,7 +1124,7 @@ export default function AIPage() {
               <div className="flex min-w-0 items-center gap-2">
                 <h1 className="truncate text-sm font-semibold text-foreground sm:text-base">{t("nav.ai")}</h1>
                 <Badge variant={configured ? "success" : "warning"} className="hidden max-w-48 truncate font-mono text-(--fs-micro-sm) sm:inline-flex">
-                  {configLoading ? t("common.loading") : enabled ? (model || provider) : t("ai.status_disabled")}
+                  {configLoading ? t("common.loading") : configError ? t("ai.config_status_unknown") : enabled ? (model || provider) : t("ai.status_disabled")}
                 </Badge>
 				{activeSessionId != null && runStatuses[activeSessionId] && <Badge variant="info" className="animate-pulse motion-reduce:animate-none">{runView.runId ? runView.status : runStatuses[activeSessionId]}</Badge>}
               </div>
@@ -1166,7 +1167,18 @@ export default function AIPage() {
           </div>
         </header>
 
-        {!configLoading && !configured && (
+        {configError && (
+          <div role="alert" className="shrink-0 border-b border-destructive/25 bg-destructive/8 px-3 py-2.5 sm:px-5">
+            <div className="mx-auto flex w-full max-w-4xl flex-col gap-1 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between">
+              <span>{t("ai.config_unread", { message: configError })}</span>
+              <Button variant="ghost" size="xs" onClick={() => { void loadConfig(); }} className="h-7 self-start text-destructive sm:self-auto">
+                {t("common.try_again")}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {!configLoading && !configError && !configured && (
           <div className="shrink-0 border-b border-warning/25 bg-warning/8 px-3 py-2.5 sm:px-5">
             <div className="mx-auto flex w-full max-w-4xl flex-col gap-1 text-sm text-warning sm:flex-row sm:items-center sm:justify-between">
               <span>{canConfigure
