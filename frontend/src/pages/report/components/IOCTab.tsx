@@ -6,6 +6,7 @@ import { downloadBlob } from "@/lib/download";
 import { formatTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { Card } from "@/components/ui/card";
+import { DataError } from "@/components/ui/data-state";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
@@ -32,6 +33,7 @@ export default function IOCTab() {
   const { t } = useI18n();
   const [entries, setEntries] = useState<IocEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [days, setDays] = useState("30");
   const [typeFilter, setTypeFilter] = useState("");
   const [downloading, setDownloading] = useState<"stix2" | "csv" | null>(null);
@@ -39,6 +41,7 @@ export default function IOCTab() {
 
   const load = useCallback(() => {
     setLoading(true);
+    setLoadError(null);
     const q = new URLSearchParams({ days });
     if (typeFilter) q.set("type", typeFilter);
     // Generation guard: rapid filter toggles must not let the slower older
@@ -49,14 +52,16 @@ export default function IOCTab() {
         if (gen !== loadGenRef.current) return;
         setEntries(d.iocs || []);
       })
-      .catch(() => {
+      .catch((e: unknown) => {
+        // "No IOCs found" is an assessment claim; a failed scan is not the same.
         if (gen !== loadGenRef.current) return;
         setEntries([]);
+        setLoadError(e instanceof Error ? e.message : t("report.toast.load_iocs_failed"));
       })
       .finally(() => {
         if (gen === loadGenRef.current) setLoading(false);
       });
-  }, [days, typeFilter]);
+  }, [days, typeFilter, t]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -111,6 +116,8 @@ export default function IOCTab() {
 
       {loading ? (
         <div className="py-10 text-center"><Spinner /></div>
+      ) : loadError ? (
+        <DataError message={t("report.ioc_unreadable", { message: loadError })} onRetry={() => { void load(); }} />
       ) : entries.length === 0 ? (
         <p className="text-xs text-muted-foreground text-center py-8">{t("report.ioc_empty")}</p>
       ) : (

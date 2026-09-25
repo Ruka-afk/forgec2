@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
+import { AgentLoadError } from "@/components/AgentLoadError";
 import { Spinner } from "@/components/ui/spinner";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { POLL } from "@/lib/polling";
@@ -43,7 +44,7 @@ interface CloudResultsResponse {
 
 export default function CloudPage() {
   const { t } = useI18n();
-  const { agents, loading: agentsLoading } = useAgentList();
+  const { agents, loading: agentsLoading, error: agentListError } = useAgentList();
   const [selectedAgent, setSelectedAgent] = useState("");
   const [provider, setProvider] = useState("aws");
   const [stealing, setStealing] = useState(false);
@@ -148,6 +149,7 @@ export default function CloudPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
           <div>
             <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("cloud.target_agent")}</span>
+            <AgentLoadError message={agentListError} className="mb-2" />
             {agentsLoading ? (
               <Skeleton className="h-10 rounded-lg" />
             ) : (

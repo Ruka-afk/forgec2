@@ -1,4 +1,5 @@
 import { PageContainer } from "@/components/ui/page-container";
+import { AgentLoadError } from "@/components/AgentLoadError";
 import { PageToolbar } from "@/components/ui/page-toolbar";
 import { ErrorState } from "@/components/ui/error-state";
 
@@ -83,7 +84,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useI18n();
   const [searchParams] = useSearchParams();
   const [tasks, setTasks] = useState<Task[]>([]);
-  const { agents } = useAgentList();
+  const { agents, error: agentListError } = useAgentList();
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -446,6 +447,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
               ))}
             </SelectContent>
           </Select>
+          <AgentLoadError message={agentListError} />
           <Select value={typeFilter || "all"} onValueChange={(val) => { setTypeFilter(val === "all" ? "" : val ?? ""); setPage(1); }}>
             <SelectTrigger aria-label={t("tasks.type_filter")}>
               <SelectValue />

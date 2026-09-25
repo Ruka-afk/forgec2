@@ -3,6 +3,7 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { PageContainer } from "@/components/ui/page-container";
+import { AgentLoadError } from "@/components/AgentLoadError";
 import { Spinner } from "@/components/ui/spinner";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { useTaskResult } from "@/lib/hooks/useTaskResult";
@@ -19,7 +20,7 @@ import type { Agent } from "@/types/agent";
 
 export default function ContainerPage() {
   const { t } = useI18n();
-  const { agents } = useAgentList();
+  const { agents, error: agentListError } = useAgentList();
   const [selectedAgent, setSelectedAgent] = useState("");
   const [escapeMethod, setEscapeMethod] = useState("generic");
   const [activeTab, setActiveTab] = useState("detect");
@@ -95,6 +96,7 @@ export default function ContainerPage() {
             <div className="text-xs text-muted-foreground">{t("container.target_desc")}</div>
           </div>
         </div>
+        <AgentLoadError message={agentListError} className="mb-3" />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("container.agent")}</span>

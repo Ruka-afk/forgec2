@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { PageContainer } from "@/components/ui/page-container";
+import { DataError } from "@/components/ui/data-state";
 import { Spinner } from "@/components/ui/spinner";
 import { StatCard } from "@/components/ui/animated-stat-card";
 import { Card } from "@/components/ui/card";
@@ -41,6 +42,10 @@ export default function ReportPage() {
   const { confirm, modal } = useConfirm();
   const {
     stats,
+    overviewError,
+    previewError,
+    historyError,
+    refreshOverview,
     loading,
     generating,
     datePreset,
@@ -57,6 +62,7 @@ export default function ReportPage() {
     listeners,
     findings,
     history,
+    loadHistory,
     generateReport,
     deleteReport,
     htmlExportUrl,
@@ -218,12 +224,27 @@ export default function ReportPage() {
       }
     >
 
+      {overviewError && (
+        <DataError
+          message={t("report.overview_unreadable", { message: overviewError })}
+          onRetry={refreshOverview}
+          className="mb-4"
+        />
+      )}
+
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-5">
-        <StatCard color="indigo" label={t("report.stat_agents_total")} value={stats.total_agents || 0} sub={`${stats.online_agents || 0} ${t("report.online")}`} subColor="text-success" />
-        <StatCard color="emerald" label={t("report.stat_task_exec")} value={stats.total_tasks || 0} sub={`${stats.success_tasks || 0} ${t("report.success")} / ${stats.failed_tasks || 0} ${t("report.failed")}`} subColor="text-muted-foreground" />
-        <StatCard color="amber" label={t("report.stat_creds")} value={stats.total_creds || 0} sub={t("report.collected")} subColor="text-muted-foreground" />
-        <StatCard color="destructive" label={t("report.stat_findings")} value={stats.total_findings || 0} sub={`${t("report.critical")}: ${stats.critical_findings || 0} | ${t("report.high")} ${stats.high_findings || 0}`} subColor="text-destructive" />
+        <StatCard color="indigo" label={t("report.stat_agents_total")} value={stats?.total_agents ?? "—"} sub={stats ? `${stats.online_agents || 0} ${t("report.online")}` : t("status.unknown")} subColor="text-success" />
+        <StatCard color="emerald" label={t("report.stat_task_exec")} value={stats?.total_tasks ?? "—"} sub={stats ? `${stats.success_tasks || 0} ${t("report.success")} / ${stats.failed_tasks || 0} ${t("report.failed")}` : t("status.unknown")} subColor="text-muted-foreground" />
+        <StatCard color="amber" label={t("report.stat_creds")} value={stats?.total_creds ?? "—"} sub={stats ? t("report.collected") : t("status.unknown")} subColor="text-muted-foreground" />
+        <StatCard color="destructive" label={t("report.stat_findings")} value={stats?.total_findings ?? "—"} sub={stats ? `${t("report.critical")}: ${stats.critical_findings || 0} | ${t("report.high")} ${stats.high_findings || 0}` : t("status.unknown")} subColor="text-destructive" />
       </div>
+
+      {previewError && (
+        <DataError
+          message={t("report.preview_unreadable", { message: previewError })}
+          className="mb-4"
+        />
+      )}
 
       <Tabs value={activeSection} onValueChange={setActiveSection} orientation="vertical">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
@@ -280,7 +301,9 @@ export default function ReportPage() {
 
                 <div className="border-t border-border pt-4">
                   <h3 className="text-sm font-semibold text-foreground mb-3">{t("report.history_title")}</h3>
-                  {history.length === 0 ? (
+                  {historyError ? (
+                    <DataError message={t("report.history_unreadable", { message: historyError })} onRetry={loadHistory} />
+                  ) : history.length === 0 ? (
                     <div className="text-center py-6 text-muted-foreground">
                       <Inbox className="size-4" />
                       <p className="text-sm">{t("report.no_history")}</p>

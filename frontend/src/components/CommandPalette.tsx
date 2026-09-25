@@ -39,7 +39,7 @@ export default function CommandPalette() {
   const open = useAppStore((s) => s.commandPaletteOpen);
   const setOpen = useAppStore((s) => s.setCommandPaletteOpen);
   const permissions = useAppStore((s) => s.currentPermissions);
-  const { agents } = useAgentList();
+  const { agents, error: agentListError } = useAgentList();
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -208,6 +208,12 @@ export default function CommandPalette() {
 
         <ScrollArea className="max-h-[45vh]">
           <div ref={listRef} id="command-palette-list" role="listbox" aria-label={t("palette.title")} className="py-2">
+            {/* Agent entries are silently absent while the list is unread. */}
+            {agentListError && normalize(query.trim()) !== "" && (
+              <div role="alert" className="mx-4 mb-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
+                {t("palette.agents_unreadable")}
+              </div>
+            )}
             {filtered.length === 0 ? (
               <div className="px-4 py-10 text-center text-sm text-muted-foreground">{t("palette.no_results")}</div>
             ) : (

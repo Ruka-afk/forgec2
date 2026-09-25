@@ -30,18 +30,30 @@ export function useReportData() {
     [datePreset, customStart, customEnd],
   );
 
-  const { data: statsData, loading: loadingOverview } = useApiResource<ReportStats>({
+  const {
+    data: statsData,
+    loading: loadingOverview,
+    error: overviewError,
+    refresh: refreshOverview,
+  } = useApiResource<ReportStats>({
     fetcher: async () => api.get<ReportStats>(paths.report.overview),
     pollMs: POLL.report,
     toastThrottleMs: POLL.toastThrottleLong,
     errorMessage: t("report.toast.load_overview_failed"),
   });
-  const stats = statsData ?? {};
+  // A failed overview must not read as a clean bill of health: every figure
+  // below is derived from it.
+  const stats = overviewError ? null : (statsData ?? null);
 
   const dateRef = useRef({ datePreset, customStart, customEnd });
   dateRef.current = { datePreset, customStart, customEnd };
 
-  const { data: preview, loading: loadingPreview, refresh: refreshPreview } = useApiResource<{
+  const {
+    data: preview,
+    loading: loadingPreview,
+    error: previewError,
+    refresh: refreshPreview,
+  } = useApiResource<{
     agents: AgentRow[];
     taskStats: TaskStatRow[];
     creds: CredRow[];
@@ -87,7 +99,12 @@ export function useReportData() {
     void refreshPreview();
   }, [datePreset, customStart, customEnd, refreshPreview]);
 
-  const { data: historyData, loading: loadingHistory, refresh: loadHistory } = useApiResource<ReportHistoryRow[]>({
+  const {
+    data: historyData,
+    loading: loadingHistory,
+    error: historyError,
+    refresh: loadHistory,
+  } = useApiResource<ReportHistoryRow[]>({
     fetcher: async () =>
       normalizeListEnvelope(await api.get(paths.report.history), ["reports", "Reports", "data"]) as ReportHistoryRow[],
     toastThrottleMs: POLL.toastThrottle,
@@ -146,6 +163,10 @@ export function useReportData() {
 
   return {
     stats,
+    overviewError,
+    previewError,
+    historyError,
+    refreshOverview,
     loading,
     generating,
     datePreset,

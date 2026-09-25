@@ -10,6 +10,7 @@ import { useConfirm } from "@/lib/hooks/useConfirm";
 import { formatTime } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
+import { AgentLoadError } from "@/components/AgentLoadError";
 import { IconBadge } from "@/components/ui/icon-badge";
 import { Pagination } from "@/components/ui/pagination";
 import { Spinner } from "@/components/ui/spinner";
@@ -51,7 +52,7 @@ interface BHResult {
 
 export default function BloodHoundPage() {
   const { t } = useI18n();
-  const { agents } = useAgentList();
+  const { agents, error: agentListError } = useAgentList();
   const [results, setResults] = useState<BHResult[]>([]);
   const [binaryStatus, setBinaryStatus] = useState<{ uploaded: boolean; filename: string }>({ uploaded: false, filename: "" });
   const [loading, setLoading] = useState(true);
@@ -193,6 +194,7 @@ export default function BloodHoundPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
           <div>
             <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bloodhound.target_agent")}</span>
+            <AgentLoadError message={agentListError} className="mb-2" />
               <Select value={selectedAgent || "placeholder"} onValueChange={(v) => setSelectedAgent(v === "placeholder" || v === null ? "" : v)}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder={t("bloodhound.select_agent")} />

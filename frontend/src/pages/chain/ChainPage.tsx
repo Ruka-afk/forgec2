@@ -5,6 +5,7 @@ import { paths } from "@/lib/api-paths";
 
 import { PageSpinner } from "@/components/ui/spinner";
 import { PageContainer } from "@/components/ui/page-container";
+import { AgentLoadError } from "@/components/AgentLoadError";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { POLL } from "@/lib/polling";
@@ -41,7 +42,7 @@ interface ChainNode {
 export default function ChainPage() {
   const { t } = useI18n();
 
-  const { agents } = useAgentList();
+  const { agents, error: agentListError } = useAgentList();
   const [selectedAgent, setSelectedAgent] = useState<string>("");
   const [chain, setChain] = useState<string[]>([]);
   const [chainLoading, setChainLoading] = useState(false);
@@ -133,6 +134,7 @@ export default function ChainPage() {
       {/* Agent Selector */}
       <Card className="p-(--card-spacing) mb-6">
         <Label className="text-xs font-medium text-muted-foreground mb-2 block">{t("chain.select_agent")}</Label>
+        <AgentLoadError message={agentListError} className="mb-2" />
         <Select value={selectedAgent} onValueChange={(v) => setSelectedAgent(v ?? "")}>
           <SelectTrigger className="w-full">
             <SelectValue placeholder={t("chain.select_agent_placeholder")} />

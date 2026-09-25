@@ -13,7 +13,8 @@ import { Banner } from "@/components/ui/banner";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Check, CheckCircle, ChevronDown, CircleX, Zap } from "lucide-react";
+import { Check, CheckCircle, ChevronDown, CircleX, Zap, AlertTriangle } from "lucide-react";
+import { DataError } from "@/components/ui/data-state";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
@@ -92,22 +93,27 @@ const TACTIC_HEADER_COLORS: Record<string, string> = {
 
 export default function AttackPage() {
   const { t } = useI18n();
-  const { agents } = useAgentList();
+  const { agents, error: agentListError } = useAgentList();
   const [data, setData] = useState<AttackCoverageResponse | null>(null);
   const [selectedAgent, setSelectedAgent] = useState("");
   const [loading, setLoading] = useState(true);
+  const [coverageError, setCoverageError] = useState<string | null>(null);
   const [expandedTactic, setExpandedTactic] = useState<string | null>(null);
 
   const fetchCoverage = useCallback(async (agentId: string, signal?: AbortSignal) => {
+    setCoverageError(null);
     try {
       const params = new URLSearchParams();
       if (agentId) params.set("agent_id", agentId);
       const json = await api.get<AttackCoverageResponse>(`/attack/coverage?${params}`, { signal });
       setData(json);
-    } catch {
-      toast.error(t("attack.fetch_failed"));
+    } catch (e) {
+      if (signal?.aborted || (e instanceof Error && e.name === "AbortError")) return;
+      const msg = e instanceof Error ? e.message : t("attack.fetch_failed");
+      setCoverageError(msg);
+      toast.error(msg);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [t]);
 
@@ -168,6 +174,20 @@ export default function AttackPage() {
         <div className="text-xs text-muted-foreground mt-0.5">{t("attack.honesty_desc")}</div>
       </Banner>
 
+      {agentListError && (
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-foreground">
+          <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1">{t("attack.agent_list_unavailable", { message: agentListError })}</span>
+        </div>
+      )}
+
+      {coverageError && (
+        <DataError
+          message={t("attack.coverage_unreadable", { message: coverageError })}
+          onRetry={() => { setLoading(true); void fetchCoverage(selectedAgent); }}
+        />
+      )}
+
       {/* Summary Card */}
       <Card className="p-(--card-spacing)">
         <div className="flex items-center justify-between flex-wrap gap-4">
@@ -176,8 +196,8 @@ export default function AttackPage() {
               {t("attack.total_coverage")}
             </div>
             <div className="text-4xl font-bold mt-2 text-foreground">
-              {data?.total_covered ?? 0}
-              <span className="text-xl text-muted-foreground font-normal">/{data?.total ?? 0}</span>
+              {coverageError || !data ? "—" : data.total_covered}
+              <span className="text-xl text-muted-foreground font-normal">{coverageError || !data ? "" : `/${data.total}`}</span>
             </div>
             <div className="text-sm mt-1 text-muted-foreground">
               {t("attack.techniques_used")}
@@ -194,7 +214,7 @@ export default function AttackPage() {
                   strokeLinecap="round" />
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-2xl font-bold text-primary">{percentage}%</span>
+                <span className="text-2xl font-bold text-primary">{coverageError || !data ? "—" : `${percentage}%`}</span>
               </div>
             </div>
             <span className="text-xs text-muted-foreground mt-1">{t("attack.coverage")}</span>
