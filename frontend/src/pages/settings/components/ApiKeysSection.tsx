@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
+import { DataError } from "@/components/ui/data-state";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -68,6 +69,7 @@ export default function ApiKeysSection() {
   const { confirm, modal } = useConfirm();
   const [keys, setKeys] = useState<ApiKeyRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // create dialog
   const [createOpen, setCreateOpen] = useState(false);
@@ -85,6 +87,7 @@ export default function ApiKeysSection() {
   const [createdKey, setCreatedKey] = useState<CreatedKey | null>(null);
 
   const load = useCallback(async () => {
+    setLoadError(null);
     try {
       // api.get auto-unwraps {success,data} — the value IS the array.
       const d = await api.get<ApiKeyEntry[] | { data?: ApiKeyEntry[] }>(paths.settings.apiKeys);
@@ -96,12 +99,13 @@ export default function ApiKeysSection() {
         ...k,
         expired: !!k.expires_at && new Date(k.expires_at).getTime() < now,
       })));
-    } catch {
+    } catch (e) {
       setKeys([]);
+      setLoadError(e instanceof Error ? e.message : t("settings.toast.load_failed"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -181,6 +185,8 @@ export default function ApiKeysSection() {
       <div className="p-(--card-spacing)">
         {loading ? (
           <div className="py-8 text-center"><Spinner /></div>
+        ) : loadError ? (
+          <DataError message={t("settings.apikeys.unreadable", { message: loadError })} onRetry={() => { void load(); }} />
         ) : keys.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-6">{t("settings.apikeys.empty")}</p>
         ) : (

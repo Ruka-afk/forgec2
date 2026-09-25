@@ -15,6 +15,7 @@ import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DataError } from "@/components/ui/data-state";
 import TemplatesPanel from "./components/TemplatesPanel";
 
 interface ToolkitAgent {
@@ -66,7 +67,7 @@ export default function ToolkitPage() {
     void refresh();
   };
 
-  const { data, loading, refresh } = useApiResource<{ toolkitAgents: ToolkitAgent[]; recentTasks: RecentTask[] }>({
+  const { data, loading, error, refresh } = useApiResource<{ toolkitAgents: ToolkitAgent[]; recentTasks: RecentTask[] }>({
     fetcher: async () => {
       const [agentsList, tasksData] = await Promise.all([
         fetchAgentListCached(),
@@ -261,7 +262,7 @@ export default function ToolkitPage() {
             </Card>
           )}
           <Card className="overflow-hidden">
-            <CardHeaderRow accent={false} title={t("toolkit.recent_results")} action={<Badge variant="secondary" className="text-(--fs-micro-sm) px-1.5 py-0.5">{recentTasks.length}</Badge>} />
+            <CardHeaderRow accent={false} title={t("toolkit.recent_results")} action={<Badge variant="secondary" className="text-(--fs-micro-sm) px-1.5 py-0.5">{error ? "—" : recentTasks.length}</Badge>} />
             <div className="max-h-[600px] overflow-y-auto">
               {loading ? (
                 <div className="space-y-2 p-(--card-spacing)">
@@ -269,6 +270,8 @@ export default function ToolkitPage() {
                     <Skeleton key={i} className="h-10 w-full" />
                   ))}
                 </div>
+              ) : error ? (
+                <DataError message={t("toolkit.results_unreadable", { message: error })} onRetry={refresh} className="py-10" />
               ) : recentTasks.length === 0 ? (
                 <div className="p-(--card-spacing) text-center text-muted-foreground text-xs">{t("toolkit.no_results")}</div>
               ) : (

@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { PageSpinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
+import { DataError } from "@/components/ui/data-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { Permission } from "@/components/ui/permission";
@@ -65,7 +66,7 @@ export default function RolesPage() {
   const { confirm, modal } = useConfirm();
   const [newPerms, setNewPerms] = useState<string[]>([]);
 
-  const { data, loading, refresh: loadRoles } = useApiResource<{ success: boolean; data?: Role[] }>({
+  const { data, loading, error, refresh: loadRoles } = useApiResource<{ success: boolean; data?: Role[] }>({
     fetcher: async () => {
       const data = await api.get<{ success: boolean; data?: Role[] }>(paths.roles.list);
       return data;
@@ -143,7 +144,10 @@ export default function RolesPage() {
         </Dialog>
 
         <div className="grid gap-4">
-          {roles.length === 0 && (
+          {error && (
+            <DataError message={t("roles.unreadable", { message: error })} onRetry={loadRoles} />
+          )}
+          {!error && roles.length === 0 && (
             <EmptyState title={t("roles.empty")} />
           )}
           {roles.map((role) => (

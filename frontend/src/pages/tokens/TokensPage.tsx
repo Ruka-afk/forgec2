@@ -40,7 +40,7 @@ export default function TokensPage() {
   const [integrityFilter, setIntegrityFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
 
-  const { data, loading, refresh } = useApiResource<{ tokens: Token[]; agents: Agent[] }>({
+  const { data, loading, error, refresh } = useApiResource<{ tokens: Token[]; agents: Agent[] }>({
     fetcher: async () => {
       const [tokenData, agentData] = await Promise.all([
         api.get(paths.tokens.list),
@@ -220,7 +220,8 @@ export default function TokensPage() {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         {["System", "High", "Medium", "Low"].map((level) => {
-          const count = tokens.filter((t) => (t.integrity || "Medium") === level).length;
+          // An unread token list must not report zero tokens at every level.
+          const count = error ? "—" : tokens.filter((t) => (t.integrity || "Medium") === level).length;
           return (
             <Card key={level} className={`relative p-3 transition-all ${integrityFilter === level ? "ring-2 ring-primary" : ""}`}>
               <Button
@@ -242,6 +243,8 @@ export default function TokensPage() {
         <DataTable<Token>
           data={filtered}
           loading={loading}
+          error={error}
+          onRetry={refresh}
           columns={columns}
           emptyTitle={t("tokens.empty_title")}
           emptyMessage={t("tokens.empty_message")}

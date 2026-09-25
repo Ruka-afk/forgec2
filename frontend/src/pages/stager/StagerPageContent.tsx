@@ -11,6 +11,7 @@ import { Banner } from "@/components/ui/banner";
 import { downloadText } from "@/lib/download";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
+import { DataError } from "@/components/ui/data-state";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -64,7 +65,7 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
   const { confirm, modal } = useConfirm();
   const [createdToken, setCreatedToken] = useState<{ token: string; stager_url: string; stage2_size: number; expires_at: string } | null>(null);
 
-  const { data, loading, refresh: loadData } = useApiResource<{ tokens: StagerToken[]; listeners: Listener[] }>({
+  const { data, loading, error, refresh: loadData } = useApiResource<{ tokens: StagerToken[]; listeners: Listener[] }>({
     fetcher: async () => {
       const res = await api.get<{ success: boolean; data: StagerToken[] }>("/stager/tokens");
       const lres = await api.get<unknown>(paths.listeners.list);
@@ -177,6 +178,10 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
         <Card className="lg:col-span-1 p-(--card-spacing) space-y-3">
           <div className="text-sm font-semibold text-foreground">{t("stager.register_token")}</div>
 
+          {error ? (
+            <DataError message={t("stager.options_unreadable", { message: error })} onRetry={loadData} className="py-10" />
+          ) : (
+          <>
           <div>
             <Label className="text-xs">{t("stager.field_listener")}</Label>
             <Select value={listenerId} onValueChange={(v) => setListenerId(v ?? "")}>
@@ -268,6 +273,8 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
             className="w-full h-11">
             {creating ? t("stager.generating") : t("stager.register_dialog")}
           </Button>
+          </>
+          )}
         </Card>
 
         <Card className="lg:col-span-2 p-(--card-spacing)">
@@ -277,6 +284,8 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
 
           {loading ? (
             <div className="text-sm text-muted-foreground"><Spinner size="xs" /> {t("common.loading")}</div>
+          ) : error ? (
+            <DataError message={t("stager.tokens_unreadable", { message: error })} onRetry={loadData} className="py-10" />
           ) : tokens.length === 0 ? (
             <EmptyState title={t("stager.empty_tokens")} />
           ) : (

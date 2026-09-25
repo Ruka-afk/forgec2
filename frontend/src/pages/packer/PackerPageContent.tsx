@@ -4,6 +4,7 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { downloadBase64 } from "@/lib/download";
 import { Spinner } from "@/components/ui/spinner";
+import { DataError } from "@/components/ui/data-state";
 import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { useTransientMessage } from "@/lib/hooks/useTransientMessage";
@@ -65,7 +66,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
   const [loading, setLoading] = useState(false);
   const { message, showMessage, clearMessage } = useTransientMessage();
 
-  const { data } = useApiResource<{ templates: ArtifactTemplate[]; info: PackerInfo }>({
+  const { data, error, loading: optionsLoading, refresh } = useApiResource<{ templates: ArtifactTemplate[]; info: PackerInfo }>({
     fetcher: async () => {
       const [templates, info] = await Promise.all([
         api.get<{ templates: ArtifactTemplate[] }>("/packer/templates"),
@@ -199,6 +200,14 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
       <TabsContent value="artifact">
         <Card className="p-(--card-spacing) space-y-5">
 
+          {/* Every option list below comes from this payload. Without it the
+              form would present empty dropdowns that look authoritative. */}
+          {error ? (
+            <DataError message={t("packer.options_unreadable", { message: error })} onRetry={refresh} />
+          ) : optionsLoading ? (
+            <div className="flex justify-center py-10"><Spinner /></div>
+          ) : (
+          <>
           {templates.length > 0 && (
             <div>
               <Label className="text-xs mb-1.5">{t("packer.template")}</Label>
@@ -324,6 +333,8 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
             className="w-full">
             {loading ? <><Spinner size="xs" /> {t("packer.building")}</> : <><Hammer className="size-4" /> {t("packer.build_artifact")}</>}
           </Button>
+          </>
+          )}
         </Card>
       </TabsContent>
 
