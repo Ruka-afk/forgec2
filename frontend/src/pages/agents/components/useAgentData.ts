@@ -2,7 +2,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { toast } from "sonner";
 import { useCachedData } from "@/lib/hooks/useCachedData";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import type { Beacon } from "./types";
@@ -42,7 +41,13 @@ const DEFAULT_QUERY: BeaconQueryParams = {
 export function useAgentData(t: (key: string) => string) {
   const queryRef = useRef<BeaconQueryParams>(DEFAULT_QUERY);
   const [tagsByAgent, setTagsByAgent] = useState<Record<string, AgentTag[]>>({});
+  const [tagsError, setTagsError] = useState(false);
   const [agentLocks, setAgentLocks] = useState<Record<string, string>>({});
+  // locksLoaded is false until a read has EVER succeeded, so the table can
+  // distinguish "this agent is not locked" from "we have never been able to
+  // read the lock table". The latter must never render as unlocked.
+  const [locksLoaded, setLocksLoaded] = useState(false);
+  const [locksError, setLocksError] = useState<string | null>(null);
   const [operatorPresence, setOperatorPresence] = useState<Record<string, string[]>>({});
 
   const { data, loading, error, setError, refresh: refreshList, setData } = useApiResource<BeaconPage>({
@@ -103,6 +108,7 @@ export function useAgentData(t: (key: string) => string) {
   );
 
   const loadLocks = useCallback(() => {
+    setLocksError(null);
     api
       .get<{ agents: Record<string, string>[] }>("/collab/agents")
       .then((data) => {
@@ -112,19 +118,21 @@ export function useAgentData(t: (key: string) => string) {
           if (a.locked_by) locks[a.id] = a.locked_by;
         }
         setAgentLocks(locks);
+        setLocksLoaded(true);
       })
-      .catch(() => {
-        toast.error(t("agents.locks_failed"));
+      .catch((err: unknown) => {
+        // Keep the last good map so a transient failure does not clear known
+        // lock holders; locksLoaded stays as-is to distinguish never-read.
+        setLocksError(err instanceof Error ? err.message : String(err));
       });
-  }, [t]);
+  }, []);
 
-  const { data: cachedAllTags } = useCachedData<AgentTag[]>("tags:list", {
+  const { data: cachedAllTags, error: tagsListError, refresh: refreshTagsList } = useCachedData<AgentTag[]>("tags:list", {
     fetcher: async () => {
       const d = await api.get(paths.tags.list);
       return (Array.isArray(d) ? d : d.tags || []) as AgentTag[];
     },
     ttlMs: 60_000,
-    onError: () => toast.error(t("agents.tags_load_failed")),
   });
 
   const allTags = cachedAllTags ?? [];
@@ -136,6 +144,7 @@ export function useAgentData(t: (key: string) => string) {
   useEffect(() => {
     if (beacons.length === 0) {
       setTagsByAgent({});
+      setTagsError(false);
       return;
     }
     const ac = new AbortController();
@@ -149,9 +158,16 @@ export function useAgentData(t: (key: string) => string) {
         .postJson<{ tags: Record<string, AgentTag[]> }>(paths.agents.batchTags, { agent_ids: ids }, { signal: ac.signal })
         // Guard on idsKey as well as abort: a slow earlier response must not
         // overwrite tags fetched for a newer id set.
-        .then((d) => { if (!ac.signal.aborted && keyAtStart === idsKeyRef.current) setTagsByAgent(d.tags || {}); })
+        .then((d) => {
+          if (!ac.signal.aborted && keyAtStart === idsKeyRef.current) {
+            setTagsByAgent(d.tags || {});
+            setTagsError(false);
+          }
+        })
         .catch(() => {
-          if (!ac.signal.aborted && keyAtStart === idsKeyRef.current) setTagsByAgent({});
+          // Retain the previous map: clearing it made every visible agent look
+          // untagged, indistinguishable from a successful "no tags" response.
+          if (!ac.signal.aborted && keyAtStart === idsKeyRef.current) setTagsError(true);
         });
     }, 200);
     return () => {
@@ -170,10 +186,16 @@ export function useAgentData(t: (key: string) => string) {
     error,
     setError,
     allTags,
+    tagsListError,
+    refreshTagsList,
     tagsByAgent,
+    tagsError,
     taskCountMap,
     agentLocks,
     setAgentLocks,
+    locksLoaded,
+    locksError,
+    locksUnread: !locksLoaded,
     operatorPresence,
     setOperatorPresence,
     loadBeacons,

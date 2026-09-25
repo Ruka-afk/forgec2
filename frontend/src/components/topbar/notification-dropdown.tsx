@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Bell, BellOff } from "lucide-react";
+import { AlertTriangle, Bell, BellOff } from "lucide-react";
 
 interface Notification {
   // Render key: server rows use "db-<id>", client pushes use "ws-<seq>" —
@@ -35,9 +35,12 @@ function formatNotifTime(raw: string): string {
 export function NotificationDropdown() {
   const { t } = useI18n();
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const setUnreadNotifications = useAppStore((s) => s.setUnreadNotifications);
 
   const loadNotifications = useCallback(() => {
+    setLoadError(null);
     api.get(paths.notifications.list("page=1&pageSize=20"))
       .then((data) => {
         const list = (data.notifications || data.data || []) as Array<Record<string, unknown>>;
@@ -53,8 +56,14 @@ export function NotificationDropdown() {
           read: Boolean(n.read),
         }));
         setNotifications(mapped);
+        setLoaded(true);
       })
-      .catch(() => { /* silent */ });
+      // A failed read must not leave the badge at 0: that is indistinguishable
+      // from "no alerts", so only a successful response updates the count.
+      .catch((err: unknown) => {
+        setLoadError(err instanceof Error ? err.message : String(err));
+        setLoaded(true);
+      });
   }, []);
 
   useEffect(() => {
@@ -155,9 +164,10 @@ export function NotificationDropdown() {
   );
 
   const unreadCount = notifications.filter((n) => !n.read).length;
+  const unreadKnown = loaded && !loadError;
   useEffect(() => {
-    setUnreadNotifications(unreadCount);
-  }, [unreadCount, setUnreadNotifications]);
+    if (unreadKnown) setUnreadNotifications(unreadCount);
+  }, [unreadKnown, unreadCount, setUnreadNotifications]);
   const markAllRead = () => {
     // Optimistic with rollback: on failure the badge must not lie about
     // server-side unread state until the next reload. Rollback restores the
@@ -191,7 +201,11 @@ export function NotificationDropdown() {
         <Tooltip>
           <TooltipTrigger render={<Button variant="ghost" size="icon" className="relative" aria-label={t("topbar.notifications")} />}>
             <Bell className="size-5 text-muted-foreground" />
-            {unreadCount > 0 && (
+            {!unreadKnown ? (
+              <Badge variant="outline" className="absolute -top-0.5 -right-0.5 min-size-4 px-0.5 text-(--fs-micro) font-bold rounded-full flex items-center justify-center" title={loadError ? t("topbar.notif_count_unreadable") : undefined}>
+                ?
+              </Badge>
+            ) : unreadCount > 0 && (
               <Badge variant="destructive" className="absolute -top-0.5 -right-0.5 min-size-4 px-0.5 text-(--fs-micro) font-bold rounded-full flex items-center justify-center animate-scale-in">
                 {unreadCount > 99 ? "99+" : String(unreadCount)}
               </Badge>
@@ -205,7 +219,7 @@ export function NotificationDropdown() {
         <div className="px-3 py-2 border-b border-border text-sm font-medium">
           <div className="flex items-center justify-between">
             <span>{t("topbar.notifications")}</span>
-            {unreadCount > 0 && (
+            {unreadKnown && unreadCount > 0 && (
               <Button variant="ghost" size="xs" onClick={markAllRead} className="text-(--fs-micro-sm) text-primary hover:text-primary/80">
                 {t("topbar.mark_all_read")}
               </Button>
@@ -213,7 +227,18 @@ export function NotificationDropdown() {
           </div>
         </div>
         <ScrollArea className="max-h-64">
-          {notifications.length === 0 ? (
+          {loadError ? (
+            <div className="p-6 text-center text-sm">
+              <AlertTriangle className="size-6 mx-auto mb-2 text-warning" />
+              <p className="text-warning-foreground">{t("topbar.notif_load_failed")}</p>
+              {notifications.length > 0 && (
+                <p className="mt-1 text-xs text-muted-foreground">{t("topbar.notif_showing_cached")}</p>
+              )}
+              <Button onClick={loadNotifications} size="sm" variant="outline" className="mt-3 min-h-11 px-4 sm:min-h-7 sm:px-2.5">
+                {t("common.try_again")}
+              </Button>
+            </div>
+          ) : notifications.length === 0 ? (
             <div className="p-6 text-center text-muted-foreground/100 text-sm">
               <BellOff className="size-6 mx-auto mb-2" />
               {t("topbar.no_notifications")}

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import {
-  Camera, ChevronDown, History, KeyRound, RefreshCw, Terminal,
+  AlertTriangle, Camera, ChevronDown, History, KeyRound, RefreshCw, Terminal,
 } from "lucide-react";
 
 interface TimelineEvent {
@@ -48,6 +48,7 @@ export default memo(function TimelineSection({ agentId, online }: { agentId: str
   const { t } = useI18n();
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [kinds, setKinds] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState(false);
   // Request-generation guard: refresh spam / kind toggles / expand fired
@@ -64,10 +65,14 @@ export default memo(function TimelineSection({ agentId, online }: { agentId: str
       .then((d) => {
         if (gen !== genRef.current) return;
         setEvents(d.events || []);
+        setLoadError(null);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (gen !== genRef.current) return;
-        setEvents([]);
+        // Deliberately keep the previously loaded events: replacing them with
+        // [] turned a refresh failure into "this agent has no history", which
+        // reads as a fact about the agent rather than about the request.
+        setLoadError(err instanceof Error ? err.message : String(err));
       })
       .finally(() => {
         if (gen === genRef.current) setLoading(false);
@@ -118,6 +123,15 @@ export default memo(function TimelineSection({ agentId, online }: { agentId: str
       </div>
 
       <div className="p-4">
+        {loadError && (
+          <div role="alert" className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
+            <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 flex-1">
+              {events.length > 0 ? t("agents.timeline_stale") : t("agents.timeline_unreadable")}
+            </span>
+            <Button onClick={load} size="xs" variant="outline">{t("common.try_again")}</Button>
+          </div>
+        )}
         {loading && events.length === 0 ? (
           <div className="py-8 text-center"><Spinner /></div>
         ) : events.length === 0 ? (

@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Spinner } from "@/components/ui/spinner";
 import { PageContainer } from "@/components/ui/page-container";
-import { AlertCircle, BadgeInfo, Check, CircleDot, Info, Key, List, Pencil, Plus, PlusCircle, RotateCcw, RotateCw, Trash2, User, UserCheck, UserCog, X } from "lucide-react";
+import { AlertCircle, AlertTriangle, BadgeInfo, Check, CircleDot, Info, Key, List, Pencil, Plus, PlusCircle, RotateCcw, RotateCw, Trash2, User, UserCheck, UserCog, X } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Card } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -63,6 +63,8 @@ export default function AgentTokenPage() {
   const [tokens, setTokens] = useState<Token[]>([]);
   const [processes, setProcesses] = useState<Process[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tokenError, setTokenError] = useState<string | null>(null);
+  const [processError, setProcessError] = useState<string | null>(null);
   const [stealPid, setStealPid] = useState("");
   const [makeUser, setMakeUser] = useState("");
   const [makeDomain, setMakeDomain] = useState("");
@@ -78,6 +80,7 @@ export default function AgentTokenPage() {
 
   const loadTokens = useCallback(async (signal?: AbortSignal) => {
     const seq = ++tokenLoadSeqRef.current;
+    setTokenError(null);
     try {
       // B1 fix: backend returns a raw array, not {tokens: [...]}. Handle both
       // formats for forward compatibility.
@@ -85,21 +88,26 @@ export default function AgentTokenPage() {
       const list = Array.isArray(res) ? res : ((res as Record<string, unknown>)?.tokens || (res as Record<string, unknown>)?.Tokens || []) as Token[];
       if (signal?.aborted || seq !== tokenLoadSeqRef.current) return;
       setTokens(list as Token[]);
-    } catch {
-      if (!signal?.aborted && seq === tokenLoadSeqRef.current) toast.error(t("agents.token_load_failed"));
+    } catch (err) {
+      if (signal?.aborted || seq !== tokenLoadSeqRef.current) return;
+      // Keep the last good list; only the error flag changes so the UI can
+      // report the failure instead of claiming "no tokens harvested yet".
+      setTokenError(err instanceof Error ? err.message : String(err));
     }
-  }, [agentId, t]);
+  }, [agentId]);
 
   const loadProcesses = useCallback(async (signal?: AbortSignal) => {
     const seq = ++processLoadSeqRef.current;
+    setProcessError(null);
     try {
       const data = await api.post<{ processes?: Process[]; data?: Process[] }>(paths.agents.tokenListProcs(agentId), undefined, { signal });
       if (signal?.aborted || seq !== processLoadSeqRef.current) return;
       setProcesses(data.processes || data.data || []);
-    } catch {
-      if (!signal?.aborted && seq === processLoadSeqRef.current) toast.error(t("agents.token_load_processes_failed"));
+    } catch (err) {
+      if (signal?.aborted || seq !== processLoadSeqRef.current) return;
+      setProcessError(err instanceof Error ? err.message : String(err));
     }
-  }, [agentId, t]);
+  }, [agentId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -297,9 +305,9 @@ export default function AgentTokenPage() {
           <form onSubmit={handleStealToken} className="space-y-3">
             <div>
               <Label htmlFor="steal-pid" className="text-xs text-muted-foreground mb-1 block">{t("agents.token_pid")}</Label>
-              <Select value={stealPid} onValueChange={(v) => setStealPid(v ?? "")}>
+              <Select value={stealPid} onValueChange={(v) => setStealPid(v ?? "")} disabled={!!processError}>
                 <SelectTrigger id="steal-pid" className="w-full">
-                  <SelectValue placeholder={t("agents.token_steal")} />
+                  <SelectValue placeholder={processError ? t("agents.token_processes_unreadable") : t("agents.token_steal")} />
                 </SelectTrigger>
                 <SelectContent>
                   {processes.map((p) => (
@@ -307,6 +315,13 @@ export default function AgentTokenPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {processError && (
+                <div role="alert" className="mt-1.5 flex items-center gap-2 text-(--fs-micro-sm) text-warning-foreground">
+                  <AlertTriangle className="size-3 shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 flex-1">{t("agents.token_load_processes_failed")}</span>
+                  <Button type="button" onClick={() => { void loadProcesses(); }} size="xs" variant="outline">{t("common.try_again")}</Button>
+                </div>
+              )}
             </div>
             <Button type="submit" disabled={!stealPid || activeAction === "steal"} className="w-full" variant="default">
               {activeAction === "steal" ? <><Spinner size="sm" />{t("agents.token_stealing")}</> : <><User className="size-4" />{t("agents.token_steal")}</>}
@@ -353,15 +368,24 @@ export default function AgentTokenPage() {
       <Card className="overflow-hidden">
         <div className="px-5 py-3 border-b border-border flex items-center justify-between">
           <h2 className="text-sm font-semibold text-foreground">
-            <List className="size-4" />{t("agents.token_title")} ({tokens.length})
+            <List className="size-4" />{t("agents.token_title")} ({tokenError ? "?" : tokens.length})
           </h2>          <div className="flex items-center gap-2">
             <div className="text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
-                <span className="size-2 bg-warning rounded-full animate-pulse"></span>                {tokens.filter(tok => tok.active).length} active
+                <span className="size-2 bg-warning rounded-full animate-pulse"></span>                {tokenError ? "?" : tokens.filter(tok => tok.active).length} active
               </span>
             </div>
           </div>
         </div>
+        {tokenError && (
+          <div role="alert" className="flex flex-wrap items-center gap-3 border-b border-border bg-warning/10 px-5 py-2.5 text-xs text-warning-foreground">
+            <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 flex-1">
+              {tokens.length > 0 ? t("agents.token_load_stale") : t("agents.token_load_failed")}
+            </span>
+            <Button onClick={() => { void loadTokens(); }} size="xs" variant="outline">{t("common.try_again")}</Button>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <Table className="w-full text-sm">
             <TableHeader>
@@ -466,7 +490,7 @@ export default function AgentTokenPage() {
                 );
               })}
               {loading && Array.from({ length: 3 }).map((_, i) => (<TableRow key={i}><TableCell colSpan={9} className="py-3 px-4"><Skeleton className="h-8 w-full" /></TableCell></TableRow>))}
-              {!loading && tokens.length === 0 && (<TableRow><TableCell colSpan={9}><EmptyState compact icon={BadgeInfo} title={t("agents.token_no_tokens")} /></TableCell></TableRow>)}
+              {!loading && !tokenError && tokens.length === 0 && (<TableRow><TableCell colSpan={9}><EmptyState compact icon={BadgeInfo} title={t("agents.token_no_tokens")} /></TableCell></TableRow>)}
             </TableBody>
           </Table>
         </div>      </Card>

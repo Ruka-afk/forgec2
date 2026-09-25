@@ -38,7 +38,7 @@ import { useVirtualWindow } from "@/lib/hooks/useVirtualWindow";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useI18n } from "@/lib/i18n";
-import { ArrowDown, ArrowUp, ArrowUpDown, Plus, Radio } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Plus, Radio } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 
 export type { Beacon };
@@ -56,10 +56,19 @@ export default function AgentsPageContent() {
 
   const {
     beacons, setBeacons, loading, total, error, setError,
-    allTags, tagsByAgent, taskCountMap, agentLocks, setAgentLocks,
+    allTags, tagsListError, refreshTagsList, tagsByAgent, tagsError,
+    taskCountMap, agentLocks, setAgentLocks,
+    locksLoaded, locksError, locksUnread,
     operatorPresence, setOperatorPresence,
     loadBeacons: loadBeaconsRaw, loadLocks,
   } = useAgentData(t);
+
+  const metaFailures: string[] = [];
+  if (locksError) {
+    metaFailures.push(locksLoaded ? t("agents.locks_stale") : t("agents.locks_unreadable"));
+  }
+  if (tagsListError) metaFailures.push(t("agents.tag_list_unreadable"));
+  if (tagsError) metaFailures.push(t("agents.agent_tags_unreadable"));
 
   const {
     confirm, setConfirm, cmdModalOpen, cmdType, cmdText, setCmdType, setCmdText,
@@ -298,6 +307,19 @@ export default function AgentsPageContent() {
         />
       )}
 
+      {metaFailures.length > 0 && (
+        <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-foreground">
+          <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1">{t("agents.meta_partial_failed", { sources: metaFailures.join(", ") })}</span>
+          {locksError && (
+            <Button onClick={loadLocks} size="sm" variant="outline" className="min-h-11 px-4 sm:min-h-7 sm:px-2.5">{t("common.try_again")}</Button>
+          )}
+          {(tagsListError || tagsError) && (
+            <Button onClick={() => { void refreshTagsList(); }} size="sm" variant="outline" className="min-h-11 px-4 sm:min-h-7 sm:px-2.5">{t("common.try_again")}</Button>
+          )}
+        </div>
+      )}
+
       <AgentBulkBar
         selected={selected}
         bulkMode={bulkMode}
@@ -403,6 +425,7 @@ export default function AgentsPageContent() {
         onEditNotes={openNotesEdit}
         taskCountMap={taskCountMap}
         agentLocks={agentLocks}
+        locksUnread={locksUnread}
         operatorPresence={operatorPresence}
         tagsByAgent={tagsByAgent}
         groupByHost={groupByHost}

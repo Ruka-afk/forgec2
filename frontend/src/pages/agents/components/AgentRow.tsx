@@ -10,7 +10,7 @@ import { agentStatusBorderClass, osIcon, integrityTone } from "./types";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { TableCell } from "@/components/ui/table";
-import { Check, Copy, FolderOpen, Link as LinkIcon, Lock, Maximize2, Monitor, MoreHorizontal, Shield, StickyNote, Terminal, Unlock, Users } from "lucide-react";
+import { Check, Copy, FolderOpen, HelpCircle, Link as LinkIcon, Lock, Maximize2, Monitor, MoreHorizontal, Shield, StickyNote, Terminal, Unlock, Users } from "lucide-react";
 import type { AgentMenuPoint } from "./agent-menu-actions";
 import { knownImplantVersion } from "@/lib/implant-version";
 import { useCopiedField } from "@/lib/hooks/useCopiedField";
@@ -26,6 +26,7 @@ interface AgentRowProps {
   onQuickNav?: (beacon: Beacon, view: "shell" | "files" | "screen") => void;
   taskCount: number;
   lockUser: string | null;
+  locksUnread?: boolean;
   presenceUsers: string[] | null;
   visibleCols: Record<string, boolean>;
   tags?: { id: string; name: string; color: string }[];
@@ -42,6 +43,7 @@ export const AgentRow = memo(function AgentRow({
   onQuickNav,
   taskCount,
   lockUser,
+  locksUnread,
   presenceUsers,
   visibleCols,
   tags,
@@ -189,6 +191,13 @@ export const AgentRow = memo(function AgentRow({
           <span className="inline-flex items-center gap-1 text-xs" title={t("agents.locked_by").replace("{user}", lockUser)}>
             <Lock className="size-4" />
             <span className="text-(--fs-micro-sm) text-warning font-medium truncate max-w-[80px]">{lockUser}</span>
+          </span>
+        ) : locksUnread ? (
+          // The lock table has never been read successfully. Showing the
+          // unlock glyph here would assert "not locked" for every agent, which
+          // is exactly the claim an operator must not be given blind.
+          <span className="text-muted-foreground/100 text-(--fs-xs-sm)" title={t("agents.lock_state_unreadable")}>
+            <HelpCircle className="size-4" />
           </span>
         ) : (
           <span className="text-muted-foreground/100 text-(--fs-xs-sm)">

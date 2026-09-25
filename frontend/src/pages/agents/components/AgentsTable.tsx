@@ -95,6 +95,7 @@ interface AgentsTableProps {
   onEditNotes: (beacon: Beacon) => void;
   taskCountMap: Record<string, number>;
   agentLocks: Record<string, string>;
+  locksUnread?: boolean;
   operatorPresence: Record<string, string[]>;
   tagsByAgent: Record<string, AgentTag[]>;
   groupByHost?: boolean;
@@ -110,7 +111,7 @@ export default memo(function AgentsTable(props: AgentsTableProps) {
     agentOffsetTop, agentTotalHeight, rowHeight,
     statusFilter, osFilter, page, total, setPage,
     onSelectAgent, onMenu, onQuickNav, onEditNotes,
-    taskCountMap, agentLocks, operatorPresence, tagsByAgent,
+    taskCountMap, agentLocks, locksUnread, operatorPresence, tagsByAgent,
     groupByHost = false,
   } = props;
 
@@ -215,6 +216,7 @@ export default memo(function AgentsTable(props: AgentsTableProps) {
                   onEditNotes={onEditNotes}
                   taskCount={taskCountMap[beacon.id || ""] ?? 0}
                   lockUser={agentLocks[beacon.id || ""] || null}
+                  locksUnread={locksUnread}
                   presenceUsers={operatorPresence[beacon.id || ""] || null}
                   visibleCols={visibleCols}
                   tags={tagsByAgent[beacon.id || ""] || []}
@@ -235,6 +237,7 @@ export default memo(function AgentsTable(props: AgentsTableProps) {
               onEditNotes={onEditNotes}
               taskCount={taskCountMap[beacon.id || ""] ?? 0}
               lockUser={agentLocks[beacon.id || ""] || null}
+              locksUnread={locksUnread}
               presenceUsers={operatorPresence[beacon.id || ""] || null}
               visibleCols={visibleCols}
               tags={tagsByAgent[beacon.id || ""] || []}
