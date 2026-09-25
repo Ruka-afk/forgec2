@@ -96,6 +96,7 @@ func main() {
 	}
 
 	// Initialize database
+	db.SetLogGeneratedPassword(cfg.ShouldLogGeneratedPassword())
 	database, err := db.InitDBWithDriver(cfg.Database.Driver, cfg.Database.DSN, cfg.Database.Path, server.LogLevelVar().Level(), cfg.Server.DBMaxOpenConns, cfg.Server.DBMaxIdleConns, cfg.Server.DBConnMaxLifetime, cfg.Auth.DefaultPasswd)
 	if err != nil {
 		slog.Error("Failed to initialize database", "err", err)

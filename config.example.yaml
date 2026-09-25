@@ -89,9 +89,15 @@ implant:
 auth:
   password_hash: ""
   # First-boot admin password, used only when the DB has zero users.
-  # SECURE DEFAULT: leave empty �?a random strong password is generated and
-  # printed to the console on first start (never commit a default password).
+  # Leave empty and a random strong password is generated on first start.
+  # Never commit a default password.
   default_password: ""
+  # Whether the first-boot banner prints that generated password in plaintext.
+  # Default true: the banner is the ONLY place the one-shot credential is ever
+  # shown, so an operator who misses it is locked out. The plaintext ends up in
+  # your log file — rotate/delete logs after first boot, or set this to false to
+  # redact and rely on `go run ./cmd/reset-password` instead.
+  log_generated_password: true
   # Max live sessions per user (0 = unlimited). Overflow evicts the oldest
   # session first (audited as session_evict). Recommended: 5.
   # session_max_concurrent: 5

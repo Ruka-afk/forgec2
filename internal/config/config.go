@@ -137,6 +137,11 @@ type Config struct {
 	Auth struct {
 		PasswordHash  string `yaml:"password_hash"`    // bcrypt hash, set on first run
 		DefaultPasswd string `yaml:"default_password"` // plaintext; used only on first boot if password_hash is empty
+		// LogGeneratedPassword controls whether the first-boot banner prints the
+		// generated admin password in plaintext. Default true so an operator who
+		// misses the one-shot banner is not locked out; set false to keep the
+		// secret out of logs (the reset-password tool still works).
+		LogGeneratedPassword *bool `yaml:"log_generated_password"`
 		// SessionMaxConcurrent caps live sessions per user (0 = unlimited).
 		// Overflow evicts the oldest session first (audited).
 		SessionMaxConcurrent int `yaml:"session_max_concurrent"`
@@ -461,6 +466,15 @@ func isWeakSecret(s string) bool {
 		}
 	}
 	return false
+}
+
+// ShouldLogGeneratedPassword reports whether the first-boot banner may print the
+// generated admin password in plaintext. Defaults to true: the banner is the only
+// place the one-shot credential is ever shown, so an operator who misses it would
+// otherwise be locked out. Set auth.log_generated_password: false to keep the
+// secret out of logs.
+func (c *Config) ShouldLogGeneratedPassword() bool {
+	return c.Auth.LogGeneratedPassword == nil || *c.Auth.LogGeneratedPassword
 }
 
 // isWeakDefaultPassword rejects trivially guessable first-boot admin

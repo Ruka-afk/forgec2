@@ -1,10 +1,12 @@
 package db
 
 import (
+	"bytes"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -1644,5 +1646,72 @@ func TestImplantCanonicalColumnsMigrationHealsLegacyNames(t *testing.T) {
 	// Idempotent rerun must not error.
 	if err := mig.Migrate(database); err != nil {
 		t.Fatalf("rerun migrate: %v", err)
+	}
+}
+
+// The first-boot banner is the only place the generated admin password is ever
+// shown, so it must be readable there. These tests pin both switch positions.
+func TestFirstBootBannerPrintsGeneratedPasswordInPlaintext(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	defer slog.SetDefault(prev)
+
+	prevFlag := LogGeneratedPassword
+	SetLogGeneratedPassword(true)
+	defer SetLogGeneratedPassword(prevFlag)
+
+	dbPath := filepath.Join(t.TempDir(), "seed.db")
+	database, err := InitDBWithDriver("", "", dbPath, slog.LevelWarn, 10, 5, time.Minute)
+	if err != nil {
+		t.Fatalf("InitDBWithDriver: %v", err)
+	}
+
+	var admin User
+	if err := database.Where("username = ?", "admin").First(&admin).Error; err != nil {
+		t.Fatalf("admin was not seeded: %v", err)
+	}
+	// Release the sqlite handle so Windows can clean up the temp dir.
+	if sqlDB, err := database.DB(); err == nil {
+		_ = sqlDB.Close()
+	}
+	out := buf.String()
+	if !strings.Contains(out, "DEFAULT ADMIN CREDENTIALS") {
+		t.Fatalf("banner missing from log:\n%s", out)
+	}
+	// The generated password must not be masked: a run of asterisks is fine,
+	// plaintext means the literal characters appear.
+	if strings.Contains(out, "Password: ****") {
+		t.Errorf("banner still redacts the password:\n%s", out)
+	}
+	if !strings.Contains(out, "log_generated_password: false") {
+		t.Errorf("banner should point at the redact switch when printing plaintext:\n%s", out)
+	}
+}
+
+func TestFirstBootBannerRedactsWhenDisabled(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	defer slog.SetDefault(prev)
+
+	prevFlag := LogGeneratedPassword
+	SetLogGeneratedPassword(false)
+	defer SetLogGeneratedPassword(prevFlag)
+
+	dbPath := filepath.Join(t.TempDir(), "seed.db")
+	database, err := InitDBWithDriver("", "", dbPath, slog.LevelWarn, 10, 5, time.Minute)
+	if err != nil {
+		t.Fatalf("InitDBWithDriver: %v", err)
+	}
+	if sqlDB, err := database.DB(); err == nil {
+		_ = sqlDB.Close()
+	}
+	out := buf.String()
+	if !strings.Contains(out, "redacted") {
+		t.Errorf("expected an explicit redaction notice:\n%s", out)
+	}
+	if !strings.Contains(out, "log_generated_password: true to print it") {
+		t.Errorf("redaction notice should name the switch:\n%s", out)
 	}
 }

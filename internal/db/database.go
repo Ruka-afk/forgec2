@@ -195,6 +195,15 @@ func InitDB(dbPath string, logLevel slog.Level, defaultPassword ...string) (*gor
 	return InitDBWithDriver("", "", dbPath, logLevel, 25, 5, 30*time.Minute, defaultPassword...)
 }
 
+// LogGeneratedPassword controls whether the first-boot admin banner prints the
+// generated password in plaintext. It is process-wide because it is read from
+// config before the DB is opened, and only matters during that one first seed.
+var LogGeneratedPassword = true
+
+// SetLogGeneratedPassword overrides the first-boot banner behaviour. Call it
+// before InitDB/InitDBWithDriver. Defaults to true.
+func SetLogGeneratedPassword(v bool) { LogGeneratedPassword = v }
+
 func InitDBWithDriver(driver, dsn, fallbackPath string, logLevel slog.Level, dbMaxOpenConns int, dbMaxIdleConns int, dbConnMaxLifetime time.Duration, defaultPassword ...string) (*gorm.DB, error) {
 	gormConfig := &gorm.Config{
 		Logger: lockAwareLogger{Interface: logger.Default.LogMode(logger.Silent)},
@@ -307,11 +316,20 @@ func InitDBWithDriver(driver, dsn, fallbackPath string, logLevel slog.Level, dbM
 				IsActive:            true,
 				ForcePasswordChange: true,
 			})
-			redacted := redactString(adminPass)
+			shown := adminPass
+			if !LogGeneratedPassword {
+				shown = "(redacted — set auth.log_generated_password: true to print it)"
+			}
 			slog.Warn("╔══════════════════════════════════════════════════════════╗")
 			slog.Warn("║  DEFAULT ADMIN CREDENTIALS (CHANGE IMMEDIATELY!)       ║")
-			slog.Warn(fmt.Sprintf("║  Username: admin  Password: %-24s  ║", redacted))
-			slog.Warn("║  Check config.yaml for the actual password.            ║")
+			slog.Warn(fmt.Sprintf("║  Username: admin  Password: %-24s  ║", shown))
+			if LogGeneratedPassword {
+				slog.Warn("║  This password is in your log file in plaintext.         ║")
+				slog.Warn("║  Delete/rotate logs, or set                             ║")
+				slog.Warn("║  auth.log_generated_password: false to redact.          ║")
+			} else {
+				slog.Warn("║  Check config.yaml for the actual password.            ║")
+			}
 			slog.Warn("╚══════════════════════════════════════════════════════════╝")
 		}
 	}
@@ -394,7 +412,9 @@ func MigrateOldRoles(db *gorm.DB) {
 }
 
 // redactString masks a secret entirely; no plaintext fragments are ever
-// allowed into logs or startup output.
+// allowed into logs or startup output. Used for secrets the operator has
+// already seen elsewhere — the first-boot admin banner deliberately does NOT
+// go through this, because it is the only place that credential is shown.
 func redactString(s string) string {
 	if s == "" {
 		return ""

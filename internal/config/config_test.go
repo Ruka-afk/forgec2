@@ -228,6 +228,23 @@ func TestValidateRejectsWeakDefaultPassword(t *testing.T) {
 	}
 }
 
+func TestShouldLogGeneratedPasswordDefaultsTrue(t *testing.T) {
+	cfg := DefaultConfig()
+	if !cfg.ShouldLogGeneratedPassword() {
+		t.Error("ShouldLogGeneratedPassword() should default to true so the one-shot banner is usable")
+	}
+	off := false
+	cfg.Auth.LogGeneratedPassword = &off
+	if cfg.ShouldLogGeneratedPassword() {
+		t.Error("ShouldLogGeneratedPassword() should honour an explicit false")
+	}
+	on := true
+	cfg.Auth.LogGeneratedPassword = &on
+	if !cfg.ShouldLogGeneratedPassword() {
+		t.Error("ShouldLogGeneratedPassword() should honour an explicit true")
+	}
+}
+
 func TestValidateOperatorPlane(t *testing.T) {
 	newValid := func() *Config {
 		cfg := DefaultConfig()
