@@ -24,7 +24,8 @@ import {
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Bot, Code, Crosshair, FolderTree, GitBranch, History, IdCard, Inbox, Key, Lock, Network, Rocket, Route, Share2, Terminal, Ticket, Wallet } from "lucide-react";
+import { DataError } from "@/components/ui/data-state";
+import { Bot, Code, Crosshair, FolderTree, GitBranch, History, IdCard, Inbox, Key, Lock, Network, Rocket, Route, Share2, Terminal, Ticket, Wallet, AlertTriangle } from "lucide-react";
 
 interface LateralStats {
   online_agents?: number;
@@ -141,21 +142,23 @@ export default function LateralPageContent() {
     onError: () => toast.error(t("lateral.toast.execute_failed")),
   });
 
-  const { data, loading, refresh: loadData } = useApiResource<{
+  const { data, loading, error, refresh: loadData } = useApiResource<{
     stats: LateralStats;
     agents: Agent[];
     credentials: Credential[];
     history: MovementHistory[];
+    /** Per-source read failures: each empty list below must say why it is empty. */
+    partialFailures: string[];
   }>({
     fetcher: async () => {
-      let failed = 0;
+      const partialFailures: string[] = [];
       const [data, agentData, credData, histData] = await Promise.all([
-        api.get(paths.lateral.historyAll).catch(() => { failed++; return { lateral: [] }; }),
-        api.get(paths.agents.list()).catch(() => { failed++; return { agents: [] }; }),
-        api.get(paths.credentials.list()).catch(() => { failed++; return { vault_entries: [] }; }),
-        api.get(paths.tasks.list("type=lateral&pageSize=50")).catch(() => { failed++; return { tasks: [] }; }),
+        api.get(paths.lateral.historyAll).catch(() => { partialFailures.push(t("lateral.source_history")); return { lateral: [] }; }),
+        api.get(paths.agents.list()).catch(() => { partialFailures.push(t("lateral.source_agents")); return { agents: [] }; }),
+        api.get(paths.credentials.list()).catch(() => { partialFailures.push(t("lateral.source_credentials")); return { vault_entries: [] }; }),
+        api.get(paths.tasks.list("type=lateral&pageSize=50")).catch(() => { partialFailures.push(t("lateral.source_tasks")); return { tasks: [] }; }),
       ]);
-      if (failed > 0) toast.error(t("lateral.toast.load_failed"));
+      if (partialFailures.length > 0) toast.error(t("lateral.toast.load_failed"));
       // The history endpoint returns {tasks,total}; the stat cards need
       // online_agents/total_creds/total_tasks, which we derive client-side
       // from the same payloads instead of expecting a dedicated stats shape.
@@ -171,11 +174,16 @@ export default function LateralPageContent() {
         agents: agentList,
         credentials: credList,
         history: taskList,
+        partialFailures,
       };
     },
     toastThrottleMs: 0,
     errorMessage: t("lateral.toast.load_failed"),
   });
+  const partialFailures = data?.partialFailures ?? [];
+  const agentsFailed = partialFailures.includes(t("lateral.source_agents"));
+  const credsFailed = partialFailures.includes(t("lateral.source_credentials"));
+  const historyFailed = partialFailures.includes(t("lateral.source_tasks"));
   const stats = data?.stats ?? {};
   const agents = data?.agents ?? [];
   const credentials = data?.credentials ?? [];
@@ -339,10 +347,18 @@ export default function LateralPageContent() {
         <div className="text-xs text-muted-foreground mt-0.5">{t("lateral.honesty_desc")}</div>
       </Banner>
 
+      {(partialFailures.length > 0 || error) && (
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-foreground">
+          <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1">{t("lateral.partial_load_failed", { sources: partialFailures.join(", ") })}</span>
+          <Button onClick={loadData} size="sm" variant="outline" className="min-h-11 px-4 sm:min-h-7 sm:px-2.5">{t("common.try_again")}</Button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard label={t("lateral.online_implant")} value={stats.online_agents || 0} color="success" icon={<Bot className="size-4" />} sub={t("lateral.pivot_available")} />
-        <StatCard label={t("lateral.available_creds")} value={stats.total_creds || 0} color="warning" icon={<Key className="size-4" />} sub={t("lateral.cred_vault")} />
-        <StatCard label={t("lateral.history_tasks")} value={stats.total_tasks || 0} color="primary" icon={<Network className="size-4" />} sub={t("lateral.lateral_records")} />
+        <StatCard label={t("lateral.online_implant")} value={agentsFailed ? "—" : stats.online_agents || 0} color="success" icon={<Bot className="size-4" />} sub={agentsFailed ? t("status.unknown") : t("lateral.pivot_available")} />
+        <StatCard label={t("lateral.available_creds")} value={credsFailed ? "—" : stats.total_creds || 0} color="warning" icon={<Key className="size-4" />} sub={credsFailed ? t("status.unknown") : t("lateral.cred_vault")} />
+        <StatCard label={t("lateral.history_tasks")} value={historyFailed ? "—" : stats.total_tasks || 0} color="primary" icon={<Network className="size-4" />} sub={historyFailed ? t("status.unknown") : t("lateral.lateral_records")} />
       </div>
 
       <Card className="px-4 shadow-sm hover:shadow-md transition-shadow duration-200">
@@ -466,9 +482,11 @@ export default function LateralPageContent() {
             </div>
             <span className="text-sm font-semibold text-foreground">{t("lateral.move_history")}</span>
           </div>
-          <span className="text-xs text-muted-foreground">{history.length} {t("lateral.records")}</span>
+          <span className="text-xs text-muted-foreground">{historyFailed ? t("status.unknown") : `${history.length} ${t("lateral.records")}`}</span>
         </div>
-        {history.length > 0 ? (
+        {historyFailed ? (
+          <div className="p-(--card-spacing)"><DataError message={t("lateral.history_unreadable")} onRetry={loadData} /></div>
+        ) : history.length > 0 ? (
           <Table className="text-sm">
             <TableHeader className="bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90 sticky top-0 z-10 border-b border-border">
               <TableRow className="hover:bg-transparent">

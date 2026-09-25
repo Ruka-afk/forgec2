@@ -54,7 +54,7 @@ export default function EventsStream() {
     setLive((prev) => incoming.reduce((next, ev) => upsertLiveEvent(next, ev), prev));
   }, []);
 
-  const { data, loading, error, refresh } = useApiResource<{ timeline: TimelineEvent[]; tasks: Task[]; alerts: AlertLike[] }>({
+  const { data, loading, error, refresh } = useApiResource<{ timeline: TimelineEvent[]; tasks: Task[]; alerts: AlertLike[]; partialFailures: string[] }>({
     fetcher: async () => {
       const [tl, tk, nt] = await Promise.allSettled([
         api.get(paths.timeline.data("page=1")),
@@ -63,15 +63,23 @@ export default function EventsStream() {
       ]);
       const failures = [tl, tk, nt].filter((r) => r.status === "rejected").length;
       if (failures === 3) throw new Error(t("events.load_failed"));
+      // A source that failed contributes an empty list; name it so the counts
+      // below read as "unknown" instead of "zero events".
+      const partialFailures: string[] = [];
+      if (tl.status === "rejected") partialFailures.push(t("events.failed_source_ops"));
+      if (tk.status === "rejected") partialFailures.push(t("events.failed_source_tasks"));
+      if (nt.status === "rejected") partialFailures.push(t("events.failed_source_notifications"));
       return {
         timeline: tl.status === "fulfilled" ? firstArray(tl.value, ["events", "data", "Events"]) as TimelineEvent[] : [],
         tasks: tk.status === "fulfilled" ? firstArray(tk.value, ["tasks", "data", "Tasks"]) as Task[] : [],
         alerts: nt.status === "fulfilled" ? firstArray(nt.value, ["notifications", "data"]) as AlertLike[] : [],
+        partialFailures,
       };
     },
     pollMs: connected ? POLL.events : POLL.eventsFallback,
     errorMessage: t("events.load_failed"),
   });
+  const partialFailures = data?.partialFailures ?? [];
 
   useEffect(() => {
     const unsub = subscribeTyped(TIMELINE_EVENTS, (msg) => {
@@ -143,18 +151,29 @@ export default function EventsStream() {
         </Button>
       </div>
 
+      {partialFailures.length > 0 && (
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-2.5 text-xs text-warning-foreground">
+          <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1">{t("events.partial_load_failed", { sources: partialFailures.join(", ") })}</span>
+        </div>
+      )}
+
       {/* Source summary chips */}
       <div className="flex items-center gap-3">
         {(["timeline", "task", "alert"] as const).map((src) => {
           const s = SOURCE_STYLES[src];
           const labelKey = src === "timeline" ? "events.source_timeline" : src === "task" ? "events.source_task" : "events.source_alert";
+          // A failed source shows "?", not 0: the count is unknown, not empty.
+          const failed = partialFailures.includes(
+            src === "timeline" ? t("events.failed_source_ops") : src === "task" ? t("events.failed_source_tasks") : t("events.failed_source_notifications"),
+          );
           return (
-            <div key={src} className={`flex items-center gap-1.5 rounded-md border border-border/50 bg-background px-2.5 py-1 text-xs`}>
+            <div key={src} className={`flex items-center gap-1.5 rounded-md border border-border/50 bg-background px-2.5 py-1 text-xs${failed ? " border-warning/40" : ""}`}>
               <span className={`flex size-5 items-center justify-center rounded ${s.iconBg} ${s.iconText}`}>
                 {SOURCE_ICONS[src]}
               </span>
               <span className="text-muted-foreground">{t(labelKey)}</span>
-              <span className="font-mono font-semibold text-foreground">{counts[src]}</span>
+              <span className={`font-mono font-semibold ${failed ? "text-warning-foreground" : "text-foreground"}`}>{failed ? "?" : counts[src]}</span>
             </div>
           );
         })}

@@ -12,6 +12,7 @@ import { PageContainer } from "@/components/ui/page-container";
 import { Card } from "@/components/ui/card";
 import { StatusDot } from "@/components/ui/status-dot";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { DataError } from "@/components/ui/data-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -260,6 +261,7 @@ export default function TopologyPage() {
   // repeat polls of an already-loaded mode keep the graph mounted.
   const loadedRef = useRef<Partial<Record<TopoViewMode, boolean>>>({});
   const loadControllerRef = useRef<AbortController | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadTopology = useCallback(async () => {
     loadControllerRef.current?.abort();
@@ -268,7 +270,7 @@ export default function TopologyPage() {
     const { signal } = controller;
     const stale = () => signal.aborted || loadControllerRef.current !== controller;
     const firstLoad = !loadedRef.current[viewMode];
-    if (firstLoad) setLoading(true);
+    if (firstLoad) { setLoading(true); setLoadError(null); }
     try {
       if (viewMode === "net") {
         const result = await api.get<NetTopologyData & { success?: boolean }>(paths.topology.network, { signal });
@@ -295,19 +297,22 @@ export default function TopologyPage() {
           setData({ nodes: (result.nodes || []) as TopoNode[], edges: (result.edges || []) as Array<{ from: string; to: string }> });
         }
       }
-    } catch {
+    } catch (e) {
       if (stale()) return;
       // Keep the last good graph on transient poll failures — wiping the
       // data here would destroy/recreate the vis instance (zoom/pan reset).
-      // Only a first-load failure surfaces the empty state (data stays null).
-      // A failed first load stays "unloaded" so the retry shows a spinner.
+      // A failed FIRST load is different: data stays null, so it must show a
+      // retryable error rather than an authoritative empty graph.
+      if (firstLoad) {
+        setLoadError(e instanceof Error ? e.message : t("topology.load_failed"));
+      }
       setLoading(false);
       return;
     }
     if (stale()) return;
     loadedRef.current[viewMode] = true;
     setLoading(false);
-  }, [viewMode]);
+  }, [viewMode, t]);
 
   useEffect(() => {
     void loadTopology();
@@ -460,7 +465,7 @@ export default function TopologyPage() {
                     </button>
                   ))}
                 </div>
-                <span className="text-(--fs-micro-sm) text-muted-foreground font-mono">NODES: {nodes.length}</span>
+                <span className="text-(--fs-micro-sm) text-muted-foreground font-mono">{loadError ? `${t("status.unknown")} (${t("common.error")})` : `NODES: ${nodes.length}`}</span>
               </div>
             </div>
             <div ref={graphContainerRef} className="relative p-4 bg-card [background-image:radial-gradient(ellipse_at_center,var(--card)_0%,var(--background)_100%)] min-h-[500px]">
@@ -469,6 +474,9 @@ export default function TopologyPage() {
                 controls stay usable, retry remounts on view change. */}
               <ErrorBoundary resetKey={viewMode}>
                 <Suspense fallback={null}>
+                  {loadError ? (
+                    <DataError message={t("topology.unreadable", { message: loadError })} onRetry={() => { void loadTopology(); }} />
+                  ) : (
                   <TopologyGraph
                     data={data || { nodes: [], edges: [] }}
                     meshData={meshData || { nodes: [], edges: [] }}
@@ -479,6 +487,7 @@ export default function TopologyPage() {
                     loading={loading}
                     onNodeClick={handleNodeClick}
                   />
+                  )}
                 </Suspense>
               </ErrorBoundary>
             </div>
