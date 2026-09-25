@@ -14,6 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
+import { DataError } from "@/components/ui/data-state";
+import { AgentLoadError } from "@/components/AgentLoadError";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { formatTime, formatSize } from "@/lib/utils";
 import { FileCode, Rocket, Trash2, Upload } from "lucide-react";
@@ -38,6 +40,8 @@ export default function ModulesSection() {
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [agentsError, setAgentsError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [deploying, setDeploying] = useState(false);
   const [hint, setHint] = useState("");
@@ -49,27 +53,35 @@ export default function ModulesSection() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const data = await api.get<{ modules?: ModuleInfo[]; hint?: string }>(paths.modules.list);
       setModules(data.modules || []);
       setHint(data.hint || "");
-    } catch {
+    } catch (e) {
+      // "No modules" is a security-relevant claim here: an unread module list
+      // must never read as "mimikatz is not installed".
       setModules([]);
-      toast.error(t("settings.modules.load_failed"));
+      const msg = e instanceof Error ? e.message : t("settings.modules.load_failed");
+      setLoadError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [t]);
 
   const loadAgents = useCallback(async () => {
     setAgentsLoading(true);
+    setAgentsError(null);
     try {
       setAgents((await fetchAgentListCached()) as AgentOption[]);
-    } catch {
+    } catch (e) {
       setAgents([]);
+      setAgentsError(e instanceof Error ? e.message : t("settings.modules.load_failed"));
     } finally {
       setAgentsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     load();
@@ -175,6 +187,8 @@ export default function ModulesSection() {
         </div>
         {loading ? (
           <div className="flex justify-center py-8"><Spinner /></div>
+        ) : loadError ? (
+          <DataError message={t("settings.modules.unreadable", { message: loadError })} onRetry={load} />
         ) : modules.length === 0 ? (          <EmptyState icon={FileCode} title={t("settings.modules.empty")} message={t("settings.modules.empty_desc")} />
         ) : (
           <Table>
@@ -230,6 +244,7 @@ export default function ModulesSection() {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">{t("settings.modules.deploy_agent")}</Label>
+                <AgentLoadError message={agentsError} className="mb-1" />
                 <Select value={deployAgent} onValueChange={(v) => setDeployAgent(v || "")}>
                   <SelectTrigger className="text-xs">
                     <SelectValue placeholder={t("settings.modules.deploy_agent_placeholder")} />
@@ -237,6 +252,8 @@ export default function ModulesSection() {
                   <SelectContent>
                     {agentsLoading ? (
                       <SelectItem value="__loading" disabled>{t("common.loading")}</SelectItem>
+                    ) : agentsError ? (
+                      <SelectItem value="__error" disabled>{t("status.unknown")}</SelectItem>
                     ) : agents.length === 0 ? (
                       <SelectItem value="__none" disabled>{t("settings.modules.no_agents")}</SelectItem>
                     ) : (

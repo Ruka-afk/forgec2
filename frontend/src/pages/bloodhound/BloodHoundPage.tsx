@@ -57,6 +57,8 @@ export default function BloodHoundPage() {
   const [binaryStatus, setBinaryStatus] = useState<{ uploaded: boolean; filename: string }>({ uploaded: false, filename: "" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [resultsError, setResultsError] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
   const [selectedAgent, setSelectedAgent] = useState("");
   const [method, setMethod] = useState("DCOnly");
   const [collecting, setCollecting] = useState(false);
@@ -67,15 +69,27 @@ export default function BloodHoundPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setResultsError(null);
+    setStatusError(null);
     try {
-      let failed = 0;
       // /bloodhound/list responds {results,total} (no success envelope);
       // /bloodhound/status responds {total_collections,last_collection,...}.
+      // Track the two independently: a failed status query must not also make
+      // the results table look empty, and vice versa.
+      let resultsErr: string | null = null;
+      let statusErr: string | null = null;
       const [resultsRes, statusRes] = await Promise.all([
-        api.get<{ results?: BHResult[]; total?: number }>(paths.bloodhound.list).catch(() => { failed++; return null; }),
-        api.get<{ total_collections?: number; last_collection?: string; last_agent_id?: string }>("/bloodhound/status").catch(() => { failed++; return null; }),
+        api.get<{ results?: BHResult[]; total?: number }>(paths.bloodhound.list)
+          .catch((e: unknown) => { resultsErr = e instanceof Error ? e.message : t("bloodhound.toast.load_failed"); return null; }),
+        api.get<{ total_collections?: number; last_collection?: string; last_agent_id?: string }>("/bloodhound/status")
+          .catch((e: unknown) => { statusErr = e instanceof Error ? e.message : t("bloodhound.toast.load_failed"); return null; }),
       ]);
-      if (resultsRes) setResults((resultsRes.results || []) as BHResult[]);
+      if (resultsRes) {
+        setResults((resultsRes.results || []) as BHResult[]);
+      } else {
+        setResults([]);
+        setResultsError(resultsErr);
+      }
       if (statusRes) {
         setBinaryStatus({
           uploaded: (statusRes.total_collections ?? 0) > 0,
@@ -83,9 +97,10 @@ export default function BloodHoundPage() {
             ? `${statusRes.total_collections ?? 0} collections · latest via ${String(statusRes.last_agent_id).slice(0, 8)}`
             : "",
         });
+      } else {
+        setStatusError(statusErr);
       }
-      if (failed === 2) {
-        setError(t("bloodhound.toast.load_failed"));
+      if (resultsErr || statusErr) {
         toast.error(t("bloodhound.toast.load_failed"));
       }
     } catch {
@@ -157,13 +172,16 @@ export default function BloodHoundPage() {
 
       <Card className="px-4 sm:px-5 hover:shadow-lg dark:hover:shadow-xl transition-shadow">
         <div className="flex items-center gap-x-3 mb-5">
-          <IconBadge icon={binaryStatus.uploaded ? CheckCircle : CircleAlert} color={binaryStatus.uploaded ? "success" : "warning"} size="lg" />
+          <IconBadge icon={statusError ? CircleAlert : binaryStatus.uploaded ? CheckCircle : CircleAlert} color={statusError ? "warning" : binaryStatus.uploaded ? "success" : "warning"} size="lg" />
           <div>
             <div className="text-sm font-semibold text-foreground">{t("bloodhound.sharp_hound_status")}</div>
             <div className="text-xs text-muted-foreground">
-              {binaryStatus.uploaded
-                ? `Uploaded ${binaryStatus.filename}`
-                : t("bloodhound.not_uploaded")}
+              {/* A failed status query must not read as "not uploaded". */}
+              {statusError
+                ? t("bloodhound.status_unreadable", { message: statusError })
+                : binaryStatus.uploaded
+                  ? `Uploaded ${binaryStatus.filename}`
+                  : t("bloodhound.not_uploaded")}
             </div>
           </div>
         </div>
@@ -247,7 +265,7 @@ export default function BloodHoundPage() {
             <RefreshCw className="size-4" />Refresh
           </Button>
         </div>
-        <DataState loading={loading} error={error} onRetry={loadData} empty={!loading && !error && results.length === 0} emptyIcon={PawPrint} emptyTitle={t("bloodhound.empty_title")} emptyMessage={t("bloodhound.empty_message")}>
+        <DataState loading={loading} error={error ?? (resultsError ? t("bloodhound.results_unreadable", { message: resultsError }) : null)} onRetry={loadData} empty={!loading && !error && !resultsError && results.length === 0} emptyIcon={PawPrint} emptyTitle={t("bloodhound.empty_title")} emptyMessage={t("bloodhound.empty_message")}>
         <div>
           {results.length > 0 ? (
             <Table>

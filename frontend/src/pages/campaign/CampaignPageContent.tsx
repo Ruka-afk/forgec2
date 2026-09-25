@@ -8,6 +8,7 @@ import { useI18n } from "@/lib/i18n";
 import { phaseColor } from "@/lib/chart-palette";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { EmptyState } from "@/components/ui/empty-state";
+import { DataError } from "@/components/ui/data-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { Spinner } from "@/components/ui/spinner";
 import { StatCard } from "@/components/ui/animated-stat-card";
@@ -61,6 +62,7 @@ export default function CampaignPageContent() {
   const {
     campaigns,
     loading,
+    listError,
     selectedCampaign,
     setSelectedCampaign,
     campaignStats,
@@ -70,6 +72,7 @@ export default function CampaignPageContent() {
     createCampaign,
     deleteCampaign,
     updateStatus,
+    loadCampaigns,
     loadCampaignDetail,
   } = useCampaignData();
 
@@ -159,7 +162,10 @@ export default function CampaignPageContent() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {campaigns.length === 0 && (
+              {listError && (
+                <TableRow><TableCell colSpan={5} className="py-10"><DataError message={t("campaign.list_unreadable", { message: listError })} onRetry={() => { void loadCampaigns(); }} /></TableCell></TableRow>
+              )}
+              {!listError && campaigns.length === 0 && (
                 <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-16 sm:py-20"><EmptyState icon={ListTodo} title={t("campaign.empty")} message={t("campaign.subtitle")} /></TableCell></TableRow>
               )}
               {campaigns.map((c) => (
@@ -212,27 +218,40 @@ function CampaignDetailView({
   const [expandedPhase, setExpandedPhase] = useState<string | null>(null);
   const [phaseTasks, setPhaseTasks] = useState<Record<string, PhaseTask[]>>({});
   const [showTimeline, setShowTimeline] = useState(false);
+  const [mitreError, setMitreError] = useState<string | null>(null);
+  const [templatesError, setTemplatesError] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
     (async () => {
-      try {
+      setMitreError(null);
+      setTemplatesError(null);
+      // Settle independently: one failed source must not blank the other, and a
+      // missing kill-chain template list must not look like "no templates".
+      const [mitreRes, tplRes] = await Promise.allSettled([
+        api.get<CampaignMITRE | { success: boolean; data?: CampaignMITRE }>(paths.campaigns.mitre(campaign.id), { signal: controller.signal }),
+        api.get<KillChainTemplate[] | { success: boolean; data?: KillChainTemplate[] }>(paths.mitre.templates, { signal: controller.signal }),
+      ]);
+      if (controller.signal.aborted) return;
+      if (mitreRes.status === "fulfilled") {
         // api.get auto-unwraps {success,data}: consume the payload directly —
         // checking .success here was always undefined (list/killchain dead).
-        const [mitreJson, tplJson] = await Promise.all([
-          api.get<CampaignMITRE | { success: boolean; data?: CampaignMITRE }>(paths.campaigns.mitre(campaign.id), { signal: controller.signal }),
-          api.get<KillChainTemplate[] | { success: boolean; data?: KillChainTemplate[] }>(paths.mitre.templates, { signal: controller.signal }),
-        ]);
-        const mitre = (mitreJson as CampaignMITRE).phases !== undefined
-          ? (mitreJson as CampaignMITRE)
-          : (mitreJson as { data?: CampaignMITRE }).data;
+        const mitre = (mitreRes.value as CampaignMITRE).phases !== undefined
+          ? (mitreRes.value as CampaignMITRE)
+          : (mitreRes.value as { data?: CampaignMITRE }).data;
         if (mitre) setMitreData(mitre);
-        const tpls = Array.isArray(tplJson)
-          ? (tplJson as KillChainTemplate[])
-          : (tplJson as { data?: KillChainTemplate[] }).data;
+      } else {
+        setMitreError(mitreRes.reason instanceof Error ? mitreRes.reason.message : t("campaign.toast.load_failed"));
+        toast.error(t("campaign.toast.load_failed"));
+      }
+      if (tplRes.status === "fulfilled") {
+        const tpls = Array.isArray(tplRes.value)
+          ? (tplRes.value as KillChainTemplate[])
+          : (tplRes.value as { data?: KillChainTemplate[] }).data;
         if (tpls) setTemplates(tpls);
-      } catch {
-        if (!controller.signal.aborted) toast.error(t("campaign.toast.load_failed"));
+      } else {
+        setTemplatesError(tplRes.reason instanceof Error ? tplRes.reason.message : t("campaign.toast.load_failed"));
+        toast.error(t("campaign.toast.load_failed"));
       }
     })();
     return () => controller.abort();
@@ -283,6 +302,18 @@ function CampaignDetailView({
 
   return (
     <div>
+      {mitreError && (
+        <DataError
+          message={t("campaign.mitre_unreadable", { message: mitreError })}
+          className="mb-4"
+        />
+      )}
+      {templatesError && (
+        <DataError
+          message={t("campaign.templates_unreadable", { message: templatesError })}
+          className="mb-4"
+        />
+      )}
       <div className="flex items-center gap-3 mb-6">
         <Button variant="ghost" size="icon" onClick={onBack} aria-label={t("campaign.a11y_back")}><ArrowLeft className="size-4" /></Button>
         <div className="flex-1">

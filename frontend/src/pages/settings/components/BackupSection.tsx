@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { Archive, Clock, Download, HardDrive, RefreshCw, Upload } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
+import { DataError } from "@/components/ui/data-state";
 import { Spinner } from "@/components/ui/spinner";
 import { formatTime, formatSize } from "@/lib/utils";
 import { downloadBlob } from "@/lib/download";
@@ -26,6 +27,7 @@ export default function BackupSection() {
   const { t } = useI18n();
   const [backups, setBackups] = useState<BackupInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [restoring, setRestoring] = useState<string | null>(null);
   const [confirmRestore, setConfirmRestore] = useState<BackupInfo | null>(null);
@@ -35,11 +37,16 @@ export default function BackupSection() {
 
   const loadBackups = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const backups = await api.get<BackupInfo[]>(paths.settings.dbBackups);
       setBackups(Array.isArray(backups) ? backups : []);
-    } catch {
-      toast.error(t("settings.toast.load_backups_failed"));
+    } catch (e) {
+      // An unread backup list is not the same as "there are no backups" —
+      // that empty state reads as a reassurance that recovery is impossible.
+      const msg = e instanceof Error ? e.message : t("settings.toast.load_backups_failed");
+      setLoadError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -136,6 +143,8 @@ export default function BackupSection() {
           <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
             <Spinner size="xs" className="mr-2" />{t("settings.backup.loading")}
           </div>
+        ) : loadError ? (
+          <DataError message={t("settings.backup.unreadable", { message: loadError })} onRetry={loadBackups} />
         ) : backups.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-muted-foreground text-sm gap-2">
             <EmptyState icon={HardDrive} title={t("settings.backup.empty_title")} message={t("settings.backup.empty_message")} />

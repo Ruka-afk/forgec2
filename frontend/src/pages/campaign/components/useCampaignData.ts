@@ -10,6 +10,7 @@ export function useCampaignData() {
   const { t } = useI18n();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<string | null>(null);
   const [campaignStats, setCampaignStats] = useState<CampaignStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
@@ -18,6 +19,7 @@ export function useCampaignData() {
 
   const loadCampaigns = useCallback(
     async (signal?: AbortSignal) => {
+      setListError(null);
       try {
         // api.get auto-unwraps {success,data} — the value IS the array.
         const data = await api.get<Campaign[] | { success: boolean; data?: Campaign[] }>(paths.campaigns.list, {
@@ -30,8 +32,14 @@ export function useCampaignData() {
         } else {
           setCampaigns([]);
         }
-      } catch {
-        if (!signal?.aborted) toast.error(t("campaign.toast.load_failed"));
+      } catch (e) {
+        if (!signal?.aborted) {
+          // Keep the list empty but say why: an unread list must not render
+          // as "you have no campaigns".
+          const msg = e instanceof Error ? e.message : t("campaign.toast.load_failed");
+          setListError(msg);
+          toast.error(msg);
+        }
       } finally {
         if (!signal?.aborted) setLoading(false);
       }
@@ -129,6 +137,7 @@ export function useCampaignData() {
   return {
     campaigns,
     loading,
+    listError,
     selectedCampaign,
     setSelectedCampaign,
     campaignStats,

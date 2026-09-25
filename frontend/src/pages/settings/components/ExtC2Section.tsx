@@ -4,6 +4,7 @@ import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
+import { DataError } from "@/components/ui/data-state";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -28,6 +29,7 @@ export default function ExtC2Section() {
   const { t } = useI18n();
   const [channels, setChannels] = useState<ExtC2Channel[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [formType, setFormType] = useState<"discord" | "slack" | "telegram">("discord");
   const [botToken, setBotToken] = useState("");
@@ -36,12 +38,17 @@ export default function ExtC2Section() {
   const { confirm, modal } = useConfirm();
 
   const fetchChannels = useCallback(async () => {
+    setLoadError(null);
     try {
       const data: ExtC2ChannelList = await api.get(paths.extc2.configs);
       setChannels(data.channels || []);
-    } catch { /* ignore */ }
-    setLoading(false);
-  }, []);
+    } catch (e) {
+      setChannels([]);
+      setLoadError(e instanceof Error ? e.message : t("settings.toast.load_failed"));
+    } finally {
+      setLoading(false);
+    }
+  }, [t]);
 
   useEffect(() => { fetchChannels(); }, [fetchChannels]);
 
@@ -94,7 +101,14 @@ export default function ExtC2Section() {
         </div>
       </div>
 
-      {channels.length === 0 && !loading && (
+      {loadError && (
+        <DataError
+          message={t("settings.extc2.unreadable", { message: loadError })}
+          onRetry={() => { setLoading(true); void fetchChannels(); }}
+        />
+      )}
+
+      {!loadError && channels.length === 0 && !loading && (
         <p className="text-xs text-muted-foreground text-center py-4">{t("settings.extc2.noChannels")}</p>
       )}
 

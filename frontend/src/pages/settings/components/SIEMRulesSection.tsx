@@ -4,6 +4,7 @@ import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
+import { DataError } from "@/components/ui/data-state";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -53,6 +54,7 @@ export default function SIEMRulesSection() {
   const { t } = useI18n();
   const [rules, setRules] = useState<SIEMRule[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<RuleForm>(emptyForm);
@@ -60,12 +62,17 @@ export default function SIEMRulesSection() {
   const { confirm, modal } = useConfirm();
 
   const fetchRules = useCallback(async () => {
+    setLoadError(null);
     try {
       const data: SIEMRuleList = await api.get(paths.siem.rules);
       setRules(data.rules || []);
-    } catch { /* ignore */ }
-    setLoading(false);
-  }, []);
+    } catch (e) {
+      setRules([]);
+      setLoadError(e instanceof Error ? e.message : t("settings.toast.load_failed"));
+    } finally {
+      setLoading(false);
+    }
+  }, [t]);
 
   useEffect(() => { fetchRules(); }, [fetchRules]);
 
@@ -146,7 +153,14 @@ export default function SIEMRulesSection() {
         </div>
       </div>
 
-      {rules.length === 0 && !loading && (
+      {loadError && (
+        <DataError
+          message={t("settings.siem.unreadable", { message: loadError })}
+          onRetry={() => { setLoading(true); void fetchRules(); }}
+        />
+      )}
+
+      {!loadError && rules.length === 0 && !loading && (
         <p className="text-xs text-muted-foreground text-center py-4">{t("settings.siem.noRules")}</p>
       )}
 

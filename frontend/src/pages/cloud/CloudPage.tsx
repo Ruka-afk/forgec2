@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DataError } from "@/components/ui/data-state";
 import { toast } from "sonner";
 import { Check, Cloud, CloudUpload, Copy, List } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
@@ -51,6 +52,7 @@ export default function CloudPage() {
   const [results, setResults] = useState<CloudCred[]>([]);
   const [resultsLoading, setResultsLoading] = useState(false);
   const [resultsFor, setResultsFor] = useState("");
+  const [resultsError, setResultsError] = useState<string | null>(null);
   const [selectedAgentResults, setSelectedAgentResults] = useState("");
   const [pollNote, setPollNote] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -58,18 +60,20 @@ export default function CloudPage() {
   const loadResults = useCallback(async (agentId: string, quiet = false): Promise<number> => {
     if (!agentId) return 0;
     setResultsLoading(true);
+    setResultsError(null);
     try {
       const data: CloudResultsResponse = await api.get<CloudResultsResponse>(`/cloud/${agentId}/results`);
       const list = data.results || [];
       setResults(list);
       setResultsFor(agentId);
       return list.length;
-    } catch {
+    } catch (e) {
       if (!quiet) toast.error(t("cloud.load_results_failed"));
       // Drop the rows: keeping another agent's credentials on screen (or the
       // previous agent's) after a failed load misattributes them.
       setResults([]);
       setResultsFor("");
+      setResultsError(e instanceof Error ? e.message : t("cloud.load_results_failed"));
       return -1;
     } finally {
       setResultsLoading(false);
@@ -218,6 +222,11 @@ export default function CloudPage() {
               <Skeleton key={i} className="h-8 w-full" />
             ))}
           </div>
+        ) : resultsFor === selectedAgentResults && resultsError ? (
+          <DataError
+            message={t("cloud.results_unreadable", { message: resultsError })}
+            onRetry={() => { if (selectedAgentResults) void loadResults(selectedAgentResults); }}
+          />
         ) : resultsFor === selectedAgentResults && results.length > 0 ? (
           <Table>
             <TableHeader>
