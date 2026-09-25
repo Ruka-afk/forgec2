@@ -16,7 +16,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { fetchAIStatus } from "@/lib/ai-status";
+import { useAIStatus } from "@/lib/hooks/useAIStatus";
 import { Sparkles, Wand2, Save } from "lucide-react";
 
 interface PBStep {
@@ -30,7 +30,7 @@ interface PBStep {
 // through the ordinary macro runner and its approval semantics.
 export function AIPlaybookDialog({ onSaved }: { onSaved: () => void }) {
   const { t } = useI18n();
-  const [aiReady, setAiReady] = useState<boolean | null>(null);
+  const { status } = useAIStatus();
   const [open, setOpen] = useState(false);
   const [goal, setGoal] = useState("");
   const [agentId, setAgentId] = useState("");
@@ -39,11 +39,9 @@ export function AIPlaybookDialog({ onSaved }: { onSaved: () => void }) {
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<{ name: string; description: string; steps: PBStep[] } | null>(null);
 
-  if (aiReady === null) {
-    void fetchAIStatus().then((st) => setAiReady(st.enabled));
-    return null;
-  }
-  if (!aiReady) return null;
+  if (status === null) return null;
+  // A failed status query is unknown, not a reason to hide the feature.
+  if (status.known && !status.enabled) return null;
 
   const openDialog = async () => {
     setOpen(true);

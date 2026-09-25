@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
-import { fetchAIStatus } from "@/lib/ai-status";
+import { useAIStatus } from "@/lib/hooks/useAIStatus";
 import { MessageSquareText, Search, Sparkles } from "lucide-react";
 
 interface NLFilter {
@@ -34,18 +34,16 @@ interface NLTaskRow {
 // operator can see exactly how their question was interpreted.
 function NLQueryDialog() {
   const { t } = useI18n();
-  const [aiReady, setAiReady] = useState<boolean | null>(null);
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState("");
+  const { status } = useAIStatus();
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<NLFilter | null>(null);
   const [rows, setRows] = useState<NLTaskRow[]>([]);
 
-  if (aiReady === null) {
-    void fetchAIStatus().then((st) => setAiReady(st.enabled));
-    return null;
-  }
-  if (!aiReady) return null;
+  if (status === null) return null;
+  // A failed status query is unknown, not a reason to hide the feature.
+  if (status.known && !status.enabled) return null;
 
   const ask = async () => {
     const q = question.trim();

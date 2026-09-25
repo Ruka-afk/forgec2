@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
-import { fetchAIStatus } from "@/lib/ai-status";
+import { useAIStatus } from "@/lib/hooks/useAIStatus";
 import { Sparkles, AlertTriangle, ShieldAlert, Globe, FolderOpen, KeyRound, Info, ArrowRight } from "lucide-react";
 
 interface Analysis {
@@ -35,15 +35,13 @@ const SEVERITY_CLASS: Record<string, string> = {
 // subsystem is disabled (graceful degradation contract).
 function AIAnalysisButton({ taskId }: { taskId: number }) {
   const { t } = useI18n();
-  const [aiReady, setAiReady] = useState<boolean | null>(null);
+  const { status } = useAIStatus();
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
 
-  if (aiReady === null) {
-    void fetchAIStatus().then((st) => setAiReady(st.enabled));
-    return null;
-  }
-  if (!aiReady) return null;
+  if (status === null) return null;
+  // A failed status query is unknown, not a reason to hide the feature.
+  if (status.known && !status.enabled) return null;
 
   const run = async () => {
     setLoading(true);

@@ -4716,6 +4716,8 @@ export const en: Record<string, string> = {
     "workflows.move_up": "Move up",
     "workflows.new": "New Workflow",
     "workflows.no_executions": "No executions yet.",
+    "workflows.executions_unreadable": "Execution history could not be read — this is not a report of zero executions. {message}",
+    "workflows.exec_logs_unreadable": "Step logs could not be read — this is not a report of zero steps. {message}",
     "workflows.on_failure": "On failure:",
     "workflows.on_success": "On success:",
     "workflows.remove_step": "Remove step",

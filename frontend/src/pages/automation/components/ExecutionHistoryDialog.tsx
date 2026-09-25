@@ -1,5 +1,5 @@
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { Spinner } from "@/components/ui/spinner";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { History, ChevronRight, X } from "lucide-react";
+import { DataError } from "@/components/ui/data-state";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { formatTime, enumLabel } from "@/lib/utils";
@@ -60,19 +61,25 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
   const [selectedExec, setSelectedExec] = useState<string | null>(null);
   const [execLogs, setExecLogs] = useState<StepLog[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [execLogsError, setExecLogsError] = useState<string | null>(null);
 
   const openHistory = useCallback(async (wfId: string) => {
     setSelectedExec(null);
     setExecLogs([]);
+    setLoadError(null);
     setLoading(true);
     try {
       const data = await api.get(`${paths.workflows.one(wfId)}/executions`);
       setExecutions((data.executions || []) as WorkflowExecution[]);
-    } catch {
+    } catch (e) {
       setExecutions([]);
-      toast.error(t("workflows.toast.load_exec_failed"));
+      const msg = e instanceof Error ? e.message : t("workflows.toast.load_exec_failed");
+      setLoadError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [t]);
 
   const loadExecutions = useCallback(async () => {
@@ -82,12 +89,15 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
 
   const viewExecution = useCallback(async (execId: string) => {
     setSelectedExec(execId);
+    setExecLogsError(null);
     try {
       const data = await api.get(`${paths.workflows.one(String(workflowId))}/executions/${execId}`);
       setExecLogs((data.logs || []) as StepLog[]);
-    } catch {
+    } catch (e) {
       setExecLogs([]);
-      toast.error(t("workflows.toast.load_exec_failed"));
+      const msg = e instanceof Error ? e.message : t("workflows.toast.load_exec_failed");
+      setExecLogsError(msg);
+      toast.error(msg);
     }
   }, [workflowId, t]);
 
@@ -95,16 +105,19 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
     if (!open) {
       setSelectedExec(null);
       setExecLogs([]);
+      setExecLogsError(null);
       setExecutions([]);
+      setLoadError(null);
       onClose();
     }
   };
 
-  if (workflowId) {
-    if (executions.length === 0 && !loading) {
-      loadExecutions();
-    }
-  }
+  // Load from an effect. This used to run during render whenever the list was
+  // empty, so a failed read re-fired the request on every render in a loop.
+  useEffect(() => {
+    if (!workflowId) return;
+    void loadExecutions();
+  }, [workflowId, loadExecutions]);
 
   return (
     <Dialog open={workflowId !== null} onOpenChange={handleOpenChange}>
@@ -122,7 +135,9 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
         {loading ? (
           <div className="flex justify-center py-8"><Spinner /></div>
         ) : selectedExec === null ? (
-          executions.length === 0 ? (
+          loadError ? (
+            <DataError message={t("workflows.executions_unreadable", { message: loadError })} onRetry={() => { void loadExecutions(); }} />
+          ) : executions.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4 text-center">{t("workflows.no_executions")}</p>
           ) : (
             <div className="flex flex-col gap-2">
@@ -141,6 +156,9 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
           )
         ) : (
           <div className="space-y-3">
+            {execLogsError && (
+              <DataError message={t("workflows.exec_logs_unreadable", { message: execLogsError })} onRetry={() => { if (selectedExec) void viewExecution(selectedExec); }} />
+            )}
             {execLogs.map(log => (
               <div key={log.id} className="p-3 rounded-lg bg-muted border-l-2 border-l-primary">
                 <div className="flex items-center gap-2 mb-1">

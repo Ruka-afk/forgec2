@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Lightbulb, Copy, Play, Sparkles } from "lucide-react";
-import { fetchAIStatus } from "@/lib/ai-status";
+import { useAIStatus } from "@/lib/hooks/useAIStatus";
 
 interface Suggestion {
   action: string;
@@ -25,19 +25,15 @@ const RISK_VARIANT: Record<string, "success" | "warning" | "destructive"> = {
 
 export function AISuggestCard({ agentId, online }: { agentId: string; online: boolean }) {
   const { t } = useI18n();
-  const [aiReady, setAiReady] = useState<boolean | null>(null);
+  const { status } = useAIStatus();
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null);
   const [executingIdx, setExecutingIdx] = useState<number>(-1);
 
-  // Probe once; hide entirely when the AI subsystem is off (graceful degrade).
-  useEffect(() => {
-    let cancelled = false;
-    fetchAIStatus().then((st) => { if (!cancelled) setAiReady(st.enabled); });
-    return () => { cancelled = true; };
-  }, []);
-  if (aiReady === null) return null;
-  if (!aiReady) return null;
+  if (status === null) return null;
+  // A genuinely disabled AI subsystem hides this card; a failed status query
+  // must not, so the feature stays visible with an explicit unknown state.
+  if (status.known && !status.enabled) return null;
 
   const loadSuggestions = async () => {
     setLoading(true);

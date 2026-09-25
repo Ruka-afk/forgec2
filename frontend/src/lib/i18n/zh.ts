@@ -4731,6 +4731,8 @@ export const zh: Record<string, string> = {
     "workflows.move_up": "上移",
     "workflows.new": "新建工作流",
     "workflows.no_executions": "暂无执行记录。",
+    "workflows.executions_unreadable": "无法读取执行历史 — 这并不代表没有执行记录。{message}",
+    "workflows.exec_logs_unreadable": "无法读取步骤日志 — 这并不代表没有步骤。{message}",
     "workflows.on_failure": "失败时：",
     "workflows.on_success": "成功时：",
     "workflows.remove_step": "移除步骤",
