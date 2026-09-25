@@ -23,23 +23,15 @@ import { parseGenerateQuery } from "@/lib/generate-query";
 
 const DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
 
-const DEFAULT_PROFILE_PRESETS: ProfilePreset[] = [
-  { name: "default", description: "Default", user_agent: "", sleep: 0, jitter: 0 },
-  { name: "google", description: "Google", user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36", sleep: 8, jitter: 15 },
-  { name: "bing", description: "Bing", user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/138.0.0.0", sleep: 10, jitter: 20 },
-  { name: "amazon", description: "Amazon - AWS CDN", user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/140.0", sleep: 15, jitter: 25 },
-  { name: "cloudflare", description: "Cloudflare", user_agent: "Mozilla/5.0 (compatible; Cloudflare-Health-Checks/1.0; +https://www.cloudflare.com/)", sleep: 30, jitter: 10 },
-  { name: "github", description: "GitHub", user_agent: "GitHub-Hookshot/abcd1234", sleep: 5, jitter: 5 },
-  { name: "office365", description: "Office 365", user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 OPR/117.0.0.0", sleep: 20, jitter: 15 },
-  { name: "teams", description: "Microsoft Teams", user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Teams/1.6.00.27573", sleep: 10, jitter: 20 },
-  { name: "slack", description: "Slack", user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Slack/4.36.0", sleep: 8, jitter: 15 },
-  { name: "zoom", description: "Zoom", user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Zoom/5.17.5", sleep: 6, jitter: 10 },
-  { name: "dropbox", description: "Dropbox", user_agent: "DropboxDesktopClient/187.4.6204 (Windows; 10.0; Win64; x64)", sleep: 12, jitter: 20 },
-  { name: "windows_update", description: "Windows Update", user_agent: "Windows-Update-Agent/10.0.19041.3636", sleep: 60, jitter: 10 },
-  { name: "firefox_update", description: "Firefox", user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/140.0", sleep: 120, jitter: 15 },
-  { name: "apple", description: "Apple", user_agent: "Mac OS X/10.15.7 (KHTML, like Gecko) Version/17.2 Safari/605.1.15", sleep: 30, jitter: 20 },
-  { name: "adobe", description: "Adobe", user_agent: "Creative Cloud/6.4.0.361 (Windows; x64)", sleep: 45, jitter: 25 },
-];
+/*
+ * No hard-coded profile catalog on purpose. A frontend copy silently drifts
+ * from the server's embedded profiles — the stale "google" preset here said
+ * 8s/15% while internal/payload/profiles/google.json says 30s/30% — so a
+ * failed or empty profile read used to render the frontend copy with a
+ * "Profile locked" badge, as if those numbers were authoritative. The catalog
+ * now comes only from GET /api/generate/profiles, and an unreadable catalog
+ * leaves the picker empty rather than wrong.
+ */
 
 export function usePayloadGenerator() {
   const { t } = useI18n();
@@ -49,7 +41,13 @@ export function usePayloadGenerator() {
   useEffect(() => { connectedRef.current = connected; }, [connected]);
   const [listeners, setListeners] = useState<Listener[]>([]);
   const [loading, setLoading] = useState(true);
-  const [profilePresets, setProfilePresets] = useState<ProfilePreset[]>(DEFAULT_PROFILE_PRESETS);
+  const [profilePresets, setProfilePresets] = useState<ProfilePreset[]>([]);
+  // A build carries a profile name to the server, which resolves the actual
+  // timing/UA. That makes the catalog load a precondition for building, not
+  // just a picker population: until it is read, profile-bearing generation
+  // must stay blocked rather than proceed against an unknown catalog.
+  const [profilesLoaded, setProfilesLoaded] = useState(false);
+  const [profilesError, setProfilesError] = useState<string | null>(null);
   const [profileLocked, setProfileLocked] = useState(false);
   const savedManualRef = useRef<{ interval: string; jitter: string; ua: string } | null>(null);
   const prevProfileRef = useRef<string>("default");
@@ -94,12 +92,27 @@ export function usePayloadGenerator() {
     } catch (e) {
       setListeners([]);
       toast.error(e instanceof Error ? e.message : t("generate.toast.load_listeners_failed"));
-    } finally { setLoading(false); }
+    }
     try {
       const profileData = await api.get(paths.generate.profiles);
-      setProfilePresets((prev) => extractProfilePresets(profileData, prev));
+      // The server lists its embedded profile set, so a catalog that comes
+      // back empty did not deliver one. Treat it as unread instead of
+      // substituting a catalog we cannot vouch for.
+      const next = extractProfilePresets(profileData, []);
+      if (next.length === 0) {
+        setProfilesError(t("generate.profiles_unreadable"));
+      } else {
+        setProfilePresets(next);
+        setProfilesError(null);
+      }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("generate.toast.load_profiles_failed"));
+      setProfilesError(e instanceof Error ? e.message : t("generate.profiles_unreadable"));
+    } finally {
+      // Profiles resolve after listeners; clearing the page-level spinner
+      // here (rather than in the listeners block) is what keeps the workspace
+      // — and its Generate action — from appearing before the catalog is known.
+      setProfilesLoaded(true);
+      setLoading(false);
     }
   }, [t]);
 
@@ -696,7 +709,7 @@ export function usePayloadGenerator() {
   }), [handleGenerateBinary, handleGeneratePS1, handleGenerateUnix, handleGenerateStager, handleGenerateShellcode, handleGenerateDonut, handleGenerateOneLiner]);
 
   return {
-    listeners, loading, profilePresets, profileLocked,
+    listeners, loading, profilePresets, profileLocked, profilesLoaded, profilesError, loadData,
     showListenerModal, setShowListenerModal,
     listenerForm, setListenerForm,
     shared, setShared,

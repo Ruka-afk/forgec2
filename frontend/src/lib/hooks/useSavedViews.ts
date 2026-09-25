@@ -16,13 +16,18 @@ interface SavedView {
 export function useSavedViews(page: string) {
   const [views, setViews] = useState<SavedView[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    setError(null);
     try {
       const d = await api.get<{ views?: SavedView[] }>(paths.settings.savedViews(page));
       setViews(d.views || []);
-    } catch {
-      setViews([]);
+    } catch (err) {
+      // Keep any views already known. Replacing them with [] was worse than a
+      // missing list: the picker stayed fully usable, and saving under an
+      // existing name silently replaced that view server-side.
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoaded(true);
     }
@@ -44,5 +49,5 @@ export function useSavedViews(page: string) {
     setViews((prev) => prev.filter((v) => v.id !== id));
   }, []);
 
-  return { views, loaded, save, remove, reload: load };
+  return { views, loaded, error, save, remove, reload: load };
 }

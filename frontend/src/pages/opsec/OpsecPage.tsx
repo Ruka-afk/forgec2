@@ -9,6 +9,7 @@ import { useConfirm } from "@/lib/hooks/useConfirm";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { StatTile } from "@/components/ui/stat-tile";
+import { DataError } from "@/components/ui/data-state";
 import { PageSpinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { formatTime, cn } from "@/lib/utils";
@@ -65,6 +66,15 @@ interface RekeyStats {
   rekeys_by_agent?: RekeyEntry[];
 }
 
+/** `failedSources` names the reads that were rejected, so each card can say
+ *  which of its numbers is unknown instead of showing a substituted zero. */
+interface OpsecPageData {
+  rules: OpsecRule[];
+  history: OpsecHistoryItem[];
+  rekey: RekeyStats;
+  failedSources: string[];
+}
+
 export default function OpsecPage() {
   const { t } = useI18n();
   const [testResult, setTestResult] = useState<TestResult | null>(null);
@@ -111,19 +121,29 @@ export default function OpsecPage() {
     { id: "portscan", label: t("opsec.tool_portscan"), icon: <Network className="size-4" />, danger: false },
   ];
 
-  const { data, loading, refresh: loadData } = useApiResource<{ rules: OpsecRule[]; history: OpsecHistoryItem[]; rekey: RekeyStats }>({
+  const { data, loading, refresh: loadData } = useApiResource<OpsecPageData>({
     fetcher: async () => {
-      let failed = 0;
-      const [rulesData, histData, rekeyData] = await Promise.all([
-        api.get<{ rules: OpsecRule[] }>(paths.opsec.rulesApi).catch(() => { failed++; return { rules: [] as OpsecRule[] }; }),
-        api.get(paths.opsec.history).catch(() => { failed++; return { history: [] }; }),
-        api.get<RekeyStats>(paths.opsec.rekey).catch(() => { failed++; return { active_sessions: 0, total_rekeys: 0 } as RekeyStats; }),
+      // Settle independently: a single Promise.all with per-source catch used
+      // to swap the failed source for a zero, so an unreadable rekey source
+      // rendered as "0 active sessions" and the reassuring "crypto sessions
+      // are stable" empty state below it.
+      const [rulesRes, histRes, rekeyRes] = await Promise.allSettled([
+        api.get<{ rules: OpsecRule[] }>(paths.opsec.rulesApi),
+        api.get<{ history?: OpsecHistoryItem[] }>(paths.opsec.history),
+        api.get<RekeyStats>(paths.opsec.rekey),
       ]);
-      if (failed > 0) toast.error(t("opsec.toast.load_failed"));
+      const failedSources: string[] = [];
+      if (rulesRes.status === "rejected") failedSources.push(t("opsec.source_rules"));
+      if (histRes.status === "rejected") failedSources.push(t("opsec.source_history"));
+      if (rekeyRes.status === "rejected") failedSources.push(t("opsec.source_rekey"));
+      if (failedSources.length > 0) toast.error(t("opsec.toast.load_failed"));
       return {
-        rules: rulesData.rules || [],
-        history: (histData.history || []) as OpsecHistoryItem[],
-        rekey: rekeyData || { active_sessions: 0, total_rekeys: 0 },
+        rules: rulesRes.status === "fulfilled" ? (rulesRes.value.rules || []) : [],
+        history: histRes.status === "fulfilled" ? (histRes.value.history || []) : [],
+        rekey: rekeyRes.status === "fulfilled"
+          ? (rekeyRes.value || { active_sessions: 0, total_rekeys: 0 })
+          : { active_sessions: 0, total_rekeys: 0 },
+        failedSources,
       };
     },
     toastThrottleMs: 0,
@@ -132,6 +152,9 @@ export default function OpsecPage() {
   const rules = data?.rules ?? [];
   const history = data?.history ?? [];
   const rekeyStats = data?.rekey ?? { active_sessions: 0, total_rekeys: 0 };
+  const rulesUnread = (data?.failedSources ?? []).includes(t("opsec.source_rules"));
+  const historyUnread = (data?.failedSources ?? []).includes(t("opsec.source_history"));
+  const rekeyUnread = (data?.failedSources ?? []).includes(t("opsec.source_rekey"));
 
   const handleRunTest = async (taskType: string) => {
     try {
@@ -192,9 +215,9 @@ export default function OpsecPage() {
     <>
       <PageContainer title={t("opsec.title")} subtitle={t("opsec.subtitle")} actions={<>
         <div className="flex items-center gap-2">
-          <span className="size-2 bg-success rounded-full animate-pulse"></span>
-          <span className="text-xs text-success font-medium">
-            {rules.length} {t("opsec.active_rules")}
+          <span className={cn("size-2 rounded-full animate-pulse", rulesUnread ? "bg-warning" : "bg-success")}></span>
+          <span className={cn("text-xs font-medium", rulesUnread ? "text-warning" : "text-success")}>
+            {rulesUnread ? "?" : rules.length} {t("opsec.active_rules")}
           </span>
         </div>
       </>}>
@@ -218,7 +241,11 @@ export default function OpsecPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rules.length === 0 ? (
+              {rulesUnread ? (
+              <TableRow>
+                <TableCell colSpan={5}><DataError message={t("opsec.rules_unreadable")} onRetry={loadData} /></TableCell>
+              </TableRow>
+              ) : rules.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5}><EmptyState icon={ShieldCheck} title={t("opsec.empty")} message={t("opsec.empty_desc")} /></TableCell>
               </TableRow>
@@ -331,16 +358,18 @@ export default function OpsecPage() {
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
             <div className="p-3 bg-muted border border-border rounded-lg">
-              <StatTile label={t("opsec.rekey_active_sessions")} value={rekeyStats.active_sessions} />
+              <StatTile label={t("opsec.rekey_active_sessions")} value={rekeyUnread ? "?" : rekeyStats.active_sessions} />
             </div>
             <div className="p-3 bg-muted border border-border rounded-lg">
-              <StatTile label={t("opsec.rekey_total")} value={rekeyStats.total_rekeys} />
+              <StatTile label={t("opsec.rekey_total")} value={rekeyUnread ? "?" : rekeyStats.total_rekeys} />
             </div>
             <div className="p-3 bg-muted border border-border rounded-lg">
-              <StatTile label={t("opsec.rekey_agents")} value={rekeyStats.rekeys_by_agent?.length ?? 0} />
+              <StatTile label={t("opsec.rekey_agents")} value={rekeyUnread ? "?" : rekeyStats.rekeys_by_agent?.length ?? 0} />
             </div>
           </div>
-          {rekeyStats.rekeys_by_agent && rekeyStats.rekeys_by_agent.length > 0 ? (
+          {rekeyUnread ? (
+            <DataError message={t("opsec.rekey_unreadable")} onRetry={loadData} />
+          ) : rekeyStats.rekeys_by_agent && rekeyStats.rekeys_by_agent.length > 0 ? (
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {rekeyStats.rekeys_by_agent.map((entry) => (
                 <div key={entry.agent_id} className="flex items-center justify-between gap-3 p-3 bg-muted border border-border rounded-lg text-xs">
@@ -366,7 +395,9 @@ export default function OpsecPage() {
             <History className="size-4" />
             {t("opsec.history")}
           </h2>
-          {history.length === 0 ? (
+          {historyUnread ? (
+            <DataError message={t("opsec.history_unreadable")} onRetry={loadData} />
+          ) : history.length === 0 ? (
             <EmptyState icon={History} title={t("opsec.history_empty")} />
           ) : (
             <div className="space-y-2 max-h-64 overflow-y-auto">

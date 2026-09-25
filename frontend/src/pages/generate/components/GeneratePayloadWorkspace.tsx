@@ -14,7 +14,7 @@ import { ListenerCallbackStrip } from "./ListenerCallbackStrip";
 
 import { usePayloadGenerator } from "../hooks/usePayloadGenerator";
 import type { PayloadKey } from "@/types/generate";
-import { AppWindow, Cpu, Info, PackageOpen, X } from "lucide-react";
+import { AlertTriangle, AppWindow, Cpu, Info, PackageOpen, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ConnectionPanel = lazy(() => import("./ConnectionPanel"));
@@ -131,7 +131,12 @@ export default function GeneratePayloadWorkspace() {
   if (g.loading) return <PageSpinner />;
 
   const currentListener = g.listeners.find((l) => String(l.id) === String(g.shared.listener_id));
-  const canGenerate = canGeneratePayload({
+  // The build POST carries a profile name that the server resolves into the
+  // real sleep/jitter/UA, so building against an unknown profile catalog would
+  // ship a payload whose beacon profile was never verified. Keep generation
+  // closed until the catalog has been read successfully.
+  const profilesKnown = g.profilesLoaded && !g.profilesError;
+  const canGenerate = profilesKnown && canGeneratePayload({
     listenerId: g.shared.listener_id,
     listenerScheme: currentListener?.scheme || currentListener?.type,
     beaconTransport: g.shared.beacon_transport,
@@ -185,6 +190,14 @@ export default function GeneratePayloadWorkspace() {
             </TooltipTrigger>
             <TooltipContent>{t("generate.dismiss")}</TooltipContent>
           </Tooltip>
+        </div>
+      )}
+
+      {g.profilesError && (
+        <div role="alert" className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-foreground">
+          <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1">{t("generate.profiles_blocked")}</span>
+          <Button onClick={() => { void g.loadData(); }} size="sm" variant="outline" className="min-h-11 px-4 sm:min-h-7 sm:px-2.5">{t("common.try_again")}</Button>
         </div>
       )}
 

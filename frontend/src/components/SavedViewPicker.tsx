@@ -26,7 +26,7 @@ interface SavedViewPickerProps {
 export default function SavedViewPicker({ page, getState, applyState }: SavedViewPickerProps) {
   const { t } = useI18n();
   const { confirm } = useConfirm();
-  const { views, save, remove } = useSavedViews(page);
+  const { views, loaded, error, save, remove, reload } = useSavedViews(page);
   const [selectedId, setSelectedId] = useState("");
   const [naming, setNaming] = useState(false);
   const [nameInput, setNameInput] = useState("");
@@ -45,9 +45,14 @@ export default function SavedViewPicker({ page, getState, applyState }: SavedVie
     }
   };
 
+  // A same-name save is an upsert, so writing while the existing views are
+  // unknown risks overwriting one of them. Block the write until the list is
+  // actually known.
+  const viewsKnown = loaded && !error;
+
   const handleSave = async () => {
     const name = nameInput.trim();
-    if (!name) return;
+    if (!name || !viewsKnown) return;
     try {
       await save(name, getState());
       // Select the freshly saved view (server upserts same-name entries).
@@ -77,13 +82,24 @@ export default function SavedViewPicker({ page, getState, applyState }: SavedVie
 
   return (
     <div className="flex items-center gap-1.5">
-      <Select value={selectedId} onValueChange={applySelected}>
+      <Select value={selectedId} onValueChange={applySelected} disabled={!!error}>
         <SelectTrigger className="w-[170px]" aria-label={t("savedviews.label")}>
           <Bookmark className="size-3.5 mr-1 text-muted-foreground shrink-0" />
-          <SelectValue placeholder={t("savedviews.placeholder")} />
+          <SelectValue placeholder={error ? t("savedviews.unreadable") : t("savedviews.placeholder")} />
         </SelectTrigger>
         <SelectContent>
-          {views.length === 0 ? (
+          {error ? (
+            <div className="px-2 py-1.5 text-xs text-muted-foreground">
+              {t("savedviews.unreadable")}
+              <button
+                type="button"
+                onClick={() => void reload()}
+                className="ml-1.5 underline underline-offset-2 hover:text-foreground"
+              >
+                {t("common.try_again")}
+              </button>
+            </div>
+          ) : views.length === 0 ? (
             <div className="px-2 py-1.5 text-xs text-muted-foreground">{t("savedviews.none")}</div>
           ) : (
             views.map((v) => (
@@ -106,7 +122,7 @@ export default function SavedViewPicker({ page, getState, applyState }: SavedVie
             placeholder={t("savedviews.name_ph")}
             className="h-8 w-32 rounded-lg border border-border bg-transparent px-2 text-xs"
           />
-          <Button variant="ghost" size="icon-sm" onClick={() => void handleSave()} aria-label={t("common.save")} className="text-primary">
+          <Button variant="ghost" size="icon-sm" onClick={() => void handleSave()} disabled={!viewsKnown || !nameInput.trim()} aria-label={t("common.save")} className="text-primary disabled:opacity-50">
             <BookmarkPlus className="size-4" />
           </Button>
           <Button variant="ghost" size="icon-sm" onClick={() => setNaming(false)} aria-label={t("common.cancel")} className="text-muted-foreground">
@@ -116,8 +132,10 @@ export default function SavedViewPicker({ page, getState, applyState }: SavedVie
       ) : (
         <>
           <Button variant="ghost" size="icon-sm" onClick={() => setNaming(true)}
-            title={t("savedviews.save_current")} aria-label={t("savedviews.save_current")}
-            className="text-muted-foreground hover:text-primary">
+            disabled={!viewsKnown}
+            title={error ? t("savedviews.save_blocked") : t("savedviews.save_current")}
+            aria-label={t("savedviews.save_current")}
+            className="text-muted-foreground hover:text-primary disabled:opacity-50">
             <BookmarkPlus className="size-4" />
           </Button>
           {selectedId && (
