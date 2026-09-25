@@ -26,11 +26,16 @@ func (s *Server) loadScriptsFromDB() {
 
 func (s *Server) handleScriptingPage(c *gin.Context) {
 	stats := s.getNavStats(c)
+	scripts, err := s.listScriptsFromDB()
+	if err != nil {
+		handleQueryError(c, err, "Failed to list scripts")
+		return
+	}
 	data := gin.H{
 		"Title":     "ForgeC2 - Scripting Console",
 		"ActiveNav": "scripting",
 		"Stats":     stats,
-		"Scripts":   s.listScriptsFromDB(),
+		"Scripts":   scripts,
 	}
 	for k, v := range stats {
 		data[k] = v
@@ -38,9 +43,11 @@ func (s *Server) handleScriptingPage(c *gin.Context) {
 	s.renderPageOrJSON(c, data)
 }
 
-func (s *Server) listScriptsFromDB() []scripting.Script {
+func (s *Server) listScriptsFromDB() ([]scripting.Script, error) {
 	var rows []db.Script
-	s.db.Order("updated_at desc").Limit(200).Find(&rows)
+	if err := s.db.Order("updated_at desc").Limit(200).Find(&rows).Error; err != nil {
+		return nil, err
+	}
 	out := make([]scripting.Script, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, scripting.Script{
@@ -54,11 +61,16 @@ func (s *Server) listScriptsFromDB() []scripting.Script {
 			LastRun:     row.LastRun,
 		})
 	}
-	return out
+	return out, nil
 }
 
 func (s *Server) handleAPIGetScripts(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": s.listScriptsFromDB()})
+	scripts, err := s.listScriptsFromDB()
+	if err != nil {
+		handleQueryError(c, err, "Failed to list scripts")
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": scripts})
 }
 
 func (s *Server) handleAPISaveScript(c *gin.Context) {

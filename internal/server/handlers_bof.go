@@ -17,7 +17,8 @@ func (s *Server) handleBOFPage(c *gin.Context) {
 
 	var bofs []db.BOFFile
 	if err := s.db.Order("created_at desc").Limit(500).Find(&bofs).Error; err != nil {
-		slog.Error("Failed to list BOFs", "err", err)
+		handleQueryError(c, err, "Failed to list BOFs")
+		return
 	}
 
 	data := gin.H{
@@ -95,7 +96,8 @@ func (s *Server) handleBOFUpload(c *gin.Context) {
 func (s *Server) handleBOFList(c *gin.Context) {
 	var bofs []db.BOFFile
 	if err := s.db.Order("created_at desc").Limit(500).Find(&bofs).Error; err != nil {
-		slog.Error("Failed to list BOFs", "err", err)
+		handleQueryError(c, err, "Failed to list BOFs")
+		return
 	}
 
 	results := make([]gin.H, 0, len(bofs))
@@ -229,7 +231,8 @@ func (s *Server) handleBOFRecentResults(c *gin.Context) {
 
 	var tasks []db.Task
 	if err := s.db.Where("type = ?", "bof").Preload("Agent").Order("created_at desc").Limit(limit).Find(&tasks).Error; err != nil {
-		slog.Error("Failed to list BOF results", "err", err)
+		handleQueryError(c, err, "Failed to list BOF results")
+		return
 	}
 
 	results := make([]gin.H, 0, len(tasks))

@@ -17,7 +17,8 @@ import (
 func (s *Server) handleAutoTagRules(c *gin.Context) {
 	var rules []db.AutoTagRule
 	if err := s.db.Preload("Tag").Order("priority desc, created_at desc").Limit(200).Find(&rules).Error; err != nil {
-		slog.Error("Failed to list auto-tag rules", "err", err)
+		handleQueryError(c, err, "Failed to list auto-tag rules")
+		return
 	}
 	respond(c, gin.H{"rules": rules})
 }

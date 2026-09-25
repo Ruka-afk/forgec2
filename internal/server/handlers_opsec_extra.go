@@ -16,11 +16,13 @@ func (s *Server) handleOpsecHistory(c *gin.Context) {
 	p := parsePagination(c, 50, 200)
 	var total int64
 	if err := s.db.Model(&db.OpsecHistory{}).Count(&total).Error; err != nil {
-		slog.Error("Failed to count OPSEC history", "err", err)
+		handleQueryError(c, err, "Failed to count OPSEC history")
+		return
 	}
 	var history []db.OpsecHistory
 	if err := s.db.Order("created_at desc").Offset(p.Offset).Limit(p.PageSize).Find(&history).Error; err != nil {
-		slog.Error("Failed to query OPSEC history", "err", err)
+		handleQueryError(c, err, "Failed to query OPSEC history")
+		return
 	}
 	respond(c, gin.H{"history": history, "total": total, "page": p.Page, "page_size": p.PageSize})
 }
@@ -119,7 +121,8 @@ func (s *Server) handleOpsecRuleDelete(c *gin.Context) {
 func (s *Server) handleOpsecRulesList(c *gin.Context) {
 	var rules []db.OpsecRule
 	if err := s.db.Order("risk_level desc, name").Limit(200).Find(&rules).Error; err != nil {
-		slog.Error("Failed to list OPSEC rules", "err", err)
+		handleQueryError(c, err, "Failed to list OPSEC rules")
+		return
 	}
 	respond(c, gin.H{"rules": rules})
 }

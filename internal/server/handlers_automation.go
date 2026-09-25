@@ -141,11 +141,13 @@ func (s *Server) handleListAutomationRules(c *gin.Context) {
 	p := parsePagination(c, 50, 200)
 	var total int64
 	if err := s.tenantScope(s.db.Model(&db.AutomationRule{}), c).Count(&total).Error; err != nil {
-		slog.Error("Failed to count automation rules", "err", err)
+		handleQueryError(c, err, "Failed to count automation rules")
+		return
 	}
 	var dbRules []db.AutomationRule
 	if err := s.tenantScope(s.db, c).Offset(p.Offset).Limit(p.PageSize).Find(&dbRules).Error; err != nil {
-		slog.Error("Failed to list automation rules", "err", err)
+		handleQueryError(c, err, "Failed to list automation rules")
+		return
 	}
 	var rules []AutomationRule
 	for _, dr := range dbRules {
