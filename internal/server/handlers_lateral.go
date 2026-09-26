@@ -246,10 +246,9 @@ func (s *Server) handleAPILateralExecute(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	task, err := s.createTask(req.Source, "lateral", spec, "", "", "", 0, 0)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create task")
-		return
+	task := s.issueAgentTask(c, req.Source, TaskSpec{Type: "lateral", Command: spec})
+	if task == nil {
+		return // issueAgentTask already responded: 404 (wrong tenant), 409 (locked) or 400
 	}
 	slog.Info("Lateral movement via JSON API", "agent_id", req.Source, "target", req.Target, "method", req.Method)
 	s.LogAuditRecord(c, "lateral", "agent", req.Source, lateralAuditSummary(spec), true, nil)
