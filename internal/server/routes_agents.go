@@ -62,8 +62,6 @@ func (s *Server) registerAgentRoutes(auth *gin.RouterGroup) {
 		agentsWrite.POST("/agents/:id/kill_date", s.handleSetKillDate)
 		agentsWrite.DELETE("/agents/:id/kill_date", s.handleClearKillDate)
 		agentsWrite.POST("/agents/:id/diagnose", s.handleAgentDiagnose)
-		agentsWrite.POST("/agents/:id/block", s.handleBlockAgent)
-		agentsWrite.DELETE("/agents/:id/block", s.handleUnblockAgent)
 	}
 	agentsDelete := auth.Group("/")
 	agentsDelete.Use(middleware.RequirePermission(db.PermAgentsDelete))

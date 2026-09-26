@@ -155,6 +155,8 @@ func (SGNEncoder) Decode(data []byte, key []byte) ([]byte, error) {
 }
 
 var (
+	// Populated once at init; the mutex is still taken on the read paths
+	// because a future encoder set may be swapped in at runtime.
 	registeredEncoders = map[ShellcodeEncode]EncoderPlugin{
 		EncodeXOR: XOREncoder{},
 		EncodeAES: AESEncoder{},
@@ -187,10 +189,4 @@ func DecodeShellcode(data []byte, method ShellcodeEncode, key []byte) ([]byte, e
 		return nil, fmt.Errorf("unknown encoder: %s", method)
 	}
 	return enc.Decode(data, key)
-}
-
-func RegisterEncoder(name ShellcodeEncode, plugin EncoderPlugin) {
-	registeredEncodersMu.Lock()
-	registeredEncoders[name] = plugin
-	registeredEncodersMu.Unlock()
 }

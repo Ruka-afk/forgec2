@@ -110,25 +110,6 @@ func TestKillDateCrossTenant404(t *testing.T) {
 	}
 }
 
-// TestBlockCrossTenant404 proves block honors tenancy.
-func TestBlockCrossTenant404(t *testing.T) {
-	s := mustTenantServer(t)
-	seedTenantAgent(t, s, "g1-block", 2)
-
-	c, w := crossTenantCtx(s, t, "g1-block", `{"reason":"x"}`)
-	s.handleBlockAgent(c)
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("status=%d, want 404", w.Code)
-	}
-	var agent db.Implant
-	if err := s.db.First(&agent, "id = ?", "g1-block").Error; err != nil {
-		t.Fatalf("reload: %v", err)
-	}
-	if agent.Blocked {
-		t.Fatal("cross-tenant block landed")
-	}
-}
-
 // TestSocksStopCrossTenant404 proves one tenant cannot tear down another
 // tenant's relay.
 func TestSocksStopCrossTenant404(t *testing.T) {

@@ -12,6 +12,18 @@ import (
 
 // ── Agent enrollment (registration + per-beacon row update) ───────────────
 
+// blockedReasonSuffix appends a parenthesized reason to audit details without
+// producing dangling parentheses when the reason is blank. The block/unblock
+// routes that used to own this helper had no UI entry point, but the
+// check-in rejection below still reads Implant.BlockedReason, so the helper
+// lives with its only remaining consumer.
+func blockedReasonSuffix(reason string) string {
+	if strings.TrimSpace(reason) == "" {
+		return ""
+	}
+	return " (" + reason + ")"
+}
+
 func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, now time.Time) (db.Implant, bool) {
 	req.Info = sanitizeInfo(req.Info)
 	// C + Go implants send hostname/username/ip base64 with encoding=base64.
@@ -49,7 +61,6 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 		slog.Debug("Rejected blocked agent check-in", "agent_id", agent.ID, "reason", agent.BlockedReason)
 		return db.Implant{}, false
 	}
-
 	if !isNewAgent && agent.DeletedAt.Valid {
 		// Agent was removed from the UI but is beaconing again: restore the
 		// tombstone (un-delete) rather than leaving a row that blocks re-registration.
