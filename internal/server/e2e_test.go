@@ -23,7 +23,9 @@ func TestE2E_Smoke_HealthEndpoint(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request, _ = http.NewRequest(http.MethodGet, "/health", nil)
-		s.handleHealth(c)
+		// The route serves handleHealthCheck (routes_public.go); handleHealth
+		// was a near-duplicate that this test alone kept alive.
+		s.handleHealthCheck(c)
 		if w.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
 		}
@@ -34,7 +36,9 @@ func TestE2E_Smoke_HealthEndpoint(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request, _ = http.NewRequest(http.MethodGet, "/ready", nil)
-		s.handleHealth(c)
+		// Was calling handleHealth, so this subtest asserted the health
+		// payload and never exercised readiness at all.
+		s.handleReadyCheck(c)
 		if w.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
 		}

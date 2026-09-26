@@ -108,12 +108,6 @@ func (rl *APIRateLimiter) SetWhitelist(ips []string) {
 	}
 }
 
-func (rl *APIRateLimiter) RemoveWhitelist(ip string) {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-	delete(rl.whitelist, ip)
-}
-
 func (rl *APIRateLimiter) GetBucket(key string) *TokenBucket {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()

@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -374,14 +373,6 @@ func (s *Server) handleTokenNoteUpdate(c *gin.Context) {
 // 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 // FormatTokenProcsResult decodes base64 and formats a token_list_procs result for display.
-func FormatTokenProcsResult(b64 string) string {
-	raw, err := base64.StdEncoding.DecodeString(b64)
-	if err != nil {
-		return b64
-	}
-	return FormatTokenProcsFromJSON(string(raw))
-}
-
 // FormatTokenProcsFromJSON formats an already-decoded JSON token_list_procs result.
 func FormatTokenProcsFromJSON(jsonStr string) string {
 	type procInfo struct {

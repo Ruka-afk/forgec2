@@ -1035,13 +1035,7 @@ export const en: Record<string, string> = {
     "ai.context_budget_hint": "High usage may trim older turns — consider starting a new session",
     "ai.system_prompt_placeholder": "Leave blank to use the built-in C2 operations prompt",
     "ai.system_prompt_hint": "Blank uses the built-in prompt: live tools only, reply in the operator's language, recommend a next action.",
-    "ai.pending_title": "AI-proposed tasks pending approval",
-    "ai.approve": "Approve",
     "ai.reject": "Reject",
-    "ai.pending_approved": "Task approved — waiting for beacon",
-    "ai.pending_rejected": "Task rejected",
-    "ai.pending_approve_failed": "Approve failed",
-    "ai.pending_reject_failed": "Reject failed",
     "ai.regenerate": "Regenerate",
     "ai.retry": "Retry response",
     "ai.generation_stopped": "Generation stopped. Retry when ready.",
@@ -4411,19 +4405,6 @@ export const en: Record<string, string> = {
     "templates.toast.deleted": "Template deleted",
     "templates.toast.fields_required": "Name, category and command are required",
     "templates.toast.run_dispatched": "Dispatched template \"{name}\"",
-    "timeline.col_agent_id": "Agent ID",
-    "timeline.description": "Description",
-    "timeline.event_details": "Event Details",
-
-
-
-
-    "timeline.time": "Time",
-    "timeline.title": "Title",
-
-    "timeline.type": "Type",
-    "timeline.user": "User",
-    "timeline.view_related": "View Related Object",
     "tokens.active": "Active",
     "tokens.all_integrity": "All Integrity",
     "tokens.all_sources": "All Sources",

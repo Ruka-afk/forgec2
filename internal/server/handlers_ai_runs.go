@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -852,13 +851,4 @@ func (s *Server) migrateLegacyAIStorage() {
 			}
 		}
 	}
-}
-
-// API keys may be supplied by environment even when the legacy config field is
-// blank. Keep this helper near the run profile resolver to avoid exposing it.
-func aiConfiguredAPIKey(configured string) string {
-	if strings.TrimSpace(configured) != "" {
-		return configured
-	}
-	return strings.TrimSpace(os.Getenv("FORGEC2_AI_API_KEY"))
 }

@@ -3,20 +3,10 @@ package server
 import (
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 )
-
-func (s *Server) handleHealth(c *gin.Context) {
-	uptime := time.Since(s.startTime)
-	c.JSON(http.StatusOK, gin.H{
-		"status":  "ok",
-		"version": ServerVersion,
-		"uptime":  uptime.String(),
-	})
-}
 
 func (s *Server) handleReadyCheck(c *gin.Context) {
 	checks := gin.H{}

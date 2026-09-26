@@ -1035,13 +1035,7 @@ export const zh: Record<string, string> = {
     "ai.context_budget_hint": "用量较高可能裁剪旧轮次 — 建议开启新会话",
     "ai.system_prompt_placeholder": "留空则使用内置 C2 作战提示词",
     "ai.system_prompt_hint": "留空即用内置提示词：只信工具返回的实时数据、用操作员的语言回答、并给出下一步建议。",
-    "ai.pending_title": "AI 提议的待批准任务",
-    "ai.approve": "批准",
     "ai.reject": "拒绝",
-    "ai.pending_approved": "任务已批准 — 等待心跳",
-    "ai.pending_rejected": "任务已拒绝",
-    "ai.pending_approve_failed": "批准失败",
-    "ai.pending_reject_failed": "拒绝失败",
     "ai.regenerate": "重新生成",
     "ai.retry": "重试回答",
     "ai.generation_stopped": "生成已停止，可随时重试。",
@@ -4426,19 +4420,6 @@ export const zh: Record<string, string> = {
     "templates.toast.deleted": "模板已删除",
     "templates.toast.fields_required": "名称、分类、命令均为必填",
     "templates.toast.run_dispatched": "已下发模板「{name}」",
-    "timeline.col_agent_id": "Agent ID",
-    "timeline.description": "描述",
-    "timeline.event_details": "事件详情",
-
-
-
-
-    "timeline.time": "时间",
-    "timeline.title": "标题",
-
-    "timeline.type": "类型",
-    "timeline.user": "用户",
-    "timeline.view_related": "查看关联对象",
     "tokens.active": "活跃",
     "tokens.all_integrity": "所有完整性级别",
     "tokens.all_sources": "所有来源",

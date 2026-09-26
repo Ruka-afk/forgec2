@@ -416,22 +416,6 @@ func (e *ScriptEngine) runEventCallback(ec *eventCallback, eventType string, dat
 	}
 }
 
-func (e *ScriptEngine) ListScripts() []Script {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	result := make([]Script, 0, len(e.scripts))
-	for _, s := range e.scripts {
-		result = append(result, Script{
-			ID:        fmt.Sprintf("%d", s.ID),
-			Name:      s.Name,
-			Code:      s.Code,
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		})
-	}
-	return result
-}
-
 type Script struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
@@ -447,51 +431,6 @@ type ExecutionResult struct {
 	Success bool   `json:"success"`
 	Output  string `json:"output"`
 	Error   string `json:"error"`
-}
-
-func (e *ScriptEngine) SaveScript(script *Script) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	script.UpdatedAt = time.Now()
-	if script.CreatedAt.IsZero() {
-		script.CreatedAt = time.Now()
-	}
-
-	ls := &LoadedScript{
-		ID:     0,
-		Name:   script.Name,
-		Code:   script.Code,
-		Active: true,
-	}
-	e.reparseEvents(ls)
-	e.scripts = append(e.scripts, ls)
-}
-
-func (e *ScriptEngine) GetScript(id string) (*Script, bool) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	for _, s := range e.scripts {
-		if fmt.Sprintf("%d", s.ID) == id || s.Name == id {
-			return &Script{
-				ID:   fmt.Sprintf("%d", s.ID),
-				Name: s.Name,
-				Code: s.Code,
-			}, true
-		}
-	}
-	return nil, false
-}
-
-func (e *ScriptEngine) DeleteScript(id string) bool {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	for i, s := range e.scripts {
-		if fmt.Sprintf("%d", s.ID) == id || s.Name == id {
-			e.scripts = append(e.scripts[:i], e.scripts[i+1:]...)
-			return true
-		}
-	}
-	return false
 }
 
 func (e *ScriptEngine) Execute(scriptID string, context map[string]interface{}, caller Caller) ExecutionResult {

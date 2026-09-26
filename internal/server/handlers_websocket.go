@@ -126,24 +126,6 @@ func (h *WebSocketHub) Get(agentID string) *WebSocketBeacon {
 	return h.beacons[agentID]
 }
 
-func (h *WebSocketHub) Broadcast(data []byte) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	for _, beacon := range h.beacons {
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					slog.Warn("WebSocket broadcast to closed channel", "agent_id", beacon.AgentID)
-				}
-			}()
-			select {
-			case beacon.Send <- data:
-			default:
-			}
-		}()
-	}
-}
-
 // handleWebSocketBeacon handles WebSocket beacon connections.
 // v2: frame-level envelopes are authenticated by decodeBeaconEnvelope, so the
 // upgrade itself requires no separate key check.

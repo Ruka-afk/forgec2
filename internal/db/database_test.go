@@ -1342,68 +1342,6 @@ func TestUserCRUD(t *testing.T) {
 	})
 }
 
-func TestCacheFunctions(t *testing.T) {
-	t.Run("cache set and get", func(t *testing.T) {
-		ClearCache()
-
-		key := "test-key"
-		data := "test-value"
-		SetCache(key, data)
-
-		result, found := GetFromCache(key)
-		if !found {
-			t.Error("expected to find cached value")
-		}
-		if result != data {
-			t.Errorf("expected '%s', got '%v'", data, result)
-		}
-	})
-
-	t.Run("cache miss", func(t *testing.T) {
-		ClearCache()
-
-		_, found := GetFromCache("nonexistent-key")
-		if found {
-			t.Error("should not find nonexistent key")
-		}
-	})
-
-	t.Run("invalidate cache by prefix", func(t *testing.T) {
-		ClearCache()
-
-		SetCache("users:1", "user1")
-		SetCache("users:2", "user2")
-		SetCache("agents:1", "agent1")
-
-		InvalidateCache("users:")
-
-		_, found1 := GetFromCache("users:1")
-		_, found2 := GetFromCache("users:2")
-		_, found3 := GetFromCache("agents:1")
-
-		if found1 || found2 {
-			t.Error("users cache should be invalidated")
-		}
-		if !found3 {
-			t.Error("agents cache should not be invalidated")
-		}
-	})
-
-	t.Run("clear cache", func(t *testing.T) {
-		SetCache("key1", "value1")
-		SetCache("key2", "value2")
-
-		ClearCache()
-
-		_, found1 := GetFromCache("key1")
-		_, found2 := GetFromCache("key2")
-
-		if found1 || found2 {
-			t.Error("cache should be cleared")
-		}
-	})
-}
-
 func TestSeedRolePermissions(t *testing.T) {
 	t.Run("seeds into empty table", func(t *testing.T) {
 		db := setupTestDB(t)

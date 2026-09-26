@@ -61,13 +61,6 @@ func GenerateDeployManifest(configPath string) *DeployManifest {
 	return deployManifest
 }
 
-func GetDeployManifest() *DeployManifest {
-	if deployManifest == nil {
-		return &DeployManifest{Version: "unknown"}
-	}
-	return deployManifest
-}
-
 func hashFile(path string) string {
 	data, err := os.ReadFile(path)
 	if err != nil {

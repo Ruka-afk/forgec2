@@ -169,26 +169,6 @@ func generateRandomPassword(length int) (string, error) {
 	return string(b), nil
 }
 
-// queryCache is a bounded TTL cache replacing the old unbounded sync.Map.
-// Max 1000 entries, 5-minute expiry.
-var queryCache = NewTTLCache[any](1000, 5*time.Minute)
-
-func GetFromCache(key string) (interface{}, bool) {
-	return queryCache.Get(key)
-}
-
-func SetCache(key string, data interface{}) {
-	queryCache.Set(key, data)
-}
-
-func InvalidateCache(prefix string) {
-	queryCache.InvalidateByPrefix(prefix)
-}
-
-func ClearCache() {
-	queryCache.Clear()
-}
-
 // InitDB initializes the database using glebarez/sqlite pure Go driver
 // or PostgreSQL via gorm.io/driver/postgres when driver="postgres" and dsn is set.
 func InitDB(dbPath string, logLevel slog.Level, defaultPassword ...string) (*gorm.DB, error) {
