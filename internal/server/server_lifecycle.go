@@ -128,12 +128,6 @@ func (s *Server) shutdown() {
 	if s.opsecAdaptive != nil {
 		s.opsecAdaptive.Stop()
 	}
-	if s.transportObfuscation != nil {
-		s.transportObfuscation.Stop()
-	}
-	if s.tlsCertMonitor != nil {
-		s.tlsCertMonitor.Stop()
-	}
 	if s.eventManager != nil {
 		s.eventManager.Shutdown()
 	}

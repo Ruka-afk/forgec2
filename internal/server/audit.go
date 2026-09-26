@@ -514,7 +514,7 @@ func (s *Server) LogEmergencyAction(c *gin.Context, action string, agentCount in
 	s.LogOperatorAction(c, OperatorAction{
 		Action:    action,
 		Resource:  "emergency",
-		Details:   "affected_agents=" + itoaJARM(agentCount),
+		Details:   "affected_agents=" + itoa(agentCount),
 		RiskLevel: "critical",
 	})
 }

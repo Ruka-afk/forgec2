@@ -287,9 +287,6 @@ type Server struct {
 	pwdChangeTimes   map[uint]time.Time
 	pwdChangeTimesMu sync.Mutex
 
-	// JARM/JA3 continuous validation
-	tlsCertMonitor *TLSCertMonitor
-
 	// Hot-reloadable TLS server cert/key pair (mtime-checked per handshake)
 	tlsCerts *tlsCertLoader
 
@@ -309,9 +306,6 @@ type Server struct {
 	killSwitchMu    sync.RWMutex
 	killSwitchArmed bool
 	killSwitchToken string
-
-	// Transport obfuscation (DNS/ICMP)
-	transportObfuscation *TransportObfuscationManager
 }
 
 // BulkResult tracks a batch command operation.
@@ -579,9 +573,6 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	// Password change rate limiter
 	s.pwdChangeTimes = make(map[uint]time.Time)
 
-	// TLS certificate stability monitor
-	s.tlsCertMonitor = NewTLSCertMonitor(s.cfg.TLSFingerprint.JARMEnabled)
-
 	// Hot-reloadable server cert pair (eager load happens in configureTLS,
 	// preserving the old fail-fast timing when TLS is enabled).
 	s.tlsCerts = newTLSCertLoader(s.cfg.Server.CertFile, s.cfg.Server.KeyFile)
@@ -594,9 +585,6 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 
 	// Fleet kill-switch broadcast state
 	s.reloadKillSwitchState()
-
-	// Transport obfuscation (DNS/ICMP)
-	s.transportObfuscation = NewTransportObfuscationManager()
 
 	// NOTE: setupRoutes() is NOT called here. Call SetupRoutes() after
 	// SetStaticFS() to ensure the static file middleware runs before route handlers.
