@@ -128,7 +128,7 @@ func (s *Server) handleAIConfig(c *gin.Context) {
 		return
 	}
 	if req.Endpoint != "" {
-		if err := validateExternalURL(req.Endpoint); err != nil {
+		if err := s.validateAIEndpoint(req.Endpoint); err != nil {
 			respondError(c, http.StatusBadRequest, "AI endpoint is invalid or blocked")
 			return
 		}

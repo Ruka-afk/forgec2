@@ -563,7 +563,11 @@ func (s *Server) aiStreamClient() *http.Client {
 	if base == nil {
 		base = s.httpClient
 	}
-	c := ssrfSafeClient(base)
+	// aiSSRFClient (not ssrfSafeClient) so redirects are validated against the
+	// AI allowlist: an allowlisted local endpoint may redirect within the
+	// allowlist but still cannot bounce the API key to an arbitrary internal
+	// address.
+	c := s.aiSSRFClient(base)
 	c.Timeout = 0
 	if t, ok := c.Transport.(*http.Transport); ok && t != nil {
 		cloned := t.Clone()
@@ -622,8 +626,10 @@ func (s *Server) aiDoRequestWithConfig(ctx context.Context, payload []byte, snap
 
 	// SSRF guard: resolve the endpoint and reject any loopback/private/
 	// link-local/metadata address (incl. DNS-rebinding), matching the outbound
-	// fetch protection used elsewhere (S4). Also validates the URL is well-formed.
-	if err := validateExternalURL(baseURL); err != nil {
+	// fetch protection used elsewhere (S4). Also validates the URL is
+	// well-formed. Operators running a local model can permit a specific
+	// host:port via ai.allowed_endpoints; nothing else is relaxed.
+	if err := s.validateAIEndpoint(baseURL); err != nil {
 		return nil, fmt.Errorf("AI endpoint blocked: %w", err)
 	}
 

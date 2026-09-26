@@ -120,7 +120,10 @@ type aiProfileInput struct {
 	IsDefault         bool   `json:"is_default"`
 }
 
-func normalizeAIProfileInput(req aiProfileInput) (aiProfileInput, error) {
+// normalizeAIProfileInput validates and canonicalises a provider profile. It is
+// a Server method so endpoint validation can consult the AI allowlist, which
+// lives in the running config.
+func (s *Server) normalizeAIProfileInput(req aiProfileInput) (aiProfileInput, error) {
 	req.Name = strings.TrimSpace(req.Name)
 	req.Provider = strings.ToLower(strings.TrimSpace(req.Provider))
 	req.Model = strings.TrimSpace(req.Model)
@@ -139,7 +142,7 @@ func normalizeAIProfileInput(req aiProfileInput) (aiProfileInput, error) {
 		if len(req.Endpoint) > 2048 {
 			return req, fmt.Errorf("endpoint too long")
 		}
-		if err := validateExternalURL(req.Endpoint); err != nil {
+		if err := s.validateAIEndpoint(req.Endpoint); err != nil {
 			return req, fmt.Errorf("endpoint blocked: %w", err)
 		}
 	}
@@ -167,7 +170,7 @@ func (s *Server) handleAIProfileCreate(c *gin.Context) {
 		return
 	}
 	var err error
-	if req, err = normalizeAIProfileInput(req); err != nil {
+	if req, err = s.normalizeAIProfileInput(req); err != nil {
 		respondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -225,7 +228,7 @@ func (s *Server) handleAIProfileUpdate(c *gin.Context) {
 		return
 	}
 	var err error
-	if req, err = normalizeAIProfileInput(req); err != nil {
+	if req, err = s.normalizeAIProfileInput(req); err != nil {
 		respondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
