@@ -192,7 +192,30 @@ func aiDefaultModel(provider string) string {
 
 // ── SSE Chat (streaming) ──────────────────────────────────────────────────
 
+// aiChatSuccessor identifies the durable replacement for the legacy chat
+// endpoint, used in the RFC 8594 Link header.
+const aiChatSuccessor = "/api/ai/runs"
+
+// markAIChatDeprecated flags POST /ai/chat as deprecated in-band (RFC 8594
+// Deprecation + Link) and logs the caller so remaining adoption is measurable.
+//
+// The endpoint is kept, not removed: external integrations may still call it,
+// and deleting a route is a breaking change. The successor, POST /api/ai/runs,
+// persists conversations durably, enforces per-user/per-tenant run limits,
+// replays events after a reconnect and records token usage; /ai/chat keeps all
+// history in the browser and records nothing server-side.
+func (s *Server) markAIChatDeprecated(c *gin.Context) {
+	c.Header("Deprecation", "true")
+	c.Header("Link", "<"+aiChatSuccessor+">; rel=\"successor-version\"")
+	c.Header("X-ForgeC2-Deprecated-Endpoint", aiChatSuccessor)
+	username, _ := c.Get("user")
+	slog.Info("legacy AI chat endpoint used; prefer "+aiChatSuccessor,
+		"user", username,
+		"ip", c.ClientIP())
+}
+
 func (s *Server) handleAIChat(c *gin.Context) {
+	s.markAIChatDeprecated(c)
 	s.configMu.RLock()
 	aiEnabled := s.cfg.AI.Enabled
 	aiAPIKey := s.cfg.AI.APIKey
@@ -211,6 +234,14 @@ func (s *Server) handleAIChat(c *gin.Context) {
 	if !aiEnabled || aiAPIKey == "" {
 		slog.Warn("AI chat blocked", "enabled", aiEnabled, "provider", aiProvider)
 		respondError(c, http.StatusBadRequest, "AI not configured. Set api_key in AI settings.")
+		return
+	}
+	// config.AIEndpoint() returns "" for providers that have no vendor default
+	// ("custom" without an explicit endpoint). Fail with a clear message
+	// instead of building a request against an empty base URL.
+	if aiEndpoint == "" {
+		slog.Error("AI endpoint unresolved", "provider", aiProvider)
+		respondError(c, http.StatusBadRequest, "AI endpoint is not configured for provider "+aiProvider)
 		return
 	}
 

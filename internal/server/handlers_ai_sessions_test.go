@@ -308,6 +308,66 @@ func TestHandleAIChatReportsOversizedRequest(t *testing.T) {
 	}
 }
 
+// TestAIChatAdvertisesSuccessor pins the deprecation contract on the legacy
+// endpoint. It is kept for external integrations, so responses must name the
+// durable replacement (RFC 8594) and the successor must actually be routed.
+func TestAIChatAdvertisesSuccessor(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := &Server{cfg: &config.Config{}}
+	s.cfg.AI.Enabled = false // short-circuit before any provider call
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("user", "admin")
+		c.Set("user_role", "admin")
+		c.Next()
+	})
+	r.POST("/ai/chat", s.handleAIChat)
+	r.POST(aiChatSuccessor, func(c *gin.Context) { c.Status(http.StatusAccepted) })
+
+	w := performJSON(r, http.MethodPost, "/ai/chat", map[string]interface{}{
+		"messages": []map[string]string{{"role": "user", "content": "hi"}},
+	})
+	if got := w.Header().Get("Deprecation"); got != "true" {
+		t.Errorf("Deprecation header = %q, want \"true\"", got)
+	}
+	if got := w.Header().Get("Link"); !strings.Contains(got, aiChatSuccessor) || !strings.Contains(got, "successor-version") {
+		t.Errorf("Link header = %q, want a successor-version link to %s", got, aiChatSuccessor)
+	}
+	// The advertised successor must not be a dead reference.
+	w2 := performJSON(r, http.MethodPost, aiChatSuccessor, map[string]interface{}{})
+	if w2.Code != http.StatusAccepted {
+		t.Errorf("successor %s is not routed (got %d); the Link header would be a lie", aiChatSuccessor, w2.Code)
+	}
+}
+
+func TestAIChatRejectsUnresolvedEndpoint(t *testing.T) {
+	// "custom" with no endpoint used to fall back to api.openai.com and ship
+	// the operator's key there. It must now fail closed with a clear message.
+	gin.SetMode(gin.TestMode)
+	s := &Server{cfg: &config.Config{}}
+	s.cfg.AI.Enabled = true
+	s.cfg.AI.APIKey = "test-key"
+	s.cfg.AI.Provider = "custom"
+	s.cfg.AI.Endpoint = ""
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("user", "admin")
+		c.Set("user_role", "admin")
+		c.Next()
+	})
+	r.POST("/ai/chat", s.handleAIChat)
+
+	w := performJSON(r, http.MethodPost, "/ai/chat", map[string]interface{}{
+		"messages": []map[string]string{{"role": "user", "content": "hi"}},
+	})
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 for a provider with no endpoint", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "endpoint") {
+		t.Errorf("body = %s, want it to name the missing endpoint", w.Body.String())
+	}
+}
+
 func TestTrimConversationHistoryBoundsMessagesAndPreservesUTF8(t *testing.T) {
 	messages := make([]chatMessage, 0, 8)
 	for i := 0; i < 8; i++ {

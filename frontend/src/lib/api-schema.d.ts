@@ -4183,7 +4183,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** AI chat */
+        /**
+         * AI chat (deprecated)
+         * @deprecated
+         * @description Deprecated legacy streaming chat endpoint. Conversation history lives in the browser and nothing is persisted server-side, so token usage is not recorded, reconnects cannot replay events, and the per-user/per-tenant run limits do not apply. Use POST /api/ai/runs instead. Responses carry `Deprecation: true` and a `Link` header naming the successor.
+         */
         post: operations["aiChat"];
         delete?: never;
         options?: never;

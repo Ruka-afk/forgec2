@@ -598,6 +598,14 @@ func (s *Server) aiProviderRequestConfigSnapshot() (aiProviderRequestConfig, err
 		model:    s.cfg.AI.Model,
 	}
 	s.configMu.RUnlock()
+	// An empty endpoint means the configured provider names no vendor and no
+	// endpoint was supplied (only "custom" can reach this state). The one-shot
+	// assist endpoints read this snapshot, so it is the path that used to send
+	// the key to whatever host a fallback branch picked.
+	if snapshot.enabled && strings.TrimSpace(snapshot.apiKey) != "" && snapshot.endpoint == "" {
+		return aiProviderRequestConfig{}, fmt.Errorf(
+			"AI provider %q has no endpoint configured; set ai.endpoint", snapshot.provider)
+	}
 	return snapshot, nil
 }
 
