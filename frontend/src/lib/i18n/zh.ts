@@ -2481,6 +2481,7 @@ export const zh: Record<string, string> = {
     "lateral.online_implant": "在线 Implant",
     "lateral.pivot": "跳板",
     "lateral.pivot_agent": "跳板 Agent",
+    "lateral.pivot_unsupported": "不支持：implant 没有跳板通道，移动始终由所选 Agent 直连执行。",
     "lateral.pivot_available": "可用于跳板",
     "lateral.records": "条记录",
     "lateral.select_online_implant": "选择在线 Implant...",

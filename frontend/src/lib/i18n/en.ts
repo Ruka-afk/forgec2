@@ -2481,6 +2481,7 @@ export const en: Record<string, string> = {
     "lateral.online_implant": "Online Implant",
     "lateral.pivot": "Pivot",
     "lateral.pivot_agent": "Pivot Agent",
+    "lateral.pivot_unsupported": "Not supported: the implant has no pivot channel, so movement always runs directly from the selected agent.",
     "lateral.pivot_available": "Available as pivot",
     "lateral.records": "records",
     "lateral.select_online_implant": "Select online implant...",

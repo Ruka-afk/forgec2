@@ -114,7 +114,12 @@ export default function LateralPageContent() {
           throw new Error("invalid port");
         }
       }
-      if (form.pivot) payload.pivot = form.pivot;
+      // The implant has no pivot slot, so the server rejects the field. Warn
+      // instead of firing a request that is guaranteed to 400.
+      if (form.pivot) {
+        toast.error(t("lateral.pivot_unsupported"));
+        throw new Error("pivot unsupported");
+      }
       if (form.credential) payload.credential = form.credential;
       if (form.username) payload.username = form.username;
       if (form.command) payload.command = form.command;
@@ -427,6 +432,9 @@ export default function LateralPageContent() {
                   })}
                 </SelectContent>
               </Select>
+              <p className="mt-1.5 text-(--fs-micro-sm) text-warning-foreground">
+                {t("lateral.pivot_unsupported")}
+              </p>
             </div>
           </div>
 

@@ -278,7 +278,9 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 	if s.pluginManager != nil {
 		s.fireTaskCreatedHook(agentID, task.ID, taskType, command)
 	}
-	s.metrics.TasksTotal.Inc()
+	if s.metrics != nil {
+		s.metrics.TasksTotal.Inc()
+	}
 	return &task, nil
 }
 
