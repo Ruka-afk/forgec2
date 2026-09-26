@@ -32,18 +32,19 @@ export function useProfilesData() {
     setLoadingActiveConfig(true);
     setActiveConfigError(null);
     try {
-      const data = await api.get<ActiveMalleableConfig>(paths.integrations.malleable);
+      // Read /settings, not /integrations/malleable: the latter returns bare
+      // keys (enabled/status_code/...) with no `malleable_enabled`, so the
+      // card's Enabled toggle read undefined and always showed "disabled".
+      // /settings carries every field the card renders under the same
+      // malleable_* names the editable form below already uses.
+      const d = await api.get<Record<string, unknown>>(paths.settings.root);
       setActiveConfig({
-        malleable_enabled: (data.malleable_enabled ?? false) as boolean,
-        malleable_profile: (data.malleable_profile ?? "") as string,
-        status_code: (data.status_code ?? 200) as number,
-        content_type: (data.content_type ?? "application/json") as string,
-        headers: (data.headers ?? {}) as Record<string, string>,
-        user_agent: (data.user_agent ?? "") as string,
-        jitter: (data.jitter ?? 0) as number,
-        interval: (data.interval ?? 0) as number,
-        prepend: (data.prepend ?? "") as string,
-        append: (data.append ?? "") as string,
+        malleable_enabled: (d.malleable_enabled ?? false) as boolean,
+        status_code: (d.malleable_status ?? 200) as number,
+        content_type: (d.malleable_ct ?? "application/json") as string,
+        headers: (d.malleable_headers ?? {}) as Record<string, string>,
+        prepend: (d.malleable_prepend ?? "") as string,
+        append: (d.malleable_append ?? "") as string,
       });
     } catch (e) {
       setActiveConfigError(e instanceof Error ? e.message : t("profiles.toast.load_failed"));

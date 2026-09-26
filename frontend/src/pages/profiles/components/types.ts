@@ -38,15 +38,19 @@ export interface AgentProfile {
   work_tz?: string;
 }
 
+/**
+ * Active global Malleable config, mirroring the `malleable_*` keys of
+ * GET /settings — the only response that carries all of them.
+ *
+ * Deliberately does NOT carry a profile name, user agent, interval or jitter.
+ * Neither /settings nor /integrations/malleable ever returned those, so the
+ * card used to render them as "N/A" and, worse, as a concrete "0s / 0%".
+ */
 export interface ActiveMalleableConfig {
   malleable_enabled: boolean;
-  malleable_profile: string;
   status_code: number;
   content_type: string;
   headers: Record<string, string>;
-  user_agent: string;
-  jitter: number;
-  interval: number;
   prepend: string;
   append: string;
 }
@@ -81,13 +85,9 @@ export const emptyProfile = (): AgentProfile => ({
 
 export const emptyActiveConfig = (): ActiveMalleableConfig => ({
   malleable_enabled: false,
-  malleable_profile: "",
   status_code: 200,
   content_type: "application/json",
   headers: {},
-  user_agent: "",
-  jitter: 0,
-  interval: 0,
   prepend: "",
   append: "",
 });

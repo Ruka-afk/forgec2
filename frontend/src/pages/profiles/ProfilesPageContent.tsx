@@ -362,23 +362,6 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                   </div>
                 </div>
                 <div className="bg-secondary rounded-lg p-3 border border-border">
-                  <div className="text-xs text-muted-foreground mb-1">{t("profiles.profile_name_label")}</div>
-                  <div className="text-sm font-medium font-mono">{activeConfig.malleable_profile || "N/A"}</div>
-                </div>
-                <div className="bg-secondary rounded-lg p-3 border border-border">
-                  <div className="text-xs text-muted-foreground mb-1">{t("profiles.user_agent_label")}</div>
-                  <Tooltip>
-                    <TooltipTrigger>
-                      <div className="text-sm font-mono truncate">{activeConfig.user_agent || "N/A"}</div>
-                    </TooltipTrigger>
-                    <TooltipContent>{activeConfig.user_agent}</TooltipContent>
-                  </Tooltip>
-                </div>
-                <div className="bg-secondary rounded-lg p-3 border border-border">
-                  <div className="text-xs text-muted-foreground mb-1">{t("profiles.beacon_interval")}</div>
-                  <div className="text-sm font-medium">{activeConfig.interval}s / {activeConfig.jitter}%</div>
-                </div>
-                <div className="bg-secondary rounded-lg p-3 border border-border">
                   <div className="text-xs text-muted-foreground mb-1">{t("profiles.status_code")}</div>
                   <div className="text-sm font-medium font-mono">{activeConfig.status_code}</div>
                 </div>

@@ -334,7 +334,7 @@ export default function ReportPage() {
                                 variant="ghost"
                                 size="icon"
                                 disabled={downloading !== null}
-                                onClick={() => void downloadReport(paths.report.download(id, "html"), `report-${id}.html`, `history-${id}`)}
+                                onClick={() => void downloadReport(paths.report.download(id), `report-${id}.html`, `history-${id}`)}
                                 className="text-primary hover:bg-primary/10 dark:hover:bg-primary/20"
                                 aria-label={t("report.download")}
                               >

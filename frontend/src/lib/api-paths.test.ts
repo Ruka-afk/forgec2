@@ -62,6 +62,17 @@ describe("api paths", () => {
     expect(paths.report.history).toBe("/api/report/history");
     expect(paths.report.agents("start=1")).toBe("/api/report/agents?start=1");
   });
+  it("report download targets the served endpoint, not the never-routed path", () => {
+    // Served by handleAPIExportGeneratedReport. The old value,
+    // /report/:id/download?format=, matched no route and 404'd the button.
+    expect(paths.report.download(42)).toBe("/api/report/generated/42/download");
+  });
+  it("profile-rotate keeps the /api prefix its only registration uses", () => {
+    // Registered as POST /api/agents/:id/profile-rotate (routes_misc.go) and
+    // documented that way in api/openapi.yaml — unlike the bare
+    // /agents/:id/config and /agents/:id/traffic-profile siblings.
+    expect(paths.agents.profileRotate("a1")).toBe("/api/agents/a1/profile-rotate");
+  });
   it("credentials list is dual-use /credentials while mutations stay /credentials", () => {
     expect(paths.credentials.list()).toBe("/credentials?format=json");
     expect(paths.credentials.list("")).toBe("/credentials");

@@ -3295,7 +3295,6 @@ export const zh: Record<string, string> = {
     "profiles.add_header": "添加",
     "profiles.append_content": "响应后追加内容",
     "profiles.append_label": "追加内容",
-    "profiles.beacon_interval": "Beacon 间隔 / 抖动",
     "profiles.beacon_uri": "信标 URI",
     "profiles.brief_desc": "此配置文件的简要说明",
     "profiles.camouflage_warning": "启用配置文件需要兼容的 agent。前置/追加内容仅用于流量伪装。",

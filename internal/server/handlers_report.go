@@ -722,6 +722,46 @@ func (s *Server) handleAPIGetGeneratedReport(c *gin.Context) {
 	}})
 }
 
+// handleAPIExportGeneratedReport streams one stored report row as a file
+// attachment. The Report page's per-row download button targets this; without
+// it that button 404s, because handleAPIGetGeneratedReport is a JSON read and
+// there was no file endpoint for a single stored report.
+//
+// Step-up is enforced here for the same reason it guards the bulk export: the
+// body is the entire report. The frontend passes the code as ?totp_code=, which
+// requireExportStepUp accepts via exportTOTPQuery.
+// GET /api/report/generated/:id/download
+func (s *Server) handleAPIExportGeneratedReport(c *gin.Context) {
+	if !s.requireExportStepUp(c, "report_export", "report") {
+		return
+	}
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, "invalid report id")
+		return
+	}
+	var r db.GeneratedReport
+	if err := s.db.First(&r, id).Error; err != nil {
+		respondError(c, http.StatusNotFound, "report not found")
+		return
+	}
+
+	ext := r.Format
+	if ext == "" {
+		ext = "html"
+	}
+	// The stored name is operator-controlled text; keep it out of the header.
+	// The id alone is unambiguous and safe.
+	filename := fmt.Sprintf("report-%d.%s", r.ID, ext)
+
+	s.LogAuditRecord(c, "report_export", "report", fmt.Sprintf("%d", r.ID),
+		fmt.Sprintf("Downloaded generated report %d (%d bytes)", r.ID, len(r.Content)), true, nil)
+
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(r.Content))
+}
+
 func (s *Server) handleAPIDeleteReport(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)

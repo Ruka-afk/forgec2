@@ -3281,7 +3281,6 @@ export const en: Record<string, string> = {
     "profiles.add_header": "Add",
     "profiles.append_content": "Append content after response",
     "profiles.append_label": "Append Content",
-    "profiles.beacon_interval": "Beacon Interval / Jitter",
     "profiles.beacon_uri": "Beacon URI",
     "profiles.brief_desc": "Brief description of this profile",
     "profiles.camouflage_warning": "Enabling profile requires compatible agents. Prepend/append is for traffic camouflage only.",

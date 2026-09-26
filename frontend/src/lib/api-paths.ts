@@ -77,7 +77,12 @@ export const paths = {
     config: (id: string) => `/agents/${id}/config`,
     persistence: (id: string) => `/agents/${id}/persistence`,
     runEvasion: (id: string) => `/agents/${id}/run_evasion`,
-    profileRotate: (id: string) => `/agents/${id}/profile-rotate`,
+    // Documented as POST /api/agents/{id}/profile-rotate (api/openapi.yaml)
+    // and registered only on that prefix in routes_misc.go — unlike its
+    // /agents/:id/config and /agents/:id/traffic-profile siblings, which are
+    // registered bare. The missing /api here made the Profiles page's
+    // "push to agent" action 404.
+    profileRotate: (id: string) => `/api/agents/${id}/profile-rotate`,
     modulesDeploy: (id: string) => `/agents/${id}/modules/deploy`,
     trafficProfile: (id: string) => `/agents/${id}/traffic-profile`,
     trafficAdapt: (id: string) => `/agents/${id}/traffic-profile/adapt`,
@@ -394,7 +399,10 @@ export const paths = {
     findings: (query = "") => (query ? `/api/report/findings?${query}` : "/api/report/findings"),
     history: "/api/report/history",
     generated: (id: string | number) => `/api/report/generated/${id}`,
-    download: (id: string | number, format = "html") => `/report/${encodeURIComponent(String(id))}/download?format=${encodeURIComponent(format)}`,
+    // Served by handleAPIExportGeneratedReport, which enforces the same TOTP
+    // step-up as the bulk export. The old /report/:id/download?format= path had
+    // no backend route at all, so the Report page's download button 404'd.
+    download: (id: string | number) => `/api/report/generated/${encodeURIComponent(String(id))}/download`,
     generate: "/api/report/generate",
     one: (id: string) => `/api/report/${id}`,
     exportHtml: (query: string) => `/api/report/export/html?${query}`,
