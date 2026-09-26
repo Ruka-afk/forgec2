@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/config"
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -225,9 +226,15 @@ func (s *Server) resolveAIRunProfile(principal aiPrincipal, profileID *uint) (ai
 		if strings.TrimSpace(profile.APIKey) == "" {
 			return aiResolvedProfile{}, errors.New("AI profile has no API key")
 		}
-		endpoint := profile.Endpoint
+		endpoint := strings.TrimSpace(profile.Endpoint)
 		if endpoint == "" {
-			endpoint = aiDefaultEndpoint(profile.Provider)
+			// "custom" names no vendor, so an empty endpoint is a configuration
+			// error. Falling back to a default host here is how one vendor's
+			// credential ends up on another vendor's API.
+			endpoint = config.DefaultAIEndpoint(profile.Provider)
+			if endpoint == "" {
+				return aiResolvedProfile{}, fmt.Errorf("AI profile %q uses provider %q, which requires an explicit endpoint", profile.Name, profile.Provider)
+			}
 		}
 		return aiResolvedProfile{
 			ID: &profile.ID, Name: profile.Name, Provider: profile.Provider,
@@ -250,21 +257,10 @@ func (s *Server) resolveAIRunProfile(principal aiPrincipal, profileID *uint) (ai
 	}, nil
 }
 
+// aiDefaultEndpoint used to be a second, drifting copy of the provider
+// endpoint table. It is now the single registry in internal/config.
 func aiDefaultEndpoint(provider string) string {
-	switch strings.ToLower(strings.TrimSpace(provider)) {
-	case "openai":
-		return "https://api.openai.com/v1"
-	case "claude", "anthropic":
-		return "https://api.anthropic.com/v1"
-	case "qianwen":
-		return "https://dashscope.aliyuncs.com/compatible-mode/v1"
-	case "zhipu":
-		return "https://open.bigmodel.cn/api/paas/v4"
-	case "longcat":
-		return "https://api.longcat.chat/openai/v1"
-	default:
-		return "https://api.deepseek.com/v1"
-	}
+	return config.DefaultAIEndpoint(provider)
 }
 
 func (s *Server) handleAIRunsCreate(c *gin.Context) {

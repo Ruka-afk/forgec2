@@ -608,10 +608,43 @@ func TestAIDefaultModels(t *testing.T) {
 		"qianwen":  "qwen-plus",
 		"zhipu":    "glm-4-flash",
 		"longcat":  "LongCat-Flash-Chat",
+		// "anthropic" was missing from the old switch and silently answered
+		// deepseek-chat, so an Anthropic user was sent a model their provider
+		// does not serve.
+		"anthropic": "claude-3-5-sonnet-latest",
 	}
 	for provider, want := range cases {
 		if got := aiDefaultModel(provider); got != want {
 			t.Errorf("aiDefaultModel(%q) = %q, want %q", provider, got, want)
+		}
+	}
+}
+
+// TestAIProviderWrappersUseSharedRegistry pins the server-side wrappers to the
+// config registry. The wire dialect used to be selected by the literal
+// `provider == "claude"` in five places, which ignored the "anthropic" spelling
+// and would have POSTed an OpenAI-shaped body to /v1/messages.
+func TestAIProviderWrappersUseSharedRegistry(t *testing.T) {
+	// Both spellings must route to the Anthropic /v1/messages dialect.
+	for _, provider := range []string{"claude", "anthropic"} {
+		if got := aiBuildChatURL("https://api.anthropic.com/v1", provider); got != "https://api.anthropic.com/v1/messages" {
+			t.Errorf("aiBuildChatURL(%q) = %q, want the /v1/messages URL", provider, got)
+		}
+		if got := aiDefaultEndpoint(provider); got != "https://api.anthropic.com/v1" {
+			t.Errorf("aiDefaultEndpoint(%q) = %q, want api.anthropic.com", provider, got)
+		}
+	}
+	// OpenAI-compatible providers must keep the /chat/completions dialect.
+	for _, provider := range []string{"openai", "deepseek", "ollama", "custom", "google"} {
+		if got := aiBuildChatURL("https://example.invalid/v1", provider); got != "https://example.invalid/v1/chat/completions" {
+			t.Errorf("aiBuildChatURL(%q) = %q, want the /chat/completions URL", provider, got)
+		}
+	}
+	// No provider may resolve to a host belonging to a different vendor.
+	for _, provider := range []string{"openai", "anthropic", "deepseek", "qianwen", "zhipu", "longcat", "google", "ollama", "local"} {
+		got := aiDefaultEndpoint(provider)
+		if got == "" {
+			t.Errorf("aiDefaultEndpoint(%q) is empty; a real provider needs a default", provider)
 		}
 	}
 }

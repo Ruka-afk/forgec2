@@ -15,6 +15,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/forgec2/forgec2/internal/config"
 	"github.com/gin-gonic/gin"
 )
 
@@ -116,7 +117,7 @@ func (s *Server) converse(model, systemPrompt string, userMessages []chatMessage
 			var content, reasoning, finishReason string
 			var turnUsage aiUsage
 			var streamErr error
-			if options.provider == "claude" {
+			if config.AIProviderUsesClaudeWire(options.provider) {
 				toolCalls, content, reasoning, finishReason, turnUsage, streamErr = s.parseClaudeStream(resp, ch, roundCtx)
 			} else {
 				toolCalls, content, reasoning, finishReason, turnUsage, streamErr = s.parseStreamChunks(resp, ch, roundCtx)
@@ -541,7 +542,7 @@ func aiFlattenError(err error) string {
 // give https://.../api/v1/chat/completions) — appending again would 404, so we
 // use it as-is. Claude uses /messages instead.
 func aiBuildChatURL(baseURL, provider string) string {
-	if provider == "claude" {
+	if config.AIProviderUsesClaudeWire(provider) {
 		if strings.HasSuffix(baseURL, "/messages") {
 			return baseURL
 		}
@@ -627,8 +628,8 @@ func (s *Server) aiDoRequestWithConfig(ctx context.Context, payload []byte, snap
 	}
 
 	var urlStr string
-	if provider == "claude" {
-		urlStr = aiBuildChatURL(baseURL, "claude")
+	if config.AIProviderUsesClaudeWire(provider) {
+		urlStr = aiBuildChatURL(baseURL, provider)
 		payload = s.buildClaudeRequest(payload)
 	} else {
 		urlStr = aiBuildChatURL(baseURL, "")
@@ -649,7 +650,7 @@ func (s *Server) aiDoRequestWithConfig(ctx context.Context, payload []byte, snap
 			return nil, err
 		}
 		httpReq.Header.Set("Content-Type", "application/json")
-		if provider == "claude" {
+		if config.AIProviderUsesClaudeWire(provider) {
 			httpReq.Header.Set("x-api-key", apiKey)
 			httpReq.Header.Set("anthropic-version", "2023-06-01")
 		} else {

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/config"
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -127,10 +128,12 @@ func normalizeAIProfileInput(req aiProfileInput) (aiProfileInput, error) {
 	if req.Name == "" || len(req.Name) > 120 || req.Model == "" || len(req.Model) > 200 {
 		return req, fmt.Errorf("name and model are required")
 	}
-	switch req.Provider {
-	case "openai", "custom", "deepseek", "claude", "anthropic", "qianwen", "zhipu", "longcat":
-	default:
+	// Shared registry, same as config.Validate and handleAIConfig.
+	if !config.IsKnownAIProvider(req.Provider) {
 		return req, fmt.Errorf("unsupported provider")
+	}
+	if req.Endpoint == "" && config.AIProviderNeedsExplicitEndpoint(req.Provider) {
+		return req, fmt.Errorf("endpoint is required when provider is %q", req.Provider)
 	}
 	if req.Endpoint != "" {
 		if len(req.Endpoint) > 2048 {

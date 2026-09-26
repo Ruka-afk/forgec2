@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/config"
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 )
@@ -97,12 +99,17 @@ func (s *Server) handleAIConfig(c *gin.Context) {
 	req.APIKey = strings.TrimSpace(req.APIKey)
 	req.Model = strings.TrimSpace(req.Model)
 	req.Endpoint = strings.TrimSpace(req.Endpoint)
-	allowedProviders := map[string]bool{
-		"deepseek": true, "openai": true, "claude": true, "qianwen": true,
-		"zhipu": true, "longcat": true, "custom": true,
-	}
-	if !allowedProviders[req.Provider] {
+	// Provider acceptance comes from the shared registry so this handler, the
+	// profile handler and config.Validate can no longer disagree.
+	if !config.IsKnownAIProvider(req.Provider) {
 		respondError(c, http.StatusBadRequest, "unsupported AI provider")
+		return
+	}
+	// "custom" names no vendor. Requiring an endpoint is the whole point of
+	// the name; defaulting it to some vendor's host would ship the operator's
+	// key to a provider they never selected.
+	if req.Endpoint == "" && config.AIProviderNeedsExplicitEndpoint(req.Provider) {
+		respondError(c, http.StatusBadRequest, "ai endpoint is required when provider is \"custom\"")
 		return
 	}
 	if req.Model == "" {
@@ -159,7 +166,11 @@ func (s *Server) handleAIConfig(c *gin.Context) {
 		// A failed disk write must not leave the running server on a config the
 		// operator was explicitly told did not save.
 		s.configMu.Lock()
-		if s.cfg.AI == nextAI {
+		// reflect.DeepEqual, not ==: config.AI holds a []string
+		// (ai.allowed_endpoints) and is therefore not comparable with ==.
+		// The check still means "config is untouched since I wrote it", so a
+		// concurrent reload is not clobbered by the rollback.
+		if reflect.DeepEqual(s.cfg.AI, nextAI) {
 			s.cfg.AI = previousAI
 		}
 		s.configMu.Unlock()
@@ -171,21 +182,12 @@ func (s *Server) handleAIConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "AI config saved"})
 }
 
+// aiDefaultModel resolves a provider's default model from the single provider
+// registry in internal/config. It used to carry its own switch statement,
+// which had no "anthropic" case and therefore answered deepseek-chat for
+// Anthropic users.
 func aiDefaultModel(provider string) string {
-	switch strings.ToLower(strings.TrimSpace(provider)) {
-	case "openai", "custom":
-		return "gpt-4o-mini"
-	case "claude":
-		return "claude-3-5-sonnet-latest"
-	case "qianwen":
-		return "qwen-plus"
-	case "zhipu":
-		return "glm-4-flash"
-	case "longcat":
-		return "LongCat-Flash-Chat"
-	default:
-		return "deepseek-chat"
-	}
+	return config.AIProviderDefaultModel(provider)
 }
 
 // ── SSE Chat (streaming) ──────────────────────────────────────────────────

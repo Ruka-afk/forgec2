@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/config"
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 )
@@ -87,7 +88,7 @@ func (s *Server) aiOneShot(parent context.Context, system, user string, maxToken
 	}
 
 	// Response shape differs by provider (snapshot taken under RLock above).
-	if provider == "claude" {
+	if config.AIProviderUsesClaudeWire(provider) {
 		var cr struct {
 			Content []struct {
 				Type string `json:"type"`

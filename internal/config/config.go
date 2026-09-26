@@ -201,20 +201,28 @@ type Config struct {
 	} `yaml:"malleable"`
 
 	AI struct {
-		Enabled               bool   `yaml:"enabled"`
-		Provider              string `yaml:"provider"` // deepseek, openai, claude, qianwen, zhipu, longcat, custom
-		APIKey                string `yaml:"api_key"`
-		Model                 string `yaml:"model"`
-		Endpoint              string `yaml:"endpoint"` // optional, override default
-		SystemPrompt          string `yaml:"system_prompt"`
-		EngagementNotes       string `yaml:"engagement_notes"`         // persistent engagement memory injected into the system prompt
-		MaxConversationTurns  int    `yaml:"max_conversation_turns"`   // 0 = unlimited (default)
-		MaxToolRounds         int    `yaml:"max_tool_rounds"`          // 0 = unlimited (default)
-		MaxDuplicateToolCalls int    `yaml:"max_duplicate_tool_calls"` // 0 = unlimited; else cap identical tool+args repeats
-		AllowExecute          bool   `yaml:"allow_execute"`            // permit AI to run commands on agents (default false = safe)
-		MaxRunsPerUser        int    `yaml:"max_runs_per_user"`        // active background runs per operator (default 2)
-		MaxRunsPerTenant      int    `yaml:"max_runs_per_tenant"`      // active background runs per tenant (default 8)
-		RunRetentionDays      int    `yaml:"run_retention_days"`       // durable event retention (default 30)
+		Enabled  bool   `yaml:"enabled"`
+		Provider string `yaml:"provider"` // see AIProviderNames(): openai, anthropic, claude, deepseek, qianwen, zhipu, longcat, google, ollama, local, custom
+		APIKey   string `yaml:"api_key"`
+		Model    string `yaml:"model"`
+		Endpoint string `yaml:"endpoint"` // optional, override the provider default; required for "custom"
+		// AllowPrivateEndpoint and AllowedEndpoints relax the SSRF guard for
+		// AI provider calls only, so an operator can point the assistant at a
+		// local Ollama/vLLM or an air-gapped internal gateway. Off by default:
+		// loopback and private addresses are rejected. Entries are matched
+		// against the endpoint host:port. This deliberately has no UI toggle —
+		// widening network reach is a config-file-level decision.
+		AllowPrivateEndpoint  bool     `yaml:"allow_private_endpoint"`
+		AllowedEndpoints      []string `yaml:"allowed_endpoints"`
+		SystemPrompt          string   `yaml:"system_prompt"`
+		EngagementNotes       string   `yaml:"engagement_notes"`         // persistent engagement memory injected into the system prompt
+		MaxConversationTurns  int      `yaml:"max_conversation_turns"`   // 0 = unlimited (default)
+		MaxToolRounds         int      `yaml:"max_tool_rounds"`          // 0 = unlimited (default)
+		MaxDuplicateToolCalls int      `yaml:"max_duplicate_tool_calls"` // 0 = unlimited; else cap identical tool+args repeats
+		AllowExecute          bool     `yaml:"allow_execute"`            // permit AI to run commands on agents (default false = safe)
+		MaxRunsPerUser        int      `yaml:"max_runs_per_user"`        // active background runs per operator (default 2)
+		MaxRunsPerTenant      int      `yaml:"max_runs_per_tenant"`      // active background runs per tenant (default 8)
+		RunRetentionDays      int      `yaml:"run_retention_days"`       // durable event retention (default 30)
 	} `yaml:"ai"`
 
 	Logging struct {
@@ -786,24 +794,11 @@ func (c *Config) AIEndpoint() string {
 	if c.AI.Endpoint != "" {
 		return c.AI.Endpoint
 	}
-	switch c.AI.Provider {
-	case "openai":
-		return "https://api.openai.com/v1"
-	case "deepseek":
-		return "https://api.deepseek.com/v1"
-	case "qianwen":
-		return "https://dashscope.aliyuncs.com/compatible-mode/v1"
-	case "zhipu":
-		return "https://open.bigmodel.cn/api/paas/v4"
-	case "claude":
-		return "https://api.anthropic.com/v1"
-	case "longcat":
-		return "https://api.longcat.chat/openai"
-	case "custom":
-		return "https://api.openai.com/v1"
-	default:
-		return "https://api.deepseek.com/v1"
-	}
+	// Resolved from the provider registry. Returns "" only for providers that
+	// deliberately have no vendor default ("custom"); callers must treat that
+	// as a configuration error rather than guessing a host, because guessing
+	// here is what used to send one vendor's key to another.
+	return DefaultAIEndpoint(c.AI.Provider)
 }
 
 // Validate checks configuration for invalid or dangerous values.
@@ -924,9 +919,14 @@ func (c *Config) Validate() error {
 		errs = append(errs, errors.New("ai.run_retention_days must be >= 0"))
 	}
 	if c.AI.Enabled && c.AI.Provider != "" {
-		validProviders := map[string]bool{"openai": true, "anthropic": true, "claude": true, "google": true, "deepseek": true, "qianwen": true, "zhipu": true, "longcat": true, "local": true, "custom": true}
-		if !validProviders[c.AI.Provider] {
-			errs = append(errs, errors.New("ai.provider must be one of: openai, anthropic, claude, google, deepseek, qianwen, zhipu, longcat, local, custom"))
+		provider := NormalizeAIProvider(c.AI.Provider)
+		if !IsKnownAIProvider(provider) {
+			errs = append(errs, AIProviderError())
+		} else if AIProviderNeedsExplicitEndpoint(provider) && strings.TrimSpace(c.AI.Endpoint) == "" {
+			// "custom" names no vendor, so there is nothing safe to assume.
+			// Failing at boot is far better than POSTing the key to a host
+			// the operator never chose.
+			errs = append(errs, fmt.Errorf("ai.endpoint is required when ai.provider is %q", provider))
 		}
 	}
 
