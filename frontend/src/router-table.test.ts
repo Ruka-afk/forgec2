@@ -21,8 +21,31 @@ describe("router table", () => {
 
   it("registers every top-level section exactly once", () => {
     const paths = collectPaths(router.routes as never, []);
-    for (const section of ["agents", "tasks", "loot", "settings", "generate"]) {
+    // "tasks" is a tab of /timeline now, not a top-level route.
+    for (const section of ["agents", "timeline", "loot", "settings", "generate"]) {
       expect(paths.filter((p) => p === `/${section}`)).toHaveLength(1);
+    }
+  });
+
+  // The former top-level stubs rendered nothing and bounced the operator to a
+  // tab elsewhere, so they were removed rather than kept as redirect routes.
+  // This locks that in: reintroducing one would silently re-add a dead URL.
+  it("does not register the removed redirect-stub sections", () => {
+    const paths = collectPaths(router.routes as never, []);
+    for (const gone of [
+      "/builds",
+      "/packer",
+      "/profiles",
+      "/stager",
+      "/tasks",
+      "/files",
+      "/notifications",
+    ]) {
+      expect(paths).not.toContain(gone);
+    }
+    // ...and the content they pointed at is still served.
+    for (const host of ["/generate", "/timeline"]) {
+      expect(paths).toContain(host);
     }
   });
 });

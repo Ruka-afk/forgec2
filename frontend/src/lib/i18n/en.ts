@@ -1685,7 +1685,6 @@ export const en: Record<string, string> = {
     "common.pagination": "Pagination",
     "common.previous_page": "Previous page",
     "common.rate_limited": "Rate limited — retry in {seconds}s",
-    "common.redirecting": "Redirecting...",
     "common.refresh": "Refresh",
     "common.remove": "Remove",
     "common.rename": "Rename",
@@ -2741,7 +2740,6 @@ export const en: Record<string, string> = {
     "nav.listeners": "Listeners",
     "nav.loot": "Loot",
     "nav.macros": "Macros",
-    "nav.notifications": "Notifications",
 
     "nav.ntlm": "NTLM",
     "nav.opsec": "OPSEC Guard",

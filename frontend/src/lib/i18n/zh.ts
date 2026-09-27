@@ -1685,7 +1685,6 @@ export const zh: Record<string, string> = {
     "common.pagination": "分页",
     "common.previous_page": "上一页",
     "common.rate_limited": "请求过于频繁，{seconds} 秒后重试",
-    "common.redirecting": "正在重定向...",
     "common.refresh": "刷新",
     "common.remove": "移除",
     "common.rename": "重命名",
@@ -2741,7 +2740,6 @@ export const zh: Record<string, string> = {
     "nav.listeners": "监听器管理",
     "nav.loot": "战利品",
     "nav.macros": "任务宏",
-    "nav.notifications": "通知",
 
     "nav.ntlm": "NTLM",
     "nav.opsec": "OPSEC 守卫",

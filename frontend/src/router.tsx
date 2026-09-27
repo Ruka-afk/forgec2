@@ -6,7 +6,6 @@ import AppLayout from "@/components/AppLayout";
 import RouterErrorView from "@/components/RouterErrorView";
 import NotFound from "@/pages/NotFound";
 import Forbidden from "@/pages/forbidden/ForbiddenPage";
-import HomePage from "@/pages/home/HomePage";
 import LoginPage from "@/pages/login/LoginPage";
 import { NAV_ITEMS } from "@/lib/navigation";
 import { useAppStore } from "@/lib/store";
@@ -25,7 +24,6 @@ const MAIN_PAGES: Record<string, ReturnType<typeof lazyPage>> = {
   autotag: lazyPage(() => import("@/pages/autotag/AutoTagPage")),
   bloodhound: lazyPage(() => import("@/pages/bloodhound/BloodHoundPage")),
   bof: lazyPage(() => import("@/pages/bof/BOFPage")),
-  builds: lazyPage(() => import("@/pages/builds/BuildsPage")),
   campaign: lazyPage(() => import("@/pages/campaign/CampaignPageContent")),
   chain: lazyPage(() => import("@/pages/chain/ChainPage")),
   chat: lazyPage(() => import("@/pages/chat/ChatPage")),
@@ -36,7 +34,6 @@ const MAIN_PAGES: Record<string, ReturnType<typeof lazyPage>> = {
   dashboard: lazyPage(() => import("@/pages/dashboard/DashboardPage")),
   dns: lazyPage(() => import("@/pages/dns/DnsPage")),
   "domain-fronting": lazyPage(() => import("@/pages/domain-fronting/DomainFrontingPage")),
-  files: lazyPage(() => import("@/pages/files/FilesPage")),
   generate: lazyPage(() => import("@/pages/generate/GeneratePage")),
   groups: lazyPage(() => import("@/pages/groups/GroupsPage")),
   infrastructure: lazyPage(() => import("@/pages/infrastructure/InfrastructurePageContent")),
@@ -45,24 +42,19 @@ const MAIN_PAGES: Record<string, ReturnType<typeof lazyPage>> = {
   listeners: lazyPage(() => import("@/pages/listeners/ListenersPageContent")),
   loot: lazyPage(() => import("@/pages/loot/LootPage")),
   macros: lazyPage(() => import("@/pages/macros/MacrosPageContent")),
-  notifications: lazyPage(() => import("@/pages/notifications/NotificationsPage")),
   ntlm: lazyPage(() => import("@/pages/ntlm/NtlmPage")),
   opsec: lazyPage(() => import("@/pages/opsec/OpsecPage")),
-  packer: lazyPage(() => import("@/pages/packer/PackerPage")),
   "password-spray": lazyPage(() => import("@/pages/password-spray/PasswordSprayPage")),
   phishing: lazyPage(() => import("@/pages/phishing/PhishingPageContent")),
   pivoting: lazyPage(() => import("@/pages/pivoting/PivotingPageContent")),
   plugins: lazyPage(() => import("@/pages/plugins/PluginsPageContent")),
   privesc: lazyPage(() => import("@/pages/privesc/PrivescPage")),
-  profiles: lazyPage(() => import("@/pages/profiles/ProfilesPage")),
   report: lazyPage(() => import("@/pages/report/ReportPageContent")),
   roles: lazyPage(() => import("@/pages/roles/RolesPage")),
   scanner: lazyPage(() => import("@/pages/scanner/ScannerPage")),
   scripting: lazyPage(() => import("@/pages/scripting/ScriptingPage")),
   settings: lazyPage(() => import("@/pages/settings/SettingsPage")),
-  stager: lazyPage(() => import("@/pages/stager/StagerPage")),
   tags: lazyPage(() => import("@/pages/tags/TagsPage")),
-  tasks: lazyPage(() => import("@/pages/tasks/TasksPage")),
   timeline: lazyPage(() => import("@/pages/timeline/components/EventsPageContent")),
   tokens: lazyPage(() => import("@/pages/tokens/TokensPage")),
   toolkit: lazyPage(() => import("@/pages/toolkit/ToolkitPage")),
@@ -97,11 +89,6 @@ const MAIN_ROUTES: MainRoute[] = [
   { path: "/agents/:id/shell", comp: AgentShellPage },
   { path: "/agents/:id/token", comp: AgentTokenPage },
   { path: "/agents/:id/traffic", comp: AgentTrafficPage },
-  { path: "/command_templates", redirect: "/toolkit" },
-  { path: "/docs", redirect: "/settings#tab=about" },
-  { path: "/scheduler", redirect: "/automation#tab=scheduled" },
-  { path: "/screenshots", redirect: "/loot?tab=screenshots" },
-  { path: "/workflows", redirect: "/automation#tab=workflows" },
   { path: "/listeners/:id", comp: ListenerDetailPage },
 ];
 
@@ -170,7 +157,9 @@ function RouteErrorBoundary({ routeKey, children }: { routeKey: string; children
 export const router = createBrowserRouter([
   {
     path: "/",
-    element: withSuspense(<HomePage />),
+    // HomePage was a spinner + navigate("/dashboard") stub; the redirect is
+    // expressed directly so no chunk loads before the destination.
+    element: <Navigate to="/dashboard" replace />,
     errorElement: <RouterErrorView />,
   },
   {

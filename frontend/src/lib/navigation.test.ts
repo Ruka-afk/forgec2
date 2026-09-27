@@ -61,26 +61,37 @@ describe("navigation single source", () => {
   });
 
   it("does not advertise merged routes as sidebar destinations", () => {
-    const hrefs = NAV_ITEMS.map((i) => i.href);
-    for (const dead of ["/builds", "/profiles", "/packer", "/stager", "/tasks", "/files"]) {
-      expect(hrefs).not.toContain(dead);
-    }
-    // /notifications is intentionally reachable again (sidebar unread badge).
-    expect(hrefs).toContain("/notifications");
-  });
+      const hrefs = NAV_ITEMS.map((i) => i.href);
+      // All of these are tabs (of /generate, /timeline or /agents/:id) rather
+      // than destinations. /notifications joined them when the alerts tab
+      // absorbed the standalone page; its unread badge rides on /timeline.
+      for (const dead of [
+        "/builds",
+        "/profiles",
+        "/packer",
+        "/stager",
+        "/tasks",
+        "/files",
+        "/notifications",
+      ]) {
+        expect(hrefs).not.toContain(dead);
+      }
+    });
 
   it("pins the four core operational destinations", () => {
     const primary = NAV_SECTIONS[0];
     expect(primary.pinned).toBe(true);
     expect(primary.items.length).toBeLessThanOrEqual(8);
-    expect(primary.items.map((i) => i.href)).toEqual([
-      "/dashboard",
-      "/agents",
-      "/listeners",
-      "/timeline",
-      "/notifications",
-    ]);
-  });
+      expect(primary.items.map((i) => i.href)).toEqual([
+        "/dashboard",
+        "/agents",
+        "/listeners",
+        "/timeline",
+      ]);
+      // The notification count must still surface somewhere in the sidebar,
+      // now carried by the events entry.
+      expect(primary.items.some((i) => i.badge === "notifications")).toBe(true);
+    });
 
   it("keeps settings reachable but outside the scrolling sidebar sections", () => {
     const hrefs = sidebarNavSections().flatMap((s) => s.items.map((i) => i.href));
