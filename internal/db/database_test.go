@@ -35,7 +35,6 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		&Listener{},
 		&CredentialEntry{},
 		&User{},
-		&RolePermission{},
 		&TokenEntry{},
 		&SocksSession{},
 		&BuildLog{},
@@ -1337,31 +1336,6 @@ func TestUserCRUD(t *testing.T) {
 		db.First(&updated, user.ID)
 		if updated.IsActive {
 			t.Error("user should be deactivated")
-		}
-	})
-}
-
-func TestSeedRolePermissions(t *testing.T) {
-	t.Run("seeds into empty table", func(t *testing.T) {
-		db := setupTestDB(t)
-		seedRolePermissions(db)
-
-		var count int64
-		db.Model(&RolePermission{}).Count(&count)
-		if count == 0 {
-			t.Error("expected role permissions to be seeded")
-		}
-	})
-
-	t.Run("skips if already seeded", func(t *testing.T) {
-		db := setupTestDB(t)
-		db.Create(&RolePermission{Role: "admin", Permission: "test"})
-		seedRolePermissions(db)
-
-		var count int64
-		db.Model(&RolePermission{}).Count(&count)
-		if count != 1 {
-			t.Errorf("expected 1 permission (pre-existing), got %d", count)
 		}
 	})
 }

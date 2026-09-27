@@ -248,7 +248,7 @@ func InitDBWithDriver(driver, dsn, fallbackPath string, logLevel slog.Level, dbM
 
 	// Auto-migrate all models (creates any tables/columns still missing on
 	// fresh installs and after historical migrations)
-	if err := db.AutoMigrate(&Implant{}, &Task{}, &AuditLog{}, &Listener{}, &TokenEntry{}, &SocksSession{}, &CredentialEntry{}, &User{}, &BuildLog{}, &ScanResult{}, &NetworkHost{}, &CommandTemplate{}, &BOFFile{}, &ServerConfig{}, &WebhookConfig{}, &Plugin{}, &PluginReview{}, &PluginDependency{}, &PluginUpdateStatus{}, &RolePermission{}, &AutomationRule{}, &AlertRule{}, &Alert{}, &SystemMetric{}, &GeneratedReport{}, &Campaign{}, &MeshPeer{}, &BloodHoundResult{}, &OpsecHistory{}, &OpsecRule{}, &CircuitBreakerConfig{}, &CircuitBreakerEvent{}, &CustomRole{}, &PhishingTemplate{}, &PhishingCampaign{}, &PhishingEvent{}, &AgentTag{}, &AgentTagAssignment{}, &AutoTagRule{}, &Notification{}, &AgentGroup{}, &AgentGroupAssignment{}, &Workflow{}, &WorkflowStep{}, &ExecutionLog{}, &ChatMessage{}, &StagerToken{}, &Redirector{}, &AgentLock{}, &CloudCred{}, &AIChatSession{}, &AIChatMessage{}, &AIProviderProfile{}, &AIChatRun{}, &AIChatRunEvent{}, &AIExecutionIntent{}, &AIAttachment{}, &AIKnowledgeCollection{}, &AIKnowledgeSource{}, &AIKnowledgeChunk{}, &ExtC2Channel{}, &AgentStatusEvent{}, &BackupCode{}, &SIEMRule{}, &UserSession{}, &PasswordHistory{}, &ApiKey{}, &Script{}, &RegSecret{}, &KillSwitch{}, &Tenant{}, &CredentialUsage{}, &CommandMacro{}, &MacroRun{}, &NotificationRoute{}, &SavedView{}, &OneShotTask{}); err != nil {
+	if err := db.AutoMigrate(&Implant{}, &Task{}, &AuditLog{}, &Listener{}, &TokenEntry{}, &SocksSession{}, &CredentialEntry{}, &User{}, &BuildLog{}, &ScanResult{}, &NetworkHost{}, &CommandTemplate{}, &BOFFile{}, &ServerConfig{}, &WebhookConfig{}, &Plugin{}, &PluginReview{}, &PluginDependency{}, &PluginUpdateStatus{}, &AutomationRule{}, &AlertRule{}, &Alert{}, &SystemMetric{}, &GeneratedReport{}, &Campaign{}, &MeshPeer{}, &BloodHoundResult{}, &OpsecHistory{}, &OpsecRule{}, &CircuitBreakerConfig{}, &CircuitBreakerEvent{}, &CustomRole{}, &PhishingTemplate{}, &PhishingCampaign{}, &PhishingEvent{}, &AgentTag{}, &AgentTagAssignment{}, &AutoTagRule{}, &Notification{}, &AgentGroup{}, &AgentGroupAssignment{}, &Workflow{}, &WorkflowStep{}, &ExecutionLog{}, &ChatMessage{}, &StagerToken{}, &Redirector{}, &AgentLock{}, &CloudCred{}, &AIChatSession{}, &AIChatMessage{}, &AIProviderProfile{}, &AIChatRun{}, &AIChatRunEvent{}, &AIExecutionIntent{}, &AIAttachment{}, &AIKnowledgeCollection{}, &AIKnowledgeSource{}, &AIKnowledgeChunk{}, &ExtC2Channel{}, &AgentStatusEvent{}, &BackupCode{}, &SIEMRule{}, &UserSession{}, &PasswordHistory{}, &ApiKey{}, &Script{}, &RegSecret{}, &KillSwitch{}, &Tenant{}, &CredentialUsage{}, &CommandMacro{}, &MacroRun{}, &NotificationRoute{}, &SavedView{}, &OneShotTask{}); err != nil {
 		return nil, err
 	}
 
@@ -257,9 +257,6 @@ func InitDBWithDriver(driver, dsn, fallbackPath string, logLevel slog.Level, dbM
 	if err := runIndexMigrations(db); err != nil {
 		return nil, fmt.Errorf("index migration failed: %w", err)
 	}
-
-	// Seed role permissions
-	seedRolePermissions(db)
 
 	// Multi-tenant bootstrap: ensure a default tenant exists and backfill any
 	// legacy (tenant_id = 0) rows so every asset is owned by a tenant. New
@@ -329,27 +326,11 @@ func InitDBWithDriver(driver, dsn, fallbackPath string, logLevel slog.Level, dbM
 	return db, nil
 }
 
-func seedRolePermissions(db *gorm.DB) {
-	var count int64
-	if err := db.Model(&RolePermission{}).Count(&count).Error; err != nil {
-		return
-	}
-	if count > 0 {
-		return
-	}
-
-	for role, perms := range RolePermissionsMap {
-		for _, perm := range perms {
-			if err := db.Create(&RolePermission{
-				Role:       role,
-				Permission: perm,
-			}).Error; err != nil {
-				slog.Error("Failed to seed role permission", "role", role, "permission", perm, "error", err)
-			}
-		}
-	}
-	slog.Info("Role permissions seeded", "roles", len(RolePermissionsMap))
-}
+// seedRolePermissions was removed. It wrote one row per (role, permission) into
+// role_permissions, but nothing ever read that table: every permission check
+// goes through RoleHasPermission / RoleHasPermissionDB, which resolve from the
+// in-memory RolePermissionsMap plus the custom_roles table. The table is now
+// dropped by a migration; the map below is the single source of truth.
 
 // ensureDefaultTenant creates the singleton "default" tenant and backfills any
 // legacy (tenant_id = 0) rows so a fresh or upgraded deployment is fully

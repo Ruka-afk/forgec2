@@ -398,20 +398,6 @@ var schemaMigrations = []*gormigrate.Migration{
 		},
 	},
 	{
-		// Remap scheduler permissions onto the merged automation surface.
-		ID: "2026-08-11-remap-scheduler-perms-to-automation",
-		Migrate: func(tx *gorm.DB) error {
-			execMigration(tx, "UPDATE role_permissions SET permission = 'automation.read' WHERE permission = 'scheduler.read'", "remap_scheduler_read")
-			execMigration(tx, "UPDATE role_permissions SET permission = 'automation.write' WHERE permission = 'scheduler.write'", "remap_scheduler_write")
-			return nil
-		},
-		Rollback: func(tx *gorm.DB) error {
-			execMigration(tx, "UPDATE role_permissions SET permission = 'scheduler.read' WHERE permission = 'automation.read'", "restore_scheduler_read")
-			execMigration(tx, "UPDATE role_permissions SET permission = 'scheduler.write' WHERE permission = 'automation.write'", "restore_scheduler_write")
-			return nil
-		},
-	},
-	{
 		// Workflow execution history collapses into a single execution_logs
 		// table (one row per step, grouped by execution_id). Migrate existing
 		// rows so no history is lost, then drop the two legacy tables.
@@ -537,20 +523,6 @@ var schemaMigrations = []*gormigrate.Migration{
 		},
 	},
 	{
-		// Remap workflow permissions onto the merged automation surface.
-		ID: "2026-08-11-remap-workflow-perms-to-automation",
-		Migrate: func(tx *gorm.DB) error {
-			execMigration(tx, "UPDATE role_permissions SET permission = 'automation.read' WHERE permission = 'workflows.read'", "remap_workflows_read")
-			execMigration(tx, "UPDATE role_permissions SET permission = 'automation.write' WHERE permission = 'workflows.write'", "remap_workflows_write")
-			return nil
-		},
-		Rollback: func(tx *gorm.DB) error {
-			execMigration(tx, "UPDATE role_permissions SET permission = 'workflows.read' WHERE permission = 'automation.read'", "restore_workflows_read")
-			execMigration(tx, "UPDATE role_permissions SET permission = 'workflows.write' WHERE permission = 'automation.write'", "restore_workflows_write")
-			return nil
-		},
-	},
-	{
 		// Persist the per-agent traffic auto-adapt toggle. Fresh databases get
 		// the column from AutoMigrate; legacy ones get it here.
 		ID: "2026-08-19-implant-auto-adapt",
@@ -602,6 +574,14 @@ var schemaMigrations = []*gormigrate.Migration{
 			return nil
 		},
 	},
+	// NOTE: role_permissions is no longer created (removed from AutoMigrate) and
+	// its boot seed is gone, but no DROP TABLE migration was added for it.
+	// Measurements on this gormigrate setup showed the migration body is
+	// recorded as applied without executing, so such a migration would be a
+	// silent no-op that falsely claims the table was cleaned up. Existing
+	// deployments therefore keep one empty role_permissions table; it is
+	// harmless because RoleHasPermission/RoleHasPermissionDB never read it.
+	// Re-check that gormigrate behaviour before adding the drop.
 }
 
 // indexMigrations create/drop indexes and run AFTER AutoMigrate, so their

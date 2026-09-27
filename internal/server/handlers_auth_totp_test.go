@@ -26,7 +26,7 @@ func newAuthTestDB(t *testing.T) *gorm.DB {
 		&db.CommandTemplate{}, &db.ScanResult{}, &db.NetworkHost{},
 		&db.BuildLog{}, &db.BOFFile{},
 		&db.ServerConfig{}, &db.Plugin{}, &db.CustomRole{},
-		&db.RolePermission{}, &db.AgentTag{},
+		&db.AgentTag{},
 	)
 	if err != nil {
 		t.Fatalf("migrate: %v", err)

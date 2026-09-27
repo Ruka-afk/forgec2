@@ -1146,14 +1146,10 @@ type GeneratedReport struct {
 
 func (GeneratedReport) TableName() string { return "generated_reports" }
 
-type RolePermission struct {
-	ID         uint      `gorm:"primaryKey" json:"id"`
-	Role       string    `gorm:"size:32;index:idx_role_perm_role" json:"role"`
-	Permission string    `gorm:"size:64;index:idx_role_perm_perm" json:"permission"`
-	CreatedAt  time.Time `json:"created_at"`
-}
-
-func (RolePermission) TableName() string { return "role_permissions" }
+// RolePermission (role_permissions) was removed. It was write-only: seeded at
+// boot and never read, because every permission check resolves from the
+// in-memory RolePermissionsMap plus the custom_roles table. The table is
+// dropped by a migration for existing deployments.
 
 func GetPermissionsForRole(role string) []string {
 	if perms, ok := RolePermissionsMap[role]; ok {

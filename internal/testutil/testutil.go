@@ -30,7 +30,7 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 		&db.BOFFile{}, &db.ServerConfig{}, &db.WebhookConfig{},
 		&db.Plugin{}, &db.PluginReview{}, &db.PluginDependency{}, &db.PluginUpdateStatus{},
 		&db.AutomationRule{}, &db.AlertRule{}, &db.Alert{}, &db.SystemMetric{},
-		&db.GeneratedReport{}, &db.RolePermission{}, &db.MeshPeer{},
+		&db.GeneratedReport{}, &db.MeshPeer{},
 		&db.BloodHoundResult{}, &db.Campaign{},
 		&db.OpsecHistory{}, &db.CircuitBreakerConfig{},
 		&db.CircuitBreakerEvent{}, &db.CustomRole{},
