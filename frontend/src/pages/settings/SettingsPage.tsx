@@ -15,12 +15,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SearchInput } from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Bell, Bot, Cpu, Database, FileCode, Globe, Lock, Palette, Server, Shield, User, Users, Wrench, Archive, Radio, AlertTriangle, Activity, ScanSearch, SearchX } from "lucide-react";
+import { Bell, Bot, Cpu, Database, FileCode, Lock, Palette, Server, Shield, Wrench, Archive, Radio, AlertTriangle, ScanSearch, SearchX } from "lucide-react";
 import { useTOTP } from "./components/useTOTP";
 import { useSettingsData } from "./components/useSettingsData";
-import ProfileSection from "./components/ProfileSection";
-import ThemeSection from "./components/ThemeSection";
-import LanguageSection from "./components/LanguageSection";
+import AppearanceSection from "./components/AppearanceSection";
 import SecuritySection from "./components/SecuritySection";
 import ApiKeysSection from "./components/ApiKeysSection";
 import ServerSection from "./components/ServerSection";
@@ -39,8 +37,6 @@ const SIEMRulesSection = lazy(() => import("./components/SIEMRulesSection"));
 const CertificatesSection = lazy(() => import("./components/CertificatesSection"));
 const ModulesSection = lazy(() => import("./components/ModulesSection"));
 const EmergencySection = lazy(() => import("./components/EmergencySection"));
-const AccessSection = lazy(() => import("./components/AccessSection"));
-const TelemetrySection = lazy(() => import("./components/TelemetrySection"));
 const ReloadStatusCard = lazy(() => import("./components/ReloadStatusCard"));
 
 const SETTINGS_SECTION_KEYS = new Set([
@@ -249,12 +245,9 @@ export default function SettingsPage() {
   );
 
   const sections = [
-    { key: "profile", label: t("settings.profile"), icon: <User className="size-4" /> },
-    { key: "theme", label: t("settings.theme"), icon: <Palette className="size-4" /> },
-    { key: "language", label: t("settings.language"), icon: <Globe className="size-4" /> },
-    { key: "security", label: t("settings.security"), icon: <Lock className="size-4" /> },
-    { key: "access", label: t("settings.access"), icon: <Users className="size-4" /> },
-    { key: "server", label: t("settings.server"), icon: <Server className="size-4" /> },
+      { key: "appearance", label: t("settings.appearance"), icon: <Palette className="size-4" /> },
+      { key: "security", label: t("settings.security"), icon: <Lock className="size-4" /> },
+      { key: "server", label: t("settings.server"), icon: <Server className="size-4" /> },
     { key: "agent", label: t("settings.agent"), icon: <Bot className="size-4" /> },
     { key: "malleable", label: t("settings.malleable"), icon: <Shield className="size-4" /> },
     { key: "database", label: t("settings.database"), icon: <Database className="size-4" /> },
@@ -265,16 +258,15 @@ export default function SettingsPage() {
     { key: "siem", label: t("settings.siem"), icon: <ScanSearch className="size-4" /> },
     { key: "certificates", label: t("settings.certificates.label"), icon: <Lock className="size-4" /> },
     { key: "modules", label: t("settings.modules.title"), icon: <FileCode className="size-4" /> },
-    { key: "emergency", label: t("settings.emergency.title"), icon: <AlertTriangle className="size-4" /> },
-    { key: "telemetry", label: t("settings.telemetry"), icon: <Activity className="size-4" /> },
-    { key: "about", label: t("settings.about"), icon: <Cpu className="size-4" /> },
+      { key: "emergency", label: t("settings.emergency.title"), icon: <AlertTriangle className="size-4" /> },
+      { key: "about", label: t("settings.about"), icon: <Cpu className="size-4" /> },
   ];
 
   const sectionGroups = [
-    { key: "account", label: t("settings.group_account"), members: ["profile", "theme", "language", "security", "access"] },
-    { key: "server", label: t("settings.group_server"), members: ["server", "database", "backup", "certificates"] },
-    { key: "agent", label: t("settings.group_agent"), members: ["agent", "malleable", "modules"] },
-    { key: "integrations", label: t("settings.group_integrations"), members: ["notifications", "extc2", "siem", "telemetry"] },
+      { key: "account", label: t("settings.group_account"), members: ["appearance", "security"] },
+      { key: "server", label: t("settings.group_server"), members: ["server", "database", "backup", "certificates"] },
+      { key: "agent", label: t("settings.group_agent"), members: ["agent", "malleable", "modules"] },
+      { key: "integrations", label: t("settings.group_integrations"), members: ["notifications", "extc2", "siem"] },
     { key: "maintenance", label: t("settings.group_maintenance"), members: ["maintenance", "emergency", "about"] },
   ].map((group) => ({
     ...group,
@@ -383,10 +375,7 @@ export default function SettingsPage() {
             </div>
 
             <div className="mx-auto max-w-5xl space-y-6">
-              <TabsContent value="profile" className="mt-0">{gateSettingsData(<ProfileSection data={data} />)}</TabsContent>
-              <TabsContent value="theme" className="mt-0"><ThemeSection theme={theme} onApplyTheme={handleApplyTheme} /></TabsContent>
-              <TabsContent value="language" className="mt-0"><LanguageSection language={language} onSetLanguage={handleSetLanguage} /></TabsContent>
-              <TabsContent value="access" className="mt-0"><Suspense fallback={null}><AccessSection /></Suspense></TabsContent>
+        <TabsContent value="appearance" className="mt-0"><AppearanceSection theme={theme} onApplyTheme={handleApplyTheme} language={language} onSetLanguage={handleSetLanguage} /></TabsContent>
               <TabsContent value="security" className="mt-0">
                 <SecuritySection
                   data={data} passwordForm={passwordForm} setPasswordForm={setPasswordForm}
@@ -417,7 +406,7 @@ export default function SettingsPage() {
               <TabsContent value="certificates" className="mt-0"><Suspense fallback={null}>{gateSettingsData(<CertificatesSection data={data} saving={saving} onRefresh={loadSettings} />)}</Suspense></TabsContent>
               <TabsContent value="modules" className="mt-0"><Suspense fallback={null}><ModulesSection /></Suspense></TabsContent>
               <TabsContent value="emergency" className="mt-0"><Suspense fallback={null}><EmergencySection /></Suspense></TabsContent>
-              <TabsContent value="telemetry" className="mt-0"><Suspense fallback={null}><TelemetrySection /></Suspense></TabsContent>
+              <TabsContent value="about" className="mt-0"><Suspense fallback={null}>{gateSettingsData(<AboutSection data={data} onCheckUpdate={handleCheckUpdate} />)}</Suspense></TabsContent>
             </div>
           </div>
         </div>

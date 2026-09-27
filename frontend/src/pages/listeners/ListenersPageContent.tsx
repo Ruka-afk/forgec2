@@ -29,7 +29,6 @@ import { emptyCreateForm, emptyEditForm } from "./components/types";
 import { useListenersData } from "./components/useListenersData";
 import type { CreateListenerForm, EditListenerForm } from "./components/types";
 import { ListenerHealthCell } from "./components/ListenerHealthCell";
-import { ListenerBreakerConfigDialog } from "./components/ListenerBreakerConfigDialog";
 import { healthForListener, isProblemHealth } from "@/lib/listener-health";
 
 export default function ListenersPageContent() {
@@ -56,7 +55,6 @@ export default function ListenersPageContent() {
   const [statusFilter, setStatusFilter] = useState("");
   const [healthFilter, setHealthFilter] = useState("");
   const [showCreate, setShowCreate] = useState(false);
-  const [showBreakerConfig, setShowBreakerConfig] = useState(false);
 
   const portSchema = useMemo(
     () =>
@@ -204,7 +202,12 @@ export default function ListenersPageContent() {
       subtitle={t("listeners.subtitle")}
       actions={
         <>
-          <Button variant="outline" onClick={() => setShowBreakerConfig(true)}>
+          {/* The circuit-breaker config form used to be duplicated in a dialog
+              here and on the /circuit-breaker page; both POSTed the same
+              payload to paths.circuitBreaker.config. The page owns it, and it
+              also carries the reset/toggle actions and event history that the
+              dialog never had. */}
+          <Button variant="outline" render={<Link to="/circuit-breaker" />}>
             <SlidersHorizontal className="size-4" />
             <span>{t("listeners.breaker_config")}</span>
           </Button>
@@ -576,7 +579,6 @@ export default function ListenersPageContent() {
         </DialogContent>
       </Dialog>
       {modal}
-      <ListenerBreakerConfigDialog open={showBreakerConfig} onOpenChange={setShowBreakerConfig} />
     </PageContainer>
   );
 }
