@@ -878,21 +878,8 @@ type BOFFile struct {
 
 func (BOFFile) TableName() string { return "bof_files" }
 
-// BOFLibrary stores BOF metadata with arch and author info for the library.
-type BOFLibrary struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	Name        string    `gorm:"uniqueIndex;size:256" json:"name"`
-	Description string    `gorm:"size:1024" json:"description"`
-	Data        []byte    `json:"-"`
-	Arch        string    `gorm:"size:16" json:"arch"`
-	Author      string    `gorm:"size:128" json:"author"`
-	Size        int64     `json:"size"`
-	CreatedBy   string    `gorm:"size:64" json:"created_by"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-}
-
-func (BOFLibrary) TableName() string { return "bof_library" }
+// BOFLibrary (bof_library) was removed. No handler ever read or wrote it; the
+// live BOF store is BOFFile, which backs the whole BOF page and automation.
 
 // ServerConfig stores key-value config for automation, events, etc.
 type ServerConfig struct {
@@ -1278,18 +1265,9 @@ type BloodHoundResult struct {
 
 func (BloodHoundResult) TableName() string { return "bloodhound_results" }
 
-type BloodHoundFile struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	Name      string    `gorm:"size:256" json:"name"`
-	Data      []byte    `json:"-"`
-	Size      int64     `json:"size"`
-	Active    bool      `gorm:"default:true" json:"active"`
-	CreatedBy string    `gorm:"size:64" json:"created_by"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
-func (BloodHoundFile) TableName() string { return "bloodhound_files" }
+// BloodHoundFile (bloodhound_files) was removed. No handler ever read or
+// wrote it; BloodHoundResult is the live model and keeps the uploaded ZIPs on
+// the filesystem under data/bloodhound/.
 
 type Campaign struct {
 	ID          string    `gorm:"primaryKey;size:36" json:"id"`
@@ -1303,13 +1281,11 @@ type Campaign struct {
 
 func (Campaign) TableName() string { return "campaigns" }
 
-type CampaignAgent struct {
-	CampaignID string    `gorm:"primaryKey;size:36" json:"campaign_id"`
-	AgentID    string    `gorm:"primaryKey;size:36" json:"agent_id"`
-	AddedAt    time.Time `json:"added_at"`
-}
-
-func (CampaignAgent) TableName() string { return "campaign_agents" }
+// CampaignAgent's explicit struct was removed. The campaign_agents table stays
+// and is still live: it is maintained implicitly through
+// Campaign.Agents []Implant many2many (Preload and Association("Agents")), which
+// GORM handles without a named join model. Naming the join struct here had no
+// reader or writer.
 
 type OpsecHistory struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`

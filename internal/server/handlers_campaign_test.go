@@ -40,15 +40,24 @@ func campaignSeedRequest(t *testing.T, s *Server, id, body string) *httptest.Res
 
 func seedCampaignWithAgents(t *testing.T, s *Server, campaignID string, agentIDs ...string) {
 	t.Helper()
-	if err := s.db.Create(&db.Campaign{ID: campaignID, Name: "test-campaign"}).Error; err != nil {
+	campaign := &db.Campaign{ID: campaignID, Name: "test-campaign"}
+	if err := s.db.Create(campaign).Error; err != nil {
 		t.Fatalf("seed campaign: %v", err)
 	}
+	var implants []db.Implant
 	for _, id := range agentIDs {
-		if err := s.db.Create(&db.Implant{ID: id, Hostname: "host-" + id, OS: "Windows"}).Error; err != nil {
+		im := db.Implant{ID: id, Hostname: "host-" + id, OS: "Windows"}
+		if err := s.db.Create(&im).Error; err != nil {
 			t.Fatalf("seed agent: %v", err)
 		}
-		if err := s.db.Create(&db.CampaignAgent{CampaignID: campaignID, AgentID: id}).Error; err != nil {
-			t.Fatalf("seed campaign agent: %v", err)
+		implants = append(implants, im)
+	}
+	// Link through the many2many association, which is how the campaign
+	// handlers maintain campaign_agents. The explicit join struct was removed;
+	// this asserts GORM still creates and populates the table without one.
+	if len(implants) > 0 {
+		if err := s.db.Model(campaign).Association("Agents").Append(implants); err != nil {
+			t.Fatalf("link campaign agents: %v", err)
 		}
 	}
 }

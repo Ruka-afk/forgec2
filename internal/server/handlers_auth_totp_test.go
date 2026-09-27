@@ -24,7 +24,7 @@ func newAuthTestDB(t *testing.T) *gorm.DB {
 		&db.User{}, &db.Task{}, &db.AuditLog{}, &db.Implant{},
 		&db.Listener{}, &db.TokenEntry{}, &db.CredentialEntry{},
 		&db.CommandTemplate{}, &db.ScanResult{}, &db.NetworkHost{},
-		&db.BuildLog{}, &db.BOFFile{}, &db.BOFLibrary{},
+		&db.BuildLog{}, &db.BOFFile{},
 		&db.ServerConfig{}, &db.Plugin{}, &db.CustomRole{},
 		&db.RolePermission{}, &db.AgentTag{},
 	)

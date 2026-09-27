@@ -51,7 +51,6 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		&Alert{},
 		&SystemMetric{},
 		&BloodHoundResult{},
-		&BloodHoundFile{},
 		&Redirector{},
 		&AgentLock{},
 		&ExtC2Channel{},
