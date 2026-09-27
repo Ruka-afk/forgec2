@@ -99,15 +99,12 @@ export const paths = {
     cookieProxy: (id: string) => `/agents/${id}/cookie_proxy`,
     cookieProxyJar: (id: string) => `/agents/${id}/cookie_proxy/jar`,
     cookieProxyNetscape: (id: string) => `/agents/${id}/cookie_proxy/netscape`,
-    sccmRecon: (id: string) => `/agents/${id}/sccm_recon`,
     fileHunt: (id: string) => `/agents/${id}/file_hunt`,
     screenTriggerStart: (id: string) => `/agents/${id}/screen_trigger/start`,
     screenTriggerStop: (id: string) => `/agents/${id}/screen_trigger/stop`,
     usbEnum: (id: string) => `/agents/${id}/usb_enum`,
     sessionRecon: (id: string) => `/agents/${id}/session_recon`,
     containerDetect: (id: string) => `/agents/${id}/container_detect`,
-    containerDocker: (id: string) => `/agents/${id}/container_docker`,
-    containerK8s: (id: string) => `/agents/${id}/container_k8s`,
     browserHistory: (id: string) => `/agents/${id}/browser_history`,
     windowList: (id: string) => `/agents/${id}/window/list`,
     windowClose: (id: string) => `/agents/${id}/window/close`,
@@ -326,7 +323,6 @@ export const paths = {
 		knowledgeCollections: "/api/ai/knowledge/collections",
 		attachments: (sessionId: string | number) => `/api/ai/sessions/${sessionId}/attachments`,
 		attachment: (id: string) => `/api/ai/attachments/${id}`,
-    pendingTasks: "/api/ai/pending-tasks",
     status: "/api/ai/status",
     analyzeResult: "/api/ai/analyze-result",
     suggestNextSteps: "/api/ai/suggest-next-steps",
@@ -344,7 +340,6 @@ export const paths = {
     run: (id: string | number) => `/api/bof/${id}/run`,
     edit: (id: string | number) => `/api/bof/${id}/edit`,
     reposImport: "/api/bof/repos/import",
-    reposRate: (id: string | number) => `/api/bof/repos/${id}/rate`,
   },
   bloodhound: {
     list: "/bloodhound/list",
@@ -520,7 +515,6 @@ export const paths = {
   templates: {
     list: "/api/templates",
     one: (id: string | number) => `/api/templates/${id}`,
-    byCategory: (category: string) => `/api/templates/category/${encodeURIComponent(category)}`,
   },
   traffic: {
     api: "/api/traffic",
@@ -544,8 +538,6 @@ export const paths = {
     toggle: (id: string | number) => `/siem/rules/${id}/toggle`,
   },
   updateCheck: "/api/update-check",
-  updateVersion: "/api/update-check/version",
-  updateRefresh: "/api/update-check/refresh",
   updateHotUpdate: "/api/update-check/hot-update",
   updateProgress: "/api/update-progress",
   redirectors: {
@@ -561,7 +553,6 @@ export const paths = {
     list: "/integrations",
     one: (id: string | number) => `/integrations/${id}`,
     toggle: (id: string | number) => `/integrations/${id}/toggle`,
-    malleable: "/integrations/malleable",
   },
   phishing: {
     templates: "/phishing/templates",

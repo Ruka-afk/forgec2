@@ -30,10 +30,9 @@ func (s *Server) registerSettingsRoutes(auth *gin.RouterGroup) {
 		settingsWrite.POST("/settings/purge/tasks", middleware.RequireRole(db.RoleAdmin), s.handlePurgeTasks)
 		settingsWrite.POST("/settings/purge/audit", middleware.RequireRole(db.RoleAdmin), s.handlePurgeAuditLogs)
 		settingsWrite.POST("/settings/jwt/regenerate", middleware.RequireRole(db.RoleAdmin), s.handleRegenerateJWT)
-		// Update-signing trust root: admin-only, signatures authorise code
-		// execution on every pinned implant.
-		settingsWrite.GET("/update-signing/public-key", middleware.RequireRole(db.RoleAdmin), s.handleUpdateSigningKey)
-		settingsWrite.POST("/update-signing/sign", middleware.RequireRole(db.RoleAdmin), s.handleSignUpdate)
+		// The /update-signing/* routes were removed. Update signing is done
+		// offline against crypto.update_signing_key; the key is still pinned
+		// into implants and enforced at hot-update time.
 		settingsWrite.POST("/settings/db/vacuum", s.handleDBVacuum)
 		settingsWrite.POST("/settings/db/backup", s.handleDBBackup)
 		// The raw database contains every secret (users, TOTP, API-key hashes,

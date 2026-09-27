@@ -64,7 +64,6 @@ func (s *Server) registerIntegrationRoutes(auth *gin.RouterGroup) {
 	integrationRead.Use(middleware.RequirePermission(db.PermSettingsRead))
 	{
 		integrationRead.GET("/integrations", s.handleIntegrationsList)
-		integrationRead.GET("/integrations/malleable", s.handleActiveMalleable)
 		integrationRead.GET("/rportfwd/status", s.handleRPortFwdGlobalStatus)
 	}
 	integrationWrite := auth.Group("/")

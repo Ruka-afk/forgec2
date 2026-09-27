@@ -91,7 +91,6 @@ type Config struct {
 		CookieDomain         string        `yaml:"cookie_domain"`           // domain for session/CSRF cookies (for cross-origin deployments)
 		BeaconKey            string        `yaml:"beacon_key"`              // optional pre-shared key for agent beacon auth (X-Beacon-Key header)
 		RequireTLSForAuth    bool          `yaml:"require_tls_for_auth"`    // require TLS before issuing session cookies (strongly recommended in production)
-		EnablePprof          bool          `yaml:"enable_pprof"`            // expose /debug/pprof (default false; requires auth when enabled)
 		EnableMetrics        bool          `yaml:"enable_metrics"`          // expose /metrics (default false; requires auth when enabled)
 		SocksListenHost      string        `yaml:"socks_listen_host"`       // bind host for SOCKS/rportfwd (default 127.0.0.1)
 		DBMaxOpenConns       int           `yaml:"db_max_open_conns"`       // max open connections for PostgreSQL pool (default 1; sqlite must stay 1)
@@ -340,7 +339,6 @@ func DefaultConfig() *Config {
 	cfg.Server.AuditRetentionDays = 365
 	cfg.Server.UpdateCheckRepo = "forgec2/forgec2"
 	cfg.Server.UpdateCheckEnabled = false // update checks phone home to api.github.com — opt-in only
-	cfg.Server.EnablePprof = false
 	cfg.Server.EnableMetrics = false
 	cfg.Server.SocksListenHost = "127.0.0.1"
 	cfg.Server.DBMaxOpenConns = 1

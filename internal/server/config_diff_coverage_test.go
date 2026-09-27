@@ -75,7 +75,6 @@ func TestDiffConfigTokenCoverage(t *testing.T) {
 		{"server.operator_mtls", "static", func(c *config.Config) { c.Server.OperatorMTLS = !c.Server.OperatorMTLS }},
 		{"server.cookie_domain", "hot", func(c *config.Config) { c.Server.CookieDomain += "x" }},
 		{"server.require_tls_for_auth", "hot", func(c *config.Config) { c.Server.RequireTLSForAuth = !c.Server.RequireTLSForAuth }},
-		{"server.enable_pprof", "hot", func(c *config.Config) { c.Server.EnablePprof = !c.Server.EnablePprof }},
 		{"server.enable_metrics", "hot", func(c *config.Config) { c.Server.EnableMetrics = !c.Server.EnableMetrics }},
 		{"server.socks_listen_host", "hot", func(c *config.Config) { c.Server.SocksListenHost += "x" }},
 		{"server.dns_obscure", "hot", func(c *config.Config) { c.Server.DNSObscure = !c.Server.DNSObscure }},

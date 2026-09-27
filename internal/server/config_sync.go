@@ -71,7 +71,6 @@ func reloadGroups() []reloadGroup {
 		{Token: "server.allowed_origins", Mode: reloadHot},
 		{Token: "server.cookie_domain", Mode: reloadHot, Apply: (*Server).syncJWTSecret},
 		{Token: "server.require_tls_for_auth", Mode: reloadHot, Apply: (*Server).syncJWTSecret},
-		{Token: "server.enable_pprof", Mode: reloadHot},
 		{Token: "server.enable_metrics", Mode: reloadHot},
 		{Token: "server.socks_listen_host", Mode: reloadHot},
 		{Token: "server.dns_obscure", Mode: reloadHot},

@@ -27,9 +27,8 @@ describe("api paths", () => {
     expect(paths.agents.socksRelayStart("x")).toBe("/agents/x/socks_relay/start");
     expect(paths.agents.socksRelayStatus("x")).toBe("/agents/x/socks_relay/status");
     expect(paths.agents.cookieProxyStart("x")).toBe("/agents/x/cookie_proxy/start");
-    expect(paths.agents.tunStart("x")).toBe("/agents/x/tun/start");
-    expect(paths.agents.sccmRecon("x")).toBe("/agents/x/sccm_recon");
-    expect(paths.identity.consent).toBe("/api/identity/consent");
+      expect(paths.agents.tunStart("x")).toBe("/agents/x/tun/start");
+      expect(paths.identity.consent).toBe("/api/identity/consent");
   });
   it("loot is dual-use under /loot not /api/loot", () => {
     expect(paths.loot.page).toBe("/loot");

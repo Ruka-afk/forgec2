@@ -9,42 +9,21 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/forgec2/forgec2/internal/payload"
 	"github.com/gin-gonic/gin"
 )
 
 // ── Update signing + simple/one-param dispatch + upload validation ─────────
 
-// handleUpdateSigningKey exposes the public half of the update-signing key so
-// external tooling can verify or pre-sign updates. Admin-only: the public key
-// reveals which builds accept updates.
-// GET /api/update-signing/public-key
-func (s *Server) handleUpdateSigningKey(c *gin.Context) {
-	pubHex, err := payload.UpdateSigningPublicKeyHex()
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, sanitizeError(err, "update signing"))
-		return
-	}
-	respond(c, gin.H{"success": true, "public_key": pubHex})
-}
-
-// handleSignUpdate signs an externally computed SHA-256 digest. Admin-only:
-// a valid signature authorises code execution on every pinned implant.
-// POST /api/update-signing/sign   sha256=<64 hex>
-func (s *Server) handleSignUpdate(c *gin.Context) {
-	shaHex := strings.ToLower(strings.TrimSpace(c.PostForm("sha256")))
-	if shaHex == "" {
-		shaHex = strings.ToLower(strings.TrimSpace(c.Query("sha256")))
-	}
-	sig, err := payload.SignUpdateHash(shaHex)
-	if err != nil {
-		respondError(c, http.StatusBadRequest, sanitizeError(err, "update signing"))
-		return
-	}
-	s.LogAuditRecord(c, "sign_update", "system", "",
-		"signed update digest "+shaHex, true, nil)
-	respond(c, gin.H{"success": true, "sha256": shaHex, "signature": sig})
-}
+// handleUpdateSigningKey and handleSignUpdate were removed together with the
+// /update-signing/* routes: nothing called them (no UI, no script, no test,
+// not in openapi). Signing digests over HTTP is a meaningful capability to
+// expose, so it is done offline against the key file instead.
+//
+// The underlying crypto is untouched and still governs hot updates:
+// payload.SignUpdateHash / payload.UpdateSigningPublicKeyHex remain, and the
+// public key is still pinned into implants at build time and injected at
+// registration (handlers_agents.go, PushUpdateKey). What changed is only that
+// an admin can no longer mint an update signature from a browser session.
 
 // simpleTaskDef defines a basic task with no extra parameters
 type simpleTaskDef struct {

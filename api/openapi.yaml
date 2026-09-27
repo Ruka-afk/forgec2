@@ -6382,17 +6382,6 @@ paths:
         '200':
           description: OK
 
-  /integrations/malleable:
-    get:
-      tags: [Integrations]
-      summary: Malleable integrations
-      operationId: integrationsMalleable
-      security:
-        - SessionCookie: []
-      responses:
-        '200':
-          description: OK
-
   /infra/front/list:
     post:
       tags: [Infrastructure]

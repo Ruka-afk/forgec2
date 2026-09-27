@@ -418,9 +418,6 @@ func diffConfig(old, new *config.Config) (hotReloadable []string, staticOnly []s
 	if old.Server.RequireTLSForAuth != new.Server.RequireTLSForAuth {
 		hotReloadable = append(hotReloadable, "server.require_tls_for_auth")
 	}
-	if old.Server.EnablePprof != new.Server.EnablePprof {
-		hotReloadable = append(hotReloadable, "server.enable_pprof")
-	}
 	if old.Server.EnableMetrics != new.Server.EnableMetrics {
 		hotReloadable = append(hotReloadable, "server.enable_metrics")
 	}

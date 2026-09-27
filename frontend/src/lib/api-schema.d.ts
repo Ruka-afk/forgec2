@@ -5512,23 +5512,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/integrations/malleable": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Malleable integrations */
-        get: operations["integrationsMalleable"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/infra/front/list": {
         parameters: {
             query?: never;
@@ -17813,24 +17796,6 @@ export interface operations {
         };
     };
     infraProfileExport: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    integrationsMalleable: {
         parameters: {
             query?: never;
             header?: never;

@@ -294,16 +294,9 @@ func (s *Server) handleIntegrationsToggle(c *gin.Context) {
 	respond(c, gin.H{"success": true, "integration": integrationToMap(wh)})
 }
 
-// handleActiveMalleable returns the currently active malleable C2 profile.
-func (s *Server) handleActiveMalleable(c *gin.Context) {
-	mp := s.cfg.Malleable
-	respond(c, gin.H{
-		"success":      true,
-		"enabled":      mp.Enabled,
-		"status_code":  mp.StatusCode,
-		"content_type": mp.ContentType,
-		"headers":      mp.Headers,
-		"prepend":      mp.Prepend,
-		"append":       mp.Append,
-	})
-}
+// handleActiveMalleable and GET /integrations/malleable were removed. The
+// response was a partial view of the same config that GET /settings returns
+// (missing request_prepend/append, headers, placements, resp_jitter), and the
+// UI abandoned it in favour of /settings: the toggle on that card always
+// rendered as disabled. The Malleable editor writes through
+// POST /settings/malleable, which is unchanged.
