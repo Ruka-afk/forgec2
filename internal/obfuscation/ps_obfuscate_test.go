@@ -1,12 +1,82 @@
 package obfuscation
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/base64"
+	"fmt"
 	"strings"
 	"testing"
 )
 
 func fixedOpts() PSObfuscateOptions {
 	return PSObfuscateOptions{Seed: 42, SeedSet: true}
+}
+
+// DecodeOneLinerPayload extracts the embedded base64 blob from a one-liner
+// produced by this package and reverses the launcher encoding (xor/gzip/plain)
+// to recover the (possibly source-obfuscated) script.
+//
+// It lives in the test file: it was never called from production code, so
+// keeping it in ps_obfuscate.go shipped a decoder for our own launchers inside
+// the server binary.
+func DecodeOneLinerPayload(oneLiner string) (string, error) {
+	idx := strings.Index(oneLiner, "'")
+	lastQuote := strings.LastIndex(oneLiner, "'")
+	if idx == -1 || lastQuote == -1 || idx == lastQuote {
+		return "", fmt.Errorf("no quoted base64 blob found")
+	}
+	b64 := oneLiner[idx+1 : lastQuote]
+	raw, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		return "", fmt.Errorf("base64 decode: %w", err)
+	}
+	// xor launcher?
+	if strings.Contains(oneLiner, "-bxor $k") {
+		key := byte(0x41)
+		if i := strings.Index(oneLiner, "$k=0x"); i >= 0 && i+6 < len(oneLiner) {
+			hexDigits := ""
+			for _, c := range oneLiner[i+5:] {
+				if (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') {
+					hexDigits += string(c)
+					if len(hexDigits) == 2 {
+						break
+					}
+					continue
+				}
+				if strings.HasPrefix(string(c), "x") {
+					continue
+				}
+				break
+			}
+			var k int
+			if _, err := fmt.Sscanf(hexDigits, "%x", &k); err == nil {
+				key = byte(k)
+			}
+		}
+		return string(xorBytes(raw, key)), nil
+	}
+	// gzip launcher? gzip magic 1f 8b.
+	if len(raw) >= 2 && raw[0] == 0x1f && raw[1] == 0x8b {
+		zr, err := gzip.NewReader(bytes.NewReader(raw))
+		if err != nil {
+			return "", fmt.Errorf("gzip open: %w", err)
+		}
+		var out bytes.Buffer
+		buf := make([]byte, 4096)
+		for {
+			n, rerr := zr.Read(buf)
+			if n > 0 {
+				out.Write(buf[:n])
+			}
+			if rerr != nil {
+				break
+			}
+		}
+		_ = zr.Close()
+		return out.String(), nil
+	}
+	return string(raw), nil
 }
 
 // Legacy launcher must stay byte-stable in shape (existing tests rely on it).

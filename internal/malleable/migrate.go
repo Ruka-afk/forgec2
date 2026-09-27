@@ -3,8 +3,6 @@ package malleable
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -201,42 +199,6 @@ func dedupStrings(in []string) []string {
 	return out
 }
 
-// MigrateProfileDir migrates every *.json under dir/profiles to v2 in place,
-// keeping a *.bak of the original on first migration.
-func MigrateProfileDir(dir string) (migrated int, err error) {
-	profDir := filepath.Join(dir, "profiles")
-	entries, err := os.ReadDir(profDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return 0, nil
-		}
-		return 0, err
-	}
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") || strings.HasSuffix(e.Name(), ".v2.json") {
-			continue
-		}
-		path := filepath.Join(profDir, e.Name())
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		var probe map[string]json.RawMessage
-		if err := json.Unmarshal(raw, &probe); err != nil {
-			continue
-		}
-		if hasAnyKey(probe, "client_metadata", "beacon_uris") {
-			continue // already v2
-		}
-		v2, err := MigrateProfileJSON(raw, strings.TrimSuffix(e.Name(), ".json"))
-		if err != nil {
-			continue
-		}
-		out, _ := json.MarshalIndent(v2, "", "  ")
-		_ = os.WriteFile(path+".bak", raw, 0644)
-		if err := os.WriteFile(path, out, 0644); err == nil {
-			migrated++
-		}
-	}
-	return migrated, nil
-}
+// MigrateProfileDir was removed: a one-shot bulk migration helper with no
+// caller anywhere in the tree. Per-profile migration still lives in
+// MigrateProfileJSON, which the profile handlers use.

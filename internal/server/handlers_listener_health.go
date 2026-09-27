@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"net"
-	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,7 +14,6 @@ import (
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
-	"github.com/gin-gonic/gin"
 	"github.com/miekg/dns"
 )
 
@@ -179,11 +177,9 @@ func (s *Server) checkAllListeners() {
 	}
 }
 
-// handleListenerHealth exposes the latest self-check results.
-// GET /api/listeners/health
-func (s *Server) handleListenerHealth(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"success": true, "health": lhTracker.snapshot()})
-}
+// handleListenerHealth was removed. The UI reads listener health from
+// /circuit-breaker/detail; nothing called GET /api/listeners/health. The
+// in-memory tracker and prober that feed it are still used internally.
 
 func (s *Server) probeListener(ctx context.Context, ln *db.Listener) *listenerHealth {
 	h := &listenerHealth{

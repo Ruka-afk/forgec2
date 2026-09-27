@@ -123,7 +123,6 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/set_sleep_mask_advanced", s.handleSetSleepMaskAdvanced)
 		agentCmd.POST("/elevate/printnightmare", s.handleElevatePrintNightmare)
 		agentCmd.POST("/execute_assembly", s.handleExecuteAssembly)
-		agentCmd.GET("/inject/methods", s.handleInjectMethods)
 		agentCmd.POST("/kerberoast", s.handleKerberoast)
 		agentCmd.POST("/password_spray", s.handlePasswordSpray)
 		agentCmd.POST("/cred_check", s.handleCredCheck)

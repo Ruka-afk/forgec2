@@ -51,7 +51,6 @@ func (s *Server) registerReconRoutes(auth *gin.RouterGroup) {
 		{
 			macrosRead.GET("/api/macros", s.handleListMacros)
 			macrosRead.GET("/api/macro-runs", s.handleListMacroRuns)
-			macrosRead.GET("/api/macro-runs/:id", s.handleGetMacroRun)
 		}
 	}
 	reconWrite := auth.Group("/")

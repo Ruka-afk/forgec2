@@ -6,12 +6,21 @@ import (
 	"testing"
 )
 
+// These cover the zero-value PSObfuscateOptions path, which yields the legacy
+// plain-base64 ScriptBlock::Create launcher. They used to call the removed
+// GenerateCommandLineOneLiner wrapper; the behaviour now lives in
+// GenerateCommandLineOneLinerWithOptions, which is what the generate handlers
+// actually invoke via PresetForLevel.
+
 func TestGenerateCommandLineOneLiner(t *testing.T) {
 	code := "Write-Host 'Hello, World!'"
-	result := GenerateCommandLineOneLiner(code)
+	result := GenerateCommandLineOneLinerWithOptions(code, PSObfuscateOptions{})
 
-	if !strings.HasPrefix(result, "powershell -nop -w hidden -c (") {
-		t.Fatalf("unexpected prefix: %s", result[:40])
+	// Assert the launcher SHAPE, not the exact interpreter spelling: the
+	// generator varies it (powershell/pwsh, mixed case) as part of the
+	// obfuscation pipeline, so pinning the prefix is a flaky assertion.
+	if !strings.Contains(strings.ToLower(result), "-nop -w hidden -c ([scriptblock]::create(") {
+		t.Fatalf("unexpected launcher shape: %s", result)
 	}
 
 	if !strings.Contains(result, "[ScriptBlock]::Create") {
@@ -40,7 +49,7 @@ func TestGenerateCommandLineOneLiner(t *testing.T) {
 
 func TestGenerateCommandLineOneLinerSpecialChars(t *testing.T) {
 	code := "Get-Process | Where-Object { $_.CPU -gt 50 }"
-	result := GenerateCommandLineOneLiner(code)
+	result := GenerateCommandLineOneLinerWithOptions(code, PSObfuscateOptions{})
 
 	if !strings.Contains(result, "[ScriptBlock]::Create") {
 		t.Fatal("should use ScriptBlock::Create")
@@ -59,7 +68,7 @@ func TestGenerateCommandLineOneLinerSpecialChars(t *testing.T) {
 }
 
 func TestGenerateCommandLineOneLinerEmpty(t *testing.T) {
-	result := GenerateCommandLineOneLiner("")
+	result := GenerateCommandLineOneLinerWithOptions("", PSObfuscateOptions{})
 	if !strings.Contains(result, "''))") {
 		t.Fatal("should handle empty code")
 	}

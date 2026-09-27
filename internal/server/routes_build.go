@@ -48,7 +48,6 @@ func (s *Server) registerListenerRoutes(auth *gin.RouterGroup) {
 		listenersRead.GET("/listeners", s.handleListenersPage)
 		listenersRead.GET("/listeners/:id", s.handleListenerDetail)
 		listenersRead.GET("/api/listeners", s.handleListListeners)
-		listenersRead.GET("/api/listeners/health", s.handleListenerHealth)
 		listenersRead.GET("/api/listeners/:id", s.handleAPIGetListener)
 	}
 	listenersWrite := auth.Group("/")

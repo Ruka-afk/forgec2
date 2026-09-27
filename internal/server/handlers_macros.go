@@ -184,15 +184,9 @@ func (s *Server) handleListMacroRuns(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "runs": runs})
 }
 
-func (s *Server) handleGetMacroRun(c *gin.Context) {
-	id := c.Param("id")
-	var run db.MacroRun
-	if err := s.db.First(&run, id).Error; err != nil {
-		respondError(c, http.StatusNotFound, "run not found")
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "run": run})
-}
+// handleGetMacroRun was removed. The macro detail dialog is populated from the
+// already-fetched run list (GET /api/macro-runs); nothing requested a single
+// run by id. The sibling stop endpoint stays.
 
 // handleStopMacroRun marks a running macro as stopped; the runner goroutine
 // polls the DB between steps and exits on sight of the stopped status.

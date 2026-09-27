@@ -163,57 +163,10 @@ func (m *Marketplace) AddDependency(pluginID, dependencyID uint, requiredVersion
 	return m.db.Create(&dep).Error
 }
 
-func (m *Marketplace) RemoveDependency(pluginID, dependencyID uint) error {
-	return m.db.Where("plugin_id = ? AND dependency_id = ?", pluginID, dependencyID).Delete(&db.PluginDependency{}).Error
-}
-
-func (m *Marketplace) ResolveInstallationOrder(pluginID uint) ([]uint, error) {
-	var plugin db.Plugin
-	if err := m.db.First(&plugin, pluginID).Error; err != nil {
-		return nil, err
-	}
-
-	visited := make(map[uint]bool)
-	inStack := make(map[uint]bool)
-	var order []uint
-
-	var dfs func(id uint) error
-	dfs = func(id uint) error {
-		if visited[id] {
-			return nil
-		}
-		if inStack[id] {
-			return fmt.Errorf("circular dependency detected")
-		}
-
-		inStack[id] = true
-
-		var deps []db.PluginDependency
-		if err := m.db.Where("plugin_id = ?", id).Find(&deps).Error; err != nil {
-			return err
-		}
-
-		for _, dep := range deps {
-			if !dep.Optional {
-				if err := dfs(dep.DependencyID); err != nil {
-					return err
-				}
-			}
-		}
-
-		inStack[id] = false
-		visited[id] = true
-		order = append(order, id)
-
-		return nil
-	}
-
-	if err := dfs(pluginID); err != nil {
-		return nil, err
-	}
-
-	return order, nil
-}
+// RemoveDependency and ResolveInstallationOrder were removed: neither had a
+// caller. AddDependency is still used by ImportPlugin, and the dependency
+// graph is still read via GetDependencies for the review/update-status
+// handlers. Topological install ordering was never wired up.
 
 func (m *Marketplace) CheckAllUpdates() {
 	var plugins []db.Plugin
@@ -491,21 +444,9 @@ func (m *Marketplace) ImportPlugin(data []byte) (*db.Plugin, error) {
 	return &plugin, nil
 }
 
-func (m *Marketplace) GetCategories() ([]string, error) {
-	var categories []string
-	err := m.db.Model(&db.Plugin{}).Distinct("category").Pluck("category", &categories).Error
-	return categories, err
-}
-
-func (m *Marketplace) ListPluginsByCategory(category string) ([]db.Plugin, error) {
-	var plugins []db.Plugin
-	if category == "" {
-		err := m.db.Find(&plugins).Error
-		return plugins, err
-	}
-	err := m.db.Where("category = ?", category).Find(&plugins).Error
-	return plugins, err
-}
+// GetCategories and ListPluginsByCategory were removed: no caller. Plugin
+// category filtering is done in the plugin list handler, not through the
+// marketplace.
 
 func compareVersions(v1, v2 string) int {
 	v1 = strings.TrimPrefix(v1, "v")

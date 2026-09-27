@@ -36,19 +36,10 @@ func (s *Server) handleExecuteAssembly(c *gin.Context) {
 	s.dispatchTask(c, task, "execute_assembly", filename)
 }
 
-// handleInjectMethods returns the injection techniques the agent supports.
-func (s *Server) handleInjectMethods(c *gin.Context) {
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	methods := map[string][]string{
-		"windows": {"createremotethread", "ntcreatethreadex", "ntcreatethreadex_indirect", "apc", "earlybird", "threadless", "syscall", "indirect", "hollow", "hijack", "atom", "txf", "stomp"},
-		"linux":   {"ptrace", "mem", "process_vm_writev", "ld_preload"},
-		"darwin":  {"ptrace", "task_for_pid"},
-	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "methods": methods})
-}
+// handleInjectMethods was removed. It advertised a static technique list that
+// no client fetched; injection is issued through POST /agents/:id/inject via
+// the generic agent-command builder, and the implant side resolves the method
+// name itself.
 
 // ── kerberoast: Request TGS hashes for all SPNs ────────────────────────────
 func (s *Server) handleKerberoast(c *gin.Context) {
