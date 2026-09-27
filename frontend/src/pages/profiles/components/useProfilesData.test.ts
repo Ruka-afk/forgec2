@@ -29,14 +29,18 @@ describe("useProfilesData", () => {
     toastError.mockReset();
   });
 
-  it("keeps the server's malleable headers so the profiles save cannot wipe them", async () => {
+  it("reads /settings once, not once per consumer", async () => {
+    // The hook used to fire two identical GET /settings calls: one for the
+    // read-only card and one (loadMalleableSettings) to seed a local edit form
+    // that was a duplicate of the Settings editor. The form is gone, so the
+    // card must be the only consumer.
     getMock.mockImplementation((path: string) => {
       if (path === "/settings") {
         return Promise.resolve({
           malleable_enabled: true,
           malleable_status: 201,
           malleable_ct: "text/html",
-          malleable_headers: "Server: cloudflare",
+          malleable_headers: { Server: "cloudflare" },
           malleable_prepend: "<!--x",
           malleable_append: "x-->",
         });
@@ -45,28 +49,15 @@ describe("useProfilesData", () => {
     });
 
     const { result } = renderHook(() => useProfilesData());
-    await waitFor(() => expect(result.current.malleableLoaded).toBe(true));
+    await waitFor(() => expect(result.current.loadingActiveConfig).toBe(false));
 
-    expect(result.current.malleableForm.headers_text).toBe("Server: cloudflare");
-    expect(result.current.malleableForm.status_code).toBe(201);
-    expect(result.current.malleableForm.content_type).toBe("text/html");
-  });
-
-  it("blocks the malleable save when the settings read failed", async () => {
-    getMock.mockImplementation((path: string) => {
-      if (path === "/settings") return Promise.reject(new Error("settings down"));
-      return Promise.resolve({ profiles: [] });
-    });
-
-    const { result } = renderHook(() => useProfilesData());
-    await waitFor(() => expect(result.current.malleableError).toBe("settings down"));
-
-    expect(result.current.malleableLoaded).toBe(false);
+    const settingsCalls = getMock.mock.calls.filter(([p]) => p === "/settings");
+    expect(settingsCalls).toHaveLength(1);
   });
 
   it("surfaces an active-config read failure instead of showing it as disabled", async () => {
-    // The card and the editable form now share one read, so a single failing
-    // /settings call must be reported rather than rendered as "disabled".
+    // A failing /settings call must be reported rather than rendered as
+    // "disabled", which would read as "the operator turned camouflage off".
     getMock.mockImplementation((path: string) => {
       if (path === "/settings") return Promise.reject(new Error("settings down"));
       return Promise.resolve({ profiles: [] });

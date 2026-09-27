@@ -1,7 +1,8 @@
 import { PageContainer } from "@/components/ui/page-container";
 import { CardHeaderRow } from "@/components/ui/card-header-row";
 
-import { useState, useCallback, useRef } from "react";
+  import { useState, useCallback, useRef } from "react";
+  import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadJSON } from "@/lib/download";
@@ -22,8 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Switch } from "@/components/ui/switch";
-import { AlertTriangle, Clock, Code, Copy, Download, FileCode, FileDown, FileEdit, FileWarning, List, PenTool, Plus, RotateCw, Save, Search, Send, Server, Shield, Trash2, X } from "lucide-react";
+import { AlertTriangle, Clock, Code, Copy, Download, FileCode, FileDown, FileEdit, FileWarning, List, PenTool, Plus, RotateCw, Search, Send, Server, Settings, Shield, Trash2, X } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { commonUAs, emptyProfile, type AgentProfile } from "./components/types";
 import { useProfilesData } from "./components/useProfilesData";
@@ -32,8 +32,6 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
   const { t } = useI18n();
   const { confirm, modal } = useConfirm();
   const {
-    malleableForm,
-    setMalleableForm,
     profiles,
     setProfiles,
     selectedIdx,
@@ -44,14 +42,10 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
     activeConfig,
     loadingActiveConfig,
     activeConfigError,
-    malleableLoaded,
-    malleableError,
     profilesError,
     loadActiveConfig,
-    loadMalleableSettings,
     loadProfiles,
   } = useProfilesData();
-  const [savingMalleable, setSavingMalleable] = useState(false);
   const [search, setSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [reloading, setReloading] = useState(false);
@@ -79,13 +73,12 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
       setLastReload(nowTime());
       toast.success(t("profiles.toast.hot_reload_ok"));
       await loadActiveConfig();
-      await loadMalleableSettings();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setReloading(false);
     }
-  }, [loadActiveConfig, loadMalleableSettings, t]);
+  }, [loadActiveConfig, t]);
 
   const normalizeEditing = (p: AgentProfile): AgentProfile => {
     const e = { ...p } as unknown as Record<string, unknown>;
@@ -106,30 +99,6 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
     p.name.toLowerCase().includes(search.toLowerCase()) ||
     (p.description || "").toLowerCase().includes(search.toLowerCase())
   );
-
-  const handleSaveMalleable = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!malleableLoaded) {
-      toast.error(t("settings.unread_save_blocked"));
-      return;
-    }
-    setSavingMalleable(true);
-    try {
-      await api.post(paths.settings.malleable, {
-        enabled: String(malleableForm.enabled),
-        status_code: String(malleableForm.status_code),
-        content_type: malleableForm.content_type,
-        headers_text: malleableForm.headers_text,
-        prepend: malleableForm.prepend,
-        append: malleableForm.append,
-      });
-      toast.success(t("profiles.toast.profile_saved"));
-    } catch {
-      toast.error(t("profiles.toast.save_profile_failed"));
-    } finally {
-      setSavingMalleable(false);
-    }
-  };
 
   const placementsToJSON = (raw: unknown): unknown => {
     if (Array.isArray(raw)) return raw;
@@ -429,55 +398,21 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
         <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
           <CardHeaderRow icon={Shield} tone="violet" title={t("profiles.card_title")} description={t("profiles.card_desc")} />
           <CardContent className="p-(--card-spacing)">
-            <form onSubmit={handleSaveMalleable} className="space-y-4">
-              <div className="flex items-center gap-3">
-                <Switch checked={malleableForm.enabled} onCheckedChange={(v) => setMalleableForm({ ...malleableForm, enabled: v })} />
-                <span className="text-sm text-muted-foreground">{malleableForm.enabled ? t("profiles.enabled") : t("profiles.disabled")}</span>
-                <span className="text-xs text-muted-foreground">{t("profiles.override_json_desc")}</span>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1.5">{t("profiles.http_status")}</Label>
-                  <Input aria-label={t("profiles.http_status")} name="input-1" type="number" min={100} max={599} value={malleableForm.status_code} onChange={(e) => setMalleableForm({ ...malleableForm, status_code: Number(e.target.value) })} />
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1.5">{t("profiles.content_type")}</Label>
-                  <Input aria-label="application-json" name="application-json-2" type="text" placeholder="application/json" value={malleableForm.content_type} onChange={(e) => setMalleableForm({ ...malleableForm, content_type: e.target.value })} className="font-mono" />
-                </div>
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1.5">{t("profiles.custom_headers")}</Label>
-                <Textarea aria-label={t("profiles.custom_headers")} name="textarea-3" rows={3} value={malleableForm.headers_text} onChange={(e) => setMalleableForm({ ...malleableForm, headers_text: e.target.value })} placeholder={"Server: nginx/1.24.0\nX-Powered-By: ASP.NET"} className="font-mono" />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1.5">{t("profiles.prepend_label")}</Label>
-                  <Textarea aria-label={t("profiles.prepend_content")} name="textarea-4" rows={2} value={malleableForm.prepend} onChange={(e) => setMalleableForm({ ...malleableForm, prepend: e.target.value })} placeholder="<html><body><!--" className="font-mono" />
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1.5">{t("profiles.append_label")}</Label>
-                  <Textarea aria-label={t("profiles.append_content")} name="textarea-5" rows={2} value={malleableForm.append} onChange={(e) => setMalleableForm({ ...malleableForm, append: e.target.value })} placeholder="--></body></html>" className="font-mono" />
-                </div>
-              </div>
-              <div className="p-3 bg-warning/15 rounded-lg border border-warning/30 text-xs text-warning">
-                <AlertTriangle className="size-4" />
-                {t("profiles.camouflage_warning")}
-              </div>
-              {malleableError && !malleableLoaded && (
-                <div role="alert" className="p-3 bg-destructive/10 rounded-lg border border-destructive/25 text-xs text-destructive flex flex-wrap items-center gap-2">
-                  <span className="min-w-0 flex-1">{t("settings.unread_save_blocked")}</span>
-                  <Button type="button" size="sm" variant="outline" onClick={() => { void loadMalleableSettings(); }}>
-                    {t("common.try_again")}
-                  </Button>
-                </div>
-              )}
-              <div className="flex flex-wrap items-center gap-3">
-                <Button type="submit" size="lg" disabled={savingMalleable || !malleableLoaded} className="px-6 bg-primary hover:bg-primary/80 text-primary-foreground text-sm font-medium transition-colors disabled:opacity-50">
-                  <Save className="size-4" />{t("profiles.save_profile")}
-                </Button>
-                {!malleableLoaded && <span className="text-xs text-muted-foreground">{t("common.loading")}</span>}
-              </div>
-            </form>
+            {/* The server-wide Malleable editor used to be duplicated here and in
+                Settings. Two forms wrote the same live C2 camouflage to
+                POST /settings/malleable, so an operator had no way to tell which
+                one was authoritative. Settings owns it now; this tab keeps the
+                read-only view, the hot-reload button, and the agent-profile
+                editor on the "agents" tab. */}
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3">
+              <Settings className="size-4 shrink-0 text-muted-foreground" />
+              <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+                {t("profiles.malleable_edit_in_settings")}
+              </p>
+              <Button variant="outline" size="sm" render={<Link to="/settings?tab=malleable" />}>
+                {t("profiles.malleable_open_settings")}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </TabsContent>
