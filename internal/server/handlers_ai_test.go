@@ -635,13 +635,13 @@ func TestAIProviderWrappersUseSharedRegistry(t *testing.T) {
 		}
 	}
 	// OpenAI-compatible providers must keep the /chat/completions dialect.
-	for _, provider := range []string{"openai", "deepseek", "ollama", "custom", "google"} {
+	for _, provider := range []string{"openai", "deepseek", "ollama", "custom"} {
 		if got := aiBuildChatURL("https://example.invalid/v1", provider); got != "https://example.invalid/v1/chat/completions" {
 			t.Errorf("aiBuildChatURL(%q) = %q, want the /chat/completions URL", provider, got)
 		}
 	}
 	// No provider may resolve to a host belonging to a different vendor.
-	for _, provider := range []string{"openai", "anthropic", "deepseek", "qianwen", "zhipu", "longcat", "google", "ollama", "local"} {
+	for _, provider := range []string{"openai", "anthropic", "deepseek", "qianwen", "zhipu", "longcat", "ollama", "local"} {
 		got := aiDefaultEndpoint(provider)
 		if got == "" {
 			t.Errorf("aiDefaultEndpoint(%q) is empty; a real provider needs a default", provider)

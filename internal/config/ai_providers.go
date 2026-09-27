@@ -14,8 +14,15 @@ import (
 // (config.AIEndpoint, config.Validate, aiDefaultModel, aiDefaultEndpoint) and
 // they drifted apart: "anthropic" was accepted by validation but had no
 // endpoint or model case, so an Anthropic API key was silently POSTed to
-// api.deepseek.com, and "google"/"local" fell through to DeepSeek with no
-// error at all. See TestNoProviderSilentlyFallsBack.
+// api.deepseek.com, and "local" fell through to DeepSeek with no error at all.
+// See TestNoProviderSilentlyFallsBack.
+//
+// A name that is absent here is REJECTED at startup rather than defaulted, so
+// adding a provider is an explicit, reviewable act. "google" was previously
+// listed but only ever pointed at Google's OpenAI-compatibility surface, which
+// this repository cannot exercise without a credential; it was removed instead
+// of shipped unverified. Operators who need it can use provider "custom" with
+// an explicit endpoint.
 type AIProvider struct {
 	// Name is the value operators put in ai.provider / the profile provider.
 	Name string
@@ -91,15 +98,6 @@ var aiProviders = []AIProvider{
 		Dialect:         aiDialectOpenAI,
 		DefaultEndpoint: "https://api.longcat.chat/openai/v1",
 		DefaultModel:    "LongCat-Flash-Chat",
-	},
-	{
-		// Google's OpenAI-compatibility surface. NOT verified against the live
-		// API in this repository's tests (no credential available in CI);
-		// the base URL follows Google's published v1beta/openai path.
-		Name:            "google",
-		Dialect:         aiDialectOpenAI,
-		DefaultEndpoint: "https://generativelanguage.googleapis.com/v1beta/openai",
-		DefaultModel:    "gemini-2.0-flash",
 	},
 	{
 		// Local Ollama / OpenAI-compatible server. The default endpoint is a

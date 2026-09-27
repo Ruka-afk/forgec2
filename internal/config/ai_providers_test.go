@@ -10,7 +10,7 @@ import (
 // provider name, endpoint and model used to live in four independent switch
 // statements that drifted, so "anthropic" was accepted by validation but had
 // no endpoint or model case and its API key was POSTed to api.deepseek.com,
-// while "google" and "local" silently fell through to DeepSeek.
+// while "local" silently fell through to DeepSeek.
 
 // TestNoProviderSilentlyFallsBack is the load-bearing invariant: every real
 // (non-alias) provider must carry its own endpoint and model. A missing case
@@ -51,7 +51,6 @@ func TestNoProviderSilentlyFallsBack(t *testing.T) {
 				"qianwen":   "aliyuncs.com",
 				"zhipu":     "bigmodel.cn",
 				"longcat":   "longcat.chat",
-				"google":    "googleapis.com",
 			}
 			if want, ok := mustContain[p.Name]; ok && !strings.Contains(host, want) {
 				t.Errorf("provider %q endpoint host %q does not belong to %q", p.Name, host, want)
@@ -81,19 +80,42 @@ func TestAnthropicResolvesToAnthropic(t *testing.T) {
 	}
 }
 
-// TestGoogleAndLocalNoLongerResolveToDeepSeek pins the two providers that used
-// to validate successfully and then hit the DeepSeek default branch.
-func TestGoogleAndLocalNoLongerResolveToDeepSeek(t *testing.T) {
-	if got := DefaultAIEndpoint("google"); strings.Contains(got, "deepseek") {
-		t.Errorf("google endpoint = %q, must not resolve to deepseek", got)
-	}
+// TestLocalNoLongerResolvesToDeepSeek pins the provider that used to validate
+// successfully and then hit the DeepSeek default branch.
+func TestLocalNoLongerResolvesToDeepSeek(t *testing.T) {
 	// "local" is a deprecated alias for ollama and must carry the loopback
 	// default, not a cloud vendor.
 	if got := DefaultAIEndpoint("local"); got != DefaultAIEndpoint("ollama") {
 		t.Errorf("local alias endpoint = %q, want the ollama endpoint", got)
 	}
+	if got := DefaultAIEndpoint("local"); strings.Contains(got, "deepseek") {
+		t.Errorf("local endpoint = %q, must not resolve to deepseek", got)
+	}
 	if p, ok := LookupAIProvider("local"); !ok || !p.Loopback {
 		t.Error("local/ollama must be flagged Loopback so callers know it needs an allowlist entry")
+	}
+}
+
+// TestUnverifiableProvidersAreRejectedNotDefaulted guards the decision to
+// remove "google" rather than ship an endpoint this repository cannot exercise.
+// An unknown provider must fail loudly; silently defaulting it to another
+// vendor is the exact defect the registry exists to prevent.
+func TestUnverifiableProvidersAreRejectedNotDefaulted(t *testing.T) {
+	if IsKnownAIProvider("google") {
+		t.Error("google must not be in the registry; it was never verified against the live API")
+	}
+	if got := DefaultAIEndpoint("google"); got != "" {
+		t.Errorf("DefaultAIEndpoint(google) = %q, want empty (unknown providers must not be guessed)", got)
+	}
+	// And config validation must reject it, rather than accepting it and
+	// sending the key somewhere the operator did not name.
+	cfg := aiValidateConfig()
+	cfg.AI.Enabled = true
+	cfg.AI.Provider = "google"
+	cfg.AI.APIKey = "k"
+	cfg.AI.Endpoint = "https://generativelanguage.googleapis.com/v1beta/openai"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate accepted the removed google provider")
 	}
 }
 
@@ -106,7 +128,7 @@ func TestCustomRequiresExplicitEndpoint(t *testing.T) {
 	if got := DefaultAIEndpoint("custom"); got != "" {
 		t.Errorf("custom default endpoint = %q, want empty so callers must not guess", got)
 	}
-	for _, name := range []string{"openai", "deepseek", "anthropic", "ollama", "qianwen", "zhipu", "longcat", "google"} {
+	for _, name := range []string{"openai", "deepseek", "anthropic", "ollama", "qianwen", "zhipu", "longcat"} {
 		if AIProviderNeedsExplicitEndpoint(name) {
 			t.Errorf("provider %q must have a usable default endpoint", name)
 		}
@@ -238,7 +260,6 @@ func TestAIEndpointDoesNotCrossVendors(t *testing.T) {
 		"anthropic": "anthropic.com",
 		"openai":    "openai.com",
 		"deepseek":  "deepseek.com",
-		"google":    "googleapis.com",
 	}
 	for provider, wantHost := range cases {
 		cfg := &Config{}

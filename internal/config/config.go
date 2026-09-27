@@ -201,8 +201,11 @@ type Config struct {
 	} `yaml:"malleable"`
 
 	AI struct {
-		Enabled  bool   `yaml:"enabled"`
-		Provider string `yaml:"provider"` // see AIProviderNames(): openai, anthropic, claude, deepseek, qianwen, zhipu, longcat, google, ollama, local, custom
+		Enabled bool `yaml:"enabled"`
+		// Provider names are NOT listed here on purpose: the accepted set lives
+		// in ai_providers.go and is queried with AIProviderNames(). A copied
+		// list in a comment is exactly how the old drift bug stayed invisible.
+		Provider string `yaml:"provider"`
 		APIKey   string `yaml:"api_key"`
 		Model    string `yaml:"model"`
 		Endpoint string `yaml:"endpoint"` // optional, override the provider default; required for "custom"
