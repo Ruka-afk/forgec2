@@ -334,21 +334,19 @@ func TestTCPBeaconRejectsPlaintext(t *testing.T) {
 	}
 }
 
-// TestPlaintextRejectedRegardlessOfForceECDH pins the unconditional refusal:
-// v2 has no plaintext frames, so the flag cannot weaken anything — flipping
-// it must not open a plaintext path on any transport.
-func TestPlaintextRejectedRegardlessOfForceECDH(t *testing.T) {
+// TestPlaintextRejected pins the unconditional refusal: v2 has no plaintext
+// frames, so a plaintext envelope is always rejected on any transport. The old
+// crypto.force_ecdh compat flag was removed because it could never weaken
+// anything — the refusal does not consult any flag.
+func TestPlaintextRejected(t *testing.T) {
 	ginSetTestMode(t)
 	database := testutil.SetupTestDB(t)
 	s := initTCPBeaconServer(t, database)
 
 	raw := []byte(`{"uuid":"ffffffff-1111-4333-8444-aaaaaaaaaaaa","pv":1}`)
-	for _, force := range []bool{true, false} {
-		s.cfg.Crypto.ForceECDH = force
-		_, _, kind := s.decodeBeaconEnvelope(raw)
-		if kind != frameRejected {
-			t.Fatalf("ForceECDH=%v: plaintext frame kind=%v, want frameRejected", force, kind)
-		}
+	_, _, kind := s.decodeBeaconEnvelope(raw)
+	if kind != frameRejected {
+		t.Fatalf("plaintext frame kind=%v, want frameRejected", kind)
 	}
 }
 

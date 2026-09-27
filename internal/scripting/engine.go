@@ -2,7 +2,6 @@ package scripting
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -18,11 +17,6 @@ import (
 // server process, so an unbounded body is both a memory and a parse-time
 // denial-of-service vector.
 const scriptSourceLimit = 1 << 20 // 1 MiB
-
-// scriptEventTimeout bounds one event callback. Callbacks run on the engine's
-// single exec mutex; without a bound, one runaway handler stalls every other
-// script's event dispatch.
-const scriptEventTimeout = 30 * time.Second
 
 // scriptParseTimeout bounds the top-level pass that collects a script's event
 // subscriptions. Parsing and registration are cheap; anything slower is a
@@ -81,16 +75,6 @@ type ScriptEngine struct {
 	mu      sync.Mutex
 	bridge  Bridge
 	scripts []*LoadedScript
-	events  map[string][]*eventCallback
-	execMu  sync.Mutex // serializes event callback execution (goja VMs are not goroutine-safe)
-}
-
-// eventCallback stores a registered event handler together with the VM it was
-// registered on: goja values are VM-bound, so callbacks must always run on
-// their owner VM.
-type eventCallback struct {
-	vm *goja.Runtime
-	cb goja.Callable
 }
 
 type LoadedScript struct {
@@ -113,8 +97,7 @@ func NewScriptEngine() *ScriptEngine {
 	console.Enable(vm)
 
 	e := &ScriptEngine{
-		vm:     vm,
-		events: make(map[string][]*eventCallback),
+		vm: vm,
 	}
 	// Dormant template VM (no e.vm call sites): keep its captured caller at
 	// the lowest privilege so a future wiring cannot inherit admin reach.
@@ -143,27 +126,6 @@ func (e *ScriptEngine) bridgeFor(caller Caller) Bridge {
 // registerAPI installs the JavaScript API surface on the given VM. The bridge
 // calls are synchronous: on failure the script sees a thrown exception.
 func (e *ScriptEngine) registerAPI(vm *goja.Runtime, caller Caller) {
-	vm.Set("on", func(call goja.FunctionCall) goja.Value {
-		eventType := call.Argument(0).String()
-		cb, ok := goja.AssertFunction(call.Argument(1))
-		if !ok {
-			slog.Error("script: on() requires a function callback")
-			return goja.Undefined()
-		}
-		e.mu.Lock()
-		e.events[eventType] = append(e.events[eventType], &eventCallback{vm: vm, cb: cb})
-		e.mu.Unlock()
-		return goja.Undefined()
-	})
-
-	vm.Set("off", func(call goja.FunctionCall) goja.Value {
-		eventType := call.Argument(0).String()
-		e.mu.Lock()
-		delete(e.events, eventType)
-		e.mu.Unlock()
-		return goja.Undefined()
-	})
-
 	vm.Set("sendTask", func(call goja.FunctionCall) goja.Value {
 		bridge := e.bridgeFor(caller)
 		if bridge == nil {
@@ -359,62 +321,12 @@ func (e *ScriptEngine) UnloadScript(name string) {
 	}
 }
 
-// FireEvent dispatches an event to all registered handlers. Callbacks always
-// run on their owner VM, serialized so concurrent events cannot race a single
-// goja runtime.
-func (e *ScriptEngine) FireEvent(eventType string, data interface{}) {
-	e.mu.Lock()
-	callbacks := make([]*eventCallback, 0)
-	for _, cb := range e.events[eventType] {
-		callbacks = append(callbacks, cb)
-	}
-	e.mu.Unlock()
-
-	e.execMu.Lock()
-	defer e.execMu.Unlock()
-	for _, ec := range callbacks {
-		var dataValue goja.Value
-		if data != nil {
-			if jsonData, err := json.Marshal(data); err == nil {
-				var parsed interface{}
-				if json.Unmarshal(jsonData, &parsed) == nil {
-					dataValue = ec.vm.ToValue(parsed)
-				}
-			}
-		}
-		if dataValue == nil {
-			dataValue = goja.Undefined()
-		}
-		e.runEventCallback(ec, eventType, dataValue)
-	}
-}
-
-// runEventCallback invokes one handler under a wall-clock bound. The handler
-// owns the engine's exec mutex, so an unbounded (or uninterruptible) callback
-// would otherwise block event dispatch for every other script.
-func (e *ScriptEngine) runEventCallback(ec *eventCallback, eventType string, data goja.Value) {
-	done := make(chan error, 1)
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				done <- fmt.Errorf("panic: %v", r)
-			}
-		}()
-		_, err := ec.cb(goja.Undefined(), data)
-		done <- err
-	}()
-	timer := time.NewTimer(scriptEventTimeout)
-	defer timer.Stop()
-	select {
-	case err := <-done:
-		if err != nil {
-			slog.Error("script event handler error", "event", eventType, "error", err)
-		}
-	case <-timer.C:
-		ec.vm.Interrupt("script event handler timeout")
-		slog.Error("script event handler timeout", "event", eventType, "timeout", scriptEventTimeout)
-	}
-}
+// FireEvent and runEventCallback were removed along with the on/off
+// registration API. Nothing in the tree ever fired an event, so every callback
+// registered via on() was unreachable: the events map, the exec mutex that
+// serialized dispatch, the per-callback timeout and the JSON data marshalling
+// all existed to serve a call that never happened. Scripts keep the rest of
+// the bridge (sendTask/getAgent/listAgents/httpRequest/query/sleep).
 
 type Script struct {
 	ID          string    `json:"id"`

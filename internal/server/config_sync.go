@@ -53,7 +53,6 @@ func reloadGroups() []reloadGroup {
 		{Token: "crypto.totp_key", Mode: reloadHot},
 		{Token: "crypto.update_signing_key", Mode: reloadHot},
 		{Token: "crypto.backup_key", Mode: reloadStatic},
-		{Token: "crypto.force_ecdh", Mode: reloadStatic},
 		{Token: "crypto.max_decrypted_payload_size", Mode: reloadHot},
 		{Token: "database.driver", Mode: reloadStatic},
 		{Token: "database.path", Mode: reloadStatic},

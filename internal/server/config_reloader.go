@@ -368,9 +368,6 @@ func diffConfig(old, new *config.Config) (hotReloadable []string, staticOnly []s
 	if !reflect.DeepEqual(old.Auth, new.Auth) {
 		staticOnly = append(staticOnly, "auth")
 	}
-	if old.Crypto.ForceECDH != new.Crypto.ForceECDH {
-		staticOnly = append(staticOnly, "crypto.force_ecdh")
-	}
 	// Whole-section comparisons for operator-tunable blocks. Previously edits
 	// here (implant minimums, two-man rule, monitoring thresholds, RoE, AI
 	// provider, SOCKS egress) fell through both lists and were silently

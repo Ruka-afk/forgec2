@@ -127,9 +127,6 @@ type Config struct {
 		DefaultWorkingStart string `yaml:"default_working_start"` // HH:MM local time (empty = disabled)
 		DefaultWorkingEnd   string `yaml:"default_working_end"`   // HH:MM local time (empty = disabled)
 		DefaultWorkingTZ    string `yaml:"default_working_tz"`    // IANA timezone (e.g. "America/New_York"), empty = UTC
-		DNSDoHURL           string `yaml:"dns_doh_url"`           // DNS-over-HTTPS endpoint
-		DNSDoTAddr          string `yaml:"dns_dot_addr"`          // DNS-over-TLS address:port
-		DNSIPv6             bool   `yaml:"dns_ipv6"`              // enable IPv6 AAAA tunneling
 		GoProxy             string `yaml:"goproxy"`               // optional GOPROXY for payload builds when env GOPROXY is unset
 	} `yaml:"implant"`
 
@@ -163,7 +160,6 @@ type Config struct {
 		BackupKey               string `yaml:"backup_key"`                 // REQUIRED: 32-byte hex key for encrypted .fbk backups (independent)
 		TotpKey                 string `yaml:"totp_key"`                   // REQUIRED: 32-byte hex key for TOTP secrets / SMTP / SSH-redirector credentials (independent)
 		CsrfKey                 string `yaml:"csrf_key"`                   // REQUIRED: 32-byte hex key for CSRF token binding (independent)
-		ForceECDH               bool   `yaml:"force_ecdh"`                 // retained for config compat: v2 has no plaintext frames so refusal is unconditional and the flag cannot weaken anything
 		MaxDecryptedPayloadSize int    `yaml:"max_decrypted_payload_size"` // max bytes for decrypted beacon body (0 = default 10MB)
 		UpdateSigningKey        string `yaml:"update_signing_key"`         // OPTIONAL: 32-byte hex Ed25519 pubkey; when set, hot updates require a detached "<checksum>.sig" release signature (empty = checksum-only + warning unless require_release_signature)
 		RequireReleaseSignature bool   `yaml:"require_release_signature"`  // when true, refuse hot updates if update_signing_key is empty or the detached .sig fails verification (default false for upgrade compat; set true in production)
@@ -389,9 +385,6 @@ func DefaultConfig() *Config {
 	cfg.Implant.DefaultWorkingStart = ""
 	cfg.Implant.DefaultWorkingEnd = ""
 	cfg.Implant.DefaultWorkingTZ = ""
-	cfg.Implant.DNSDoHURL = "https://dns.google/dns-query"
-	cfg.Implant.DNSDoTAddr = "1.1.1.1:853"
-	cfg.Implant.DNSIPv6 = false
 
 	cfg.Malleable.Enabled = false
 	cfg.Malleable.StatusCode = 200
@@ -423,9 +416,8 @@ func DefaultConfig() *Config {
 
 	// Secure default: ECDH+AES-256-GCM beacon encryption enabled. Plaintext
 	// rejection is unconditional (v2 defines no plaintext frames), so
-	// crypto.force_ecdh is retained only for config compatibility.
+	// crypto.force_ecdh was removed as a compat no-op.
 	cfg.Crypto.Key = "ecdh:"
-	cfg.Crypto.ForceECDH = true
 
 	cfg.RateLimit.Login.MaxAttempts = 5
 	cfg.RateLimit.Login.Window = 60
