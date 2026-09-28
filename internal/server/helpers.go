@@ -551,16 +551,19 @@ func marshalJSONSafe(v interface{}) ([]byte, bool) {
 }
 
 // encryptCredNotes encrypts sensitive credential notes with the loot key
-// before storage. Falls back to plaintext if encryption is unavailable.
-func encryptCredNotes(s string) string {
+// before storage. Fail-closed: on vault failure it returns an error and the
+// caller must skip the write. The old behaviour stored the notes as plaintext
+// with no error anywhere, which defeats at-rest encryption for harvested
+// browser credentials.
+func encryptCredNotes(s string) (string, error) {
 	if s == "" {
-		return ""
+		return "", nil
 	}
 	enc, err := crypto.EncryptLoot(s)
 	if err != nil {
-		return s
+		return "", err
 	}
-	return enc
+	return enc, nil
 }
 
 // decryptCredNotes decrypts credential notes stored via encryptCredNotes.

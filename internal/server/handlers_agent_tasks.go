@@ -1,15 +1,17 @@
 package server
 
 import (
-	"bytes"
 	"encoding/csv"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func (s *Server) handleTaskHistory(c *gin.Context) {
@@ -117,22 +119,44 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 	s.renderPageOrJSON(c, data)
 }
 
-// handleExportTasks exports tasks as CSV for reporting
+// handleExportTasks exports tasks as CSV for reporting.
+//
+// Resource discipline matters here: Result/Error blobs can each reach
+// MaxResultSize (1 MiB) and AfterFind AES-GCM-decrypts every loaded row, so a
+// naive "load everything then buffer the CSV" can hold ~10 GiB for the default
+// ExportTaskLimit. This handler therefore (a) SELECTs only the columns the CSV
+// uses, (b) preloads just the agent hostname, (c) streams rows to the response
+// instead of buffering, and (d) honours ?limit= capped at ExportTaskLimit.
 func (s *Server) handleExportTasks(c *gin.Context) {
 	if !s.requireExportStepUp(c, "task_export", "task") {
 		return
 	}
+	limit := ExportTaskLimit
+	if raw := strings.TrimSpace(c.Query("limit")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			if n > ExportTaskLimit {
+				n = ExportTaskLimit
+			}
+			limit = n
+		}
+	}
 	var tasks []db.Task
-	query := s.db.WithContext(s.ctx).Preload("Agent").
+	query := s.db.WithContext(s.ctx).
+		Preload("Agent", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id, hostname")
+		}).
+		Select("tasks.id, tasks.agent_id, tasks.type, tasks.command, tasks.result, tasks.error, tasks.status, tasks.created_at").
 		Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"})
 	query = s.tenantScope(query, c)
-	if err := query.Order("created_at desc").Limit(ExportTaskLimit).Find(&tasks).Error; err != nil {
+	if err := query.Order("created_at desc").Limit(limit).Find(&tasks).Error; err != nil {
 		handleQueryError(c, err, "Failed to export tasks")
 		return
 	}
 
-	var buf bytes.Buffer
-	writer := csv.NewWriter(&buf)
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", `attachment; filename="forgec2_tasks_`+time.Now().Format("2006-01-02")+`.csv"`)
+	s.LogAuditRecord(c, "task_export", "task", "", fmt.Sprintf("tasks exported as CSV (limit %d)", limit), true, nil)
+	writer := csv.NewWriter(c.Writer)
 	writer.Write([]string{"Time", "Agent", "Type", "Command", "Result", "Error", "Status"})
 
 	for _, t := range tasks {
@@ -151,16 +175,11 @@ func (s *Server) handleExportTasks(c *gin.Context) {
 		})
 	}
 	writer.Flush()
+	// Headers are already sent at this point, so a write failure can only be
+	// logged, not turned into a 500.
 	if err := writer.Error(); err != nil {
-		slog.Error("Failed to write CSV export", "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to export tasks")
-		return
+		slog.Error("Failed to stream CSV export", "error", err)
 	}
-
-	c.Header("Content-Type", "text/csv; charset=utf-8")
-	c.Header("Content-Disposition", `attachment; filename="forgec2_tasks_`+time.Now().Format("2006-01-02")+`.csv"`)
-	s.LogAuditRecord(c, "task_export", "task", "", "tasks exported as CSV", true, nil)
-	c.String(http.StatusOK, buf.String())
 }
 
 func (s *Server) apiBulkTaskStatus(c *gin.Context) {

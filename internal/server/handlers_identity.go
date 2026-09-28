@@ -13,6 +13,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// identityHTTPTimeout bounds every outbound call to the identity provider.
+// http.DefaultClient has no timeout, so a hung IdP would pin the handler
+// goroutine (and its in-flight slot) until the operator gave up and closed
+// the browser tab.
+const identityHTTPTimeout = 15 * time.Second
+
+// identityHTTPClient returns a bounded client for IdP calls. Redirects are
+// validated like every other outbound fetch.
+func identityHTTPClient() *http.Client {
+	return ssrfSafeClient(&http.Client{Timeout: identityHTTPTimeout})
+}
+
 type deviceCodeSession struct {
 	DeviceCode              string `json:"device_code"`
 	UserCode                string `json:"user_code"`
@@ -58,13 +70,13 @@ func (s *Server) handleDeviceCodeStart(c *gin.Context) {
 	}
 	endpoint := fmt.Sprintf("https://login.microsoftonline.com/%s/oauth2/v2.0/devicecode", url.PathEscape(tenant))
 	form := url.Values{"client_id": {req.ClientID}, "scope": {scope}}
-	httpReq, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(form.Encode()))
+	httpReq, err := http.NewRequestWithContext(c.Request.Context(), http.MethodPost, endpoint, strings.NewReader(form.Encode()))
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "request build failed")
 		return
 	}
 	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := identityHTTPClient().Do(httpReq)
 	if err != nil {
 		respondError(c, http.StatusBadGateway, "device-code request failed (need outbound HTTPS to login.microsoftonline.com)")
 		return
@@ -117,9 +129,9 @@ func (s *Server) handleDeviceCodePoll(c *gin.Context) {
 		"client_id":   {sess.ClientID},
 		"device_code": {sess.DeviceCode},
 	}
-	httpReq, _ := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(form.Encode()))
+	httpReq, _ := http.NewRequestWithContext(c.Request.Context(), http.MethodPost, endpoint, strings.NewReader(form.Encode()))
 	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := identityHTTPClient().Do(httpReq)
 	if err != nil {
 		respondError(c, http.StatusBadGateway, "token poll failed")
 		return
@@ -288,13 +300,13 @@ func (s *Server) handleConsentExchange(c *gin.Context) {
 	if sess.ClientSecret != "" {
 		form.Set("client_secret", sess.ClientSecret)
 	}
-	httpReq, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(form.Encode()))
+	httpReq, err := http.NewRequestWithContext(c.Request.Context(), http.MethodPost, endpoint, strings.NewReader(form.Encode()))
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "request build failed")
 		return
 	}
 	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := identityHTTPClient().Do(httpReq)
 	if err != nil {
 		respondError(c, http.StatusBadGateway, "token exchange failed (need outbound HTTPS to login.microsoftonline.com)")
 		return

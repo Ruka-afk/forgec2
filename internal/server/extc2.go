@@ -402,13 +402,25 @@ func (s *Server) processExternalC2Result(agentID string, taskID uint, resultID s
 		return
 	}
 	// Encrypt result at rest (H3) so command output is not stored as plaintext.
-	if enc, err := crypto.EncryptLoot(result); err == nil {
+	// Fail-closed like the beacon path (encryptTaskFieldsOrBlank): on vault
+	// failure the output is dropped and replaced with a marker, never stored
+	// as plaintext. A silent plaintext store would leak command output into
+	// the DB with a "completed" status and no error anywhere.
+	enc, encErr := crypto.EncryptLoot(result)
+	if encErr != nil {
+		slog.Error("ExtC2 result encryption failed, dropping output", "task_id", taskID, "agent_id", agentID, "err", encErr)
+		s.vaultNoteError("encrypt-extc2-result", encErr, task.ID, agentID)
+		result = ""
+	} else {
 		result = enc
 	}
 	updates := map[string]interface{}{
 		"status":     "completed",
 		"result":     result,
 		"updated_at": time.Now(),
+	}
+	if encErr != nil {
+		updates["error"] = "vault encryption unavailable"
 	}
 	if resultID != "" {
 		updates["last_result_id"] = resultID
