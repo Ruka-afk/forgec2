@@ -24,6 +24,7 @@ import { formatTime } from "@/lib/utils";
 import { useVirtualWindow } from "@/lib/hooks/useVirtualWindow";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { useDebounce } from "@/lib/hooks/useDebounce";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { POLL } from "@/lib/polling";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { useWS } from "@/lib/wsContext";
@@ -198,6 +199,25 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
 
   useVisibleInterval(pollTasks, POLL.tasks);
 
+  const { confirm, modal: confirmModal } = useConfirm();
+  // In-flight mutation guard: without it a double-click fires cancel/rerun
+  // twice, and the row buttons give no busy signal while the request flies.
+  const [mutatingIds, setMutatingIds] = useState<Set<number>>(new Set());
+  const markMutating = useCallback((id: number, on: boolean) => {
+    setMutatingIds((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+  // Prefer the server's message so the operator can diagnose (409 locked by
+  // whom, 404, validation) instead of a bare "failed" toast. The fallback is
+  // translated at the call site so check:i18n still sees the t("鈥?) key.
+  const mutationError = useCallback((e: unknown, fallback: string) => {
+    toast.error(e instanceof Error && e.message ? e.message : fallback);
+  }, []);
+
   const handleExportCSV = () => {
     const headers = ["Time", "Agent", "Type", "Command", "Status", "Result", "Duration"].map(csvCell);
     const rows = tasks.map((t) => [
@@ -223,46 +243,64 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
   }, []);
 
   const handleCancel = useCallback(async (task: Task) => {
+    if (mutatingIds.has(task.id)) return;
+    markMutating(task.id, true);
     try {
       await api.post(paths.agents.cancelTask(task.agent_id, task.id));
       loadTasks();
-    } catch { toast.error(t("tasks.toast_cancel_failed")); }
-  }, [loadTasks, t]);
+    } catch (e) { mutationError(e, t("tasks.toast_cancel_failed")); }
+    finally { markMutating(task.id, false); }
+  }, [loadTasks, markMutating, mutatingIds, mutationError, t]);
 
   const handleRerun = useCallback(async (task: Task) => {
+    if (mutatingIds.has(task.id)) return;
+    markMutating(task.id, true);
     try {
       await api.post(paths.agents.rerunTask(task.agent_id, task.id));
       loadTasks();
-    } catch { toast.error(t("tasks.toast_rerun_failed")); }
-  }, [loadTasks, t]);
+    } catch (e) { mutationError(e, t("tasks.toast_rerun_failed")); }
+    finally { markMutating(task.id, false); }
+  }, [loadTasks, markMutating, mutatingIds, mutationError, t]);
 
   const handleApprove = useCallback(async (task: Task) => {
+    if (mutatingIds.has(task.id)) return;
+    markMutating(task.id, true);
     try {
       await api.post(paths.tasksCollab.approve(task.id));
       loadTasks();
-    } catch { toast.error(t("tasks.toast_approve_failed")); }
-  }, [loadTasks, t]);
+    } catch (e) { mutationError(e, t("tasks.toast_approve_failed")); }
+    finally { markMutating(task.id, false); }
+  }, [loadTasks, markMutating, mutatingIds, mutationError, t]);
 
   const handleReject = useCallback(async (task: Task) => {
+    if (mutatingIds.has(task.id)) return;
+    markMutating(task.id, true);
     try {
       await api.post(paths.tasksCollab.reject(task.id));
       loadTasks();
-    } catch { toast.error(t("tasks.toast_reject_failed")); }
-  }, [loadTasks, t]);
+    } catch (e) { mutationError(e, t("tasks.toast_reject_failed")); }
+    finally { markMutating(task.id, false); }
+  }, [loadTasks, markMutating, mutatingIds, mutationError, t]);
 
   const handleClaim = useCallback(async (taskId: number) => {
+    if (mutatingIds.has(taskId)) return;
+    markMutating(taskId, true);
     try {
       await api.post(paths.tasksCollab.claim(taskId));
       loadTasks();
-    } catch { toast.error(t("tasks.toast_claim_failed")); }
-  }, [loadTasks, t]);
+    } catch (e) { mutationError(e, t("tasks.toast_claim_failed")); }
+    finally { markMutating(taskId, false); }
+  }, [loadTasks, markMutating, mutatingIds, mutationError, t]);
 
   const handleRelease = useCallback(async (taskId: number) => {
+    if (mutatingIds.has(taskId)) return;
+    markMutating(taskId, true);
     try {
       await api.post(paths.tasksCollab.release(taskId));
       loadTasks();
-    } catch { toast.error(t("tasks.toast_release_failed")); }
-  }, [loadTasks, t]);
+    } catch (e) { mutationError(e, t("tasks.toast_release_failed")); }
+    finally { markMutating(taskId, false); }
+  }, [loadTasks, markMutating, mutatingIds, mutationError, t]);
 
   const toggleSelect = useCallback((id: number, checked: boolean) => {
     setSelectedIds((prev) => {
@@ -290,6 +328,8 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
       toast.info(t("tasks.bulk_no_cancellable"));
       return;
     }
+    // Bulk cancel destroys queued work irreversibly: confirm with the count.
+    if (!(await confirm({ message: t("tasks.bulk_cancel_confirm", { count: targets.length }), danger: true }))) return;
     let ok = 0;
     let fail = 0;
     await Promise.all(targets.map((tk) =>
@@ -301,7 +341,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
     else toast.success(t("tasks.bulk_cancel_done", { ok }));
     clearSelection();
     loadTasks();
-  }, [tasks, selectedIds, loadTasks, clearSelection, t]);
+  }, [tasks, selectedIds, loadTasks, clearSelection, confirm, t]);
 
   /** Rerun every selected terminal task (completed/failed/cancelled). */
   const handleBulkRerun = useCallback(async () => {
@@ -313,6 +353,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
       toast.info(t("tasks.bulk_no_rerunnable"));
       return;
     }
+    if (!(await confirm({ message: t("tasks.bulk_rerun_confirm", { count: targets.length }), danger: true }))) return;
     let ok = 0;
     let fail = 0;
     await Promise.all(targets.map((tk) =>
@@ -324,7 +365,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
     else toast.success(t("tasks.bulk_rerun_done", { ok }));
     clearSelection();
     loadTasks();
-  }, [tasks, selectedIds, loadTasks, clearSelection, t]);
+  }, [tasks, selectedIds, loadTasks, clearSelection, confirm, t]);
 
   const applySavedState = useCallback((state: Record<string, unknown>) => {
     if (typeof state.status === "string") setStatusFilter(state.status);
@@ -546,6 +587,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
                   onReject={handleReject}
                   onClaim={handleClaim}
                   onRelease={handleRelease}
+                  disabledIds={mutatingIds}
                   getAgentName={getAgentName}
                   getTypeBadge={getTypeBadge}
                   getStatusBadge={getStatusBadge}
@@ -604,6 +646,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
                   onReject={handleReject}
                   onClaim={handleClaim}
                   onRelease={handleRelease}
+                  disabledIds={mutatingIds}
                   getAgentName={getAgentName}
                   getTypeBadge={getTypeBadge}
                   getStatusBadge={getStatusBadge}
@@ -624,6 +667,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
       <Pagination page={page} pageSize={50} total={total} onPageChange={setPage} />
 
       {detailTask && <TaskDetailModal task={detailTask} onClose={() => setDetailTask(null)} getAgentName={getAgentName} getStatusBadge={getStatusBadge} getTypeBadge={getTypeBadge} />}
+      {confirmModal}
     </PageContainer>
   );
 }
@@ -637,7 +681,7 @@ export default function TasksPageWrapper({ embedded = false }: { embedded?: bool
   );
 }
 
-const TaskRow = memo(function TaskRow({ task, expanded, selected, onToggleSelect, onToggle, onDetail, onCancel, onRerun, onApprove, onReject, onClaim, onRelease, getAgentName, getTypeBadge, getStatusBadge }: {
+const TaskRow = memo(function TaskRow({ task, expanded, selected, onToggleSelect, onToggle, onDetail, onCancel, onRerun, onApprove, onReject, onClaim, onRelease, disabledIds, getAgentName, getTypeBadge, getStatusBadge }: {
   task: Task;
   expanded: boolean;
   selected: boolean;
@@ -650,6 +694,7 @@ const TaskRow = memo(function TaskRow({ task, expanded, selected, onToggleSelect
   onReject: (task: Task) => void;
   onClaim: (taskId: number) => void;
   onRelease: (taskId: number) => void;
+  disabledIds: Set<number>;
   getAgentName: (id: string) => string | undefined;
   getTypeBadge: (t: string) => React.ReactNode;
   getStatusBadge: (s: string) => React.ReactNode;
@@ -715,6 +760,7 @@ const TaskRow = memo(function TaskRow({ task, expanded, selected, onToggleSelect
             onReject={onReject}
             onClaim={onClaim}
             onRelease={onRelease}
+            disabledIds={disabledIds}
           />
         </TableCell>
       </TableRow>
@@ -742,13 +788,14 @@ type TaskCardProps = {
   onReject: (task: Task) => void;
   onClaim: (taskId: number) => void;
   onRelease: (taskId: number) => void;
+  disabledIds: Set<number>;
   getAgentName: (id: string) => string | undefined;
   getTypeBadge: (t: string) => React.ReactNode;
   getStatusBadge: (s: string) => React.ReactNode;
 };
 
 /** Narrow-screen list item: keeps every column the desktop table shows. */
-const TaskCard = memo(function TaskCard({ task, expanded, selected, onToggleSelect, onToggle, onDetail, onCancel, onRerun, onApprove, onReject, onClaim, onRelease, getAgentName, getTypeBadge, getStatusBadge }: TaskCardProps) {
+const TaskCard = memo(function TaskCard({ task, expanded, selected, onToggleSelect, onToggle, onDetail, onCancel, onRerun, onApprove, onReject, onClaim, onRelease, disabledIds, getAgentName, getTypeBadge, getStatusBadge }: TaskCardProps) {
   const currentUsername = useAppStore((s) => s.currentUsername);
   const { t } = useI18n();
   return (
@@ -818,6 +865,7 @@ const TaskCard = memo(function TaskCard({ task, expanded, selected, onToggleSele
               onReject={onReject}
               onClaim={onClaim}
               onRelease={onRelease}
+              disabledIds={disabledIds}
             />
           </div>
           {expanded && task.result && (
@@ -832,7 +880,7 @@ const TaskCard = memo(function TaskCard({ task, expanded, selected, onToggleSele
 });
 
 /** Shared claim/cancel/rerun/approve/reject icon buttons (row + card). */
-function TaskActions({ task, onCancel, onRerun, onApprove, onReject, onClaim, onRelease }: {
+function TaskActions({ task, onCancel, onRerun, onApprove, onReject, onClaim, onRelease, disabledIds }: {
   task: Task;
   onCancel: (task: Task) => void;
   onRerun: (task: Task) => void;
@@ -840,40 +888,42 @@ function TaskActions({ task, onCancel, onRerun, onApprove, onReject, onClaim, on
   onReject: (task: Task) => void;
   onClaim: (taskId: number) => void;
   onRelease: (taskId: number) => void;
+  disabledIds: Set<number>;
 }) {
   const currentUsername = useAppStore((s) => s.currentUsername);
   const { t } = useI18n();
+  const busy = disabledIds.has(task.id);
   return (
     <div className="flex items-center justify-end gap-1">
       {(!task.operator_claimed_by || task.operator_claimed_by === currentUsername) && (task.status === "pending" || task.status === "running") && (
         <>
           {task.operator_claimed_by !== currentUsername ? (
-            <Button variant="ghost" size="icon-xs" onClick={() => onClaim(task.id)} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-chart-3/20" title={t("tasks.claim")} aria-label={t("tasks.claim")}>
+            <Button variant="ghost" size="icon-xs" disabled={busy} aria-busy={busy} onClick={() => onClaim(task.id)} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-chart-3/20" title={t("tasks.claim")} aria-label={t("tasks.claim")}>
               <Hand className="size-4" />
             </Button>
           ) : (
-            <Button variant="ghost" size="icon-xs" onClick={() => onRelease(task.id)} className="text-muted-foreground hover:text-warning hover:bg-warning/15" title={t("tasks.release")} aria-label={t("tasks.release")}>
+            <Button variant="ghost" size="icon-xs" disabled={busy} aria-busy={busy} onClick={() => onRelease(task.id)} className="text-muted-foreground hover:text-warning hover:bg-warning/15" title={t("tasks.release")} aria-label={t("tasks.release")}>
               <Hand className="size-4" />
             </Button>
           )}
         </>
       )}
       {(task.status === "pending" || task.status === "running") && !task.operator_claimed_by && (
-        <Button variant="ghost" size="icon-xs" onClick={() => onCancel(task)} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10" title={t("tasks.cancel")} aria-label={t("tasks.cancel")}>
+        <Button variant="ghost" size="icon-xs" disabled={busy} aria-busy={busy} onClick={() => onCancel(task)} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10" title={t("tasks.cancel")} aria-label={t("tasks.cancel")}>
           <Ban className="size-3" />
         </Button>
       )}
       {(task.status === "completed" || task.status === "failed" || task.status === "cancelled") && (
-        <Button variant="ghost" size="icon-xs" onClick={() => onRerun(task)} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-chart-3/20" title={t("tasks.rerun")} aria-label={t("tasks.rerun")}>
+        <Button variant="ghost" size="icon-xs" disabled={busy} aria-busy={busy} onClick={() => onRerun(task)} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-chart-3/20" title={t("tasks.rerun")} aria-label={t("tasks.rerun")}>
           <RotateCw className="size-4" />
         </Button>
       )}
       {task.status === "pending_approval" && (
         <>
-          <Button variant="ghost" size="icon-xs" onClick={() => onApprove(task)} className="text-muted-foreground hover:text-success hover:bg-success/15" title={t("tasks.approve")} aria-label={t("tasks.approve")}>
+          <Button variant="ghost" size="icon-xs" disabled={busy} aria-busy={busy} onClick={() => onApprove(task)} className="text-muted-foreground hover:text-success hover:bg-success/15" title={t("tasks.approve")} aria-label={t("tasks.approve")}>
             <Check className="size-4" />
           </Button>
-          <Button variant="ghost" size="icon-xs" onClick={() => onReject(task)} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10" title={t("tasks.reject")} aria-label={t("tasks.reject")}>
+          <Button variant="ghost" size="icon-xs" disabled={busy} aria-busy={busy} onClick={() => onReject(task)} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10" title={t("tasks.reject")} aria-label={t("tasks.reject")}>
             <X className="size-4" />
           </Button>
         </>
