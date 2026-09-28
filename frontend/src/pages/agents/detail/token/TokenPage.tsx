@@ -132,6 +132,10 @@ export default function AgentTokenPage() {
   const handleStealToken = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!stealPid) return;
+    // Stealing a token injects into another process: confirm the PID first,
+    // a typo here targets the wrong process.
+    const okSteal = await confirm({ title: t("agents.token_steal_title"), message: t("agents.token_steal_confirm", { pid: stealPid }), danger: true });
+    if (!okSteal) return;
     setActiveAction("steal");
     try {
       const body = new URLSearchParams();
@@ -141,8 +145,8 @@ export default function AgentTokenPage() {
       // B7 fix: task accepted, poll later
       toast.info(t("agents.token_task_queued"));
       scheduleTokenReload();
-    } catch {
-      toast.error(t("agents.token_steal_failed"));
+    } catch (errSteal) {
+      toast.error(errSteal instanceof Error && errSteal.message ? errSteal.message : t("agents.token_steal_failed"));
     } finally {
       setActiveAction(null);
     }
@@ -193,12 +197,16 @@ export default function AgentTokenPage() {
   };
 
   const handleImpersonate = async (tokenId: string) => {
+    // Impersonation changes the security context the agent operates under:
+    // confirm explicitly, like the destructive drop action below.
+    const okImp = await confirm({ title: t("agents.token_impersonate_title"), message: t("agents.token_impersonate_confirm"), danger: true });
+    if (!okImp) return;
     setActiveAction(`impersonate-${tokenId}`);    try {
       await api.post(paths.agents.tokenImpersonate(agentId, tokenId));
       toast.success(t("agents.token_impersonate"));
       await loadTokens();
-    } catch {
-      toast.error(t("agents.token_impersonate_failed"));
+    } catch (errImp) {
+      toast.error(errImp instanceof Error && errImp.message ? errImp.message : t("agents.token_impersonate_failed"));
     } finally {      setActiveAction(null);    }
   };
 

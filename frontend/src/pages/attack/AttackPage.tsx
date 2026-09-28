@@ -433,16 +433,19 @@ function UsageHeatmapCard() {
   const [range, setRange] = useState("30d");
   const [data, setData] = useState<HeatmapData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setError(null);
     api.get<HeatmapData>(paths.mitre.heatmap(range))
       .then((d) => { if (!cancelled) setData(d); })
-      .catch(() => { if (!cancelled) setData(null); })
+      .catch((e) => { if (!cancelled) { setData(null); setError(e instanceof Error && e.message ? e.message : t("attack.heatmap_error")); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [range]);
+  }, [range, retry, t]);
 
   const lookup = new Map<string, number>();
   (data?.cells || []).forEach((c) => lookup.set(`${c.date}|${c.tactic}`, c.count));
@@ -465,6 +468,8 @@ function UsageHeatmapCard() {
       <div className="p-4">
         {loading ? (
           <PageSpinner />
+        ) : error && !data ? (
+          <DataError message={error} onRetry={() => setRetry((n) => n + 1)} />
         ) : !data || data.total_tasks === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-6">{t("attack.heatmap_empty")}</p>
         ) : (

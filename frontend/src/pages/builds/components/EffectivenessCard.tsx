@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { timeAgo } from "@/lib/utils";
@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
+import { DataError } from "@/components/ui/data-state";
 import { StatTile } from "@/components/ui/stat-tile";
 import { Target, RefreshCw } from "lucide-react";
 
@@ -49,16 +50,18 @@ export default function EffectivenessCard() {
   const [data, setData] = useState<EffectivenessData | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
+    setError(null);
     api.get<EffectivenessData>(paths.builds.effectiveness(30))
       .then(setData)
-      .catch(() => setData(null))
+      .catch((e) => { setData(null); setError(e instanceof Error && e.message ? e.message : t("builds.effectiveness_error")); })
       .finally(() => setLoading(false));
-  };
+  }, [t]);
 
-  useEffect(load, []);
+  useEffect(() => { load(); }, [load]);
 
   const reachRate = data && data.total_success > 0
     ? Math.round((data.deployed_builds / data.total_success) * 100)
@@ -75,10 +78,11 @@ export default function EffectivenessCard() {
         </Button>
       </div>
 
-      {!data ? (
-        loading ? <div className="py-6 text-center"><Spinner /></div>
-          : <p className="text-xs text-muted-foreground text-center py-4">{t("builds.effectiveness_empty")}</p>
-      ) : (
+        {!data ? (
+          loading ? <div className="py-6 text-center"><Spinner /></div>
+            : error ? <DataError message={error} onRetry={load} />
+            : <p className="text-xs text-muted-foreground text-center py-4">{t("builds.effectiveness_empty")}</p>
+        ) : (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
             <StatTile label={t("builds.eff_total")} value={String(data.total_success)} tone="info" />
