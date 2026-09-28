@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/plugin"
 	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -321,31 +320,12 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 	}
 
 	// Post-insert: fire hooks, broadcast. Pending counters were already
-	// incremented under the gate check above.
+	// incremented under the gate check above. Hooks go through the bounded
+	// worker pool via fireTaskCreatedHook so a bulk dispatch cannot spawn an
+	// unbounded goroutine fan-out.
 	for i := range tasks {
 		if s.pluginManager != nil {
-			taskCopy := tasks[i]
-			s.wg.Add(1)
-			go func() {
-				defer s.wg.Done()
-				defer func() {
-					if r := recover(); r != nil {
-						slog.Error("Panic in batch hook", "agent_id", taskCopy.AgentID, "recover", r)
-					}
-				}()
-				if err := s.pluginManager.ExecuteHook(s.ctx, plugin.Event{
-					Type:      plugin.EventTaskCreated,
-					Timestamp: time.Now(),
-					AgentID:   taskCopy.AgentID,
-					Payload: map[string]interface{}{
-						"task_id":   taskCopy.ID,
-						"task_type": taskCopy.Type,
-						"command":   taskCopy.Command,
-					},
-				}); err != nil {
-					slog.Warn("Hook errors on task_created event", "agent_id", taskCopy.AgentID, "task_id", taskCopy.ID, "err", err)
-				}
-			}()
+			s.fireTaskCreatedHook(tasks[i].AgentID, tasks[i].ID, tasks[i].Type, tasks[i].Command)
 		}
 		s.metrics.TasksTotal.Inc()
 		s.broadcastTaskUpdate(tasks[i].AgentID, tasks[i])

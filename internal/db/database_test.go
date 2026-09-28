@@ -280,6 +280,98 @@ func TestRenameMigrationSelfHealsStrandedAgentsData(t *testing.T) {
 	}
 }
 
+// TestDropRolePermissionsMigration removes the write-only role_permissions
+// table on databases that still have it, and is a quiet no-op where the table
+// never existed. The table was seeded on every boot but never read — every
+// permission check resolves from RolePermissionsMap plus custom_roles — so
+// dropping it changes no access decision.
+//
+// The migration is invoked directly (like the rename-migration tests above)
+// rather than through runSchemaMigrations: on a database without a migrations
+// table, gormigrate's InitSchema marks every ID applied without running
+// bodies, which would make an end-to-end assertion vacuous.
+func TestDropRolePermissionsMigration(t *testing.T) {
+	var dropMigration *gormigrate.Migration
+	for _, m := range Migrations {
+		if m.ID == "2026-09-27-drop-role-permissions" {
+			dropMigration = m
+			break
+		}
+	}
+	if dropMigration == nil {
+		t.Fatal("drop role_permissions migration not found")
+	}
+
+	t.Run("drops legacy table", func(t *testing.T) {
+		db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+		if err != nil {
+			t.Fatalf("open: %v", err)
+		}
+		if err := db.Exec(`CREATE TABLE role_permissions (id integer PRIMARY KEY AUTOINCREMENT, role varchar(32), permission varchar(64), created_at datetime)`).Error; err != nil {
+			t.Fatalf("create legacy table: %v", err)
+		}
+		if err := db.Exec(`INSERT INTO role_permissions (role, permission) VALUES ('admin', 'agents.read')`).Error; err != nil {
+			t.Fatalf("seed legacy row: %v", err)
+		}
+		if err := dropMigration.Migrate(db); err != nil {
+			t.Fatalf("drop migration: %v", err)
+		}
+		if db.Migrator().HasTable("role_permissions") {
+			t.Error("role_permissions still exists after the drop migration")
+		}
+	})
+
+	t.Run("no-op when table absent", func(t *testing.T) {
+		db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+		if err != nil {
+			t.Fatalf("open: %v", err)
+		}
+		if err := dropMigration.Migrate(db); err != nil {
+			t.Fatalf("drop migration on fresh DB: %v", err)
+		}
+	})
+}
+
+// TestBeaconDispatchCoverIndexes pins the per-beacon claim indexes: the
+// just-claimed re-read and the lost-response refill both filter
+// agent_id + status + claimed_by on every beacon, and the operator
+// claimed-by filter previously had no index at all.
+func TestBeaconDispatchCoverIndexes(t *testing.T) {
+	var idxMigration *gormigrate.Migration
+	for _, m := range Migrations {
+		if m.ID == "2026-09-28-add-beacon-dispatch-cover-indexes" {
+			idxMigration = m
+			break
+		}
+	}
+	if idxMigration == nil {
+		t.Fatal("beacon dispatch cover-index migration not found")
+	}
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	// Minimal shape matching the indexed columns.
+	if err := db.Exec(`CREATE TABLE tasks (id integer PRIMARY KEY AUTOINCREMENT, agent_id varchar(36), status varchar(32), claimed_by varchar(255), operator_claimed_by varchar(255))`).Error; err != nil {
+		t.Fatalf("create tasks: %v", err)
+	}
+	if err := db.Exec(`CREATE TABLE implants (id varchar(36) PRIMARY KEY, parent_agent_id varchar(36))`).Error; err != nil {
+		t.Fatalf("create implants: %v", err)
+	}
+	if err := idxMigration.Migrate(db); err != nil {
+		t.Fatalf("cover-index migration: %v", err)
+	}
+	for _, idx := range []string{"idx_tasks_agent_status_claimed", "idx_tasks_op_claimed", "idx_implants_parent_agent"} {
+		var n int
+		if err := db.Raw(`SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name = ?`, idx).Scan(&n).Error; err != nil {
+			t.Fatalf("index check %s: %v", idx, err)
+		}
+		if n != 1 {
+			t.Errorf("index %s was not created", idx)
+		}
+	}
+}
+
 func TestRenameMigrationSkipsWhenNoLegacyTable(t *testing.T) {
 	db := setupTestDB(t)
 

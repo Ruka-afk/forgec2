@@ -341,14 +341,10 @@ func (s *Server) fireTaskCreatedHook(agentID string, taskID uint, taskType, comm
 	if s.pluginManager == nil {
 		return
 	}
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		defer func() {
-			if r := recover(); r != nil {
-				slog.Error("Panic in task_created hook", "agent_id", agentID, "task_id", taskID, "recover", r)
-			}
-		}()
+	// Route through the bounded worker pool, not a raw goroutine: a bulk
+	// dispatch of N agents used to spawn N unbounded goroutines, each running
+	// plugin hooks that can block on SQLITE_BUSY, stalling shutdown in wg.Wait.
+	s.runTaskWorker("task_created", func() {
 		if err := s.pluginManager.ExecuteHook(s.ctx, plugin.Event{
 			Type:      plugin.EventTaskCreated,
 			Timestamp: time.Now(),
@@ -361,7 +357,7 @@ func (s *Server) fireTaskCreatedHook(agentID string, taskID uint, taskType, comm
 		}); err != nil {
 			slog.Warn("Hook errors on task_created event", "agent_id", agentID, "task_id", taskID, "err", err)
 		}
-	}()
+	})
 }
 
 // clampSetSleepCommand bounds a set_sleep "interval,jitter" command to the

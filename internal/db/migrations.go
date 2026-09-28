@@ -574,14 +574,37 @@ var schemaMigrations = []*gormigrate.Migration{
 			return nil
 		},
 	},
-	// NOTE: role_permissions is no longer created (removed from AutoMigrate) and
-	// its boot seed is gone, but no DROP TABLE migration was added for it.
-	// Measurements on this gormigrate setup showed the migration body is
-	// recorded as applied without executing, so such a migration would be a
-	// silent no-op that falsely claims the table was cleaned up. Existing
-	// deployments therefore keep one empty role_permissions table; it is
-	// harmless because RoleHasPermission/RoleHasPermissionDB never read it.
-	// Re-check that gormigrate behaviour before adding the drop.
+	// Drop the write-only role_permissions table.
+	//
+	// It was seeded on every boot but never read: RoleHasPermission and
+	// RoleHasPermissionDB resolve from the in-memory RolePermissionsMap plus
+	// custom_roles, so the rows had no effect on any access decision. The two
+	// older "remap scheduler/workflow perms" migrations that only rewrote
+	// strings in this table are gone with it.
+	//
+	// Verified behaviour on both paths: on a fresh database gormigrate's
+	// InitSchema marks every migration applied without running bodies (schema
+	// comes from AutoMigrate, which no longer creates this table), so this is
+	// a quiet no-op; on an existing database that already has a migrations
+	// table, only this missing ID runs and the DROP fires.
+	{
+		ID: "2026-09-27-drop-role-permissions",
+		Migrate: func(tx *gorm.DB) error {
+			execMigration(tx, "DROP TABLE IF EXISTS role_permissions", "drop_role_permissions")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			// Recreating the table restores the shape but not the seed data;
+			// the table is unused either way, so there is nothing to restore.
+			execMigration(tx, `CREATE TABLE IF NOT EXISTS role_permissions (
+				id integer PRIMARY KEY AUTOINCREMENT,
+				role varchar(32),
+				permission varchar(64),
+				created_at datetime
+			)`, "recreate_role_permissions")
+			return nil
+		},
+	},
 }
 
 // indexMigrations create/drop indexes and run AFTER AutoMigrate, so their
@@ -913,6 +936,26 @@ var indexMigrations = []*gormigrate.Migration{
 			execMigration(tx, "DROP INDEX IF EXISTS idx_tasks_status_acknowledged", "drop_idx_tasks_status_acknowledged")
 			execMigration(tx, "DROP INDEX IF EXISTS idx_tasks_sweep_running", "drop_idx_tasks_sweep_running")
 			execMigration(tx, "DROP INDEX IF EXISTS idx_tasks_approval_expiry", "drop_idx_tasks_approval_expiry")
+			return nil
+		},
+	},
+	{
+		ID: "2026-09-28-add-beacon-dispatch-cover-indexes",
+		Migrate: func(tx *gorm.DB) error {
+			// Cover the per-beacon claim predicates that previously scanned:
+			// the re-read of just-claimed rows and the lost-response refill
+			// both filter agent_id + status + claimed_by, and the operator
+			// claimed-by filter had no index at all. The parent walk for
+			// chain assignment queries parent_agent_id per depth level.
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_tasks_agent_status_claimed ON tasks(agent_id, status, claimed_by)", "idx_tasks_agent_status_claimed")
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_tasks_op_claimed ON tasks(operator_claimed_by)", "idx_tasks_op_claimed")
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_implants_parent_agent ON implants(parent_agent_id)", "idx_implants_parent_agent")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			execMigration(tx, "DROP INDEX IF EXISTS idx_tasks_agent_status_claimed", "drop_idx_tasks_agent_status_claimed")
+			execMigration(tx, "DROP INDEX IF EXISTS idx_tasks_op_claimed", "drop_idx_tasks_op_claimed")
+			execMigration(tx, "DROP INDEX IF EXISTS idx_implants_parent_agent", "drop_idx_implants_parent_agent")
 			return nil
 		},
 	},

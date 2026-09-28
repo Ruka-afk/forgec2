@@ -107,6 +107,15 @@ func (s *Server) shutdown() {
 		}
 	}
 	clear(s.extC2Channels)
+	// Stop every registered channel poller (Discord/Slack/Telegram tickers).
+	// Closing the conns above does not stop the poll loops, which would keep
+	// reconnecting with deleted tokens until process exit.
+	for key, r := range s.extC2Runners {
+		delete(s.extC2Runners, key)
+		if r != nil {
+			r.Stop()
+		}
+	}
 	s.extC2ChannelsMu.Unlock()
 
 	// Stop subsystems
