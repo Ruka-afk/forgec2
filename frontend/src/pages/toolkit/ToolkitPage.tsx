@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataError } from "@/components/ui/data-state";
 import TemplatesPanel from "./components/TemplatesPanel";
+import PasswordSprayPanel from "./components/PasswordSprayPanel";
 
 interface ToolkitAgent {
   id?: string;
@@ -43,7 +44,7 @@ interface RecentTask {
 export default function ToolkitPage() {
   const { t } = useI18n();
   const [selectedAgent, setSelectedAgent] = useState("");
-  const [activeTab, setActiveTab] = useState<"commands" | "templates">("commands");
+  const [activeTab, setActiveTab] = useState<"commands" | "templates" | "spray">("commands");
   const [agentInfo, setAgentInfo] = useState<Record<string, unknown> | null>(null);
   const runAction = async (action: string, param = "") => {
     if (!selectedAgent) {
@@ -168,6 +169,14 @@ export default function ToolkitPage() {
       { cmd: "persistence", desc: t("toolkit.desc_persistence") },
       { cmd: "usb_drop", desc: t("toolkit.desc_usb_drop") },
     ]},
+    // Absorbed from the former standalone Container page: the same four
+    // one-shot agent commands, dispatched through the same runAction path.
+    { name: t("toolkit.cat_container"), color: "orange", commands: [
+      { cmd: "container_detect", desc: t("toolkit.desc_container_detect") },
+      { cmd: "container_escape", desc: t("toolkit.desc_container_escape") },
+      { cmd: "container_docker", desc: t("toolkit.desc_container_docker") },
+      { cmd: "container_k8s", desc: t("toolkit.desc_container_k8s") },
+    ]},
   ];
 
   const colorMap: Record<string, string> = {
@@ -178,6 +187,7 @@ export default function ToolkitPage() {
     amber: "bg-warning/10 text-warning border-warning/30",
     purple: "bg-chart-6/purple text-chart-6 border-chart-6/purple",
     teal: "bg-chart-2/10 text-chart-2 border-chart-2/30",
+    orange: "bg-warning/10 text-warning border-warning/30",
   };
 
   return (
@@ -198,10 +208,11 @@ export default function ToolkitPage() {
         </div>
       </>}>
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v === "templates" ? "templates" : "commands")}>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v === "templates" ? "templates" : v === "spray" ? "spray" : "commands")}>
         <TabsList>
           <TabsTrigger value="commands">{t("toolkit.tab_commands")}</TabsTrigger>
           <TabsTrigger value="templates">{t("toolkit.tab_templates")}</TabsTrigger>
+          <TabsTrigger value="spray">{t("toolkit.tab_spray")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="commands">
@@ -310,6 +321,14 @@ export default function ToolkitPage() {
               })();
             }}
           />
+        </TabsContent>
+
+        <TabsContent value="spray">
+          {!selectedAgent ? (
+            <Card className="p-(--card-spacing) text-center text-muted-foreground text-xs">{t("toolkit.toast.select_agent_first")}</Card>
+          ) : (
+            <PasswordSprayPanel selectedAgent={selectedAgent} />
+          )}
         </TabsContent>
       </Tabs>
     </PageContainer>

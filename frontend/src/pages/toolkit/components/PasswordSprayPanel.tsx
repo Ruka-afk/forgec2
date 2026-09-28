@@ -1,5 +1,4 @@
 
-import { PageContainer } from "@/components/ui/page-container";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
@@ -11,21 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useApiResource } from "@/lib/hooks/useApiResource";
-import { POLL } from "@/lib/polling";
 import { useLiveTaskResult } from "@/lib/hooks/useLiveTaskResult";
 import { Spinner } from "@/components/ui/spinner";
 import { Banner } from "@/components/ui/banner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Shield, Play, CheckCircle2, XCircle, AlertTriangle, Lock, Database, Key } from "lucide-react";
 import { toast } from "sonner";
-
-interface Agent {
-  id: string;
-  hostname: string;
-  status: string;
-  os: string;
-}
 
 interface SpraySummary {
   total: number;
@@ -56,9 +46,8 @@ function parseSprayOutput(raw: string): SprayOutput | null {
   }
 }
 
-export default function PasswordSprayPage() {
+export default function PasswordSprayPanel({ selectedAgent }: { selectedAgent: string }) {
   const { t } = useI18n();
-  const [selectedAgent, setSelectedAgent] = useState("");
   const [password, setPassword] = useState("");
   const [pickedVault, setPickedVault] = useState("");
   const [vaultPasswords, setVaultPasswords] = useState<{ id: number; label: string; password: string; domain: string }[]>([]);
@@ -108,18 +97,8 @@ export default function PasswordSprayPage() {
     };
   }, [t]);
 
-  const { data } = useApiResource<{ agents: Agent[] }>({
-    fetcher: async () => {
-      const d = await api.get<{ agents: Agent[] }>(paths.agents.list());
-      return d;
-    },
-    pollMs: POLL.spray,
-    errorMessage: t("spray.load_failed"),
-  });
-
-  const agents = data?.agents ?? [];
-  const onlineAgents = agents.filter((a) => a.status === "online");
-
+  // Agent selection comes from the Toolkit page header; this panel no longer
+  // fetches its own agent list.
   const usernameList = usernames.split("\n").filter((u) => u.trim());
   const running = live.running;
   const canSubmit = selectedAgent && password && domain && usernameList.length > 0 && !running;
@@ -161,24 +140,7 @@ export default function PasswordSprayPage() {
   };
 
   return (
-    <PageContainer
-      title={t("spray.title")}
-      subtitle={t("spray.subtitle")}
-      actions={
-        <Select value={selectedAgent} onValueChange={(v) => setSelectedAgent(v ?? "")}>
-          <SelectTrigger className="w-64">
-            <SelectValue placeholder={t("spray.select_agent")} />
-          </SelectTrigger>
-          <SelectContent>
-            {onlineAgents.map((a) => (
-              <SelectItem key={a.id} value={a.id}>
-                {a.hostname} ({a.os})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      }
-    >
+    <>
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="p-6 space-y-4">
           <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -328,6 +290,6 @@ export default function PasswordSprayPage() {
           )}
         </Card>
       </div>
-    </PageContainer>
+    </>
   );
 }

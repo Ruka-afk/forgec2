@@ -54,10 +54,31 @@ describe("navigation single source", () => {
     expect(hrefs).not.toContain("/lateral");
     expect(hrefs).not.toContain("/campaign");
     expect(hrefs).toContain("/automation");
-    expect(hrefs).toContain("/bof");
+    expect(hrefs).not.toContain("/bof");
     expect(hrefs).toContain("/plugins");
+    expect(hrefs).toContain("/asset-organization");
     expect(NAV_BY_HREF["/lateral"]).toBe("nav.lateral");
     expect(NAV_BY_HREF["/campaign"]).toBe("nav.campaign");
+  });
+
+  it("keeps retired or high-risk tools addressable without advertising them", () => {
+    const hidden = [
+      "/phishing", "/ntlm", "/bof", "/macros",
+      "/privesc", "/pivoting", "/lateral", "/chat", "/domain-fronting",
+      "/tags", "/groups", "/autotag",
+      "/traffic",
+      // NOTE: "/password-spray" was removed from this list when the page was
+      // merged into the Toolkit spray tab: unlike the entries above (hidden
+      // but still routed), its route no longer exists, so there is nothing
+      // to keep addressable. The form lives at /toolkit (spray tab).
+    ];
+    const sidebarHrefs = sidebarNavSections().flatMap((s) => s.items.map((i) => i.href));
+    const paletteItems = NAV_ITEMS.filter((item) => item.discoverable !== false).map((item) => item.href);
+    for (const href of hidden) {
+      expect(sidebarHrefs).not.toContain(href);
+      expect(paletteItems).not.toContain(href);
+      expect(NAV_BY_HREF[href]).toBeTruthy();
+    }
   });
 
   it("does not advertise merged routes as sidebar destinations", () => {

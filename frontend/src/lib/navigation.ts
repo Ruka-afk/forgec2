@@ -6,7 +6,7 @@ import type { PermissionKey } from "./permission-keys";
 import {
   Activity, Bot, Shield, Fish, Zap, Bug, Tags, Layers, Wand2, Clock,
   MessageSquare, GitBranch, Link as LinkIcon, Boxes,
-  Radio, Server, Cloud, Box, Wrench, Code, Key,
+  Radio, Server, Cloud, Wrench, Code, Key,
   Route, IdCard, Archive, SatelliteDish, ArrowLeftRight,
   FileCode, Puzzle, Network, Crosshair, ClipboardList,
   Plug, Users, Settings, ListOrdered,
@@ -74,7 +74,6 @@ export const NAV_SECTIONS: NavSectionDef[] = [
       { href: "/scanner", labelKey: "nav.scanner", icon: SatelliteDish, sidebar: false, perms: ["agents.read"] },
       { href: "/scripting", labelKey: "nav.scripting", icon: Code, sidebar: false, perms: ["settings.read"] },
       { href: "/toolkit", labelKey: "nav.toolkit", icon: Wrench, sidebar: false, perms: ["agents.read"] },
-      { href: "/password-spray", labelKey: "nav.password_spray", icon: Shield, sidebar: false, perms: ["agents.write"] },
     ],
   },
   {
@@ -101,7 +100,6 @@ export const NAV_SECTIONS: NavSectionDef[] = [
       { href: "/circuit-breaker", labelKey: "nav.circuit_breaker", icon: Zap, perms: ["opsec.read"] },
       { href: "/cloud", labelKey: "nav.cloud", icon: Cloud, perms: ["intel.read"] },
       { href: "/ntlm", labelKey: "nav.ntlm", icon: Zap, perms: ["agents.read"] },
-      { href: "/container", labelKey: "nav.container", icon: Box, perms: ["agents.read"] },
       { href: "/topology", labelKey: "nav.topology", icon: GitBranch, perms: ["agents.read"] },
       { href: "/chain", labelKey: "nav.chain", icon: LinkIcon, perms: ["agents.read"] },
     ],
