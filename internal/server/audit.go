@@ -201,8 +201,13 @@ func (s *Server) flushAuditEntriesSync(entries []db.AuditLog) {
 // before the column existed hash over the same field set, so adding tenant
 // scoping does not invalidate historical EntryHash values.
 func auditEntryHash(e *db.AuditLog) string {
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%s|%s|%s|%t|%s|%s",
-		e.User, e.Action, e.Resource, e.AgentID, e.IP, e.Success, e.Error, e.Details)))
+	// fmt.Appendf writes the exact same bytes as []byte(fmt.Sprintf(...))
+	// without the intermediate string allocation, so the digest — and the
+	// tamper-evident chain built on it — is unchanged for historical rows.
+	var buf []byte
+	buf = fmt.Appendf(buf, "%s|%s|%s|%s|%s|%t|%s|%s",
+		e.User, e.Action, e.Resource, e.AgentID, e.IP, e.Success, e.Error, e.Details)
+	h := sha256.Sum256(buf)
 	return fmt.Sprintf("%x", h)
 }
 
