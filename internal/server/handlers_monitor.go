@@ -192,6 +192,7 @@ func (m *MonitorCollector) checkAgentAlerts() {
 	now := time.Now()
 	var staleIDs []string
 	var offlineIDs []string
+	var statusEvents []db.AgentStatusEvent
 	// Page through the online/stale agents so the sweep stays complete past
 	// one page: a single capped query would silently skip the tail of a large
 	// fleet, leaving those agents unmarked (and unbroadcast) until they
@@ -220,7 +221,7 @@ func (m *MonitorCollector) checkAgentAlerts() {
 			case offlineFor > staleThreshold:
 				offlineIDs = append(offlineIDs, agent.ID)
 				m.server.broadcastAgentOffline(agent, "offline")
-				m.server.recordAgentStatusEvent(agent.ID, "offline")
+				statusEvents = append(statusEvents, db.AgentStatusEvent{AgentID: agent.ID, Status: "offline", Timestamp: now})
 				if m.server.pluginManager != nil {
 					select {
 					case m.hookSem <- struct{}{}:
@@ -252,7 +253,7 @@ func (m *MonitorCollector) checkAgentAlerts() {
 				}
 			case offlineFor > offlineThreshold && agent.Status == "online":
 				staleIDs = append(staleIDs, agent.ID)
-				m.server.recordAgentStatusEvent(agent.ID, "stale")
+				statusEvents = append(statusEvents, db.AgentStatusEvent{AgentID: agent.ID, Status: "stale", Timestamp: now})
 			}
 			for _, rule := range rules {
 				threshold := time.Duration(rule.Threshold) * time.Second
@@ -268,6 +269,13 @@ func (m *MonitorCollector) checkAgentAlerts() {
 		}
 		if len(agents) < agentReapPageSize {
 			break
+		}
+	}
+	// One batched insert (a single transaction) instead of an auto-commit per
+	// agent, so a mass-drop tick does not take thousands of WAL commits.
+	if len(statusEvents) > 0 {
+		if err := m.server.db.Create(&statusEvents).Error; err != nil {
+			slog.Error("Monitor: failed to record agent status events", "count", len(statusEvents), "err", err)
 		}
 	}
 	m.flipAgentStatus(staleIDs, "stale")
