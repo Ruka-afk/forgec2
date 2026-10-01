@@ -79,7 +79,7 @@ export default function TrafficPage({ embedded = false }: { embedded?: boolean }
       return list.map(normalizeTrafficEntry);
     },
     pollMs: autoRefresh ? POLL.traffic : 0,
-    toastThrottleMs: 10000,
+    toastThrottleMs: POLL.toastThrottle,
     errorMessage: t("traffic.toast.load_failed"),
   });
   const entries = data ?? EMPTY_TRAFFIC;
