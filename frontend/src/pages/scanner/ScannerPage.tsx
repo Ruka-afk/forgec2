@@ -1,5 +1,5 @@
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadText, downloadJSON } from "@/lib/download";
@@ -104,6 +104,7 @@ export default function ScannerPage() {
   const [showCustomRange, setShowCustomRange] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [activeTab, setActiveTab] = useState<"results" | "active" | "history">("results");
+  const hasDataRef = useRef(false);
 
   const { t } = useI18n();
 
@@ -116,10 +117,17 @@ export default function ScannerPage() {
         active_scans: (result.active_scans || []) as ActiveScan[],
         history: (result.history || []) as ScanHistory[],
       });
+      hasDataRef.current = true;
       setLoadError(null);
     } catch (err) {
-      setData({ agents: [], results: [], active_scans: [], history: [] });
-      setLoadError(err instanceof Error ? err.message : t("scanner.load_failed"));
+      // Keep the last good data on transient poll failures: wiping
+      // active_scans here would flip hasActiveScan false and stop this
+      // poll loop from ever resuming after a single blip. The banner
+      // only matters when nothing has ever loaded (retain-on-error, like
+      // useApiResource).
+      if (!hasDataRef.current) {
+        setLoadError(err instanceof Error ? err.message : t("scanner.load_failed"));
+      }
     }
     setLoading(false);
   }, [t]);

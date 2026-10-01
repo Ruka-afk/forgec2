@@ -106,6 +106,7 @@ export default function PrivescPage() {
   ];
 
   const loadBusyRef = useRef(false);
+  const hasDataRef = useRef(false);
   const delayedReloadRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadData = useCallback(async () => {
@@ -116,12 +117,16 @@ export default function PrivescPage() {
       setAgents((data.agents || []) as PrivescAgent[]);
       setHistory((data.history || []) as PrivescHistory[]);
       setFindings((data.findings || []) as PrivescFinding[]);
+      hasDataRef.current = true;
       setLoadError(null);
     } catch (err) {
-      setAgents([]);
-      setHistory([]);
-      setFindings([]);
-      setLoadError(err instanceof Error ? err.message : t("privesc.load_failed"));
+      // Keep the last good data on transient poll failures — wiping the
+      // arrays would blank the table every time the server blips. The
+      // banner only matters when nothing has ever loaded (matches the
+      // retain-on-error semantics useApiResource established).
+      if (!hasDataRef.current) {
+        setLoadError(err instanceof Error ? err.message : t("privesc.load_failed"));
+      }
     }
     setLoading(false);
     loadBusyRef.current = false;
