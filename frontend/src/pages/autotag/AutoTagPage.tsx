@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { EmptyState } from "@/components/ui/empty-state";
+import { DataError } from "@/components/ui/data-state";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { useTransientMessage } from "@/lib/hooks/useTransientMessage";
 import { Banner } from "@/components/ui/banner";
@@ -70,7 +71,7 @@ export default function AutoTagPage() {
   const { confirm, modal } = useConfirm();
   const { message, showMessage, clearMessage } = useTransientMessage();
 
-  const { data, loading, refresh: fetchData } = useApiResource<{ rules: AutoTagRule[]; tags: AgentTag[] }>({
+  const { data, loading, error, refresh: fetchData } = useApiResource<{ rules: AutoTagRule[]; tags: AgentTag[] }>({
     fetcher: async () => {
       const [r, t] = await Promise.all([
         api.get<{ rules: AutoTagRule[] }>(paths.autotag.rules),
@@ -78,9 +79,7 @@ export default function AutoTagPage() {
       ]);
       return { rules: r.rules || [], tags: Array.isArray(t) ? t : t.tags || [] };
     },
-    toastThrottleMs: 0,
     errorMessage: t("autotag.load_failed"),
-    onError: () => showMessage(t("autotag.load_failed"), { tone: "destructive" }),
   });
   const rules = data?.rules ?? [];
   const tags = data?.tags ?? [];
@@ -264,7 +263,14 @@ export default function AutoTagPage() {
           ))}
         </div>
       ) : rules.length === 0 ? (
-          <EmptyState icon={Wand2} title={t("autotag.empty_title")} message={t("autotag.empty_message")} />
+          error ? (
+            <DataError
+              message={t("autotag.rules_unreadable", { message: error })}
+              onRetry={() => void fetchData()}
+            />
+          ) : (
+            <EmptyState icon={Wand2} title={t("autotag.empty_title")} message={t("autotag.empty_message")} />
+          )
       ) : (
         <div className="space-y-2">
           {rules.map((rule) => (

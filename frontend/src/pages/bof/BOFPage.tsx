@@ -11,6 +11,7 @@ import { lazy, Suspense } from "react";
 
 import { Card } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/animated-stat-card";
+import { DataError } from "@/components/ui/data-state";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -37,6 +38,8 @@ export default function BOFPage() {
     agents,
     loading,
     repoLoading,
+    loadError,
+    repoError,
     activeTab,
     setActiveTab,
     uploadBOF,
@@ -44,6 +47,8 @@ export default function BOFPage() {
     runBOF,
     editBOF,
     importFromUrl,
+    loadFiles,
+    loadRepo,
   } = useBOFData();
 
   const { confirm, modal } = useConfirm();
@@ -93,6 +98,13 @@ export default function BOFPage() {
   return (
     <PageContainer title={t("bof.title")} subtitle={t("bof.subtitle")}>
 
+      {files.length === 0 && loadError ? (
+        // First-load failure: the stat cards would all read 0 and the quick
+        // tab's badges would read "not installed" - a reassuring default for
+        // a request failure, so replace the whole view instead.
+        <DataError message={t("bof.data_unreadable", { message: loadError })} onRetry={() => void loadFiles()} />
+      ) : (
+        <>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-5 mb-6">
         <StatCard label={t("bof.stat_uploaded")} value={files.length} color="primary" icon={<Box className="size-4" />} iconSide="left" />
         <StatCard label={t("bof.stat_executions")} value={executions.length} color="success" icon={<Check className="size-4" />} iconSide="left" />
@@ -135,7 +147,7 @@ export default function BOFPage() {
         </Suspense>
       </TabsContent>
 
-      <TabsContent value="exec"><Suspense fallback={null}><BOFExecutionsTab executions={executions} loading={loading} /></Suspense></TabsContent>
+      <TabsContent value="exec"><Suspense fallback={null}><BOFExecutionsTab executions={executions} loading={loading} error={loadError} onRetry={() => void loadFiles()} /></Suspense></TabsContent>
 
       <TabsContent value="quick">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -164,10 +176,12 @@ export default function BOFPage() {
 
       <TabsContent value="repo">
         <Suspense fallback={null}>
-          <BOFRepoTab repoItems={repoItems} loading={repoLoading} onImportUrl={importFromUrl} />
+          <BOFRepoTab repoItems={repoItems} loading={repoLoading} error={repoError} onRetry={() => void loadRepo()} onImportUrl={importFromUrl} />
         </Suspense>
       </TabsContent>
       </Tabs>
+        </>
+      )}
 
       {modal}
     </PageContainer>

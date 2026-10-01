@@ -8,6 +8,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SearchInput } from "@/components/SearchInput";
 import { EmptyState } from "@/components/ui/empty-state";
+import { DataError } from "@/components/ui/data-state";
 import { CheckCircle, Download, ExternalLink, Layers, Link, TriangleAlert } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { safeHref } from "@/lib/safeUrl";
@@ -16,6 +17,8 @@ import { cn } from "@/lib/utils";
 interface BOFRepoTabProps {
   repoItems: RepoItem[];
   loading: boolean;
+  error?: string | null;
+  onRetry?: () => void;
   onImportUrl: (url: string, name?: string) => Promise<{ success: boolean; message: string }>;
 }
 
@@ -23,7 +26,7 @@ function itemUrl(item: RepoItem): string | undefined {
   return safeHref(item.url || item.URL);
 }
 
-export default function BOFRepoTab({ repoItems, loading, onImportUrl }: BOFRepoTabProps) {
+export default function BOFRepoTab({ repoItems, loading, error, onRetry, onImportUrl }: BOFRepoTabProps) {
   const { t } = useI18n();
   const [importUrl, setImportUrl] = useState("");
   const [importName, setImportName] = useState("");
@@ -131,11 +134,15 @@ export default function BOFRepoTab({ repoItems, loading, onImportUrl }: BOFRepoT
           <Spinner />
         </div>
       ) : filteredItems.length === 0 ? (
-        <EmptyState
-          icon={Layers}
-          title={repoItems.length === 0 ? t("bof.no_collections") : t("bof.no_search_results")}
-          message={repoItems.length === 0 ? t("bof.no_collections_hint") : t("bof.no_search_results_hint")}
-        />
+        error && repoItems.length === 0 ? (
+          <DataError message={t("bof.repo_unreadable", { message: error })} onRetry={onRetry} />
+        ) : (
+          <EmptyState
+            icon={Layers}
+            title={repoItems.length === 0 ? t("bof.no_collections") : t("bof.no_search_results")}
+            message={repoItems.length === 0 ? t("bof.no_collections_hint") : t("bof.no_search_results_hint")}
+          />
+        )
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredItems.map((item, i) => {

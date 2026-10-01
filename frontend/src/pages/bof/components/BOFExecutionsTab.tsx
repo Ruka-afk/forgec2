@@ -4,6 +4,7 @@ import { getStatusColor } from "./types";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Card } from "@/components/ui/card";
+import { DataError } from "@/components/ui/data-state";
 import { Terminal } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -11,9 +12,11 @@ import { EmptyState } from "@/components/ui/empty-state";
 interface BOFExecutionsTabProps {
   executions: Execution[];
   loading: boolean;
+  error?: string | null;
+  onRetry?: () => void;
 }
 
-export default function BOFExecutionsTab({ executions, loading }: BOFExecutionsTabProps) {
+export default function BOFExecutionsTab({ executions, loading, error, onRetry }: BOFExecutionsTabProps) {
   const { t } = useI18n();
   if (loading) {
     return (
@@ -58,6 +61,10 @@ export default function BOFExecutionsTab({ executions, loading }: BOFExecutionsT
             </div>
           ))}
         </div>
+      ) : error ? (
+        // A failed refresh with no runs on screen: the "no executions"
+        // line would read as a fact instead of about the request.
+        <DataError message={t("bof.executions_unreadable", { message: error })} onRetry={onRetry} />
       ) : (
         <EmptyState icon={Terminal} title={t("bof.no_executions")} />
       )}

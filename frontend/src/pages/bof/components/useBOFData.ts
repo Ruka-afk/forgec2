@@ -21,8 +21,11 @@ export function useBOFData() {
   const [loading, setLoading] = useState(true);
   const [repoLoading, setRepoLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"bof" | "exec" | "quick" | "repo">("bof");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [repoError, setRepoError] = useState<string | null>(null);
 
   const loadFiles = useCallback(async () => {
+    setLoadError(null);
     try {
       const data = await api.get<{ BOFFiles?: BOFFile[]; bofs?: BOFFile[]; files?: BOFFile[] }>(paths.bof.list);
       setFiles(data.bofs || data.files || []);
@@ -36,6 +39,9 @@ export function useBOFData() {
         }))
       );
     } catch (e) {
+      // Retain the last good snapshot: a failed refresh must not read as
+      // "no BOFs / no executions / no agents" below.
+      setLoadError(e instanceof Error ? e.message : String(e));
       if (process.env.NODE_ENV === "development") log.error("load data failed", e);
     } finally {
       setLoading(false);
@@ -44,11 +50,13 @@ export function useBOFData() {
 
   const loadRepo = useCallback(async () => {
     setRepoLoading(true);
+    setRepoError(null);
     try {
       const data = await api.get<RepoItem[]>(paths.bof.repos);
       setRepoItems(Array.isArray(data) ? data : []);
-    } catch {
-      setRepoItems([]);
+    } catch (e) {
+      // Retain the last good list; wiping it to [] read as "no collections".
+      setRepoError(e instanceof Error ? e.message : String(e));
     } finally {
       setRepoLoading(false);
     }
@@ -148,6 +156,8 @@ export function useBOFData() {
     agents,
     loading,
     repoLoading,
+    loadError,
+    repoError,
     activeTab,
     setActiveTab,
     loadFiles,
