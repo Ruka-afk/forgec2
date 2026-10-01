@@ -289,6 +289,18 @@ func (e *executor) run(ctx context.Context, pluginDir string, m *Manifest, input
 
 	if ctx.Err() == context.DeadlineExceeded {
 		res.TimedOut = true
+		// Surface what the plugin had printed before the kill so an operator
+		// chasing a stuck plugin sees where it hung instead of a bare timeout.
+		tail := strings.TrimSpace(string(res.Stderr))
+		if tail == "" {
+			tail = strings.TrimSpace(string(res.Stdout))
+		}
+		if len(tail) > 400 {
+			tail = "…" + tail[len(tail)-400:]
+		}
+		if tail != "" {
+			return res, fmt.Errorf("plugin %q timed out after %ds: last output: %s", m.Name, timeout, tail)
+		}
 		return res, fmt.Errorf("plugin %q timed out after %ds", m.Name, timeout)
 	}
 	if runErr != nil {

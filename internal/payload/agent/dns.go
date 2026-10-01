@@ -204,7 +204,11 @@ func sendDNSDoH(dohURL, qname string) []byte {
 		return nil
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 16*1024*1024))
+	// A DoH response body is a single DNS message, which the protocol caps at
+	// 65535 bytes; anything larger is not a DNS answer. Reading beyond the
+	// cap would only accept a hostile response (the DNS-over-TLS and TCP
+	// paths enforce the same 16-bit length field).
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 65535))
 	if err != nil {
 		return nil
 	}

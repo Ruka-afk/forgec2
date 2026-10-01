@@ -144,24 +144,35 @@ static BYTE g_sesskey[32];
 static int g_have_session = 0;
 static char g_uuid[40];
 static unsigned long long g_seq = 0;
+/* Build "<tempdir>\fc2c.seq" without truncating: GetTempPathA is sized for
+ * MAX_PATH and the result is only written into out when it fits, so an
+ * abnormally long system temp path fails cleanly instead of being cut off
+ * mid-string. Returns 1 on success. */
+static int seq_path(char *out, size_t cap) {
+    char tmp[MAX_PATH];
+    DWORD n = GetTempPathA((DWORD)sizeof(tmp), tmp);
+    size_t total;
+    if (n == 0 || n >= sizeof(tmp)) return 0;
+    total = n + sizeof("fc2c.seq"); /* n includes the terminating NUL */
+    if (total >= cap) return 0;
+    memcpy(out, tmp, n);
+    strcpy(out + n, "fc2c.seq");
+    return 1;
+}
 static void seq_save(void) {
-    char p[260];
-    DWORD n = GetTempPathA((DWORD)sizeof(p), p);
+    char p[512];
     FILE *f;
-    if (n == 0 || n >= sizeof(p) - 16) return;
-    strcat_s(p, sizeof(p), "fc2c.seq");
+    if (!seq_path(p, sizeof(p))) return;
     f = fopen(p, "w");
     if (!f) return;
     fprintf(f, "%llu", g_seq);
     fclose(f);
 }
 static void seq_load(void) {
-    char p[260];
-    DWORD n = GetTempPathA((DWORD)sizeof(p), p);
+    char p[512];
     FILE *f;
     unsigned long long v = 0;
-    if (n == 0 || n >= sizeof(p) - 16) return;
-    strcat_s(p, sizeof(p), "fc2c.seq");
+    if (!seq_path(p, sizeof(p))) return;
     f = fopen(p, "r");
     if (!f) return;
     if (fscanf(f, "%llu", &v) == 1 && v > g_seq) g_seq = v;

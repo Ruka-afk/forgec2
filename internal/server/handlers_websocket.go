@@ -96,6 +96,27 @@ func (h *WebSocketHub) Register(agentID string, beacon *WebSocketBeacon) {
 	h.beacons[agentID] = beacon
 }
 
+// RegisterExclusive atomically checks the active connection for agentID and
+// registers a new beacon. If an existing connection has been active within
+// staleWindow it is returned (and kept in place) so the caller can reject the
+// new connection; otherwise the old connection is closed and replaced.
+// This single critical section closes the check-and-register window that
+// allowed two concurrent upgrades to both pass the duplicate check.
+func (h *WebSocketHub) RegisterExclusive(agentID string, beacon *WebSocketBeacon, staleWindow time.Duration) (conflict *WebSocketBeacon) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if existing, ok := h.beacons[agentID]; ok && existing != beacon {
+		if time.Since(existing.lastSeenAt()) < staleWindow {
+			return existing
+		}
+		existing.closeOnce.Do(func() {
+			close(existing.Send)
+		})
+	}
+	h.beacons[agentID] = beacon
+	return nil
+}
+
 // Unregister removes the entry for agentID and closes its Send channel,
 // but ONLY if the current entry is the same connection. This prevents one
 // connection from closing another connection's channel (cross-connection DoS).
@@ -162,16 +183,12 @@ func (s *Server) handleWebSocketBeacon(c *gin.Context) {
 			s.wsHub = NewWebSocketHub()
 		}
 	})
-	if existing := s.wsHub.Get(agentID); existing != nil && existing != beacon {
-		existingLastSeen := existing.lastSeenAt()
-		if time.Since(existingLastSeen) < 30*time.Second {
-			slog.Warn("WebSocket hub: rejecting duplicate connection (recently active)", "agent_id", agentID)
-			conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "agent already connected"))
-			conn.Close()
-			return
-		}
+	if conflict := s.wsHub.RegisterExclusive(agentID, beacon, 30*time.Second); conflict != nil {
+		slog.Warn("WebSocket hub: rejecting duplicate connection (recently active)", "agent_id", agentID)
+		conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "agent already connected"))
+		conn.Close()
+		return
 	}
-	s.wsHub.Register(agentID, beacon)
 
 	// Start read and write pumps
 	s.wg.Add(2)

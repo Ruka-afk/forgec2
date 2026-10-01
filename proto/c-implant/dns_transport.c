@@ -24,6 +24,10 @@
 #define DNS_FRAG_MAX_TOTAL 64
 #define DNS_QNAME_MAX 253
 #define DNS_LABEL_MAX 63
+/* Hard cap on accumulated TXT answer length: a single DNS message cannot
+ * exceed 65535 bytes on the wire, so anything beyond this is malformed and
+ * is refused instead of growing the buffer without bound. */
+#define DNS_RESP_CAP 65536
 
 void dns_xor(BYTE *data, DWORD len, const char *key) {
     size_t klen;
@@ -225,6 +229,12 @@ char *dns_txt_query(const char *dns_server, const char *qname, DWORD *outlen) {
             if (!s) continue;
             slen = strlen(s);
             if (slen == 0) continue;
+            if (len + slen + 1 > DNS_RESP_CAP) {
+                /* Malformed or hostile answer: stop accumulating. */
+                free(out);
+                DnsRecordListFree(recs, DnsFreeRecordList);
+                return NULL;
+            }
             while (len + slen + 1 > cap) {
                 cap = cap ? cap * 2 : 512;
                 out = (char *)realloc(out, cap);
