@@ -135,7 +135,10 @@ export default memo(function TimelineSection({ agentId, online }: { agentId: str
         {loading && events.length === 0 ? (
           <div className="py-8 text-center"><Spinner /></div>
         ) : events.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-6">{t("agents.timeline_empty")}</p>
+          // The reassuring "no history" line must not sit under the
+          // unreadable banner: it reads as a fact about the agent instead
+          // of about the request (retain-on-error, like the banner above).
+          !loadError && <p className="text-xs text-muted-foreground text-center py-6">{t("agents.timeline_empty")}</p>
         ) : (
           <>
             <div className="relative space-y-0">
