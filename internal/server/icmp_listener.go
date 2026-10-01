@@ -6,6 +6,7 @@ import (
 	"net"
 	"runtime/debug"
 	"sync"
+	"time"
 
 	"github.com/forgec2/forgec2/pkg/protocol"
 	"golang.org/x/net/icmp"
@@ -20,13 +21,15 @@ type ICMPBeaconListener struct {
 	wg      sync.WaitGroup
 	started bool
 	asm     *protocol.ICMPAssembler
+	stop    chan struct{}
+	stopOne sync.Once
 }
 
 func NewICMPBeaconListener(addr string) *ICMPBeaconListener {
 	if addr == "" {
 		addr = "0.0.0.0"
 	}
-	return &ICMPBeaconListener{addr: addr, asm: protocol.NewICMPAssembler()}
+	return &ICMPBeaconListener{addr: addr, asm: protocol.NewICMPAssembler(), stop: make(chan struct{})}
 }
 
 func (l *ICMPBeaconListener) SetHandler(h func(agentID string, reqJSON []byte) []byte) {
@@ -49,6 +52,23 @@ func (l *ICMPBeaconListener) Start() error {
 		defer l.wg.Done()
 		l.serve()
 	}()
+	// Periodic sweep of expired fragment assemblies (same cadence as the DNS
+	// listener): lazy TTL sweeping alone lets a stopped flood pin its
+	// expired-but-unreaped entries in memory until the next Add.
+	l.wg.Add(1)
+	go func() {
+		defer l.wg.Done()
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-l.stop:
+				return
+			case <-ticker.C:
+				l.asm.GC()
+			}
+		}
+	}()
 	return nil
 }
 
@@ -57,6 +77,7 @@ func (l *ICMPBeaconListener) Stop() {
 		l.conn.Close()
 	}
 	if l.started {
+		l.stopOne.Do(func() { close(l.stop) })
 		l.wg.Wait()
 	}
 }

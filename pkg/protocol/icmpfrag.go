@@ -85,11 +85,21 @@ type ICMPAssembler struct {
 
 // maxICMPAssemblies caps distinct in-flight assemblies (same rationale as the
 // DNS fragmenter cap): keys are attacker-influenceable, TTL sweeping is lazy.
-const maxICMPAssemblies = 4096
+// Pair with icmpFragMaxAssembly the fleet-wide worst case stays bounded at
+// maxICMPAssemblies * icmpFragMaxAssembly = 256 MiB instead of the
+// 256 fragments * 8 KiB read-buffer part size * 4096 keys ~= 8 GiB a flood
+// could previously pin.
+const maxICMPAssemblies = 1024
+
+// icmpFragMaxAssembly caps total reassembled bytes per key. 256 KiB is far
+// above any legitimate C2 envelope (implants fragment bodies of at most a
+// few KiB at 512-byte parts); beyond that the stream is an attack.
+const icmpFragMaxAssembly = 256 * 1024
 
 type icmpAssembly struct {
 	total int
 	parts map[int][]byte
+	bytes int
 	last  time.Time
 }
 
@@ -126,11 +136,26 @@ func (a *ICMPAssembler) Add(key string, total, index int, payload []byte) ([]byt
 		st = &icmpAssembly{total: total, parts: make(map[int][]byte), last: time.Now()}
 		a.items[key] = st
 	}
+	// Byte cap: an attacker can pad every part with 8 KiB read-buffer-sized
+	// payloads (total is capped at 256 by ICMPFragParse, ~= 2 MiB per key);
+	// bound the stream itself and discard it once it crosses the limit. The
+	// check uses the conservative upper bound (re-counts a duplicate index),
+	// which can only reject earlier, never later.
+	if st.bytes+len(payload) > icmpFragMaxAssembly {
+		delete(a.items, key)
+		return nil, fmt.Errorf("fragment assembly exceeds %d bytes", icmpFragMaxAssembly)
+	}
 	st.last = time.Now()
 	if st.total != total {
 		return nil, fmt.Errorf("fragment total mismatch")
 	}
+	// Recompute rather than accumulate so a re-sent index (duplicate part)
+	// is counted once. n <= 256 parts, cost is negligible.
 	st.parts[index] = payload
+	st.bytes = 0
+	for _, p := range st.parts {
+		st.bytes += len(p)
+	}
 	if len(st.parts) < total {
 		return nil, nil
 	}
@@ -157,6 +182,19 @@ func (a *ICMPAssembler) gcLocked() {
 			delete(a.items, k)
 		}
 	}
+}
+
+// GC sweeps TTL-expired entries now, instead of waiting for the next Add to
+// lazy-sweep them. Long-lived listeners (the server beacon loop) run it on a
+// timer so a stopped flood cannot pin expired assemblies in memory
+// indefinitely.
+func (a *ICMPAssembler) GC() {
+	if a == nil {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.gcLocked()
 }
 
 // ICMPMaybePlain returns p unchanged when it is not an FC2I fragment, so
