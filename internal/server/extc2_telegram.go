@@ -165,12 +165,12 @@ func (t *TelegramExternalC2) connectAndRun(channelID string) {
 				slog.Warn("Telegram ExtC2 message dropped: sender not in configured chat", "chat_id", u.Message.Chat.ID)
 				continue
 			}
-			t.processMessage(u.Message.Text, channelID)
+			t.processMessage(u.Message.Text)
 		}
 	}
 }
 
-func (t *TelegramExternalC2) processMessage(text, channelID string) {
+func (t *TelegramExternalC2) processMessage(text string) {
 	var extMsg extC2WSMessage
 	if err := json.Unmarshal([]byte(text), &extMsg); err != nil {
 		return

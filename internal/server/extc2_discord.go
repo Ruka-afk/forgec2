@@ -308,14 +308,14 @@ func (d *DiscordExternalC2) connectAndRun(channelID string) {
 					continue
 				}
 				if event.ChannelID == d.channelID {
-					d.processMessage(event.Content, channelID)
+					d.processMessage(event.Content)
 				}
 			}
 		}
 	}
 }
 
-func (d *DiscordExternalC2) processMessage(content, channelID string) {
+func (d *DiscordExternalC2) processMessage(content string) {
 	var extMsg extC2WSMessage
 	if err := json.Unmarshal([]byte(content), &extMsg); err != nil {
 		return

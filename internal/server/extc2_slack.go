@@ -156,7 +156,7 @@ func (sc *SlackExternalC2) connectAndRun(channelID string) {
 				if ev.BotID != "" {
 					continue
 				}
-				sc.processMessage(ev.Text, channelID)
+				sc.processMessage(ev.Text)
 			case *slack.ConnectedEvent:
 				slog.Info("Slack External C2 connected", "channel_id", sc.channelID)
 			case *slack.LatencyReport:
@@ -176,7 +176,7 @@ func (sc *SlackExternalC2) connectAndRun(channelID string) {
 	}
 }
 
-func (sc *SlackExternalC2) processMessage(text, channelID string) {
+func (sc *SlackExternalC2) processMessage(text string) {
 	var extMsg extC2WSMessage
 	if err := json.Unmarshal([]byte(text), &extMsg); err != nil {
 		return
