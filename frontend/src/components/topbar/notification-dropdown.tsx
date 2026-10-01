@@ -38,8 +38,13 @@ export function NotificationDropdown() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const setUnreadNotifications = useAppStore((s) => s.setUnreadNotifications);
+  // Open/close churn guard: skip the refetch when one already went out
+  // recently (e.g. the user flicks the dropdown open and closed).
+  const lastLoadAtRef = useRef(0);
 
-  const loadNotifications = useCallback(() => {
+  const loadNotifications = useCallback((opts?: { force?: boolean }) => {
+    if (!opts?.force && Date.now() - lastLoadAtRef.current < 15_000) return;
+    lastLoadAtRef.current = Date.now();
     setLoadError(null);
     api.get(paths.notifications.list("page=1&pageSize=20"))
       .then((data) => {
@@ -234,7 +239,7 @@ export function NotificationDropdown() {
               {notifications.length > 0 && (
                 <p className="mt-1 text-xs text-muted-foreground">{t("topbar.notif_showing_cached")}</p>
               )}
-              <Button onClick={loadNotifications} size="sm" variant="outline" className="mt-3 min-h-11 px-4 sm:min-h-7 sm:px-2.5">
+              <Button onClick={() => loadNotifications({ force: true })} size="sm" variant="outline" className="mt-3 min-h-11 px-4 sm:min-h-7 sm:px-2.5">
                 {t("common.try_again")}
               </Button>
             </div>

@@ -1,5 +1,5 @@
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 
@@ -49,6 +49,7 @@ export default function ChainPage() {
   const [chainError, setChainError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const chainAbortRef = useRef<AbortController | null>(null);
 
   const { data: graphData, loading: graphLoading, refresh } = useApiResource<{ nodes: ChainNode[] }>({
     fetcher: async () => {
@@ -61,6 +62,7 @@ export default function ChainPage() {
   const graph = graphData?.nodes || [];
 
   const loadChain = useCallback(async (agentId: string) => {
+    chainAbortRef.current?.abort();
     if (!agentId) {
       setChain([]);
       setChainLoading(false);
@@ -68,19 +70,26 @@ export default function ChainPage() {
     }
     setChainLoading(true);
     setChainError(null);
+    const controller = new AbortController();
+    chainAbortRef.current = controller;
     try {
-      const data = await api.get<{ chain: string[] }>(paths.agents.chain(agentId));
+      const data = await api.get<{ chain: string[] }>(paths.agents.chain(agentId), { signal: controller.signal });
+      if (controller.signal.aborted) return;
       setChain(data.chain || []);
     } catch (err) {
+      if (controller.signal.aborted) return;
       // chain === [] means "direct to C2". Rendering that while the request is
       // in flight (or after it failed) states a routing fact we do not know.
       setChain([]);
       setChainError(err instanceof Error ? err.message : t("chain.load_proxy_failed"));
       toast.error(t("chain.load_proxy_failed"));
     } finally {
-      setChainLoading(false);
+      if (!controller.signal.aborted) setChainLoading(false);
+      if (chainAbortRef.current === controller) chainAbortRef.current = null;
     }
   }, [t]);
+
+  useEffect(() => () => chainAbortRef.current?.abort(), []);
 
   useEffect(() => {
     if (selectedAgent) {

@@ -9,10 +9,11 @@ import type { Agent } from "@/types/agent";
  * re-fetch a list that just loaded elsewhere. Callers may `refresh()` to
  * force revalidation for chatty views.
  */
-export function useAgentList() {
+export function useAgentList(options: { enabled?: boolean } = {}) {
   const { t } = useI18n();
   const { data, loading, error, refresh } = useCachedData<Agent[]>(AGENTS_CACHE_KEY, {
     fetcher: fetchAgentListCached,
+    enabled: options.enabled,
     ttlMs: 60_000,
   });
 

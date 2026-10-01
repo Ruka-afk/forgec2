@@ -286,7 +286,9 @@ const stats = useAppStore((s) => s.stats);
 
   useEffect(() => { fetchStats(); }, [fetchStats]);
   useEffect(() => { initStatsWSListener(); }, []);
-  useVisibleInterval(fetchStats, POLL.stats);
+  // WS pushes stats updates (agent_online/offline, task_update…); the tight
+  // 30s poll only earns its keep while the socket is down.
+  useVisibleInterval(fetchStats, connected ? POLL.wsDrift : POLL.stats);
 
   useEffect(() => {
     return subscribe((msg) => {

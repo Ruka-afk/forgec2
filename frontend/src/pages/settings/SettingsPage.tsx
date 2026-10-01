@@ -39,18 +39,29 @@ const ModulesSection = lazy(() => import("./components/ModulesSection"));
 const EmergencySection = lazy(() => import("./components/EmergencySection"));
 const ReloadStatusCard = lazy(() => import("./components/ReloadStatusCard"));
 
+// Keep hash navigation aligned with the actual tab values below. These legacy
+// aliases are retained so bookmarks from older releases never land on a blank
+// panel after the settings groups were consolidated.
 const SETTINGS_SECTION_KEYS = new Set([
-  "profile", "theme", "language", "security", "access", "server", "agent",
-  "malleable", "database", "backup", "maintenance", "notifications", "extc2",
-  "siem", "certificates", "modules", "emergency", "telemetry", "about",
+  "appearance", "security", "server", "agent", "malleable", "database", "backup",
+  "maintenance", "notifications", "extc2", "siem", "certificates", "modules", "emergency", "about",
 ]);
+
+const SETTINGS_SECTION_ALIASES: Record<string, string> = {
+  profile: "appearance",
+  theme: "appearance",
+  language: "appearance",
+  access: "security",
+  telemetry: "about",
+};
 
 function sectionFromHash(): string | null {
   const raw = window.location.hash.match(/^#tab=(.+)$/)?.[1];
   if (!raw) return null;
   try {
     const section = decodeURIComponent(raw);
-    return SETTINGS_SECTION_KEYS.has(section) ? section : null;
+    const canonical = SETTINGS_SECTION_ALIASES[section] ?? section;
+    return SETTINGS_SECTION_KEYS.has(canonical) ? canonical : null;
   } catch {
     return null;
   }
@@ -77,7 +88,7 @@ export default function SettingsPage() {
     language,
     setLanguage,
   } = useSettingsData();
-  const [activeSection, setActiveSection] = useState("profile");
+  const [activeSection, setActiveSection] = useState("appearance");
   const [sectionQuery, setSectionQuery] = useState("");
   const [purgeDays, setPurgeDays] = useState({ tasks: "30", audit: "30" });
   const [saving, setSaving] = useState(false);
@@ -325,21 +336,23 @@ export default function SettingsPage() {
                 label={t("settings.search_sections")}
               />
               </div>
-              <nav aria-label={t("settings.sidebar_header")} className="max-h-[calc(100vh-13rem)] space-y-3 overflow-y-auto p-2.5 supports-[height:100dvh]:max-h-[calc(100dvh-13rem)]">
-                {visibleSectionGroups.map((group) => (
-                  <div key={group.key}>
-                    <div className="mono-eyebrow mb-1 px-2 text-muted-foreground">{group.label}</div>
-                    <TabsList variant="sidebar">
-                      {group.items.map((s) => (
-                        <TabsTrigger key={s.key} value={s.key}
-                          className="relative flex min-h-10 w-full items-center justify-start gap-2.5 rounded-lg border-l-2 border-transparent px-2.5 py-2 text-xs text-muted-foreground transition-colors hover:bg-primary/5 data-[selected]:border-l-primary data-[selected]:bg-primary/10 data-[selected]:font-semibold data-[selected]:text-primary data-[selected]:shadow-none data-[selected]:[&>span:first-child]:bg-primary/10 data-[selected]:[&>span:first-child]:text-primary">
-                          <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted/75 text-muted-foreground">{s.icon}</span>
-                          <span className="truncate">{s.label}</span>
-                        </TabsTrigger>
-                      ))}
-                    </TabsList>
-                  </div>
-                ))}
+              <nav aria-label={t("settings.sidebar_header")} className="min-h-0 max-h-[calc(100vh-13rem)] overflow-y-auto p-2.5 supports-[height:100dvh]:max-h-[calc(100dvh-13rem)]">
+                <div className="space-y-4">
+                  {visibleSectionGroups.map((group) => (
+                    <div key={group.key}>
+                      <div className="mono-eyebrow mb-1.5 px-2 text-muted-foreground">{group.label}</div>
+                      <TabsList variant="sidebar" className="gap-1">
+                        {group.items.map((s) => (
+                          <TabsTrigger key={s.key} value={s.key}
+                            className="relative flex min-h-10 w-full items-center justify-start gap-2.5 rounded-lg border-l-2 border-transparent px-2.5 py-2 text-xs text-muted-foreground transition-colors hover:bg-primary/5 data-[selected]:border-l-primary data-[selected]:bg-primary/10 data-[selected]:font-semibold data-[selected]:text-primary data-[selected]:shadow-none data-[selected]:[&>span:first-child]:bg-primary/10 data-[selected]:[&>span:first-child]:text-primary">
+                            <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted/75 text-muted-foreground">{s.icon}</span>
+                            <span className="truncate">{s.label}</span>
+                          </TabsTrigger>
+                        ))}
+                      </TabsList>
+                    </div>
+                  ))}
+                </div>
                 {visibleSectionGroups.length === 0 && (
                   <div className="flex flex-col items-center px-3 py-8 text-center">
                     <SearchX className="mb-2 size-5 text-muted-foreground" />
@@ -406,7 +419,6 @@ export default function SettingsPage() {
               <TabsContent value="certificates" className="mt-0"><Suspense fallback={null}>{gateSettingsData(<CertificatesSection data={data} saving={saving} onRefresh={loadSettings} />)}</Suspense></TabsContent>
               <TabsContent value="modules" className="mt-0"><Suspense fallback={null}><ModulesSection /></Suspense></TabsContent>
               <TabsContent value="emergency" className="mt-0"><Suspense fallback={null}><EmergencySection /></Suspense></TabsContent>
-              <TabsContent value="about" className="mt-0"><Suspense fallback={null}>{gateSettingsData(<AboutSection data={data} onCheckUpdate={handleCheckUpdate} />)}</Suspense></TabsContent>
             </div>
           </div>
         </div>

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { onCLS, onFCP, onINP, onLCP, onTTFB, type Metric } from "web-vitals";
+import type { Metric } from "web-vitals";
 import { recordVital, recordClientError, type VitalName } from "@/lib/telemetry";
 
 const VITAL_NAMES = new Set(["TTFB", "FCP", "LCP", "CLS", "FID", "INP"]);
@@ -19,17 +19,38 @@ let collectorHandlers: { onError: (e: ErrorEvent) => void; onRejection: (e: Prom
 
 export default function TelemetryCollector() {
   useEffect(() => {
-    const report = (metric: Metric) => {
-      if (VITAL_NAMES.has(metric.name)) {
-        recordVital(metric.name as VitalName, metric.value);
+    let cancelled = false;
+    let idleHandle: number | null = null;
+    const load = () => {
+      if (cancelled) return;
+      void import("web-vitals").then(({ onCLS, onFCP, onINP, onLCP, onTTFB }) => {
+        if (cancelled) return;
+        const report = (metric: Metric) => {
+          if (VITAL_NAMES.has(metric.name)) {
+            recordVital(metric.name as VitalName, metric.value);
+          }
+        };
+        // web-vitals v5 on* functions register once; no cleanup needed.
+        onLCP(report);
+        onFCP(report);
+        onINP(report);
+        onCLS(report);
+        onTTFB(report);
+      }).catch(() => { /* telemetry must never affect app startup */ });
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      idleHandle = window.requestIdleCallback(load, { timeout: 2500 });
+    } else {
+      idleHandle = window.setTimeout(load, 1200);
+    }
+    return () => {
+      cancelled = true;
+      if (typeof idleHandle === "number" && typeof window.cancelIdleCallback === "function") {
+        window.cancelIdleCallback(idleHandle);
+      } else if (idleHandle != null) {
+        window.clearTimeout(idleHandle);
       }
     };
-    // web-vitals v5 on* functions register once; no cleanup needed.
-    onLCP(report);
-    onFCP(report);
-    onINP(report);
-    onCLS(report);
-    onTTFB(report);
   }, []);
 
   useEffect(() => {

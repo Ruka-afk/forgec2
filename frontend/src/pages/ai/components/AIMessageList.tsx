@@ -1,5 +1,5 @@
 
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,8 @@ import { SanitizedMarkdown } from "./SanitizedMarkdown";
 import { AITracePanel } from "./AITracePanel";
 import { cn } from "@/lib/utils";
 import { describeToolOutput, extractAICitations, formatAIRunDuration } from "./aiOutput";
+
+const EMPTY_FOLLOW_UPS: { label: string; query: string }[] = [];
 
 interface AIMessageListProps {
   messages: AIMessage[];
@@ -43,7 +45,10 @@ export function AIMessageList({
     <div
       data-ai-message-scroll
       role="log"
-      aria-live="polite"
+      // Streaming text changes many times per second. Keep the log quiet while
+      // generation is active and announce the final message once it settles;
+      // otherwise screen readers repeat every partial token.
+      aria-live={loading ? "off" : "polite"}
       aria-relevant="additions text"
       aria-busy={loading}
       className="min-h-0 flex-1 overflow-y-auto bg-background/40 px-3 py-5 sm:px-5 sm:py-7"
@@ -84,109 +89,20 @@ export function AIMessageList({
             </div>
           </div>
         ) : (
-          messages.map((msg, i) => {
-            if (msg.trace) {
-              return (
-                <AITracePanel
-                  key={msg.stream_id || `trace-${i}`}
-                  steps={msg.trace}
-                  status={msg.trace_status || "complete"}
-                  reasoning={msg.reasoning}
-                />
-              );
-            }
-            if (msg.thinking) {
-              return (
-                <div key={i} className="flex items-start gap-3">
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                    <Bot className="size-4" />
-                  </div>
-                  <div className="rounded-2xl rounded-tl-md border border-border/75 bg-card px-4 py-3 shadow-xs">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Brain className="size-4 text-primary" />
-                      <span>{t("ai.thinking")}</span>
-                      <span className="ml-1 flex gap-1" aria-hidden="true">
-                        <span className="size-1.5 animate-bounce rounded-full bg-primary" />
-                        <span className="size-1.5 animate-bounce rounded-full bg-primary delay-150" />
-                        <span className="size-1.5 animate-bounce rounded-full bg-primary delay-300" />
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            }
-            if (msg.role === "tool") {
-              return (
-                <ToolResultBlock
-                  key={msg.stream_id ? `${msg.stream_id}-${msg.tool_call_id || "tool"}-${i}` : `tool-${i}`}
-                  toolName={msg.tool_name || t("ai.tool")}
-                  content={msg.content}
-                  status={msg.tool_status}
-                  expandAll={expandAll}
-                />
-              );
-            }
-            return (
-              <div key={msg.stream_id ? `${msg.stream_id}-${msg.tool_call_id || msg.role}-${i}` : i} className={`group flex items-start gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-                <div className={`flex size-8 shrink-0 items-center justify-center rounded-xl shadow-xs ring-1 ${msg.role === "user" ? "bg-foreground text-background ring-foreground/10" : msg.error ? "bg-destructive/10 text-destructive ring-destructive/20" : "bg-primary/10 text-primary ring-primary/15"}`}>
-                  {msg.role === "user" ? <User className="size-4" /> : <Bot className="size-4" />}
-                </div>
-                <div className={`min-w-0 ${msg.role === "user" ? "max-w-[85%] rounded-2xl rounded-tr-md bg-primary px-4 py-3 text-primary-foreground shadow-sm sm:max-w-[72%]" : msg.error ? "max-w-[94%] flex-1 rounded-2xl rounded-tl-md border border-destructive/25 border-l-2 border-l-destructive/60 bg-card px-4 py-4 text-card-foreground shadow-sm sm:px-5" : "max-w-[94%] flex-1 rounded-2xl rounded-tl-md border border-border/80 border-l-2 border-l-primary/45 bg-card px-4 py-4 text-card-foreground shadow-sm sm:px-5"}`}>
-                  {msg.role !== "user" && (
-                    <div className="mb-3 flex min-h-6 items-center justify-between gap-3 border-b border-border/55 pb-2.5">
-                      <div className={`flex min-w-0 items-center gap-1.5 text-xs font-semibold ${msg.error ? "text-destructive" : "text-foreground"}`}>
-                        {msg.error ? <CircleAlert className="size-3.5 text-destructive" /> : <Bot className="size-3.5 text-primary" />}
-                        <span className="truncate">{t("nav.ai")}</span>
-                      </div>
-                      <div className="flex items-center gap-0.5 rounded-lg bg-muted/60 p-0.5 opacity-100 transition-opacity sm:opacity-60 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
-                        {msg.role === "assistant" && !msg.thinking && i === lastAssistantIndex && !loading && (
-                          <Button variant="ghost" size="icon-xs" onClick={onRegenerate} title={msg.error ? t("ai.retry") : t("ai.regenerate")} aria-label={msg.error ? t("ai.retry") : t("ai.regenerate")}>
-                            <RotateCw className="size-3.5" />
-                          </Button>
-                        )}
-                        {msg.role === "assistant" && !msg.thinking && (
-                          <CopyButton text={msg.content} size="icon-xs" className="text-muted-foreground hover:text-primary" title={t("ai.copy")} onError={() => toast.error(t("ai.toast.copy_failed"))}>
-                            {(copied) => copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-                          </CopyButton>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  {msg.role === "assistant" ? (
-                    <>
-                      <SanitizedMarkdown content={msg.content} live={loading && i === lastAssistantIndex} />
-                      <AssistantOutputMeta message={msg} />
-                    </>
-                  ) : (
-                    <p className="whitespace-pre-wrap text-sm leading-6">{msg.content}</p>
-                  )}
-                  {msg.role === "user" && msg.id && onBranch && !loading && (
-                    <div className="mt-2 flex justify-end opacity-80 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
-                      <Button variant="ghost" size="xs" className="h-7 text-primary-foreground/80 hover:bg-white/10 hover:text-primary-foreground" onClick={() => onBranch(msg.id!)} title={t("ai.branch_from_here")}>
-                        <GitBranch className="size-3" />{t("ai.branch_from_here")}
-                      </Button>
-                    </div>
-                  )}
-                  {msg.role === "assistant" && !msg.thinking && i === lastAssistantIndex && !loading && followUps.length > 0 && (
-                    <div className="mt-4 flex flex-wrap gap-1.5 border-t border-border/55 pt-3">
-                      {followUps.map((item) => (
-                        <Button
-                          key={item.query}
-                          type="button"
-                          variant="outline"
-                          size="xs"
-                          onClick={() => onFollowUp(item.query)}
-                          className="h-7 rounded-full px-2.5 text-xs font-normal"
-                        >
-                          {item.label}
-                        </Button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })
+          messages.map((msg, i) => (
+            <AIMessageItem
+              key={msg.stream_id ? `${msg.stream_id}-${msg.tool_call_id || msg.role}-${i}` : i}
+              message={msg}
+              index={i}
+              lastAssistantIndex={lastAssistantIndex}
+              loading={loading}
+              followUps={i === lastAssistantIndex ? followUps : EMPTY_FOLLOW_UPS}
+              expandAll={expandAll}
+              onFollowUp={onFollowUp}
+              onRegenerate={onRegenerate}
+              onBranch={onBranch}
+            />
+          ))
         )}
         {loading && !messages.some((m) => m.thinking || m.trace_status === "running") && (
           <div className="flex items-start gap-3">
@@ -236,6 +152,94 @@ function AssistantOutputMeta({ message }: { message: AIMessage }) {
     </div>
   );
 }
+
+interface AIMessageItemProps {
+  message: AIMessage;
+  index: number;
+  lastAssistantIndex: number;
+  loading: boolean;
+  followUps: { label: string; query: string }[];
+  expandAll: boolean | null;
+  onFollowUp: (query: string) => void;
+  onRegenerate: () => void;
+  onBranch?: (messageId: number) => void;
+}
+
+const AIMessageItem = memo(function AIMessageItem({
+  message: msg,
+  index: i,
+  lastAssistantIndex,
+  loading,
+  followUps,
+  expandAll,
+  onFollowUp,
+  onRegenerate,
+  onBranch,
+}: AIMessageItemProps) {
+  const { t } = useI18n();
+  if (msg.trace) {
+    return <MemoizedAITracePanel steps={msg.trace} status={msg.trace_status || "complete"} reasoning={msg.reasoning} />;
+  }
+  if (msg.thinking) {
+    return (
+      <div className="flex items-start gap-3">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Bot className="size-4" /></div>
+        <div className="rounded-2xl rounded-tl-md border border-border/75 bg-card px-4 py-3 shadow-xs">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Brain className="size-4 text-primary" />
+            <span>{t("ai.thinking")}</span>
+            <span className="ml-1 flex gap-1" aria-hidden="true">
+              <span className="size-1.5 animate-bounce rounded-full bg-primary" />
+              <span className="size-1.5 animate-bounce rounded-full bg-primary delay-150" />
+              <span className="size-1.5 animate-bounce rounded-full bg-primary delay-300" />
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (msg.role === "tool") {
+    return <MemoizedToolResultBlock toolName={msg.tool_name || t("ai.tool")} content={msg.content} status={msg.tool_status} expandAll={expandAll} />;
+  }
+  return (
+    <div className={`group flex items-start gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
+      <div className={`flex size-8 shrink-0 items-center justify-center rounded-xl shadow-xs ring-1 ${msg.role === "user" ? "bg-foreground text-background ring-foreground/10" : msg.error ? "bg-destructive/10 text-destructive ring-destructive/20" : "bg-primary/10 text-primary ring-primary/15"}`}>
+        {msg.role === "user" ? <User className="size-4" /> : <Bot className="size-4" />}
+      </div>
+      <div className={`min-w-0 ${msg.role === "user" ? "max-w-[85%] rounded-2xl rounded-tr-md bg-primary px-4 py-3 text-primary-foreground shadow-sm sm:max-w-[72%]" : msg.error ? "max-w-[94%] flex-1 rounded-2xl rounded-tl-md border border-destructive/25 border-l-2 border-l-destructive/60 bg-card px-4 py-4 text-card-foreground shadow-sm sm:px-5" : "max-w-[94%] flex-1 rounded-2xl rounded-tl-md border border-border/80 border-l-2 border-l-primary/45 bg-card px-4 py-4 text-card-foreground shadow-sm sm:px-5"}`}>
+        {msg.role !== "user" && (
+          <div className="mb-3 flex min-h-6 items-center justify-between gap-3 border-b border-border/55 pb-2.5">
+            <div className={`flex min-w-0 items-center gap-1.5 text-xs font-semibold ${msg.error ? "text-destructive" : "text-foreground"}`}>
+              {msg.error ? <CircleAlert className="size-3.5 text-destructive" /> : <Bot className="size-3.5 text-primary" />}
+              <span className="truncate">{t("nav.ai")}</span>
+            </div>
+            <div className="flex items-center gap-0.5 rounded-lg bg-muted/60 p-0.5 opacity-100 transition-opacity sm:opacity-60 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+              {msg.role === "assistant" && i === lastAssistantIndex && !loading && (
+                <Button variant="ghost" size="icon-xs" onClick={onRegenerate} title={msg.error ? t("ai.retry") : t("ai.regenerate")} aria-label={msg.error ? t("ai.retry") : t("ai.regenerate")}><RotateCw className="size-3.5" /></Button>
+              )}
+              {msg.role === "assistant" && (
+                <CopyButton text={msg.content} size="icon-xs" className="text-muted-foreground hover:text-primary" title={t("ai.copy")} onError={() => toast.error(t("ai.toast.copy_failed"))}>
+                  {(copied) => copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                </CopyButton>
+              )}
+            </div>
+          </div>
+        )}
+        {msg.role === "assistant" ? <><SanitizedMarkdown content={msg.content} live={loading && i === lastAssistantIndex} /><AssistantOutputMeta message={msg} /></> : <p className="whitespace-pre-wrap text-sm leading-6">{msg.content}</p>}
+        {msg.role === "user" && msg.id && onBranch && !loading && (
+          <div className="mt-2 flex justify-end opacity-80 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+            <Button variant="ghost" size="xs" className="h-7 text-primary-foreground/80 hover:bg-white/10 hover:text-primary-foreground" onClick={() => onBranch(msg.id!)} title={t("ai.branch_from_here")}><GitBranch className="size-3" />{t("ai.branch_from_here")}</Button>
+          </div>
+        )}
+        {msg.role === "assistant" && i === lastAssistantIndex && !loading && followUps.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-1.5 border-t border-border/55 pt-3">
+            {followUps.map((item) => <Button key={item.query} type="button" variant="outline" size="xs" onClick={() => onFollowUp(item.query)} className="h-7 rounded-full px-2.5 text-xs font-normal">{item.label}</Button>)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
 
 function ToolResultBlock({ toolName, content, status = "success", expandAll }: { toolName: string; content: string; status?: AIMessage["tool_status"]; expandAll?: boolean | null }) {
   const { t } = useI18n();
@@ -315,3 +319,9 @@ function ToolResultBlock({ toolName, content, status = "success", expandAll }: {
     </div>
   );
 }
+
+// Tool results and trace steps are immutable after each event. Memoizing them
+// keeps a long conversation from re-formatting every historical tool payload
+// whenever the active assistant message receives another streamed token.
+const MemoizedAITracePanel = memo(AITracePanel);
+const MemoizedToolResultBlock = memo(ToolResultBlock);

@@ -87,9 +87,16 @@ export default function ToolkitPage() {
 
   useEffect(() => {
     if (!selectedAgent) { setAgentInfo(null); return; }
-    api.get<{ agent?: Record<string, unknown> }>(`/toolkit/agents/${selectedAgent}/info`)
-      .then((d) => setAgentInfo(d.agent || null))
-      .catch(() => setAgentInfo(null));
+    const controller = new AbortController();
+    setAgentInfo(null);
+    api.get<{ agent?: Record<string, unknown> }>(`/toolkit/agents/${selectedAgent}/info`, { signal: controller.signal })
+      .then((d) => {
+        if (!controller.signal.aborted) setAgentInfo(d.agent || null);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setAgentInfo(null);
+      });
+    return () => controller.abort();
   }, [selectedAgent]);
 
   const quickActions = [

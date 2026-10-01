@@ -17,6 +17,7 @@ const lazyPage = (imp: () => Promise<{ default: unknown }>) =>
 
 const MAIN_PAGES: Record<string, ReturnType<typeof lazyPage>> = {
   agents: lazyPage(() => import("@/pages/agents/AgentsPageContent")),
+  "asset-organization": lazyPage(() => import("@/pages/asset-organization/AssetOrganizationPage")),
   ai: lazyPage(() => import("@/pages/ai/AIPageContent")),
   attack: lazyPage(() => import("@/pages/attack/AttackPage")),
   audit: lazyPage(() => import("@/pages/audit/AuditPage")),
@@ -26,7 +27,6 @@ const MAIN_PAGES: Record<string, ReturnType<typeof lazyPage>> = {
   bof: lazyPage(() => import("@/pages/bof/BOFPage")),
   campaign: lazyPage(() => import("@/pages/campaign/CampaignPageContent")),
   chain: lazyPage(() => import("@/pages/chain/ChainPage")),
-  chat: lazyPage(() => import("@/pages/chat/ChatPage")),
   "circuit-breaker": lazyPage(() => import("@/pages/circuit-breaker/CircuitBreakerPage")),
   cloud: lazyPage(() => import("@/pages/cloud/CloudPage")),
   credentials: lazyPage(() => import("@/pages/credentials/CredentialsPageContent")),
@@ -78,6 +78,10 @@ type MainRoute =
 
 const MAIN_ROUTES: MainRoute[] = [
   ...Object.keys(MAIN_PAGES).map((name) => ({ path: `/${name}`, comp: MAIN_PAGES[name] })),
+  // Chat is now a mode of the AI workspace. Keep the old URL as a
+  // compatibility redirect so bookmarks and external links continue to work
+  // without shipping a second chat application bundle.
+  { path: "/chat", redirect: "/ai" },
   { path: "/agents/:id", comp: AgentDetailPage },
   { path: "/agents/:id/config", comp: AgentConfigPage },
   { path: "/agents/:id/files", comp: AgentFilesPage },

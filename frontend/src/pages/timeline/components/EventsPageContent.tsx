@@ -2,11 +2,12 @@ import { useI18n } from "@/lib/i18n";
 import { useUrlState } from "@/lib/hooks/useUrlState";
 import { PageContainer } from "@/components/ui/page-container";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Activity, ListTodo, Bell } from "lucide-react";
+import { Activity, ListTodo, Bell, Network } from "lucide-react";
 import { EVENTS_TABS, type EventsTab } from "./types";
 import EventsStream from "./EventsStream";
 import TasksPageContent from "../../tasks/TasksPageContent";
 import NotificationsPageContent from "../../notifications/NotificationsPageContent";
+import TrafficPage from "../../traffic/TrafficPage";
 
 export default function EventsPageContent() {
   const { t } = useI18n();
@@ -19,6 +20,7 @@ export default function EventsPageContent() {
           <TabsTrigger value="stream" className="gap-1.5"><Activity className="size-3.5" />{t("events.tab_stream")}</TabsTrigger>
           <TabsTrigger value="tasks" className="gap-1.5"><ListTodo className="size-3.5" />{t("events.tab_tasks")}</TabsTrigger>
           <TabsTrigger value="alerts" className="gap-1.5"><Bell className="size-3.5" />{t("events.tab_alerts")}</TabsTrigger>
+          <TabsTrigger value="traffic" className="gap-1.5"><Network className="size-3.5" />{t("events.tab_traffic")}</TabsTrigger>
         </TabsList>
         <TabsContent value="stream" className="mt-4">
           <EventsStream />
@@ -28,6 +30,9 @@ export default function EventsPageContent() {
         </TabsContent>
         <TabsContent value="alerts" className="mt-4">
           <NotificationsPageContent embedded />
+        </TabsContent>
+        <TabsContent value="traffic" className="mt-4">
+          <TrafficPage embedded />
         </TabsContent>
       </Tabs>
     </PageContainer>

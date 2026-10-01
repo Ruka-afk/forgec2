@@ -7,6 +7,7 @@ import { PageContainer } from "@/components/ui/page-container";
 import { AgentLoadError } from "@/components/AgentLoadError";
 import { Spinner } from "@/components/ui/spinner";
 import { useAgentList } from "@/lib/hooks/useAgentList";
+import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { POLL } from "@/lib/polling";
 import { Card } from "@/components/ui/card";
 import { Banner } from "@/components/ui/banner";
@@ -55,7 +56,9 @@ export default function CloudPage() {
   const [resultsError, setResultsError] = useState<string | null>(null);
   const [selectedAgentResults, setSelectedAgentResults] = useState("");
   const [pollNote, setPollNote] = useState("");
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [polling, setPolling] = useState(false);
+  const pollStateRef = useRef<{ agentId: string; baseline: number; attempts: number } | null>(null);
+  const pollInFlightRef = useRef(false);
 
   const loadResults = useCallback(async (agentId: string, quiet = false): Promise<number> => {
     if (!agentId) return 0;
@@ -93,8 +96,36 @@ export default function CloudPage() {
     void loadResults(selectedAgentResults);
   }, [selectedAgentResults, loadResults]);
 
+  const stopPolling = useCallback(() => {
+    pollStateRef.current = null;
+    setPolling(false);
+  }, []);
+
+  const pollResults = useCallback(async () => {
+    const state = pollStateRef.current;
+    if (!state || pollInFlightRef.current) return;
+    pollInFlightRef.current = true;
+    state.attempts += 1;
+    try {
+      const n = await loadResults(state.agentId, true);
+      const count = n >= 0 ? n : 0;
+      if (count > state.baseline) {
+        setPollNote(t("cloud.poll_updated"));
+        stopPolling();
+        toast.success(t("cloud.poll_updated"));
+      } else if (state.attempts >= 30) {
+        setPollNote(t("cloud.poll_timeout"));
+        stopPolling();
+      }
+    } finally {
+      pollInFlightRef.current = false;
+    }
+  }, [loadResults, stopPolling, t]);
+
+  useVisibleInterval(() => { void pollResults(); }, polling ? POLL.stealPoll : 0);
+
   useEffect(() => () => {
-    if (pollRef.current) clearInterval(pollRef.current);
+    pollStateRef.current = null;
   }, []);
 
   const handleSteal = async () => {
@@ -107,27 +138,9 @@ export default function CloudPage() {
       setSelectedAgentResults(selectedAgent);
       const baselineRaw = await loadResults(selectedAgent, true);
       const baseline = baselineRaw >= 0 ? baselineRaw : 0;
-      let attempts = 0;
-      if (pollRef.current) clearInterval(pollRef.current);
       setPollNote(t("cloud.poll_waiting"));
-      pollRef.current = setInterval(async () => {
-        // Don't burn requests while the tab is hidden; the countdown only
-        // advances on visible ticks.
-        if (typeof document !== "undefined" && document.hidden) return;
-        attempts += 1;
-        const n = await loadResults(selectedAgent, true);
-        const count = n >= 0 ? n : 0;
-        if (count > baseline) {
-          setPollNote(t("cloud.poll_updated"));
-          if (pollRef.current) clearInterval(pollRef.current);
-          pollRef.current = null;
-          toast.success(t("cloud.poll_updated"));
-        } else if (attempts >= 30) {
-          setPollNote(t("cloud.poll_timeout"));
-          if (pollRef.current) clearInterval(pollRef.current);
-          pollRef.current = null;
-        }
-      }, POLL.stealPoll);
+      pollStateRef.current = { agentId: selectedAgent, baseline, attempts: 0 };
+      setPolling(true);
     } catch { toast.error(t("cloud.steal_failed")); }
     setStealing(false);
   };

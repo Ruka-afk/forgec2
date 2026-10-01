@@ -637,8 +637,8 @@ import type { AgentStatus } from "@/types/agent";
 
 const VALID_STATUSES: readonly string[] = AGENT_STATUSES;
 
-async function getAgentStatus(agentId: string): Promise<AgentStatus | "unknown"> {
-  const data = await api.get<{ Agent?: { status?: string }; agent?: { status?: string } }>(paths.agents.one(agentId));
+async function getAgentStatus(agentId: string, signal?: AbortSignal): Promise<AgentStatus | "unknown"> {
+  const data = await api.get<{ Agent?: { status?: string }; agent?: { status?: string } }>(paths.agents.one(agentId), { signal });
   const raw = data.agent?.status || data.Agent?.status || "unknown";
   return (VALID_STATUSES.includes(raw) ? raw : "unknown") as AgentStatus | "unknown";
 }
@@ -661,7 +661,7 @@ export async function runTask(
   opts: RunTaskOptions = {},
 ): Promise<TaskStatus> {
   if (opts.checkOnline) {
-    const status = await getAgentStatus(agentId).catch(() => "unknown");
+    const status = await getAgentStatus(agentId, opts.signal).catch(() => "unknown");
     if (status !== "online") {
       throw new Error(`Agent is ${status} — start the agent and ensure it is online before running this.`);
     }
@@ -670,6 +670,7 @@ export async function runTask(
   const res = await postFn<{ success?: boolean; task_id?: number; error?: string }>(
     path,
     (opts.body as Record<string, string>) || {},
+    { signal: opts.signal },
   );
   const taskId = res.task_id;
   if (!taskId) {

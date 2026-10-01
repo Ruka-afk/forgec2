@@ -3,6 +3,7 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { useWS } from "@/lib/wsContext";
+import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -52,13 +53,11 @@ export function UpdateDialog() {
   const [info, setInfo] = useState<UpdateDialogInfo | null>(null);
   const [phase, setPhase] = useState<Phase>("confirm");
   const [progress, setProgress] = useState<ProgressState>({ stage: "idle", percent: 0, downloaded: 0, total: 0 });
-  const pollRef = useRef<number | null>(null);
+  const [polling, setPolling] = useState(false);
+  const pollInFlightRef = useRef(false);
 
   const stopPolling = useCallback(() => {
-    if (pollRef.current !== null) {
-      window.clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
+    setPolling(false);
   }, []);
 
   useEffect(() => () => stopPolling(), [stopPolling]);
@@ -107,28 +106,36 @@ export function UpdateDialog() {
     });
   }, [open, subscribe, applyProgress]);
 
-  const startPolling = useCallback(() => {
-    stopPolling();
-    pollRef.current = window.setInterval(() => {
-      api.get<{
+  const pollProgress = useCallback(async () => {
+    if (!open || pollInFlightRef.current) return;
+    pollInFlightRef.current = true;
+    try {
+      const d = await api.get<{
         stage?: string; percent?: number; downloaded?: number;
         total?: number; error?: string;
-      }>(paths.updateProgress).then(
-        (d) => {
-          if (d.stage) {
-            applyProgress({
-              stage: String(d.stage),
-              percent: Number(d.percent ?? 0),
-              downloaded: Number(d.downloaded ?? 0),
-              total: Number(d.total ?? 0),
-              error: d.error ? String(d.error) : undefined,
-            });
-          }
-        },
-        () => {},
-      );
-    }, 3000);
-  }, [applyProgress, stopPolling]);
+      }>(paths.updateProgress);
+      if (d.stage) {
+        applyProgress({
+          stage: String(d.stage),
+          percent: Number(d.percent ?? 0),
+          downloaded: Number(d.downloaded ?? 0),
+          total: Number(d.total ?? 0),
+          error: d.error ? String(d.error) : undefined,
+        });
+      }
+    } catch {
+      // WebSocket progress remains authoritative; a transient fallback poll
+      // failure should not replace the active update state with an error.
+    } finally {
+      pollInFlightRef.current = false;
+    }
+  }, [applyProgress, open]);
+
+  useVisibleInterval(() => { void pollProgress(); }, polling ? 3000 : 0);
+
+  const startPolling = useCallback(() => {
+    setPolling(true);
+  }, []);
 
   const startUpdate = useCallback(async () => {
     setPhase("running");

@@ -16,7 +16,10 @@ function fontPreloadPlugin(): Plugin {
         const bundle = ctx.bundle;
         if (!bundle) return [];
         return Object.keys(bundle)
-          .filter((f) => f.endsWith(".woff2"))
+          // Inter is used by the application shell. JetBrains Mono is only
+          // needed by terminal/code surfaces, so let the browser fetch it
+          // when those surfaces are actually rendered.
+          .filter((f) => f.endsWith(".woff2") && f.includes("Inter-Variable"))
           .map((f) => ({
             tag: "link",
             attrs: {

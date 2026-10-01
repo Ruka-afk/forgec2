@@ -1,5 +1,5 @@
 
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 import { API_BASE } from "@/lib/constants";
@@ -31,39 +31,16 @@ import { AIAssistBar } from "./components/AIAssistBar";
 import { AIConfigPanel } from "./components/AIConfigPanel";
 import { PendingAIIntents } from "./components/PendingAIIntents";
 import { AIContextPanel } from "./components/AIContextPanel";
-import { aiRunViewReducer, initialAIRunViewState } from "./components/aiRunReducer";
 import { AI_INPUT_MAX_CHARS, buildConversationPayload, sessionTitleFromQuery } from "./components/chatPayload";
 import { readAIResponseError } from "./components/streamErrors";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { usePermissions } from "@/lib/hooks/usePermissions";
+import { useAIRunStatuses } from "./components/useAIRunStatuses";
+import { useAISessionDraft, readNewAISessionDraft } from "./components/useAISessionDraft";
+import { fetchAISSE } from "./components/aiSse";
 
 function nowMs(): number {
   return Date.now();
-}
-
-/** SSE connect timeout for AI event streams. fetch() has no connect phase:
- *  a hung TCP/TLS handshake stalls forever (the idle watchdog only watches
- *  post-connect frames). The per-attempt controller below is aborted on
- *  timeout, while the operator AbortSignal keeps propagating for the whole
- *  stream lifetime (Stop button, idle watchdog, unmount). */
-const SSE_CONNECT_TIMEOUT_MS = 30_000;
-
-function fetchSSE(input: string, init: RequestInit, parent: AbortSignal): Promise<Response> {
-  const attempt = new AbortController();
-  const onParentAbort = () => attempt.abort(parent.reason);
-  if (parent.aborted) {
-    attempt.abort(parent.reason);
-  } else {
-    // Intentionally never removed: the parent is a per-message controller,
-    // so the listener dies with it; removing it after connect would break
-    // the Stop button for the rest of the stream.
-    parent.addEventListener("abort", onParentAbort);
-  }
-  const timer = window.setTimeout(
-    () => attempt.abort(new DOMException("SSE connect timeout", "TimeoutError")),
-    SSE_CONNECT_TIMEOUT_MS,
-  );
-  return fetch(input, { ...init, signal: attempt.signal }).finally(() => window.clearTimeout(timer));
 }
 
 export default function AIPage() {
@@ -83,8 +60,7 @@ export default function AIPage() {
 	const [lowRiskAuto, setLowRiskAuto] = useState(false);
 	const [chatOnly, setChatOnly] = useState(false);
 	const [profilesReady, setProfilesReady] = useState(false);
-	const [runStatuses, setRunStatuses] = useState<Record<number, string>>({});
-	const [runView, dispatchRunView] = useReducer(aiRunViewReducer, initialAIRunViewState);
+	const { runStatuses, setRunStatuses } = useAIRunStatuses();
   const abortRef = useRef<AbortController | null>(null);
   const streamFlushRef = useRef<(() => void) | null>(null);
   const sendLockRef = useRef(false);
@@ -191,41 +167,13 @@ export default function AIPage() {
 	  return () => { active = false; };
 	}, []);
 	const configured = (enabled && hasApiKey) || profilesReady;
-	useEffect(() => {
-	  let active = true;
-	  const refreshRuns = async () => {
-		try {
-		  const payload = await api.get<unknown>(`${paths.ai.runs}?status=active`);
-		  if (!active) return;
-		  const runs = normalizeListEnvelope(payload, ["runs", "data"]) as Array<{ session_id: number; status: string }>;
-		  const next: Record<number, string> = {};
-		  runs.forEach((run) => { next[run.session_id] = run.status; });
-		  setRunStatuses(next);
-		} catch { /* connection banner handles transient failures */ }
-	  };
-	  void refreshRuns();
-	  const timer = window.setInterval(() => { void refreshRuns(); }, 5000);
-	  return () => { active = false; window.clearInterval(timer); };
-	}, []);
   const canConfigure = can("ai.configure") || currentUserRole.toLocaleLowerCase() === "admin";
   const draftKey = (sessionId: number | null) => sessionId == null ? "new" : `session:${sessionId}`;
   const replaceInput = useCallback((value: string) => {
     inputRef.current = value;
     setInput(value);
   }, []);
-	useEffect(() => {
-	  const timer = window.setTimeout(() => {
-		if (activeSessionId == null) {
-		  try { window.sessionStorage.setItem("forgec2.ai.newDraft", input); } catch { /* optional browser storage */ }
-		  return;
-		}
-		void api.putJson(paths.ai.session(activeSessionId), { draft: input }).catch(() => {
-		  // Keep typing responsive; the in-memory draft remains available and a
-		  // later keystroke retries the encrypted server save.
-		});
-	  }, 700);
-	  return () => window.clearTimeout(timer);
-	}, [activeSessionId, input]);
+	useAISessionDraft(activeSessionId, input);
 
   const stickToBottomRef = useRef(true);
   const scheduleScrollToBottom = useCallback((smooth: boolean) => {
@@ -317,9 +265,17 @@ export default function AIPage() {
     setRenameTarget(null);
   };
 
+  const quickActions = [
+    { label: t("ai.quick_situation"), query: t("ai.quick_situation_query") },
+    { label: t("ai.quick_list_implants"), query: t("ai.quick_list_implants") },
+    { label: t("ai.quick_elevated"), query: t("ai.quick_elevated_query") },
+    { label: t("ai.quick_alerts"), query: t("ai.quick_alerts_query") },
+    { label: t("ai.quick_next"), query: t("ai.quick_next_query") },
+  ];
+
   // handleRegenerate trims the trailing assistant/tool reply and re-asks the last
   // user message, reusing the existing streaming path via handleSend.
-  const handleRegenerate = () => {
+  const handleRegenerate = useCallback(() => {
     if (loading) return;
     const cur = messagesRef.current;
     let lastUser = -1;
@@ -329,8 +285,8 @@ export default function AIPage() {
     if (lastUser < 0) return;
     const lastUserMsg = cur[lastUser];
     setMessagesBoth(cur.slice(0, lastUser));
-    void handleSend(lastUserMsg.content, true);
-  };
+    void handleSendRef.current(lastUserMsg.content, true);
+  }, [loading, setMessagesBoth]);
 
   const handleSend = async (textOverride?: string, regenerated = false) => {
     const text = (textOverride ?? input).trim();
@@ -359,7 +315,7 @@ export default function AIPage() {
     let sessionId = activeSessionId;
     if (sessionId == null) {
       try {
-        const created = await api.postJson<{ id: number; title: string }>("/ai/sessions", {
+        const created = await api.postJson<{ id: number; title: string }>(paths.ai.sessions, {
           title: sessionTitleFromQuery(text, quickActions),
 		  profile_id: selectedProfileId,
 		  write_policy: lowRiskAuto ? "low_risk_auto" : "approval",
@@ -577,7 +533,6 @@ export default function AIPage() {
 		},
 	  });
 	  backgroundRunId = run.id;
-	  dispatchRunView({ type: "started", runId: run.id, status: run.status === "running" ? "running" : "queued" });
 	  activeRunIdRef.current = backgroundRunId;
 	  setRunStatuses((current) => ({ ...current, [sessionId]: run.status || "queued" }));
 
@@ -586,7 +541,7 @@ export default function AIPage() {
 	  for (let attempt = 0; attempt < 4; attempt += 1) {
 		const headers: Record<string, string> = { Accept: "text/event-stream" };
 		if (lastEventId) headers["Last-Event-ID"] = lastEventId;
-		response = await fetchSSE(`${API_BASE}${paths.ai.runEvents(backgroundRunId)}${lastEventId ? `?after=${encodeURIComponent(lastEventId)}` : ""}`, {
+		response = await fetchAISSE(`${API_BASE}${paths.ai.runEvents(backgroundRunId)}${lastEventId ? `?after=${encodeURIComponent(lastEventId)}` : ""}`, {
 		  method: "GET",
 		  headers,
 		  credentials: "include",
@@ -612,7 +567,6 @@ export default function AIPage() {
 
 	  const processEvent = ({ id, event, data }: ParsedSSEEvent) => {
 		if (gen !== streamGenRef.current) return;
-		dispatchRunView({ type: "event", event: { id, event, data } });
 		if (id) lastEventId = id;
         lastEventAt = nowMs();
         switch (event) {
@@ -789,7 +743,7 @@ export default function AIPage() {
 		await new Promise((resolve) => window.setTimeout(resolve, 600 * (reconnect + 1)));
 		const h: Record<string, string> = { Accept: "text/event-stream" };
 		if (lastEventId) h["Last-Event-ID"] = lastEventId;
-		currentResponse = await fetchSSE(`${API_BASE}${paths.ai.runEvents(backgroundRunId)}?after=${encodeURIComponent(lastEventId || "0")}`, {
+		currentResponse = await fetchAISSE(`${API_BASE}${paths.ai.runEvents(backgroundRunId)}?after=${encodeURIComponent(lastEventId || "0")}`, {
 		  headers: h,
 		  credentials: "include",
 		}, controller.signal);
@@ -888,7 +842,7 @@ export default function AIPage() {
     }
   };
 
-	const handleBranch = async (messageId: number) => {
+	const handleBranch = useCallback(async (messageId: number) => {
 	  if (activeSessionId == null) return;
 	  try {
 		const child = await api.postJson<{ id: number }>(paths.ai.sessionBranch(activeSessionId), { message_id: messageId });
@@ -898,7 +852,7 @@ export default function AIPage() {
 	  } catch (error) {
 		toast.error(error instanceof Error ? error.message : t("ai.branch_failed"));
 	  }
-	};
+	}, [activeSessionId, loadSessions, selectSession, t]);
 
   const handleClear = () => {
     handleNewChat();
@@ -926,7 +880,7 @@ export default function AIPage() {
 	} else {
       draftsRef.current.set(draftKey(activeSessionId), inputRef.current);
 	  let temporaryDraft = draftsRef.current.get(draftKey(null)) || "";
-	  try { temporaryDraft = window.sessionStorage.getItem("forgec2.ai.newDraft") || temporaryDraft; } catch { /* optional browser storage */ }
+	  temporaryDraft = readNewAISessionDraft() || temporaryDraft;
 	  replaceInput(temporaryDraft);
     }
     handleNewChat();
@@ -980,13 +934,6 @@ export default function AIPage() {
     downloadText(text, "ai-chat-export.txt");
   };
 
-  const quickActions = [
-    { label: t("ai.quick_situation"), query: t("ai.quick_situation_query") },
-    { label: t("ai.quick_list_implants"), query: t("ai.quick_list_implants") },
-    { label: t("ai.quick_elevated"), query: t("ai.quick_elevated_query") },
-    { label: t("ai.quick_alerts"), query: t("ai.quick_alerts_query") },
-    { label: t("ai.quick_next"), query: t("ai.quick_next_query") },
-  ];
   const lastUserText = (() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === "user") return messages[i].content;
@@ -999,6 +946,12 @@ export default function AIPage() {
     { label: t("ai.followup_alerts"), query: t("ai.quick_alerts_query") },
     { label: t("ai.followup_stale"), query: t("ai.quick_stale_query") },
   ].filter((item) => item.query !== lastUserText);
+  const handleFollowUp = useCallback((query: string) => {
+    void handleSendRef.current(query);
+  }, []);
+  const handleBranchMessage = useCallback((messageId: number) => {
+    void handleBranch(messageId);
+  }, [handleBranch]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // While a response is streaming, keep the composer fully editable. Enter
@@ -1126,7 +1079,7 @@ export default function AIPage() {
                 <Badge variant={configured ? "success" : "warning"} className="hidden max-w-48 truncate font-mono text-(--fs-micro-sm) sm:inline-flex">
                   {configLoading ? t("common.loading") : configError ? t("ai.config_status_unknown") : enabled ? (model || provider) : t("ai.status_disabled")}
                 </Badge>
-				{activeSessionId != null && runStatuses[activeSessionId] && <Badge variant="info" className="animate-pulse motion-reduce:animate-none">{runView.runId ? runView.status : runStatuses[activeSessionId]}</Badge>}
+				{activeSessionId != null && runStatuses[activeSessionId] && <Badge variant="info" className="animate-pulse motion-reduce:animate-none">{runStatuses[activeSessionId]}</Badge>}
               </div>
               <p className="truncate text-xs text-muted-foreground">
                 {activeSessionId != null ? `${t("ai.sessions")} #${activeSessionId}` : t("ai.new_chat")}
@@ -1200,9 +1153,9 @@ export default function AIPage() {
             lastAssistantIndex={lastAssistantIndex}
             quickActions={quickActions}
             followUps={followUps}
-            onFollowUp={(query) => { void handleSend(query); }}
-            onRegenerate={handleRegenerate}
-			onBranch={(messageId) => { void handleBranch(messageId); }}
+              onFollowUp={handleFollowUp}
+              onRegenerate={handleRegenerate}
+			 onBranch={handleBranchMessage}
             messagesEndRef={messagesEndRef}
           />
           {showJumpToLatest && (

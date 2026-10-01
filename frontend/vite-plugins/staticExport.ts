@@ -92,10 +92,19 @@ export function staticExportPlugin(): Plugin {
       if (!html || html.type !== "asset") return;
       const source =
         typeof html.source === "string" ? html.source : Buffer.from(html.source).toString("utf8");
-      this.emitFile({ type: "asset", fileName: "404.html", source });
+      // Vite sees the lazy router imports from the application entry and
+      // emits modulepreload tags for every route. That defeats route-level
+      // code splitting: a dashboard visit downloads Agent, AI, credentials,
+      // and every other page before the operator opens it. Keep only shared
+      // vendor preloads; route chunks are fetched by React.lazy on navigation.
+      const shell = source.replace(/<link rel="modulepreload"[^>]*>/g, (tag) =>
+        /href="\/assets\/vendor-/.test(tag) ? tag : "",
+      );
+      html.source = shell;
+      this.emitFile({ type: "asset", fileName: "404.html", source: shell });
       for (const route of STATIC_ROUTES) {
-        this.emitFile({ type: "asset", fileName: `${route}.html`, source });
-        this.emitFile({ type: "asset", fileName: `${route}/index.html`, source });
+        this.emitFile({ type: "asset", fileName: `${route}.html`, source: shell });
+        this.emitFile({ type: "asset", fileName: `${route}/index.html`, source: shell });
       }
     },
   };

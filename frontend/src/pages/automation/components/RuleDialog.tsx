@@ -45,12 +45,24 @@ export function RuleDialog({ open, onOpenChange, ruleForm, setRuleForm, sendingT
 
   // Load macro options when the run_macro action is picked.
   useEffect(() => {
-    if (!open || ruleForm.action_type !== "run_macro") return;
+    if (!open || ruleForm.action_type !== "run_macro") {
+      setMacrosLoading(false);
+      if (ruleForm.action_type !== "run_macro") setMacros([]);
+      return;
+    }
+    const controller = new AbortController();
     setMacrosLoading(true);
-    api.get<{ macros?: MacroOption[] }>(paths.macros.list)
-      .then((d) => setMacros(d.macros || []))
-      .catch(() => setMacros([]))
-      .finally(() => setMacrosLoading(false));
+    api.get<{ macros?: MacroOption[] }>(paths.macros.list, { signal: controller.signal })
+      .then((d) => {
+        if (!controller.signal.aborted) setMacros(d.macros || []);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setMacros([]);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setMacrosLoading(false);
+      });
+    return () => controller.abort();
   }, [open, ruleForm.action_type]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

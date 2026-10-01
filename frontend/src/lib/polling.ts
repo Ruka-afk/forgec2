@@ -17,6 +17,10 @@ export const POLL = {
   scanActive: 3_000,
   /** Fallback task poll while the WebSocket is down. */
   wsDownPoll: 8_000,
+  /** Slow drift correction for surfaces already live-updated over the
+   * WebSocket: a long-interval safety net when the WS is connected, replaced
+   * by the tighter cadence below while the WS is down. */
+  wsDrift: 300_000,
   /** Shell page agent status (online/offline overlay). */
   shellStatus: 5_000,
   /** Relative-time "now" ticker. */

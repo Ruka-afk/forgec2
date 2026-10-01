@@ -18,8 +18,8 @@ export const EVENT_COLORS: Record<string, { dot: string; bg: string; text: strin
   alert: { dot: "bg-destructive", bg: "bg-destructive/15", text: "text-destructive" },
 };
 
-export type EventsTab = "stream" | "tasks" | "alerts";
-export const EVENTS_TABS: readonly EventsTab[] = ["stream", "tasks", "alerts"];
+export type EventsTab = "stream" | "tasks" | "alerts" | "traffic";
+export const EVENTS_TABS: readonly EventsTab[] = ["stream", "tasks", "alerts", "traffic"];
 
 export type UnifiedSource = "timeline" | "task" | "alert";
 

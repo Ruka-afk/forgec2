@@ -19,6 +19,9 @@ interface NavItemDef {
   badge?: "agents" | "listeners" | "notifications";
   /** When false, omitted from the sidebar (still in Ctrl+K). */
   sidebar?: boolean;
+  /** When false, kept addressable for compatibility but omitted from the
+   * command palette and default discovery surfaces. */
+  discoverable?: boolean;
   /**
    * Any-of permission requirement, mirroring per-route enforcement in
    * internal/server/routes.go. Items without perms are visible to every
@@ -55,25 +58,25 @@ export const NAV_SECTIONS: NavSectionDef[] = [
     items: [
       { href: "/generate", labelKey: "nav.generate", icon: Boxes, perms: ["agents.read"] },
       { href: "/infrastructure", labelKey: "nav.infrastructure", icon: Server },
-      { href: "/dns", labelKey: "nav.dns", icon: Network },
-      { href: "/domain-fronting", labelKey: "nav.domain_fronting", icon: Cloud, perms: ["agents.read"] },
+      { href: "/dns", labelKey: "nav.dns", icon: Network, sidebar: false, discoverable: false },
+      { href: "/domain-fronting", labelKey: "nav.domain_fronting", icon: Cloud, sidebar: false, discoverable: false, perms: ["agents.read"] },
     ],
   },
   {
     titleKey: "post-exploitation",
     items: [
       { href: "/automation", labelKey: "nav.automation", icon: Bot, perms: ["automation.read"] },
-      { href: "/macros", labelKey: "nav.macros", icon: ListOrdered, perms: ["agents.read"] },
-      { href: "/bof", labelKey: "nav.bof", icon: FileCode, perms: ["agents.read"] },
+      { href: "/macros", labelKey: "nav.macros", icon: ListOrdered, sidebar: false, discoverable: false, perms: ["agents.read"] },
+      { href: "/bof", labelKey: "nav.bof", icon: FileCode, sidebar: false, discoverable: false, perms: ["agents.read"] },
       { href: "/plugins", labelKey: "nav.plugins", icon: Puzzle, perms: ["plugins.read"] },
-      { href: "/opsec", labelKey: "nav.opsec", icon: Shield, sidebar: false, perms: ["opsec.read"] },
-      { href: "/lateral", labelKey: "nav.lateral", icon: ArrowLeftRight, sidebar: false, perms: ["agents.read"] },
-      { href: "/privesc", labelKey: "nav.privesc", icon: Shield, sidebar: false, perms: ["agents.read"] },
-      { href: "/pivoting", labelKey: "nav.pivoting", icon: Route, sidebar: false, perms: ["agents.read"] },
-      { href: "/tokens", labelKey: "nav.token_store", icon: IdCard, sidebar: false, perms: ["settings.read"] },
-      { href: "/scanner", labelKey: "nav.scanner", icon: SatelliteDish, sidebar: false, perms: ["agents.read"] },
-      { href: "/scripting", labelKey: "nav.scripting", icon: Code, sidebar: false, perms: ["settings.read"] },
-      { href: "/toolkit", labelKey: "nav.toolkit", icon: Wrench, sidebar: false, perms: ["agents.read"] },
+      { href: "/opsec", labelKey: "nav.opsec", icon: Shield, sidebar: false, discoverable: false, perms: ["opsec.read"] },
+      { href: "/lateral", labelKey: "nav.lateral", icon: ArrowLeftRight, sidebar: false, discoverable: false, perms: ["agents.read"] },
+      { href: "/privesc", labelKey: "nav.privesc", icon: Shield, sidebar: false, discoverable: false, perms: ["agents.read"] },
+      { href: "/pivoting", labelKey: "nav.pivoting", icon: Route, sidebar: false, discoverable: false, perms: ["agents.read"] },
+      { href: "/tokens", labelKey: "nav.token_store", icon: IdCard, sidebar: false, discoverable: false, perms: ["settings.read"] },
+      { href: "/scanner", labelKey: "nav.scanner", icon: SatelliteDish, sidebar: false, discoverable: false, perms: ["agents.read"] },
+      { href: "/scripting", labelKey: "nav.scripting", icon: Code, sidebar: false, discoverable: false, perms: ["settings.read"] },
+      { href: "/toolkit", labelKey: "nav.toolkit", icon: Wrench, sidebar: false, discoverable: false, perms: ["agents.read"] },
     ],
   },
   {
@@ -82,26 +85,27 @@ export const NAV_SECTIONS: NavSectionDef[] = [
       { href: "/loot", labelKey: "nav.loot", icon: Archive, perms: ["agents.read"] },
       { href: "/credentials", labelKey: "nav.credentials", icon: Key, perms: ["credentials.read"] },
       { href: "/audit", labelKey: "nav.audit", icon: Shield, perms: ["audit.read"] },
-      { href: "/traffic", labelKey: "nav.traffic", icon: Network, perms: ["agents.read"] },
+      { href: "/traffic", labelKey: "nav.traffic", icon: Network, sidebar: false, discoverable: false, perms: ["agents.read"] },
       { href: "/report", labelKey: "nav.report", icon: ClipboardList, perms: ["agents.read"] },
+      { href: "/asset-organization", labelKey: "nav.asset_organization", icon: Layers, perms: ["agents.write", "groups.read", "settings.read"] },
       { href: "/ai", labelKey: "nav.ai", icon: Bot, layout: "workspace", perms: ["settings.read"] },
       { href: "/integrations", labelKey: "nav.integrations", icon: Plug, perms: ["settings.read"] },
-      { href: "/campaign", labelKey: "nav.campaign", icon: Crosshair, sidebar: false, perms: ["campaigns.read"] },
-      { href: "/attack", labelKey: "nav.attack", icon: Shield, sidebar: false, perms: ["campaigns.read"] },
-      { href: "/bloodhound", labelKey: "nav.bloodhound", icon: Network, sidebar: false, perms: ["intel.read"] },
-      { href: "/chat", labelKey: "nav.chat", icon: MessageSquare, sidebar: false, layout: "workspace", perms: ["agents.read"] },
+      { href: "/campaign", labelKey: "nav.campaign", icon: Crosshair, sidebar: false, discoverable: false, perms: ["campaigns.read"] },
+      { href: "/attack", labelKey: "nav.attack", icon: Shield, sidebar: false, discoverable: false, perms: ["campaigns.read"] },
+      { href: "/bloodhound", labelKey: "nav.bloodhound", icon: Network, sidebar: false, discoverable: false, perms: ["intel.read"] },
+      { href: "/chat", labelKey: "nav.chat", icon: MessageSquare, sidebar: false, discoverable: false, layout: "workspace", perms: ["agents.read"] },
     ],
   },
   {
     titleKey: "lab",
     sidebar: false,
     items: [
-      { href: "/phishing", labelKey: "nav.phishing", icon: Fish, perms: ["campaigns.read"] },
-      { href: "/circuit-breaker", labelKey: "nav.circuit_breaker", icon: Zap, perms: ["opsec.read"] },
-      { href: "/cloud", labelKey: "nav.cloud", icon: Cloud, perms: ["intel.read"] },
-      { href: "/ntlm", labelKey: "nav.ntlm", icon: Zap, perms: ["agents.read"] },
-      { href: "/topology", labelKey: "nav.topology", icon: GitBranch, perms: ["agents.read"] },
-      { href: "/chain", labelKey: "nav.chain", icon: LinkIcon, perms: ["agents.read"] },
+      { href: "/phishing", labelKey: "nav.phishing", icon: Fish, sidebar: false, discoverable: false, perms: ["campaigns.read"] },
+      { href: "/circuit-breaker", labelKey: "nav.circuit_breaker", icon: Zap, sidebar: false, discoverable: false, perms: ["opsec.read"] },
+      { href: "/cloud", labelKey: "nav.cloud", icon: Cloud, sidebar: false, discoverable: false, perms: ["intel.read"] },
+      { href: "/ntlm", labelKey: "nav.ntlm", icon: Zap, sidebar: false, discoverable: false, perms: ["agents.read"] },
+      { href: "/topology", labelKey: "nav.topology", icon: GitBranch, sidebar: false, discoverable: false, perms: ["agents.read"] },
+      { href: "/chain", labelKey: "nav.chain", icon: LinkIcon, sidebar: false, discoverable: false, perms: ["agents.read"] },
     ],
   },
   {
@@ -111,9 +115,9 @@ export const NAV_SECTIONS: NavSectionDef[] = [
       { href: "/settings", labelKey: "nav.settings", icon: Settings, perms: ["settings.read"] },
       { href: "/users", labelKey: "nav.users", icon: Users, perms: ["users.read"] },
       { href: "/roles", labelKey: "nav.roles", icon: Shield, perms: ["roles.read"] },
-      { href: "/tags", labelKey: "nav.tags", icon: Tags, perms: ["agents.write"] },
-      { href: "/groups", labelKey: "nav.groups", icon: Layers, perms: ["groups.read"] },
-      { href: "/autotag", labelKey: "nav.autotag", icon: Wand2, perms: ["settings.read"] },
+      { href: "/tags", labelKey: "nav.tags", icon: Tags, sidebar: false, discoverable: false, perms: ["agents.write"] },
+      { href: "/groups", labelKey: "nav.groups", icon: Layers, sidebar: false, discoverable: false, perms: ["groups.read"] },
+      { href: "/autotag", labelKey: "nav.autotag", icon: Wand2, sidebar: false, discoverable: false, perms: ["settings.read"] },
     ],
   },
 ];

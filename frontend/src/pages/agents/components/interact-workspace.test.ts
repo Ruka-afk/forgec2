@@ -7,7 +7,7 @@ import {
   readInteractPrefs,
   writeInteractPrefs,
 } from "@/lib/interact-storage";
-import { isEditableTarget, tabFromDigit } from "./interact-workspace";
+import { isEditableTarget, tabFromDigit } from "@/lib/interact-workspace";
 
 describe("clampDockHeight", () => {
   it("clamps to the operator range", () => {

@@ -70,6 +70,7 @@ export function useRemoteDesktop(agentId: string) {
   const cursorRafRef = useRef<number | null>(null);
   const pendingCursorRef = useRef<{ x: number; y: number } | null>(null);
   const captureBusyRef = useRef(false);
+  const actionAbortRef = useRef<AbortController | null>(null);
   // Reset monitoring state when agent id changes (Next.js reuses
   // the component instance when only the [id] param changes).
   const prevIdRef = useRef(id);
@@ -77,6 +78,7 @@ export function useRemoteDesktop(agentId: string) {
     if (prevIdRef.current !== id) {
       // Stop any running monitoring for the previous agent
       if (monitoringRef.current) {
+        actionAbortRef.current?.abort();
         monitoringRef.current = false;
         setMonitoring(false);
         setStatus("waiting");
@@ -129,18 +131,19 @@ export function useRemoteDesktop(agentId: string) {
   // Background poll failures only update status, never toast.error on every
   // tick (which creates a toast storm for offline beacons). Only
   // user-initiated actions (startMonitoring) toast.
-  const captureFrame = useCallback(async () => {
+  const captureFrame = useCallback(async (signal?: AbortSignal) => {
     if (!id) return;
-    if (captureBusyRef.current) return;
+    if (captureBusyRef.current || signal?.aborted) return;
     captureBusyRef.current = true;
     try {
-      const data = await api.get(paths.agents.screenshot(id));
+      const data = await api.get(paths.agents.screenshot(id), { signal });
       const imgData = (data.image || data.data || data.screenshot || "") as string;
       if (imgData) {
         const fullData = imgData.startsWith("data:") ? imgData : `data:image/png;base64,${imgData}`;
         commitFrame(fullData, data.width as number, data.height as number);
       }
     } catch {
+      if (signal?.aborted) return;
       setStatus("error");
       // No toast — let the status indicator communicate the error.
     } finally {
@@ -150,33 +153,46 @@ export function useRemoteDesktop(agentId: string) {
 
   const startMonitoring = useCallback(async () => {
     if (!id) return;
+    if (monitoringRef.current || actionAbortRef.current) return;
     if (versionBlocked) {
       toast.error(t("agents.version_unknown_dest"));
       return;
     }
+    const actionAbort = new AbortController();
+    actionAbortRef.current = actionAbort;
     setStatus("capturing");
     try {
-      await api.post(paths.agents.screenStart(id), { interval: String(pollInterval) });
+      await api.post(paths.agents.screenStart(id), { interval: String(pollInterval) }, { signal: actionAbort.signal });
+      if (actionAbort.signal.aborted) return;
       setMonitoring(true);
       monitoringRef.current = true;
-      await captureFrame();
+      await captureFrame(actionAbort.signal);
     } catch {
+      if (actionAbort.signal.aborted) return;
       setStatus("error");
       setMonitoring(false);
       monitoringRef.current = false;
       toast.error(t("agents.rdp_start_failed"));
+    } finally {
+      if (actionAbortRef.current === actionAbort) actionAbortRef.current = null;
     }
   }, [id, versionBlocked, t, pollInterval, captureFrame]);
 
   const stopMonitoring = useCallback(async () => {
     if (!id) return;
+    actionAbortRef.current?.abort();
+    const actionAbort = new AbortController();
+    actionAbortRef.current = actionAbort;
     setMonitoring(false);
     monitoringRef.current = false;
     setStatus("waiting");
     try {
-      await api.post(paths.agents.screenStop(id));
+      await api.post(paths.agents.screenStop(id), undefined, { signal: actionAbort.signal });
     } catch {
+      if (actionAbort.signal.aborted) return;
       toast.error(t("agents.rdp_stop_failed"));
+    } finally {
+      if (actionAbortRef.current === actionAbort) actionAbortRef.current = null;
     }
   }, [id, t]);
 
@@ -201,6 +217,7 @@ export function useRemoteDesktop(agentId: string) {
 
   useEffect(() => {
     return () => {
+      actionAbortRef.current?.abort();
       if (moveThrottleRef.current) clearTimeout(moveThrottleRef.current);
       if (frameRafRef.current !== null) cancelAnimationFrame(frameRafRef.current);
       if (cursorRafRef.current !== null) cancelAnimationFrame(cursorRafRef.current);

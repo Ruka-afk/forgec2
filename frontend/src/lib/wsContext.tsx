@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   useCallback,
+  useMemo,
   type ReactNode,
 } from "react";
 import { DEFAULT_WS_HOST, DEFAULT_WS_PORT } from "./constants";
@@ -53,7 +54,16 @@ interface WSContextValue {
   reconnect: () => void;
 }
 
-const WSContext = createContext<WSContextValue | null>(null);
+// Two contexts, one hook: the status fields (connected/reconnectFailed)
+// change on every connect flap, while the methods keep stable identity.
+// Splitting them means components that only call subscribe() (most pages)
+// no longer re-render when the socket reconnects. useWS() keeps the
+// combined shape so consumers are unchanged.
+type WSStatusValue = Pick<WSContextValue, "connected" | "reconnectFailed">;
+type WSMethodsValue = Pick<WSContextValue, "subscribe" | "send" | "reconnect">;
+
+const WSStatusContext = createContext<WSStatusValue>({ connected: false, reconnectFailed: false });
+const WSMethodsContext = createContext<WSMethodsValue | null>(null);
 
 export function getWSURL(path = "/ws"): string {
   const envURL = import.meta.env.VITE_FORGEC2_WS_URL;
@@ -285,15 +295,20 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const methods = useMemo<WSMethodsValue>(() => ({ subscribe, send, reconnect }), [subscribe, send, reconnect]);
+
   return (
-    <WSContext.Provider value={{ connected, reconnectFailed, subscribe, send, reconnect }}>
-      {children}
-    </WSContext.Provider>
+    <WSMethodsContext.Provider value={methods}>
+      <WSStatusContext.Provider value={{ connected, reconnectFailed }}>
+        {children}
+      </WSStatusContext.Provider>
+    </WSMethodsContext.Provider>
   );
 }
 
 export function useWS() {
-  const ctx = useContext(WSContext);
-  if (!ctx) throw new Error("useWS must be used within WebSocketProvider");
-  return ctx;
+  const status = useContext(WSStatusContext);
+  const methods = useContext(WSMethodsContext);
+  if (!methods) throw new Error("useWS must be used within WebSocketProvider");
+  return { ...status, ...methods };
 }

@@ -7,6 +7,7 @@ import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { bannerSurface } from "@/components/ui/banner";
 import { cn } from "@/lib/utils";
+import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 
 const CHECK_INTERVAL_MS = 60_000;
 const WARN_BEFORE_MS = 5 * 60 * 1000;
@@ -28,50 +29,53 @@ export default function SessionTimeoutWarning() {
   const { t } = useI18n();
   const [remaining, setRemaining] = useState<number | null>(null);
   const [visible, setVisible] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const toastShownRef = useRef(false);
-  const sessionExpRef = useRef<number | null>(null);
+  const checkInFlightRef = useRef(false);
 
   const check = useCallback(async () => {
-    const exp = await fetchSessionExpiry();
-    if (!exp) {
-      setVisible(false);
-      toastShownRef.current = false;
-      return;
-    }
-    sessionExpRef.current = exp;
-    const left = exp - Date.now();
-    if (left <= 0) {
-      setVisible(false);
-      toastShownRef.current = false;
-      if (typeof window !== "undefined" && window.location.pathname !== "/login") {
-        window.location.href = "/login";
+    // The warning is mounted globally, so a slow /api/auth/me request must
+    // not overlap the next polling tick or apply stale expiry information.
+    if (checkInFlightRef.current) return;
+    checkInFlightRef.current = true;
+    try {
+      const exp = await fetchSessionExpiry();
+      if (!exp) {
+        setVisible(false);
+        toastShownRef.current = false;
+        return;
       }
-      return;
-    }
-    setRemaining(left);
-    const shouldWarn = left < WARN_BEFORE_MS;
-    setVisible(shouldWarn);
+      const left = exp - Date.now();
+      if (left <= 0) {
+        setVisible(false);
+        toastShownRef.current = false;
+        if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+          window.location.href = "/login";
+        }
+        return;
+      }
+      setRemaining(left);
+      const shouldWarn = left < WARN_BEFORE_MS;
+      setVisible(shouldWarn);
 
-    if (shouldWarn && !toastShownRef.current) {
-      toastShownRef.current = true;
-      const minutes = Math.ceil(left / 60_000);
-      toast.warning(
-        minutes === 1
-          ? t("session.toast_minute")
-          : t("session.toast_minutes", { minutes }),
-        { duration: 10000 },
-      );
+      if (shouldWarn && !toastShownRef.current) {
+        toastShownRef.current = true;
+        const minutes = Math.ceil(left / 60_000);
+        toast.warning(
+          minutes === 1
+            ? t("session.toast_minute")
+            : t("session.toast_minutes", { minutes }),
+          { duration: 10000 },
+        );
+      }
+    } finally {
+      checkInFlightRef.current = false;
     }
   }, [t]);
 
   useEffect(() => {
-    check();
-    intervalRef.current = setInterval(check, CHECK_INTERVAL_MS);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
+    void check();
   }, [check]);
+  useVisibleInterval(() => { void check(); }, CHECK_INTERVAL_MS);
 
   // G5 fix: only redirect on 401 (actual session expiry); transient network
   // errors, 429 rate limits, or 5xx should not kick a valid session.
@@ -79,7 +83,7 @@ export default function SessionTimeoutWarning() {
     try {
       await api.post(paths.auth.extend);
       toastShownRef.current = false;
-      check();
+      void check();
     } catch (err: unknown) {
       const status = (err as { status?: number })?.status;
       if (status === 401) {

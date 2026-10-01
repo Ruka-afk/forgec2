@@ -49,6 +49,7 @@ export function useAgentData(t: (key: string) => string) {
   const [locksLoaded, setLocksLoaded] = useState(false);
   const [locksError, setLocksError] = useState<string | null>(null);
   const [operatorPresence, setOperatorPresence] = useState<Record<string, string[]>>({});
+  const locksAbortRef = useRef<AbortController | null>(null);
 
   const { data, loading, error, setError, refresh: refreshList, setData } = useApiResource<BeaconPage>({
     fetcher: async (signal) => {
@@ -108,10 +109,14 @@ export function useAgentData(t: (key: string) => string) {
   );
 
   const loadLocks = useCallback(() => {
+    locksAbortRef.current?.abort();
+    const ac = new AbortController();
+    locksAbortRef.current = ac;
     setLocksError(null);
     api
-      .get<{ agents: Record<string, string>[] }>("/collab/agents")
+      .get<{ agents: Record<string, string>[] }>("/collab/agents", { signal: ac.signal })
       .then((data) => {
+        if (ac.signal.aborted) return;
         const agents = data.agents || [];
         const locks: Record<string, string> = {};
         for (const a of agents) {
@@ -121,11 +126,14 @@ export function useAgentData(t: (key: string) => string) {
         setLocksLoaded(true);
       })
       .catch((err: unknown) => {
+        if (ac.signal.aborted) return;
         // Keep the last good map so a transient failure does not clear known
         // lock holders; locksLoaded stays as-is to distinguish never-read.
         setLocksError(err instanceof Error ? err.message : String(err));
       });
   }, []);
+
+  useEffect(() => () => locksAbortRef.current?.abort(), []);
 
   const { data: cachedAllTags, error: tagsListError, refresh: refreshTagsList } = useCachedData<AgentTag[]>("tags:list", {
     fetcher: async () => {

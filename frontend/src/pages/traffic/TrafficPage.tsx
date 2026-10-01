@@ -63,7 +63,7 @@ function normalizeTrafficEntry(raw: TrafficEntry): TrafficEntry {
   };
 }
 
-export default function TrafficPage() {
+export default function TrafficPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [autoScroll, setAutoScroll] = useState(false);
   const [sourceIpFilter, setSourceIpFilter] = useState("");
@@ -124,7 +124,7 @@ export default function TrafficPage() {
   };
 
   return (
-    <PageContainer title={t("traffic.title")} subtitle={`${t("traffic.request_log")} · C2 Beacon ${t("traffic.comm_record")}`} actions={<>
+    <PageContainer embedded={embedded} title={!embedded ? t("traffic.title") : undefined} subtitle={!embedded ? `${t("traffic.request_log")} · C2 Beacon ${t("traffic.comm_record")}` : undefined} actions={<>
         <div className="flex items-center gap-2 flex-wrap">
           <Label className="flex items-center gap-x-2 text-sm text-muted-foreground cursor-pointer">
             <Checkbox checked={autoRefresh} onCheckedChange={setAutoRefresh} />

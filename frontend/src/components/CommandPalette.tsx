@@ -5,7 +5,7 @@ import { NAV_SECTIONS, filterNavByPermissions } from "@/lib/navigation";
 import { useI18n } from "@/lib/i18n";
 import { useAppStore } from "@/lib/store";
 import { useAgentList } from "@/lib/hooks/useAgentList";
-import { isEditableTarget } from "@/pages/agents/components/interact-workspace";
+import { isEditableTarget } from "@/lib/interact-workspace";
 import { Search, Server, Terminal } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -39,7 +39,10 @@ export default function CommandPalette() {
   const open = useAppStore((s) => s.commandPaletteOpen);
   const setOpen = useAppStore((s) => s.setCommandPaletteOpen);
   const permissions = useAppStore((s) => s.currentPermissions);
-  const { agents, error: agentListError } = useAgentList();
+  // The palette is mounted globally, but most sessions never open it. Avoid
+  // fetching the full fleet until it is actually used; the shared cache still
+  // makes subsequent opens instant and lets other pages reuse the snapshot.
+  const { agents, error: agentListError } = useAgentList({ enabled: open });
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -49,6 +52,7 @@ export default function CommandPalette() {
     const out: PaletteItem[] = [];
     for (const section of NAV_SECTIONS) {
       for (const item of filterNavByPermissions(section.items, permissions)) {
+        if (item.discoverable === false) continue;
         out.push({
           href: item.href,
           label: t(item.labelKey),

@@ -47,7 +47,7 @@ export default function AgentsPageContent() {
   const { t } = useI18n();
   const isMobile = useAppStore((state) => state.isMobile);
   const navigate = useNavigate();
-  const { subscribe } = useWS();
+  const { subscribe, connected } = useWS();
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
@@ -169,7 +169,9 @@ export default function AgentsPageContent() {
   useEffect(() => { loadBeacons(); }, [loadBeacons]);
   useEffect(() => { loadLocks(); }, [loadLocks]);
 
-  useVisibleInterval(() => loadBeacons(), autoRefresh ? POLL.agents : 0);
+  // WS events already reload/merge this list (agent_online/offline/data_update);
+  // the 30s poll is a fallback for when the socket is down.
+  useVisibleInterval(() => loadBeacons(), autoRefresh ? (connected ? POLL.wsDrift : POLL.agents) : 0);
 
   useEffect(() => {
     if (!actionMsg) return;

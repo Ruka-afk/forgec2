@@ -41,8 +41,23 @@ interface TaskStatusResponse { status?: string; error?: string; result?: string 
 const GALLERY_CAP = 48;
 const TASK_TIMEOUT_MS = 90_000;
 
-function delay(ms: number) {
-  return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+function delay(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("The operation was aborted", "AbortError"));
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      window.clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      reject(new DOMException("The operation was aborted", "AbortError"));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 function frameDataUrl(value: string, mime = "image/png") {
@@ -108,6 +123,7 @@ export function useScreenMonitor(agentId: string, opts: ScreenMonitorOpts) {
   const lastCaptureIdRef = useRef<string | null>(null);
   const lastWsFrameAtRef = useRef(0);
   const captureBusyRef = useRef(false);
+  const actionAbortRef = useRef<AbortController | null>(null);
   const frameRafRef = useRef<number | null>(null);
   const pendingFrameRef = useRef<{ data: string; width?: number; height?: number; windowName: string } | null>(null);
 
@@ -164,9 +180,9 @@ export function useScreenMonitor(agentId: string, opts: ScreenMonitorOpts) {
     commitFrame(fullData, extras);
   }, [commitFrame]);
 
-  const captureScreenshot = useCallback(async (showStatus = true): Promise<boolean> => {
+  const captureScreenshot = useCallback(async (showStatus = true, signal?: AbortSignal): Promise<boolean> => {
     const id = agentId;
-    if (!id || captureBusyRef.current) return false;
+    if (!id || captureBusyRef.current || signal?.aborted) return false;
     // WS main link: skip HTTP when WS is live and recent (staleAfter = max(5s, interval*2.5))
     const staleAfter = Math.max(5000, optsRef.current.interval * 2500);
     if (monitoringRef.current && Date.now() - lastWsFrameAtRef.current < staleAfter) {
@@ -179,7 +195,7 @@ export function useScreenMonitor(agentId: string, opts: ScreenMonitorOpts) {
       setMonitoringStatus("capturing");
     }
     try {
-      const data = await api.get<ScreenshotResponse>(paths.agents.screenshot(id, ""));
+      const data = await api.get<ScreenshotResponse>(paths.agents.screenshot(id, ""), { signal });
       const image = data.image || data.data || data.screenshot || "";
       if (!image) {
         if (showStatus) setStatus("error");
@@ -205,6 +221,7 @@ export function useScreenMonitor(agentId: string, opts: ScreenMonitorOpts) {
       }, false);
       return true;
     } catch {
+      if (signal?.aborted) return false;
       if (showStatus) {
         setStatus("error");
         if (monitoringRef.current) setMonitoringStatus("offline");
@@ -215,44 +232,50 @@ export function useScreenMonitor(agentId: string, opts: ScreenMonitorOpts) {
     }
   }, [agentId, recordFrame]);
 
-  const waitForTask = useCallback(async (taskId: number | string) => {
+  const waitForTask = useCallback(async (taskId: number | string, signal?: AbortSignal) => {
     const deadline = Date.now() + TASK_TIMEOUT_MS;
-    while (mountedRef.current && Date.now() < deadline) {
-      const task = await api.get<TaskStatusResponse>(paths.agents.task(agentId, taskId));
+    while (mountedRef.current && !signal?.aborted && Date.now() < deadline) {
+      const task = await api.get<TaskStatusResponse>(paths.agents.task(agentId, taskId), { signal });
       const taskStatus = String(task.status || "").toLowerCase();
       if (["completed", "success", "done"].includes(taskStatus)) return;
       if (["failed", "error", "cancelled"].includes(taskStatus)) {
         throw new Error(task.error || task.result || t("common.task_failed"));
       }
-      await delay(1_000);
+      await delay(1_000, signal);
     }
+    if (signal?.aborted) return;
     throw new Error(t("screen.capture_timeout"));
   }, [agentId, t]);
 
   const requestFreshCapture = useCallback(async (kind: "capture" | "window") => {
     if (!tryClaimBusy(kind)) return;
+    const actionAbort = new AbortController();
+    actionAbortRef.current = actionAbort;
     const previousSequence = frameSequenceRef.current;
     setStatus("capturing");
     setMonitoringStatus("capturing");
     try {
       const endpoint = kind === "window" ? paths.agents.screenshotWindow(agentId) : paths.agents.screenshotTask(agentId);
-      const queued = await api.post<TaskResponse>(endpoint, {});
-      if (queued.task_id != null) await waitForTask(queued.task_id);
+      const queued = await api.post<TaskResponse>(endpoint, {}, { signal: actionAbort.signal });
+      if (queued.task_id != null) await waitForTask(queued.task_id, actionAbort.signal);
 
-      for (let attempt = 0; mountedRef.current && attempt < 12; attempt += 1) {
+      for (let attempt = 0; mountedRef.current && !actionAbort.signal.aborted && attempt < 12; attempt += 1) {
         if (frameSequenceRef.current > previousSequence) break;
-        await captureScreenshot(false);
+        await captureScreenshot(false, actionAbort.signal);
         if (frameSequenceRef.current > previousSequence) break;
-        await delay(500);
+        await delay(500, actionAbort.signal);
       }
+      if (actionAbort.signal.aborted) return;
       if (frameSequenceRef.current <= previousSequence) throw new Error(t("screen.capture_timeout"));
       setMonitoringStatus(monitoringRef.current ? "connected" : "waiting");
       toast.success(kind === "window" ? t("screen.window_capture_complete") : t("screen.capture_complete"));
     } catch (error) {
+      if (actionAbort.signal.aborted) return;
       setStatus("error");
       setMonitoringStatus(monitoringRef.current ? "connected" : "waiting");
       toast.error(formatThrownError(error));
     } finally {
+      if (actionAbortRef.current === actionAbort) actionAbortRef.current = null;
       releaseBusy();
     }
   }, [captureScreenshot, agentId, t, waitForTask, releaseBusy, tryClaimBusy]);
@@ -260,30 +283,36 @@ export function useScreenMonitor(agentId: string, opts: ScreenMonitorOpts) {
   const startMonitoring = useCallback(async () => {
     const { interval, quality } = optsRef.current;
     if (!tryClaimBusy("start")) return;
+    const actionAbort = new AbortController();
+    actionAbortRef.current = actionAbort;
     setMonitoringStatus("capturing");
     setStatus("waiting");
     try {
-      await api.post(paths.agents.screenStart(agentId), { interval: String(interval), quality });
+      await api.post(paths.agents.screenStart(agentId), { interval: String(interval), quality }, { signal: actionAbort.signal });
       monitoringRef.current = true;
       setMonitoring(true);
       setMonitoringStatus("waiting");
       toast.success(t("agents.screen_started"));
-      void captureScreenshot(false);
+      void captureScreenshot(false, actionAbort.signal);
     } catch (error) {
+      if (actionAbort.signal.aborted) return;
       monitoringRef.current = false;
       setMonitoring(false);
       setStatus("error");
       setMonitoringStatus("offline");
       toast.error(`${t("agents.screen_start_failed")}: ${formatThrownError(error)}`);
     } finally {
+      if (actionAbortRef.current === actionAbort) actionAbortRef.current = null;
       releaseBusy();
     }
   }, [agentId, captureScreenshot, t, releaseBusy, tryClaimBusy]);
 
   const stopMonitoring = useCallback(async () => {
     if (!tryClaimBusy("stop")) return;
+    const actionAbort = new AbortController();
+    actionAbortRef.current = actionAbort;
     try {
-      await api.post(paths.agents.screenStop(agentId), {});
+      await api.post(paths.agents.screenStop(agentId), {}, { signal: actionAbort.signal });
       monitoringRef.current = false;
       setMonitoring(false);
       setWsLive(false);
@@ -291,8 +320,10 @@ export function useScreenMonitor(agentId: string, opts: ScreenMonitorOpts) {
       setStatus("waiting");
       toast.success(t("agents.screen_stopped"));
     } catch (error) {
+      if (actionAbort.signal.aborted) return;
       toast.error(`${t("agents.screen_stop_failed")}: ${formatThrownError(error)}`);
     } finally {
+      if (actionAbortRef.current === actionAbort) actionAbortRef.current = null;
       releaseBusy();
     }
   }, [agentId, t, releaseBusy, tryClaimBusy]);
@@ -395,6 +426,7 @@ export function useScreenMonitor(agentId: string, opts: ScreenMonitorOpts) {
 
   useEffect(() => {
     if (prevIdRef.current === agentId) return;
+    actionAbortRef.current?.abort();
     const previousId = prevIdRef.current;
     if (monitoringRef.current && previousId) {
       monitoringRef.current = false;
@@ -436,6 +468,7 @@ export function useScreenMonitor(agentId: string, opts: ScreenMonitorOpts) {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      actionAbortRef.current?.abort();
       if (frameRafRef.current !== null) cancelAnimationFrame(frameRafRef.current);
       if (monitoringRef.current && prevIdRef.current) {
         monitoringRef.current = false;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BookOpen, ClipboardList, LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -40,40 +40,55 @@ export function AIAssistBar({ sessionId, disabled, onInsertPrompt }: AIAssistBar
   const [review, setReview] = useState<RunReview | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewing, setReviewing] = useState(false);
+  const reviewAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
     (async () => {
       try {
-        const payload = await api.get<unknown>(paths.macros.list);
+        const payload = await api.get<unknown>(paths.macros.list, { signal: controller.signal });
         const list = normalizeListEnvelope(payload, ["macros", "data"]) as PlaybookMacro[];
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setMacros(Array.isArray(list) ? list : []);
           setMacrosError(null);
         }
       } catch (err) {
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         setMacros([]);
         setMacrosError(err instanceof Error ? err.message : t("ai.playbook_empty"));
       } finally {
-        if (!cancelled) setMacrosLoading(false);
+        if (!controller.signal.aborted) setMacrosLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => controller.abort();
   }, [t]);
+
+  useEffect(() => {
+    reviewAbortRef.current?.abort();
+    setReviewOpen(false);
+    return () => reviewAbortRef.current?.abort();
+  }, [sessionId]);
 
   const handleReview = async () => {
     if (sessionId == null) return;
+    reviewAbortRef.current?.abort();
+    const controller = new AbortController();
+    reviewAbortRef.current = controller;
     setReviewing(true);
     try {
-      const data = await api.postJson<{ review?: RunReview }>(paths.ai.runReview, { session_id: sessionId });
+      const data = await api.postJson<{ review?: RunReview }>(paths.ai.runReview, { session_id: sessionId }, { signal: controller.signal });
+      if (controller.signal.aborted) return;
       if (!data.review) throw new Error("empty review");
       setReview(data.review);
       setReviewOpen(true);
     } catch (error) {
+      if (controller.signal.aborted) return;
       toast.error(error instanceof Error ? error.message : t("ai.review_failed"));
     } finally {
-      setReviewing(false);
+      if (reviewAbortRef.current === controller) {
+        reviewAbortRef.current = null;
+        setReviewing(false);
+      }
     }
   };
 

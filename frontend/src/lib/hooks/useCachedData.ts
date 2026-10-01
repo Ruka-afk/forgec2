@@ -51,6 +51,11 @@ export async function fetchCached<T>(key: string, fetcher: () => Promise<T>, ttl
 
 interface UseCachedDataOptions<T> {
   fetcher: () => Promise<T>;
+  /**
+   * Delay the initial request until the consumer is actually visible/needed.
+   * Cached data is still returned immediately when available.
+   */
+  enabled?: boolean;
   /** Freshness window in ms. Default 60_000 (1 min). */
   ttlMs?: number;
   /**
@@ -72,7 +77,7 @@ interface UseCachedDataResult<T> {
 
 export function useCachedData<T>(
   key: string,
-  { fetcher, ttlMs = 60_000, keepStaleWhileRevalidate = true, onError }: UseCachedDataOptions<T>,
+  { fetcher, enabled = true, ttlMs = 60_000, keepStaleWhileRevalidate = true, onError }: UseCachedDataOptions<T>,
 ): UseCachedDataResult<T> {
   const [data, setData] = useState<T | null>(() => {
     const entry = cache.get(key);
@@ -93,6 +98,8 @@ export function useCachedData<T>(
   ttlRef.current = ttlMs;
   const keepRef = useRef(keepStaleWhileRevalidate);
   keepRef.current = keepStaleWhileRevalidate;
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
   const requestSeqRef = useRef(0);
   const mountedRef = useRef(true);
 
@@ -105,6 +112,14 @@ export function useCachedData<T>(
   }, []);
 
   useEffect(() => {
+    if (!enabled) {
+      // Keep any cached snapshot visible, but do not issue a request while the
+      // consumer is hidden (for example, the global command palette).
+      requestSeqRef.current += 1;
+      setLoading(false);
+      setError(false);
+      return;
+    }
     const entry = cache.get(key);
     const fresh = !!entry && entry.expiresAt >= Date.now();
     if (fresh) {
@@ -135,9 +150,13 @@ export function useCachedData<T>(
     return () => {
       cancelled = true;
     };
-  }, [key]);
+  }, [key, enabled]);
 
   const refresh = useCallback((): Promise<T> => {
+    if (!enabledRef.current) {
+      const entry = cache.get(key);
+      return Promise.resolve(entry?.value as T);
+    }
     const seq = ++requestSeqRef.current;
     setLoading(true);
     setError(false);

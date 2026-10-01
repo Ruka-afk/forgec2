@@ -77,7 +77,7 @@ export default function DashboardPage() {
       }
     >
 
-      {statsError && (
+      {statsError !== undefined && (
         <DataError
           message={statsError || t("dashboard.load_failed")}
           onRetry={() => { fetchStats(); }}

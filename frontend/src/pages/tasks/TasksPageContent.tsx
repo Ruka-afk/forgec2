@@ -176,13 +176,18 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
       });
   }, [page, statusFilter, agentFilter, typeFilter, searchQuery, claimedFilter, t]);
 
-  useEffect(() => { loadTasks(); }, [loadTasks]);
+  useEffect(() => {
+    loadTasks();
+    // Cancel the active request when filters change or the page unmounts so
+    // a late response cannot update a stale task list.
+    return () => loadTasksAbortRef.current?.abort();
+  }, [loadTasks]);
 
   const loadTasksRef = useRef(loadTasks);
   loadTasksRef.current = loadTasks;
   const pollTasks = useCallback(() => { loadTasksRef.current(true); }, []);
 
-  const { subscribe } = useWS();
+  const { subscribe, connected } = useWS();
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const unsub = subscribe((msg) => {
@@ -197,7 +202,10 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
     };
   }, [subscribe]);
 
-  useVisibleInterval(pollTasks, POLL.tasks);
+  // The task_update / task_created / task_deleted WS events above already
+  // refresh the grid live; the tight poll only earns its keep while the
+  // socket is down, so connected sessions fall back to the drift cadence.
+  useVisibleInterval(pollTasks, connected ? POLL.wsDrift : POLL.tasks);
 
   const { confirm, modal: confirmModal } = useConfirm();
   // In-flight mutation guard: without it a double-click fires cancel/rerun
@@ -213,7 +221,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
   }, []);
   // Prefer the server's message so the operator can diagnose (409 locked by
   // whom, 404, validation) instead of a bare "failed" toast. The fallback is
-  // translated at the call site so check:i18n still sees the t("鈥?) key.
+  // translated at the call site so check:i18n still sees the t("…") key.
   const mutationError = useCallback((e: unknown, fallback: string) => {
     toast.error(e instanceof Error && e.message ? e.message : fallback);
   }, []);
