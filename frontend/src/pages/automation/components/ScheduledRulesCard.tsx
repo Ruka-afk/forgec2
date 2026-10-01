@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { fetchAgentListCached } from "@/lib/agents";
 import { EmptyState } from "@/components/ui/empty-state";
+import { DataError } from "@/components/ui/data-state";
 import { FieldError } from "@/components/ui/field-error";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { useMutation } from "@/lib/hooks/useMutation";
@@ -86,7 +87,7 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
     onError: () => toast.error(t("scheduler.save_failed")),
   });
 
-  const { data, loading, refresh: fetchData } = useApiResource<{ tasks: ScheduledRule[]; agents: Agent[] }>({
+  const { data, loading, error, refresh: fetchData } = useApiResource<{ tasks: ScheduledRule[]; agents: Agent[] }>({
     fetcher: async () => {
       const [rules, agentList] = await Promise.all([
         api.get<ScheduledRule[]>(paths.automation.rules),
@@ -97,7 +98,6 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
         agents: agentList,
       };
     },
-    toastThrottleMs: 0,
     errorMessage: t("scheduler.load_failed"),
   });
   const tasks = data?.tasks ?? [];
@@ -246,7 +246,11 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
             ))}
           </div>
         ) : tasks.length === 0 ? (
+          error ? (
+            <DataError message={t("scheduler.rules_unreadable", { message: error })} onRetry={() => void fetchData()} />
+          ) : (
             <EmptyState icon={Clock} title={t("scheduler.empty_title")} />
+          )
         ) : (
           <div className="space-y-2">
             {tasks.map(task => (

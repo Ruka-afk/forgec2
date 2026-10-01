@@ -13,8 +13,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
+import { DataError } from "@/components/ui/data-state";
 import { useConfirm } from "@/lib/hooks/useConfirm";
-import { CalendarClock, Plus, Trash2, Zap } from "lucide-react";
+import { AlertTriangle, CalendarClock, Plus, Trash2, Zap } from "lucide-react";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 
 interface OneShotTask {
@@ -51,12 +52,16 @@ export function OneShotTasksCard() {
   const [command, setCommand] = useState("");
   const [runAtLocal, setRunAtLocal] = useState("");
   const [agents, setAgents] = useState<Array<{ id: string; hostname?: string; status?: string }>>([]);
+  const [agentsError, setAgentsError] = useState<string | null>(null);
   const loadAgents = useCallback(async () => {
+    setAgentsError(null);
     try {
       const list = await fetchAgentListCached();
       setAgents(list.map((a) => ({ id: String(a.id || ""), hostname: a.hostname, status: a.status })));
-    } catch {
-      setAgents([]);
+    } catch (e) {
+      // Retain the last known agent list on failure so the empty dropdown
+      // is never mistaken for "no agents exist".
+      setAgentsError(e instanceof Error ? e.message : String(e));
     }
   }, []);
   useEffect(() => { void loadAgents(); }, [loadAgents]);
@@ -66,7 +71,7 @@ export function OneShotTasksCard() {
     const data = await api.get<{ tasks?: OneShotTask[] }>(paths.scheduler.oneshotList, { signal });
     return data.tasks || [];
   }, []);
-  const { data, loading, refresh } = useApiResource<OneShotTask[]>({
+  const { data, loading, error, refresh } = useApiResource<OneShotTask[]>({
     fetcher: fetchTasks,
     pollMs: POLL.tasks,
   });
@@ -136,6 +141,15 @@ export function OneShotTasksCard() {
                   </option>
                 ))}
               </select>
+              {agentsError && agents.length === 0 && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-2 py-1.5 text-xs text-warning-foreground" role="alert">
+                  <AlertTriangle className="size-3.5 shrink-0" />
+                  <span className="flex-1 min-w-[140px]">{t("oneshot.agents_unreadable", { message: agentsError })}</span>
+                  <button type="button" className="shrink-0 underline" onClick={() => void loadAgents()}>
+                    {t("common.try_again")}
+                  </button>
+                </div>
+              )}
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">{t("oneshot.run_at")}</Label>
@@ -166,7 +180,11 @@ export function OneShotTasksCard() {
       {loading ? (
         <div className="py-6 text-center"><Spinner /></div>
       ) : tasks.length === 0 ? (
-        <EmptyState icon={CalendarClock} title={t("oneshot.empty_title")} message={t("oneshot.empty_desc")} />
+        error ? (
+          <DataError message={t("oneshot.tasks_unreadable", { message: error })} onRetry={() => void refresh()} />
+        ) : (
+          <EmptyState icon={CalendarClock} title={t("oneshot.empty_title")} message={t("oneshot.empty_desc")} />
+        )
       ) : (
         <div className="divide-y divide-border max-h-80 overflow-y-auto">
           {tasks.map((st) => (
