@@ -71,7 +71,10 @@ func (s *Server) collectSituation(reqCtx *aiReqCtx) aiSituation {
 	out.AgentsOffline = out.AgentsTotal - out.AgentsOnline
 	agents().Where("status = ? AND elevated = ?", "online", true).Count(&out.ElevatedOnline)
 	var onlineHosts []db.Implant
-	agents().Where("status = ?", "online").Find(&onlineHosts)
+	// The snapshot only counts stale online agents: project the three columns
+	// implantIsStale reads instead of the full row, since this runs on every
+	// AI chat request and the online set can be large.
+	agents().Where("status = ?", "online").Select("status, last_seen, current_interval").Find(&onlineHosts)
 	for _, a := range onlineHosts {
 		if implantIsStale(a) {
 			out.StaleOnline++
