@@ -517,6 +517,10 @@ func (s *Server) apiHealth(c *gin.Context) {
 		health["backup"] = gin.H{"enabled": false}
 	}
 
+	// Audit backlog: the async queue is bounded and non-blocking; operators can
+	// alert on depth before entries start being dropped.
+	health["audit_queue_depth"] = s.auditQueueDepth()
+
 	c.JSON(http.StatusOK, health)
 }
 

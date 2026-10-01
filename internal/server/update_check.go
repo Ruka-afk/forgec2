@@ -717,15 +717,6 @@ func (s *Server) handleUpdateCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// verifyChecksum downloads a checksum file and verifies the SHA-256 of the binary.
-func verifyChecksum(binaryPath, checksumURL string) error {
-	data, binName, err := fetchChecksumFile(checksumURL, binaryPath)
-	if err != nil {
-		return err
-	}
-	return verifyChecksumBytes(binaryPath, data, binName)
-}
-
 // fetchChecksumFile downloads the checksum file (capped) and derives the
 // expected asset filename from the downloaded binary path.
 func fetchChecksumFile(checksumURL, binaryPath string) ([]byte, string, error) {

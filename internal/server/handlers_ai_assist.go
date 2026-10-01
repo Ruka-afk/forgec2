@@ -743,12 +743,12 @@ func (s *Server) handleAIRunReview(c *gin.Context) {
 		return
 	}
 	var sb strings.Builder
-	sb.WriteString("Run status: " + run.Status + "\n")
+	fmt.Fprintf(&sb, "Run status: %s\n", run.Status)
 	for _, ev := range events {
 		payload := truncateStr(ev.Payload, 1500)
 		switch ev.Type {
 		case "text", "reasoning", "tool_call", "tool_result", "tool_error":
-			sb.WriteString("[" + ev.Type + "] " + payload + "\n")
+			fmt.Fprintf(&sb, "[%s] %s\n", ev.Type, payload)
 		}
 		if sb.Len() > 14000 {
 			break
