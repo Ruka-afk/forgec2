@@ -60,9 +60,13 @@ describe("CommandPalette", () => {
     useAppStore.setState({ commandPaletteOpen: true });
     render(<CommandPalette />);
     const input = screen.getByLabelText(/type to jump/i);
-    fireEvent.change(input, { target: { value: "bloodhound" } });
-    expect(screen.getByText("nav.bloodhound")).toBeTruthy();
+    fireEvent.change(input, { target: { value: "report" } });
+    expect(screen.getByText("nav.report")).toBeTruthy();
     expect(screen.queryByText("nav.dashboard")).toBeNull();
+    // "bloodhound" is deliberately hidden from discovery
+    // (navigation.ts discoverable: false) — the palette must not surface it.
+    fireEvent.change(input, { target: { value: "bloodhound" } });
+    expect(screen.queryByText("nav.bloodhound")).toBeNull();
     fireEvent.change(input, { target: { value: "kerberoast" } });
     expect(screen.getByText(/no results/i)).toBeTruthy();
   });
