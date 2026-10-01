@@ -22,6 +22,11 @@ import (
 const (
 	offlineHookSemSize = 8
 	offlineHookTimeout = 30 * time.Second
+	// statusUpdateChunkSize bounds one IN-list status flip. SQLite rejects a
+	// statement with more parameters than SQLITE_MAX_VARIABLE_NUMBER (32766
+	// by default), and the paged sweep can collect that many IDs in a single
+	// pass on a very large fleet.
+	statusUpdateChunkSize = 1000
 )
 
 type MonitorCollector struct {
@@ -265,14 +270,19 @@ func (m *MonitorCollector) checkAgentAlerts() {
 			break
 		}
 	}
-	if len(staleIDs) > 0 {
-		if err := m.server.db.Model(&db.Implant{}).Where("id IN ?", staleIDs).Update("status", "stale").Error; err != nil {
-			slog.Error("Monitor: failed to flip agents to stale", "count", len(staleIDs), "err", err)
-		}
-	}
-	if len(offlineIDs) > 0 {
-		if err := m.server.db.Model(&db.Implant{}).Where("id IN ?", offlineIDs).Update("status", "offline").Error; err != nil {
-			slog.Error("Monitor: failed to flip agents to offline", "count", len(offlineIDs), "err", err)
+	m.flipAgentStatus(staleIDs, "stale")
+	m.flipAgentStatus(offlineIDs, "offline")
+}
+
+// flipAgentStatus applies a bulk status flip in bounded IN-list chunks. A
+// chunk that fails is logged and retried on the next tick: the agents stay in
+// the sweep filter (status IN online/stale) until their row actually flips, so
+// a transient error cannot permanently strand them.
+func (m *MonitorCollector) flipAgentStatus(ids []string, status string) {
+	for start := 0; start < len(ids); start += statusUpdateChunkSize {
+		end := min(start+statusUpdateChunkSize, len(ids))
+		if err := m.server.db.Model(&db.Implant{}).Where("id IN ?", ids[start:end]).Update("status", status).Error; err != nil {
+			slog.Error("Monitor: failed to flip agents", "status", status, "chunk", start, "count", end-start, "err", err)
 		}
 	}
 }
