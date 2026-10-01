@@ -17,6 +17,7 @@ import { cn, timeAgo } from "@/lib/utils";
 import { POLL } from "@/lib/polling";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { agentIdentityTitle, pickAgentField } from "@/lib/shell-ui";
+import { useWS } from "@/lib/wsContext";
 import { agentDetailHref } from "../components/agent-detail-utils";
 import type { AgentStatus } from "@/types/agent";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -70,6 +71,7 @@ export default function AgentShellPage() {
   const [listError, setListError] = useState<string | null>(null);
   const loadedRef = useRef<Set<string>>(new Set());
   const selectTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const { subscribe, connected } = useWS();
 
   // Keep route ↔ active tab in sync (deep link or browser back).
   useEffect(() => {
@@ -132,15 +134,34 @@ export default function AgentShellPage() {
     return () => controller.abort();
   }, [tabs, loadMeta]);
 
+  // agent_online / agent_offline arrive over the WS: merge the status into
+  // the open tabs' meta immediately instead of waiting for the next poll.
+  useEffect(() => {
+    return subscribe((msg) => {
+      if (msg.type !== "agent_online" && msg.type !== "agent_offline") return;
+      const aid = String(msg.agent_id ?? "");
+      if (!aid) return;
+      const status = msg.type === "agent_online" ? "online" : "offline";
+      setMetaByAgent((prev) => {
+        const cur = prev[aid];
+        if (!cur) return prev;
+        return { ...prev, [aid]: { ...cur, status } };
+      });
+    });
+  }, [subscribe]);
+
   const activeMeta = metaByAgent[activeAgentId];
   const offline = Boolean(activeMeta?.status && activeMeta.status !== "online");
-  // Offline agents won't come back in 5s; back off to 15s to cut idle load.
+  // With the WS connected, status changes are live-merged above, so the
+  // interval only needs the slow drift safety net; the tight cadence only
+  // earns its keep while the socket is down (same pattern as the task page).
+  // Offline agents additionally back off to 15s to cut idle load.
   useVisibleInterval(() => {
     if (activeAgentId) {
       loadedRef.current.delete(activeAgentId);
       void loadMeta(activeAgentId, undefined, true);
     }
-  }, offline ? 15_000 : POLL.shellStatus);
+  }, connected ? POLL.wsDrift : offline ? 15_000 : POLL.shellStatus);
 
   const openAgentTab = useCallback((nextId: string) => {
     if (!nextId) return;
