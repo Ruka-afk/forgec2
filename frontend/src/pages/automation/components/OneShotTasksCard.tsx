@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { fetchAgentListCached } from "@/lib/agents";
+import { POLL } from "@/lib/polling";
 import { useI18n } from "@/lib/i18n";
 import { formatTime } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
@@ -67,7 +68,7 @@ export function OneShotTasksCard() {
   }, []);
   const { data, loading, refresh } = useApiResource<OneShotTask[]>({
     fetcher: fetchTasks,
-    pollMs: 30000,
+    pollMs: POLL.tasks,
   });
   const tasks = data || [];
 

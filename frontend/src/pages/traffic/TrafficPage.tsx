@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { POLL } from "@/lib/polling";
 import { formatTime, formatBytes } from "@/lib/utils";
 import { PageContainer } from "@/components/ui/page-container";
 import { CardHeaderRow } from "@/components/ui/card-header-row";
@@ -77,7 +78,7 @@ export default function TrafficPage({ embedded = false }: { embedded?: boolean }
       const list = Array.isArray(arr) ? (arr as TrafficEntry[]) : [];
       return list.map(normalizeTrafficEntry);
     },
-    pollMs: autoRefresh ? 15000 : 0,
+    pollMs: autoRefresh ? POLL.traffic : 0,
     toastThrottleMs: 10000,
     errorMessage: t("traffic.toast.load_failed"),
   });

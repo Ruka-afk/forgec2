@@ -3,6 +3,7 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { normalizeListEnvelope } from "@/lib/envelope";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { POLL } from "@/lib/polling";
 
 export type AIRunStatus = "queued" | "running" | "waiting_approval" | "completed" | "failed" | "cancelled" | string;
 
@@ -27,7 +28,7 @@ export function useAIRunStatuses() {
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
-  useVisibleInterval(() => { void refresh(); }, 5000);
+  useVisibleInterval(() => { void refresh(); }, POLL.aiRuns);
 
   return { runStatuses: statuses, setRunStatuses: setStatuses, refreshRunStatuses: refresh };
 }

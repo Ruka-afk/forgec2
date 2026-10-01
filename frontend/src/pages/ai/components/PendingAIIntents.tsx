@@ -6,6 +6,7 @@ import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { normalizeListEnvelope } from "@/lib/envelope";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { POLL } from "@/lib/polling";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -31,7 +32,7 @@ export function PendingAIIntents({ activeSessionId }: { activeSessionId: number 
     const payload = await api.get<unknown>(`${paths.ai.intents}?status=pending`, { signal });
     return normalizeListEnvelope(payload, ["intents", "data"]) as AIExecutionIntent[];
   }, []);
-	const { data, refresh, error } = useApiResource({ fetcher: fetchIntents, pollMs: 5000, errorMessage: t("ai.approvals_load_failed") });
+	const { data, refresh, error } = useApiResource({ fetcher: fetchIntents, pollMs: POLL.aiRuns, errorMessage: t("ai.approvals_load_failed") });
 	const allIntents = data ?? [];
 	const intents = activeSessionId == null ? allIntents : allIntents.filter((intent) => intent.session_id === activeSessionId);
 

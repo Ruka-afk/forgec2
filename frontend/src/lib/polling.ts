@@ -40,8 +40,9 @@ export const POLL = {
   report: 30_000,
   /** Pivoting relay/forward status page (nearly static; refresh on action). */
   pivoting: 30_000,
-  /** Traffic page auto-refresh toggle. */
-  traffic: 5_000,
+  /** Traffic page auto-refresh. No WS stream carries traffic entries, so this
+   * poll *is* the page's live update (on by default). */
+  traffic: 15_000,
   /** Dashboard active-missions board. */
   missions: 30_000,
   /** Timeline events stream while the WS is connected. */
@@ -58,4 +59,7 @@ export const POLL = {
   toastThrottleAlerts: 15_000,
   /** Cloud credential-steal progress poll while an operation is in flight. */
   stealPoll: 3_000,
+  /** AI-page cadence: active run statuses and the pending-intent/approval
+   * queue (server-side `status=active` keeps responses small). */
+  aiRuns: 5_000,
 } as const;
