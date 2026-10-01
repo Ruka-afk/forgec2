@@ -137,6 +137,9 @@ const (
 	RemoteDesktopReadDeadline  = 5 * time.Minute
 	MonitorMetricsInterval     = 30 * time.Second
 	MonitorAlertInterval       = 1 * time.Minute
+	// agentReapPageSize bounds one page of the offline-sweep query so the
+	// reaper stays complete past a single page on large fleets.
+	agentReapPageSize = 5000
 
 	AIAPITimeout              = 120 * time.Second
 	AITaskWaitMax             = 60 * time.Second

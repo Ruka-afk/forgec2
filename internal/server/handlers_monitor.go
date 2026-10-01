@@ -184,68 +184,85 @@ func (m *MonitorCollector) checkAgentAlerts() {
 		slog.Error("Monitor: failed to query agent offline rules", "err", err)
 	}
 
-	var agents []db.Implant
-	if err := m.server.db.Where("status IN ?", []string{"online", "stale"}).Limit(5000).Find(&agents).Error; err != nil {
-		slog.Error("Monitor: failed to query agents for alert check", "err", err)
-	}
-
 	now := time.Now()
 	var staleIDs []string
 	var offlineIDs []string
-	for _, agent := range agents {
-		offlineFor := now.Sub(agent.LastSeen)
-		// Per-agent thresholds: long-sleep agents must not flap between
-		// check-ins (see offlineThresholdFor).
-		offlineThreshold := m.server.offlineThresholdFor(agent)
-		staleThreshold := m.server.staleThresholdFor(agent)
-		switch {
-		case offlineFor > staleThreshold:
-			offlineIDs = append(offlineIDs, agent.ID)
-			m.server.broadcastAgentOffline(agent, "offline")
-			m.server.recordAgentStatusEvent(agent.ID, "offline")
-			if m.server.pluginManager != nil {
-				select {
-				case m.hookSem <- struct{}{}:
-					go func(a db.Implant) {
-						defer func() {
-							<-m.hookSem
-							if r := recover(); r != nil {
-								slog.Error("Plugin hook panicked (agent offline)", "agent", a.ID, "recover", r)
+	// Page through the online/stale agents so the sweep stays complete past
+	// one page: a single capped query would silently skip the tail of a large
+	// fleet, leaving those agents unmarked (and unbroadcast) until they
+	// re-check in. Oldest last_seen first so a partial pass still reaps the
+	// worst offenders; the set is stable within a tick — statuses only flip
+	// after the loop — so offset pages do not shift under us.
+	for offset := 0; ; offset += agentReapPageSize {
+		var agents []db.Implant
+		if err := m.server.db.Where("status IN ?", []string{"online", "stale"}).
+			Order("last_seen ASC, id ASC").
+			Limit(agentReapPageSize).Offset(offset).
+			Find(&agents).Error; err != nil {
+			slog.Error("Monitor: failed to query agents for alert check", "err", err)
+			return
+		}
+		if len(agents) == 0 {
+			break
+		}
+		for _, agent := range agents {
+			offlineFor := now.Sub(agent.LastSeen)
+			// Per-agent thresholds: long-sleep agents must not flap between
+			// check-ins (see offlineThresholdFor).
+			offlineThreshold := m.server.offlineThresholdFor(agent)
+			staleThreshold := m.server.staleThresholdFor(agent)
+			switch {
+			case offlineFor > staleThreshold:
+				offlineIDs = append(offlineIDs, agent.ID)
+				m.server.broadcastAgentOffline(agent, "offline")
+				m.server.recordAgentStatusEvent(agent.ID, "offline")
+				if m.server.pluginManager != nil {
+					select {
+					case m.hookSem <- struct{}{}:
+						go func(a db.Implant) {
+							defer func() {
+								<-m.hookSem
+								if r := recover(); r != nil {
+									slog.Error("Plugin hook panicked (agent offline)", "agent", a.ID, "recover", r)
+								}
+							}()
+							ctx, cancel := context.WithTimeout(context.Background(), offlineHookTimeout)
+							defer cancel()
+							if err := m.server.pluginManager.ExecuteHook(ctx, plugin.Event{
+								Type:      plugin.EventAgentDisconnect,
+								Timestamp: time.Now(),
+								AgentID:   a.ID,
+								Payload: map[string]interface{}{
+									"hostname":            a.Hostname,
+									"ip":                  a.IP,
+									"offline_for_seconds": now.Sub(a.LastSeen).Seconds(),
+								},
+							}); err != nil {
+								slog.Warn("Hook errors on agent_disconnect event", "agent_id", a.ID, "err", err)
 							}
-						}()
-						ctx, cancel := context.WithTimeout(context.Background(), offlineHookTimeout)
-						defer cancel()
-						if err := m.server.pluginManager.ExecuteHook(ctx, plugin.Event{
-							Type:      plugin.EventAgentDisconnect,
-							Timestamp: time.Now(),
-							AgentID:   a.ID,
-							Payload: map[string]interface{}{
-								"hostname":            a.Hostname,
-								"ip":                  a.IP,
-								"offline_for_seconds": now.Sub(a.LastSeen).Seconds(),
-							},
-						}); err != nil {
-							slog.Warn("Hook errors on agent_disconnect event", "agent_id", a.ID, "err", err)
-						}
-					}(agent)
-				default:
-					slog.Warn("Monitor: offline hook backlog full, skipping agent", "agent", agent.ID)
+						}(agent)
+					default:
+						slog.Warn("Monitor: offline hook backlog full, skipping agent", "agent", agent.ID)
+					}
+				}
+			case offlineFor > offlineThreshold && agent.Status == "online":
+				staleIDs = append(staleIDs, agent.ID)
+				m.server.recordAgentStatusEvent(agent.ID, "stale")
+			}
+			for _, rule := range rules {
+				threshold := time.Duration(rule.Threshold) * time.Second
+				if threshold <= 0 {
+					threshold = m.server.offlineThreshold()
+				}
+				if offlineFor > threshold {
+					m.triggerAlert(&rule, agent.ID, agent.Hostname,
+						offlineFor.String(),
+						map[string]interface{}{"agent_id": agent.ID, "hostname": agent.Hostname})
 				}
 			}
-		case offlineFor > offlineThreshold && agent.Status == "online":
-			staleIDs = append(staleIDs, agent.ID)
-			m.server.recordAgentStatusEvent(agent.ID, "stale")
 		}
-		for _, rule := range rules {
-			threshold := time.Duration(rule.Threshold) * time.Second
-			if threshold <= 0 {
-				threshold = m.server.offlineThreshold()
-			}
-			if offlineFor > threshold {
-				m.triggerAlert(&rule, agent.ID, agent.Hostname,
-					offlineFor.String(),
-					map[string]interface{}{"agent_id": agent.ID, "hostname": agent.Hostname})
-			}
+		if len(agents) < agentReapPageSize {
+			break
 		}
 	}
 	if len(staleIDs) > 0 {
