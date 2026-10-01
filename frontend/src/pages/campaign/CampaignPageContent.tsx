@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 
@@ -221,11 +221,15 @@ function CampaignDetailView({
   const [mitreError, setMitreError] = useState<string | null>(null);
   const [templatesError, setTemplatesError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const abortRef = useRef<AbortController | null>(null);
+
+  const loadSources = useCallback(() => {
+    abortRef.current?.abort();
     const controller = new AbortController();
-    (async () => {
-      setMitreError(null);
-      setTemplatesError(null);
+    abortRef.current = controller;
+    setMitreError(null);
+    setTemplatesError(null);
+    void (async () => {
       // Settle independently: one failed source must not blank the other, and a
       // missing kill-chain template list must not look like "no templates".
       const [mitreRes, tplRes] = await Promise.allSettled([
@@ -254,8 +258,12 @@ function CampaignDetailView({
         toast.error(t("campaign.toast.load_failed"));
       }
     })();
-    return () => controller.abort();
   }, [campaign.id, t]);
+
+  useEffect(() => {
+    loadSources();
+    return () => abortRef.current?.abort();
+  }, [loadSources]);
 
   const loadPhaseTasks = async (phase: string) => {
     try {
@@ -305,12 +313,14 @@ function CampaignDetailView({
       {mitreError && (
         <DataError
           message={t("campaign.mitre_unreadable", { message: mitreError })}
+          onRetry={loadSources}
           className="mb-4"
         />
       )}
       {templatesError && (
         <DataError
           message={t("campaign.templates_unreadable", { message: templatesError })}
+          onRetry={loadSources}
           className="mb-4"
         />
       )}
@@ -357,6 +367,14 @@ function CampaignDetailView({
             </div>
 
             {!showTimeline ? (
+              mitreError && !mitreData ? (
+                // An unreadable MITRE read must not render as the all-pending
+                // phase bar: that looks like a fresh campaign, not a failed
+                // request (the banner above carries the detail + retry).
+                <p className="text-xs text-muted-foreground py-3" role="alert">
+                  {t("campaign.mitre_unreadable", { message: mitreError })}
+                </p>
+              ) : (
               <>
                 {/* Horizontal Phase Progress Bar */}
                 <Collapsible open={expandedPhase !== null} onOpenChange={(open) => { if (!open) setExpandedPhase(null); }}>
@@ -416,6 +434,11 @@ function CampaignDetailView({
                 </CollapsibleContent>
                 </Collapsible>
               </>
+              )
+            ) : mitreError && !mitreData ? (
+              <p className="text-xs text-muted-foreground py-3" role="alert">
+                {t("campaign.mitre_unreadable", { message: mitreError })}
+              </p>
             ) : (
               <div className="relative pl-6 border-l-2 border-border">
                 {(mitreData?.timeline || []).length === 0 ? (
@@ -441,6 +464,14 @@ function CampaignDetailView({
               <Zap className="size-4" />
               {t("campaign.templates")}
             </h3>
+            {templatesError && templates.length === 0 ? (
+              // An unreadable template list must not render as an empty
+              // selector: that looks like "no templates exist", not a failed
+              // request (the banner above carries the detail + retry).
+              <p className="text-xs text-muted-foreground py-3" role="alert">
+                {t("campaign.templates_unreadable", { message: templatesError })}
+              </p>
+            ) : (
             <div className="flex gap-2 items-end">
               <div className="flex-1">
                 <Select value={selectedTemplate} onValueChange={(v) => setSelectedTemplate(v ?? "")}>
@@ -465,6 +496,7 @@ function CampaignDetailView({
                 {t("campaign.execute")}
               </Button>
             </div>
+            )}
             {selectedTemplate && (
               <div className="mt-3">
                 <h4 className="text-xs font-semibold text-muted-foreground mb-2">{t("campaign.steps")}</h4>
