@@ -50,6 +50,8 @@ interface AgentOfflineEvent {
   hostname?: string;
   username?: string;
   ip?: string;
+  /** New server-side status ("stale" | "offline"); absent on older servers. */
+  status?: string;
 }
 
 interface AgentLockedEvent {

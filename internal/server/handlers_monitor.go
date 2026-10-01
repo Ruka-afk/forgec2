@@ -201,7 +201,7 @@ func (m *MonitorCollector) checkAgentAlerts() {
 		switch {
 		case offlineFor > staleThreshold:
 			offlineIDs = append(offlineIDs, agent.ID)
-			m.server.broadcastAgentOffline(agent)
+			m.server.broadcastAgentOffline(agent, "offline")
 			m.server.recordAgentStatusEvent(agent.ID, "offline")
 			if m.server.pluginManager != nil {
 				select {

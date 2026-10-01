@@ -141,7 +141,15 @@ export default function AgentShellPage() {
       if (msg.type !== "agent_online" && msg.type !== "agent_offline") return;
       const aid = String(msg.agent_id ?? "");
       if (!aid) return;
-      const status = msg.type === "agent_online" ? "online" : "offline";
+      let status: AgentStatus;
+      if (msg.type === "agent_online") {
+        status = "online";
+      } else {
+        // `agent_offline` carries the exact new status ("stale" on a live-connection
+        // drop, "offline" when the reaper gives up); fall back to "offline" for
+        // payloads that predate the field.
+        status = msg.status === "stale" ? "stale" : "offline";
+      }
       setMetaByAgent((prev) => {
         const cur = prev[aid];
         if (!cur) return prev;

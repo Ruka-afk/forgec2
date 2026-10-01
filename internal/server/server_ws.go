@@ -293,7 +293,11 @@ func (s *Server) broadcastAgentOnline(agent db.Implant, isNew bool) {
 }
 
 // broadcastAgentOffline pushes agent offline events to all WebSocket clients.
-func (s *Server) broadcastAgentOffline(agent db.Implant) {
+// status is the new server-side status (the call sites set it in the same
+// pass): "stale" on a live-connection drop, "offline" when the reaper gives
+// up — clients that merge the event into badges can show the exact state
+// instead of assuming the worst.
+func (s *Server) broadcastAgentOffline(agent db.Implant, status string) {
 	if !s.suppressAgentStatusEvent(agent.ID) {
 		return
 	}
@@ -302,6 +306,7 @@ func (s *Server) broadcastAgentOffline(agent db.Implant) {
 		"agent_id": agent.ID,
 		"hostname": agent.Hostname,
 		"ip":       agent.IP,
+		"status":   status,
 	}
 	notification, err := json.Marshal(payload)
 	if err != nil {
@@ -337,7 +342,7 @@ func (s *Server) handleWSBeaconDisconnect(agentID string) {
 		}
 		s.recordAgentStatusEvent(agentID, "stale")
 		if s.suppressAgentStatusEvent(agentID) {
-			s.broadcastAgentOffline(agent)
+			s.broadcastAgentOffline(agent, "stale")
 		}
 	}
 }
