@@ -3085,6 +3085,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/extc2/telegram": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Configure Telegram ExtC2 */
+        post: operations["extc2Telegram"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/extc2/configs/{id}": {
         parameters: {
             query?: never;
@@ -14710,6 +14727,24 @@ export interface operations {
         };
     };
     extc2Slack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Configured */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    extc2Telegram: {
         parameters: {
             query?: never;
             header?: never;

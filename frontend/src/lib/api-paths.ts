@@ -531,6 +531,9 @@ export const paths = {
   extc2: {
     configs: "/extc2/configs",
     config: (id: string | number) => `/extc2/configs/${id}`,
+    discord: "/extc2/discord",
+    slack: "/extc2/slack",
+    telegram: "/extc2/telegram",
   },
   siem: {
     rules: "/siem/rules",

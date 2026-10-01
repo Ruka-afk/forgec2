@@ -4222,6 +4222,16 @@ paths:
       responses:
         '200':
           description: Configured
+  /extc2/telegram:
+    post:
+      tags: [Integrations]
+      summary: Configure Telegram ExtC2
+      operationId: extc2Telegram
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Configured
   /extc2/configs/{id}:
     delete:
       tags: [Integrations]

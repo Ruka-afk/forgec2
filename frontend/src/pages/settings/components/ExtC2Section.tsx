@@ -59,7 +59,7 @@ export default function ExtC2Section() {
     }
     setSaving(true);
     try {
-      const endpoint = formType === "discord" ? "/extc2/discord" : formType === "slack" ? "/extc2/slack" : "/extc2/telegram";
+      const endpoint = formType === "discord" ? paths.extc2.discord : formType === "slack" ? paths.extc2.slack : paths.extc2.telegram;
       const payload = formType === "telegram"
         ? { bot_token: botToken, chat_id: channelId }
         : { bot_token: botToken, channel_id: channelId };
