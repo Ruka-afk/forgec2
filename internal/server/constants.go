@@ -97,6 +97,10 @@ const (
 	ClaudeMaxTokens        = 4096
 	MaxBOFResultLimit      = 100
 	AutomationRuleLimit    = 200
+	// AgentStatusHistoryLimit caps the newest status-history rows returned per
+	// agent; a flapping agent can accumulate tens of thousands of events in
+	// one retention window.
+	AgentStatusHistoryLimit = 2000
 
 	// ─── Timeouts ───
 	HTTPReadTimeout  = 30 * time.Second

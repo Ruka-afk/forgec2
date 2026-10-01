@@ -32,8 +32,16 @@ func (s *Server) handleAgentStatusHistory(c *gin.Context) {
 	var events []db.AgentStatusEvent
 	q := s.db.Where("agent_id = ? AND timestamp >= ?", agentID, startTime)
 	q = s.tenantScope(q, c)
-	q.Order("timestamp ASC").
-		Find(&events)
+	// Fetch the newest N first (an unbounded Find would return a flapping
+	// agent's entire retention window), then restore the ascending order the
+	// API has always returned.
+	if err := q.Order("timestamp DESC").Limit(AgentStatusHistoryLimit).Find(&events).Error; err != nil {
+		handleQueryError(c, err, "Failed to load agent status history")
+		return
+	}
+	for i, j := 0, len(events)-1; i < j; i, j = i+1, j-1 {
+		events[i], events[j] = events[j], events[i]
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"agent_id": agentID,
