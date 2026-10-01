@@ -22,7 +22,7 @@ import { useConfirm } from "@/lib/hooks/useConfirm";
 import { AIPlaybookDialog } from "./components/AIPlaybookDialog";
 import type { Agent } from "@/types/agent";
 import {
-  ArrowDown, ArrowUp, Copy, ListOrdered, Play, Plus, Square, Terminal, Trash2,
+  AlertTriangle, ArrowDown, ArrowUp, Copy, ListOrdered, Play, Plus, Square, Terminal, Trash2,
 } from "lucide-react";
 
 interface MacroStep {
@@ -104,6 +104,9 @@ export default function MacrosPageContent() {
   const [loading, setLoading] = useState(true);
   const [runsLoading, setRunsLoading] = useState(true);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [runsError, setRunsError] = useState<string | null>(null);
+  const [agentsError, setAgentsError] = useState<string | null>(null);
 
   // Editor dialog state
   const [editorOpen, setEditorOpen] = useState(false);
@@ -123,11 +126,14 @@ export default function MacrosPageContent() {
   const [detailRun, setDetailRun] = useState<MacroRun | null>(null);
 
   const loadMacros = useCallback(async () => {
+    setLoadError(null);
     try {
       const d = await api.get<{ macros?: Macro[] }>(paths.macros.list);
       setMacros(d.macros || []);
-    } catch {
-      setMacros([]);
+    } catch (e) {
+      // Retain the last good list: wiping it to [] meant an API blip read
+      // to the operator as "no macros exist".
+      setLoadError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -135,21 +141,34 @@ export default function MacrosPageContent() {
 
   const loadRuns = useCallback(async () => {
     setRunsLoading(true);
+    setRunsError(null);
     try {
       const d = await api.get<{ runs?: MacroRun[] }>(paths.macros.runs());
       setRuns(d.runs || []);
-    } catch {
-      /* keep previous list */
+    } catch (e) {
+      // Retain the previous run list; only report the failure so a blip
+      // cannot masquerade as "no runs".
+      setRunsError(e instanceof Error ? e.message : String(e));
     } finally {
       setRunsLoading(false);
+    }
+  }, []);
+
+  const loadAgents = useCallback(async () => {
+    setAgentsError(null);
+    try {
+      setAgents(await fetchAgentListCached());
+    } catch (e) {
+      // Same: a wiped agent list read as "no agents on the network".
+      setAgentsError(e instanceof Error ? e.message : String(e));
     }
   }, []);
 
   useEffect(() => {
     void loadMacros();
     void loadRuns();
-    fetchAgentListCached().then(setAgents).catch(() => setAgents([]));
-  }, [loadMacros, loadRuns]);
+    void loadAgents();
+  }, [loadMacros, loadRuns, loadAgents]);
 
   // Live progress: refresh the runs table whenever a macro_update arrives.
   useEffect(() => {
@@ -287,11 +306,19 @@ export default function MacrosPageContent() {
         {loading ? (
           <div className="py-12 text-center"><Spinner /></div>
         ) : macros.length === 0 ? (
-          <EmptyState
-            icon={ListOrdered}
-            title={t("macros.empty_title")}
-            message={t("macros.empty_message")}
-          />
+          loadError ? (
+            <div role="alert" className="m-5 flex flex-wrap items-center gap-2 border border-warning/30 bg-warning/10 px-3 py-2 rounded-lg text-xs text-warning-foreground">
+              <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
+              <span className="min-w-0 flex-1">{t("macros.library_unreadable", { message: loadError })}</span>
+              <Button onClick={() => void loadMacros()} size="xs" variant="outline">{t("common.try_again")}</Button>
+            </div>
+          ) : (
+            <EmptyState
+              icon={ListOrdered}
+              title={t("macros.empty_title")}
+              message={t("macros.empty_message")}
+            />
+          )
         ) : (
           <div className="divide-y divide-border">
             {macros.map((m) => {
@@ -339,7 +366,15 @@ export default function MacrosPageContent() {
             ))}
           </div>
         ) : runs.length === 0 ? (
-          <EmptyState icon={Play} title={t("macros.runs_empty")} />
+          runsError ? (
+            <div role="alert" className="m-5 flex flex-wrap items-center gap-2 border border-warning/30 bg-warning/10 px-3 py-2 rounded-lg text-xs text-warning-foreground">
+              <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
+              <span className="min-w-0 flex-1">{t("macros.runs_unreadable", { message: runsError })}</span>
+              <Button onClick={() => void loadRuns()} size="xs" variant="outline">{t("common.try_again")}</Button>
+            </div>
+          ) : (
+            <EmptyState icon={Play} title={t("macros.runs_empty")} />
+          )
         ) : (
           <div className="divide-y divide-border max-h-80 overflow-y-auto">
             {runs.map((r) => (
@@ -468,7 +503,15 @@ export default function MacrosPageContent() {
             </p>
             <div className="max-h-56 overflow-y-auto rounded-lg border border-border divide-y divide-border">
               {agents.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-6">{t("macros.no_agents")}</p>
+                agentsError ? (
+                  <div role="alert" className="m-3 flex flex-wrap items-center gap-2 border border-warning/30 bg-warning/10 px-3 py-2 rounded-lg text-xs text-warning-foreground">
+                    <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
+                    <span className="min-w-0 flex-1">{t("macros.agents_unreadable", { message: agentsError })}</span>
+                    <Button onClick={() => void loadAgents()} size="xs" variant="outline">{t("common.try_again")}</Button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground text-center py-6">{t("macros.no_agents")}</p>
+                )
               ) : agents.map((a) => (
                 <label key={a.id} className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-muted/50 text-sm">
                   <input

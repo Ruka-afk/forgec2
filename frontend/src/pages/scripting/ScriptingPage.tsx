@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, Code, Eraser, History, Layers, Play, Save, Terminal, Trash2, X } from "lucide-react";
+import { AlertTriangle, BookOpen, Code, Eraser, History, Layers, Play, Save, Terminal, Trash2, X } from "lucide-react";
 
 import type { Agent } from "@/types/agent";
 import {
@@ -124,22 +124,23 @@ export default function ScriptingPage() {
   const [running, setRunning] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
 
-  const { data, loading, refresh: loadData } = useApiResource<{ agents: Agent[]; savedScripts: SavedScript[]; runHistory: ScriptRun[] }>({
+  const { data, loading, error, refresh: loadData } = useApiResource<{ agents: Agent[]; savedScripts: SavedScript[]; runHistory: ScriptRun[] }>({
     fetcher: async () => {
-      let failed = 0;
+      // Let any source failure reject: swallowing them and returning fake
+      // empty arrays replaced the last good snapshot with "no agents / no
+      // scripts / no history" on every blip, defeating the hook's
+      // retain-on-error behaviour.
       const [agentData, scriptData, historyData] = await Promise.all([
-        fetchAgentListCached().catch(() => { failed++; return [] as Agent[]; }),
-        api.get<unknown>(paths.scripts.list).catch(() => { failed++; return []; }),
-        api.get<unknown>(paths.scripts.history).catch(() => ({ history: [] })),
+        fetchAgentListCached(),
+        api.get<unknown>(paths.scripts.list),
+        api.get<unknown>(paths.scripts.history),
       ]);
-      if (failed > 0) toast.error(t("scripting.toast.load_failed"));
       return {
         agents: agentData,
         savedScripts: extractSavedScripts(scriptData),
         runHistory: extractRunHistory(historyData),
       };
     },
-    toastThrottleMs: 0,
     errorMessage: t("scripting.toast.load_failed"),
   });
   const agents = data?.agents ?? [];
@@ -247,6 +248,15 @@ export default function ScriptingPage() {
       )}
 
       <div className="space-y-4">
+        {error && !data && (
+          // First-load failure: no snapshot to retain yet, so the "no scripts /
+          // no history" empties below must not stand in for the failure.
+          <div role="alert" className="flex flex-wrap items-center gap-2 border border-warning/30 bg-warning/10 px-3 py-2 rounded-lg text-xs text-warning-foreground">
+            <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 flex-1">{t("scripting.data_unreadable", { message: error })}</span>
+            <Button onClick={() => void loadData()} size="xs" variant="outline">{t("common.try_again")}</Button>
+          </div>
+        )}
         <Tabs defaultValue="editor">
         <TabsList>
           <TabsTrigger value="editor" className="gap-1.5">
@@ -290,7 +300,7 @@ export default function ScriptingPage() {
                   <span className="text-sm font-semibold text-foreground">{t("scripting.saved_scripts")}</span>
                 </div>
                 <div className="max-h-60 overflow-y-auto">
-                  {savedScripts.length === 0 ? (
+                  {!error && savedScripts.length === 0 ? (
                     <div className="p-4 text-center text-muted-foreground text-sm">{t("scripting.no_scripts")}</div>
                   ) : (
                     savedScripts.map((s) => (
@@ -371,7 +381,7 @@ export default function ScriptingPage() {
 
         <TabsContent value="history">
           <Card className="overflow-hidden">
-            {runHistory.length === 0 ? (
+            {!error && runHistory.length === 0 ? (
               <div className="text-center py-16 sm:py-20">
                 <EmptyState icon={History} title={t("scripting.no_history")} />
               </div>
