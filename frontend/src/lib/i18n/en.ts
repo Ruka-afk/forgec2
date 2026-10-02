@@ -2080,6 +2080,8 @@ export const en: Record<string, string> = {
     "generate.history_empty": "No builds yet",
     "generate.history_empty_desc": "Your generated payloads will show up here.",
     "generate.history_recent": "{count} recent builds",
+    "generate.history_unread": "History could not be read",
+    "generate.history_unreadable": "The build history could not be read - this is not a report that no builds exist. {message}",
     "generate.rebuild": "Rebuild",
     "generate.http_proxy": "HTTP Proxy",
     "generate.import_profile": "Import profile JSON file",

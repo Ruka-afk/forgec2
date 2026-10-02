@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/empty-state";
+import { DataError } from "@/components/ui/data-state";
 import { AppWindow, Apple, Binary, CheckCircle2, ChevronDown, Disc, Download, HardDrive, History, PackageOpen, Puzzle, RefreshCw, Terminal, XCircle } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -28,14 +29,13 @@ const FORMAT_ICONS: Record<string, React.ReactNode> = {
 export default function BuildHistorySection({ refreshKey }: { refreshKey?: number }) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
-  const { data, loading, refresh } = useApiResource<{ builds: BuildHistoryEntry[] }>({
+  const { data, loading, error, refresh } = useApiResource<{ builds: BuildHistoryEntry[] }>({
     fetcher: async () => {
       const d = await api.get<{ builds?: BuildHistoryEntry[]; Logs?: BuildHistoryEntry[]; logs?: BuildHistoryEntry[] }>(
         paths.builds.list("pageSize=20"),
       );
       return { builds: d.builds || d.logs || d.Logs || [] };
     },
-    toastThrottleMs: 0,
     errorMessage: t("generate.toast.build_history_load_failed"),
   });
   useEffect(() => { if (refreshKey) void refresh(); }, [refreshKey, refresh]);
@@ -73,14 +73,16 @@ export default function BuildHistorySection({ refreshKey }: { refreshKey?: numbe
             <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground ring-1 ring-border/40"><History className="size-4" /></div>
             <div className="min-w-0 flex-1">
               <div className="text-sm font-semibold tracking-tight text-foreground">{t("builds.history_title")}</div>
-              <div className="text-xs leading-4 text-muted-foreground">{t("generate.history_recent", { count: builds.length })}</div>
+              <div className="text-xs leading-4 text-muted-foreground">{error ? t("generate.history_unread") : t("generate.history_recent", { count: builds.length })}</div>
             </div>
-            <Badge variant="outline" className="rounded-full">{builds.length}</Badge>
+            <Badge variant="outline" className="rounded-full">{error ? "?" : builds.length}</Badge>
             <ChevronDown className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${expanded ? "rotate-180" : ""}`} />
           </div>
         </CollapsibleTrigger>
         <CollapsibleContent className="mt-4">
-          {builds.length === 0 ? (
+          {error ? (
+            <DataError message={t("generate.history_unreadable", { message: error })} onRetry={() => void refresh()} />
+          ) : builds.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border/70 bg-muted/20 p-4">
               <EmptyState
                 icon={History}

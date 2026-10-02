@@ -2080,6 +2080,8 @@ export const zh: Record<string, string> = {
     "generate.history_empty": "暂无构建记录",
     "generate.history_empty_desc": "生成的载荷会显示在这里。",
     "generate.history_recent": "最近 {count} 次构建",
+    "generate.history_unread": "构建历史读取失败",
+    "generate.history_unreadable": "无法读取构建历史，这并不表示没有构建记录。{message}",
     "generate.rebuild": "重建",
     "generate.http_proxy": "HTTP 代理",
     "generate.import_profile": "导入配置文件 JSON",
