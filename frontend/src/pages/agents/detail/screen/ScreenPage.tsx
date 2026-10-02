@@ -14,7 +14,7 @@ export default function ScreenPage() {
   const urlParams = useParams<{ id: string }>();
   const id = Array.isArray(urlParams?.id) ? urlParams.id[0] : urlParams?.id || "";
 
-  const [interval, setInterval] = useState(3);
+  const [interval, changeInterval] = useState(3);
   const [quality, setQuality] = useState<ScreenQuality>("medium");
   const [triggerMatch, setTriggerMatch] = useState("");
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -62,7 +62,7 @@ export default function ScreenPage() {
               monitoring={monitor.monitoring}
               busyAction={monitor.busyAction}
               interval={interval}
-              setInterval={setInterval}
+              changeInterval={changeInterval}
               quality={quality}
               setQuality={setQuality}
               autoRefresh={autoRefresh}

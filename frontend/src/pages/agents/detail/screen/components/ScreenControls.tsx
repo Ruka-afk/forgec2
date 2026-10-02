@@ -15,7 +15,7 @@ interface ScreenControlsProps {
   monitoring: boolean;
   busyAction: BusyAction;
   interval: number;
-  setInterval: (v: number) => void;
+  changeInterval: (v: number) => void;
   quality: ScreenQuality;
   setQuality: (v: ScreenQuality) => void;
   autoRefresh: boolean;
@@ -32,7 +32,7 @@ interface ScreenControlsProps {
 
 /** Right-rail settings: interval/quality, toggles, title trigger, resolution. */
 export default memo(function ScreenControls({
-  t, monitoring, busyAction, interval, setInterval, quality, setQuality,
+  t, monitoring, busyAction, interval, changeInterval, quality, setQuality,
   autoRefresh, setAutoRefresh, videoMode, setVideoMode,
   triggerMatch, setTriggerMatch, triggerOn, onTriggerStart, onTriggerStop, resolution,
 }: ScreenControlsProps) {
@@ -52,7 +52,7 @@ export default memo(function ScreenControls({
             <Clock className="size-3.5" aria-hidden="true" />
             {t("agents.screen_interval")}
           </span>
-          <Select value={String(interval)} onValueChange={(value) => value !== null && setInterval(Number(value))} disabled={monitoring || busyAction === "start"}>
+          <Select value={String(interval)} onValueChange={(value) => value !== null && changeInterval(Number(value))} disabled={monitoring || busyAction === "start"}>
             <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="1">1s · {t("screen.high_cpu")}</SelectItem>

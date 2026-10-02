@@ -20,7 +20,7 @@ export default memo(function ScreenTriggerSection({ agentId, online }: ScreenTri
   const { t } = useI18n();
   const { busy, fire } = useCollectTask(agentId);
   const [match, setMatch] = useState("");
-  const [interval, setInterval] = useState("5");
+  const [interval, changeInterval] = useState("5");
   const [watching, setWatching] = useState<string | null>(null);
 
   const run = async (kind: "start" | "stop" | "window") => {
@@ -83,7 +83,7 @@ export default memo(function ScreenTriggerSection({ agentId, online }: ScreenTri
           <Label className="mb-1 block text-xs text-muted-foreground">{t("agents.trigger_interval")}</Label>
           <Input
             value={interval}
-            onChange={(e) => setInterval(e.target.value.replace(/[^0-9]/g, "").slice(0, 3))}
+            onChange={(e) => changeInterval(e.target.value.replace(/[^0-9]/g, "").slice(0, 3))}
             className="h-8 font-mono text-xs"
             inputMode="numeric"
           />
