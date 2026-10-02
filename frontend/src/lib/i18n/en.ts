@@ -2230,6 +2230,7 @@ export const en: Record<string, string> = {
     "generate.panel.icon_custom": "Custom upload",
     "generate.panel.icon_upload": "Upload .ico/.png",
     "generate.panel.disguise_as": "Disguise as",
+    "generate.panel.disguise_none": "No disguise",
     "generate.panel.disguise_hint": "Filename will become *.jpg.exe and use a JPG icon — looks like an image but is an executable",
     "generate.panel.pe_options": "PE Tweaks",
     "generate.panel.working_hours": "Working Hours",

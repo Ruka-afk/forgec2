@@ -119,7 +119,7 @@ export default function InfrastructurePage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label className="text-xs">{t("infra.domain")}</Label>
-                  <Input aria-label="c2.example.com" name="input-1" type="text" value={domain} onChange={e => setDomain(e.target.value)} placeholder="c2.example.com" />
+                  <Input aria-label={t("infra.domain")} name="input-1" type="text" value={domain} onChange={e => setDomain(e.target.value)} placeholder="c2.example.com" />
                 </div>
                 <div>
                   <Label className="text-xs">{t("infra.listen_port")}</Label>
@@ -262,7 +262,7 @@ export default function InfrastructurePage() {
                   </div>
                   <div>
                     <Label className="text-xs">{t("infra.host")}</Label>
-                    <Input aria-label="192.168.1.100" name="input-8" type="text" value={rdHost} onChange={e => setRdHost(e.target.value)} placeholder="192.168.1.100" />
+                    <Input aria-label={t("infra.host")} name="input-8" type="text" value={rdHost} onChange={e => setRdHost(e.target.value)} placeholder="192.168.1.100" />
                   </div>
                   <div>
                     <Label className="text-xs">{t("common.type")}</Label>
@@ -340,11 +340,11 @@ export default function InfrastructurePage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs">{t("infra.domain")}</Label>
-                  <Input aria-label="c2.example.com" name="input-14" type="text" value={rdGenerateDomain} onChange={e => setRdGenerateDomain(e.target.value)} placeholder="c2.example.com" />
+                  <Input aria-label={t("infra.domain")} name="input-14" type="text" value={rdGenerateDomain} onChange={e => setRdGenerateDomain(e.target.value)} placeholder="c2.example.com" />
                 </div>
                 <div>
                   <Label className="text-xs">{t("infra.backend_url")}</Label>
-                  <Input aria-label="https://127.0.0.1:8080" name="input-15" type="text" value={backendURL} onChange={e => setBackendURL(e.target.value)} placeholder="https://127.0.0.1:8080" />
+                  <Input aria-label={t("infra.backend_url")} name="input-15" type="text" value={backendURL} onChange={e => setBackendURL(e.target.value)} placeholder="https://127.0.0.1:8080" />
                 </div>
                 <div>
                   <Label className="text-xs">{t("infra.listen_port")}</Label>

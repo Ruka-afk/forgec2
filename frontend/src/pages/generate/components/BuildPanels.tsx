@@ -119,7 +119,7 @@ export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setF
         <div>
           <FieldLabel>{t("generate.panel.disguise_as") || "Disguise as"}</FieldLabel>
           <Select value={form.disguise_as || ""} onValueChange={(val) => val != null && setForm({ ...form, disguise_as: val === "__none" ? "" : val })}>
-            <SelectTrigger className="w-full"><SelectValue placeholder="No disguise" /></SelectTrigger>
+            <SelectTrigger className="w-full"><SelectValue placeholder={t("generate.panel.disguise_none")} /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__none">No disguise</SelectItem>
               <SelectItem value="jpg">JPG Image (*.jpg.exe)</SelectItem>
@@ -163,24 +163,24 @@ export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setF
           {form.p2p_mode === "child" && (
             <div>
               <FieldLabel>{t("generate.panel.parent_address")}</FieldLabel>
-              <Input aria-label="tcp://192.168.1.100:4444" name={`${id}-parent`} type="text" placeholder="tcp://192.168.1.100:4444" value={form.p2p_parent} onChange={(e) => setForm({ ...form, p2p_parent: e.target.value })} className="font-mono text-xs" />
+              <Input aria-label={t("generate.panel.parent_address")} name={`${id}-parent`} type="text" placeholder="tcp://192.168.1.100:4444" value={form.p2p_parent} onChange={(e) => setForm({ ...form, p2p_parent: e.target.value })} className="font-mono text-xs" />
             </div>
           )}
           {form.p2p_mode === "parent" && (
             <div>
               <FieldLabel>{t("generate.panel.listen_address")}</FieldLabel>
-              <Input aria-label="TCP: :4444 / SMB: pipe_name" name={`${id}-listen`} type="text" placeholder="TCP: :4444 / SMB: pipe_name" value={form.p2p_listen_addr} onChange={(e) => setForm({ ...form, p2p_listen_addr: e.target.value })} className="font-mono text-xs" />
+              <Input aria-label={t("generate.panel.listen_address")} name={`${id}-listen`} type="text" placeholder="TCP: :4444 / SMB: pipe_name" value={form.p2p_listen_addr} onChange={(e) => setForm({ ...form, p2p_listen_addr: e.target.value })} className="font-mono text-xs" />
             </div>
           )}
           {form.p2p_mode === "dns" && (
             <>
               <div>
                 <FieldLabel>{t("generate.panel.dns_domain")}</FieldLabel>
-                <Input aria-label="c2.example.com" name={`${id}-dns-domain`} type="text" placeholder="c2.example.com" value={form.dns_domain} onChange={(e) => setForm({ ...form, dns_domain: e.target.value })} className="font-mono text-xs" />
+                <Input aria-label={t("generate.panel.dns_domain")} name={`${id}-dns-domain`} type="text" placeholder="c2.example.com" value={form.dns_domain} onChange={(e) => setForm({ ...form, dns_domain: e.target.value })} className="font-mono text-xs" />
               </div>
               <div>
                 <FieldLabel>{t("generate.panel.dns_server")}</FieldLabel>
-                <Input aria-label="192.168.1.100" name={`${id}-dns-server`} type="text" placeholder="192.168.1.100" value={form.dns_server} onChange={(e) => setForm({ ...form, dns_server: e.target.value })} className="font-mono text-xs" />
+                <Input aria-label={t("generate.panel.dns_server")} name={`${id}-dns-server`} type="text" placeholder="192.168.1.100" value={form.dns_server} onChange={(e) => setForm({ ...form, dns_server: e.target.value })} className="font-mono text-xs" />
               </div>
             </>
           )}

@@ -2230,6 +2230,7 @@ export const zh: Record<string, string> = {
     "generate.panel.icon_custom": "自定义上传",
     "generate.panel.icon_upload": "上传 .ico/.png",
     "generate.panel.disguise_as": "伪装类型",
+    "generate.panel.disguise_none": "无伪装",
     "generate.panel.disguise_hint": "文件名将变为 *.jpg.exe 并使用 JPG 图标 — 看起来像图片实际是可执行文件",
     "generate.panel.pe_options": "PE 伪装",
     "generate.panel.working_hours": "工作时段",

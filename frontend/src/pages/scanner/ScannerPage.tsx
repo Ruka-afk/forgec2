@@ -260,7 +260,7 @@ export default function ScannerPage() {
           {showCustomRange && (
             <div>
               <Label className="block text-xs font-medium text-muted-foreground mb-1.5">{t("scanner.port_range")}</Label>
-              <Input aria-label="1-1000,8080,8443" type="text" value={customPorts} onChange={e => setCustomPorts(e.target.value)} placeholder="1-1000,8080,8443" className="font-mono" />
+              <Input aria-label={t("scanner.port_range")} type="text" value={customPorts} onChange={e => setCustomPorts(e.target.value)} placeholder="1-1000,8080,8443" className="font-mono" />
               <p className="text-xs text-muted-foreground mt-1">{t("scanner.port_format_hint")}</p>
             </div>
           )}
