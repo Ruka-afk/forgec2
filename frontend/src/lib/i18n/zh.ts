@@ -1109,6 +1109,7 @@ export const zh: Record<string, string> = {
     "ai.attachment_upload_failed": "附件上传失败",
     "ai.attachment_remove_failed": "删除附件失败",
     "ai.context_load_failed": "AI 上下文加载失败",
+    "ai.context_unreadable": "无法读取 AI 上下文数据，本面板中的列表可能不完整，而不是真的为空。{message}",
     "ai.knowledge_collections": "知识集合",
     "ai.knowledge_empty": "暂无可用知识集合。",
     "ai.knowledge_shared": "共享",

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, FileText, LoaderCircle, Paperclip, RefreshCw, Shield, Trash2 } from "lucide-react";
+import { AlertTriangle, Bot, FileText, LoaderCircle, Paperclip, RefreshCw, Shield, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
@@ -64,11 +64,13 @@ export function AIContextPanel({
   const [profiles, setProfiles] = useState<AIProfile[]>([]);
   const [attachments, setAttachments] = useState<AIAttachment[]>([]);
   const [collections, setCollections] = useState<AIKnowledgeCollection[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     try {
+      setLoadError(null);
       const [profilePayload, collectionPayload, attachmentPayload] = await Promise.all([
         api.get<unknown>(paths.ai.profiles, { signal }),
         api.get<unknown>(paths.ai.knowledgeCollections, { signal }),
@@ -87,6 +89,10 @@ export function AIContextPanel({
       }
     } catch (error) {
       if (signal?.aborted || (error instanceof Error && error.name === "AbortError")) return;
+      // Retain the last good lists; the banner below only appears when
+      // nothing is on screen, so a failed refresh never masquerades as
+      // "no profiles / no attachments / no collections".
+      setLoadError(error instanceof Error ? error.message : t("ai.context_load_failed"));
       toast.error(error instanceof Error ? error.message : t("ai.context_load_failed"));
     }
   }, [onProfileChange, profileId, sessionId, t]);
@@ -156,6 +162,15 @@ export function AIContextPanel({
       </div>
 
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
+        {loadError && profiles.length === 0 && collections.length === 0 && attachments.length === 0 && (
+          <div role="alert" className="flex flex-wrap items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
+            <AlertTriangle className="size-3.5 shrink-0" />
+            <span className="min-w-[160px] flex-1">{t("ai.context_unreadable", { message: loadError })}</span>
+            <button type="button" className="shrink-0 underline" onClick={() => void refresh()}>
+              {t("common.try_again")}
+            </button>
+          </div>
+        )}
         {(() => {
           const used = attachments.filter((a) => selectedAttachmentIds.includes(a.id)).reduce((s, a) => s + a.size, 0) + selectedCollectionIds.length * 8000;
           const budget = 48 * 1024;

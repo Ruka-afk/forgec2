@@ -57,7 +57,12 @@ export default function EffectivenessCard() {
     setError(null);
     api.get<EffectivenessData>(paths.builds.effectiveness(30))
       .then(setData)
-      .catch((e) => { setData(null); setError(e instanceof Error && e.message ? e.message : t("builds.effectiveness_error")); })
+      .catch((e) => {
+        // Retain the last good stats on a failed refresh: the DataError
+        // branch only replaces the view when there is nothing on screen,
+        // so a working readout is never hidden behind a transient error.
+        setError(e instanceof Error && e.message ? e.message : t("builds.effectiveness_error"));
+      })
       .finally(() => setLoading(false));
   }, [t]);
 

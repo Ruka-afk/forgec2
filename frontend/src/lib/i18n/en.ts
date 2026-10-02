@@ -1109,6 +1109,7 @@ export const en: Record<string, string> = {
     "ai.attachment_upload_failed": "Attachment upload failed",
     "ai.attachment_remove_failed": "Failed to remove attachment",
     "ai.context_load_failed": "Failed to load AI context",
+    "ai.context_unreadable": "The AI context data could not be read - the lists in this panel are incomplete, not empty. {message}",
     "ai.knowledge_collections": "Knowledge collections",
     "ai.knowledge_empty": "No knowledge collections are available.",
     "ai.knowledge_shared": "Shared",
