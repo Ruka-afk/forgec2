@@ -139,30 +139,45 @@ replace) that silently destroys real configuration.
 
 ## Class 3 — a failed fetch presented as empty / as a safe default
 
-The "lies to the operator" half is done. What remains is MEDIUM: these make a
-list look empty or a picker look bare, but the surrounding page is not making a
-safety claim and no destructive write is unlocked by the wrong value.
+RESOLVED 2026-10-02 — every item below is either fixed (retain-on-error +
+first-failure `DataError`/banner, never render a failed load as "empty") or
+audited clean (it already did this, often via `useApiResource` + `DataError`
+or per-source `?` substitution). `plugins/**` remains notes-only (re-signing
+constraint).
 
-- `settings/{SIEMRulesSection, ExtC2Section, BackupSection, ModulesSection}`
-- `generate/components/BuildHistorySection` + `usePayloadGenerator` (presets
-  fall back to hard-coded defaults after a failed profile read)
-- campaign (list + the MITRE/template `Promise.all`), cloud results, bloodhound
-  (results and status are tracked together), autotag
+Fixed:
+- campaign (list + the MITRE/template `Promise.all`) — `cb4a9323`
 - macros library/history, scripting (agent/library/history), bof
-  library/results
-- agent detail token page + `TimelineSection`, `agents/components/useAgentData`
-  (lock + tag lists), `AgentDockShot`, topbar notification dropdown
-- `builds/components/EffectivenessCard`, `useSavedViews`, automation
-  `ScheduledRulesCard` + `OneShotTasksCard`, `ai/AIContextPanel`
-- opsec is a separate page worth a look; the audit did not confirm a site there
-- `plugins/**` is notes-only (re-signing constraint)
+  library/results — `2bc3b34b`
+- autotag — `0933b8f2`
+- agent detail token page + `TimelineSection` — `c0907a40`
+- automation `ScheduledRulesCard` + `OneShotTasksCard` — `c936b120`
+- `ai/components/AIContextPanel` (first-failure banner gated on all three
+  lists empty) + `builds/components/EffectivenessCard` (refresh no longer
+  wipes the last-good stats) — `7b0e090d`
+- `generate/components/BuildHistorySection` (DataError-gated empty branch;
+  collapsed-by-default header shows `?` / "could not be read", never "0")
+  — `f85b5d5c`
 
-Suggested order: the settings panels (they sit next to code already fixed in
-this file), then the agent-detail token/timeline, then the rest. Prefer
-migrating a page to `useApiResource` (it already retains data on refresh errors
-and keeps background refreshes silent) over hand-rolling another
-`useState`/`useEffect` loader. For a page that already uses `useApiResource`, the
-fix is usually just consuming its `error` and rendering `DataError`.
+Audited clean (no change needed):
+- `settings/{SIEMRulesSection, ExtC2Section, BackupSection, ModulesSection}`
+  and `settings/{ApiKeysSection, NotificationRoutesCard, NotificationsSection,
+  SettingsPage}` — all render `DataError` with `*.unreadable` keys + retry
+- `generate/components/usePayloadGenerator`
+- agent detail token page, `TimelineSection`, `agents/components/useAgentData`
+  (lock + tag lists), `AgentDockShot`, topbar notification dropdown
+  (`loadError` + `?` count, `topbar.notif_count_unreadable`)
+- cloud results (`loadResults` deliberately wipes rows to avoid misattributing
+  another agent's credentials; `resultsError` + `DataError` + `AgentLoadError`),
+  bloodhound (`DataState` with `error ?? resultsError`, `empty` gated on
+  `!loading && !error && !resultsError`)
+- `useSavedViews`, opsec (per-source `failedSources`, `?` instead of zero on
+  stats, per-section `DataError`)
+
+Suggested order (historical, now moot): the settings panels … prefer
+migrating a page to `useApiResource` over hand-rolled `useState`/`useEffect`
+loaders; for pages already on `useApiResource`, the fix is consuming its
+`error` and rendering `DataError`.
 
 ## Two cross-cutting traps found while fixing this list — check for them first
 
