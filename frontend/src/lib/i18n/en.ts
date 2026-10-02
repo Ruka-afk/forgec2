@@ -3578,6 +3578,7 @@ export const en: Record<string, string> = {
     "scheduler.params": "Params (JSON, optional)",
     "scheduler.run_count": "Run",
     "scheduler.rules_unreadable": "The scheduled rules could not be read - this is not a report that no scheduled tasks exist. {message}",
+    "scheduler.tasktypes_unreadable": "The available task types could not be read, so the task-type dropdown is empty. {message}",
     "scheduler.save_failed": "Failed to save",
     "scheduler.saved": "Saved",
     "scheduler.schedule": "Schedule",

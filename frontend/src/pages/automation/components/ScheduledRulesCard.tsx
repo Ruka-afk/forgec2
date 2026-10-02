@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { fetchAgentListCached } from "@/lib/agents";
@@ -24,7 +24,7 @@ import { Switch } from "@/components/ui/switch";
 import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
 import { fetchTaskTypes, type TaskTypeInfo } from "@/lib/taskTypes";
-import { Bug, Calendar, CalendarClock, Clock, Pencil, Plus, Trash2, X } from "lucide-react";
+import { AlertTriangle, Bug, Calendar, CalendarClock, Clock, Pencil, Plus, Trash2, X } from "lucide-react";
 
 interface ScheduledRule {
   id: string;
@@ -54,6 +54,7 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
   const [params, setParams] = useState("");
   const [schedule, setSchedule] = useState("");
   const [taskTypes, setTaskTypes] = useState<TaskTypeInfo[]>([]);
+  const [taskTypesError, setTaskTypesError] = useState<string | null>(null);
   const { confirm, modal } = useConfirm();
   const [formErrors, setFormErrors] = useState<{ name?: string; agentId?: string; schedule?: string; command?: string }>({});
 
@@ -103,9 +104,20 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
   const tasks = data?.tasks ?? [];
   const agents = data?.agents ?? [];
 
-  useEffect(() => {
-    fetchTaskTypes().then(setTaskTypes);
+  const loadTaskTypes = useCallback(async () => {
+    setTaskTypesError(null);
+    try {
+      setTaskTypes(await fetchTaskTypes());
+    } catch (e) {
+      // Retain the last known task-type list on failure so the bare
+      // dropdown is never mistaken for "the server has no task types".
+      setTaskTypesError(e instanceof Error ? e.message : String(e));
+    }
   }, []);
+
+  useEffect(() => {
+    void loadTaskTypes();
+  }, [loadTaskTypes]);
 
   function resetForm() {
     setName(""); setAgentId(""); setTaskType("shell"); setCommand(""); setParams(""); setSchedule("");
@@ -209,6 +221,13 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
                       {taskTypes.map(tt => <SelectItem key={tt.type} value={tt.type}>{tt.name || tt.type}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                  {taskTypesError && taskTypes.length === 0 && (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-2 py-1.5 text-xs text-warning-foreground" role="alert">
+                      <AlertTriangle className="size-3.5 shrink-0" />
+                      <span className="flex-1 min-w-[140px]">{t("scheduler.tasktypes_unreadable", { message: taskTypesError })}</span>
+                      <button type="button" className="shrink-0 underline" onClick={() => void loadTaskTypes()}>{t("common.try_again")}</button>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label className="text-xs mb-1">{t("scheduler.schedule")}</Label>

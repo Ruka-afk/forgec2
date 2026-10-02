@@ -3592,6 +3592,7 @@ export const zh: Record<string, string> = {
     "scheduler.params": "参数 (JSON, 可选)",
     "scheduler.run_count": "运行",
     "scheduler.rules_unreadable": "无法读取定时规则，这并不表示没有定时任务。{message}",
+    "scheduler.tasktypes_unreadable": "无法读取可用任务类型，因此任务类型下拉框为空。{message}",
     "scheduler.save_failed": "保存失败",
     "scheduler.saved": "已保存",
     "scheduler.schedule": "调度规则",
