@@ -13,7 +13,7 @@ function CredBody({ data }: { data: Record<string, number> }) {
     <div className="space-y-1.5">
       {entries.length === 0 ? <p className="text-xs text-muted-foreground/100 text-center py-4">{t("dashboard.no_credential_data")}</p> : entries.slice(0, 8).map(([k, v]) => (
         <div key={k} className="flex items-center gap-2 text-xs">
-          <span className="w-16 text-muted-foreground truncate text-(--fs-micro-sm)">{k}</span>
+          <span className="w-16 text-muted-foreground truncate text-(--fs-micro-sm)">{k || t("dashboard.unknown")}</span>
           <div className="flex-1 h-3 bg-secondary rounded-full overflow-hidden">
             <div className="h-full bg-chart-6 rounded-full transition-all" style={{ width: `${maxValue > 0 ? (v / maxValue) * 100 : 0}%` }}></div>
           </div>
@@ -33,7 +33,7 @@ export default withChartData<Record<string, number>>(
       : (((raw as { data?: { Name?: string; Count?: number }[] })?.data) || []);
     const rec: Record<string, number> = {};
     (arr as { name?: string; count?: number }[]).forEach((x) => {
-      rec[x.name || "Unknown"] = Number(x.count) || 0;
+      rec[x.name || ""] = Number(x.count) || 0;
     });    return rec;
   },
 );

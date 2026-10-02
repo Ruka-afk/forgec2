@@ -427,7 +427,7 @@ export default function AgentTokenPage() {
                 return (
                   <TableRow key={tid} className={`hover:bg-muted/50 transition-colors ${active ? "bg-warning/10" : ""}`}>
                     <TableCell className="px-5 py-3">
-                      <span className="font-semibold text-foreground text-sm">{domain ? `${domain}\\${username}` : username || "Unknown"}</span>
+                      <span className="font-semibold text-foreground text-sm">{domain ? `${domain}\\${username}` : username || t("agents.unknown")}</span>
                     </TableCell>
                     <TableCell className="px-4 py-3">{getIntegrityBadge(integrity)}</TableCell>
                     <TableCell className="px-4 py-3">{getTokenTypeBadge(source, tokenType, protocol)}</TableCell>

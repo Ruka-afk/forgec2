@@ -165,9 +165,9 @@ export function usePayloadGenerator() {
       host: l.host || "",
       port: l.port || "",
       type: l.type || "",
-      name: l.name || "Unknown",
+      name: l.name || t("generate.unknown_listener"),
     };
-  }, [listeners]);
+  }, [listeners, t]);
 
   // Shared settings resolved with profile
   const getSharedSettings = useCallback(() => {

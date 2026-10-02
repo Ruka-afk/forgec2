@@ -264,7 +264,7 @@ export default function CloudPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">
-                    {cred.access_key_id || "(raw)"}
+                    {cred.access_key_id || t("cloud.raw")}
                   </TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground max-w-[200px] truncate">
                     {cred.secret_key ? cred.secret_key.substring(0, 40) + "..." : "-"}

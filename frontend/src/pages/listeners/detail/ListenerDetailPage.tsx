@@ -142,7 +142,7 @@ export default function ListenerDetailPage() {
     );
   }
 
-  const name = listener.name || "Unknown";
+  const name = listener.name || t("listeners.unknown");
   const scheme = listener.scheme || listener.protocol || listener.type || "http";
   const host = listener.host || "0.0.0.0";
   const port = listener.port ?? 8080;

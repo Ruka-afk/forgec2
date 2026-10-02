@@ -122,7 +122,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
       if (conv === undefined) delete payload.placements;
       else payload.placements = conv;
     } catch {
-      toast.error("placements must be JSON array or lines of 'target | chain'");
+      toast.error(t("profiles.placements_invalid"));
       return;
     }
     try {
@@ -221,7 +221,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
       if (conv === undefined) delete content.placements;
       else content.placements = conv;
     } catch {
-      toast.error("placements must be JSON array or lines of 'target | chain'");
+      toast.error(t("profiles.placements_invalid"));
       setValidating(false);
       return;
     }
