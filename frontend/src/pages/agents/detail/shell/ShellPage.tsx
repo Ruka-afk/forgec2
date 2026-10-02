@@ -108,7 +108,7 @@ export default function AgentShellPage() {
       if (controller.signal.aborted) return;
       setAgents(list);
       setListError(error);
-      if (error) toast.error(error);
+      if (error) toast.error(t("agents.list_unreadable", { message: error }));
       setMetaByAgent((prev) => {
         const merged = { ...prev };
         for (const a of list) {
@@ -118,7 +118,7 @@ export default function AgentShellPage() {
       });
     });
     return () => controller.abort();
-  }, []);
+  }, [t]);
 
   // Fetch fresh meta for tabs not yet loaded from the detail endpoint.
   useEffect(() => {
@@ -340,7 +340,7 @@ export default function AgentShellPage() {
         </div>
       )}
       {listError && (
-        <p className="shrink-0 px-4 py-1.5 text-xs text-red-300" role="alert">{listError}</p>
+        <p className="shrink-0 px-4 py-1.5 text-xs text-red-300" role="alert">{t("agents.list_unreadable", { message: listError })}</p>
       )}
       <div className="relative flex min-h-0 flex-1 flex-col">
         {tabs.map((tab) => {

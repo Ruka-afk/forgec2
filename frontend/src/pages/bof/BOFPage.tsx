@@ -161,7 +161,7 @@ export default function BOFPage() {
                     {isUploaded ? t("bof.uploaded_ready") : t("bof.not_installed")}
                   </Badge>
                 </div>
-                <div className="text-xs text-muted-foreground mb-1">{bof.desc}</div>
+                <div className="text-xs text-muted-foreground mb-1">{t(bof.descKey)}</div>
                 <div className="flex items-center justify-between mt-3">
                   <Badge variant="secondary" className="text-(--fs-micro-sm) font-mono">{bof.arch}</Badge>
                   <Button size="sm" onClick={() => handleQuickRun(bof)} disabled={!isUploaded}>

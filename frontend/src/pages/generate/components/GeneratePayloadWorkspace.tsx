@@ -40,13 +40,14 @@ function SectionHeading({ icon, tint, title, desc, className }: { icon: ReactNod
   );
 }
 
+/** desc is an i18n key (generate.format_desc_*) resolved by the consumer — never render it raw. */
 const FORMAT_META: Record<PayloadFormat, { icon: ReactNode; desc: string; iconTint: string; activeRing: string }> = {
-  exe: { icon: <AppWindow className="size-4" />, desc: "GUI implant · exe", iconTint: "bg-warning/10 text-warning", activeRing: "border-warning/30 bg-warning/5" },
-  dll: { icon: <PackageOpen className="size-4" />, desc: "sideload · dll", iconTint: "bg-destructive/10 text-destructive", activeRing: "border-destructive/30 bg-destructive/5" },
-  ps1: { icon: <Cpu className="size-4" />, desc: "ps1 · one-liner", iconTint: "bg-info/10 text-info", activeRing: "border-info/30 bg-info/5" },
-  linux: { icon: <Cpu className="size-4" />, desc: "elf · amd64/arm", iconTint: "bg-success/10 text-success", activeRing: "border-success/30 bg-success/5" },
-  macos: { icon: <AppWindow className="size-4" />, desc: "mach-o · mac", iconTint: "bg-chart-6/violet text-chart-6", activeRing: "border-chart-6/30 bg-chart-6/5" },
-  oneliner: { icon: <PackageOpen className="size-4" />, desc: "curl · wget · ps", iconTint: "bg-muted text-muted-foreground", activeRing: "border-primary/30 bg-primary/5" },
+  exe: { icon: <AppWindow className="size-4" />, desc: "generate.format_desc_exe", iconTint: "bg-warning/10 text-warning", activeRing: "border-warning/30 bg-warning/5" },
+  dll: { icon: <PackageOpen className="size-4" />, desc: "generate.format_desc_dll", iconTint: "bg-destructive/10 text-destructive", activeRing: "border-destructive/30 bg-destructive/5" },
+  ps1: { icon: <Cpu className="size-4" />, desc: "generate.format_desc_ps1", iconTint: "bg-info/10 text-info", activeRing: "border-info/30 bg-info/5" },
+  linux: { icon: <Cpu className="size-4" />, desc: "generate.format_desc_linux", iconTint: "bg-success/10 text-success", activeRing: "border-success/30 bg-success/5" },
+  macos: { icon: <AppWindow className="size-4" />, desc: "generate.format_desc_macos", iconTint: "bg-chart-6/violet text-chart-6", activeRing: "border-chart-6/30 bg-chart-6/5" },
+  oneliner: { icon: <PackageOpen className="size-4" />, desc: "generate.format_desc_oneliner", iconTint: "bg-muted text-muted-foreground", activeRing: "border-primary/30 bg-primary/5" },
 };
 
 export default function GeneratePayloadWorkspace() {
@@ -256,7 +257,7 @@ export default function GeneratePayloadWorkspace() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-xs font-semibold leading-4 text-foreground">{t(PAYLOAD_FORMAT_LABEL[key])}</div>
-                      <div className="truncate text-[11px] leading-3 text-muted-foreground">{meta.desc}</div>
+                      <div className="truncate text-[11px] leading-3 text-muted-foreground">{t(meta.desc)}</div>
                     </div>
                     {active && <div className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary shadow-sm" aria-hidden="true" />}
                   </button>

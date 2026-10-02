@@ -71,7 +71,7 @@ export function ScreenVideoPlayer({ src, wsLive, fps = 5, className, onFullscree
             </Button>
             <Badge variant="secondary" className="gap-1 bg-black/40 text-white text-xs">
               <Circle className={cn("size-2", wsLive ? "fill-success text-success animate-pulse" : "fill-muted text-muted")} />
-              {wsLive ? "LIVE" : "POLL"} · {lastFps || fps} fps
+              {wsLive ? t("agents.screen_live") : t("agents.screen_poll")} · {lastFps || fps} fps
             </Badge>
             <span className="text-xs text-white/80">#{frameCount}</span>
           </div>

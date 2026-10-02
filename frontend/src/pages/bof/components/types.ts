@@ -55,24 +55,25 @@ export interface RepoItem {
 
 export interface QuickBOF {
   name: string;
-  desc: string;
+  /** i18n key (bof.quick.*) resolved by the consumer — never render this raw. */
+  descKey: string;
   arch: string;
   args: string;
 }
 
 export const quickBOFLibrary: QuickBOF[] = [
-  { name: "adcs_enum", desc: "Enumerate AD CS templates and certificate authorities", arch: "x64", args: "" },
-  { name: "sc_shutdown_elevated", desc: "Shutdown system with elevated privileges", arch: "x64", args: "" },
-  { name: "netuserenum", desc: "Enumerate domain users via various methods", arch: "x64", args: "/groups" },
-  { name: "enumerate-laps", desc: "Enumerate LAPS passwords from AD", arch: "x64", args: "" },
-  { name: "uptime", desc: "Get system uptime information", arch: "x64", args: "" },
-  { name: "env-list", desc: "List environment variables", arch: "x64", args: "" },
-  { name: "ldap-search", desc: "Perform LDAP searches from beacon", arch: "x64", args: "(objectClass=*)" },
-  { name: "kerberoast", desc: "Request TGS tickets for kerberoasting", arch: "x64", args: "" },
-  { name: "clipboard", desc: "Monitor clipboard contents", arch: "x64", args: "" },
-  { name: "wts_enum", desc: "Enumerate Remote Desktop sessions", arch: "x64", args: "" },
-  { name: "window-list", desc: "List visible windows on desktop", arch: "x64", args: "" },
-  { name: "tcp-scan", desc: "Internal TCP port scanner", arch: "x64", args: "10.0.0.1 80-443" },
+  { name: "adcs_enum", descKey: "bof.quick.adcs_enum", arch: "x64", args: "" },
+  { name: "sc_shutdown_elevated", descKey: "bof.quick.sc_shutdown_elevated", arch: "x64", args: "" },
+  { name: "netuserenum", descKey: "bof.quick.netuserenum", arch: "x64", args: "/groups" },
+  { name: "enumerate-laps", descKey: "bof.quick.enumerate_laps", arch: "x64", args: "" },
+  { name: "uptime", descKey: "bof.quick.uptime", arch: "x64", args: "" },
+  { name: "env-list", descKey: "bof.quick.env_list", arch: "x64", args: "" },
+  { name: "ldap-search", descKey: "bof.quick.ldap_search", arch: "x64", args: "(objectClass=*)" },
+  { name: "kerberoast", descKey: "bof.quick.kerberoast", arch: "x64", args: "" },
+  { name: "clipboard", descKey: "bof.quick.clipboard", arch: "x64", args: "" },
+  { name: "wts_enum", descKey: "bof.quick.wts_enum", arch: "x64", args: "" },
+  { name: "window-list", descKey: "bof.quick.window_list", arch: "x64", args: "" },
+  { name: "tcp-scan", descKey: "bof.quick.tcp_scan", arch: "x64", args: "10.0.0.1 80-443" },
 ];
 
 export const getStatusColor = (status: string) => {

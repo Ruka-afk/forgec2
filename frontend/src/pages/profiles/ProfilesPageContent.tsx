@@ -227,11 +227,11 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
     }
     try {
       const d = await api.postJson(paths.generate.profileValidate, { name: editing.name, format: "json", content: JSON.stringify(content) }) as { success?: boolean; data?: { wire?: Record<string, string>; sample?: { input: string; encoded: string }; warnings?: string[] }; error?: string };
-      if (!d.success) { toast.error((d as { error?: string }).error || "validate failed"); return; }
+      if (!d.success) { toast.error((d as { error?: string }).error || t("profiles.validate_failed")); return; }
       setValidateResult(d.data || null);
       const warns = (d.data?.warnings || []).length;
-      if (warns) toast.warning(`validate passed with ${warns} warning(s)`);
-      else toast.success("profile valid");
+      if (warns) toast.warning(t("profiles.validate_warnings", { count: warns }));
+      else toast.success(t("profiles.validate_ok"));
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : String(err));
     } finally {
@@ -240,11 +240,11 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
   };
 
   const handleImportCSText = async () => {
-    if (!csText.trim()) { toast.error("paste CS profile text first"); return; }
+    if (!csText.trim()) { toast.error(t("profiles.cs_paste_first")); return; }
     setCSBusy(true);
     try {
       const d = await api.postJson(paths.generate.profileImportText, { name: csName.trim() || "imported", format: "cs", content: csText }) as { success?: boolean; error?: string; profile?: AgentProfile };
-      if (!d.success) { toast.error(d.error || "CS import failed"); return; }
+      if (!d.success) { toast.error(d.error || t("profiles.cs_import_failed")); return; }
       const imported = d.profile!;
       const existingIdx = profiles.findIndex((p) => p.name === imported.name);
       if (existingIdx >= 0) {
@@ -259,7 +259,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
       setEditing(normalizeEditing(imported));
       setShowCSModal(false);
       setCSText("");
-      toast.success("CS profile imported");
+      toast.success(t("profiles.cs_imported"));
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : String(err));
     } finally {
@@ -437,10 +437,10 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                       <TooltipContent>{t("profiles.import_btn")}</TooltipContent>
                     </Tooltip>
                     <Tooltip>
-                      <TooltipTrigger render={<Button onClick={() => setShowCSModal(true)} className="size-7 bg-secondary/50 hover:bg-secondary/70 flex items-center justify-center transition-colors" aria-label="Import CS .profile text" size="icon" />}>
+                      <TooltipTrigger render={<Button onClick={() => setShowCSModal(true)} className="size-7 bg-secondary/50 hover:bg-secondary/70 flex items-center justify-center transition-colors" aria-label={t("profiles.import_cs_text")} size="icon" />}>
                         <Code className="size-4" />
                       </TooltipTrigger>
-                      <TooltipContent>Import CS .profile text</TooltipContent>
+                      <TooltipContent>{t("profiles.import_cs_text")}</TooltipContent>
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger render={<Button onClick={() => {
