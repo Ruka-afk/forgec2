@@ -181,10 +181,15 @@ loaders; for pages already on `useApiResource`, the fix is consuming its
 
 ## Two cross-cutting traps found while fixing this list — check for them first
 
-1. **A FAILED read being cached as a valid answer** (see `lib/ai-status.ts`,
-   fixed). Look for any module-level cache that writes its error fallback into
-   the success slot.
-2. **A fetch or a state reset called DURING render.** Three components did
-   `if (loading === null) { void fetch(); return null; }`. It works by accident
-   and turns any failure into a render loop. See `useAIStatus.ts` and
-   `ExecutionHistoryDialog`.
+1. **A FAILED read being cached as a valid answer.** `lib/ai-status.ts` was
+   the first instance (fixed). A second was found in `lib/taskTypes.ts`: its
+   catch wrote a hard-coded `FALLBACK_TYPES` list into the module cache, so a
+   single transient failure served invented task types for the rest of the
+   session and made `ScheduledRulesCard`'s task-type dropdown look
+   authoritative — fixed in `41ba973` (fallback removed, failures reject and
+   are not cached; the card shows a first-failure banner instead).
+2. **A fetch or a state reset called DURING render.** Re-hunted 2026-10-02:
+   no live instances remain. The originals were `useAIStatus.ts` and
+   `ExecutionHistoryDialog`; every current `void load()` / `void refresh()` /
+   `void fetch()` call site now sits inside `useEffect`, `useCallback`, or an
+   event handler.
