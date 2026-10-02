@@ -48,5 +48,15 @@
 ## 6. 文案
 
 - 所有用户可见文案经 `t("key")`，en/zh 双语同批补齐（`check:i18n` 门禁）。
+- i18n 边缘规则（2026-10-02 两批清扫后固化）：
+  - 库层（无 hook 上下文）的错误串 / 控制流标记（如 `lib/agents.ts`、`lib/errors.ts`
+    的 `"Aborted"` token）可保留英文回退；**UI 调用点必须包裹** `t(key, { message })`
+    （如 `agents.list_unreadable`），禁止把库层原文直接 toast / 渲染。
+  - 客户端查找表渲染一律走 i18n 键：bof quick 库用 `descKey` 模式、generate 的
+    `FORMAT_META` 用 `generate.format_desc_*`、回退标签复用/新增
+    （`agents.unknown` / `listeners.unknown` / `cloud.raw` / `generate.unknown_listener`）。
+  - 纯数据映射函数无法调 hook 时保留空串哨兵（`credential-types` 模式），
+    组件层再渲染 `dashboard.unknown`。
+  - 通用短形标注可原样保留：REC / WS / N/A / fps。
 - 图标键名迁移等机械操作优先脚本化（参考 `scripts/unify-icon-sizes.mjs`），
   并同步扩展对应 checker 形成防回潮闭环。
