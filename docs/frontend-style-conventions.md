@@ -1,7 +1,8 @@
 # Frontend Style Conventions
 
 操作型控制台的统一约定。新增页面/组件必须遵守；存量代码按批次收敛
-（`docs/frontend-empty-state-backlog.txt` 跟踪空态残留）。
+（`docs/frontend-empty-state-backlog.md` 跟踪空态残留 —— Class-3 清单已于
+2026-10-02 全部修复或审计干净，见该文件内记录）。
 
 ## 1. 图标尺寸
 
@@ -15,8 +16,10 @@
   禁止手写 `text-center text-muted-foreground` 居中 div。
 - 图表/迷你面板内的单行数据注记（"暂无数据"）可保留 muted 单行文本——它们是
   数据注记，不是空态组件的职责范围。
-- 加载用既有 `Skeleton`/`Spinner`，错误提示用 `ErrorState`，结果性反馈用
-  `Banner`。禁止原生 `confirm()` —— 一律 `useConfirm()`。
+- 加载用既有 `Skeleton`/`Spinner`；**读取失败**一律 `DataError`（107 处，
+  约定：刷新失败保留上次成功数据、仅在"屏上无数据"时显示首败提示，见
+  `useApiResource` 的 `error` 语义），泛型错误展示用 `ErrorState`；结果性
+  反馈用 `Banner`。禁止原生 `confirm()` —— 一律 `useConfirm()`。
 
 ## 3. 表单
 
