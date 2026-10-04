@@ -67,6 +67,9 @@
   --surface-2: oklch(0.995 0.002 265);
   --surface-3: oklch(0.958 0.008 265);
   --surface-4: oklch(0.932 0.012 265);
+  --surface-hover: oklch(0.968 0.009 265);
+  --table-header: oklch(0.965 0.008 265);
+  --table-stripe: oklch(0.988 0.003 265);
 
   --sidebar: oklch(0.987 0.004 265);
   --sidebar-foreground: oklch(0.215 0.022 265);
@@ -184,6 +187,9 @@
   --surface-2: oklch(0.16 0.017 265);
   --surface-3: oklch(0.185 0.018 265);
   --surface-4: oklch(0.21 0.019 265);
+  --surface-hover: oklch(0.205 0.019 265);
+  --table-header: oklch(0.20 0.018 265);
+  --table-stripe: oklch(0.145 0.016 265);
 
   --sidebar: oklch(0.115 0.013 265);
   --sidebar-foreground: oklch(0.93 0.012 264);
@@ -292,6 +298,53 @@ body::before {
 [data-slot="card"]:has([data-slot="table-container"]):hover {
   transform: none;
   box-shadow: var(--elevation-1);
+}
+
+/* Shared surface treatment: quiet depth in light mode, clear separation in
+   dark mode. Interactive cards opt into a slightly stronger hover affordance
+   while data cards stay stable for scanning. */
+[data-slot="card"] {
+  box-shadow: var(--elevation-1);
+  border-color: color-mix(in oklch, var(--border) 88%, transparent);
+}
+[data-slot="card"][data-interactive="true"]:hover {
+  border-color: color-mix(in oklch, var(--primary) 32%, var(--border));
+  box-shadow: var(--elevation-2);
+}
+[data-slot="card"]:focus-within {
+  border-color: color-mix(in oklch, var(--ring) 42%, var(--border));
+}
+
+/* Tables use their own visual plane so sticky headers and horizontal scrolling
+   remain legible against the page background. */
+[data-slot="table-container"] {
+  border: 1px solid color-mix(in oklch, var(--border) 82%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in oklch, white 35%, transparent);
+}
+[data-slot="table-header"] {
+  background: var(--table-header);
+  box-shadow: 0 1px 0 color-mix(in oklch, var(--border) 80%, transparent);
+}
+[data-slot="table-body"] > [data-slot="table-row"]:nth-child(even) {
+  background: var(--table-stripe);
+}
+[data-slot="table-body"] > [data-slot="table-row"]:hover {
+  background: var(--surface-hover);
+}
+
+/* Keep native form controls visually consistent with the shadcn controls and
+   make keyboard focus obvious without changing component-level sizing. */
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+input:not([type="checkbox"]):not([type="radio"]):focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 22%, transparent);
+  outline: none;
 }
 
 /* Light mode uses solid working surfaces; translucent cards look muddy over

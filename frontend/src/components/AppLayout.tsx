@@ -115,7 +115,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           )}
         >
           {crumbs && (
-            <div className="sticky top-0 z-20 flex h-(--shell-breadcrumb-height) shrink-0 items-center border-b border-border/70 bg-card/95 backdrop-blur-md">
+            <div className="sticky top-0 z-20 flex h-(--shell-breadcrumb-height) shrink-0 items-center border-b border-border/70 bg-card/90 shadow-sm backdrop-blur-xl">
               <div className="mx-auto w-full max-w-(--content-wide) px-4 sm:px-6 lg:px-8">
                 <Breadcrumb />
               </div>

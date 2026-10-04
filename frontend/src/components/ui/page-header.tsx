@@ -12,11 +12,11 @@ export function PageHeader({ title, subtitle, eyebrow, icon, meta, children, cla
 }) {
   return (
     <div className={cn(
-      "relative flex flex-col gap-4 border-b border-border/75 pb-4 sm:flex-row sm:items-end sm:justify-between sm:pb-5",
+      "relative flex flex-col gap-4 border-b border-border/75 pb-4 before:absolute before:bottom-[-1px] before:left-0 before:h-0.5 before:w-12 before:rounded-full before:bg-primary sm:flex-row sm:items-end sm:justify-between sm:pb-5",
       className,
     )}>
       <div className="flex min-w-0 items-center gap-x-3.5">
-        {icon && <div className="icon-well size-10 border border-primary/15 bg-primary/8 text-primary">{icon}</div>}
+        {icon && <div className="icon-well size-10 border border-primary/15 bg-primary/8 text-primary shadow-sm">{icon}</div>}
         <div className="min-w-0">
           {eyebrow !== undefined && eyebrow !== null && (
             <div className="mono-eyebrow text-muted-foreground/100 mb-1">{eyebrow}</div>

@@ -118,7 +118,7 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
       })).filter((section) => section.items.length > 0);
 
   return (
-    <nav className={collapsed ? 'flex flex-col items-center gap-1' : 'space-y-0 text-sm'}>
+    <nav className={collapsed ? 'flex flex-col items-center gap-1' : 'space-y-0.5 text-sm'}>
       {filteredSections.map((section, idx) => (
         <div key={section.titleKey} className={collapsed ? 'w-full' : ''}>
           {!collapsed && (
@@ -127,7 +127,7 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
               size="sm"
               onClick={() => { if (!section.pinned) toggleSection(section.titleKey); }}
               disabled={section.pinned}
-              className={`w-full flex items-center gap-x-1 px-2 pt-1 pb-0.5 cursor-pointer select-none transition-colors hover:text-foreground justify-start disabled:opacity-100 disabled:cursor-default ${idx > 0 ? 'mt-2.5 border-t border-border/40 pt-2.5' : ''}`}
+              className={`w-full min-h-9 flex items-center gap-x-1 px-2 pt-1 pb-0.5 cursor-pointer select-none transition-colors hover:text-foreground justify-start disabled:opacity-100 disabled:cursor-default ${idx > 0 ? 'mt-2.5 border-t border-border/40 pt-2.5' : ''}`}
             >
               {!section.pinned && (
                 <ChevronDown className={`size-3 text-muted-foreground transition-transform duration-200 ${(searching || sections[section.titleKey]) ? '' : '-rotate-90'}`} />
@@ -147,7 +147,7 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
                 key={item.href}
                 to={item.href}
                 className={`flex items-center gap-x-2.5 rounded-lg transition-colors duration-150 ${collapsed ? 'group relative' : ''}
-                  ${collapsed ? 'justify-center px-0 py-2 mx-auto size-10' : 'px-2 py-1.5'}
+                  ${collapsed ? 'justify-center px-0 py-2 mx-auto size-10' : 'min-h-9 px-2 py-1.5'}
                   ${isActive(item.href)
                     ? 'nav-item-active bg-primary/12 font-medium text-primary'
                     : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}`}
@@ -371,7 +371,7 @@ const stats = useAppStore((s) => s.stats);
     return (
       <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
         <SheetContent side="left" showCloseButton={false}
-          className="w-72 p-0 bg-sidebar border-r border-border">
+          className="w-72 border-r border-border bg-sidebar/95 p-0 backdrop-blur-xl">
           <SheetTitle className="sr-only">{t("a11y.navigation")}</SheetTitle>
           <div className="flex flex-col h-full">
             {navContent}
@@ -384,7 +384,7 @@ const stats = useAppStore((s) => s.stats);
   // Desktop: fixed aside
   return (
     <aside className={`flex h-screen flex-col overflow-hidden transition-all duration-200 ease-in-out supports-[height:100dvh]:h-[100dvh]
-      bg-sidebar border-r border-border fixed left-0 top-0 z-40
+      bg-sidebar border-r border-border fixed left-0 top-0 z-40 shadow-sm
       ${collapsed ? 'w-[var(--shell-sidebar-collapsed)]' : 'w-[var(--shell-sidebar-expanded)]'}`}
     >
       {navContent}

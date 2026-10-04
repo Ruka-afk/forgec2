@@ -26,7 +26,7 @@ export default function TopBar({ onMenuToggle }: { onMenuToggle?: () => void }) 
   return (
     <>
     <header
-      className="fixed top-0 right-0 z-30 flex h-(--shell-topbar-height) items-center justify-between border-b border-border/80 bg-card px-3 shadow-sm transition-[left] duration-200 ease-in-out sm:px-4"
+      className="fixed top-0 right-0 z-30 flex h-(--shell-topbar-height) items-center justify-between border-b border-border/80 bg-card/95 px-3 shadow-sm backdrop-blur-xl transition-[left] duration-200 ease-in-out sm:px-4"
       style={{ left: focusMode ? 0 : storeSidebarWidth }}
     >
       <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -49,7 +49,7 @@ export default function TopBar({ onMenuToggle }: { onMenuToggle?: () => void }) 
 
       <div className="flex items-center gap-1">
         {/* WS + Live Agents */}
-        <div className="mr-1 flex shrink-0 items-center gap-2 rounded-lg border border-border/70 bg-muted/65 px-2.5 py-1 sm:mr-2">
+        <div className="mr-1 flex shrink-0 items-center gap-2 rounded-lg border border-border/70 bg-secondary/70 px-2.5 py-1 shadow-sm sm:mr-2">
           <Tooltip>
             <TooltipTrigger>
               <span role="status" aria-live="polite" className="flex items-center gap-2">
