@@ -33,6 +33,14 @@ interface MacroStep {
   stop_on_error?: boolean;
 }
 
+// Client-only stable identity for editor step rows. Persisted macros stay
+// uid-free; it only keeps row keys stable across reorder/delete so the
+// per-row controlled inputs don't lose focus or bleed values after a move.
+type EditorStep = MacroStep & { uid: string };
+
+let stepUidSeq = 0;
+const newStepUid = (): string => `step-${++stepUidSeq}`;
+
 interface Macro {
   id?: number;
   name: string;
@@ -85,7 +93,7 @@ function runLog(raw: string): MacroRunLogEntry[] {
   }
 }
 
-const emptyStep = (): MacroStep => ({ command: "", delay_ms: 500, wait: false, timeout_s: 120 });
+const emptyStep = (): EditorStep => ({ command: "", delay_ms: 500, wait: false, timeout_s: 120, uid: newStepUid() });
 
 const RUN_STATUS_VARIANT: Record<string, "success" | "destructive" | "warning" | "secondary"> = {
   completed: "success",
@@ -113,7 +121,7 @@ export default function MacrosPageContent() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [steps, setSteps] = useState<MacroStep[]>([emptyStep()]);
+  const [steps, setSteps] = useState<EditorStep[]>([emptyStep()]);
   const [saving, setSaving] = useState(false);
 
   // Run dialog state
@@ -191,7 +199,7 @@ export default function MacrosPageContent() {
     setName(m.name);
     setDescription(m.description || "");
     const parsed = parseSteps(m.steps);
-    setSteps(parsed.length > 0 ? parsed.map((s) => ({ ...emptyStep(), ...s })) : [emptyStep()]);
+    setSteps(parsed.length > 0 ? parsed.map((s) => ({ ...emptyStep(), ...s, uid: newStepUid() })) : [emptyStep()]);
     setEditorOpen(true);
   };
 
@@ -211,7 +219,11 @@ export default function MacrosPageContent() {
 
   const handleSave = async () => {
     if (!name.trim()) { toast.error(t("macros.toast.name_required")); return; }
-    const valid = steps.filter(s => s.command.trim() !== "");
+    // Project back to the persisted MacroStep shape — the client-only uid
+    // stays out of the request body.
+    const valid: MacroStep[] = steps
+      .filter((s) => s.command.trim() !== "")
+      .map((s) => ({ command: s.command, delay_ms: s.delay_ms, wait: s.wait, timeout_s: s.timeout_s, stop_on_error: s.stop_on_error }));
     if (valid.length === 0) { toast.error(t("macros.toast.step_required")); return; }
     setSaving(true);
     try {
@@ -424,7 +436,7 @@ export default function MacrosPageContent() {
             <div className="space-y-2">
               <Label>{t("macros.field_steps")}</Label>
               {steps.map((step, idx) => (
-                <div key={idx} className="rounded-lg border border-border p-3 space-y-2">
+                <div key={step.uid} className="rounded-lg border border-border p-3 space-y-2">
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className="font-mono">{idx + 1}</Badge>
                     <Input
