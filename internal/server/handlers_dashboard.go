@@ -103,7 +103,10 @@ func (s *Server) handleDashboardActivityHeatmap(c *gin.Context) {
 		Count int64
 	}
 	var buckets []hourBucket
-	if err := s.db.Raw(`SELECT CAST((julianday('now') - julianday(created_at)) AS INTEGER) as day, strftime('%H', created_at) as hour, COUNT(*) as count FROM tasks WHERE created_at >= ? GROUP BY day, hour`, startTime).Scan(&buckets).Error; err != nil {
+	if err := s.tenantScope(s.db.Model(&db.Task{}), c).
+		Select("CAST((julianday('now') - julianday(created_at)) AS INTEGER) as day, strftime('%H', created_at) as hour, COUNT(*) as count").
+		Where("created_at >= ?", startTime).
+		Group("day, hour").Scan(&buckets).Error; err != nil {
 		handleQueryError(c, err, "Failed to query activity heatmap")
 		return
 	}
@@ -135,7 +138,7 @@ func (s *Server) handleDashboardOSDistribution(c *gin.Context) {
 	}
 
 	var results []osCount
-	if err := s.db.Model(&db.Implant{}).
+	if err := s.tenantScope(s.db.Model(&db.Implant{}), c).
 		Select("os, COUNT(*) as count").
 		Group("os").
 		Order("count DESC").
@@ -164,7 +167,8 @@ func (s *Server) handleDashboardTaskStatus(c *gin.Context) {
 		Status string
 		Count  int64
 	}
-	if err := s.db.Model(&db.Task{}).Select("status, count(*) as count").Group("status").Limit(10).Find(&counts).Error; err != nil {
+	if err := s.tenantScope(s.db.Model(&db.Task{}), c).
+		Select("status, count(*) as count").Group("status").Limit(10).Find(&counts).Error; err != nil {
 		slog.Error("Dashboard: failed to query task status counts", "err", err)
 	}
 
@@ -265,7 +269,7 @@ func (s *Server) handleDashboardCredentialTypes(c *gin.Context) {
 	}
 
 	var results []typeCount
-	if err := s.db.Model(&db.CredentialEntry{}).
+	if err := s.tenantScope(s.db.Model(&db.CredentialEntry{}), c).
 		Select("type, COUNT(*) as count").
 		Group("type").
 		Order("count DESC").
@@ -326,7 +330,7 @@ func (s *Server) handleDashboardAgentGeo(c *gin.Context) {
 	}
 
 	var results []countryCount
-	if err := s.db.Model(&db.Implant{}).
+	if err := s.tenantScope(s.db.Model(&db.Implant{}), c).
 		Select("country, COUNT(*) as count").
 		Where("country != ''").
 		Group("country").
@@ -385,7 +389,7 @@ func (s *Server) handleDashboardTaskGantt(c *gin.Context) {
 	}
 
 	var tasks []db.Task
-	if err := s.db.Preload("Agent").
+	if err := s.tenantScope(s.db.Preload("Agent"), c).
 		Where("created_at >= ?", startTime).
 		Order("created_at ASC").
 		Limit(20).
@@ -443,7 +447,8 @@ func (s *Server) handleDashboardTaskGantt(c *gin.Context) {
 
 func (s *Server) handleDashboardAttackPath(c *gin.Context) {
 	var agents []db.Implant
-	if err := s.db.Select("id, hostname, os, ip, parent_id").Limit(10).Find(&agents).Error; err != nil {
+	if err := s.tenantScope(s.db.Select("id, hostname, os, ip, parent_id"), c).
+		Limit(10).Find(&agents).Error; err != nil {
 		slog.Error("Dashboard: failed to query attack path agents", "err", err)
 	}
 

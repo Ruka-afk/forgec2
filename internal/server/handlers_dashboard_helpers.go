@@ -40,12 +40,13 @@ func (s *Server) handleDashboard(c *gin.Context) {
 			(SELECT COUNT(*) FROM tasks WHERE status = 'pending' AND (tenant_id = ? OR ? = 0)) AS pending_tasks,
 			(SELECT COUNT(*) FROM tasks WHERE status = 'failed' AND (tenant_id = ? OR ? = 0)) AS failed_tasks,
 			(SELECT COUNT(*) FROM tasks WHERE (tenant_id = ? OR ? = 0)) AS total_tasks,
-			(SELECT COUNT(*) FROM credential_entries) AS total_creds,
-			(SELECT COUNT(*) FROM token_entries) AS total_tokens,
-			(SELECT COUNT(*) FROM audit_logs) AS total_audits,
-			(SELECT COUNT(*) FROM socks_sessions) AS total_socks,
-			(SELECT COUNT(*) FROM listeners) AS total_listeners
-	`, tid, tid, offlineCutoff, tid, tid, todayStart, tid, tid, tid, tid, tid, tid, tid, tid).Scan(&counts)
+			(SELECT COUNT(*) FROM credential_entries WHERE (tenant_id = ? OR ? = 0)) AS total_creds,
+			(SELECT COUNT(*) FROM token_entries WHERE (? = 0 OR agent_id IN (SELECT id FROM implants WHERE tenant_id = ?))) AS total_tokens,
+			(SELECT COUNT(*) FROM audit_logs WHERE (tenant_id = ? OR ? = 0)) AS total_audits,
+			(SELECT COUNT(*) FROM socks_sessions WHERE (? = 0 OR agent_id IN (SELECT id FROM implants WHERE tenant_id = ?))) AS total_socks,
+			(SELECT COUNT(*) FROM listeners WHERE (tenant_id = ? OR ? = 0)) AS total_listeners
+	`, tid, tid, offlineCutoff, tid, tid, todayStart, tid, tid, tid, tid, tid, tid, tid, tid,
+		tid, tid, tid, tid, tid, tid, tid, tid, tid, tid).Scan(&counts)
 
 	// Online agent list (recently active) - optimized with SELECT
 	var recentAgents []db.Implant
