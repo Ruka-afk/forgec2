@@ -75,6 +75,24 @@ func TestShutdownCompletes(t *testing.T) {
 	}
 }
 
+func TestShutdownWithUninitializedInFlightTracker(t *testing.T) {
+	// A server can reach shutdown with an HTTP server allocated but before
+	// middleware initialization completes (for example during a failed reload).
+	// Shutdown must remain safe and bounded in that partial state.
+	srv := &Server{httpServer: &http.Server{}}
+	done := make(chan struct{})
+	go func() {
+		srv.Shutdown()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Shutdown() did not complete with an uninitialized in-flight tracker")
+	}
+}
+
 func TestHandleHealthCheckWithDBFailure(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := testutil.SetupTestDB(t)
@@ -101,6 +119,17 @@ func TestHandleHealthCheckWithDBFailure(t *testing.T) {
 		c, _ := gin.CreateTestContext(w)
 		c.Request, _ = http.NewRequest(http.MethodGet, "/health", nil)
 		s.handleHealthCheck(c)
+		if w.Code != http.StatusServiceUnavailable {
+			t.Errorf("expected 503, got %d; body=%s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("nil DB returns 503", func(t *testing.T) {
+		nilDBServer := &Server{startTime: time.Now()}
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request, _ = http.NewRequest(http.MethodGet, "/health", nil)
+		nilDBServer.handleHealthCheck(c)
 		if w.Code != http.StatusServiceUnavailable {
 			t.Errorf("expected 503, got %d; body=%s", w.Code, w.Body.String())
 		}
@@ -133,6 +162,17 @@ func TestHandleReadyCheckWithDBFailure(t *testing.T) {
 		c, _ := gin.CreateTestContext(w)
 		c.Request, _ = http.NewRequest(http.MethodGet, "/ready", nil)
 		s.handleReadyCheck(c)
+		if w.Code != http.StatusServiceUnavailable {
+			t.Errorf("expected 503, got %d; body=%s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("nil DB returns 503", func(t *testing.T) {
+		nilDBServer := &Server{startTime: time.Now()}
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request, _ = http.NewRequest(http.MethodGet, "/ready", nil)
+		nilDBServer.handleReadyCheck(c)
 		if w.Code != http.StatusServiceUnavailable {
 			t.Errorf("expected 503, got %d; body=%s", w.Code, w.Body.String())
 		}

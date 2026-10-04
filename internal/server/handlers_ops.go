@@ -13,7 +13,10 @@ func (s *Server) handleReadyCheck(c *gin.Context) {
 	ready := true
 
 	// Check database connectivity
-	if sqlDB, err := s.db.DB(); err != nil {
+	if s == nil || s.db == nil {
+		checks["database"] = "unavailable: database is not initialized"
+		ready = false
+	} else if sqlDB, err := s.db.DB(); err != nil {
 		checks["database"] = "error: " + sanitizeError(err, "Server operation")
 		ready = false
 	} else if err := sqlDB.Ping(); err != nil {
@@ -25,7 +28,10 @@ func (s *Server) handleReadyCheck(c *gin.Context) {
 
 	// Check listener count
 	var listenerCount int64
-	if err := s.db.Model(&db.Listener{}).Count(&listenerCount).Error; err != nil {
+	if s == nil || s.db == nil {
+		checks["listeners"] = "unavailable: database is not initialized"
+		ready = false
+	} else if err := s.db.Model(&db.Listener{}).Count(&listenerCount).Error; err != nil {
 		checks["listeners"] = "error: " + sanitizeError(err, "Server operation")
 		ready = false
 	} else {

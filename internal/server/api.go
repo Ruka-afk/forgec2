@@ -492,8 +492,12 @@ func (s *Server) apiHealth(c *gin.Context) {
 		"timestamp": strconv.FormatInt(time.Now().Unix(), 10),
 	}
 
-	// Check database
-	if sqlDB, err := s.db.DB(); err == nil {
+	// Check database. Keep the API probe available during partial startup so
+	// orchestrators can inspect the degraded response instead of seeing a panic.
+	if s == nil || s.db == nil {
+		health["status"] = "degraded"
+		health["database"] = "unavailable"
+	} else if sqlDB, err := s.db.DB(); err == nil {
 		if err := sqlDB.Ping(); err != nil {
 			health["status"] = "degraded"
 			health["database"] = "unreachable"
@@ -504,7 +508,7 @@ func (s *Server) apiHealth(c *gin.Context) {
 
 	// Backup freshness: an operator (or monitor) should be able to see that the
 	// last snapshot is stale without shelling into the box.
-	if s.backupManager != nil {
+	if s != nil && s.backupManager != nil {
 		bh := s.backupManager.Health()
 		health["backup"] = gin.H{
 			"retain":       bh.Retain,
@@ -519,7 +523,11 @@ func (s *Server) apiHealth(c *gin.Context) {
 
 	// Audit backlog: the async queue is bounded and non-blocking; operators can
 	// alert on depth before entries start being dropped.
-	health["audit_queue_depth"] = s.auditQueueDepth()
+	if s != nil {
+		health["audit_queue_depth"] = s.auditQueueDepth()
+	} else {
+		health["audit_queue_depth"] = 0
+	}
 
 	c.JSON(http.StatusOK, health)
 }

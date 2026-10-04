@@ -117,13 +117,19 @@ func (s *Server) converse(model, systemPrompt string, userMessages []chatMessage
 			var content, reasoning, finishReason string
 			var turnUsage aiUsage
 			var streamErr error
-			if config.AIProviderUsesClaudeWire(options.provider) {
-				toolCalls, content, reasoning, finishReason, turnUsage, streamErr = s.parseClaudeStream(resp, ch, roundCtx)
-			} else {
-				toolCalls, content, reasoning, finishReason, turnUsage, streamErr = s.parseStreamChunks(resp, ch, roundCtx)
-			}
-			resp.Body.Close()
-			cancelRound()
+			// Keep response-body and per-round context cleanup in the same scope
+			// as parsing. If a provider parser panics or returns early, the
+			// top-level recovery still gets a closed connection and cancelled
+			// deadline instead of leaking resources until the parent run ends.
+			func() {
+				defer resp.Body.Close()
+				defer cancelRound()
+				if config.AIProviderUsesClaudeWire(options.provider) {
+					toolCalls, content, reasoning, finishReason, turnUsage, streamErr = s.parseClaudeStream(resp, ch, roundCtx)
+				} else {
+					toolCalls, content, reasoning, finishReason, turnUsage, streamErr = s.parseStreamChunks(resp, ch, roundCtx)
+				}
+			}()
 			if streamErr != nil {
 				send(sseEvent{"error", aiFlattenError(streamErr)})
 				return

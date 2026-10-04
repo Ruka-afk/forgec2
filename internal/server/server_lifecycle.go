@@ -80,12 +80,19 @@ func (s *Server) shutdown() {
 	if s.httpServer != nil {
 		// Wait briefly for in-flight requests to drain before forced shutdown
 		done := make(chan struct{})
-		s.wg.Add(1)
-		go func() {
-			defer s.wg.Done()
-			s.inFlight.Wait()
+		if s.inFlight == nil {
+			// A partially initialized server can own an HTTP server before the
+			// request tracker is installed. Treat that state as having no
+			// tracked requests instead of panicking during shutdown.
 			close(done)
-		}()
+		} else {
+			s.wg.Add(1)
+			go func() {
+				defer s.wg.Done()
+				s.inFlight.Wait()
+				close(done)
+			}()
+		}
 		select {
 		case <-done:
 			slog.Info("All in-flight requests completed")

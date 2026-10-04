@@ -262,6 +262,10 @@ func (s *Server) ActivityMiddleware() gin.HandlerFunc {
 
 // handleHealthCheck provides health/ready endpoints for monitoring
 func (s *Server) handleHealthCheck(c *gin.Context) {
+	if s == nil || s.db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "db_unavailable"})
+		return
+	}
 	sqlDB, err := s.db.DB()
 	if err != nil || sqlDB.Ping() != nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "db_unavailable"})
