@@ -1,5 +1,5 @@
 
-import React, { Suspense, useEffect, useState } from "react";
+import React, { Suspense, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
@@ -23,6 +23,43 @@ const LazyAgentGeo = React.lazy(() => import("../charts/agent-geo"));
 const LazyAttackPath = React.lazy(() => import("../charts/attack-path"));
 const LazyTaskGanttSection = React.lazy(() => import("../charts/task-gantt"));
 const LazyMonitorAlertsSection = React.lazy(() => import("../charts/monitor-alerts"));
+
+/**
+ * Keep below-the-fold analytics out of the initial render and request wave.
+ * A generous root margin makes scrolling feel instant while avoiding work for
+ * charts the operator never opens during a short dashboard visit.
+ */
+function DeferredAnalyticsSection({ children }: { children: React.ReactNode }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node || visible) return;
+    if (!("IntersectionObserver" in window)) {
+      setVisible(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "320px 0px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [visible]);
+
+  return (
+    <div ref={containerRef} className="min-h-48" aria-busy={!visible}>
+      {visible ? children : <Skeleton className="h-48 w-full rounded-lg" />}
+    </div>
+  );
+}
 
 function AuditStrip() {
   const { t } = useI18n();
@@ -83,14 +120,14 @@ export default function AnalyticsView({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 mb-7">
-          <LazyListenerTrafficSection range={range} className="animate-fade-slide-up" />
-          <ChartCard title={t("dashboard.beacon_geo")} icon={Globe} iconColor="rose" exportFilename="agent-geo.png"><LazyAgentGeo /></ChartCard>
-          <ChartCard title={t("dashboard.attack_path")} icon={Route} iconColor="warning" exportFilename="attack-path.png"><LazyAttackPath /></ChartCard>
+          <DeferredAnalyticsSection><LazyListenerTrafficSection range={range} className="animate-fade-slide-up" /></DeferredAnalyticsSection>
+          <DeferredAnalyticsSection><ChartCard title={t("dashboard.beacon_geo")} icon={Globe} iconColor="rose" exportFilename="agent-geo.png"><LazyAgentGeo /></ChartCard></DeferredAnalyticsSection>
+          <DeferredAnalyticsSection><ChartCard title={t("dashboard.attack_path")} icon={Route} iconColor="warning" exportFilename="attack-path.png"><LazyAttackPath /></ChartCard></DeferredAnalyticsSection>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-7">
-          <LazyTaskGanttSection range={range} />
-          <ChartCard title={t("dashboard.active_alerts")} icon={AlertTriangle} iconColor="warning"><LazyMonitorAlertsSection /></ChartCard>
+          <DeferredAnalyticsSection><LazyTaskGanttSection range={range} /></DeferredAnalyticsSection>
+          <DeferredAnalyticsSection><ChartCard title={t("dashboard.active_alerts")} icon={AlertTriangle} iconColor="warning"><LazyMonitorAlertsSection /></ChartCard></DeferredAnalyticsSection>
         </div>
       </Suspense>
 
