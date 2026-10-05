@@ -42,6 +42,7 @@ export default function FilesPage() {
     setCurrentPathInput,
     entries,
     loading,
+    listError,
     selectedFile,
     setSelectedFile,
     uploadProgress,
@@ -241,7 +242,17 @@ export default function FilesPage() {
         </div>
       )}
 
-      {!loading && entries.length === 0 && (
+      {/* A failed listing stays visible with a retry; the table below (if any)
+          holds the last good contents, which may be stale. */}
+      {!loading && listError && (
+        <DataError
+          message={listError}
+          onRetry={() => void loadDirectory(currentPath, { refresh: true })}
+          className="py-6"
+        />
+      )}
+
+      {!loading && !listError && entries.length === 0 && (
         <Card className="flex flex-col items-center gap-2 py-10">
           <FolderOpen className="size-6 text-muted-foreground" />
           <p className="text-muted-foreground">{t("agents.files_empty")}</p>

@@ -44,6 +44,10 @@ export function useAgentFiles(agentId: string) {
   const [currentPathInput, setCurrentPathInput] = useState("C:\\");
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  // A failed listing must not be rendered as "empty" (P2 class-3): the last
+  // good entries stay visible and listError drives a persistent error card
+  // with a retry until a reload succeeds.
+  const [listError, setListError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
@@ -87,6 +91,7 @@ export function useAgentFiles(agentId: string) {
           setEntries(hit.entries);
           setCurrentPath(path);
           setCurrentPathInput(path);
+          setListError(null);
           return;
         }
       }
@@ -110,12 +115,15 @@ export function useAgentFiles(agentId: string) {
         // Sorting lives in useFilesView; cache the raw listing as served.
         storeListing(listingCacheRef.current, path, items);
         setEntries(items);
+        setListError(null);
         setCurrentPath(path);
         setCurrentPathInput(path);
       } catch (err) {
         if (ac.signal.aborted) return;
         showToast(String(err), "error");
-        setEntries([]);
+        // Keep the last good listing: a failed load is shown via listError,
+        // never by wiping entries into a reassuring "directory is empty" card.
+        setListError(err instanceof Error ? err.message : String(err));
       } finally {
         if (!ac.signal.aborted) setLoading(false);
       }
@@ -664,6 +672,7 @@ export function useAgentFiles(agentId: string) {
     setCurrentPathInput,
     entries,
     loading,
+    listError,
     selectedFile,
     setSelectedFile,
     uploadProgress,
