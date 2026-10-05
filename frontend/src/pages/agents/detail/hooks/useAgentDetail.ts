@@ -58,6 +58,17 @@ export function mergeSnapshotWithPrev<T>(snapshot: T, prev: T | null): T {
   return { ...snapshot, tasks: merged };
 }
 
+// Signature for snapshot change detection: the full snapshot is stringified on
+// every (2s-throttled) background reload, but most of its weight is a few very
+// long fields (keylogs, process dumps) that never change between reloads.
+// Their exact content does not affect the equal/not-equal decision, so proxy
+// very long strings with just their length and keep the signature compact.
+function snapshotSig(value: unknown): string {
+  return JSON.stringify(value, (_key, val) =>
+    typeof val === "string" && val.length > 1024 ? "s" + val.length : val,
+  );
+}
+
 export function useAgentDetail<T>(agentId: string) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,7 +95,7 @@ export function useAgentDetail<T>(agentId: string) {
         hasDataRef.current = true;
         setData((prev) => {
           const merged = mergeSnapshotWithPrev<T>(response, prev);
-          const snap = JSON.stringify(merged);
+          const snap = snapshotSig(merged);
           if (lastSnapshotRef.current === snap) return prev;
           lastSnapshotRef.current = snap;
           return merged;
