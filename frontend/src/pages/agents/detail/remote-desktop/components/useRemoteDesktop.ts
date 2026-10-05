@@ -48,6 +48,12 @@ export function useRemoteDesktop(agentId: string) {
   const id = agentId;
   const [monitoring, setMonitoring] = useState(false);
   const monitoringRef = useRef(false);
+  // A monitor session is "started" the moment the start request is dispatched
+  // (a client-side abort can still leave it running server-side) and only
+  // ends when the stop request resolves. The server's screen-monitor slot is
+  // per-AGENT with no client ownership, so every stop decision below keys
+  // off this ref instead of firing unconditionally.
+  const sessionStartedRef = useRef(false);
   const [status, setStatus] = useState<RdpStatus>("waiting");
   const [screenData, setScreenData] = useState<string | null>(null);
   const [resolution, setResolution] = useState<string>("medium");
@@ -76,10 +82,13 @@ export function useRemoteDesktop(agentId: string) {
   const prevIdRef = useRef(id);
   useEffect(() => {
     if (prevIdRef.current !== id) {
-      // Stop any running monitoring for the previous agent
-      if (monitoringRef.current) {
+      // Stop any monitor for the previous agent. sessionStartedRef covers
+      // both "started" and "start in flight" (monitoringRef is only set
+      // after the start POST resolves).
+      if (sessionStartedRef.current) {
         actionAbortRef.current?.abort();
         monitoringRef.current = false;
+        sessionStartedRef.current = false;
         setMonitoring(false);
         setStatus("waiting");
         setWsLive(false);
@@ -160,6 +169,7 @@ export function useRemoteDesktop(agentId: string) {
     }
     const actionAbort = new AbortController();
     actionAbortRef.current = actionAbort;
+    sessionStartedRef.current = true; // set at dispatch: a client-side abort may leave the monitor running server-side
     setStatus("capturing");
     try {
       await api.post(paths.agents.screenStart(id), { interval: String(pollInterval) }, { signal: actionAbort.signal });
@@ -169,6 +179,7 @@ export function useRemoteDesktop(agentId: string) {
       await captureFrame(actionAbort.signal);
     } catch {
       if (actionAbort.signal.aborted) return;
+      sessionStartedRef.current = false; // the server rejected the start: no session to stop
       setStatus("error");
       setMonitoring(false);
       monitoringRef.current = false;
@@ -188,8 +199,9 @@ export function useRemoteDesktop(agentId: string) {
     setStatus("waiting");
     try {
       await api.post(paths.agents.screenStop(id), undefined, { signal: actionAbort.signal });
+      sessionStartedRef.current = false; // stop took effect
     } catch {
-      if (actionAbort.signal.aborted) return;
+      if (actionAbort.signal.aborted) return; // the unmount cleanup re-issues the stop
       toast.error(t("agents.rdp_stop_failed"));
     } finally {
       if (actionAbortRef.current === actionAbort) actionAbortRef.current = null;
@@ -222,6 +234,13 @@ export function useRemoteDesktop(agentId: string) {
       if (frameRafRef.current !== null) cancelAnimationFrame(frameRafRef.current);
       if (cursorRafRef.current !== null) cancelAnimationFrame(cursorRafRef.current);
       if (!id) return;
+      // The server's screen-monitor slot is per-AGENT with no client
+      // ownership: an unconditional stop here would kill a monitor started
+      // from another tab/page (e.g. the Screen tab's useScreenMonitor),
+      // which would then freeze silently. Only stop a session this hook
+      // dispatched (sessionStartedRef), and an aborted in-flight stop stays
+      // "started" so the stop is re-issued here instead of lost.
+      if (!sessionStartedRef.current) return;
       api.post(paths.agents.screenStop(id)).catch((e) => { logger.error("screenStop failed", e); });
     };
   }, [id]);
