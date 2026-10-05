@@ -140,37 +140,55 @@ func (s *Server) parseAndStoreCredentials(agentID string, raw string, taskID uin
 		return
 	}
 
-	// Optimization: Load existing creds once and use HashSet for O(1) lookup
-	type credKey struct {
-		AgentID, Domain, Username, Hash, Password string
+	// Attribute harvests to the agent's owning tenant once, up front, so the
+	// per-row write hook doesn't re-SELECT the agent (and the default tenant)
+	// for every credential on the single-writer pool.
+	if tid := s.agentTenantID(agentID); tid != 0 {
+		for i := range entries {
+			entries[i].TenantID = tid
+		}
 	}
 
-	existingSet := make(map[credKey]bool)
+	// Optimization: load existing dedup keys once and use a HashSet for O(1)
+	// lookup. The bounded dedup_key column (a digest of the plaintext
+	// identity, populated at insert) replaces the full-row scan: no blob I/O,
+	// no per-row AfterFind decryption, and it stops re-walking the agent's
+	// entire credential history on every fresh harvest.
+	existingSet := make(map[string]bool)
 	var lastID uint
 	const batchSize = 1000
 	for {
-		var batch []db.CredentialEntry
-		if err := database.Where("agent_id = ? AND id > ?", agentID, lastID).
-			Order("id ASC").Limit(batchSize).Find(&batch).Error; err != nil {
-			slog.Error("Failed to load existing credential batch", "err", err)
+		var rows []struct {
+			ID       uint
+			DedupKey string `gorm:"dedup_key"`
 		}
-		if len(batch) == 0 {
+		if err := database.Model(&db.CredentialEntry{}).
+			Select("id", "dedup_key").
+			Where("agent_id = ? AND id > ? AND dedup_key <> ?", agentID, lastID, "").
+			Order("id ASC").Limit(batchSize).Scan(&rows).Error; err != nil {
+			slog.Error("Failed to load existing credential dedup keys", "err", err)
+		}
+		if len(rows) == 0 {
 			break
 		}
-		for _, e := range batch {
-			existingSet[credKey{e.AgentID, e.Domain, e.Username, e.Hash, e.Password}] = true
+		for _, r := range rows {
+			existingSet[r.DedupKey] = true
 		}
-		lastID = batch[len(batch)-1].ID
+		lastID = rows[len(rows)-1].ID
 	}
 
-	// Filter duplicates using HashSet
+	// Filter duplicates using HashSet. Keys digest the plaintext identity, so
+	// they are computed on the parsed (unencrypted) entries — the write hook
+	// stores the same digest in dedup_key at insert time.
 	var batch []db.CredentialEntry
+	seen := make(map[string]bool, len(entries))
 	for _, e := range entries {
-		key := credKey{e.AgentID, e.Domain, e.Username, e.Hash, e.Password}
-		if !existingSet[key] {
-			batch = append(batch, e)
-			existingSet[key] = true // Mark as added to avoid duplicates in batch
+		key := db.ComputeCredDedupKey(e.AgentID, e.Domain, e.Username, e.Password, e.Hash)
+		if existingSet[key] || seen[key] {
+			continue
 		}
+		seen[key] = true
+		batch = append(batch, e)
 	}
 
 	if len(batch) > 0 {
@@ -205,6 +223,23 @@ func (s *Server) parseAndStoreCredentials(agentID string, raw string, taskID uin
 			"count":    len(batch),
 		})
 	}
+}
+
+// agentTenantID resolves the tenant owning an agent's harvests, with a
+// default-tenant fallback for orphaned agent rows (mirrors the CredentialEntry
+// write hook, but resolved once per harvest instead of once per row). Returns
+// 0 when neither resolves; callers leave TenantID unset in that case and the
+// hook's own fallback takes over.
+func (s *Server) agentTenantID(agentID string) uint {
+	var agent db.Implant
+	if err := s.db.Select("tenant_id").Where("id = ?", agentID).First(&agent).Error; err == nil && agent.TenantID != 0 {
+		return agent.TenantID
+	}
+	var t db.Tenant
+	if err := s.db.Where("name = ?", db.DefaultTenantName).First(&t).Error; err == nil {
+		return t.ID
+	}
+	return 0
 }
 
 // parseCredentialSource classifies a raw credential dump for audit detail
@@ -396,6 +431,9 @@ func (s *Server) parseAndStorePasswordSprayResults(agentID string, task db.Task,
 		existSet[credKey{agentID, k.Domain, k.Username, k.Password, "password_spray"}] = true
 	}
 
+	// Resolve the owning tenant once for the whole result instead of letting
+	// the per-row write hook re-SELECT it.
+	tenantID := s.agentTenantID(agentID)
 	var newEntries []db.CredentialEntry
 	for _, r := range out.Results {
 		if r.Status != "valid" {
@@ -436,6 +474,7 @@ func (s *Server) parseAndStorePasswordSprayResults(agentID string, task db.Task,
 			Confirmed: true, // verified by LogonUser during the spray
 			Notes:     "validated via password spray",
 			TaskID:    task.ID,
+			TenantID:  tenantID,
 		})
 	}
 
@@ -446,9 +485,7 @@ func (s *Server) parseAndStorePasswordSprayResults(agentID string, task db.Task,
 		slog.Error("Failed to store password spray credentials", "agent_id", agentID, "err", err)
 		return 0
 	}
-	for _, e := range newEntries {
-		s.RecordUsage(e.ID, task.ID, agentID, "spray", "ok", "", "")
-	}
+	s.recordUsageBatch(newEntries, task.ID, agentID, "spray", "ok")
 	slog.Info("Password spray hits stored in vault", "agent_id", agentID, "count", len(newEntries))
 	s.LogAuditRecord(nil, "credential_ingest", "credential", agentID,
 		"stored "+strconv.Itoa(len(newEntries))+" password spray credentials", true, nil)
@@ -1287,6 +1324,31 @@ func (s *Server) RecordUsage(credentialID uint, taskID uint, agentID, action, re
 	}
 	if err := s.db.Create(&entry).Error; err != nil {
 		slog.Error("Failed to record credential usage", "credential_id", credentialID, "action", action, "error", err)
+	}
+}
+
+// recordUsageBatch appends one ledger row per credential in a single batched
+// insert instead of N individually-committed inserts on the single-writer
+// pool. Rows without an ID yet (create failed) are skipped.
+func (s *Server) recordUsageBatch(entries []db.CredentialEntry, taskID uint, agentID, action, result string) {
+	usages := make([]db.CredentialUsage, 0, len(entries))
+	for _, e := range entries {
+		if e.ID == 0 {
+			continue
+		}
+		usages = append(usages, db.CredentialUsage{
+			CredentialID: e.ID,
+			TaskID:       taskID,
+			AgentID:      agentID,
+			Action:       action,
+			Result:       result,
+		})
+	}
+	if len(usages) == 0 {
+		return
+	}
+	if err := s.db.CreateInBatches(usages, 50).Error; err != nil {
+		slog.Error("Failed to record credential usage batch", "count", len(usages), "error", err)
 	}
 }
 
