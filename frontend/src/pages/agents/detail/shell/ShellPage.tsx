@@ -189,20 +189,19 @@ export default function AgentShellPage() {
   }, [tabs, routeAgentId, navigate, t]);
 
   const closeTab = useCallback((nextId: string) => {
-    setTabs((prev) => {
-      const next = prev.filter((tb) => tb.agentId !== nextId);
-      if (nextId === activeAgentId) {
-        const fallback = next[next.length - 1];
-        if (fallback) {
-          setActiveAgentId(fallback.agentId);
-          navigate(`/agents/${fallback.agentId}/shell`, { replace: true });
-        } else {
-          navigate("/agents");
-        }
-      }
-      return next;
-    });
-  }, [activeAgentId, navigate]);
+    // Compute the post-close state from the `tabs` snapshot and run the
+    // side effects at top level — not inside the setTabs updater (which must
+    // stay pure; the double-invocation there fired navigate/setActiveAgentId
+    // twice). Same shape as openAgentTab above.
+    const next = tabs.filter((tb) => tb.agentId !== nextId);
+    setTabs(next);
+    if (nextId === activeAgentId) {
+      const fallback = next[next.length - 1];
+      setActiveAgentId(fallback ? fallback.agentId : "");
+      if (fallback) navigate(`/agents/${fallback.agentId}/shell`, { replace: true });
+      else navigate("/agents");
+    }
+  }, [tabs, activeAgentId, navigate]);
 
   const listMeta = useMemo(() => {
     const map: Record<string, AgentShellMeta> = {};
