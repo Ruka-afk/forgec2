@@ -48,6 +48,10 @@ export function usePayloadGenerator() {
   // must stay blocked rather than proceed against an unknown catalog.
   const [profilesLoaded, setProfilesLoaded] = useState(false);
   const [profilesError, setProfilesError] = useState<string | null>(null);
+  // A failed listener read is a persistent, retriable condition (rendered as a
+  // workspace banner), not a transient toast: the last-known registry is kept
+  // visible and generation stays gated until a read succeeds.
+  const [listenersError, setListenersError] = useState<string | null>(null);
   const [profileLocked, setProfileLocked] = useState(false);
   const savedManualRef = useRef<{ interval: string; jitter: string; ua: string } | null>(null);
   const prevProfileRef = useRef<string>("default");
@@ -89,9 +93,12 @@ export function usePayloadGenerator() {
     try {
       const data = await api.get(paths.listeners.list);
       setListeners(normalizeListeners(data));
+      setListenersError(null);
     } catch (e) {
-      setListeners([]);
-      toast.error(e instanceof Error ? e.message : t("generate.toast.load_listeners_failed"));
+      // A failed load keeps the last-known registry (stale but real) instead
+      // of wiping it to "empty"; listenersError is what the workspace banner
+      // renders and what keeps generation gated until a read succeeds.
+      setListenersError(e instanceof Error ? e.message : t("generate.listeners_unreadable"));
     }
     try {
       const profileData = await api.get(paths.generate.profiles);
@@ -709,7 +716,7 @@ export function usePayloadGenerator() {
   }), [handleGenerateBinary, handleGeneratePS1, handleGenerateUnix, handleGenerateStager, handleGenerateShellcode, handleGenerateDonut, handleGenerateOneLiner]);
 
   return {
-    listeners, loading, profilePresets, profileLocked, profilesLoaded, profilesError, loadData,
+    listeners, listenersError, loading, profilePresets, profileLocked, profilesLoaded, profilesError, loadData,
     showListenerModal, setShowListenerModal,
     listenerForm, setListenerForm,
     shared, setShared,

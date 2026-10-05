@@ -137,7 +137,10 @@ export default function GeneratePayloadWorkspace() {
   // ship a payload whose beacon profile was never verified. Keep generation
   // closed until the catalog has been read successfully.
   const profilesKnown = g.profilesLoaded && !g.profilesError;
-  const canGenerate = profilesKnown && canGeneratePayload({
+  // A listener registry that failed to read keeps its last-known list, so
+  // without this gate the picker could point a build at a listener we can no
+  // longer vouch for — treat it like the profiles gate: unread = blocked.
+  const canGenerate = profilesKnown && !g.listenersError && canGeneratePayload({
     listenerId: g.shared.listener_id,
     listenerScheme: currentListener?.scheme || currentListener?.type,
     beaconTransport: g.shared.beacon_transport,
@@ -198,6 +201,14 @@ export default function GeneratePayloadWorkspace() {
         <div role="alert" className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-foreground">
           <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1">{t("generate.profiles_blocked")}</span>
+          <Button onClick={() => { void g.loadData(); }} size="sm" variant="outline" className="min-h-11 px-4 sm:min-h-7 sm:px-2.5">{t("common.try_again")}</Button>
+        </div>
+      )}
+
+      {g.listenersError && (
+        <div role="alert" className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-foreground">
+          <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1">{t("generate.listeners_blocked")}</span>
           <Button onClick={() => { void g.loadData(); }} size="sm" variant="outline" className="min-h-11 px-4 sm:min-h-7 sm:px-2.5">{t("common.try_again")}</Button>
         </div>
       )}
