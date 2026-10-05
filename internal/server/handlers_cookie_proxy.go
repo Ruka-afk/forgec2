@@ -184,13 +184,21 @@ func (h *cookieProxyHandler) handleConnect(w http.ResponseWriter, r *http.Reques
 	_, _ = bufrw.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n")
 	_ = bufrw.Flush()
 	go func() {
-		defer conn.Close()
-		defer backend.Close()
-		if bufrw.Reader.Buffered() > 0 {
+		var wg sync.WaitGroup
+		wg.Go(func() {
+			// Pump client→backend. The source is the buffered reader so any
+			// bytes already consumed at Hijack() are relayed first. When the
+			// client side ends, close the conn so the outer pump cannot
+			// stay blocked on a target that never closes the connection.
 			_, _ = io.Copy(backend, bufrw.Reader)
-		}
-		go func() { _, _ = io.Copy(backend, conn) }()
+			conn.Close()
+		})
+		// Pump backend→client. When either direction ends, close the
+		// client conn to unblock the other pump, then close the backend.
 		_, _ = io.Copy(conn, backend)
+		conn.Close()
+		wg.Wait()
+		backend.Close()
 	}()
 }
 
