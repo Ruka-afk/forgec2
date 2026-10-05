@@ -39,7 +39,32 @@ var roeAlwaysAllowed = map[string]bool{
 	"set_sleep": true, "help": true, "hostinfo": true,
 }
 
+// checkRoE is the Rules-of-Engagement gate for creation paths that do not
+// already hold the agent row: it resolves the row, then hands off to
+// checkRoELoaded. Batch paths that loaded the agents up front call
+// checkRoELoaded directly to avoid one point SELECT per agent.
 func (s *Server) checkRoE(agentID, taskType, command, data, path string) error {
+	if s.cfg == nil || !s.cfg.Roe.Enabled {
+		return nil
+	}
+	if roeAlwaysAllowed[taskType] {
+		return nil
+	}
+	var agent db.Implant
+	if err := s.db.Select("id, public_ip, ip").First(&agent, "id = ?", agentID).Error; err != nil {
+		// Unknown agent: no IP to check, but scoped task types still get
+		// the target checks below (a zero-valued agent's empty IPs are
+		// skipped by the nil-parse in checkRoELoaded).
+		agent = db.Implant{}
+	}
+	return s.checkRoELoaded(agent, taskType, command, data, path)
+}
+
+// checkRoELoaded runs the RoE checks against an already-loaded agent row.
+// The agent's IPs are checked against the CIDR lists only when present:
+// empty strings parse to nil and are skipped, so a zero-valued agent (row
+// not found) is equivalent to the not-found case in checkRoE.
+func (s *Server) checkRoELoaded(agent db.Implant, taskType, command, data, path string) error {
 	if s.cfg == nil || !s.cfg.Roe.Enabled {
 		return nil
 	}
@@ -52,19 +77,16 @@ func (s *Server) checkRoE(agentID, taskType, command, data, path string) error {
 	denyDomains := normalizeDomains(s.cfg.Roe.DenyDomains)
 	allowDomains := normalizeDomains(s.cfg.Roe.AllowDomains)
 
-	var agent db.Implant
-	if err := s.db.Select("id, public_ip, ip").First(&agent, "id = ?", agentID).Error; err == nil {
-		for _, ipStr := range []string{agent.PublicIP, agent.IP} {
-			ip := net.ParseIP(strings.TrimSpace(ipStr))
-			if ip == nil {
-				continue
-			}
-			if cidrContains(deny, ip) {
-				return fmt.Errorf("RoE: agent IP %s is in a denied CIDR", ip)
-			}
-			if len(allow) > 0 && !cidrContains(allow, ip) && roeScoped(taskType) {
-				return fmt.Errorf("RoE: agent IP %s is outside the allowed CIDRs", ip)
-			}
+	for _, ipStr := range []string{agent.PublicIP, agent.IP} {
+		ip := net.ParseIP(strings.TrimSpace(ipStr))
+		if ip == nil {
+			continue
+		}
+		if cidrContains(deny, ip) {
+			return fmt.Errorf("RoE: agent IP %s is in a denied CIDR", ip)
+		}
+		if len(allow) > 0 && !cidrContains(allow, ip) && roeScoped(taskType) {
+			return fmt.Errorf("RoE: agent IP %s is outside the allowed CIDRs", ip)
 		}
 	}
 

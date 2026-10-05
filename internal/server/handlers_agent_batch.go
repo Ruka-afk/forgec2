@@ -151,16 +151,21 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 
 	var existingAgents []db.Implant
 	// Tenant gate: foreign-tenant ids simply miss the visible set and fall
-	// into failedCount below — no task is ever queued on another tenant's agent.
-	if err := s.tenantScope(s.db, c).Select("id", "tenant_id").Where("id IN ?", uniqueIDs).Find(&existingAgents).Error; err != nil {
+	// into failedCount below — no task is ever queued on another tenant's
+	// agent. The RoE columns ride along so the RoE gate can check the row
+	// in memory instead of re-SELECTing every agent (finding: up to 500
+	// point queries serialized on the single-writer pool).
+	if err := s.tenantScope(s.db, c).Select("id", "tenant_id", "public_ip", "ip").Where("id IN ?", uniqueIDs).Find(&existingAgents).Error; err != nil {
 		handleQueryError(c, err, "Failed to query existing agents for batch")
 		return
 	}
 	existingSet := make(map[string]bool, len(existingAgents))
 	tenantByAgent := make(map[string]uint, len(existingAgents))
+	agentsByID := make(map[string]db.Implant, len(existingAgents))
 	for _, a := range existingAgents {
 		existingSet[a.ID] = true
 		tenantByAgent[a.ID] = a.TenantID
+		agentsByID[a.ID] = a
 	}
 
 	// Build all tasks first, then batch-insert in a single DB call.
@@ -220,10 +225,11 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 	tasks := make([]db.Task, 0, len(uniqueIDs))
 	validAgentIDs := make([]string, 0, len(uniqueIDs))
 
-	// Phase 1 (NO lock): per-agent validation performs DB I/O (RoE lookups).
-	// Doing it under agentPendingTasksMu — the same mutex every beacon result
-	// ingestion and createTask acquires — stalled the whole task pipeline for
-	// up to MaxBatchAgentLimit sequential queries.
+	// Phase 1 (NO lock): per-agent validation is now I/O-free for agents in
+	// the batch (the RoE gate reuses the agent load above). Doing it under
+	// agentPendingTasksMu — the same mutex every beacon result ingestion and
+	// createTask acquires — stalled the whole task pipeline for up to
+	// MaxBatchAgentLimit sequential queries.
 	type batchCandidate struct {
 		agentID string
 		task    db.Task
@@ -249,7 +255,10 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 			continue
 		}
 
-		if err := s.validateTaskCreation(c, agentID, req.TaskType, command, req.Args, req.File, callerUID); err != nil {
+		// Validation reuses the batch's own agent load for the RoE gate —
+		// no per-agent point SELECTs under the single-writer pool.
+		preloaded := agentsByID[agentID]
+		if err := s.validateTaskCreationWithAgent(c, agentID, req.TaskType, command, req.Args, req.File, callerUID, &preloaded); err != nil {
 			slog.Warn("Batch command: validation failed", "agent_id", agentID, "err", err)
 			continue
 		}

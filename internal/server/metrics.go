@@ -204,13 +204,14 @@ func metricsPromHandler() gin.HandlerFunc {
 	}
 }
 
+// updateMetricsFromDB refreshes the fast, predicate-indexed gauges plus the
+// process-local syncs. The unfiltered full-table COUNT(*)s (implants,
+// credential_entries) are deliberately NOT here: on the single-writer SQLite
+// pool a 5-second unfiltered walk of credential_entries (which grows
+// monotonically with every harvest, carrying encrypted blobs) would contend
+// with beacons for the one connection. Those live in
+// updateSlowMetricsFromDB, run on its own longer cadence.
 func (s *Server) updateMetricsFromDB() {
-	var total int64
-	if err := s.db.Model(&db.Implant{}).Count(&total).Error; err != nil {
-		slog.Error("Failed to count total agents for metrics", "err", err)
-	}
-	s.metrics.AgentsTotal.Set(float64(total))
-
 	offlineCutoff := time.Now().Add(-s.offlineThreshold())
 	var online int64
 	if err := s.db.Model(&db.Implant{}).Where("last_seen > ?", offlineCutoff).Count(&online).Error; err != nil {
@@ -229,12 +230,6 @@ func (s *Server) updateMetricsFromDB() {
 		slog.Error("Failed to count listeners for metrics", "err", err)
 	}
 	s.metrics.ListenersTotal.Set(float64(listeners))
-
-	var creds int64
-	if err := s.db.Model(&db.CredentialEntry{}).Count(&creds).Error; err != nil {
-		slog.Error("Failed to count credentials for metrics", "err", err)
-	}
-	s.metrics.CredsTotal.Set(float64(creds))
 
 	// Sync the per-agent rekey counters from the live session manager so the
 	// exported series reflects reality (counters are process-local and reset
@@ -259,4 +254,23 @@ func (s *Server) updateMetricsFromDB() {
 		}
 		s.metrics.BackupAgeSeconds.Set(age)
 	}
+}
+
+// updateSlowMetricsFromDB refreshes the unfiltered COUNT(*) gauges (total
+// agents, total credentials). Both are full-table walks on the single-writer
+// SQLite pool — O(rows) against credential_entries, which grows with every
+// harvest — so they run on a much longer cadence (server_lifecycle.go's
+// slow ticker) instead of every 5-second tick.
+func (s *Server) updateSlowMetricsFromDB() {
+	var total int64
+	if err := s.db.Model(&db.Implant{}).Count(&total).Error; err != nil {
+		slog.Error("Failed to count total agents for metrics", "err", err)
+	}
+	s.metrics.AgentsTotal.Set(float64(total))
+
+	var creds int64
+	if err := s.db.Model(&db.CredentialEntry{}).Count(&creds).Error; err != nil {
+		slog.Error("Failed to count credentials for metrics", "err", err)
+	}
+	s.metrics.CredsTotal.Set(float64(creds))
 }

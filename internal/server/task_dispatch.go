@@ -82,8 +82,20 @@ func callerOpts(c *gin.Context) []TaskOption {
 // validity, chrome-agent affinity, Rules-of-Engagement, the lportfwd kill
 // switch, adaptive OPSEC blocking, and the operator soft-lock. Centralizing
 // these keeps the single-task and batch paths consistent so neither can
-// bypass a gate.
+// bypass a gate. Creation paths that do not already hold the agent row call
+// this (the RoE gate SELECTs it); batch paths use
+// validateTaskCreationWithAgent to reuse their own batch load.
 func (s *Server) validateTaskCreation(c *gin.Context, agentID, taskType, command, data, path string, callerUserID uint) error {
+	return s.validateTaskCreationWithAgent(c, agentID, taskType, command, data, path, callerUserID, nil)
+}
+
+// validateTaskCreationWithAgent is validateTaskCreation for callers that
+// already hold the agent row (the batch path loads all agents up front):
+// passing preloadedAgent lets the RoE gate check that row in memory instead
+// of re-SELECTing every agent, which is one point query per agent on the
+// single-writer pool. With preloadedAgent == nil it behaves exactly like
+// validateTaskCreation.
+func (s *Server) validateTaskCreationWithAgent(c *gin.Context, agentID, taskType, command, data, path string, callerUserID uint, preloadedAgent *db.Implant) error {
 	if !IsKnownTaskType(taskType) && !protocol.ValidTaskType(taskType) {
 		return fmt.Errorf("unknown task type: %s", taskType)
 	}
@@ -91,7 +103,11 @@ func (s *Server) validateTaskCreation(c *gin.Context, agentID, taskType, command
 	// lportfwd opens a tunneled egress path through the teamserver; honor the
 	// server.lportfwd_enabled kill switch centrally so every creation path
 	// (handlers, bulk, automation, scripting) inherits it.
-	if err := s.checkRoE(agentID, taskType, command, data, path); err != nil {
+	if preloadedAgent != nil {
+		if err := s.checkRoELoaded(*preloadedAgent, taskType, command, data, path); err != nil {
+			return err
+		}
+	} else if err := s.checkRoE(agentID, taskType, command, data, path); err != nil {
 		return err
 	}
 
@@ -655,7 +671,11 @@ func (s *Server) requeueStaleTasksPass() bool {
 	}
 
 	var staleTasks []db.Task
-	if err := s.db.Where("status = ? AND claimed_at < ? AND acknowledged_at IS NULL AND delivery_attempts < 3", "running", cutoff).Limit(1000).Find(&staleTasks).Error; err != nil {
+	// Select only the columns the requeue pass uses: full rows drag
+	// Result/Error blobs and fire a pointless per-row AES-GCM decrypt in
+	// Task.AfterFind (same pattern as the beacon-claim path).
+	if err := s.db.Where("status = ? AND claimed_at < ? AND acknowledged_at IS NULL AND delivery_attempts < 3", "running", cutoff).
+		Select("id, agent_id, claimed_at").Limit(1000).Find(&staleTasks).Error; err != nil {
 		slog.Error("Failed to find stale running tasks", "error", err)
 		return false
 	}
@@ -747,7 +767,10 @@ func (s *Server) failStaleAcknowledgedTasks() {
 func (s *Server) failStaleAcknowledgedTasksPass() bool {
 	cutoff := time.Now().Add(-AckedTaskResultTimeout)
 	var staleTasks []db.Task
-	if err := s.db.Where("status = ? AND acknowledged_at IS NOT NULL AND acknowledged_at < ?", "running", cutoff).Limit(1000).Find(&staleTasks).Error; err != nil {
+	// Column Select: the pass only needs id/agent_id/acknowledged_at —
+	// full rows would drag Result/Error blobs and fire per-row decryption.
+	if err := s.db.Where("status = ? AND acknowledged_at IS NOT NULL AND acknowledged_at < ?", "running", cutoff).
+		Select("id, agent_id, acknowledged_at").Limit(1000).Find(&staleTasks).Error; err != nil {
 		slog.Error("Failed to find stale acknowledged tasks", "error", err)
 		return false
 	}
@@ -779,24 +802,32 @@ func (s *Server) failStaleAcknowledgedTasksPass() bool {
 	}
 	now := time.Now()
 	var failIDs []uint
-	var renewed int
+	var renewIDs []uint
 	for _, t := range staleTasks {
 		// Renew once: agent alive since ack, and within 2 windows of the ack
 		// (bounds wedged agents to a single extension).
 		if t.AcknowledgedAt != nil &&
 			now.Sub(*t.AcknowledgedAt) < 2*AckedTaskResultTimeout &&
 			lastSeen[t.AgentID].After(*t.AcknowledgedAt) {
-			if err := s.withBusyRetryDB("sweep", func() *gorm.DB {
-				return s.db.Model(&db.Task{}).Where("id = ? AND status = ?", t.ID, "running").
-					Update("acknowledged_at", now)
-			}).Error; err != nil {
-				slog.Warn("Acked sweep: renewal failed", "task", t.ID, "err", err)
-			} else {
-				renewed++
-			}
+			renewIDs = append(renewIDs, t.ID)
 			continue
 		}
 		failIDs = append(failIDs, t.ID)
+	}
+	renewed := 0
+	if len(renewIDs) > 0 {
+		// One guarded batch UPDATE instead of one busy-retry round trip per
+		// task: the status guard still skips rows whose result arrived
+		// between SELECT and UPDATE.
+		res := s.withBusyRetryDB("sweep", func() *gorm.DB {
+			return s.db.Model(&db.Task{}).Where("id IN ? AND status = ?", renewIDs, "running").
+				Update("acknowledged_at", now)
+		})
+		if res.Error != nil {
+			slog.Warn("Acked sweep: batch renewal failed", "count", len(renewIDs), "err", res.Error)
+		} else {
+			renewed = int(res.RowsAffected)
+		}
 	}
 	if renewed > 0 {
 		slog.Info("Renewed acked tasks for live agents", "count", renewed)

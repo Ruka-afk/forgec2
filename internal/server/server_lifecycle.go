@@ -250,7 +250,10 @@ func (s *Server) Run() error {
 		}
 	}()
 
-	// periodic metrics refresh (same interval as nav stats cache)
+	// periodic metrics refresh (same interval as nav stats cache). The fast
+	// tick covers the predicate-indexed gauges; the unfiltered COUNT(*)
+	// walks (total agents/credentials) run on a separate 60s ticker so they
+	// stop competing with beacons for the single SQLite writer every 5s.
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -261,12 +264,19 @@ func (s *Server) Run() error {
 		}()
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
+		slow := time.NewTicker(60 * time.Second)
+		defer slow.Stop()
+		// Seed the slow gauges at boot so a scrape before the first slow
+		// tick still sees real totals instead of zero.
+		s.updateSlowMetricsFromDB()
 		for {
 			select {
 			case <-s.ctx.Done():
 				return
 			case <-ticker.C:
 				s.updateMetricsFromDB()
+			case <-slow.C:
+				s.updateSlowMetricsFromDB()
 			}
 		}
 	}()

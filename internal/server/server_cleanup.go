@@ -91,6 +91,14 @@ func (s *Server) cleanupOldData() {
 					if _, err := sqlDB.Exec("PRAGMA optimize"); err != nil {
 						slog.Debug("SQLite ANALYZE failed", "err", err)
 					}
+					// The startup block sets auto_vacuum=INCREMENTAL, which
+					// queues freed pages instead of returning them to the OS;
+					// without this call the .db file grows monotonically with
+					// task-result churn (encrypted Result/Error blobs,
+					// credential re-encryption on key rotation).
+					if _, err := sqlDB.Exec("PRAGMA incremental_vacuum"); err != nil {
+						slog.Debug("SQLite incremental_vacuum failed", "err", err)
+					}
 				}()
 			}
 		}
