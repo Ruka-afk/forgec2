@@ -5,6 +5,7 @@ import { CardHeaderRow } from "@/components/ui/card-header-row";
   import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { fetchAllAgents } from "@/lib/agents";
 import { downloadJSON } from "@/lib/download";
 import { nowTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
@@ -777,8 +778,9 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
             <Button onClick={async () => {
               setLoadingAgents(true);
               try {
-                const d = await api.get(paths.agents.list("page=1&pageSize=500"));
-                const list = (d.agents || d.data || (Array.isArray(d) ? d : [])) as Record<string, unknown>[];
+                // Full-fleet fetch: the push modal must reach every agent,
+                // not just the first 100 rows the server page cap allows.
+                const list = await fetchAllAgents();
                 setPushAgents(list.map((a) => ({ id: String(a.id || ""), hostname: String(a.hostname || a.ip || ""), ip: String(a.ip || "") })));
               } catch { toast.error(t("profiles.toast.load_agents_failed")); }
               setLoadingAgents(false);

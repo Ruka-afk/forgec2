@@ -1,6 +1,7 @@
 
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { fetchAllAgents } from "@/lib/agents";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { paths } from "@/lib/api-paths";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -42,13 +43,15 @@ export default function TokensPage() {
 
   const { data, loading, error, refresh } = useApiResource<{ tokens: Token[]; agents: Agent[] }>({
     fetcher: async () => {
-      const [tokenData, agentData] = await Promise.all([
-        api.get(paths.tokens.list),
-        api.get(paths.agents.list("page=1&pageSize=200")),
-      ]) as Record<string, unknown>[];
+      const [tokenData, allAgents] = await Promise.all([
+        api.get<Record<string, unknown>>(paths.tokens.list),
+        // Full fleet: token rows map to hostnames, so one truncated page
+        // would leave tokens pointing at unknown agents on large fleets.
+        fetchAllAgents(),
+      ]);
       return {
         tokens: (tokenData.tokens || tokenData.data || tokenData || []) as Token[],
-        agents: (agentData.agents || agentData.data || agentData || []) as Agent[],
+        agents: allAgents as Agent[],
       };
     },
     errorMessage: t("tokens.load_failed"),

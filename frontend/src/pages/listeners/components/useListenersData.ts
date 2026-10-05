@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { fetchAllAgents } from "@/lib/agents";
 import { firstArray, normalizeListEnvelope } from "@/lib/envelope";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { POLL } from "@/lib/polling";
@@ -175,26 +176,33 @@ export function useListenersData() {
     [loadListeners, t],
   );
 
+  // Agent counts come from the FULL fleet (paged fetch; a single request can
+  // never return more than the server's 100-row page cap). t rotates on
+  // locale switch, so keep it in a ref and run this effect once on mount.
+  // Named tRef (not a longer camelCase) so the i18n checker's
+  // tRef.current("key") usage pattern recognizes the lookup.
+  const tRef = useRef(t);
+  tRef.current = t;
+
   useEffect(() => {
     const controller = new AbortController();
-    api
-      .get(paths.agents.list("page=1&pageSize=500"), { signal: controller.signal })
-      .then((d) => {
-        const agents = normalizeListEnvelope(d, ["agents", "Agents", "data"]);
+    fetchAllAgents(controller.signal)
+      .then((agents) => {
         const map: Record<string, number> = {};
-        (agents as { listener_id?: number; ListenerID?: number }[]).forEach((a) => {
-          const lid = String(a.listener_id ?? a.ListenerID ?? "");
+        agents.forEach((a) => {
+          const lid = String(a.listener_id ?? "");
           if (lid && lid !== "0") map[lid] = (map[lid] || 0) + 1;
         });
         setAgentCountMap(map);
         setAgentCountError(null);
       })
       .catch((e: unknown) => {
+        if (controller.signal.aborted) return;
         setAgentCountMap({});
-        setAgentCountError(e instanceof Error ? e.message : t("listeners.agent_count_failed"));
+        setAgentCountError(e instanceof Error ? e.message : tRef.current("listeners.agent_count_failed"));
       });
     return () => controller.abort();
-  }, [t]);
+  }, []);
 
   // Live registry updates: refresh when another operator changes a listener
   // or when the WS reconnects (sync snapshot).

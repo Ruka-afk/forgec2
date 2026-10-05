@@ -41,14 +41,14 @@ interface AgentsPage {
  * unwrap:false). Tolerates the data/agents/Agents list keys /api/agents has
  * historically been served under, and coerces total (number | string).
  */
-export async function fetchAgentsPage(query: AgentsListQuery = {}): Promise<AgentsPage> {
+export async function fetchAgentsPage(query: AgentsListQuery = {}, signal?: AbortSignal): Promise<AgentsPage> {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(query)) {
     if (v === undefined || v === "") continue;
     q.set(k, String(v));
   }
   const suffix = q.size ? `?${q.toString()}` : "";
-  const raw = await api.get<unknown>(paths.agents.list(suffix), { unwrap: false });
+  const raw = await api.get<unknown>(paths.agents.list(suffix), { unwrap: false, signal });
   const agents = firstArray(raw, ["data", "agents", "Agents"]) as AgentDTO[];
   return { agents, total: firstNumber(raw, ["total"], agents.length) };
 }

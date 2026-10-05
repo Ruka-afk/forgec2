@@ -278,8 +278,12 @@ func parsePagination(c *gin.Context, defaultPageSize, maxPageSize int) paginatio
 		pageSizeStr = c.DefaultQuery("pageSize", strconv.Itoa(defaultPageSize))
 	}
 	pageSize, _ := strconv.Atoi(pageSizeStr)
-	if pageSize < 1 || pageSize > maxPageSize {
+	if pageSize < 1 {
 		pageSize = defaultPageSize
+	} else if pageSize > maxPageSize {
+		// Clamp, don't reset: a client asking for "as many as you'll give
+		// me" (e.g. full-fleet dashboards) must get the max, not 20.
+		pageSize = maxPageSize
 	}
 	return paginationParams{
 		Page:     page,

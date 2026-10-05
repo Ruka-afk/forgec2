@@ -2,6 +2,7 @@
 import { useState, useMemo } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { fetchAllAgents } from "@/lib/agents";
 import { downloadBlob } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
 import { Pagination } from "@/components/ui/pagination";
@@ -139,9 +140,10 @@ export default function PluginsPage() {
 
   const loadExecuteAgents = async () => {
     try {
-      const d = await api.get<{ agents?: { id: string; hostname?: string }[] }>(paths.agents.list("page=1&page_size=200"));
-      const list = Array.isArray(d) ? d : d.agents || [];
-      setExecuteAgents(list);
+      // Full-fleet fetch: a single page-size request would be truncated to
+      // the server's 100-row cap on large fleets.
+      const list = await fetchAllAgents();
+      setExecuteAgents(list.map((a) => ({ id: String(a.id ?? ""), hostname: a.hostname })));
     } catch { setExecuteAgents([]); }
   };
 
