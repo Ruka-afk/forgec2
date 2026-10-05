@@ -148,7 +148,9 @@ async function request<T>(path: string, options: RequestOptions & { body?: unkno
   // polls are never cached.
   const isGet = method === "GET";
   if (isGet && !externalSignal) {
-    const key = `GET ${path} ${options.unwrap === false ? "raw" : "unwrap"}`;
+    // unwrap and raw each change what the caller receives from the same path,
+    // so two distinct shapes must not coalesce into one in-flight promise.
+    const key = `GET ${path} ${options.unwrap === false ? "raw" : "unwrap"} ${options.raw ? "rawfetch" : "json"}`;
     const inflight = getDedupCache.get(key);
     if (inflight) return inflight as Promise<T>;
     const promise = doRequest();
