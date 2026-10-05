@@ -1,6 +1,6 @@
-import { formatTime, formatSize } from "@/lib/utils";
+import { formatTime, formatBytes } from "@/lib/utils";
 
-export { formatSize };
+export { formatBytes };
 
 export interface FileEntry {
   name: string;

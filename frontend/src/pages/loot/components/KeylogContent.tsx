@@ -1,8 +1,5 @@
 import { useMemo } from "react";
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
+import { esc } from "@/lib/sanitize";
 
 const SENSITIVE_PATTERNS: Array<{ re: RegExp; cls: "secret" | "email" | "url" | "ip" | "user" }> = [
   // password/secret/token/api key assignments — value is highlighted
@@ -27,7 +24,7 @@ function highlightKeylog(text: string): string {
       used.push([idx, idx + len, cls]);
     }
   }
-  if (used.length === 0) return escapeHtml(text);
+  if (used.length === 0) return esc(text);
   // Walk matches in order over the raw text, escaping each segment separately.
   // Escaping first then slicing shifts indices whenever &, <, > or " appear.
   used.sort((a, b) => a[0] - b[0]);
@@ -35,11 +32,11 @@ function highlightKeylog(text: string): string {
   let pos = 0;
   for (const [s, e, cls] of used) {
     if (s < pos) continue;
-    out += escapeHtml(text.slice(pos, s));
-    out += `<mark class="keylog-${cls}">${escapeHtml(text.slice(s, e))}</mark>`;
+    out += esc(text.slice(pos, s));
+    out += `<mark class="keylog-${cls}">${esc(text.slice(s, e))}</mark>`;
     pos = e;
   }
-  out += escapeHtml(text.slice(pos));
+  out += esc(text.slice(pos));
   return out;
 }
 

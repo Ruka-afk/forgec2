@@ -18,6 +18,20 @@ export function esc(s: string): string {
     .replace(/\//g, "&#x2F;");
 }
 
+// Attribute escaper for URL-safe contexts (e.g. markdown link hrefs): escapes
+// quotes/ampersands/angle brackets so the value cannot break out of the
+// attribute, but leaves "/" unescaped so URLs stay canonical. Escaping slashes
+// as &#x2F; only matters for JSON-in-<script> breakout, which this codebase
+// does not render; entity-ified URLs would make otherwise-valid links
+// non-canonical (harder to copy, inspect, and pin in tests).
+export function escAttr(s: string): string {
+  return s.replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 const SAFE_URI_REGEXP = /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|cid|xmpp):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i;
 
 export async function sanitizeHtml(html: string): Promise<string> {

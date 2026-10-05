@@ -1,24 +1,24 @@
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
+import { esc, escAttr } from "./sanitize";
 
-function escapeAttr(s: string): string {
-  return escapeHtml(s).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-}
-
-function safeMarkdownHref(value: string): string | null {
-  // `inline` escapes the complete source before parsing Markdown. Decode the
-  // one entity produced for a literal ampersand before escaping the final
-  // attribute, otherwise query strings become `&amp;amp;` in the rendered URL.
-  const href = value.trim().replace(/&amp;/g, "&");
-  return /^(?:https?:\/\/|mailto:)/i.test(href) ? escapeAttr(href) : null;
+function safeMarkdownHref(escapedValue: string): string | null {
+  // `inline` escapes the complete source before parsing Markdown, so the
+  // captured href holds HTML entities where the source had &, <, >, ", ' or
+  // /. Decode everything the escaper can emit before gating (ampersand last,
+  // so a double-encoded &amp;#x2F; cannot decode twice), then re-escape for
+  // the attribute. escAttr (not esc) keeps "/" unescaped so the href stays a
+  // canonical URL; & escaping still breaks entity-based scheme obfuscation.
+  const href = escapedValue.trim()
+    .replace(/&#x2F;/g, "/")
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+  return /^(?:https?:\/\/|mailto:)/i.test(href) ? escAttr(href) : null;
 }
 
 function inline(text: string): string {
-  let t = escapeHtml(text);
+  let t = esc(text);
   t = t.replace(/`([^`]+)`/g, (_m, c) => `<code>${c}</code>`);
   t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   t = t.replace(/__([^_]+)__/g, "<strong>$1</strong>");
@@ -70,12 +70,12 @@ export function renderMarkdown(src: string): string {
       const codeLines: string[] = [];
       i++;
       while (i < lines.length && !/^```/.test(lines[i])) {
-        codeLines.push(escapeHtml(lines[i]));
+        codeLines.push(esc(lines[i]));
         i++;
       }
       i++; // skip closing ```
-      const cls = lang ? ` class="language-${escapeAttr(lang)}"` : "";
-      const label = lang ? `<div class="md-code-head"><span>${escapeHtml(lang.toUpperCase())}</span></div>` : "";
+      const cls = lang ? ` class="language-${esc(lang)}"` : "";
+      const label = lang ? `<div class="md-code-head"><span>${esc(lang.toUpperCase())}</span></div>` : "";
       blocks.push(`<div class="md-code-block">${label}<pre><code${cls}>${codeLines.join("\n")}</code></pre></div>`);
       continue;
     }

@@ -14,7 +14,7 @@ import { Archive, Clock, Download, HardDrive, RefreshCw, Upload } from "lucide-r
 import { EmptyState } from "@/components/ui/empty-state";
 import { DataError } from "@/components/ui/data-state";
 import { Spinner } from "@/components/ui/spinner";
-import { formatTime, formatSize } from "@/lib/utils";
+import { formatTime, formatBytes } from "@/lib/utils";
 import { downloadBlob } from "@/lib/download";
 
 interface BackupInfo {
@@ -168,7 +168,7 @@ export default function BackupSection() {
                       <Clock className="size-3" />
                       <span>{formatTime(b.mod_time)}</span>
                       <span>·</span>
-                      <span>{formatSize(b.size)}</span>
+                      <span>{formatBytes(b.size)}</span>
                     </div>
                   </div>
                 </div>

@@ -1,11 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { formatSize, isImageFile, joinPath, parentPath, parseDrives } from "./types";
+import { formatBytes, isImageFile, joinPath, parentPath, parseDrives } from "./types";
 
 describe("agent files helpers", () => {
-  it("formatSize handles zero and units", () => {
-    expect(formatSize(0)).toBe("-");
-    expect(formatSize(500)).toBe("500 B");
-    expect(formatSize(2048)).toMatch(/KB/);
+  it("formatBytes handles zero and units", () => {
+    // 0 is a real size, rendered honestly (not as a "no data" dash);
+    // only null/undefined/"" produce "-".
+    expect(formatBytes(0)).toBe("0 B");
+    expect(formatBytes(500)).toBe("500 B");
+    expect(formatBytes(2048)).toMatch(/KB/);
   });
 
   it("isImageFile checks extensions", () => {

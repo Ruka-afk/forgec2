@@ -9,7 +9,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { ErrorState } from "@/components/ui/error-state";
 import { Link } from "react-router-dom";
 import { CloudUpload, Download, File, Folder, FolderUp } from "lucide-react";
-import { formatSize, joinPath, parentPath, type FileEntry } from "@/lib/agent-files/types";
+import { formatBytes, joinPath, parentPath, type FileEntry } from "@/lib/agent-files/types";
 import { extractImmediateListing, filesLsTaskId, isFilesLsAck, parseLsListing } from "@/lib/agent-files/ls-listing";
 import { pullRemoteFile, pushLocalFile } from "@/lib/agent-files/file-transfer";
 import { transferPercent, type TransferProgress } from "@/lib/agent-files/file-task";
@@ -211,7 +211,7 @@ export function AgentDockFiles({ agentId, osType }: AgentDockFilesProps) {
                 >
                   {entry.is_dir ? <Folder className="size-3.5 text-primary" /> : <File className="size-3.5 text-muted-foreground" />}
                   <span className="min-w-0 flex-1 truncate font-mono">{entry.name}</span>
-                  <span className="shrink-0 font-mono text-muted-foreground">{entry.is_dir ? "" : formatSize(entry.size)}</span>
+                  <span className="shrink-0 font-mono text-muted-foreground">{entry.is_dir ? "" : formatBytes(entry.size)}</span>
                 </button>
                 {!entry.is_dir && (
                   <Button

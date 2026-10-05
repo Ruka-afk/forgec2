@@ -17,18 +17,6 @@ export function nowTime(): string {
   return new Date().toLocaleTimeString()
 }
 
-export function formatSize(bytes: number | undefined | null): string {
-  if (!bytes) return "-"
-  const units = ["B", "KB", "MB", "GB"]
-  let i = 0
-  let size = bytes
-  while (size >= 1024 && i < units.length - 1) {
-    size /= 1024
-    i++
-  }
-  return `${size.toFixed(i > 0 ? 1 : 0)} ${units[i]}`
-}
-
 /** Format a byte count (numbers or numeric strings). null/undefined/"" -> "-",
  *  0 -> "0 B". Sizes at the B level stay integral. */
 export function formatBytes(bytes: number | string | null | undefined): string {

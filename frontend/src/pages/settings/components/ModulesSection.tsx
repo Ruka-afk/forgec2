@@ -17,7 +17,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { DataError } from "@/components/ui/data-state";
 import { AgentLoadError } from "@/components/AgentLoadError";
 import { useConfirm } from "@/lib/hooks/useConfirm";
-import { formatTime, formatSize } from "@/lib/utils";
+import { formatTime, formatBytes } from "@/lib/utils";
 import { FileCode, Rocket, Trash2, Upload } from "lucide-react";
 
 interface ModuleInfo {
@@ -204,7 +204,7 @@ export default function ModulesSection() {
               {modules.map((m) => (
                 <TableRow key={m.name}>
                   <TableCell className="font-mono text-xs">{m.name}</TableCell>
-                  <TableCell className="text-xs">{formatSize(m.size)}</TableCell>
+                  <TableCell className="text-xs">{formatBytes(m.size)}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {m.updated_at ? formatTime(m.updated_at) : "-"}
                   </TableCell>

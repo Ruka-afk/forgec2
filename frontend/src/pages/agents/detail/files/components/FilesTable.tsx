@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowDown, ArrowUp, Download, Eye, File, Folder, ImageIcon, Lock, Pencil, Trash2, X } from "lucide-react";
-import { formatSize, formatTimestamp, isImageFile, type FileEntry } from "@/lib/agent-files/types";
+import { formatBytes, formatTimestamp, isImageFile, type FileEntry } from "@/lib/agent-files/types";
 import type { FileSortKey } from "./useFilesView";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;
@@ -136,7 +136,7 @@ export default memo(function FilesTable(props: FilesTableProps) {
                   </span>
                 </TableCell>
                 <TableCell className="font-mono text-sm text-muted-foreground">
-                  {entry.is_dir ? "" : formatSize(entry.size)}
+                  {entry.is_dir ? "" : formatBytes(entry.size)}
                 </TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">
                   {formatTimestamp(entry.mod_time)}
