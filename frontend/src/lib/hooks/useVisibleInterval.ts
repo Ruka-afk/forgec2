@@ -4,9 +4,10 @@ import { useEffect, useRef } from "react"
  * Fires `callback` every `delay` ms, but pauses when the browser tab is hidden.
  * When the tab becomes visible again, it fires an immediate catch-up tick.
  */
-export function useVisibleInterval(callback: () => void, delay: number) {
+export function useVisibleInterval(callback: () => void | PromiseLike<void>, delay: number) {
   const savedCallback = useRef(callback)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const runningRef = useRef(false)
 
   useEffect(() => {
     savedCallback.current = callback
@@ -16,7 +17,25 @@ export function useVisibleInterval(callback: () => void, delay: number) {
     if (delay <= 0) return
 
     const tick = () => {
-      savedCallback.current()
+      // Polling callbacks commonly start an async request. Do not allow a
+      // slow request to overlap with the next interval tick and create a
+      // request pile-up when the backend is under pressure.
+      if (runningRef.current) return
+      runningRef.current = true
+      try {
+        const result = savedCallback.current()
+        if (result && typeof (result as PromiseLike<void>).then === "function") {
+          Promise.resolve(result).then(
+            () => { runningRef.current = false },
+            () => { runningRef.current = false },
+          )
+        } else {
+          runningRef.current = false
+        }
+      } catch (error) {
+        runningRef.current = false
+        throw error
+      }
     }
 
     const start = () => {
@@ -42,6 +61,7 @@ export function useVisibleInterval(callback: () => void, delay: number) {
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
+      runningRef.current = false
       document.removeEventListener("visibilitychange", handleVisibility)
     }
   }, [delay])

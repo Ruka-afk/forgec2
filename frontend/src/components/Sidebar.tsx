@@ -16,8 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { StatusDot } from "@/components/ui/status-dot";
-import { ConnectionDot } from "@/components/ui/connection-dot";
-import { Shield, ChevronDown, LayoutGrid, Settings } from "lucide-react";
+import { Shield, ChevronDown, LayoutGrid, Settings, Search, X } from "lucide-react";
 import { sidebarNavSections, filterNavByPermissions } from "@/lib/navigation";
 import type { PermissionKey } from "@/lib/permission-keys";
 import {
@@ -146,6 +145,7 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
               <Link
                 key={item.href}
                 to={item.href}
+                aria-current={isActive(item.href) ? "page" : undefined}
                 className={`flex items-center gap-x-2.5 rounded-lg transition-colors duration-150 ${collapsed ? 'group relative' : ''}
                   ${collapsed ? 'justify-center px-0 py-2 mx-auto size-10' : 'min-h-9 px-2 py-1.5'}
                   ${isActive(item.href)
@@ -199,10 +199,9 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
   );
 });
 
-const SidebarFooter = memo(function SidebarFooter({ collapsed, connected, reconnectFailed, onlineUsers, currentUsername, t, onOpenTools }: {
+const SidebarFooter = memo(function SidebarFooter({ collapsed, connected, onlineUsers, currentUsername, t, onOpenTools }: {
   collapsed: boolean;
   connected: boolean;
-  reconnectFailed: boolean;
   onlineUsers: Array<{ username: string }>;
   currentUsername: string;
   t: (key: string, params?: Record<string, string | number>) => string;
@@ -249,20 +248,13 @@ const SidebarFooter = memo(function SidebarFooter({ collapsed, connected, reconn
           {!collapsed && <span>{t("nav.settings")}</span>}
         </Button>
       </div>
-      <div role="status" aria-live="polite" className="flex items-center gap-x-2 rounded-md bg-secondary/50 dark:bg-secondary/30 border border-border/40 px-2 py-1.5">
-        <ConnectionDot connected={connected} reconnectFailed={reconnectFailed} />
-        <span className="mono-cell text-(--fs-micro-sm) text-muted-foreground/80">
-          {connected ? t("common.live") : t("common.disconnected")}
-        </span>
-        {!connected && <span className={`ml-auto text-(--fs-micro) font-medium ${reconnectFailed ? "text-destructive" : "text-warning"}`}>{reconnectFailed ? t("sidebar.offline") : t("sidebar.reconnecting")}</span>}
-      </div>
     </div>
   );
 });
 
 export default function Sidebar() {
   const { pathname } = useLocation();
-  const { connected, reconnectFailed, subscribe } = useWebSocket();
+  const { connected, subscribe } = useWebSocket();
   const { t } = useI18n();
   const [sections, setSections] = useState<Record<string, boolean>>(defaultSections);
   const [searchQuery, setSearchQuery] = useState("");
@@ -328,15 +320,28 @@ const stats = useAppStore((s) => s.stats);
         collapseLabel={t("a11y.collapse_sidebar")}
       />
       {!collapsed && (
-        <div className="px-2 pt-2">
+        <div className="relative px-2 pt-2">
+          <Search aria-hidden="true" className="pointer-events-none absolute left-4 top-[0.95rem] size-3.5 text-muted-foreground" />
           <Input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t("common.search") + "..."}
             aria-label={t("common.search")}
-            className="h-8 bg-secondary/50 text-(--fs-xs-sm) placeholder:text-muted-foreground/100"
+            className="h-8 bg-secondary/50 pl-8 pr-8 text-(--fs-xs-sm) placeholder:text-muted-foreground/100"
           />
+          {searchQuery && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => setSearchQuery("")}
+              aria-label={t("common.clear")}
+              className="absolute right-2 top-[0.625rem] size-6 text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-3.5" />
+            </Button>
+          )}
         </div>
       )}
       <div className={`flex-1 overflow-hidden ${collapsed ? 'p-1' : 'p-2'}`}>
@@ -357,7 +362,6 @@ const stats = useAppStore((s) => s.stats);
       <SidebarFooter
         collapsed={collapsed}
         connected={connected}
-        reconnectFailed={reconnectFailed}
         onlineUsers={onlineUsers}
         currentUsername={currentUsername}
         t={t}

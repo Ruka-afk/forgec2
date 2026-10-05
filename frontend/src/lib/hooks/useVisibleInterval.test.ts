@@ -25,4 +25,21 @@ describe("useVisibleInterval", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
     expect(callback).toHaveBeenCalledTimes(2);
   });
+
+  it("skips overlapping async ticks", async () => {
+    vi.useFakeTimers();
+    let release: (() => void) | undefined;
+    const callback = vi.fn(() => new Promise<void>((resolve) => { release = resolve }));
+    renderHook(() => useVisibleInterval(callback, 1000));
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(callback).toHaveBeenCalledTimes(1);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(callback).toHaveBeenCalledTimes(1);
+
+    act(() => release?.());
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(callback).toHaveBeenCalledTimes(2);
+  });
 });
