@@ -57,6 +57,26 @@ let conditionKeyCounter = 0;
 const FIELDS = ["hostname", "os", "arch", "ip", "username", "domain", "process_name", "external_ip"];
 const OPS = ["contains", "equals", "starts_with", "regex", "not_equals"];
 
+// Rendered 'field op "value" AND ...' for each unique condition string,
+// parsed once per unique value instead of re-parsing every card on every
+// render. Keyed by the raw string so an edited rule (new condition text)
+// renders fresh even under the same rule id.
+const conditionRenderCache = new Map<string, string>();
+
+function renderCondition(raw: string): string {
+  const cached = conditionRenderCache.get(raw);
+  if (cached !== undefined) return cached;
+  let rendered: string;
+  try {
+    const c = JSON.parse(raw) as TagCondition[];
+    rendered = c.map((cc) => `${cc.field} ${cc.op} "${cc.value}"`).join(" AND ");
+  } catch {
+    rendered = raw;
+  }
+  conditionRenderCache.set(raw, rendered);
+  return rendered;
+}
+
 export default function AutoTagPage() {
   const { t } = useI18n();
   const [showForm, setShowForm] = useState(false);
@@ -288,7 +308,7 @@ export default function AutoTagPage() {
                     <span className="text-(--fs-xs-sm) text-muted-foreground">{t("autotag.priority_label")} {rule.priority}</span>
                   </div>
                   <div className="text-(--fs-compact) text-muted-foreground mt-0.5 font-mono truncate">
-                    {(() => { try { const c = JSON.parse(rule.condition); return c.map((cc: TagCondition) => `${cc.field} ${cc.op} "${cc.value}"`).join(" AND "); } catch { return rule.condition; } })()}
+                    {renderCondition(rule.condition)}
                   </div>
                 </div>
                 <div className="flex gap-1 shrink-0">

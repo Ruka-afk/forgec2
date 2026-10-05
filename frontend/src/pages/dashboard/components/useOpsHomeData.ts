@@ -29,6 +29,18 @@ function asAgent(row: Record<string, unknown>): NormalizedAgent {
   };
 }
 
+// Stable fallbacks for the not-yet-loaded state. Shared module-level
+// constants (instead of fresh values per render) so consumers that memoize
+// on these values (OpsHome's splitSessions/pickUnhealthyListeners/…
+// useMemos) actually stick while `data` is still undefined, and so `refresh`
+// can have a stable identity via useCallback. All read-only at the call
+// sites (flattenLoot etc.), so sharing the objects is safe.
+const EMPTY_AGENTS: NormalizedAgent[] = [];
+const EMPTY_HEALTH: Record<string, ListenerHealth> = {};
+const EMPTY_TASKS: Task[] = [];
+const EMPTY_LOOT: LootData = emptyLootData();
+const EMPTY_PARTIAL_FAILURES: string[] = [];
+
 interface OpsHomeData {
   agents: NormalizedAgent[];
   healthByTarget: Record<string, ListenerHealth>;
@@ -123,18 +135,20 @@ export function useOpsHomeData(): OpsHomeData {
     errorMessage: t("dashboard.ops_load_failed"),
   });
 
+  const refresh = useCallback(() => {
+    void refreshData();
+  }, [refreshData]);
+
   return {
-    agents: data?.agents ?? [],
-    healthByTarget: data?.healthByTarget ?? {},
-    failedTasks: data?.failedTasks ?? [],
-    pendingTasks: data?.pendingTasks ?? [],
-    approvalTasks: data?.approvalTasks ?? [],
-    loot: data?.loot ?? emptyLootData(),
+    agents: data?.agents ?? EMPTY_AGENTS,
+    healthByTarget: data?.healthByTarget ?? EMPTY_HEALTH,
+    failedTasks: data?.failedTasks ?? EMPTY_TASKS,
+    pendingTasks: data?.pendingTasks ?? EMPTY_TASKS,
+    approvalTasks: data?.approvalTasks ?? EMPTY_TASKS,
+    loot: data?.loot ?? EMPTY_LOOT,
     loading,
     error,
-    partialFailures: data?.partialFailures ?? [],
-    refresh: () => {
-      void refreshData();
-    },
+    partialFailures: data?.partialFailures ?? EMPTY_PARTIAL_FAILURES,
+    refresh,
   };
 }
