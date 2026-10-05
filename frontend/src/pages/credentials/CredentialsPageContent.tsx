@@ -34,6 +34,7 @@ import { CredentialRow } from "./components/CredentialRow";
 import { csvCell } from "@/lib/csv";
 import { CredHarvestCard } from "./components/CredHarvestCard";
 import { CookieProxyCard } from "./components/CookieProxyCard";
+import { useFilteredCredentials } from "./components/useFilteredCredentials";
 
 const PAGE_SIZE = 20;
 
@@ -341,21 +342,13 @@ export default function CredentialsPage() {
     });
   }, [entries]);
 
-  const filteredEntries = entries.filter(entry => {
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      if (
-        !entry.username.toLowerCase().includes(q) &&
-        !entry.domain?.toLowerCase().includes(q) &&
-        !entry.notes?.toLowerCase().includes(q)
-      ) return false;
-    }
-    if (typeFilter !== "all" && entry.type !== typeFilter) return false;
-    if (confirmedFilter === "true" && !entry.confirmed) return false;
-    if (confirmedFilter === "false" && entry.confirmed) return false;
-    if (lifecycleFilter && entry.lifecycle !== lifecycleFilter) return false;
-    return true;
-  });
+  const filteredEntries = useFilteredCredentials(
+    entries,
+    searchQuery,
+    typeFilter,
+    confirmedFilter,
+    lifecycleFilter,
+  );
 
   const pageCount = Math.max(1, Math.ceil(filteredEntries.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
