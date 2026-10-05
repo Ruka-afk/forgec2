@@ -215,12 +215,20 @@ func InitDBWithDriver(driver, dsn, fallbackPath string, logLevel slog.Level, dbM
 		}
 		// Enable foreign_keys and busy_timeout at the DSN level so every
 		// pooled connection inherits the pragmas (a per-connection PRAGMA
-		// only affects the single connection it runs on). Applies to both
-		// file and in-memory DSNs; DSNs that already carry query
-		// parameters are left untouched.
+		// only affects the single connection it runs on). The performance
+		// pragmas travel in the DSN for the same reason: the pool recycles
+		// its writer at ConnMaxLifetime/IdleTime, and Exec'd session
+		// pragmas would silently fall back to SQLite defaults (e.g.
+		// synchronous=FULL) on the new connection. Values mirror the
+		// one-time Exec block below. Applies to both file and in-memory
+		// DSNs; DSNs that already carry query parameters are left
+		// untouched.
 		sqliteDSN := fallbackPath
 		if !strings.Contains(sqliteDSN, "?") {
-			sqliteDSN += fmt.Sprintf("?_pragma=foreign_keys(1)&_pragma=busy_timeout(%d)", SQLiteBusyTimeoutMS)
+			sqliteDSN += fmt.Sprintf(
+				"?_pragma=foreign_keys(1)&_pragma=busy_timeout(%d)&_pragma=synchronous(1)&_pragma=cache_size(-2000)&_pragma=temp_store(2)&_pragma=mmap_size(268435456)",
+				SQLiteBusyTimeoutMS,
+			)
 		}
 		db, err = gorm.Open(glebarez.Open(sqliteDSN), gormConfig)
 		if err != nil {
@@ -264,6 +272,11 @@ func InitDBWithDriver(driver, dsn, fallbackPath string, logLevel slog.Level, dbM
 	if err := ensureDefaultTenant(db); err != nil {
 		return nil, fmt.Errorf("default tenant bootstrap failed: %w", err)
 	}
+
+	// Backfill credential dedup keys for rows predating the column. Idempotent
+	// by data state: it stops as soon as no empty key remains, so a fresh
+	// DB costs one bounded probe.
+	backfillCredentialDedupKeys(db)
 
 	// Seed default admin user if none exist
 	var userCount int64
@@ -363,6 +376,40 @@ func ensureDefaultTenant(db *gorm.DB) error {
 // DefaultTenantName is the name of the bootstrap tenant all legacy assets are
 // assigned to.
 const DefaultTenantName = "default"
+
+// backfillCredentialDedupKeys fills DedupKey on credential rows predating the
+// column. Keys digest the plaintext identity, so pages select the encrypted
+// columns and let AfterFind decrypt them; the Update keeps a dedup_key = ”
+// guard so an interrupted backfill is safe to re-run.
+func backfillCredentialDedupKeys(db *gorm.DB) {
+	const pageSize = 500
+	for {
+		var rows []CredentialEntry
+		if err := db.Select("id, agent_id, domain, username, password, hash").
+			Where("dedup_key = ''").
+			Order("id ASC").Limit(pageSize).Find(&rows).Error; err != nil {
+			slog.Warn("Credential dedup-key backfill failed", "err", err)
+			return
+		}
+		if len(rows) == 0 {
+			return
+		}
+		if err := db.Transaction(func(tx *gorm.DB) error {
+			for i := range rows {
+				key := ComputeCredDedupKey(rows[i].AgentID, rows[i].Domain, rows[i].Username, rows[i].Password, rows[i].Hash)
+				if err := tx.Model(&CredentialEntry{}).
+					Where("id = ? AND dedup_key = ''", rows[i].ID).
+					Update("dedup_key", key).Error; err != nil {
+					return err
+				}
+			}
+			return nil
+		}); err != nil {
+			slog.Warn("Credential dedup-key backfill aborted, will retry on next start", "err", err)
+			return
+		}
+	}
+}
 
 // MigrateOldRoles migrates "operator"/"viewer"/"guest" to "user"
 func MigrateOldRoles(db *gorm.DB) {

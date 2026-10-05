@@ -1,6 +1,8 @@
 package db
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -526,6 +528,11 @@ func (c *CredentialEntry) BeforeCreate(tx *gorm.DB) error {
 	if c.ExpiresAt.IsZero() {
 		c.ExpiresAt = time.Now().AddDate(0, 0, 30)
 	}
+	// The dedup key must digest the plaintext fields, so it is computed
+	// before they are encrypted below.
+	if c.DedupKey == "" {
+		c.DedupKey = ComputeCredDedupKey(c.AgentID, c.Domain, c.Username, c.Password, c.Hash)
+	}
 	if err := encryptField(&c.Password); err != nil {
 		return err
 	}
@@ -741,8 +748,23 @@ type CredentialEntry struct {
 	ExpiresAt      time.Time  `gorm:"index" json:"expires_at"`
 	Confirmed      bool       `json:"confirmed"` // whether credential has been verified
 	TaskID         uint       `json:"task_id"`   // originating task (0 = manual)
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	// DedupKey is a stable digest of the plaintext credential identity
+	// (agent|domain|username|password|hash), computed before encryption at
+	// insert. AES-GCM ciphertext is randomized per write and cannot be
+	// compared across rows, so dedup scans read this bounded column
+	// instead of pulling and decrypting whole rows. Legacy rows are
+	// backfilled at startup (backfillCredentialDedupKeys in database.go).
+	DedupKey  string    `gorm:"size:64;index" json:"-"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// ComputeCredDedupKey digests the plaintext credential identity so vault
+// dedup can compare a stable column instead of stored (encrypted) values.
+// Fields are NUL-joined so no field content can mimic a boundary.
+func ComputeCredDedupKey(agentID, domain, username, password, hash string) string {
+	sum := sha256.Sum256([]byte(agentID + "\x00" + domain + "\x00" + username + "\x00" + password + "\x00" + hash))
+	return hex.EncodeToString(sum[:])
 }
 
 // TableName overrides
