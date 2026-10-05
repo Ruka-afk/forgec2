@@ -239,14 +239,20 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     return () => window.removeEventListener("keydown", handleKeydown);
   }, [navigate, id]);
 
+  // t only appears in this effect's catch toast, so keep the effect stable
+  // on [id] via a ref. Named tRef so the i18n checker's ref-usage pattern
+  // sees the lookup.
+  const tRef = useRef(t);
+  tRef.current = t;
+
   useEffect(() => {
     if (!id) return;
     const controller = new AbortController();
     api.get(paths.credentials.byAgent(id, 1), { signal: controller.signal })
       .then((r: { total?: number }) => { if (r && typeof r.total === "number") setCredCount(r.total); })
-      .catch((e) => { if (e.name !== 'AbortError') toast.error(t("agents.detail_creds_load_failed")); });
+      .catch((e) => { if (e.name !== 'AbortError') toast.error(tRef.current("agents.detail_creds_load_failed")); });
     return () => controller.abort();
-  }, [id, t]);
+  }, [id]);
 
   useEffect(() => {
     const controller = new AbortController();

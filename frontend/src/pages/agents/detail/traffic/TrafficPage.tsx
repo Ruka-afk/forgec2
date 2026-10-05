@@ -1,5 +1,5 @@
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
@@ -61,25 +61,37 @@ export default function AgentTrafficPage() {
 
   const [autoAdapt, setAutoAdapt] = useState(false);
 
+  // t rotates on locale switch; keep it in a ref so loadReport (and the
+  // effect below it) stay stable and don't refetch on locale changes.
+  // Named tRef so the i18n checker's ref-usage pattern sees the lookups.
+  const tRef = useRef(t);
+  tRef.current = t;
+  // A load for a previous agent id must not overwrite the report the new id
+  // started fetching when the route param changes mid-flight.
+  const loadSeqRef = useRef(0);
+
   const loadReport = useCallback(async () => {
     if (!id) return;
+    const seq = ++loadSeqRef.current;
     try {
       // B4 fix: api.get already strips one layer of the {success,data} envelope,
       // so `data` IS the report object. The previous code did `data.data` which
       // was always undefined → report always null.
       const reportData = await api.get(paths.agents.trafficProfile(id));
+      if (seq !== loadSeqRef.current) return; // a newer load superseded this one
       setReport((reportData as unknown as BaselineReport) || null);
       setLoadError(false);
       if (reportData) {
         setAutoAdapt((reportData as unknown as BaselineReport).auto_adapt);
       }
     } catch {
+      if (seq !== loadSeqRef.current) return;
       setLoadError(true);
-      toast.error(t("agents.traffic_load_failed"));
+      toast.error(tRef.current("agents.traffic_load_failed"));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
-  }, [id, t]);
+  }, [id]);
 
   useEffect(() => { loadReport(); }, [loadReport]);
 

@@ -1,5 +1,5 @@
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { api, formatThrownError } from "@/lib/api";
@@ -53,34 +53,51 @@ export default function AgentPersistencePage() {
   const [listOutput, setListOutput] = useState<string | null>(null);
   const [listLoading, setListLoading] = useState(false);
 
+  // t rotates on locale switch; keep it in a ref so the load callbacks stay
+  // stable (deps [id]) and don't re-fire the agent list action on locale
+  // changes. Named tRef so the i18n checker's ref-usage pattern sees the lookups.
+  const tRef = useRef(t);
+  tRef.current = t;
+  // A load for a previous agent id must not overwrite the agent the new id
+  // started fetching when the route param changes mid-flight.
+  const loadSeqRef = useRef(0);
+
 
   const loadAgent = useCallback(async () => {
     if (!id) return;
+    const seq = ++loadSeqRef.current;
     try {
       const data = await api.get(paths.agents.one(id));
+      if (seq !== loadSeqRef.current) return; // a newer load superseded this one
       setAgent(data.agent || data);
       setLoadError(null);
     } catch {
+      if (seq !== loadSeqRef.current) return;
       // Distinguish "could not load" from "no such agent": a failed request used
       // to render the not-found page, which reads as a deleted implant.
-      setLoadError(t("agents.persistence_load_failed"));
-      toast.error(t("agents.persistence_load_failed"));
+      setLoadError(tRef.current("agents.persistence_load_failed"));
+      toast.error(tRef.current("agents.persistence_load_failed"));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
-  }, [id, t]);
+  }, [id]);
+
+  // Shared cancellation flag: an async callback can't hand React a synchronous
+  // cleanup function, so the poll loop below checks this ref instead. The
+  // effect resets it at the start of each run and sets it on cleanup, which
+  // stops the 10×1.5s poll on unmount or id change.
+  const listCancelledRef = useRef(false);
 
   const listPersistence = useCallback(async () => {
     if (!id) return;
     setListLoading(true);
-    let cancelled = false;
     try {
       const data = await api.post(paths.agents.persistence(id), { action: "list" });
       if (data.success) {
-        toast.success(t("agents.persistence_list_success"));
+        toast.success(tRef.current("agents.persistence_list_success"));
         for (let attempt = 0; attempt < 10; attempt++) {
           await new Promise((resolve) => setTimeout(resolve, 1500));
-          if (cancelled) break;
+          if (listCancelledRef.current) break;
           const tasks = await api.get<{ tasks?: Array<{ type: string; result: string }> }>(
             paths.agents.tasks(id),
           );
@@ -93,18 +110,22 @@ export default function AgentPersistencePage() {
           }
         }
       } else {
-        toast.error((data.error as string) || t("agents.persistence_load_failed"));
+        toast.error((data.error as string) || tRef.current("agents.persistence_load_failed"));
       }
     } catch (e) {
       toast.error(formatThrownError(e));
     } finally {
       setListLoading(false);
     }
-    return () => { cancelled = true; };
-  }, [id, t]);
+  }, [id]);
 
   useEffect(() => { loadAgent(); }, [loadAgent]);
-  useEffect(() => { if (id) listPersistence(); }, [id, listPersistence]);
+  useEffect(() => {
+    if (!id) return;
+    listCancelledRef.current = false;
+    void listPersistence();
+    return () => { listCancelledRef.current = true; };
+  }, [id, listPersistence]);
   const confirmDialog = useConfirm();
 
   const addPersistence = async (method: string) => {
