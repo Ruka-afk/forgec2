@@ -208,21 +208,21 @@ func isSensitiveCommand(cmd string) bool {
 	return false
 }
 
-func canonicalJSON(v interface{}) interface{} {
+func canonicalJSON(v any) any {
 	switch x := v.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		// Sort keys by re-marshaling via ordered map
 		keys := make([]string, 0, len(x))
 		for k := range x {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
-		ordered := make(map[string]interface{}, len(x))
+		ordered := make(map[string]any, len(x))
 		for _, k := range keys {
 			ordered[k] = canonicalJSON(x[k])
 		}
 		return ordered
-	case []interface{}:
+	case []any:
 		for i, e := range x {
 			x[i] = canonicalJSON(e)
 		}
