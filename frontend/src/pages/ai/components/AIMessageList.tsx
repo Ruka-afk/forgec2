@@ -8,7 +8,7 @@ import { Activity, Bell, BookOpen, Bot, Brain, Check, CheckCircle2, ChevronDown,
 import type { AIMessage } from "./types";
 import { SanitizedMarkdown } from "./SanitizedMarkdown";
 import { AITracePanel } from "./AITracePanel";
-import { cn } from "@/lib/utils";
+import { cn, formatBytes } from "@/lib/utils";
 import { describeToolOutput, extractAICitations, formatAIRunDuration } from "./aiOutput";
 
 const EMPTY_FOLLOW_UPS: { label: string; query: string }[] = [];
@@ -308,8 +308,8 @@ function ToolResultBlock({ toolName, content, status = "success", expandAll }: {
           <div className="mb-2 flex flex-wrap items-center gap-2 text-(--fs-micro-sm) text-muted-foreground">
             {view.isJson && <span className="inline-flex items-center gap-1"><FileJson2 className="size-3" />JSON</span>}
             {view.lineCount > 1 && <span>{t("ai.tool_lines", { count: view.lineCount })}</span>}
-            {view.byteCount > 1024 && <span>{(view.byteCount / 1024).toFixed(1)}KB</span>}
-            {view.originalBytes != null && <span title={t("ai.tool_original_size")}>{(view.originalBytes / 1024).toFixed(1)}KB {t("ai.tool_original")}</span>}
+            {view.byteCount > 1024 && <span>{formatBytes(view.byteCount)}</span>}
+            {view.originalBytes != null && <span title={t("ai.tool_original_size")}>{formatBytes(view.originalBytes)} {t("ai.tool_original")}</span>}
           </div>
           <pre className={cn("max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-lg border px-3 py-2 font-mono text-xs leading-relaxed", view.status === "error" ? "border-destructive/20 bg-destructive/5 text-destructive" : "border-border/70 bg-background/70 text-muted-foreground")}>
             {view.formatted}

@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Button } from "@/components/ui/button";
 import { API_BASE } from "@/lib/constants";
+import { formatBytes } from "@/lib/utils";
 import { BookOpen, Cpu, Download, RotateCw } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
@@ -25,8 +26,8 @@ export default function AboutSection({
             { label: t("settings.about.go_version"), value: data.go_version ?? "-" },
             { label: t("settings.about.platform"), value: `${data.goos ?? "-"} / ${data.goarch ?? "-"}` },
             { label: t("settings.about.goroutines"), value: data.goroutines ?? "-" },
-            { label: t("settings.about.memory_alloc"), value: data.alloc_mem ? (data.alloc_mem / 1024 / 1024).toFixed(1) + " MB" : "-" },
-            { label: t("settings.about.total_alloc"), value: data.total_alloc_mem ? (data.total_alloc_mem / 1024 / 1024).toFixed(1) + " MB" : "-" },
+            { label: t("settings.about.memory_alloc"), value: data.alloc_mem ? formatBytes(data.alloc_mem) : "-" },
+            { label: t("settings.about.total_alloc"), value: data.total_alloc_mem ? formatBytes(data.total_alloc_mem) : "-" },
             { label: t("settings.about.cpu_cores"), value: data.num_cpu ?? "-" },
             { label: t("settings.about.implants"), value: t("settings.about.implants_value", { total: data.total_agents ?? 0, online: data.online_agents ?? 0 }) },
           ].map((stat) => (

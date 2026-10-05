@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { normalizeListEnvelope } from "@/lib/envelope";
+import { formatBytes } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -41,12 +42,6 @@ interface AIContextPanelProps {
   onAttachmentIdsChange: (ids: string[]) => void;
   onCollectionIdsChange: (ids: number[]) => void;
   onLowRiskAutoChange: (enabled: boolean) => void;
-}
-
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 export function AIContextPanel({

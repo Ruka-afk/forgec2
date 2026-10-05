@@ -4,6 +4,7 @@ import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { useWS } from "@/lib/wsContext";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { formatBytes } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -37,13 +38,6 @@ export const OPEN_UPDATE_DIALOG = "forgec2:open-update-dialog";
 
 export function openUpdateDialog(info: UpdateDialogInfo) {
   window.dispatchEvent(new CustomEvent<UpdateDialogInfo>(OPEN_UPDATE_DIALOG, { detail: info }));
-}
-
-function formatBytes(n: number): string {
-  if (!Number.isFinite(n) || n < 0) return "—";
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
 export function UpdateDialog() {
