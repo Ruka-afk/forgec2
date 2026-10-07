@@ -182,9 +182,10 @@ func (s *Server) buildTimelineEvents(c *gin.Context, filterType, filterUser, fil
 		agentName := agentNames[task.AgentID]
 
 		statusIcon := "[OK]"
-		if task.Status == "failed" || task.Status == "error" {
+		switch task.Status {
+		case "failed", "error":
 			statusIcon = "[FAIL]"
-		} else if task.Status == "pending" {
+		case "pending":
 			statusIcon = "[...]"
 		}
 
@@ -218,10 +219,12 @@ func (s *Server) handleTimelineExport(c *gin.Context) {
 	// Generate CSV
 	c.Header("Content-Disposition", "attachment; filename=timeline_export.csv")
 	c.Header("Content-Type", "text/csv")
-	c.Writer.WriteString("Timestamp,Type,User,Action,Details,Agent ID,Agent Name,IP,Success\n")
+	if _, err := c.Writer.WriteString("Timestamp,Type,User,Action,Details,Agent ID,Agent Name,IP,Success\n"); err != nil {
+		return // client gone; further writes are futile
+	}
 
 	for _, ev := range events {
-		c.Writer.WriteString(fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s,%s,%t\n",
+		if _, err := c.Writer.WriteString(fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s,%s,%t\n",
 			ev.Timestamp.Format("2006-01-02 15:04:05"),
 			csvSanitize(ev.Type),
 			csvSanitize(ev.User),
@@ -231,6 +234,8 @@ func (s *Server) handleTimelineExport(c *gin.Context) {
 			csvSanitize(ev.AgentName),
 			csvSanitize(ev.IP),
 			ev.Success,
-		))
+		)); err != nil {
+			return
+		}
 	}
 }
