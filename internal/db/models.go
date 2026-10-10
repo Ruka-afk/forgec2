@@ -1006,7 +1006,7 @@ type CommandMacro struct {
 	ID          uint      `gorm:"primaryKey" json:"id"`
 	Name        string    `gorm:"uniqueIndex;size:128" json:"name"`
 	Description string    `json:"description"`
-	Steps       string    `json:"type:text" json:"steps"`
+	Steps       string    `gorm:"type:text" json:"steps"`
 	CreatedBy   string    `json:"created_by"`
 	TenantID    uint      `gorm:"index" json:"tenant_id"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -1018,17 +1018,20 @@ func (CommandMacro) TableName() string { return "command_macros" }
 // MacroRun tracks one execution of a macro against a single agent so the UI
 // can show live progress and a per-step result log.
 type MacroRun struct {
-	ID          uint       `gorm:"primaryKey" json:"id"`
-	MacroID     uint       `json:"macro_id"`
-	MacroName   string     `gorm:"size:128" json:"macro_name"`
-	AgentID     string     `gorm:"index;size:64" json:"agent_id"`
-	Status      string     `gorm:"size:16" json:"status"` // running, completed, failed, stopped
-	CurrentStep int        `json:"current_step"`
-	TotalSteps  int        `json:"total_steps"`
-	Log         string     `gorm:"type:text" json:"log"` // JSON array of step entries
-	CreatedBy   string     `json:"created_by"`
-	StartedAt   time.Time  `json:"started_at"`
-	FinishedAt  *time.Time `json:"finished_at"`
+	ID          uint   `gorm:"primaryKey" json:"id"`
+	MacroID     uint   `json:"macro_id"`
+	MacroName   string `gorm:"size:128" json:"macro_name"`
+	AgentID     string `gorm:"index;size:64" json:"agent_id"`
+	Status      string `gorm:"size:16" json:"status"` // running, completed, failed, stopped
+	CurrentStep int    `json:"current_step"`
+	TotalSteps  int    `json:"total_steps"`
+	Log         string `gorm:"type:text" json:"log"` // JSON array of step entries
+	CreatedBy   string `json:"created_by"`
+	// TenantID mirrors CommandMacro.TenantID so macro-run reads stay
+	// tenant-scoped. Runs inherit it from the parent macro.
+	TenantID   uint       `gorm:"index" json:"tenant_id"`
+	StartedAt  time.Time  `json:"started_at"`
+	FinishedAt *time.Time `json:"finished_at"`
 }
 
 func (MacroRun) TableName() string { return "macro_runs" }

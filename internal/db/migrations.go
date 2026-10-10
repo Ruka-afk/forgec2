@@ -605,6 +605,44 @@ var schemaMigrations = []*gormigrate.Migration{
 			return nil
 		},
 	},
+	// Stamp macro runs with their macro's tenant.
+	//
+	// MacroRun rows were written without a tenant, so a scoped operator
+	// listing runs saw cross-tenant rows. The column is added, then
+	// backfilled from the parent command_macros row (JOIN on macro_id);
+	// runs whose macro was deleted keep tenant 0, which tenantScope
+	// already treats as legacy/unscoped. New runs inherit the tenant in
+	// startMacroRun, and the handlers scope every read/write by it.
+	{
+		ID: "2026-10-10-macro-runs-tenant-id",
+		Migrate: func(tx *gorm.DB) error {
+			if !tx.Migrator().HasTable("macro_runs") {
+				return nil
+			}
+			execMigration(tx, "ALTER TABLE macro_runs ADD COLUMN tenant_id INTEGER DEFAULT 0", "add_macro_runs_tenant_id")
+			if tx.Migrator().HasTable("command_macros") {
+				// Inherit from the parent macro; the subquery yields NULL
+				// when the macro was deleted, and the UPDATE ... = NULL
+				// form would leave those rows NULL (invisible to both
+				// scoped and legacy reads), so normalize afterwards.
+				if err := tx.Exec("UPDATE macro_runs SET tenant_id = (SELECT tenant_id FROM command_macros WHERE command_macros.id = macro_runs.macro_id) WHERE tenant_id IS NULL OR tenant_id = 0").Error; err != nil {
+					return err
+				}
+				if err := tx.Exec("UPDATE macro_runs SET tenant_id = 0 WHERE tenant_id IS NULL").Error; err != nil {
+					return err
+				}
+			}
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_macro_runs_tenant_id ON macro_runs(tenant_id)", "add_macro_runs_tenant_id_index")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			execMigration(tx, "DROP INDEX IF EXISTS idx_macro_runs_tenant_id", "drop_macro_runs_tenant_id_index")
+			if tx.Migrator().HasColumn("macro_runs", "tenant_id") {
+				execMigration(tx, "ALTER TABLE macro_runs DROP COLUMN tenant_id", "drop_macro_runs_tenant_id")
+			}
+			return nil
+		},
+	},
 }
 
 // indexMigrations create/drop indexes and run AFTER AutoMigrate, so their

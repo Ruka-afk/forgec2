@@ -177,7 +177,7 @@ func (s *Server) handleListMacroRuns(c *gin.Context) {
 		limit = v
 	}
 	var runs []db.MacroRun
-	if err := s.db.Order("id desc").Limit(limit).Find(&runs).Error; err != nil {
+	if err := s.tenantScope(s.db, c).Order("id desc").Limit(limit).Find(&runs).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "query failed")
 		return
 	}
@@ -189,10 +189,12 @@ func (s *Server) handleListMacroRuns(c *gin.Context) {
 // run by id. The sibling stop endpoint stays.
 
 // handleStopMacroRun marks a running macro as stopped; the runner goroutine
-// polls the DB between steps and exits on sight of the stopped status.
+// polls the DB between steps and exits on sight of the stopped status. The
+// update is tenant-scoped so a foreign operator cannot stop another
+// tenant's run (they get the same "not running" response as a finished run).
 func (s *Server) handleStopMacroRun(c *gin.Context) {
 	id := c.Param("id")
-	res := s.db.Model(&db.MacroRun{}).Where("id = ? AND status = ?", id, "running").
+	res := s.tenantScope(s.db.Model(&db.MacroRun{}), c).Where("id = ? AND status = ?", id, "running").
 		Update("status", "stopped")
 	if res.Error != nil {
 		respondError(c, http.StatusInternalServerError, "failed to stop run")
@@ -227,6 +229,7 @@ func (s *Server) startMacroRun(macro *db.CommandMacro, agentID, operator string,
 		TotalSteps: len(steps),
 		Log:        "[]",
 		CreatedBy:  operator,
+		TenantID:   macro.TenantID,
 		StartedAt:  time.Now(),
 	}
 	if err := s.db.Create(&run).Error; err != nil {
@@ -254,8 +257,8 @@ func (s *Server) startMacroRun(macro *db.CommandMacro, agentID, operator string,
 // handleRunMacro dispatches the macro to each requested agent.
 func (s *Server) handleRunMacro(c *gin.Context) {
 	id := c.Param("id")
-	var macro db.CommandMacro
-	if err := s.db.First(&macro, id).Error; err != nil {
+	macro, ok := s.loadMacroScoped(c, id)
+	if !ok {
 		respondError(c, http.StatusNotFound, "macro not found")
 		return
 	}
@@ -273,10 +276,12 @@ func (s *Server) handleRunMacro(c *gin.Context) {
 		return
 	}
 
-	// Only dispatch to agents that actually exist.
+	// Only dispatch to agents that actually exist (and are visible to
+	// this tenant: a scoped operator must not run steps on another
+	// tenant's agents).
 	existing := map[string]bool{}
 	var implants []db.Implant
-	if err := s.db.Select("id").Find(&implants).Error; err != nil {
+	if err := s.tenantScope(s.db.Select("id"), c).Find(&implants).Error; err != nil {
 		slog.Error("Failed to resolve macro target agents", "err", err)
 		respondError(c, http.StatusInternalServerError, "failed to load agents")
 		return
