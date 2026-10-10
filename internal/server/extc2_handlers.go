@@ -9,7 +9,31 @@ import (
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm/clause"
 )
+
+// upsertExtC2Channel inserts the config row for one (type, channel_id) pair
+// or refreshes the existing one, returning the canonical row. Configure used
+// to Create unconditionally: reconfiguring a channel accumulated rows, and a
+// Start failure mid-way left a row advertising a channel that never came up.
+// The unique index on (type, channel_id) makes the upsert atomic.
+func (s *Server) upsertExtC2Channel(kind, channelID, botToken string) (*db.ExtC2Channel, error) {
+	row := db.ExtC2Channel{Type: kind, ChannelID: channelID, BotToken: botToken, Enabled: true}
+	err := s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "type"}, {Name: "channel_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"bot_token", "enabled"}),
+	}).Create(&row).Error
+	if err != nil {
+		return nil, err
+	}
+	// The conflict-update path leaves row.ID zero, so re-read the canonical
+	// row for a stable response id.
+	var stored db.ExtC2Channel
+	if err := s.db.Where("type = ? AND channel_id = ?", kind, channelID).First(&stored).Error; err != nil {
+		return nil, err
+	}
+	return &stored, nil
+}
 
 func (s *Server) handleConfigureDiscordC2(c *gin.Context) {
 	var req struct {
@@ -21,22 +45,21 @@ func (s *Server) handleConfigureDiscordC2(c *gin.Context) {
 		return
 	}
 
-	channel := db.ExtC2Channel{
-		Type:      "discord",
-		BotToken:  req.BotToken,
-		ChannelID: req.ChannelID,
-		Enabled:   true,
-	}
-	if err := s.db.Create(&channel).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Save config"))
-		return
-	}
-
+	// Start before persisting: a failed Start must not leave a configured
+	// row behind (the poller never came up, so the token is useless and
+	// restore-on-boot would keep retrying it).
 	discord := NewDiscordExternalC2(s, req.BotToken, req.ChannelID)
 	if err := discord.Start(); err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Start Discord C2"))
 		return
 	}
+	channel, err := s.upsertExtC2Channel("discord", req.ChannelID, req.BotToken)
+	if err != nil {
+		discord.Stop() // roll the poller back: no row, no runner
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Save config"))
+		return
+	}
+	// registerExtC2Runner stops any previous poller on the same key first.
 	s.registerExtC2Runner(fmt.Sprintf("extc2-discord-%s", req.ChannelID), discord)
 
 	s.LogAuditRecord(c, "extc2_discord_configure", "extc2", req.ChannelID, "Discord External C2 configured", true, nil)
@@ -53,22 +76,20 @@ func (s *Server) handleConfigureSlackC2(c *gin.Context) {
 		return
 	}
 
-	channel := db.ExtC2Channel{
-		Type:      "slack",
-		BotToken:  req.BotToken,
-		ChannelID: req.ChannelID,
-		Enabled:   true,
-	}
-	if err := s.db.Create(&channel).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Save config"))
-		return
-	}
-
+	// Start before persisting: a failed Start must not leave a configured
+	// row behind (see the Discord handler for the full rationale).
 	slackC2 := NewSlackExternalC2(s, req.BotToken, req.ChannelID)
 	if err := slackC2.Start(); err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Start Slack C2"))
 		return
 	}
+	channel, err := s.upsertExtC2Channel("slack", req.ChannelID, req.BotToken)
+	if err != nil {
+		slackC2.Stop() // roll the poller back: no row, no runner
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Save config"))
+		return
+	}
+	// registerExtC2Runner stops any previous poller on the same key first.
 	s.registerExtC2Runner(fmt.Sprintf("extc2-slack-%s", req.ChannelID), slackC2)
 
 	s.LogAuditRecord(c, "extc2_slack_configure", "extc2", req.ChannelID, "Slack External C2 configured", true, nil)
@@ -92,22 +113,20 @@ func (s *Server) handleConfigureTelegramC2(c *gin.Context) {
 		return
 	}
 
-	channel := db.ExtC2Channel{
-		Type:      "telegram",
-		BotToken:  req.BotToken,
-		ChannelID: req.ChatID,
-		Enabled:   true,
-	}
-	if err := s.db.Create(&channel).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Save config"))
-		return
-	}
-
+	// Start before persisting: a failed Start must not leave a configured
+	// row behind (see the Discord handler for the full rationale).
 	telegramC2 := NewTelegramExternalC2(s, req.BotToken, req.ChatID)
 	if err := telegramC2.Start(); err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Start Telegram C2"))
 		return
 	}
+	channel, err := s.upsertExtC2Channel("telegram", req.ChatID, req.BotToken)
+	if err != nil {
+		telegramC2.Stop() // roll the poller back: no row, no runner
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Save config"))
+		return
+	}
+	// registerExtC2Runner stops any previous poller on the same key first.
 	s.registerExtC2Runner(fmt.Sprintf("extc2-telegram-%s", req.ChatID), telegramC2)
 
 	s.LogAuditRecord(c, "extc2_telegram_configure", "extc2", req.ChatID, "Telegram External C2 configured", true, nil)

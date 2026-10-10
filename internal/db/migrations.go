@@ -998,6 +998,28 @@ var indexMigrations = []*gormigrate.Migration{
 			return nil
 		},
 	},
+	// Unique (type, channel_id) on external C2 channels. Configure used to
+	// Create unconditionally, so reconfiguring the same channel accumulated
+	// rows (and orphaned the previous poller); the upsert path in
+	// extc2_handlers requires this constraint. Legacy duplicates collapse to
+	// the lowest id first, or the unique index cannot be created.
+	{
+		ID: "2026-10-10-extc2-channel-unique",
+		Migrate: func(tx *gorm.DB) error {
+			if !tx.Migrator().HasTable("extc2_channels") {
+				return nil
+			}
+			if err := tx.Exec("DELETE FROM extc2_channels WHERE id NOT IN (SELECT MIN(id) FROM extc2_channels GROUP BY type, channel_id)").Error; err != nil {
+				return err
+			}
+			execMigration(tx, "CREATE UNIQUE INDEX IF NOT EXISTS idx_extc2_type_channel ON extc2_channels(type, channel_id)", "idx_extc2_type_channel")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			execMigration(tx, "DROP INDEX IF EXISTS idx_extc2_type_channel", "drop_idx_extc2_type_channel")
+			return nil
+		},
+	},
 }
 
 // Migrations is the combined migration history, kept for tooling and tests.

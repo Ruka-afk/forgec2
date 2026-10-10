@@ -7,11 +7,19 @@ type extC2Runner interface {
 }
 
 // registerExtC2Runner tracks a started channel poller under the same key the
-// metadata map uses ("extc2-<type>-<channelID>").
+// metadata map uses ("extc2-<type>-<channelID>"). A runner already living on
+// that key is stopped first: reconfiguring a channel used to orphan its
+// poller, which kept reconnecting with the stale token until restart.
 func (s *Server) registerExtC2Runner(key string, r extC2Runner) {
 	s.extC2ChannelsMu.Lock()
+	prev, hadPrev := s.extC2Runners[key]
 	s.extC2Runners[key] = r
 	s.extC2ChannelsMu.Unlock()
+	// Stop outside the lock: Stop can block on poller teardown. A runner
+	// re-registering itself (restore on boot) is skipped.
+	if hadPrev && prev != nil && prev != r {
+		prev.Stop()
+	}
 }
 
 // stopExtC2Runner stops and forgets the poller for key; returns whether one
