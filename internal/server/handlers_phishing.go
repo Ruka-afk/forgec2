@@ -19,7 +19,9 @@ import (
 func (s *Server) handleAPIPhishingTemplates(c *gin.Context) {
 	var templates []db.PhishingTemplate
 	if err := s.db.Order("created_at desc").Limit(200).Find(&templates).Error; err != nil {
-		slog.Error("Failed to list phishing templates", "err", err)
+		// An empty 200 here reads as "no templates configured".
+		handleQueryError(c, err, "Failed to list phishing templates")
+		return
 	}
 	respond(c, gin.H{"data": templates})
 }
@@ -27,7 +29,9 @@ func (s *Server) handleAPIPhishingTemplates(c *gin.Context) {
 func (s *Server) handleAPIPhishingCampaigns(c *gin.Context) {
 	var campaigns []db.PhishingCampaign
 	if err := s.db.Order("created_at desc").Limit(200).Find(&campaigns).Error; err != nil {
-		slog.Error("Failed to list phishing campaigns", "err", err)
+		// An empty 200 here reads as "no campaigns running".
+		handleQueryError(c, err, "Failed to list phishing campaigns")
+		return
 	}
 	respond(c, gin.H{"data": campaigns})
 }
@@ -35,7 +39,10 @@ func (s *Server) handleAPIPhishingCampaigns(c *gin.Context) {
 func (s *Server) handleAPIPhishingCaptures(c *gin.Context) {
 	var events []db.PhishingEvent
 	if err := s.db.Where("event_type = ?", "capture").Order("created_at desc").Limit(500).Find(&events).Error; err != nil {
-		slog.Error("Failed to query phishing captures", "err", err)
+		// An empty 200 here reads as "nobody clicked / nobody submitted
+		// credentials" — a failed read must not fabricate that.
+		handleQueryError(c, err, "Failed to query phishing captures")
+		return
 	}
 	type captureEntry struct {
 		ID        uint   `json:"id"`

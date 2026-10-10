@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/forgec2/forgec2/internal/util"
 	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 const bloodHoundDir = "data/bloodhound"
@@ -21,7 +23,9 @@ const bloodHoundDir = "data/bloodhound"
 func (s *Server) handleBloodHoundList(c *gin.Context) {
 	var results []db.BloodHoundResult
 	if err := s.db.Order("created_at desc").Limit(BloodHoundResultLimit).Find(&results).Error; err != nil {
-		slog.Error("Failed to list bloodhound results", "error", err)
+		// An empty 200 here reads as "nothing collected yet".
+		handleQueryError(c, err, "Failed to list bloodhound results")
+		return
 	}
 	respond(c, gin.H{"results": results, "total": len(results)})
 }
@@ -30,12 +34,20 @@ func (s *Server) handleBloodHoundList(c *gin.Context) {
 func (s *Server) handleBloodHoundStatus(c *gin.Context) {
 	var total int64
 	if err := s.db.Model(&db.BloodHoundResult{}).Count(&total).Error; err != nil {
-		slog.Error("Failed to count bloodhound results", "error", err)
+		// A zero count here reads as "no collections ever": a failed
+		// count must not impersonate a clean bill of health.
+		handleQueryError(c, err, "Failed to count bloodhound results")
+		return
 	}
 
 	var last db.BloodHoundResult
 	if err := s.db.Order("created_at desc").First(&last).Error; err != nil {
-		slog.Error("Failed to fetch last bloodhound result", "error", err)
+		// Not-found is the legitimate "no collections yet" state; only a
+		// real failure is an error.
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			handleQueryError(c, err, "Failed to fetch last bloodhound result")
+			return
+		}
 	}
 
 	respond(c, gin.H{
