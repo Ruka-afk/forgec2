@@ -74,6 +74,7 @@ var initialSchemaIndexes = []struct{ sql, label string }{
 	{"CREATE INDEX IF NOT EXISTS idx_network_hosts_agent_ip ON network_hosts(agent_id, ip)", "idx_network_hosts_agent_ip"},
 	{"CREATE INDEX IF NOT EXISTS idx_phishing_events_type_created ON phishing_events(event_type, created_at)", "idx_phishing_events_type_created"},
 	{"CREATE INDEX IF NOT EXISTS idx_credential_domain_created ON credential_entries(domain, created_at)", "idx_credential_domain_created"},
+	{"CREATE INDEX IF NOT EXISTS idx_audit_user_created ON audit_logs(user, created_at)", "idx_audit_user_created"},
 }
 
 // schemaMigrations mutate tables/columns/data and run BEFORE AutoMigrate.
