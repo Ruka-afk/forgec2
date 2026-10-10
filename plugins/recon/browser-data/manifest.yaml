@@ -18,6 +18,6 @@ params:
       default: "20"
       description: Number of top entries to show
 digest: sha256:7dd6e05bf74712746cbe57d5ec114f487925e64b6d1cf4944f3c53ae664e2163
-signature: a37f917b85817bd2af9399f05e809160dc39d003274d101224db1abbdb3d90a090a80fec249290ea4cc1bf7f56e0c6e216d61a0bc0a62c3fd60754c1ecafa907
+signature: 6838017c6075cbd5a1ede7ef6b6118bfd667b8e1dcf35fc7f1b8642713e18eeb56c7b3555e31b2478e8502e2ce3c659033a8813e6c2ed86b73e8a1fe8b225b00
 includes:
     - lib

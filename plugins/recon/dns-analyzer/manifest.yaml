@@ -13,6 +13,6 @@ params:
       required: false
       description: Specific agent to analyze
 digest: sha256:f8faa4d75d30bbf14f0b32e807d9638ae7c362a962fad9c7064f5b7567e7cf1f
-signature: e34919848b86ac61a122ad94e3028c4dfd1d399d81529799eddd4bf27a86f2b08937f400b15d694e6450f88ff69ed0c786635897fedb5be752cbb6b08086d001
+signature: 8b195176f26b4d582d69e1952901017c7feed4853f0bb1f25febc09eec2ffa5c95f7a6db27a1b1b25889f3aa6f9027e331c0272268bcd886d4bc4846c9d15c0e
 includes:
     - lib

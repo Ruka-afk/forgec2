@@ -96,6 +96,73 @@ func TestPackageDigestIsStableAndCoversHelpers(t *testing.T) {
 	}
 }
 
+// TestPackageDigestIgnoresStraySystemDriveTree proves that a stray
+// "%SystemDrive%" tree — left behind when an operator-side copy runs
+// through an unexpanded environment variable with the plugin's CWD
+// pinned to its package dir — cannot invalidate a signed package.
+// Without the exclusion, one stray file fail-closes a legitimate
+// plugin under plugins.require_signed.
+func TestPackageDigestIgnoresStraySystemDriveTree(t *testing.T) {
+	dir := t.TempDir()
+	writePackage(t, dir, map[string]string{
+		"manifest.yaml": "name: demo\nversion: 1.0.0\ntype: report\nentry: main.py\ninterpreter: python3\n",
+		"main.py":       "print('{}')\n",
+	})
+
+	first, err := PackageDigest(dir, nil, dir)
+	if err != nil {
+		t.Fatalf("digest: %v", err)
+	}
+
+	stray := filepath.Join(dir, "%SystemDrive%", "ProgramData", "Microsoft", "Windows", "Caches")
+	if err := os.MkdirAll(stray, 0o750); err != nil {
+		t.Fatalf("mkdir stray: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(stray, "cversions.2.db"), []byte("stray"), 0o600); err != nil {
+		t.Fatalf("write stray file: %v", err)
+	}
+
+	withStray, err := PackageDigest(dir, nil, dir)
+	if err != nil {
+		t.Fatalf("digest with stray tree: %v", err)
+	}
+	if withStray != first {
+		t.Fatal("stray %SystemDrive% tree must not change the package digest")
+	}
+}
+
+// TestRemoveStrayPackageDirs proves LoadFromDisk's hygiene pass
+// deletes stray "%SystemDrive%" trees while leaving real package
+// payload and VCS directories untouched.
+func TestRemoveStrayPackageDirs(t *testing.T) {
+	root := t.TempDir()
+	pkg := filepath.Join(root, "hook", "demo")
+	writePackage(t, pkg, map[string]string{
+		"manifest.yaml": "name: demo\nversion: 1.0.0\ntype: hook\nentry: main.py\ninterpreter: python3\n",
+		"main.py":       "print('{}')\n",
+	})
+	writePackage(t, filepath.Join(root, ".git"), map[string]string{"HEAD": "ref: refs/heads/main\n"})
+	stray := filepath.Join(pkg, "%SystemDrive%", "ProgramData")
+	if err := os.MkdirAll(stray, 0o750); err != nil {
+		t.Fatalf("mkdir stray: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(stray, "cversions.2.db"), []byte("stray"), 0o600); err != nil {
+		t.Fatalf("write stray file: %v", err)
+	}
+
+	removeStrayPackageDirs(root)
+
+	if _, err := os.Stat(filepath.Join(pkg, "%SystemDrive%")); !os.IsNotExist(err) {
+		t.Fatalf("stray %%SystemDrive%% tree was not removed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(pkg, "main.py")); err != nil {
+		t.Fatalf("package payload was removed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".git", "HEAD")); err != nil {
+		t.Fatalf("VCS directory was removed: %v", err)
+	}
+}
+
 // TestPackageDigestCoversSharedIncludes proves a shared library outside the
 // package directory is part of the digest. Without it, tampering with
 // plugins/lib would satisfy every package while owning the server account.

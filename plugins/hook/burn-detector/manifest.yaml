@@ -15,7 +15,7 @@ events:
 config:
     alert_threshold: "3"
     log_file: ""
-digest: sha256:cefd277a0f6a775ab3ae3e6630c5ef07fdddd8e18f1b00f00f6ae4aae111a151
-signature: d5e17c49a8face6e3a72ef6e0b9cc3f796299086cdb5a33a31407924e93c951b1b7c248690a7f25fc92fbd69fc5fa4614501a32539e7e4cdee457f85f7d9ab07
+digest: sha256:096dcccd44148da18623fcd38569b80337248648bf703452d51d9f3a4487bd79
+signature: d3efeb7051f85f590021cca2cbd360bc6bd963eff93618c83ec2b785530a1d0f2c4de743821927487e210b50cc7adf32374babfcec946d0be687da27ab56d30a
 includes:
     - lib

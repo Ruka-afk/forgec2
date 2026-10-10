@@ -120,7 +120,7 @@ plugins:
   # own key to sign plugins you author; share paths (e.g. the shared lib/) are
   # covered through the manifest's `includes` list.
   trusted_keys:
-    - "3442a0abd61e4b954ec46e99bbd6bdf2750200b7c96661a861a2686b3e87aaba"
+    - "b5c42a42ed1409ff23e7c410d23bb44e707fad2e9ecd6c026a63c63192c15bf3"
   # Refuse unsigned plugin packages. Safe out of the box because the bundled
   # plugins are signed; third-party plugins must be signed to be installed.
   require_signed: true

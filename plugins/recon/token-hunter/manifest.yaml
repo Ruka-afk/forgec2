@@ -13,6 +13,6 @@ params:
       required: false
       description: Specific agent to scan
 digest: sha256:b86424314541381b607cf546d8d4d57bdcb7fc3ed9cf7e3375e98688cfeecb62
-signature: 8b6e4c7e0017902975b8faf2549476458e55f2a5699232c64a27629d68dec8c86521733fa9277d1adf3bcc0c554fb65b732e4714ba0cdf5fe0f55968ea527607
+signature: 042052d50351eeceaee1ecbcf119690b2707630a3675bb527ce7837eaba88ba4dbe3afd7b67fc4118c7da58bb07f28094fb925d1192a912a0e766ebbc3df8c00
 includes:
     - lib

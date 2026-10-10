@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
@@ -146,10 +147,13 @@ func PackageDigest(dir string, includes []string, root string) (string, error) {
 }
 
 // digestExcludedDir reports directories that are runtime or VCS noise rather
-// than package payload.
+// than package payload. "%SystemDrive%" is a stray tree left behind when an
+// operator-side action copies files through an unexpanded environment variable
+// while the plugin's CWD is the package dir (see executor.go: cmd.Dir); it is
+// already ignored by .gitignore for the same reason.
 func digestExcludedDir(name string) bool {
 	switch name {
-	case "__pycache__", ".git", ".svn", ".hg", "node_modules", ".idea", ".vscode":
+	case "__pycache__", ".git", ".svn", ".hg", "node_modules", ".idea", ".vscode", "%SystemDrive%":
 		return true
 	}
 	return false
@@ -184,8 +188,27 @@ func fileSHA256(path string) (string, error) {
 	if info.Size() > maxPluginPackageFileBytes {
 		return "", fmt.Errorf("plugin file %s exceeds %d bytes", filepath.Base(path), maxPluginPackageFileBytes)
 	}
+	data, err := io.ReadAll(io.LimitReader(f, maxPluginPackageFileBytes+1))
+	if err != nil {
+		return "", err
+	}
+	if int64(len(data)) > maxPluginPackageFileBytes {
+		return "", fmt.Errorf("plugin file %s exceeds %d bytes", filepath.Base(path), maxPluginPackageFileBytes)
+	}
+	// Hash line-ending-normalized text content: git may check text
+	// files out with CRLF (core.autocrlf on Windows) while the
+	// recorded digest was computed over LF bytes. Normalizing keeps
+	// verification checkout-agnostic; line endings carry no payload
+	// semantics for the supported interpreters. Binary payloads
+	// (wasm modules, compiled entries) are detected by a NUL byte
+	// and hashed raw: normalizing those would corrupt bytes that
+	// merely contain a 0x0D 0x0A sequence.
+	normalized := data
+	if !bytes.ContainsRune(data, 0) {
+		normalized = bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
+	}
 	h := sha256.New()
-	if _, err := io.Copy(h, io.LimitReader(f, maxPluginPackageFileBytes+1)); err != nil {
+	if _, err := h.Write(normalized); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil

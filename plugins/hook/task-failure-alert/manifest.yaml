@@ -14,7 +14,7 @@ config:
     consecutive_threshold: 3
     log_file: ""
     time_window_seconds: 300
-digest: sha256:22ece0e6280d6e2e45f445fe1fe4b473df54835ac47a961c2a0741efd3c2edba
-signature: 22f3862027e50a7d49541dc36ca08f54c0ecf244e532b03eeef379f8091e8ea3b6be79b664bb53d8c0cc324f7e5008b45303aed70508afc4fae94d3a1213b708
+digest: sha256:f23c4435aa3e3c5ea78398c93cf0b9d936b18bb77f71a74099901c66b4be9e1c
+signature: bc579586c2b4436b252f0cb490d2a40863709d0cdfa3ab023e7e3b2dce84a622310e32a74471e98fefacfcb9bbf20da3dad6232c4cc787655d8cba49541ec80f
 includes:
     - lib

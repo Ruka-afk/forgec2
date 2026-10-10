@@ -13,6 +13,6 @@ params:
       required: false
       description: Specific agent to audit
 digest: sha256:b2757ccb0ae4c6ce24e3d8a27c820d20267748f7d5618eddc75b3d957b614f6e
-signature: 6bbb5fded87c52d869dec9e4508fa610725ef0b19dc98091a96abd76d75720104a07f0bd96089c082fdfca94c04a7fc80956d876e25a150a326b6d56a7fa4f09
+signature: 4edb7336303c3c2ec731bbd95fa9de49f62cba0948834cf9d569e8eeaabdbd5f3dd4c3c08835228655f41cf376f1f991efb1396e6096af5b29176c81e1c49e0d
 includes:
     - lib

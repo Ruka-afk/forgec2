@@ -12,7 +12,7 @@ params:
       type: string
       required: false
       description: Specific agent to check
-digest: sha256:7dd04bb9f6a621e4ace7f2e77a980647855b1d064e62fec4955377a561b13369
-signature: a6006536c944600079d1a80cfdd75a27a56058fa0d1526c6127bdcdef2d1b0c90dda31dd7a4ba211ae31f30696b1580310c15cea5e0cc74cea0ae0593fd2b405
+digest: sha256:3c3bebb3107090568d41bd3368ca56e393564748d196beadfa452eed800a9ae9
+signature: e8b9c95224bdc59b71dd7d3f6adb1cbbc15d51f8488c6e2918b8c09393434fe44b35f22cf2224b8cdc8cf62149c534e309a831607cc3eb1b96a236a306df1c0c
 includes:
     - lib

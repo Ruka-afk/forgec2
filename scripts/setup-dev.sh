@@ -65,6 +65,14 @@ database:
   path: "data/db/forgec2.db"
   driver: "sqlite"
 
+plugins:
+  # Verify the bundled plugin packages by default. Third-party packages must
+  # carry a signature from an explicitly configured trusted key.
+  trusted_keys:
+    - "b5c42a42ed1409ff23e7c410d23bb44e707fad2e9ecd6c026a63c63192c15bf3"
+  require_signed: true
+  max_concurrent: 4
+
 implant:
   default_interval: 10
   default_jitter: 25

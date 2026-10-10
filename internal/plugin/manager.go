@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -49,6 +50,10 @@ type Manager struct {
 	// trust holds the package-verification policy (trusted signing keys and
 	// whether unsigned packages are refused).
 	trust trustPolicy
+	// loadFailures records the latest reason a discovered package could not be
+	// registered. It is intentionally diagnostic only: failed packages remain
+	// unavailable and are never treated as trusted.
+	loadFailures map[string]string
 }
 
 // NewManager creates a new plugin manager backed by the given database.
@@ -60,6 +65,7 @@ func NewManager(database *gorm.DB) *Manager {
 		exec:          newExecutor(defaultMaxConcurrentPlugins),
 		hookFails:     make(map[string]int),
 		hookTrippedAt: make(map[string]time.Time),
+		loadFailures:  make(map[string]string),
 	}
 }
 
@@ -116,11 +122,43 @@ func (m *Manager) SetMarketplace(mp *Marketplace) {
 
 // LoadFromDisk walks a directory of plugin packages and registers each one.
 func (m *Manager) LoadFromDisk(dir string) error {
+	removeStrayPackageDirs(dir)
 	m.mu.Lock()
 	m.pluginDir = dir
+	// Failures describe the current scan, not an append-only history. Clear
+	// the snapshot before walking so a fixed or removed package stops being
+	// reported as broken after the next reload.
+	m.loadFailures = make(map[string]string)
 	m.mu.Unlock()
 
 	return m.loadFromDir(dir, dir)
+}
+
+// removeStrayPackageDirs deletes volatile trees that operator-side
+// actions left inside plugin packages — currently the literal
+// "%SystemDrive%" directory created when a copy runs through an
+// unexpanded environment variable while a plugin's CWD is its own
+// package dir (executor.go pins cmd.Dir to the package). Such trees
+// are git-ignored, are never package payload, and would otherwise
+// accumulate on disk. Best-effort: failures are logged, not fatal.
+func removeStrayPackageDirs(root string) {
+	if root == "" {
+		return
+	}
+	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !d.IsDir() || d.Name() != "%SystemDrive%" {
+			return nil
+		}
+		if rerr := os.RemoveAll(path); rerr != nil {
+			slog.Warn("Failed to remove stray plugin artifact", "dir", path, "err", rerr)
+		} else {
+			slog.Info("Removed stray artifact from plugin package", "dir", path)
+		}
+		return filepath.SkipDir
+	})
 }
 
 // loadFromDir scans dir (and nested directories) for plugin packages. root is
@@ -146,6 +184,7 @@ func (m *Manager) loadFromDir(dir, root string) error {
 			manifest, err := LoadManifest(manifestPath)
 			if err != nil {
 				slog.Warn("Failed to load plugin manifest", "path", manifestPath, "err", err)
+				m.recordLoadFailure(entry.Name(), err)
 				continue
 			}
 			batch = append(batch, pendingPlugin{root: root, dir: pluginDir, manifest: manifest})
@@ -164,16 +203,56 @@ func (m *Manager) loadFromDir(dir, root string) error {
 	// missing requirements are reported per plugin; everything that resolves
 	// still loads (warn-and-continue semantics preserved from the original
 	// per-entry loop).
-	ordered, problems := topoSortPlugins(batch, m.loadedNames())
+	ordered, problems, rejected := topoSortPlugins(batch, m.loadedNames())
 	for _, pErr := range problems {
 		slog.Warn("Plugin dependency problem", "dir", dir, "err", pErr)
+	}
+	for name, reason := range rejected {
+		m.recordLoadFailure(name, reason)
 	}
 	for _, p := range ordered {
 		if err := m.registerAtDir(p.manifest, p.dir, p.root); err != nil {
 			slog.Warn("Failed to register plugin", "name", p.manifest.Name, "err", err)
+			m.recordLoadFailure(p.manifest.Name, err)
 		}
 	}
 	return nil
+}
+
+func (m *Manager) recordLoadFailure(name string, err error) {
+	if m == nil || name == "" || err == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.loadFailures == nil {
+		m.loadFailures = make(map[string]string)
+	}
+	m.loadFailures[name] = err.Error()
+}
+
+func (m *Manager) recordLoadSuccess(name string) {
+	if m == nil || name == "" {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.loadFailures, name)
+}
+
+// LoadFailures returns a snapshot of packages discovered but rejected during
+// the last disk load. The returned map is safe for callers to retain.
+func (m *Manager) LoadFailures() map[string]string {
+	if m == nil {
+		return nil
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make(map[string]string, len(m.loadFailures))
+	for name, reason := range m.loadFailures {
+		out[name] = reason
+	}
+	return out
 }
 
 // loadedNames snapshots the names of currently registered plugins so a batch
@@ -192,7 +271,7 @@ func (m *Manager) loadedNames() map[string]bool {
 // their dependents. Problems (duplicate names, unknown/self dependencies,
 // cycles) are returned individually and exclude only the implicated plugins.
 // `loaded` satisfies requirements outside the batch.
-func topoSortPlugins(batch []pendingPlugin, loaded map[string]bool) ([]pendingPlugin, []error) {
+func topoSortPlugins(batch []pendingPlugin, loaded map[string]bool) ([]pendingPlugin, []error, map[string]error) {
 	const (
 		unvisited = 0
 		visiting  = 1
@@ -200,9 +279,12 @@ func topoSortPlugins(batch []pendingPlugin, loaded map[string]bool) ([]pendingPl
 	)
 	byName := make(map[string]pendingPlugin, len(batch))
 	var problems []error
+	rejected := make(map[string]error)
 	for _, p := range batch {
 		if _, dup := byName[p.manifest.Name]; dup {
-			problems = append(problems, fmt.Errorf("duplicate plugin name %q in the same directory", p.manifest.Name))
+			err := fmt.Errorf("duplicate plugin name %q in the same directory", p.manifest.Name)
+			problems = append(problems, err)
+			rejected[p.manifest.Name] = err
 			continue
 		}
 		byName[p.manifest.Name] = p
@@ -219,15 +301,18 @@ func topoSortPlugins(batch []pendingPlugin, loaded map[string]bool) ([]pendingPl
 		case done:
 			return !failed[name]
 		case visiting:
-			problems = append(problems, fmt.Errorf("dependency cycle: %s -> %s",
-				strings.Join(chain, " -> "), name))
+			err := fmt.Errorf("dependency cycle: %s -> %s", strings.Join(chain, " -> "), name)
+			problems = append(problems, err)
+			rejected[name] = err
 			return false
 		}
 		state[name] = visiting
 		okAll := true
 		for _, dep := range p.manifest.Requires {
 			if dep == name {
-				problems = append(problems, fmt.Errorf("plugin %q depends on itself", name))
+				err := fmt.Errorf("plugin %q depends on itself", name)
+				problems = append(problems, err)
+				rejected[name] = err
 				okAll = false
 				continue
 			}
@@ -240,13 +325,18 @@ func topoSortPlugins(batch []pendingPlugin, loaded map[string]bool) ([]pendingPl
 			case loaded[dep]:
 				// Satisfied by an already-registered plugin.
 			default:
-				problems = append(problems, fmt.Errorf("plugin %q requires %q which is not loaded", name, dep))
+				err := fmt.Errorf("plugin %q requires %q which is not loaded", name, dep)
+				problems = append(problems, err)
+				rejected[name] = err
 				okAll = false
 			}
 		}
 		state[name] = done
 		if !okAll {
 			failed[name] = true
+			if rejected[name] == nil {
+				rejected[name] = fmt.Errorf("plugin %q has an unavailable dependency", name)
+			}
 			return false
 		}
 		out = append(out, p)
@@ -261,11 +351,16 @@ func topoSortPlugins(batch []pendingPlugin, loaded map[string]bool) ([]pendingPl
 	for _, n := range names {
 		visit(byName[n], nil)
 	}
-	return out, problems
+	return out, problems, rejected
 }
 
 // Register persists a plugin manifest and loads it into memory.
 func (m *Manager) Register(manifest *Manifest) error {
+	if manifest == nil {
+		err := errors.New("plugin manifest is nil")
+		m.recordLoadFailure("<unknown>", err)
+		return err
+	}
 	dir := m.pluginDirFor(manifest.Name)
 	m.mu.RLock()
 	root := m.pluginDir
@@ -273,7 +368,11 @@ func (m *Manager) Register(manifest *Manifest) error {
 	if root == "" {
 		root = filepath.Dir(dir)
 	}
-	return m.registerAtDir(manifest, dir, root)
+	err := m.registerAtDir(manifest, dir, root)
+	if err != nil {
+		m.recordLoadFailure(manifest.Name, err)
+	}
+	return err
 }
 
 // checkRegistration rejects duplicate names, self-dependencies and requires
@@ -377,6 +476,7 @@ func (m *Manager) registerAtDir(manifest *Manifest, pluginDir, root string) erro
 	m.mu.Lock()
 	m.plugins[manifest.Name] = p
 	m.mu.Unlock()
+	m.recordLoadSuccess(manifest.Name)
 
 	slog.Info("Plugin registered", "name", manifest.Name, "type", manifest.Type, "version", manifest.Version, "dir", pluginDir)
 	return nil
