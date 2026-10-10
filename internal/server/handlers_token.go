@@ -264,7 +264,10 @@ func (s *Server) handleGetTokens(c *gin.Context) {
 	id := c.Param("id")
 	var tokens []db.TokenEntry
 	if err := s.db.Where("agent_id = ?", id).Order("created_at desc").Find(&tokens).Error; err != nil {
-		slog.Error("Failed to get tokens", "err", err)
+		// An empty 200 here reads as "this agent has no tokens": a failed
+		// read must be a 500, not a false bill of health.
+		handleQueryError(c, err, "Failed to get tokens")
+		return
 	}
 	c.JSON(http.StatusOK, tokens)
 }
