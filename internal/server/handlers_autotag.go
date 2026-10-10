@@ -10,6 +10,7 @@ import (
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/util"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // handleAutoTagRules lists all auto-tag rules.
@@ -131,7 +132,13 @@ func (s *Server) handleAutoTagApply(c *gin.Context) {
 		existingSet[a.AgentTagID+"|"+a.ImplantID] = true
 	}
 
-	applied := 0
+	// Collect the new assignments first, then write them in one batched
+	// transaction: the inner loop used to issue one INSERT per (rule,
+	// agent) pair, turning a 200-rule × 5000-agent apply into a
+	// single-statement-per-row storm. The batch is also capped so a
+	// pathological rule set cannot allocate an unbounded slice.
+	var pending []db.AgentTagAssignment
+	capped := false
 	for _, r := range rules {
 		if r.Tag == nil {
 			continue
@@ -144,15 +151,34 @@ func (s *Server) handleAutoTagApply(c *gin.Context) {
 			if existingSet[key] {
 				continue
 			}
-			if err := s.db.Create(&db.AgentTagAssignment{AgentTagID: r.TagID, ImplantID: a.ID}).Error; err != nil {
-				slog.Error("Auto-tag: failed to create assignment", "rule", r.ID, "tag", r.TagID, "agent", a.ID, "err", err)
-				continue
+			if len(pending) >= AutoTagApplyBatchLimit {
+				capped = true
+				break
 			}
+			pending = append(pending, db.AgentTagAssignment{AgentTagID: r.TagID, ImplantID: a.ID})
 			existingSet[key] = true
-			applied++
+		}
+		if capped {
+			break
 		}
 	}
-	respond(c, gin.H{"applied": applied})
+	applied := 0
+	if len(pending) > 0 {
+		// One transaction, batched inserts; a conflict on the unique
+		// index (concurrent apply) is reported, not fatal.
+		if err := s.db.Transaction(func(tx *gorm.DB) error {
+			return tx.CreateInBatches(&pending, 500).Error
+		}); err != nil {
+			slog.Error("Auto-tag: failed to apply assignment batch", "count", len(pending), "err", err)
+			respond(c, gin.H{"applied": 0, "partial": true, "error": "batch insert failed"})
+			return
+		}
+		applied = len(pending)
+	}
+	if capped {
+		slog.Warn("Auto-tag apply hit the batch cap", "cap", AutoTagApplyBatchLimit)
+	}
+	respond(c, gin.H{"applied": applied, "capped": capped})
 }
 
 // autoTagMatch evaluates a stored condition (JSON array of {field,op,value})

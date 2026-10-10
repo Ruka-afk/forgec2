@@ -91,6 +91,9 @@ const (
 	AutoTagRuleLimit       = 200
 	AutoTagAgentLimit      = 5000
 	AutoTagAssignmentLimit = 50000
+	// AutoTagApplyBatchLimit caps how many assignments one apply call may
+	// insert in a single batched transaction.
+	AutoTagApplyBatchLimit = 20000
 	BloodHoundResultLimit  = 50000
 	CampaignTaskLimit      = 10000
 	MITRETimelineLimit     = 500
