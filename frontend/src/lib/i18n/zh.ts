@@ -3499,6 +3499,8 @@ export const zh: Record<string, string> = {
     "report.ioc_unreadable": "无法读取指标。这并不代表“没有指标” — 是提取查询失败了。{message}",
     "report.overview_unreadable": "无法读取报告总览，因此上方所有数字为未知，而不是 0。{message}",
     "report.preview_unreadable": "无法读取报告预览数据，因此下方板块可能不完整。{message}",
+    "report.partial_title": "本报告不完整。",
+    "report.partial_body": "失败板块：{sections}。这些数据缺失，而非 0。",
     "report.history_unreadable": "无法读取报告历史 — 这并不代表没有已保存的报告。{message}",
     "report.ioc_hint": "从任务结果和侦察数据中提取（公网 IPv4、域名、URL、MD5/SHA1/SHA256），可导出 STIX 2.1 供威胁情报平台使用。",
     "report.sec_overview": "概览",

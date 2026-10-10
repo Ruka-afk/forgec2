@@ -59,6 +59,8 @@ export function useReportData() {
     creds: CredRow[];
     listeners: ListenerRow[];
     findings: FindingRow[];
+    partial: boolean;
+    failedSections: string[];
   }>({
     fetcher: async () => {
       const { start, end } = computeDateRange(
@@ -71,19 +73,31 @@ export function useReportData() {
       if (end) qs.set("end", end);
       const q = qs.toString();
 
-      const [agentsResp, tasksResp, credsResp, netResp, findResp] = await Promise.all([
+      // allSettled, not all: one broken section must not blank the whole
+      // preview. Failed sections come back empty and are reported so the
+      // UI can say "incomplete" instead of implying "no data".
+      const [agentsResp, tasksResp, credsResp, netResp, findResp] = await Promise.allSettled([
         api.get<{ agents?: AgentRow[] }>(paths.report.agents(q)),
         api.get<{ stats?: TaskStatRow[] }>(paths.report.tasks(q)),
         api.get<{ credentials?: CredRow[] }>(paths.report.credentials(q)),
         api.get<{ listeners?: ListenerRow[] }>(paths.report.network(q)),
         api.get<{ findings?: FindingRow[] }>(paths.report.findings(q)),
       ]);
+      const value = <T,>(r: PromiseSettledResult<T>): T | undefined =>
+        r.status === "fulfilled" ? r.value : undefined;
+      const failedSections: string[] = [];
+      const sectionNames = ["agents", "tasks", "credentials", "listeners", "findings"];
+      [agentsResp, tasksResp, credsResp, netResp, findResp].forEach((r, i) => {
+        if (r.status === "rejected") failedSections.push(sectionNames[i]);
+      });
       return {
-        agents: agentsResp.agents || [],
-        taskStats: tasksResp.stats || [],
-        creds: credsResp.credentials || [],
-        listeners: netResp.listeners || [],
-        findings: findResp.findings || [],
+        agents: value(agentsResp)?.agents || [],
+        taskStats: value(tasksResp)?.stats || [],
+        creds: value(credsResp)?.credentials || [],
+        listeners: value(netResp)?.listeners || [],
+        findings: value(findResp)?.findings || [],
+        partial: failedSections.length > 0,
+        failedSections,
       };
     },
     toastThrottleMs: POLL.toastThrottle,
@@ -118,6 +132,10 @@ export function useReportData() {
   const creds = preview?.creds ?? [];
   const listeners = preview?.listeners ?? [];
   const findings = preview?.findings ?? [];
+  // One or more preview sections failed: the data is incomplete, which the
+  // page must state rather than rendering empty tabs as fact.
+  const previewPartial = preview?.partial ?? false;
+  const previewFailedSections = preview?.failedSections ?? [];
 
   const generateReport = useCallback(
     async (sections: string[]) => {
@@ -165,6 +183,8 @@ export function useReportData() {
     stats,
     overviewError,
     previewError,
+    previewPartial,
+    previewFailedSections,
     historyError,
     refreshOverview,
     loading,

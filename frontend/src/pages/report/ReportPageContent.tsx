@@ -44,6 +44,8 @@ export default function ReportPage() {
     stats,
     overviewError,
     previewError,
+    previewPartial,
+    previewFailedSections,
     historyError,
     refreshOverview,
     loading,
@@ -244,6 +246,13 @@ export default function ReportPage() {
           message={t("report.preview_unreadable", { message: previewError })}
           className="mb-4"
         />
+      )}
+
+      {previewPartial && !previewError && (
+        <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+          <span className="font-medium">{t("report.partial_title")}</span>{" "}
+          {t("report.partial_body", { sections: previewFailedSections.join(", ") })}
+        </div>
       )}
 
       <Tabs value={activeSection} onValueChange={setActiveSection} orientation="vertical">

@@ -3485,6 +3485,8 @@ export const en: Record<string, string> = {
     "report.ioc_unreadable": "Indicators could not be read. This is NOT a finding of \"no IOCs\" — the extraction query failed. {message}",
     "report.overview_unreadable": "The report overview could not be read, so every figure above is unknown rather than zero. {message}",
     "report.preview_unreadable": "The report preview data could not be read, so the sections below may be incomplete. {message}",
+    "report.partial_title": "This report is incomplete.",
+    "report.partial_body": "Failed sections: {sections}. Their figures are missing, not zero.",
     "report.history_unreadable": "Report history could not be read — this is not a report of zero saved reports. {message}",
     "report.ioc_hint": "Extracted from task results and recon data (public IPv4, domains, URLs, MD5/SHA1/SHA256). Export as STIX 2.1 for threat-intelligence platforms.",
     "report.sec_overview": "Overview",
