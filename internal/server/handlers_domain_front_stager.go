@@ -1,16 +1,22 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/payload"
 	"github.com/gin-gonic/gin"
 )
+
+// frontRefreshConcurrency bounds parallel domain probes so a large list
+// cannot open hundreds of sockets at once.
+const frontRefreshConcurrency = 4
 
 // frontDomainState mirrors the frontend's FrontDomain shape.
 type frontDomainState struct {
@@ -54,16 +60,50 @@ func (s *Server) frontCheckDomain(domain string) frontDomainState {
 }
 
 // frontRefresh re-checks every configured domain and updates status.
+// The lock is never held across a probe: frontCheckDomain does DNS
+// resolution plus an HTTPS round trip, so holding domainFrontMu here used
+// to block every reader (list/status) for the full probe duration of every
+// configured domain.
 func (s *Server) frontRefresh() {
 	s.domainFrontMu.Lock()
-	defer s.domainFrontMu.Unlock()
-	for _, d := range s.domainFrontDomains {
-		st := s.frontCheckDomain(d)
-		if s.domainFrontAuto {
-			st.Active = true
-		}
-		s.domainFrontStatus[d] = &st
+	domains := make([]string, len(s.domainFrontDomains))
+	copy(domains, s.domainFrontDomains)
+	auto := s.domainFrontAuto
+	s.domainFrontMu.Unlock()
+
+	type probe struct {
+		domain string
+		state  frontDomainState
 	}
+	results := make([]probe, 0, len(domains))
+	sem := make(chan struct{}, frontRefreshConcurrency)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	for _, d := range domains {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(domain string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			st := s.frontCheckDomain(domain)
+			if auto {
+				st.Active = true
+			}
+			mu.Lock()
+			results = append(results, probe{domain: domain, state: st})
+			mu.Unlock()
+		}(d)
+	}
+	wg.Wait()
+
+	s.domainFrontMu.Lock()
+	for _, r := range results {
+		if !s.frontHasDomain(r.domain) {
+			continue // domain removed while probing
+		}
+		s.domainFrontStatus[r.domain] = &r.state
+	}
+	s.domainFrontMu.Unlock()
 }
 
 func (s *Server) frontDomains() []frontDomainState {
@@ -115,7 +155,7 @@ func (s *Server) handleAPIInfraFrontConfig(c *gin.Context) {
 	}
 
 	s.domainFrontMu.Lock()
-	s.domainFrontDomains = req.Domains
+	s.domainFrontDomains = capDomainFronts(req.Domains)
 	s.domainFrontAuto = req.AutoFailover
 	for k := range s.domainFrontStatus {
 		if !s.frontHasDomain(k) {
@@ -124,11 +164,89 @@ func (s *Server) handleAPIInfraFrontConfig(c *gin.Context) {
 	}
 	s.domainFrontMu.Unlock()
 
+	s.persistDomainFrontConfig()
 	s.frontRefresh()
 	respond(c, gin.H{
 		"domains":       s.frontDomains(),
 		"auto_failover": s.domainFrontAuto,
 	})
+}
+
+// capDomainFronts enforces MaxDomainFrontStatus: the status map is a
+// per-domain in-memory record set, so an unbounded list is a slow memory
+// leak. Excess entries are dropped with a warning.
+func capDomainFronts(domains []string) []string {
+	out := make([]string, 0, len(domains))
+	seen := make(map[string]bool, len(domains))
+	for _, d := range domains {
+		d = strings.TrimSpace(d)
+		if d == "" || seen[d] {
+			continue
+		}
+		if len(out) >= MaxDomainFrontStatus {
+			slog.Warn("Domain front list exceeds the configured cap; dropping the rest",
+				"cap", MaxDomainFrontStatus, "dropped_domain", d)
+			break
+		}
+		seen[d] = true
+		out = append(out, d)
+	}
+	return out
+}
+
+// domainFrontConfigKey is the ServerConfig key holding the persisted
+// domain-fronting list (it used to live only in memory and was lost on
+// every restart).
+const domainFrontConfigKey = "domain_fronting_config"
+
+// persistDomainFrontConfig writes the current domain-fronting list to
+// ServerConfig so a restart restores it. Failures are logged, not fatal:
+// the in-memory list stays authoritative for this process.
+func (s *Server) persistDomainFrontConfig() {
+	s.domainFrontMu.Lock()
+	payload, err := json.Marshal(struct {
+		Domains      []string `json:"domains"`
+		AutoFailover bool     `json:"auto_failover"`
+	}{Domains: s.domainFrontDomains, AutoFailover: s.domainFrontAuto})
+	s.domainFrontMu.Unlock()
+	if err != nil {
+		slog.Error("Failed to marshal domain fronting config", "err", err)
+		return
+	}
+	cfg := db.ServerConfig{Key: domainFrontConfigKey, Value: string(payload), UpdatedAt: time.Now()}
+	if err := s.db.Save(&cfg).Error; err != nil {
+		slog.Error("Failed to persist domain fronting config", "err", err)
+	}
+}
+
+// restoreDomainFrontConfig loads the persisted domain-fronting list at
+// boot. An absent key (fresh install) keeps the empty default.
+func (s *Server) restoreDomainFrontConfig() {
+	var cfg db.ServerConfig
+	if err := s.db.Where("key = ?", domainFrontConfigKey).First(&cfg).Error; err != nil || cfg.Value == "" {
+		return
+	}
+	var stored struct {
+		Domains      []string `json:"domains"`
+		AutoFailover bool     `json:"auto_failover"`
+	}
+	if err := json.Unmarshal([]byte(cfg.Value), &stored); err != nil {
+		slog.Error("Failed to parse persisted domain fronting config", "err", err)
+		return
+	}
+	domains := capDomainFronts(stored.Domains)
+	s.domainFrontMu.Lock()
+	s.domainFrontDomains = domains
+	s.domainFrontAuto = stored.AutoFailover
+	for k := range s.domainFrontStatus {
+		if !s.frontHasDomain(k) {
+			delete(s.domainFrontStatus, k)
+		}
+	}
+	s.domainFrontMu.Unlock()
+	if len(domains) > 0 {
+		slog.Info("Restored domain fronting config", "domains", len(domains), "auto_failover", stored.AutoFailover)
+	}
 }
 
 func (s *Server) handleAPIDomainFronting(c *gin.Context) {

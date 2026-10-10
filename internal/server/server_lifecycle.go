@@ -195,10 +195,15 @@ func (s *Server) Run() error {
 	// vault re-encrypt: normalize previous-key loot rows after rotation
 	s.startVaultReencryptLoop()
 
-	// TLS expiry: startup check plus daily monitor (regenerate/upload take
-	// effect for new handshakes without restart via the cert loader).
-	s.checkTLSCertExpiry("startup")
-	s.startTLSCertMonitor()
+	// TLS expiry monitoring is meaningful only when the HTTPS listener is
+	// enabled. Skipping it for plain-HTTP development deployments avoids a
+	// misleading missing-certificate warning and an unnecessary goroutine.
+	if s.cfg.Server.TLSEnabled {
+		// Regenerate/upload take effect for new handshakes without restart via
+		// the certificate loader.
+		s.checkTLSCertExpiry("startup")
+		s.startTLSCertMonitor()
+	}
 
 	// start periodic cleanup
 	s.wg.Add(1)
@@ -498,6 +503,10 @@ func (s *Server) Run() error {
 
 	// Restore External C2 channels from DB
 	s.restoreExtC2Channels()
+
+	// Restore the persisted domain-fronting list (memory-only before, so it
+	// was lost on every restart).
+	s.restoreDomainFrontConfig()
 
 	// Start async build job cleanup goroutine
 	s.wg.Add(1)
