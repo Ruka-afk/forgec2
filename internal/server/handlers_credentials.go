@@ -966,7 +966,11 @@ func (s *Server) handleExportCredentials(c *gin.Context) {
 	}
 
 	if err := query.Limit(5000).Find(&creds).Error; err != nil {
+		// Exporting an empty CSV as if it were the full vault is the worst
+		// failure mode here: an operator would archive "no credentials".
 		slog.Error("Failed to query credentials for export", "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to load credentials for export")
+		return
 	}
 
 	c.Header("Content-Type", "text/csv")
