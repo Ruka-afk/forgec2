@@ -28,6 +28,11 @@ func parsePermissions(raw string) []string {
 }
 
 func marshalPermissions(perms []string) string {
+	// json.Marshal encodes a nil slice as "null"; store "[]" instead so every
+	// row has the same shape and no consumer has to special-case null.
+	if perms == nil {
+		perms = []string{}
+	}
 	b, ok := marshalJSONSafe(perms)
 	if !ok {
 		return "[]"
