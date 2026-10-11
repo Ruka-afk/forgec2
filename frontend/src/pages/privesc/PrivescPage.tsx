@@ -21,7 +21,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Bot, ChevronDown, CircleAlert, Info, CircleQuestionMark, Eye, FileCode, FileSpreadsheet, History, Lightbulb, Play, ShieldAlert, ShieldCheck, TriangleAlert, TrendingUp, Zap } from "lucide-react";
+import { Bot, ChevronDown, CircleAlert, Info, CircleQuestionMark, Eye, FileCode, FileSpreadsheet, History, Lightbulb, Play, ShieldAlert, ShieldCheck, TriangleAlert, TrendingUp } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -50,7 +50,6 @@ interface PrivescFinding {
   severity?: string;
   cve_id?: string;
   description?: string;
-  exploit_command?: string;
   recommendation?: string;
 }
 
@@ -86,7 +85,7 @@ export default function PrivescPage() {
   const [expandedFinding, setExpandedFinding] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const { confirm, modal } = useConfirm();
+  const { modal } = useConfirm();
 
   const { t } = useI18n();
 
@@ -161,13 +160,6 @@ export default function PrivescPage() {
       const data = await api.get(paths.privesc.history(historyId));
       setFindings((data.findings || data.tasks || []) as PrivescFinding[]);
     } catch { toast.error(t("privesc.toast.load_history_failed")); }
-  };
-
-  const handleExecuteExploit = async (finding: PrivescFinding) => {
-    if (!(await confirm({ message: `${t("privesc.confirm_exploit")}\n\n${finding.title || t("privesc.unknown")}` }))) return;
-    try {
-      await api.postJson(paths.privesc.execute, { agent_id: selectedAgent, check_type: checkType, exploit_command: finding.exploit_command });
-    } catch { toast.error(t("privesc.toast.execute_exploit_failed")); }
   };
 
   const handleExportJSON = () => {
@@ -322,14 +314,6 @@ export default function PrivescPage() {
                               <p className="text-sm text-primary">
                                 <Lightbulb className="size-4" />{t("privesc.recommendation_label")} {f.recommendation}
                               </p>
-                            )}
-                            {f.exploit_command && (
-                              <div className="flex items-center gap-2">
-                                <code className="text-xs font-mono bg-card text-success px-3 py-1.5 rounded-lg flex-1 overflow-x-auto">{f.exploit_command}</code>
-                                <Button variant="destructive" size="sm" onClick={() => handleExecuteExploit(f)} className="shrink-0">
-                                  <Zap className="size-4" /> {t("privesc.execute")}
-                                </Button>
-                              </div>
                             )}
                           </div>
                         </CollapsibleContent>

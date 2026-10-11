@@ -16,7 +16,6 @@ func (s *Server) handlePrivescCheck(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
 	}
-	user := c.GetString("username")
 	agentID := c.Param("id")
 
 	var req struct {
@@ -30,22 +29,11 @@ func (s *Server) handlePrivescCheck(c *gin.Context) {
 		}
 	}
 
-	// Build command
-	command := fmt.Sprintf("privesc_check:%s", req.CheckType)
-
-	// Create task
-	task := db.Task{
-		AgentID:   agentID,
-		Type:      "privesc_check",
-		Command:   command,
-		Status:    "pending",
-		CreatedBy: user,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-
-	if err := s.db.Create(&task).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create privesc check task")
+	// Route through issueAgentTask like every other agent-facing dispatch:
+	// the bare Create used to skip the tenant scope, the agent-existence
+	// check and the approval/lock gates inside createTask.
+	task := s.issueAgentTask(c, agentID, TaskSpec{Type: "privesc_check", Command: fmt.Sprintf("privesc_check:%s", req.CheckType)})
+	if task == nil {
 		return
 	}
 
@@ -168,6 +156,15 @@ type privescHistoryEntry struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
+// handlePrivescExecute was removed: privesc_execute was never a registered
+// protocol task type, so the task it created could not be dispatched to any
+// implant (and the UI never received an exploit_command to send, since
+// findings carry only reference URLs). Routing it through issueAgentTask
+// exposed the phantom type; the honest fix is to delete the endpoint rather
+// than keep an operation that claimed "exploit task created" for a task that
+// could never run. A real exploit-execution surface needs a proper TaskSpec
+// plus an agent handler, not an unregistered type.
+
 // buildPrivescHistory maps privesc tasks to the frontend history shape.
 func (s *Server) buildPrivescHistory(tasks []db.Task) []privescHistoryEntry {
 	out := make([]privescHistoryEntry, 0, len(tasks))
@@ -274,7 +271,6 @@ func (s *Server) handlePrivescRun(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
 	}
-	user := c.GetString("username")
 	var req struct {
 		AgentID   string `json:"agent_id"`
 		CheckType string `json:"check_type"`
@@ -286,18 +282,11 @@ func (s *Server) handlePrivescRun(c *gin.Context) {
 	if req.CheckType == "" {
 		req.CheckType = "all"
 	}
-	command := fmt.Sprintf("privesc_check:%s", req.CheckType)
-	task := db.Task{
-		AgentID:   req.AgentID,
-		Type:      "privesc_check",
-		Command:   command,
-		Status:    "pending",
-		CreatedBy: user,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-	if err := s.db.Create(&task).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	// issueAgentTask validates the agent (tenant scope included) and routes
+	// through the same gates as every other task-issuing endpoint; the bare
+	// Create used to accept any agent id from any tenant.
+	task := s.issueAgentTask(c, req.AgentID, TaskSpec{Type: "privesc_check", Command: fmt.Sprintf("privesc_check:%s", req.CheckType)})
+	if task == nil {
 		return
 	}
 	s.LogAuditRecord(c, "privesc_check", "agent", req.AgentID,
@@ -305,35 +294,11 @@ func (s *Server) handlePrivescRun(c *gin.Context) {
 	respond(c, gin.H{"success": true, "task_id": task.ID})
 }
 
-// handlePrivescExecute executes an exploit command for a privesc finding.
-func (s *Server) handlePrivescExecute(c *gin.Context) {
-	if !s.requireOperator(c) {
-		return
-	}
-	user := c.GetString("username")
-	var req struct {
-		AgentID        string `json:"agent_id"`
-		CheckType      string `json:"check_type"`
-		ExploitCommand string `json:"exploit_command"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil || req.AgentID == "" || req.ExploitCommand == "" {
-		respondError(c, http.StatusBadRequest, "agent_id and exploit_command required")
-		return
-	}
-	task := db.Task{
-		AgentID:   req.AgentID,
-		Type:      "privesc_execute",
-		Command:   req.ExploitCommand,
-		Status:    "pending",
-		CreatedBy: user,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-	if err := s.db.Create(&task).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create exploit task")
-		return
-	}
-	s.LogAuditRecord(c, "privesc_execute", "agent", req.AgentID,
-		fmt.Sprintf("Privesc exploit task created: %s", req.ExploitCommand), true, nil)
-	respond(c, gin.H{"success": true, "task_id": task.ID})
-}
+// handlePrivescExecute was removed 2026-10: privesc_execute was never a
+// registered protocol task type, so the row it created could not be
+// dispatched to any implant, and no finding ever carried an exploit_command
+// for the UI to send (agent output offers reference URLs only). Routing it
+// through issueAgentTask exposed the phantom type as a 400; the honest fix
+// is deleting the endpoint rather than keeping an operation that claims
+// "exploit task created" for a task that can never run. A real
+// exploit-execution surface needs a proper TaskSpec plus an agent handler.

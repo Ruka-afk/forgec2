@@ -63,7 +63,6 @@ func (s *Server) registerReconRoutes(auth *gin.RouterGroup) {
 		reconWrite.POST("/api/lateral/result", s.handleProcessLateralResult)
 		reconWrite.POST("/api/privesc/result", s.handleProcessPrivescResult)
 		reconWrite.POST("/api/privesc/run", s.handlePrivescRun)
-		reconWrite.POST("/api/privesc/execute", s.handlePrivescExecute)
 		reconWrite.POST("/toolkit/agents/:id/action", s.handleToolkitQuickAction)
 		reconWrite.POST("/api/report/generate", s.handleGenerateReport)
 		reconWrite.DELETE("/api/report/:id", s.handleAPIDeleteReport)

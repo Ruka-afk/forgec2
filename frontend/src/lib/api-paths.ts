@@ -348,11 +348,6 @@ export const paths = {
     one: (id: string | number) => `/bloodhound/${id}`,
     download: (id: string | number) => `/bloodhound/${id}/download`,
   },
-  chat: {
-    channels: "/chat/channels",
-    send: "/chat/send",
-    history: (channel: string) => `/chat/history?channel=${encodeURIComponent(channel)}`,
-  },
   circuitBreaker: {
     detail: "/circuit-breaker/detail",
     config: "/circuit-breaker/config",
@@ -487,7 +482,6 @@ export const paths = {
     page: "/privesc",
     run: "/api/privesc/run",
     history: (id: string) => `/api/privesc/history/${id}`,
-    execute: "/api/privesc/execute",
   },
   lateral: {
     historyAll: "/api/lateral/history/all",

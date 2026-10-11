@@ -3465,23 +3465,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/privesc/execute": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Execute privesc checks */
-        post: operations["privescExecute"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/privesc/result": {
         parameters: {
             query?: never;
@@ -15201,24 +15184,6 @@ export interface operations {
         };
     };
     lateralResult: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    privescExecute: {
         parameters: {
             query?: never;
             header?: never;
