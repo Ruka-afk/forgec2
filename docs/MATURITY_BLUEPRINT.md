@@ -337,33 +337,45 @@ killswitch: 持久化后丢弃 key → 无法解密后续任务 → 冷却退出
 
 ## 4. 安全加固 Checklist（代码审查可勾选）
 
+> 2026-10-10 逐项对照源码核实并勾选。勾选项均有测试/门禁佐证；
+> 括号内为关键实现位置。未勾选项列入 §7 风险表。
+
 ### 加密与传输
-- [ ] TLS1.3 only 于 QUIC / 推荐 HTTP；禁用明文 `grpc://` 于非 lab
-- [ ] 会话 X25519 + AES-256-GCM；reg_secret 每 implant 隔离
-- [ ] HMAC 覆盖 uuid/nonce/seq；重放窗拒绝旧 seq
-- [ ] loot 静态加密 + 密钥轮换；私钥路径权限收紧
-- [ ] 发布/OTA 一律 Ed25519；agent **必须** pin 公钥（拒绝裸 URL）
-- [ ] uTLS 指纹池与 malleable UA 一致，避免 JA3 孤岛
+- [x] TLS1.3 only 于 QUIC / 推荐 HTTP；禁用明文 `grpc://` 于非 lab（`quic_listener.go` MinVersion；`grpc://` 非 TLS 时拒绝降级）
+- [x] 会话 X25519 + AES-256-GCM；reg_secret 每 implant 隔离（`beacon_register.go` + `cipher.go`）
+- [x] HMAC 覆盖 uuid/nonce/seq；重放窗拒绝旧 seq（`beacon_core` seq 单调校验）
+- [x] loot 静态加密 + 密钥轮换；私钥路径权限收紧（`crypto.ReencryptLoot`；`data/update_signing.key` 0600）
+- [x] 发布/OTA 一律 Ed25519；agent **必须** pin 公钥（拒绝裸 URL）（`agent_lifecycle.go:117` 空 pin 即拒）
+- [x] uTLS 指纹池与 malleable UA 一致，避免 JA3 孤岛
 
 ### 认证与权限
-- [ ] JWT + 可选 TOTP；CSRF 双提交（`forgec2_csrf`）
-- [ ] RBAC：`RequireRole` 于 settings/self_update/sign
-- [ ] mTLS `RequireAndVerifyClientCert` 可配置且失败则拒绝降级
-- [ ] 插件与 agent 最小权限；SeDebug 按需、默认不开
+- [x] JWT + 可选 TOTP；CSRF 双提交（`forgec2_csrf` header + cookie 双校验）
+- [x] RBAC：`RequireRole` 于 settings/self_update/sign
+- [x] mTLS `RequireAndVerifyClientCert` 可配置且失败则拒绝降级（`grpc_mtls_resync_hardening_test.go`）
+- [x] 插件与 agent 最小权限；SeDebug 按需、默认不开
 
 ### 任务与 OPSEC
-- [ ] ~70 危险任务 approval gate 不可绕过（API + UI）
-- [ ] `opsec.PreFlight` 在 dispatch 前执行
-- [ ] ROE CIDR deny 优先于 allow
-- [ ] 日志脱敏（token/secret/凭据不出明文）
-- [ ] kill-switch / uninstall 清凭据残留
+- [x] ~70 危险任务 approval gate 不可绕过（API + UI）（`tasktypes.go` 注册表派发；两处门禁均有测试）
+- [x] `opsec.PreFlight` 在 dispatch 前执行
+- [x] ROE CIDR deny 优先于 allow
+- [x] 日志脱敏（token/secret/凭据不出明文）（`logfields` 统一脱敏）
+- [x] kill-switch / uninstall 清凭据残留
 
 ### 实现卫生
-- [ ] 所有 listener：`LimitReader` + panic recover + 状态位诚实
-- [ ] 插件：无敏感 env、PATH 白名单、超时、输出 cap、进程树 kill
-- [ ] `gofmt` / `go vet`（忽略 agent unsafe.Pointer 既知项）/ 测试 skip 仅已知 flaky
-- [ ] OpenAPI / i18n / permissions 前端门禁绿
-- [ ] 无密钥入库（gitleaks pre-commit）
+- [x] 所有 listener：`LimitReader` + panic recover + 状态位诚实
+- [x] 插件：无敏感 env、PATH 白名单、超时、输出 cap、进程树 kill（`executor.go`；cap 有测试）
+- [x] `gofmt` / `go vet`（忽略 agent unsafe.Pointer 既知项）/ 测试 skip 仅已知 flaky（CI 门禁）
+- [x] OpenAPI / i18n / permissions 前端门禁绿（`check:pre` 8 项并发）
+- [x] 无密钥入库（gitleaks pre-commit + CI secrets job）
+
+### 数据诚实性（2026-10-10 新增）
+- [x] 读路径失败不伪装成功空数据：report/credentials/notifications/dashboard/collab/
+      chat/mesh/timeline/chain/token/cloud/bloodhound/phishing/webhooks/backup-codes 等
+      21 处查询失败改 500 fail-loud（`handleQueryError`；`query_failure*_test.go` 门禁）
+- [x] 部分失败可见：报告 `partial` 标志 + HTML 横幅 + 前端分段 allSettled（`handlers_report.go`）
+- [x] 凭据导出失败不产生空 CSV（`handlers_credentials.go`）
+- [x] 插件包 digest 跨平台一致（CRLF 归一化 + volatile 目录排除 + NUL 字节二进制保护）
+- [x] 重签密钥轮换后 52 个 bundled 插件全量验签通过（`TestBundledPluginsVerifyUnderStrictPolicy`）
 
 ---
 
@@ -461,6 +473,29 @@ c2, impact, other`。每个条目含 type、aliases、parameters、approval 标�
 
 ---
 
+## 6.5 插件签名与信任链（现状）
+
+**2026-10-10 密钥轮换**。历史问题：9 个 bundled 插件的 manifest digest 记录的是
+签名时刻包内 volatile 文件（未展开环境变量留下的 `%SystemDrive%` 树，内含会变动的
+Windows 缓存 DB）的哈希，原签名种子已销毁，digest 不可复现，严格策略下这 9 个
+插件被 fail-closed 拒绝（`TestBundledPluginsVerifyUnderStrictPolicy` 失败）。
+
+当前状态（已恢复并对冲了整类风险）：
+
+| 机制 | 位置 | 作用 |
+|------|------|------|
+| digest CRLF→LF 归一化 | `internal/plugin/trust.go:fileSHA256` | git `core.autocrlf` 检出差异不再改变 digest（Windows/Linux 一致，已用 git index LF 内容模拟验证） |
+| NUL 字节二进制判定 | 同上 | wasm/exe 等二进制载荷按原字节哈希，不被行尾归一化破坏 |
+| volatile 目录排除 | `digestExcludedDir` | `__pycache__` / `%SystemDrive%` 等运行时产物不进 digest |
+| 启动清理 | `removeStrayPackageDirs` | `LoadFromDisk` 前移除 stray `%SystemDrive%` 树 |
+| `(type, channel_id)` 唯一约束 | `2026-10-10-extc2-channel-unique` | upsert 原子化，历史重复行折叠（ExtC2 相关） |
+
+重签流程（密钥轮换后）：`PLUGIN_SIGNING_KEY=<seed> go run ./cmd/sign-plugin -root plugins <dir>`。
+新公钥在 `config.example.yaml` 与 `scripts/setup-dev.sh` 的 `plugins.trusted_keys`。
+种子**不在仓库内**，由操作员离线保管（轮换时只展示一次）。
+
+---
+
 ## 7. 潜在风险与缓解（按严重度）
 
 | 级别 | 风险 | 缓解 |
@@ -487,12 +522,12 @@ c2, impact, other`。每个条目含 type、aliases、parameters、approval 标�
 | 维度 | 分 | 理由 |
 |------|----|------|
 | 功能成熟度 | **8.5** | 217 任务、11 传输、52 插件、malleable v2、双语言 UI；扣分：C-implant 子集、部分 lateral/tun 非 Win stub |
-| 稳定性/健壮性 | **9.0** | 队列/退避/kill-switch/限长/recover 齐全；QUIC stream cap + gRPC keepalive/MaxConnectionAge；Unix 进程组 kill；D2-4 插件 guard fail-closed + WaitDelay + timeout 硬上限；扣分：仍非 WASM 沙箱、无插件 CPU/IO 配额 |
-| 生态成熟度 | **8.8** | 命令>50、别名、manifest+goja、en/zh；D2-4 脚本 require 宿主机逃逸已封、事件回调有界；D4-1 插件包 digest+Ed25519 签名信任链 + `cmd/sign-plugin` + 并发配额；D4-2 **WASM 不可信插件层**（wazero，无 WASI、16 MiB 内存上限、超时，ABI v1 见 `docs/PLUGIN_TIERS.md`）；D4-3 52 个内置插件全部签名（项目私钥已销毁）、`includes` 覆盖共享 `lib/`、示例配置默认 `require_signed: true`；扣分：WASM 层暂无官方 SDK/示例模块 |
-| 安全与合规加固 | **9.0** | TLS1.3/ECDH/GCM/Ed25519 pin/ROE/approval/审计；可选 ChaCha20-Poly1305；生产 compose；D2-1 `/api/v1` operator guard；D2-2 审计租户隔离；D2-3 gRPC mTLS fail-closed + resync oracle 关闭；扣分：ChaCha20 非默认、mTLS 仅全局而非 per-listener |
+| 稳定性/健壮性 | **9.2** | 队列/退避/kill-switch/限长/recover 齐全；QUIC stream cap + gRPC keepalive/MaxConnectionAge；Unix 进程组 kill；D2-4 插件 guard fail-closed + WaitDelay + timeout 硬上限；**数据诚实性专项**：21 处查询失败改 500 fail-loud、报告 partial 标志 + HTML 横幅、凭据导出失败不产空 CSV、ExtC2 Start 失败不留配置行、domain-front 探测移出锁并持久化 + 128 上限、AutoTag 单事务批量 + 上限、audit(user,created_at) 复合索引（`query_failure*_test.go` 门禁）；扣分：仍非 WASM 沙箱、无插件 CPU/IO 配额 |
+| 生态成熟度 | **8.9** | 命令>50、别名、manifest+goja、en/zh；D2-4 脚本 require 宿主机逃逸已封、事件回调有界；D4-1 插件包 digest+Ed25519 签名信任链 + `cmd/sign-plugin` + 并发配额；D4-2 **WASM 不可信插件层**（wazero，无 WASI、16 MiB 内存上限、超时，ABI v1 见 `docs/PLUGIN_TIERS.md`）；D4-3 52 个内置插件全量签名（2026-10 轮换密钥重签）+ digest CRLF 归一化跨平台一致 + volatile 目录排除 + `(type,channel_id)` 唯一约束 + 示例配置默认 `require_signed: true`；扣分：WASM 层暂无官方 SDK/示例模块 |
+| 安全与合规加固 | **9.3** | TLS1.3/ECDH/GCM/Ed25519 pin/ROE/approval/审计；可选 ChaCha20-Poly1305；生产 compose；D2-1 `/api/v1` operator guard；D2-2 审计租户隔离；D2-3 gRPC mTLS fail-closed + resync oracle 关闭；**§4 checklist 25 项全部勾选**（含数据诚实性 5 项）+ 宏 run/stop/list 租户隔离（跨租户 404/空列表/停不掉测试）；扣分：ChaCha20 非默认、mTLS 仅全局而非 per-listener |
 | 可维护性/更新性 | **9.2** | 单一 TaskSpec 真源、CI 门禁、gofmt 清债、OTA 签名链闭环；matrix 任务清单生成段 + `--check`；版本行由 `VERSION` 单源 stamp；D3 CI 含 `-race` job、33% 覆盖率下限、定时 fuzz、Docker/Compose 校验、**真实服务端 live UI e2e**；发布含 SBOM + provenance；扣分：GitHub Action/基础镜像仍是可变 tag |
 | 额外加分 | **8.0** | HTTP/3、别名史、多语言插件、跨平台构建已有；扣分：模块化代理/WASM、Win TUN 未打包 |
-| **综合** | **9.4** | P3 工程债已清 + P4 全落地 + Phase C + **D-2 服务端 P0**（operator guard/审计租户/gRPC mTLS fail-closed/resync oracle/插件脚本 fail-closed/存储密钥与 compose 契约/PG 备份边界）+ **D-2b agent fail-closed**（禁明文降级、DNS 校验、证书 pin、响应上限）+ **D-3 供应链**（race/覆盖率/fuzz/docker/live-e2e 门禁、SBOM + provenance）+ **D-4 插件生态**（包签名信任链、共享 lib 覆盖、并发配额、WASM 不可信层、52 插件已签名且默认强制验签）+ **D-5 备份可运维性**（可配置保留/调度 + 新鲜度指标与 health 暴露） |
+| **综合** | **9.5** | P3 工程债已清 + P4 全落地 + Phase C + **D-2 服务端 P0**（operator guard/审计租户/gRPC mTLS fail-closed/resync oracle/插件脚本 fail-closed/存储密钥与 compose 契约/PG 备份边界）+ **D-2b agent fail-closed**（禁明文降级、DNS 校验、证书 pin、响应上限）+ **D-3 供应链**（race/覆盖率/fuzz/docker/live-e2e 门禁、SBOM + provenance）+ **D-4 插件生态**（包签名信任链、共享 lib 覆盖、并发配额、WASM 不可信层、52 插件已签名且默认强制验签）+ **D-5 备份可运维性**（可配置保留/调度 + 新鲜度指标与 health 暴露）+ **2026-10 数据诚实性与可信度专项**（§4 checklist 清零；21 处 fail-loud + partial 标志 + 5 个租户隔离/孤儿行/持久化/批量/索引修复，每项配回归测试） |
 
 ---
 
