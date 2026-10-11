@@ -1,7 +1,6 @@
 package server
 
 import (
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -169,7 +168,10 @@ func (s *Server) handleDashboardTaskStatus(c *gin.Context) {
 	}
 	if err := s.tenantScope(s.db.Model(&db.Task{}), c).
 		Select("status, count(*) as count").Group("status").Limit(10).Find(&counts).Error; err != nil {
-		slog.Error("Dashboard: failed to query task status counts", "err", err)
+		// Zero counts here render as a clean dashboard: a failed
+		// aggregate must not be displayed as real task statistics.
+		handleQueryError(c, err, "Dashboard: failed to query task status counts")
+		return
 	}
 
 	countMap := make(map[string]int64, len(counts))
@@ -449,7 +451,10 @@ func (s *Server) handleDashboardAttackPath(c *gin.Context) {
 	var agents []db.Implant
 	if err := s.tenantScope(s.db.Select("id, hostname, os, ip, parent_id"), c).
 		Limit(10).Find(&agents).Error; err != nil {
-		slog.Error("Dashboard: failed to query attack path agents", "err", err)
+		// An empty node list here draws an attack path with no agents:
+		// a failed read must not be rendered as "no path exists".
+		handleQueryError(c, err, "Dashboard: failed to query attack path agents")
+		return
 	}
 
 	nodes := make([]AttackPathNode, 0)

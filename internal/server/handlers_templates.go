@@ -123,7 +123,9 @@ func (s *Server) handleUpdateTemplate(c *gin.Context) {
 func (s *Server) handleListTemplatesJSON(c *gin.Context) {
 	var templates []db.CommandTemplate
 	if err := s.db.Order("category, name").Find(&templates).Error; err != nil {
-		slog.Error("Failed to list templates JSON", "err", err)
+		// An empty 200 here reads as "no command templates exist".
+		handleQueryError(c, err, "Failed to list templates JSON")
+		return
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"templates": templates,

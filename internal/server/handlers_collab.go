@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"log/slog"
 	"net/http"
 	"time"
 
@@ -18,7 +17,10 @@ func (s *Server) handleCollabAgents(c *gin.Context) {
 	// them — restrict both sides to caller-visible agents.
 	var agents []db.Implant
 	if err := s.tenantScope(s.db, c).Select("id").Order("last_seen desc").Limit(5000).Find(&agents).Error; err != nil {
-		slog.Error("Failed to query collab agents", "err", err)
+		// An empty 200 here reads as "no agents at all": a failed read
+		// must not be indistinguishable from an empty deployment.
+		handleQueryError(c, err, "Failed to query collab agents")
+		return
 	}
 	visible := make([]string, 0, len(agents))
 	for _, a := range agents {
@@ -33,7 +35,10 @@ func (s *Server) handleCollabAgents(c *gin.Context) {
 		lockQ = lockQ.Where("1 = 0")
 	}
 	if err := lockQ.Find(&locks).Error; err != nil {
-		slog.Error("Failed to query collab locks", "err", err)
+		// Missing locks read as "nobody holds these agents": a failed
+		// lock read hides an active operator session.
+		handleQueryError(c, err, "Failed to query collab locks")
+		return
 	}
 	lockMap := make(map[string]string, len(locks))
 	now := time.Now()

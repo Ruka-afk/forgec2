@@ -74,7 +74,10 @@ func (s *Server) handleAPICircuitBreakerConfig(c *gin.Context) {
 func (s *Server) handleAPICircuitBreakerEvents(c *gin.Context) {
 	var events []db.CircuitBreakerEvent
 	if err := s.db.Order("created_at DESC").Limit(100).Find(&events).Error; err != nil {
-		slog.Error("Failed to list circuit breaker events", "err", err)
+		// An empty 200 here reads as "the breaker never tripped": a failed
+		// read must not look like a clean health history.
+		handleQueryError(c, err, "Failed to list circuit breaker events")
+		return
 	}
 	respond(c, gin.H{"events": events})
 }
@@ -176,7 +179,7 @@ func (s *Server) handleAPICircuitBreakerToggle(c *gin.Context) {
 		oldState = "unknown"
 	}
 
-	newState := "healthy"
+	var newState string
 	switch strings.ToLower(strings.TrimSpace(req.State)) {
 	case "disabled", "open", "burned":
 		th.Status = HealthBurned

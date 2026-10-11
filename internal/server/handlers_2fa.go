@@ -201,7 +201,10 @@ func (s *Server) handleBackupCodeCount(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	var count int64
 	if err := s.db.Model(&db.BackupCode{}).Where("user_id = ? AND used = false", userID).Count(&count).Error; err != nil {
-		slog.Error("Failed to count backup codes", "err", err)
+		// A zero here reads as "no recovery codes left" and can push an
+		// operator into re-enrolling 2FA on a transient failure.
+		handleQueryError(c, err, "Failed to count backup codes")
+		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "remaining": count})
 }

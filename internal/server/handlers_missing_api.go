@@ -113,7 +113,9 @@ func (s *Server) handleAPISettings(c *gin.Context) {
 func (s *Server) handleAPIMeshTopology(c *gin.Context) {
 	var peers []db.MeshPeer
 	if err := s.db.Limit(500).Find(&peers).Error; err != nil {
-		slog.Error("Failed to query mesh peers", "err", err)
+		// An empty 200 here draws a topology with no peers at all.
+		handleQueryError(c, err, "Failed to query mesh peers")
+		return
 	}
 	type topoNode struct {
 		ID        string `json:"id"`
@@ -209,7 +211,10 @@ func (s *Server) handleAPITimelineData(c *gin.Context) {
 	if err := s.db.Table("audit_logs").
 		Select("id, created_at, user, action, details, agent_id, ip, success").
 		Order("created_at DESC").Limit(200).Find(&auditLogs).Error; err != nil {
-		slog.Error("Failed to query audit logs for timeline", "err", err)
+		// The timeline merges two feeds; dropping one silently would show
+		// a partial history as if it were complete.
+		handleQueryError(c, err, "Failed to query audit logs for timeline")
+		return
 	}
 	for _, l := range auditLogs {
 		events = append(events, timelineEntry{
@@ -231,7 +236,8 @@ func (s *Server) handleAPITimelineData(c *gin.Context) {
 	if err := s.db.Table("tasks").
 		Select("id, created_at, agent_id, type, command, status").
 		Order("created_at DESC").Limit(200).Find(&tasks).Error; err != nil {
-		slog.Error("Failed to query tasks for timeline", "err", err)
+		handleQueryError(c, err, "Failed to query tasks for timeline")
+		return
 	}
 	for _, t := range tasks {
 		events = append(events, timelineEntry{
@@ -248,7 +254,9 @@ func (s *Server) handleAPIChatHistory(c *gin.Context) {
 	channel := c.DefaultQuery("channel", "general")
 	var msgs []db.ChatMessage
 	if err := s.db.Where("channel = ?", channel).Order("created_at asc").Limit(200).Find(&msgs).Error; err != nil {
-		slog.Error("Failed to query chat history", "err", err)
+		// An empty 200 here reads as "the channel is quiet".
+		handleQueryError(c, err, "Failed to query chat history")
+		return
 	}
 	respond(c, gin.H{"messages": msgs})
 }
@@ -264,15 +272,20 @@ func (s *Server) handleAPIChatChannels(c *gin.Context) {
 	if err := s.db.Model(&db.ChatMessage{}).
 		Select("channel, COUNT(*) as message_count, MAX(message) as last_message, MAX(created_at) as last_time").
 		Group("channel").Order("MAX(created_at) DESC").Limit(500).Find(&rows).Error; err != nil {
-		slog.Error("Failed to query chat channels", "err", err)
+		// An empty 200 here reads as "no chat channels exist".
+		handleQueryError(c, err, "Failed to query chat channels")
+		return
 	}
 	respond(c, gin.H{"channels": rows})
 }
 
-func (s *Server) buildChainEntries() []gin.H {
+// buildChainEntries loads the agent parent/child relations for the chain
+// topology views. A failed read returns an error so callers answer 500
+// instead of drawing an empty topology that reads as "no agents".
+func (s *Server) buildChainEntries() ([]gin.H, error) {
 	var agents []db.Implant
 	if err := s.db.Select("id, hostname, parent_agent_id").Order("last_seen desc").Limit(5000).Find(&agents).Error; err != nil {
-		slog.Error("Failed to build chain entries", "err", err)
+		return nil, err
 	}
 	entries := make([]gin.H, 0, len(agents))
 	for _, a := range agents {
@@ -282,15 +295,26 @@ func (s *Server) buildChainEntries() []gin.H {
 			"parent_id": a.ParentAgentID,
 		})
 	}
-	return entries
+	return entries, nil
+}
+
+// respondChainEntries answers a chain-topology request, mapping a failed
+// relation load to a 500 (never an empty topology).
+func (s *Server) respondChainEntries(c *gin.Context, key string) {
+	entries, err := s.buildChainEntries()
+	if err != nil {
+		handleQueryError(c, err, "Failed to build chain entries")
+		return
+	}
+	respond(c, gin.H{key: entries})
 }
 
 func (s *Server) handleAPIChainGraph(c *gin.Context) {
-	respond(c, gin.H{"nodes": s.buildChainEntries()})
+	s.respondChainEntries(c, "nodes")
 }
 
 func (s *Server) handleAPIChainList(c *gin.Context) {
-	respond(c, gin.H{"chains": s.buildChainEntries()})
+	s.respondChainEntries(c, "chains")
 }
 
 func (s *Server) handleAPISendChatMessage(c *gin.Context) {
@@ -341,13 +365,11 @@ func (s *Server) handleDownloadBuild(c *gin.Context) {
 		respondError(c, http.StatusNotFound, "artifact file not found on disk")
 		return
 	}
-	allowedDir := filepath.Join(s.implantDataDir())
-	cleanPath := filepath.Clean(logEntry.OutputPath)
-	if !strings.HasPrefix(cleanPath, filepath.Clean(allowedDir)) {
-		respondError(c, http.StatusForbidden, "Access denied")
-		return
-	}
-	serveFileSafe(c, logEntry.OutputPath, allowedDir, logEntry.Filename)
+	// serveFileSafe performs the canonical containment and symlink checks. Do
+	// not duplicate them with a raw string-prefix test here: paths such as
+	// "implants-evil" share the prefix of the real directory and make that
+	// check misleading, while the helper already handles all path boundaries.
+	serveFileSafe(c, logEntry.OutputPath, s.implantDataDir(), logEntry.Filename)
 }
 
 func (s *Server) handleConfigReload(c *gin.Context) {
@@ -450,7 +472,7 @@ func (s *Server) handleSettingsMaintenancePurge(c *gin.Context) {
 // ── Agent Chain ──────────────────────────────────────────────────────
 
 func (s *Server) handleAgentChainGet(c *gin.Context) {
-	respond(c, gin.H{"chain": s.buildChainEntries()})
+	s.respondChainEntries(c, "chain")
 }
 
 func (s *Server) handleAgentChainSet(c *gin.Context) {
@@ -548,7 +570,9 @@ func (s *Server) handleMeshRoute(c *gin.Context) {
 	}
 	var peers []db.MeshPeer
 	if err := s.db.Where("agent_id = ? OR peer_id = ?", agentID, agentID).Limit(500).Find(&peers).Error; err != nil {
-		slog.Error("Failed to query mesh route", "err", err)
+		// An empty 200 here reads as "this agent has no mesh peers".
+		handleQueryError(c, err, "Failed to query mesh route")
+		return
 	}
 	respond(c, gin.H{"success": true, "peers": peers})
 }

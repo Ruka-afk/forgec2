@@ -268,7 +268,10 @@ func (s *Server) handleToggleAutomationRule(c *gin.Context) {
 func (s *Server) handleListWebhooks(c *gin.Context) {
 	var webhooks []db.WebhookConfig
 	if err := s.tenantScope(s.db, c).Limit(500).Find(&webhooks).Error; err != nil {
-		slog.Error("Failed to list webhooks", "err", err)
+		// An empty 200 here reads as "no webhooks configured": alerting
+		// silently looks disabled.
+		handleQueryError(c, err, "Failed to list webhooks")
+		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": webhooks})
 }
