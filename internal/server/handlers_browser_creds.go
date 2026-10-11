@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
@@ -76,22 +75,13 @@ func (s *Server) handleWifiCreds(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
 	}
-	user := c.GetString("username")
 	agentID := c.Param("id")
 
-	// Create task
-	task := db.Task{
-		AgentID:   agentID,
-		Type:      "wifi_creds",
-		Command:   "wifi_creds:all",
-		Status:    "pending",
-		CreatedBy: user,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-
-	if err := s.db.Create(&task).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create WiFi credential extraction task")
+	// Route through issueAgentTask like every sibling collector: the bare
+	// Create used to skip the tenant scope, the agent-existence check and
+	// the approval/lock gates inside createTask.
+	task := s.issueAgentTask(c, agentID, TaskSpec{Type: "wifi_creds", Command: "wifi_creds:all"})
+	if task == nil {
 		return
 	}
 
