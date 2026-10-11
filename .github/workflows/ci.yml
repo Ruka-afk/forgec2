@@ -62,12 +62,14 @@ jobs:
       - name: Unit tests + coverage
         run: go test ./internal/config/... ./internal/crypto/... ./internal/db/... ./internal/malleable/... ./internal/obfuscation/... ./internal/payload/... ./internal/plugin/... ./internal/scripting/... ./internal/server/... ./pkg/... ./cmd/... -count=1 -timeout 8m -coverprofile=coverage.out
       - name: Coverage floor
-        # Ratcheting floor: current total is ~35%. Lower this only after adding
-        # tests, never to make a regression pass.
+        # Ratcheting floor: current total is ~45.8% (raised from 33 when the
+        # security-critical handlers — privesc/evasion/roles/certs/workflow-
+        # groups/browser-creds — went from 0% to ~75%). Lower this only after
+        # adding tests, never to make a regression pass.
         run: |
           total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub("%", "", $3); print $3}')
           echo "total statement coverage: ${total}%"
-          floor=33
+          floor=40
           awk -v t="$total" -v f="$floor" 'BEGIN { exit (t+0 >= f+0) ? 0 : 1 }' || {
             echo "coverage ${total}% is below the ${floor}% floor"
             exit 1
@@ -195,9 +197,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: golangci/golangci-lint-action@v6
+      # golangci-lint v2: .golangci.yml declares `version: "2"`, and only
+      # action v7+ can download/drive a v2 binary.
+      - uses: golangci/golangci-lint-action@v9
         with:
-          version: v1.64.7  # pinned; bump deliberately after validating a new release
+          version: v2.14.0  # pinned; bump deliberately after validating a new release
           args: --timeout=5m
 
   security:
@@ -249,10 +253,10 @@ jobs:
           node ../scripts/gen-capability-matrix.mjs --check
       - run: npx tsc --noEmit
       - run: npm run lint
-      # 6 static checks run concurrently via the bundled `check:pre` script
-      # (package.json) instead of 6 sequential CI steps; `check:bundle` and the
+      # 7 static checks run concurrently via the bundled `check:pre` script
+      # (package.json) instead of 7 sequential CI steps; `check:bundle` and the
       # post-build webdist freshness check stay separate to preserve granularity.
-      - name: Static checks (css/tokens/i18n/paths/openapi/perms, concurrent)
+      - name: Static checks (css/tokens/i18n/paths/dialogs/openapi/perms, concurrent)
         run: npm run check:pre
       - run: npm run check:bundle
       - run: npm test

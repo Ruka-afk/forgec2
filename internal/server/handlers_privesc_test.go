@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -152,6 +153,69 @@ func TestProcessPrivescResultRejectsBadJSON(t *testing.T) {
 	s.handleProcessPrivescResult(c)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d, want 400", w.Code)
+	}
+}
+
+// TestPrivescHistoryEndpoint proves the history endpoint returns the stored
+// task with its findings count, and 404s for a non-privesc task id.
+func TestPrivescHistoryEndpoint(t *testing.T) {
+	s := mustTenantServer(t)
+	if err := s.db.Create(&db.Task{
+		ID: 7, AgentID: "pv-hist", Type: "privesc_check",
+		Command: "privesc_check:linux", Status: "completed", Result: "[!] sudo WRITABLE",
+	}).Error; err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	// A non-privesc task must not be reachable through this endpoint.
+	if err := s.db.Create(&db.Task{ID: 8, AgentID: "pv-hist", Type: "shell", Status: "completed"}).Error; err != nil {
+		t.Fatalf("seed shell task: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	c.Params = gin.Params{{Key: "id", Value: "7"}}
+	s.handlePrivescHistory(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s, want 200", w.Code, w.Body.String())
+	}
+	var payload struct {
+		Tasks    []privescHistoryEntry `json:"tasks"`
+		Findings []gin.H               `json:"findings"`
+		Total    int                   `json:"total"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if payload.Total != 1 || len(payload.Tasks) != 1 {
+		t.Fatalf("payload = %+v, want one task", payload)
+	}
+	if payload.Tasks[0].CheckType != "linux" || payload.Tasks[0].FindingsCount != 1 {
+		t.Fatalf("task summary = %+v, want linux/1 finding", payload.Tasks[0])
+	}
+
+	w2 := httptest.NewRecorder()
+	c2, _ := gin.CreateTestContext(w2)
+	c2.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	c2.Params = gin.Params{{Key: "id", Value: "8"}}
+	s.handlePrivescHistory(c2)
+	if w2.Code != http.StatusNotFound {
+		t.Fatalf("status=%d, want 404 for a non-privesc task", w2.Code)
+	}
+}
+
+// TestBuildPrivescFindingsAggregates proves findings from several tasks are
+// concatenated in order.
+func TestBuildPrivescFindingsAggregates(t *testing.T) {
+	s := mustTenantServer(t)
+	tasks := []db.Task{
+		{ID: 1, Result: "[!] first vuln"},
+		{ID: 2, Result: "clean output"},
+		{ID: 3, Result: "[!] third vuln"},
+	}
+	got := s.buildPrivescFindings(tasks)
+	if len(got) != 2 {
+		t.Fatalf("findings = %d, want 2 (the clean task contributes none)", len(got))
 	}
 }
 

@@ -362,7 +362,7 @@ func TestGroupCRUDAndAggregation(t *testing.T) {
 
 	// The delete guard is proven by TestGroupDeleteRefusesNonEmpty; here the
 	// group is emptied first (agent assignment + child removed) so the happy
-	// path is exercised — both rows are gone, leaving zero groups.
+	// path is exercised 鈥?both rows are gone, leaving zero groups.
 	if err := s.db.Where("agent_group_id = ?", payload.ID).Delete(&db.AgentGroupAssignment{}).Error; err != nil {
 		t.Fatalf("clear assignment: %v", err)
 	}
@@ -400,5 +400,46 @@ func TestGroupUpdateMissingIs404(t *testing.T) {
 	s.handleAPIUpdateGroup(c2)
 	if w2.Code != http.StatusNotFound {
 		t.Fatalf("update missing group: status=%d, want 404", w2.Code)
+	}
+}
+
+// TestWorkflowListAndUpdateRoundTrip proves the list endpoint reports the
+// total and the update endpoint persists a rename.
+func TestWorkflowListAndUpdateRoundTrip(t *testing.T) {
+	s := newWorkflowTestServer(t)
+	if err := s.db.Create(&db.Workflow{ID: "wf-list", Name: "listed", ScopeType: "all"}).Error; err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	c, w := wfJSONCtx("")
+	s.handleAPIWorkflows(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list status=%d body=%s", w.Code, w.Body.String())
+	}
+	var payload struct {
+		Workflows []db.Workflow `json:"workflows"`
+		Total     int64         `json:"total"`
+		Page      int           `json:"page"`
+		PageSize  int           `json:"page_size"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if payload.Total != 1 || len(payload.Workflows) != 1 {
+		t.Fatalf("list = %+v, want the seeded workflow with total 1", payload)
+	}
+
+	c2, w2 := wfJSONCtx(`{"name":"renamed","scope_type":"all"}`)
+	c2.Params = gin.Params{{Key: "id", Value: "wf-list"}}
+	s.handleAPIUpdateWorkflow(c2)
+	if w2.Code != http.StatusOK {
+		t.Fatalf("update status=%d body=%s", w2.Code, w2.Body.String())
+	}
+	var reloaded db.Workflow
+	if err := s.db.First(&reloaded, "id = ?", "wf-list").Error; err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if reloaded.Name != "renamed" {
+		t.Fatalf("name = %q, want renamed", reloaded.Name)
 	}
 }
