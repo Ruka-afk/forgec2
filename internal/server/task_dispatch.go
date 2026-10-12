@@ -310,6 +310,13 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 // appropriate. Operator-only gates (RoE, collab soft-lock) are intentionally
 // not applied — system paths are not interactive operators.
 func (s *Server) createSystemTask(agentID, taskType, command, shell, status, createdBy string) (*db.Task, error) {
+	return s.createSystemTaskWithData(agentID, taskType, command, shell, "", status, createdBy)
+}
+
+// createSystemTaskWithData is the Data-carrying form of createSystemTask for
+// system tasks whose payload is a structured blob (profile rotation, config
+// push). Same accounting as createSystemTask.
+func (s *Server) createSystemTaskWithData(agentID, taskType, command, shell, data, status, createdBy string) (*db.Task, error) {
 	if agentID == "" {
 		return nil, fmt.Errorf("agent id required")
 	}
@@ -327,7 +334,7 @@ func (s *Server) createSystemTask(agentID, taskType, command, shell, status, cre
 	}
 	task := db.Task{
 		AgentID: agentID, Type: taskType, Command: command,
-		Shell: shell, Status: status, CreatedBy: createdBy,
+		Shell: shell, Data: data, Status: status, CreatedBy: createdBy,
 	}
 	// Same tenant inheritance as createTask: without it tenant-scoped
 	// single-task reads 404 on system-created rows.

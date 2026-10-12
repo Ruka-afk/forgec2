@@ -840,22 +840,20 @@ func (s *Server) handlePushAgentConfig(c *gin.Context) {
 		s.LogAuditRecord(c, "push_update_key", "agent", id,
 			"update signing key pushed (fingerprint "+pubHex[:16]+")", true, nil)
 	}
-	task := db.Task{
-		AgentID:   id,
-		Type:      "config_push",
-		Command:   "config_push",
-		Data:      string(taskData),
-		Status:    "pending",
-		CreatedBy: "operator",
-	}
-	if err := s.db.Create(&task).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create config push task")
+	// Route through issueAgentTask: the bare Create used to skip the tenant
+	// scope, the agent-existence check and the collaboration-lock gate on a
+	// task that can carry the OTA update signing key, and it stamped
+	// CreatedBy with the literal "operator" so the audit chain could not
+	// answer WHO pushed the configuration.
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "config_push", Command: "config_push", Data: string(taskData)})
+	if task == nil {
 		return
 	}
 
-	s.broadcastTaskUpdate(id, task)
+	// dispatchTask stamps the calling operator as creator, audits the push
+	// and broadcasts the task (replacing the previous manual broadcast).
+	s.dispatchTask(c, task, "config_push", "Configuration pushed to agent")
 	slog.Info("Config push task created", "agent_id", id, "task_id", task.ID)
-	respond(c, gin.H{"success": true, "task_id": task.ID, "message": "Config push task queued for next beacon"})
 }
 
 // handleAgentDiagnose queues a batch of host-recon tasks (hostinfo, ps, netstat, users, av)

@@ -114,6 +114,9 @@ func (s *Server) handleCircuitBreakerStatus(c *gin.Context) {
 // handleProfileRotate sends a profile rotation command to an agent.
 // POST /api/agents/:id/profile-rotate
 func (s *Server) handleProfileRotate(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	agentID := c.Param("id")
 
 	var req struct {
@@ -135,24 +138,18 @@ func (s *Server) handleProfileRotate(c *gin.Context) {
 		return
 	}
 
-	task := db.Task{
-		AgentID:   agentID,
-		Type:      "profile_rotate",
-		Data:      string(taskData),
-		Status:    "pending",
-		CreatedBy: "operator",
-	}
-
-	if err := s.db.Create(&task).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+	// Route through issueAgentTask: the bare Create used to skip the tenant
+	// scope, the agent-existence check and the collaboration-lock gate, and
+	// it stamped CreatedBy with the literal "operator" so the audit chain
+	// could not answer WHO rotated the profile.
+	task := s.issueAgentTask(c, agentID, TaskSpec{Type: "profile_rotate", Data: string(taskData)})
+	if task == nil {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"task_id": task.ID,
-		"message": "Profile rotation task queued for next beacon",
-	})
+	// dispatchTask stamps the calling operator as creator and audits the
+	// rotation (the old handler recorded no audit entry at all).
+	s.dispatchTask(c, task, "profile_rotate", "Profile rotation queued for next beacon")
 }
 
 // rotateAgentsOnBurnedListener rotates all agents connected to a burned listener.
@@ -192,14 +189,11 @@ func (s *Server) rotateAgentsOnBurnedListener(listenerID string) {
 			continue
 		}
 
-		task := db.Task{
-			AgentID:   agent.ID,
-			Type:      "profile_rotate",
-			Data:      string(data),
-			Status:    "pending",
-			CreatedBy: "system",
-		}
-		if err := s.db.Create(&task).Error; err != nil {
+		// createSystemTaskWithData instead of a bare Create: the system path
+		// must apply the same accounting as every other task — tenant
+		// inheritance (otherwise tenant-scoped reads 404 on these rows), the
+		// pending counter, the task_created plugin hook, and TasksTotal.
+		if _, err := s.createSystemTaskWithData(agent.ID, "profile_rotate", "", "", string(data), "pending", "system"); err != nil {
 			slog.Error("Failed to create rotation task for agent", "agent_id", agent.ID, "err", err)
 		}
 	}

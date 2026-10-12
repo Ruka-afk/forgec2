@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
@@ -83,8 +82,6 @@ func (s *Server) handleScannerPage(c *gin.Context) {
 
 // handleScanTask creates a new scan task for an agent
 func (s *Server) handleScanTask(c *gin.Context) {
-	user := c.GetString("username")
-
 	agentID := c.PostForm("agent_id")
 	target := c.PostForm("target")
 	portRange := c.PostForm("port_range")
@@ -130,31 +127,18 @@ func (s *Server) handleScanTask(c *gin.Context) {
 	scanType := c.PostForm("scan_type")
 	command := fmt.Sprintf("%s:%s", target, strings.Join(portList, ","))
 
-	// Create task
-	task := db.Task{
-		AgentID:   agentID,
-		Type:      "portscan",
-		Command:   command,
-		Shell:     scanType,
-		Status:    "pending",
-		CreatedBy: user,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-
-	if err := s.db.Create(&task).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create scan task")
+	// Route through issueAgentTask like every other agent-facing dispatch:
+	// the bare Create used to skip the tenant scope, the agent-existence
+	// check and the collaboration-lock/approval gates inside createTask.
+	task := s.issueAgentTask(c, agentID, TaskSpec{Type: "portscan", Command: command, Shell: scanType})
+	if task == nil {
 		return
 	}
 
-	// Log audit
-	s.LogAuditRecord(c, "scan_created", fmt.Sprintf("Scan task %d created targeting %s", task.ID, target), agentID, fmt.Sprintf("Ports: %d", len(ports)), true, nil)
-
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"task_id": task.ID,
-		"message": fmt.Sprintf("Scan task created with %d ports", len(ports)),
-	})
+	// dispatchTask stamps the calling operator as creator, writes the audit
+	// record and broadcasts the task to operator sessions.
+	s.dispatchTask(c, task, "scan_created",
+		fmt.Sprintf("Scan task %d created targeting %s (ports: %d)", task.ID, target, len(ports)))
 }
 
 // handleScanResults returns scan results for a task
