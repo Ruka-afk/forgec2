@@ -10322,6 +10322,627 @@ paths:
       security: [{SessionCookie: []}]
       responses:
         '200': {description: Cited matching chunks}
+  /api/macros:
+    get:
+      tags: [Macros]
+      summary: List command macros (tenant-scoped)
+      operationId: listMacros
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Macros visible to the caller's tenant}
+    post:
+      tags: [Macros]
+      summary: Create a command macro
+      operationId: createMacro
+      security: [{SessionCookie: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MacroInput'}
+      responses:
+        '200': {description: Macro created}
+  /api/macros/{id}:
+    put:
+      tags: [Macros]
+      summary: Update a command macro
+      operationId: updateMacro
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MacroInput'}
+      responses:
+        '200': {description: Macro updated}
+        '404': {description: Macro not visible to this tenant}
+    delete:
+      tags: [Macros]
+      summary: Delete a command macro
+      operationId: deleteMacro
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Macro deleted}
+        '404': {description: Macro not visible to this tenant}
+  /api/macros/{id}/run:
+    post:
+      tags: [Macros]
+      summary: Dispatch a macro to one or more agents
+      operationId: runMacro
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_ids]
+              properties:
+                agent_ids: {type: array, maxItems: 100, items: {type: string}}
+                stop_on_error: {type: boolean}
+      responses:
+        '200': {description: Macro dispatched to N agents}
+        '400': {description: No valid agents}
+        '404': {description: Macro not visible to this tenant}
+  /api/macro-runs:
+    get:
+      tags: [Macros]
+      summary: List macro runs (tenant-scoped)
+      operationId: listMacroRuns
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
+      responses:
+        '200': {description: Runs visible to the caller's tenant}
+  /api/macro-runs/{id}/stop:
+    post:
+      tags: [Macros]
+      summary: Stop a running macro
+      operationId: stopMacroRun
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Run stopped}
+        '400': {description: Run is not running or belongs to another tenant}
+  /api/saved-views:
+    get:
+      tags: [Settings]
+      summary: List saved views
+      operationId: listSavedViews
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Saved views}
+    post:
+      tags: [Settings]
+      summary: Create a saved view
+      operationId: createSavedView
+      security: [{SessionCookie: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SavedViewInput'}
+      responses:
+        '200': {description: View created}
+  /api/saved-views/{id}:
+    delete:
+      tags: [Settings]
+      summary: Delete a saved view
+      operationId: deleteSavedView
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: View deleted}
+  /api/notification-routes:
+    get:
+      tags: [Notifications]
+      summary: List notification delivery routes
+      operationId: listNotificationRoutes
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Routes}
+    post:
+      tags: [Notifications]
+      summary: Create a notification route (Discord/Telegram/webhook)
+      operationId: createNotificationRoute
+      security: [{SessionCookie: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/NotificationRouteInput'}
+      responses:
+        '200': {description: Route created}
+  /api/notification-routes/{id}:
+    put:
+      tags: [Notifications]
+      summary: Update a notification route
+      operationId: updateNotificationRoute
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/NotificationRouteInput'}
+      responses:
+        '200': {description: Route updated}
+    delete:
+      tags: [Notifications]
+      summary: Delete a notification route
+      operationId: deleteNotificationRoute
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Route deleted}
+  /api/notification-routes/{id}/test:
+    post:
+      tags: [Notifications]
+      summary: Send a test notification through the route
+      operationId: testNotificationRoute
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Test delivery result}
+  /siem/rules:
+    get:
+      tags: [SIEM]
+      summary: List SIEM correlation rules
+      operationId: listSIEMRules
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Rules}
+    post:
+      tags: [SIEM]
+      summary: Create a SIEM correlation rule
+      operationId: createSIEMRule
+      security: [{SessionCookie: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SIEMRuleInput'}
+      responses:
+        '200': {description: Rule created}
+  /siem/rules/{id}:
+    put:
+      tags: [SIEM]
+      summary: Update a SIEM correlation rule
+      operationId: updateSIEMRule
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SIEMRuleInput'}
+      responses:
+        '200': {description: Rule updated}
+    delete:
+      tags: [SIEM]
+      summary: Delete a SIEM correlation rule
+      operationId: deleteSIEMRule
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Rule deleted}
+  /siem/rules/{id}/toggle:
+    post:
+      tags: [SIEM]
+      summary: Enable or disable a SIEM rule
+      operationId: toggleSIEMRule
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: New enabled state}
+  /api/scheduler/oneshot:
+    get:
+      tags: [Scheduler]
+      summary: List one-shot scheduled tasks
+      operationId: listOneShotTasks
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: One-shot tasks}
+    post:
+      tags: [Scheduler]
+      summary: Schedule a one-shot task
+      operationId: createOneShotTask
+      security: [{SessionCookie: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_id, task_type, run_at]
+              properties:
+                agent_id: {type: string}
+                task_type: {type: string}
+                command: {type: string}
+                run_at: {type: string, format: date-time}
+      responses:
+        '200': {description: One-shot task scheduled}
+  /api/scheduler/oneshot/{id}:
+    delete:
+      tags: [Scheduler]
+      summary: Cancel a one-shot scheduled task
+      operationId: deleteOneShotTask
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: One-shot task cancelled}
+  /api/ai/status:
+    get:
+      tags: [AI]
+      summary: AI assistant availability and rate-limit state
+      operationId: getAIStatus
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Assistant status for this operator}
+  /api/ai/pending-tasks:
+    get:
+      tags: [AI]
+      summary: List AI-proposed tasks awaiting operator approval
+      operationId: listAIPendingTasks
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Pending intents}
+  /api/ai/analyze-result:
+    post:
+      tags: [AI]
+      summary: Analyze a task result with the assistant
+      operationId: aiAnalyzeResult
+      security: [{SessionCookie: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [task_id]
+              properties:
+                task_id: {type: integer}
+      responses:
+        '200': {description: Analysis markdown}
+  /api/ai/nl-query:
+    post:
+      tags: [AI]
+      summary: Translate a natural-language question into inventory queries
+      operationId: aiNLQuery
+      security: [{SessionCookie: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query: {type: string, maxLength: 2000}
+      responses:
+        '200': {description: Structured answer}
+  /api/ai/suggest-next-steps:
+    post:
+      tags: [AI]
+      summary: Suggest operator next steps for an agent or session
+      operationId: aiSuggestNextSteps
+      security: [{SessionCookie: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agent_id: {type: string}
+                session_id: {type: integer}
+      responses:
+        '200': {description: Suggestions}
+  /api/ai/generate-playbook:
+    post:
+      tags: [AI]
+      summary: Draft an operation playbook with the assistant
+      operationId: aiGeneratePlaybook
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Generated playbook}
+  /api/ai/save-playbook:
+    post:
+      tags: [AI]
+      summary: Persist an assistant-generated playbook
+      operationId: aiSavePlaybook
+      security: [{SessionCookie: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, content]
+              properties:
+                name: {type: string}
+                content: {type: string}
+      responses:
+        '200': {description: Playbook saved}
+  /api/ai/run-review:
+    post:
+      tags: [AI]
+      summary: Review a completed AI run for policy issues
+      operationId: aiRunReview
+      security: [{SessionCookie: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [run_id]
+              properties:
+                run_id: {type: string, format: uuid}
+      responses:
+        '200': {description: Review findings}
+  /api/agents/{id}/timeline:
+    get:
+      tags: [Agents]
+      summary: Chronological event feed for one agent (tenant-scoped)
+      operationId: getAgentTimeline
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+        - {name: types, in: query, schema: {type: string}}
+        - {name: limit, in: query, schema: {type: integer}}
+      responses:
+        '200': {description: Timeline entries}
+        '404': {description: Agent not visible to this tenant}
+  /agents/{id}/hostinfo:
+    post:
+      tags: [Agents]
+      summary: Collect detailed host information
+      operationId: agentHostInfo
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '200': {description: Task dispatched with the task id in task_id}
+        '404': {description: Agent not visible to this tenant}
+  /agents/{id}/wallpaper:
+    post:
+      tags: [Agents]
+      summary: Set the desktop wallpaper
+      operationId: agentWallpaper
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '200': {description: Task dispatched with the task id in task_id}
+        '404': {description: Agent not visible to this tenant}
+  /agents/{id}/diagnose:
+    post:
+      tags: [Agents]
+      summary: Run agent connectivity diagnostics
+      operationId: agentDiagnose
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '200': {description: Task dispatched with the task id in task_id}
+        '404': {description: Agent not visible to this tenant}
+  /agents/{id}/files/mkdir:
+    post:
+      tags: [Files]
+      summary: Create a directory on the agent
+      operationId: agentMkdir
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path: {type: string}
+      responses:
+        '200': {description: Task dispatched with the task id in task_id}
+  /agents/{id}/files/rename:
+    post:
+      tags: [Files]
+      summary: Rename or move a path on the agent
+      operationId: agentRename
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from, to]
+              properties:
+                from: {type: string}
+                to: {type: string}
+      responses:
+        '200': {description: Task dispatched with the task id in task_id}
+  /agents/{id}/files/chmod:
+    post:
+      tags: [Files]
+      summary: Change file permissions on the agent
+      operationId: agentChmod
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path, mode]
+              properties:
+                path: {type: string}
+                mode: {type: string}
+      responses:
+        '200': {description: Task dispatched with the task id in task_id}
+  /credentials/batch/verify:
+    post:
+      tags: [Credentials]
+      summary: Verify a batch of credentials against their targets
+      operationId: batchVerifyCredentials
+      security: [{SessionCookie: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids: {type: array, items: {type: integer}}
+      responses:
+        '200': {description: Verification dispatched}
+  /api/generate/profile:
+    post:
+      tags: [Generate]
+      summary: Validate or preview a generation profile before building
+      operationId: generateProfile
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Profile preview}
+  /api/ioc:
+    get:
+      tags: [Report]
+      summary: Extracted indicators of compromise
+      operationId: getIOCs
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: IOC list; a failed extraction is reported as an error, never as an empty list}
+  /api/ioc/export:
+    get:
+      tags: [Report]
+      summary: Export indicators as STIX 2.1
+      operationId: exportIOCs
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: STIX 2.1 bundle}
+  /api/mitre/heatmap:
+    get:
+      tags: [Report]
+      summary: ATT&CK technique coverage heatmap
+      operationId: getMitreHeatmap
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Heatmap rows}
+  /api/builds/effectiveness:
+    get:
+      tags: [Builds]
+      summary: Build success rates and implant survival by profile
+      operationId: getBuildEffectiveness
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Effectiveness metrics}
+  /api/topology/network:
+    get:
+      tags: [Topology]
+      summary: Network-level topology view
+      operationId: getNetworkTopology
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Network topology}
+  /api/handover/export:
+    get:
+      tags: [Handover]
+      summary: Export the operator handover package as JSON
+      operationId: exportHandover
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: application/json handover package}
+  /api/report/generated/{id}:
+    get:
+      tags: [Report]
+      summary: Fetch one generated report's content
+      operationId: getGeneratedReport
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Report content}
+        '404': {description: Report not found}
+  /api/report/generated/{id}/download:
+    get:
+      tags: [Report]
+      summary: Download a generated report as an attachment
+      operationId: downloadGeneratedReport
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Report attachment}
+        '404': {description: Report not found}
+  /api/update-progress:
+    get:
+      tags: [Ops]
+      summary: Background update-check progress state
+      operationId: getUpdateProgress
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Update progress}
+  /config/reload-status:
+    get:
+      tags: [Ops]
+      summary: Last configuration reload outcome
+      operationId: getConfigReloadStatus
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Reload status}
+  /collect:
+    post:
+      tags: [Collector]
+      summary: Operator-facing manual artifact collection trigger
+      operationId: collectArtifact
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Collection dispatched}
+    get:
+      tags: [Collector]
+      summary: Same collector endpoint over GET (beacon-style transport)
+      operationId: collectArtifactGet
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Collection dispatched}
+  /api/v1/collect:
+    post:
+      tags: [Collector]
+      summary: Same collector trigger under the versioned API prefix
+      operationId: collectArtifactV1
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Collection dispatched}
+    get:
+      tags: [Collector]
+      summary: Collector capability description (v1)
+      operationId: collectArtifactV1Info
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Accepted collector payload shape}
+
 components:
   securitySchemes:
     SessionCookie:
@@ -10331,6 +10952,60 @@ components:
       description: Session cookie obtained from login endpoint
 
   schemas:
+
+    MacroInput:
+      type: object
+      required: [name, steps]
+      properties:
+        name: {type: string, maxLength: 128}
+        description: {type: string}
+        steps:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: object
+            required: [command]
+            properties:
+              command: {type: string}
+              delay_ms: {type: integer, minimum: 0, maximum: 3600000}
+              wait: {type: boolean}
+              timeout_s: {type: integer, minimum: 0, maximum: 1800}
+              stop_on_error: {type: boolean}
+
+    SavedViewInput:
+      type: object
+      required: [page, name, state]
+      properties:
+        page: {type: string}
+        name: {type: string}
+        state: {type: string}
+
+    NotificationRouteInput:
+      type: object
+      required: [channel]
+      properties:
+        channel:
+          type: string
+          enum: [discord, telegram, webhook]
+        target: {type: string, description: Webhook URL or chat id}
+        secret: {type: string, description: Bot token; write-only}
+        min_severity:
+          type: string
+          enum: [info, low, medium, high, critical]
+        enabled: {type: boolean}
+
+    SIEMRuleInput:
+      type: object
+      required: [name, action]
+      properties:
+        name: {type: string}
+        action: {type: string}
+        window_sec: {type: integer, minimum: 1}
+        threshold: {type: integer, minimum: 1}
+        alert_action: {type: string}
+        alert_details: {type: string}
+        enabled: {type: boolean}
     AIRunInput:
       type: object
       required: [session_id, messages]
