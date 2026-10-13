@@ -644,6 +644,36 @@ var schemaMigrations = []*gormigrate.Migration{
 			return nil
 		},
 	},
+	// Stamp campaigns with the tenant that created them.
+	//
+	// Campaign rows predate tenant stamping, so a scoped operator listing
+	// campaigns saw every tenant's campaigns and could seed kill chains into
+	// another tenant's agents. Existing rows have no parent to inherit from,
+	// so they keep tenant 0 — the legacy/unscoped marker that tenantScope
+	// treats as "visible to unscoped operators only", exactly like agents and
+	// macros. New campaigns stamp the creator's tenant and every handler
+	// scopes reads/writes by it.
+	{
+		ID: "2026-10-13-campaigns-tenant-id",
+		Migrate: func(tx *gorm.DB) error {
+			if !tx.Migrator().HasTable("campaigns") {
+				return nil
+			}
+			execMigration(tx, "ALTER TABLE campaigns ADD COLUMN tenant_id INTEGER DEFAULT 0", "add_campaigns_tenant_id")
+			if err := tx.Exec("UPDATE campaigns SET tenant_id = 0 WHERE tenant_id IS NULL").Error; err != nil {
+				return err
+			}
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_campaigns_tenant_id ON campaigns(tenant_id)", "add_campaigns_tenant_id_index")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			execMigration(tx, "DROP INDEX IF EXISTS idx_campaigns_tenant_id", "drop_campaigns_tenant_id_index")
+			if tx.Migrator().HasColumn("campaigns", "tenant_id") {
+				execMigration(tx, "ALTER TABLE campaigns DROP COLUMN tenant_id", "drop_campaigns_tenant_id")
+			}
+			return nil
+		},
+	},
 }
 
 // indexMigrations create/drop indexes and run AFTER AutoMigrate, so their

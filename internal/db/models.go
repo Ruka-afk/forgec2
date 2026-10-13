@@ -1291,13 +1291,17 @@ func (BloodHoundResult) TableName() string { return "bloodhound_results" }
 // the filesystem under data/bloodhound/.
 
 type Campaign struct {
-	ID          string    `gorm:"primaryKey;size:36" json:"id"`
-	Name        string    `gorm:"size:256;not null" json:"name"`
-	Description string    `gorm:"size:1024" json:"description"`
-	Status      string    `gorm:"size:32;default:active" json:"status"` // active, completed, archived
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	Agents      []Implant `gorm:"many2many:campaign_agents;foreignKey:ID;joinForeignKey:campaign_id;References:ID;joinReferences:agent_id" json:"agents,omitempty"`
+	ID          string `gorm:"primaryKey;size:36" json:"id"`
+	Name        string `gorm:"size:256;not null" json:"name"`
+	Description string `gorm:"size:1024" json:"description"`
+	Status      string `gorm:"size:32;default:active" json:"status"` // active, completed, archived
+	// TenantID scopes a campaign to the operator that created it. Without it a
+	// campaign row (and every kill-chain task it seeds) is visible to all
+	// tenants. 0 = legacy/unscoped, the convention tenantScope already uses.
+	TenantID  uint      `gorm:"index" json:"-"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Agents    []Implant `gorm:"many2many:campaign_agents;foreignKey:ID;joinForeignKey:campaign_id;References:ID;joinReferences:agent_id" json:"agents,omitempty"`
 }
 
 func (Campaign) TableName() string { return "campaigns" }

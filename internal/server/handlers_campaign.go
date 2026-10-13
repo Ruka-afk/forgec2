@@ -16,9 +16,24 @@ import (
 
 // handleCampaignsList returns all campaign-wizard campaigns.
 // GET /campaigns
+// loadCampaignScoped resolves a campaign within the caller's tenant. A
+// campaign carries agents and seeds kill chains, so an unscoped read would
+// let one tenant read and drive another tenant's host set.
+func (s *Server) loadCampaignScoped(c *gin.Context, dest *db.Campaign, id string, preloads ...string) bool {
+	q := s.tenantScope(s.db, c)
+	for _, p := range preloads {
+		q = q.Preload(p)
+	}
+	if err := q.First(dest, "id = ?", id).Error; err != nil {
+		respondError(c, http.StatusNotFound, "campaign not found")
+		return false
+	}
+	return true
+}
+
 func (s *Server) handleCampaignsList(c *gin.Context) {
 	var campaigns []db.Campaign
-	if err := s.db.Preload("Agents").Order("created_at desc").Limit(200).Find(&campaigns).Error; err != nil {
+	if err := s.tenantScope(s.db, c).Preload("Agents").Order("created_at desc").Limit(200).Find(&campaigns).Error; err != nil {
 		handleQueryError(c, err, "Failed to list campaigns")
 		return
 	}
@@ -30,7 +45,7 @@ func (s *Server) handleCampaignsList(c *gin.Context) {
 func (s *Server) handleCampaignGet(c *gin.Context) {
 	id := c.Param("id")
 	var campaign db.Campaign
-	if !s.findOrFailPreload(c, &campaign, id, "campaign", "Agents") {
+	if !s.loadCampaignScoped(c, &campaign, id, "Agents") {
 		return
 	}
 
@@ -72,6 +87,7 @@ func (s *Server) handleCampaignCreate(c *gin.Context) {
 		Name:        req.Name,
 		Description: req.Description,
 		Status:      "active",
+		TenantID:    s.currentTenantID(c),
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
@@ -87,7 +103,7 @@ func (s *Server) handleCampaignCreate(c *gin.Context) {
 func (s *Server) handleCampaignUpdate(c *gin.Context) {
 	id := c.Param("id")
 	var campaign db.Campaign
-	if !s.findOrFail(c, &campaign, id, "campaign") {
+	if !s.loadCampaignScoped(c, &campaign, id) {
 		return
 	}
 	var req struct {
@@ -120,7 +136,7 @@ func (s *Server) handleCampaignUpdate(c *gin.Context) {
 // DELETE /v1/campaigns/:id
 func (s *Server) handleCampaignDelete(c *gin.Context) {
 	id := c.Param("id")
-	res := s.db.Delete(&db.Campaign{}, "id = ?", id)
+	res := s.tenantScope(s.db, c).Delete(&db.Campaign{}, "id = ?", id)
 	if res.Error != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(res.Error, "Campaign operation"))
 		return
@@ -287,7 +303,7 @@ func (s *Server) handleCampaignKillChain(c *gin.Context) {
 	}
 
 	var campaign db.Campaign
-	if !s.findOrFail(c, &campaign, id, "campaign") {
+	if !s.loadCampaignScoped(c, &campaign, id, "Agents") {
 		return
 	}
 
@@ -324,6 +340,10 @@ func (s *Server) handleCampaignKillChain(c *gin.Context) {
 			operator = s
 		}
 	}
+	// Seeded tasks inherit the campaign's tenant, not tenant 0: without it
+	// they were readable by every tenant and could be executed by an operator
+	// who never had access to these agents.
+	taskTenant := campaign.TenantID
 
 	// Respect the same per-agent pending ceiling and status resolution as the
 	// single/batch task paths, so seeding can't silently bypass queue limits.
@@ -341,6 +361,7 @@ func (s *Server) handleCampaignKillChain(c *gin.Context) {
 				continue
 			}
 			tasks = append(tasks, db.Task{
+				TenantID:  taskTenant,
 				AgentID:   a.ID,
 				Type:      st.TaskType,
 				Command:   command,
@@ -377,6 +398,9 @@ func (s *Server) handleCampaignKillChain(c *gin.Context) {
 	slog.Info("Campaign kill chain seeded",
 		"campaign_id", id, "template", tpl.Name,
 		"tasks", len(tasks), "agents", len(agents), "skipped", skippedAgents)
+	s.LogAuditRecord(c, "campaign_killchain_seed", "campaign", id,
+		fmt.Sprintf("seeded %d tasks from template %s across %d agents (%d skipped at the pending ceiling)",
+			len(tasks), tpl.Name, len(agents), skippedAgents), true, nil)
 	respond(c, gin.H{
 		"success":        true,
 		"campaign_id":    id,
@@ -401,7 +425,10 @@ func (s *Server) handleMitreTimeline(c *gin.Context) {
 	var agentIDs []string
 	if campaignID != "" {
 		var campaign db.Campaign
-		if err := s.db.Preload("Agents").First(&campaign, "id = ?", campaignID).Error; err == nil {
+		// Scoped like every other campaign read: a foreign or unknown id
+		// resolves to no agents and the timeline falls through to the
+		// tenant-scoped task list rather than exposing another tenant's hosts.
+		if err := s.tenantScope(s.db, c).Preload("Agents").First(&campaign, "id = ?", campaignID).Error; err == nil {
 			for _, a := range campaign.Agents {
 				agentIDs = append(agentIDs, a.ID)
 			}
@@ -517,11 +544,18 @@ func taskPhase(taskType string) string {
 		return "Persistence"
 	case strings.HasPrefix(t, "inject"), t == "shell", strings.HasPrefix(t, "exec"), t == "run":
 		return "Execution"
-	case strings.HasPrefix(t, "lsass"), strings.HasPrefix(t, "creds"), t == "mimikatz", t == "wdigest", t == "lsa_dump":
+	case strings.HasPrefix(t, "lsass"), strings.HasPrefix(t, "creds"), strings.HasPrefix(t, "cred_"),
+		t == "mimikatz", t == "wdigest", t == "lsa_dump",
+		// Credential-theft tasks used to fall through to the catch-all below
+		// and were reported as "Execution" on the MITRE timeline, which is
+		// exactly the phase an operator does not triage them under.
+		strings.HasPrefix(t, "password_spray"), strings.HasPrefix(t, "token_steal"),
+		strings.HasPrefix(t, "token_"), t == "dcsync", t == "hashdump", t == "secretsdump":
 		return "Credential Access"
 	case t == "ps", t == "ls", t == "find", t == "net", t == "whoami", t == "ipconfig", t == "arp", strings.HasPrefix(t, "discover"):
 		return "Discovery"
-	case strings.HasPrefix(t, "pivot"), strings.HasPrefix(t, "wmi"), strings.HasPrefix(t, "psexec"), strings.HasPrefix(t, "winrm"), strings.HasPrefix(t, "ssh"):
+	case strings.HasPrefix(t, "pivot"), strings.HasPrefix(t, "wmi"), strings.HasPrefix(t, "psexec"),
+		strings.HasPrefix(t, "winrm"), strings.HasPrefix(t, "ssh"), strings.HasPrefix(t, "lateral"):
 		return "Lateral Movement"
 	case t == "upload", strings.HasPrefix(t, "exfil"), t == "download":
 		return "Exfiltration"
