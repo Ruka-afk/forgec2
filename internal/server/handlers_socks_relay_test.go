@@ -15,7 +15,252 @@ import (
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/testutil"
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
+	promtest "github.com/prometheus/client_golang/prometheus/testutil"
 )
+
+// TestSocksOutboundOverflowClosesConn proves a connection whose unsent
+// backlog exceeds the byte cap is closed loudly (close frame queued) instead
+// of silently shedding stream bytes.
+func TestSocksOutboundOverflowClosesConn(t *testing.T) {
+	e := newSocksRelayEngine()
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+	e.connections[7] = &socksRelayConn{connID: 7, tcpConn: server, agentID: "a1"}
+
+	// Fill just under the cap, then push over it.
+	big := make([]byte, socksMaxOutboundBytes-10)
+	e.enqueueFrame("a1", socksFrame{ConnID: 7, Action: "data", Data: big})
+	e.enqueueFrame("a1", socksFrame{ConnID: 7, Action: "data", Data: make([]byte, 64)})
+
+	e.mu.Lock()
+	_, listed := e.connections[7]
+	e.mu.Unlock()
+	if listed {
+		t.Fatal("overflowed conn must be dropped from the table")
+	}
+	e.controlFramesMu.Lock()
+	closes := 0
+	for _, f := range e.controlFrames["a1"] {
+		if f.ConnID == 7 && f.Action == "close" {
+			closes++
+		}
+	}
+	e.controlFramesMu.Unlock()
+	if closes != 1 {
+		t.Fatalf("want exactly 1 close frame for dropped conn, got %d", closes)
+	}
+}
+
+// TestSocksWriteFailureDropsConn proves a failed operator write removes the
+// entry (previously it stayed listed until the 5-minute sweep, holding one
+// of the 256 slots while the agent sent into the void).
+func TestSocksWriteFailureDropsConn(t *testing.T) {
+	e := newSocksRelayEngine()
+	client, server := net.Pipe()
+	e.connections[9] = &socksRelayConn{connID: 9, tcpConn: server, agentID: "a1"}
+	client.Close() // reads fail -> writes fail
+
+	s := &Server{}
+	s.db = newTasksTestServer(t).db
+	e.processAgentData(s, "a1", []socksFrame{{ConnID: 9, Action: "data", Data: []byte("hello")}})
+
+	e.mu.Lock()
+	_, listed := e.connections[9]
+	e.mu.Unlock()
+	if listed {
+		t.Fatal("write-failed conn must be dropped from the table")
+	}
+	server.Close()
+}
+
+// TestFrameBudgetForTransport pins the MTU policy: datagram transports get
+// small frames + a capped total, streams drain everything uncapped.
+func TestFrameBudgetForTransport(t *testing.T) {
+	for _, tr := range []string{"udp", "icmp", "dns"} {
+		size, budget := frameBudgetForTransport(tr)
+		if size != SocksLowMTUFrameSize || budget != SocksLowMTUBudget {
+			t.Fatalf("%s: got (%d,%d)", tr, size, budget)
+		}
+	}
+	for _, tr := range []string{"http", "tcp", "grpc", "quic", "ssh", "smb", "", "bogus"} {
+		size, budget := frameBudgetForTransport(tr)
+		if size != 0 || budget != 0 {
+			t.Fatalf("%s: want uncapped, got (%d,%d)", tr, size, budget)
+		}
+	}
+}
+
+// TestLowMTUBudgetRequeuesLosslessly proves a datagram budget cuts the tunnel
+// payload without loss or reorder: the remainder stays queued head-ordered
+// for the next beacon, across all three data FIFOs.
+func TestLowMTUBudgetRequeuesLosslessly(t *testing.T) {
+	e := newSocksRelayEngine()
+	const agentID = "mtu-1"
+
+	// Rportfwd FIFO: 3×2KB frames, 4KB budget -> 2 now, 1 requeued.
+	for i := 0; i < 3; i++ {
+		if !e.enqueueRPortFwdFrame(agentID, socksFrame{ConnID: 1, Action: "rportfwd_data", Data: bytes.Repeat([]byte{byte(i + 1)}, 2048)}) {
+			t.Fatal("enqueue must fit the 2MB FIFO budget")
+		}
+	}
+	first := e.collectPendingFrames(agentID, 1024, 4096)
+	if len(first) != 2 {
+		t.Fatalf("want 2 frames within budget, got %d", len(first))
+	}
+	rest := e.collectPendingFrames(agentID, 0, 0)
+	if len(rest) != 1 || !bytes.Equal(rest[0].Data, bytes.Repeat([]byte{3}, 2048)) {
+		t.Fatalf("requeued frame lost or reordered: %+v", rest)
+	}
+
+	// SOCKS data: 8KB stream, 1KB frames, 4KB budget -> 4 frames now and a
+	// byte-identical 4KB remainder later.
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+	stream := append(bytes.Repeat([]byte{'A'}, 4096), bytes.Repeat([]byte{'B'}, 4096)...)
+	e.connections[11] = &socksRelayConn{connID: 11, tcpConn: server, agentID: agentID,
+		outbound: [][]byte{stream}, outboundBytes: len(stream)}
+	got := e.collectPendingFrames(agentID, 1024, 4096)
+	if len(got) != 4 {
+		t.Fatalf("want 4×1KB frames, got %d", len(got))
+	}
+	var head []byte
+	for _, f := range got {
+		head = append(head, f.Data...)
+	}
+	tail := e.collectPendingFrames(agentID, 0, 0)
+	var tailBytes []byte
+	for _, f := range tail {
+		if f.Action == "data" {
+			tailBytes = append(tailBytes, f.Data...)
+		}
+	}
+	if !bytes.Equal(append(head, tailBytes...), stream) {
+		t.Fatal("budgeted SOCKS drain corrupted the byte stream")
+	}
+}
+
+// TestSocksStopAllDrains proves server shutdown releases every relay
+// listener + connection (previously FDs and accept loops leaked across the
+// restart path) and is safe to run twice.
+func TestSocksStopAllDrains(t *testing.T) {
+	e := newSocksRelayEngine()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := ln.Addr().String()
+	ctx, cancel := context.WithCancel(context.Background())
+	e.sessions["a9"] = &socksRelaySession{agentID: "a9", listener: ln, ctx: ctx, cancel: cancel}
+	client, server := net.Pipe()
+	defer client.Close()
+	e.connections[3] = &socksRelayConn{connID: 3, tcpConn: server, agentID: "a9", lastActive: time.Now()}
+
+	e.stopAll()
+	e.stopAll() // idempotent
+
+	e.mu.Lock()
+	nsess, nconn := len(e.sessions), len(e.connections)
+	e.mu.Unlock()
+	if nsess != 0 || nconn != 0 {
+		t.Fatalf("tables not drained: sessions=%d conns=%d", nsess, nconn)
+	}
+	if c, err := net.Dial("tcp", addr); err == nil {
+		c.Close()
+		t.Fatal("listener still accepting after stopAll")
+	}
+}
+
+// TestSocksFastModeOnlyWithTraffic proves an idle-but-open session does not
+// pin the agent at fast-poll cadence: the hint fires only while frames flow
+// either way (frames in the response re-arm fast mode agent-side anyway).
+func TestSocksFastModeOnlyWithTraffic(t *testing.T) {
+	newEngine := func() *socksRelayEngine {
+		e := newSocksRelayEngine()
+		e.sessions["fast-agent"] = &socksRelaySession{agentID: "fast-agent", port: 1080}
+		return e
+	}
+
+	// Idle session, no frames either way: no hint.
+	s := &Server{socksEngine: newEngine()}
+	resp := &beaconResponse{}
+	s.processSOCKSRelay("fast-agent", nil, resp)
+	if resp.SocksFastMode {
+		t.Fatal("idle session must not request fast polling")
+	}
+	if len(resp.SocksFrames) != 0 {
+		t.Fatalf("idle session produced %d frames", len(resp.SocksFrames))
+	}
+
+	// Queued outbound frame: hint set.
+	s = &Server{socksEngine: newEngine()}
+	if !s.socksEngine.enqueueRPortFwdFrame("fast-agent", socksFrame{ConnID: 1, Action: "rportfwd_data", Data: []byte("hi")}) {
+		t.Fatal("enqueue must fit")
+	}
+	resp = &beaconResponse{}
+	s.processSOCKSRelay("fast-agent", nil, resp)
+	if !resp.SocksFastMode {
+		t.Fatal("outbound backlog must request fast polling")
+	}
+	if len(resp.SocksFrames) != 1 {
+		t.Fatalf("got %d frames, want 1", len(resp.SocksFrames))
+	}
+
+	// Inbound data alone (operator leg live, nothing queued yet): hint set.
+	s = &Server{socksEngine: newEngine(), db: newTasksTestServer(t).db}
+	client, server := net.Pipe()
+	s.socksEngine.connections[9] = &socksRelayConn{connID: 9, tcpConn: server, agentID: "fast-agent", lastActive: time.Now()}
+	client.Close() // writes fail fast; the hint depends on traffic, not delivery
+	defer server.Close()
+	resp = &beaconResponse{}
+	s.processSOCKSRelay("fast-agent", []socksFrame{{ConnID: 9, Action: "data", Data: []byte("x")}}, resp)
+	if !resp.SocksFastMode {
+		t.Fatal("inbound traffic must request fast polling")
+	}
+}
+
+// TestSocksDropsCounted proves formerly-silent frame sheds are visible in
+// SocksDroppedTotal: unknown-conn data (either direction), foreign-conn
+// replay attempts, and malformed UDP datagrams.
+func TestSocksDropsCounted(t *testing.T) {
+	e := newSocksRelayEngine()
+	counter := prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_socks_dropped_total"}, []string{"reason"})
+	e.SetDropCounter(counter)
+	s := &Server{}
+
+	// Agent->server data for a conn that doesn't exist.
+	e.processAgentData(s, "a", []socksFrame{{ConnID: 77, Action: "data", Data: []byte("x")}})
+	// Agent->server data for another agent's live conn (replay attempt).
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+	e.connections[78] = &socksRelayConn{connID: 78, tcpConn: server, agentID: "b"}
+	e.processAgentData(s, "a", []socksFrame{{ConnID: 78, Action: "data", Data: []byte("x")}})
+	// Malformed UDP datagram on a live UDP leg.
+	udpConn, _ := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1")})
+	defer udpConn.Close()
+	e.connections[79] = &socksRelayConn{connID: 79, agentID: "a", isUDP: true, udpConn: udpConn, udpClient: &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 9}}
+	e.processAgentData(s, "a", []socksFrame{{ConnID: 79, Action: "udp_data", Data: []byte("short")}})
+	// Server->agent data for a dead leg.
+	e.enqueueFrame("a", socksFrame{ConnID: 80, Action: "data", Data: []byte("y")})
+
+	count := func(reason string) float64 {
+		return promtest.ToFloat64(counter.WithLabelValues(reason))
+	}
+	if got := count("unknown_conn"); got != 2 {
+		t.Fatalf("unknown_conn=%v, want 2 (both directions)", got)
+	}
+	if got := count("foreign_conn"); got != 1 {
+		t.Fatalf("foreign_conn=%v, want 1", got)
+	}
+	if got := count("udp_drop"); got != 1 {
+		t.Fatalf("udp_drop=%v, want 1", got)
+	}
+}
+
+// ── Agent-facing UDP frame codec ───────────────────────────────────────────
 
 func newSocksTestServer(t *testing.T) *Server {
 	t.Helper()
@@ -27,9 +272,7 @@ func newSocksTestServer(t *testing.T) *Server {
 	return s
 }
 
-// ── Agent-facing UDP frame codec ───────────────────────────────────────────
-
-// TestSocksUDPFrameRoundTrip proves the server→agent datagram codec is an exact
+// TestSocksUDPFrameRoundTrip proves the server->agent datagram codec is an exact
 // inverse: a payload that does not survive this would be delivered to the wrong
 // destination or truncated on the way out.
 func TestSocksUDPFrameRoundTrip(t *testing.T) {
@@ -123,7 +366,7 @@ func allBytes(n int) []byte {
 
 // TestParseOperatorUDPHeaderLayouts pins all three SOCKS UDP address types.
 // The datagram layout the relay speaks is RSV RSV FRAG ATYP DST.ADDR DST.PORT
-// DATA — the leading zero byte the caller validates is the reserved byte, so
+// DATA - the leading zero byte the caller validates is the reserved byte, so
 // the address type sits at offset 3.
 func TestParseOperatorUDPHeaderLayouts(t *testing.T) {
 	t.Run("ipv4", func(t *testing.T) {
@@ -200,13 +443,10 @@ func TestParseOperatorUDPHeaderRejectsMalformed(t *testing.T) {
 		{"six bytes", make([]byte, 6)},
 		{"unknown atyp", []byte{0, 0, 0, 0x09, 1, 2, 3, 4, 0, 0}},
 		{"ipv4 truncated", []byte{0, 0, 0, 0x01, 10, 0, 0, 7, 0x01}},
-		{"ipv4 header without payload is still valid", nil}, // placeholder replaced below
 		{"ipv6 truncated", append([]byte{0, 0, 0, 0x04}, make([]byte, 16)...)},
 		{"domain length lies (says 20, sends 2)", []byte{0, 0, 0, 0x03, 20, 'a', 'b', 0, 0}},
 		{"domain without port", []byte{0, 0, 0, 0x03, 1, 'a'}},
 	}
-	// Drop the placeholder row: an ipv4 header with an empty payload IS valid.
-	cases = cases[:6]
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if dst, payload, err := parseOperatorUDPHeader(tc.in); err == nil {
@@ -217,7 +457,7 @@ func TestParseOperatorUDPHeaderRejectsMalformed(t *testing.T) {
 }
 
 // TestParseOperatorUDPHeaderAcceptsEmptyPayload proves a bare address header
-// (no data) is accepted — that is how a client opens a stream.
+// (no data) is accepted - that is how a client opens a stream.
 func TestParseOperatorUDPHeaderAcceptsEmptyPayload(t *testing.T) {
 	dst, payload, err := parseOperatorUDPHeader([]byte{0, 0, 0, 0x01, 1, 2, 3, 4, 0x00, 0x50})
 	if err != nil {
@@ -368,38 +608,6 @@ func TestSocksControlFrameQueueIsBounded(t *testing.T) {
 	}
 }
 
-// TestSocksOutboundOverflowClosesConn proves an agent that stops reading cannot
-// make the relay buffer unbounded: past the cap the leg is closed loudly.
-func TestSocksOutboundOverflowClosesConn(t *testing.T) {
-	s := newSocksTestServer(t)
-	engine := s.socksEngine
-	client, server := net.Pipe()
-	defer client.Close()
-	conn := &socksRelayConn{connID: 7, agentID: "agent-1", tcpConn: client, lastActive: time.Now()}
-	engine.mu.Lock()
-	engine.connections[7] = conn
-	engine.mu.Unlock()
-
-	chunk := make([]byte, 64*1024)
-	// 2 MiB cap: the 33rd 64 KiB chunk overflows and must drop the leg.
-	for i := 0; i < 33; i++ {
-		engine.enqueueFrame("agent-1", socksFrame{ConnID: 7, Action: "data", Data: chunk})
-	}
-	engine.mu.Lock()
-	_, still := engine.connections[7]
-	engine.mu.Unlock()
-	if still {
-		t.Fatal("outbound overflow kept the connection instead of closing it")
-	}
-	conn.mu.Lock()
-	closed := conn.closed
-	conn.mu.Unlock()
-	if !closed {
-		t.Fatal("overflowing connection was not marked closed")
-	}
-	_ = server
-}
-
 // TestSocksDataForUnknownConnIsDropped proves agent data for a leg that is
 // already gone is counted and discarded rather than panicking or re-creating
 // the connection.
@@ -509,7 +717,7 @@ func TestSocksCollectPendingFramesRequeuesRemainderLosslessly(t *testing.T) {
 		want = append(want, c...)
 	}
 
-	// A budget smaller than the merged block emits nothing yet — the whole
+	// A budget smaller than the merged block emits nothing yet - the whole
 	// stream is requeued intact rather than partially delivered.
 	const budget = len("first") + len("second")
 	first := engine.collectPendingFrames("agent-1", SocksMaxFrameSize, budget)
