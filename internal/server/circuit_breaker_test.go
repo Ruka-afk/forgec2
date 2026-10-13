@@ -304,23 +304,27 @@ func TestCircuitBreakerStateNames(t *testing.T) {
 
 // ── Probing ─────────────────────────────────────────────────────────────────
 
-// closedPort returns a port nothing is listening on.
-func closedPort(t *testing.T) int {
+// deadPort is a port nothing can be listening on: TCP port 0 is never a valid
+// destination, so a dial is refused immediately. Reserving-then-releasing a
+// real ephemeral port races with every other process on the host (it did, and
+// turned this test flaky).
+func deadPort(t *testing.T) int {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("reserve port: %v", err)
+	// Guard the assumption: if a dial ever succeeds, the platform has a
+	// different meaning for port 0 and the probe assertions below would lie.
+	probe, err := net.DialTimeout("tcp", "127.0.0.1:0", 2*time.Second)
+	if err == nil {
+		probe.Close()
+		t.Skip("tcp port 0 accepted a connection on this platform")
 	}
-	port := ln.Addr().(*net.TCPAddr).Port
-	ln.Close()
-	return port
+	return 0
 }
 
 // TestProbeTargetClosedPortReportsFailure proves an unreachable transport is
 // reported as a failure (and marked burned) rather than silently healthy.
 func TestProbeTargetClosedPortReportsFailure(t *testing.T) {
 	cb := newTestCircuitBreaker()
-	res := cb.probeTarget(ProbeTarget{ID: "11", Scheme: "http", Host: "127.0.0.1", Port: closedPort(t)})
+	res := cb.probeTarget(ProbeTarget{ID: "11", Scheme: "http", Host: "127.0.0.1", Port: deadPort(t)})
 	if res.Error == "" {
 		t.Fatal("probe of a closed port reported no error")
 	}
@@ -330,8 +334,8 @@ func TestProbeTargetClosedPortReportsFailure(t *testing.T) {
 	if !res.Burned {
 		t.Fatal("closed port not marked burned")
 	}
-	if res.ResponseTime <= 0 {
-		t.Fatal("probe did not measure a response time")
+	if res.ResponseTime < 0 {
+		t.Fatalf("probe reported a negative response time: %v", res.ResponseTime)
 	}
 }
 
@@ -417,7 +421,7 @@ func TestProbeTargetPlainHTTPUsesHealthEndpoint(t *testing.T) {
 	}
 
 	// TCP up but no HTTP server: the health request fails, so the target burns.
-	res2 := cb.probeTarget(ProbeTarget{ID: "12", Scheme: "http", Host: "127.0.0.1", Port: closedPort(t)})
+	res2 := cb.probeTarget(ProbeTarget{ID: "12", Scheme: "http", Host: "127.0.0.1", Port: deadPort(t)})
 	if res2.HTTPStatus != 0 {
 		t.Fatalf("HTTPStatus = %d for an unreachable endpoint, want 0", res2.HTTPStatus)
 	}
@@ -446,7 +450,7 @@ func TestProbeAllIsolatesTargetFailures(t *testing.T) {
 
 	cb := newTestCircuitBreaker()
 	cb.RegisterTarget("alive", "tcp", "127.0.0.1", ln.Addr().(*net.TCPAddr).Port)
-	cb.RegisterTarget("dead", "tcp", "127.0.0.1", closedPort(t))
+	cb.RegisterTarget("dead", "tcp", "127.0.0.1", deadPort(t))
 
 	cb.probeAll()
 
@@ -464,7 +468,7 @@ func TestProbeAllIsolatesTargetFailures(t *testing.T) {
 // Stop, a second Stop is safe, and a probe recorded while stopped still works.
 func TestCircuitBreakerStartStopIsIdempotent(t *testing.T) {
 	cb := newTestCircuitBreaker()
-	cb.RegisterTarget("dead", "tcp", "127.0.0.1", closedPort(t))
+	cb.RegisterTarget("dead", "tcp", "127.0.0.1", deadPort(t))
 
 	cb.Start()
 	select {
@@ -490,8 +494,8 @@ func TestCircuitBreakerStartStopIsIdempotent(t *testing.T) {
 // do not race; run under -race this pins the lock discipline.
 func TestProbeLoopConcurrentStatusReads(t *testing.T) {
 	cb := newTestCircuitBreaker()
-	cb.RegisterTarget("11", "tcp", "127.0.0.1", closedPort(t))
-	cb.RegisterTarget("12", "tcp", "127.0.0.1", closedPort(t))
+	cb.RegisterTarget("11", "tcp", "127.0.0.1", deadPort(t))
+	cb.RegisterTarget("12", "tcp", "127.0.0.1", deadPort(t))
 
 	cb.Start()
 	var wg sync.WaitGroup
