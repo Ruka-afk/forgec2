@@ -733,6 +733,36 @@ var schemaMigrations = []*gormigrate.Migration{
 			return nil
 		},
 	},
+	// Stamp redirectors with the tenant that registered them.
+	//
+	// A redirector row holds the SSH credentials and target host of the
+	// operator's redirector infrastructure, and both the listing and the
+	// SSH deploy path read it globally: one tenant could enumerate and edit
+	// another tenant's redirectors, and a deploy probe flipped every matching
+	// host to "active" across all tenants. Existing rows predate stamping and
+	// have no parent to inherit from, so they keep tenant 0 — legacy/unscoped,
+	// which tenantScope treats as visible to unscoped operators only.
+	{
+		ID: "2026-10-15-redirectors-tenant-id",
+		Migrate: func(tx *gorm.DB) error {
+			if !tx.Migrator().HasTable("redirectors") {
+				return nil
+			}
+			execMigration(tx, "ALTER TABLE redirectors ADD COLUMN tenant_id INTEGER DEFAULT 0", "add_redirectors_tenant_id")
+			if err := tx.Exec("UPDATE redirectors SET tenant_id = 0 WHERE tenant_id IS NULL").Error; err != nil {
+				return err
+			}
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_redirectors_tenant_id ON redirectors(tenant_id)", "add_redirectors_tenant_id_index")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			execMigration(tx, "DROP INDEX IF EXISTS idx_redirectors_tenant_id", "drop_redirectors_tenant_id_index")
+			if tx.Migrator().HasColumn("redirectors", "tenant_id") {
+				execMigration(tx, "ALTER TABLE redirectors DROP COLUMN tenant_id", "drop_redirectors_tenant_id")
+			}
+			return nil
+		},
+	},
 }
 
 // indexMigrations create/drop indexes and run AFTER AutoMigrate, so their

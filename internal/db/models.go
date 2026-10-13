@@ -1867,7 +1867,12 @@ type Script struct {
 func (Script) TableName() string { return "scripts" }
 
 type Redirector struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
+	ID uint `gorm:"primaryKey" json:"id"`
+	// TenantID scopes a redirector to the tenant that registered it. A
+	// redirector carries SSH credentials for the operator's redirector
+	// infrastructure, so an unscoped listing disclosed another tenant's
+	// targets. 0 = legacy/unscoped, the convention tenantScope already uses.
+	TenantID    uint      `gorm:"index" json:"-"`
 	Name        string    `gorm:"size:100" json:"name"`
 	Host        string    `gorm:"size:255" json:"host"`
 	Type        string    `gorm:"size:20" json:"type"`
@@ -1875,8 +1880,8 @@ type Redirector struct {
 	Config      string    `gorm:"type:text" json:"config"`
 	SSHUser     string    `gorm:"size:64" json:"ssh_user"`
 	SSHPort     int       `gorm:"default:22" json:"ssh_port"`
-	SSHKey      string    `gorm:"type:text" json:"ssh_key"`
-	SSHPassword string    `gorm:"type:text" json:"ssh_password"`
+	SSHKey      string    `gorm:"type:text" json:"-"`
+	SSHPassword string    `gorm:"type:text" json:"-"`
 	LastSeen    time.Time `json:"last_seen"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
