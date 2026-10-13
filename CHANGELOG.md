@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
+- Hot update refuses to install a release it cannot prove is newer: version comparison now fails closed when either version is not a plain numeric release stamp (a `dev`/nightly build, a build whose version was never injected, or a tag with a prerelease suffix), instead of treating the unreadable side as "older" and accepting an arbitrary published release
 - Agent no longer downgrades to cleartext when every configured C2 URL is encrypted: the WSS→HTTP fallback, the DNS→HTTP fallback and transport failover/rotation refuse `http`/`ws`/`h2c`/`tcp`/`udp`/`dns` for such an implant (configure at least one cleartext URL to keep lab failover)
 - HTTP(S)/mTLS beacon clients refuse a redirect from an encrypted origin to `http://`; cleartext lab origins keep normal redirect behaviour
 - Agent certificate pinning now actually authenticates self-signed teamserver certificates: the pin replaces chain validation (plus a hostname check when a server name is known) instead of failing before the pin is consulted
@@ -30,6 +31,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- WebSocket batch retries no longer silently drop an oversized result: the frame being retried is always retained and only the backlog is trimmed to the 8 MiB cap, so an agent can no longer wait forever on a reply that was discarded
+- `find` and `reg_set` task dispatch no longer returns `400 task type requires 'command' parameter` for valid requests: both now populate the command slot the protocol metadata requires (`find` falls back to the search root when no pattern is supplied, `reg_set` carries `path=value`)
 - Fresh installs from `config.example.yaml` boot again: missing `crypto.loot_key` / `extc2_key` / `backup_key` / `totp_key` / `csrf_key` are generated at startup and persisted (idempotent, env vars win, read-only configs keep working with a warning)
 - `FORGEC2_DATA_DIR` now rebases `data_dir` and every derived path (DB, TLS cert/key, SSH host key); compose sets it to `/data` so state and logs live on the persistent volume instead of the tmpfs working directory
 - Base compose binds `0.0.0.0` by default, so published ports are actually reachable
