@@ -221,14 +221,35 @@ func fetchLatestVersion(repo string) (string, error) {
 	return "", lastErr
 }
 
-// compareVersions compares two semver strings.
-// Returns: 1 if v1 > v2, -1 if v1 < v2, 0 if equal
-func compareVersions(v1, v2 string) int {
-	v1 = strings.TrimPrefix(v1, "v")
-	v2 = strings.TrimPrefix(v2, "v")
+// versionParts splits a release tag into its numeric segments. ok is false when
+// any segment is not a plain non-negative integer — a prerelease suffix
+// ("2.7.0-rc1"), stray whitespace, or a "dev" build whose version stamp was
+// never injected. The ordering of such a version against a release is not
+// knowable, and guessing it is what used to let an unversioned build accept a
+// downgrade.
+func versionParts(v string) ([]int, bool) {
+	fields := strings.Split(strings.TrimPrefix(v, "v"), ".")
+	parts := make([]int, 0, len(fields))
+	for _, field := range fields {
+		n, err := strconv.Atoi(field)
+		if err != nil || n < 0 {
+			return nil, false
+		}
+		parts = append(parts, n)
+	}
+	return parts, true
+}
 
-	parts1 := strings.Split(v1, ".")
-	parts2 := strings.Split(v2, ".")
+// compareVersions compares two semver strings.
+// Returns: 1 if v1 > v2, -1 if v1 < v2, 0 if equal or if either side is not
+// a comparable release version (fail closed: callers must not derive an
+// upgrade or a downgrade from a version they cannot read).
+func compareVersions(v1, v2 string) int {
+	parts1, ok1 := versionParts(v1)
+	parts2, ok2 := versionParts(v2)
+	if !ok1 || !ok2 {
+		return 0
+	}
 
 	maxLen := len(parts1)
 	if len(parts2) > maxLen {
@@ -236,19 +257,12 @@ func compareVersions(v1, v2 string) int {
 	}
 
 	for i := 0; i < maxLen; i++ {
-		n1, err1 := 0, error(nil)
-		n2, err2 := 0, error(nil)
+		n1, n2 := 0, 0
 		if i < len(parts1) {
-			n1, err1 = strconv.Atoi(parts1[i])
+			n1 = parts1[i]
 		}
 		if i < len(parts2) {
-			n2, err2 = strconv.Atoi(parts2[i])
-		}
-		if err1 != nil && err2 == nil {
-			return -1
-		}
-		if err1 == nil && err2 != nil {
-			return 1
+			n2 = parts2[i]
 		}
 		if n1 > n2 {
 			return 1
