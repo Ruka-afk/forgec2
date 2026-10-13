@@ -18,6 +18,9 @@ import (
 // ── P0-3: rportfwd server-side relay (binds local port, relays via beacon) ─
 func (s *Server) handleRPortFwdRelayStart(c *gin.Context) {
 	// Similar to SOCKS relay: server binds port, tunnels through beacon
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
@@ -74,6 +77,9 @@ func (s *Server) handleRPortFwdRelayStart(c *gin.Context) {
 }
 
 func (s *Server) handleRPortFwdStatus(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
@@ -141,6 +147,9 @@ func (s *Server) handleRPortFwdGlobalStatus(c *gin.Context) {
 }
 
 func (s *Server) handleRPortFwdRelayStop(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	localPortStr := c.PostForm("lport")
 	if localPortStr == "" {

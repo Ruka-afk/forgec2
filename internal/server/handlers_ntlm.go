@@ -75,13 +75,25 @@ func (st *ntlmRelayStore) findByAgent(agentID string) *ntlmRelaySession {
 // handleNTLMRelayStatus returns active NTLM relay sessions.
 // GET /ntlm/relay_status
 func (s *Server) handleNTLMRelayStatus(c *gin.Context) {
-	sessions := s.ntlmRelays.list()
-	running := len(sessions) > 0
+	// The store is built in NewServer, but a report endpoint that 500s on a
+	// nil store would be a worse failure than one that reports nothing.
+	if s.ntlmRelays == nil {
+		c.JSON(http.StatusOK, gin.H{"success": true, "active": []interface{}{}, "count": 0, "running": false})
+		return
+	}
+	// A relay session is filed against an agent, so hide sessions the caller
+	// has no visibility of rather than dumping the whole fleet's relays.
+	visible := make([]*ntlmRelaySession, 0, 1)
+	for _, session := range s.ntlmRelays.list() {
+		if s.resolveVisibleAgentID(c, session.AgentID) != "" {
+			visible = append(visible, session)
+		}
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"active":  sessions,
-		"count":   len(sessions),
-		"running": running,
+		"active":  visible,
+		"count":   len(visible),
+		"running": len(visible) > 0,
 	})
 }
 
