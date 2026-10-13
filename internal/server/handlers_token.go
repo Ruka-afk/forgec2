@@ -103,6 +103,9 @@ func (s *Server) handleGlobalTokensPage(c *gin.Context) {
 
 // handleTokenListProcs dispatches token_list_procs task to agent
 func (s *Server) handleTokenListProcs(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	task := s.issueAgentTask(c, id, TaskSpec{Type: "token_list_procs"})
 	if task == nil {
@@ -116,6 +119,9 @@ func (s *Server) handleTokenListProcs(c *gin.Context) {
 // handleTokenSteal dispatches token_steal task (steal token from pid)
 // POST /agents/:id/token/steal  body: pid=<pid>
 func (s *Server) handleTokenSteal(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	pidStr := c.PostForm("pid")
 	processName := c.PostForm("process_name") // optional, for display
@@ -135,14 +141,15 @@ func (s *Server) handleTokenSteal(c *gin.Context) {
 	}
 
 	slog.Info("Token steal requested", "agent_id", id, "pid", pidStr)
-	s.LogAuditRecord(c, "token_steal", "agent", id, fmt.Sprintf("steal token from pid %s", pidStr), true, nil)
-	s.broadcastTaskUpdate(id, *task)
-	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
+	s.dispatchTask(c, task, "token_steal", fmt.Sprintf("steal token from pid %s", pidStr))
 }
 
 // handleTokenMake dispatches token_make (LogonUser)
 // POST /agents/:id/token/make  body: user=DOMAIN\user  password=xxx  logon_type=interactive|network
 func (s *Server) handleTokenMake(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	domUser := c.PostForm("user")
 	password := c.PostForm("password")
@@ -163,14 +170,17 @@ func (s *Server) handleTokenMake(c *gin.Context) {
 	}
 
 	slog.Info("Token make requested", "agent_id", id, "user", domUser)
-	s.LogAuditRecord(c, "token_make", "agent", id, fmt.Sprintf("make_token for %s (logon: %s)", domUser, logonType), true, nil)
-	s.broadcastTaskUpdate(id, *task)
-	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
+	// The password is deliberately absent from the detail string: dispatchTask
+	// fingerprints the arguments for dangerous task types instead.
+	s.dispatchTask(c, task, "token_make", fmt.Sprintf("make_token for %s (logon: %s)", domUser, logonType))
 }
 
 // handleTokenRevert dispatches rev2self
 // POST /agents/:id/token/revert
 func (s *Server) handleTokenRevert(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	task := s.issueAgentTask(c, id, TaskSpec{Type: "token_revert"})
 	if task == nil {
@@ -183,13 +193,14 @@ func (s *Server) handleTokenRevert(c *gin.Context) {
 	}
 
 	slog.Info("Token revert (rev2self) requested", "agent_id", id)
-	s.LogAuditRecord(c, "token_revert", "agent", id, "rev2self", true, nil)
-	s.broadcastTaskUpdate(id, *task)
-	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
+	s.dispatchTask(c, task, "token_revert", "rev2self")
 }
 
 // handleTokenWhoami dispatches token_whoami
 func (s *Server) handleTokenWhoami(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	task := s.issueAgentTask(c, id, TaskSpec{Type: "token_whoami"})
 	if task == nil {
@@ -228,6 +239,9 @@ func (s *Server) handleTokenDrop(c *gin.Context) {
 // handleTokenImpersonate re-activates a saved token (re-steal from same pid)
 // POST /agents/:id/token/:token_id/impersonate
 func (s *Server) handleTokenImpersonate(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	tokenIDStr := c.Param("token_id")
 
@@ -254,9 +268,7 @@ func (s *Server) handleTokenImpersonate(c *gin.Context) {
 	}
 
 	slog.Info("Token re-impersonate requested", "agent_id", id, "pid", entry.PID, "user", entry.Username)
-	s.LogAuditRecord(c, "token_impersonate", "agent", id, fmt.Sprintf("re-impersonate %s\\%s (pid %d)", entry.Domain, entry.Username, entry.PID), true, nil)
-	s.broadcastTaskUpdate(id, *task)
-	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
+	s.dispatchTask(c, task, "token_impersonate", fmt.Sprintf("re-impersonate %s\\%s (pid %d)", entry.Domain, entry.Username, entry.PID))
 }
 
 // handleGetTokens returns JSON list of tokens for an agent (used by AJAX)
@@ -361,9 +373,22 @@ func (s *Server) handleTokenNoteUpdate(c *gin.Context) {
 		return
 	}
 
+	// Tenant gate first: without it a caller from another tenant could probe
+	// token ids and read the 200-vs-404 difference.
+	if s.resolveVisibleAgentID(c, id) == "" {
+		respondError(c, http.StatusNotFound, "agent not found")
+		return
+	}
+
 	result := s.db.Model(&db.TokenEntry{}).Where("id = ? AND agent_id = ?", tokenID, id).Update("notes", notes)
 	if result.Error != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(result.Error, "update token notes"))
+		return
+	}
+	// Reporting success for a token that does not exist (or belongs to another
+	// tenant) is a lie the operator triages from.
+	if result.RowsAffected == 0 {
+		respondError(c, http.StatusNotFound, "token not found")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
