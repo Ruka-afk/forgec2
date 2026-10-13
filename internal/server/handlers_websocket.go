@@ -343,10 +343,14 @@ func (s *Server) requeueBatch(beacon *WebSocketBeacon, data []byte) {
 		payload = out
 	}
 
-	queue := append([][]byte{payload}, beacon.BatchQueue...)
-	total := 0
-	kept := make([][]byte, 0, len(queue))
-	for _, b := range queue {
+	// The batch being retried is never dropped: it is the frame the agent is
+	// blocked on, and losing it would leave the agent waiting on a reply that
+	// is never coming. It is a single frame, and upstream per-result size
+	// caps keep it modest even when it alone exceeds the retention cap.
+	kept := make([][]byte, 0, len(beacon.BatchQueue)+1)
+	kept = append(kept, payload)
+	total := len(payload)
+	for _, b := range beacon.BatchQueue {
 		if total+len(b) > maxRetained {
 			slog.Warn("WebSocket requeue dropping backlog over retention cap", "agent_id", beacon.AgentID, "dropped_bytes", total+len(b))
 			continue
