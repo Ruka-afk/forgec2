@@ -295,6 +295,25 @@ func (m *MonitorCollector) flipAgentStatus(ids []string, status string) {
 	}
 }
 
+// alertTenantFor resolves which tenant an alert belongs to. An agent-sourced
+// alert follows the agent, so the alert lands in the feed of the tenant that
+// owns the host and nobody else sees its hostname. Server-wide alerts (source
+// "system") have no agent and fall back to the rule's tenant, which keeps a
+// tenant-scoped rule from announcing server health to the whole fleet while
+// still letting legacy (tenant 0) rules raise global alerts.
+func (m *MonitorCollector) alertTenantFor(source string, rule *db.AlertRule) uint {
+	if source != "" && source != "system" {
+		var agent db.Implant
+		if err := m.server.db.Select("tenant_id").First(&agent, "id = ?", source).Error; err == nil {
+			return agent.TenantID
+		}
+	}
+	if rule != nil {
+		return rule.TenantID
+	}
+	return 0
+}
+
 func (m *MonitorCollector) triggerAlert(rule *db.AlertRule, source, sourceName, value string, details map[string]interface{}) {
 	var existingAlert db.Alert
 	result := m.server.db.Where("rule_id = ? AND source = ? AND status = ?", rule.ID, source, "active").First(&existingAlert)
@@ -319,6 +338,7 @@ func (m *MonitorCollector) triggerAlert(rule *db.AlertRule, source, sourceName, 
 		SourceName: sourceName,
 		Status:     "active",
 		Details:    string(detailsJSON),
+		TenantID:   m.alertTenantFor(source, rule),
 	}
 
 	if err := m.server.db.Create(&alert).Error; err != nil {
@@ -424,11 +444,33 @@ func (s *Server) handleGetMetricsHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": history})
 }
 
+// loadAlertRuleScoped resolves an alert rule within the caller's tenant. Rules
+// gate every alert in the feed and name the thresholds an operator watches, so
+// an unscoped read/write would let one tenant retune another tenant's alerting.
+func (s *Server) loadAlertRuleScoped(c *gin.Context, dest *db.AlertRule, id string) bool {
+	if err := s.tenantScope(s.db, c).First(dest, "id = ?", id).Error; err != nil {
+		respondError(c, http.StatusNotFound, "rule not found")
+		return false
+	}
+	return true
+}
+
+// loadAlertScoped resolves an alert within the caller's tenant. Alerts embed the
+// alerting host's hostname, so acknowledging or resolving a foreign one would
+// disclose that host exists.
+func (s *Server) loadAlertScoped(c *gin.Context, dest *db.Alert, id string) bool {
+	if err := s.tenantScope(s.db, c).First(dest, "id = ?", id).Error; err != nil {
+		respondError(c, http.StatusNotFound, "alert not found")
+		return false
+	}
+	return true
+}
+
 func (s *Server) handleGetAlerts(c *gin.Context) {
 	status := c.DefaultQuery("status", "")
 	severity := c.DefaultQuery("severity", "")
 
-	query := s.db.Model(&db.Alert{})
+	query := s.tenantScope(s.db.Model(&db.Alert{}), c)
 
 	if status != "" {
 		query = query.Where("status = ?", status)
@@ -455,15 +497,30 @@ func (s *Server) handleGetAlertStats(c *gin.Context) {
 		Info     int64 `json:"info"`
 	}
 
-	err := s.db.Raw(`
+	// The aggregate is raw SQL, and Raw().Scan() ignores any Where appended
+	// afterwards, so the tenant predicate has to be part of the statement
+	// itself. tenantScope cannot express it here.
+	tid, ok := s.resolveTenant(c)
+	if !ok {
+		// Fail closed, same rule as tenantScope: a broken tenant lookup must
+		// not fall back to fleet-wide counters.
+		respondError(c, http.StatusUnauthorized, "tenant context unavailable")
+		return
+	}
+	stmt := `
 		SELECT
 			COALESCE(SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), 0) as active,
 			COALESCE(SUM(CASE WHEN status = 'active' AND severity = 'critical' THEN 1 ELSE 0 END), 0) as critical,
 			COALESCE(SUM(CASE WHEN status = 'active' AND severity = 'warning' THEN 1 ELSE 0 END), 0) as warning,
 			COALESCE(SUM(CASE WHEN status = 'active' AND severity = 'info' THEN 1 ELSE 0 END), 0) as info
-		FROM alerts`,
-	).Scan(&stats).Error
-	if err != nil {
+		FROM alerts`
+	var args []interface{}
+	if tid != 0 {
+		stmt += ` WHERE tenant_id = ?`
+		args = append(args, tid)
+	}
+
+	if err := s.db.Raw(stmt, args...).Scan(&stats).Error; err != nil {
 		slog.Error("Failed to query alert stats", "err", err)
 		respondError(c, http.StatusInternalServerError, "Failed to query alert stats")
 		return
@@ -475,13 +532,13 @@ func (s *Server) handleGetAlertStats(c *gin.Context) {
 func (s *Server) handleGetAlertRules(c *gin.Context) {
 	p := parsePagination(c, 50, 200)
 	var total int64
-	if err := s.db.Model(&db.AlertRule{}).Count(&total).Error; err != nil {
+	if err := s.tenantScope(s.db.Model(&db.AlertRule{}), c).Count(&total).Error; err != nil {
 		slog.Error("Failed to count alert rules", "err", err)
 		respondError(c, http.StatusInternalServerError, "Failed to count alert rules")
 		return
 	}
 	var rules []db.AlertRule
-	if err := s.db.Order("created_at DESC").Offset(p.Offset).Limit(p.PageSize).Find(&rules).Error; err != nil {
+	if err := s.tenantScope(s.db, c).Order("created_at DESC").Offset(p.Offset).Limit(p.PageSize).Find(&rules).Error; err != nil {
 		slog.Error("Failed to query alert rules", "err", err)
 		respondError(c, http.StatusInternalServerError, "Failed to query alert rules")
 		return
@@ -493,20 +550,58 @@ func (s *Server) handleCreateAlertRule(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
 	}
-	var rule db.AlertRule
-	if err := c.ShouldBindJSON(&rule); err != nil {
+	// Bind an explicit allowlist instead of the model: binding db.AlertRule
+	// directly let a caller set id and tenant_id (and anything added to the
+	// model later) straight from the request body.
+	//
+	// Enabled is a pointer so an omitted field keeps the model's
+	// "default:true" semantics instead of silently creating a disarmed rule.
+	var req struct {
+		Name        string  `json:"name"`
+		Type        string  `json:"type"`
+		Threshold   float64 `json:"threshold"`
+		Enabled     *bool   `json:"enabled"`
+		Description string  `json:"description"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, sanitizeError(err, "Alert rule operation"))
 		return
 	}
 
-	if rule.Name == "" || rule.Type == "" {
+	if req.Name == "" || req.Type == "" {
 		respondError(c, http.StatusBadRequest, "name and type are required")
 		return
+	}
+
+	enabled := true
+	if req.Enabled != nil {
+		enabled = *req.Enabled
+	}
+
+	rule := db.AlertRule{
+		TenantID:    s.currentTenantID(c),
+		Name:        req.Name,
+		Type:        req.Type,
+		Threshold:   req.Threshold,
+		Enabled:     enabled,
+		Description: req.Description,
 	}
 
 	if err := s.db.Create(&rule).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Alert rule operation"))
 		return
+	}
+	// AlertRule.Enabled carries `gorm:"default:true"`, and GORM substitutes the
+	// column default for a zero value on insert — so an explicit
+	// enabled:false was silently stored as true and the operator could never
+	// create a disarmed rule. Write the flag back when it was deliberately
+	// given as false.
+	if req.Enabled != nil && !enabled {
+		if err := s.db.Model(&db.AlertRule{}).Where("id = ?", rule.ID).Update("enabled", false).Error; err != nil {
+			respondError(c, http.StatusInternalServerError, sanitizeError(err, "Alert rule operation"))
+			return
+		}
+		rule.Enabled = false
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "rule": rule})
@@ -518,7 +613,7 @@ func (s *Server) handleUpdateAlertRule(c *gin.Context) {
 	}
 	id := c.Param("id")
 	var rule db.AlertRule
-	if !s.findOrFail(c, &rule, id, "rule") {
+	if !s.loadAlertRuleScoped(c, &rule, id) {
 		return
 	}
 
@@ -557,8 +652,15 @@ func (s *Server) handleDeleteAlertRule(c *gin.Context) {
 	}
 	id := c.Param("id")
 
-	if err := s.db.Delete(&db.AlertRule{}, id).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Alert rule operation"))
+	res := s.tenantScope(s.db, c).Delete(&db.AlertRule{}, "id = ?", id)
+	if res.Error != nil {
+		respondError(c, http.StatusInternalServerError, sanitizeError(res.Error, "Alert rule operation"))
+		return
+	}
+	// An id outside the caller's tenant deletes nothing; reporting success
+	// there would tell an operator their rule is gone while it is still armed.
+	if res.RowsAffected == 0 {
+		respondError(c, http.StatusNotFound, "rule not found")
 		return
 	}
 
@@ -571,7 +673,7 @@ func (s *Server) handleAcknowledgeAlert(c *gin.Context) {
 	}
 	id := c.Param("id")
 	var alert db.Alert
-	if !s.findOrFail(c, &alert, id, "alert") {
+	if !s.loadAlertScoped(c, &alert, id) {
 		return
 	}
 
@@ -590,7 +692,7 @@ func (s *Server) handleResolveAlert(c *gin.Context) {
 	}
 	id := c.Param("id")
 	var alert db.Alert
-	if !s.findOrFail(c, &alert, id, "alert") {
+	if !s.loadAlertScoped(c, &alert, id) {
 		return
 	}
 

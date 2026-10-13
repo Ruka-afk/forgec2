@@ -1116,7 +1116,12 @@ type AutomationRule struct {
 func (AutomationRule) TableName() string { return "automation_rules" }
 
 type AlertRule struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
+	ID uint `gorm:"primaryKey" json:"id"`
+	// TenantID scopes a rule to the tenant that created it. Alerts carry the
+	// source agent's hostname, so an unscoped rule listing disclosed another
+	// tenant's asset names. 0 = legacy/unscoped, the convention tenantScope
+	// already uses.
+	TenantID    uint      `gorm:"index" json:"-"`
 	Name        string    `gorm:"size:255;not null" json:"name"`
 	Type        string    `gorm:"size:100;not null" json:"type"` // agent_offline, cpu_high, memory_high, disk_high, credential_found, agent_online
 	Threshold   float64   `json:"threshold"`                     // Threshold (percentage or seconds)
@@ -1129,7 +1134,11 @@ type AlertRule struct {
 func (AlertRule) TableName() string { return "alert_rules" }
 
 type Alert struct {
-	ID         uint      `gorm:"primaryKey" json:"id"`
+	ID uint `gorm:"primaryKey" json:"id"`
+	// TenantID mirrors the alerting agent's tenant so one tenant's alert feed
+	// never shows another's hostnames or severities. Stamped by the collector
+	// at creation time; 0 = legacy/unscoped.
+	TenantID   uint      `gorm:"index" json:"-"`
 	RuleID     uint      `json:"rule_id"`
 	Rule       AlertRule `gorm:"foreignKey:RuleID" json:"rule"`
 	Type       string    `gorm:"size:100;not null" json:"type"`

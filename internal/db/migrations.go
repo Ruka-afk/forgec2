@@ -674,6 +674,65 @@ var schemaMigrations = []*gormigrate.Migration{
 			return nil
 		},
 	},
+	// Stamp alert rules and alerts with their tenant.
+	//
+	// Alert rows carry the alerting host's hostname and every tenant read the
+	// whole table, so one operator could enumerate another tenant's asset
+	// names; the rules behind them were equally global and could be edited or
+	// deleted by any operator. Rules keep tenant 0 (legacy/unscoped — the
+	// marker tenantScope already treats as visible to unscoped operators only)
+	// because they predate stamping and have no parent to inherit from.
+	//
+	// Alerts can inherit, so they are backfilled from the source implant where
+	// one is still present; alerts whose agent was deleted, and server-wide
+	// ("system") alerts with no agent at all, keep tenant 0.
+	{
+		ID: "2026-10-14-alerts-tenant-id",
+		Migrate: func(tx *gorm.DB) error {
+			if !tx.Migrator().HasTable("alert_rules") {
+				return nil
+			}
+			execMigration(tx, "ALTER TABLE alert_rules ADD COLUMN tenant_id INTEGER DEFAULT 0", "add_alert_rules_tenant_id")
+			if err := tx.Exec("UPDATE alert_rules SET tenant_id = 0 WHERE tenant_id IS NULL").Error; err != nil {
+				return err
+			}
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_alert_rules_tenant_id ON alert_rules(tenant_id)", "add_alert_rules_tenant_id_index")
+
+			if !tx.Migrator().HasTable("alerts") {
+				return nil
+			}
+			execMigration(tx, "ALTER TABLE alerts ADD COLUMN tenant_id INTEGER DEFAULT 0", "add_alerts_tenant_id")
+			if tx.Migrator().HasTable("implants") {
+				// Inherit from the alerting agent. The correlated subquery
+				// yields NULL when the implant is gone, so restrict the UPDATE
+				// to alerts whose source really is a live implant — leaving the
+				// rest for the NULL normalization below rather than stamping
+				// them NULL.
+				if err := tx.Exec(`UPDATE alerts SET tenant_id = (
+						SELECT i.tenant_id FROM implants i WHERE i.id = alerts.source
+					)
+					WHERE EXISTS (SELECT 1 FROM implants i WHERE i.id = alerts.source)`).Error; err != nil {
+					return err
+				}
+			}
+			if err := tx.Exec("UPDATE alerts SET tenant_id = 0 WHERE tenant_id IS NULL").Error; err != nil {
+				return err
+			}
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_alerts_tenant_id ON alerts(tenant_id)", "add_alerts_tenant_id_index")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			execMigration(tx, "DROP INDEX IF EXISTS idx_alerts_tenant_id", "drop_alerts_tenant_id_index")
+			if tx.Migrator().HasTable("alerts") && tx.Migrator().HasColumn("alerts", "tenant_id") {
+				execMigration(tx, "ALTER TABLE alerts DROP COLUMN tenant_id", "drop_alerts_tenant_id")
+			}
+			execMigration(tx, "DROP INDEX IF EXISTS idx_alert_rules_tenant_id", "drop_alert_rules_tenant_id_index")
+			if tx.Migrator().HasTable("alert_rules") && tx.Migrator().HasColumn("alert_rules", "tenant_id") {
+				execMigration(tx, "ALTER TABLE alert_rules DROP COLUMN tenant_id", "drop_alert_rules_tenant_id")
+			}
+			return nil
+		},
+	},
 }
 
 // indexMigrations create/drop indexes and run AFTER AutoMigrate, so their
