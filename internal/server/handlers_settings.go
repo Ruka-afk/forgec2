@@ -236,21 +236,36 @@ func (s *Server) handleSaveAgentConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Agent configuration saved successfully"})
 }
 
+// consumePasswordChangeSlot claims the caller's password-change cooldown. It
+// returns the remaining wait and false while a previous attempt is still inside
+// the window.
+//
+// Every attempt claims the slot, not just successful ones. Arming the window
+// only on success meant a caller holding a valid session but not the current
+// password could guess it an unlimited number of times: each wrong guess was
+// rejected, yet nothing ever recorded the attempt.
+func (s *Server) consumePasswordChangeSlot(userID uint) (time.Duration, bool) {
+	now := time.Now()
+	s.pwdChangeTimesMu.Lock()
+	defer s.pwdChangeTimesMu.Unlock()
+	if lastChange, exists := s.pwdChangeTimes[userID]; exists {
+		if elapsed := now.Sub(lastChange); elapsed < PasswordChangeCooldown {
+			return PasswordChangeCooldown - elapsed, false
+		}
+	}
+	s.pwdChangeTimes[userID] = now
+	return 0, true
+}
+
 func (s *Server) handleChangePassword(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	uid, _ := userID.(uint)
 
-	s.pwdChangeTimesMu.Lock()
-	if lastChange, exists := s.pwdChangeTimes[uid]; exists {
-		if time.Since(lastChange) < 5*time.Minute {
-			s.pwdChangeTimesMu.Unlock()
-			remaining := 5*time.Minute - time.Since(lastChange)
-			respondError(c, http.StatusTooManyRequests,
-				fmt.Sprintf("Password change rate limited. Try again in %d seconds.", int(remaining.Seconds())))
-			return
-		}
+	if remaining, ok := s.consumePasswordChangeSlot(uid); !ok {
+		respondError(c, http.StatusTooManyRequests,
+			fmt.Sprintf("Password change rate limited. Try again in %d seconds.", int(remaining.Seconds())))
+		return
 	}
-	s.pwdChangeTimesMu.Unlock()
 
 	current := c.PostForm("current_password")
 	newPass := c.PostForm("new_password")
@@ -326,12 +341,18 @@ func (s *Server) handleChangePassword(c *gin.Context) {
 
 	s.LogAuditRecord(c, "password_change", "auth", user.Username, "Password changed", true, nil)
 
-	s.pwdChangeTimesMu.Lock()
-	s.pwdChangeTimes[user.ID] = time.Now()
-	s.pwdChangeTimesMu.Unlock()
-
 	if err := s.revokeAllUserSessions(user.ID); err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to revoke sessions")
+		// The password is already rotated and audited at this point, so a bare
+		// 500 would tell the operator the change failed and invite a retry
+		// against a password that no longer exists. Say exactly what landed.
+		s.LogAuditRecord(c, "password_change_sessions_revoked", "auth", user.Username,
+			"Password changed but existing sessions could not be revoked: "+err.Error(), false, err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success":          false,
+			"error":            "password changed, but existing sessions could not be revoked",
+			"password_changed": true,
+			"sessions_revoked": false,
+		})
 		return
 	}
 
