@@ -169,6 +169,10 @@ func (cb *CircuitBreaker) probeTarget(target ProbeTarget) ProbeResult {
 	}
 	if err != nil {
 		result.Error = fmt.Sprintf("TCP dial failed: %v", err)
+		// Burned must describe the probe, not just the HTTP sub-check below:
+		// a refused/unreachable transport is the most severe failure there is,
+		// and this path used to return before the flag was ever set.
+		result.Burned = true
 		result.ResponseTime = time.Since(start)
 		return result
 	}
@@ -214,11 +218,18 @@ func (cb *CircuitBreaker) probeTarget(target ProbeTarget) ProbeResult {
 }
 
 func (cb *CircuitBreaker) recordResult(targetID string, result ProbeResult) {
+	// Burn notification is edge-triggered. The handler rotates every agent on
+	// the listener and rewrites the redirector's status row, so firing it on
+	// each further probe while the target stays burned churned agents and
+	// re-broadcast the same event once per check interval until an operator
+	// reset — the probe loop is the only thing that ever clears a burn.
+	var notifyBurned bool
+
 	cb.mu.Lock()
-	defer cb.mu.Unlock()
 
 	th, ok := cb.targets[targetID]
 	if !ok {
+		cb.mu.Unlock()
 		return
 	}
 
@@ -242,16 +253,23 @@ func (cb *CircuitBreaker) recordResult(targetID string, result ProbeResult) {
 	}
 
 	// Determine health status
+	previous := th.Status
 	switch {
 	case th.ConsecutiveFails >= 5:
 		th.Status = HealthBurned
-		if cb.onBurned != nil {
-			go cb.onBurned(targetID)
-		}
+		notifyBurned = previous != HealthBurned && cb.onBurned != nil
 	case th.ConsecutiveFails >= 1:
 		th.Status = HealthUnstable
 	default:
 		th.Status = HealthHealthy
+	}
+	handler := cb.onBurned
+	cb.mu.Unlock()
+
+	// Outside the critical section: the handler itself queries the breaker
+	// and the database, so calling it under the lock would stall every probe.
+	if notifyBurned {
+		go handler(targetID)
 	}
 }
 
@@ -279,4 +297,20 @@ func (cb *CircuitBreaker) SetOnBurnedHandler(handler func(targetID string)) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 	cb.onBurned = handler
+}
+
+// circuitBreakerStateName is the single mapping from the in-memory health enum
+// to the wire/audit vocabulary. Detail, toggle and reset all report through it
+// so an event row can never disagree with the state it claims to describe.
+func circuitBreakerStateName(status ListenerHealth) string {
+	switch status {
+	case HealthHealthy:
+		return "healthy"
+	case HealthUnstable:
+		return "unstable"
+	case HealthBurned:
+		return "burned"
+	default:
+		return "unknown"
+	}
 }

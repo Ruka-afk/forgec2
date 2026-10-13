@@ -32,21 +32,12 @@ func (s *Server) handleAPICircuitBreakerDetail(c *gin.Context) {
 	cb.mu.RLock()
 	var listeners []listenerDetail
 	for id, th := range cb.targets {
-		statusStr := "unknown"
-		switch th.Status {
-		case HealthHealthy:
-			statusStr = "healthy"
-		case HealthUnstable:
-			statusStr = "unstable"
-		case HealthBurned:
-			statusStr = "burned"
-		}
 		listeners = append(listeners, listenerDetail{
 			Target:           id,
 			Scheme:           th.Target.Scheme,
 			Host:             th.Target.Host,
 			Port:             th.Target.Port,
-			Status:           statusStr,
+			Status:           circuitBreakerStateName(th.Status),
 			ConsecutiveFails: th.ConsecutiveFails,
 			LastProbe:        th.LastProbe.Format(time.RFC3339),
 			FailReasons:      th.FailReasons,
@@ -119,20 +110,24 @@ func (s *Server) handleAPICircuitBreakerReset(c *gin.Context) {
 	}
 
 	cb.mu.Lock()
-	if th, ok := cb.targets[listenerID]; ok {
-		th.ConsecutiveFails = 0
-		th.FailReasons = nil
-		th.Status = HealthUnknown
-	} else {
+	th, ok := cb.targets[listenerID]
+	if !ok {
 		cb.mu.Unlock()
 		respondError(c, http.StatusNotFound, "listener not found")
 		return
 	}
+	// The event must record the state the listener was actually in: resetting
+	// a healthy listener is not a recovery from "burned", and an event row that
+	// claims otherwise is what operators triage from.
+	oldState := circuitBreakerStateName(th.Status)
+	th.ConsecutiveFails = 0
+	th.FailReasons = nil
+	th.Status = HealthUnknown
 	cb.mu.Unlock()
 
 	if err := s.db.Create(&db.CircuitBreakerEvent{
 		ListenerID: listenerID,
-		OldState:   "burned",
+		OldState:   oldState,
 		NewState:   "unknown",
 		Reason:     "manual reset by operator",
 		CreatedAt:  time.Now(),
@@ -167,17 +162,7 @@ func (s *Server) handleAPICircuitBreakerToggle(c *gin.Context) {
 		return
 	}
 
-	var oldState string
-	switch th.Status {
-	case HealthHealthy:
-		oldState = "healthy"
-	case HealthUnstable:
-		oldState = "unstable"
-	case HealthBurned:
-		oldState = "burned"
-	default:
-		oldState = "unknown"
-	}
+	oldState := circuitBreakerStateName(th.Status)
 
 	var newState string
 	switch strings.ToLower(strings.TrimSpace(req.State)) {
