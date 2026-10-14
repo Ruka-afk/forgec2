@@ -49,9 +49,13 @@ func (p aiPrincipal) hasPermission(database *gorm.DB, permission string) bool {
 }
 
 func (s *Server) currentAIPrincipal(c *gin.Context) (aiPrincipal, bool) {
-	username, _ := c.Get("user")
-	role, _ := c.Get("user_role")
-	p := aiPrincipal{Username: fmt.Sprint(username), Role: fmt.Sprint(role)}
+	// GetString (not Get + fmt.Sprint): a missing key must read as "" so the
+	// role falls back to the stored user role. fmt.Sprint(nil) would produce
+	// the literal "<nil>", which never matches a role and silently denies the
+	// whole AI surface to any request the middleware left unannotated.
+	username := c.GetString("user")
+	role := c.GetString("user_role")
+	p := aiPrincipal{Username: username, Role: role}
 	if p.Username == "" {
 		return p, false
 	}
