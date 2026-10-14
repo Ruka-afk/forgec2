@@ -470,6 +470,9 @@ func (s *Server) handleSaveMalleableProfile(c *gin.Context) {
 }
 
 func (s *Server) handlePurgeTasks(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	daysStr := c.PostForm("days")
 	days, err := strconv.Atoi(daysStr)
 	if err != nil || days < 1 {
@@ -491,6 +494,9 @@ func (s *Server) handlePurgeTasks(c *gin.Context) {
 }
 
 func (s *Server) handlePurgeAuditLogs(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	daysStr := c.PostForm("days")
 	days, err := strconv.Atoi(daysStr)
 	if err != nil || days < 1 {
