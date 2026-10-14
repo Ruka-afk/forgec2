@@ -31,6 +31,9 @@ func (s *Server) handleListSIEMRules(c *gin.Context) {
 }
 
 func (s *Server) handleCreateSIEMRule(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	var req siemRuleInput
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, "Invalid request body")
@@ -57,12 +60,26 @@ func (s *Server) handleCreateSIEMRule(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Create SIEM rule"))
 		return
 	}
+	// SIEMRule.Enabled carries `gorm:"default:true"`, and GORM substitutes the
+	// column default for a zero value on insert — so an explicit
+	// enabled:false was silently stored as true and an operator could not create
+	// a paused rule. Write the flag back when it was deliberately given as false.
+	if !enabled {
+		if err := s.db.Model(&db.SIEMRule{}).Where("id = ?", rule.ID).Update("enabled", false).Error; err != nil {
+			respondError(c, http.StatusInternalServerError, sanitizeError(err, "Create SIEM rule"))
+			return
+		}
+		rule.Enabled = false
+	}
 	s.reloadSIEMRules()
 	s.LogAuditRecord(c, "siem_rule_create", "siem", rule.Name, "SIEM correlation rule created", true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "rule": rule})
 }
 
 func (s *Server) handleUpdateSIEMRule(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	var rule db.SIEMRule
 	if err := s.db.First(&rule, c.Param("id")).Error; err != nil {
 		respondError(c, http.StatusNotFound, "Rule not found")
@@ -96,6 +113,9 @@ func (s *Server) handleUpdateSIEMRule(c *gin.Context) {
 }
 
 func (s *Server) handleToggleSIEMRule(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	var rule db.SIEMRule
 	if err := s.db.First(&rule, c.Param("id")).Error; err != nil {
 		respondError(c, http.StatusNotFound, "Rule not found")
@@ -112,6 +132,9 @@ func (s *Server) handleToggleSIEMRule(c *gin.Context) {
 }
 
 func (s *Server) handleDeleteSIEMRule(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	var rule db.SIEMRule
 	if err := s.db.First(&rule, c.Param("id")).Error; err != nil {
 		respondError(c, http.StatusNotFound, "Rule not found")
