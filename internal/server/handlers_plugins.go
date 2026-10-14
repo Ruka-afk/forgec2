@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -127,6 +128,75 @@ func (s *Server) handlePluginReport(c *gin.Context) {
 	})
 }
 
+// pluginInstallStaging is a write-ahead record for one install request, so a
+// rejected plugin never leaves its package behind on disk.
+//
+// A rejected manifest used to leave manifest.yaml and the uploaded script in
+// the plugin directory after Register() failed, and tryRegisterPluginFromDisk
+// would later pick them up — a package the trust layer had explicitly refused
+// could still be activated. cleanup() rolls the filesystem back: files this
+// request created are removed, and files this request overwrote are restored to
+// their previous bytes, so reinstalling an existing plugin can never destroy it.
+type pluginInstallStaging struct {
+	pluginDir string
+	entries   []stagedFile
+
+	dirCreated bool
+}
+
+// stagedFile is one path this request wrote, with the bytes that were there
+// before (when it already existed).
+type stagedFile struct {
+	path    string
+	prior   []byte
+	existed bool
+}
+
+// writeFile records and writes a file, remembering what was there before.
+func (st *pluginInstallStaging) writeFile(path string, data []byte, perm os.FileMode) error {
+	var prior []byte
+	if existing, err := os.ReadFile(path); err == nil {
+		prior = existing
+	}
+	entry := stagedFile{path: path}
+	if prior != nil {
+		entry.existed = true
+		entry.prior = prior
+	}
+	if err := os.WriteFile(path, data, perm); err != nil {
+		return err
+	}
+	st.entries = append(st.entries, entry)
+	return nil
+}
+
+// cleanup rolls back every file this request wrote. The plugin directory is
+// removed only when this request created it and it is empty afterwards, so a
+// rejected reinstall cannot delete the directory an existing plugin lives in.
+func (st *pluginInstallStaging) cleanup() {
+	for _, entry := range st.entries {
+		if entry.existed {
+			if err := os.WriteFile(entry.path, entry.prior, 0600); err != nil && !errors.Is(err, os.ErrNotExist) {
+				slog.Warn("Plugin install: failed to restore overwritten file", "path", entry.path, "err", err)
+			}
+			continue
+		}
+		if err := os.Remove(entry.path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			slog.Warn("Plugin install: failed to remove staged file", "path", entry.path, "err", err)
+		}
+	}
+	if !st.dirCreated {
+		return
+	}
+	entries, err := os.ReadDir(st.pluginDir)
+	if err != nil || len(entries) > 0 {
+		return
+	}
+	if err := os.Remove(st.pluginDir); err != nil && !errors.Is(err, os.ErrNotExist) {
+		slog.Warn("Plugin install: failed to remove empty plugin dir", "path", st.pluginDir, "err", err)
+	}
+}
+
 func (s *Server) handlePluginInstall(c *gin.Context) {
 	id := c.Param("id")
 
@@ -172,22 +242,50 @@ func (s *Server) handlePluginInstall(c *gin.Context) {
 		return
 	}
 
-	if strings.ContainsAny(manifest.Name, `/\..`) || manifest.Name == "" {
-		respondError(c, http.StatusBadRequest, "invalid plugin name: must not contain path separators or dots")
+	if strings.ContainsAny(manifest.Name, `/\`) || manifest.Name == "" {
+		respondError(c, http.StatusBadRequest, "invalid plugin name: must not contain path separators")
 		return
 	}
-	if manifest.Entry != "" && strings.ContainsAny(manifest.Entry, `/\..`) {
-		respondError(c, http.StatusBadRequest, "invalid entry point: must not contain path separators or dots")
+	if strings.Contains(manifest.Name, "..") {
+		respondError(c, http.StatusBadRequest, "invalid plugin name: must not contain '..'")
 		return
+	}
+	if manifest.Entry != "" {
+		if strings.ContainsAny(manifest.Entry, `/\`) || strings.Contains(manifest.Entry, "..") {
+			respondError(c, http.StatusBadRequest, "invalid entry point: must be a file inside the plugin directory")
+			return
+		}
+		if filepath.IsAbs(manifest.Entry) {
+			respondError(c, http.StatusBadRequest, "invalid entry point: must not be an absolute path")
+			return
+		}
 	}
 
 	pluginDir := s.pluginManager.PluginDir(manifest.Name)
+	_, statErr := os.Stat(pluginDir)
+	if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+		respondError(c, http.StatusInternalServerError, "failed to inspect plugin directory")
+		return
+	}
+	stage := &pluginInstallStaging{pluginDir: pluginDir, dirCreated: statErr != nil}
+	// fail leaves whatever this request wrote on disk; the caller already sent
+	// the response, so this only cleans up.
+	fail := func(code int, msg string) {
+		stage.cleanup()
+		respondError(c, code, msg)
+	}
+	failSafe := func(code int, err error, fallback string) {
+		stage.cleanup()
+		respondErrorSafe(c, code, err, fallback)
+	}
+
 	if err := os.MkdirAll(pluginDir, 0750); err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create plugin directory")
 		return
 	}
 
-	if err := os.WriteFile(filepath.Join(pluginDir, "manifest.yaml"), manifestData, 0600); err != nil {
+	manifestPath := filepath.Join(pluginDir, "manifest.yaml")
+	if err := stage.writeFile(manifestPath, manifestData, 0600); err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to write manifest")
 		return
 	}
@@ -209,14 +307,17 @@ func (s *Server) handlePluginInstall(c *gin.Context) {
 			respondError(c, http.StatusInternalServerError, "failed to read script")
 			return
 		}
-		if err := os.WriteFile(filepath.Join(pluginDir, manifest.Entry), scriptData, 0600); err != nil {
-			respondError(c, http.StatusInternalServerError, "failed to write script")
+		scriptPath := filepath.Join(pluginDir, manifest.Entry)
+		if err := stage.writeFile(scriptPath, scriptData, 0600); err != nil {
+			fail(http.StatusInternalServerError, "failed to write script")
 			return
 		}
 	}
 
+	// Register rejects bad signatures, unresolvable dependencies and duplicate
+	// names. A rejection must not leave the package on disk.
 	if err := s.pluginManager.Register(&manifest); err != nil {
-		respondErrorSafe(c, http.StatusBadRequest, err, "")
+		failSafe(http.StatusBadRequest, err, "")
 		return
 	}
 
