@@ -3,6 +3,7 @@ package payload
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -28,17 +29,35 @@ func safeBuildFileName(name string) string {
 	return filepath.Base(name)
 }
 
+// stripImportLine removes one tab-indented, single-line import of path and
+// reports whether it was present.
+//
+// The closing bracket of the import block is optional because the import may
+// be alone in its block (`"…credentials"]`) or sit among siblings
+// (`"…credentials"`). Matching the exact current text is what let this guard
+// drift out of sync with transport_utls.go: the matcher expected a bare line
+// while the file ended the block on that same line, so stripUTLSCreds failed on
+// EVERY slim build — blocking the artifact instead of catching a regression.
+func stripImportLine(text, path string) (string, bool) {
+	re := regexp.MustCompile(`(?m)^\t` + regexp.QuoteMeta(`"`+path+`"`) + `\]?\r?\n`)
+	loc := re.FindStringIndex(text)
+	if loc == nil {
+		return text, false
+	}
+	return text[:loc[0]] + text[loc[1]:], true
+}
+
 // stripUTLSCreds removes the grpc-dependent tail and import from a copy of
 // transport_utls.go source. It errors loudly (failing the build) when the
 // marker or import moves, so upstream refactors cannot silently reintroduce
 // the grpc dependency into slim builds.
 func stripUTLSCreds(src []byte) ([]byte, error) {
 	text := string(src)
-	imp := "\t\"google.golang.org/grpc/credentials\"\n"
-	if !strings.Contains(text, imp) {
+	stripped, ok := stripImportLine(text, "google.golang.org/grpc/credentials")
+	if !ok {
 		return nil, fmt.Errorf("slim: grpc credentials import not found in transport_utls.go (refactor?)")
 	}
-	text = strings.Replace(text, imp, "", 1)
+	text = stripped
 	idx := strings.Index(text, utlsCredsMarker)
 	if idx < 0 {
 		return nil, fmt.Errorf("slim: utlsCreds marker not found in transport_utls.go (refactor?)")
@@ -46,8 +65,10 @@ func stripUTLSCreds(src []byte) ([]byte, error) {
 	text = text[:idx]
 	// The grpc tail was the only user of fmt in this file; drop the import
 	// so the slim copy still compiles (verified by TestSmokeSlimWindowsEXE).
-	if strings.Contains(text, "\t\"fmt\"\n") && !strings.Contains(text, "fmt.") {
-		text = strings.Replace(text, "\t\"fmt\"\n", "", 1)
+	if !strings.Contains(text, "fmt.") {
+		if trimmed, ok := stripImportLine(text, "fmt"); ok {
+			text = trimmed
+		}
 	}
 	return []byte(text), nil
 }
