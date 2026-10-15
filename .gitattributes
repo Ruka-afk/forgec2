@@ -3,3 +3,12 @@
 # byte-compare against the LF build output always reports stale.
 /internal/webdist/dist/** -text
 /frontend/out/** -text
+# Same reasoning, different byte-comparers: check-permissions.mjs and
+# check-openapi-types.mjs both compare the committed file against freshly
+# generated output with a raw string/sha256 compare. Both generators emit LF, so
+# a CRLF checkout (core.autocrlf=true) always reports "stale" on Windows even
+# when the content is identical. These two are committed with LF, so marking
+# them -text keeps the checkout byte-identical to the blob. On Linux this is a
+# no-op.
+frontend/src/lib/permission-keys.ts -text
+frontend/src/lib/api-schema.d.ts -text

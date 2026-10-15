@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { describeProcessSnapshot } from "../components/process-snapshot";
+import { describeProcessSnapshot } from "@/lib/process-snapshot";
 import { usePersistedState } from "@/lib/hooks/usePersistedState";
 
 export function useAgentProcessTree(agentId: string, emptyMessage: string, errorMessage: string, persistKey?: string) {

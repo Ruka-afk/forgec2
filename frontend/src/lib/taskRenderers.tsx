@@ -11,7 +11,7 @@ import type { ComponentType } from "react";
 import { RefreshCw, ShieldAlert, Monitor, Package, Network, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { parsePsRows } from "@/pages/agents/detail/components/process-snapshot";
+import { parsePsRows } from "@/lib/process-snapshot";
 
 interface TaskRendererProps {
   /** Raw result payload exactly as stored on the task row. */

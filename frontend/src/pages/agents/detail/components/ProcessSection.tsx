@@ -11,7 +11,7 @@ import { useI18n } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { Pause, Play, RefreshCw, Skull, Terminal } from "lucide-react";
-import { parsePsRows } from "./process-snapshot";
+import { parsePsRows } from "@/lib/process-snapshot";
 
 interface ProcessSectionProps {
   agentId: string;
