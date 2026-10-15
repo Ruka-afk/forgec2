@@ -20,8 +20,9 @@ ForgeC2 is a mature Go (net/http + sqlite) C2 server plus a Vite + React TypeScr
 The frontend is **Vite** (not Next.js).
 - Build: `npm run dev` for dev; production: `npm run build` → outputs to `frontend/out`.
 - Frontend is embedded into the Go server via `//go:embed all:dist` in `internal/webdist/webdist.go`, which embeds the directory `internal/webdist/dist`.
-- **Canonical sync script**: `scripts/build-embedded.ps1` (uses `Remove-Item` + `Copy-Item -Recurse frontend/out/*` → `internal/webdist/dist`; includes assets). Use this, NOT robocopy directly.
+- **Canonical sync script**: `scripts/build-embedded.ps1` (uses `Remove-Item` + `Copy-Item -Recurse frontend/out/*` → `internal/webdist/dist`; includes assets; runs `scripts/normalize-webdist.mjs` afterwards). Use this, NOT robocopy directly.
 - After syncing, verify with `scripts/check-webdist.mjs` (expects "OK: matches frontend/out").
+- **Check out with LF line endings.** CI builds the bundle on Linux and compares it byte for byte, so the committed `internal/webdist/dist` must come from an LF checkout. With `core.autocrlf=true`, `frontend/index.html` is CRLF and vite's static export re-converts the newlines, emitting a doubled CR (`\r\r\n`) that no amount of normalization removes. `check-webdist.mjs` detects exactly that case and prints the fix; the short version is `git config core.autocrlf false` in this clone, then re-checkout and rebuild.
 
 ## Frontend verification
 Run from `frontend/`:

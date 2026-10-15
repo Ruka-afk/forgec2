@@ -45,6 +45,18 @@ function sha256(file) {
   return createHash("sha256").update(buf).digest("hex");
 }
 
+// Hash with every CR dropped. CRLF-normalizing is not enough to make a Windows
+// checkout comparable: vite's static export re-converts the template's newlines,
+// so a CRLF template yields a doubled CR ("\r\r\n") that survives replaceAll of
+// "\r\n". Dropping all CRs is the loosest question we can ask before calling a
+// difference real.
+function crHash(file) {
+  const buf = readFileSync(file);
+  return createHash("sha256")
+    .update(Buffer.from(buf.toString("utf8").replaceAll("\r", ""), "utf8"))
+    .digest("hex");
+}
+
 function walk(dir) {
   const map = new Map();
   const stack = [dir];
@@ -56,7 +68,11 @@ function walk(dir) {
         stack.push(abs);
       } else {
         const rel = relative(dir, abs).split(sep).join("/");
-        map.set(rel, { hash: sha256(abs) });
+        const isText = TEXT_EXT.has(extname(abs).toLowerCase());
+        map.set(rel, {
+          hash: sha256(abs),
+          crHash: isText ? crHash(abs) : "",
+        });
       }
     }
   }
@@ -74,20 +90,48 @@ try {
 }
 
 const stale = [];
+const eolOnly = [];
 for (const [rel, meta] of out) {
   const d = dist.get(rel);
   if (!d) {
     stale.push(`missing: ${rel}`);
   } else if (d.hash !== meta.hash) {
-    stale.push(`changed: ${rel}`);
+    // A text file can differ only because the checkout is CRLF. That is a
+    // checkout problem, not a stale bundle, and it needs a different fix —
+    // saying "changed: 404.html" sends people hunting for a nonexistent
+    // content drift.
+    if (TEXT_EXT.has(extname(rel).toLowerCase()) && crHash(join(outDir, rel)) === d.crHash) {
+      eolOnly.push(rel);
+    } else {
+      stale.push(`changed: ${rel}`);
+    }
   }
 }
 for (const rel of dist.keys()) {
   if (!out.has(rel)) stale.push(`orphan: ${rel}`);
 }
 
-if (stale.length) {
-  console.error(`FAIL: internal/webdist/dist is stale (${stale.length} diff(s)).`);
+if (stale.length || eolOnly.length) {
+  console.error(`FAIL: internal/webdist/dist is stale (${stale.length + eolOnly.length} diff(s)).`);
+  if (eolOnly.length) {
+    console.error("");
+    console.error(
+      `${eolOnly.length} file(s) differ ONLY in carriage returns — the bundle is current,`,
+    );
+    console.error(
+      "but this checkout has CRLF sources. On Windows a core.autocrlf=true checkout makes",
+    );
+    console.error(
+      "frontend/index.html CRLF, and vite's static export then emits a doubled CR (\\r\\r\\n).",
+    );
+    console.error("CI builds on Linux, so a CRLF-built bundle does not match it.");
+    console.error("");
+    console.error("Fix: check out with LF line endings, then rebuild:");
+    console.error("  git config core.autocrlf false");
+    console.error("  git rm -r --cached . && git reset --hard   # or re-clone");
+    console.error("  powershell -File scripts/build-embedded.ps1");
+    console.error("");
+  }
   console.error("Run from repo root:  powershell -File scripts/build-embedded.ps1  (or refresh dist only)");
   for (const line of stale.slice(0, 40)) console.error(`  - ${line}`);
   if (stale.length > 40) console.error(`  ... and ${stale.length - 40} more`);
