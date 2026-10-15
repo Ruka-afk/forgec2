@@ -260,6 +260,15 @@ jobs:
         run: npm run check:pre
       - run: npm run check:bundle
       - run: npm test
+      # Ratcheting floor: today 14.26% of statements in src/ (8084/56699).
+      # It reads low because most uncovered code is page components no test
+      # imports at all, not a missed branch inside a tested file. Raise this
+      # whenever tests are added; lower it only as part of that same change,
+      # never to make a regression pass. The Go job has an equivalent floor.
+      - name: Frontend coverage floor
+        run: |
+          npm run test:coverage
+          npm run check:coverage
       - run: npm run build
       - name: Webdist freshness (internal/webdist/dist must match export)
         run: node ../scripts/check-webdist.mjs
