@@ -4,8 +4,8 @@ Thank you for your interest in contributing to ForgeC2. This document outlines t
 
 ## Prerequisites
 
-- **Go 1.25+**
-- **Node.js 20+**
+- **Go 1.26+**
+- **Node.js 20.19+**
 - **PowerShell** (Windows) or **Bash** (Linux/macOS)
 - **Docker** (optional, for containerized builds)
 - **Git**

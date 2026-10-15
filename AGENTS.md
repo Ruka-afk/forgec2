@@ -43,7 +43,7 @@ go test ./internal/config/... ./internal/crypto/... ./internal/db/... ./internal
 
 ## Build caveats
 - `go build ./...` passes (the `data/e2e/` helpers have `//go:build ignore` tags).
-- Go version: **1.25.0** (go.mod).
+- Go version: **1.26.0** (go.mod) with `toolchain go1.26.9` pinned for the standard-library security patches (net/http, crypto/tls, html/template, net/textproto).
 - sqlite driver is **`github.com/glebarez/sqlite`** (pure Go, no cgo). Any DB-verification temp program MUST use this driver, NOT `gorm.io/driver/sqlite` (which needs cgo).
 
 ## CSRF Protection (IMPORTANT)

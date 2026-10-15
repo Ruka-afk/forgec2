@@ -49,7 +49,7 @@ Open `http://localhost:8000` — on first boot the server prints a freshly gener
 ```bash
 git clone https://github.com/Ruka-afk/forgec2.git && cd forgec2
 
-# requires Go 1.25+ and Node.js 20+
+# requires Go 1.26+ (toolchain go1.26.9) and Node.js 20.19+
 powershell -File scripts/build-embedded.ps1   # frontend → embedded → binary
 
 # one-line comprehensive verify + build + deploy (auto-fix, skip heavy)

@@ -197,4 +197,4 @@ services:
       - ./data:/app/data
 ```
 
-3-stage build: Node 20 (frontend) → Go 1.25 (backend with embedded FS) → distroless static (runtime)
+3-stage build: Node 20.19 (frontend) → Go 1.26 (backend with embedded FS) → distroless static (runtime)

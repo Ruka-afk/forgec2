@@ -49,7 +49,7 @@ chmod +x forgec2-server-linux-amd64
 ```bash
 git clone https://github.com/Ruka-afk/forgec2.git && cd forgec2
 
-# 需要 Go 1.25+ 和 Node.js 20+
+# 需要 Go 1.26+（toolchain go1.26.9）和 Node.js 20.19+
 powershell -File scripts/build-embedded.ps1   # 前端 → 内嵌 → 二进制
 
 # 一行全验证 + 构建 + 部署（自动修、跳重型）
