@@ -1,4 +1,8 @@
 name: CI
+
+# Actions are pinned to full commit SHAs (supply-chain hygiene: a moved tag
+# cannot change what runs). Dependabot updates the SHA along with the trailing
+# version comment — do not replace them with floating tags.
 on:
   push:
     branches: [main, dev]
@@ -12,10 +16,10 @@ jobs:
   go:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: '1.26'
           cache: true
@@ -53,7 +57,7 @@ jobs:
           fi
       - name: Upload vet output
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: vet-output
           path: vet.err
@@ -119,8 +123,8 @@ jobs:
     name: Race detector (concurrency-sensitive packages)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: '1.26'
           cache: true
@@ -139,8 +143,8 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: '1.26'
           cache: true
@@ -152,7 +156,7 @@ jobs:
         run: go test ./internal/server/ -run='^$' -fuzz=FuzzDecodeBeaconIdentity -fuzztime=60s
       - name: Fuzz malleable transforms
         run: go test ./internal/malleable/ -run='^$' -fuzz=FuzzTransformChainDecode -fuzztime=60s
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
         with:
           name: fuzz-crashers
@@ -164,7 +168,7 @@ jobs:
     name: Docker build + compose validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Validate compose files
         env:
           # The production overlay requires an explicit JWT secret and the
@@ -182,8 +186,8 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: '1.26'
           cache: true
@@ -204,13 +208,13 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # --new-from-rev=HEAD~ diffs the tip commit against its parent.
           fetch-depth: 2
       # golangci-lint v2: .golangci.yml declares `version: "2"`, and only
       # action v7+ can download/drive a v2 binary.
-      - uses: golangci/golangci-lint-action@v9
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.14.0  # pinned; bump deliberately after validating a new release
           # Ratchet, not a cleanup. Years of invalid config meant this gate
@@ -224,8 +228,8 @@ jobs:
   security:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: '1.26'
           cache: true
@@ -236,11 +240,11 @@ jobs:
   secrets:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
       - name: Run gitleaks
-        uses: gitleaks/gitleaks-action@v2.1.0
+        uses: gitleaks/gitleaks-action@aa6c132071730e14d28e89080e0adeebc4df4512 # v2.1.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -250,8 +254,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '20'
           cache: 'npm'
@@ -304,7 +308,7 @@ jobs:
       - name: Webdist freshness (internal/webdist/dist must match export)
         run: node ../scripts/check-webdist.mjs
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-chromium-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
@@ -317,13 +321,13 @@ jobs:
     name: Live UI e2e (real Go server)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: '1.26'
           cache: true
           cache-dependency-path: go.sum
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '20'
           cache: 'npm'
@@ -351,7 +355,7 @@ jobs:
           done
           curl -sf http://127.0.0.1:8000/health || { cat "$RUNNER_TEMP/server.log"; exit 1; }
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-live-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
