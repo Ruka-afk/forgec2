@@ -51,8 +51,19 @@ func artifactValidationError(format string, a ...any) error {
 
 // normalizeEntryPoint maps the operator-facing entry point names to the
 // loader's execution techniques. "thread" and "call" are aliases (threaded
-// execution); "tls" has no loader implementation and is rejected rather than
-// silently ignored.
+// execution); "tls" is rejected rather than silently ignored.
+//
+// Why "tls" is unimplemented by design: a PE TLS entry point
+// (IMAGE_DIRECTORY_ENTRY_TLS) calls its callback while the image initializes,
+// before the CRT and the Go runtime start. This loader is a Go binary — the
+// Go linker cannot emit a TLS directory, and a callback cannot call into Go
+// before the runtime is initialized. Supporting the technique would mean
+// hand-writing a position-independent x86-64 stub that walks the PEB, resolves
+// its own imports, decodes and executes the blob: a second loader whose
+// Windows execution behavior no Linux CI runner can validate. EPTLS therefore
+// survives only as a defensive rejection (callers that bypass the OpenAPI enum
+// get a 400 instead of a broken artifact), and the advertised options list
+// deliberately omits it.
 func normalizeEntryPoint(name string, fallback EntryPointTechnique) (string, error) {
 	v := EntryPointTechnique(name)
 	if v == "" {
