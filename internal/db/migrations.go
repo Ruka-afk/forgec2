@@ -1139,6 +1139,78 @@ var indexMigrations = []*gormigrate.Migration{
 			return nil
 		},
 	},
+	// ── Hot-path indexes for read shapes the earlier migrations missed ──
+	// Every index below was picked by EXPLAIN QUERY PLAN against the real
+	// handler query, not by guessing at columns. Each one replaced either a
+	// full scan plus a temp b-tree sort, or a non-covering search that still
+	// fetched every matching row.
+	//
+	// Deliberately NOT included (measured, plan unchanged):
+	//   - alert_rules(created_at): handleGetAlertRules already seeks
+	//     idx_alert_rules_tenant_id; a second index changed nothing.
+	//   - credential_usages(credential_id, created_at): the vault page loads
+	//     the model (SELECT *), so the composite never became covering. The
+	//     real cost there is the unbounded row count, not the sort.
+	//   - network_hosts(agent_id, last_seen): the topology view filters with
+	//     `agent_id IN (SELECT id FROM implants WHERE tenant_id = ?)` and
+	//     SQLite still sorts. The composite only removed the b-tree for a
+	//     literal `agent_id = ?`, a shape no handler emits.
+	{
+		ID: "2026-10-15-hot-path-read-indexes",
+		Migrate: func(tx *gorm.DB) error {
+			// metric_alerts evaluates the failure rate every
+			// defaultAlertEvalInterval (30s) as
+			// `status IN ('completed','failed') AND updated_at > ?`.
+			// idx_tasks_status alone located the candidate rows and then read
+			// updated_at off every one of them, so the cost grew with all of
+			// history rather than with the window.
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_tasks_status_updated ON tasks(status, updated_at)", "idx_tasks_status_updated")
+			// The AI task tool's creator filter (`created_by = 'ai'`) plus
+			// `ORDER BY created_at DESC`. tasks has 24 indexes and none led
+			// with created_by, so this scanned idx_tasks_created_at instead.
+			// The `NOT IN ('ai','automation','system')` branch cannot seek this
+			// index and keeps its previous plan.
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_tasks_created_by_created ON tasks(created_by, created_at)", "idx_tasks_created_by_created")
+			// handleGetAlerts is tenant-scoped and orders by created_at DESC; the
+			// tenant index alone forced a temp b-tree sort per request.
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_alerts_tenant_created ON alerts(tenant_id, created_at DESC)", "idx_alerts_tenant_created")
+			// The notification inbox's `severity = ?` filter had no index, and
+			// with `read` unset neither (read, created_at) nor (type, read)
+			// applies, so a filtered inbox scanned the whole table.
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_notifications_severity_created ON notifications(severity, created_at DESC)", "idx_notifications_severity_created")
+			// Token lists (per-agent page and global list) order by created_at
+			// DESC; idx_token_entries_agent_active sorts afterwards.
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_token_entries_agent_created ON token_entries(agent_id, created_at DESC)", "idx_token_entries_agent_created")
+			// Build log filters: platform (ops list) and status+window
+			// (effectiveness report).
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_build_logs_platform_created ON build_logs(platform, created_at DESC)", "idx_build_logs_platform_created")
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_build_logs_status_created ON build_logs(status, created_at DESC)", "idx_build_logs_status_created")
+			// Chat history is one ascending window per channel.
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_chat_messages_channel_created ON chat_messages(channel, created_at)", "idx_chat_messages_channel_created")
+			// Session and API-key lists: both are per-user and order by
+			// created_at DESC; only user_id was indexed.
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_user_sessions_user_created ON user_sessions(user_id, created_at DESC)", "idx_user_sessions_user_created")
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_api_keys_user_created ON api_keys(user_id, created_at DESC)", "idx_api_keys_user_created")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			for _, idx := range []string{
+				"idx_tasks_status_updated",
+				"idx_tasks_created_by_created",
+				"idx_alerts_tenant_created",
+				"idx_notifications_severity_created",
+				"idx_token_entries_agent_created",
+				"idx_build_logs_platform_created",
+				"idx_build_logs_status_created",
+				"idx_chat_messages_channel_created",
+				"idx_user_sessions_user_created",
+				"idx_api_keys_user_created",
+			} {
+				execMigration(tx, "DROP INDEX IF EXISTS "+idx, "drop_"+idx)
+			}
+			return nil
+		},
+	},
 }
 
 // Migrations is the combined migration history, kept for tooling and tests.
