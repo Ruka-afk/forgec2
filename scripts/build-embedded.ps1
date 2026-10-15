@@ -82,6 +82,16 @@ try {
         Rename-Item -Path "internal/webdist/dist.new" -NewName "dist"
     }
 
+    # 2.4b. Normalize CRLF -> LF in the embedded bundle. A Windows build emits
+    # CRLF inside generated .html/.css (vite's static export copies the line
+    # endings of frontend/index.html, which a core.autocrlf checkout made
+    # CRLF); Linux emits LF. The committed dist must be LF or CI's byte
+    # comparison against its own Linux build fails on every HTML page.
+    # Normalizing here reproduces the Linux artifact byte for byte, so the
+    # bundle is the same no matter which OS built it. No-op on Linux.
+    node scripts/normalize-webdist.mjs
+    if ($LASTEXITCODE -ne 0) { throw "webdist line-ending normalization failed" }
+
     # 2.5. Validate source contracts, the freshly-built bundle and the embedded
     # copy together before compiling or restarting the backend.
     Write-Host "==> Checking frontend consistency..." -ForegroundColor Cyan
