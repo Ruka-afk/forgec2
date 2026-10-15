@@ -28,6 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Beacon resync no longer answers unauthenticated frames while the server still holds that agent's session (UUID-existence oracle / response amplifier); AEAD-verified replays and genuinely lost sessions still receive the resync + rekey
 - Plugin execution is fail-closed: a process guard that cannot be attached now kills the plugin and refuses the run, `Cmd.WaitDelay` bounds `Wait` when a grandchild holds the output pipes, the guard is released as soon as the context fires, and manifest timeouts are clamped to a 300s server ceiling
 - Goja scripts can no longer `require()` host modules (deny-all source loader; `console` still available), script source is capped at 1 MiB, and top-level/event execution is time-bounded (10s parse / 30s callback)
+- GitHub Actions are pinned to immutable commit SHAs and every Dockerfile/compose base image to a multi-arch digest (the human version stays in a comment and Dependabot still raises update PRs), removing the mutable-tag supply-chain gap
 
 ### Fixed
 
@@ -44,9 +45,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Built-in database backup/restore/VACUUM are explicitly SQLite-only: on other drivers the endpoints answer `501` with guidance (use `pg_dump`/`pgBackRest`) and the scheduled backup job stays disabled instead of failing cryptically
 - CI: `internal/scripting` + `cmd` packages are now part of the test run, a 33% statement-coverage floor is enforced (current total ~35%), a dedicated `-race` job covers server/plugin/scripting/agent/db, a weekly fuzz campaign exercises the beacon and malleable fuzz targets, and a new job validates all compose files plus the production overlay and builds the image
 - Release: CycloneDX SBOM (`forgec2-server-linux-amd64.sbom.json`) and SLSA-style build provenance attestations ship with tag releases, and release notes are lifted from the matching `CHANGELOG.md` section
-
-### Known limitations
-- GitHub Actions and container base images are still referenced by mutable tags (Dependabot tracks them); pinning to commit SHAs/digests is the remaining supply-chain step.
+- The fleet kill-switch endpoint now dispatches to enrolled agents in one batched insert instead of per-agent round trips (measured ≈2× faster and ≈4× fewer allocations at 1,000 agents); pending caps, tenant inheritance, escalation flags and the uninstall counter behave exactly as before
+- CI: the golangci-lint gate runs as an incremental ratchet (`fetch-depth: 2` + `--new-from-rev=HEAD~`) so new code is held to the standard while existing debt shrinks, the frontend gate enforces visual baselines on Linux and a measured coverage floor, and the smoke suite no longer asserts retired static routes
 
 ## [2.6.2] - 2026-09-24
 
