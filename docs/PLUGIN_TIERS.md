@@ -4,7 +4,7 @@ Plugins are executable code. ForgeC2 therefore treats them in two tiers:
 
 | Tier | `interpreter:` | Isolation | Use for |
 |------|----------------|-----------|---------|
-| Native (trusted) | `python`, `python3`, `powershell`, `pwsh`, `bash`, `sh`, `go` | child process: minimal env, sanitized absolute-only `PATH`, per-run process group / Windows Job Object, 300s server timeout ceiling, capped stdout/stderr | bundled plugins and code you authored |
+| Native (trusted) | `python`, `python3`, `powershell`, `pwsh`, `bash`, `sh`, `go` | child process: minimal env, sanitized absolute-only `PATH`, per-run process group / Windows Job Object, 300s server timeout ceiling, CPU-time budget (default 120s, Linux/Windows), capped stdout/stderr | bundled plugins and code you authored |
 | WASM (untrusted) | `wasm` | wazero runtime: **no WASI**, no filesystem/network/env, 16 MiB linear-memory cap, wall-clock timeout, capped logs and result | third-party or downloaded plugins |
 
 A native plugin runs with the team server account's reach — env scrubbing and
@@ -85,7 +85,16 @@ plugins:
   trusted_keys: ["<bundled-or-your-pubkey-hex>"]  # or FORGEC2_PLUGIN_TRUSTED_KEYS
   require_signed: true                            # refuse unsigned packages
   max_concurrent: 4                               # simultaneous plugin processes
+  max_cpu_seconds: 120                            # CPU-time budget per run (Linux/Windows)
 ```
+
+`max_cpu_seconds` bounds the CPU time one native run may burn across its whole
+process tree (Windows: Job Object accounting; Linux: process-group sampling of
+`/proc`). The watchdog samples once a second, so a spinning plugin is killed
+within about a second of exhausting the budget and the run fails with an
+explicit CPU-budget error instead of a wall-clock timeout. Platforms without
+CPU accounting (macOS) log once and stay bounded by the 300s timeout; the WASM
+tier remains wall-clock bounded only.
 
 Changing any bundled plugin file (or `lib/`) without re-signing makes the server
 refuse to load it — that is the point, and `go test ./internal/plugin/` fails

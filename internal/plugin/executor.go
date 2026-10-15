@@ -27,13 +27,49 @@ type executor struct {
 	// slots bounds concurrent plugin processes; nil means the executor runs
 	// without a quota (used by tests that exercise a single run).
 	slots chan struct{}
+	// cpuQuota bounds the CPU time one native plugin run may burn across its
+	// process tree before the tree is killed; zero disables the watchdog.
+	cpuQuota time.Duration
 }
 
 func newExecutor(maxConcurrent int) *executor {
 	if maxConcurrent <= 0 {
 		maxConcurrent = defaultMaxConcurrentPlugins
 	}
-	return &executor{slots: make(chan struct{}, maxConcurrent)}
+	return &executor{
+		slots:    make(chan struct{}, maxConcurrent),
+		cpuQuota: defaultPluginCPUQuota,
+	}
+}
+
+// withMaxConcurrent returns an executor with a new concurrency cap that keeps
+// the current CPU budget. Like the previous implementation it swaps the slot
+// channel, so runs already in flight keep the old cap until they finish.
+func (e *executor) withMaxConcurrent(maxConcurrent int) *executor {
+	if maxConcurrent <= 0 {
+		maxConcurrent = defaultMaxConcurrentPlugins
+	}
+	next := &executor{
+		slots:    make(chan struct{}, maxConcurrent),
+		cpuQuota: defaultPluginCPUQuota,
+	}
+	if e != nil && e.cpuQuota > 0 {
+		next.cpuQuota = e.cpuQuota
+	}
+	return next
+}
+
+// withCPUQuota returns an executor with a new CPU budget that keeps the
+// current concurrency cap, sharing its slot channel.
+func (e *executor) withCPUQuota(quota time.Duration) *executor {
+	if quota <= 0 {
+		return e
+	}
+	next := &executor{cpuQuota: quota}
+	if e != nil {
+		next.slots = e.slots
+	}
+	return next
 }
 
 // acquire reserves an execution slot, honouring ctx cancellation so a saturated
@@ -268,8 +304,22 @@ func (e *executor) run(ctx context.Context, pluginDir string, m *Manifest, input
 		}
 	}()
 
+	// CPU budget: watchdog the process tree and kill it once the budget is
+	// spent. Sampled (see cpuQuotaPollInterval), so enforcement lands within
+	// one interval of the limit.
+	cpuExceeded := make(chan struct{})
+	if e.cpuQuota > 0 {
+		go watchCPUQuota(guard, e.cpuQuota, guardDone, cpuExceeded)
+	}
+
 	runErr := cmd.Wait()
 	guard.release()
+	killedByCPU := false
+	select {
+	case <-cpuExceeded:
+		killedByCPU = true
+	default:
+	}
 
 	res := &execResult{
 		Stdout: stdout.Bytes(),
@@ -302,6 +352,13 @@ func (e *executor) run(ctx context.Context, pluginDir string, m *Manifest, input
 			return res, fmt.Errorf("plugin %q timed out after %ds: last output: %s", m.Name, timeout, tail)
 		}
 		return res, fmt.Errorf("plugin %q timed out after %ds", m.Name, timeout)
+	}
+	// A CPU-budget kill surfaces here as a non-zero exit on Unix, but a
+	// Windows job close terminates the process with exit code 0, so the
+	// watchdog's verdict — not the exit code — decides. Checked after the
+	// wall-clock branch: if the deadline fired, that is the cause to report.
+	if killedByCPU {
+		return res, fmt.Errorf("plugin %q exceeded its %s CPU budget and was killed", m.Name, e.cpuQuota)
 	}
 	if runErr != nil {
 		stderrText := strings.TrimSpace(string(res.Stderr))

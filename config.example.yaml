@@ -126,6 +126,10 @@ plugins:
   require_signed: true
   # Simultaneously running plugin processes (0 = default 4).
   max_concurrent: 4
+  # CPU-time budget for one native plugin run, summed over its whole process
+  # tree (seconds; 0 = default 120). Countered with the 300s wall-clock
+  # ceiling: a spinning plugin is killed once it burns through this budget.
+  max_cpu_seconds: 120
 
 backup:
   # Encrypted database snapshots (.fbk). Retention used to be a hard-coded 7.

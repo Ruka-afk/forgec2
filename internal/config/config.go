@@ -31,6 +31,10 @@ type Config struct {
 		// MaxConcurrent caps simultaneously running plugin processes across
 		// the server (0 = built-in default).
 		MaxConcurrent int `yaml:"max_concurrent"`
+		// MaxCPUSeconds bounds the CPU time one native plugin run may burn
+		// across its process tree before the tree is killed (0 = built-in
+		// default; the wall-clock ceiling still applies).
+		MaxCPUSeconds int `yaml:"max_cpu_seconds"`
 	} `yaml:"plugins"`
 	Backup struct {
 		// Retain is how many encrypted .fbk snapshots to keep (0 = 7).
@@ -726,7 +730,7 @@ func Load(path string) (*Config, error) {
 	}
 
 	// Plugin trust via env: comma-separated hex Ed25519 public keys, a boolean
-	// strictness switch, and the concurrency ceiling.
+	// strictness switch, the concurrency ceiling, and the CPU-time budget.
 	if envKeys := os.Getenv("FORGEC2_PLUGIN_TRUSTED_KEYS"); envKeys != "" {
 		cfg.Plugins.TrustedKeys = splitAndTrim(envKeys)
 	}
@@ -742,6 +746,13 @@ func Load(path string) (*Config, error) {
 			cfg.Plugins.MaxConcurrent = v
 		} else {
 			slog.Warn("Ignoring FORGEC2_PLUGINS_MAX_CONCURRENT: not a non-negative integer", "value", envConc)
+		}
+	}
+	if envCPU := os.Getenv("FORGEC2_PLUGINS_MAX_CPU_SECONDS"); envCPU != "" {
+		if v, err := strconv.Atoi(envCPU); err == nil && v >= 0 {
+			cfg.Plugins.MaxCPUSeconds = v
+		} else {
+			slog.Warn("Ignoring FORGEC2_PLUGINS_MAX_CPU_SECONDS: not a non-negative integer", "value", envCPU)
 		}
 	}
 

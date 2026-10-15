@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Plugin package trust: manifests may carry a canonical `digest` (`sha256:` over every package file, plus any `includes` shared paths such as `lib/`) and an Ed25519 `signature` over that digest; the server verifies both on load and install, and `plugins.require_signed` turns "unsigned" into a refusal. Generate/verify with the new `cmd/sign-plugin` (`-gen`, `-root`, `-include`, `-verify -key <pubkey>`)
 - The 52 bundled plugins are now signed with a project key whose private half was discarded at release, and `config.example.yaml` ships its public key with `require_signed: true` — so an out-of-the-box install refuses unsigned third-party plugins while the bundled set still loads
 - Plugin execution quota: `plugins.max_concurrent` (default 4, env `FORGEC2_PLUGINS_MAX_CONCURRENT`) bounds simultaneous plugin processes, so event bursts cannot fan out interpreters
+- Plugin CPU budget: `plugins.max_cpu_seconds` (default 120, env `FORGEC2_PLUGINS_MAX_CPU_SECONDS`) kills a native plugin's process tree once it burns that much CPU time, accounted per run across the whole tree (Windows Job Object accounting / Linux process-group `/proc` samples) and reported as an explicit CPU-budget error distinct from the 300s wall-clock timeout; platforms without CPU accounting log once and stay bounded by the timeout, and the WASM tier remains wall-clock bounded only
 
 ### Security
 

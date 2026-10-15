@@ -613,6 +613,9 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	if maxConc := s.cfg.Plugins.MaxConcurrent; maxConc > 0 {
 		s.pluginManager.SetMaxConcurrent(maxConc)
 	}
+	if maxCPU := s.cfg.Plugins.MaxCPUSeconds; maxCPU > 0 {
+		s.pluginManager.SetMaxCPUSeconds(maxCPU)
+	}
 	pluginDir := filepath.Join(s.cfg.Server.DataDir, "plugins")
 	if err := os.MkdirAll(pluginDir, 0750); err != nil {
 		slog.Warn("Failed to create plugin data directory", "dir", pluginDir, "err", err)

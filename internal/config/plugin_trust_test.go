@@ -18,6 +18,7 @@ func TestPluginTrustEnvOverrides(t *testing.T) {
 	t.Setenv("FORGEC2_PLUGIN_TRUSTED_KEYS", " "+pub+" , ")
 	t.Setenv("FORGEC2_PLUGINS_REQUIRE_SIGNED", "true")
 	t.Setenv("FORGEC2_PLUGINS_MAX_CONCURRENT", "7")
+	t.Setenv("FORGEC2_PLUGINS_MAX_CPU_SECONDS", "45")
 
 	cfg, err := Load(path)
 	if err != nil {
@@ -32,11 +33,15 @@ func TestPluginTrustEnvOverrides(t *testing.T) {
 	if cfg.Plugins.MaxConcurrent != 7 {
 		t.Fatalf("max_concurrent = %d, want 7", cfg.Plugins.MaxConcurrent)
 	}
+	if cfg.Plugins.MaxCPUSeconds != 45 {
+		t.Fatalf("max_cpu_seconds = %d, want 45", cfg.Plugins.MaxCPUSeconds)
+	}
 
 	// Bad values are ignored, so the config falls back to its safe defaults
 	// instead of being poisoned by a typo.
 	t.Setenv("FORGEC2_PLUGINS_REQUIRE_SIGNED", "maybe")
 	t.Setenv("FORGEC2_PLUGINS_MAX_CONCURRENT", "-3")
+	t.Setenv("FORGEC2_PLUGINS_MAX_CPU_SECONDS", "-3")
 	cfg2, err := Load(path)
 	if err != nil {
 		t.Fatalf("load 2: %v", err)
@@ -46,6 +51,26 @@ func TestPluginTrustEnvOverrides(t *testing.T) {
 	}
 	if cfg2.Plugins.MaxConcurrent != 0 {
 		t.Fatalf("negative max_concurrent must be ignored, got %d", cfg2.Plugins.MaxConcurrent)
+	}
+	if cfg2.Plugins.MaxCPUSeconds != 0 {
+		t.Fatalf("negative max_cpu_seconds must be ignored, got %d", cfg2.Plugins.MaxCPUSeconds)
+	}
+}
+
+// TestPluginCPUQuotaFromConfigYAML proves the CPU budget can be set from the
+// config file, not only from the environment.
+func TestPluginCPUQuotaFromConfigYAML(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(path, []byte("plugins:\n  max_cpu_seconds: 30\n"), 0600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.Plugins.MaxCPUSeconds != 30 {
+		t.Fatalf("max_cpu_seconds = %d, want 30", cfg.Plugins.MaxCPUSeconds)
 	}
 }
 
@@ -61,5 +86,8 @@ func TestPluginTrustConfigDefaults(t *testing.T) {
 	}
 	if cfg.Plugins.MaxConcurrent != 0 {
 		t.Fatalf("plugins.max_concurrent must default to 0 (built-in default), got %d", cfg.Plugins.MaxConcurrent)
+	}
+	if cfg.Plugins.MaxCPUSeconds != 0 {
+		t.Fatalf("plugins.max_cpu_seconds must default to 0 (built-in default), got %d", cfg.Plugins.MaxCPUSeconds)
 	}
 }

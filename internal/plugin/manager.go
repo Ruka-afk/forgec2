@@ -76,7 +76,18 @@ func (m *Manager) SetMaxConcurrent(n int) {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.exec = newExecutor(n)
+	m.exec = m.exec.withMaxConcurrent(n)
+}
+
+// SetMaxCPUSeconds caps how much CPU time one plugin run may spend across its
+// whole process tree before the tree is killed (0 keeps the built-in default).
+func (m *Manager) SetMaxCPUSeconds(secs int) {
+	if secs <= 0 {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.exec = m.exec.withCPUQuota(time.Duration(secs) * time.Second)
 }
 
 // hookAllowed reports whether a plugin's hook may run. Tripped plugins are
