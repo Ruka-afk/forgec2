@@ -33,6 +33,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- WASM plugins can no longer have their own memory overwritten by the host: the input JSON is written past the module's initial linear memory instead of at a fixed `1024` offset — which is exactly where wasm-ld's default layout puts the data segment of a real C/Rust/TinyGo module — so a module's globals, heap or stack survive until `run()` reads the input through the pointer argument
+- WASM plugins that define no linear memory (or do not export `memory`) are refused with an explicit error instead of crashing the host on wazero's typed-nil `Module.Memory()` interface; the `forgec2.log` import has the same guard
 - WebSocket batch retries no longer silently drop an oversized result: the frame being retried is always retained and only the backlog is trimmed to the 8 MiB cap, so an agent can no longer wait forever on a reply that was discarded
 - `find` and `reg_set` task dispatch no longer returns `400 task type requires 'command' parameter` for valid requests: both now populate the command slot the protocol metadata requires (`find` falls back to the search root when no pattern is supplied, `reg_set` carries `path=value`)
 - Fresh installs from `config.example.yaml` boot again: missing `crypto.loot_key` / `extc2_key` / `backup_key` / `totp_key` / `csrf_key` are generated at startup and persisted (idempotent, env vars win, read-only configs keep working with a warning)

@@ -20,10 +20,13 @@ A module must export:
 (func (export "run") (param i32 i32) (result i32 i32))
 ```
 
-`run(ptr, len)` receives the input JSON, which the host wrote at address
-`1024` (linear memory is grown as needed). It returns `(ptr, len)` locating
-the JSON result anywhere in the module's own memory. The host clamps both to
-the module's memory bounds and to 2 MiB; `(0, 0)` means "no result".
+`run(ptr, len)` receives the input JSON through its arguments: the host writes
+the input past the module's initial linear memory (growing memory as needed),
+so the module's own data — globals, heap, stack, wherever its toolchain placed
+them — can never be overwritten by the input. Always read it through `ptr`
+rather than assuming an address. `run` returns `(ptr, len)` locating the JSON
+result anywhere in the module's own memory. The host clamps both to the
+module's memory bounds and to 2 MiB; `(0, 0)` means "no result".
 
 Optional import (module `forgec2`):
 

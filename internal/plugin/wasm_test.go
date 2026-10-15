@@ -31,14 +31,27 @@ func wasmULEB(n uint32) []byte {
 	}
 }
 
+// wasmSLEB encodes n as signed LEB128, the encoding i32.const operands use.
+// An unsigned encoding of a value whose top 7-bit group has bit 6 set decodes
+// as a negative number (e.g. 66 encodes as 0x42, which i32.const reads as -62),
+// so constants must not go through wasmULEB.
+func wasmSLEB(n int32) []byte {
+	var out []byte
+	for {
+		b := byte(n) & 0x7F
+		n >>= 7
+		if (n == 0 && b&0x40 == 0) || (n == -1 && b&0x40 != 0) {
+			return append(out, b)
+		}
+		out = append(out, b|0x80)
+	}
+}
+
 func wasmName(s string) []byte {
 	out := wasmULEB(uint32(len(s)))
 	return append(out, s...)
 }
 
-// testResultOffset is where the synthetic test modules park their result. The
-// real ABI lets a module choose any address; a fixed value keeps the
-// hand-encoded module trivial.
 // testResultOffset is where the synthetic test modules park their result, well
 // above the input region so a large input cannot clobber it. The real ABI lets
 // a module choose any address in its own memory.
@@ -52,6 +65,17 @@ const testResultPages = 9
 // run(ptr,len)->(ptr,len) and returns a preloaded JSON result. That is exactly
 // the ForgeC2 WASM ABI contract.
 func buildResultModule(t *testing.T, resultJSON string, memoryPages uint32) []byte {
+	t.Helper()
+	return buildStaticDataModule(t, resultJSON, testResultOffset, memoryPages)
+}
+
+// buildStaticDataModule parks payload at dataOffset and returns a module whose
+// run() reports (dataOffset, len(payload)) — the smallest module that speaks
+// the ABI while also keeping state in linear memory. dataOffset=1024
+// reproduces the layout wasm-ld gives real C/Rust modules (data segment right
+// after the reserved first KiB), which is what the input-offset regression
+// test needs.
+func buildStaticDataModule(t *testing.T, payload string, dataOffset, memoryPages uint32) []byte {
 	t.Helper()
 	mod := []byte{0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00}
 
@@ -67,20 +91,20 @@ func buildResultModule(t *testing.T, resultJSON string, memoryPages uint32) []by
 	exp = append(exp, 0x02, 0x00)
 	exp = append(exp, wasmName("run")...)
 	exp = append(exp, 0x00, 0x00)
-	// data: resultJSON at testResultOffset (well past any small input)
+	// data: payload at dataOffset
 	data := []byte{0x01, 0x00}
 	offsetExpr := []byte{0x41}
-	offsetExpr = append(offsetExpr, wasmULEB(testResultOffset)...)
+	offsetExpr = append(offsetExpr, wasmSLEB(int32(dataOffset))...)
 	offsetExpr = append(offsetExpr, 0x0B)
 	data = append(data, offsetExpr...)
-	data = append(data, wasmULEB(uint32(len(resultJSON)))...)
-	data = append(data, resultJSON...)
-	// code: push (offset, len) then end
+	data = append(data, wasmULEB(uint32(len(payload)))...)
+	data = append(data, payload...)
+	// code: push (dataOffset, len) then end
 	body := []byte{0x00}
 	body = append(body, 0x41)
-	body = append(body, wasmULEB(testResultOffset)...)
+	body = append(body, wasmSLEB(int32(dataOffset))...)
 	body = append(body, 0x41)
-	body = append(body, wasmULEB(uint32(len(resultJSON)))...)
+	body = append(body, wasmSLEB(int32(len(payload)))...)
 	body = append(body, 0x0B)
 	code := append([]byte{0x01}, wasmULEB(uint32(len(body)))...)
 	code = append(code, body...)

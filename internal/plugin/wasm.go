@@ -41,9 +41,10 @@ import (
 // module's memory bounds and to maxWasmResultBytes, and a module may return
 // ptr=0/len=0 to mean "no result".
 const (
-	// wasmInputOffset is where the host writes the input JSON. The first KiB is
-	// reserved for the module's own scratch/globals; a large input simply grows
-	// linear memory, and the module picks its own result location afterwards.
+	// wasmInputOffset is the floor of the host's input buffer. The input is
+	// written past the module's initial linear memory (see runWasmPlugin),
+	// never below this address, so even a zero-page module keeps its first
+	// KiB free for scratch/globals.
 	wasmInputOffset = 1024
 	// maxWasmResultBytes bounds the returned result.
 	maxWasmResultBytes = 2 << 20 // 2 MiB, matching the native stdout cap
@@ -159,10 +160,27 @@ func (e *executor) runWasmPlugin(ctx context.Context, pluginDir string, m *Manif
 	if err != nil {
 		return nil, fmt.Errorf("wasm plugin %q: marshal input: %w", m.Name, err)
 	}
-	if err := ensureWasmRegion(mod.Memory(), wasmInputOffset, len(payload)); err != nil {
+	// ExportedMemory, not Memory: Module.Memory returns a typed-nil interface
+	// when the module defines no memory at all, which would panic on the
+	// first method call. ExportedMemory returns a plain nil.
+	mem := mod.ExportedMemory("memory")
+	if mem == nil {
+		return nil, fmt.Errorf("wasm plugin %q: module does not export linear memory", m.Name)
+	}
+	// Write the input past the module's initial memory. Module data (globals,
+	// heap, stack) is laid out by the module's own toolchain — wasm-ld's
+	// default puts the data segment right at address 1024 — so parking the
+	// input at a fixed offset would overwrite it before run() executes.
+	// Memory past the module's initial size is guaranteed untouched, and the
+	// ABI hands the pointer to the module anyway.
+	inputOffset := int(mem.Size())
+	if inputOffset < wasmInputOffset {
+		inputOffset = wasmInputOffset
+	}
+	if err := ensureWasmRegion(mem, inputOffset, len(payload)); err != nil {
 		return nil, fmt.Errorf("wasm plugin %q: input does not fit in memory: %w", m.Name, err)
 	}
-	if !mod.Memory().Write(wasmInputOffset, payload) {
+	if !mem.Write(uint32(inputOffset), payload) {
 		return nil, fmt.Errorf("wasm plugin %q: could not write input into memory", m.Name)
 	}
 
@@ -170,7 +188,7 @@ func (e *executor) runWasmPlugin(ctx context.Context, pluginDir string, m *Manif
 	if fn == nil {
 		return nil, fmt.Errorf("wasm plugin %q: module does not export run(ptr,len)->(ptr,len)", m.Name)
 	}
-	results, err := fn.Call(ctx, uint64(wasmInputOffset), uint64(len(payload)))
+	results, err := fn.Call(ctx, uint64(inputOffset), uint64(len(payload)))
 	if err != nil {
 		if ctx.Err() != nil {
 			return &execResult{TimedOut: true}, fmt.Errorf("wasm plugin %q timed out: %w", m.Name, ctx.Err())
@@ -192,7 +210,6 @@ func (e *executor) runWasmPlugin(ctx context.Context, pluginDir string, m *Manif
 	if length > maxWasmResultBytes {
 		return &execResult{Stderr: run.stderr()}, fmt.Errorf("wasm plugin %q: result of %d bytes exceeds the %d byte cap", m.Name, length, maxWasmResultBytes)
 	}
-	mem := mod.Memory()
 	size := uint32(mem.Size())
 	if resultPtr+length > size || resultPtr+length < resultPtr {
 		return &execResult{Stderr: run.stderr()}, fmt.Errorf("wasm plugin %q: result region out of bounds (ptr=%d len=%d, memory %d)", m.Name, resultPtr, length, size)
@@ -267,7 +284,12 @@ func (r *wasmRun) addLog(mod api.Module, ptr, length uint32) {
 		r.sink.dropped += int(length)
 		return
 	}
-	data, ok := mod.Memory().Read(ptr, length)
+	mem := mod.ExportedMemory("memory")
+	if mem == nil {
+		r.sink.dropped += int(length)
+		return
+	}
+	data, ok := mem.Read(ptr, length)
 	if !ok {
 		r.sink.dropped += int(length)
 		return
