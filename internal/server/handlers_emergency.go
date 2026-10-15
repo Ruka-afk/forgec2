@@ -11,6 +11,7 @@ import (
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func (s *Server) handleEmergencyStop(c *gin.Context) {
@@ -177,13 +178,9 @@ func (s *Server) handleKillSwitch(c *gin.Context) {
 		// online implants react immediately; the beacon-level token covers
 		// everyone else (offline, sleeping, future registrations).
 		var agents []db.Implant
-		dispatched := 0
-		if err := s.db.Find(&agents).Error; err == nil {
-			for _, a := range agents {
-				if _, err := s.createTask(a.ID, "uninstall", "", "", "", "", 0, 0); err == nil {
-					dispatched++
-				}
-			}
+		dispatched, skipped := 0, 0
+		if err := s.db.Select("id", "tenant_id", "public_ip", "ip").Find(&agents).Error; err == nil {
+			dispatched, skipped = s.dispatchFleetUninstall(agents)
 		}
 		s.LogAuditRecord(c, "kill_switch_arm", "security", user.Username,
 			"Fleet kill-switch ARMED ("+strconv.Itoa(dispatched)+" uninstall tasks dispatched)", true, nil)
@@ -192,7 +189,8 @@ func (s *Server) handleKillSwitch(c *gin.Context) {
 			"Fleet kill-switch armed by "+user.Username+". All implants will self-destruct on next beacon.", "kill_switch")
 		slog.Warn("KILL SWITCH ARMED",
 			"user", user.Username,
-			"uninstall_tasks_dispatched", dispatched)
+			"uninstall_tasks_dispatched", dispatched,
+			"agents_skipped_at_capacity", skipped)
 		c.JSON(http.StatusOK, gin.H{
 			"success":          true,
 			"message":          "Kill switch armed. All implants will self-destruct on next beacon.",
@@ -247,6 +245,104 @@ func (s *Server) handleKillSwitch(c *gin.Context) {
 	default:
 		respondError(c, http.StatusBadRequest, "action must be 'arm' or 'disarm'")
 	}
+}
+
+// dispatchFleetUninstall queues one self-destruct task per implant when the
+// kill switch arms. It replaces a per-agent createTask loop that issued three
+// point SELECTs plus one INSERT per implant — at fleet scale thousands of
+// round trips on the single-writer pool, measured at ~360ms for 1000 agents
+// (BenchmarkKillSwitchArmFleet) at the exact moment the operator needs the
+// fleet gone.
+//
+// The gates are kept identical to createTask(nil, id, "uninstall", ...): every
+// agent still passes the RoE and adaptive-opsec checks, evaluated against the
+// rows the caller loaded (which is why checkRoELoaded exists), and the
+// per-agent pending ceiling still applies. The collaboration soft-lock check
+// is intentionally not replicated: on the system path (callerUserID == 0) it
+// short-circuits to nil after a per-agent SELECT, so skipping it is
+// behavior-preserving, not a relaxation.
+//
+// Tasks are committed in one transaction and the in-memory counters are
+// released together on failure, so a partial insert can never leave durably
+// queued rows that are uncounted (a later disarm must be able to reclaim
+// exactly what arm queued).
+//
+// Agents skipped at the ceiling are still covered by the beacon-level kill
+// token, so no implant escapes the kill switch.
+func (s *Server) dispatchFleetUninstall(agents []db.Implant) (dispatched, skippedAtCapacity int) {
+	if len(agents) == 0 {
+		return 0, 0
+	}
+
+	status := s.resolveInitialTaskStatus("uninstall")
+	var approvalExpiresAt *time.Time
+	if status == TaskStatusPendingApproval {
+		exp := time.Now().Add(ApprovalExpiryDuration)
+		approvalExpiresAt = &exp
+	}
+
+	// Phase 1 (no lock): validation only. Held outside the pending-tasks
+	// mutex because a blocked agent writes an audit record, and audit I/O
+	// must not serialize task accounting for the rest of the fleet.
+	eligible := make([]db.Implant, 0, len(agents))
+	for _, a := range agents {
+		if err := s.validateTaskCreationWithAgent(nil, a.ID, "uninstall", "", "", "", 0, &a); err != nil {
+			continue
+		}
+		eligible = append(eligible, a)
+	}
+
+	// Phase 2 (locked, memory-only): capacity checks and counters, same
+	// section createTask runs under the same mutex.
+	tasks := make([]db.Task, 0, len(eligible))
+	s.agentPendingTasksMu.Lock()
+	for _, a := range eligible {
+		if s.agentPendingTasks[a.ID] >= MaxPendingTasksPerAgent {
+			skippedAtCapacity++
+			continue
+		}
+		s.agentPendingTasks[a.ID]++
+		tasks = append(tasks, db.Task{
+			AgentID:           a.ID,
+			Type:              "uninstall",
+			Status:            status,
+			TenantID:          a.TenantID,
+			ApprovalExpiresAt: approvalExpiresAt,
+		})
+	}
+	s.agentPendingTasksMu.Unlock()
+
+	if len(tasks) == 0 {
+		return 0, skippedAtCapacity
+	}
+
+	// All-or-nothing: CreateInBatches commits per chunk, so without the
+	// transaction a mid-way failure would leave earlier chunks durably
+	// queued while the rollback below releases every counter.
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		return tx.CreateInBatches(tasks, 100).Error
+	}); err != nil {
+		for i := range tasks {
+			s.decPendingTasks(tasks[i].AgentID)
+		}
+		slog.Error("Kill switch: failed to queue fleet uninstall tasks",
+			"err", err, "count", len(tasks))
+		return 0, skippedAtCapacity
+	}
+
+	// Same per-task bookkeeping createTask runs after a successful INSERT.
+	// The per-task task_updated broadcast used by the batch endpoint is not
+	// fired here: the arm path never sent one before, and the system-wide
+	// alert already announced the arm to every operator.
+	for i := range tasks {
+		if s.pluginManager != nil {
+			s.fireTaskCreatedHook(tasks[i].AgentID, tasks[i].ID, tasks[i].Type, tasks[i].Command)
+		}
+		if s.metrics != nil {
+			s.metrics.TasksTotal.Inc()
+		}
+	}
+	return len(tasks), skippedAtCapacity
 }
 
 // handleKillSwitchStatus reports the current kill-switch state. The token

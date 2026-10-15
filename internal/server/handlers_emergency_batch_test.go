@@ -20,7 +20,7 @@ import (
 )
 
 // smTest returns a fresh session manager for tests.
-func smTest(t *testing.T) *crypto.SessionManager {
+func smTest(t testing.TB) *crypto.SessionManager {
 	t.Helper()
 	sm, err := crypto.NewSessionManager()
 	if err != nil {
@@ -31,7 +31,7 @@ func smTest(t *testing.T) *crypto.SessionManager {
 
 // batchTestServer builds a Server with the fields handleBatchCommand and
 // handleKillSwitch rely on (metrics + in-memory pending counts).
-func batchTestServer(t *testing.T) (*Server, *gorm.DB) {
+func batchTestServer(t testing.TB) (*Server, *gorm.DB) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	database := testutil.SetupTestDB(t)
@@ -193,5 +193,94 @@ func TestKillSwitchDisarmReclaimsUninstallTasks(t *testing.T) {
 	s.agentPendingTasksMu.Unlock()
 	if pending != 0 {
 		t.Fatalf("pending counter not rolled back, got %d", pending)
+	}
+}
+
+// TestKillSwitchArmBatchesFleetUninstall verifies arming the kill switch fans
+// out one uninstall task per implant in a single batched insert: every task
+// inherits its own agent's tenant (loaded up front, no per-agent re-SELECT),
+// a saturated agent is skipped without touching its counter, and the armed
+// state is persisted alongside the dispatch.
+func TestKillSwitchArmBatchesFleetUninstall(t *testing.T) {
+	s, database := batchTestServer(t)
+
+	agents := []db.Implant{
+		{ID: "ks-arm-1", Hostname: "H1", Status: "online", TenantID: 1},
+		{ID: "ks-arm-2", Hostname: "H2", Status: "online", TenantID: 0},
+		{ID: "ks-arm-full", Hostname: "H3", Status: "online", TenantID: 1},
+	}
+	if err := database.Create(&agents).Error; err != nil {
+		t.Fatalf("seed implants: %v", err)
+	}
+	s.agentPendingTasksMu.Lock()
+	s.agentPendingTasks["ks-arm-full"] = MaxPendingTasksPerAgent
+	s.agentPendingTasksMu.Unlock()
+
+	hashBytes, err := middleware.HashPassword("killpw")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	user := db.User{Username: "op", PasswordHash: hashBytes}
+	if err := database.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	body := `{"action":"arm","password":"killpw"}`
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodPost, "/api/killswitch", strings.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Set("user_id", user.ID)
+	s.handleKillSwitch(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Dispatched int `json:"tasks_dispatched"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("response parse: %v (body=%s)", err, w.Body.String())
+	}
+	if resp.Dispatched != 2 {
+		t.Fatalf("expected 2 dispatched (one agent saturated), got %d; body=%s", resp.Dispatched, w.Body.String())
+	}
+
+	var ks db.KillSwitch
+	if err := database.First(&ks, 1).Error; err != nil || !ks.Armed {
+		t.Fatalf("kill switch not armed: err=%v armed=%v", err, ks.Armed)
+	}
+
+	var tasks []db.Task
+	if err := database.Where("type = ?", "uninstall").Find(&tasks).Error; err != nil {
+		t.Fatalf("load uninstall tasks: %v", err)
+	}
+	if len(tasks) != 2 {
+		t.Fatalf("expected 2 uninstall tasks, got %d", len(tasks))
+	}
+	wantTenant := map[string]uint{"ks-arm-1": 1, "ks-arm-2": 0}
+	for _, task := range tasks {
+		if task.Status != "pending" {
+			t.Fatalf("task for %s: expected pending, got %q", task.AgentID, task.Status)
+		}
+		if got, ok := wantTenant[task.AgentID]; !ok {
+			t.Fatalf("unexpected task for agent %s", task.AgentID)
+		} else if task.TenantID != got {
+			t.Fatalf("task for %s: tenant %d, want %d", task.AgentID, task.TenantID, got)
+		}
+	}
+	for _, id := range []string{"ks-arm-1", "ks-arm-2"} {
+		s.agentPendingTasksMu.Lock()
+		pending := s.agentPendingTasks[id]
+		s.agentPendingTasksMu.Unlock()
+		if pending != 1 {
+			t.Fatalf("pending counter for %s: got %d, want 1", id, pending)
+		}
+	}
+	s.agentPendingTasksMu.Lock()
+	full := s.agentPendingTasks["ks-arm-full"]
+	s.agentPendingTasksMu.Unlock()
+	if full != MaxPendingTasksPerAgent {
+		t.Fatalf("saturated agent counter changed: got %d, want %d", full, MaxPendingTasksPerAgent)
 	}
 }

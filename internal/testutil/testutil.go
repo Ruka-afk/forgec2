@@ -10,7 +10,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func SetupTestDB(t *testing.T) *gorm.DB {
+func SetupTestDB(t testing.TB) *gorm.DB {
 	t.Helper()
 	database, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
