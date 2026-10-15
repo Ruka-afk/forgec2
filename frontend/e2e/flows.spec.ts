@@ -177,11 +177,16 @@ test.describe("agents list interplay", () => {
 });
 
 test.describe("tasks list interplay", () => {
+  // The standalone /tasks page was folded into the timeline workspace as its
+  // "tasks" tab (EventsPageContent renders <TasksPageContent embedded />), so
+  // /tasks.html 404s — the test was asserting against a page that no longer
+  // exists, and had been silently unreachable behind the failing npm audit
+  // step. Open the tab directly via the URL state the page itself uses.
   test("renders task rows and the status filter re-queries", async ({ page }) => {
     await mockAuthedApis(page);
     await withSession(page);
 
-    await page.goto("/tasks.html");
+    await page.goto("/timeline.html?tab=tasks");
     await expect(page.getByText("whoami")).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText("capture")).toBeVisible();
 
