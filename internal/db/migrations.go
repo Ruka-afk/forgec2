@@ -55,7 +55,6 @@ var initialSchemaIndexes = []struct{ sql, label string }{
 	{"CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity)", "idx_alerts_severity"},
 	{"CREATE INDEX IF NOT EXISTS idx_alerts_type ON alerts(type)", "idx_alerts_type"},
 	{"CREATE INDEX IF NOT EXISTS idx_alert_rules_enabled ON alert_rules(enabled)", "idx_alert_rules_enabled"},
-	{"CREATE INDEX IF NOT EXISTS idx_alert_rules_event ON alert_rules(event_type)", "idx_alert_rules_event"},
 	{"CREATE INDEX IF NOT EXISTS idx_system_metrics_created ON system_metrics(created_at)", "idx_system_metrics_created"},
 	{"CREATE INDEX IF NOT EXISTS idx_automation_rules_enabled ON automation_rules(enabled)", "idx_automation_rules_enabled"},
 	{"CREATE INDEX IF NOT EXISTS idx_automation_rules_event ON automation_rules(event_type)", "idx_automation_rules_event"},
@@ -69,7 +68,6 @@ var initialSchemaIndexes = []struct{ sql, label string }{
 	{"CREATE INDEX IF NOT EXISTS idx_alerts_status_severity ON alerts(status, severity)", "idx_alerts_status_severity"},
 	{"CREATE INDEX IF NOT EXISTS idx_alerts_rule_source ON alerts(rule_id, source, status)", "idx_alerts_rule_source"},
 	{"CREATE INDEX IF NOT EXISTS idx_chat_messages_channel ON chat_messages(channel)", "idx_chat_messages_channel"},
-	{"CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_next_run ON scheduled_tasks(next_run, enabled)", "idx_scheduled_tasks_next_run"},
 	{"CREATE INDEX IF NOT EXISTS idx_opsec_history_agent_created ON opsec_history(agent_id, created_at)", "idx_opsec_history_agent_created"},
 	{"CREATE INDEX IF NOT EXISTS idx_network_hosts_agent_ip ON network_hosts(agent_id, ip)", "idx_network_hosts_agent_ip"},
 	{"CREATE INDEX IF NOT EXISTS idx_phishing_events_type_created ON phishing_events(event_type, created_at)", "idx_phishing_events_type_created"},
@@ -807,7 +805,6 @@ var indexMigrations = []*gormigrate.Migration{
 			m("CREATE INDEX IF NOT EXISTS idx_listeners_type_enabled ON listeners(type, enabled)", "idx_listeners_type_enabled")
 			m("CREATE INDEX IF NOT EXISTS idx_plugins_type ON plugins(type)", "idx_plugins_type")
 			m("CREATE INDEX IF NOT EXISTS idx_plugins_category ON plugins(category)", "idx_plugins_category")
-			m("CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id)", "idx_chat_messages_session_id")
 			m("CREATE INDEX IF NOT EXISTS idx_credential_entries_domain ON credential_entries(domain)", "idx_credential_entries_domain")
 			m("CREATE INDEX IF NOT EXISTS idx_webhook_configs_event_type_enabled ON webhook_configs(event_type, enabled)", "idx_webhook_configs_event_type_enabled")
 			m("CREATE INDEX IF NOT EXISTS idx_alert_rules_type_enabled ON alert_rules(type, enabled)", "idx_alert_rules_type_enabled")
@@ -824,7 +821,6 @@ var indexMigrations = []*gormigrate.Migration{
 			m("DROP INDEX IF EXISTS idx_listeners_type_enabled", "drop_idx_listeners_type_enabled")
 			m("DROP INDEX IF EXISTS idx_plugins_type", "drop_idx_plugins_type")
 			m("DROP INDEX IF EXISTS idx_plugins_category", "drop_idx_plugins_category")
-			m("DROP INDEX IF EXISTS idx_chat_messages_session_id", "drop_idx_chat_messages_session_id")
 			m("DROP INDEX IF EXISTS idx_credential_entries_domain", "drop_idx_credential_entries_domain")
 			m("DROP INDEX IF EXISTS idx_webhook_configs_event_type_enabled", "drop_idx_webhook_configs_event_type_enabled")
 			m("DROP INDEX IF EXISTS idx_alert_rules_type_enabled", "drop_idx_alert_rules_type_enabled")
@@ -840,7 +836,6 @@ var indexMigrations = []*gormigrate.Migration{
 			m := func(sql, label string) {
 				execMigration(tx, sql, label)
 			}
-			m("CREATE INDEX IF NOT EXISTS idx_implants_agent_id_nocase ON implants(agent_id COLLATE NOCASE)", "idx_implants_agent_id_nocase")
 			m("CREATE INDEX IF NOT EXISTS idx_tasks_agent_id_nocase ON tasks(agent_id COLLATE NOCASE)", "idx_tasks_agent_id_nocase")
 			return nil
 		},
@@ -848,7 +843,6 @@ var indexMigrations = []*gormigrate.Migration{
 			m := func(sql, label string) {
 				execMigration(tx, sql, label)
 			}
-			m("DROP INDEX IF EXISTS idx_implants_agent_id_nocase", "drop_idx_implants_agent_id_nocase")
 			m("DROP INDEX IF EXISTS idx_tasks_agent_id_nocase", "drop_idx_tasks_agent_id_nocase")
 			return nil
 		},
@@ -859,7 +853,6 @@ var indexMigrations = []*gormigrate.Migration{
 			m := func(sql, label string) {
 				execMigration(tx, sql, label)
 			}
-			m("CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_agent_id ON scheduled_tasks(agent_id)", "idx_scheduled_tasks_agent_id")
 			m("CREATE INDEX IF NOT EXISTS idx_scan_results_task_id ON scan_results(task_id)", "idx_scan_results_task_id")
 			m("CREATE INDEX IF NOT EXISTS idx_credential_entries_task_id ON credential_entries(task_id)", "idx_credential_entries_task_id")
 			m("CREATE INDEX IF NOT EXISTS idx_implants_domain ON implants(domain)", "idx_implants_domain")
@@ -880,7 +873,6 @@ var indexMigrations = []*gormigrate.Migration{
 				execMigration(tx, sql, label)
 			}
 			m("CREATE INDEX IF NOT EXISTS idx_templates_category ON command_templates(category)", "restore_idx_templates_category")
-			m("DROP INDEX IF EXISTS idx_scheduled_tasks_agent_id", "drop_idx_scheduled_tasks_agent_id")
 			m("DROP INDEX IF EXISTS idx_scan_results_task_id", "drop_idx_scan_results_task_id")
 			m("DROP INDEX IF EXISTS idx_credential_entries_task_id", "drop_idx_credential_entries_task_id")
 			m("DROP INDEX IF EXISTS idx_implants_domain", "drop_idx_implants_domain")
@@ -921,9 +913,7 @@ var indexMigrations = []*gormigrate.Migration{
 			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_tasks_type_created ON tasks(type, created_at)", "idx_tasks_type_created")
 			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_implants_domain ON implants(domain)", "idx_implants_domain")
 			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_implants_parent_agent_id ON implants(parent_agent_id)", "idx_implants_parent_agent_id")
-			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_tasks_result ON tasks(result(255))", "idx_tasks_result")
 			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_webhook_configs_url ON webhook_configs(url)", "idx_webhook_configs_url")
-			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_screenshots_agent_id ON screenshots(agent_id)", "idx_screenshots_agent_id")
 			return nil
 		},
 		Rollback: func(tx *gorm.DB) error {
@@ -932,9 +922,7 @@ var indexMigrations = []*gormigrate.Migration{
 			execMigration(tx, "DROP INDEX IF EXISTS idx_tasks_type_created", "idx_tasks_type_created")
 			execMigration(tx, "DROP INDEX IF EXISTS idx_implants_domain", "idx_implants_domain")
 			execMigration(tx, "DROP INDEX IF EXISTS idx_implants_parent_agent_id", "idx_implants_parent_agent_id")
-			execMigration(tx, "DROP INDEX IF EXISTS idx_tasks_result", "idx_tasks_result")
 			execMigration(tx, "DROP INDEX IF EXISTS idx_webhook_configs_url", "idx_webhook_configs_url")
-			execMigration(tx, "DROP INDEX IF EXISTS idx_screenshots_agent_id", "idx_screenshots_agent_id")
 			return nil
 		},
 	},
@@ -1208,6 +1196,27 @@ var indexMigrations = []*gormigrate.Migration{
 			} {
 				execMigration(tx, "DROP INDEX IF EXISTS "+idx, "drop_"+idx)
 			}
+			return nil
+		},
+	},
+	// Case-insensitive agent-id lookup. Replaces a migration that asked for
+	// implants(agent_id COLLATE NOCASE): the implant's primary key column is
+	// `id`, not `agent_id`, so that index never existed and every boot logged a
+	// "no such column: agent_id" warning. The intent is real — beacon dispatch
+	// lower-cases the agent id before looking it up — so this lands the index
+	// that actually serves it.
+	//
+	// A new ID rather than an edit to the old one: existing databases already
+	// recorded 2025-07-24-add-nocase-indexes in the migration ledger, so
+	// changing that migration's SQL would never re-run it on upgrade.
+	{
+		ID: "2026-10-16-implant-id-nocase-index",
+		Migrate: func(tx *gorm.DB) error {
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_implants_id_nocase ON implants(id COLLATE NOCASE)", "idx_implants_id_nocase")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			execMigration(tx, "DROP INDEX IF EXISTS idx_implants_id_nocase", "drop_idx_implants_id_nocase")
 			return nil
 		},
 	},
