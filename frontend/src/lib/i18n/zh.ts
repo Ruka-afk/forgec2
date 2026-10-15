@@ -3298,7 +3298,7 @@ export const zh: Record<string, string> = {
     "privesc.toast.load_history_failed": "加载历史失败",
     "privesc.toast.start_check_failed": "启动权限检查失败",
     "privesc.toast_select_agent": "请选择目标 Agent",
-    "privesc.unknown": "未知",
+
     "privesc.view_history": "查看历史",
     "privesc.view_result": "查看结果",
     "profiles.active_config": "活动 Malleable 配置",

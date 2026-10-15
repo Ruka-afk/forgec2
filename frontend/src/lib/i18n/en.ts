@@ -3284,7 +3284,7 @@ export const en: Record<string, string> = {
     "privesc.toast.load_history_failed": "Failed to load history",
     "privesc.toast.start_check_failed": "Failed to start privilege check",
     "privesc.toast_select_agent": "Please select a target agent",
-    "privesc.unknown": "Unknown",
+
     "privesc.view_history": "View history",
     "privesc.view_result": "View Result",
     "profiles.active_config": "Active Malleable Config",
