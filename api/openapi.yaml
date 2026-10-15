@@ -4535,17 +4535,6 @@ paths:
         '200':
           description: OK
 
-  /api/privesc/execute:
-    post:
-      tags: [Privilege Escalation]
-      summary: Execute privesc checks
-      operationId: privescExecute
-      security:
-        - SessionCookie: []
-      responses:
-        '200':
-          description: OK
-
   /api/privesc/result:
     post:
       tags: [Privilege Escalation]
