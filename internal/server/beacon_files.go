@@ -18,7 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ── Screenshots, sleep-mask rotation, path/IP/geo helpers, ls normalize ───
+// 鈹€鈹€ Screenshots, sleep-mask rotation, path/IP/geo helpers, ls normalize 鈹€鈹€鈹€
 
 func (s *Server) saveScreenshot(dataDir, agentID string, taskID uint, b64Data string) {
 	if s.IsScreenMonitoring(agentID) {
@@ -60,7 +60,7 @@ func (s *Server) handleServeScreenshot(c *gin.Context) {
 	agentID := c.Param("agent_id")
 	filename := c.Param("filename")
 
-	// Tenant gate: screenshots are stored per agent dir on disk — verify the
+	// Tenant gate: screenshots are stored per agent dir on disk 鈥?verify the
 	// caller can see this agent before serving anything under its directory.
 	if _, ok := s.getAgentOrFail(c, agentID); !ok {
 		return
@@ -87,7 +87,7 @@ func (s *Server) handleServeScreenshot(c *gin.Context) {
 // autoSwitchSleepMask rotates to a different sleep mask variant when integrity failure is detected.
 // Output format: "sleep_mask_integrity_failure: mask=<name> page=<idx>"
 func (s *Server) autoSwitchSleepMask(agentID string, output string) {
-	slog.Error("Sleep mask integrity failure — auto-switching variant", "agent_id", agentID, "output", output)
+	slog.Error("Sleep mask integrity failure 鈥?auto-switching variant", "agent_id", agentID, "output", output)
 
 	// Escalate the adaptive OPSEC threat score: a memory-scanner hit means
 	// the host is actively hostile, and repeated hits push the agent toward
@@ -107,7 +107,7 @@ func (s *Server) autoSwitchSleepMask(agentID string, output string) {
 		}
 	}
 
-	// Rotation order: advanced → zilean → foliage → advanced
+	// Rotation order: advanced 鈫?zilean 鈫?foliage 鈫?advanced
 	var nextMask string
 	switch currentMask {
 	case "advanced":
@@ -140,6 +140,11 @@ func (s *Server) autoSwitchSleepMask(agentID string, output string) {
 
 // Returns empty string if the path escapes the base directory.
 func safeJoin(base, name string) string {
+	// Normalize backslashes to slashes before any filepath operation so that
+	// traversal attempts using Windows-style separators cannot bypass the
+	// prefix check on a Linux host (or vice versa).
+	base = strings.ReplaceAll(base, `\`, `/`)
+	name = strings.ReplaceAll(name, `\`, `/`)
 	cleanBase := filepath.Clean(base)
 	target := filepath.Clean(filepath.Join(cleanBase, name))
 	if !strings.HasPrefix(target, cleanBase+string(filepath.Separator)) && target != cleanBase {
@@ -237,7 +242,7 @@ func normalizeLsResult(raw string) string {
 	var entries []lsEntry
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "Type") || strings.HasPrefix(line, "---") || strings.HasPrefix(line, "─") {
+		if line == "" || strings.HasPrefix(line, "Type") || strings.HasPrefix(line, "---") || strings.HasPrefix(line, "鈹€") {
 			continue
 		}
 		parts := strings.SplitN(line, "\t", 4)

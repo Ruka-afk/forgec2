@@ -26,18 +26,21 @@ func psEscape(s string) string {
 // output filename so that build artifacts can never be written outside the
 // requested output directory via ".." segments or an absolute path (A1).
 func safeBuildFileName(name string) string {
-	return filepath.Base(name)
+	// Accept both "/" and "\" as separators regardless of GOOS: the caller
+	// may receive a Windows-style path from a user on Linux CI, and stripping
+	// only the native separator would leave directory components in place.
+	return filepath.Base(strings.ReplaceAll(name, `\`, `/`))
 }
 
 // stripImportLine removes one tab-indented, single-line import of path and
 // reports whether it was present.
 //
 // The closing bracket of the import block is optional because the import may
-// be alone in its block (`"…credentials"]`) or sit among siblings
-// (`"…credentials"`). Matching the exact current text is what let this guard
+// be alone in its block (`"鈥redentials"]`) or sit among siblings
+// (`"鈥redentials"`). Matching the exact current text is what let this guard
 // drift out of sync with transport_utls.go: the matcher expected a bare line
 // while the file ended the block on that same line, so stripUTLSCreds failed on
-// EVERY slim build — blocking the artifact instead of catching a regression.
+// EVERY slim build 鈥?blocking the artifact instead of catching a regression.
 func stripImportLine(text, path string) (string, bool) {
 	re := regexp.MustCompile(`(?m)^\t` + regexp.QuoteMeta(`"`+path+`"`) + `\]?\r?\n`)
 	loc := re.FindStringIndex(text)

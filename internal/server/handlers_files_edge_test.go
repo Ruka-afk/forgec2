@@ -67,7 +67,7 @@ func TestHandleUploadFile_PathTraversalPrevention(t *testing.T) {
 
 	t.Run("safeJoin allows normal paths", func(t *testing.T) {
 		result := safeJoin(`C:\Base`, `Users\Admin\file.txt`)
-		if !strings.HasPrefix(result, `C:\Base`) {
+		if !strings.HasPrefix(strings.ReplaceAll(result, "\\", "/"), "C:/Base") {
 			t.Errorf("expected path under C:\\Base, got %q", result)
 		}
 	})
