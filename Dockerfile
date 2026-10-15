@@ -6,7 +6,7 @@
 # Stage 1: Build Vite frontend
 # Node 20.19 is the floor for Vite 7 (require(esm) must be enabled by default,
 # otherwise loading the ESM-only @vitejs/plugin-react fails with ERR_REQUIRE_ESM).
-FROM node:20.19-alpine@sha256:658d0f63e501824d6c23e06d4bb95c71e7d704537c9d9272f488ac03a370d448 AS frontend-builder
+FROM node:26.11-alpine@sha256:143494b1da2945f061539253adc65e4f1569ddf07da2d384c022c791a9d90a4a AS frontend-builder
 WORKDIR /build/frontend
 COPY frontend/package*.json ./
 RUN npm ci
@@ -14,7 +14,7 @@ COPY frontend/ .
 RUN npm run build
 
 # Stage 2: Build Go binary with embedded frontend
-FROM golang:1.26-alpine@sha256:3082400e369fa24d5fc60bca20edab3f6d604e0c5a690ec66b295eff4dd87ade AS backend-builder
+FROM golang:1.27-alpine@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d AS backend-builder
 WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
