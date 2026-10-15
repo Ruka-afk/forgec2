@@ -194,7 +194,7 @@ func TestSmokeTokenStagerBuild(t *testing.T) {
 		{"linux", GenerateTokenStagerLinux},
 	} {
 		outDir := t.TempDir()
-		cfg := ImplantConfig{Filename: "tokstager", C2URL: "http://127.0.0.1:8080/http"}
+		cfg := ImplantConfig{Filename: "tokstager", C2URL: "http://127.0.0.1:8080/http", Architecture: "amd64"}
 		cfg.Protocol = "http"
 		path, err := tc.fn(cfg, outDir, fetch)
 		if err != nil {
