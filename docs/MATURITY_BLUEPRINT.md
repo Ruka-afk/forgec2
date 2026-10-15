@@ -163,9 +163,19 @@ CIDR allow/deny；`LogAuditRecord` 覆盖 self_update、lateral 等；日志字�
 
 ### 2.10 C Implant（`proto/c-implant`）
 
-MinGW 构建的子集 implant：shell、DNS transport、ECDH/CNG crypto、基本 evade。
-定位是「体积/依赖极限」与 E2E 对照，**不承诺** Go Agent 任务对等；malleable
-output chain 对 C 不解码（matrix 已标注）。双 implant 策略下以 Go 为功能真源。
+MinGW 构建的子集 implant：shell + 系统管理/持久化、recon 扩展（drives、find、
+portscan、clipboard_get/set、get_sleep_mode，输出形状对齐 Go agent）、ECDH/CNG
+crypto、基本 evade。定位是「体积/依赖极限」与 E2E 对照，**不承诺** Go Agent 任务
+对等；malleable output chain 对 C 不解码（matrix 已标注）。双 implant 策略下以
+Go 为功能真源。
+
+门禁与验证：CI `c-implant` job 交叉构建（`-Wall -Wextra -Werror`；`sqlite3.c`
+单独编译不作 `-Werror`，其告警不能掩盖 implant 告警）+ 任务字符串断言 +
+`C2_TRANSPORT_DNS` 变体语法检查 + 主机 `x25519_selftest` + WASM 示例 clang
+构建并经 `cmd/plugin-check -run` 执行；本地 `scripts/e2e-c-implant-local.ps1`
+（一次性服务器 + `cmd/mint-reg-secret`）对 7 个任务做真实结果断言，无需操作台
+UI。DNS TXT 传输模块 `dns_transport.c` 已具备 Go 线级对等，但尚未接入 beacon
+主循环（默认构建不含 dnsapi）。
 
 ---
 
@@ -511,7 +521,7 @@ Windows 缓存 DB）的哈希，原签名种子已销毁，digest 不可复现�
 | **中** | TLS 降级（阻断加密链路诱发明文回退） | D2-2b：全 TLS 配置的 implant 拒绝 WSS/DNS→HTTP 与明文 failover/rotation；https→http 跳转被拒 |
 | **中** | 凭据 dump 落盘残留 | uninstall 清理；approval；loot 加密 |
 | **中** | 备份静默失效（无人察觉直到恢复时） | `backup.retain`/`schedule` 可配置；`/api/v1/health` 暴露 age/last_error；`forgec2_backup_age_seconds` + 成功/失败计数（D-4） |
-| **中** | C implant 与文档漂移 | matrix 标明子集；E2E 分轨 |
+| **中** | C implant 与文档漂移 | matrix 标明子集；CI 构建门禁（`-Werror` + 任务字符串断言 + x25519 主机自检 + WASM 示例门禁）+ 一次性服务器全任务 E2E（`scripts/e2e-c-implant-local.ps1`，无需 UI） |
 | **低** | 文档过期（matrix 曾停 v2.4.1） | P4-2 刷新 + 生成命令手册 |
 | **低** | 根目录构建杂物 | gitignore + 清理脚本 |
 
@@ -527,7 +537,7 @@ Windows 缓存 DB）的哈希，原签名种子已销毁，digest 不可复现�
 | 安全与合规加固 | **9.3** | TLS1.3/ECDH/GCM/Ed25519 pin/ROE/approval/审计；可选 ChaCha20-Poly1305；生产 compose；D2-1 `/api/v1` operator guard；D2-2 审计租户隔离；D2-3 gRPC mTLS fail-closed + resync oracle 关闭；**§4 checklist 25 项全部勾选**（含数据诚实性 5 项）+ 宏 run/stop/list 租户隔离（跨租户 404/空列表/停不掉测试）；扣分：ChaCha20 非默认、mTLS 仅全局而非 per-listener |
 | 可维护性/更新性 | **9.2** | 单一 TaskSpec 真源、CI 门禁、gofmt 清债、OTA 签名链闭环；matrix 任务清单生成段 + `--check`；版本行由 `VERSION` 单源 stamp；D3 CI 含 `-race` job、40% 覆盖率下限（实测 CI 范围 46%+）、定时 fuzz、Docker/Compose 校验、**真实服务端 live UI e2e**；OTA 版本比较对无法解析的版本号 fail-closed（未 stamp 的构建不会被远端旧版本覆盖）；发布含 SBOM + provenance；扣分：无（原「可变 tag」已由 D/E 批次修复：39 处 Actions 钉 SHA、Dockerfile/compose 基础镜像钉多架构 digest、Dependabot 增加 docker/docker-compose 生态；升级 PR 评审仍是人工步骤） |
 | 额外加分 | **8.0** | HTTP/3、别名史、多语言插件、跨平台构建已有；扣分：模块化代理/WASM、Win TUN 未打包 |
-| **综合** | **9.5** | P3 工程债已清 + P4 全落地 + Phase C + **D-2 服务端 P0**（operator guard/审计租户/gRPC mTLS fail-closed/resync oracle/插件脚本 fail-closed/存储密钥与 compose 契约/PG 备份边界）+ **D-2b agent fail-closed**（禁明文降级、DNS 校验、证书 pin、响应上限）+ **D-3 供应链**（race/覆盖率/fuzz/docker/live-e2e 门禁、SBOM + provenance）+ **D-4 插件生态**（包签名信任链、共享 lib 覆盖、并发配额、WASM 不可信层、52 插件已签名且默认强制验签）+ **D-5 备份可运维性**（可配置保留/调度 + 新鲜度指标与 health 暴露）+ **2026-10 数据诚实性与可信度专项**（§4 checklist 清零；21 处 fail-loud + partial 标志 + 5 个租户隔离/孤儿行/持久化/批量/索引修复，每项配回归测试）+ **2026-10 传输与更新链专项**（WebSocket Hub 的连接 claim/隔离契约回归测试；批量重试不再静默丢弃超限结果帧；OTA 版本比较对不可解析版本 fail-closed）+ **2026-10 供应链钉扎**（39 处 Actions 钉 SHA + 4 个基础镜像钉多架构 digest + Dependabot 覆盖 docker/docker-compose；golangci-lint 改为增量棘轮收债）+ **2026-10 插件 CPU 预算**（Windows Job Object / Linux /proc 进程组记账，默认 120s，超限杀树并报 CPU 预算错误；采样间隔显式传参，消除 watchdog 与测试的竞态）+ **2026-10 插件写入预算**（同一 watchdog 记账写入字节，默认 1024 MiB，超限杀树；Windows Job Object I/O 计数 / Linux `/proc/<pid>/io` wchar）+ **2026-10 WASM ABI 加固**（输入写在模块初始内存之后，不再覆写模块数据；缺内存模块 fail-closed）+ **2026-10 插件创作管线**（`cmd/plugin-init` 脚手架 + `cmd/plugin-check` 校验器复用真实信任链与 executor，`-run` 真跑并校验输出契约，诊断带稳定 code 与 `-json` 报告；规范 + manifest JSON Schema 落文档） |
+| **综合** | **9.5** | P3 工程债已清 + P4 全落地 + Phase C + **D-2 服务端 P0**（operator guard/审计租户/gRPC mTLS fail-closed/resync oracle/插件脚本 fail-closed/存储密钥与 compose 契约/PG 备份边界）+ **D-2b agent fail-closed**（禁明文降级、DNS 校验、证书 pin、响应上限）+ **D-3 供应链**（race/覆盖率/fuzz/docker/live-e2e 门禁、SBOM + provenance）+ **D-4 插件生态**（包签名信任链、共享 lib 覆盖、并发配额、WASM 不可信层、52 插件已签名且默认强制验签）+ **D-5 备份可运维性**（可配置保留/调度 + 新鲜度指标与 health 暴露）+ **2026-10 数据诚实性与可信度专项**（§4 checklist 清零；21 处 fail-loud + partial 标志 + 5 个租户隔离/孤儿行/持久化/批量/索引修复，每项配回归测试）+ **2026-10 传输与更新链专项**（WebSocket Hub 的连接 claim/隔离契约回归测试；批量重试不再静默丢弃超限结果帧；OTA 版本比较对不可解析版本 fail-closed）+ **2026-10 供应链钉扎**（39 处 Actions 钉 SHA + 4 个基础镜像钉多架构 digest + Dependabot 覆盖 docker/docker-compose；golangci-lint 改为增量棘轮收债）+ **2026-10 插件 CPU 预算**（Windows Job Object / Linux /proc 进程组记账，默认 120s，超限杀树并报 CPU 预算错误；采样间隔显式传参，消除 watchdog 与测试的竞态）+ **2026-10 插件写入预算**（同一 watchdog 记账写入字节，默认 1024 MiB，超限杀树；Windows Job Object I/O 计数 / Linux `/proc/<pid>/io` wchar）+ **2026-10 WASM ABI 加固**（输入写在模块初始内存之后，不再覆写模块数据；缺内存模块 fail-closed）+ **2026-10 插件创作管线**（`cmd/plugin-init` 脚手架 + `cmd/plugin-check` 校验器复用真实信任链与 executor，`-run` 真跑并校验输出契约，诊断带稳定 code 与 `-json` 报告；规范 + manifest JSON Schema 落文档） + **2026-10 C-implant 任务扩展与门禁**（clipboard_get/set、drives、find、portscan、get_sleep_mode 六个任务输出对齐 Go agent；CI 交叉构建 `-Werror` + 字符串断言 + `x25519_selftest` 主机自检 + WASM 示例 `plugin-check -run`；`cmd/mint-reg-secret` + 一次性服务器本地 E2E 全绿，无需操作台） |
 
 ---
 

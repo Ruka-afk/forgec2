@@ -136,6 +136,77 @@ jobs:
       - name: go test -race
         run: go test -race ./internal/server/... ./internal/plugin/... ./internal/scripting/... ./internal/payload/agent/... ./internal/db/... -count=1 -timeout 20m
 
+  # The C implant ships as source and is assembled on operator machines, so no
+  # other job would notice a syntax error, a fresh compiler warning, a task type
+  # that is dispatched but unreachable, or a WASM sample that no longer builds.
+  c-implant:
+    name: C implant + WASM example build gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: '1.26'
+          cache: true
+          cache-dependency-path: go.sum
+      - run: go mod download
+      - name: Install the cross toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 clang lld
+      - name: Cross-build the implant (warnings are errors)
+        run: |
+          cd proto/c-implant
+          # The vendored SQLite amalgamation is not this repository's code, so it
+          # is compiled once without -Werror: its warnings must not be able to
+          # mask ours.
+          x86_64-w64-mingw32-gcc -O1 -c sqlite3.c -o "$RUNNER_TEMP/sqlite3.o"
+          x86_64-w64-mingw32-gcc -O2 -Wall -Wextra -Werror -Wno-unknown-pragmas \
+            -DC2_HOST='"127.0.0.1"' -DC2_PORT=8000 -DBEACON_PATH='"/collect"' \
+            -DSECRET_ID='"00000000000000000000000000000000"' -DSECRET_B64='"AA=="' \
+            -DINTERVAL=3 -o "$RUNNER_TEMP/cbeacon-gate.exe" \
+            beacon.c crypto_cng.c curve25519.c evade.c dns_transport.c "$RUNNER_TEMP/sqlite3.o" \
+            -lwinhttp -lbcrypt -lpsapi -liphlpapi -lgdiplus -lgdi32 -luser32 -lole32 -ldnsapi -lws2_32
+      - name: Assert the task matrix is in the binary
+        run: |
+          status=0
+          for t in clipboard_get clipboard_set drives find portscan get_sleep_mode; do
+            if strings "$RUNNER_TEMP/cbeacon-gate.exe" | grep -q "$t"; then
+              echo "ok: $t"
+            else
+              echo "missing from the built implant: $t"
+              status=1
+            fi
+          done
+          exit $status
+      - name: DNS transport variant still compiles
+        run: |
+          cd proto/c-implant
+          x86_64-w64-mingw32-gcc -fsyntax-only -Wall -Wextra -Werror \
+            -DC2_TRANSPORT_DNS -DC2_DNS_DOMAIN='"t.example.com"' dns_transport.c
+      # The embedded X25519 ladder is checked at implant startup against
+      # compiler-baked Go-stdlib vectors; the same self-test runs here so a
+      # broken ladder fails CI instead of refusing to run in the field.
+      - name: X25519 self-test (host build)
+        run: |
+          cd proto/c-implant
+          printf '%s\n' \
+            '#include <stdio.h>' \
+            '#include "curve25519.h"' \
+            'int main(void) { int rc = x25519_selftest(); printf("x25519_selftest=%d\n", rc); return rc == 0 ? 0 : 1; }' \
+            > "$RUNNER_TEMP/x25519_main.c"
+          cc -O2 -Wall -Wextra -Werror -I. "$RUNNER_TEMP/x25519_main.c" curve25519.c \
+            -o "$RUNNER_TEMP/x25519_selftest"
+          "$RUNNER_TEMP/x25519_selftest"
+      - name: WASM example builds and runs (ABI v1)
+        run: |
+          cd examples/wasm/hello-report
+          rm -f plugin.wasm
+          CC=clang sh build.sh
+          cd "$GITHUB_WORKSPACE"
+          go run ./cmd/plugin-check examples/wasm/hello-report -run
+
   fuzz:
     name: Fuzz campaign
     # Seed corpora run as part of the normal test pass; the actual fuzzing only
