@@ -110,6 +110,47 @@ func isPortAvailable(host string, port int) bool {
 	return true
 }
 
+// isWildcardHost reports whether host binds every local interface: an empty
+// host, IPv4 0.0.0.0 or IPv6 :: (with or without brackets).
+func isWildcardHost(host string) bool {
+	switch strings.TrimSpace(strings.ToLower(host)) {
+	case "", "0.0.0.0", "::", "[::]":
+		return true
+	}
+	return false
+}
+
+// isLoopbackAlias reports whether host is the IPv4 loopback in either its
+// name or dotted-quad spelling. ::1 is deliberately not an alias of
+// 127.0.0.1: the two bind different address families and can coexist on the
+// same port.
+func isLoopbackAlias(host string) bool {
+	switch strings.TrimSpace(strings.ToLower(host)) {
+	case "localhost", "127.0.0.1":
+		return true
+	}
+	return false
+}
+
+// listenerOverlapsMainAddr reports whether a listener bound to host:port would
+// collide with the main server bind mainHost:mainPort. Wildcards cover every
+// interface on their port, and "localhost" aliases 127.0.0.1. Two different
+// concrete addresses on the same port are allowed to coexist.
+func listenerOverlapsMainAddr(host string, port int, mainHost string, mainPort int) bool {
+	if port != mainPort {
+		return false
+	}
+	h := strings.TrimSpace(strings.ToLower(host))
+	mh := strings.TrimSpace(strings.ToLower(mainHost))
+	if isWildcardHost(h) || isWildcardHost(mh) {
+		return true
+	}
+	if isLoopbackAlias(h) && isLoopbackAlias(mh) {
+		return true
+	}
+	return h == mh
+}
+
 // startTCPListener starts a raw TCP transport listener for agents using Protocol=tcp.
 // Uses length-prefixed JSON (4-byte BE len + JSON) for BeaconRequest / BeaconResponse.
 func (s *Server) startTCPListener() {

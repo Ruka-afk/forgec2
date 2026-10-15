@@ -31,12 +31,15 @@ func (s *Server) startExtraListenersFromDB() {
 		}
 		key := listenerKey(&l)
 
-		// For HTTP/TCP, skip if this is the main server address
+		// For HTTP/TCP, skip listeners that would collide with the main bind.
+		// The comparison is wildcard/loopback aware: the seeded default
+		// listener for a server bound to 0.0.0.0:8000 is stored as
+		// 127.0.0.1:8000, and binding that row as an "extra" listener wins the
+		// port race and then fails the main bind with "address already in use".
 		if scheme == "http" || scheme == "https" || scheme == "tcp" || scheme == "tls" {
 			addr := l.Host + ":" + itoa(l.Port)
-			mainAddr := s.cfg.Server.Host + ":" + itoa(s.cfg.Server.Port)
-			if addr == mainAddr {
-				slog.Debug("Skipping extra listener — matches main server address", "key", key)
+			if listenerOverlapsMainAddr(l.Host, l.Port, s.cfg.Server.Host, s.cfg.Server.Port) {
+				slog.Debug("Skipping extra listener — matches main server address", "key", key, "addr", addr)
 				continue
 			}
 			// Check port availability
