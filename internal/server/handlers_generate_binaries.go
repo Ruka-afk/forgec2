@@ -423,6 +423,14 @@ func (s *Server) handleGenerateDLL(c *gin.Context) {
 		return
 	}
 	agentsDir := s.extractAgentsDir()
+	// Fail fast on toolchain problems. Whether this host can cross-compile a
+	// CGO DLL is a property of the machine, not of the request, and the same
+	// check would otherwise run inside the queued job after sources had been
+	// extracted — surfacing as a build that hangs and then fails.
+	if err := payload.CheckDLLBuildPreconditions(cfg.Architecture, cfg.Obfuscate); err != nil {
+		respondError(c, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
 	job := s.startBuildJobWithProfile("windows", "dll", form.C2URL, form.ListenerID, form.Filename, form.Profile, profileAuditHash(cfg))
 
 	if !s.submitBuild(job, func() (string, error) {

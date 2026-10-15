@@ -56,6 +56,35 @@ func checkCgoCrossCompiler(goarch string) error {
 	return fmt.Errorf("CGO cross-compiler for amd64 not found: install mingw-w64 (e.g. apt install gcc-mingw-w64-x86-64) or set CC environment variable")
 }
 
+// CheckDLLBuildPreconditions reports whether this host can produce a Windows
+// DLL for the given requested architecture, before any build job is queued.
+//
+// GenerateWindowsDLL performs the same two checks, but only after extracting
+// agent sources into a temp dir and writing the config inject file. A server
+// with no mingw-w64 therefore accepted the request, answered 200
+// {"status":"building"}, and only failed once the queued job reached the
+// compiler check — a failure an operator sees as a stalled build rather than
+// as "this server cannot build DLLs at all". Whether the toolchain is present
+// is a fixed property of the host, so re-discovering it per attempt is waste.
+//
+// Both checks are read-only (PATH lookups) and conservative: they only report
+// what would certainly fail, so a host that can build still can.
+func CheckDLLBuildPreconditions(architecture string, obfuscate bool) error {
+	goarch, err := resolveBuildArch("windows", architecture)
+	if err != nil {
+		return err
+	}
+	if obfuscate {
+		// Same rejection as buildAgentBinaryDLL, which runs garble and
+		// -buildmode=c-shared at once.
+		return fmt.Errorf("garble obfuscation is not supported with -buildmode=c-shared; disable obfuscation for DLL builds")
+	}
+	if err := checkCgoCrossCompiler(goarch); err != nil {
+		return fmt.Errorf("DLL build requires CGO: %w", err)
+	}
+	return nil
+}
+
 // GenerateWindowsDLL builds the Windows agent DLL (buildmode=c-shared)
 // for use with rundll32 / regsvr32 / LoadLibrary.
 func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
@@ -86,7 +115,7 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 
 	goMod := buildGoMod("windows", true, cfg.Slim, cfg.Win7Compat)
 
-	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0600); err != nil {
 		return "", err
 	}
 	if cfg.Win7Compat {
