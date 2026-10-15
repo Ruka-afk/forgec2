@@ -89,9 +89,20 @@ const (
 	// export. Task.Result is ciphertext capped at MaxResultSize (1 MiB) per row,
 	// so the read is chunked: decrypt first and truncate second, with at most
 	// HandoverTaskChunk rows resident at a time instead of the whole window.
-	HandoverTaskLimit      = 50000
-	HandoverTaskChunk      = 1000
-	HandoverResultMaxLen   = 4096
+	HandoverTaskLimit    = 50000
+	HandoverTaskChunk    = 1000
+	HandoverResultMaxLen = 4096
+	// IOCScanTaskLimit / IOCScanChunk bound the indicator sweep over task
+	// output. Task.Result is capped at MaxResultSize (1 MiB) per row, so
+	// reading the whole window in one query could materialise tens of GiB. The
+	// sweep chunks instead of truncating: a size cut would silently drop
+	// indicators, and SUBSTR cannot be used because the column is ciphertext.
+	IOCScanTaskLimit = 20000
+	IOCScanChunk     = 500
+	// IOCScanHostLimit / IOCScanHostChunk bound the network-host half of the
+	// same sweep.
+	IOCScanHostLimit       = 10000
+	IOCScanHostChunk       = 2000
 	TopologyAgentLimit     = 5000
 	LootAgentLimit         = 5000
 	AgentQueryLimit        = 5000

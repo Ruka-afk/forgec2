@@ -809,13 +809,36 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 	}
 	latestUsageMap := make(map[uint]*db.CredentialUsage)
 	if len(credIDs) > 0 {
-		var usages []db.CredentialUsage
-		if err := s.db.Where("credential_id IN ?", credIDs).
-			Order("created_at desc").Find(&usages).Error; err == nil {
-			for i := range usages {
-				if _, exists := latestUsageMap[usages[i].CredentialID]; !exists {
-					latestUsageMap[usages[i].CredentialID] = &usages[i]
-				}
+		// One row per credential, not the whole ledger. The page previously
+		// read every usage row for up to 5000 credentials into memory and
+		// de-duped in Go; credential_usages is append-only and (before the
+		// retention sweep) unbounded, so the vault page's memory cost grew
+		// with engagement history rather than with the page size.
+		//
+		// CredentialLifecycle only reads Action and Result, and ROW_NUMBER is
+		// the portable way to pick the newest row per group (SQLite >= 3.25 and
+		// Postgres both support it; a bare column alongside MAX() would be a
+		// SQLite-only extension).
+		type latestUsageRow struct {
+			CredentialID uint
+			Action       string
+			Result       string
+		}
+		ranked := s.db.Model(&db.CredentialUsage{}).
+			Select("credential_id, action, result, created_at, ROW_NUMBER() OVER (PARTITION BY credential_id ORDER BY created_at DESC) AS rn").
+			Where("credential_id IN ?", credIDs)
+		var rows []latestUsageRow
+		if err := s.db.Table("(?) AS ranked", ranked).Where("rn = 1").Scan(&rows).Error; err != nil {
+			// Swallowing this rendered every credential as "fresh" with no
+			// evidence the read failed — a fabricated lifecycle label.
+			handleQueryError(c, err, "Failed to aggregate credential usage")
+			return
+		}
+		for i := range rows {
+			latestUsageMap[rows[i].CredentialID] = &db.CredentialUsage{
+				CredentialID: rows[i].CredentialID,
+				Action:       rows[i].Action,
+				Result:       rows[i].Result,
 			}
 		}
 	}
@@ -855,7 +878,7 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 	}
 
 	var credsTasks []db.Task
-	if err := s.db.Preload("Agent").
+	if err := s.tenantScope(s.db.Preload("Agent"), c).
 		Where("type = ?", "creds").
 		Order("created_at desc").Limit(100).Find(&credsTasks).Error; err != nil {
 		handleQueryError(c, err, "Failed to query creds tasks")
@@ -863,7 +886,7 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 	}
 
 	var related []db.Task
-	if err := s.db.Preload("Agent").
+	if err := s.tenantScope(s.db.Preload("Agent"), c).
 		Where("type = ? AND (command LIKE ? OR command LIKE ? OR command LIKE ?)", "shell", "%mimikatz%", "%sekurlsa%", "%lsass%").
 		Order("created_at desc").Limit(30).Find(&related).Error; err != nil {
 		handleQueryError(c, err, "Failed to query related creds tasks")

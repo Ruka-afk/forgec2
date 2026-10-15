@@ -182,47 +182,69 @@ func (s *Server) extractIOCs(days int, includePrivate bool, agentScope *gorm.DB)
 	// regexes below ran over FC2ENC: ciphertext before, which silently lost
 	// every IOC that only appeared in command output. Type is selected as well
 	// because the hook uses it to decide whether Command needs decrypting too.
-	var rows []db.Task
-	taskQuery := s.db.Table("tasks").
-		Select("id, agent_id, type, command, result, created_at").
-		Where("created_at >= ?", since).
-		Order("created_at desc").Limit(20000)
-	if agentScope != nil {
-		taskQuery = taskQuery.Where("agent_id IN (?)", agentScope)
-	}
-	if err := taskQuery.Find(&rows).Error; err != nil {
-		return nil, 0, fmt.Errorf("scan task indicators: %w", err)
-	}
-	scanned := len(rows)
-	for _, r := range rows {
-		at := r.CreatedAt
-		iocExtractText(acc, r.Result, at, includePrivate)
-		// Commands can contain target URLs/IPs (download_url, portscan…).
-		if r.Command != "" && len(r.Command) < 2048 {
-			iocExtractText(acc, r.Command, at, includePrivate)
+	//
+	// Read in chunks rather than truncating. Task.Result is capped at
+	// MaxResultSize (1 MiB) per row, so the old single 20k-row read could
+	// materialise ~20 GiB before a single regex ran. SQL-side SUBSTR is not an
+	// option: the column is ciphertext and cutting it makes it undecryptable.
+	// Chunking bounds the resident set while still scanning every byte, so no
+	// indicator is lost to a size cut.
+	var scanned int
+	for offset := 0; offset < IOCScanTaskLimit; offset += IOCScanChunk {
+		var rows []db.Task
+		taskQuery := s.db.Table("tasks").
+			Select("id, agent_id, type, command, result, created_at").
+			Where("created_at >= ?", since).
+			Order("created_at desc, id desc").
+			Offset(offset).Limit(IOCScanChunk)
+		if agentScope != nil {
+			taskQuery = taskQuery.Where("agent_id IN (?)", agentScope)
+		}
+		if err := taskQuery.Find(&rows).Error; err != nil {
+			return nil, 0, fmt.Errorf("scan task indicators: %w", err)
+		}
+		for _, r := range rows {
+			at := r.CreatedAt
+			iocExtractText(acc, r.Result, at, includePrivate)
+			// Commands can contain target URLs/IPs (download_url, portscan…).
+			if r.Command != "" && len(r.Command) < 2048 {
+				iocExtractText(acc, r.Command, at, includePrivate)
+			}
+		}
+		scanned += len(rows)
+		if len(rows) < IOCScanChunk {
+			break
 		}
 	}
 
-	// Network hosts discovered by scanning/recon.
-	var hosts []struct {
-		IP        string
-		Hostname  string
-		CreatedAt time.Time
-	}
-	hostQuery := s.db.Table("network_hosts").
-		Select("ip, hostname, created_at").Limit(10000)
-	if agentScope != nil {
-		hostQuery = hostQuery.Where("agent_id IN (?)", agentScope)
-	}
-	if err := hostQuery.Scan(&hosts).Error; err != nil {
-		return nil, 0, fmt.Errorf("scan network-host indicators: %w", err)
-	}
-	for _, h := range hosts {
-		if includePrivate || isPublicIP(h.IP) {
-			acc.add("ipv4", h.IP, h.CreatedAt, "network_hosts")
+	// Network hosts discovered by scanning/recon. Chunked for the same reason
+	// as the task sweep, and so the whole table is never resident at once.
+	for offset := 0; offset < IOCScanHostLimit; offset += IOCScanHostChunk {
+		var hosts []struct {
+			IP        string
+			Hostname  string
+			CreatedAt time.Time
 		}
-		if h.Hostname != "" && strings.Contains(h.Hostname, ".") {
-			acc.add("domain", strings.ToLower(h.Hostname), h.CreatedAt, "network_hosts")
+		hostQuery := s.db.Table("network_hosts").
+			Select("ip, hostname, created_at").
+			Order("created_at desc, id desc").
+			Offset(offset).Limit(IOCScanHostChunk)
+		if agentScope != nil {
+			hostQuery = hostQuery.Where("agent_id IN (?)", agentScope)
+		}
+		if err := hostQuery.Scan(&hosts).Error; err != nil {
+			return nil, 0, fmt.Errorf("scan network-host indicators: %w", err)
+		}
+		for _, h := range hosts {
+			if includePrivate || isPublicIP(h.IP) {
+				acc.add("ipv4", h.IP, h.CreatedAt, "network_hosts")
+			}
+			if h.Hostname != "" && strings.Contains(h.Hostname, ".") {
+				acc.add("domain", strings.ToLower(h.Hostname), h.CreatedAt, "network_hosts")
+			}
+		}
+		if len(hosts) < IOCScanHostChunk {
+			break
 		}
 	}
 

@@ -67,6 +67,17 @@ func (s *Server) cleanupOldData() {
 		}
 	}
 
+	// The credential-usage ledger is append-only and had no retention at all:
+	// every spray/lateral/verify wrote a row forever, and the vault page read
+	// the whole table to compute lifecycle labels. Purged on the forensic
+	// clock rather than the ops one — deleting evidence of credential use
+	// sooner than the audit trail that records the operator would be a
+	// forensic regression. CredentialLifecycle only needs the newest row per
+	// credential, which survives any cutoff shorter than the engagement.
+	if err := s.db.WithContext(s.ctx).Where("created_at < ?", auditCutoff).Delete(&db.CredentialUsage{}).Error; err != nil {
+		slog.Error("Cleanup credential usages failed", "err", err)
+	}
+
 	// delete old system metrics (monitoring persists one row every 30s; without
 	// retention the table grows ~2.9k rows/day and bloats the SQLite database)
 	if err := s.db.WithContext(s.ctx).Where("created_at < ?", cutoff).Delete(&db.SystemMetric{}).Error; err != nil {
