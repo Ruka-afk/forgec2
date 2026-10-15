@@ -21,12 +21,62 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// updateTestServers tracks every server built by newUpdateTestServer so
+// setServerVersion can drain them before restoring the package-level
+// ServerVersion. handleHotUpdate finishes the update on a wg-tracked
+// goroutine that reads ServerVersion, so without this drain the version
+// restore raced a live worker — a genuine data race the detector flags.
+var updateTestServers []*Server
+
 func newUpdateTestServer(t *testing.T) *Server {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	cfg := config.DefaultConfig()
 	cfg.Server.UpdateCheckRepo = "forgec2-test/nonexistent-update-repo"
-	return &Server{db: testutil.SetupTestDB(t), cfg: cfg, ctx: context.Background()}
+	s := &Server{db: testutil.SetupTestDB(t), cfg: cfg, ctx: context.Background()}
+	updateTestServers = append(updateTestServers, s)
+	return s
+}
+
+// stubReleaseAPI points the release-assets URL at a local server for the rest
+// of the test. Without it the accept path reaches api.github.com for real:
+// three attempts of DNS plus TLS against a repo that does not exist, which
+// made this test take ~17s and fail whenever the network was unavailable.
+// The stub answers 404, which is the branch performHotUpdate already handles.
+func stubReleaseAPI(t *testing.T) {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	previous := releaseAssetsURLFmt
+	releaseAssetsURLFmt = srv.URL + "/repos/%s/releases/tags/%s"
+	t.Cleanup(func() {
+		// Drain before restoring: the worker reads this var, so the write must
+		// not land while one is still in flight. Doing both in one cleanup
+		// makes that invariant independent of cleanup ordering.
+		drainUpdateWorkers(t)
+		releaseAssetsURLFmt = previous
+		srv.Close()
+	})
+}
+
+// drainUpdateWorkers waits for background workers spawned by the update
+// handlers, bounded so a stalled fetch cannot wedge the suite. A timeout here
+// is itself a failure: it means a worker outlived the test that started it.
+func drainUpdateWorkers(t *testing.T) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for _, s := range updateTestServers {
+			s.wg.Wait()
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		t.Error("background update worker outlived the test")
+	}
 }
 
 // updateWait fails the test if ch does not produce a value in time.
@@ -90,12 +140,17 @@ func TestCompareVersions(t *testing.T) {
 }
 
 // setServerVersion pins the build version for a test and restores it, since the
-// comparison guards read a package-level var.
+// comparison guards read a package-level var. The drain and the restore are one
+// cleanup so the drain always runs first, whatever order the other test
+// cleanups were registered in.
 func setServerVersion(t *testing.T, v string) {
 	t.Helper()
 	previous := ServerVersion
 	ServerVersion = v
-	t.Cleanup(func() { ServerVersion = previous })
+	t.Cleanup(func() {
+		drainUpdateWorkers(t)
+		ServerVersion = previous
+	})
 }
 
 // TestHotUpdateNeverDowngradesAnUnreadableBuild proves the guard that matters
@@ -586,6 +641,7 @@ func TestHandleHotUpdateRefusesDowngradeAndNoUpdate(t *testing.T) {
 func TestHandleHotUpdateAcceptsNewerVersionAndAudits(t *testing.T) {
 	s := newUpdateTestServer(t)
 	setServerVersion(t, "2.6.2")
+	stubReleaseAPI(t)
 	if err := s.db.Create(&db.User{Username: "update-op", TenantID: 1, Role: "admin", IsActive: true}).Error; err != nil {
 		t.Fatalf("seed caller: %v", err)
 	}

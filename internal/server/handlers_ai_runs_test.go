@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -136,7 +137,7 @@ func TestAIToolPolicyCreatesBoundIntentInsteadOfExecuting(t *testing.T) {
 func TestAIReasoningIsNotReplayedToNewSubscriber(t *testing.T) {
 	broker := newAIRunBroker()
 	broker.publish("run-1", aiLiveEvent{Sequence: 3, Type: "reasoning", Payload: "private chain"}, true)
-	stream, unsubscribe := broker.subscribe("run-1")
+	stream, _, unsubscribe := broker.subscribe("run-1")
 	defer unsubscribe()
 	select {
 	case event := <-stream:
@@ -147,7 +148,7 @@ func TestAIReasoningIsNotReplayedToNewSubscriber(t *testing.T) {
 
 func TestAIBrokerCoalescesStalledRetries(t *testing.T) {
 	broker := newAIRunBroker()
-	stream, unsubscribe := broker.subscribe("run-1")
+	stream, _, unsubscribe := broker.subscribe("run-1")
 	// Fill the 256 buffer so every publish takes the retry path.
 	for i := 0; i < 256; i++ {
 		broker.publish("run-1", aiLiveEvent{Sequence: int64(i), Type: "text", Payload: "x"}, false)
@@ -171,6 +172,69 @@ func TestAIBrokerCoalescesStalledRetries(t *testing.T) {
 	}
 	// Drain remaining worker without hanging the suite.
 	time.Sleep(150 * time.Millisecond)
+}
+
+// TestAIBrokerUnsubscribeRacesRetriedSend hammers the exact interleaving that
+// used to be a data race: publish takes the retry path (buffer full, one
+// worker parked in its blocking send) while unsubscribe runs concurrently.
+//
+// The old design closed the event channel from the unsubscribe closure, so a
+// retry worker could be inside `dst <- ev` when the close landed. That was
+// caught by a recover(), which silences the panic but not the race. The new
+// design never closes the event channel — termination is a separate done
+// channel — so this test passes under -race with no recover in sight.
+func TestAIBrokerUnsubscribeRacesRetriedSend(t *testing.T) {
+	for attempt := 0; attempt < 40; attempt++ {
+		broker := newAIRunBroker()
+		const runID = "run-race"
+		_, _, unsubscribe := broker.subscribe(runID)
+
+		// Saturate the 256-slot buffer so the next publish must take the
+		// blocking retry path and park a worker on the send.
+		for i := 0; i < 256; i++ {
+			broker.publish(runID, aiLiveEvent{Sequence: int64(i), Type: "text", Payload: "x"}, false)
+		}
+
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 20; i++ {
+				broker.publish(runID, aiLiveEvent{Sequence: int64(1000 + i), Type: "text", Payload: "y"}, false)
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			// Repeatedly cycle the subscription so workers spawned by one
+			// generation overlap the close of the next.
+			for i := 0; i < 10; i++ {
+				unsubscribe()
+				_, _, unsubscribe = broker.subscribe(runID)
+			}
+			unsubscribe()
+		}()
+		wg.Wait()
+		// Let any parked retry worker finish against the dead subscription.
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	// After every unsubscribe the run must be fully deregistered: a leak here
+	// would keep retrying workers alive for a run nobody is listening to.
+	broker := newAIRunBroker()
+	_, done, unsubscribe := broker.subscribe("run-cleanup")
+	unsubscribe()
+	unsubscribe() // must be idempotent, not a double-close panic
+	select {
+	case <-done:
+	default:
+		t.Fatal("unsubscribe must close the done channel")
+	}
+	broker.mu.Lock()
+	leftover := len(broker.subscribers["run-cleanup"])
+	broker.mu.Unlock()
+	if leftover != 0 {
+		t.Fatalf("run kept %d subscribers after unsubscribe", leftover)
+	}
 }
 
 func TestAIKnowledgeSearchRejectsCrossTenantCollections(t *testing.T) {

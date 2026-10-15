@@ -76,42 +76,61 @@ type aiLiveEvent struct {
 	Payload  string
 }
 
+// aiSubscriber is one live run's event stream.
+//
+// The event channel is deliberately NEVER closed. An unsubscribe races any
+// in-flight send, and closing under a sender turns a routine disconnect into a
+// "send on closed channel" panic — previously papered over with a recover(),
+// which is still a data race the race detector (correctly) rejects. Instead
+// termination is signalled by done: closing it is a synchronization point that
+// senders select on, so a late event is simply dropped.
+type aiSubscriber struct {
+	events chan aiLiveEvent
+	done   chan struct{}
+}
+
 type aiRunBroker struct {
 	mu          sync.Mutex
-	subscribers map[string]map[chan aiLiveEvent]struct{}
+	subscribers map[string]map[*aiSubscriber]struct{}
 	cancels     map[string]context.CancelFunc
-	// retrying tracks channels with an in-flight blocking retry worker, so
+	// retrying tracks subscribers with an in-flight blocking retry worker, so
 	// a stalled subscriber coalesces to at most one worker instead of one
 	// goroutine per event (previously unbounded at event rate).
-	retrying map[chan aiLiveEvent]bool
+	retrying map[*aiSubscriber]bool
 }
 
 func newAIRunBroker() *aiRunBroker {
 	return &aiRunBroker{
-		subscribers: make(map[string]map[chan aiLiveEvent]struct{}),
+		subscribers: make(map[string]map[*aiSubscriber]struct{}),
 		cancels:     make(map[string]context.CancelFunc),
-		retrying:    make(map[chan aiLiveEvent]bool),
+		retrying:    make(map[*aiSubscriber]bool),
 	}
 }
 
-func (b *aiRunBroker) subscribe(runID string) (<-chan aiLiveEvent, func()) {
-	ch := make(chan aiLiveEvent, 256)
+// subscribe registers a live listener for runID. It returns the event stream,
+// a channel closed when the subscription ends, and an idempotent unsubscribe.
+func (b *aiRunBroker) subscribe(runID string) (<-chan aiLiveEvent, <-chan struct{}, func()) {
+	sub := &aiSubscriber{events: make(chan aiLiveEvent, 256), done: make(chan struct{})}
 	b.mu.Lock()
 	if b.subscribers[runID] == nil {
-		b.subscribers[runID] = make(map[chan aiLiveEvent]struct{})
+		b.subscribers[runID] = make(map[*aiSubscriber]struct{})
 	}
-	b.subscribers[runID][ch] = struct{}{}
+	b.subscribers[runID][sub] = struct{}{}
 	b.mu.Unlock()
-	return ch, func() {
-		b.mu.Lock()
-		if subs := b.subscribers[runID]; subs != nil {
-			delete(subs, ch)
-			if len(subs) == 0 {
-				delete(b.subscribers, runID)
+
+	var once sync.Once
+	return sub.events, sub.done, func() {
+		once.Do(func() {
+			b.mu.Lock()
+			if subs := b.subscribers[runID]; subs != nil {
+				delete(subs, sub)
+				if len(subs) == 0 {
+					delete(b.subscribers, runID)
+				}
 			}
-		}
-		close(ch)
-		b.mu.Unlock()
+			b.mu.Unlock()
+			close(sub.done)
+		})
 	}
 }
 
@@ -119,44 +138,36 @@ func (b *aiRunBroker) publish(runID string, event aiLiveEvent, ephemeral bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	_ = ephemeral // reasoning is live-only per choice #3 (single session visible).
-	for ch := range b.subscribers[runID] {
+	for sub := range b.subscribers[runID] {
 		select {
-		case ch <- event:
+		case sub.events <- event:
 		default:
 			// Buffer full: try blocking 100ms before dropping to favor latency-first but avoid stall.
 			// Single-session reasoning stays ephemeral; durable events are replayed from SQLite.
-			// At most one retry worker per channel — concurrent full-buffer
+			// At most one retry worker per subscriber — concurrent full-buffer
 			// events coalesce (the worker carries the latest) instead of
 			// spawning a goroutine per event under a stalled subscriber.
-			if b.retrying[ch] {
+			if b.retrying[sub] {
 				continue
 			}
-			b.retrying[ch] = true
-			go func(dst chan aiLiveEvent, ev aiLiveEvent, rid string) {
-				// A racing unsubscribe closes dst; sending then panics.
-				// Recover as drop — the subscriber is gone by definition.
+			b.retrying[sub] = true
+			go func(dst *aiSubscriber, ev aiLiveEvent, rid string) {
 				defer func() {
-					if r := recover(); r != nil {
-						slog.Debug("AI broker retry on closed channel", "run_id", rid)
-					}
 					b.mu.Lock()
 					delete(b.retrying, dst)
 					b.mu.Unlock()
 				}()
-				// Re-check membership: an unsubscribe that won the race made
-				// this retry pointless — drop without touching the channel.
-				b.mu.Lock()
-				_, alive := b.subscribers[rid][dst]
-				b.mu.Unlock()
-				if !alive {
-					return
-				}
+				// dst.done is already closed when the subscriber left, so a
+				// racing unsubscribe makes this drop instead of panic — and
+				// unlike a membership re-check it cannot lose the race between
+				// the check and the send.
 				select {
-				case dst <- ev:
+				case dst.events <- ev:
+				case <-dst.done:
 				case <-time.After(100 * time.Millisecond):
 					slog.Warn("AI broker drop: stalled subscriber", "run_id", rid, "event_id", ev.Sequence, "type", ev.Type)
 				}
-			}(ch, event, runID)
+			}(sub, event, runID)
 		}
 	}
 }
@@ -683,7 +694,7 @@ func (s *Server) handleAIRunEvents(c *gin.Context) {
 	if s.aiRuns == nil {
 		s.aiRuns = newAIRunBroker()
 	}
-	live, unsubscribe := s.aiRuns.subscribe(run.ID)
+	live, gone, unsubscribe := s.aiRuns.subscribe(run.ID)
 	defer unsubscribe()
 	send := func(event aiLiveEvent) bool {
 		if event.Sequence <= after {
@@ -732,10 +743,14 @@ func (s *Server) handleAIRunEvents(c *gin.Context) {
 		select {
 		case <-c.Request.Context().Done():
 			return
-		case event, open := <-live:
-			if !open || !send(event) {
+		case event := <-live:
+			if !send(event) {
 				return
 			}
+		case <-gone:
+			// The subscription ended. The event channel is never closed, so
+			// this — not a zero-value receive — is the end-of-stream signal.
+			return
 		case <-heartbeat.C:
 			if _, err := fmt.Fprintf(c.Writer, "event: ping\ndata: %d\n\n", time.Now().Unix()); err != nil {
 				return

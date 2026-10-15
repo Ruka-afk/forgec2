@@ -335,7 +335,12 @@ func (s *Server) handleHotUpdate(c *gin.Context) {
 	// Trigger async hot-update; progress follows via WS update_progress
 	// and GET /api/update-progress (the process restarts on success).
 	s.setUpdateProgress(updateStageDownloading, 0, 0, 0, latest, "")
+	// wg-tracked so shutdown drains an in-flight replacement instead of
+	// exiting halfway through swapping the binary. Stop() bounds the wait
+	// with WorkerDrainTimeout, so a slow download cannot wedge shutdown.
+	s.wg.Add(1)
 	go func() {
+		defer s.wg.Done()
 		defer func() {
 			if r := recover(); r != nil {
 				slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))
@@ -555,9 +560,14 @@ func quoteSh(p string) string {
 	return "'" + strings.ReplaceAll(p, `'`, `'\''`) + "'"
 }
 
+// releaseAssetsURLFmt builds the GitHub release-assets URL. It is a var, not a
+// const, so tests can point it at a local httptest server; the hot-update path
+// is otherwise a live network call that made the suite both slow and flaky.
+var releaseAssetsURLFmt = defaultReleaseAssetsURLFmt
+
 // fetchReleaseAssets gets the asset list for a given tag
 func fetchReleaseAssets(repo, tag string) ([]GitHubAsset, error) {
-	url := fmt.Sprintf(defaultReleaseAssetsURLFmt, repo, tag)
+	url := fmt.Sprintf(releaseAssetsURLFmt, repo, tag)
 	client := ssrfSafeClient(&http.Client{Timeout: GitHubAPITimeout})
 
 	backoff := []time.Duration{time.Second, 3 * time.Second}

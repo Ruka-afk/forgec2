@@ -34,18 +34,28 @@ func newBuildTestServer(t *testing.T) *Server {
 }
 
 // waitForBuildJob waits for the job to leave the "building" state.
+//
+// The status must be read while still holding the lock: completeBuildJob
+// mutates the job from the build goroutine, so reading the field after
+// RUnlock is a data race even though the map lookup was guarded.
 func waitForBuildJob(t *testing.T, s *Server, jobID string, timeout time.Duration) *BuildJob {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		s.buildJobsMu.RLock()
 		job, ok := s.buildJobs[jobID]
+		var done *BuildJob
+		if ok && job.Status != "building" {
+			// Copy under the lock so the caller cannot race the worker either.
+			snapshot := *job
+			done = &snapshot
+		}
 		s.buildJobsMu.RUnlock()
 		if !ok {
 			t.Fatalf("job %s not found", jobID)
 		}
-		if job.Status != "building" {
-			return job
+		if done != nil {
+			return done
 		}
 		time.Sleep(10 * time.Millisecond)
 	}

@@ -350,7 +350,7 @@ func TestAIRunBrokerLifecycle(t *testing.T) {
 	b := newAIRunBroker()
 	const runID = "run-1"
 
-	ch, unsubscribe := b.subscribe(runID)
+	ch, _, unsubscribe := b.subscribe(runID)
 	defer unsubscribe()
 
 	b.publish(runID, aiLiveEvent{Sequence: 1, Type: "started", Payload: "{}"}, false)
@@ -408,15 +408,15 @@ func TestAIRunBrokerUnsubscribeStopsDelivery(t *testing.T) {
 	b := newAIRunBroker()
 	const runID = "run-3"
 
-	ch, unsubscribe := b.subscribe(runID)
+	ch, _, unsubscribe := b.subscribe(runID)
 	unsubscribe()
-	// A late publish must not block or panic on a closed channel.
+	// A late publish must not block or reach the subscriber. The event channel
+	// is never closed, so the guarantee is structural rather than a recovered
+	// panic.
 	b.publish(runID, aiLiveEvent{Sequence: 1, Type: "late"}, false)
 	select {
-	case ev, ok := <-ch:
-		if ok {
-			t.Fatalf("event %+v was delivered after unsubscribe", ev)
-		}
+	case ev := <-ch:
+		t.Fatalf("event %+v was delivered after unsubscribe", ev)
 	default:
 	}
 }

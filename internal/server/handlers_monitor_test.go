@@ -87,13 +87,11 @@ func TestCheckAgentAlertsPagedSweepLargeFleet(t *testing.T) {
 	m := NewMonitorCollector(s)
 
 	const fleetSize = agentReapPageSize + 2
-	now := time.Now()
 	seed := make([]db.Implant, 0, fleetSize)
 	for i := range fleetSize {
 		seed = append(seed, db.Implant{
-			ID:       fmt.Sprintf("swp-%05d", i),
-			Status:   "online",
-			LastSeen: now.Add(-45 * time.Second), // past the 30s offline threshold, before the 90s stale threshold
+			ID:     fmt.Sprintf("swp-%05d", i),
+			Status: "online",
 		})
 	}
 	// 5002 rows would need one INSERT statement here, which exceeds SQLite's
@@ -102,6 +100,23 @@ func TestCheckAgentAlertsPagedSweepLargeFleet(t *testing.T) {
 		end := min(start+500, len(seed))
 		if err := s.db.Create(seed[start:end]).Error; err != nil {
 			t.Fatalf("seed fleet: %v", err)
+		}
+	}
+	// Anchor last_seen AFTER the inserts finish, not before. checkAgentAlerts
+	// compares against time.Now(), so a fixture that timestamps up front is
+	// only correct while seeding is fast: under -race the insert can outlive
+	// the 90s stale threshold, every agent is then legitimately classified
+	// offline, and this test fails reporting "0/5002 flipped to stale" — a
+	// measurement of the fixture's own latency, not of the sweep.
+	cutoff := time.Now().Add(-45 * time.Second) // past the 30s offline threshold, before the 90s stale threshold
+	for start := 0; start < len(seed); start += 500 {
+		end := min(start+500, len(seed))
+		ids := make([]string, 0, end-start)
+		for _, a := range seed[start:end] {
+			ids = append(ids, a.ID)
+		}
+		if err := s.db.Model(&db.Implant{}).Where("id IN ?", ids).Update("last_seen", cutoff).Error; err != nil {
+			t.Fatalf("anchor last_seen: %v", err)
 		}
 	}
 
