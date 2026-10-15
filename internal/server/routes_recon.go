@@ -118,7 +118,4 @@ func (s *Server) gatedMetricsHandler() gin.HandlerFunc {
 	}
 }
 
-// gatedPprofHandler was removed along with the /debug/pprof/* routes, which
-// leaves server.enable_pprof with no reader.
-
 // registerSettingsRoutes registers settings, 2FA, i18n routes.

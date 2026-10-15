@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -309,10 +308,4 @@ func activeLogSink(ctx context.Context) *wasmRun {
 // isWasmInterpreter reports whether the manifest selects the WASM tier.
 func isWasmInterpreter(interpreter string) bool {
 	return strings.EqualFold(strings.TrimSpace(interpreter), "wasm")
-}
-
-// logWasmUnsupported is emitted once when a package claims the WASM tier but
-// the runtime is unavailable, so operators can see why it did not run.
-func logWasmUnavailable(name string, err error) {
-	slog.Error("WASM plugin runtime unavailable", "plugin", name, "err", err)
 }
