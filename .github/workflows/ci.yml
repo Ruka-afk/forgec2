@@ -107,7 +107,12 @@ jobs:
             sleep 1
           done
           chmod +x scripts/ci-api-smoke.sh
-          scripts/ci-api-smoke.sh
+          scripts/ci-api-smoke.sh || {
+            echo "=== server log (last 200 lines) ==="
+            tail -n 200 /tmp/forgec2-smoke.log
+            kill $(cat /tmp/forgec2-smoke.pid) || true
+            exit 1
+          }
           kill $(cat /tmp/forgec2-smoke.pid) || true
 
   race:
@@ -162,8 +167,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate compose files
         env:
-          # The production overlay requires an explicit JWT secret.
+          # The production overlay requires an explicit JWT secret and the
+          # postgres profile interpolates DB_PASSWORD; both values are
+          # throwaway validation-only strings, never real credentials.
           FORGEC2_JWT_SECRET: ci-validation-only-not-a-secret
+          DB_PASSWORD: ci-validation-only-not-a-secret
         run: |
           docker compose -f docker-compose.yml config > /dev/null
           docker compose -f docker-compose.yml -f docker-compose.prod.yml config > /dev/null
