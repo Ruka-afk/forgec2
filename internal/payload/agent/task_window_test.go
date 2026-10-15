@@ -1,6 +1,7 @@
 package main
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 
@@ -18,15 +19,32 @@ func TestWindowHandlersRegistered(t *testing.T) {
 }
 
 // TestWindowCloseRequiresTarget is platform-independent: an empty target
-// must fail before any OS window call happens.
+// must fail before any OS window call happens, and must never report success.
+//
+// The wording of the error is platform-specific and used to be asserted
+// unconditionally, which is why this test passed on Windows and failed on
+// ubuntu CI: off Windows, closeWindow returns "window_close only on Windows"
+// before it ever looks at the target, so the HWND usage text never appears.
+// The invariant worth pinning everywhere is "rejected, no output"; the
+// Windows wording is still checked, but only where it is produced.
 func TestWindowCloseRequiresTarget(t *testing.T) {
 	res := TaskResult{}
 	handleWindowClose(Task{ID: 903, Type: protocol.TaskTypeWindowClose}, &res)
 	if res.Error == "" {
 		t.Fatal("expected an error for empty window_close target")
 	}
-	if !strings.Contains(res.Error, "HWND") {
-		t.Fatalf("error should mention HWND/title usage, got: %q", res.Error)
+	if res.Output != "" {
+		t.Fatalf("empty target produced output %q, want none", res.Output)
+	}
+	if runtime.GOOS == "windows" {
+		if !strings.Contains(res.Error, "HWND") {
+			t.Fatalf("error should mention HWND/title usage on Windows, got: %q", res.Error)
+		}
+	} else if !strings.Contains(res.Error, "only on Windows") {
+		// Off Windows closeWindow bails before touching the target, so the
+		// message is the unsupported-task one from task_window.go. Asserting it
+		// keeps this branch honest instead of skipping the check entirely.
+		t.Fatalf("error should say the task is Windows-only off Windows, got: %q", res.Error)
 	}
 }
 
