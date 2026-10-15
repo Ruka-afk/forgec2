@@ -85,6 +85,13 @@ const (
 	ExportTaskLimit        = 10000
 	CSVResultTruncLen      = 500
 	CSVErrorTruncLen       = 500
+	// HandoverTaskLimit / HandoverTaskChunk bound the handover bundle's task
+	// export. Task.Result is ciphertext capped at MaxResultSize (1 MiB) per row,
+	// so the read is chunked: decrypt first and truncate second, with at most
+	// HandoverTaskChunk rows resident at a time instead of the whole window.
+	HandoverTaskLimit      = 50000
+	HandoverTaskChunk      = 1000
+	HandoverResultMaxLen   = 4096
 	TopologyAgentLimit     = 5000
 	LootAgentLimit         = 5000
 	AgentQueryLimit        = 5000

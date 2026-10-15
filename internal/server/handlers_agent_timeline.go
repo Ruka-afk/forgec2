@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 )
 
@@ -53,18 +54,15 @@ func (s *Server) handleAgentTimeline(c *gin.Context) {
 	skipTypes := map[string]bool{
 		"beacon_now": true, "set_sleep": true,
 	}
-	var tasks []struct {
-		ID        uint      `json:"id"`
-		Type      string    `json:"type"`
-		Command   string    `json:"command"`
-		Status    string    `json:"status"`
-		CreatedAt time.Time `json:"created_at"`
-	}
+	// Dest is db.Task so Task.AfterFind decrypts Command for the
+	// SensitiveTaskTypes (mimikatz, cred_check, token_make, …). Scanning into a
+	// bare struct put an "FC2ENC:..." blob in the feed as the event title.
+	var tasks []db.Task
 	q := s.db.Table("tasks").
-		Select("id, type, command, status, created_at").
+		Select("id, agent_id, type, command, status, created_at").
 		Where("agent_id = ?", id)
 	q = s.tenantScope(q, c)
-	if err := q.Order("created_at desc").Limit(limit).Scan(&tasks).Error; err != nil {
+	if err := q.Order("created_at desc").Limit(limit).Find(&tasks).Error; err != nil {
 		// Non-fatal: still render other sources.
 		tasks = nil
 	}

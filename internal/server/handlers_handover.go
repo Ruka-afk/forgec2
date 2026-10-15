@@ -94,20 +94,39 @@ func (s *Server) handleHandoverExport(c *gin.Context) {
 	addJSON("agents.json", agentsOut)
 
 	// ── Tasks in range (results truncated per row; full text lives in tasks.jsonl) ──
-	// Column-pruned + SQL-side truncation: Find() with the full Result text
-	// materialized multi-MB blobs × 50k rows in RAM before each was cut to
-	// 4 KiB. SUBSTR caps it at the source; only needed columns are scanned.
-	var tasks []db.Task
-	s.tenantScope(s.db, c).Select("id, agent_id, type, command, status, error, created_at, updated_at, created_by, SUBSTR(result, 1, 4100) AS result").
-		Where("created_at >= ?", since).Order("created_at asc").Limit(50000).Find(&tasks)
-	taskCount = int64(len(tasks))
-	tw, err := zw.Create("tasks.jsonl")
-	if err == nil {
-		for _, t := range tasks {
+	// Result is read whole and cut in Go, not with SQL SUBSTR. The column holds
+	// AES-256-GCM ciphertext (FC2ENC:) and truncating ciphertext produces an
+	// undecryptable blob, which Task.AfterFind then passes straight through — so
+	// every exported task shipped a 4 KiB garbage blob where its output should
+	// be. The order is therefore fixed: decrypt (hook), truncate (truncateStr).
+	// Reads are chunked so at most HandoverTaskChunk results are resident at
+	// once; Task.Result is capped at MaxResultSize, so a window-sized read of
+	// encrypted rows is unbounded in the pathological case.
+	tw, twErr := zw.Create("tasks.jsonl")
+	if twErr != nil {
+		slog.Error("Handover: failed to create tasks.jsonl", "err", twErr)
+		tw = nil
+	}
+	for offset := 0; offset < HandoverTaskLimit; offset += HandoverTaskChunk {
+		var chunk []db.Task
+		if err := s.tenantScope(s.db, c).
+			Select("id, agent_id, type, command, status, error, created_at, updated_at, created_by, result").
+			Where("created_at >= ?", since).
+			Order("created_at asc, id asc").
+			Offset(offset).Limit(HandoverTaskChunk).
+			Find(&chunk).Error; err != nil {
+			slog.Error("Handover: failed to query tasks", "err", err)
+			break
+		}
+		for _, t := range chunk {
+			taskCount++
+			if tw == nil {
+				continue
+			}
 			line := map[string]interface{}{
 				"id": t.ID, "agent_id": t.AgentID, "type": t.Type,
 				"command": t.Command, "status": t.Status,
-				"result":   truncateStr(t.Result, 4096),
+				"result":   truncateStr(t.Result, HandoverResultMaxLen),
 				"error":    t.Error,
 				"created":  t.CreatedAt.Format(time.RFC3339),
 				"operator": t.CreatedBy,
@@ -115,6 +134,9 @@ func (s *Server) handleHandoverExport(c *gin.Context) {
 			if line2, ok := marshalJSONSafe(line); ok {
 				_, _ = tw.Write(append(line2, '\n'))
 			}
+		}
+		if len(chunk) < HandoverTaskChunk {
+			break
 		}
 	}
 

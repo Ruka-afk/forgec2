@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -177,19 +178,19 @@ func (s *Server) extractIOCs(days int, includePrivate bool, agentScope *gorm.DB)
 	since := time.Now().AddDate(0, 0, -days)
 	acc := &iocAccumulator{items: map[string]*iocEntry{}}
 
-	var rows []struct {
-		Command   string
-		Result    string
-		CreatedAt time.Time
-	}
+	// Dest is db.Task so Task.AfterFind decrypts Result/Error. The indicator
+	// regexes below ran over FC2ENC: ciphertext before, which silently lost
+	// every IOC that only appeared in command output. Type is selected as well
+	// because the hook uses it to decide whether Command needs decrypting too.
+	var rows []db.Task
 	taskQuery := s.db.Table("tasks").
-		Select("command, result, created_at").
+		Select("id, agent_id, type, command, result, created_at").
 		Where("created_at >= ?", since).
 		Order("created_at desc").Limit(20000)
 	if agentScope != nil {
 		taskQuery = taskQuery.Where("agent_id IN (?)", agentScope)
 	}
-	if err := taskQuery.Scan(&rows).Error; err != nil {
+	if err := taskQuery.Find(&rows).Error; err != nil {
 		return nil, 0, fmt.Errorf("scan task indicators: %w", err)
 	}
 	scanned := len(rows)

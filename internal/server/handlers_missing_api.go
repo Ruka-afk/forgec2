@@ -172,13 +172,23 @@ func (s *Server) handleAPIPrivesc(c *gin.Context) {
 		Status    string    `json:"status"`
 		CreatedAt time.Time `json:"created_at"`
 	}
-	var results []privescResult
+	// Queried into db.Task so Task.AfterFind decrypts Result/Error; scanning
+	// straight into the JSON view struct served raw FC2ENC: ciphertext to the
+	// privesc panel whenever loot encryption was on.
+	var tasks []db.Task
 	s.db.Table("tasks").
 		Select("id, agent_id, command, result, status, created_at").
 		Where("type = ?", "privesc_check").
 		Order("created_at DESC").
 		Limit(100).
-		Find(&results)
+		Find(&tasks)
+	results := make([]privescResult, 0, len(tasks))
+	for _, t := range tasks {
+		results = append(results, privescResult{
+			ID: t.ID, AgentID: t.AgentID, Command: t.Command,
+			Result: t.Result, Status: t.Status, CreatedAt: t.CreatedAt,
+		})
+	}
 	respond(c, gin.H{"results": results})
 }
 
@@ -225,14 +235,10 @@ func (s *Server) handleAPITimelineData(c *gin.Context) {
 	}
 
 	// Recent tasks
-	var tasks []struct {
-		ID        uint
-		CreatedAt time.Time
-		AgentID   string
-		Type      string
-		Command   string
-		Status    string
-	}
+	// Dest is db.Task so Task.AfterFind decrypts Command for the
+	// SensitiveTaskTypes; the bare struct rendered an "FC2ENC:..." blob as the
+	// event's action text.
+	var tasks []db.Task
 	if err := s.db.Table("tasks").
 		Select("id, created_at, agent_id, type, command, status").
 		Order("created_at DESC").Limit(200).Find(&tasks).Error; err != nil {

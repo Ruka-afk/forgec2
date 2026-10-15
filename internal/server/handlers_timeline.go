@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 )
 
@@ -98,17 +99,12 @@ func (s *Server) buildTimelineEvents(c *gin.Context, filterType, filterUser, fil
 	}
 
 	// Get tasks
-	var tasks []struct {
-		ID        uint
-		Timestamp time.Time
-		AgentID   string
-		Type      string
-		Command   string
-		Result    string
-		Status    string
-	}
+	// Dest is db.Task so Task.AfterFind decrypts Result/Error. A bare struct
+	// scan left "FC2ENC:..." in the timeline's Details field whenever loot
+	// encryption was on.
+	var tasks []db.Task
 
-	taskQuery := s.db.Table("tasks").Select("id, created_at as timestamp, agent_id, type, command, result, status").
+	taskQuery := s.db.Table("tasks").Select("id, created_at, agent_id, type, command, result, status").
 		Where("agent_id IN (?)", s.reportAgentIDs(c))
 
 	if filterType == "" || filterType == "task" {
@@ -191,7 +187,7 @@ func (s *Server) buildTimelineEvents(c *gin.Context, filterType, filterUser, fil
 
 		events = append(events, TimelineEvent{
 			ID:        task.ID,
-			Timestamp: task.Timestamp,
+			Timestamp: task.CreatedAt,
 			Type:      "task",
 			Action:    fmt.Sprintf("[%s] %s %s", statusIcon, task.Type, task.Command),
 			Details:   task.Result,

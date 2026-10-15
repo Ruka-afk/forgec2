@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 
+	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 )
 
@@ -46,21 +47,23 @@ func (s *Server) handleGetProcesses(c *gin.Context) {
 func (s *Server) handleGetProcessTree(c *gin.Context) {
 	agentID := c.Param("id")
 
-	var task struct {
-		Type   string
-		Result string
-	}
+	// Scan into the model, not a bare struct: Task.AfterFind is what decrypts
+	// Result/Error, and it only runs when the destination is a db.Task. A
+	// struct scan handed this handler raw FC2ENC: ciphertext, which then failed
+	// the envelope parse and answered "no completed process tree" for every
+	// agent whose output was encrypted at rest.
+	var tasks []db.Task
 	err := s.db.Table("tasks").
 		Select("type, result").
 		Where("agent_id = ? AND type IN ? AND status = 'completed' AND result <> ''", agentID, []string{"process_tree", "ps"}).
 		Order("CASE WHEN type = 'process_tree' THEN 0 ELSE 1 END, created_at desc").
 		Limit(1).
-		Scan(&task).Error
+		Find(&tasks).Error
 
-	if err != nil || task.Result == "" {
+	if err != nil || len(tasks) == 0 || tasks[0].Result == "" {
 		respondError(c, http.StatusNotFound, "No completed process tree. Queue process_tree first.")
 		return
 	}
 
-	c.JSON(http.StatusOK, processTreeEnvelope(task.Result, task.Type))
+	c.JSON(http.StatusOK, processTreeEnvelope(tasks[0].Result, tasks[0].Type))
 }
