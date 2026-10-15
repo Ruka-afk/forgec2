@@ -72,6 +72,10 @@ Plugins (command/hook/report; interpreters python, python3, powershell, pwsh, ba
 CLI tool: `go run ./cmd/reset-password -db data/db/forgec2.db -user <user> -pass <newpass>`
 Or build: `go build -o reset-password.exe ./cmd/reset-password`
 
+## Mint a Registration Secret (no UI)
+CLI tool: `go run ./cmd/mint-reg-secret -config config.yaml` (or `-db <path> -beacon-key <hex>`)
+Prints the `set SECRET_ID=` / `set SECRET_B64=` pair for a build. It writes the sealed row straight into `reg_secrets` (no UI, no audit entry) and binds to the first agent id that registers with it. Used by `scripts/e2e-c-implant-local.ps1`.
+
 ## Deploying the server
 1. `npm run build` (from `frontend/`)
 2. Sync dist via `scripts/build-embedded.ps1`
