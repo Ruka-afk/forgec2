@@ -60,6 +60,14 @@ go test ./internal/config/... ./internal/crypto/... ./internal/db/... ./internal
 - Local E2E build: `proto/c-implant/build-e2e-local.bat` (gitignored; takes `SECRET_ID`/`SECRET_B64` from env vars or args — no secret is stored in the file)
 - Tracked template `build-e2e.bat` contains placeholders only (`YOUR_SECRET_ID`, `YOUR_SECRET_B64`, port 8001).
 
+## Plugin authoring (IMPORTANT)
+Plugins (command/hook/report; interpreters python, python3, powershell, pwsh, bash, sh, go, wasm) are packages: a directory with `manifest.yaml` + an entry file.
+- Scaffold a package that is valid by construction: `go run ./cmd/plugin-init -name <name> -type <command|hook|report> -interpreter <interpreter> -dir <dir>` (omit `-interpreter` to auto-detect the first one that runs here).
+- Validate like the server does, then execute once: `go run ./cmd/plugin-check <dir> -run` (add `-json` for the machine-readable report, `-key <hex>`/`-require-signed` to exercise the trust policy).
+- Every finding has a stable code (`manifest.invalid`, `wasm.bad_abi`, `result.bad_json`, …); fix error-level findings only — warnings do not fail. Exit code 1 means errors.
+- Contract reference for humans and agents: `docs/PLUGIN_AUTHORING.md` + `docs/schemas/plugin-manifest.schema.json`; tier guarantees/quotas: `docs/PLUGIN_TIERS.md`; WASM ABI v1 sample: `examples/wasm/hello-report`.
+- Never hand-edit `digest`/`signature`: stamp with `PLUGIN_SIGNING_KEY=<seed> go run ./cmd/sign-plugin <dir>` (`-gen` to create a key). Native tiers run as real child processes; only `wasm` is sandboxed.
+
 ## Reset Password
 CLI tool: `go run ./cmd/reset-password -db data/db/forgec2.db -user <user> -pass <newpass>`
 Or build: `go build -o reset-password.exe ./cmd/reset-password`

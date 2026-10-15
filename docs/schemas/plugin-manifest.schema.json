@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ForgeC2 plugin manifest",
+  "description": "Schema for a plugin package's manifest.yaml (package schema v2). The authoritative loader is internal/plugin/manifest.go and manifest.Validate(); `go run ./cmd/plugin-check <dir>` applies this schema plus the tier rules (entry file, package digest/signature, WASM ABI surface). Unknown keys are ignored by the loader but may be rejected by future schema revisions, so keep the manifest clean.",
+  "type": "object",
+  "required": ["name", "version", "type", "entry", "interpreter"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique plugin name used by the API, the UI and `requires` lists. Keys the installed plugin and its audit trail."
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Plugin version, free-form but conventionally semver."
+    },
+    "type": {
+      "enum": ["command", "hook", "report"],
+      "description": "command runs on demand with operator params; hook subscribes to system events; report renders a report object."
+    },
+    "description": {
+      "type": "string",
+      "description": "One-line summary shown in the UI."
+    },
+    "author": { "type": "string" },
+    "category": {
+      "type": "string",
+      "description": "Grouping in the UI (recon, credential, report, …)."
+    },
+    "entry": {
+      "type": "string",
+      "description": "Relative path of the script or module inside the package. Must be relative and must not contain '..'. A wasm interpreter requires a .wasm entry."
+    },
+    "interpreter": {
+      "enum": ["python", "python3", "powershell", "pwsh", "bash", "sh", "go", "wasm"],
+      "description": "How the entry is executed. python/powershell/bash/go run as native child processes with the server account's reach; wasm runs sandboxed in-process (no WASI, no files, no sockets, 16 MiB memory cap)."
+    },
+    "timeout": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Per-run wall-clock limit in seconds; 0 or absent means 60. The server clamps runs at 300s and additionally enforces CPU and write budgets."
+    },
+    "params": {
+      "type": "array",
+      "description": "Operator-facing parameters; the UI renders one form field per entry and the values arrive as the `params` object.",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "type": {
+            "type": "string",
+            "description": "Field type; 'string', 'int', 'number' and 'bool' are the conventional values."
+          },
+          "required": { "type": "boolean" },
+          "default": {
+            "type": "string",
+            "description": "String form of the default value; the UI casts it to the declared type."
+          },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "description": "Hook subscriptions (for example agent.connect, agent.disconnect, task.completed). A hook with an empty list never fires.",
+      "items": { "type": "string" }
+    },
+    "config": {
+      "type": "object",
+      "description": "Default configuration handed to the plugin as the `config` object; the operator can override it per install.",
+      "additionalProperties": true
+    },
+    "requires": {
+      "type": "array",
+      "description": "Plugin names that must load before this one; the loader refuses missing or cyclic dependencies.",
+      "items": { "type": "string" }
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "Canonical package digest, written by cmd/sign-plugin (never by hand)."
+    },
+    "signature": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{128}$",
+      "description": "Ed25519 signature over the digest string, written by cmd/sign-plugin and verified by the server against plugins.trusted_keys."
+    },
+    "publisher": {
+      "type": "string",
+      "description": "Human-readable signer identity; informational."
+    },
+    "includes": {
+      "type": "array",
+      "description": "Extra paths inside the package tree whose files also belong to the digest (for example [\"lib\"] for a shared helper library). Entries must be relative and must not contain '..'.",
+      "items": { "type": "string" }
+    }
+  },
+  "additionalProperties": true
+}
