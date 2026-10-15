@@ -58,7 +58,7 @@ func (r *ConfigReloader) Start() error {
 
 	slog.Info("Config reloader started", "path", r.path)
 
-	go r.monitor()
+	go r.monitor(watcher)
 
 	return nil
 }
@@ -74,11 +74,11 @@ func (r *ConfigReloader) Stop() {
 	slog.Info("Config reloader stopped")
 }
 
-func (r *ConfigReloader) monitor() {
-	r.mu.Lock()
-	w := r.watcher
-	r.mu.Unlock()
-
+// monitor consumes events from the watcher captured by Start. The watcher is
+// passed in rather than re-read from r.watcher: Stop() clears that field, and
+// a monitor goroutine that lost the scheduling race to Stop read nil and
+// crashed on the first select with a nil pointer dereference.
+func (r *ConfigReloader) monitor(w *fsnotify.Watcher) {
 	var debounceMu sync.Mutex
 	var debounce *time.Timer
 	schedule := func() {

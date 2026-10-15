@@ -23,7 +23,9 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o forgec2-server ./cmd/server
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o healthcheck ./cmd/healthcheck
 # Seed /data with nonroot ownership in the builder (which has a shell).
 # NOTE: no RUN in the distroless stage — it has no shell and the build fails.
-RUN mkdir -p /data/db && chown -R nonroot:nonroot /data
+# The distroless nonroot user is uid/gid 65532 and does not exist in the
+# alpine builder image, so chown numerically instead of by name.
+RUN mkdir -p /data/db && chown -R 65532:65532 /data
 
 # Stage 3: Runtime — distroless for minimal attack surface
 FROM gcr.io/distroless/static-debian12

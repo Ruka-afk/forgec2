@@ -138,3 +138,29 @@ func TestConfigReloader_InvalidConfig(t *testing.T) {
 		t.Fatal("expected error for invalid YAML config, got nil")
 	}
 }
+
+// TestConfigReloader_StopBeforeMonitorSelects guards the shutdown race where
+// Stop() cleared the watcher before the monitor goroutine reached its first
+// select: the goroutine then dereferenced the nil watcher and took the whole
+// test binary down with a SIGSEGV. monitor() now receives the watcher by
+// value, so there is no field left to lose the race on. The loop re-creates
+// the start/stop interleaving many times to keep the window covered.
+func TestConfigReloader_StopBeforeMonitorSelects(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "config.yaml")
+
+	cfg := config.DefaultConfig()
+	cfg.Server.JWTSecret = "test-secret-for-reloader-32chars!!"
+	setServerTestKeys(cfg)
+	if err := cfg.Save(cfgPath); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+
+	for i := 0; i < 32; i++ {
+		reloader := NewConfigReloader(cfg, cfgPath, nil)
+		if err := reloader.Start(); err != nil {
+			t.Fatalf("start reloader (iteration %d): %v", i, err)
+		}
+		reloader.Stop()
+	}
+}

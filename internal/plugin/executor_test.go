@@ -37,7 +37,10 @@ func main() {
 }`)
 
 	exec := &executor{}
-	manifest := &Manifest{Name: "echo", Interpreter: "go", Entry: "echo.go", Timeout: 10}
+	// 60s: `go run` compiles the script on every execution, and a cold build
+	// cache on a loaded CI runner can exceed 10s. Timeout enforcement itself
+	// is covered by TestExecutorTimeout, not by this script's budget.
+	manifest := &Manifest{Name: "echo", Interpreter: "go", Entry: "echo.go", Timeout: 60}
 	res, err := exec.run(context.Background(), dir, manifest, map[string]interface{}{
 		"agent_id": "agent-1",
 		"params":   map[string]interface{}{"target": "127.0.0.1"},
@@ -115,7 +118,7 @@ func TestExecutorHookNoOutput(t *testing.T) {
 func main() {}`)
 
 	exec := &executor{}
-	manifest := &Manifest{Name: "noop", Interpreter: "go", Entry: "noop.go", Timeout: 10}
+	manifest := &Manifest{Name: "noop", Interpreter: "go", Entry: "noop.go", Timeout: 60} // cold `go run` compile headroom, see TestExecutorEcho
 	res, err := exec.run(context.Background(), dir, manifest, map[string]interface{}{"event": map[string]interface{}{"type": "agent.connect"}}, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
