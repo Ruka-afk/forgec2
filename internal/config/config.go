@@ -35,6 +35,10 @@ type Config struct {
 		// across its process tree before the tree is killed (0 = built-in
 		// default; the wall-clock ceiling still applies).
 		MaxCPUSeconds int `yaml:"max_cpu_seconds"`
+		// MaxWriteMB bounds how many MiB one native plugin run may write
+		// across its process tree before the tree is killed (0 = built-in
+		// default; the wall-clock ceiling and CPU budget still apply).
+		MaxWriteMB int `yaml:"max_write_mb"`
 	} `yaml:"plugins"`
 	Backup struct {
 		// Retain is how many encrypted .fbk snapshots to keep (0 = 7).
@@ -753,6 +757,13 @@ func Load(path string) (*Config, error) {
 			cfg.Plugins.MaxCPUSeconds = v
 		} else {
 			slog.Warn("Ignoring FORGEC2_PLUGINS_MAX_CPU_SECONDS: not a non-negative integer", "value", envCPU)
+		}
+	}
+	if envWrite := os.Getenv("FORGEC2_PLUGINS_MAX_WRITE_MB"); envWrite != "" {
+		if v, err := strconv.Atoi(envWrite); err == nil && v >= 0 {
+			cfg.Plugins.MaxWriteMB = v
+		} else {
+			slog.Warn("Ignoring FORGEC2_PLUGINS_MAX_WRITE_MB: not a non-negative integer", "value", envWrite)
 		}
 	}
 

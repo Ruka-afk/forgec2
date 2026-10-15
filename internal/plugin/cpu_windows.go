@@ -31,12 +31,12 @@ type jobObjectBasicAccountingInformation struct {
 // already exited.
 func (g *processGuard) cpuTime() (time.Duration, error) {
 	if g == nil {
-		return 0, errCPUGuardGone
+		return 0, errGuardGone
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.job == nil {
-		return 0, errCPUGuardGone
+		return 0, errGuardGone
 	}
 	var info jobObjectBasicAccountingInformation
 	if err := windows.QueryInformationJobObject(

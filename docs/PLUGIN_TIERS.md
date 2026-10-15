@@ -115,15 +115,20 @@ plugins:
   require_signed: true                            # refuse unsigned packages
   max_concurrent: 4                               # simultaneous plugin processes
   max_cpu_seconds: 120                            # CPU-time budget per run (Linux/Windows)
+  max_write_mb: 1024                              # bytes-written budget per run (Linux/Windows)
 ```
 
+Both budgets are enforced by the same watchdog, which samples once a second.
 `max_cpu_seconds` bounds the CPU time one native run may burn across its whole
 process tree (Windows: Job Object accounting; Linux: process-group sampling of
-`/proc`). The watchdog samples once a second, so a spinning plugin is killed
-within about a second of exhausting the budget and the run fails with an
-explicit CPU-budget error instead of a wall-clock timeout. Platforms without
-CPU accounting (macOS) log once and stay bounded by the 300s timeout; the WASM
-tier remains wall-clock bounded only.
+`/proc`). `max_write_mb` bounds the bytes it may write — files, pipes and
+console alike (Windows: Job Object I/O counters; Linux: `wchar` in
+`/proc/<pid>/io`). A spinning plugin is killed within about a second of
+exhausting its CPU budget and a runaway writer within about a second of
+exhausting its write budget, each failing with an explicit budget error
+instead of a wall-clock timeout. Platforms with neither accounting (macOS)
+log once and stay bounded by the 300s timeout; the WASM tier remains
+wall-clock bounded only.
 
 Changing any bundled plugin file (or `lib/`) without re-signing makes the server
 refuse to load it — that is the point, and `go test ./internal/plugin/` fails

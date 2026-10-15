@@ -90,6 +90,17 @@ func (m *Manager) SetMaxCPUSeconds(secs int) {
 	m.exec = m.exec.withCPUQuota(time.Duration(secs) * time.Second)
 }
 
+// SetMaxWriteMB caps how many MiB one plugin run may write across its whole
+// process tree before the tree is killed (0 keeps the built-in default).
+func (m *Manager) SetMaxWriteMB(mb int) {
+	if mb <= 0 {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.exec = m.exec.withWriteQuota(int64(mb) << 20)
+}
+
 // hookAllowed reports whether a plugin's hook may run. Tripped plugins are
 // skipped until the cooldown passes, when a single probe goes through.
 func (m *Manager) hookAllowed(name string) bool {

@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The 52 bundled plugins are now signed with a project key whose private half was discarded at release, and `config.example.yaml` ships its public key with `require_signed: true` — so an out-of-the-box install refuses unsigned third-party plugins while the bundled set still loads
 - Plugin execution quota: `plugins.max_concurrent` (default 4, env `FORGEC2_PLUGINS_MAX_CONCURRENT`) bounds simultaneous plugin processes, so event bursts cannot fan out interpreters
 - Plugin CPU budget: `plugins.max_cpu_seconds` (default 120, env `FORGEC2_PLUGINS_MAX_CPU_SECONDS`) kills a native plugin's process tree once it burns that much CPU time, accounted per run across the whole tree (Windows Job Object accounting / Linux process-group `/proc` samples) and reported as an explicit CPU-budget error distinct from the 300s wall-clock timeout; platforms without CPU accounting log once and stay bounded by the timeout, and the WASM tier remains wall-clock bounded only
+- Plugin write budget: `plugins.max_write_mb` (default 1024, env `FORGEC2_PLUGINS_MAX_WRITE_MB`) does for bytes what the CPU budget does for time — file, pipe and console writes are summed over the run's process tree (Windows Job Object I/O counters / Linux `wchar` in `/proc/<pid>/io`) and the tree is killed with an explicit write-budget error once the budget is spent, so a runaway writer cannot fill the volume for the rest of its wall-clock window
 
 ### Security
 

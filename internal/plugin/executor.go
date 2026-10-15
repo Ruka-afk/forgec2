@@ -30,9 +30,12 @@ type executor struct {
 	// cpuQuota bounds the CPU time one native plugin run may burn across its
 	// process tree before the tree is killed; zero disables the watchdog.
 	cpuQuota time.Duration
-	// cpuPollInterval overrides the watchdog's sampling interval (tests use a
-	// short one); zero means defaultCPUQuotaPollInterval.
-	cpuPollInterval time.Duration
+	// writeQuota bounds the bytes one native plugin run may write across its
+	// process tree before the tree is killed; zero disables the watchdog.
+	writeQuota int64
+	// quotaPollInterval overrides the watchdogs' sampling interval (tests use
+	// a short one); zero means defaultQuotaPollInterval.
+	quotaPollInterval time.Duration
 }
 
 func newExecutor(maxConcurrent int) *executor {
@@ -40,25 +43,37 @@ func newExecutor(maxConcurrent int) *executor {
 		maxConcurrent = defaultMaxConcurrentPlugins
 	}
 	return &executor{
-		slots:    make(chan struct{}, maxConcurrent),
-		cpuQuota: defaultPluginCPUQuota,
+		slots:      make(chan struct{}, maxConcurrent),
+		cpuQuota:   defaultPluginCPUQuota,
+		writeQuota: defaultPluginWriteQuota,
 	}
 }
 
+// clone returns an executor that shares the slot channel and keeps every
+// budget, so a setter changes one knob without silently resetting another.
+func (e *executor) clone() *executor {
+	next := &executor{}
+	if e != nil {
+		*next = *e
+	}
+	return next
+}
+
 // withMaxConcurrent returns an executor with a new concurrency cap that keeps
-// the current CPU budget. Like the previous implementation it swaps the slot
-// channel, so runs already in flight keep the old cap until they finish.
+// the current CPU and write budgets. Like the previous implementation it
+// swaps the slot channel, so runs already in flight keep the old cap until
+// they finish.
 func (e *executor) withMaxConcurrent(maxConcurrent int) *executor {
 	if maxConcurrent <= 0 {
 		maxConcurrent = defaultMaxConcurrentPlugins
 	}
-	next := &executor{
-		slots:    make(chan struct{}, maxConcurrent),
-		cpuQuota: defaultPluginCPUQuota,
+	next := e.clone()
+	next.slots = make(chan struct{}, maxConcurrent)
+	if next.cpuQuota <= 0 {
+		next.cpuQuota = defaultPluginCPUQuota
 	}
-	if e != nil && e.cpuQuota > 0 {
-		next.cpuQuota = e.cpuQuota
-		next.cpuPollInterval = e.cpuPollInterval
+	if next.writeQuota <= 0 {
+		next.writeQuota = defaultPluginWriteQuota
 	}
 	return next
 }
@@ -69,11 +84,19 @@ func (e *executor) withCPUQuota(quota time.Duration) *executor {
 	if quota <= 0 {
 		return e
 	}
-	next := &executor{cpuQuota: quota}
-	if e != nil {
-		next.slots = e.slots
-		next.cpuPollInterval = e.cpuPollInterval
+	next := e.clone()
+	next.cpuQuota = quota
+	return next
+}
+
+// withWriteQuota returns an executor with a new write budget that keeps the
+// current concurrency cap, sharing its slot channel.
+func (e *executor) withWriteQuota(quota int64) *executor {
+	if quota <= 0 {
+		return e
 	}
+	next := e.clone()
+	next.writeQuota = quota
 	return next
 }
 
@@ -309,25 +332,38 @@ func (e *executor) run(ctx context.Context, pluginDir string, m *Manifest, input
 		}
 	}()
 
-	// CPU budget: watchdog the process tree and kill it once the budget is
-	// spent. Sampled (see cpuPollInterval), so enforcement lands within one
-	// interval of the limit.
+	// CPU and write budgets: watchdog the process tree and kill it once either
+	// budget is spent. Sampled (see quotaPollInterval), so enforcement lands
+	// within one interval of the limit.
 	cpuExceeded := make(chan struct{})
+	writeExceeded := make(chan struct{})
+	interval := e.quotaPollInterval
+	if interval <= 0 {
+		interval = defaultQuotaPollInterval
+	}
 	if e.cpuQuota > 0 {
-		interval := e.cpuPollInterval
-		if interval <= 0 {
-			interval = defaultCPUQuotaPollInterval
-		}
 		go watchCPUQuota(guard, e.cpuQuota, interval, guardDone, cpuExceeded)
+	}
+	if e.writeQuota > 0 {
+		go watchWriteQuota(guard, e.writeQuota, interval, guardDone, writeExceeded)
 	}
 
 	runErr := cmd.Wait()
 	guard.release()
-	killedByCPU := false
+	killedByCPU, killedByWrite := false, false
 	select {
 	case <-cpuExceeded:
 		killedByCPU = true
 	default:
+	}
+	// Checked second (and only when the CPU watchdog did not fire) so a run
+	// that trips both reports the budget the watchdog saw first.
+	if !killedByCPU {
+		select {
+		case <-writeExceeded:
+			killedByWrite = true
+		default:
+		}
 	}
 
 	res := &execResult{
@@ -362,12 +398,15 @@ func (e *executor) run(ctx context.Context, pluginDir string, m *Manifest, input
 		}
 		return res, fmt.Errorf("plugin %q timed out after %ds", m.Name, timeout)
 	}
-	// A CPU-budget kill surfaces here as a non-zero exit on Unix, but a
-	// Windows job close terminates the process with exit code 0, so the
+	// A CPU- or write-budget kill surfaces here as a non-zero exit on Unix,
+	// but a Windows job close terminates the process with exit code 0, so the
 	// watchdog's verdict — not the exit code — decides. Checked after the
 	// wall-clock branch: if the deadline fired, that is the cause to report.
 	if killedByCPU {
 		return res, fmt.Errorf("plugin %q exceeded its %s CPU budget and was killed", m.Name, e.cpuQuota)
+	}
+	if killedByWrite {
+		return res, fmt.Errorf("plugin %q exceeded its %d MiB write budget and was killed", m.Name, e.writeQuota>>20)
 	}
 	if runErr != nil {
 		stderrText := strings.TrimSpace(string(res.Stderr))

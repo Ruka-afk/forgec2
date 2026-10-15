@@ -22,7 +22,7 @@ const linuxUserHZ = 100
 // process group.
 func (g *processGuard) cpuTime() (time.Duration, error) {
 	if g == nil || g.pgid <= 0 {
-		return 0, errCPUGuardGone
+		return 0, errGuardGone
 	}
 	return groupCPUTime("/proc", g.pgid)
 }

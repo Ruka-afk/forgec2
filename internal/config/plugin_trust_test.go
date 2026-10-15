@@ -19,6 +19,7 @@ func TestPluginTrustEnvOverrides(t *testing.T) {
 	t.Setenv("FORGEC2_PLUGINS_REQUIRE_SIGNED", "true")
 	t.Setenv("FORGEC2_PLUGINS_MAX_CONCURRENT", "7")
 	t.Setenv("FORGEC2_PLUGINS_MAX_CPU_SECONDS", "45")
+	t.Setenv("FORGEC2_PLUGINS_MAX_WRITE_MB", "512")
 
 	cfg, err := Load(path)
 	if err != nil {
@@ -36,12 +37,16 @@ func TestPluginTrustEnvOverrides(t *testing.T) {
 	if cfg.Plugins.MaxCPUSeconds != 45 {
 		t.Fatalf("max_cpu_seconds = %d, want 45", cfg.Plugins.MaxCPUSeconds)
 	}
+	if cfg.Plugins.MaxWriteMB != 512 {
+		t.Fatalf("max_write_mb = %d, want 512", cfg.Plugins.MaxWriteMB)
+	}
 
 	// Bad values are ignored, so the config falls back to its safe defaults
 	// instead of being poisoned by a typo.
 	t.Setenv("FORGEC2_PLUGINS_REQUIRE_SIGNED", "maybe")
 	t.Setenv("FORGEC2_PLUGINS_MAX_CONCURRENT", "-3")
 	t.Setenv("FORGEC2_PLUGINS_MAX_CPU_SECONDS", "-3")
+	t.Setenv("FORGEC2_PLUGINS_MAX_WRITE_MB", "-3")
 	cfg2, err := Load(path)
 	if err != nil {
 		t.Fatalf("load 2: %v", err)
@@ -55,14 +60,17 @@ func TestPluginTrustEnvOverrides(t *testing.T) {
 	if cfg2.Plugins.MaxCPUSeconds != 0 {
 		t.Fatalf("negative max_cpu_seconds must be ignored, got %d", cfg2.Plugins.MaxCPUSeconds)
 	}
+	if cfg2.Plugins.MaxWriteMB != 0 {
+		t.Fatalf("negative max_write_mb must be ignored, got %d", cfg2.Plugins.MaxWriteMB)
+	}
 }
 
-// TestPluginCPUQuotaFromConfigYAML proves the CPU budget can be set from the
-// config file, not only from the environment.
-func TestPluginCPUQuotaFromConfigYAML(t *testing.T) {
+// TestPluginQuotasFromConfigYAML proves the CPU and write budgets can be set
+// from the config file, not only from the environment.
+func TestPluginQuotasFromConfigYAML(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(path, []byte("plugins:\n  max_cpu_seconds: 30\n"), 0600); err != nil {
+	if err := os.WriteFile(path, []byte("plugins:\n  max_cpu_seconds: 30\n  max_write_mb: 256\n"), 0600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 	cfg, err := Load(path)
@@ -71,6 +79,9 @@ func TestPluginCPUQuotaFromConfigYAML(t *testing.T) {
 	}
 	if cfg.Plugins.MaxCPUSeconds != 30 {
 		t.Fatalf("max_cpu_seconds = %d, want 30", cfg.Plugins.MaxCPUSeconds)
+	}
+	if cfg.Plugins.MaxWriteMB != 256 {
+		t.Fatalf("max_write_mb = %d, want 256", cfg.Plugins.MaxWriteMB)
 	}
 }
 
@@ -89,5 +100,8 @@ func TestPluginTrustConfigDefaults(t *testing.T) {
 	}
 	if cfg.Plugins.MaxCPUSeconds != 0 {
 		t.Fatalf("plugins.max_cpu_seconds must default to 0 (built-in default), got %d", cfg.Plugins.MaxCPUSeconds)
+	}
+	if cfg.Plugins.MaxWriteMB != 0 {
+		t.Fatalf("plugins.max_write_mb must default to 0 (built-in default), got %d", cfg.Plugins.MaxWriteMB)
 	}
 }

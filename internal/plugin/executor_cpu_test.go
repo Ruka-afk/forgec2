@@ -29,7 +29,7 @@ func TestPluginCPUQuotaKillsRunawayPlugin(t *testing.T) {
 	writeTempPlugin(t, dir, "spin.py", "while True:\n    pass\n")
 	m := &Manifest{Name: "spin", Interpreter: interp, Entry: "spin.py"}
 
-	e := &executor{cpuQuota: 1 * time.Second, cpuPollInterval: 50 * time.Millisecond}
+	e := &executor{cpuQuota: 1 * time.Second, quotaPollInterval: 50 * time.Millisecond}
 	start := time.Now()
 	res, err := e.run(context.Background(), dir, m, map[string]interface{}{}, 120)
 	elapsed := time.Since(start)
@@ -57,7 +57,7 @@ func TestPluginCPUQuotaLeavesNormalRunsAlone(t *testing.T) {
 	writeTempPlugin(t, dir, "ok.py", "print('{\"success\": true, \"output\": \"ok\"}')\n")
 	m := &Manifest{Name: "ok", Interpreter: interp, Entry: "ok.py"}
 
-	e := &executor{cpuQuota: 2 * time.Second, cpuPollInterval: 50 * time.Millisecond}
+	e := &executor{cpuQuota: 2 * time.Second, quotaPollInterval: 50 * time.Millisecond}
 	res, err := e.run(context.Background(), dir, m, map[string]interface{}{}, 30)
 	if err != nil {
 		t.Fatalf("run within budget failed: %v", err)

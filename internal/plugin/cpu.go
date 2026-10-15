@@ -13,21 +13,15 @@ import (
 // spinning plugin cannot saturate a core for the entire wall-clock window.
 const defaultPluginCPUQuota = 120 * time.Second
 
-// defaultCPUQuotaPollInterval is how often the CPU watchdog samples the
-// plugin's process tree when the executor does not request a different
-// interval (tests shrink it). Sampling is cheap but not free (on Linux one
-// sample walks /proc), so the interval is deliberately coarse.
-const defaultCPUQuotaPollInterval = time.Second
-
 // errCPUQuotaUnsupported reports platforms without plugin CPU accounting
 // (everything but Linux and Windows). The watchdog logs once and degrades to
 // wall-clock enforcement instead of failing runs, because the quota is a
 // resource guard, not an isolation guarantee.
 var errCPUQuotaUnsupported = errors.New("plugin CPU accounting is unsupported on this platform")
 
-// errCPUGuardGone reports that the guard was already released (the run ended)
-// before a sample could be taken; the watchdog exits silently.
-var errCPUGuardGone = errors.New("plugin process guard already released")
+// errGuardGone reports that the guard was already released (the run ended)
+// before a sample could be taken; the watchdogs exit silently.
+var errGuardGone = errors.New("plugin process guard already released")
 
 var (
 	cpuQuotaUnsupportedOnce sync.Once
@@ -52,7 +46,7 @@ func watchCPUQuota(guard *processGuard, budget, interval time.Duration, done <-c
 			used, err := guard.cpuTime()
 			if err != nil {
 				switch {
-				case errors.Is(err, errCPUGuardGone):
+				case errors.Is(err, errGuardGone):
 					return
 				case errors.Is(err, errCPUQuotaUnsupported):
 					cpuQuotaUnsupportedOnce.Do(func() {
