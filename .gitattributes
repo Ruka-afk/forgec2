@@ -12,3 +12,6 @@
 # no-op.
 frontend/src/lib/permission-keys.ts -text
 frontend/src/lib/api-schema.d.ts -text
+# Committed wasm modules are opaque binaries: never let git apply newline
+# conversion to them, whatever core.autocrlf says.
+examples/wasm/**/*.wasm -text

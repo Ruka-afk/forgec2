@@ -30,16 +30,22 @@ import (
 //
 //	exports:
 //	  memory              linear memory
-//	  run(ptr, len) -> (ptr, len)
+//	  run(ptr, len) -> i64
 //	                      executes the plugin. ptr/len address the input JSON
-//	                      the host wrote. The two results locate the JSON the
-//	                      module produced, anywhere in its own memory.
+//	                      the host wrote. The i64 result locates the JSON the
+//	                      module produced, anywhere in its own memory:
+//	                      low 32 bits = pointer, high 32 bits = length.
 //	imports (module "forgec2"):
 //	  log(ptr, len)       append one diagnostic line (capped, length-prefixed)
 //
+// The result is packed into one i64 because multi-value *results* are not what
+// mainstream C/Rust ABIs emit: clang lowers a two-field struct return to an
+// indirect (sret) parameter, so a `(result i32 i32)` entry point could only be
+// written by hand or by TinyGo. One i64 packs into any language in one line.
+//
 // The returned pointer/length is never trusted blindly: it is clamped to the
-// module's memory bounds and to maxWasmResultBytes, and a module may return
-// ptr=0/len=0 to mean "no result".
+// module's memory bounds and to maxWasmResultBytes, and a module may return 0
+// to mean "no result".
 const (
 	// wasmInputOffset is the floor of the host's input buffer. The input is
 	// written past the module's initial linear memory (see runWasmPlugin),
@@ -186,7 +192,7 @@ func (e *executor) runWasmPlugin(ctx context.Context, pluginDir string, m *Manif
 
 	fn := mod.ExportedFunction("run")
 	if fn == nil {
-		return nil, fmt.Errorf("wasm plugin %q: module does not export run(ptr,len)->(ptr,len)", m.Name)
+		return nil, fmt.Errorf("wasm plugin %q: module does not export run(ptr,len)->i64", m.Name)
 	}
 	results, err := fn.Call(ctx, uint64(inputOffset), uint64(len(payload)))
 	if err != nil {
@@ -195,11 +201,11 @@ func (e *executor) runWasmPlugin(ctx context.Context, pluginDir string, m *Manif
 		}
 		return &execResult{Stderr: run.stderr()}, fmt.Errorf("wasm plugin %q failed: %w", m.Name, err)
 	}
-	if len(results) < 2 {
-		return nil, fmt.Errorf("wasm plugin %q: run() must return (ptr, len)", m.Name)
+	if len(results) != 1 {
+		return &execResult{Stderr: run.stderr()}, fmt.Errorf("wasm plugin %q: run must return one i64 (ptr | len<<32), got %d results", m.Name, len(results))
 	}
 	resultPtr := uint32(results[0])
-	length := uint32(results[1])
+	length := uint32(results[0] >> 32)
 	if length == 0 || resultPtr == 0 {
 		res := &execResult{Stderr: run.stderr()}
 		if ctx.Err() != nil {

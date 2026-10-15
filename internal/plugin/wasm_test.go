@@ -35,7 +35,11 @@ func wasmULEB(n uint32) []byte {
 // An unsigned encoding of a value whose top 7-bit group has bit 6 set decodes
 // as a negative number (e.g. 66 encodes as 0x42, which i32.const reads as -62),
 // so constants must not go through wasmULEB.
-func wasmSLEB(n int32) []byte {
+func wasmSLEB(n int32) []byte { return wasmSLEB64(int64(n)) }
+
+// wasmSLEB64 is wasmSLEB for i64.const operands (ABI v1 packs the reply
+// pointer and length into one i64 result).
+func wasmSLEB64(n int64) []byte {
 	var out []byte
 	for {
 		b := byte(n) & 0x7F
@@ -62,7 +66,7 @@ const testResultOffset = 512 * 1024
 const testResultPages = 9
 
 // buildResultModule produces a module that exports memory and
-// run(ptr,len)->(ptr,len) and returns a preloaded JSON result. That is exactly
+// run(ptr,len)->i64 and returns a preloaded JSON result. That is exactly
 // the ForgeC2 WASM ABI contract.
 func buildResultModule(t *testing.T, resultJSON string, memoryPages uint32) []byte {
 	t.Helper()
@@ -79,8 +83,8 @@ func buildStaticDataModule(t *testing.T, payload string, dataOffset, memoryPages
 	t.Helper()
 	mod := []byte{0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00}
 
-	// type: (i32,i32)->(i32,i32)
-	typ := []byte{0x01, 0x60, 0x02, 0x7F, 0x7F, 0x02, 0x7F, 0x7F}
+	// type: (i32,i32)->i64  (ABI v1: ptr | len<<32)
+	typ := []byte{0x01, 0x60, 0x02, 0x7F, 0x7F, 0x01, 0x7E}
 	// function: one function of type 0
 	fun := []byte{0x01, 0x00}
 	// memory: min pages
@@ -99,12 +103,10 @@ func buildStaticDataModule(t *testing.T, payload string, dataOffset, memoryPages
 	data = append(data, offsetExpr...)
 	data = append(data, wasmULEB(uint32(len(payload)))...)
 	data = append(data, payload...)
-	// code: push (dataOffset, len) then end
-	body := []byte{0x00}
-	body = append(body, 0x41)
-	body = append(body, wasmSLEB(int32(dataOffset))...)
-	body = append(body, 0x41)
-	body = append(body, wasmSLEB(int32(len(payload)))...)
+	// code: return dataOffset | len<<32 as one i64
+	packed := int64(uint64(dataOffset) | uint64(len(payload))<<32)
+	body := []byte{0x00, 0x42}
+	body = append(body, wasmSLEB64(packed)...)
 	body = append(body, 0x0B)
 	code := append([]byte{0x01}, wasmULEB(uint32(len(body)))...)
 	code = append(code, body...)
@@ -125,7 +127,7 @@ func buildStaticDataModule(t *testing.T, payload string, dataOffset, memoryPages
 func buildSpinModule(t *testing.T) []byte {
 	t.Helper()
 	mod := []byte{0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00}
-	typ := []byte{0x01, 0x60, 0x02, 0x7F, 0x7F, 0x02, 0x7F, 0x7F}
+	typ := []byte{0x01, 0x60, 0x02, 0x7F, 0x7F, 0x01, 0x7E}
 	fun := []byte{0x01, 0x00}
 	mem := []byte{0x01, 0x00, 0x01}
 	exp := []byte{0x02}
@@ -133,14 +135,13 @@ func buildSpinModule(t *testing.T) []byte {
 	exp = append(exp, 0x02, 0x00)
 	exp = append(exp, wasmName("run")...)
 	exp = append(exp, 0x00, 0x00)
-	// loop { br 0 } ; then (0,0)
+	// loop { br 0 } ; then 0
 	body := []byte{
 		0x00,       // no locals
 		0x03, 0x40, // loop void
 		0x0C, 0x00, // br 0
 		0x0B,       // end loop
-		0x41, 0x00, // i32.const 0
-		0x41, 0x00, // i32.const 0
+		0x42, 0x00, // i64.const 0
 		0x0B, // end
 	}
 	code := append([]byte{0x01}, wasmULEB(uint32(len(body)))...)

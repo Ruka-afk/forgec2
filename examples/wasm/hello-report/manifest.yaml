@@ -1,0 +1,15 @@
+name: wasm-hello
+version: 1.0.0
+type: report
+description: Example WASM plugin (ABI v1) — freestanding C module that echoes params.label back as a markdown report
+author: ForgeC2
+category: example
+entry: plugin.wasm
+interpreter: wasm
+timeout: 10
+params:
+  - name: label
+    type: string
+    required: false
+    default: world
+    description: Text echoed into the report title and body

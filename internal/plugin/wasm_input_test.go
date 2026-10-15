@@ -7,13 +7,13 @@ import (
 	"testing"
 )
 
-// buildArgEchoModule returns a module whose run(ptr,len)->(ptr,len) reports its
-// own arguments: whatever the host wrote at the pointer it passed comes back
-// as the result.
+// buildArgEchoModule returns a module whose run(ptr,len)->i64 reports its own
+// arguments: whatever the host wrote at the pointer it passed comes back as
+// the packed result (ptr | len<<32).
 func buildArgEchoModule(t *testing.T, memoryPages uint32) []byte {
 	t.Helper()
 	mod := []byte{0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00}
-	typ := []byte{0x01, 0x60, 0x02, 0x7F, 0x7F, 0x02, 0x7F, 0x7F}
+	typ := []byte{0x01, 0x60, 0x02, 0x7F, 0x7F, 0x01, 0x7E}
 	fun := []byte{0x01, 0x00}
 	mem := append([]byte{0x01, 0x00}, wasmULEB(memoryPages)...)
 	exp := []byte{0x02}
@@ -21,8 +21,17 @@ func buildArgEchoModule(t *testing.T, memoryPages uint32) []byte {
 	exp = append(exp, 0x02, 0x00)
 	exp = append(exp, wasmName("run")...)
 	exp = append(exp, 0x00, 0x00)
-	// local.get 0; local.get 1; end
-	body := []byte{0x00, 0x20, 0x00, 0x20, 0x01, 0x0B}
+	// ptr | len<<32: local.get 0; i64.extend_i32_u; local.get 1;
+	// i64.extend_i32_u; i64.const 32; i64.shl; i64.or; end
+	body := []byte{
+		0x00,             // no locals
+		0x20, 0x00, 0xAD, // local.get 0; i64.extend_i32_u
+		0x20, 0x01, 0xAD, // local.get 1; i64.extend_i32_u
+		0x42, 0x20, // i64.const 32
+		0x86, // i64.shl
+		0x84, // i64.or
+		0x0B, // end
+	}
 	code := append([]byte{0x01}, wasmULEB(uint32(len(body)))...)
 	code = append(code, body...)
 	for _, s := range []wasmSection{{1, typ}, {3, fun}, {5, mem}, {7, exp}, {10, code}} {
@@ -38,13 +47,13 @@ func buildArgEchoModule(t *testing.T, memoryPages uint32) []byte {
 func buildMemorylessModule(t *testing.T) []byte {
 	t.Helper()
 	mod := []byte{0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00}
-	typ := []byte{0x01, 0x60, 0x02, 0x7F, 0x7F, 0x02, 0x7F, 0x7F}
+	typ := []byte{0x01, 0x60, 0x02, 0x7F, 0x7F, 0x01, 0x7E}
 	fun := []byte{0x01, 0x00}
 	exp := []byte{0x01}
 	exp = append(exp, wasmName("run")...)
 	exp = append(exp, 0x00, 0x00)
-	// i32.const 0; i32.const 0; end
-	body := []byte{0x00, 0x41, 0x00, 0x41, 0x00, 0x0B}
+	// i64.const 0; end
+	body := []byte{0x00, 0x42, 0x00, 0x0B}
 	code := append([]byte{0x01}, wasmULEB(uint32(len(body)))...)
 	code = append(code, body...)
 	for _, s := range []wasmSection{{1, typ}, {3, fun}, {7, exp}, {10, code}} {

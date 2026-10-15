@@ -24,9 +24,17 @@ A module must export:
 the input past the module's initial linear memory (growing memory as needed),
 so the module's own data — globals, heap, stack, wherever its toolchain placed
 them — can never be overwritten by the input. Always read it through `ptr`
-rather than assuming an address. `run` returns `(ptr, len)` locating the JSON
-result anywhere in the module's own memory. The host clamps both to the
-module's memory bounds and to 2 MiB; `(0, 0)` means "no result".
+rather than assuming an address.
+
+`run` returns **one `i64`** locating the JSON result anywhere in the module's
+own memory: low 32 bits are the pointer, high 32 bits the length, and `0` means
+"no result". The host clamps the pair to the module's memory bounds and to
+2 MiB.
+
+The pair is packed rather than returned as two values on purpose: a
+`(result i32 i32)` export cannot be produced by ordinary C/Rust toolchains —
+clang lowers a two-field struct return to an indirect (sret) parameter — so the
+multi-value form would have excluded exactly the languages this tier targets.
 
 Optional import (module `forgec2`):
 
@@ -37,19 +45,37 @@ Optional import (module `forgec2`):
 Diagnostics are capped at 256 KiB per run and surface as plugin stderr.
 
 Nothing else is importable: no WASI means no files, no sockets, no
-environment, no clock beyond the host timeout. Implementation skeleton (C):
+environment, no clock beyond the host timeout.
+
+A complete buildable example lives in
+[`examples/wasm/hello-report`](../examples/wasm/hello-report) — freestanding C
+(no libc), manifest, build script, and a committed `plugin.wasm` that
+`internal/plugin/wasm_example_test.go` runs through the real executor on every
+test run. The parts that matter:
 
 ```c
-__attribute__((export_name("memory"))) static unsigned char mem[576*1024];
+/* The reply lives in the module's data segment — which is why the host writes
+   the input past the module's initial memory instead of at a fixed offset. */
+static unsigned char reply[4096];
+
+typedef unsigned long long u64;
 
 __attribute__((export_name("run")))
-int run(const unsigned char *in, int len) {
-    /* parse in[0..len), build a JSON reply in mem[524288..] */
-    const char *reply = "{\"success\":true,\"output\":\"hello\"}";
-    int n = 0; while (reply[n]) n++;
-    for (int i = 0; i < n; i++) mem[524288 + i] = (unsigned char)reply[i];
-    return (524288, n); /* multi-value return: see wasm-ld specifics */
+u64 run(const unsigned char *in, unsigned len) {
+    /* parse in[0..len) ... */
+    unsigned n = 0;
+    /* ... build the reply JSON into reply[0..n) ... */
+    return ((u64)n << 32) | (u64)(unsigned long)reply;
 }
+```
+
+Build it with any wasm32-capable clang (no sysroot needed) and export the
+memory, because the ABI requires the module to export it:
+
+```sh
+clang --target=wasm32-unknown-unknown -Os -nostdlib \
+      -Wl,--no-entry -Wl,--export=run -Wl,--export-memory \
+      -o plugin.wasm plugin.c
 ```
 
 ## Package trust
