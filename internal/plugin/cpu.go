@@ -13,11 +13,11 @@ import (
 // spinning plugin cannot saturate a core for the entire wall-clock window.
 const defaultPluginCPUQuota = 120 * time.Second
 
-// cpuQuotaPollInterval is how often the CPU watchdog samples the plugin's
-// process tree. Sampling is cheap but not free (on Linux one sample walks
-// /proc), so the interval is deliberately coarse. It is a variable so tests
-// can shrink it.
-var cpuQuotaPollInterval = time.Second
+// defaultCPUQuotaPollInterval is how often the CPU watchdog samples the
+// plugin's process tree when the executor does not request a different
+// interval (tests shrink it). Sampling is cheap but not free (on Linux one
+// sample walks /proc), so the interval is deliberately coarse.
+const defaultCPUQuotaPollInterval = time.Second
 
 // errCPUQuotaUnsupported reports platforms without plugin CPU accounting
 // (everything but Linux and Windows). The watchdog logs once and degrades to
@@ -36,13 +36,13 @@ var (
 
 // watchCPUQuota samples the guarded process tree's CPU time and kills the tree
 // once the run spends its budget. It is a watchdog, not a hard limit: a sample
-// lands at most one cpuQuotaPollInterval after the budget is exhausted.
+// lands at most one interval after the budget is exhausted.
 //
 // done is the run's completion channel; closing it stops the watchdog. On
 // success (budget exhausted) the watchdog closes exceeded before releasing the
 // guard so the run's error path can tell a CPU kill apart from a timeout.
-func watchCPUQuota(guard *processGuard, budget time.Duration, done <-chan struct{}, exceeded chan struct{}) {
-	ticker := time.NewTicker(cpuQuotaPollInterval)
+func watchCPUQuota(guard *processGuard, budget, interval time.Duration, done <-chan struct{}, exceeded chan struct{}) {
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {

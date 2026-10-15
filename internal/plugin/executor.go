@@ -30,6 +30,9 @@ type executor struct {
 	// cpuQuota bounds the CPU time one native plugin run may burn across its
 	// process tree before the tree is killed; zero disables the watchdog.
 	cpuQuota time.Duration
+	// cpuPollInterval overrides the watchdog's sampling interval (tests use a
+	// short one); zero means defaultCPUQuotaPollInterval.
+	cpuPollInterval time.Duration
 }
 
 func newExecutor(maxConcurrent int) *executor {
@@ -55,6 +58,7 @@ func (e *executor) withMaxConcurrent(maxConcurrent int) *executor {
 	}
 	if e != nil && e.cpuQuota > 0 {
 		next.cpuQuota = e.cpuQuota
+		next.cpuPollInterval = e.cpuPollInterval
 	}
 	return next
 }
@@ -68,6 +72,7 @@ func (e *executor) withCPUQuota(quota time.Duration) *executor {
 	next := &executor{cpuQuota: quota}
 	if e != nil {
 		next.slots = e.slots
+		next.cpuPollInterval = e.cpuPollInterval
 	}
 	return next
 }
@@ -305,11 +310,15 @@ func (e *executor) run(ctx context.Context, pluginDir string, m *Manifest, input
 	}()
 
 	// CPU budget: watchdog the process tree and kill it once the budget is
-	// spent. Sampled (see cpuQuotaPollInterval), so enforcement lands within
-	// one interval of the limit.
+	// spent. Sampled (see cpuPollInterval), so enforcement lands within one
+	// interval of the limit.
 	cpuExceeded := make(chan struct{})
 	if e.cpuQuota > 0 {
-		go watchCPUQuota(guard, e.cpuQuota, guardDone, cpuExceeded)
+		interval := e.cpuPollInterval
+		if interval <= 0 {
+			interval = defaultCPUQuotaPollInterval
+		}
+		go watchCPUQuota(guard, e.cpuQuota, interval, guardDone, cpuExceeded)
 	}
 
 	runErr := cmd.Wait()

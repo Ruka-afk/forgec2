@@ -17,15 +17,6 @@ func requireCPUAccounting(t *testing.T) {
 	}
 }
 
-// shortCPUQuotaPollInterval shrinks the watchdog's sampling interval for the
-// duration of a test so budget enforcement lands quickly.
-func shortCPUQuotaPollInterval(t *testing.T, d time.Duration) {
-	t.Helper()
-	old := cpuQuotaPollInterval
-	cpuQuotaPollInterval = d
-	t.Cleanup(func() { cpuQuotaPollInterval = old })
-}
-
 // TestPluginCPUQuotaKillsRunawayPlugin proves a plugin that spins CPU is
 // killed once it burns its budget instead of running out the wall-clock
 // window, and that the failure is reported as a CPU-budget kill (not as a
@@ -33,13 +24,12 @@ func shortCPUQuotaPollInterval(t *testing.T, d time.Duration) {
 func TestPluginCPUQuotaKillsRunawayPlugin(t *testing.T) {
 	requireCPUAccounting(t)
 	interp := requireHostInterpreter(t)
-	shortCPUQuotaPollInterval(t, 50*time.Millisecond)
 
 	dir := t.TempDir()
 	writeTempPlugin(t, dir, "spin.py", "while True:\n    pass\n")
 	m := &Manifest{Name: "spin", Interpreter: interp, Entry: "spin.py"}
 
-	e := &executor{cpuQuota: 1 * time.Second}
+	e := &executor{cpuQuota: 1 * time.Second, cpuPollInterval: 50 * time.Millisecond}
 	start := time.Now()
 	res, err := e.run(context.Background(), dir, m, map[string]interface{}{}, 120)
 	elapsed := time.Since(start)
@@ -62,13 +52,12 @@ func TestPluginCPUQuotaKillsRunawayPlugin(t *testing.T) {
 // plugin that finishes well within it keeps succeeding.
 func TestPluginCPUQuotaLeavesNormalRunsAlone(t *testing.T) {
 	interp := requireHostInterpreter(t)
-	shortCPUQuotaPollInterval(t, 50*time.Millisecond)
 
 	dir := t.TempDir()
 	writeTempPlugin(t, dir, "ok.py", "print('{\"success\": true, \"output\": \"ok\"}')\n")
 	m := &Manifest{Name: "ok", Interpreter: interp, Entry: "ok.py"}
 
-	e := &executor{cpuQuota: 2 * time.Second}
+	e := &executor{cpuQuota: 2 * time.Second, cpuPollInterval: 50 * time.Millisecond}
 	res, err := e.run(context.Background(), dir, m, map[string]interface{}{}, 30)
 	if err != nil {
 		t.Fatalf("run within budget failed: %v", err)
