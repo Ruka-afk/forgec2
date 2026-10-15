@@ -23,3 +23,21 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+
+  # Base images are digest-pinned in the Dockerfile / docker-compose.yml;
+  # these two ecosystems keep the digests fresh instead of freezing them.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      docker-base:
+        patterns: ["*"]
+
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      compose-images:
+        patterns: ["*"]
