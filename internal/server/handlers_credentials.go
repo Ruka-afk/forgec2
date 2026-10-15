@@ -1164,6 +1164,48 @@ func (s *Server) handleUpdateCredential(c *gin.Context) {
 // one validation task; results flow back through parseAndStoreCredCheckResult
 // which flips VerifyStatus to valid/invalid and stamps LastVerifiedAt.
 // POST /credentials/batch/verify {ids: [1,2,3]}
+// verifiableAgentIDs returns the distinct agent IDs of the entries that would
+// reach the agent-existence check: it must apply the same skips the handler
+// applies (no password at all, hash-only, or no agent), or the batched lookup
+// would query agents whose entries never needed them.
+func verifiableAgentIDs(entries []db.CredentialEntry) []string {
+	seen := make(map[string]struct{}, len(entries))
+	ids := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.Password == "" || e.AgentID == "" {
+			continue
+		}
+		if _, dup := seen[e.AgentID]; dup {
+			continue
+		}
+		seen[e.AgentID] = struct{}{}
+		ids = append(ids, e.AgentID)
+	}
+	return ids
+}
+
+// visibleAgentIDs returns the subset of ids the caller's tenant can reach.
+// Same query and same tenant scope as the per-row First it replaces, so a
+// foreign agent is just as unreachable here.
+func (s *Server) visibleAgentIDs(c *gin.Context, ids []string) map[string]bool {
+	out := make(map[string]bool, len(ids))
+	if len(ids) == 0 {
+		return out
+	}
+	var found []string
+	if err := s.tenantScope(s.db.Model(&db.Implant{}), c).
+		Where("id IN ?", ids).Pluck("id", &found).Error; err != nil {
+		// Fail closed: a failed lookup must read as "no visible agents", never
+		// as "all visible", or the gate inverts into a bypass.
+		slog.Warn("cred_check agent visibility lookup failed", "agents", len(ids), "err", err)
+		return out
+	}
+	for _, id := range found {
+		out[id] = true
+	}
+	return out
+}
+
 func (s *Server) handleBatchVerifyCredentials(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
@@ -1197,6 +1239,14 @@ func (s *Server) handleBatchVerifyCredentials(c *gin.Context) {
 	outcomes := make([]verifyOutcome, 0, len(entries))
 	queued := 0
 
+	// Tenant gate, batched: entries surviving the scoped query above always
+	// belong to visible agents, but each one is still re-verified — a cred_check
+	// carries the vault password in its command, so it must never be queued
+	// against a foreign agent. This was a SELECT per entry (up to 100 per
+	// request); resolving the whole set once keeps the same predicate and the
+	// same tenant scope.
+	reachable := s.visibleAgentIDs(c, verifiableAgentIDs(entries))
+
 	for _, entry := range entries {
 		out := verifyOutcome{ID: entry.ID, AgentID: entry.AgentID}
 		switch {
@@ -1215,11 +1265,7 @@ func (s *Server) handleBatchVerifyCredentials(c *gin.Context) {
 			outcomes = append(outcomes, out)
 			continue
 		}
-		var agent db.Implant
-		// Tenant gate: entries surviving the scoped query above always belong
-		// to visible agents, but re-verify — never queue cred_check (with the
-		// vault password in its command) against a foreign agent.
-		if err := s.tenantScope(s.db, c).Select("id").Where("id = ?", entry.AgentID).First(&agent).Error; err != nil {
+		if !reachable[entry.AgentID] {
 			out.Status = "skipped_agent_gone"
 			outcomes = append(outcomes, out)
 			continue

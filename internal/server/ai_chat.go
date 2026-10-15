@@ -423,6 +423,49 @@ func trimConversationHistory(msgs []chatMessage) []chatMessage {
 	return out
 }
 
+// agentIDsOf returns the distinct, non-empty agent IDs of the given tasks in
+// first-seen order. Dedup matters: a pending-approval page routinely holds
+// several tasks for one agent, and a per-row lookup would repeat the query.
+func agentIDsOf(tasks []db.Task) []string {
+	seen := make(map[string]struct{}, len(tasks))
+	ids := make([]string, 0, len(tasks))
+	for _, t := range tasks {
+		if t.AgentID == "" {
+			continue
+		}
+		if _, dup := seen[t.AgentID]; dup {
+			continue
+		}
+		seen[t.AgentID] = struct{}{}
+		ids = append(ids, t.AgentID)
+	}
+	return ids
+}
+
+// agentHostnamesByID maps agent ID -> hostname for the requested agents, in a
+// single query. A missing or unreadable row simply has no entry, which is what
+// the previous per-row lookup produced (hostname stayed "" on error).
+//
+// Tenant scope is deliberately not applied: the previous per-row SELECT had
+// none, and narrowing it here would silently blank hostnames for rows whose
+// task and agent tenants disagree. Tenant isolation of this endpoint is a
+// separate open question.
+func (s *Server) agentHostnamesByID(ids []string) map[string]string {
+	out := make(map[string]string, len(ids))
+	if len(ids) == 0 {
+		return out
+	}
+	var rows []db.Implant
+	if err := s.db.Model(&db.Implant{}).Select("id", "hostname").Where("id IN ?", ids).Find(&rows).Error; err != nil {
+		slog.Warn("agent hostname lookup failed", "agents", len(ids), "err", err)
+		return out
+	}
+	for _, r := range rows {
+		out[r.ID] = r.Hostname
+	}
+	return out
+}
+
 func (s *Server) handleAIPendingTasks(c *gin.Context) {
 	var tasks []db.Task
 	if err := s.tenantScope(s.db.Where("status = ? AND created_by = ?", "pending_approval", "ai"), c).Order("created_at desc").Limit(20).Find(&tasks).Error; err != nil {
@@ -437,15 +480,14 @@ func (s *Server) handleAIPendingTasks(c *gin.Context) {
 		Type      string `json:"type"`
 		CreatedAt string `json:"created_at"`
 	}
+	// Hostnames for up to 20 rows, fetched in one query. The loop used to run
+	// a SELECT per task — and repeated the same SELECT for tasks sharing an
+	// agent — so a full page cost 21 round trips to render one list.
+	hostnames := s.agentHostnamesByID(agentIDsOf(tasks))
 	var out []pendingTask
 	for _, t := range tasks {
-		hostname := ""
-		var ag db.Implant
-		if err := s.db.Select("hostname").Where("id = ?", t.AgentID).First(&ag).Error; err == nil {
-			hostname = ag.Hostname
-		}
 		out = append(out, pendingTask{
-			ID: t.ID, AgentID: t.AgentID, Hostname: hostname,
+			ID: t.ID, AgentID: t.AgentID, Hostname: hostnames[t.AgentID],
 			Command: truncateStr(t.Command, 200), Type: t.Type,
 			CreatedAt: t.CreatedAt.Format(time.RFC3339),
 		})
