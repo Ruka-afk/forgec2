@@ -30,6 +30,9 @@ const SOURCE_ICONS: Record<string, React.ReactNode> = {
   alert: <AlertTriangle className="size-3.5" />,
 };
 
+// How many event rows are rendered before the operator has to ask for more.
+const PAGE_SIZE = 80;
+
 const SOURCE_STYLES: Record<string, { border: string; iconBg: string; iconText: string; bg: string }> = {
   timeline: { border: "border-l-info", iconBg: "bg-info/15", iconText: "text-info", bg: "" },
   task: { border: "border-l-chart-6", iconBg: "bg-chart-6/15", iconText: "text-chart-6", bg: "bg-chart-6/[0.03]" },
@@ -114,6 +117,15 @@ export default function EventsStream() {
     [allRows, live, query, followSession, dockAgentId],
   );
 
+  // The feed is unbounded (three merged sources plus the live socket), so only
+  // the first PAGE_SIZE rows are rendered. visibleCount is deliberately NOT
+  // reset when rows changes: a 5s poll that replaced it would collapse a feed
+  // the operator had expanded, which is the same silent-truncation problem in
+  // a different disguise.
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const visible = useMemo(() => rows.slice(0, visibleCount), [rows, visibleCount]);
+  const hidden = rows.length - visible.length;
+
   const counts = useMemo(() => {
     const c = { timeline: 0, task: 0, alert: 0 };
     for (const r of allRows) { if (r.source in c) c[r.source as keyof typeof c]++; }
@@ -178,7 +190,9 @@ export default function EventsStream() {
           );
         })}
         <div className="ml-auto text-xs text-muted-foreground font-mono">
-          {rows.length} {rows.length === 1 ? "event" : "events"}
+          {visible.length === rows.length
+            ? `${rows.length} ${rows.length === 1 ? "event" : "events"}`
+            : t("events.shown_of_total", { shown: visible.length, total: rows.length })}
         </div>
       </div>
 
@@ -193,7 +207,7 @@ export default function EventsStream() {
           emptyMessage={t("events.empty_hint")}
         >
           <ul>
-            {rows.slice(0, 80).map((ev) => {
+            {visible.map((ev) => {
               const s = SOURCE_STYLES[ev.source] ?? SOURCE_STYLES.timeline;
               return (
                 <li
@@ -242,6 +256,20 @@ export default function EventsStream() {
               );
             })}
           </ul>
+          {hidden > 0 && (
+            // Rendering used to stop at 80 rows while the header kept counting
+            // every event, so a feed of 500 said "500 events" and showed 80 with
+            // no indication that 420 were hidden. The count is now split into
+            // shown/total and the remainder is one click away.
+            <div className="flex items-center justify-center gap-3 border-t border-border/50 px-4 py-3">
+              <span className="text-xs text-muted-foreground">
+                {t("events.showing_of", { shown: visible.length, total: rows.length })}
+              </span>
+              <Button variant="outline" size="sm" onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}>
+                {t("events.show_more", { count: hidden })}
+              </Button>
+            </div>
+          )}
         </DataState>
       </Card>
     </div>

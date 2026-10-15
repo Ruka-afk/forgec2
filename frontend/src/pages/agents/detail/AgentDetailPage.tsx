@@ -714,8 +714,8 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
         </div>
       </div>
 
-      <ConfirmModal open={confirmKill} title={t("agents.kill_agent")} message={t("agents.kill_msg")} confirmText={t("agents.kill")} danger onConfirm={async () => { await runKillAgent(); setConfirmKill(false); }} onCancel={() => setConfirmKill(false)} />
-      <ConfirmModal open={confirmUninstall} title={t("agents.uninstall_agent")} message={t("agents.uninstall_msg")} confirmText={t("agents.uninstall")} danger onConfirm={async () => { await runUninstallAgent(); setConfirmUninstall(false); }} onCancel={() => setConfirmUninstall(false)} />
+      <ConfirmModal open={confirmKill} title={t("agents.kill_agent")} message={t("agents.kill_msg")} confirmText={t("agents.kill")} danger onConfirm={async () => { if (await runKillAgent()) setConfirmKill(false); }} onCancel={() => setConfirmKill(false)} />
+      <ConfirmModal open={confirmUninstall} title={t("agents.uninstall_agent")} message={t("agents.uninstall_msg")} confirmText={t("agents.uninstall")} danger onConfirm={async () => { if (await runUninstallAgent()) setConfirmUninstall(false); }} onCancel={() => setConfirmUninstall(false)} />
       {confirmKillDate && (
         <Dialog open={confirmKillDate} onOpenChange={(v) => !v && setConfirmKillDate(false)}>
           <DialogContent className="w-80 gap-0">
@@ -726,12 +726,12 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
             <Input type="date" value={killDateValue} onChange={(e) => setKillDateValue(e.target.value)} className="mb-3 text-sm" />
             <DialogFooter>
               <Button variant="ghost" size="sm" onClick={() => setConfirmKillDate(false)} disabled={!!dangerBusy}>{t("agents.detail_cancel")}</Button>
-              <Button variant="destructive" size="sm" onClick={async () => { await runSetKillDate(killDateValue); setConfirmKillDate(false); }} disabled={!!dangerBusy}>{t("agents.detail_set_kill_date")}</Button>
+              <Button variant="destructive" size="sm" onClick={async () => { if (await runSetKillDate(killDateValue)) setConfirmKillDate(false); }} disabled={!!dangerBusy}>{t("agents.detail_set_kill_date")}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       )}
-      <ConfirmModal open={confirmClearKillDate} title={t("agents.detail_clear_kill_date")} message={t("agents.detail_clear_kill_date_msg")} confirmText={t("agents.detail_clear")} danger onConfirm={async () => { await runClearKillDate(); setConfirmClearKillDate(false); }} onCancel={() => setConfirmClearKillDate(false)} />
+      <ConfirmModal open={confirmClearKillDate} title={t("agents.detail_clear_kill_date")} message={t("agents.detail_clear_kill_date_msg")} confirmText={t("agents.detail_clear")} danger onConfirm={async () => { if (await runClearKillDate()) setConfirmClearKillDate(false); }} onCancel={() => setConfirmClearKillDate(false)} />
       {confirmMigrate && (
         <Dialog open={confirmMigrate} onOpenChange={(v) => !v && setConfirmMigrate(false)}>
           <DialogContent className="w-96 gap-0">
@@ -744,13 +744,13 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
               type="text"
               value={migratePath}
               onChange={(e) => setMigratePath(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { runMigrateAgent(migratePath); setConfirmMigrate(false); } }}
+              onKeyDown={(e) => { if (e.key === "Enter") { void (async () => { if (await runMigrateAgent(migratePath)) setConfirmMigrate(false); })(); } }}
               placeholder={t("agents.migrate_path_placeholder")}
               className="mb-3 text-sm font-mono"
             />
             <DialogFooter>
               <Button variant="ghost" size="sm" onClick={() => setConfirmMigrate(false)} disabled={!!dangerBusy}>{t("agents.detail_cancel")}</Button>
-              <Button variant="destructive" size="sm" onClick={async () => { await runMigrateAgent(migratePath); setConfirmMigrate(false); }} disabled={!!dangerBusy}>{t("agents.migrate")}</Button>
+              <Button variant="destructive" size="sm" onClick={async () => { if (await runMigrateAgent(migratePath)) setConfirmMigrate(false); }} disabled={!!dangerBusy}>{t("agents.migrate")}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
