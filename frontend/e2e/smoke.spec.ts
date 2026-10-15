@@ -44,6 +44,26 @@ async function mockAuthedApis(page: Page) {
   });
 }
 
+/**
+ * Boots a static-export route and asserts the SPA actually came up: React
+ * mounts into #root, no uncaught error fires, and the URL does not land on an
+ * error page. The previous helper only checked "body is visible" plus an
+ * absent /error in the URL, which passed even for retired routes — /builds,
+ * /screenshots and /workflows were rendering the not-found page while still
+ * "loading without crash".
+ */
+async function bootRoute(page: Page, route: string) {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await mockAuthedApis(page);
+  const res = await page.goto(route);
+  expect(res?.ok() || res?.status() === 200).toBeTruthy();
+  await expect(page.locator("#root")).not.toBeEmpty();
+  await page.waitForTimeout(300);
+  expect(page.url()).not.toMatch(/error|not-found/);
+  expect(pageErrors).toEqual([]);
+}
+
 test.describe("login page", () => {
   test("renders form and shows failed login without navigating away", async ({ page }) => {
     await page.route("**/health", async (route) => {
@@ -108,94 +128,28 @@ test.describe("login page", () => {
   });
 });
 
-test.describe("agents page shell", () => {
-  test("agents static page loads without auth redirect crash", async ({ page }) => {
-    await mockAuthedApis(page);
-    const res = await page.goto("/agents.html");
-    expect(res?.ok() || res?.status() === 200).toBeTruthy();
-    await expect(page.locator("body")).toBeVisible();
-    // Stay on agents route (or client soft-nav); must not hard-crash
-    await page.waitForTimeout(500);
-    expect(page.url()).not.toMatch(/error/);
-  });
-});
+// Top-level SPA pages that exist in the router table (src/router.tsx) and are
+// emitted by the static export. Retired destinations (/builds, /screenshots,
+// /workflows, /tasks, /packer, /stager, /profiles, /files, /notifications)
+// merged into tabs elsewhere; probing them proved nothing about the app.
+const SHELL_ROUTES = [
+  "/agents.html",
+  "/generate.html",
+  "/credentials.html",
+  "/loot.html",
+  "/users.html",
+  "/report.html",
+  "/ai.html",
+  "/plugins.html",
+  "/settings.html",
+  "/phishing.html",
+  "/automation.html",
+] as const;
 
-test.describe("generate page shell", () => {
-  test("generate static page loads without crash", async ({ page }) => {
-    await mockAuthedApis(page);
-    const res = await page.goto("/generate.html");
-    expect(res?.ok() || res?.status() === 200).toBeTruthy();
-    await expect(page.locator("body")).toBeVisible();
-    await page.waitForTimeout(800);
-    // Soft: either generate chrome or still hydrating; must not hard-error
-    expect(page.url()).not.toMatch(/error|not-found/);
-  });
-});
-
-test.describe("credentials page shell", () => {
-  test("credentials page loads without crash", async ({ page }) => {
-    await mockAuthedApis(page);
-    const res = await page.goto("/credentials.html");
-    expect(res?.ok() || res?.status() === 200).toBeTruthy();
-    await expect(page.locator("body")).toBeVisible();
-    await page.waitForTimeout(500);
-    expect(page.url()).not.toMatch(/error/);
-  });
-});
-
-async function softShell(page: Page, route: string) {
-  await mockAuthedApis(page);
-  const res = await page.goto(route);
-  expect(res?.ok() || res?.status() === 200).toBeTruthy();
-  await expect(page.locator("body")).toBeVisible();
-  await page.waitForTimeout(500);
-  expect(page.url()).not.toMatch(/error|not-found/);
-}
-
-test.describe("core ops pages shell", () => {
-  test("loot page loads without crash", async ({ page }) => {
-    await softShell(page, "/loot.html");
-  });
-
-  test("users page loads without crash", async ({ page }) => {
-    await softShell(page, "/users.html");
-  });
-
-  test("screenshots page loads without crash", async ({ page }) => {
-    await softShell(page, "/screenshots.html");
-  });
-
-  test("builds page loads without crash", async ({ page }) => {
-    await softShell(page, "/builds.html");
-  });
-
-  test("report page loads without crash", async ({ page }) => {
-    await softShell(page, "/report.html");
-  });
-});
-
-test.describe("platform pages shell", () => {
-  test("ai page loads without crash", async ({ page }) => {
-    await softShell(page, "/ai.html");
-  });
-
-  test("plugins page loads without crash", async ({ page }) => {
-    await softShell(page, "/plugins.html");
-  });
-
-  test("settings page loads without crash", async ({ page }) => {
-    await softShell(page, "/settings.html");
-  });
-
-  test("phishing page loads without crash", async ({ page }) => {
-    await softShell(page, "/phishing.html");
-  });
-
-  test("automation page loads without crash", async ({ page }) => {
-    await softShell(page, "/automation.html");
-  });
-
-  test("workflows page loads without crash", async ({ page }) => {
-    await softShell(page, "/workflows.html");
-  });
+test.describe("page shells boot the SPA", () => {
+  for (const route of SHELL_ROUTES) {
+    test(`${route} mounts without uncaught errors`, async ({ page }) => {
+      await bootRoute(page, route);
+    });
+  }
 });
