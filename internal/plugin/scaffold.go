@@ -595,6 +595,32 @@ typedef unsigned char u8;
 typedef unsigned int u32;
 typedef unsigned long long u64;
 
+/* The only libc a freestanding module needs. clang lowers copy loops (the
+ * reply copy below included) and struct assignments to memcpy/memset even
+ * under -nostdlib, and wasm-ld then refuses to link with "undefined symbol:
+ * memcpy" unless the module defines them. They run downwards so the compiler
+ * cannot turn them back into calls to themselves. */
+__attribute__((used)) void *memcpy(void *dst, const void *src, unsigned long n) {
+    unsigned char *d = (unsigned char *)dst;
+    const unsigned char *s = (const unsigned char *)src;
+    unsigned long i = n;
+    while (i > 0) {
+        i--;
+        d[i] = s[i];
+    }
+    return dst;
+}
+
+__attribute__((used)) void *memset(void *dst, int c, unsigned long n) {
+    unsigned char *d = (unsigned char *)dst;
+    unsigned long i = n;
+    while (i > 0) {
+        i--;
+        d[i] = (unsigned char)c;
+    }
+    return dst;
+}
+
 __attribute__((import_module("forgec2"), import_name("log")))
 extern void host_log(const char *ptr, u32 len);
 
@@ -634,7 +660,9 @@ func wasmBuildScript() string {
 # Build plugin.wasm for the ForgeC2 WASM tier (ABI v1).
 #
 # Any clang with a wasm32 backend works, with or without a sysroot: the module
-# is freestanding (-nostdlib) and declares its own host import.
+# is freestanding (-nostdlib) and declares its own host import. plugin.c also
+# defines the two libc calls (memcpy/memset) clang lowers copy loops to, so no
+# sysroot or compiler-rt is needed.
 #
 #   sh build.sh                               # clang from PATH
 #   CC="zig cc" TARGET=wasm32-freestanding sh build.sh
@@ -653,7 +681,7 @@ fi
 # shellcheck disable=SC2086
 $CC \
     --target="$TARGET" \
-    -Os -nostdlib \
+    -Os -nostdlib -ffreestanding \
     -Wl,--no-entry \
     -Wl,--export=run \
     -Wl,--export-memory \

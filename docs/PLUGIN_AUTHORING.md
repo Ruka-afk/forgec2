@@ -150,6 +150,12 @@ sh build.sh                                        # clang from PATH
 CC="zig cc" TARGET=wasm32-freestanding sh build.sh # zig
 ```
 
+The skeleton defines the only two libc calls a freestanding module needs
+(`memcpy`/`memset`, which clang lowers copy loops to) and builds with
+`-nostdlib -ffreestanding`; keep those definitions if you rewrite the file, or
+wasm-ld fails with `undefined symbol: memcpy` on a plain clang (zig hides the
+problem because it links its own runtime).
+
 ## Diagnostics
 
 `plugin-check` prints one line per finding and, with `-json`, the same findings

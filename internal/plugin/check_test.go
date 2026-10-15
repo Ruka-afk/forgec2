@@ -299,9 +299,6 @@ func TestScaffoldedWasmPluginBuildsAndRuns(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "main.sh")); err == nil {
 		t.Fatalf("wasm scaffold must not write a shell entry")
 	}
-	if _, err := os.Stat(filepath.Join(dir, "main.sh")); err == nil {
-		t.Fatalf("wasm scaffold must not write a shell entry")
-	}
 	build := exec.Command("sh", filepath.Join(dir, "build.sh"))
 	build.Dir = dir
 	build.Env = append(os.Environ(), "CC="+cc, "TARGET="+target)
@@ -317,6 +314,46 @@ func TestScaffoldedWasmPluginBuildsAndRuns(t *testing.T) {
 	}
 	if !hasDiag(rep, DiagInfo, "result.ok") {
 		t.Errorf("want result.ok, got %v (stdout=%s)", rep.Diagnostics, rep.Stdout)
+	}
+}
+
+// TestShippedWasmExampleBuildsFromSource keeps examples/wasm/hello-report
+// honest. The committed plugin.wasm is exercised by wasm_example_test.go, but
+// nothing else would notice when the C source stops building — the same class
+// of failure that made the scaffold add its own memcpy/memset shims, because
+// clang lowers copy loops to those calls even under -nostdlib. The build runs
+// in a temp copy of the package so the committed artifact is never rewritten.
+func TestShippedWasmExampleBuildsFromSource(t *testing.T) {
+	cc, target, ok := canCompileWasm(t)
+	if !ok {
+		t.Skip("no wasm-capable clang or zig on this host")
+	}
+	srcDir := filepath.Join("..", "..", "examples", "wasm", "hello-report")
+	if _, err := os.Stat(filepath.Join(srcDir, "plugin.c")); err != nil {
+		t.Skipf("example package not present: %v", err)
+	}
+	dir := filepath.Join(t.TempDir(), "hello-report")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("temp dir: %v", err)
+	}
+	for _, name := range []string{"plugin.c", "build.sh"} {
+		data, err := os.ReadFile(filepath.Join(srcDir, name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), data, 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	build := exec.Command("sh", filepath.Join(dir, "build.sh"))
+	build.Dir = dir
+	build.Env = append(os.Environ(), "CC="+cc, "TARGET="+target)
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("example build.sh failed: %v\n%s", err, out)
+	}
+	st, err := os.Stat(filepath.Join(dir, "plugin.wasm"))
+	if err != nil || st.Size() == 0 {
+		t.Fatalf("example build produced no plugin.wasm: %v", err)
 	}
 }
 

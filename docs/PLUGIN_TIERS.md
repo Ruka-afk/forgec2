@@ -73,10 +73,18 @@ Build it with any wasm32-capable clang (no sysroot needed) and export the
 memory, because the ABI requires the module to export it:
 
 ```sh
-clang --target=wasm32-unknown-unknown -Os -nostdlib \
+clang --target=wasm32-unknown-unknown -Os -nostdlib -ffreestanding \
       -Wl,--no-entry -Wl,--export=run -Wl,--export-memory \
       -o plugin.wasm plugin.c
 ```
+
+The module is its own libc: clang lowers copy loops to `memcpy`/`memset` even
+under `-nostdlib`, so the module must define them (and `-ffreestanding` stops
+the compiler from turning those definitions into calls to themselves). Both the
+skeleton from `plugin-init -interpreter wasm` and
+[`examples/wasm/hello-report/plugin.c`](../examples/wasm/hello-report/plugin.c)
+carry the two shims; without them wasm-ld fails with
+`undefined symbol: memcpy`.
 
 ## Package trust
 

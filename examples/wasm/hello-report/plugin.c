@@ -10,6 +10,32 @@
 typedef unsigned int u32;
 typedef unsigned char u8;
 
+// ── the whole libc this module needs ────────────────────────────────────────
+// clang lowers copy loops and struct assignments to memcpy/memset even under
+// -nostdlib; wasm-ld then fails with "undefined symbol: memcpy" unless the
+// module defines them. They run downwards so the compiler cannot turn them
+// back into calls to themselves.
+__attribute__((used)) void *memcpy(void *dst, const void *src, unsigned long n) {
+    u8 *d = (u8 *)dst;
+    const u8 *s = (const u8 *)src;
+    unsigned long i = n;
+    while (i > 0) {
+        i--;
+        d[i] = s[i];
+    }
+    return dst;
+}
+
+__attribute__((used)) void *memset(void *dst, int c, unsigned long n) {
+    u8 *d = (u8 *)dst;
+    unsigned long i = n;
+    while (i > 0) {
+        i--;
+        d[i] = (u8)c;
+    }
+    return dst;
+}
+
 // ── optional host import ────────────────────────────────────────────────────
 // Diagnostics land in the plugin's stderr, capped by the host at 256 KiB.
 __attribute__((import_module("forgec2"), import_name("log")))
