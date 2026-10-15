@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	forgecrypto "github.com/forgec2/forgec2/internal/crypto"
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 )
@@ -405,110 +404,20 @@ func TestHandleCoerceRejectsBadInput(t *testing.T) {
 }
 
 // ── BOF endpoints ───────────────────────────────────────────────────────────
-
-// TestBOFEndpointsAreTenantScoped proves the BOF library cannot be read,
-// downloaded or deleted across tenants. Legacy (tenant 0) rows stay visible by
-// design, so those are seeded separately from the tenant-scoped rows.
-func TestBOFEndpointsAreTenantScoped(t *testing.T) {
-	s := mustTenantServer(t)
-	seedBoFFile(t, s, "own-bof", 1)
-	theirs := seedBoFFileReturning(t, s, "foreign-bof", 2)
-
-	// The list hides another tenant's BOF.
-	c0, w0 := tenantScopedAdminContext(s, t, "bof-op", 1)
-	c0.Request = httptest.NewRequest(http.MethodGet, "/", nil)
-	s.handleBOFList(c0)
-	if w0.Code != http.StatusOK {
-		t.Fatalf("list: %d %s", w0.Code, w0.Body.String())
-	}
-	if strings.Contains(w0.Body.String(), "foreign-bof") {
-		t.Fatalf("another tenant's BOF leaked: %s", w0.Body.String())
-	}
-	if !strings.Contains(w0.Body.String(), "own-bof") {
-		t.Fatalf("own BOF missing: %s", w0.Body.String())
-	}
-
-	cases := []struct {
-		name   string
-		invoke func(*Server, *gin.Context)
-	}{
-		{"delete", (*Server).handleBOFDelete},
-		{"download", (*Server).handleBOFDownload},
-		{"recent results", (*Server).handleBOFRecentResults},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			c, w := tenantScopedAdminContext(s, t, "bof-op", 1)
-			c.Params = gin.Params{{Key: "id", Value: fmt.Sprint(theirs.ID)}}
-			c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
-			tc.invoke(s, c)
-			if tc.name == "recent results" {
-				// This one is a fleet-wide result list scoped by tenant, not an
-				// id lookup: it must return 200 while hiding the foreign agent.
-				if strings.Contains(w.Body.String(), "bof-agent-x") {
-					t.Fatalf("another tenant's BOF result leaked: %s", w.Body.String())
-				}
-				return
-			}
-			if w.Code != http.StatusNotFound {
-				t.Fatalf("status = %d, want 404 (%s)", w.Code, w.Body.String())
-			}
-		})
-	}
-
-	if err := s.db.First(&db.BOFFile{}, "id = ?", theirs.ID).Error; err != nil {
-		t.Fatalf("another tenant's BOF was destroyed by a refused request: %v", err)
-	}
-
-	// Recent results contain the agent hostname; a foreign agent's must not show.
-	foreignAgent := seedTenantAgentWithHost(t, s, "bof-agent-x", 2)
-	ownAgent := seedTenantAgentWithHost(t, s, "bof-agent-mine", 1)
-	seedBOFResultTask(t, s, foreignAgent)
-	seedBOFResultTask(t, s, ownAgent)
-
-	c, w := tenantScopedAdminContext(s, t, "bof-op", 1)
-	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
-	s.handleBOFRecentResults(c)
-	if w.Code != http.StatusOK {
-		t.Fatalf("recent results: %d %s", w.Code, w.Body.String())
-	}
-	if strings.Contains(w.Body.String(), "bof-agent-x") {
-		t.Fatalf("another tenant's BOF result leaked: %s", w.Body.String())
-	}
-	if !strings.Contains(w.Body.String(), "bof-agent-mine") {
-		t.Fatalf("own BOF result missing: %s", w.Body.String())
-	}
-}
-
-func seedTenantAgentWithHost(t *testing.T, s *Server, id string, tenantID uint) db.Implant {
-	t.Helper()
-	agent := db.Implant{ID: id, TenantID: tenantID, Hostname: id}
-	if err := s.db.Create(&agent).Error; err != nil {
-		t.Fatalf("seed agent: %v", err)
-	}
-	return agent
-}
-
-func seedBOFResultTask(t *testing.T, s *Server, agent db.Implant) {
-	t.Helper()
-	forgecrypto.InitLootEncryption(tenantVisibilityMasterHex)
-	if err := s.db.Create(&db.Task{
-		AgentID:  agent.ID,
-		TenantID: agent.TenantID,
-		Type:     "bof",
-		Command:  "#Execute",
-		Status:   "completed",
-		Result:   "bof output",
-	}).Error; err != nil {
-		t.Fatalf("seed bof task: %v", err)
-	}
-}
+//
+// BOF tenant scoping is NOT covered here: db.BOFFile carries no TenantID in
+// this tree, handleBOFList reads with no tenant predicate, and findOrFail is
+// an unscoped `First(id = ?)`. A test asserting cross-tenant isolation would
+// therefore fail on the code that exists. The assertions that used to live here
+// seeded db.BOFFile.TenantID, a field that only exists in an unlanded change —
+// they broke the build for the whole package. Re-add them when the tenancy
+// lands.
 
 // TestBOFEndpointsRequireOperator proves the mutating BOF endpoints keep the
 // role gate.
 func TestBOFEndpointsRequireOperator(t *testing.T) {
 	s := mustTenantServer(t)
-	seedBoFFile(t, s, "role-bof", 1)
+	seedBoFFile(t, s, "role-bof")
 
 	var seeded db.BOFFile
 	if err := s.db.First(&seeded, "name = ?", "role-bof").Error; err != nil {
@@ -538,14 +447,14 @@ func TestBOFEndpointsRequireOperator(t *testing.T) {
 	}
 }
 
-func seedBoFFile(t *testing.T, s *Server, name string, tenantID uint) {
+func seedBoFFile(t *testing.T, s *Server, name string) {
 	t.Helper()
-	seedBoFFileReturning(t, s, name, tenantID)
+	seedBoFFileReturning(t, s, name)
 }
 
-func seedBoFFileReturning(t *testing.T, s *Server, name string, tenantID uint) db.BOFFile {
+func seedBoFFileReturning(t *testing.T, s *Server, name string) db.BOFFile {
 	t.Helper()
-	bof := db.BOFFile{Name: name, TenantID: tenantID, Size: 32, Description: "seeded"}
+	bof := db.BOFFile{Name: name, Size: 32, Description: "seeded"}
 	if err := s.db.Create(&bof).Error; err != nil {
 		t.Fatalf("seed bof: %v", err)
 	}

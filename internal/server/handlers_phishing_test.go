@@ -157,32 +157,14 @@ func TestParsePhishingTargetsMalformedJSONFallsBack(t *testing.T) {
 
 // ── Campaign tenant ownership ───────────────────────────────────────────────
 
-// TestCampTenantIDResolvesOwner proves the tenant is read from the campaign
-// row (not the request): landing-page and capture handlers use it to scope
-// their writes, so a wrong value here attributes data to the wrong tenant.
-func TestCampTenantIDResolvesOwner(t *testing.T) {
-	database := testutil.SetupTestDB(t)
-	tpl := db.PhishingTemplate{Name: "t1", Subject: "s", Body: "b", FromEmail: "a@x"}
-	if err := database.Create(&tpl).Error; err != nil {
-		t.Fatalf("seed template: %v", err)
-	}
-	camp := db.PhishingCampaign{TenantID: 7, Name: "c1", TemplateID: tpl.ID, Status: "draft"}
-	if err := database.Create(&camp).Error; err != nil {
-		t.Fatalf("seed campaign: %v", err)
-	}
-
-	if got := campTenantID(database, camp.ID); got != 7 {
-		t.Fatalf("campTenantID = %d, want 7", got)
-	}
-	// Unknown campaign: zero (treated as legacy/unscoped), never a panic.
-	if got := campTenantID(database, 99999); got != 0 {
-		t.Fatalf("campTenantID(unknown) = %d, want 0", got)
-	}
-	// Nil database must not panic.
-	if got := campTenantID(nil, camp.ID); got != 0 {
-		t.Fatalf("campTenantID(nil) = %d, want 0", got)
-	}
-}
+// ── Campaign tenancy: NOT YET COVERED ──────────────────────────────────────
+// PhishingCampaign/PhishingTemplate carry no TenantID in the committed tree and
+// handleAPICreatePhishingCampaign / handleAPILaunchPhishingCampaign perform no
+// tenancy scoping, so there is nothing to assert yet. Tests for it previously
+// referenced db.PhishingCampaign.TenantID and the campTenantID helper, which
+// only exist in an unlanded change — they broke the build for the whole
+// package. Re-add coverage when the tenancy lands; until then a template from
+// another tenant is accepted and every campaign is globally visible.
 
 // ── Base URL / body rendering ───────────────────────────────────────────────
 
@@ -347,27 +329,16 @@ func TestPhishingTemplateCRUD(t *testing.T) {
 func TestCreatePhishingCampaignTenantFromCaller(t *testing.T) {
 	s := newPhishingTestServer(t)
 	seedPhishingTenantUser(t, s, "phish-op", 5)
-	// A template owned by another tenant.
-	if err := s.db.Create(&db.PhishingTemplate{Name: "foreign", Subject: "s", Body: "b", FromEmail: "a@x", TenantID: 9}).Error; err != nil {
-		t.Fatalf("seed foreign template: %v", err)
+	// One template; tenancy on templates is not implemented in this tree yet
+	// (see the "Campaign tenancy" note above).
+	if err := s.db.Create(&db.PhishingTemplate{Name: "own", Subject: "s", Body: "b", FromEmail: "a@x"}).Error; err != nil {
+		t.Fatalf("seed template: %v", err)
 	}
 
-	// Foreign template must be refused (tenant-scoped lookup fails).
-	c, w := phishingCtx("operator", `{"name":"c","template_id":1}`)
-	s.handleAPICreatePhishingCampaign(c)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("foreign template: status=%d, want 400", w.Code)
-	}
-
-	// Own-tenant template succeeds and inherits the caller's tenant.
-	if err := s.db.Create(&db.PhishingTemplate{Name: "own", Subject: "s", Body: "b", FromEmail: "a@x", TenantID: 5}).Error; err != nil {
-		t.Fatalf("seed own template: %v", err)
-	}
-	c2, w2 := phishingCtx("operator", `{"name":"c2","template_id":2}`)
-	c2.Set(tenantIDContextKey, tenantResolution{tid: 5, ok: true})
+	c2, w2 := phishingCtx("operator", `{"name":"c2","template_id":1}`)
 	s.handleAPICreatePhishingCampaign(c2)
 	if w2.Code != http.StatusOK {
-		t.Fatalf("own template: status=%d body=%s, want 200", w2.Code, w2.Body.String())
+		t.Fatalf("create: status=%d body=%s, want 200", w2.Code, w2.Body.String())
 	}
 	var camps []db.PhishingCampaign
 	if err := s.db.Find(&camps).Error; err != nil {
@@ -376,15 +347,11 @@ func TestCreatePhishingCampaignTenantFromCaller(t *testing.T) {
 	if len(camps) != 1 {
 		t.Fatalf("campaigns stored = %d, want 1", len(camps))
 	}
-	if camps[0].TenantID != 5 {
-		t.Fatalf("campaign tenant = %d, want the caller's 5", camps[0].TenantID)
-	}
 	if camps[0].CreatedBy != "phish-op" {
 		t.Fatalf("CreatedBy = %q, want phish-op", camps[0].CreatedBy)
 	}
 	// SMTP password must be stored encrypted (never the raw value).
-	c3, w3 := phishingCtx("operator", `{"name":"c3","template_id":2,"smtp_host":"mail.example","smtp_pass":"topsecret"}`)
-	c3.Set(tenantIDContextKey, tenantResolution{tid: 5, ok: true})
+	c3, w3 := phishingCtx("operator", `{"name":"c3","template_id":1,"smtp_host":"mail.example","smtp_pass":"topsecret"}`)
 	s.handleAPICreatePhishingCampaign(c3)
 	if w3.Code != http.StatusOK {
 		t.Fatalf("third campaign status=%d", w3.Code)
@@ -402,23 +369,22 @@ func TestCreatePhishingCampaignTenantFromCaller(t *testing.T) {
 	}
 }
 
-// TestLaunchPhishingCampaignValidation proves launch refuses a foreign
-// campaign, an already-running one, and a campaign with no valid targets.
+// TestLaunchPhishingCampaignValidation proves launch refuses an already-running
+// campaign and one with no valid targets.
 func TestLaunchPhishingCampaignValidation(t *testing.T) {
 	s := newPhishingTestServer(t)
 	seedPhishingTenantUser(t, s, "phish-op", 5)
-	tpl := db.PhishingTemplate{Name: "t", Subject: "s", Body: "b", FromEmail: "a@x", TenantID: 5}
+	tpl := db.PhishingTemplate{Name: "t", Subject: "s", Body: "b", FromEmail: "a@x"}
 	if err := s.db.Create(&tpl).Error; err != nil {
 		t.Fatalf("seed tpl: %v", err)
 	}
-	draft := db.PhishingCampaign{TenantID: 5, Name: "draft", TemplateID: tpl.ID, Status: "draft", TargetList: ""}
+	draft := db.PhishingCampaign{Name: "draft", TemplateID: tpl.ID, Status: "draft", TargetList: ""}
 	if err := s.db.Create(&draft).Error; err != nil {
 		t.Fatalf("seed draft: %v", err)
 	}
 
 	// Empty target list is refused before any send is queued.
 	c, w := phishingCtx("operator", "")
-	c.Set(tenantIDContextKey, tenantResolution{tid: 5, ok: true})
 	c.Params = gin.Params{{Key: "id", Value: uintToStr(draft.ID)}}
 	s.handleAPILaunchPhishingCampaign(c)
 	if w.Code != http.StatusBadRequest {
@@ -432,7 +398,6 @@ func TestLaunchPhishingCampaignValidation(t *testing.T) {
 		t.Fatalf("set running: %v", err)
 	}
 	c2, w2 := phishingCtx("operator", "")
-	c2.Set(tenantIDContextKey, tenantResolution{tid: 5, ok: true})
 	c2.Params = gin.Params{{Key: "id", Value: uintToStr(draft.ID)}}
 	s.handleAPILaunchPhishingCampaign(c2)
 	if w2.Code != http.StatusBadRequest {
@@ -443,35 +408,10 @@ func TestLaunchPhishingCampaignValidation(t *testing.T) {
 	}
 }
 
-// TestLaunchPhishingCampaignCrossTenant404 proves another tenant's campaign
-// is invisible to the launch endpoint.
-func TestLaunchPhishingCampaignCrossTenant404(t *testing.T) {
-	s := newPhishingTestServer(t)
-	seedPhishingTenantUser(t, s, "phish-op", 5)
-	tpl := db.PhishingTemplate{Name: "t", Subject: "s", Body: "b", FromEmail: "a@x", TenantID: 9}
-	if err := s.db.Create(&tpl).Error; err != nil {
-		t.Fatalf("seed tpl: %v", err)
-	}
-	camp := db.PhishingCampaign{TenantID: 9, Name: "foreign", TemplateID: tpl.ID, Status: "draft", TargetList: "v@x"}
-	if err := s.db.Create(&camp).Error; err != nil {
-		t.Fatalf("seed camp: %v", err)
-	}
-
-	c, w := phishingCtx("operator", "")
-	c.Set(tenantIDContextKey, tenantResolution{tid: 5, ok: true})
-	c.Params = gin.Params{{Key: "id", Value: uintToStr(camp.ID)}}
-	s.handleAPILaunchPhishingCampaign(c)
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("status=%d, want 404 for another tenant's campaign", w.Code)
-	}
-	var reloaded db.PhishingCampaign
-	if err := s.db.First(&reloaded, camp.ID).Error; err != nil {
-		t.Fatalf("reload: %v", err)
-	}
-	if reloaded.Status != "draft" {
-		t.Fatalf("cross-tenant launch claimed the campaign: status=%s", reloaded.Status)
-	}
-}
+// Cross-tenant launch is NOT covered: PhishingCampaign has no TenantID in this
+// tree, so a foreign campaign is launchable. See the "Campaign tenancy" note
+// above; the assertion that used to live here referenced fields and a helper
+// that only exist in an unlanded change.
 
 // uintToStr formats an id for path params without importing strconv twice.
 func uintToStr(v uint) string {
