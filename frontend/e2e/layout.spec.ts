@@ -106,16 +106,17 @@ test.describe("light and dark visual baselines", () => {
     for (const theme of ["light", "dark"] as const) {
       test(`${route} ${theme}`, async ({ page }, testInfo) => {
         test.skip(!["mobile", "laptop"].includes(testInfo.project.name), "Visual baselines use representative mobile and laptop widths");
-        // Every committed baseline is *-win32.png, rendered by Playwright on
-        // Windows. CI runs ubuntu-latest, where the font stack differs, so
-        // Playwright looks for a *-linux.png that does not exist and fails
-        // with "A snapshot doesn't exist" — 32 failures that had been hidden
-        // behind the earlier npm audit step. Pixel comparison across font
-        // stacks is not meaningful at any tolerance, so the baselines are
-        // honoured only on the platform that produced them.
+        // Baselines are per-platform because the font stack changes the
+        // rendering: *-win32.png is rendered by Playwright on Windows and
+        // *-linux.png on ubuntu-latest (the same image the frontend job uses).
+        // Both sets are committed, so the visual contract is enforced in CI
+        // and locally; other platforms skip instead of failing on a missing
+        // snapshot. Regenerate linux via .github/workflows/visual-baselines.yml
+        // and win32 with `npx playwright test e2e/layout.spec.ts
+        // --update-snapshots` on Windows.
         test.skip(
-          process.platform !== "win32",
-          "Visual baselines are win32-rendered and cannot be compared against a Linux font stack",
+          !["win32", "linux"].includes(process.platform),
+          "Visual baselines exist for win32 and linux only",
         );
         await prepare(page, theme);
         await page.goto(`/${route}.html`);
