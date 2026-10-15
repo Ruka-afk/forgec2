@@ -205,12 +205,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # --new-from-rev=HEAD~ diffs the tip commit against its parent.
+          fetch-depth: 2
       # golangci-lint v2: .golangci.yml declares `version: "2"`, and only
       # action v7+ can download/drive a v2 binary.
       - uses: golangci/golangci-lint-action@v9
         with:
           version: v2.14.0  # pinned; bump deliberately after validating a new release
-          args: --timeout=5m
+          # Ratchet, not a cleanup. Years of invalid config meant this gate
+          # never ran, and the repo now carries ~660 findings (mostly
+          # errcheck/staticcheck/gosec across internal/). Failing on all of
+          # them would block every push; instead only issues on lines the tip
+          # commit changed fail. The backlog shrinks by paying it down, never
+          # by loosening this arg. Full local runs still show the backlog.
+          args: --timeout=5m --new-from-rev=HEAD~
 
   security:
     runs-on: ubuntu-latest
