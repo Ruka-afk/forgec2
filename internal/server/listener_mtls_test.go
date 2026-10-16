@@ -172,9 +172,9 @@ func startTLSTestServer(t *testing.T, cfg *tls.Config) (string, func()) {
 		t.Fatalf("listen: %v", err)
 	}
 	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	})}
-	go srv.Serve(tls.NewListener(ln, cfg))
+	go func() { _ = srv.Serve(tls.NewListener(ln, cfg)) }()
 	return ln.Addr().String(), func() { srv.Close() }
 }
 
@@ -342,7 +342,7 @@ func TestListenerMTLSRealHandshake(t *testing.T) {
 			t.Fatalf("HTTPS request with a CA-signed client certificate failed: %v", err)
 		}
 		defer resp.Body.Close()
-		io.Copy(io.Discard, resp.Body)
+		_, _ = io.Copy(io.Discard, resp.Body)
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("status=%d, want 200", resp.StatusCode)
 		}
@@ -371,7 +371,7 @@ func TestListenerMTLSRealHandshake(t *testing.T) {
 		if err := s3.startExtraTCPListener(key, "tls", ov); err != nil {
 			t.Fatalf("startExtraTCPListener: %v", err)
 		}
-		defer s3.stopExtraListener(key)
+		defer func() { _ = s3.stopExtraListener(key) }()
 		dialAddr := strings.TrimPrefix(key, "tls://")
 
 		assertTLSConnectionAccepted(t, dialAddr, clientTLSConfig(t, m, &m.clientPair, 0))

@@ -404,7 +404,7 @@ jobs:
       - name: Static checks (css/tokens/i18n/paths/dialogs/openapi/perms, concurrent)
         run: npm run check:pre
       - run: npm test
-      # Ratcheting floor: today 14.20% of statements in src/ (8061/56767).
+      # Ratcheting floor: today 14.53% of statements in src/ (8257/56837).
       # It reads low because most uncovered code is page components no test
       # imports at all, not a missed branch inside a tested file. Raise this
       # whenever tests are added; lower it only as part of that same change,
