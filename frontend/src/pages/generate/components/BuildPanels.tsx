@@ -11,6 +11,7 @@ import { CopyButton } from "@/components/ui/copy-button";
 import type { BinaryForm, UnixForm, PS1Form, StagerForm, ShellcodeForm, DonutForm, BinaryVariant, UnixVariant, StagerVariant } from "@/types/generate";
 import { AppWindow, Apple, Binary, CheckCircle2, Disc, Download, HardDrive, Info, Package, PackageOpen, Puzzle, Terminal, Wand2 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { AdvancedSection, FieldLabel, PayloadCard } from "./PayloadCard";
 import { BuildResult, BuildStatusBadge } from "./BuildResult";
@@ -227,7 +228,15 @@ export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setF
         <label htmlFor={`${id}-ghost-mode`} className="flex cursor-pointer items-start gap-x-2.5 rounded-lg border border-border/50 bg-background/40 px-2.5 py-2 transition-colors hover:border-primary/25 hover:bg-muted/30 has-checked:border-primary/30 has-checked:bg-primary/5">
           <Checkbox id={`${id}-ghost-mode`} aria-label={t("generate.panel.ghost_mode_aria")} checked={form.ghost_mode} onCheckedChange={(checked) => setForm({ ...form, ghost_mode: checked === true })} className="mt-0.5" />
           <span className="text-sm text-muted-foreground">
-            {t("generate.panel.ghost_mode")}
+            <span className="inline-flex items-center gap-x-1">
+              {t("generate.panel.ghost_mode")}
+              <Tooltip>
+                <TooltipTrigger type="button" aria-label={t("generate.panel.ghost_mode_tip_aria")} className="rounded-sm text-muted-foreground/70 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <Info className="size-3.5" />
+                </TooltipTrigger>
+                <TooltipContent side="top">{t("generate.panel.ghost_mode_tip")}</TooltipContent>
+              </Tooltip>
+            </span>
             <span className="block font-normal text-muted-foreground/80 text-xs leading-4">{t("generate.panel.ghost_mode_hint")}</span>
           </span>
         </label>

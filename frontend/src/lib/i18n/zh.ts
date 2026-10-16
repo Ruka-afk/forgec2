@@ -2168,6 +2168,8 @@ export const zh: Record<string, string> = {
     "generate.panel.ghost_mode": "幽灵模式",
     "generate.panel.ghost_mode_aria": "启用幽灵模式",
     "generate.panel.ghost_mode_hint": "沙箱/反调试触发时隐藏（可选）",
+    "generate.panel.ghost_mode_tip": "命中沙箱/分析工具（VM 工具、Procmon、Wireshark、调试器、Process Hacker 等）或反调试检查后：发送最后一次心跳，随后转入静默——停止轮询任务、休眠拉长到 24 小时以上，内存中的配置与密钥保留。72 小时后自动恢复，也可用 ghost_mode_status / ghost_mode_exit 任务查询状态或提前退出。默认关闭，避免真实主机上的分析工具误触发。",
+    "generate.panel.ghost_mode_tip_aria": "幽灵模式说明",
     "generate.panel.elf_title": "Linux ELF",
     "generate.panel.end_aria": "工作时段结束",
     "generate.panel.end_hhmm": "结束（HH:MM）",

@@ -2168,6 +2168,8 @@ export const en: Record<string, string> = {
     "generate.panel.ghost_mode": "Ghost Mode",
     "generate.panel.ghost_mode_aria": "Enable ghost mode",
     "generate.panel.ghost_mode_hint": "Hide on sandbox/anti-debug triggers (opt-in)",
+    "generate.panel.ghost_mode_tip": "On a sandbox/analysis hit (VM tools, Procmon, Wireshark, debuggers, Process Hacker) or an anti-debug trip: one last beacon, then quiet — no task polling, sleep stretched past 24h, in-memory state kept. Recovers after 72h, or early via the ghost_mode_status / ghost_mode_exit tasks. Off by default so analysis tools on a real host cannot silence a fresh implant.",
+    "generate.panel.ghost_mode_tip_aria": "Ghost mode details",
     "generate.panel.elf_title": "Linux ELF",
     "generate.panel.end_aria": "Working hours end",
     "generate.panel.end_hhmm": "End (HH:MM)",
