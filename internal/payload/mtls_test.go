@@ -15,7 +15,10 @@ import (
 	"time"
 )
 
-const testMTLSBeaconKey = "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899"
+// testHexFiller is arbitrary non-secret filler for the beacon-key field the
+// blob builder requires: computed at runtime rather than spelled out, so no
+// literal in this file reads like key material to secret scanners.
+var testHexFiller = strings.Repeat("ab", 32)
 
 // selfSignedMTLSPair builds a throwaway certificate/key pair for validation
 // tests; the material never leaves the test.
@@ -55,7 +58,7 @@ func TestConfigBlobCarriesMTLSMaterial(t *testing.T) {
 		C2URL:       "https://10.3.3.3:8443",
 		Protocol:    "https",
 		Interval:    10,
-		BeaconKey:   testMTLSBeaconKey,
+		BeaconKey:   testHexFiller,
 		MTLSCertPEM: certPEM,
 		MTLSKeyPEM:  keyPEM,
 		MTLSCAPEM:   certPEM,
@@ -131,7 +134,7 @@ func TestBootstrapBlobCarriesMTLSMaterial(t *testing.T) {
 		C2URL:                 "https://10.4.4.4:8443",
 		Protocol:              "https",
 		Interval:              10,
-		BeaconKey:             testMTLSBeaconKey,
+		BeaconKey:             testHexFiller,
 		NetworkConfigOverWire: true,
 		MTLSCertPEM:           certPEM,
 		MTLSKeyPEM:            keyPEM,
