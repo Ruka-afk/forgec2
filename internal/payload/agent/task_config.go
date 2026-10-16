@@ -33,14 +33,10 @@ type ConfigOverride struct {
 
 var configOverrides struct {
 	sync.RWMutex
-	sleep           int // 0 = not set
-	jitter          int // 0 = not set
 	userAgent       string
 	headers         map[string]string
 	beaconURI       string
 	method          string
-	hasSleep        bool
-	hasJitter       bool
 	coverTraffic    bool
 	coverTrafficMax int
 }
@@ -124,24 +120,6 @@ func isHex64(s string) bool {
 		}
 	}
 	return true
-}
-
-func getActiveSleep() int {
-	configOverrides.RLock()
-	defer configOverrides.RUnlock()
-	if configOverrides.hasSleep {
-		return configOverrides.sleep
-	}
-	return Interval
-}
-
-func getActiveJitter() int {
-	configOverrides.RLock()
-	defer configOverrides.RUnlock()
-	if configOverrides.hasJitter {
-		return configOverrides.jitter
-	}
-	return Jitter
 }
 
 // defaultUserAgentPool is a curated set of realistic browser User-Agents. A

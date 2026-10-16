@@ -278,14 +278,6 @@ func (r *rportfwdRelay) acceptLoop() {
 	}
 }
 
-func (r *rportfwdRelay) start() {
-	if err := r.bind(); err != nil {
-		slog.Error("Rportfwd relay listen failed", "err", err)
-		return
-	}
-	r.acceptLoop()
-}
-
 func (r *rportfwdRelay) handleConn(operatorConn net.Conn) {
 	defer operatorConn.Close()
 

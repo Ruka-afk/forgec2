@@ -10,8 +10,6 @@ import (
 	"strings"
 )
 
-type agentTransformFunc func([]byte) ([]byte, error)
-
 type agentTransformStep struct {
 	Name  string
 	Value string

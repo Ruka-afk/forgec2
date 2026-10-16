@@ -10,11 +10,10 @@ import (
 )
 
 var (
-	imgLoadK32            = syscall.NewLazyDLL("kernel32.dll")
-	procImgCreateFileW    = imgLoadK32.NewProc("CreateFileW")
-	procImgGetFileSize    = imgLoadK32.NewProc("GetFileSize")
-	procImgReadFile       = imgLoadK32.NewProc("ReadFile")
-	procImgSetFilePointer = imgLoadK32.NewProc("SetFilePointer")
+	imgLoadK32         = syscall.NewLazyDLL("kernel32.dll")
+	procImgCreateFileW = imgLoadK32.NewProc("CreateFileW")
+	procImgGetFileSize = imgLoadK32.NewProc("GetFileSize")
+	procImgReadFile    = imgLoadK32.NewProc("ReadFile")
 )
 
 func init() {

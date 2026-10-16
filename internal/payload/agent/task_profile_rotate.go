@@ -26,7 +26,6 @@ var profileOverrides struct {
 	beaconURI    string
 	beaconMethod string
 	userAgent    string
-	encoding     string
 	c2URL        string
 }
 
@@ -50,12 +49,6 @@ func handleProfileRotate(task Task, res *TaskResult) {
 	}
 	if pr.UserAgent != "" {
 		profileOverrides.userAgent = pr.UserAgent
-	}
-	if pr.Encoding != "" {
-		switch pr.Encoding {
-		case "json", "msgpack", "cbor":
-			profileOverrides.encoding = pr.Encoding
-		}
 	}
 	if pr.C2URL != "" {
 		if !hasValidC2Scheme(pr.C2URL) {
@@ -89,20 +82,4 @@ func getActiveBeaconMethod() string {
 		return method
 	}
 	return BeaconMethod
-}
-
-func getActiveUserAgent() string {
-	profileOverrides.RLock()
-	ua := profileOverrides.userAgent
-	profileOverrides.RUnlock()
-	if ua != "" {
-		return ua
-	}
-	return UserAgent
-}
-
-func getActiveEncoding() string {
-	profileOverrides.RLock()
-	defer profileOverrides.RUnlock()
-	return profileOverrides.encoding
 }

@@ -232,7 +232,6 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 	// MaxBatchAgentLimit sequential queries.
 	type batchCandidate struct {
 		agentID string
-		task    db.Task
 	}
 	candidates := make([]batchCandidate, 0, len(uniqueIDs))
 	lockedSkipped := 0

@@ -49,25 +49,3 @@ $results | ConvertTo-Json -Compress
 	}
 	return hosts, nil
 }
-
-func monitorIncomingTGTs() error {
-	psCmd := `
-try {
-	$klist = klist -li 0x3e7 2>&1
-	if ($LASTEXITCODE -ne 0) {
-		Write-Output "No cached tickets found"
-		return
-	}
-	Write-Output "Current LSA cache:"
-	Write-Output $klist
-} catch {
-	Write-Output "TGT monitor: $_"
-}
-`
-	out, err := runShell(psCmd, "powershell.exe")
-	if err != nil {
-		return fmt.Errorf("TGT monitor failed: %w\nOutput: %s", err, out)
-	}
-	_ = out
-	return nil
-}

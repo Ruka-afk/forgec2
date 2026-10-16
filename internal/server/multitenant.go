@@ -195,14 +195,6 @@ func (s *Server) resolveVisibleAgentID(c *gin.Context, idOrHost string) string {
 	return agent.ID
 }
 
-// assignTenantToAgent sets the tenant on a newly created/registered implant so
-// it is owned by the calling operator's tenant.
-func (s *Server) assignTenantToAgent(c *gin.Context, agentID string) {
-	if tid := s.currentTenantID(c); tid != 0 {
-		s.db.Model(&db.Implant{}).Where("id = ?", agentID).Update("tenant_id", tid)
-	}
-}
-
 // defaultTenantID returns the ID of the bootstrap "default" tenant that all
 // legacy/freshly-registered assets are assigned to.
 func (s *Server) defaultTenantID() uint {

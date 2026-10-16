@@ -39,14 +39,6 @@ var (
 
 type zMask struct{}
 
-func getZileanMask() SleepMasker {
-	zInitOnce.Do(zInit)
-	if !zCtx.ready {
-		return nil
-	}
-	return &zMask{}
-}
-
 func zInit() {
 	if !enableSleepMask {
 		return

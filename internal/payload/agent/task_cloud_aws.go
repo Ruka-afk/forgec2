@@ -443,9 +443,6 @@ func checkAWSCodeBuild(creds *awsCreds, r *CloudTokenResult) {
 	}
 
 	// List CodeBuild projects
-	type ProjectEntry struct {
-		Name string `json:"name"`
-	}
 	type ListResult struct {
 		Projects []string `json:"projects"`
 	}

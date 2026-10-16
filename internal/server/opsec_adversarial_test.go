@@ -13,8 +13,6 @@ import (
 	"github.com/forgec2/forgec2/internal/crypto"
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/server/opsec"
-	"github.com/glebarez/sqlite"
-	"gorm.io/gorm"
 )
 
 func TestErrorCodes_AllCodesHaveHTTPMapping(t *testing.T) {
@@ -105,15 +103,6 @@ func TestErrorCodes_DuplicateCodes(t *testing.T) {
 		}
 		seen[c.code] = c.name
 	}
-}
-
-func newTestDB(t *testing.T) *gorm.DB {
-	t.Helper()
-	database, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	if err != nil {
-		t.Fatalf("open test db: %v", err)
-	}
-	return database
 }
 
 func TestBackupManager_RotateKey(t *testing.T) {
@@ -426,32 +415,4 @@ func TestExtC2Encryption_RoundTrip(t *testing.T) {
 	if legacy != "old-unencrypted-value" {
 		t.Errorf("legacy fallback = %q, want 'old-unencrypted-value'", legacy)
 	}
-}
-
-func base64Encode(data []byte) string {
-	const table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-	result := make([]byte, 0, (len(data)+2)/3*4)
-	for i := 0; i < len(data); i += 3 {
-		var b0, b1, b2 byte
-		b0 = data[i]
-		if i+1 < len(data) {
-			b1 = data[i+1]
-		}
-		if i+2 < len(data) {
-			b2 = data[i+2]
-		}
-		result = append(result, table[b0>>2])
-		result = append(result, table[((b0&0x03)<<4)|(b1>>4)])
-		if i+1 < len(data) {
-			result = append(result, table[((b1&0x0f)<<2)|(b2>>6)])
-		} else {
-			result = append(result, '=')
-		}
-		if i+2 < len(data) {
-			result = append(result, table[b2&0x3f])
-		} else {
-			result = append(result, '=')
-		}
-	}
-	return string(result)
 }

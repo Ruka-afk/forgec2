@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -290,18 +289,6 @@ func parsePagination(c *gin.Context, defaultPageSize, maxPageSize int) paginatio
 		PageSize: pageSize,
 		Offset:   (page - 1) * pageSize,
 	}
-}
-
-// --- #8: List helper ---
-
-// listAll queries all records ordered as specified and responds with data + total.
-func (s *Server) listAll(c *gin.Context, dest interface{}, order string) {
-	if err := s.db.Order(order).Find(dest).Error; err != nil {
-		slog.Error("ListAll query failed", "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to query data")
-		return
-	}
-	respond(c, gin.H{"success": true, "data": dest, "total": reflect.ValueOf(dest).Elem().Len()})
 }
 
 // csvSanitize prevents CSV injection by stripping dangerous leading characters.

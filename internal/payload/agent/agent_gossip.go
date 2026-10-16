@@ -34,7 +34,6 @@ type PeerInfo struct {
 var (
 	peerTable        map[string]PeerInfo
 	peerTableMu      sync.RWMutex
-	gossipRunning    bool
 	lastGossipReport time.Time
 )
 
@@ -46,7 +45,6 @@ func startGossipProtocol() {
 	if !GossipEnabled {
 		return
 	}
-	gossipRunning = true
 
 	probeKnownPeers()
 

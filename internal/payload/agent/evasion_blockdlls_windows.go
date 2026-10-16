@@ -45,10 +45,6 @@ func blockDLLs() string {
 	return results
 }
 
-func blockDLLsPEB() string {
-	return "PEB BlockDlls: " + blockDllsPEBInternal()
-}
-
 func blockDllsPEBInternal() string {
 	ntdll := syscall.NewLazyDLL("ntdll.dll")
 	procNtQueryInformationProcess := ntdll.NewProc(s(SProcNtQIP))

@@ -1934,9 +1934,6 @@ func netScanSMB(cidr string) (string, error) {
 func netEnumHosts(domain string) (string, error) {
 	return "", fmt.Errorf("host enumeration is Windows-only")
 }
-func netScanSMBDiscovery() (string, error) {
-	return "", fmt.Errorf("SMB discovery is Windows-only")
-}
 
 func dpapiMasterKey() (string, error) {
 	return "", fmt.Errorf("DPAPI is Windows-only")
@@ -1976,14 +1973,6 @@ func ldapSPN() (string, error) {
 }
 func ldapACL() (string, error) {
 	return "", fmt.Errorf("LDAP queries are Windows-only")
-}
-
-func namedPipeImpersonate(cmd string) (string, error) {
-	return "", fmt.Errorf("named pipe impersonation is Windows-only")
-}
-
-func juicyPotato(cmd string) (string, error) {
-	return "", fmt.Errorf("Juicy Potato is Windows-only")
 }
 
 func selfUpdateLinux(exe, tmpPath string) string {
@@ -2026,10 +2015,6 @@ func initCLRHosting() bool { return false }
 
 func executeAssemblyInProcess(assemblyData []byte, args string) (string, error) {
 	return "", fmt.Errorf("CLR execute-assembly is Windows-only")
-}
-
-func runPowerShellInProcess(script string) (string, error) {
-	return "", fmt.Errorf("CLR PowerShell is Windows-only")
 }
 
 func handleCLRExecAssembly(task Task, res *TaskResult) {

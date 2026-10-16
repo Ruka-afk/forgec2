@@ -477,6 +477,10 @@ func (s *Server) deleteAgentRecord(id string) bool {
 		slog.Error("Failed to commit agent deletion", "agent_id", id, "err", err)
 		return false
 	}
+	// Tear down any live port-forward tunnels the agent held: entries in
+	// lportfwdTargets carry the (now deleted) agent's dial target and the
+	// sockets would linger until process exit otherwise.
+	s.cleanupLPortFwdForAgent(id)
 	screenshotsDir := safeJoin(filepath.Join(s.cfg.Server.DataDir, "screenshots"), id)
 	if screenshotsDir != "" {
 		if err := os.RemoveAll(screenshotsDir); err != nil {

@@ -15,9 +15,8 @@ import (
 // rportfwd_data frames for the next beacon, and rportfwd_data frames from the
 // server are written through to the target.
 var (
-	rportfwdConns  = make(map[uint64]*rportfwdConn)
-	rportfwdMu     sync.Mutex
-	rportfwdNextID uint64
+	rportfwdConns = make(map[uint64]*rportfwdConn)
+	rportfwdMu    sync.Mutex
 )
 
 type rportfwdConn struct {
@@ -48,19 +47,6 @@ func rportfwdCollectOutbound() []socksFrame {
 		rc.mu.Unlock()
 	}
 	return frames
-}
-
-func rportfwdHandleFrames(frames []socksFrame) {
-	for _, f := range frames {
-		switch f.Action {
-		case "rportfwd_connect":
-			go rportfwdDial(f.ConnID, string(f.Data))
-		case "rportfwd_data":
-			rportfwdWrite(f.ConnID, f.Data)
-		case "rportfwd_close":
-			rportfwdClose(f.ConnID)
-		}
-	}
 }
 
 func rportfwdDial(connID uint64, target string) {

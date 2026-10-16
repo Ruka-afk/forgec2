@@ -65,11 +65,10 @@ const (
 // wasmRunner owns a shared wazero runtime plus a compiled-module cache so a
 // report that runs on every page view does not recompile the module each time.
 type wasmRunner struct {
-	mu       sync.Mutex
-	runtime  wazero.Runtime
-	cache    map[string]wazero.CompiledModule
-	hostMod  api.Module
-	disabled bool
+	mu      sync.Mutex
+	runtime wazero.Runtime
+	cache   map[string]wazero.CompiledModule
+	hostMod api.Module
 }
 
 var (

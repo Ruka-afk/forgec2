@@ -13,14 +13,13 @@ import (
 var (
 	advapi32 = syscall.NewLazyDLL("advapi32.dll")
 
-	procOpenProcessToken          = advapi32.NewProc("OpenProcessToken")
-	procDuplicateTokenEx          = advapi32.NewProc("DuplicateTokenEx")
-	procImpersonateLoggedOnUser   = advapi32.NewProc("ImpersonateLoggedOnUser")
-	procRevertToSelf              = advapi32.NewProc("RevertToSelf")
-	procGetTokenInformation       = advapi32.NewProc("GetTokenInformation")
-	procLookupAccountSidW         = advapi32.NewProc("LookupAccountSidW")
-	procLogonUserW                = advapi32.NewProc("LogonUserW")
-	procImpersonateLoggedOnUserFn = advapi32.NewProc("ImpersonateLoggedOnUser")
+	procOpenProcessToken        = advapi32.NewProc("OpenProcessToken")
+	procDuplicateTokenEx        = advapi32.NewProc("DuplicateTokenEx")
+	procImpersonateLoggedOnUser = advapi32.NewProc("ImpersonateLoggedOnUser")
+	procRevertToSelf            = advapi32.NewProc("RevertToSelf")
+	procGetTokenInformation     = advapi32.NewProc("GetTokenInformation")
+	procLookupAccountSidW       = advapi32.NewProc("LookupAccountSidW")
+	procLogonUserW              = advapi32.NewProc("LogonUserW")
 )
 
 const (

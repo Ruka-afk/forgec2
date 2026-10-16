@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"strings"
 	"time"
 )
 
@@ -257,11 +256,4 @@ func minInt(a, b int) int {
 		return a
 	}
 	return b
-}
-
-// sanitizeForJSON cleans a string for JSON output.
-func sanitizeForJSON(s string) string {
-	s = strings.ReplaceAll(s, "\\", "\\\\")
-	s = strings.ReplaceAll(s, "\"", "\\\"")
-	return s
 }

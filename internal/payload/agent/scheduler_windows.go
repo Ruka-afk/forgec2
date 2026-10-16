@@ -10,7 +10,6 @@ import (
 )
 
 // Windows trigger detection: last input via user32 + adapter table diff.
-var lastUserActivity time.Time
 var lastNetworkState string
 
 func detectUserActivity() bool {
@@ -28,7 +27,6 @@ func detectUserActivity() bool {
 	}
 	now := uint32(time.Now().Unix())
 	idle := now - lii.dwTime/1000
-	lastUserActivity = time.Now()
 	return idle < 30 // User active in last 30 seconds
 }
 

@@ -23,10 +23,3 @@ func netEnumHosts(domain string) (string, error) {
 	}
 	return fmt.Sprintf("Host enumeration (domain=%s):\n%s\n", domain, result), err
 }
-
-func netScanSMBDiscovery() (string, error) {
-	cmd := exec.Command("cmd", "/c", "net view")
-	applyHideWindow(cmd)
-	out, err := cmd.CombinedOutput()
-	return fmt.Sprintf("Net view:\n%s", string(out)), err
-}

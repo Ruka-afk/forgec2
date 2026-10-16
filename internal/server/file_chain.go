@@ -65,31 +65,6 @@ func (fc *fileChainState) sweep(ttl time.Duration) int {
 	return n
 }
 
-// prev returns the expected previous-MAC for the given task: the committed MAC
-// of the previous chunk, or 32 zero bytes (chain seed) for the first chunk.
-func (fc *fileChainState) prev(taskID uint) []byte {
-	if fc == nil {
-		return make([]byte, 32)
-	}
-	fc.mu.Lock()
-	defer fc.mu.Unlock()
-	if prev, ok := fc.chains[taskID]; ok {
-		return prev
-	}
-	return make([]byte, 32)
-}
-
-// commit records the MAC of the most recently verified chunk for a task.
-func (fc *fileChainState) commit(taskID uint, mac []byte) {
-	if fc == nil {
-		return
-	}
-	fc.mu.Lock()
-	defer fc.mu.Unlock()
-	fc.chains[taskID] = mac
-	fc.touched[taskID] = time.Now()
-}
-
 // reset drops chain state for a task (task errored or completed).
 func (fc *fileChainState) reset(taskID uint) {
 	if fc == nil {

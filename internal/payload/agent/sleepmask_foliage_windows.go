@@ -102,14 +102,6 @@ type fMbi struct {
 
 type fMask struct{}
 
-func getFoliageMask() SleepMasker {
-	foliageInit.Do(fInit)
-	if !foliageInst.ready {
-		return nil
-	}
-	return &fMask{}
-}
-
 func fInit() {
 	if !enableSleepMask {
 		return

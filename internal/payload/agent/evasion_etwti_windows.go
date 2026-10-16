@@ -12,19 +12,6 @@ const (
 	etwTiProviderGUID = "{A6F70AEF-E9E1-47E3-9613-EAB41B718D2C}"
 )
 
-var (
-	ntdllETWTI            = syscall.NewLazyDLL("ntdll.dll")
-	procEtwEventWriteFull = ntdllETWTI.NewProc(s(SProcEtwFull))
-)
-
-// ETW TI GUID bytes in little-endian GUID format
-var etwTiGuidBytes = []byte{
-	0xEF, 0x0A, 0xF7, 0xA6, // Data1 (little-endian)
-	0xE1, 0xE9, // Data2 (little-endian)
-	0xE3, 0x47, // Data3 (little-endian)
-	0x96, 0x13, 0xEA, 0xB4, 0x1B, 0x71, 0x8D, 0x2C, // Data4
-}
-
 func init() {
 	registerEvasion("etwti", runEvasionETWTI)
 }

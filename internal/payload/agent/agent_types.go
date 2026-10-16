@@ -60,7 +60,6 @@ var (
 	beaconConsecutiveFailures int
 
 	// P2P relay state
-	p2pRelayRunning  bool
 	p2pRelayMu       sync.Mutex
 	p2pChildUUIDs    []string // UUIDs of children connected through us
 	p2pChildResults  = make(map[string][]TaskResult)
@@ -73,9 +72,6 @@ var (
 	// never parsing or decrypting them.
 	p2pChildFrames  = make(map[string][][]byte)
 	p2pChildReplies = make(map[string][][]byte)
-
-	// SMB transport state
-	isSMBChild bool // true if this agent is connected via SMB to a parent
 
 	// Keylogger state (cross platform, inc in platform files)
 	keylogActive int32 // atomic: 0=false, 1=true
@@ -189,11 +185,7 @@ type OpsProfile struct {
 	OfficeHoursOnly    bool
 }
 
-var (
-	currentEnvClass   string
-	currentOpsProfile *OpsProfile
-	envDetected       bool
-)
+var currentOpsProfile *OpsProfile
 
 func isShellTask(taskType string) bool {
 	return taskType == "shell" || taskType == "ps" || taskType == "powerpick"
@@ -204,29 +196,7 @@ func isInjectTask(taskType string) bool {
 }
 
 // ── Egress Detection State ───────────────────────────────────────────────
-var (
-	egressReport    *EgressReport
-	egressDetected  bool
-	bestEgressProto string
-)
-
-// ── EDR Adaptive Strategy Flags ───────────────────────────────────────────
-// Set by ApplyStrategy() at startup based on detected EDR.
-var (
-	useIndirectSyscall bool
-	useStackSpoofing   bool
-	pebBlockDLLs       bool
-	patchAMSI          bool
-	patchETW           bool
-	enableSleepMask    bool
-	enableVEHUnhook    bool
-)
-
-// ── Anti-Debug State ─────────────────────────────────────────────────────
-var (
-	antiDebugScore     int32 // current anti-debug score (0-100)
-	antiDebugTriggered bool  // true if any debugger detected
-)
+var bestEgressProto string
 
 // ── P2P Gossip State ─────────────────────────────────────────────────────
 var (

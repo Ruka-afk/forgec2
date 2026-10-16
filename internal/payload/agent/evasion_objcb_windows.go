@@ -9,9 +9,8 @@ import (
 )
 
 var (
-	ntdllObjCB            = syscall.NewLazyDLL("ntdll.dll")
-	procNtDuplicateObject = ntdllObjCB.NewProc("NtDuplicateObject")
-	procNtOpenProcess     = ntdllObjCB.NewProc("NtOpenProcess")
+	ntdllObjCB        = syscall.NewLazyDLL("ntdll.dll")
+	procNtOpenProcess = ntdllObjCB.NewProc("NtOpenProcess")
 )
 
 const (

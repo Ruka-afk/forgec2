@@ -411,14 +411,6 @@ func openWeChatDBReadonly(path string) *sql.DB {
 	return db
 }
 
-// hasWeChatTable reports whether a table named name exists in the db.
-// Unlike the old helper, an error (e.g. encrypted file) is propagated so
-// callers can report it instead of silently skipping the db.
-func hasWeChatTable(db *sql.DB, name string) bool {
-	ok, _ := wechatHasTable(db, name)
-	return ok
-}
-
 // wechatHasTable is the error-aware table probe. Table names are matched
 // case-insensitively by SQLite itself.
 func wechatHasTable(db *sql.DB, name string) (bool, error) {

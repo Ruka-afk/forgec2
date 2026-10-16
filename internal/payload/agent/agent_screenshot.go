@@ -8,7 +8,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"image/jpeg"
-	"image/png"
 	"io"
 	"net/http"
 	"strings"
@@ -105,18 +104,6 @@ func sendScreenFrame(data []byte) {
 			resp.Body.Close()
 		}
 	}
-}
-
-func takeScreenshot() ([]byte, error) {
-	img, err := captureScreenRGBA()
-	if err != nil {
-		return nil, err
-	}
-	var pngBuf bytes.Buffer
-	if err := png.Encode(&pngBuf, img); err != nil {
-		return nil, err
-	}
-	return pngBuf.Bytes(), nil
 }
 
 func takeScreenshotJPEG(quality int) ([]byte, error) {

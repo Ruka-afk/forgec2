@@ -827,12 +827,6 @@ func injectDefaultAgent(name string, argsJSON string, defaultAgent string) strin
 	return argsJSON
 }
 
-// executeToolWithDefaultAgent injects the context agent into the args JSON for
-// the agent-scoped tools before dispatching.
-func (s *Server) executeToolWithDefaultAgent(name string, argsJSON string, defaultAgent string) string {
-	return s.executeToolSwitch(name, injectDefaultAgent(name, argsJSON, defaultAgent))
-}
-
 func (s *Server) executeToolSwitch(name string, argsJSON string) string {
 	return s.executeToolSwitchCtx(nil, name, argsJSON)
 }

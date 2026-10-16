@@ -11,13 +11,11 @@ import (
 
 var (
 	kernel32                  = syscall.NewLazyDLL("kernel32.dll")
-	ntdll                     = syscall.NewLazyDLL("ntdll.dll")
 	procVirtualAlloc          = kernel32.NewProc("VirtualAlloc")
 	procVirtualFree           = kernel32.NewProc("VirtualFree")
 	procVirtualProtect        = kernel32.NewProc("VirtualProtect")
 	procLoadLibraryA          = kernel32.NewProc("LoadLibraryA")
 	procGetProcAddress        = kernel32.NewProc("GetProcAddress")
-	procGetModuleHandleA      = kernel32.NewProc("GetModuleHandleA")
 	procFlushInstructionCache = kernel32.NewProc("FlushInstructionCache")
 	procGetCurrentProcess     = kernel32.NewProc("GetCurrentProcess")
 	procWaitForSingleObject   = kernel32.NewProc("WaitForSingleObject")
@@ -167,14 +165,6 @@ type imageImportDescriptor struct {
 	firstThunk         uint32
 }
 
-type imageThunkData64 struct {
-	addressOfData uint64
-}
-
-type imageThunkData32 struct {
-	addressOfData uint32
-}
-
 type imageExportDirectory struct {
 	characteristics       uint32
 	timeDateStamp         uint32
@@ -210,10 +200,6 @@ const (
 	memReserve                         uint32 = 0x2000
 	infinity                           uint32 = 0xFFFFFFFF
 )
-
-func peAligment(value, alignment uint32) uint32 {
-	return (value + alignment - 1) & ^(alignment - 1)
-}
 
 func reflectDLL(dllData []byte) (uintptr, error) {
 	if len(dllData) < 64 {

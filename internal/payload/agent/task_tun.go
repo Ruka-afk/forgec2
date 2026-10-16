@@ -3,7 +3,6 @@
 package main
 
 import (
-	"fmt"
 	"strings"
 	"sync"
 )
@@ -46,14 +45,4 @@ func handleTunStop(task Task, res *TaskResult) {
 	tunActive = false
 	tunMu.Unlock()
 	res.Output = "tun stopped"
-}
-
-func tunEnqueue(pkt []byte) {
-	socksEnqueueOut(0, "tun_data", pkt)
-}
-
-func tunNote(msg string) {
-	if Debug {
-		fmt.Println("[tun]", msg)
-	}
 }

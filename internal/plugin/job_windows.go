@@ -61,9 +61,8 @@ func (j *windowsJob) release() {
 // processGuard attaches a started plugin process to a job object so the whole
 // process tree dies with the plugin run.
 type processGuard struct {
-	mu   sync.Mutex
-	job  *windowsJob
-	done bool
+	mu  sync.Mutex
+	job *windowsJob
 }
 
 // attachProcessGuard binds the process to a fresh job object. Failure is

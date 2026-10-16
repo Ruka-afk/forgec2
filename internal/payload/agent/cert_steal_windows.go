@@ -20,7 +20,6 @@ var (
 	procCertOpenStore                     = crypt32Dll.NewProc(s(SCertStore))
 	procCertCloseStore                    = crypt32Dll.NewProc("CertCloseStore")
 	procCertEnumCertificatesInStore       = crypt32Dll.NewProc(s(SCertEnum))
-	procCertDuplicateCertificateContext   = crypt32Dll.NewProc("CertDuplicateCertificateContext")
 	procCertAddCertificateContextToStore  = crypt32Dll.NewProc("CertAddCertificateContextToStore")
 	procCertGetNameStringW                = crypt32Dll.NewProc("CertGetNameStringW")
 	procCertGetCertificateContextProperty = crypt32Dll.NewProc("CertGetCertificateContextProperty")
@@ -44,9 +43,6 @@ const (
 
 	certSHA1HashPropID    = 3
 	certKeyProvInfoPropID = 2
-
-	x509ASNEncoding  = 0x00000001
-	pkcs7ASNEncoding = 0x00010000
 )
 
 type cryptIntegerBlob struct {

@@ -1,5 +1,5 @@
-//go:build linux || windows || darwin
-// +build linux windows darwin
+//go:build windows
+// +build windows
 
 package main
 

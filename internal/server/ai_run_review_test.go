@@ -12,11 +12,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func setupAIRunReviewTest(t *testing.T) *Server {
-	t.Helper()
-	return setupAIRunStorageTest(t)
-}
-
 func TestAIRunReviewValidation(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := setupAIRunStorageTest(t)

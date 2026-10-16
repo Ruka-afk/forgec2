@@ -14,23 +14,6 @@ const (
 	processQueryLimitedInfo = 0x1000
 )
 
-// procThreadAttributeList holds the attribute list for extended process creation.
-type procThreadAttributeList struct {
-	dwFlags  uint32
-	size     uintptr
-	count    uint16
-	reserved uint16
-	unknown  uintptr
-	entries  [1]procThreadAttributeEntry
-}
-
-type procThreadAttributeEntry struct {
-	attribute uintptr
-	cbSize    uintptr
-	lpValue   uintptr
-	unknown   uintptr
-}
-
 // createProcessWithPPIDSpoof creates a process with a spoofed parent PID.
 // Returns hProcess, hThread, pid, error.
 func createProcessWithPPIDSpoof(exePath string, cmdLine string, parentPID uint32) (uintptr, uintptr, uint32, error) {

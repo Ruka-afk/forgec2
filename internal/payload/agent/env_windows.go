@@ -70,7 +70,6 @@ type EnvironmentDetector struct {
 	lastCheck time.Time
 	checkInt  time.Duration
 
-	domainSid      string
 	isDomainJoined bool
 	domainName     string
 	edrProducts    []string

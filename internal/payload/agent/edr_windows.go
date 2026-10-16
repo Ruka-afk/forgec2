@@ -161,23 +161,19 @@ func (e *EDRInfo) detectServices() {
 		return
 	}
 
-	type enumServiceStatusW struct {
-		serviceName             uintptr
-		displayName             uintptr
-		serviceType             uint32
-		currentState            uint32
-		controlsAccepted        uint32
-		win32ExitCode           uint32
-		serviceSpecificExitCode uint32
-		checkPoint              uint32
-		waitHint                uint32
-	}
+	// ENUM_SERVICE_STATUSW is walked by hand: only the service-name pointer at
+	// offset 0 is read, while the display-name/SERVICE_STATUS tail merely pads
+	// each record out to the Win32 ABI stride. Declaring the mirrored struct
+	// would pull in eight never-read ABI fields.
+	stride := unsafe.Sizeof(uintptr(0))*2 + 28 // 2 LPWSTRs + 7x uint32 SERVICE_STATUS
+	stride = (stride + 7) &^ 7                 // pad to the 8-byte struct alignment
 
-	ess := (*[1 << 16]enumServiceStatusW)(unsafe.Pointer(&buf[0]))
+	base := unsafe.Pointer(&buf[0])
 	for i := uint32(0); i < servicesReturned; i++ {
-		if ess[i].serviceName != 0 {
+		ep := unsafe.Pointer(uintptr(base) + uintptr(i)*stride)
+		if namePtr := *(*uintptr)(ep); namePtr != 0 {
 			var nameChars []uint16
-			p := unsafe.Pointer(ess[i].serviceName)
+			p := unsafe.Pointer(namePtr)
 			for j := 0; ; j++ {
 				c := *(*uint16)(unsafe.Pointer(uintptr(p) + uintptr(j)*2))
 				if c == 0 {

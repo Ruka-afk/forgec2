@@ -25,7 +25,6 @@ func protectProcess() string {
 	prot := processProtection{Level: 0x01, Flags: 0x01}
 
 	const ProcessProtection = 68
-	const PROCESS_ALL_ACCESS = 0x1FFFFF
 	const NtCurrentProcess = ^uintptr(0)
 
 	ret, _, _ := ntSetInfo.Call(

@@ -31,7 +31,6 @@ type BeaconScheduler struct {
 	maxInterval  int
 	jitter       int
 	nextBeacon   time.Time
-	scheduledAt  time.Time
 
 	// Office-hours config
 	officeStart     int // Hour (0-23)
@@ -45,7 +44,6 @@ type BeaconScheduler struct {
 
 	// Adaptive state
 	lastBeaconTime   time.Time
-	beaconLatency    time.Duration
 	beaconCount      int
 	consecutiveFast  int
 	consecutiveSlow  int

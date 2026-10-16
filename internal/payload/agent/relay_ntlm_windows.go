@@ -495,13 +495,3 @@ func generateNTLMChallenge() []byte {
 
 	return negResp
 }
-
-// getActiveRelayTarget returns the forward target of the active relay, if any.
-func getActiveRelayTarget() string {
-	relayMu.Lock()
-	defer relayMu.Unlock()
-	if activeRelay == nil {
-		return ""
-	}
-	return activeRelay.forwardAddr
-}

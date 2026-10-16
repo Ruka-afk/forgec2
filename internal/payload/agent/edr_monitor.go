@@ -33,7 +33,6 @@ var (
 		"fireeye", "elastic-agent",
 		"trelix", "sense", "mssense",
 	}
-	edrLastScan time.Time
 )
 
 func startEdrMonitor() {
@@ -56,7 +55,6 @@ func scanForEDR() {
 	}
 	edrMu.Lock()
 	defer edrMu.Unlock()
-	edrLastScan = time.Now()
 	now := time.Now().Unix()
 
 	lower := strings.ToLower(procStr)
@@ -97,12 +95,6 @@ func getEdrAlerts() []EdrAlert {
 	out := make([]EdrAlert, len(edrAlerts))
 	copy(out, edrAlerts)
 	return out
-}
-
-func clearEdrAlerts() {
-	edrMu.Lock()
-	defer edrMu.Unlock()
-	edrAlerts = nil
 }
 
 func handleEdrStatus(task Task, res *TaskResult) {

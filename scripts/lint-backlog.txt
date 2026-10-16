@@ -23,6 +23,11 @@
 # issue that so far only appeared on the linux analysis host (CI measured one
 # more than this machine); linux matches CI exactly. Tighten the windows
 # number once a local run reproduces the CI count.
+#
+# Batch K (2026-10): dead-code adjudication paid the unused linter to zero on
+# both targets (win 116 / lin 64 findings removed along with their write-only
+# state), taking the whole-tree totals to 845 (win) and 569 (lin). The
+# windows number again carries the +1 CI observation headroom.
 
-windows=968
-linux=634
+windows=846
+linux=569

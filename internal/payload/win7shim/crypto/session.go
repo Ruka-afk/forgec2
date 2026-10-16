@@ -408,19 +408,6 @@ func sealSession(suite string, key, nonce, plaintext, aad []byte) ([]byte, error
 	return aesGCM.Seal(nil, nonce, plaintext, aad), nil
 }
 
-// decryptAESGCM authenticates and decrypts AES-256-GCM ciphertext (raw bytes
-// of nonce(12)+ciphertext) using the provided key. It does not touch session
-// bookkeeping, so callers can test a candidate key without committing to it.
-func decryptAESGCM(key, ciphertext []byte) ([]byte, error) {
-	return decryptAESGCMWithAAD(key, ciphertext, nil)
-}
-
-// decryptAESGCMWithAAD authenticates and decrypts AES-256-GCM ciphertext with
-// the provided AAD, using the provided key (see decryptAESGCM).
-func decryptAESGCMWithAAD(key, ciphertext, aad []byte) ([]byte, error) {
-	return openSession(SessionCipherAESGCM, key, ciphertext, aad)
-}
-
 // openSession authenticates+decrypts nonce||ct under suite.
 func openSession(suite string, key, ciphertext, aad []byte) ([]byte, error) {
 	if NormalizeSessionCipher(suite) == SessionCipherChaCha20 {

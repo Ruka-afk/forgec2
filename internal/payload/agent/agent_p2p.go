@@ -313,13 +313,6 @@ func p2pDeliverChildReplies(replies []protocol.RelayedReply) {
 	}
 }
 
-// p2pPendingChildReply reports whether at least one reply is queued for a child.
-func p2pPendingChildReply(childID string) bool {
-	p2pRelayMu.Lock()
-	defer p2pRelayMu.Unlock()
-	return len(p2pChildReplies[childID]) > 0
-}
-
 // p2pTakeChildReply pops the oldest queued reply for a child.
 func p2pTakeChildReply(childID string) []byte {
 	p2pRelayMu.Lock()

@@ -222,7 +222,6 @@ type coffRelocation struct {
 // bofLoadedSect tracks a loaded section
 type bofLoadedSect struct {
 	header   coffSectionHeader
-	data     []byte
 	baseAddr uintptr
 }
 
@@ -839,28 +838,6 @@ func bofDataString(parser uintptr) uintptr {
 	p.Buffer = uintptr(unsafe.Pointer(end))
 	p.Length -= int32(end - ptr)
 	return result
-}
-
-// bofStubReturnFalse is a safe stub for unimplemented Beacon APIs.
-// Returns 0 (FALSE / NULL) so BOFs that check the return value won't misbehave.
-func bofStubReturnFalse() int32 {
-	return 0
-}
-
-// bofStubUnsupportedN writes a diagnostic to BOF output and returns FALSE.
-// Used by per-API stubs so operators can see which Beacon API is unavailable.
-func bofStubUnsupportedN(name uintptr) int32 {
-	if name != 0 {
-		n := bofGoString(name)
-		if n != "" {
-			if bofOutputBuf.Len() > 0 {
-				bofOutputBuf.WriteString("\n")
-			}
-			bofOutputBuf.WriteString("[!] Beacon API not supported: ")
-			bofOutputBuf.WriteString(n)
-		}
-	}
-	return 0
 }
 
 func bofStubInjectProcess(hProc uintptr, pid uint32, remote uintptr, remoteSize int32, src uintptr, srcSize int32, outSize uintptr, mode int32) int32 {

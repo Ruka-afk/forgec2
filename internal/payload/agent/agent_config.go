@@ -146,7 +146,6 @@ var (
 	BeaconTransport  string
 	evasionEnabled   bool
 	ghostModeEnabled bool
-	chameleonEnabled bool
 	chameleonProfile string
 	isSMBParent      bool
 	smbPipeName      string // resolved SMB pipe name (from SMBPipeName or extracted from C2URL)

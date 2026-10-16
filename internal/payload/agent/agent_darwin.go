@@ -1419,9 +1419,6 @@ func netScanSMB(cidr string) (string, error) {
 func netEnumHosts(domain string) (string, error) {
 	return "", fmt.Errorf("host enumeration is Windows-only")
 }
-func netScanSMBDiscovery() (string, error) {
-	return "", fmt.Errorf("SMB discovery is Windows-only")
-}
 
 func dpapiMasterKey() (string, error)           { return "", fmt.Errorf("DPAPI is Windows-only") }
 func dpapiBlob(filePath string) (string, error) { return "", fmt.Errorf("DPAPI is Windows-only") }
