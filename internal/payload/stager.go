@@ -28,6 +28,13 @@ type StagerConfig struct {
 	BeaconKey     string // PSK used to derive registration auth (empty = no PSK auth)
 	RegSecretID   string // v3 per-implant registration secret id
 	RegSecret     string // v3 per-implant registration secret, base64
+	// mTLS client material (PEM) for the stage-2 beacon: a listener that
+	// requires a client certificate rejects registration and beacons without
+	// it. Carried into the implant config so the same config-blob path as a
+	// direct build embeds it (base64, never the build argv).
+	MTLSCertPEM string
+	MTLSKeyPEM  string
+	MTLSCAPEM   string
 }
 
 var (
@@ -141,11 +148,13 @@ func DecryptStage2Payload(data []byte, key []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-func GenerateStagerStage2(cfg StagerConfig, outputDir string) (string, error) {
-	proto := cfg.Protocol
-	if proto == "" {
-		proto = "http"
-	}
+// stagerImplantConfig maps the stager configuration onto the implant config the
+// stage-2 beacon is built from. It is a named function so the mapping — in
+// particular the mTLS client material a require_client_cert listener needs for
+// registration and beacons — is testable without a toolchain. withDNS mirrors
+// the historical asymmetry: the Windows stage-2 carries DNS transport settings,
+// the Linux one does not.
+func stagerImplantConfig(cfg StagerConfig, proto string, withDNS bool) ImplantConfig {
 	implantCfg := ImplantConfig{
 		C2URL:         cfg.C2URL,
 		Protocol:      proto,
@@ -158,12 +167,26 @@ func GenerateStagerStage2(cfg StagerConfig, outputDir string) (string, error) {
 		Profile:       cfg.Profile,
 		ListenerID:    cfg.ListenerID,
 		Architecture:  cfg.Architecture,
-		DNSDomain:     cfg.DNSDomain,
-		DNSServer:     cfg.DNSServer,
 		BeaconKey:     cfg.BeaconKey,
 		RegSecretID:   cfg.RegSecretID,
 		RegSecret:     cfg.RegSecret,
+		MTLSCertPEM:   cfg.MTLSCertPEM,
+		MTLSKeyPEM:    cfg.MTLSKeyPEM,
+		MTLSCAPEM:     cfg.MTLSCAPEM,
 	}
+	if withDNS {
+		implantCfg.DNSDomain = cfg.DNSDomain
+		implantCfg.DNSServer = cfg.DNSServer
+	}
+	return implantCfg
+}
+
+func GenerateStagerStage2(cfg StagerConfig, outputDir string) (string, error) {
+	proto := cfg.Protocol
+	if proto == "" {
+		proto = "http"
+	}
+	implantCfg := stagerImplantConfig(cfg, proto, true)
 
 	if !filepath.IsAbs(outputDir) {
 		abs, err := filepath.Abs(outputDir)
@@ -187,22 +210,7 @@ func GenerateStagerStage2Linux(cfg StagerConfig, outputDir string) (string, erro
 	if proto == "" {
 		proto = "http"
 	}
-	implantCfg := ImplantConfig{
-		C2URL:         cfg.C2URL,
-		Protocol:      proto,
-		Interval:      10,
-		Jitter:        20,
-		UserAgent:     cfg.UserAgent,
-		SkipTLSVerify: cfg.SkipTLSVerify,
-		Filename:      "forgec2_stage2",
-		Debug:         false,
-		Profile:       cfg.Profile,
-		ListenerID:    cfg.ListenerID,
-		Architecture:  cfg.Architecture,
-		BeaconKey:     cfg.BeaconKey,
-		RegSecretID:   cfg.RegSecretID,
-		RegSecret:     cfg.RegSecret,
-	}
+	implantCfg := stagerImplantConfig(cfg, proto, false)
 
 	if !filepath.IsAbs(outputDir) {
 		abs, err := filepath.Abs(outputDir)

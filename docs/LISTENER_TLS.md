@@ -109,8 +109,22 @@ the failure escalation path is unchanged.
   (the agent accepts raw PEM as a fallback when a value is not base64). An
   implant built without a certificate is refused during the handshake — a
   beacon cannot silently keep talking to a hardened listener.
-- Limits: the token stager and the C implant do not carry client credentials
-  yet, so point a client-certificate listener at a Go agent build.
+- The token stager carries the same material end to end: `POST
+  /generate/stager|stager_linux` accept `mtls_cert` / `mtls_key` / `mtls_ca`
+  with the identical boundary validation, the stage-2 beacon gets them through
+  the config blob, and the stage-1 stager compiles them in through a generated
+  `mtls_inject.go` (never `-ldflags`: a PEM block needs real newlines and the
+  private key must not be readable from the build's process listing). The same
+  fields also carry `skip_tls_verify` / `proxy` / `user_agent`, which the stager
+  builder used to drop. A stager whose material does not parse exits before the
+  fetch instead of falling back to an unauthenticated one.
+- The lazy stager-token flow (`POST /stager/register`) persists nothing between
+  register and fetch — private keys are never stored — so it cannot satisfy a
+  listener that verifies client certificates. Registration answers `400` with
+  the reason instead of handing out a URL that is dead on arrival; use the
+  generate-page stager for a client-certificate listener.
+- Limits: the C implant does not carry client credentials yet, so point a
+  client-certificate listener at a Go agent or token-stager build.
 - Verify a listener with any TLS client that can present a certificate:
 
   ```bash
@@ -130,3 +144,8 @@ the failure escalation path is unchanged.
 - `internal/payload/mtls.go` — `ValidateMTLSMaterial` (generation boundary)
 - `internal/payload/config_blob.go` — base64 PEM fields, including the bootstrap blob
 - `internal/payload/agent/transport_mtls.go` — agent-side decode + load; `transport_mtls_test.go` runs a real uTLS handshake against a server that requires a client certificate
+- `internal/payload/stager_token.go` — token-stager source, `mtls_inject.go` rendering, ldflag rendering
+- `internal/payload/stager.go` — `stagerImplantConfig`: stage-2 beacon mapping
+- `internal/payload/stager_mtls_test.go` — rendering invariants (no material on the argv) plus `TestSmokeTokenStagerMTLSFetch`, which builds a real stager and runs it against a client-certificate-verifying server (CI smoke job)
+- `internal/server/handlers_generate_stagers.go` — stager form fields, boundary validation, `stagerFetch` wiring
+- `internal/server/handlers_domain_front_stager.go` — lazy-token registration refuses client-certificate listeners

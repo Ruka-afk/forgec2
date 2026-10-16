@@ -336,6 +336,17 @@ func (s *Server) handleAPIStagerRegister(c *gin.Context) {
 		return
 	}
 
+	// The lazy flow persists nothing between register and fetch (the token row
+	// holds no client material, by design: private keys are never stored), so it
+	// cannot satisfy a listener that verifies client certificates — neither the
+	// stage-1 fetch nor the stage-2 beacon it builds could present one. Refuse
+	// at register time instead of handing out a URL that is dead on arrival.
+	if s.listenerRequiresClientCert(&listener) {
+		respondError(c, http.StatusBadRequest,
+			"listener requires client certificates; register the token only for listeners without mTLS, or build a stager with embedded credentials via the generate page")
+		return
+	}
+
 	tokenHex, sig, keyHex, err := payload.NewStageToken()
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Domain front operation"))
