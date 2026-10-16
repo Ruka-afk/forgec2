@@ -190,7 +190,7 @@ func TestDNSBeaconBadKeyRejected(t *testing.T) {
 		"ts":       ts,
 		"ecdh_pub": base64.StdEncoding.EncodeToString(make([]byte, 32)),
 	})
-	respJSON := h("bbbbbbbb-cccc-4333-8444-dddddddddddd", []byte(body))
+	respJSON := h("bbbbbbbb-cccc-4333-8444-dddddddddddd", body)
 	if len(respJSON) != 0 {
 		t.Fatalf("unauthenticated frame should be rejected (empty response), got %q", respJSON)
 	}

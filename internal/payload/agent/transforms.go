@@ -269,7 +269,7 @@ func init() {
 func agentNetBIOSEncode(data []byte) []byte {
 	var out []byte
 	for _, b := range data {
-		out = append(out, 'A'+byte((b>>4)&0xF), 'A'+byte(b&0xF))
+		out = append(out, 'A'+(b>>4)&0xF, 'A'+b&0xF)
 	}
 	return out
 }
@@ -289,7 +289,7 @@ func agentNetBIOSDecode(data []byte) []byte {
 func agentNetBIOSUEncode(data []byte) []byte {
 	var out []byte
 	for _, b := range data {
-		out = append(out, 'A'+byte((b>>4)&0xF), 'a'+byte(b&0xF))
+		out = append(out, 'A'+(b>>4)&0xF, 'a'+b&0xF)
 	}
 	return out
 }

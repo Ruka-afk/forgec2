@@ -98,7 +98,7 @@ func computeSleepDuration() time.Duration {
 	weekday := now.Weekday()
 	isWeekend := weekday == time.Saturday || weekday == time.Sunday
 
-	var hourlyMod float64 = 1.0
+	var hourlyMod float64
 	if !isWeekend {
 		if hour >= 8 && hour <= 18 {
 			hourlyMod = 0.7

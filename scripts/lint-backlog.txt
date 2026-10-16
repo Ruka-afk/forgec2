@@ -1,0 +1,22 @@
+# Checked-in lint debt ceiling.
+#
+# This file pins the total finding count of a full uncapped golangci-lint run
+# (.golangci.yml, all rules) per analysis target, so the gate does not depend
+# on the host that ran the linter: CI records one JSON report with GOOS=windows
+# (which includes the windows-only agent sources a native linux run would skip)
+# and one with GOOS=linux, then scripts/check-lint-debt.sh compares both.
+#
+# The ceiling may only go DOWN. Pay debt down, refresh the numbers with
+#   bash scripts/check-lint-debt.sh --update <windows.json> <linux.json>
+# and commit the change together with the cleanup that paid it down.
+# --update refuses to raise a number: growing the backlog is never the answer.
+#
+# The same JSON reports also enforce zero findings from the mechanical linters
+# (unconvert, ineffassign, govet, misspell) on both targets.
+#
+# History: the windows target measured 1056 findings before the mechanical
+# cleanup (2026-10); it sits at 977 with those linters at zero, and the linux
+# target at 635.
+
+windows=977
+linux=635

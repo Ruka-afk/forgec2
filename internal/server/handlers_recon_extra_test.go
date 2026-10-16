@@ -136,6 +136,9 @@ func TestBuildQuickActionCommandReconExtra(t *testing.T) {
 	if typ != "session_recon" {
 		t.Fatalf("type=%q", typ)
 	}
+	if cmd != "" {
+		t.Fatalf("session_recon cmd=%q, want empty", cmd)
+	}
 	typ, cmd = buildQuickActionCommand("usb_drop", `C:\temp\a.exe`, "")
 	if typ != "usb_drop" || cmd != `C:\temp\a.exe` {
 		t.Fatalf("usb_drop %q %q", typ, cmd)

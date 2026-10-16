@@ -678,26 +678,26 @@ func packBOFArgs(args string) []byte {
 func setupBeaconAPI() {
 	// Use text/trick: define function variables that point to Go functions
 	exportedBeaconAPI = callbackTable{
-		Printf:      uintptr(syscall.NewCallback(bofBeaconPrintf)),
-		Output:      uintptr(syscall.NewCallback(bofBeaconOutput)),
-		DataParse:   uintptr(syscall.NewCallback(bofDataParse)),
-		DataInt:     uintptr(syscall.NewCallback(bofDataInt)),
-		DataShort:   uintptr(syscall.NewCallback(bofDataShort)),
-		DataLen:     uintptr(syscall.NewCallback(bofDataLength)),
-		DataExtract: uintptr(syscall.NewCallback(bofDataExtract)),
-		DataString:  uintptr(syscall.NewCallback(bofDataString)),
+		Printf:      syscall.NewCallback(bofBeaconPrintf),
+		Output:      syscall.NewCallback(bofBeaconOutput),
+		DataParse:   syscall.NewCallback(bofDataParse),
+		DataInt:     syscall.NewCallback(bofDataInt),
+		DataShort:   syscall.NewCallback(bofDataShort),
+		DataLen:     syscall.NewCallback(bofDataLength),
+		DataExtract: syscall.NewCallback(bofDataExtract),
+		DataString:  syscall.NewCallback(bofDataString),
 		// Stubs that return FALSE/0 safely — no token ops or process injection
-		BeaconUseToken:               uintptr(syscall.NewCallback(bofBeaconUseToken)),
-		BeaconRevertToken:            uintptr(syscall.NewCallback(bofBeaconRevertToken)),
-		BeaconIsAdmin:                uintptr(syscall.NewCallback(bofBeaconIsAdmin)),
-		BeaconInjectProcess:          uintptr(syscall.NewCallback(bofStubInjectProcess)),
-		BeaconInjectTemporaryProcess: uintptr(syscall.NewCallback(bofStubInjectTemporaryProcess)),
-		BeaconSpawnTemporaryProcess:  uintptr(syscall.NewCallback(bofStubSpawnTemporaryProcess)),
-		BeaconCleanupProcess:         uintptr(syscall.NewCallback(bofStubCleanupProcess)),
-		BeaconInformation:            uintptr(syscall.NewCallback(bofStubInformation)),
-		BeaconGetCustomUserData:      uintptr(syscall.NewCallback(bofStubGetCustomUserData)),
-		BeaconSetCustomUserData:      uintptr(syscall.NewCallback(bofStubSetCustomUserData)),
-		BeaconCheckMsfPayload:        uintptr(syscall.NewCallback(bofStubCheckMsfPayload)),
+		BeaconUseToken:               syscall.NewCallback(bofBeaconUseToken),
+		BeaconRevertToken:            syscall.NewCallback(bofBeaconRevertToken),
+		BeaconIsAdmin:                syscall.NewCallback(bofBeaconIsAdmin),
+		BeaconInjectProcess:          syscall.NewCallback(bofStubInjectProcess),
+		BeaconInjectTemporaryProcess: syscall.NewCallback(bofStubInjectTemporaryProcess),
+		BeaconSpawnTemporaryProcess:  syscall.NewCallback(bofStubSpawnTemporaryProcess),
+		BeaconCleanupProcess:         syscall.NewCallback(bofStubCleanupProcess),
+		BeaconInformation:            syscall.NewCallback(bofStubInformation),
+		BeaconGetCustomUserData:      syscall.NewCallback(bofStubGetCustomUserData),
+		BeaconSetCustomUserData:      syscall.NewCallback(bofStubSetCustomUserData),
+		BeaconCheckMsfPayload:        syscall.NewCallback(bofStubCheckMsfPayload),
 	}
 }
 
@@ -759,7 +759,7 @@ func bofDataInt(parser uintptr) int32 {
 	}
 	// Read 4-byte int from current buffer position
 	val := *(*int32)(unsafe.Pointer(p.Buffer))
-	p.Buffer = uintptr(unsafe.Pointer(uintptr(p.Buffer) + 4))
+	p.Buffer = uintptr(unsafe.Pointer(p.Buffer + 4))
 	p.Length -= 4
 	return val
 }
@@ -776,7 +776,7 @@ func bofDataShort(parser uintptr) int32 {
 		return 0
 	}
 	val := *(*int16)(unsafe.Pointer(p.Buffer))
-	p.Buffer = uintptr(unsafe.Pointer(uintptr(p.Buffer) + 2))
+	p.Buffer = uintptr(unsafe.Pointer(p.Buffer + 2))
 	p.Length -= 2
 	return int32(val)
 }
@@ -798,7 +798,7 @@ func bofDataExtract(parser uintptr, sizeOut uintptr) uintptr {
 		return 0
 	}
 	strLen := *(*uint16)(unsafe.Pointer(p.Buffer))
-	p.Buffer = uintptr(unsafe.Pointer(uintptr(p.Buffer) + 2))
+	p.Buffer = uintptr(unsafe.Pointer(p.Buffer + 2))
 	p.Length -= 2
 	if int32(strLen) > p.Length {
 		p.Indicator = 1
@@ -809,7 +809,7 @@ func bofDataExtract(parser uintptr, sizeOut uintptr) uintptr {
 		*(*int32)(unsafe.Pointer(sizeOut)) = int32(strLen)
 	}
 	result := p.Buffer
-	p.Buffer = uintptr(unsafe.Pointer(uintptr(p.Buffer) + uintptr(strLen)))
+	p.Buffer = uintptr(unsafe.Pointer(p.Buffer + uintptr(strLen)))
 	p.Length -= int32(strLen)
 	return result
 }
@@ -826,7 +826,7 @@ func bofDataString(parser uintptr) uintptr {
 	}
 	// Find null terminator
 	result := p.Buffer
-	ptr := uintptr(p.Buffer)
+	ptr := p.Buffer
 	end := ptr
 	// Byte-by-byte scan for null terminator in C string
 	for int32(end-ptr) < p.Length {

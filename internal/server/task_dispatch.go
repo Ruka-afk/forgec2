@@ -646,7 +646,7 @@ func (s *Server) requeueStaleTasksPass() bool {
 		slog.Error("Failed to find stale running tasks past attempt cap", "error", err)
 		return false
 	}
-	fullPage = len(exhaustedTasks) == 1000
+	fullPage = fullPage || len(exhaustedTasks) == 1000
 	exhaustedTasks = s.filterLongSleepTasks(exhaustedTasks, cutoff)
 	if len(exhaustedTasks) > 0 {
 		exhaustedIDs := make([]uint, len(exhaustedTasks))

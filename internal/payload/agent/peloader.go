@@ -289,7 +289,7 @@ func reflectDLL(dllData []byte) (uintptr, error) {
 
 	// Walk section headers array (starts right after optional header in PE)
 	for i := uint16(0); i < numberOfSections; i++ {
-		sec := (*imageSectionHeader)(unsafe.Pointer(&dllData[sectionOffset+uintptr(i)*uintptr(unsafe.Sizeof(imageSectionHeader{}))]))
+		sec := (*imageSectionHeader)(unsafe.Pointer(&dllData[sectionOffset+uintptr(i)*unsafe.Sizeof(imageSectionHeader{})]))
 		if sec.sizeOfRawData == 0 {
 			continue
 		}
@@ -436,7 +436,7 @@ func resolveImports(imageBase uintptr, dd imageDataDirectory) {
 	idx := uint32(0)
 	for {
 		// Walk IMAGE_IMPORT_DESCRIPTOR array for each imported DLL
-		impDesc := (*imageImportDescriptor)(unsafe.Pointer(importStart + uintptr(idx)*uintptr(unsafe.Sizeof(imageImportDescriptor{}))))
+		impDesc := (*imageImportDescriptor)(unsafe.Pointer(importStart + uintptr(idx)*unsafe.Sizeof(imageImportDescriptor{})))
 		if impDesc.name == 0 {
 			break
 		}
@@ -519,7 +519,7 @@ func protectMemory(addr uintptr, size uint32, prot uint32) {
 
 func setExecutableSections(imageBase uintptr, sectionData []byte, numSections uint16, is64Bit bool) {
 	for i := uint16(0); i < numSections; i++ {
-		sec := (*imageSectionHeader)(unsafe.Pointer(&sectionData[uintptr(i)*uintptr(unsafe.Sizeof(imageSectionHeader{}))]))
+		sec := (*imageSectionHeader)(unsafe.Pointer(&sectionData[uintptr(i)*unsafe.Sizeof(imageSectionHeader{})]))
 		if sec.virtualAddress == 0 || sec.virtualSize == 0 {
 			continue
 		}

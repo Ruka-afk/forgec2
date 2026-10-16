@@ -55,8 +55,12 @@ func GenerateSelfSignedCert(certPath, keyPath string) error {
 		return err
 	}
 
-	// Ensure dir exists
+	// Ensure dir exists (the key may live in a different directory than the
+	// certificate when key_file is configured explicitly).
 	if err := os.MkdirAll(filepath.Dir(certPath), 0700); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(keyPath), 0700); err != nil {
 		return err
 	}
 

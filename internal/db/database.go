@@ -151,7 +151,7 @@ func migrationRowExists(tx *gorm.DB, table, column, value string) bool {
 // generateRandomPassword creates a random alphanumeric password of the given length.
 func generateRandomPassword(length int) (string, error) {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
-	charsetLen := int(len(charset))
+	charsetLen := len(charset)
 	threshold := 256 - (256 % charsetLen)
 	b := make([]byte, length)
 	if _, err := rand.Read(b); err != nil {

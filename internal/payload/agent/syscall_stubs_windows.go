@@ -169,7 +169,7 @@ func findRetGadget() (uintptr, error) {
 
 	ntHdrOffset := uintptr(dos.eLfanew)
 	// Map first section header: located after optional header in NT headers
-	firstSection := (*imageSectionHeader)(unsafe.Pointer(base + ntHdrOffset + uintptr(unsafe.Offsetof(ntHdr.optionalHeader)) + uintptr(ntHdr.fileHeader.sizeOfOptionalHeader)))
+	firstSection := (*imageSectionHeader)(unsafe.Pointer(base + ntHdrOffset + unsafe.Offsetof(ntHdr.optionalHeader) + uintptr(ntHdr.fileHeader.sizeOfOptionalHeader)))
 
 	// Iterate section headers to find .text section for ret gadget
 	for i := uint16(0); i < ntHdr.fileHeader.numberOfSections; i++ {
@@ -289,7 +289,7 @@ func findSyscallGadget() (uintptr, error) {
 	}
 
 	ntHdrOffset := uintptr(dos.eLfanew)
-	firstSection := (*imageSectionHeader)(unsafe.Pointer(base + ntHdrOffset + uintptr(unsafe.Offsetof(ntHdr.optionalHeader)) + uintptr(ntHdr.fileHeader.sizeOfOptionalHeader)))
+	firstSection := (*imageSectionHeader)(unsafe.Pointer(base + ntHdrOffset + unsafe.Offsetof(ntHdr.optionalHeader) + uintptr(ntHdr.fileHeader.sizeOfOptionalHeader)))
 
 	for i := uint16(0); i < ntHdr.fileHeader.numberOfSections; i++ {
 		sec := (*imageSectionHeader)(unsafe.Pointer(uintptr(unsafe.Pointer(firstSection)) + uintptr(i)*unsafe.Sizeof(imageSectionHeader{})))

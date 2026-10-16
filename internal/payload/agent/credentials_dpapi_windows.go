@@ -110,7 +110,7 @@ func dpapiBrowser() (string, error) {
 			}
 			if len(out) > 0 {
 				found += "  Passwords:\n"
-				lines := strings.Split(string(out), "\n")
+				lines := strings.Split(out, "\n")
 				for _, line := range lines {
 					line = strings.TrimSpace(line)
 					if line != "" {

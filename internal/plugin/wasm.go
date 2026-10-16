@@ -216,7 +216,7 @@ func (e *executor) runWasmPlugin(ctx context.Context, pluginDir string, m *Manif
 	if length > maxWasmResultBytes {
 		return &execResult{Stderr: run.stderr()}, fmt.Errorf("wasm plugin %q: result of %d bytes exceeds the %d byte cap", m.Name, length, maxWasmResultBytes)
 	}
-	size := uint32(mem.Size())
+	size := mem.Size()
 	if resultPtr+length > size || resultPtr+length < resultPtr {
 		return &execResult{Stderr: run.stderr()}, fmt.Errorf("wasm plugin %q: result region out of bounds (ptr=%d len=%d, memory %d)", m.Name, resultPtr, length, size)
 	}

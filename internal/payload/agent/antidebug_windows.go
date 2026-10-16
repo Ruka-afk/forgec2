@@ -37,7 +37,7 @@ func antidebugGetPEB() uintptr {
 		^uintptr(0),
 		0,
 		uintptr(unsafe.Pointer(&pbi)),
-		uintptr(unsafe.Sizeof(pbi)),
+		unsafe.Sizeof(pbi),
 		0,
 	)
 	if ret != 0 || pbi.pebBaseAddress == 0 {
@@ -93,7 +93,7 @@ func checkNtQueryInfoProcessDebugPort() bool {
 		^uintptr(0),
 		uintptr(antidebugProcessDebugPort),
 		uintptr(unsafe.Pointer(&debugPort)),
-		uintptr(unsafe.Sizeof(debugPort)),
+		unsafe.Sizeof(debugPort),
 		0,
 	)
 	if ret != 0 {
@@ -109,7 +109,7 @@ func checkNtQueryInfoProcessFlags() bool {
 		^uintptr(0),
 		uintptr(antidebugProcessDebugFlags),
 		uintptr(unsafe.Pointer(&debugFlags)),
-		uintptr(unsafe.Sizeof(debugFlags)),
+		unsafe.Sizeof(debugFlags),
 		0,
 	)
 	if ret != 0 {

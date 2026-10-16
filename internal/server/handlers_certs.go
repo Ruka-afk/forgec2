@@ -53,11 +53,13 @@ func (s *Server) handleGetCertInfo(c *gin.Context) {
 
 func (s *Server) handleRegenerateCert(c *gin.Context) {
 	certPath := s.cfg.Server.CertFile
-	keyPath := s.cfg.Server.KeyFile
 	if certPath == "" {
 		certPath = "data/certs/server.crt"
 	}
-	keyPath = filepath.Join(filepath.Dir(certPath), "server.key")
+	keyPath := s.cfg.Server.KeyFile
+	if keyPath == "" {
+		keyPath = filepath.Join(filepath.Dir(certPath), "server.key")
+	}
 
 	// Remove existing files
 	if err := os.Remove(certPath); err != nil && !os.IsNotExist(err) {
@@ -163,13 +165,25 @@ func (s *Server) handleUploadCert(c *gin.Context) {
 	}
 
 	certPath := s.cfg.Server.CertFile
-	keyPath := s.cfg.Server.KeyFile
 	if certPath == "" {
 		certPath = "data/certs/server.crt"
 	}
-	keyPath = filepath.Join(filepath.Dir(certPath), "server.key")
+	// Honor an explicit key_file: deriving the key next to the certificate
+	// silently ignored the configured path and paired the new certificate
+	// with whatever key still lived at server.key_file.
+	keyPath := s.cfg.Server.KeyFile
+	if keyPath == "" {
+		keyPath = filepath.Join(filepath.Dir(certPath), "server.key")
+	}
 
-	os.MkdirAll(filepath.Dir(certPath), 0700)
+	if err := os.MkdirAll(filepath.Dir(certPath), 0700); err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to create certificate directory")
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(keyPath), 0700); err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to create key directory")
+		return
+	}
 
 	if err := os.WriteFile(certPath, certData, 0600); err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to write certificate")

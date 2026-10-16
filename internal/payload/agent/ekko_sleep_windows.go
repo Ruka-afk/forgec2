@@ -133,7 +133,7 @@ func indirectNtDelayExecution(d time.Duration) {
 	if ms < 1 {
 		ms = 1
 	}
-	interval := int64(ms * -10000) // negative = relative
+	interval := ms * -10000 // negative = relative
 	syscallNtDelayExecution(mgr, false, &interval)
 }
 

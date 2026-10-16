@@ -70,7 +70,7 @@ func (m *zMask) Encrypt() {
 
 	sp := stackPtr()
 	var mbi mbi
-	zVirtualQuery.Call(sp, uintptr(unsafe.Pointer(&mbi)), uintptr(unsafe.Sizeof(mbi)))
+	_, _, _ = zVirtualQuery.Call(sp, uintptr(unsafe.Pointer(&mbi)), unsafe.Sizeof(mbi))
 	if mbi.state == memCommit && mbi.protect != pageNoaccess {
 		zCtx.stackBase = mbi.baseAddr
 		zCtx.stackSize = mbi.regionSize
@@ -130,7 +130,7 @@ func enumPages() []zileanPage {
 	addr := uintptr(0)
 	for {
 		var m mbi
-		ret, _, _ := zVirtualQuery.Call(addr, uintptr(unsafe.Pointer(&m)), uintptr(unsafe.Sizeof(m)))
+		ret, _, _ := zVirtualQuery.Call(addr, uintptr(unsafe.Pointer(&m)), unsafe.Sizeof(m))
 		if ret == 0 {
 			break
 		}

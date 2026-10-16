@@ -335,12 +335,32 @@ jobs:
         with:
           version: v2.14.0  # pinned; bump deliberately after validating a new release
           # Ratchet, not a cleanup. Years of invalid config meant this gate
-          # never ran, and the repo now carries ~660 findings (mostly
-          # errcheck/staticcheck/gosec across internal/). Failing on all of
-          # them would block every push; instead only issues on lines the tip
-          # commit changed fail. The backlog shrinks by paying it down, never
-          # by loosening this arg. Full local runs still show the backlog.
+          # never ran, and the repo carries a checked-in ceiling instead
+          # (scripts/lint-backlog.txt, enforced by the debt steps below).
+          # Failing on all findings would block every push; instead only
+          # issues on lines the tip commit changed fail here. The backlog
+          # shrinks by paying it down, never by loosening this arg.
           args: --timeout=5m --new-from-rev=HEAD~
+
+      # Full-tree debt record, one per analysis target. GOOS is pinned so the
+      # numbers do not depend on the host: `windows` covers the windows-only
+      # agent sources a native linux run would skip. --issues-exit-code=0
+      # records the JSON instead of failing the step; scripts/check-lint-debt.sh
+      # is the gate (mechanical linters at zero + ceiling only shrinks).
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        env:
+          GOOS: windows
+        with:
+          version: v2.14.0
+          args: --timeout=5m --max-issues-per-linter=0 --max-same-issues=0 --issues-exit-code=0 --output.json.path=lint-debt-windows.json --output.text.path=lint-debt-windows.txt
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        env:
+          GOOS: linux
+        with:
+          version: v2.14.0
+          args: --timeout=5m --max-issues-per-linter=0 --max-same-issues=0 --issues-exit-code=0 --output.json.path=lint-debt-linux.json --output.text.path=lint-debt-linux.txt
+      - name: Lint debt ceiling + mechanical linters at zero
+        run: bash scripts/check-lint-debt.sh lint-debt-windows.json lint-debt-linux.json
 
   security:
     runs-on: ubuntu-latest

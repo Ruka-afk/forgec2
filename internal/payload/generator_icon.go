@@ -243,7 +243,7 @@ func injectIconResource(tmpDir string, cfg ImplantConfig) error {
 		return err
 	}
 	defer f.Close()
-	var warch winres.Arch = winres.ArchAMD64
+	var warch winres.Arch
 	switch cfg.Architecture {
 	case "386", "x86":
 		warch = winres.ArchI386

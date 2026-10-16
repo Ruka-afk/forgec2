@@ -45,6 +45,8 @@ Thumbs.db
 *.tmp
 *.txt
 !README.md
+# The lint debt ceiling is checked in on purpose (see scripts/check-lint-debt.sh).
+!scripts/lint-backlog.txt
 
 # Build artifacts
 build/

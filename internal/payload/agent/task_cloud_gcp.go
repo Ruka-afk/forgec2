@@ -397,12 +397,7 @@ func checkGCPCloudSQL(accessToken, projectID string, r *CloudTokenResult) {
 		}
 		if gcpAPICallJSON(accessToken, "GET", usersURL, &users) == nil {
 			for _, u := range users.Items {
-				userInfo := fmt.Sprintf("User=%s", u.Name)
-				if u.Host != "" {
-					userInfo += fmt.Sprintf(", Host=%s", u.Host)
-				}
 				if u.Password != "" {
-					userInfo += fmt.Sprintf(", Password=%s", u.Password)
 					r.Tokens = append(r.Tokens, CloudToken{
 						Type:     "gcp_cloudsql_user_password",
 						Resource: fmt.Sprintf("cloudsql:%s/user:%s", inst.Name, u.Name),

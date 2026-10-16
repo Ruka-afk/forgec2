@@ -42,7 +42,7 @@ func enumVisibleWindows() ([]winEntry, error) {
 			return 1
 		}
 		buf := make([]uint16, n+1)
-		procGetWindowTextW.Call(hwnd, uintptr(unsafe.Pointer(&buf[0])), uintptr(n+1))
+		_, _, _ = procGetWindowTextW.Call(hwnd, uintptr(unsafe.Pointer(&buf[0])), n+1)
 		title := strings.TrimSpace(syscall.UTF16ToString(buf))
 		if title == "" {
 			return 1

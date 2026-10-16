@@ -32,7 +32,7 @@ func protectProcess() string {
 		NtCurrentProcess,
 		ProcessProtection,
 		uintptr(unsafe.Pointer(&prot)),
-		uintptr(unsafe.Sizeof(prot)),
+		unsafe.Sizeof(prot),
 	)
 	if ret != 0 {
 		return fmt.Sprintf("protect_process: NtSetInformationProcess failed: 0x%x", ret)

@@ -141,7 +141,7 @@ func (SGNEncoder) Decode(data []byte, key []byte) ([]byte, error) {
 	}
 	// When the caller does not supply a key, fall back to the key embedded in
 	// the stub so a blob can be decoded without out-of-band knowledge.
-	k := byte(0xAA)
+	var k byte
 	if len(key) > 0 {
 		k = key[0]
 	} else {

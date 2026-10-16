@@ -312,7 +312,7 @@ func TestResyncDropSessionRecoveryLoopDNS(t *testing.T) {
 		"uuid": agentUUID, "seq": agent.nextSeq(), "ts": time.Now().Unix(),
 		"c": "Z3JhYmJl",
 	})
-	resp = h(agentUUID, []byte(lostFrame))
+	resp = h(agentUUID, lostFrame)
 	var rs resyncContract
 	if err := encoding.Unmarshal(resp, &rs); err != nil {
 		t.Fatalf("dns resync parse: %v (body=%s)", err, resp)

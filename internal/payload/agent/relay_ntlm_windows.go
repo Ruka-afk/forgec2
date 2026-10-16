@@ -358,7 +358,7 @@ func decodeUTF16(b []byte) string {
 	if len(chars) > 0 && chars[len(chars)-1] == 0 {
 		chars = chars[:len(chars)-1]
 	}
-	return string(utf16Decode(chars))
+	return utf16Decode(chars)
 }
 
 func utf16Decode(s []uint16) string {

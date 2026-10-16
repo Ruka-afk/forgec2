@@ -286,7 +286,7 @@ func (s *Server) handleExportIOCs(c *gin.Context) {
 			return
 		}
 		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="forgec2-iocs-%s.stix.json"`, stamp))
-		c.Data(http.StatusOK, "application/stix+json; charset=utf-8", []byte(body))
+		c.Data(http.StatusOK, "application/stix+json; charset=utf-8", body)
 	}
 }
 

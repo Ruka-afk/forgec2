@@ -104,7 +104,7 @@ func readFileFromDisk(path string) ([]byte, error) {
 	ret, _, _ := procImgReadFile.Call(
 		hFile,
 		uintptr(unsafe.Pointer(&buf[0])),
-		uintptr(fileSize),
+		fileSize,
 		uintptr(unsafe.Pointer(&bytesRead)),
 		0,
 	)

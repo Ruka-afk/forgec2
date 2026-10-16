@@ -151,7 +151,7 @@ func runProcessCallbackHardening() string {
 	ret, _, _ := procSetMitigation.Call(
 		uintptr(ProcessSignaturePolicy),
 		uintptr(unsafe.Pointer(&policy)),
-		uintptr(unsafe.Sizeof(policy)),
+		unsafe.Sizeof(policy),
 	)
 
 	if ret == 0 {

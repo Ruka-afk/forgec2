@@ -96,7 +96,7 @@ func (m *advMask) Encrypt() {
 
 	sp := advStackPtr()
 	var mbi memBasicInfo
-	aVirtualQuery.Call(sp, uintptr(unsafe.Pointer(&mbi)), uintptr(unsafe.Sizeof(mbi)))
+	_, _, _ = aVirtualQuery.Call(sp, uintptr(unsafe.Pointer(&mbi)), unsafe.Sizeof(mbi))
 	if mbi.State == memCommit && mbi.Protect != pageNoaccess {
 		advCtx.stackBase = mbi.BaseAddress
 		advCtx.stackSize = mbi.RegionSize
@@ -149,7 +149,7 @@ func advEnumPages() []advPage {
 	addr := uintptr(0)
 	for {
 		var m memBasicInfo
-		ret, _, _ := aVirtualQuery.Call(addr, uintptr(unsafe.Pointer(&m)), uintptr(unsafe.Sizeof(m)))
+		ret, _, _ := aVirtualQuery.Call(addr, uintptr(unsafe.Pointer(&m)), unsafe.Sizeof(m))
 		if ret == 0 {
 			break
 		}

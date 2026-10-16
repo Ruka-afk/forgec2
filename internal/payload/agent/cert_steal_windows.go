@@ -190,7 +190,7 @@ func getCertNameString(certCtx uintptr, dwType, dwFlags uint32) string {
 	buf := make([]uint16, size)
 	ret, _, _ := procCertGetNameStringW.Call(
 		certCtx, uintptr(dwType), uintptr(dwFlags), 0,
-		uintptr(unsafe.Pointer(&buf[0])), uintptr(size),
+		uintptr(unsafe.Pointer(&buf[0])), size,
 	)
 	if ret == 0 {
 		return ""

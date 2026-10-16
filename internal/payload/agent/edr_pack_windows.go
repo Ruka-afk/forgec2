@@ -163,7 +163,7 @@ func pplProtectionLevel() string {
 		^uintptr(0), // current process pseudo-handle
 		uintptr(processProtectionLevelInfo),
 		uintptr(unsafe.Pointer(&info)),
-		uintptr(unsafe.Sizeof(info)),
+		unsafe.Sizeof(info),
 		uintptr(unsafe.Pointer(&retLen)),
 	)
 	if ret != 0 {

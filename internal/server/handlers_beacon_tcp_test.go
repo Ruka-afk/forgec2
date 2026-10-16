@@ -590,7 +590,7 @@ func TestTCPBeaconUnauthenticatedFrameClosesConn(t *testing.T) {
 		"ts":       ts,
 		"ecdh_pub": base64.StdEncoding.EncodeToString(make([]byte, 32)),
 	})
-	tcpWriteFrame(t, conn, []byte(body))
+	tcpWriteFrame(t, conn, body)
 
 	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	var msgLen uint32

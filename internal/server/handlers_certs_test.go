@@ -67,6 +67,9 @@ func newCertsTestServer(t *testing.T, dir string) *Server {
 	gin.SetMode(gin.TestMode)
 	cfg := config.DefaultConfig()
 	cfg.Server.CertFile = filepath.Join(dir, "server.crt")
+	// DefaultConfig points key_file at data/server.key; pin it next to the
+	// certificate so the read-only assertions below do not touch the repo.
+	cfg.Server.KeyFile = filepath.Join(dir, "server.key")
 	return &Server{db: testutil.SetupTestDB(t), cfg: cfg}
 }
 
@@ -265,6 +268,55 @@ func TestUploadCertHappyPathWritesFiles(t *testing.T) {
 	}
 }
 
+// TestUploadCertHonorsConfiguredKeyFile proves the uploaded key lands on the
+// configured key_file path instead of being derived next to the certificate.
+// The handler used to overwrite Server.KeyFile unconditionally, so a custom
+// key path kept the stale key while the new certificate was installed — a
+// mismatched pair the moment the server reloads TLS.
+func TestUploadCertHonorsConfiguredKeyFile(t *testing.T) {
+	dir := t.TempDir()
+	keyDir := t.TempDir()
+	s := newCertsTestServer(t, dir)
+	customKey := filepath.Join(keyDir, "custom.key")
+	s.cfg.Server.KeyFile = customKey
+
+	src := t.TempDir()
+	writeTestCert(t, src, time.Now().Add(48*time.Hour))
+	certPEM, _ := os.ReadFile(filepath.Join(src, "server.crt"))
+	keyPEM, _ := os.ReadFile(filepath.Join(src, "server.key"))
+
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	cw, _ := mw.CreateFormFile("cert", "server.crt")
+	if _, err := cw.Write(certPEM); err != nil {
+		t.Fatalf("write cert part: %v", err)
+	}
+	kw, _ := mw.CreateFormFile("key", "server.key")
+	if _, err := kw.Write(keyPEM); err != nil {
+		t.Fatalf("write key part: %v", err)
+	}
+	mw.Close()
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", &buf)
+	c.Request.Header.Set("Content-Type", mw.FormDataContentType())
+	s.handleUploadCert(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s, want 200", w.Code, w.Body.String())
+	}
+	got, err := os.ReadFile(customKey)
+	if err != nil {
+		t.Fatalf("configured key_file not written: %v", err)
+	}
+	if !bytes.Equal(got, keyPEM) {
+		t.Fatal("configured key_file does not contain the uploaded key")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "server.key")); !os.IsNotExist(err) {
+		t.Fatal("handler also wrote a derived server.key next to the certificate")
+	}
+}
+
 // TestRegenerateCertReplacesExisting proves regeneration removes the old pair
 // and writes a fresh self-signed certificate the info endpoint can read.
 func TestRegenerateCertReplacesExisting(t *testing.T) {
@@ -301,5 +353,37 @@ func TestRegenerateCertReplacesExisting(t *testing.T) {
 	s.handleGetCertInfo(c2)
 	if w2.Code != http.StatusOK {
 		t.Fatalf("info after regenerate: status=%d body=%s", w2.Code, w2.Body.String())
+	}
+}
+
+// TestRegenerateCertHonorsConfiguredKeyFile pins the same key_file contract
+// for regeneration: the fresh private key must land on the configured path.
+// Writing it anywhere else leaves the server reading a stale key that no
+// longer matches the regenerated certificate.
+func TestRegenerateCertHonorsConfiguredKeyFile(t *testing.T) {
+	dir := t.TempDir()
+	keyDir := t.TempDir()
+	writeTestCert(t, dir, time.Now().Add(48*time.Hour))
+	customKey := filepath.Join(keyDir, "custom.key")
+	// Seed the pair the way a custom key_file install looks: certificate in
+	// one directory, key in the configured one.
+	if err := os.Rename(filepath.Join(dir, "server.key"), customKey); err != nil {
+		t.Fatalf("seed key: %v", err)
+	}
+	s := newCertsTestServer(t, dir)
+	s.cfg.Server.KeyFile = customKey
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+	s.handleRegenerateCert(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s, want 200", w.Code, w.Body.String())
+	}
+	if _, err := os.Stat(customKey); err != nil {
+		t.Fatalf("regenerated key not written to configured key_file: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "server.key")); !os.IsNotExist(err) {
+		t.Fatal("regeneration also wrote a derived server.key next to the certificate")
 	}
 }

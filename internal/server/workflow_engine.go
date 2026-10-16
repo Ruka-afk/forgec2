@@ -36,6 +36,11 @@ func (we *WorkflowEngine) ExecuteWorkflow(wf db.Workflow, agentIDs []string) (in
 	var lastErr string
 	for _, agentID := range agentIDs {
 		stepResults := map[uint]string{}
+		// Jump budget is per agent for the whole run. It used to live inside
+		// the step loop below and was therefore re-initialized on every
+		// iteration, which made the bound a no-op: a step whose branch target
+		// was itself re-created tasks forever (P2).
+		jumpBudget := len(steps)
 
 		for i := 0; i < len(steps); i++ {
 			step := steps[i]
@@ -48,7 +53,6 @@ func (we *WorkflowEngine) ExecuteWorkflow(wf db.Workflow, agentIDs []string) (in
 			if maxRepeats < 1 {
 				maxRepeats = 1
 			}
-			jumpBudget := len(steps) // bounded self/backward jumps (P2)
 			for {
 				created, jumpTarget, abort := we.executeStep(wf, step, agentID, executionID, stepResults)
 				taskCount += created

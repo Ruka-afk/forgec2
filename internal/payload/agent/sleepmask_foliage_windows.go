@@ -255,7 +255,7 @@ func fEnumPagesLocked() []foliagePage {
 	addr := uintptr(0)
 	for {
 		var m fMbi
-		ret, _, _ := fVmQuery.Call(addr, uintptr(unsafe.Pointer(&m)), uintptr(unsafe.Sizeof(m)))
+		ret, _, _ := fVmQuery.Call(addr, uintptr(unsafe.Pointer(&m)), unsafe.Sizeof(m))
 		if ret == 0 {
 			break
 		}

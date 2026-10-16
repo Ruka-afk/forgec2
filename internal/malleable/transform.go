@@ -170,7 +170,7 @@ func applySingle(data []byte, t Transform, encode bool) ([]byte, error) {
 func netbiosEncode(data []byte) []byte {
 	var result []byte
 	for _, b := range data {
-		result = append(result, 'A'+byte((b>>4)&0xF), 'A'+byte(b&0xF))
+		result = append(result, 'A'+(b>>4)&0xF, 'A'+b&0xF)
 	}
 	return result
 }
@@ -229,7 +229,7 @@ func netbiosUEncode(data []byte) []byte {
 	for _, b := range data {
 		hi, lo := (b>>4)&0xF, b&0xF
 		hc, lc := 'A'+hi, 'a'+lo
-		out = append(out, byte(hc), byte(lc))
+		out = append(out, hc, lc)
 	}
 	return out
 }

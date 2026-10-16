@@ -55,7 +55,7 @@ func TestConfigExampleYAMLHasNoDeadKeys(t *testing.T) {
 }
 
 func collectDeadKeys(path string, node map[string]any, typ reflect.Type, dead *[]string) {
-	for typ.Kind() == reflect.Ptr {
+	for typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
 	if typ.Kind() != reflect.Struct {

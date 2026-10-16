@@ -128,7 +128,7 @@ func enumerateEDRHandles() []systemHandleEntry {
 
 	for i := 0; i < numHandles; i++ {
 		entry := (*systemHandleEntry)(unsafe.Pointer(
-			uintptr(unsafe.Pointer(&buf[0])) + uintptr(unsafe.Sizeof(uintptr(0))) + uintptr(i)*unsafe.Sizeof(systemHandleEntry{}),
+			uintptr(unsafe.Pointer(&buf[0])) + unsafe.Sizeof(uintptr(0)) + uintptr(i)*unsafe.Sizeof(systemHandleEntry{}),
 		))
 
 		// Filter for EDR processes with callback-related handles
@@ -185,7 +185,7 @@ func checkProcessDebugPort() string {
 		^uintptr(0),
 		uintptr(ProcessDebugPort),
 		uintptr(unsafe.Pointer(&debugPort)),
-		uintptr(unsafe.Sizeof(debugPort)),
+		unsafe.Sizeof(debugPort),
 		uintptr(unsafe.Pointer(&retLen)),
 	)
 	if ret != 0 {

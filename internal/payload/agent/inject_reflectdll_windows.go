@@ -130,7 +130,7 @@ func reflectDLLInjectImpl(dllData []byte, pid int, exportName string, exportArgs
 	}
 
 	for i := uint16(0); i < numberOfSections; i++ {
-		sec := (*imageSectionHeader)(unsafe.Pointer(&dllData[sectionOffset+uintptr(i)*uintptr(unsafe.Sizeof(imageSectionHeader{}))]))
+		sec := (*imageSectionHeader)(unsafe.Pointer(&dllData[sectionOffset+uintptr(i)*unsafe.Sizeof(imageSectionHeader{})]))
 		if sec.sizeOfRawData == 0 || sec.pointerToRawData == 0 || sec.virtualAddress == 0 {
 			continue
 		}
@@ -419,12 +419,12 @@ func resolveImportsRemote(mgr *syscallManager, hProc uintptr, dllData []byte, im
 
 func setRemoteSectionProtections(mgr *syscallManager, hProc uintptr, dllData []byte, imageBase uintptr, numSections uint16, sectionOffset uintptr, is64Bit bool) error {
 	for i := uint16(0); i < numSections; i++ {
-		sec := (*imageSectionHeader)(unsafe.Pointer(&dllData[sectionOffset+uintptr(i)*uintptr(unsafe.Sizeof(imageSectionHeader{}))]))
+		sec := (*imageSectionHeader)(unsafe.Pointer(&dllData[sectionOffset+uintptr(i)*unsafe.Sizeof(imageSectionHeader{})]))
 		if sec.virtualAddress == 0 || sec.virtualSize == 0 {
 			continue
 		}
 
-		prot := uint32(pageReadwrite)
+		prot := pageReadwrite
 		if sec.characteristics&imageScnMemExecute != 0 {
 			if sec.characteristics&imageScnMemWrite != 0 {
 				prot = pageExecuteReadwrite
@@ -506,7 +506,7 @@ func rvaToFileOffset(dllData []byte, rva uint32, ntOffset uintptr) uint32 {
 	sectionOffset := ntOffset + 24 + uintptr(nt32.fileHeader.sizeOfOptionalHeader)
 
 	for i := uint16(0); i < numSections; i++ {
-		sec := (*imageSectionHeader)(unsafe.Pointer(&dllData[sectionOffset+uintptr(i)*uintptr(unsafe.Sizeof(imageSectionHeader{}))]))
+		sec := (*imageSectionHeader)(unsafe.Pointer(&dllData[sectionOffset+uintptr(i)*unsafe.Sizeof(imageSectionHeader{})]))
 		if rva >= sec.virtualAddress && rva < sec.virtualAddress+sec.virtualSize {
 			if sec.pointerToRawData == 0 {
 				return 0
