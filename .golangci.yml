@@ -52,7 +52,22 @@ linters:
         # 10 windows findings and sometimes none of those 5, while every other
         # linter's finding set stayed byte-stable. A count that cannot be
         # reproduced cannot be pinned; the agent's exec path is intentional.
+        # G702 has since been joined by its 2025-26 taint siblings — see 70x
+        # below.
         - G702
+        # G701/G703/G704 complete the gosec taint family ("SQL/path/SSRF via
+        # taint analysis", win 1+46+2 / lin 1+47+5 rows as of batch L). Their
+        # sinks are this product's inputs by design: agent task handlers
+        # write the paths the operator's command names (persistence, cred
+        # dump, collection), CLI generators/artifacts take -out arguments,
+        # and the extc2 cookie proxy fetches what the session asks it to
+        # fetch — the same judgment already recorded for G107/G204/G301-
+        # G304. A taint run cannot distinguish an operator-steered intrusion
+        # kit from a web app; flagging intentional sinks buries real
+        # findings under ~50 rows.
+        - G701
+        - G703
+        - G704
     errcheck:
       exclude-functions:
         - (*os.File).Close

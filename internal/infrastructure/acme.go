@@ -161,10 +161,10 @@ func (a *ACMEClient) Provision(ctx context.Context) (certPEM, keyPEM []byte, err
 	// Cache certs; a cache write failure is non-fatal (the fresh cert is
 	// already being returned) but losing the cache silently costs an extra
 	// order next boot — surface it.
-	if err := os.WriteFile(certFile, certPEM, 0640); err != nil {
+	if err := os.WriteFile(certFile, certPEM, 0600); err != nil {
 		slog.Warn("acme: failed to cache certificate", "file", certFile, "err", err)
 	}
-	if err := os.WriteFile(keyFile, keyPEM, 0640); err != nil {
+	if err := os.WriteFile(keyFile, keyPEM, 0600); err != nil {
 		slog.Warn("acme: failed to cache key", "file", keyFile, "err", err)
 	}
 

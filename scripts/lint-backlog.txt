@@ -34,10 +34,15 @@
 # scripting/delivery/PE-strip and the linux transport/relay/persistence set)
 # and the staticcheck ST100 campaign (ST1003 renames incl. the dual-GOOS
 # syscall-constant family, ST1005 error strings, ST1016 receivers, S10xx and
-# SA9xxx small classes) took the totals to 361 (win) and 293 (lin). Remaining
-# debt: errcheck typed-wrapper call sites (186/147), gosec G306-style mode
-# findings, SA1019 deprecations (41/11 — syscall.Syscall6/grpc.DialContext/
+# SA9xxx small classes) took the totals to 361 (win) and 293 (lin); the
+# follow-up fixup (CI-gate findings: the scripting-bridge errcheck straggler,
+# three G306 write-permission hardenings, loader Syscall -> SyscallN) and the
+# G701/G703/G704 config exclusion completing the earlier G702 rationale (the
+# taint family cannot tell an operator-steered kit from a web app) settled
+# the batch at 305 (win) and 236 (lin). Remaining debt: errcheck typed-wrapper
+# call sites (185/146), gosec G306 mode findings (5/5), SA1019 deprecations
+# (39/11-12 — syscall.Syscall6/SyscallN migration and grpc.DialContext/
 # http2.Transport, deliberate keep), S1011/S1001 one-offs.
-
-windows=362
-linux=293
+#
+windows=306
+linux=236
