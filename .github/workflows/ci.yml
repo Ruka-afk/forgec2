@@ -155,6 +155,23 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 clang lld
+      # sqlite3.c/sqlite3.h are vendored locally but gitignored (9 MB of
+      # third-party code does not belong in the repository), so the gate
+      # fetches the release the tree is built against, verifies the exact
+      # bytes and reads the version macro back out of the file.
+      - name: Fetch the vendored SQLite amalgamation (3.46.1)
+        run: |
+          cd proto/c-implant
+          curl -sSfL -o "$RUNNER_TEMP/sqlite-amalgamation.zip" \
+            https://www.sqlite.org/2024/sqlite-amalgamation-3460100.zip
+          unzip -q "$RUNNER_TEMP/sqlite-amalgamation.zip" -d "$RUNNER_TEMP/sqlite"
+          cp "$RUNNER_TEMP/sqlite/sqlite-amalgamation-3460100/sqlite3.c" \
+             "$RUNNER_TEMP/sqlite/sqlite-amalgamation-3460100/sqlite3.h" .
+          # Same sha256 as the amalgamation this repository is developed
+          # against; bump both together with .gitignore'd sqlite3.c updates.
+          echo "6c35bc5f7f85eac9c49928bacbb02bb694b547aabf69197e058cca245ad80e83  sqlite3.c" | sha256sum -c -
+          grep -qE '#define SQLITE_VERSION +"3\.46\.1"' sqlite3.c
+          grep -qE '#define SQLITE_VERSION_NUMBER +3046001' sqlite3.c
       - name: Cross-build the implant (warnings are errors)
         run: |
           cd proto/c-implant

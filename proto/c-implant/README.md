@@ -47,6 +47,11 @@ to exactly one agent id; identity persists in `%TEMP%\fc2c.dat`).
 Add `-DE2E_DEBUG` for the `C:\Windows\Temp\cbeacon-dbg.log` frame trace
 (build-e2e.bat pattern). Never commit real secrets (`.exe` is gitignored).
 
+The build links the vendored SQLite 3.46.1 amalgamation, which is gitignored:
+unpack `sqlite-amalgamation-3460100.zip` from sqlite.org into this directory
+once (`sqlite3.c` + `sqlite3.h`). The CI gate downloads that same release
+itself and asserts the version macro before compiling it.
+
 ## One-click E2E verification
 
 ```bat
@@ -121,12 +126,14 @@ interactive desktop. Requires `go`, `x86_64-w64-mingw32-gcc` and `curl.exe`.
 
 ## CI gate
 
-The `c-implant` job in `.github/workflows/ci.yml` cross-builds the implant with
-mingw-w64 under `-Wall -Wextra -Werror` (the vendored `sqlite3.c` is compiled
-separately, without `-Werror`, so its warnings cannot mask ours), asserts every
-recon task string is present in the binary, `-fsyntax-only` builds the
-`C2_TRANSPORT_DNS` variant, runs `x25519_selftest` as a host binary, and builds
-and runs the shipped WASM example through `cmd/plugin-check`.
+The `c-implant` job in `.github/workflows/ci.yml` fetches the SQLite 3.46.1
+amalgamation the tree is built against (it is gitignored, see Build), then
+cross-builds the implant with mingw-w64 under `-Wall -Wextra -Werror` (the
+vendored `sqlite3.c` is compiled separately, without `-Werror`, so its warnings
+cannot mask ours), asserts every recon task string is present in the binary,
+`-fsyntax-only` builds the `C2_TRANSPORT_DNS` variant, runs `x25519_selftest`
+as a host binary, and builds and runs the shipped WASM example through
+`cmd/plugin-check`.
 
 ## Size comparison (windows/amd64)
 
@@ -175,8 +182,10 @@ to already-stripped sections and high entropy.
 - `selftest_main.c` — standalone `x25519_selftest` runner
 - `dns_transport.{c,h}` — DNS TXT beacon transport (Go-agent wire parity,
   gated on `C2_TRANSPORT_DNS`, not wired into the main loop yet)
-- `sqlite3.c` / `sqlite3.h` — vendored SQLite amalgamation
-  (`wechat_history`), built separately from the implant sources
+- `sqlite3.c` / `sqlite3.h` — vendored SQLite 3.46.1 amalgamation, required by
+  `wechat_history`; deliberately gitignored (9 MB of third-party code), so it
+  is unpacked into this directory before the first build and the CI gate
+  fetches that same release itself
 
 Harnesses: `scripts\e2e-c-implant.bat` (one task against a live server),
 `scripts\e2e-c-implant-local.ps1` (the whole loop, no UI needed) and
