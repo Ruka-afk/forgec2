@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"gorm.io/gorm"
 )
 
@@ -48,6 +49,11 @@ type EventManager struct {
 	eventQueue chan Event
 	ctx        context.Context
 	cancel     context.CancelFunc
+
+	// dropCounter, when set, counts silently-dropped internal events by
+	// reason (queue_full, handler_saturated). Wired by the server after
+	// metrics init; nil in unit tests.
+	dropCounter *prometheus.CounterVec
 }
 
 func NewEventManager(database *gorm.DB) *EventManager {
@@ -68,6 +74,17 @@ func (em *EventManager) Shutdown() {
 	em.cancel()
 }
 
+// SetDropCounter wires the drop metric. Safe to call once at startup.
+func (em *EventManager) SetDropCounter(c *prometheus.CounterVec) {
+	em.dropCounter = c
+}
+
+func (em *EventManager) noteDrop(reason string) {
+	if em.dropCounter != nil {
+		em.dropCounter.WithLabelValues(reason).Inc()
+	}
+}
+
 func (em *EventManager) On(et EventType, handler EventHandler) {
 	em.mu.Lock()
 	defer em.mu.Unlock()
@@ -80,6 +97,7 @@ func (em *EventManager) Emit(evt Event) {
 		return
 	case em.eventQueue <- evt:
 	default:
+		em.noteDrop("queue_full")
 		slog.Warn("Event queue full, dropping event", "type", evt.Type)
 	}
 }
@@ -110,6 +128,7 @@ func (em *EventManager) queueReader() {
 						handler(evt)
 					}(h)
 				default:
+					em.noteDrop("handler_saturated")
 					slog.Warn("Event handler worker saturated, dropping event", "type", evt.Type)
 				}
 			}

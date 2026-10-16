@@ -47,6 +47,7 @@ Thumbs.db
 !README.md
 # The lint debt ceiling is checked in on purpose (see scripts/check-lint-debt.sh).
 !scripts/lint-backlog.txt
+!scripts/openapi-debt.txt
 
 # Build artifacts
 build/
@@ -104,3 +105,11 @@ frontend/*.log
 frontend/*.err
 frontend/*.tsbuildinfo
 frontend/.next-build-output.txt
+
+# Local dev clutter (binary artifacts + scratch patches, never committed)
+/.gomodcache/
+/coverage
+/coverage-server
+/i18n-zh-mine.patch
+/openapi-worktree.patch
+/nul

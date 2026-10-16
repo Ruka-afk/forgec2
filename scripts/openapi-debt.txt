@@ -1,0 +1,8 @@
+# Schema-coverage ceiling (only-shrinking), checked with:
+#   go run ./cmd/checkopenapi -deep-baseline scripts/openapi-debt.txt
+# Counts snapshotted at batch O (2026-10, spec includes the operator's
+# in-flight api/openapi.yaml work). CI enforcement is deferred until that
+# work lands; exit 1 only when current counts exceed these values.
+no_operation_id=0
+no_request_schema=275
+no_response_schema=507

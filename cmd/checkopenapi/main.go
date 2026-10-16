@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -77,10 +78,12 @@ var coreRoutes = []string{
 
 func main() {
 	strict := flag.Bool("strict", false, "fail if any backend route is missing from OpenAPI")
-	minCoverage := flag.Float64("min-coverage", 0.15, "minimum fraction of backend routes that must be documented (0-1)")
+	minCoverage := flag.Float64("min-coverage", 1.0, "minimum fraction of backend routes that must be documented (0-1)")
 	listMissing := flag.Bool("list-missing", false, "print all missing routes (no limit)")
 	dumpBackend := flag.Bool("dump-backend", false, "print all extracted backend routes and exit")
 	listStale := flag.Bool("list-stale", false, "print OpenAPI paths not present in backend (orphans)")
+	deepLint := flag.Bool("deep-lint", false, "report schema-coverage gaps (operationId, request/response bodies) with examples")
+	deepBaseline := flag.String("deep-baseline", "", "enforce schema-coverage counts against a baseline file (e.g. scripts/openapi-debt.txt); exits 1 if current counts exceed it")
 	flag.Parse()
 
 	backendPaths, err := extractBackendPaths("internal/server")
@@ -153,6 +156,38 @@ func main() {
 	if coverage < *minCoverage {
 		fmt.Printf("Coverage %.1f%% is below minimum %.1f%%\n", coverage*100, *minCoverage*100)
 		exitCode = 1
+	}
+
+	if *deepLint || *deepBaseline != "" {
+		cov := schemaCensusOf(spec)
+		if *deepLint {
+			fmt.Printf("Schema coverage: no_operation_id=%d no_request_schema=%d no_response_schema=%d\n",
+				cov.NoOperationID, cov.NoRequestSchema, cov.NoResponseSchema)
+			for _, rule := range deepLintRules {
+				for i, e := range cov.examples[rule.key] {
+					if i >= deepLintExamplesPerRule {
+						fmt.Printf("  %s: ... and %d more\n", rule.key, len(cov.examples[rule.key])-i)
+						break
+					}
+					fmt.Printf("  %s: %s\n", rule.key, e)
+				}
+			}
+		}
+		if *deepBaseline != "" {
+			base, err := parseDeepBaseline(*deepBaseline)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error reading schema-coverage baseline: %v\n", err)
+				os.Exit(1)
+			}
+			if cov.greaterThan(base) {
+				fmt.Printf("Schema coverage regression against %s: current no_operation_id=%d no_request_schema=%d no_response_schema=%d, baseline %d/%d/%d\n",
+					*deepBaseline, cov.NoOperationID, cov.NoRequestSchema, cov.NoResponseSchema,
+					base.NoOperationID, base.NoRequestSchema, base.NoResponseSchema)
+				exitCode = 1
+			} else if !*deepLint {
+				fmt.Printf("Schema coverage vs %s: OK\n", *deepBaseline)
+			}
+		}
 	}
 
 	if *strict || *listMissing {
@@ -603,4 +638,200 @@ func routeInSpec(backendRoute string, spec map[string]bool) bool {
 	// e.g. backend post /mimikatz vs openapi post /agents/{id}/mimikatz
 	// Reverse: if backend is full, already handled.
 	return false
+}
+
+// Schema-coverage linting: the path-coverage gate above only proves a route is
+// documented somewhere. These rules measure contract depth (operationId,
+// request body, success response body). Counts only ever shrink as the spec
+// matures; scripts/openapi-debt.txt is the ceiling, mirroring the lint
+// backlog's only-shrinking rule.
+
+const deepLintExamplesPerRule = 10
+
+type deepLintRule struct {
+	key string
+}
+
+var deepLintRules = []deepLintRule{
+	{"no_operation_id"},
+	{"no_request_schema"},
+	{"no_response_schema"},
+}
+
+type schemaCoverage struct {
+	NoOperationID    int `json:"no_operation_id"`
+	NoRequestSchema  int `json:"no_request_schema"`
+	NoResponseSchema int `json:"no_response_schema"`
+}
+
+func (c schemaCoverage) greaterThan(base schemaCoverage) bool {
+	return c.NoOperationID > base.NoOperationID ||
+		c.NoRequestSchema > base.NoRequestSchema ||
+		c.NoResponseSchema > base.NoResponseSchema
+}
+
+type schemaCensus struct {
+	schemaCoverage
+	examples map[string][]string
+}
+
+func (s schemaCensus) add(rule, method, path string) {
+	s.examples[rule] = append(s.examples[rule], method+" "+normalizePath(path))
+}
+
+// schemaCensusOf walks every documented operation and tallies the three
+// depth rules. YAML objects arrive via interface{}, so each level is
+// type-asserted defensively; malformed shapes count as undocumented.
+func schemaCensusOf(spec *OpenAPISpec) schemaCensus {
+	cens := schemaCensus{examples: map[string][]string{}}
+	paths := make([]string, 0, len(spec.Paths))
+	for p := range spec.Paths {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+
+	for _, p := range paths {
+		methods := spec.Paths[p]
+		names := make([]string, 0, len(methods))
+		for m := range methods {
+			names = append(names, m)
+		}
+		sort.Strings(names)
+		for _, m := range names {
+			lm := strings.ToLower(m)
+			if !isDocumentedMethod(lm) {
+				continue
+			}
+			op, ok := methods[m].(map[string]interface{})
+			if !ok {
+				cens.NoOperationID++
+				cens.add("no_operation_id", lm, p)
+				cens.NoResponseSchema++
+				cens.add("no_response_schema", lm, p)
+				continue
+			}
+			if opID, _ := op["operationId"].(string); strings.TrimSpace(opID) == "" {
+				cens.NoOperationID++
+				cens.add("no_operation_id", lm, p)
+			}
+			if lm == "post" || lm == "put" || lm == "patch" {
+				rb, _ := op["requestBody"].(map[string]interface{})
+				if !bodyHasSchema(rb) {
+					cens.NoRequestSchema++
+					cens.add("no_request_schema", lm, p)
+				}
+			}
+			if !responseDocumented(op["responses"]) {
+				cens.NoResponseSchema++
+				cens.add("no_response_schema", lm, p)
+			}
+		}
+	}
+	return cens
+}
+
+func isDocumentedMethod(m string) bool {
+	switch m {
+	case "get", "post", "put", "delete", "patch", "head", "options":
+		return true
+	}
+	return false
+}
+
+// contentHasSchema reports whether at least one media-type entry documents a
+// schema object.
+func contentHasSchema(content map[string]interface{}) bool {
+	if content == nil {
+		return false
+	}
+	for _, v := range content {
+		media, ok := v.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if schema, has := media["schema"].(map[string]interface{}); has && schema != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func bodyHasSchema(rb map[string]interface{}) bool {
+	if rb == nil {
+		return false
+	}
+	if _, has := rb["$ref"]; has {
+		return true
+	}
+	content, _ := rb["content"].(map[string]interface{})
+	return contentHasSchema(content)
+}
+
+// responseDocumented checks the first documented success status of
+// 200/201/202/206/204. A $ref counts; a content-carrying entry needs at
+// least one schema; a bare 204 is a declared empty body and counts as
+// documented. No success status at all counts as undocumented.
+func responseDocumented(raw interface{}) bool {
+	responses, ok := raw.(map[string]interface{})
+	if !ok {
+		return false
+	}
+	for _, key := range []string{"200", "201", "202", "206", "204"} {
+		entry, ok := responses[key]
+		if !ok {
+			continue
+		}
+		resp, ok := entry.(map[string]interface{})
+		if !ok {
+			return false
+		}
+		if _, has := resp["$ref"]; has {
+			return true
+		}
+		content, _ := resp["content"].(map[string]interface{})
+		if contentHasSchema(content) {
+			return true
+		}
+		if key == "204" {
+			return true
+		}
+		return false
+	}
+	return false
+}
+
+// parseDeepBaseline reads a scripts/openapi-debt.txt-style file
+// (key=value lines; blank lines and #-comments permitted).
+func parseDeepBaseline(path string) (schemaCoverage, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return schemaCoverage{}, err
+	}
+	var base schemaCoverage
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			return schemaCoverage{}, fmt.Errorf("bad baseline line %q", line)
+		}
+		key := strings.TrimSpace(parts[0])
+		n, err := strconv.Atoi(strings.TrimSpace(parts[1]))
+		if err != nil {
+			return schemaCoverage{}, fmt.Errorf("bad baseline value in %q", line)
+		}
+		switch key {
+		case "no_operation_id":
+			base.NoOperationID = n
+		case "no_request_schema":
+			base.NoRequestSchema = n
+		case "no_response_schema":
+			base.NoResponseSchema = n
+		default:
+			return schemaCoverage{}, fmt.Errorf("unknown baseline key %q", key)
+		}
+	}
+	return base, nil
 }

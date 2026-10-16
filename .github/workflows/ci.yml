@@ -82,7 +82,7 @@ jobs:
       - run: go build -o checkopenapi ./cmd/checkopenapi
       - name: OpenAPI check (core paths + min coverage)
         run: |
-          ./checkopenapi -min-coverage 0.95
+          ./checkopenapi -min-coverage 1.00
           # Fail if OpenAPI drifts ahead of backend (wrong docs)
           stale=$(./checkopenapi -list-stale | tail -n +2 | wc -l)
           test "$stale" -eq 0
