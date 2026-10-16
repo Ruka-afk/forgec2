@@ -15,8 +15,14 @@
 # (unconvert, ineffassign, govet, misspell) on both targets.
 #
 # History: the windows target measured 1056 findings before the mechanical
-# cleanup (2026-10); it sits at 977 with those linters at zero, and the linux
-# target at 635.
+# cleanup (2026-10). Excluding gosec G702 (its taint results flapped between
+# identical runs — 5 of the 10 windows findings appeared or not) took windows
+# to 967 and linux to 634, both stable across repeated warm/fresh runs.
+#
+# The windows ceiling carries one finding of headroom for the staticcheck
+# issue that so far only appeared on the linux analysis host (CI measured one
+# more than this machine); linux matches CI exactly. Tighten the windows
+# number once a local run reproduces the CI count.
 
-windows=977
-linux=635
+windows=968
+linux=634
