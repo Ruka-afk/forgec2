@@ -67,8 +67,8 @@ function Get-AgentList {
     # curl, not Invoke-RestMethod: its private CookieContainer silently ignores
     # a Cookie header, so a valid session would answer 401. Reading with UTF-8
     # is required too: hostnames are not always ASCII.
-    & curl.exe -s -b $script:jar -H 'Accept: application/json' -o "$WorkDir\agents.json" "http://127.0.0.1:$Port/api/v1/agents"
-    return ([System.IO.File]::ReadAllText("$WorkDir\agents.json", [System.Text.Encoding]::UTF8) | ConvertFrom-Json)
+    & curl.exe -s -b $script:jar -H 'Accept: application/json' -o "$WorkDir/agents.json" "http://127.0.0.1:$Port/api/v1/agents"
+    return ([System.IO.File]::ReadAllText("$WorkDir/agents.json", [System.Text.Encoding]::UTF8) | ConvertFrom-Json)
 }
 
 try {
@@ -83,12 +83,12 @@ try {
     $RepoRoot = [System.IO.Path]::GetFullPath($RepoRoot)
     Step "work dir: $WorkDir"
     if (Test-Path $WorkDir) { Remove-Item -Recurse -Force $WorkDir }
-    New-Item -ItemType Directory -Force -Path "$WorkDir\tmp" | Out-Null
+    New-Item -ItemType Directory -Force -Path "$WorkDir/tmp" | Out-Null
     Push-Location $RepoRoot
     $pushed = $true
 
     Step '1/8 build the throwaway server'
-    go build -o "$WorkDir\forgec2-server.exe" ./cmd/server
+    go build -o "$WorkDir/forgec2-server.exe" ./cmd/server
     if ($LASTEXITCODE -ne 0) { throw 'server build failed' }
 
     Step '2/8 write the throwaway config'
@@ -111,12 +111,12 @@ try {
     }
     # No BOM: the server's YAML reader does not need one, and UTF-8 keeps any
     # non-ASCII comment intact.
-    [System.IO.File]::WriteAllText("$WorkDir\config.e2e.yaml", $cfg, (New-Object System.Text.UTF8Encoding($false)))
-    Write-Host "  wrote $WorkDir\config.e2e.yaml"
+    [System.IO.File]::WriteAllText("$WorkDir/config.e2e.yaml", $cfg, (New-Object System.Text.UTF8Encoding($false)))
+    Write-Host "  wrote $WorkDir/config.e2e.yaml"
 
     Step "3/8 start the throwaway server on 127.0.0.1:$Port"
-    $server = Start-Process -FilePath "$WorkDir\forgec2-server.exe" `
-        -ArgumentList '-config', "$WorkDir\config.e2e.yaml" -WorkingDirectory $WorkDir -PassThru -WindowStyle Hidden
+    $server = Start-Process -FilePath "$WorkDir/forgec2-server.exe" `
+        -ArgumentList '-config', "$WorkDir/config.e2e.yaml" -WorkingDirectory $WorkDir -PassThru -WindowStyle Hidden
     $healthy = $false
     for ($i = 0; $i -lt 80; $i++) {
         Start-Sleep -Milliseconds 500
@@ -131,11 +131,11 @@ try {
     Step '4/8 log in and mint a registration secret'
     # A successful /api/login answers 302 towards the SPA; curl keeps the
     # Set-Cookie header either way (and does not follow redirects by default).
-    $script:jar = "$WorkDir\cookies.txt"
-    $code = & curl.exe -s -c $script:jar -o "$WorkDir\login-body.txt" -w '%{http_code}' `
+    $script:jar = "$WorkDir/cookies.txt"
+    $code = & curl.exe -s -c $script:jar -o "$WorkDir/login-body.txt" -w '%{http_code}' `
         -H 'Accept: application/json' -d "username=$User&password=$Password" "http://127.0.0.1:$Port/api/login"
     if ($code -ne '302' -and $code -ne '200') {
-        throw "login failed with HTTP ${code}: $(Get-Content "$WorkDir\login-body.txt" -Raw)"
+        throw "login failed with HTTP ${code}: $(Get-Content "$WorkDir/login-body.txt" -Raw)"
     }
     $mint = & go run ./cmd/mint-reg-secret -db "$WorkDir/data/db/forgec2.db" -beacon-key $BeaconKey
     if ($LASTEXITCODE -ne 0) { throw 'cmd/mint-reg-secret failed' }
@@ -147,33 +147,33 @@ try {
     Step '5/8 cross-build the implant against that secret'
     # sqlite3.c is a 9MB vendored amalgamation; compiling it once and caching
     # the object keeps repeated E2E loops fast.
-    if (-not (Test-Path "$WorkDir\sqlite3.o") -or
-        (Get-Item "$WorkDir\sqlite3.o").LastWriteTime -lt (Get-Item "$RepoRoot\proto\c-implant\sqlite3.c").LastWriteTime) {
+    if (-not (Test-Path "$WorkDir/sqlite3.o") -or
+        (Get-Item "$WorkDir/sqlite3.o").LastWriteTime -lt (Get-Item "$RepoRoot\proto\c-implant\sqlite3.c").LastWriteTime) {
         Write-Host '  compiling sqlite3.c (first run, ~40s)...'
-        cmd /c "cd /d `"$RepoRoot\proto\c-implant`" && x86_64-w64-mingw32-gcc -O1 -c sqlite3.c -o `"$WorkDir\sqlite3.o`" > `"$WorkDir\sqlite3.log`" 2>&1"
-        if (-not (Test-Path "$WorkDir\sqlite3.o")) { Get-Content "$WorkDir\sqlite3.log" -Tail 15 | ForEach-Object { Write-Host "  $_" }; throw 'sqlite3.o build failed' }
+        cmd /c "cd /d `"$RepoRoot\proto\c-implant`" && x86_64-w64-mingw32-gcc -O1 -c sqlite3.c -o `"$WorkDir/sqlite3.o`" > `"$WorkDir/sqlite3.log`" 2>&1"
+        if (-not (Test-Path "$WorkDir/sqlite3.o")) { Get-Content "$WorkDir/sqlite3.log" -Tail 15 | ForEach-Object { Write-Host "  $_" }; throw 'sqlite3.o build failed' }
     }
     # Generated as a .cmd: PowerShell mangles the -Wl/-D quoting that mingw needs.
     $build = @"
 @echo off
 cd /d $RepoRoot\proto\c-implant
-x86_64-w64-mingw32-gcc -O2 -Wall -o "$WorkDir\cbeacon-e2e.exe" beacon.c crypto_cng.c curve25519.c evade.c dns_transport.c "$WorkDir\sqlite3.o" -lwinhttp -lbcrypt -lpsapi -liphlpapi -lgdiplus -lgdi32 -luser32 -lole32 -ldnsapi -lws2_32 -DC2_HOST=\"127.0.0.1\" -DC2_PORT=$Port -DBEACON_PATH=\"/collect\" -DSECRET_ID=\"$sid\" -DSECRET_B64=\"$sb64\" -DINTERVAL=3 > "$WorkDir\build.log" 2>&1
+x86_64-w64-mingw32-gcc -O2 -Wall -o "$WorkDir/cbeacon-e2e.exe" beacon.c crypto_cng.c curve25519.c evade.c dns_transport.c "$WorkDir/sqlite3.o" -lwinhttp -lbcrypt -lpsapi -liphlpapi -lgdiplus -lgdi32 -luser32 -lole32 -ldnsapi -lws2_32 -DC2_HOST=\"127.0.0.1\" -DC2_PORT=$Port -DBEACON_PATH=\"/collect\" -DSECRET_ID=\"$sid\" -DSECRET_B64=\"$sb64\" -DINTERVAL=3 > "$WorkDir/build.log" 2>&1
 "@
-    [System.IO.File]::WriteAllText("$WorkDir\build-implant.cmd", $build, (New-Object System.Text.UTF8Encoding($false)))
-    cmd /c "$WorkDir\build-implant.cmd"
-    if (-not (Test-Path "$WorkDir\cbeacon-e2e.exe")) {
-        Get-Content "$WorkDir\build.log" -Tail 15 | ForEach-Object { Write-Host "  $_" }
+    [System.IO.File]::WriteAllText("$WorkDir/build-implant.cmd", $build, (New-Object System.Text.UTF8Encoding($false)))
+    cmd /c "$WorkDir/build-implant.cmd"
+    if (-not (Test-Path "$WorkDir/cbeacon-e2e.exe")) {
+        Get-Content "$WorkDir/build.log" -Tail 15 | ForEach-Object { Write-Host "  $_" }
         throw 'implant build failed'
     }
-    Write-Host "  built $((Get-Item "$WorkDir\cbeacon-e2e.exe").Length) bytes"
+    Write-Host "  built $((Get-Item "$WorkDir/cbeacon-e2e.exe").Length) bytes"
 
     Step '6/8 run the implant with a scratch TEMP and wait for registration'
     $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = "$WorkDir\cbeacon-e2e.exe"
+    $psi.FileName = "$WorkDir/cbeacon-e2e.exe"
     $psi.WorkingDirectory = $WorkDir
     $psi.UseShellExecute = $false
-    $psi.EnvironmentVariables['TEMP'] = "$WorkDir\tmp"
-    $psi.EnvironmentVariables['TMP'] = "$WorkDir\tmp"
+    $psi.EnvironmentVariables['TEMP'] = "$WorkDir/tmp"
+    $psi.EnvironmentVariables['TMP'] = "$WorkDir/tmp"
     $implant = [System.Diagnostics.Process]::Start($psi)
     $agentId = $null
     for ($i = 0; $i -lt 60; $i++) {

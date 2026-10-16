@@ -138,17 +138,17 @@ try {
     if (-not (Get-Command $Curl -ErrorAction SilentlyContinue)) { throw "$Curl not found in PATH" }
     $WorkDir = [System.IO.Path]::GetFullPath($WorkDir)
     $RepoRoot = [System.IO.Path]::GetFullPath($RepoRoot)
-    $script:reqFile = "$WorkDir\request.json"
+    $script:reqFile = "$WorkDir/request.json"
     $base = "http://127.0.0.1:$Port"
     Step "work dir: $WorkDir (target os: $TargetOs)"
     if (Test-Path $WorkDir) { Remove-Item -Recurse -Force $WorkDir }
-    New-Item -ItemType Directory -Force -Path "$WorkDir\tmp" | Out-Null
-    New-Item -ItemType Directory -Force -Path "$WorkDir\state" | Out-Null
+    New-Item -ItemType Directory -Force -Path "$WorkDir/tmp" | Out-Null
+    New-Item -ItemType Directory -Force -Path "$WorkDir/state" | Out-Null
     Push-Location $RepoRoot
     $pushed = $true
 
     Step "1/9 build the throwaway server"
-    go build -o "$WorkDir\$SrvExe" ./cmd/server
+    go build -o "$WorkDir/$SrvExe" ./cmd/server
     if ($LASTEXITCODE -ne 0) { throw 'server build failed' }
 
     Step "2/9 write the throwaway config"
@@ -171,8 +171,8 @@ try {
     }
     # No BOM: the server's YAML reader does not need one, and UTF-8 keeps any
     # non-ASCII comment intact.
-    [System.IO.File]::WriteAllText("$WorkDir\config.e2e.yaml", $cfg, (New-Object System.Text.UTF8Encoding($false)))
-    Write-Host "  wrote $WorkDir\config.e2e.yaml"
+    [System.IO.File]::WriteAllText("$WorkDir/config.e2e.yaml", $cfg, (New-Object System.Text.UTF8Encoding($false)))
+    Write-Host "  wrote $WorkDir/config.e2e.yaml"
 
     Step "3/9 start the throwaway server on $base"
     # The server must run with the repository as its working directory: agent
@@ -181,8 +181,8 @@ try {
     # so a server started elsewhere cannot build payloads. Logs are redirected
     # into the work dir with -log-file to keep the repository's logs/ untouched.
     $sp = @{
-        FilePath         = "$WorkDir\$SrvExe"
-        ArgumentList     = @('-config', "$WorkDir\config.e2e.yaml", '-log-file', "$WorkDir\logs\forgec2.log")
+        FilePath         = "$WorkDir/$SrvExe"
+        ArgumentList     = @('-config', "$WorkDir/config.e2e.yaml", '-log-file', "$WorkDir/logs\forgec2.log")
         WorkingDirectory = $RepoRoot
         PassThru         = $true
     }
@@ -194,21 +194,21 @@ try {
         $health = & $Curl -s --max-time 2 "$base/health"
         if ($LASTEXITCODE -eq 0 -and $health -match 'ok') { $healthy = $true; break }
     }
-    if (-not $healthy) { Get-LogTail "$WorkDir\logs\forgec2.log" 30; throw "the throwaway server never became healthy on port $Port" }
+    if (-not $healthy) { Get-LogTail "$WorkDir/logs\forgec2.log" 30; throw "the throwaway server never became healthy on port $Port" }
     Write-Host '  /health ok'
 
     Step '4/9 log in and read the CSRF cookie'
     # A successful /api/login answers 302 towards the SPA; curl keeps the
     # Set-Cookie header either way (and does not follow redirects by default).
-    $script:jar = "$WorkDir\cookies.txt"
-    $code = & $Curl -s -c $script:jar -o "$WorkDir\login-body.txt" -w '%{http_code}' `
+    $script:jar = "$WorkDir/cookies.txt"
+    $code = & $Curl -s -c $script:jar -o "$WorkDir/login-body.txt" -w '%{http_code}' `
         -H 'Accept: application/json' -d "username=$User&password=$Password" "$base/api/login"
     if ($code -ne '302' -and $code -ne '200') {
-        throw "login failed with HTTP ${code}: $(Get-Content "$WorkDir\login-body.txt" -Raw)"
+        throw "login failed with HTTP ${code}: $(Get-Content "$WorkDir/login-body.txt" -Raw)"
     }
     # An authenticated GET rotates the CSRF cookie to the session-derived value
     # (see AGENTS.md); mutations below echo it back in X-CSRF-Token.
-    [void](Api-Get "$base/api/v1/tasks" "$WorkDir\csrf-probe.json")
+    [void](Api-Get "$base/api/v1/tasks" "$WorkDir/csrf-probe.json")
     $script:csrf = Get-CsrfToken $script:jar
     if (-not $script:csrf) { throw 'forgec2_csrf cookie not found after login' }
     Write-Host "  logged in as $User, csrf $($script:csrf.Substring(0, [Math]::Min(8, $script:csrf.Length)))..."
@@ -221,8 +221,8 @@ try {
             port    = $BeaconPort
             enabled = $true
         } | ConvertTo-Json -Compress)
-    $created = Api-PostJson "$base/api/listeners" $listenerJson "$WorkDir\listener.json"
-    if (-not $created.success) { throw "listener creation failed: $(Get-Content "$WorkDir\listener.json" -Raw)" }
+    $created = Api-PostJson "$base/api/listeners" $listenerJson "$WorkDir/listener.json"
+    if (-not $created.success) { throw "listener creation failed: $(Get-Content "$WorkDir/listener.json" -Raw)" }
     $listenerId = $created.listener.id
     $listenerStatus = $created.listener.status
     Write-Host "  listener id=$listenerId status=$listenerStatus"
@@ -233,8 +233,8 @@ try {
     $genPath = if ($TargetOs -eq 'windows') { '/generate/exe' } else { '/generate/linux' }
     # interval=2 keeps the round-trip fast; the clamp floor is 1s.
     $genForm = "listener_id=$listenerId&interval=2&jitter=0&filename=$agentName"
-    $gen = Api-PostForm "$base$genPath" $genForm "$WorkDir\generate.json"
-    if (-not $gen.success) { throw "generate request failed: $(Get-Content "$WorkDir\generate.json" -Raw)" }
+    $gen = Api-PostForm "$base$genPath" $genForm "$WorkDir/generate.json"
+    if (-not $gen.success) { throw "generate request failed: $(Get-Content "$WorkDir/generate.json" -Raw)" }
     $buildId = $gen.build_id
     Write-Host "  build $buildId queued"
     $deadline = (Get-Date).AddSeconds($BuildTimeoutSec)
@@ -243,7 +243,7 @@ try {
     while ((Get-Date) -lt $deadline) {
         Start-Sleep -Seconds 2
         $polls++
-        $b = Api-Get "$base/generate/builds/$buildId" "$WorkDir\build.json"
+        $b = Api-Get "$base/generate/builds/$buildId" "$WorkDir/build.json"
         $status = $b.status
         if ($status -ne 'building') { break }
         if ($polls % 10 -eq 0) { Write-Host "  still building ($([int]((Get-Date) - $deadline.AddSeconds($BuildTimeoutSec)).TotalSeconds)s elapsed)..." }
@@ -252,7 +252,7 @@ try {
         $err = if ($b.error) { $b.error } else { '(no error field)' }
         throw "agent build did not complete: status=$status error=$err"
     }
-    $agentPath = "$WorkDir\$agentName"
+    $agentPath = "$WorkDir/$agentName"
     # The SPA middleware (server_http.go) answers any non-API GET that does not
     # ask for JSON with index.html, so this GET must carry the Accept header the
     # status polls already send - without it the "download" silently saves the
@@ -283,12 +283,12 @@ try {
     $psi.UseShellExecute = $false
     # Redirect every directory the agent persists into: identity.key lives under
     # the user cache dir, scratch files under the temp dir.
-    $psi.EnvironmentVariables['TEMP'] = "$WorkDir\tmp"
-    $psi.EnvironmentVariables['TMP'] = "$WorkDir\tmp"
-    $psi.EnvironmentVariables['TMPDIR'] = "$WorkDir\tmp"
-    $psi.EnvironmentVariables['XDG_CACHE_HOME'] = "$WorkDir\state\cache"
-    $psi.EnvironmentVariables['HOME'] = "$WorkDir\state\home"
-    $psi.EnvironmentVariables['LOCALAPPDATA'] = "$WorkDir\state\appdata"
+    $psi.EnvironmentVariables['TEMP'] = "$WorkDir/tmp"
+    $psi.EnvironmentVariables['TMP'] = "$WorkDir/tmp"
+    $psi.EnvironmentVariables['TMPDIR'] = "$WorkDir/tmp"
+    $psi.EnvironmentVariables['XDG_CACHE_HOME'] = "$WorkDir/state\cache"
+    $psi.EnvironmentVariables['HOME'] = "$WorkDir/state\home"
+    $psi.EnvironmentVariables['LOCALAPPDATA'] = "$WorkDir/state\appdata"
     $agent = [System.Diagnostics.Process]::Start($psi)
     $agentId = $null
     $agentStatus = $null
@@ -296,7 +296,7 @@ try {
     for ($i = 0; $i -lt 90; $i++) {
         Start-Sleep -Seconds 1
         if ($agent.HasExited) { throw "the agent exited early with code $($agent.ExitCode)" }
-        try { $agents = @((Api-Get "$base/api/v1/agents" "$WorkDir\agents.json").data) } catch { continue }
+        try { $agents = @((Api-Get "$base/api/v1/agents" "$WorkDir/agents.json").data) } catch { continue }
         if ($agents.Count -gt 0) {
             $agentId = $agents[0].id
             $agentStatus = $agents[0].status
@@ -318,7 +318,7 @@ try {
     $shellMarker = "FORGEC2-E2E-SHELL-$markerHex"
     $fileMarker = "FORGEC2-E2E-FILE-$markerHex"
     $markerName = "e2e-marker-$markerHex.txt"
-    $markerPath = "$WorkDir\$markerName"
+    $markerPath = "$WorkDir/$markerName"
     [System.IO.File]::WriteAllText($markerPath, $fileMarker, (New-Object System.Text.UTF8Encoding($false)))
 
     # Contract probe (regression guard): read's spec parameter is 'command'
@@ -329,8 +329,8 @@ try {
     [System.IO.File]::WriteAllText($script:reqFile, $badBody, (New-Object System.Text.UTF8Encoding($false)))
     $badCode = & $Curl -s -b $script:jar -H 'Accept: application/json' -H "X-CSRF-Token: $script:csrf" `
         -H 'Content-Type: application/json' -X POST --data-binary "@$script:reqFile" `
-        -o "$WorkDir\task-create-read-missing-param.json" -w '%{http_code}' "$base/api/v1/tasks"
-    $badErr = [string](Read-Json "$WorkDir\task-create-read-missing-param.json").error
+        -o "$WorkDir/task-create-read-missing-param.json" -w '%{http_code}' "$base/api/v1/tasks"
+    $badErr = [string](Read-Json "$WorkDir/task-create-read-missing-param.json").error
 
     $cases = @(
         @{ name = 'shell';          type = 'shell';          command = "echo $shellMarker"; path = $null },
@@ -343,14 +343,14 @@ try {
         $body = [ordered]@{ agent_id = $agentId; type = $case.type }
         if ($case.command) { $body['command'] = $case.command }
         if ($case.path) { $body['path'] = $case.path }
-        $createdTask = Api-PostJson "$base/api/v1/tasks" ($body | ConvertTo-Json -Compress) "$WorkDir\task-create-$($case.name).json"
+        $createdTask = Api-PostJson "$base/api/v1/tasks" ($body | ConvertTo-Json -Compress) "$WorkDir/task-create-$($case.name).json"
         $taskId = $createdTask.data.id
-        if (-not $taskId) { throw "task $($case.name) was not created: $(Get-Content "$WorkDir\task-create-$($case.name).json" -Raw)" }
+        if (-not $taskId) { throw "task $($case.name) was not created: $(Get-Content "$WorkDir/task-create-$($case.name).json" -Raw)" }
         $taskDeadline = (Get-Date).AddSeconds($TaskTimeoutSec)
         $task = $null
         while ((Get-Date) -lt $taskDeadline) {
             Start-Sleep -Seconds 1
-            $task = (Api-Get "$base/api/v1/tasks/$taskId" "$WorkDir\task-$($case.name).json").data
+            $task = (Api-Get "$base/api/v1/tasks/$taskId" "$WorkDir/task-$($case.name).json").data
             if ($task.status -eq 'completed' -or $task.status -eq 'failed') { break }
         }
         $results[$case.name] = $task
@@ -403,7 +403,7 @@ finally {
     if (-not $runGreen) {
         # Red run: the server log carries the real reason (payload build errors,
         # beacon rejections) while the HTTP responses stay generic.
-        Get-LogTail "$WorkDir\logs\forgec2.log" 60
+        Get-LogTail "$WorkDir/logs\forgec2.log" 60
     }
     if ($runGreen -and -not $KeepWork) {
         # Drop the throwaway DB, config, cookie jar and binaries of a green run
