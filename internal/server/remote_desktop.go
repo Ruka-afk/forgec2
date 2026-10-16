@@ -285,7 +285,7 @@ func (h *RDHub) BroadcastFrame(agentID string, frameData []byte) {
 
 	for i, op := range ops {
 		op.writeMu.Lock()
-		op.conn.SetWriteDeadline(time.Now().Add(RemoteDesktopWriteDeadline))
+		_ = op.conn.SetWriteDeadline(time.Now().Add(RemoteDesktopWriteDeadline))
 		err := op.conn.WriteMessage(websocket.BinaryMessage, frameData)
 		op.writeMu.Unlock()
 		if err != nil {
@@ -420,7 +420,7 @@ func (s *Server) handleRDWebSocket(c *gin.Context) {
 				return
 			case <-ticker.C:
 				op.writeMu.Lock()
-				conn.SetWriteDeadline(time.Now().Add(RemoteDesktopWriteDeadline))
+				_ = conn.SetWriteDeadline(time.Now().Add(RemoteDesktopWriteDeadline))
 				pingErr := conn.WriteMessage(websocket.PingMessage, nil)
 				op.writeMu.Unlock()
 				if pingErr != nil {
