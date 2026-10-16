@@ -6,6 +6,7 @@ package main
 import (
 	"bytes"
 	"crypto/x509"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,11 +21,28 @@ var (
 	mtlsCertLoaded bool
 )
 
+// decodeMTLSPEM returns the PEM bytes for a value delivered as base64 of the
+// PEM (the documented generator/config-blob format) or as raw PEM (hand-built
+// -ldflags builds). The two are unambiguous: PEM text contains '-', spaces and
+// newlines, none of which occur in the standard base64 alphabet.
+func decodeMTLSPEM(s string) []byte {
+	if s == "" {
+		return nil
+	}
+	if decoded, err := base64.StdEncoding.DecodeString(s); err == nil {
+		return decoded
+	}
+	return []byte(s)
+}
+
 func initMTLS() {
 	if MTLSCertStr == "" || MTLSKeyStr == "" {
 		return
 	}
-	cert, err := utls.X509KeyPair([]byte(MTLSCertStr), []byte(MTLSKeyStr))
+	// The var contract is base64-encoded PEM (matching the config blob's
+	// SSHKey delivery), so decode before parsing. Skipping this step made
+	// every generated mTLS agent silently load no client certificate.
+	cert, err := utls.X509KeyPair(decodeMTLSPEM(MTLSCertStr), decodeMTLSPEM(MTLSKeyStr))
 	if err != nil {
 		if Debug {
 			fmt.Printf("[!] mTLS: failed to load client cert: %v\n", err)
@@ -36,8 +54,10 @@ func initMTLS() {
 
 	if MTLSCAStr != "" {
 		pool := x509.NewCertPool()
-		if pool.AppendCertsFromPEM([]byte(MTLSCAStr)) {
+		if pool.AppendCertsFromPEM(decodeMTLSPEM(MTLSCAStr)) {
 			mtlsCAPool = pool
+		} else if Debug {
+			fmt.Println("[!] mTLS: CA bundle contains no PEM certificates")
 		}
 	}
 }

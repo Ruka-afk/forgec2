@@ -49,6 +49,9 @@ export interface SharedState {
   ssh_password: string;
   ssh_key: string;
   ssh_host_key: string;
+  mtls_cert: string;
+  mtls_key: string;
+  mtls_ca: string;
 }
 
 export interface BinaryForm {

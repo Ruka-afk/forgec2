@@ -93,11 +93,24 @@ the failure escalation path is unchanged.
   present, `main.MTLSCAStr` as its root CA. The certificate is attached on the
   uTLS transports (`https`, `wss`, `mtls`), which is why an implant for a
   client-certificate listener is an ordinary `https` build plus those values.
-- The generate API wires URL and transport from the listener record but does
-  **not** inject the certificate yet, so such an implant is built with
-  `-ldflags "-X main.MTLSCertStr=<b64> -X main.MTLSKeyStr=<b64> -X main.MTLSCAStr=<b64>"`.
-  An implant built without a certificate is refused during the handshake — a
+- The generate form injects the material: `POST /generate/exe|dll|linux|macos`
+  accept the multipart fields `mtls_cert` / `mtls_key` / `mtls_ca` (PEM; the
+  GUI shows them on the mTLS transport, EN + ZH). The credentials are embedded
+  as base64 inside the AES-GCM config blob — the client private key never
+  appears on the `go build` argv — and they are not persisted: paste the pair
+  for every build. A config-over-wire bootstrap build keeps them too, because
+  the agent needs them to reach the initial endpoint.
+- The API boundary refuses material that could never complete a handshake:
+  a certificate without its key (or vice versa), a pair that does not parse as
+  `tls.X509KeyPair`, a CA bundle containing no PEM certificates, or any single
+  entry over 64 KiB answers `400` before any build work starts.
+- Hand-built binaries keep working:
+  `-ldflags "-X main.MTLSCertStr=<b64> -X main.MTLSKeyStr=<b64> -X main.MTLSCAStr=<b64>"`
+  (the agent accepts raw PEM as a fallback when a value is not base64). An
+  implant built without a certificate is refused during the handshake — a
   beacon cannot silently keep talking to a hardened listener.
+- Limits: the token stager and the C implant do not carry client credentials
+  yet, so point a client-certificate listener at a Go agent build.
 - Verify a listener with any TLS client that can present a certificate:
 
   ```bash
@@ -114,3 +127,6 @@ the failure escalation path is unchanged.
 - `internal/server/server_listeners.go` — extra HTTP / raw TLS listener assembly
 - `internal/server/handlers_listeners.go` — create/update validation
 - `internal/server/listener_mtls_test.go` — real-handshake tests (accepted, no certificate, foreign CA, TLS 1.3 floor, raw `tls://`)
+- `internal/payload/mtls.go` — `ValidateMTLSMaterial` (generation boundary)
+- `internal/payload/config_blob.go` — base64 PEM fields, including the bootstrap blob
+- `internal/payload/agent/transport_mtls.go` — agent-side decode + load; `transport_mtls_test.go` runs a real uTLS handshake against a server that requires a client certificate

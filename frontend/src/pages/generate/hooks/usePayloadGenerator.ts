@@ -63,6 +63,7 @@ export function usePayloadGenerator() {
     interval: "15", jitter: "30",
     ua: DEFAULT_UA, proxy: "", failover: "", crypto_key: "", beacon_key: "", profile: "",
     dns_doh_url: "", dns_dot_addr: "", ssh_user: "forgec2", ssh_password: "", ssh_key: "", ssh_host_key: "",
+    mtls_cert: "", mtls_key: "", mtls_ca: "",
   });
 
   const [forms, setForms] = useState<PayloadForms>(createDefaultForms);
@@ -200,8 +201,13 @@ export function usePayloadGenerator() {
     formData.set("crypto_key", s.crypto_key);
     formData.set("beacon_key", s.beacon_key);
     formData.set("listener_id", shared.listener_id);
+    // mTLS client credentials: only sent when the operator filled them in, so
+    // a material-free build keeps its request shape unchanged.
+    if (shared.mtls_cert) formData.set("mtls_cert", shared.mtls_cert);
+    if (shared.mtls_key) formData.set("mtls_key", shared.mtls_key);
+    if (shared.mtls_ca) formData.set("mtls_ca", shared.mtls_ca);
     if (extra) for (const [k, v] of Object.entries(extra)) formData.set(k, v);
-  }, [getSharedSettings, shared.listener_id]);
+  }, [getSharedSettings, shared.listener_id, shared.mtls_cert, shared.mtls_key, shared.mtls_ca]);
 
   const buildC2URL = useCallback(() => {
     const info = getListenerInfo(shared.listener_id);

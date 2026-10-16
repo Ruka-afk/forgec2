@@ -62,6 +62,9 @@ type binaryGenForm struct {
 	SSHPassword      string `form:"ssh_password"`
 	SSHKey           string `form:"ssh_key"`
 	SSHHostKey       string `form:"ssh_host_key"` // base64 server host public key pin
+	MTLSCert         string `form:"mtls_cert"`    // PEM client certificate (optional)
+	MTLSKey          string `form:"mtls_key"`     // PEM client private key (required with mtls_cert)
+	MTLSCA           string `form:"mtls_ca"`      // PEM CA bundle to pin the server in mTLS mode (optional)
 	PinnedCertSHA256 string `form:"pinned_cert_sha256"`
 	ExpiryDate       string `form:"expiry_date"`              // "YYYY-MM-DD"; implant auto-exits after this date
 	SelfCheck        bool   `form:"self_check"`               // embed + verify a SHA-256 self-integrity hash
@@ -114,6 +117,17 @@ func (s *Server) parseBinaryForm(c *gin.Context) (*binaryGenForm, bool) {
 			}
 			form.IconB64 = base64.StdEncoding.EncodeToString(data)
 		}
+	}
+
+	// mTLS client credentials (optional). Trim surrounding whitespace — a PEM
+	// pasted from a file carries a trailing newline — then reject material
+	// that could never complete a handshake before any build work starts.
+	form.MTLSCert = strings.TrimSpace(form.MTLSCert)
+	form.MTLSKey = strings.TrimSpace(form.MTLSKey)
+	form.MTLSCA = strings.TrimSpace(form.MTLSCA)
+	if err := payload.ValidateMTLSMaterial(form.MTLSCert, form.MTLSKey, form.MTLSCA); err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return nil, false
 	}
 
 	isP2P := form.P2PMode == "parent" || form.P2PMode == "child"
@@ -324,6 +338,9 @@ func (s *Server) buildImplantConfig(form *binaryGenForm) (payload.ImplantConfig,
 		SSHPassword:           form.SSHPassword,
 		SSHKey:                form.SSHKey,
 		SSHHostKey:            hostKey,
+		MTLSCertPEM:           form.MTLSCert,
+		MTLSKeyPEM:            form.MTLSKey,
+		MTLSCAPEM:             form.MTLSCA,
 		PinnedCertSHA256:      form.PinnedCertSHA256,
 		ExpiryDate:            form.ExpiryDate,
 		SelfCheck:             form.SelfCheck,

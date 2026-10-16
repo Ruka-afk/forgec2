@@ -16,6 +16,7 @@ import { CraftPanel } from "@/components/CraftPanel";
 import { ConfigSection } from "@/components/ConfigSection";
 import { Listener, ProfilePreset, SharedState, clampInterval, clampJitter } from "./types";
 import ListenerModal from "./ListenerModal";
+import { MtlsCertificateFields } from "./MtlsCertificateFields";
 import { FileCode2, Import, KeyRound, Lock, Network, Plus, Radio, Timer, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -259,6 +260,12 @@ export default function ConnectionPanel({
                 />
               </div>
             </div>
+          )}
+          {transport === "mtls" && (
+            <MtlsCertificateFields
+              value={{ cert: shared.mtls_cert, key: shared.mtls_key, ca: shared.mtls_ca }}
+              onChange={(v) => setShared((s) => ({ ...s, mtls_cert: v.cert, mtls_key: v.key, mtls_ca: v.ca }))}
+            />
           )}
         </div>
       </ConfigSection>
