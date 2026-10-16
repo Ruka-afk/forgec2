@@ -188,7 +188,7 @@ jobs:
       - name: Assert the task matrix is in the binary
         run: |
           status=0
-          for t in clipboard_get clipboard_set drives find portscan get_sleep_mode; do
+          for t in clipboard_get clipboard_set drives find portscan get_sleep_mode usb_enum usb_drop session_recon token_whoami; do
             if strings "$RUNNER_TEMP/cbeacon-gate.exe" | grep -q "$t"; then
               echo "ok: $t"
             else

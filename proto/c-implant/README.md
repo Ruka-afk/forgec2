@@ -15,7 +15,8 @@ built with mingw-w64. No Go toolchain, no runtime, ~660KB release binary
   suspend/resume, reboot/shutdown, window_list/window_close),
   persistence (persistence_add/list/remove: registry Run, scheduled task,
   startup folder), recon extensions (**drives**, **find**, **portscan**,
-  **clipboard_get/clipboard_set**, **get_sleep_mode**), traffic jitter
+  **clipboard_get/clipboard_set**, **get_sleep_mode**, **usb_enum**,
+  **usb_drop**, **session_recon**, **token_whoami**), traffic jitter
   camouflage, per-disguise LNK icons; unsupported types fail closed with
   `unsupported in C implant`
 - Crypto: X25519 via embedded constant-time ladder (`curve25519.c`),
@@ -95,6 +96,10 @@ argument, because cmd strips quotes from command-line arguments.
 | `clipboard_get` | the clipboard text (UTF-8) | needs an interactive desktop; without one: `cannot open the clipboard` |
 | `clipboard_set` | `clipboard set` | writes `CF_UNICODETEXT`; a locked clipboard: `clipboard set failed` |
 | `get_sleep_mode` | `sleep interval N s, jitter M%` | the C implant has no adaptive sleep modes, so it reports the active interval/jitter |
+| `usb_enum` | `=== volume enum (Windows GetDriveType) ===` then a `root`/`type`/`label`/`free`/`total` table (raw bytes) | byte-for-byte the Go agent's table and volume order (letter mask, `GetDriveType`); no removable volume is not an error |
+| `usb_drop` | `usb_drop: copied <n> bytes to <dst> hide=<true\|false>` | `path` is the source, `command` the destination (a one-arg call takes the source from `command`, destination = first removable volume), `data` may carry `hide=1`; refuses to copy the running implant (`usb_drop: refused to copy the implant executable`) and refuses a non-removable destination (`usb_drop: destination <x> is not a removable volume`); the server's two-man rule gates this type by default, so with `security.require_approval: true` it parks in `pending_approval` until approved |
+| `session_recon` | `console_session_id`/`active_window`/`idle_ms` plus `query user`, `qwinsta`, `whoami /upn`, `whoami` sections | same layout as the Go agent; a host without `query`/`qwinsta` shows the shell's own error text in that section instead of `(failed: ...)` |
+| `token_whoami` | `{"whoami":"DOMAIN\\user"}` | thread token first, process token as fallback; `(unknown)`/`(query failed)`/`(lookup failed)` fail closed like the Go agent |
 
 Every other task type the server can dispatch keeps failing closed with
 `unsupported in C implant`, so a type that lands in the C build by accident
@@ -116,8 +121,9 @@ powershell -NoProfile -File scripts\e2e-c-implant-local.ps1
 3. cross-builds the implant against the secret and runs it with `TEMP`/`TMP`
    redirected, so a developer's `%TEMP%\fc2c.dat` identity is never reused
 4. drives `scripts/e2e-c-implant.bat` once per task (shell, drives, find,
-   clipboard_set, clipboard_get, portscan, get_sleep_mode) and asserts the
-   result text
+   clipboard_set, clipboard_get, portscan, get_sleep_mode, usb_enum,
+   session_recon, token_whoami, plus two `usb_drop` refusal cases that hold on
+   any machine) and asserts the result text
 
 It exits 0 only when every assertion holds and keeps the work dir of a failed
 run; clipboard tasks count as passed when they either complete or fail closed
@@ -164,6 +170,8 @@ to already-stripped sections and high entropy.
   (tick-acceleration + 1c/<2GiB hw gate, -DSANDBOX_CHECKS=0 to strip).
   NOT full-image AES, NOT AMSI/ETW patching, NOT direct syscalls elsewhere.
 - No keylogging/webcam/mic; no SOCKS/port-forwarding yet
+- Tokens: `token_whoami` reads the current identity only; steal/make/revert
+  (and every other token operation) stay Go-only
 - Streams are beacon-paced (1 frame per beacon), not realtime
 - No malleable request transforms (plain JSON inner bodies)
 - No auto self-update; redeploy manually

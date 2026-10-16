@@ -14,6 +14,11 @@
 #   * runs it with TEMP/TMP redirected, so %TEMP%\fc2c.dat stays untouched
 #   * drives scripts/e2e-c-implant.bat once per task and asserts the output
 #
+# Task matrix: shell, drives, find, clipboard_set/get, portscan,
+# get_sleep_mode, usb_enum, session_recon, token_whoami, plus two usb_drop
+# refusal cases (the implant must refuse to copy itself, and must refuse a
+# fixed-volume destination) that hold on any machine, USB stick or not.
+#
 # Requires: go, x86_64-w64-mingw32-gcc, curl.exe, PowerShell 5.1.
 # Note: clipboard tasks need an interactive desktop; without one they must
 # fail closed and are reported as "env skip" rather than as failures.
@@ -103,8 +108,14 @@ try {
     $cfg = $cfg -replace '(?m)^(\s*)path: data/db/forgec2.db', "`${1}path: $WorkDir/data/db/forgec2.db"
     $cfg = $cfg -replace '(?m)^(\s*)beacon_key: ""', "`${1}beacon_key: `"$BeaconKey`""
     $cfg = $cfg -replace '(?m)^(\s*)default_password: ""', "`${1}default_password: `"$Password`""
+    # The two-man rule is a server-side gate with its own tests; this script
+    # drives the implant, so high-impact types (usb_drop) must reach it
+    # directly instead of parking in pending_approval (the documented
+    # single-operator lab setting; the server logs a startup warning).
+    $cfg = $cfg -replace '(?m)^(\s*)require_approval: true', "`${1}require_approval: false"
     if ($cfg -notmatch "port: $Port" -or $cfg -notmatch 'tls_enabled: false' -or
-        $cfg -notmatch 'require_tls_for_auth: false' -or $cfg -notmatch [regex]::Escape("data_dir: $WorkDir/data") -or
+        $cfg -notmatch 'require_tls_for_auth: false' -or $cfg -notmatch 'require_approval: false' -or
+        $cfg -notmatch [regex]::Escape("data_dir: $WorkDir/data") -or
         $cfg -notmatch [regex]::Escape("path: $WorkDir/data/db/forgec2.db") -or
         $cfg -notmatch [regex]::Escape($Password) -or $cfg -notmatch [regex]::Escape($BeaconKey)) {
         throw 'config rewrite did not apply cleanly - is config.example.yaml unchanged?'
@@ -187,6 +198,11 @@ x86_64-w64-mingw32-gcc -O2 -Wall -o "$WorkDir/cbeacon-e2e.exe" beacon.c crypto_c
 
     Step '7/8 run the task matrix through scripts/e2e-c-implant.bat'
     $extraJson = '"path":"' + ($WorkDir -replace '\\', '\\') + '"'
+    # usb_drop takes the source as path and the destination as command; both
+    # extras below point at files that exist. `C:` as a destination is a valid
+    # JSON command with no backslash to escape, and is never removable.
+    $selfExtra = '"path":"' + (($WorkDir + '\cbeacon-e2e.exe') -replace '\\', '\\') + '"'
+    $logExtra = '"path":"' + (($WorkDir + '\build.log') -replace '\\', '\\') + '"'
     $cases = @(
         @{ name = 'shell';          type = 'shell';          cmd = 'echo CBEACON-E2E-VERIFIED'; extra = '' },
         @{ name = 'drives';         type = 'drives';         cmd = '';                          extra = '' },
@@ -194,7 +210,12 @@ x86_64-w64-mingw32-gcc -O2 -Wall -o "$WorkDir/cbeacon-e2e.exe" beacon.c crypto_c
         @{ name = 'clipboard_set';  type = 'clipboard_set';  cmd = 'CBEACON-CLIP-MARKER';       extra = '' },
         @{ name = 'clipboard_get';  type = 'clipboard_get';  cmd = '';                          extra = '' },
         @{ name = 'portscan';       type = 'portscan';       cmd = "127.0.0.1:$Port";           extra = '' },
-        @{ name = 'get_sleep_mode'; type = 'get_sleep_mode'; cmd = '';                          extra = '' }
+        @{ name = 'get_sleep_mode'; type = 'get_sleep_mode'; cmd = '';                          extra = '' },
+        @{ name = 'usb_enum';       type = 'usb_enum';       cmd = '';                          extra = '' },
+        @{ name = 'session_recon';  type = 'session_recon';  cmd = '';                          extra = '' },
+        @{ name = 'token_whoami';   type = 'token_whoami';   cmd = '';                          extra = '' },
+        @{ name = 'usb_drop_self';  type = 'usb_drop';       cmd = '';                          extra = $selfExtra },
+        @{ name = 'usb_drop_fixed'; type = 'usb_drop';       cmd = 'C:';                        extra = $logExtra }
     )
     $outputs = @{}
     foreach ($case in $cases) {
@@ -224,6 +245,10 @@ x86_64-w64-mingw32-gcc -O2 -Wall -o "$WorkDir/cbeacon-e2e.exe" beacon.c crypto_c
             $closed = $outputs[$case.name] -match 'Error: cannot open the clipboard' -or
                       $outputs[$case.name] -match 'Error: clipboard set failed'
             Check "$($case.name) (completed or failed closed)" ($done -or $closed) $(if ($done) { '' } else { '(no usable clipboard here)' })
+        } elseif ($case.type -eq 'usb_drop') {
+            # The two usb_drop cases are refusal tests: they must fail closed
+            # with a usb_drop: reason, never "complete".
+            Check "$($case.name) failed closed" ($outputs[$case.name] -match 'Error: usb_drop: ') ''
         } else {
             Check "$($case.name) completed" ($outputs[$case.name] -match 'OK: Task completed') ''
         }
@@ -241,6 +266,15 @@ x86_64-w64-mingw32-gcc -O2 -Wall -o "$WorkDir/cbeacon-e2e.exe" beacon.c crypto_c
     }
     Check 'portscan open' ($outputs['portscan'] -match "127\.0\.0\.1:$Port open") ''
     Check 'get_sleep_mode' ($outputs['get_sleep_mode'] -match 'sleep interval 3 s') ''
+    Check 'usb_enum header' ($outputs['usb_enum'] -match '=== volume enum \(Windows GetDriveType\) ===' -and
+                            $outputs['usb_enum'] -match "root`ttype`tlabel`tfree`ttotal") ''
+    Check 'usb_enum volume row' ($outputs['usb_enum'] -match "`t[A-Z]:\\`tfixed`t") ''
+    Check 'session_recon sections' ($outputs['session_recon'] -match 'console_session_id=\d+' -and
+                                    $outputs['session_recon'] -match '--- whoami ---') ''
+    Check 'token_whoami current user' ($outputs['token_whoami'] -match '"whoami":"' -and
+                                       $outputs['token_whoami'] -match [regex]::Escape($env:USERNAME)) ''
+    Check 'usb_drop refuses the implant' ($outputs['usb_drop_self'] -match 'usb_drop: refused to copy the implant executable') ''
+    Check 'usb_drop refuses a fixed destination' ($outputs['usb_drop_fixed'] -match 'usb_drop: destination C: is not a removable volume') ''
 }
 finally {
     if ($implant -and -not $implant.HasExited) { $implant.Kill(); Write-Host '  implant stopped' }
