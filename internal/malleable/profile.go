@@ -11,8 +11,8 @@ import (
 type Profile struct {
 	Name        string     `json:"name"`
 	Description string     `json:"description,omitempty"`
-	HttpGet     HTTPGet    `json:"http_get,omitempty"`
-	HttpPost    HTTPPost   `json:"http_post,omitempty"`
+	HTTPGet     HTTPGet    `json:"http_get,omitempty"`
+	HTTPPost    HTTPPost   `json:"http_post,omitempty"`
 	HTTPConfig  HTTPConfig `json:"http_config,omitempty"`
 	Jitter      JitterCfg  `json:"jitter,omitempty"`
 }
@@ -65,16 +65,16 @@ type HTTPConfig struct {
 	XForwardedFor string            `json:"x_forwarded_for"`
 }
 
-// HttpPostOutputString serializes the http-post output transform chain into the
+// HTTPPostOutputString serializes the http-post output transform chain into the
 // over-the-wire form the agent parses ("name" or "name:value", steps separated
 // by ';'). Order matches the server's apply order; the agent reverses it on
 // decode. Returns "" when no output transforms are configured.
-func (p *Profile) HttpPostOutputString() string {
-	if p.HttpPost.Output == nil {
+func (p *Profile) HTTPPostOutputString() string {
+	if p.HTTPPost.Output == nil {
 		return ""
 	}
-	parts := make([]string, 0, len(p.HttpPost.Output.Transforms))
-	for _, t := range p.HttpPost.Output.Transforms {
+	parts := make([]string, 0, len(p.HTTPPost.Output.Transforms))
+	for _, t := range p.HTTPPost.Output.Transforms {
 		if t.Value != "" {
 			parts = append(parts, t.Type+":"+t.Value)
 		} else {
@@ -113,10 +113,10 @@ func Parse(name, profileText string) (*Profile, error) {
 			current = ""
 
 		case current == "http-get":
-			parseHTTPGetLine(&p.HttpGet, line)
+			parseHTTPGetLine(&p.HTTPGet, line)
 
 		case current == "http-post":
-			parseHTTPPostLine(&p.HttpPost, line)
+			parseHTTPPostLine(&p.HTTPPost, line)
 
 		default:
 			parseJitterLine(&p.Jitter, line)
@@ -176,7 +176,8 @@ func parseJitterLine(j *JitterCfg, line string) {
 	lower := strings.ToLower(strings.TrimSpace(line))
 	if strings.HasPrefix(lower, "jitter") {
 		val := extractWord(line)
-		fmt.Sscanf(val, "%d", &j.ContentLength)
+		// Best-effort parse: a malformed jitter value keeps the default.
+		_, _ = fmt.Sscanf(val, "%d", &j.ContentLength)
 	}
 }
 
@@ -249,14 +250,14 @@ func DefaultProfile() *Profile {
 	return &Profile{
 		Name:        "default",
 		Description: "Default ForgeC2 beacon profile",
-		HttpGet: HTTPGet{
+		HTTPGet: HTTPGet{
 			URI:  []string{"/collect", "/r/collect", "/j/collect"},
 			Verb: "GET",
 			Headers: map[string]string{
 				"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 			},
 		},
-		HttpPost: HTTPPost{
+		HTTPPost: HTTPPost{
 			URI:  []string{"/collect", "/batch"},
 			Verb: "POST",
 			Headers: map[string]string{
@@ -275,7 +276,7 @@ func MicrosoftProfile() *Profile {
 	return &Profile{
 		Name:        "microsoft",
 		Description: "Microsoft 365 telemetry simulation",
-		HttpGet: HTTPGet{
+		HTTPGet: HTTPGet{
 			URI:  []string{"/common/oauth2/token", "/login.srf", "/api/healthcheck"},
 			Verb: "GET",
 			Headers: map[string]string{
@@ -297,7 +298,7 @@ func MicrosoftProfile() *Profile {
 				},
 			},
 		},
-		HttpPost: HTTPPost{
+		HTTPPost: HTTPPost{
 			URI:  []string{"/common/oauth2/token", "/api/telemetry"},
 			Verb: "POST",
 			Headers: map[string]string{
@@ -330,7 +331,7 @@ func GoogleAnalyticsProfile() *Profile {
 	return &Profile{
 		Name:        "google_analytics",
 		Description: "Google Analytics beacon simulation",
-		HttpGet: HTTPGet{
+		HTTPGet: HTTPGet{
 			URI:  []string{"/collect", "/r/collect", "/j/collect"},
 			Verb: "GET",
 			Headers: map[string]string{
@@ -343,7 +344,7 @@ func GoogleAnalyticsProfile() *Profile {
 				},
 			},
 		},
-		HttpPost: HTTPPost{
+		HTTPPost: HTTPPost{
 			URI:  []string{"/batch", "/collect"},
 			Verb: "POST",
 			Headers: map[string]string{
@@ -363,7 +364,7 @@ func CloudflareProfile() *Profile {
 	return &Profile{
 		Name:        "cloudflare_cdn",
 		Description: "Cloudflare CDN edge request simulation",
-		HttpGet: HTTPGet{
+		HTTPGet: HTTPGet{
 			URI:  []string{"/cdn-cgi/trace", "/cdn-cgi/rum", "/cdn-cgi/performance"},
 			Verb: "GET",
 			Headers: map[string]string{
@@ -372,7 +373,7 @@ func CloudflareProfile() *Profile {
 				"CDN-Loop":         "cloudflare",
 			},
 		},
-		HttpPost: HTTPPost{
+		HTTPPost: HTTPPost{
 			URI:  []string{"/cdn-cgi/rum", "/cdn-cgi/beacon"},
 			Verb: "POST",
 			Headers: map[string]string{
@@ -388,7 +389,7 @@ func AkamaiProfile() *Profile {
 	return &Profile{
 		Name:        "akamai",
 		Description: "Akamai CDN request simulation",
-		HttpGet: HTTPGet{
+		HTTPGet: HTTPGet{
 			URI:  []string{"/akamai/collect", "/akamai/pixel"},
 			Verb: "GET",
 			Headers: map[string]string{
@@ -396,7 +397,7 @@ func AkamaiProfile() *Profile {
 				"X-Akamai-Config": "true",
 			},
 		},
-		HttpPost: HTTPPost{
+		HTTPPost: HTTPPost{
 			URI:  []string{"/akamai/beacon"},
 			Verb: "POST",
 			Headers: map[string]string{

@@ -222,7 +222,7 @@ func TestHandleTrafficProfileAutoAdapt(t *testing.T) {
 			t.Error("auto_adapt not persisted in database")
 		}
 
-		w, c = newTrafficRequest(http.MethodPost, "/api/agents/agent-1/traffic-profile/auto-adapt", "agent-1", `{"enabled":false}`)
+		_, c = newTrafficRequest(http.MethodPost, "/api/agents/agent-1/traffic-profile/auto-adapt", "agent-1", `{"enabled":false}`)
 		s.handleTrafficProfileAutoAdapt(c)
 		if err := s.db.First(&agent, "id = ?", "agent-1").Error; err != nil {
 			t.Fatalf("reload: %v", err)

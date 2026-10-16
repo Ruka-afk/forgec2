@@ -41,7 +41,7 @@ func newContractDB(t *testing.T) *gorm.DB {
 		&db.StagerToken{}, &db.Redirector{}, &db.AgentLock{},
 		&db.AIChatSession{}, &db.AIChatMessage{}, &db.ExtC2Channel{},
 		&db.UserSession{}, &db.BackupCode{}, &db.AgentStatusEvent{},
-		&db.OpsecRule{}, &db.PasswordHistory{}, &db.ApiKey{}, &db.Script{},
+		&db.OpsecRule{}, &db.PasswordHistory{}, &db.APIKey{}, &db.Script{},
 	)
 	if err != nil {
 		t.Fatalf("migrate: %v", err)

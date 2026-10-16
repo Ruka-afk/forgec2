@@ -523,10 +523,7 @@ func isWeakDefaultPassword(s string) bool {
 			hasDigit = true
 		}
 	}
-	if !(hasUpper && hasLower && hasDigit) {
-		return true
-	}
-	return false
+	return !(hasUpper && hasLower && hasDigit)
 }
 
 // EnsureStorageKeys generates any missing independent storage key

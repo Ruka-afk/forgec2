@@ -9,10 +9,8 @@ import (
 	"unsafe"
 )
 
-const (
-	logon32LogonNetwork    = 2
-	logon32ProviderDefault = 0
-)
+// trySprayAuth: logonMail uses LOGON32_LOGON_INTERACTIVE (2) and
+// LOGON32_PROVIDER_DEFAULT (0) — declared once in token_windows.go.
 
 func trySprayAuth(domain, user, password, dc string) (string, string) {
 	usernameUTF16, _ := syscall.UTF16PtrFromString(user)
@@ -24,7 +22,7 @@ func trySprayAuth(domain, user, password, dc string) (string, string) {
 		uintptr(unsafe.Pointer(usernameUTF16)),
 		uintptr(unsafe.Pointer(domainUTF16)),
 		uintptr(unsafe.Pointer(passwordUTF16)),
-		uintptr(logon32LogonNetwork),
+		uintptr(logon32LogonInteractive),
 		uintptr(logon32ProviderDefault),
 		uintptr(unsafe.Pointer(&token)),
 	)

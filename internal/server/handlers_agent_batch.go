@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -223,7 +224,6 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 	}
 
 	tasks := make([]db.Task, 0, len(uniqueIDs))
-	validAgentIDs := make([]string, 0, len(uniqueIDs))
 
 	// Phase 1 (NO lock): per-agent validation is now I/O-free for agents in
 	// the batch (the RoE gate reuses the agent load above). Doing it under
@@ -307,7 +307,6 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 			row.ApprovalExpiresAt = &exp
 		}
 		tasks = append(tasks, row)
-		validAgentIDs = append(validAgentIDs, cand.agentID)
 	}
 	s.agentPendingTasksMu.Unlock()
 
@@ -374,14 +373,17 @@ func (s *Server) handleBulkResults(c *gin.Context) {
 
 	page := 1
 	pageSize := 20
+	// Value-semantics parse: a failed or non-positive value leaves the
+	// default untouched (the previous Sscanf-with-pointer-write dance is
+	// gone, so the same inputs keep the same outcomes).
 	if p := c.Query("page"); p != "" {
-		if v, err := fmt.Sscanf(p, "%d", &page); err == nil && v > 0 {
-			// use page
+		if v, err := strconv.Atoi(strings.TrimSpace(p)); err == nil && v > 0 {
+			page = v
 		}
 	}
 	if ps := c.Query("pageSize"); ps != "" {
-		if v, err := fmt.Sscanf(ps, "%d", &pageSize); err == nil && v > 0 {
-			// use pageSize
+		if v, err := strconv.Atoi(strings.TrimSpace(ps)); err == nil && v > 0 {
+			pageSize = v
 		}
 	}
 	if page < 1 {

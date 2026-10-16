@@ -128,7 +128,7 @@ func (s *InteractiveShell) stop() {
 	}
 	s.active = false
 	if s.cmd != nil && s.cmd.Process != nil {
-		s.cmd.Process.Kill()
+		_ = s.cmd.Process.Kill()
 	}
 	s.stdin.Close()
 	s.stdout.Close()

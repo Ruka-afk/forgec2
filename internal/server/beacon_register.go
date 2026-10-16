@@ -73,7 +73,7 @@ func (s *Server) processAuthFrame(env beaconEnvelope, kind beaconFrameKind) ([]b
 
 	// Authenticate the frame MAC against the resolved key.
 	if kind == frameRegister {
-		expected := crypto.ComputeRegHMAC(regKey, env.UUID, env.IdentityPub, env.Ts, env.Seq)
+		expected := crypto.ComputeRegHMAC(regKey, env.UUID, env.IdentityPub, env.TS, env.Seq)
 		got, err := base64.StdEncoding.DecodeString(env.RegHMAC)
 		if err != nil || !hmac.Equal(expected, got) {
 			slog.Warn("Beacon registration rejected: bad reg_hmac", "agent_id", env.UUID)
@@ -90,7 +90,7 @@ func (s *Server) processAuthFrame(env beaconEnvelope, kind beaconFrameKind) ([]b
 		// an attacker who captured a plaintext authentication frame from
 		// replaying it with an inflated sequence number to burn the server-side
 		// replay window and permanently lock out the real implant.
-		expected := computeAuthMAC(regKey, env.UUID, env.ECDHPub, strconv.FormatInt(env.Ts, 10), strconv.FormatUint(env.Seq, 10))
+		expected := computeAuthMAC(regKey, env.UUID, env.ECDHPub, strconv.FormatInt(env.TS, 10), strconv.FormatUint(env.Seq, 10))
 		got, err := base64.StdEncoding.DecodeString(env.Mac)
 		if err != nil {
 			slog.Warn("Beacon handshake rejected: bad mac encoding", "agent_id", env.UUID)
@@ -276,7 +276,7 @@ func (s *Server) buildNetworkConfig(imp db.Implant, regKey []byte) (string, erro
 		// applyV2FileProfile does file IO and nested config reads.
 		if profileName != "" {
 			if profile, ok := malleable.PredefinedProfiles()[profileName]; ok {
-				nc.MalleableRespDecode = profile.HttpPostOutputString()
+				nc.MalleableRespDecode = profile.HTTPPostOutputString()
 			} else if out, _, _, ok := s.applyV2FileProfile(profileName, []byte{}); ok {
 				_ = out
 				// Reload the v2 chain as wire form for the agent.

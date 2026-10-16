@@ -23,7 +23,7 @@ var (
 
 // beaconCONTEXT is the x64 CONTEXT layout (see winnt.h). Only the control /
 // integer registers needed for stack spoofing are referenced; ContextFlags
-// selects CONTEXT_CONTROL so Get/SetThreadContext only touch SegSs, EFlags,
+// selects contextControl so Get/SetThreadContext only touch SegSs, EFlags,
 // Rsp and Rip.
 type beaconCONTEXT struct {
 	P1Home               uint64
@@ -74,7 +74,7 @@ type beaconCONTEXT struct {
 }
 
 const (
-	beaconContextControl  = 0x100001 // CONTEXT_AMD64 | CONTEXT_CONTROL
+	beaconContextControl  = 0x100001 // contextAmd64 | contextControl
 	beaconCreateSuspended = 0x00000004
 )
 

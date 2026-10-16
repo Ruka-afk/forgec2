@@ -130,7 +130,7 @@ func getVMVendorMACs() []string {
 		index               uint32
 		_type               uint32
 		dhcpEnabled         uint32
-		currentIpAddress    uintptr
+		currentIPAddress    uintptr
 		ipAddressList       ipAddressList
 		gatewayList         ipAddressList
 		dhcpServer          ipAddressList

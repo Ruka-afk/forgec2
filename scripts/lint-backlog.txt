@@ -28,6 +28,16 @@
 # both targets (win 116 / lin 64 findings removed along with their write-only
 # state), taking the whole-tree totals to 845 (win) and 569 (lin). The
 # windows number again carries the +1 CI observation headroom.
+#
+# Batch L (2026-10): errcheck divide-and-conquer (Set*Deadline + LazyProc.Call
+# config exclusions plus ~70 point fixes: session/config/crypto/plugin/
+# scripting/delivery/PE-strip and the linux transport/relay/persistence set)
+# and the staticcheck ST100 campaign (ST1003 renames incl. the dual-GOOS
+# syscall-constant family, ST1005 error strings, ST1016 receivers, S10xx and
+# SA9xxx small classes) took the totals to 361 (win) and 293 (lin). Remaining
+# debt: errcheck typed-wrapper call sites (186/147), gosec G306-style mode
+# findings, SA1019 deprecations (41/11 — syscall.Syscall6/grpc.DialContext/
+# http2.Transport, deliberate keep), S1011/S1001 one-offs.
 
-windows=846
-linux=569
+windows=362
+linux=293

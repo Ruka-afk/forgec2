@@ -411,7 +411,7 @@ func buildBeaconEnvelope(body []byte) (sendBody []byte, kind agentFrameKind, seq
 	}
 	seq = nextBeaconSeq()
 	ts := time.Now().Unix()
-	env := v2Envelope{UUID: agentUUID, Seq: seq, Ts: ts}
+	env := v2Envelope{UUID: agentUUID, Seq: seq, TS: ts}
 
 	seqMu.Lock()
 	reg := registered

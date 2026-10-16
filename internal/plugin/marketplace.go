@@ -463,10 +463,11 @@ func compareVersions(v1, v2 string) int {
 	for i := 0; i < maxLen; i++ {
 		var n1, n2 int
 		if i < len(parts1) {
-			fmt.Sscanf(parts1[i], "%d", &n1)
+			// Best-effort version-token parse: a non-numeric token keeps 0.
+			_, _ = fmt.Sscanf(parts1[i], "%d", &n1)
 		}
 		if i < len(parts2) {
-			fmt.Sscanf(parts2[i], "%d", &n2)
+			_, _ = fmt.Sscanf(parts2[i], "%d", &n2)
 		}
 		if n1 > n2 {
 			return 1

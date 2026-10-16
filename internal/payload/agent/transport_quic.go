@@ -48,7 +48,7 @@ func sendQUICBeacon(body []byte) []byte {
 		}
 		return nil
 	}
-	defer conn.CloseWithError(0, "")
+	defer func() { _ = conn.CloseWithError(0, "") }()
 
 	stream, err := conn.OpenStreamSync(ctx)
 	if err != nil {

@@ -21,7 +21,7 @@ const (
 )
 
 type systemHandleEntry struct {
-	UniqueProcessId  uint32
+	UniqueProcessID  uint32
 	CreatorBackTrace uint32
 	ObjectTypeIndex  uint8
 	HandleAttributes uint8
@@ -52,7 +52,7 @@ func runEvasionEnumCallbacks() string {
 		result.WriteString(fmt.Sprintf("[!] Potential EDR callback handles found: %d\n", len(edrHandles)))
 		for _, h := range edrHandles {
 			result.WriteString(fmt.Sprintf("    PID=%d Handle=0x%x TypeIndex=%d Access=0x%x\n",
-				h.UniqueProcessId, h.HandleValue, h.ObjectTypeIndex, h.GrantedAccess))
+				h.UniqueProcessID, h.HandleValue, h.ObjectTypeIndex, h.GrantedAccess))
 		}
 	} else {
 		result.WriteString("[*] No obvious EDR callback handles detected\n")
@@ -134,7 +134,7 @@ func enumerateEDRHandles() []systemHandleEntry {
 		// Filter for EDR processes with callback-related handles
 		if entry.ObjectTypeIndex == 6 || entry.ObjectTypeIndex == 7 || entry.ObjectTypeIndex == 11 {
 			for _, pid := range knownEdrPids {
-				if entry.UniqueProcessId == pid {
+				if entry.UniqueProcessID == pid {
 					edrHandles = append(edrHandles, *entry)
 				}
 			}
@@ -146,7 +146,7 @@ func enumerateEDRHandles() []systemHandleEntry {
 
 func getKnownEDRPIDs() []uint32 {
 	var pids []uint32
-	snap, _, _ := procCreateToolhelp32Snapshot.Call(TH32CS_SNAPPROCESS, 0)
+	snap, _, _ := procCreateToolhelp32Snapshot.Call(th32csSnapProcess, 0)
 	if snap == 0 {
 		return nil
 	}

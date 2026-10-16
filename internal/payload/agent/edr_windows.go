@@ -83,7 +83,7 @@ func DetectEDR() *EDRInfo {
 }
 
 func (e *EDRInfo) detectProcesses() {
-	snap, _, _ := procCreateToolhelp32Snapshot.Call(TH32CS_SNAPPROCESS, 0)
+	snap, _, _ := procCreateToolhelp32Snapshot.Call(th32csSnapProcess, 0)
 	if snap == 0 {
 		return
 	}

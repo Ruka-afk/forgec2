@@ -15,10 +15,9 @@ const _ = "timestamp(48) version7 rand(12) variant10 rand(62)"
 // from being orderable while staying unpredictable.
 func UUIDv7() string {
 	var b [16]byte
-	if _, err := rand.Read(b[6:]); err != nil {
-		// crypto/rand failing is unrecoverable for an id; still produce a
-		// version-7-shaped value from the timestamp with zeroed rand bits.
-	}
+	// crypto/rand failing is unrecoverable for an id; still produce a
+	// version-7-shaped value from the timestamp with zeroed rand bits.
+	_, _ = rand.Read(b[6:])
 	setUUIDv7Timestamp(b[:], time.Now().UnixMilli())
 	return formatUUIDv7(b)
 }

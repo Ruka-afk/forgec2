@@ -113,7 +113,8 @@ func parseSSHParams(input string) sshParams {
 		} else if strings.HasPrefix(part, "user=") {
 			params.user = strings.TrimPrefix(part, "user=")
 		} else if strings.HasPrefix(part, "port=") {
-			fmt.Sscanf(part, "port=%d", &params.port)
+			// Best-effort parse; failure keeps the configured default port.
+			_, _ = fmt.Sscanf(part, "port=%d", &params.port)
 		} else if strings.HasPrefix(part, "hosts=") {
 			params.hosts = strings.Split(strings.TrimPrefix(part, "hosts="), ",")
 		} else if strings.Contains(part, "@") {
@@ -123,7 +124,7 @@ func parseSSHParams(input string) sshParams {
 			rest := part[atIdx+1:]
 			if colonIdx := strings.Index(rest, ":"); colonIdx >= 0 {
 				params.hosts = append(params.hosts, rest[:colonIdx])
-				fmt.Sscanf(rest[colonIdx+1:], "%d", &params.port)
+				_, _ = fmt.Sscanf(rest[colonIdx+1:], "%d", &params.port)
 			} else {
 				params.hosts = append(params.hosts, rest)
 			}
@@ -526,7 +527,8 @@ func handleSCPUploadImpl(task Task, res *TaskResult) {
 		defer w.Close()
 		fileName := filepath.Base(remotePath)
 		fmt.Fprintf(w, "C0644 %d %s\n", len(data), fileName)
-		w.Write(data)
+		// Stream write failures surface through session.Wait's exit status below.
+		_, _ = w.Write(data)
 		fmt.Fprintf(w, "\x00")
 	}()
 

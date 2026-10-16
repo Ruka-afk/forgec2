@@ -183,8 +183,8 @@ func (s *Server) handleCampaignMitre(c *gin.Context) {
 		}
 	}
 
-	phases := make([]map[string]interface{}, 0, len(PHASE_ORDER))
-	for _, p := range PHASE_ORDER {
+	phases := make([]map[string]interface{}, 0, len(phaseOrder))
+	for _, p := range phaseOrder {
 		// A phase is only "completed" when a task of that phase actually
 		// completed; a phase with only failed/pending tasks must not be
 		// advertised as done.
@@ -526,8 +526,8 @@ func buildPhaseTimeline(tasks []db.Task) []map[string]interface{} {
 	return out
 }
 
-// PHASE_ORDER mirrors the MITRE ATT&CK kill chain used by the frontend.
-var PHASE_ORDER = []string{
+// phaseOrder mirrors the MITRE ATT&CK kill chain used by the frontend.
+var phaseOrder = []string{
 	"Reconnaissance", "Resource Development", "Initial Access", "Execution",
 	"Persistence", "Privilege Escalation", "Defense Evasion", "Credential Access",
 	"Discovery", "Lateral Movement", "Collection", "Command and Control",

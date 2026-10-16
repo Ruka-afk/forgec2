@@ -288,7 +288,9 @@ func sendDNSTCP(dnsServer, qname string) []byte {
 	if err := binary.Read(conn, binary.BigEndian, &respLen); err != nil {
 		return nil
 	}
-	if respLen == 0 || respLen > 65535 {
+	// respLen is a uint16 wire field; the > MaxUint16 half of the old
+	// comparison was statically unreachable, keep only the zero check.
+	if respLen == 0 {
 		return nil
 	}
 	respBody := make([]byte, respLen)

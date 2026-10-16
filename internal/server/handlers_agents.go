@@ -383,7 +383,7 @@ func (s *Server) handleUpdateNote(c *gin.Context) {
 			return
 		}
 	}
-	s.LogAuditRecord(c, "update_notes", "agent", id, fmt.Sprintf("notes/tags updated"), true, nil)
+	s.LogAuditRecord(c, "update_notes", "agent", id, "notes/tags updated", true, nil)
 	s.broadcastAgentDataUpdate(id, updates)
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }

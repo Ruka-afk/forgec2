@@ -289,8 +289,8 @@ func handleFind(task Task, res *TaskResult) {
 }
 
 func handleRegGet(task Task, res *TaskResult) {
-	out, err := regGet(task.Command)
-	if err != nil {
+	out, err := regGet(task.Command) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                  //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = out
@@ -298,8 +298,8 @@ func handleRegGet(task Task, res *TaskResult) {
 }
 
 func handleRegSet(task Task, res *TaskResult) {
-	err := regSet(task.Path, task.Data)
-	if err != nil {
+	err := regSet(task.Path, task.Data) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                     //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = "reg set"
@@ -307,8 +307,8 @@ func handleRegSet(task Task, res *TaskResult) {
 }
 
 func handleRegDelete(task Task, res *TaskResult) {
-	err := regDelete(task.Command)
-	if err != nil {
+	err := regDelete(task.Command) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = "reg deleted"

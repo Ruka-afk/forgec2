@@ -361,7 +361,7 @@ func checkGCPCloudSQL(accessToken, projectID string, r *CloudTokenResult) {
 			RootPassword    string `json:"rootPassword,omitempty"`
 			Settings        struct {
 				UserLabels      map[string]string `json:"userLabels,omitempty"`
-				IpConfiguration struct {
+				IPConfiguration struct {
 					PrivateNetwork string `json:"privateNetwork,omitempty"`
 				} `json:"ipConfiguration"`
 			} `json:"settings"`

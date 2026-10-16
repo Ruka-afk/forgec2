@@ -35,7 +35,7 @@ type imageDOSHeader struct {
 	eSs       uint16
 	eSp       uint16
 	eCsum     uint16
-	eIp       uint16
+	eIP       uint16
 	eCs       uint16
 	eLfarlc   uint16
 	eOvno     uint16

@@ -138,14 +138,14 @@ func (s *Server) profileBeaconPools() (uris []string, userAgents []string) {
 		}
 	}
 	if profile, ok := malleable.PredefinedProfiles()[profileName]; ok {
-		for _, u := range profile.HttpPost.URI {
+		for _, u := range profile.HTTPPost.URI {
 			addURI(u)
 		}
-		for _, u := range profile.HttpGet.URI {
+		for _, u := range profile.HTTPGet.URI {
 			addURI(u)
 		}
-		addUA(profile.HttpPost.Headers["User-Agent"])
-		addUA(profile.HttpGet.Headers["User-Agent"])
+		addUA(profile.HTTPPost.Headers["User-Agent"])
+		addUA(profile.HTTPGet.Headers["User-Agent"])
 		return uris, userAgents
 	}
 	if v2 := s.loadV2Profile(profileName); v2 != nil {
@@ -649,8 +649,8 @@ func (s *Server) v2RespDecodeWire(name string) string {
 
 func (s *Server) applyProfilePreset(c *gin.Context, body []byte, profile *malleable.Profile) {
 	// Apply output transforms
-	if profile.HttpPost.Output != nil {
-		transformed, err := profile.HttpPost.Output.Apply(body, true)
+	if profile.HTTPPost.Output != nil {
+		transformed, err := profile.HTTPPost.Output.Apply(body, true)
 		if err == nil {
 			body = transformed
 		} else {
@@ -667,11 +667,11 @@ func (s *Server) applyProfilePreset(c *gin.Context, body []byte, profile *mallea
 
 	wrapped := string(body)
 
-	for k, v := range profile.HttpPost.Headers {
+	for k, v := range profile.HTTPPost.Headers {
 		c.Header(k, v)
 	}
 
-	ct := profile.HttpPost.Headers["Content-Type"]
+	ct := profile.HTTPPost.Headers["Content-Type"]
 	if ct == "" {
 		ct = "text/plain"
 	}

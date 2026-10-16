@@ -123,10 +123,19 @@ func (e *ScriptEngine) bridgeFor(caller Caller) Bridge {
 	return e.bridge
 }
 
+// setAPIOn installs one scripting-API binding on the VM. goja only rejects it
+// when the VM is in an unreachable state, in which case the script will hit a
+// ReferenceError on that name — surface it instead of dropping silently.
+func setAPIOn(vm *goja.Runtime, name string, val any) {
+	if err := vm.Set(name, val); err != nil {
+		slog.Error("scripting: failed to register API binding", "name", name, "err", err)
+	}
+}
+
 // registerAPI installs the JavaScript API surface on the given VM. The bridge
 // calls are synchronous: on failure the script sees a thrown exception.
 func (e *ScriptEngine) registerAPI(vm *goja.Runtime, caller Caller) {
-	vm.Set("sendTask", func(call goja.FunctionCall) goja.Value {
+	setAPIOn(vm, "sendTask", func(call goja.FunctionCall) goja.Value {
 		bridge := e.bridgeFor(caller)
 		if bridge == nil {
 			panic(vm.NewGoError(errors.New("script bridge is not available")))
@@ -141,7 +150,7 @@ func (e *ScriptEngine) registerAPI(vm *goja.Runtime, caller Caller) {
 		return vm.ToValue(id)
 	})
 
-	vm.Set("getAgent", func(call goja.FunctionCall) goja.Value {
+	setAPIOn(vm, "getAgent", func(call goja.FunctionCall) goja.Value {
 		bridge := e.bridgeFor(caller)
 		if bridge == nil {
 			panic(vm.NewGoError(errors.New("script bridge is not available")))
@@ -154,7 +163,7 @@ func (e *ScriptEngine) registerAPI(vm *goja.Runtime, caller Caller) {
 		return vm.ToValue(agent)
 	})
 
-	vm.Set("listAgents", func(call goja.FunctionCall) goja.Value {
+	setAPIOn(vm, "listAgents", func(call goja.FunctionCall) goja.Value {
 		bridge := e.bridgeFor(caller)
 		if bridge == nil {
 			panic(vm.NewGoError(errors.New("script bridge is not available")))
@@ -166,7 +175,7 @@ func (e *ScriptEngine) registerAPI(vm *goja.Runtime, caller Caller) {
 		return vm.ToValue(agents)
 	})
 
-	vm.Set("httpRequest", func(call goja.FunctionCall) goja.Value {
+	setAPIOn(vm, "httpRequest", func(call goja.FunctionCall) goja.Value {
 		bridge := e.bridgeFor(caller)
 		if bridge == nil {
 			panic(vm.NewGoError(errors.New("script bridge is not available")))
@@ -205,7 +214,7 @@ func (e *ScriptEngine) registerAPI(vm *goja.Runtime, caller Caller) {
 		return vm.ToValue(res)
 	})
 
-	vm.Set("query", func(call goja.FunctionCall) goja.Value {
+	setAPIOn(vm, "query", func(call goja.FunctionCall) goja.Value {
 		bridge := e.bridgeFor(caller)
 		if bridge == nil {
 			panic(vm.NewGoError(errors.New("script bridge is not available")))
@@ -224,13 +233,13 @@ func (e *ScriptEngine) registerAPI(vm *goja.Runtime, caller Caller) {
 		return vm.ToValue(result)
 	})
 
-	vm.Set("log", func(call goja.FunctionCall) goja.Value {
+	setAPIOn(vm, "log", func(call goja.FunctionCall) goja.Value {
 		msg := call.Argument(0).String()
 		slog.Info("script", "message", msg)
 		return goja.Undefined()
 	})
 
-	vm.Set("sleep", func(call goja.FunctionCall) goja.Value {
+	setAPIOn(vm, "sleep", func(call goja.FunctionCall) goja.Value {
 		ms := call.Argument(0).ToInteger()
 		if ms > 0 && ms <= 60000 {
 			time.Sleep(time.Duration(ms) * time.Millisecond)
@@ -281,7 +290,7 @@ func (e *ScriptEngine) reparseEvents(s *LoadedScript) error {
 	}
 	vm := goja.New()
 	events := make(map[string]bool)
-	vm.Set("on", func(call goja.FunctionCall) goja.Value {
+	setAPIOn(vm, "on", func(call goja.FunctionCall) goja.Value {
 		eventType := call.Argument(0).String()
 		events[eventType] = true
 		return goja.Undefined()
@@ -380,7 +389,7 @@ func (e *ScriptEngine) executeScript(code string, scriptCtx map[string]interface
 	console.Enable(vm)
 
 	for k, v := range scriptCtx {
-		vm.Set(k, v)
+		setAPIOn(vm, k, v)
 	}
 
 	e.registerAPI(vm, caller)

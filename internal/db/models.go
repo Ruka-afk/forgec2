@@ -473,9 +473,9 @@ type Listener struct {
 }
 
 // BeforeCreate hook for UUID
-func (a *Implant) BeforeCreate(tx *gorm.DB) (err error) {
-	if a.ID == "" {
-		a.ID = uuid.New().String()
+func (i *Implant) BeforeCreate(tx *gorm.DB) (err error) {
+	if i.ID == "" {
+		i.ID = uuid.New().String()
 	}
 	return nil
 }
@@ -2003,8 +2003,8 @@ type PasswordHistory struct {
 
 func (PasswordHistory) TableName() string { return "password_history" }
 
-// ApiKey represents a programmatic API key for REST API authentication.
-type ApiKey struct {
+// APIKey represents a programmatic API key for REST API authentication.
+type APIKey struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	UserID    uint      `gorm:"index;not null" json:"user_id"`
 	Name      string    `gorm:"size:128;not null" json:"name"`
@@ -2023,4 +2023,4 @@ type ApiKey struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
-func (ApiKey) TableName() string { return "api_keys" }
+func (APIKey) TableName() string { return "api_keys" }

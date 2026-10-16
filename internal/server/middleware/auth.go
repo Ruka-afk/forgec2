@@ -417,7 +417,7 @@ func AuthRequired(database *gorm.DB) gin.HandlerFunc {
 			}
 			h := sha256.Sum256([]byte(apiKey))
 			hash := hex.EncodeToString(h[:])
-			var ak db.ApiKey
+			var ak db.APIKey
 			if database.Where("key_hash = ? AND active = ?", hash, true).First(&ak).Error == nil {
 				if ak.ExpiresAt.IsZero() || time.Now().Before(ak.ExpiresAt) {
 					var user db.User

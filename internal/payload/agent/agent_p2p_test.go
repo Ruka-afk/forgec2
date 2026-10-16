@@ -63,7 +63,9 @@ func TestP2PAuthFailsWithWrongKey(t *testing.T) {
 	if _, err := io.ReadFull(client, nonce[:]); err != nil {
 		t.Fatalf("read nonce: %v", err)
 	}
-	client.Write(make([]byte, 32)) // wrong MAC
+	if _, err := client.Write(make([]byte, 32)); err != nil { // wrong MAC
+		t.Fatalf("send bogus mac: %v", err)
+	}
 	serverOk := <-done
 	if serverOk {
 		t.Fatalf("server must reject a peer that fails the HMAC challenge")

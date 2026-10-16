@@ -129,7 +129,9 @@ func TestSessionManagerEncryptB64DecryptB64(t *testing.T) {
 	curve := ecdh.X25519()
 	agentKey, _ := curve.GenerateKey(rand.Reader)
 
-	sm.EstablishSession("agent-1", agentKey.PublicKey().Bytes())
+	if err := sm.EstablishSession("agent-1", agentKey.PublicKey().Bytes()); err != nil {
+		t.Fatal(err)
+	}
 
 	plaintext := []byte("base64 test data")
 	b64, err := sm.EncryptB64("agent-1", plaintext)
@@ -169,7 +171,9 @@ func TestSessionManagerDecryptInvalidCiphertext(t *testing.T) {
 	sm, _ := NewSessionManager()
 	curve := ecdh.X25519()
 	agentKey, _ := curve.GenerateKey(rand.Reader)
-	sm.EstablishSession("agent-1", agentKey.PublicKey().Bytes())
+	if err := sm.EstablishSession("agent-1", agentKey.PublicKey().Bytes()); err != nil {
+		t.Fatal(err)
+	}
 
 	_, err := sm.Decrypt("agent-1", []byte("short"))
 	if err == nil {
@@ -181,7 +185,9 @@ func TestSessionManagerIncrementMessageCount(t *testing.T) {
 	sm, _ := NewSessionManager()
 	curve := ecdh.X25519()
 	agentKey, _ := curve.GenerateKey(rand.Reader)
-	sm.EstablishSession("agent-1", agentKey.PublicKey().Bytes())
+	if err := sm.EstablishSession("agent-1", agentKey.PublicKey().Bytes()); err != nil {
+		t.Fatal(err)
+	}
 
 	sess := sm.GetSession("agent-1")
 	if sess.MessageCount != 0 {
@@ -332,7 +338,9 @@ func TestSessionManagerMultipleAgents(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		agentKey, _ := curve.GenerateKey(rand.Reader)
 		agentID := "agent-" + string(rune('a'+i))
-		sm.EstablishSession(agentID, agentKey.PublicKey().Bytes())
+		if err := sm.EstablishSession(agentID, agentKey.PublicKey().Bytes()); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	for i := 0; i < 10; i++ {
@@ -348,7 +356,9 @@ func TestSessionManagerConcurrentAccess(t *testing.T) {
 	sm, _ := NewSessionManager()
 	curve := ecdh.X25519()
 	agentKey, _ := curve.GenerateKey(rand.Reader)
-	sm.EstablishSession("agent-1", agentKey.PublicKey().Bytes())
+	if err := sm.EstablishSession("agent-1", agentKey.PublicKey().Bytes()); err != nil {
+		t.Fatal(err)
+	}
 
 	done := make(chan struct{})
 	for i := 0; i < 50; i++ {
@@ -420,14 +430,18 @@ func BenchmarkSessionManagerEncrypt(b *testing.B) {
 	sm, _ := NewSessionManager()
 	curve := ecdh.X25519()
 	agentKey, _ := curve.GenerateKey(rand.Reader)
-	sm.EstablishSession("bench-agent", agentKey.PublicKey().Bytes())
+	if err := sm.EstablishSession("bench-agent", agentKey.PublicKey().Bytes()); err != nil {
+		b.Fatal(err)
+	}
 
 	plaintext := make([]byte, 256)
 	rand.Read(plaintext)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		sm.Encrypt("bench-agent", plaintext)
+		if _, err := sm.Encrypt("bench-agent", plaintext); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -435,7 +449,9 @@ func BenchmarkSessionManagerDecrypt(b *testing.B) {
 	sm, _ := NewSessionManager()
 	curve := ecdh.X25519()
 	agentKey, _ := curve.GenerateKey(rand.Reader)
-	sm.EstablishSession("bench-agent", agentKey.PublicKey().Bytes())
+	if err := sm.EstablishSession("bench-agent", agentKey.PublicKey().Bytes()); err != nil {
+		b.Fatal(err)
+	}
 
 	plaintext := make([]byte, 256)
 	rand.Read(plaintext)
@@ -443,7 +459,9 @@ func BenchmarkSessionManagerDecrypt(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		sm.Decrypt("bench-agent", encrypted)
+		if _, err := sm.Decrypt("bench-agent", encrypted); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -454,6 +472,8 @@ func BenchmarkSessionManagerEstablish(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		agentKey, _ := curve.GenerateKey(rand.Reader)
-		sm.EstablishSession("bench-agent", agentKey.PublicKey().Bytes())
+		if err := sm.EstablishSession("bench-agent", agentKey.PublicKey().Bytes()); err != nil {
+			b.Fatal(err)
+		}
 	}
 }

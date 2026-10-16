@@ -402,8 +402,9 @@ func p2pHandleChild(conn net.Conn) {
 			// is not distinguishable by an un-wrapped envelope (I2). The child
 			// strips these bytes on read.
 			reply = wrapMalleableResponse(reply)
-			binary.Write(conn, binary.BigEndian, uint32(len(reply)))
-			conn.Write(reply)
+			// Peer may disconnect mid-reply; delivery is best-effort.
+			_ = binary.Write(conn, binary.BigEndian, uint32(len(reply)))
+			_, _ = conn.Write(reply)
 			return
 		}
 		time.Sleep(100 * time.Millisecond)

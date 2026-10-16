@@ -152,7 +152,8 @@ func socksReplyAgent(conn net.Conn, rep byte, atyp byte, bindAddr string) {
 	if bindAddr != "" {
 		if h, p, err := net.SplitHostPort(bindAddr); err == nil {
 			bindIP = net.ParseIP(h)
-			fmt.Sscanf(p, "%d", &bindPort)
+			// Best-effort port parse; failure keeps the default.
+			_, _ = fmt.Sscanf(p, "%d", &bindPort)
 		}
 	}
 	if bindIP == nil {
@@ -167,7 +168,7 @@ func socksReplyAgent(conn net.Conn, rep byte, atyp byte, bindAddr string) {
 		reply = append(reply, bindIP.To16()...)
 	}
 	reply = append(reply, byte(bindPort>>8), byte(bindPort))
-	conn.Write(reply)
+	_, _ = conn.Write(reply)
 }
 
 // resolveThroughSOCKS resolves a domain name through the SOCKS server
@@ -200,9 +201,9 @@ func handleSocksConn(conn net.Conn) {
 	}
 	nmethods := int(buf[1])
 	methods := make([]byte, nmethods)
-	io.ReadFull(conn, methods)
+	_, _ = io.ReadFull(conn, methods)
 	// Always accept no-auth (the tunnel itself is authenticated)
-	conn.Write([]byte{0x05, 0x00})
+	_, _ = conn.Write([]byte{0x05, 0x00})
 
 	header := make([]byte, 4)
 	if _, err := io.ReadFull(conn, header); err != nil {
@@ -265,12 +266,14 @@ func handleSocksConnect(conn net.Conn, atyp byte) {
 	// target must see EOF too, or protocols that reply only after reading
 	// EOF hang until timeout through the tunnel.
 	go func() {
-		io.Copy(target, conn)
+		// Half-duplex relay copy: the peer closing (or resetting) the socket
+		// is a normal end of transfer, not an actionable failure.
+		_, _ = io.Copy(target, conn)
 		if tc, ok := target.(*net.TCPConn); ok {
-			tc.CloseWrite()
+			_ = tc.CloseWrite()
 		}
 	}()
-	io.Copy(conn, target)
+	_, _ = io.Copy(conn, target)
 }
 
 func handleSocksBind(conn net.Conn, atyp byte) {
@@ -284,7 +287,8 @@ func handleSocksBind(conn net.Conn, atyp byte) {
 	// Extract port
 	_, portStr, _ := net.SplitHostPort(bindAddr)
 	var bindPort int
-	fmt.Sscanf(portStr, "%d", &bindPort)
+	// Best-effort port parse; failure keeps the default.
+	_, _ = fmt.Sscanf(portStr, "%d", &bindPort)
 
 	if bindPort == 0 {
 		bindPort = 0
@@ -303,7 +307,7 @@ func handleSocksBind(conn net.Conn, atyp byte) {
 	socksReplyAgent(conn, 0x00, 0x01, bindResp)
 
 	tcpLn := ln.(*net.TCPListener)
-	tcpLn.SetDeadline(time.Now().Add(60 * time.Second))
+	_ = tcpLn.SetDeadline(time.Now().Add(60 * time.Second))
 	targetConn, err := tcpLn.Accept()
 	if err != nil {
 		return
@@ -314,12 +318,13 @@ func handleSocksBind(conn net.Conn, atyp byte) {
 	socksReplyAgent(conn, 0x00, 0x01, remoteAddr)
 
 	go func() {
-		io.Copy(targetConn, conn)
+		// Same normal-close semantics as the reverse direction above.
+		_, _ = io.Copy(targetConn, conn)
 		if tc, ok := targetConn.(*net.TCPConn); ok {
-			tc.CloseWrite()
+			_ = tc.CloseWrite()
 		}
 	}()
-	io.Copy(conn, targetConn)
+	_, _ = io.Copy(conn, targetConn)
 }
 
 // handleSocksUDPAssociate implements SOCKS5 UDP ASSOCIATE (RFC 1928 §7).

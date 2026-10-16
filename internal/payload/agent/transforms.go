@@ -134,7 +134,8 @@ func agentExecTransform(data []byte, step agentTransformStep, encode bool) ([]by
 		// Format "key;offset", symmetric like the server engine.
 		key, offset := step.Value, 0
 		if i := strings.Index(key, ";"); i >= 0 {
-			fmt.Sscanf(key[i+1:], "%d", &offset)
+			// Best-effort offset parse; failure keeps the default (0).
+			_, _ = fmt.Sscanf(key[i+1:], "%d", &offset)
 			key = key[:i]
 		}
 		if len(key) == 0 {

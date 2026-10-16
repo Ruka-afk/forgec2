@@ -168,9 +168,9 @@ func checkSleepSkew() bool {
 }
 
 func checkHardwareBreakpoints() bool {
-	procGetCurrentThreadId := k32.NewProc(s(SProcGCTId))
+	procGetCurrentThreadID := k32.NewProc(s(SProcGCTId))
 	procOpenThread := k32.NewProc(s(SProcOThread))
-	tid, _, _ := procGetCurrentThreadId.Call()
+	tid, _, _ := procGetCurrentThreadID.Call()
 	hThread, _, _ := procOpenThread.Call(
 		uintptr(antidebugTHREADGetContext),
 		0,

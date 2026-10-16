@@ -358,7 +358,6 @@ func splitAIKnowledge(content string) []string {
 }
 
 func aiSearchTerms(text string) []string {
-	runes := []rune(strings.ToLower(text))
 	set := make(map[string]struct{})
 	var word strings.Builder
 	flush := func() {
@@ -368,7 +367,7 @@ func aiSearchTerms(text string) []string {
 		word.Reset()
 	}
 	var lastCJK rune
-	for _, r := range runes {
+	for _, r := range strings.ToLower(text) {
 		if unicode.Is(unicode.Han, r) || unicode.Is(unicode.Hiragana, r) || unicode.Is(unicode.Katakana, r) || unicode.Is(unicode.Hangul, r) {
 			flush()
 			if lastCJK != 0 {

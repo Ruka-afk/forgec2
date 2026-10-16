@@ -67,7 +67,7 @@ func (s *Server) handleProcessPrivescResult(c *gin.Context) {
 	}
 
 	// Format results
-	result := fmt.Sprintf("=== Privilege Escalation Check Results ===\n\n")
+	result := "=== Privilege Escalation Check Results ===\n\n"
 	result += fmt.Sprintf("OS: %s\n\n", req.OS)
 
 	result += fmt.Sprintf("Found %d potential vulnerabilities:\n", len(req.Vulnerabilities))
@@ -82,7 +82,7 @@ func (s *Server) handleProcessPrivescResult(c *gin.Context) {
 			i+1, misconfig.Severity, misconfig.Title, misconfig.Description)
 	}
 
-	result += fmt.Sprintf("\nSuggestions:\n")
+	result += "\nSuggestions:\n"
 	for i, suggestion := range req.Suggestions {
 		result += fmt.Sprintf("%d. %s\n", i+1, suggestion)
 	}

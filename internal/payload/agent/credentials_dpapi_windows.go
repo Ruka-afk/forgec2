@@ -19,7 +19,7 @@ func dpapiMasterKey() (string, error) {
 		protectDir = filepath.Join(os.Getenv("USERPROFILE"), "AppData", "Roaming", "Microsoft", "Protect")
 		entries, err = os.ReadDir(protectDir)
 		if err != nil {
-			return "", fmt.Errorf("Cannot find Protect directory: %v", err)
+			return "", fmt.Errorf("cannot find Protect directory: %v", err)
 		}
 	}
 
@@ -37,7 +37,7 @@ func dpapiMasterKey() (string, error) {
 	}
 
 	if sidDir == "" {
-		return "", fmt.Errorf("No Protect subdirectory found (SID folder)")
+		return "", fmt.Errorf("no Protect subdirectory found (SID folder)")
 	}
 
 	result := fmt.Sprintf("DPAPI MasterKey directory: %s\n", sidDir)

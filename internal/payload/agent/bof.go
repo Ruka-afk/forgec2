@@ -199,18 +199,18 @@ func (s *coffSymbol) Name(stringTable []byte) string {
 }
 
 const (
-	IMAGE_REL_AMD64_ABSOLUTE = 0x0000
-	IMAGE_REL_AMD64_ADDR64   = 0x0001
-	IMAGE_REL_AMD64_ADDR32   = 0x0002
-	IMAGE_REL_AMD64_ADDR32NB = 0x0003
-	IMAGE_REL_AMD64_REL32    = 0x0004
-	IMAGE_REL_AMD64_REL32_1  = 0x0005
-	IMAGE_REL_AMD64_REL32_2  = 0x0006
-	IMAGE_REL_AMD64_REL32_3  = 0x0007
-	IMAGE_REL_AMD64_REL32_4  = 0x0008
-	IMAGE_REL_AMD64_REL32_5  = 0x0009
-	IMAGE_REL_AMD64_SECTION  = 0x000A
-	IMAGE_REL_AMD64_SECREL   = 0x000B
+	imageRelAmd64Absolute   = 0x0000
+	imageRelAmd64Addr64     = 0x0001
+	imageRelAmd64Addr32     = 0x0002
+	imageRelAmd64Addr32Nb   = 0x0003
+	imageRelAmd64Rel32      = 0x0004
+	imageRelAmd64Rel32One   = 0x0005
+	imageRelAmd64Rel32Two   = 0x0006
+	imageRelAmd64Rel32Three = 0x0007
+	imageRelAmd64Rel32Four  = 0x0008
+	imageRelAmd64Rel32Five  = 0x0009
+	imageRelAmd64Section    = 0x000A
+	imageRelAmd64SecRel     = 0x000B
 )
 
 type coffRelocation struct {
@@ -357,7 +357,7 @@ func loadAndRunBOF(bofData []byte, args string) (uintptr, error) {
 		}
 	}
 
-	// Change executable sections to PAGE_EXECUTE_READ after data is written
+	// Change executable sections to pageExecuteRead after data is written
 	for i := range loaded {
 		if loaded[i].baseAddr == 0 {
 			continue
@@ -565,42 +565,42 @@ func loadAndRunBOF(bofData []byte, args string) (uintptr, error) {
 			}
 
 			switch rel.Type {
-			case IMAGE_REL_AMD64_ABSOLUTE:
+			case imageRelAmd64Absolute:
 				// No-op
-			case IMAGE_REL_AMD64_ADDR64:
+			case imageRelAmd64Addr64:
 				// Write full 64-bit absolute address into relocation target
 				*(*uint64)(unsafe.Pointer(targetAddr)) = uint64(symAddr)
-			case IMAGE_REL_AMD64_ADDR32:
+			case imageRelAmd64Addr32:
 				// Write 32-bit absolute address (truncated)
 				*(*uint32)(unsafe.Pointer(targetAddr)) = uint32(symAddr)
-			case IMAGE_REL_AMD64_ADDR32NB:
+			case imageRelAmd64Addr32Nb:
 				*(*uint32)(unsafe.Pointer(targetAddr)) = uint32(symAddr)
-			case IMAGE_REL_AMD64_REL32:
+			case imageRelAmd64Rel32:
 				// Write 32-bit RIP-relative offset: symAddr - targetAddr - 4
 				delta := uint64(symAddr) - uint64(targetAddr) - 4
 				*(*uint32)(unsafe.Pointer(targetAddr)) = uint32(delta)
-			case IMAGE_REL_AMD64_REL32_1:
+			case imageRelAmd64Rel32One:
 				// REL32 with 1-byte displacement adjustment
 				delta := uint64(symAddr) - uint64(targetAddr) - 5
 				*(*uint32)(unsafe.Pointer(targetAddr)) = uint32(delta)
-			case IMAGE_REL_AMD64_REL32_2:
+			case imageRelAmd64Rel32Two:
 				delta := uint64(symAddr) - uint64(targetAddr) - 6
 				*(*uint32)(unsafe.Pointer(targetAddr)) = uint32(delta)
-			case IMAGE_REL_AMD64_REL32_3:
+			case imageRelAmd64Rel32Three:
 				delta := uint64(symAddr) - uint64(targetAddr) - 7
 				*(*uint32)(unsafe.Pointer(targetAddr)) = uint32(delta)
-			case IMAGE_REL_AMD64_REL32_4:
+			case imageRelAmd64Rel32Four:
 				delta := uint64(symAddr) - uint64(targetAddr) - 8
 				*(*uint32)(unsafe.Pointer(targetAddr)) = uint32(delta)
-			case IMAGE_REL_AMD64_REL32_5:
+			case imageRelAmd64Rel32Five:
 				delta := uint64(symAddr) - uint64(targetAddr) - 9
 				*(*uint32)(unsafe.Pointer(targetAddr)) = uint32(delta)
-			case IMAGE_REL_AMD64_SECTION:
+			case imageRelAmd64Section:
 				// Write 16-bit section index (1-based)
 				if symSection >= 0 {
 					*(*uint16)(unsafe.Pointer(targetAddr)) = uint16(symSection + 1)
 				}
-			case IMAGE_REL_AMD64_SECREL:
+			case imageRelAmd64SecRel:
 				// Write 32-bit section-relative offset for TLS/SEH
 				if symSection >= 0 {
 					*(*uint32)(unsafe.Pointer(targetAddr)) = symVal

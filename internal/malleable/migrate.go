@@ -126,54 +126,54 @@ func FromLegacyProfile(p *Profile) *ProfileV2 {
 	if p.HTTPConfig.UserAgent != "" {
 		v2.UserAgent = p.HTTPConfig.UserAgent
 	}
-	for _, u := range p.HttpGet.URI {
+	for _, u := range p.HTTPGet.URI {
 		if u != "" {
 			v2.URIs = append(v2.URIs, u)
 		}
 	}
-	for _, u := range p.HttpPost.URI {
+	for _, u := range p.HTTPPost.URI {
 		if u != "" {
 			v2.URIs = append(v2.URIs, u)
 		}
 	}
-	if p.HttpGet.Verb != "" {
-		v2.Verbs = append(v2.Verbs, strings.ToUpper(p.HttpGet.Verb))
+	if p.HTTPGet.Verb != "" {
+		v2.Verbs = append(v2.Verbs, strings.ToUpper(p.HTTPGet.Verb))
 	}
-	if p.HttpPost.Verb != "" {
-		v2.Verbs = append(v2.Verbs, strings.ToUpper(p.HttpPost.Verb))
+	if p.HTTPPost.Verb != "" {
+		v2.Verbs = append(v2.Verbs, strings.ToUpper(p.HTTPPost.Verb))
 	}
-	if len(p.HttpGet.Headers) > 0 {
-		v2.Headers = p.HttpGet.Headers
+	if len(p.HTTPGet.Headers) > 0 {
+		v2.Headers = p.HTTPGet.Headers
 	}
-	if len(p.HttpPost.Headers) > 0 {
+	if len(p.HTTPPost.Headers) > 0 {
 		if v2.Headers == nil {
 			v2.Headers = map[string]string{}
 		}
-		for k, v := range p.HttpPost.Headers {
+		for k, v := range p.HTTPPost.Headers {
 			v2.Headers[k] = v
 		}
 	}
-	if p.HttpGet.Metadata != nil {
-		for _, t := range p.HttpGet.Metadata.Transforms {
+	if p.HTTPGet.Metadata != nil {
+		for _, t := range p.HTTPGet.Metadata.Transforms {
 			v2.ClientMetadata = append(v2.ClientMetadata, StepV2{Type: t.Type, Value: t.Value})
 		}
 	}
-	if p.HttpPost.ID != nil {
-		for _, t := range p.HttpPost.ID.Transforms {
+	if p.HTTPPost.ID != nil {
+		for _, t := range p.HTTPPost.ID.Transforms {
 			v2.ClientID = append(v2.ClientID, StepV2{Type: t.Type, Value: t.Value})
 		}
 	}
-	if p.HttpPost.Output != nil {
-		for _, t := range p.HttpPost.Output.Transforms {
+	if p.HTTPPost.Output != nil {
+		for _, t := range p.HTTPPost.Output.Transforms {
 			v2.ServerOutput = append(v2.ServerOutput, StepV2{Type: t.Type, Value: t.Value})
 		}
-	} else if p.HttpGet.Output != nil {
-		for _, t := range p.HttpGet.Output.Transforms {
+	} else if p.HTTPGet.Output != nil {
+		for _, t := range p.HTTPGet.Output.Transforms {
 			v2.ServerOutput = append(v2.ServerOutput, StepV2{Type: t.Type, Value: t.Value})
 		}
 	}
-	if p.HttpPost.Parameter != "" {
-		v2.Parameter = p.HttpPost.Parameter
+	if p.HTTPPost.Parameter != "" {
+		v2.Parameter = p.HTTPPost.Parameter
 	}
 	v2.ContentLengthJitter = p.Jitter.ContentLength
 	v2.JitterURI = p.Jitter.URI

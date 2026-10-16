@@ -63,7 +63,9 @@ func listenSilent(t *testing.T) net.Listener {
 			if err != nil {
 				return
 			}
-			held = append(held, c)
+			// held pins the accepted conns open for the test's lifetime; the
+			// append result is intentionally never read.
+			held = append(held, c) //nolint:staticcheck // intentional hold-open sink
 		}
 	}()
 	t.Cleanup(func() { ln.Close() })

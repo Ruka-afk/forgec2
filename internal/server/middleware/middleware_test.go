@@ -121,7 +121,9 @@ func TestCacheControl(t *testing.T) {
 			c, _ := gin.CreateTestContext(w)
 			c.Request, _ = http.NewRequest(tt.method, "/test", nil)
 			c.Writer.WriteHeader(200)
-			c.Writer.Write([]byte("test body"))
+			if _, err := c.Writer.Write([]byte("test body")); err != nil {
+				t.Fatalf("write body: %v", err)
+			}
 
 			middleware := CacheControl(tt.maxAge)
 			middleware(c)

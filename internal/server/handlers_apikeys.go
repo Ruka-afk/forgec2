@@ -108,7 +108,7 @@ func (s *Server) handleCreateAPIKey(c *gin.Context) {
 		return
 	}
 
-	apiKey := db.ApiKey{
+	apiKey := db.APIKey{
 		UserID:       userID,
 		Name:         req.Name,
 		KeyHash:      hash,
@@ -159,7 +159,7 @@ func (s *Server) handleListAPIKeys(c *gin.Context) {
 		return
 	}
 
-	var keys []db.ApiKey
+	var keys []db.APIKey
 	if err := s.db.Where("user_id = ?", userID).Order("created_at DESC").Find(&keys).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to list keys")
 		return
@@ -197,7 +197,7 @@ func (s *Server) handleRevokeAPIKey(c *gin.Context) {
 		return
 	}
 
-	var key db.ApiKey
+	var key db.APIKey
 	if err := s.db.Where("id = ? AND user_id = ?", id, userID).First(&key).Error; err != nil {
 		respondError(c, http.StatusNotFound, "API key not found")
 		return
@@ -221,7 +221,7 @@ func (s *Server) handleRotateAPIKey(c *gin.Context) {
 		return
 	}
 
-	var oldKey db.ApiKey
+	var oldKey db.APIKey
 	if err := s.db.Where("id = ? AND user_id = ?", id, userID).First(&oldKey).Error; err != nil {
 		respondError(c, http.StatusNotFound, "API key not found")
 		return
@@ -239,7 +239,7 @@ func (s *Server) handleRotateAPIKey(c *gin.Context) {
 		return
 	}
 
-	newKey := db.ApiKey{
+	newKey := db.APIKey{
 		UserID:       oldKey.UserID,
 		Name:         oldKey.Name,
 		KeyHash:      hash,

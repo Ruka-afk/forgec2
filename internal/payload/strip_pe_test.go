@@ -10,20 +10,20 @@ import (
 // stripPEArtifacts / validatePE without invoking the Go toolchain.
 func makePE(t *testing.T, machine uint16, pe32plus bool) []byte {
 	t.Helper()
-	e_lfanew := 0x80
-	buf := make([]byte, e_lfanew+0x200)
+	eLfanew := 0x80
+	buf := make([]byte, eLfanew+0x200)
 	buf[0], buf[1] = 'M', 'Z'
-	buf[0x3C] = byte(e_lfanew)
+	buf[0x3C] = byte(eLfanew)
 	buf[0x3D], buf[0x3E], buf[0x3F] = 0, 0, 0
-	buf[e_lfanew], buf[e_lfanew+1], buf[e_lfanew+2], buf[e_lfanew+3] = 'P', 'E', 0, 0
-	buf[e_lfanew+4] = byte(machine)
-	buf[e_lfanew+5] = byte(machine >> 8)
+	buf[eLfanew], buf[eLfanew+1], buf[eLfanew+2], buf[eLfanew+3] = 'P', 'E', 0, 0
+	buf[eLfanew+4] = byte(machine)
+	buf[eLfanew+5] = byte(machine >> 8)
 	magic := uint16(0x20b)
 	if !pe32plus {
 		magic = 0x10b
 	}
-	buf[e_lfanew+0x18] = byte(magic)
-	buf[e_lfanew+0x19] = byte(magic >> 8)
+	buf[eLfanew+0x18] = byte(magic)
+	buf[eLfanew+0x19] = byte(magic >> 8)
 	return buf
 }
 
@@ -72,7 +72,9 @@ func TestStripPEArtifactsKeepsPEValid(t *testing.T) {
 	if err := validatePE(p, 0x8664); err != nil {
 		t.Fatalf("precondition failed: %v", err)
 	}
-	stripPEArtifacts(p)
+	if err := stripPEArtifacts(p); err != nil {
+		t.Fatalf("stripPEArtifacts failed: %v", err)
+	}
 	if err := validatePE(p, 0x8664); err != nil {
 		t.Fatalf("stripPEArtifacts corrupted amd64 PE: %v", err)
 	}
@@ -83,7 +85,9 @@ func TestStripPEArtifactsKeepsPEValid(t *testing.T) {
 	if err := os.WriteFile(p2, makePE(t, 0x014c, false), 0644); err != nil {
 		t.Fatal(err)
 	}
-	stripPEArtifacts(p2)
+	if err := stripPEArtifacts(p2); err != nil {
+		t.Fatalf("stripPEArtifacts failed: %v", err)
+	}
 	if err := validatePE(p2, 0x014c); err != nil {
 		t.Fatalf("stripPEArtifacts corrupted 386 PE: %v", err)
 	}

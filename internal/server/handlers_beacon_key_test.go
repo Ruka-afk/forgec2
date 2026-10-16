@@ -98,10 +98,10 @@ func TestV2BeaconRegistrationAuth(t *testing.T) {
 	t.Run("stale timestamp rejected", func(t *testing.T) {
 		// Register frame with an old ts (clock skew beyond tolerance).
 		seq := agent.nextSeq()
-		oldTs := time.Now().Unix() - beaconTsTolerance - 60
+		oldTS := time.Now().Unix() - beaconTSTolerance - 60
 		idPub := agent.publicKeyB64()
-		regHMAC := base64.StdEncoding.EncodeToString(crypto.ComputeRegHMAC(agent.regKey, agentUUID, idPub, oldTs, seq))
-		body := `{"uuid":"` + agentUUID + `","seq":` + strconv.FormatUint(seq, 10) + `,"ts":` + strconv.FormatInt(oldTs, 10) + `,"ecdh_pub":"` + idPub + `","id_pub":"` + idPub + `","reg_hmac":"` + regHMAC + `"}`
+		regHMAC := base64.StdEncoding.EncodeToString(crypto.ComputeRegHMAC(agent.regKey, agentUUID, idPub, oldTS, seq))
+		body := `{"uuid":"` + agentUUID + `","seq":` + strconv.FormatUint(seq, 10) + `,"ts":` + strconv.FormatInt(oldTS, 10) + `,"ecdh_pub":"` + idPub + `","id_pub":"` + idPub + `","reg_hmac":"` + regHMAC + `"}`
 		w := v2Post(t, s, body)
 		if w.Code == http.StatusOK {
 			t.Fatalf("expected rejection for stale timestamp, got 200; body=%s", w.Body.String())

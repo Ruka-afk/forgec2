@@ -30,8 +30,8 @@ func handleLateralWMI(task Task, res *TaskResult) {
 	if len(parts) > 3 {
 		c = parts[3]
 	}
-	out, err := lateralWMI(t, u, p, c)
-	if err != nil {
+	out, err := lateralWMI(t, u, p, c) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                    //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = out
@@ -54,8 +54,8 @@ func handleLateralWinRM(task Task, res *TaskResult) {
 	if len(parts) > 3 {
 		c = parts[3]
 	}
-	out, err := lateralWinRM(t, u, p, c)
-	if err != nil {
+	out, err := lateralWinRM(t, u, p, c) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                      //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = out
@@ -78,8 +78,8 @@ func handleLateralPsexec(task Task, res *TaskResult) {
 	if len(parts) > 3 {
 		c = parts[3]
 	}
-	out, err := lateralPsexec(t, u, p, c)
-	if err != nil {
+	out, err := lateralPsexec(t, u, p, c) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                       //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = out
@@ -102,8 +102,8 @@ func handleLateralDCOM(task Task, res *TaskResult) {
 	if len(parts) > 3 {
 		c = parts[3]
 	}
-	out, err := lateralDCOM(t, u, p, c)
-	if err != nil {
+	out, err := lateralDCOM(t, u, p, c) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                     //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = out
@@ -111,8 +111,8 @@ func handleLateralDCOM(task Task, res *TaskResult) {
 }
 
 func handleLateralSCF(task Task, res *TaskResult) {
-	out, err := lateralSCF(task.Command)
-	if err != nil {
+	out, err := lateralSCF(task.Command) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                      //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = out
@@ -130,8 +130,8 @@ func handleLateralList(task Task, res *TaskResult) {
 }
 
 func handleNetScanSMB(task Task, res *TaskResult) {
-	out, err := netScanSMB(task.Command)
-	if err != nil {
+	out, err := netScanSMB(task.Command) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                      //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = out
@@ -139,8 +139,8 @@ func handleNetScanSMB(task Task, res *TaskResult) {
 }
 
 func handleNetEnumHosts(task Task, res *TaskResult) {
-	out, err := netEnumHosts(task.Command)
-	if err != nil {
+	out, err := netEnumHosts(task.Command) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                        //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = out

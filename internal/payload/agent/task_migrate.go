@@ -120,7 +120,8 @@ func launchDetached(dest string) (*exec.Cmd, error) {
 		return nil, err
 	}
 	// Release the child: once we exit it is reparented, never a zombie here.
-	go cmd.Wait()
+	// The child is re-parented on exit; nothing consumes Wait's error here.
+	go func() { _ = cmd.Wait() }()
 	return cmd, nil
 }
 

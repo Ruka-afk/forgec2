@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -155,15 +156,26 @@ func TestSaveConcurrentSafety(t *testing.T) {
 	cfg.Server.JWTSecret = "test-secret-concurrent"
 
 	done := make(chan bool, 5)
+	errMu := sync.Mutex{}
+	saveErrs := []error{}
 	for i := 0; i < 5; i++ {
 		go func() {
-			cfg.Save(path)
+			err := cfg.Save(path)
+			errMu.Lock()
+			saveErrs = append(saveErrs, err)
+			errMu.Unlock()
 			done <- true
 		}()
 	}
 
 	for i := 0; i < 5; i++ {
 		<-done
+	}
+
+	for _, err := range saveErrs {
+		if err != nil {
+			t.Errorf("Save in racy goroutine: %v", err)
+		}
 	}
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -296,7 +308,9 @@ func TestAutoGenerateJWTSecret(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Server.JWTSecret = ""
 	out, _ := yaml.Marshal(cfg)
-	os.WriteFile(path, out, 0644)
+	if err := os.WriteFile(path, out, 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
 
 	// Load should auto-generate
 	loaded, err := Load(path)
@@ -318,7 +332,9 @@ func TestAutoGenerateBeaconKey(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Server.BeaconKey = ""
 	out, _ := yaml.Marshal(cfg)
-	os.WriteFile(path, out, 0644)
+	if err := os.WriteFile(path, out, 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
 
 	loaded, err := Load(path)
 	if err != nil {
@@ -342,7 +358,9 @@ func TestPreservesExplicitBeaconKey(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Server.BeaconKey = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	out, _ := yaml.Marshal(cfg)
-	os.WriteFile(path, out, 0644)
+	if err := os.WriteFile(path, out, 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
 
 	loaded, err := Load(path)
 	if err != nil {

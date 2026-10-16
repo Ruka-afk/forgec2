@@ -36,7 +36,7 @@ const (
 type v2Envelope struct {
 	UUID        string `json:"uuid"`
 	Seq         uint64 `json:"seq,omitempty"`
-	Ts          int64  `json:"ts,omitempty"`
+	TS          int64  `json:"ts,omitempty"`
 	ECDHPub     string `json:"ecdh_pub,omitempty"`
 	CipherB64   string `json:"c,omitempty"`
 	Mac         string `json:"mac,omitempty"`

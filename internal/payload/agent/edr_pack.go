@@ -53,8 +53,8 @@ func handleBYOVDLoad(task Task, res *TaskResult) {
 		res.Error = "format: driver_path[|service_name]"
 		return
 	}
-	out, err := byovdLoadDriver(driverPath, svcName)
-	if err != nil {
+	out, err := byovdLoadDriver(driverPath, svcName) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                                  //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 		return
 	}

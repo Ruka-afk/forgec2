@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -157,9 +158,15 @@ func (a *ACMEClient) Provision(ctx context.Context) (certPEM, keyPEM []byte, err
 	keyBytes := x509.MarshalPKCS1PrivateKey(certKey)
 	keyPEM = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyBytes})
 
-	// Cache certs
-	os.WriteFile(certFile, certPEM, 0640)
-	os.WriteFile(keyFile, keyPEM, 0640)
+	// Cache certs; a cache write failure is non-fatal (the fresh cert is
+	// already being returned) but losing the cache silently costs an extra
+	// order next boot — surface it.
+	if err := os.WriteFile(certFile, certPEM, 0640); err != nil {
+		slog.Warn("acme: failed to cache certificate", "file", certFile, "err", err)
+	}
+	if err := os.WriteFile(keyFile, keyPEM, 0640); err != nil {
+		slog.Warn("acme: failed to cache key", "file", keyFile, "err", err)
+	}
 
 	return certPEM, keyPEM, nil
 }
@@ -168,7 +175,7 @@ func (a *ACMEClient) startChallengeServer(token, keyAuth string, stopCh chan str
 	mux := http.NewServeMux()
 	mux.HandleFunc("/.well-known/acme-challenge/"+token, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte(keyAuth))
+		_, _ = w.Write([]byte(keyAuth)) // client-side disconnect is not fatal for the challenge answer
 	})
 
 	srv := &http.Server{

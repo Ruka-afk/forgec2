@@ -104,8 +104,8 @@ func handleExecuteAssemblyForkRun(task Task, res *TaskResult) {
 		res.Error = "execute-assembly fork&run is Windows-only"
 		return
 	}
-	out, err := executeAssemblyForkRun(task.Data)
-	if err != nil {
+	out, err := executeAssemblyForkRun(task.Data) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                               //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = out
@@ -117,8 +117,8 @@ func handlePELoader(task Task, res *TaskResult) {
 		res.Error = "peloader is Windows-only"
 		return
 	}
-	out, err := peloaderReflective(task.Data)
-	if err != nil {
+	out, err := peloaderReflective(task.Data) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                           //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = out
@@ -132,8 +132,8 @@ func handleBOF(task Task, res *TaskResult) {
 	} else if runtime.GOOS != "windows" {
 		res.Error = "bof: Windows-only"
 	} else {
-		out, err := executeBOF(bofData, task.Command)
-		if err != nil {
+		out, err := executeBOF(bofData, task.Command) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+		if err != nil {                               //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 			res.Error = err.Error()
 		} else {
 			res.Output = out
@@ -191,8 +191,8 @@ func handleBOFInfection(task Task, res *TaskResult) {
 	}
 
 	// task.Shell holds the BOF arguments
-	out, err := executeBOF(data, task.Shell)
-	if err != nil {
+	out, err := executeBOF(data, task.Shell) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                          //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = fmt.Sprintf("bof_infection: %v", err)
 	} else {
 		res.Output = out

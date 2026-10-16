@@ -21,7 +21,9 @@ func finalizePE(outPath string, cfg ImplantConfig, goarch string) {
 	case "keep":
 		// keep original Go timestamp
 	default:
-		stripPEArtifacts(outPath)
+		if err := stripPEArtifacts(outPath); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: strip PE artifacts: %v\n", err)
+		}
 		if cfg.PETimestampMode == "random" {
 			if ts, err := GenerateTimestamp(TSRandom, ""); err == nil {
 				if data, err := os.ReadFile(outPath); err == nil {
@@ -68,42 +70,44 @@ func finalizePE(outPath string, cfg ImplantConfig, goarch string) {
 }
 
 // stripPEArtifacts removes forensic PE artifacts: timestamp, Rich Header, Debug Directory.
-func stripPEArtifacts(path string) {
+// It returns the underlying write error so a failed in-place rewrite is not
+// mistaken for a stripped artifact.
+func stripPEArtifacts(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil || len(data) < 0x100 {
-		return
+		return err
 	}
 	if data[0] != 'M' || data[1] != 'Z' {
-		return // not a PE file
+		return nil // not a PE file
 	}
-	// e_lfanew is a 32-bit little-endian offset to the PE signature. Reading
-	// only 2 bytes (as before) is wrong and, for any exe whose e_lfanew does
+	// eLfanew is a 32-bit little-endian offset to the PE signature. Reading
+	// only 2 bytes (as before) is wrong and, for any exe whose eLfanew does
 	// not fit in 16 bits, would compute a garbage offset and corrupt the file.
 	if 0x40 > len(data) {
-		return
+		return nil
 	}
-	e_lfanew := int(data[0x3C]) | int(data[0x3D])<<8 | int(data[0x3E])<<16 | int(data[0x3F])<<24
-	if e_lfanew < 0 || e_lfanew+4 >= len(data) {
-		return
+	eLfanew := int(data[0x3C]) | int(data[0x3D])<<8 | int(data[0x3E])<<16 | int(data[0x3F])<<24
+	if eLfanew < 0 || eLfanew+4 >= len(data) {
+		return nil
 	}
-	if string(data[e_lfanew:e_lfanew+4]) != "PE\x00\x00" {
-		return // malformed PE
+	if string(data[eLfanew:eLfanew+4]) != "PE\x00\x00" {
+		return nil // malformed PE
 	}
 
 	// Optional header magic selects PE32 (0x10b) vs PE32+ (0x20b); the data
 	// directory array lives at a different offset in each, so zeroing the
 	// debug directory at a hardcoded PE64 offset on a PE32 binary corrupts it.
-	if e_lfanew+0x18+2 > len(data) {
-		return
+	if eLfanew+0x18+2 > len(data) {
+		return nil
 	}
-	magic := int(data[e_lfanew+0x18]) | int(data[e_lfanew+0x19])<<8
-	dataDirBase := e_lfanew + 0x70 // PE32+ (amd64/arm64)
+	magic := int(data[eLfanew+0x18]) | int(data[eLfanew+0x19])<<8
+	dataDirBase := eLfanew + 0x70 // PE32+ (amd64/arm64)
 	if magic == 0x10b {
-		dataDirBase = e_lfanew + 0x60 // PE32 (386)
+		dataDirBase = eLfanew + 0x60 // PE32 (386)
 	}
 
 	// 1. Zero timestamp at PE+8
-	tsOffset := e_lfanew + 8
+	tsOffset := eLfanew + 8
 	if tsOffset+4 <= len(data) {
 		for i := range 4 {
 			data[tsOffset+i] = 0
@@ -113,7 +117,7 @@ func stripPEArtifacts(path string) {
 	// 2. Zero Rich Header (between DOS stub and PE signature). Search backwards
 	// from the PE signature for the "Rich" magic.
 	richStart := 0
-	for i := e_lfanew - 4; i >= 0x80; i-- {
+	for i := eLfanew - 4; i >= 0x80; i-- {
 		if data[i] == 'R' && data[i+1] == 'i' && data[i+2] == 'c' && data[i+3] == 'h' {
 			richStart = i
 			break
@@ -121,7 +125,7 @@ func stripPEArtifacts(path string) {
 	}
 	if richStart > 0 {
 		// Zero from Rich marker to PE signature
-		for i := richStart; i < e_lfanew; i++ {
+		for i := richStart; i < eLfanew; i++ {
 			data[i] = 0
 		}
 	}
@@ -135,7 +139,7 @@ func stripPEArtifacts(path string) {
 		}
 	}
 
-	os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0644)
 }
 
 // windowsMachine maps the requested architecture to the PE Machine field so we
@@ -199,14 +203,14 @@ func validatePE(path string, machine uint16) error {
 	if 0x40 > len(data) {
 		return fmt.Errorf("truncated PE")
 	}
-	e_lfanew := int(data[0x3C]) | int(data[0x3D])<<8 | int(data[0x3E])<<16 | int(data[0x3F])<<24
-	if e_lfanew < 0 || e_lfanew+4 >= len(data) || string(data[e_lfanew:e_lfanew+4]) != "PE\x00\x00" {
+	eLfanew := int(data[0x3C]) | int(data[0x3D])<<8 | int(data[0x3E])<<16 | int(data[0x3F])<<24
+	if eLfanew < 0 || eLfanew+4 >= len(data) || string(data[eLfanew:eLfanew+4]) != "PE\x00\x00" {
 		return fmt.Errorf("missing PE signature")
 	}
-	if e_lfanew+4+2 > len(data) {
+	if eLfanew+4+2 > len(data) {
 		return fmt.Errorf("truncated COFF header")
 	}
-	got := uint16(data[e_lfanew+4]) | uint16(data[e_lfanew+5])<<8
+	got := uint16(data[eLfanew+4]) | uint16(data[eLfanew+5])<<8
 	if got != machine {
 		return fmt.Errorf("unexpected PE machine 0x%04x, wanted 0x%04x", got, machine)
 	}

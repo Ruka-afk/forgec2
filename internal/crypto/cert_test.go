@@ -44,7 +44,9 @@ func TestGenerateSelfSignedCertSkipExisting(t *testing.T) {
 	}
 
 	// Modify the cert file
-	os.WriteFile(certPath, []byte("modified"), 0644)
+	if err := os.WriteFile(certPath, []byte("modified"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	// Should NOT regenerate since files exist
 	err = GenerateSelfSignedCert(certPath, keyPath)

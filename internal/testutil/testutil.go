@@ -41,7 +41,7 @@ func SetupTestDB(t testing.TB) *gorm.DB {
 		&db.StagerToken{}, &db.Redirector{}, &db.AgentLock{},
 		&db.AIChatSession{}, &db.AIChatMessage{}, &db.ExtC2Channel{},
 		&db.UserSession{}, &db.BackupCode{}, &db.OpsecRule{},
-		&db.PasswordHistory{}, &db.ApiKey{}, &db.Script{},
+		&db.PasswordHistory{}, &db.APIKey{}, &db.Script{},
 		&db.RegSecret{}, &db.KillSwitch{}, &db.Tenant{}, &db.AgentStatusEvent{},
 		&db.SIEMRule{}, &db.CommandMacro{}, &db.MacroRun{},
 	)

@@ -24,8 +24,8 @@ func handleTunStart(task Task, res *TaskResult) {
 		return
 	}
 	tunMu.Unlock()
-	msg, err := startAgentTUN(cidr)
-	if err != nil {
+	msg, err := startAgentTUN(cidr) //nolint:staticcheck // cross-GOOS dispatch: linux TUN stubs always error
+	if err != nil {                 //nolint:staticcheck // dual-GOOS dispatch: the other GOOS's stub makes this branch statically dead
 		res.Error = err.Error()
 		return
 	}

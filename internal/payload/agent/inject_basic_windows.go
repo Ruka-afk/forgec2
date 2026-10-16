@@ -29,7 +29,7 @@ func doQueueUserAPC(hProc uintptr, pid uint32, sc []byte) error {
 		return err
 	}
 
-	snap, _, _ := procCreateToolhelp32Snapshot.Call(TH32CS_SNAPTHREAD, 0)
+	snap, _, _ := procCreateToolhelp32Snapshot.Call(th32csSnapThread, 0)
 	if snap == 0 {
 		return fmt.Errorf("thread snapshot failed")
 	}
@@ -40,7 +40,7 @@ func doQueueUserAPC(hProc uintptr, pid uint32, sc []byte) error {
 	ret, _, _ := procThread32First.Call(snap, uintptr(unsafe.Pointer(&te)))
 	for ret != 0 {
 		if te.th32OwnerProcessID == pid {
-			hThread, _, _ := procOpenThread.Call(THREAD_SUSPEND_RESUME|0x0010, 0, uintptr(te.th32ThreadID))
+			hThread, _, _ := procOpenThread.Call(threadSuspendResume|0x0010, 0, uintptr(te.th32ThreadID))
 			if hThread != 0 {
 				queued, _, _ := procQueueUserAPC.Call(addr, hThread, 0)
 				procCloseHandle.Call(hThread)

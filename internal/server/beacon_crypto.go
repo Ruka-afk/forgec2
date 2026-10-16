@@ -383,8 +383,8 @@ func (s *Server) decodeBeaconEnvelope(raw []byte) (envelope beaconEnvelope, req 
 
 	// Timestamp window: reject stale or clock-skewed frames.
 	now := time.Now().Unix()
-	if envelope.Ts == 0 || now-envelope.Ts > beaconTsTolerance || envelope.Ts-now > beaconTsTolerance {
-		slog.Warn("Beacon rejected: timestamp outside tolerance", "agent_id", envelope.UUID, "ts", envelope.Ts)
+	if envelope.TS == 0 || now-envelope.TS > beaconTSTolerance || envelope.TS-now > beaconTSTolerance {
+		slog.Warn("Beacon rejected: timestamp outside tolerance", "agent_id", envelope.UUID, "ts", envelope.TS)
 		return beaconEnvelope{}, beaconRequest{}, frameRejected
 	}
 

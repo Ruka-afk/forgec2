@@ -163,7 +163,9 @@ func sendSSHBeacon(body []byte) []byte {
 			continue
 		}
 
-		stdin.Write(body)
+		// Input delivery is best-effort; the remote exit status carries the
+		// outcome for the caller below.
+		_, _ = stdin.Write(body)
 		stdin.Close()
 
 		type sshReadResult struct {
@@ -187,7 +189,7 @@ func sendSSHBeacon(body []byte) []byte {
 			client.Close()
 			return nil
 		}
-		session.Wait()
+		_ = session.Wait()
 		session.Close()
 		client.Close()
 

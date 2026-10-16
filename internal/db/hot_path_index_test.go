@@ -164,7 +164,7 @@ func hotPathProbes() []hotPathProbe {
 		},
 		{
 			index: "idx_api_keys_user_created", table: "api_keys",
-			creates: []interface{}{&ApiKey{}}, pre: nil,
+			creates: []interface{}{&APIKey{}}, pre: nil,
 			// handlers_apikeys.go:163 — a user's API keys, newest first.
 			query:  "SELECT * FROM api_keys WHERE user_id = 1 ORDER BY created_at DESC",
 			before: "USE TEMP B-TREE FOR ORDER BY",

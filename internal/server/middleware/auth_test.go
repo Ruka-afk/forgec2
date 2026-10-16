@@ -130,7 +130,9 @@ func TestAuthRequired(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
 	}
-	testDB.AutoMigrate(&db.User{}, &db.UserSession{})
+	if err := testDB.AutoMigrate(&db.User{}, &db.UserSession{}); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
 
 	t.Run("no cookie", func(t *testing.T) {
 		w := httptest.NewRecorder()

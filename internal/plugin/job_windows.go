@@ -42,7 +42,7 @@ func newWindowsJob(memoryLimitMB uint32) (*windowsJob, error) {
 		uintptr(unsafe.Pointer(&info)),
 		uint32(unsafe.Sizeof(info)),
 	); err != nil {
-		windows.CloseHandle(handle)
+		_ = windows.CloseHandle(handle)
 		return nil, err
 	}
 	return &windowsJob{handle: handle}, nil
@@ -55,7 +55,7 @@ func (j *windowsJob) assign(process windows.Handle) error {
 // release closes the job handle; with KILL_ON_JOB_CLOSE this terminates any
 // process still running inside the job (orphaned children included).
 func (j *windowsJob) release() {
-	windows.CloseHandle(j.handle)
+	_ = windows.CloseHandle(j.handle) // best-effort: nothing left to do on failure
 }
 
 // processGuard attaches a started plugin process to a job object so the whole
@@ -76,7 +76,7 @@ func attachProcessGuard(p *os.Process) (*processGuard, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer windows.CloseHandle(h)
+	defer func() { _ = windows.CloseHandle(h) }()
 	job, err := newWindowsJob(pluginProcessMemoryMB)
 	if err != nil {
 		return nil, err

@@ -237,8 +237,8 @@ func (s *Server) handleMitrePhases(c *gin.Context) {
 		}
 	}
 
-	phases := make([]map[string]interface{}, 0, len(PHASE_ORDER))
-	for _, p := range PHASE_ORDER {
+	phases := make([]map[string]interface{}, 0, len(phaseOrder))
+	for _, p := range phaseOrder {
 		covered := 0
 		if set, ok := phaseCampaigns[p]; ok {
 			covered = len(set)

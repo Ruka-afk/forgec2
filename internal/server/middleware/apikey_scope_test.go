@@ -32,7 +32,7 @@ func TestScopedKeyEnforcement(t *testing.T) {
 	if err := InitJWTSecret(cfg, ""); err != nil {
 		t.Fatalf("InitJWTSecret: %v", err)
 	}
-	database.Create(&db.ApiKey{
+	database.Create(&db.APIKey{
 		KeyHash:      sha256Of("scoped-key-1"),
 		Prefix:       "scoped",
 		UserID:       1,
@@ -40,7 +40,7 @@ func TestScopedKeyEnforcement(t *testing.T) {
 		Scopes:       "agents.read,tasks.read",
 		AllowedCIDRs: "10.0.0.0/8",
 	})
-	database.Create(&db.ApiKey{
+	database.Create(&db.APIKey{
 		KeyHash: sha256Of("full-key-1"),
 		Prefix:  "full",
 		UserID:  1,

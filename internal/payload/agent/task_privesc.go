@@ -13,9 +13,7 @@ import (
 
 func handlePrivescCheck(task Task, res *TaskResult) {
 	checkType := strings.TrimSpace(task.Command)
-	if strings.HasPrefix(checkType, "privesc_check:") {
-		checkType = strings.TrimPrefix(checkType, "privesc_check:")
-	}
+	checkType = strings.TrimPrefix(checkType, "privesc_check:")
 	if checkType == "" {
 		checkType = "all"
 	}

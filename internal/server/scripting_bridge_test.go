@@ -115,7 +115,7 @@ func TestScriptingBridgeHTTPRequestSSRF(t *testing.T) {
 		}
 	}
 
-	if _, err := b.HTTPRequest(admin, "GET", "https://example.com", nil, "", 500); err == nil {
-		// unreachable network in CI is fine — the timeout cap is what matters here
-	}
+	// Unreachable network in CI is fine — the point of this call is the
+	// timeout cap path, not a successful response.
+	b.HTTPRequest(admin, "GET", "https://example.com", nil, "", 500)
 }

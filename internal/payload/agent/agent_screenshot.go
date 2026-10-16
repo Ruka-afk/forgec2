@@ -46,7 +46,8 @@ func sendScreenStreamError(msg string) {
 		httpReq.Header.Set("User-Agent", getActiveUserAgentFromConfig())
 		resp, err := client.Do(httpReq)
 		if err == nil {
-			io.Copy(io.Discard, resp.Body)
+			// Drain for conn reuse; a read error here is normal peer behavior.
+			_, _ = io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
 		}
 	}
@@ -100,7 +101,8 @@ func sendScreenFrame(data []byte) {
 		httpReq.Header.Set("User-Agent", getActiveUserAgentFromConfig())
 		resp, err := client.Do(httpReq)
 		if err == nil {
-			io.Copy(io.Discard, resp.Body)
+			// Drain for conn reuse; a read error here is normal peer behavior.
+			_, _ = io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
 		}
 	}

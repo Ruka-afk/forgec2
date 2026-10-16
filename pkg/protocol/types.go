@@ -22,7 +22,7 @@ type BeaconRequest struct {
 	ProtocolVersion uint              `json:"pv,omitempty"`
 	AgentVersion    string            `json:"av,omitempty"`
 	Seq             uint64            `json:"seq,omitempty"`
-	Ts              int64             `json:"ts,omitempty"`
+	TS              int64             `json:"ts,omitempty"`
 	Info            map[string]string `json:"info,omitempty"`
 	Results         []TaskResult      `json:"results,omitempty"`
 	ResultIDs       []string          `json:"result_ids,omitempty"`

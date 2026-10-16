@@ -509,7 +509,11 @@ func (m *Manager) Unregister(name string) error {
 	m.mu.Lock()
 	pluginDir := ""
 	if p, ok := m.plugins[name]; ok {
-		p.Shutdown()
+		// The plugin is being torn down either way; surface a slow/hung
+		// shutdown instead of dropping it on the floor.
+		if err := p.Shutdown(); err != nil {
+			slog.Warn("plugin shutdown error during unregister", "plugin", name, "err", err)
+		}
 		if ep, ok := p.(*externalPlugin); ok {
 			pluginDir = ep.dir
 		}

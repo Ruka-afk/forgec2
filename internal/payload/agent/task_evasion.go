@@ -128,8 +128,8 @@ func handleTokenListProcs(task Task, res *TaskResult) {
 		res.Error = "token ops only on Windows"
 		return
 	}
-	procs, err := tokenListProcesses()
-	if err != nil {
+	procs, err := tokenListProcesses() //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                    //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		data, _ := json.Marshal(procs)
@@ -148,8 +148,8 @@ func handleTokenSteal(task Task, res *TaskResult) {
 		res.Error = fmt.Sprintf("invalid pid: %v", err)
 		return
 	}
-	dom, user, integ, err := tokenSteal(uint32(pid))
-	if err != nil {
+	dom, user, integ, err := tokenSteal(uint32(pid)) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                                  //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		m := map[string]string{
@@ -172,8 +172,8 @@ func handleTokenMake(task Task, res *TaskResult) {
 	domUser := task.Command
 	password := task.Shell
 	logonType := task.Path
-	dom, user, integ, err := tokenMake(domUser, password, logonType)
-	if err != nil {
+	dom, user, integ, err := tokenMake(domUser, password, logonType) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                                                  //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		m := map[string]string{
@@ -193,7 +193,7 @@ func handleTokenRevert(task Task, res *TaskResult) {
 		res.Error = "token ops only on Windows"
 		return
 	}
-	if err := tokenRevert(); err != nil {
+	if err := tokenRevert(); err != nil { //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		whoami := getCurrentTokenUser()

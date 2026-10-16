@@ -289,7 +289,7 @@ func (s *Server) handleDeleteUser(c *gin.Context) {
 			slog.Error("Failed to clean up backup codes", "user_id", user.ID, "err", err)
 			return err
 		}
-		if err := tx.Where("user_id = ?", user.ID).Delete(&db.ApiKey{}).Error; err != nil {
+		if err := tx.Where("user_id = ?", user.ID).Delete(&db.APIKey{}).Error; err != nil {
 			slog.Error("Failed to clean up API keys", "user_id", user.ID, "err", err)
 			return err
 		}

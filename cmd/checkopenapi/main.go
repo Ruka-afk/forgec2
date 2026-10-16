@@ -531,9 +531,7 @@ func joinRoute(prefix, path string) string {
 		prefix = "/" + prefix
 	}
 	// Gin joins group + relative; Group("/") + "/agents" => "/agents"
-	if strings.HasSuffix(prefix, "/") {
-		prefix = strings.TrimSuffix(prefix, "/")
-	}
+	prefix = strings.TrimSuffix(prefix, "/")
 	if path == "/" {
 		if prefix == "" {
 			return "/"

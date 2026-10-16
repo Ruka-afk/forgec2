@@ -175,18 +175,18 @@ $procs = Get-Process | Where-Object { $names -contains $_.ProcessName.ToLower() 
 	}
 	var procSingle struct {
 		ProcessName any `json:"ProcessName"`
-		Id          any `json:"Id"`
+		ID          any `json:"ID"`
 	}
 	if jerr := json.Unmarshal(parsed.EdrProcs, &procSingle); jerr == nil && procSingle.ProcessName != nil {
-		appendProc(procSingle.ProcessName, procSingle.Id)
+		appendProc(procSingle.ProcessName, procSingle.ID)
 	} else {
 		var procs []struct {
 			ProcessName any `json:"ProcessName"`
-			Id          any `json:"Id"`
+			ID          any `json:"ID"`
 		}
 		if jerr := json.Unmarshal(parsed.EdrProcs, &procs); jerr == nil {
 			for _, p := range procs {
-				appendProc(p.ProcessName, p.Id)
+				appendProc(p.ProcessName, p.ID)
 			}
 		}
 	}

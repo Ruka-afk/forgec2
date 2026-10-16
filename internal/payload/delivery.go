@@ -75,7 +75,7 @@ func BuildCMDLnk(command string) ([]byte, error) {
 	buf.Write(hdr)
 
 	// IDList: size prefix + items + terminal 0
-	binary.Write(&buf, binary.LittleEndian, uint16(len(idlist)+2))
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(len(idlist)+2)) // bytes.Buffer cannot fail
 	buf.Write(idlist)
 
 	// StringData: Name, RelativePath, Arguments (each is uint16 char-count + utf16)
@@ -86,7 +86,7 @@ func BuildCMDLnk(command string) ([]byte, error) {
 	_ = rel
 
 	// ExtraData terminal block
-	binary.Write(&buf, binary.LittleEndian, uint32(0))
+	_ = binary.Write(&buf, binary.LittleEndian, uint32(0)) // buffer never fails
 	return buf.Bytes(), nil
 }
 
@@ -97,7 +97,7 @@ func writeLnkString(buf *bytes.Buffer, s string) {
 	if n < 0 {
 		n = 0
 	}
-	binary.Write(buf, binary.LittleEndian, uint16(n))
+	_ = binary.Write(buf, binary.LittleEndian, uint16(n)) // buffer never fails
 	if n > 0 {
 		buf.Write(u[:n*2])
 	}
@@ -162,7 +162,7 @@ func BuildLnkForExeWithIcon(exeFile string, iconPath string) ([]byte, error) {
 	binary.LittleEndian.PutUint32(hdr[52:56], 0)
 	hdr[60] = 7 // SW_SHOWMINNOACTIVE
 	buf.Write(hdr)
-	binary.Write(&buf, binary.LittleEndian, uint16(2))
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(2)) // buffer never fails
 	buf.Write([]byte{0x00, 0x00})
 	// StringData in spec order: Name, RelativePath, IconLocation.
 	// (No WorkingDir/Arguments are present, so nothing else is written.)
@@ -176,7 +176,7 @@ func BuildLnkForExeWithIcon(exeFile string, iconPath string) ([]byte, error) {
 	if iconPath != "" {
 		writeLnkString(&buf, iconPath)
 	}
-	binary.Write(&buf, binary.LittleEndian, uint32(0))
+	_ = binary.Write(&buf, binary.LittleEndian, uint32(0)) // buffer never fails
 	return buf.Bytes(), nil
 }
 

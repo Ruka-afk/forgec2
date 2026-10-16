@@ -121,7 +121,7 @@ func (sd *SandboxDetector) checkVMMAC() bool {
 		index               uint32
 		_type               uint32
 		dhcpEnabled         uint32
-		currentIpAddress    uintptr
+		currentIPAddress    uintptr
 		ipAddressList       ipAddressList
 		gatewayList         ipAddressList
 		dhcpServer          ipAddressList
@@ -251,7 +251,7 @@ func (sd *SandboxDetector) checkVMMACEnhanced() bool {
 		index               uint32
 		_type               uint32
 		dhcpEnabled         uint32
-		currentIpAddress    uintptr
+		currentIPAddress    uintptr
 		ipAddressList       ipAddressList
 		gatewayList         ipAddressList
 		dhcpServer          ipAddressList
@@ -348,7 +348,7 @@ func (sd *SandboxDetector) checkHardwareBreakpoints() bool {
 	ntdll := syscall.NewLazyDLL("ntdll.dll")
 	procNtQueryInformationThread := ntdll.NewProc("NtQueryInformationThread")
 
-	// CONTEXT_DEBUG_REGISTERS = 0x00000010 for x64
+	// contextDebugRegisters = 0x00000010 for x64
 	const contextDebugRegisters = 0x00000010
 
 	type context struct {

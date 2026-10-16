@@ -94,9 +94,7 @@ func screenTriggerLoop(taskID uint, match string, intervalSec int) {
 		} else {
 			lastTitle = ""
 		}
-		select {
-		case <-tick.C:
-		}
+		<-tick.C
 		if atomic.LoadInt32(&screenTriggering) != 1 {
 			return
 		}

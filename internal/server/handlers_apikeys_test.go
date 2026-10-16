@@ -65,7 +65,7 @@ func TestCreateAPIKeyValidation(t *testing.T) {
 	if !strings.Contains(w.Body.String(), "203.0.113.7/32") {
 		t.Fatalf("CIDR not normalized in response: %s", w.Body.String())
 	}
-	var stored db.ApiKey
+	var stored db.APIKey
 	if err := s.db.Where("name = ?", "scoped-ok").First(&stored).Error; err != nil {
 		t.Fatalf("reload: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestListAPIKeysFlagsLegacy(t *testing.T) {
 	if err := s.db.Create(&owner).Error; err != nil {
 		t.Fatalf("seed owner: %v", err)
 	}
-	seed := []db.ApiKey{
+	seed := []db.APIKey{
 		{UserID: owner.ID, Name: "legacy", KeyHash: "h1", Prefix: "fc2_legacy", Scopes: "", AllowedCIDRs: "", Active: true},
 		{UserID: owner.ID, Name: "scoped", KeyHash: "h2", Prefix: "fc2_scoped", Scopes: "agents.read", AllowedCIDRs: "10.0.0.0/8", Active: true},
 	}

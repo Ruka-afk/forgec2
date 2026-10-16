@@ -85,15 +85,15 @@ func deleteObject(obj uintptr) {
 }
 
 func getVirtualScreen() (x, y, w, h int32) {
-	x = getSystemMetrics(SM_XVIRTUALSCREEN)
-	y = getSystemMetrics(SM_YVIRTUALSCREEN)
-	w = getSystemMetrics(SM_CXVIRTUALSCREEN)
-	h = getSystemMetrics(SM_CYVIRTUALSCREEN)
+	x = getSystemMetrics(smXVirtualScreen)
+	y = getSystemMetrics(smYVirtualScreen)
+	w = getSystemMetrics(smCxVirtualScreen)
+	h = getSystemMetrics(smCyVirtualScreen)
 	if w <= 0 {
-		w = getSystemMetrics(SM_CXSCREEN)
+		w = getSystemMetrics(smCxScreen)
 	}
 	if h <= 0 {
-		h = getSystemMetrics(SM_CYSCREEN)
+		h = getSystemMetrics(smCyScreen)
 	}
 	return
 }
@@ -155,11 +155,11 @@ func captureScreenRGBA() (*image.RGBA, error) {
 	bi.bmiHeader.biHeight = -h
 	bi.bmiHeader.biPlanes = 1
 	bi.bmiHeader.biBitCount = 32
-	bi.bmiHeader.biCompression = BI_RGB
+	bi.bmiHeader.biCompression = biRGB
 
 	pixBuf := make([]byte, int64(w)*int64(h)*4)
 
-	lines := getDIBits(hdcMem, hbm, 0, h, unsafe.Pointer(&pixBuf[0]), &bi, DIB_RGB_COLORS)
+	lines := getDIBits(hdcMem, hbm, 0, h, unsafe.Pointer(&pixBuf[0]), &bi, dibRGBColors)
 	if lines <= 0 {
 		return nil, fmt.Errorf("GetDIBits returned %d", lines)
 	}
@@ -294,7 +294,7 @@ func clipboardGetWindows() (string, error) {
 	}
 	defer procCloseClipboard.Call()
 
-	h, _, _ := procGetClipboardData.Call(CF_TEXT)
+	h, _, _ := procGetClipboardData.Call(cfText)
 	if h == 0 {
 		return "", fmt.Errorf("get clipboard data failed (maybe not text)")
 	}
@@ -305,7 +305,7 @@ func clipboardGetWindows() (string, error) {
 	}
 	defer procGlobalUnlock.Call(h)
 
-	// Cast clipboard global memory handle to byte slice for CF_TEXT read.
+	// Cast clipboard global memory handle to byte slice for cfText read.
 	// Use the actual allocation size from GlobalSize — a fixed 1MB view would
 	// read past the allocation into adjacent heap memory on smaller clips.
 	size, _, _ := procGlobalSize.Call(h)
@@ -313,7 +313,7 @@ func clipboardGetWindows() (string, error) {
 		return "", fmt.Errorf("global size failed")
 	}
 	buf := (*[1 << 20]byte)(unsafe.Pointer(ptr))[:size]
-	// CF_TEXT is NUL-terminated; return only up to the terminator. Returning
+	// cfText is NUL-terminated; return only up to the terminator. Returning
 	// the whole buffer would also leak the uninitialized bytes that follow the
 	// string within the allocation.
 	n := size
@@ -336,7 +336,7 @@ func clipboardSetWindows(data string) error {
 	procEmptyClipboard.Call()
 
 	size := len(data) + 1
-	hMem, _, _ := procGlobalAlloc.Call(GMEM_MOVEABLE, uintptr(size))
+	hMem, _, _ := procGlobalAlloc.Call(gmemMoveable, uintptr(size))
 	if hMem == 0 {
 		return fmt.Errorf("global alloc failed")
 	}
@@ -354,6 +354,6 @@ func clipboardSetWindows(data string) error {
 		procGlobalUnlock.Call(hMem)
 	}
 
-	procSetClipboardData.Call(CF_TEXT, hMem)
+	procSetClipboardData.Call(cfText, hMem)
 	return nil
 }

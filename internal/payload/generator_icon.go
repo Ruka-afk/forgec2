@@ -153,7 +153,6 @@ func injectIconResource(tmpDir string, cfg ImplantConfig) error {
 	}
 	// Prepare resource set early for VersionInfo even if icon is missing
 	rs := &winres.ResourceSet{}
-	hasIcon := len(iconData) > 0
 	// VersionInfo: honor FileDescription / CompanyName if supplied; otherwise derive from disguise with realistic version numbers
 	if cfg.FileDescription != "" || cfg.CompanyName != "" || disguise != "" {
 		vi := version.Info{}
@@ -203,10 +202,8 @@ func injectIconResource(tmpDir string, cfg ImplantConfig) error {
 		setVer(version.OriginalFilename, orig)
 		setVer(version.InternalName, fd)
 		rs.SetVersionInfo(vi)
-		// If we have no icon but have VersionInfo, we still need to emit rsrc.syso
-		if !hasIcon {
-			// No icon to embed, but VersionInfo will be written below
-		}
+		// Icon-less builds still emit an rsrc.syso carrying VersionInfo (set
+		// above); no icon entry is needed when there is nothing to embed.
 	}
 	// Optional manifest for blend mode
 	if cfg.PEManifestMode == "blend" {

@@ -1431,7 +1431,7 @@ func adcsRequest(template string) (string, error) {
 	return "", fmt.Errorf("AD CS certificate request is Windows-only")
 }
 func shadowCreds(target string) (string, error) {
-	return "", fmt.Errorf("Shadow Credentials is Windows-only")
+	return "", fmt.Errorf("shadow credentials are Windows-only")
 }
 func ldapQuery(filter string) (string, error) { return "", fmt.Errorf("LDAP queries are Windows-only") }
 func ldapUsers() (string, error)              { return "", fmt.Errorf("LDAP queries are Windows-only") }

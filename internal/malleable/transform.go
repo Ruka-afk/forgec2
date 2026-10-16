@@ -209,7 +209,8 @@ func applyMask(data []byte, param string) []byte {
 	offset := 0
 	if len(parts) == 2 {
 		key = parts[0]
-		fmt.Sscanf(parts[1], "%d", &offset)
+		// Best-effort parse: a malformed offset keeps the default (0).
+		_, _ = fmt.Sscanf(parts[1], "%d", &offset)
 	}
 	if len(key) == 0 {
 		return data

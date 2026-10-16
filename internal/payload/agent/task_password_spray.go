@@ -44,7 +44,8 @@ func handlePasswordSpray(task Task, res *TaskResult) {
 	}
 	delayMs := 500
 	if len(parts) > 3 && parts[3] != "" {
-		fmt.Sscanf(parts[3], "%d", &delayMs)
+		// Best-effort delay parse; failure keeps the 500ms default.
+		_, _ = fmt.Sscanf(parts[3], "%d", &delayMs)
 	}
 
 	rawUsers := strings.Split(strings.TrimSpace(task.Data), "\n")

@@ -30,7 +30,7 @@ var busyRetrySleep = time.Sleep
 
 // withBusyRetry runs fn, retrying SQLite lock-contention failures with
 // linear backoff + jitter. Non-lock errors return immediately. op names the
-// call site for the DbBusyRetriesTotal metric ("claim", "result", "sweep",
+// call site for the DBBusyRetriesTotal metric ("claim", "result", "sweep",
 // "enroll").
 func (s *Server) withBusyRetry(op string, fn func() error) error {
 	var err error
@@ -42,8 +42,8 @@ func (s *Server) withBusyRetry(op string, fn func() error) error {
 		if !db.IsSQLiteLockError(err) {
 			return err
 		}
-		if s.metrics != nil && s.metrics.DbBusyRetriesTotal != nil {
-			s.metrics.DbBusyRetriesTotal.WithLabelValues(op).Inc()
+		if s.metrics != nil && s.metrics.DBBusyRetriesTotal != nil {
+			s.metrics.DBBusyRetriesTotal.WithLabelValues(op).Inc()
 		}
 		if attempt == dbRetryAttempts {
 			break

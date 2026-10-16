@@ -42,7 +42,9 @@ func TestInvalidateUserCacheEndsStaleSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
 	}
-	database.AutoMigrate(&db.User{}, &db.UserSession{})
+	if err := database.AutoMigrate(&db.User{}, &db.UserSession{}); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
 
 	user := db.User{ID: 9001, Username: "cache-victim", Role: "user", IsActive: true}
 	if err := database.Create(&user).Error; err != nil {
@@ -89,7 +91,9 @@ func TestInvalidateUserCacheForceLogout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
 	}
-	database.AutoMigrate(&db.User{}, &db.UserSession{})
+	if err := database.AutoMigrate(&db.User{}, &db.UserSession{}); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
 
 	user := db.User{ID: 9002, Username: "force-victim", Role: "user", IsActive: true}
 	if err := database.Create(&user).Error; err != nil {

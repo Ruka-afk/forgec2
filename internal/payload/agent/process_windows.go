@@ -76,7 +76,7 @@ func getPlatformSecurityInfo() (string, bool, string) {
 }
 
 func listProcessesForTree() ([]procNode, error) {
-	snap, _, _ := procCreateToolhelp32Snapshot.Call(TH32CS_SNAPPROCESS, 0)
+	snap, _, _ := procCreateToolhelp32Snapshot.Call(th32csSnapProcess, 0)
 	if snap == 0 || snap == ^uintptr(0) {
 		return nil, fmt.Errorf("CreateToolhelp32Snapshot failed")
 	}
@@ -102,7 +102,7 @@ func listProcessesForTree() ([]procNode, error) {
 }
 
 func findPIDByName(name string) (uint32, error) {
-	snap, _, _ := procCreateToolhelp32Snapshot.Call(TH32CS_SNAPPROCESS, 0)
+	snap, _, _ := procCreateToolhelp32Snapshot.Call(th32csSnapProcess, 0)
 	if snap == 0 {
 		return 0, fmt.Errorf("CreateToolhelp32Snapshot failed")
 	}
@@ -134,7 +134,7 @@ func suspendProcessWindows(target string) (string, error) {
 		pid = p
 	}
 
-	snap, _, _ := procCreateToolhelp32Snapshot.Call(TH32CS_SNAPTHREAD, 0)
+	snap, _, _ := procCreateToolhelp32Snapshot.Call(th32csSnapThread, 0)
 	if snap == 0 {
 		return "", fmt.Errorf("snapshot failed")
 	}
@@ -147,7 +147,7 @@ func suspendProcessWindows(target string) (string, error) {
 	count := 0
 	for ret != 0 {
 		if te.th32OwnerProcessID == pid {
-			h, _, _ := procOpenThread.Call(THREAD_SUSPEND_RESUME, 0, uintptr(te.th32ThreadID))
+			h, _, _ := procOpenThread.Call(threadSuspendResume, 0, uintptr(te.th32ThreadID))
 			if h != 0 {
 				procSuspendThread.Call(h)
 				procCloseHandle.Call(h)
@@ -171,7 +171,7 @@ func resumeProcessWindows(target string) (string, error) {
 		pid = p
 	}
 
-	snap, _, _ := procCreateToolhelp32Snapshot.Call(TH32CS_SNAPTHREAD, 0)
+	snap, _, _ := procCreateToolhelp32Snapshot.Call(th32csSnapThread, 0)
 	if snap == 0 {
 		return "", fmt.Errorf("snapshot failed")
 	}
@@ -184,7 +184,7 @@ func resumeProcessWindows(target string) (string, error) {
 	count := 0
 	for ret != 0 {
 		if te.th32OwnerProcessID == pid {
-			h, _, _ := procOpenThread.Call(THREAD_SUSPEND_RESUME, 0, uintptr(te.th32ThreadID))
+			h, _, _ := procOpenThread.Call(threadSuspendResume, 0, uintptr(te.th32ThreadID))
 			if h != 0 {
 				procResumeThread.Call(h)
 				procCloseHandle.Call(h)
@@ -208,7 +208,7 @@ func killProcessWindows(target string) (string, error) {
 		pid = p
 	}
 
-	h, _, _ := procOpenProcess.Call(PROCESS_TERMINATE, 0, uintptr(pid))
+	h, _, _ := procOpenProcess.Call(processTerminate, 0, uintptr(pid))
 	if h == 0 {
 		return "", fmt.Errorf("open process failed")
 	}

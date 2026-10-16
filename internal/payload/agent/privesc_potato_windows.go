@@ -156,7 +156,7 @@ func namedPipeImpersonateWithTrigger(cmd, pipeName string, trigger func(string) 
 
 	currentThread, _, _ := k32.NewProc("GetCurrentThread").Call()
 	var hToken uintptr
-	ret, _, le = procOpenThreadToken.Call(currentThread, TOKEN_ALL_ACCESS_TOKEN, 0, uintptr(unsafe.Pointer(&hToken)))
+	ret, _, le = procOpenThreadToken.Call(currentThread, tokenAllAccessToken, 0, uintptr(unsafe.Pointer(&hToken)))
 	if ret == 0 {
 		procRevertToSelf.Call()
 		return "", fmt.Errorf("OpenThreadToken failed: %v", le)
@@ -169,7 +169,7 @@ func namedPipeImpersonateWithTrigger(cmd, pipeName string, trigger func(string) 
 	var hPrimary uintptr
 	ret, _, le = procDuplicateTokenEx.Call(
 		hToken,
-		TOKEN_ALL_ACCESS_TOKEN,
+		tokenAllAccessToken,
 		0,
 		SecurityImpersonation,
 		TokenPrimary,

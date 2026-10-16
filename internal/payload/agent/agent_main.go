@@ -391,7 +391,7 @@ func main() {
 
 	// Start SMB parent pipe listener if configured
 	if isSMBParent && smbPipeName != "" {
-		if err := StartSMBParentPipe(smbPipeName); err != nil {
+		if err := StartSMBParentPipe(smbPipeName); err != nil { //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 			if Debug {
 				fmt.Printf("[!] SMB parent pipe start failed: %v\n", err)
 			}

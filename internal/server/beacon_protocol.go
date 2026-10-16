@@ -146,7 +146,7 @@ type beaconResponse struct {
 type beaconEnvelope struct {
 	UUID        string `json:"uuid"`
 	Seq         uint64 `json:"seq,omitempty"`
-	Ts          int64  `json:"ts,omitempty"`
+	TS          int64  `json:"ts,omitempty"`
 	ECDHPub     string `json:"ecdh_pub,omitempty"`  // base64 X25519 public key (handshake/registration)
 	CipherB64   string `json:"c,omitempty"`         // base64(nonce + AES-256-GCM ciphertext)
 	Mac         string `json:"mac,omitempty"`       // HMAC(regKey, uuid||ecdh_pub||ts) for handshake frames
@@ -171,9 +171,9 @@ const (
 	frameRegister                  // one-time v2 registration binding the identity key
 )
 
-// beaconTsTolerance is the maximum clock skew accepted between the agent's
+// beaconTSTolerance is the maximum clock skew accepted between the agent's
 // frame timestamp and server time.
-const beaconTsTolerance = 300 // seconds
+const beaconTSTolerance = 300 // seconds
 
 // maxSeqJump is the base per-frame sequence advance before a frame is
 // rejected as a replay flood / desync indicator. acceptSeq scales it up with

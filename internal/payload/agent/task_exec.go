@@ -102,7 +102,7 @@ func runTask(task Task) (result TaskResult) {
 	registerExecCancel(task.ID, cancel)
 	setExecCtx(ctx)
 	res := executeTask(task)
-	setExecCtx(nil)
+	clearExecCtx()
 	unregisterExecCancel(task.ID)
 	cancel()
 
@@ -164,15 +164,18 @@ func currentGoroutineID() uint64 {
 
 // setExecCtx binds ctx to the calling goroutine so runShell (and anything it
 // calls synchronously) can observe the current task's cancellation scope.
-// Passing nil clears the binding.
 func setExecCtx(ctx context.Context) {
 	id := currentGoroutineID()
 	execCtxMu.Lock()
-	if ctx == nil {
-		delete(execCtxByGID, id)
-	} else {
-		execCtxByGID[id] = ctx
-	}
+	execCtxByGID[id] = ctx
+	execCtxMu.Unlock()
+}
+
+// clearExecCtx removes the calling goroutine's task-context binding.
+func clearExecCtx() {
+	id := currentGoroutineID()
+	execCtxMu.Lock()
+	delete(execCtxByGID, id)
 	execCtxMu.Unlock()
 }
 

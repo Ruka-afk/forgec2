@@ -30,7 +30,7 @@ func TestCurrentExecCtxBackgroundFallback(t *testing.T) {
 
 // TestCurrentExecCtxGoroutineLocal verifies the per-goroutine scoping: the ctx
 // set on one goroutine is visible only to that goroutine, is cleared by
-// setExecCtx(nil), and another goroutine keeps seeing Background.
+// clearExecCtx, and another goroutine keeps seeing Background.
 func TestCurrentExecCtxGoroutineLocal(t *testing.T) {
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	defer cancel1()
@@ -41,7 +41,7 @@ func TestCurrentExecCtxGoroutineLocal(t *testing.T) {
 
 	go func() {
 		setExecCtx(ctx1)
-		defer setExecCtx(nil)
+		defer clearExecCtx()
 		close(ready)
 		<-release
 		ownerResult <- currentExecCtx() == ctx1
@@ -70,9 +70,9 @@ func TestCurrentExecCtxGoroutineLocal(t *testing.T) {
 
 	// Clearing the binding restores Background on the same goroutine.
 	setExecCtx(ctx1)
-	setExecCtx(nil)
+	clearExecCtx()
 	if got := currentExecCtx(); got != context.Background() {
-		t.Error("setExecCtx(nil) did not restore Background")
+		t.Error("clearExecCtx did not restore Background")
 	}
 
 	// A cancelled owner ctx is delivered as-is so abort signalling works via
@@ -82,7 +82,7 @@ func TestCurrentExecCtxGoroutineLocal(t *testing.T) {
 	ready2 := make(chan struct{})
 	go func() {
 		setExecCtx(ctx2)
-		defer setExecCtx(nil)
+		defer clearExecCtx()
 		close(ready2)
 		<-ctx2.Done()
 		scoped <- currentExecCtx()

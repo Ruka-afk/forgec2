@@ -15,8 +15,8 @@ import (
 
 const (
 	exceptionSingleStep = 0x80000004
-	CONTEXT_AMD64       = 0x100000
-	CONTEXT_CONTROL     = 0x100001
+	contextAmd64        = 0x100000
+	contextControl      = 0x100001
 	pageReadonly        = 0x02
 )
 
@@ -42,7 +42,7 @@ type foliagePage struct {
 var (
 	foliageInst   foliageCtx
 	foliageInit   sync.Once
-	fVmQuery      = kernel32.NewProc("VirtualQuery")
+	fVMQuery      = kernel32.NewProc("VirtualQuery")
 	fSetThreadCtx = kernel32.NewProc("SetThreadContext")
 	fGetThreadCtx = kernel32.NewProc("GetThreadContext")
 	fAddVeh       = kernel32.NewProc("AddVectoredExceptionHandler")
@@ -213,7 +213,7 @@ func fSetHWBP(targetAddr uintptr) bool {
 	thread := uintptr(0xFFFFFFFFFFFFFFFE)
 
 	var ctx fContext
-	ctx.ContextFlags = CONTEXT_AMD64 | 0x10
+	ctx.ContextFlags = contextAmd64 | 0x10
 	ret, _, _ := fGetThreadCtx.Call(thread, uintptr(unsafe.Pointer(&ctx)))
 	if ret == 0 {
 		return false
@@ -230,7 +230,7 @@ func fClearHWBP() {
 	thread := uintptr(0xFFFFFFFFFFFFFFFE)
 
 	var ctx fContext
-	ctx.ContextFlags = CONTEXT_AMD64 | 0x10
+	ctx.ContextFlags = contextAmd64 | 0x10
 	ret, _, _ := fGetThreadCtx.Call(thread, uintptr(unsafe.Pointer(&ctx)))
 	if ret == 0 {
 		return
@@ -247,7 +247,7 @@ func fEnumPagesLocked() []foliagePage {
 	addr := uintptr(0)
 	for {
 		var m fMbi
-		ret, _, _ := fVmQuery.Call(addr, uintptr(unsafe.Pointer(&m)), unsafe.Sizeof(m))
+		ret, _, _ := fVMQuery.Call(addr, uintptr(unsafe.Pointer(&m)), unsafe.Sizeof(m))
 		if ret == 0 {
 			break
 		}

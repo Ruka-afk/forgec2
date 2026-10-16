@@ -169,7 +169,9 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 
 	// Strip PE forensic artifacts in every mode (garble does not clean them)
 	// and remove the Go-generated .h export header next to the DLL.
-	stripPEArtifacts(outPath)
+	if err := stripPEArtifacts(outPath); err != nil {
+		return "", fmt.Errorf("strip PE artifacts: %w", err)
+	}
 
 	if cfg.SelfCheck {
 		if err := patchSelfCheckHash(outPath); err != nil {

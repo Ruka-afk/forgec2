@@ -118,7 +118,7 @@ func grpcSendBeacon(body []byte) ([]byte, error) {
 	}
 	// Release the server-side stream on every return path; otherwise each
 	// beacon leaks a stream until the gRPC connection is torn down.
-	defer stream.CloseSend()
+	defer func() { _ = stream.CloseSend() }()
 
 	// The envelope is relayed verbatim (opaque bytes): handshake/registration
 	// frames carry mac/secret_id fields that a struct round-trip would drop.

@@ -100,7 +100,7 @@ func createProcessWithPPIDSpoof(exePath string, cmdLine string, parentPID uint32
 func findPidByName(name string) uint32 {
 	procNameUpper := stringToUpper(name)
 
-	hSnapshot, _, _ := procCreateToolhelp32Snapshot.Call(TH32CS_SNAPPROCESS, 0)
+	hSnapshot, _, _ := procCreateToolhelp32Snapshot.Call(th32csSnapProcess, 0)
 	if hSnapshot == 0 {
 		return 0
 	}

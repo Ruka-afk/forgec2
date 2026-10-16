@@ -342,7 +342,7 @@ func handleCertStoreListImpl(task Task, res *TaskResult) {
 	}
 
 	var result strings.Builder
-	result.WriteString(fmt.Sprintf("=== Certificate Store Enumeration ===\n"))
+	result.WriteString("=== Certificate Store Enumeration ===\n")
 	result.WriteString(fmt.Sprintf("Total certificates found: %d\n\n", len(entries)))
 
 	highValueCount := 0
@@ -386,7 +386,7 @@ func handleCertStoreListImpl(task Task, res *TaskResult) {
 			result.WriteString(fmt.Sprintf("  PFX:          %s\n", pfxPreview))
 			result.WriteString(fmt.Sprintf("  PFX Password: %s\n", e.PFXPassword))
 		} else if e.HasPrivate {
-			result.WriteString(fmt.Sprintf("  PFX:          (non-exportable private key)\n"))
+			result.WriteString("  PFX:          (non-exportable private key)\n")
 		}
 		result.WriteString("\n")
 	}

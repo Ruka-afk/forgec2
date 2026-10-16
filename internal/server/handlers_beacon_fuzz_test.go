@@ -50,15 +50,14 @@ func FuzzSanitizeInfo(f *testing.F) {
 	f.Fuzz(func(t *testing.T, key, value string) {
 		info := map[string]string{key: value}
 		result := sanitizeInfo(info)
-		// Should never panic, result should always be valid
-		if result != nil {
-			for k, v := range result {
-				if len([]rune(v)) > maxInfoValueLen {
-					t.Errorf("value too long: %d > %d", len([]rune(v)), maxInfoValueLen)
-				}
-				if !allowedInfoKeys[k] {
-					t.Errorf("unexpected key passed through: %q", k)
-				}
+		// Should never panic; range over nil is a no-op so a nil result just
+		// skips the assertions below.
+		for k, v := range result {
+			if len([]rune(v)) > maxInfoValueLen {
+				t.Errorf("value too long: %d > %d", len([]rune(v)), maxInfoValueLen)
+			}
+			if !allowedInfoKeys[k] {
+				t.Errorf("unexpected key passed through: %q", k)
 			}
 		}
 	})

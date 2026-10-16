@@ -70,13 +70,15 @@ func wssRoundTrip(wsURL string, body []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	conn.SetWriteDeadline(time.Now().Add(15 * time.Second))
+	// Deadline failures only mean the connection is already unusable; the
+	// next write/read surfaces it.
+	_ = conn.SetWriteDeadline(time.Now().Add(15 * time.Second))
 	// Binary frames: body-length jitter can append non-UTF-8 bytes.
 	if err := conn.WriteMessage(websocket.BinaryMessage, body); err != nil {
 		wssInvalidate()
 		return nil, err
 	}
-	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 	_, resp, err := conn.ReadMessage()
 	if err != nil {
 		wssInvalidate()

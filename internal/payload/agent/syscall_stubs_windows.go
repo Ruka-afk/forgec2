@@ -260,10 +260,10 @@ func findSyscallNumHalo(funcName string) (uint32, error) {
 							continue
 						}
 					}
-					return 0, fmt.Errorf("Halo's Gate: valid syscall+ret not found in %s", funcName)
+					return 0, fmt.Errorf("halo's Gate: valid syscall+ret not found in %s", funcName)
 				}
 			}
-			return 0, fmt.Errorf("Halo's Gate: no mov eax pattern in %s", funcName)
+			return 0, fmt.Errorf("halo's Gate: no mov eax pattern in %s", funcName)
 		}
 	}
 	return 0, fmt.Errorf("export %s not found in ntdll", funcName)
@@ -361,7 +361,7 @@ func syscallNtAllocateVirtualMemory(sm *syscallManager, hProc uintptr, size uint
 		uintptr(unsafe.Pointer(&baseAddr)),
 		0,
 		uintptr(unsafe.Pointer(&regionSize)),
-		uintptr(MEM_COMMIT|MEM_RESERVE),
+		uintptr(memCommit|memReserve),
 		uintptr(protect),
 	)
 	if r1 != 0 {
@@ -559,7 +559,7 @@ func ntBuildObjAttr(pipeName string, secDesc uintptr) (*uint16, *ntUnicodeString
 	oa := &ntObjectAttributes{
 		Length:             uint32(unsafe.Sizeof(ntObjectAttributes{})),
 		ObjectName:         us,
-		Attributes:         0x40, // OBJ_CASE_INSENSITIVE
+		Attributes:         0x40, // objCaseInsensitive
 		SecurityDescriptor: secDesc,
 	}
 	return buf, us, oa

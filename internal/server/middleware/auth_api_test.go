@@ -21,7 +21,7 @@ func setupAPITestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	if err := database.AutoMigrate(&db.User{}, &db.ApiKey{}); err != nil {
+	if err := database.AutoMigrate(&db.User{}, &db.APIKey{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	database.Create(&db.User{
@@ -42,7 +42,7 @@ func TestAuthRequired_APIKeyValid(t *testing.T) {
 	}
 
 	keyHash := sha256Of("valid-api-key-12345")
-	database.Create(&db.ApiKey{
+	database.Create(&db.APIKey{
 		KeyHash: keyHash,
 		Prefix:  "valid",
 		UserID:  1,
@@ -102,7 +102,7 @@ func TestAuthRequired_APIKeyExpired(t *testing.T) {
 	}
 
 	keyHash := sha256Of("expired-api-key")
-	database.Create(&db.ApiKey{
+	database.Create(&db.APIKey{
 		KeyHash:   keyHash,
 		Prefix:    "exp",
 		UserID:    1,
@@ -142,7 +142,7 @@ func TestAuthRequired_APIKeyInactiveUser(t *testing.T) {
 	var inactiveUser db.User
 	database.Where("username = ?", "inactive-user").First(&inactiveUser)
 
-	database.Create(&db.ApiKey{
+	database.Create(&db.APIKey{
 		KeyHash: keyHash,
 		Prefix:  "inu",
 		UserID:  inactiveUser.ID,

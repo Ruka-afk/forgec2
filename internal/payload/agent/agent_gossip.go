@@ -252,6 +252,7 @@ func handleGossipConn(conn net.Conn) {
 	}
 	respBody, _ := json.Marshal(resp)
 	conn.SetDeadline(time.Now().Add(10 * time.Second))
-	binary.Write(conn, binary.BigEndian, uint32(len(respBody)))
-	conn.Write(respBody)
+	// Peer may disconnect mid-reply; delivery is best-effort.
+	_ = binary.Write(conn, binary.BigEndian, uint32(len(respBody)))
+	_, _ = conn.Write(respBody)
 }
