@@ -90,3 +90,52 @@ powershell -File scripts/api-smoke.ps1 -TryDefaultAdmin
 ```
 
 Expect health/ready/login SPA + unauthenticated 401 on `/api/*`, then (if login works) agents/modules/listeners/attack coverage + CSRF gate.
+
+## Automated Go-agent E2E (no UI required)
+
+The primary implant has a runtime gate that walks the whole operator path against
+a throwaway server - no UI, no manual steps, nothing written outside `-WorkDir`:
+
+```powershell
+# Windows: real EXE
+powershell -NoProfile -File scripts\e2e-agent-local.ps1
+# Linux (also the CI variant): real ELF
+pwsh -NoProfile -File scripts/e2e-agent-local.ps1 -WorkDir "$env:RUNNER_TEMP/e2e-agent" -KeepWork
+```
+
+What it proves, in order: throwaway server boot + `/health`; login with CSRF
+cookie; `POST /api/listeners` (HTTP) reaches `running`; `POST /generate/{linux,exe}`
+queues a real build through the job queue; the poll returns `completed` and the
+download **is an executable** (magic checked: `MZ` / ELF); the agent registers
+over v3, comes online, and its hostname/os/arch/pid/listener are backfilled on
+the beacon after the registration frame; then a four-task matrix round-trips -
+`shell` (random echo marker), `read` (file content stored as plain text after the
+server decodes the wire base64), `find` (`name<TAB>size<TAB>YYYY-MM-DD HH:MM`
+for a script-written fixture) and `get_sleep_mode` (`default`). The script also
+locks an API contract: `POST /api/v1/tasks` for `read` without `command` answers
+`400 task type read requires 'command' parameter` (not the opaque 500 this gate
+originally hit).
+
+Two operator-path traps this harness had to encode; they apply to any scripted
+integration, not just this one:
+
+1. **The server process must run with its CWD inside the checkout.** The payload
+   generator injects its module `replace` directive by walking up from the
+   current working directory to find `go.mod`; started elsewhere, every build
+   fails and the API only reports a sanitized "Build failed" (the real reason is
+   in the server log).
+2. **Artifact downloads must ask for JSON.** The SPA middleware
+   (`internal/server/server_http.go`) answers any non-API GET that does not carry
+   `Accept: application/json`, `X-Requested-With: XMLHttpRequest` or a CSRF
+   header with `index.html` - a download request without the header silently
+   saves the SPA shell (2 KB "implant") instead of the binary.
+
+`shell` is asserted ops-profile-aware: on a host the agent classifies as a
+sandbox (VM heuristics in `env_windows.go`), the ops profile refuses shell by
+design, so the gate asserts that refusal - including that no command output
+leaks - instead of the marker. Linux probes keep the permissive profile and
+assert the marker.
+
+On failure the script keeps the DB, config, binaries and logs and tails the
+server log; a fully green run deletes them, because they carry the
+server-minted registration secret.

@@ -293,6 +293,32 @@ jobs:
           GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -o "$RUNNER_TEMP/agent-darwin" ./internal/payload/agent/
           GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o "$RUNNER_TEMP/agent-darwin-arm64" ./internal/payload/agent/
 
+  # Operator-path runtime gate for the primary (Go) implant: a throwaway server
+  # builds a real Linux agent through the generate API, the agent registers,
+  # beacons and executes real tasks. The smoke job above proves the generator
+  # produces binaries; this proves those binaries work end to end, including
+  # ldflag-injected registration secrets and the task round trip.
+  agent-e2e:
+    name: Go agent E2E (generated ELF, real beacons + tasks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: '1.26'
+          cache: true
+          cache-dependency-path: go.sum
+      - run: go mod download
+      - name: Generated-agent E2E (login -> listener -> generate -> beacon -> tasks)
+        shell: pwsh
+        run: ./scripts/e2e-agent-local.ps1 -WorkDir "$env:RUNNER_TEMP/e2e-agent" -KeepWork
+      - name: Server log (failure only)
+        if: failure()
+        run: |
+          log="$RUNNER_TEMP/e2e-agent/logs/forgec2.log"
+          [ -f "$log" ] && tail -n 200 "$log" || echo "no server log"
+
   lint:
     runs-on: ubuntu-latest
     steps:

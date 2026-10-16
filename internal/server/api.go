@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -186,9 +187,16 @@ func (s *Server) apiCreateTask(c *gin.Context) {
 	}
 
 	// Path/Data are optional but required by some types (rename/chmod need
-	// data); without them those types always 500d on missing parameters.
+	// data). A missing mandatory parameter is a client error: answer 400 with
+	// the parameter name instead of an opaque 500.
 	task, err := s.createTask(req.AgentID, req.Type, req.Command, req.Shell, req.Path, req.Data, 0, 0)
 	if err != nil {
+		var reqErr *taskRequestError
+		if errors.As(err, &reqErr) {
+			respondError(c, http.StatusBadRequest, reqErr.Error())
+			return
+		}
+		slog.Error("Task creation failed", "agent_id", req.AgentID, "type", req.Type, "err", err)
 		respondError(c, http.StatusInternalServerError, "task creation failed")
 		return
 	}

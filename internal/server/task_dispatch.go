@@ -151,6 +151,19 @@ func isUniqueViolation(err error) bool {
 		strings.Contains(msg, "23505")
 }
 
+// taskRequestError marks a createTask failure that was caused by the request
+// itself (unknown type, missing parameter, RoE/OPSEC refusal, queue or lock
+// limits) instead of a server fault. API handlers answer 400 with the message
+// so operators see why nothing was queued; internal/DB failures keep the
+// generic 500.
+type taskRequestError struct{ msg string }
+
+func (e *taskRequestError) Error() string { return e.msg }
+
+func taskRequestErrorf(format string, args ...any) error {
+	return &taskRequestError{msg: fmt.Sprintf(format, args...)}
+}
+
 // createTask creates and persists a new pending task. Returns the task or error.
 func (s *Server) createTask(agentID, taskType, command, shell, path, data string, offset, size int64, opts ...TaskOption) (*db.Task, error) {
 	var tOpts taskOptions
@@ -159,17 +172,17 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 	}
 
 	if err := s.validateTaskCreation(nil, agentID, taskType, command, data, path, tOpts.callerUserID); err != nil {
-		return nil, err
+		return nil, &taskRequestError{msg: err.Error()}
 	}
 
 	// Collaboration lock: another operator's live lock blocks creation unless
 	// this call carries an explicit admin force override (audited inside).
 	if err := s.checkAgentLockForCreate(agentID, &tOpts); err != nil {
-		return nil, err
+		return nil, &taskRequestError{msg: err.Error()}
 	}
 
 	if len(command) > MaxCommandLength {
-		return nil, fmt.Errorf("command too long (max %d characters)", MaxCommandLength)
+		return nil, taskRequestErrorf("command too long (max %d characters)", MaxCommandLength)
 	}
 
 	// set_sleep bounds: the agent rejects interval <= 0 but honors absurd
@@ -182,7 +195,7 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 		var err error
 		command, err = clampSetSleepCommand(command)
 		if err != nil {
-			return nil, err
+			return nil, &taskRequestError{msg: err.Error()}
 		}
 	}
 
@@ -192,7 +205,7 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 	// never block key reuse.
 	if key := strings.TrimSpace(tOpts.idempotencyKey); key != "" {
 		if len(key) > 64 {
-			return nil, fmt.Errorf("idempotency key too long (max 64 characters)")
+			return nil, taskRequestErrorf("idempotency key too long (max 64 characters)")
 		}
 		var existing db.Task
 		if err := s.db.Where("agent_id = ? AND idempotency_key = ? AND status IN ?",
@@ -209,19 +222,19 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 				switch p.Name {
 				case "command":
 					if command == "" {
-						return nil, fmt.Errorf("task type %s requires 'command' parameter", taskType)
+						return nil, taskRequestErrorf("task type %s requires 'command' parameter", taskType)
 					}
 				case "shell":
 					if shell == "" {
-						return nil, fmt.Errorf("task type %s requires 'shell' parameter", taskType)
+						return nil, taskRequestErrorf("task type %s requires 'shell' parameter", taskType)
 					}
 				case "path":
 					if path == "" {
-						return nil, fmt.Errorf("task type %s requires 'path' parameter", taskType)
+						return nil, taskRequestErrorf("task type %s requires 'path' parameter", taskType)
 					}
 				case "data":
 					if data == "" {
-						return nil, fmt.Errorf("task type %s requires 'data' parameter", taskType)
+						return nil, taskRequestErrorf("task type %s requires 'data' parameter", taskType)
 					}
 				}
 			}
@@ -232,7 +245,7 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 	pending := s.agentPendingTasks[agentID]
 	if pending >= MaxPendingTasksPerAgent {
 		s.agentPendingTasksMu.Unlock()
-		return nil, fmt.Errorf("agent %s has %d pending tasks (limit %d)", agentID, pending, MaxPendingTasksPerAgent)
+		return nil, taskRequestErrorf("agent %s has %d pending tasks (limit %d)", agentID, pending, MaxPendingTasksPerAgent)
 	}
 	s.agentPendingTasks[agentID] = pending + 1
 	s.agentPendingTasksMu.Unlock()

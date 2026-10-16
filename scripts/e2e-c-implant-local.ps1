@@ -97,12 +97,15 @@ try {
     $cfg = $cfg -replace '(?m)^(\s*)host: 0.0.0.0', "`${1}host: 127.0.0.1"
     $cfg = $cfg -replace '(?m)^(\s*)tls_enabled: true', "`${1}tls_enabled: false"
     $cfg = $cfg -replace '(?m)^(\s*)require_tls_for_auth: true', "`${1}require_tls_for_auth: false"
-    $cfg = $cfg -replace '(?m)^(\s*)data_dir: data\s*$', "`${1}data_dir: $WorkDir/data"
+    # No end-of-line anchor: the example carries a trailing comment on the
+    # data_dir line, and the trailing text must survive the rewrite.
+    $cfg = $cfg -replace '(?m)^([ \t]*)data_dir: data\b', "`${1}data_dir: $WorkDir/data"
     $cfg = $cfg -replace '(?m)^(\s*)path: data/db/forgec2.db', "`${1}path: $WorkDir/data/db/forgec2.db"
     $cfg = $cfg -replace '(?m)^(\s*)beacon_key: ""', "`${1}beacon_key: `"$BeaconKey`""
     $cfg = $cfg -replace '(?m)^(\s*)default_password: ""', "`${1}default_password: `"$Password`""
     if ($cfg -notmatch "port: $Port" -or $cfg -notmatch 'tls_enabled: false' -or
-        $cfg -notmatch 'require_tls_for_auth: false' -or $cfg -notmatch [regex]::Escape("$WorkDir/data") -or
+        $cfg -notmatch 'require_tls_for_auth: false' -or $cfg -notmatch [regex]::Escape("data_dir: $WorkDir/data") -or
+        $cfg -notmatch [regex]::Escape("path: $WorkDir/data/db/forgec2.db") -or
         $cfg -notmatch [regex]::Escape($Password) -or $cfg -notmatch [regex]::Escape($BeaconKey)) {
         throw 'config rewrite did not apply cleanly - is config.example.yaml unchanged?'
     }
