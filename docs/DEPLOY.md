@@ -83,6 +83,12 @@ Copy-Item config.example.yaml config.yaml
 Open `https://<host>:8000` (self-signed cert on first run; TLS on by default).
 Data (SQLite + uploads) lives under `data/` (or the `forgec2_data` volume).
 
+TLS posture is configurable per termination point: extra `https`/`tls`
+listeners can require verified client certificates, verify them against their
+own CA, or raise their floor to TLS 1.3 — see
+[`docs/LISTENER_TLS.md`](LISTENER_TLS.md) for the merge rules and the
+client-certificate path for implants.
+
 ## Cut a release (maintainers)
 
 ```bash

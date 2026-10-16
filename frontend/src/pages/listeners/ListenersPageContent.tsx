@@ -23,9 +23,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowLeftRight, Check, Copy, Info, Pencil, Plug, Plus, Power, SlidersHorizontal, Trash2, Radio, Globe, Network, Flame, AlertTriangle } from "lucide-react";
 import type { Listener } from "./components/types";
-import { emptyCreateForm, emptyEditForm } from "./components/types";
+import { emptyCreateForm, emptyEditForm, isTLSScheme } from "./components/types";
 import { useListenersData } from "./components/useListenersData";
 import type { CreateListenerForm, EditListenerForm } from "./components/types";
 import { ListenerHealthCell } from "./components/ListenerHealthCell";
@@ -79,6 +80,9 @@ export default function ListenersPageContent() {
         protocol: z.string(),
         tags: z.string(),
         color: z.string(),
+        client_ca_file: z.string(),
+        require_client_cert: z.boolean(),
+        min_tls_version: z.string(),
       }),
     [portSchema, t],
   );
@@ -96,6 +100,45 @@ export default function ListenersPageContent() {
     setFieldValue("type", val);
     setFieldValue("protocol", val === "https" ? "https" : val);
   };
+
+  // Shared per-listener TLS posture fields for the create/edit dialogs. Only
+  // rendered for https/tls schemes: the server refuses the knobs on any other
+  // scheme, and these can only tighten the server-wide TLS posture.
+  const tlsFields = (
+    prefix: string,
+    values: { client_ca_file: string; require_client_cert: boolean; min_tls_version: string },
+    setField: (f: keyof CreateListenerForm, v: unknown) => void,
+  ) => (
+    <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
+      <p className="text-xs font-semibold text-muted-foreground">{t("listeners.tls_section")}</p>
+      <div>
+        <Label className="text-xs mb-1" htmlFor={`${prefix}-client-ca`}>{t("listeners.field_client_ca")}</Label>
+        <Input id={`${prefix}-client-ca`} className="font-mono text-xs" value={values.client_ca_file}
+          onChange={(e) => setField("client_ca_file", e.target.value)}
+          placeholder={t("listeners.client_ca_ph")} />
+        <p className="mt-1 text-(--fs-micro-sm) text-muted-foreground">{t("listeners.client_ca_hint")}</p>
+      </div>
+      <Label className="flex items-center gap-2 text-xs text-foreground">
+        <Checkbox checked={values.require_client_cert}
+          onCheckedChange={(v) => setField("require_client_cert", v === true)} />
+        {t("listeners.field_require_client_cert")}
+      </Label>
+      <div>
+        <Label className="text-xs mb-1" htmlFor={`${prefix}-min-tls`}>{t("listeners.field_min_tls")}</Label>
+        <Select value={values.min_tls_version} onValueChange={(val) => setField("min_tls_version", val ?? "")}>
+          <SelectTrigger id={`${prefix}-min-tls`} className="w-full">
+            <SelectValue placeholder={t("listeners.min_tls_inherit")} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">{t("listeners.min_tls_inherit")}</SelectItem>
+            <SelectItem value="1.2">TLS 1.2</SelectItem>
+            <SelectItem value="1.3">TLS 1.3</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <p className="text-(--fs-micro-sm) text-muted-foreground">{t("listeners.tls_hint")}</p>
+    </div>
+  );
 
   const [editingListener, setEditingListener] = useState<Listener | null>(null);
   const [showEdit, setShowEdit] = useState(false);
@@ -159,6 +202,9 @@ export default function ListenersPageContent() {
       notes: listener.notes || "",
       tags: listener.tags || "",
       color: listener.color || "",
+      client_ca_file: listener.client_ca_file || "",
+      require_client_cert: listener.require_client_cert === true,
+      min_tls_version: listener.min_tls_version || "",
     });
     setShowEdit(true);
   };
@@ -437,6 +483,7 @@ export default function ListenersPageContent() {
                     <SelectItem value="http">HTTP</SelectItem>
                     <SelectItem value="https">HTTPS</SelectItem>
                     <SelectItem value="tcp">TCP</SelectItem>
+                    <SelectItem value="tls">TLS</SelectItem>
                     <SelectItem value="dns">DNS</SelectItem>
                     <SelectItem value="icmp">ICMP</SelectItem>
                     <SelectItem value="ssh">SSH</SelectItem>
@@ -461,6 +508,7 @@ export default function ListenersPageContent() {
                   aria-describedby={createErrors.port ? "create-port-error" : undefined} />
                 {createTouched.port && <FieldError id="create-port-error">{createErrors.port}</FieldError>}
               </div>
+              {isTLSScheme(createForm.protocol || createForm.type) && tlsFields("create", createForm, createSetField)}
               <div>
                 <Label className="text-xs mb-1" htmlFor="create-tags">{t("listeners.field_tags")}</Label>
                 <Input id="create-tags" value={createForm.tags} onChange={createChange("tags")}
@@ -520,6 +568,7 @@ export default function ListenersPageContent() {
                     <SelectItem value="http">HTTP</SelectItem>
                     <SelectItem value="https">HTTPS</SelectItem>
                     <SelectItem value="tcp">TCP</SelectItem>
+                    <SelectItem value="tls">TLS</SelectItem>
                     <SelectItem value="dns">DNS</SelectItem>
                     <SelectItem value="icmp">ICMP</SelectItem>
                     <SelectItem value="ssh">SSH</SelectItem>
@@ -543,6 +592,7 @@ export default function ListenersPageContent() {
                   aria-describedby={editErrors.port ? "edit-port-error" : undefined} />
                 {editTouched.port && <FieldError id="edit-port-error">{editErrors.port}</FieldError>}
               </div>
+              {isTLSScheme(editForm.protocol || editForm.type) && tlsFields("edit", editForm, setEditChange)}
               <div>
                 <Label className="text-xs mb-1" htmlFor="edit-notes">{t("listeners.field_notes")}</Label>
                 <Input id="edit-notes" value={editForm.notes} onChange={handleEditChange("notes")} />

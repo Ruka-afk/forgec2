@@ -17,6 +17,7 @@ import { DataError } from "@/components/ui/data-state";
 import { POLL } from "@/lib/polling";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { firstArray } from "@/lib/envelope";
+import { isTLSScheme } from "../components/types";
 import {
   appendHealthSamples,
   healthForListener,
@@ -50,6 +51,10 @@ interface ListenerDetail {
   notes?: string;
   CreatedAt?: string;
   created_at?: string;
+  // Per-listener TLS posture (https/tls listeners only).
+  client_ca_file?: string;
+  require_client_cert?: boolean;
+  min_tls_version?: string;
 }
 
 interface ListenerAgent {
@@ -189,6 +194,13 @@ export default function ListenerDetailPage() {
               <div><span className="text-muted-foreground">{t("listener.scheme")}</span> <span className="text-foreground">{scheme}</span></div>
               <div><span className="text-muted-foreground">{t("listener.address")}</span> <span className="text-foreground">{host}:{port}</span></div>
               <div><span className="text-muted-foreground">{t("listener.transport_type")}</span> <span className="text-foreground">{listener.type || scheme}</span></div>
+              {isTLSScheme(scheme) && (
+                <>
+                  <div><span className="text-muted-foreground">{t("listener.tls_client_ca")}</span> <span className="text-foreground">{listener.client_ca_file || t("listener.tls_inherit")}</span></div>
+                  <div><span className="text-muted-foreground">{t("listener.tls_client_cert")}</span> <span className="text-foreground">{listener.require_client_cert === true ? t("listener.tls_required") : t("listener.tls_not_required")}</span></div>
+                  <div><span className="text-muted-foreground">{t("listener.tls_min_version")}</span> <span className="text-foreground">{listener.min_tls_version || t("listener.tls_inherit")}</span></div>
+                </>
+              )}
               <div><span className="text-muted-foreground">{t("listener.notes")}</span> <span className="text-foreground">{notes}</span></div>
               <div><span className="text-muted-foreground">{t("listener.created")}</span> <span className="text-foreground">{createdAt}</span></div>
               <div>

@@ -3,12 +3,10 @@ package server
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -161,8 +159,26 @@ func (s *Server) newHTTPServer(addr string) *http.Server {
 // including JARM/JA3 fingerprint randomization and optional mTLS.
 // The server certificate is served through the hot-reloadable loader:
 // regenerate/upload take effect for new handshakes without a restart.
+//
+// This is the server-wide posture used by the main listener; extra listeners
+// go through configureTLSWith with their own per-listener overrides.
 func (s *Server) configureTLS(srv *http.Server) error {
-	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+	return s.configureTLSWith(srv, listenerTLSOverrides{})
+}
+
+// configureTLSWith is configureTLS plus optional per-listener hardening. The
+// overrides can only strengthen the server-wide posture: they may add a
+// client-certificate requirement, supply the client CA, or raise the TLS floor
+// to 1.3 — never drop the server-wide requirement or leave the listener
+// without the requested check. A configuration that cannot be honoured returns
+// an error so the caller can fail the listener start instead of serving a
+// weaker posture.
+func (s *Server) configureTLSWith(srv *http.Server, o listenerTLSOverrides) error {
+	floor, ok := minTLSVersionFloor(o.MinTLSVersion)
+	if !ok {
+		return fmt.Errorf("invalid min_tls_version %q", o.MinTLSVersion)
+	}
+	tlsConfig := &tls.Config{MinVersion: floor}
 
 	if s.tlsCerts == nil {
 		s.tlsCerts = newTLSCertLoader(s.cfg.Server.CertFile, s.cfg.Server.KeyFile)
@@ -176,19 +192,18 @@ func (s *Server) configureTLS(srv *http.Server) error {
 		tlsConfig = s.tlsFingerprint.Live(tlsConfig)
 	}
 
-	if s.cfg.Server.RequireClientCert && s.cfg.Server.ClientCAFile != "" {
-		caCert, caErr := os.ReadFile(s.cfg.Server.ClientCAFile)
-		if caErr != nil {
-			slog.Error("Failed to read client CA file", "err", caErr)
-			return fmt.Errorf("loading client CA for mTLS: %w", caErr)
-		}
-		caPool := x509.NewCertPool()
-		if !caPool.AppendCertsFromPEM(caCert) {
-			return fmt.Errorf("failed to parse client CA certificate")
-		}
+	requireClientCert, caPool, err := s.effectiveClientAuth(o)
+	if err != nil {
+		return err
+	}
+	if requireClientCert {
 		tlsConfig.ClientCAs = caPool
 		tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
-		slog.Info("mTLS enabled for beacon connections", "ca", s.cfg.Server.ClientCAFile)
+		caUsed := strings.TrimSpace(o.ClientCAFile)
+		if caUsed == "" {
+			caUsed = strings.TrimSpace(s.cfg.Server.ClientCAFile)
+		}
+		slog.Info("mTLS enabled for beacon connections", "ca", caUsed)
 	} else if s.cfg.Server.OperatorMTLS {
 		// Operator mTLS only REQUESTS a client certificate at the TLS layer
 		// so cert-less beacons keep working on the shared listener; the

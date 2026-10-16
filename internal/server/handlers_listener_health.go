@@ -197,6 +197,21 @@ func (s *Server) probeListener(ctx context.Context, ln *db.Listener) *listenerHe
 			h.Error = "tcp connect failed"
 		}
 	case "https", "tls":
+		if s.listenerRequiresClientCert(ln) {
+			// The probe presents no client certificate, so a real handshake
+			// would fail even though the listener is healthy. Probe TCP
+			// reachability and report the shallower check explicitly instead
+			// of turning a healthy mTLS listener into a false "error" row (or
+			// a silent green).
+			h.OK = probeTCP(ctx, h.Addr)
+			if !h.OK {
+				h.Error = "tcp connect failed"
+				break
+			}
+			h.Skipped = true
+			h.Error = "client certificates required: probed TCP reachability only"
+			break
+		}
 		ok, err := probeTLS(ctx, h.Addr)
 		h.OK = ok
 		if !ok {

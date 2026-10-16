@@ -23,6 +23,12 @@ export interface Listener {
   Color?: string;
   status?: string;
   Status?: string;
+  // Per-listener TLS posture for https/tls listeners. Empty/false means
+  // "inherit the server-wide setting"; the server only ever lets these
+  // strengthen that posture.
+  client_ca_file?: string;
+  require_client_cert?: boolean;
+  min_tls_version?: string;
 }
 
 export type CreateListenerForm = {
@@ -33,6 +39,9 @@ export type CreateListenerForm = {
   protocol: string;
   tags: string;
   color: string;
+  client_ca_file: string;
+  require_client_cert: boolean;
+  min_tls_version: string;
 };
 
 export type EditListenerForm = CreateListenerForm & {
@@ -47,6 +56,9 @@ export const emptyCreateForm = (): CreateListenerForm => ({
   protocol: "http",
   tags: "",
   color: "",
+  client_ca_file: "",
+  require_client_cert: false,
+  min_tls_version: "",
 });
 
 export const emptyEditForm = (): EditListenerForm => ({
@@ -54,3 +66,9 @@ export const emptyEditForm = (): EditListenerForm => ({
   notes: "",
   port: "",
 });
+
+/** Per-listener TLS knobs only apply to these schemes (mirrors the server rule). */
+export function isTLSScheme(scheme: string | undefined | null): boolean {
+  const s = (scheme || "").trim().toLowerCase();
+  return s === "https" || s === "tls";
+}

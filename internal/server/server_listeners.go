@@ -50,7 +50,7 @@ func (s *Server) startExtraListenersFromDB() {
 		}
 
 		slog.Info("Restoring extra listener from DB", "key", key, "scheme", scheme)
-		if err := s.startExtraListener(key, scheme); err != nil {
+		if err := s.startExtraListener(&l, key, scheme); err != nil {
 			slog.Error("Failed to start extra listener from DB", "key", key, "err", err)
 			// Write the failure back immediately so the row does not claim
 			// "running" until the health loop flips it minutes later.
@@ -140,7 +140,7 @@ func (s *Server) handleListenerBeacon(transport, agentID string, reqJSON []byte,
 // startExtraListener starts an additional listener for the given scheme and key.
 // The limit check reserves a placeholder under lock to prevent concurrent
 // callers from both passing the check and exceeding the limit.
-func (s *Server) startExtraListener(key, scheme string) error {
+func (s *Server) startExtraListener(l *db.Listener, key, scheme string) error {
 	s.extraListenersMu.Lock()
 	if len(s.extraListeners) >= MaxExtraListeners {
 		s.extraListenersMu.Unlock()
@@ -172,10 +172,10 @@ func (s *Server) startExtraListener(key, scheme string) error {
 
 	switch scheme {
 	case "http", "https":
-		err = s.startExtraHTTPListener(key, scheme)
+		err = s.startExtraHTTPListener(key, scheme, listenerTLSOverridesFor(l))
 		return err
 	case "tcp", "tls":
-		err = s.startExtraTCPListener(key, scheme)
+		err = s.startExtraTCPListener(key, scheme, listenerTLSOverridesFor(l))
 		return err
 	case "dns":
 		err = s.startExtraDNSListener(key)
@@ -205,7 +205,7 @@ func (s *Server) startExtraListener(key, scheme string) error {
 	}
 }
 
-func (s *Server) startExtraHTTPListener(key, scheme string) error {
+func (s *Server) startExtraHTTPListener(key, scheme string, o listenerTLSOverrides) error {
 	// Key format: "http://host:port" or "https://host:port"
 	addr := key[len(scheme)+3:] // strip "scheme://"
 	srv := &http.Server{
@@ -223,6 +223,19 @@ func (s *Server) startExtraHTTPListener(key, scheme string) error {
 	if err != nil {
 		return fmt.Errorf("binding extra %s listener %s: %w", scheme, addr, err)
 	}
+	if scheme == "https" {
+		// Extra HTTPS listeners share the main server's TLS posture (JARM/JA3
+		// fingerprint wrapping, TLS floor, mTLS requirements) and layer the
+		// listener's own hardening on top. The config is resolved BEFORE the
+		// listener is registered or served: a listener whose client CA cannot
+		// be loaded, or that demands client certificates without one, must fail
+		// its start instead of serving a weaker posture. The certificate itself
+		// stays hot-reloadable (see tlsCertLoader).
+		if cfgErr := s.configureTLSWith(srv, o); cfgErr != nil {
+			ln.Close()
+			return fmt.Errorf("extra HTTPS listener %s TLS config: %w", addr, cfgErr)
+		}
+	}
 	s.extraListenersMu.Lock()
 	s.extraListeners[key] = srv
 	s.extraListenersMu.Unlock()
@@ -236,13 +249,6 @@ func (s *Server) startExtraHTTPListener(key, scheme string) error {
 		defer s.wg.Done()
 		var err error
 		if scheme == "https" {
-			// Extra HTTPS listeners share the main server's TLS posture:
-			// JARM/JA3 fingerprint wrapping, mTLS requirements and TLS 1.2
-			// floor are applied identically to every termination point.
-			// The cert itself is hot-reloadable (see tlsCertLoader).
-			if cfgErr := s.configureTLS(srv); cfgErr != nil {
-				slog.Error("Extra HTTPS listener TLS config failed", "key", key, "addr", addr, "err", cfgErr)
-			}
 			slog.Info("Extra HTTPS listener started", "addr", addr, "key", key)
 			err = srv.ServeTLS(ln, "", "")
 		} else {
@@ -259,7 +265,7 @@ func (s *Server) startExtraHTTPListener(key, scheme string) error {
 	return nil
 }
 
-func (s *Server) startExtraTCPListener(key, scheme string) error {
+func (s *Server) startExtraTCPListener(key, scheme string, o listenerTLSOverrides) error {
 	// Key format: "tcp://host:port" or "tls://host:port"
 	addr := key[len(scheme)+3:] // strip "scheme://"
 	var ln net.Listener
@@ -269,11 +275,29 @@ func (s *Server) startExtraTCPListener(key, scheme string) error {
 		if certErr != nil {
 			return fmt.Errorf("loading TLS cert for extra TCP listener: %w", certErr)
 		}
+		floor, ok := minTLSVersionFloor(o.MinTLSVersion)
+		if !ok {
+			return fmt.Errorf("invalid min_tls_version %q", o.MinTLSVersion)
+		}
 		tlsCfg := &tls.Config{
 			Certificates: []tls.Certificate{cert},
-			MinVersion:   tls.VersionTLS12,
+			MinVersion:   floor,
 		}
-		ln, err = tls.Listen("tcp", addr, s.tlsFingerprint.Live(tlsCfg))
+		// Raw tls:// listeners honour the same per-listener hardening as https
+		// listeners, client-certificate requirement included; a posture that
+		// cannot be honoured fails the start (fail closed).
+		requireClientCert, caPool, authErr := s.effectiveClientAuth(o)
+		if authErr != nil {
+			return authErr
+		}
+		if requireClientCert {
+			tlsCfg.ClientCAs = caPool
+			tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
+		}
+		if s.tlsFingerprint != nil {
+			tlsCfg = s.tlsFingerprint.Live(tlsCfg)
+		}
+		ln, err = tls.Listen("tcp", addr, tlsCfg)
 	} else {
 		ln, err = net.Listen("tcp", addr)
 	}
@@ -313,11 +337,12 @@ func (s *Server) startExtraTCPListener(key, scheme string) error {
 				slog.Error("Extra TCP accept error (listener exiting)", "key", key, "addr", addr, "err", aErr)
 				break
 			}
+			// handleTCPConnection owns the matching wg.Done (same
+			// convention as the main TCP listener in server_net.go): adding
+			// a second Done here decremented the counter per connection and
+			// eventually panicked with "sync: negative WaitGroup counter".
 			s.wg.Add(1)
-			go func() {
-				defer s.wg.Done()
-				s.handleTCPConnection(conn)
-			}()
+			go s.handleTCPConnection(conn)
 		}
 		ln.Close()
 		s.extraListenersMu.Lock()

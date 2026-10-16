@@ -458,6 +458,14 @@ type Listener struct {
 	// ICMP-specific: the bind address (e.g. "0.0.0.0")
 	ICMPAddr string `gorm:"size:255" json:"icmp_addr"`
 
+	// Per-listener TLS posture for https/tls listeners. Empty/false values
+	// inherit the server-wide beacon settings (server.client_ca_file /
+	// server.require_client_cert); the knobs can only strengthen that posture
+	// (see listener_tls.go), never relax it.
+	ClientCAFile      string `gorm:"size:255" json:"client_ca_file"`
+	RequireClientCert bool   `json:"require_client_cert"`
+	MinTLSVersion     string `gorm:"size:16" json:"min_tls_version"`
+
 	TenantID uint `gorm:"index" json:"tenant_id"`
 
 	CreatedAt time.Time `gorm:"index" json:"created_at"`

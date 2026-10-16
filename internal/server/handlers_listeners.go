@@ -188,7 +188,7 @@ func (s *Server) startListenerForRecord(l *db.Listener, context string) bool {
 		}
 	}
 
-	if err := s.startExtraListener(key, scheme); err != nil {
+	if err := s.startExtraListener(l, key, scheme); err != nil {
 		slog.Error("Failed to start listener",
 			"key", key, "context", context, "err", err)
 		return false
@@ -360,6 +360,14 @@ func (s *Server) handleCreateListener(c *gin.Context) {
 		return
 	}
 
+	// Per-listener TLS knobs are validated before the row exists: a listener
+	// that cannot honour its requested posture (bad CA, TLS floor below 1.2,
+	// require_client_cert without any CA) must never be created as "running".
+	if err := s.validateListenerTLSShape(l.Scheme, listenerTLSOverridesFor(&l)); err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	l.Enabled = true
 	l.Status = "running"
 	// New listeners belong to the operator's tenant; the body must not set it.
@@ -418,6 +426,11 @@ func (s *Server) handleUpdateListener(c *gin.Context) {
 		DNSDomain     string `json:"dns_domain"`
 		DNSListenAddr string `json:"dns_listen_addr"`
 		ICMPAddr      string `json:"icmp_addr"`
+		// Pointers: an explicit "" / false clears a per-listener TLS override
+		// instead of being indistinguishable from "field absent".
+		ClientCAFile      *string `json:"client_ca_file"`
+		RequireClientCert *bool   `json:"require_client_cert"`
+		MinTLSVersion     *string `json:"min_tls_version"`
 	}
 	if err := c.ShouldBindJSON(&updates); err != nil {
 		respondErrorSafe(c, http.StatusBadRequest, err, "")
@@ -461,6 +474,22 @@ func (s *Server) handleUpdateListener(c *gin.Context) {
 	}
 	if updates.Host != "" && !isValidHost(updates.Host) {
 		respondError(c, http.StatusBadRequest, "invalid host address")
+		return
+	}
+	// Per-listener TLS knobs. Pointers keep "clear the override" distinct from
+	// "leave it alone"; the merged shape is validated before Save so a listener
+	// can never be persisted in a posture it cannot serve.
+	if updates.ClientCAFile != nil {
+		l.ClientCAFile = strings.TrimSpace(*updates.ClientCAFile)
+	}
+	if updates.RequireClientCert != nil {
+		l.RequireClientCert = *updates.RequireClientCert
+	}
+	if updates.MinTLSVersion != nil {
+		l.MinTLSVersion = strings.TrimSpace(*updates.MinTLSVersion)
+	}
+	if err := s.validateListenerTLSShape(l.Scheme, listenerTLSOverridesFor(&l)); err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 	if updates.Notes != "" {
@@ -514,7 +543,8 @@ func (s *Server) handleUpdateListener(c *gin.Context) {
 
 	// Sync extra listener state (start/stop/restart)
 	changed := updates.Host != "" || updates.Port != 0 || updates.Scheme != "" || updates.Protocol != "" || updates.Type != "" ||
-		updates.DNSDomain != "" || updates.DNSListenAddr != "" || updates.ICMPAddr != ""
+		updates.DNSDomain != "" || updates.DNSListenAddr != "" || updates.ICMPAddr != "" ||
+		updates.ClientCAFile != nil || updates.RequireClientCert != nil || updates.MinTLSVersion != nil
 	if changed {
 		s.stopExtraListener(oldKey)
 	}

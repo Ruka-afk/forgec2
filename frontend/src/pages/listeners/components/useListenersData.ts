@@ -9,7 +9,7 @@ import { POLL } from "@/lib/polling";
 import { useWS } from "@/lib/wsContext";
 import { useI18n } from "@/lib/i18n";
 import type { CreateListenerForm, EditListenerForm, Listener } from "./types";
-import { emptyCreateForm, emptyEditForm } from "./types";
+import { emptyCreateForm, emptyEditForm, isTLSScheme } from "./types";
 import {
   appendHealthSamples,
   indexListenerHealth,
@@ -88,6 +88,7 @@ export function useListenersData() {
       }
       setCreating(true);
       try {
+        const tlsScheme = isTLSScheme(form.protocol || form.type);
         const data = await api.postJson(paths.listeners.list, {
           name: form.name,
           type: form.type,
@@ -96,6 +97,15 @@ export function useListenersData() {
           scheme: form.protocol,
           tags: form.tags,
           color: form.color,
+          // Only meaningful for https/tls listeners; the server rejects the
+          // knobs on any other scheme instead of ignoring them silently.
+          ...(tlsScheme
+            ? {
+                client_ca_file: form.client_ca_file.trim(),
+                require_client_cert: form.require_client_cert,
+                min_tls_version: form.min_tls_version,
+              }
+            : {}),
         });
         if (data.success) {
           await loadListeners();
@@ -104,8 +114,10 @@ export function useListenersData() {
         }
         toast.error((data.error as string) || t("listeners.toast_unknown_error"));
         return false;
-      } catch {
-        toast.error(t("listeners.toast_create_failed"));
+      } catch (e) {
+        // 4xx validation messages (e.g. "require_client_cert needs a client
+        // CA") are more useful than the generic failure toast.
+        toast.error(e instanceof Error && e.message ? e.message : t("listeners.toast_create_failed"));
         return false;
       } finally {
         setCreating(false);
@@ -121,6 +133,7 @@ export function useListenersData() {
         return false;
       }
       try {
+        const tlsScheme = isTLSScheme(form.protocol || form.type);
         await api.putJson(paths.listeners.one(id), {
           name: form.name,
           type: form.type,
@@ -130,12 +143,18 @@ export function useListenersData() {
           notes: form.notes,
           tags: form.tags,
           color: form.color,
+          // Always sent explicitly: moving an https/tls listener to another
+          // scheme must clear the per-listener TLS posture instead of leaving
+          // a stale override the server then refuses to serve.
+          client_ca_file: tlsScheme ? form.client_ca_file.trim() : "",
+          require_client_cert: tlsScheme ? form.require_client_cert : false,
+          min_tls_version: tlsScheme ? form.min_tls_version : "",
         });
         await loadListeners();
         toast.success(t("listeners.toast_updated"));
         return true;
-      } catch {
-        toast.error(t("listeners.toast_update_failed"));
+      } catch (e) {
+        toast.error(e instanceof Error && e.message ? e.message : t("listeners.toast_update_failed"));
         return false;
       }
     },
