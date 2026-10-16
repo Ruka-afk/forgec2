@@ -19,7 +19,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func initBeaconTestServer(t *testing.T, database *gorm.DB) (*Server, *gin.Engine) {
+func initBeaconTestServer(t testing.TB, database *gorm.DB) (*Server, *gin.Engine) {
 	t.Helper()
 	sm, err := crypto.NewSessionManager()
 	if err != nil {

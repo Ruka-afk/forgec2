@@ -61,6 +61,7 @@ func reloadGroups() []reloadGroup {
 		{Token: "logging.level", Mode: reloadHot, Apply: (*Server).syncLogLevel},
 		{Token: "server.tls", Mode: reloadStatic},
 		{Token: "server.mtls", Mode: reloadStatic},
+		{Token: "server.pprof_addr", Mode: reloadStatic},
 		{Token: "server.data_dir", Mode: reloadStatic},
 		{Token: "server.listeners", Mode: reloadStatic},
 		{Token: "auth", Mode: reloadStatic},

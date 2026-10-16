@@ -43,6 +43,7 @@ func TestDiffConfigTokenCoverage(t *testing.T) {
 		{"logging.level", "hot", func(c *config.Config) { c.Logging.Level += "x" }},
 		{"server.tls", "static", func(c *config.Config) { c.Server.TLSEnabled = !c.Server.TLSEnabled }},
 		{"server.mtls", "static", func(c *config.Config) { c.Server.RequireClientCert = !c.Server.RequireClientCert }},
+		{"server.pprof_addr", "static", func(c *config.Config) { c.Server.PprofAddr = "127.0.0.1:6060" }},
 		{"server.data_dir", "static", func(c *config.Config) { c.Server.DataDir += "x" }},
 		{"server.listeners", "static", func(c *config.Config) { c.Listeners.H2C.Enabled = !c.Listeners.H2C.Enabled }},
 		{"auth", "static", func(c *config.Config) { c.Auth.DefaultPasswd += "x" }},

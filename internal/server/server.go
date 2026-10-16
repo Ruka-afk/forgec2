@@ -151,6 +151,14 @@ type Server struct {
 	extraListeners   map[string]io.Closer
 	extraListenersMu sync.Mutex
 
+	// Opt-in profiling listener (config server.pprof_addr). Kept out of
+	// extraListeners on purpose: those entries are operator listeners and the
+	// listener-health endpoint walks them, while this one only ever serves
+	// /debug/pprof. nil when profiling is disabled.
+	pprofSrv  *http.Server
+	pprofAddr string
+	pprofMu   sync.Mutex
+
 	metrics *MetricsCollector
 
 	// GeoIP lookup concurrency limiter

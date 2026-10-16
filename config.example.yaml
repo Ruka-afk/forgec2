@@ -55,6 +55,7 @@ server:
                               # (agent binds 127.0.0.1:lport, traffic egresses from the teamserver)
   dns_obscure: false          # XOR-obscure DNS C2 fragments (must match generated implants)
   auto_recon: []              # e.g. [hostinfo, process_tree] queued on first check-in
+  pprof_addr: ""              # OPT-IN profiling endpoints (empty = off); loopback only, e.g. "127.0.0.1:6060". See docs/CAPACITY.md.
 
 # Rules of engagement: refuse tasks whose command IPs fall outside allow or inside deny.
 roe:

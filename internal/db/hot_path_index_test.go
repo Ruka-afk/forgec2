@@ -12,6 +12,13 @@ import (
 // migrations missed.
 const hotPathIndexID = "2026-10-15-hot-path-read-indexes"
 
+// implantListenerIndexID is the migration that adds the composite index the
+// listener detail page's ordered agent page and its active counters need.
+// Later index batches get their own migration ID for the same reason: an
+// already-applied migration is never edited retroactively, because databases
+// that ran it would never see the added index.
+const implantListenerIndexID = "2026-10-16-implant-listener-read-index"
+
 // hotPathProbe is one (index, query) pair taken verbatim from a handler. The
 // query is the shape the planner actually sees, including the tenant predicate
 // where the handler has one — measuring a simplified query is how a "useful"
@@ -28,6 +35,17 @@ type hotPathProbe struct {
 	query   string
 	creates []interface{}
 	pre     []string
+	// migration is the index migration that creates the index. Empty means
+	// hotPathIndexID.
+	migration string
+}
+
+// migrationID is the migration a probe's index belongs to.
+func (p hotPathProbe) migrationID() string {
+	if p.migration != "" {
+		return p.migration
+	}
+	return hotPathIndexID
 }
 
 // taskBaseline / friends are the pre-existing index sets per table, kept here
@@ -65,6 +83,17 @@ var (
 	// index a session_id column the model does not have.)
 	chatBaseline = []string{
 		"CREATE INDEX IF NOT EXISTS idx_chat_messages_channel ON chat_messages(channel)",
+	}
+	// Implant carries gorm:"index" tags for last_seen and status, and the
+	// initial-schema index migration adds the single-column listener_id index.
+	// The composite probe below starts from exactly those, so its measured
+	// "before" is the plan a production database has today.
+	implantBaseline = []string{
+		"CREATE INDEX IF NOT EXISTS idx_implants_listener_id ON implants(listener_id)",
+		"CREATE INDEX IF NOT EXISTS idx_implants_last_seen ON implants(last_seen)",
+		"CREATE INDEX IF NOT EXISTS idx_implants_status ON implants(status)",
+		"CREATE INDEX IF NOT EXISTS idx_implants_status_last_seen ON implants(status, last_seen)",
+		"CREATE INDEX IF NOT EXISTS idx_implants_parent_agent ON implants(parent_agent_id)",
 	}
 )
 
@@ -140,6 +169,25 @@ func hotPathProbes() []hotPathProbe {
 			query:  "SELECT * FROM api_keys WHERE user_id = 1 ORDER BY created_at DESC",
 			before: "USE TEMP B-TREE FOR ORDER BY",
 		},
+		{
+			index: "idx_implants_listener_seen", table: "implants",
+			creates: []interface{}{&Implant{}}, pre: implantBaseline,
+			migration: implantListenerIndexID,
+			// handlers_listeners.go:77,114 — the listener detail page: the
+			// listener's agents, newest first, before the 5000-row page cap.
+			query:  "SELECT * FROM implants WHERE listener_id = 1 ORDER BY last_seen DESC LIMIT 5000",
+			before: "USE TEMP B-TREE FOR ORDER BY",
+		},
+		{
+			index: "idx_implants_listener_seen", table: "implants",
+			creates: []interface{}{&Implant{}}, pre: implantBaseline,
+			migration: implantListenerIndexID,
+			// handlers_listeners.go:82,121 — active agents on the listener:
+			// the same predicate plus a last_seen window, served as an ordered
+			// range instead of a seek plus per-row lookups.
+			query:  "SELECT COUNT(*) FROM implants WHERE listener_id = 1 AND last_seen > '2020-01-01'",
+			before: "USING INDEX idx_implants_listener_id",
+		},
 	}
 }
 
@@ -203,13 +251,13 @@ func hasIndex(t *testing.T, database *gorm.DB, table, want string) bool {
 	return found
 }
 
-// TestHotPathIndexesCreatedByMigration proves the migration really creates all
-// ten indexes. A typo in one SQL string would otherwise only surface as a
-// silently slow query in production.
+// TestHotPathIndexesCreatedByMigration proves the migrations really create
+// every index the probes name. A typo in one SQL string would otherwise only
+// surface as a silently slow query in production.
 func TestHotPathIndexesCreatedByMigration(t *testing.T) {
 	for _, p := range hotPathProbes() {
 		database := hotPathDB(t, p)
-		if err := findMigration(t, hotPathIndexID).Migrate(database); err != nil {
+		if err := findMigration(t, p.migrationID()).Migrate(database); err != nil {
 			t.Fatalf("migrate: %v", err)
 		}
 		if !hasIndex(t, database, p.table, p.index) {
@@ -234,7 +282,7 @@ func TestHotPathIndexChangesTheQueryPlan(t *testing.T) {
 				t.Fatalf("setup changed: expected the pre-index plan to use %q, got %s", p.before, before)
 			}
 
-			if err := findMigration(t, hotPathIndexID).Migrate(database); err != nil {
+			if err := findMigration(t, p.migrationID()).Migrate(database); err != nil {
 				t.Fatalf("migrate: %v", err)
 			}
 			after := hotPathPlan(t, database, p.query)
@@ -257,7 +305,7 @@ func TestHotPathIndexChangesTheQueryPlan(t *testing.T) {
 func TestHotPathIndexRollbackDropsEveryIndex(t *testing.T) {
 	for _, p := range hotPathProbes() {
 		database := hotPathDB(t, p)
-		mig := findMigration(t, hotPathIndexID)
+		mig := findMigration(t, p.migrationID())
 		if err := mig.Migrate(database); err != nil {
 			t.Fatalf("migrate: %v", err)
 		}
@@ -270,7 +318,7 @@ func TestHotPathIndexRollbackDropsEveryIndex(t *testing.T) {
 	}
 }
 
-// TestHotPathIndexesAreIdempotent proves re-running the migration on an
+// TestHotPathIndexesAreIdempotent proves re-running the migrations on an
 // already-indexed database is a no-op, which is what the migration runner does
 // on every boot.
 func TestHotPathIndexesAreIdempotent(t *testing.T) {
@@ -286,10 +334,11 @@ func TestHotPathIndexesAreIdempotent(t *testing.T) {
 			}
 		}
 	}
-	mig := findMigration(t, hotPathIndexID)
 	for i := 0; i < 3; i++ {
-		if err := mig.Migrate(database); err != nil {
-			t.Fatalf("migrate run %d: %v", i+1, err)
+		for _, id := range probeMigrationIDs(probes) {
+			if err := findMigration(t, id).Migrate(database); err != nil {
+				t.Fatalf("migrate %s run %d: %v", id, i+1, err)
+			}
 		}
 	}
 	for _, p := range probes {
@@ -297,6 +346,20 @@ func TestHotPathIndexesAreIdempotent(t *testing.T) {
 			t.Errorf("repeated migration lost %s", p.index)
 		}
 	}
+}
+
+// probeMigrationIDs lists the distinct migrations the probes depend on, in
+// probe order.
+func probeMigrationIDs(probes []hotPathProbe) []string {
+	var ids []string
+	seen := map[string]bool{}
+	for _, p := range probes {
+		if id := p.migrationID(); !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	return ids
 }
 
 // TestHotPathIndexesSkippedWhenTableMissing proves the migration tolerates a

@@ -229,6 +229,11 @@ func diffConfig(old, new *config.Config) (hotReloadable []string, staticOnly []s
 	if old.Server.Port != new.Server.Port {
 		staticOnly = append(staticOnly, "server.port")
 	}
+	// The profiling listener is bound once at startup (and is meant to exist
+	// only while an operator is measuring), so a live change cannot be applied.
+	if old.Server.PprofAddr != new.Server.PprofAddr {
+		staticOnly = append(staticOnly, "server.pprof_addr")
+	}
 	if old.Server.BeaconKey != new.Server.BeaconKey {
 		hotReloadable = append(hotReloadable, "server.beacon_key")
 	}

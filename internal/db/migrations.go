@@ -1220,6 +1220,29 @@ var indexMigrations = []*gormigrate.Migration{
 			return nil
 		},
 	},
+	// The listener detail page lists the agents registered through one
+	// listener, newest first: handlers_listeners.go:77,114 emit
+	// `WHERE listener_id = ? ORDER BY last_seen DESC LIMIT 5000`, and the
+	// active-agent counters reuse the predicate with a last_seen window
+	// (handlers_listeners.go:82,121,572; handlers_opsec.go:158;
+	// ai_tools_exec.go:1286). idx_implants_listener_id finds the rows but
+	// nothing supplies the order, so every request sorted the listener's whole
+	// fleet in a temp b-tree before the LIMIT could cut it down, and the
+	// counters paid a rowid lookup per match just to read last_seen. The
+	// composite serves both shapes: equality seek plus an ordered,
+	// index-only range. A new migration ID rather than an edit to
+	// 2026-10-15-hot-path-read-indexes, which databases have already applied.
+	{
+		ID: "2026-10-16-implant-listener-read-index",
+		Migrate: func(tx *gorm.DB) error {
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_implants_listener_seen ON implants(listener_id, last_seen)", "idx_implants_listener_seen")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			execMigration(tx, "DROP INDEX IF EXISTS idx_implants_listener_seen", "drop_idx_implants_listener_seen")
+			return nil
+		},
+	},
 }
 
 // Migrations is the combined migration history, kept for tooling and tests.

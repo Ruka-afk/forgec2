@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -106,6 +107,11 @@ type Config struct {
 		DBConnMaxLifetime    time.Duration `yaml:"db_conn_max_lifetime"`    // max connection lifetime for PostgreSQL pool (default 30m)
 		DNSObscure           bool          `yaml:"dns_obscure"`             // XOR-obscure DNS C2 fragments (must match implant DNSObscure)
 		AutoRecon            []string      `yaml:"auto_recon"`              // task types queued on first check-in (empty = disabled)
+		// PprofAddr exposes Go's /debug/pprof endpoints ("" = disabled, the
+		// default). Loopback only: the server refuses to start with a
+		// non-loopback address, because those endpoints expose process
+		// internals and accept no authentication. See docs/CAPACITY.md.
+		PprofAddr string `yaml:"pprof_addr"`
 	} `yaml:"server"`
 
 	// Roe is the rules-of-engagement gate: tasks whose command/data/path
@@ -816,6 +822,31 @@ func (c *Config) AIEndpoint() string {
 	return DefaultAIEndpoint(c.AI.Provider)
 }
 
+// validatePprofAddr rejects profiling addresses that are not loopback. The
+// /debug/pprof endpoints have no authentication, so a routable bind is a
+// configuration error at load time and again at bind time in internal/server
+// (defense in depth: config.Validate runs before the server owns any socket).
+func validatePprofAddr(addr string) error {
+	if addr == "" {
+		return nil
+	}
+	ap, err := netip.ParseAddrPort(addr)
+	if err != nil {
+		// "localhost:port" is the one non-literal form net.Listen resolves;
+		// accepting it keeps the operator's spelling working without widening
+		// what counts as loopback.
+		host, port, splitErr := net.SplitHostPort(addr)
+		if splitErr != nil || port == "" || !strings.EqualFold(host, "localhost") {
+			return fmt.Errorf("server.pprof_addr %q must be a loopback host:port such as 127.0.0.1:6060", addr)
+		}
+		return nil
+	}
+	if !ap.Addr().IsLoopback() {
+		return fmt.Errorf("server.pprof_addr %q must be loopback (127.0.0.1 or ::1): the profiling endpoints have no authentication", addr)
+	}
+	return nil
+}
+
 // Validate checks configuration for invalid or dangerous values.
 func (c *Config) Validate() error {
 	var errs []error
@@ -909,6 +940,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Server.GRPCEnabled && c.Server.GRPCAddr == "" {
 		errs = append(errs, errors.New("server.grpc_addr is required when grpc_enabled is true"))
+	}
+	if err := validatePprofAddr(strings.TrimSpace(c.Server.PprofAddr)); err != nil {
+		errs = append(errs, err)
 	}
 	if c.Server.SSHEnabled && c.Server.SSHPort <= 0 {
 		errs = append(errs, errors.New("server.ssh_port must be > 0 when ssh_enabled is true"))

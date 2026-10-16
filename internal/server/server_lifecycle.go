@@ -24,6 +24,7 @@ func (s *Server) shutdown() {
 	slog.Info("Shutting down server...")
 
 	// Stop accepting new connections
+	s.stopPprof()
 	s.extraListenersMu.Lock()
 	for key, srv := range s.extraListeners {
 		slog.Info("Shutting down extra listener", "key", key)
@@ -517,6 +518,13 @@ func (s *Server) Run() error {
 
 	// Start extra listeners from DB (created via the UI in previous sessions)
 	s.startExtraListenersFromDB()
+
+	// Opt-in profiling endpoints (loopback only, disabled by default). Started
+	// before the main listener so a misconfigured address fails the boot
+	// instead of surfacing after the server claims to be up.
+	if err := s.startPprof(); err != nil {
+		return err
+	}
 
 	// Check main server port availability before attempting to bind
 	addr := s.cfg.Server.Host + ":" + itoa(s.cfg.Server.Port)

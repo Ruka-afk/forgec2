@@ -38,7 +38,7 @@ type tcpTestAgent struct {
 	secretID   string // v3 per-implant secret id (carried on registration frames)
 }
 
-func newTCPTestAgent(t *testing.T, uuid string) *tcpTestAgent {
+func newTCPTestAgent(t testing.TB, uuid string) *tcpTestAgent {
 	t.Helper()
 	curve := ecdh.X25519()
 	privateKey, err := curve.GenerateKey(rand.Reader)
@@ -266,7 +266,7 @@ func tcpFrameConn(t *testing.T, s *Server) (net.Conn, func()) {
 
 // v3TestAgent builds a test agent that carries a freshly minted per-implant
 // v3 secret (the v2 master-key path is deprecated and rejected).
-func v3TestAgent(t *testing.T, s *Server, uuid string) *tcpTestAgent {
+func v3TestAgent(t testing.TB, s *Server, uuid string) *tcpTestAgent {
 	t.Helper()
 	id, secretB64, err := s.createRegSecret()
 	if err != nil {
