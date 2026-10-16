@@ -46,11 +46,12 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 
 	session := UserSession{Username: username, ConnectedAt: time.Now()}
 	client := &wsClientConn{
-		conn:     conn,
-		session:  session,
-		tenantID: s.tenantIDForUser(username),
-		ch:       make(chan []byte, wsWriteChanSize),
-		done:     make(chan struct{}),
+		conn:          conn,
+		session:       session,
+		tenantID:      s.tenantIDForUser(username),
+		canViewScreen: s.userCanViewScreen(username),
+		ch:            make(chan []byte, wsWriteChanSize),
+		done:          make(chan struct{}),
 	}
 
 	s.wsMutex.Lock()
@@ -176,8 +177,12 @@ type wsClientConn struct {
 	// tenantID scopes agent-bound broadcasts: 0 (legacy operators) receives
 	// everything, matching tenantScope semantics.
 	tenantID uint
-	ch       chan []byte
-	done     chan struct{}
+	// canViewScreen mirrors the operator gate on the screenshot APIs
+	// (agents.write): live screen frames are pushed over this same socket, so
+	// a read-only custom role must not receive them just by connecting /ws.
+	canViewScreen bool
+	ch            chan []byte
+	done          chan struct{}
 }
 
 const wsWriteChanSize = 64
@@ -217,36 +222,73 @@ func (s *Server) broadcastToClients(message []byte) {
 	s.broadcastToClientsWhere(message, nil)
 }
 
+// userCanViewScreen reports whether a username may receive live screen frames
+// on the dashboard socket, computed once at connect time. It mirrors the
+// operator gate + agents.write permission of the screenshot endpoints
+// (RoleHasPermissionDB covers custom roles too); lookup errors fail closed.
+func (s *Server) userCanViewScreen(username string) bool {
+	var user db.User
+	if err := s.db.Select("role").Where("username = ?", username).First(&user).Error; err != nil {
+		return false
+	}
+	if user.Role == "viewer" || user.Role == "" {
+		return false
+	}
+	return db.RoleHasPermissionDB(s.db, user.Role, db.PermAgentsWrite)
+}
+
 // broadcastToTenant sends an agent-scoped message only to clients allowed to
 // see the agent: legacy (tenant 0) operators plus the agent's own tenant.
 // Previously every agent/task event fanned out to all connected operators,
 // disclosing other tenants' hostnames, IDs and task types over the socket.
 func (s *Server) broadcastToTenant(message []byte, agentID string) {
+	s.broadcastToTenantWhere(message, agentID, nil)
+}
+
+// broadcastScreenshotToTenant delivers live screen frames only to clients
+// that could fetch the same frame over HTTP (agents.write + operator role).
+// The tenant fan-out alone was not enough: a read-only custom role with
+// agents.read could watch a desktop through /ws even though the screenshot
+// endpoints require the write permission.
+func (s *Server) broadcastScreenshotToTenant(message []byte, agentID string) {
+	s.broadcastToTenantWhere(message, agentID, func(client *wsClientConn) bool {
+		return client.canViewScreen
+	})
+}
+
+// broadcastToTenantWhere is broadcastToTenant with an extra per-client filter
+// (nil keeps every client in the resolved tenant set).
+func (s *Server) broadcastToTenantWhere(message []byte, agentID string, allow func(*wsClientConn) bool) {
 	var agent db.Implant
 	if err := s.db.Select("tenant_id").Where("id = ?", agentID).First(&agent).Error; err != nil {
 		// Agent row gone (or DB hiccup): limit to legacy clients rather than
 		// dropping (availability) or fanning out (disclosure).
 		slog.Warn("Tenant broadcast: agent lookup failed, limiting to legacy clients", "agent_id", agentID, "error", err)
-		s.broadcastToClientsWhere(message, func(tid uint) bool { return tid == 0 })
+		s.broadcastToClientsWhere(message, func(client *wsClientConn) bool {
+			return client.tenantID == 0 && (allow == nil || allow(client))
+		})
 		return
 	}
 	if agent.TenantID == 0 {
-		s.broadcastToClients(message)
+		s.broadcastToClientsWhere(message, allow)
 		return
 	}
 	tid := agent.TenantID
-	s.broadcastToClientsWhere(message, func(clientTID uint) bool {
-		return clientTID == 0 || clientTID == tid
+	s.broadcastToClientsWhere(message, func(client *wsClientConn) bool {
+		if client.tenantID != 0 && client.tenantID != tid {
+			return false
+		}
+		return allow == nil || allow(client)
 	})
 }
 
-// broadcastToClientsWhere is broadcastToClients with a per-client tenant
-// filter (nil keeps everything).
-func (s *Server) broadcastToClientsWhere(message []byte, allow func(tid uint) bool) {
+// broadcastToClientsWhere is broadcastToClients with a per-client filter
+// (nil keeps everything).
+func (s *Server) broadcastToClientsWhere(message []byte, allow func(*wsClientConn) bool) {
 	s.wsMutex.RLock()
 	clients := make([]*wsClientConn, 0, len(s.wsClients))
 	for _, client := range s.wsClients {
-		if allow != nil && !allow(client.tenantID) {
+		if allow != nil && !allow(client) {
 			continue
 		}
 		clients = append(clients, client)

@@ -64,6 +64,23 @@ const (
 	PublicDownloadRate = 60 // max public payload/stage downloads per IP per window
 	LoginRequestRate   = 10 // max login POSTs per IP per window (lockout handles failures)
 
+	// Remote desktop input bounds. The agent-side dispatcher understands
+	// move/click/key only, and coordinates are injected straight into
+	// SetCursorPos/keybd_event without validation agent-side — so the API
+	// boundary is the only place that can reject garbage.
+	MaxRemoteInputCoord  = 32767 // reject |x|/|y| beyond this
+	MaxRemoteInputKeyLen = 32    // reject longer key names
+	// MaxRemoteInputEventsPerWindow throttles accepted input events per
+	// (operator, agent): every event becomes a task row plus an audit row,
+	// so an unbounded stream is a write-amplification primitive.
+	MaxRemoteInputEventsPerWindow = 40
+	RemoteInputWindow             = 1 * time.Second
+	// Screen monitor stream command bounds (interval/quality validated in the
+	// handler as well): width is spliced into the agent's CSV command, so an
+	// arbitrary string there was parameter injection.
+	MinScreenMonitorWidth = 16
+	MaxScreenMonitorWidth = 16384
+
 	// SOCKS Relay
 	SocksMaxFrameSize   = 64 * 1024       // 64 KB per relay frame
 	SocksFastInterval   = 500             // ms – agent fast-poll when relay active
@@ -160,8 +177,18 @@ const (
 
 	RemoteDesktopWriteDeadline = 5 * time.Second
 	RemoteDesktopReadDeadline  = 5 * time.Minute
-	MonitorMetricsInterval     = 30 * time.Second
-	MonitorAlertInterval       = 1 * time.Minute
+	// RemoteDesktopPingInterval keeps a read-idle operator stream alive: the
+	// legacy /ws/remote-desktop read loop only extends its read deadline on
+	// pongs, so without server pings every session died at the 5-minute
+	// deadline even while actively watching.
+	RemoteDesktopPingInterval = 30 * time.Second
+	// MaxRDOperatorsPerAgent / MaxRDOperatorConnections bound the legacy RD
+	// websocket hub. Without caps, one authenticated operator could open
+	// unlimited sockets (each a goroutine + read buffer) against one agent.
+	MaxRDOperatorsPerAgent   = 8
+	MaxRDOperatorConnections = 64
+	MonitorMetricsInterval   = 30 * time.Second
+	MonitorAlertInterval     = 1 * time.Minute
 	// agentReapPageSize bounds one page of the offline-sweep query so the
 	// reaper stays complete past a single page on large fleets.
 	agentReapPageSize = 5000

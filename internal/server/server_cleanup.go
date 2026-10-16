@@ -230,6 +230,11 @@ func (s *Server) cleanupStaleMapEntries() {
 		cleaned += s.fileChains.sweep(StaleMapCleanupAge)
 	}
 
+	// Expired remote-input limiter windows. Keys are attacker/operator chosen
+	// (user id + agent id), so without a sweep a hostile client could leak one
+	// map entry per agent id forever.
+	cleaned += s.remoteInputLimiter.sweep(cutoff)
+
 	if cleaned > 0 {
 		slog.Info("Cleaned stale map entries", "count", cleaned)
 	}

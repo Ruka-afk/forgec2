@@ -779,8 +779,12 @@ func (s *Server) TriggerAlertForEvent(evt Event) {
 func (s *Server) handleScreenMonitorPage(c *gin.Context) {
 	id := c.Param("id")
 
+	// Tenant scope: this page renders agent identity/hostname, and the JSON
+	// branch exposes the same fields — an unscoped read was a cross-tenant
+	// disclosure (mirrors the shell page fix).
 	var agent db.Implant
-	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
+	q := s.tenantScope(s.db.Model(&db.Implant{}), c)
+	if err := q.First(&agent, "id = ?", id).Error; err != nil {
 		c.Redirect(http.StatusFound, "/agents")
 		return
 	}
@@ -855,10 +859,45 @@ func (s *Server) handleStartScreenMonitor(c *gin.Context) {
 	}
 	interval = strconv.Itoa(intervalSeconds)
 
+	// Width is spliced into the agent's CSV stream command ("interval,quality
+	// [,width][,mime]"), so an arbitrary string was parameter injection into
+	// the agent-side parser. Validate and canonicalize it here.
+	width := 0
+	if widthStr != "" {
+		widthValue, widthErr := strconv.Atoi(widthStr)
+		if widthErr != nil || widthValue < MinScreenMonitorWidth || widthValue > MaxScreenMonitorWidth {
+			respondError(c, http.StatusBadRequest,
+				fmt.Sprintf("width must be an integer between %d and %d", MinScreenMonitorWidth, MaxScreenMonitorWidth))
+			return
+		}
+		width = widthValue
+	}
+
+	mimeVal := strings.ToLower(strings.TrimSpace(request.Mime))
+	if mimeVal == "" {
+		mimeVal = strings.ToLower(strings.TrimSpace(c.Query("mime")))
+	}
+	if mimeVal != "" && mimeVal != "webp" && mimeVal != "jpeg" && mimeVal != "png" {
+		respondError(c, http.StatusBadRequest, "mime must be webp, jpeg, or png")
+		return
+	}
+	if mimeVal != "" && width == 0 {
+		// The agent parses the command positionally
+		// ("interval,quality[,width][,mime]"), so a mime without a width
+		// would land in the width slot.
+		respondError(c, http.StatusBadRequest, "mime requires width")
+		return
+	}
+
 	monitorKey := strings.ToLower(id)
+	// Single-flight reservation, then release the registry lock before any DB
+	// write: issueAgentTask runs plugin hooks and audit writes, and holding
+	// screenMonitorMu across them would stall frame ingest (which takes the
+	// same lock on every screen_frame result).
 	s.screenMonitorMu.Lock()
-	defer s.screenMonitorMu.Unlock()
+	s.ensureScreenMonitorMapsLocked()
 	if _, active := s.screenMonitorImplants[monitorKey]; active {
+		s.screenMonitorMu.Unlock()
 		c.JSON(http.StatusOK, gin.H{
 			"success":        true,
 			"active":         true,
@@ -868,26 +907,37 @@ func (s *Server) handleStartScreenMonitor(c *gin.Context) {
 		return
 	}
 	if len(s.screenMonitorImplants) >= MaxScreenMonitors {
+		s.screenMonitorMu.Unlock()
 		respondError(c, http.StatusTooManyRequests, "screen monitor limit reached")
 		return
 	}
+	if op := s.screenMonitorOps[monitorKey]; op != "" {
+		s.screenMonitorMu.Unlock()
+		respondError(c, http.StatusConflict, "screen monitor "+op+" already in progress for this agent")
+		return
+	}
+	s.screenMonitorOps[monitorKey] = "start"
+	s.screenMonitorMu.Unlock()
 
 	streamCmd := interval + "," + quality
-	if widthStr != "" {
-		streamCmd += "," + widthStr
+	if width > 0 {
+		streamCmd += "," + strconv.Itoa(width)
 	}
-	mimeVal := strings.ToLower(strings.TrimSpace(request.Mime))
-	if mimeVal == "" {
-		mimeVal = strings.ToLower(strings.TrimSpace(c.Query("mime")))
-	}
-	if mimeVal == "webp" || mimeVal == "jpeg" || mimeVal == "png" {
+	if mimeVal != "" {
 		streamCmd += "," + mimeVal
 	}
 	task := s.issueAgentTask(c, id, TaskSpec{Type: "screen_stream_start", Command: streamCmd})
 	if task == nil {
+		s.screenMonitorMu.Lock()
+		delete(s.screenMonitorOps, monitorKey)
+		s.screenMonitorMu.Unlock()
 		return
 	}
+	s.screenMonitorMu.Lock()
+	delete(s.screenMonitorOps, monitorKey)
 	s.screenMonitorImplants[monitorKey] = time.Now()
+	s.screenMonitorMu.Unlock()
+
 	s.broadcastTaskUpdate(id, *task)
 
 	s.LogAuditRecord(c, "screen_monitor_start", "agent", id, "Started screen monitoring", true, nil)
@@ -900,6 +950,17 @@ func (s *Server) handleStartScreenMonitor(c *gin.Context) {
 		"quality":  quality,
 		"message":  "Screen stream started",
 	})
+}
+
+// ensureScreenMonitorMapsLocked initializes the monitor maps for bare test
+// servers that construct Server literals. Callers must hold screenMonitorMu.
+func (s *Server) ensureScreenMonitorMapsLocked() {
+	if s.screenMonitorImplants == nil {
+		s.screenMonitorImplants = make(map[string]time.Time)
+	}
+	if s.screenMonitorOps == nil {
+		s.screenMonitorOps = make(map[string]string)
+	}
 }
 
 type cachedScreenFrame struct {
@@ -918,9 +979,12 @@ func (s *Server) handleStopScreenMonitor(c *gin.Context) {
 	}
 
 	monitorKey := strings.ToLower(id)
+	// Single-flight reservation, same as start: never hold screenMonitorMu
+	// across task creation/broadcast/audit.
 	s.screenMonitorMu.Lock()
-	defer s.screenMonitorMu.Unlock()
+	s.ensureScreenMonitorMapsLocked()
 	if _, active := s.screenMonitorImplants[monitorKey]; !active {
+		s.screenMonitorMu.Unlock()
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"active":  false,
@@ -928,12 +992,26 @@ func (s *Server) handleStopScreenMonitor(c *gin.Context) {
 		})
 		return
 	}
+	if op := s.screenMonitorOps[monitorKey]; op != "" {
+		s.screenMonitorMu.Unlock()
+		respondError(c, http.StatusConflict, "screen monitor "+op+" already in progress for this agent")
+		return
+	}
+	s.screenMonitorOps[monitorKey] = "stop"
+	s.screenMonitorMu.Unlock()
 
 	stopTask := s.issueAgentTask(c, id, TaskSpec{Type: "screen_stream_stop"})
 	if stopTask == nil {
+		s.screenMonitorMu.Lock()
+		delete(s.screenMonitorOps, monitorKey)
+		s.screenMonitorMu.Unlock()
 		return
 	}
+	s.screenMonitorMu.Lock()
 	delete(s.screenMonitorImplants, monitorKey)
+	delete(s.screenMonitorOps, monitorKey)
+	s.screenMonitorMu.Unlock()
+
 	s.broadcastTaskUpdate(id, *stopTask)
 
 	s.LogAuditRecord(c, "screen_monitor_stop", "agent", id, "Stopped screen monitoring", true, nil)
@@ -986,7 +1064,7 @@ func (s *Server) BroadcastScreenshot(agentID string, base64Data string) {
 		return
 	}
 
-	s.broadcastToTenant(message, agentID)
+	s.broadcastScreenshotToTenant(message, agentID)
 }
 
 func (s *Server) latestScreenFrame(agentID string) (cachedScreenFrame, bool) {
@@ -1018,7 +1096,7 @@ func (s *Server) BroadcastScreenMonitorError(agentID, errorMessage string) {
 }
 
 // handleAgentRemoteInput accepts remote desktop input events and queues a remote_input task.
-// Payload JSON: {"type":"click|move|key","x":0,"y":0,"key":""}
+// Payload JSON: {"type":"move|click|key","x":0,"y":0,"key":""}
 // Agent-side dispatch: Windows (SendInput-equivalent win32 calls), Linux
 // (xdotool/ydotool), macOS (osascript keystrokes).
 func (s *Server) handleAgentRemoteInput(c *gin.Context) {
@@ -1030,19 +1108,26 @@ func (s *Server) handleAgentRemoteInput(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		Type string `json:"type"`
-		X    int    `json:"x"`
-		Y    int    `json:"y"`
-		Key  string `json:"key"`
-	}
+	var req remoteInputRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, "invalid json: expected {type, x, y, key}")
 		return
 	}
-	if req.Type == "" {
-		respondError(c, http.StatusBadRequest, "type is required (click, move, key)")
+	if err := req.normalize(); err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
 		return
+	}
+
+	// Throttle per (operator, agent): each accepted event becomes a task row
+	// plus an audit row, so an unbounded client must not be able to drive the
+	// write path at line speed. pushback is reported as 429, not silently
+	// dropped, so a mis-throttled client can tell.
+	if userID, ok := currentUserID(c); ok {
+		if !s.remoteInputLimiter.allow(strconv.FormatUint(uint64(userID), 10)+":"+strings.ToLower(id),
+			MaxRemoteInputEventsPerWindow, RemoteInputWindow, time.Now()) {
+			respondError(c, http.StatusTooManyRequests, "remote input rate limit exceeded")
+			return
+		}
 	}
 
 	payload, ok := marshalJSONSafe(req)

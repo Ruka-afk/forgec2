@@ -63,8 +63,15 @@ type Server struct {
 	udpConn               net.PacketConn
 	screenMonitorImplants map[string]time.Time
 	screenMonitorMu       sync.Mutex
-	screenFrames          map[string]cachedScreenFrame
-	screenFrameMu         sync.RWMutex
+	// screenMonitorOps is the single-flight reservation for start/stop: DB
+	// writes (and plugin hooks) must not run while holding screenMonitorMu,
+	// or every frame ingest blocks behind an unrelated task insert.
+	screenMonitorOps map[string]string
+	screenFrames     map[string]cachedScreenFrame
+	screenFrameMu    sync.RWMutex
+	// remoteInputLimiter throttles remote desktop input events per
+	// (operator, agent). Value type: zero value works on bare test servers.
+	remoteInputLimiter fixedWindowLimiter
 
 	// P0-3: rportfwd (reverse port forward)
 	rportfwdListeners map[string]*rportfwdRelay
@@ -379,6 +386,7 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		tunEngine:             newTunEngine(),
 		startTime:             time.Now(),
 		screenMonitorImplants: make(map[string]time.Time),
+		screenMonitorOps:      make(map[string]string),
 		screenFrames:          make(map[string]cachedScreenFrame),
 		rportfwdListeners:     make(map[string]*rportfwdRelay),
 		lportfwdTargets:       make(map[string]*lportfwdTarget),

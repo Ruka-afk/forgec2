@@ -20,8 +20,12 @@ import (
 func (s *Server) handleTokenPage(c *gin.Context) {
 	id := c.Param("id")
 
+	// Tenant scope: the page (and its JSON branch) lists token entries with
+	// usernames/domains, so an unscoped read disclosed another tenant's
+	// tokens (same class as the shell/screen page IDORs).
 	var agent db.Implant
-	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
+	q := s.tenantScope(s.db.Model(&db.Implant{}), c)
+	if err := q.First(&agent, "id = ?", id).Error; err != nil {
 		c.Redirect(http.StatusFound, "/agents")
 		return
 	}

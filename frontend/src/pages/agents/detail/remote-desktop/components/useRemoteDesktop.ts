@@ -71,6 +71,9 @@ export function useRemoteDesktop(agentId: string) {
   const containerRef = useRef<HTMLDivElement>(null);
   const moveThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastFrameRef = useRef<string | null>(null);
+  // Timestamp of the last frame received over the dashboard WS push. While it
+  // is fresh the HTTP fallback poll is skipped (the WS is the primary path).
+  const wsLastFrameRef = useRef(0);
   const frameRafRef = useRef<number | null>(null);
   const pendingFrameRef = useRef<{ data: string; width?: number; height?: number } | null>(null);
   const cursorRafRef = useRef<number | null>(null);
@@ -96,6 +99,7 @@ export function useRemoteDesktop(agentId: string) {
       }
       setScreenData(null);
       lastFrameRef.current = null;
+      wsLastFrameRef.current = 0;
       prevIdRef.current = id;
     }
   }, [id]);
@@ -140,9 +144,16 @@ export function useRemoteDesktop(agentId: string) {
   // Background poll failures only update status, never toast.error on every
   // tick (which creates a toast storm for offline beacons). Only
   // user-initiated actions (startMonitoring) toast.
-  const captureFrame = useCallback(async (signal?: AbortSignal) => {
+  const captureFrame = useCallback(async (signal?: AbortSignal, force = false) => {
     if (!id) return;
     if (captureBusyRef.current || signal?.aborted) return;
+    // WS frames are the primary transport; skip the HTTP fallback while they
+    // keep arriving (grace = max(5s, 2.5 poll periods)). `force` is used for
+    // the first capture after start, when no WS frame can have arrived yet.
+    if (!force && wsLastFrameRef.current > 0 &&
+        Date.now() - wsLastFrameRef.current < Math.max(5000, pollInterval * 2.5)) {
+      return;
+    }
     captureBusyRef.current = true;
     try {
       const data = await api.get(paths.agents.screenshot(id), { signal });
@@ -158,7 +169,7 @@ export function useRemoteDesktop(agentId: string) {
     } finally {
       captureBusyRef.current = false;
     }
-  }, [id, commitFrame]);
+  }, [id, commitFrame, pollInterval]);
 
   const startMonitoring = useCallback(async () => {
     if (!id) return;
@@ -172,11 +183,17 @@ export function useRemoteDesktop(agentId: string) {
     sessionStartedRef.current = true; // set at dispatch: a client-side abort may leave the monitor running server-side
     setStatus("capturing");
     try {
-      await api.post(paths.agents.screenStart(id), { interval: String(pollInterval) }, { signal: actionAbort.signal });
+      // The server rejects intervals outside 1..60 seconds; ui intervals are
+      // in ms (250..2000), so convert and clamp before posting. Sending the
+      // raw ms value made every fresh RD start 400 ("interval must be between
+      // 1 and 60 seconds") — the page only ever worked when a monitor was
+      // already active from the Screen tab.
+      const streamIntervalSec = Math.max(1, Math.round(pollInterval / 1000));
+      await api.post(paths.agents.screenStart(id), { interval: String(streamIntervalSec) }, { signal: actionAbort.signal });
       if (actionAbort.signal.aborted) return;
       setMonitoring(true);
       monitoringRef.current = true;
-      await captureFrame(actionAbort.signal);
+      await captureFrame(actionAbort.signal, true);
     } catch {
       if (actionAbort.signal.aborted) return;
       sessionStartedRef.current = false; // the server rejected the start: no session to stop
@@ -197,6 +214,7 @@ export function useRemoteDesktop(agentId: string) {
     setMonitoring(false);
     monitoringRef.current = false;
     setStatus("waiting");
+    wsLastFrameRef.current = 0;
     try {
       await api.post(paths.agents.screenStop(id), undefined, { signal: actionAbort.signal });
       sessionStartedRef.current = false; // stop took effect
@@ -218,6 +236,7 @@ export function useRemoteDesktop(agentId: string) {
     return subscribe((msg) => {
       if (!monitoringRef.current) return;
       if (msg.type === "screenshot" && String(msg.agent_id) === id && msg.data) {
+        wsLastFrameRef.current = Date.now();
         setWsLive(true);
         const fullData = String(msg.data).startsWith("data:")
           ? String(msg.data)

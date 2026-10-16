@@ -23,12 +23,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Pinned at the measured level: 14.5% statements (8257/56837) at the time of
-// the last raise (the per-listener TLS fields in the listener dialogs and the
-// detail page, covered by useListenersData/types tests). A new uncovered page
-// or helper drops the figure below the floor, and the check fails with the
-// exact delta.
-const FLOOR = Number(process.env.COVERAGE_FLOOR ?? 14.5);
+// Pinned at the measured level: 14.8% statements (8473/56846) at the time of
+// the last raise (the remote-desktop hardening batch: RD hook interval-unit
+// fix, WS-live polling shortcut, and the reset-on-stop path). A new uncovered
+// page or helper drops the figure below the floor, and the check fails with
+// the exact delta.
+const FLOOR = Number(process.env.COVERAGE_FLOOR ?? 14.8);
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "..");
 const summaryPath = join(root, "coverage", "coverage-summary.json");
