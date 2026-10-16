@@ -32,9 +32,11 @@ import (
 // newlines, which -X cannot carry) and never travels through the ldflags, where
 // a private key would be readable from the build's process listing.
 func TestTokenStagerRendersMTLSMaterialOutsideLdflags(t *testing.T) {
-	certPEM := "-----BEGIN CERTIFICATE-----\nMIIBcertlines\n-----END CERTIFICATE-----\n"
-	keyPEM := "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIkeylines\n-----END EC PRIVATE KEY-----\n"
-	caPEM := "-----BEGIN CERTIFICATE-----\nMIIBcalines\n-----END CERTIFICATE-----\n"
+	// Real material generated at runtime: filler is enough for the rendering
+	// rules, but runtime material keeps secret scanners (and humans) from
+	// reading a PEM marker that is not actually used.
+	certPEM, keyPEM := selfSignedMTLSPair(t)
+	caPEM := certPEM
 	fetch := StagerFetch{
 		BaseURL:       "https://c2.example.com:8443",
 		Token:         "token",
@@ -62,7 +64,7 @@ func TestTokenStagerRendersMTLSMaterialOutsideLdflags(t *testing.T) {
 	// The ldflags must not leak any of the material — not the private key, not
 	// even the public certificate.
 	flags := tokenStagerLdflags(fetch)
-	for _, secret := range []string{certPEM, keyPEM, caPEM, strings.TrimSpace(keyPEM), strings.TrimSpace(certPEM), "keylines"} {
+	for _, secret := range []string{certPEM, keyPEM, caPEM, strings.TrimSpace(keyPEM), strings.TrimSpace(certPEM), strings.TrimSpace(certPEM)[:32]} {
 		if strings.Contains(flags, secret) {
 			t.Fatalf("ldflags leak mTLS material: %s", flags)
 		}
