@@ -25,7 +25,7 @@ func getPlatformSecurityInfo() (string, bool, string) {
 		uintptr(unsafe.Pointer(&hToken)),
 	)
 	if ret != 0 && hToken != 0 {
-		defer syscall.CloseHandle(syscall.Handle(hToken))
+		defer func() { _ = syscall.CloseHandle(syscall.Handle(hToken)) }()
 
 		var needed uint32
 		procGetTokenInformation.Call(hToken, 25, 0, 0, uintptr(unsafe.Pointer(&needed)))

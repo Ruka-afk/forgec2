@@ -197,7 +197,7 @@ func (s *Server) syncTrustedProxies() error {
 		}
 		middleware.SetTrustedProxyIPs(s.cfg.Server.TrustedProxies)
 	} else {
-		s.router.SetTrustedProxies(nil)
+		_ = s.router.SetTrustedProxies(nil) // nil never errors: only a CIDR list can fail validation
 		middleware.SetTrustedProxyIPs(nil)
 	}
 	return nil

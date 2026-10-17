@@ -20,7 +20,9 @@ import (
 
 // createRegSecret persists a fresh per-implant registration secret and returns
 // its public id and the base64 secret to embed in the implant's config blob.
-func (s *Server) createRegSecret() (id string, secretB64 string, err error) {
+// tenantID is the minting operator's tenant, recorded on the row so the
+// implant binds to that tenant when it first registers (0 = legacy unscoped).
+func (s *Server) createRegSecret(tenantID uint) (id string, secretB64 string, err error) {
 	if s.regSecrets == nil {
 		return "", "", errors.New("v3 reg secret store not initialized")
 	}
@@ -37,7 +39,7 @@ func (s *Server) createRegSecret() (id string, secretB64 string, err error) {
 		return "", "", err
 	}
 	id = hex.EncodeToString(idBytes)
-	if err := s.db.Create(&db.RegSecret{ID: id, SecretEnc: sealed}).Error; err != nil {
+	if err := s.db.Create(&db.RegSecret{ID: id, SecretEnc: sealed, TenantID: tenantID}).Error; err != nil {
 		return "", "", err
 	}
 	return id, base64.StdEncoding.EncodeToString(secret), nil
@@ -58,6 +60,37 @@ func (s *Server) regSecretByID(id string) []byte {
 		return nil
 	}
 	return secret
+}
+
+// regSecretTenantByID resolves the minting tenant for a presented secret id.
+// Legacy rows (minted before tenant attribution, or by the CLI without
+// -tenant) carry 0 and stay on the default-tenant bootstrap path.
+func (s *Server) regSecretTenantByID(id string) uint {
+	if id == "" {
+		return 0
+	}
+	var row db.RegSecret
+	if err := s.db.Select("tenant_id").Where("id = ?", id).First(&row).Error; err != nil {
+		return 0
+	}
+	return row.TenantID
+}
+
+// regSecretTenantForAgent is the registry direction of the same chain: once a
+// secret has bound to an agent (see bindRegSecret), the agent's owning tenant
+// is whatever tenant awarded that secret. Enrollment paths that never present
+// a raw secret id (HTTP beacons reach the server without v3 frames) resolve
+// the implant's tenant through this reverse lookup; it falls back to the
+// bootstrap default for agents without a bound secret.
+func (s *Server) regSecretTenantForAgent(agentID string) uint {
+	if agentID == "" {
+		return 0
+	}
+	var row db.RegSecret
+	if err := s.db.Select("tenant_id").Where("agent_id = ?", agentID).First(&row).Error; err != nil {
+		return 0
+	}
+	return row.TenantID
 }
 
 // regSecretForAuth resolves the per-implant secret for an authentication frame
@@ -88,17 +121,21 @@ func (s *Server) regSecretForAuth(id, agentID string) ([]byte, bool) {
 // returns its public id and base64 secret. On success beaconKey is cleared,
 // because v3 payloads must never carry the fleet master key.
 //
+// tenantID is the minting operator's tenant (0 = legacy unscoped); the row
+// carries it so first registration lands the implant in the building team
+// rather than the bootstrap default.
+//
 // A creation failure is fatal: with v2 master-key auth deprecated and rejected
 // server-side, silently falling back to the master key would build an implant
 // that can never register. Callers must abort the build when err is non-nil.
 // When beaconKey is empty there is no auth material at all — processAuthFrame
 // rejects any frame without a SecretID — so generation must FAIL instead of
 // handing the operator a payload that can never register (P2-4).
-func (s *Server) ensureV3RegSecret(beaconKey string) (id, secretB64, clearedKey string, err error) {
+func (s *Server) ensureV3RegSecret(beaconKey string, tenantID uint) (id, secretB64, clearedKey string, err error) {
 	if s == nil || beaconKey == "" {
 		return "", "", "", fmt.Errorf("server.beacon_key is not configured: generated payloads could never register (v2 master-key auth is deprecated)")
 	}
-	id, secretB64, err = s.createRegSecret()
+	id, secretB64, err = s.createRegSecret(tenantID)
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to create v3 registration secret: %w", err)
 	}

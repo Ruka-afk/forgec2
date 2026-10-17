@@ -35,19 +35,19 @@ func main() {
 
 	switch os.Args[1] {
 	case "check":
-		checkCmd.Parse(os.Args[2:])
+		_ = checkCmd.Parse(os.Args[2:])
 		runCheck(*checkLang)
 	case "stats":
-		statsCmd.Parse(os.Args[2:])
+		_ = statsCmd.Parse(os.Args[2:])
 		runStats()
 	case "export":
-		exportCmd.Parse(os.Args[2:])
+		_ = exportCmd.Parse(os.Args[2:])
 		runExport(*exportLang, *exportFormat, *exportOutput)
 	case "list":
-		listCmd.Parse(os.Args[2:])
+		_ = listCmd.Parse(os.Args[2:])
 		runList()
 	case "missing":
-		missingCmd.Parse(os.Args[2:])
+		_ = missingCmd.Parse(os.Args[2:])
 		runMissing(*missingLang)
 	case "help", "-h", "--help":
 		printUsage()

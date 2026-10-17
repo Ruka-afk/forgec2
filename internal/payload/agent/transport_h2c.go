@@ -5,23 +5,33 @@ package main
 
 import (
 	"bytes"
-	"crypto/tls"
+	"context"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"strings"
 	"time"
-
-	"golang.org/x/net/http2"
 )
 
-var h2cTransport = &http2.Transport{
-	AllowHTTP: true,
-	DialTLS: func(network, addr string, tlsConfig *tls.Config) (net.Conn, error) {
-		// Dial plain TCP for h2c (no TLS)
-		return net.DialTimeout(network, addr, 30*time.Second)
-	},
+var h2cTransport = h2cTransportNew()
+
+// h2cTransportNew builds a net/http transport that speaks HTTP/2 prior
+// knowledge ("h2c") over plain TCP for http:// URLs — the wire format the
+// server's h2c listener expects — without reaching for the deprecated
+// http2.Transport family (net/http gained first-class unencrypted HTTP/2
+// via Transport.Protocols in Go 1.24). The 30s dialer cap keeps the old
+// net.DialTimeout bound so a stalled SYN is not retried forever.
+func h2cTransportNew() *http.Transport {
+	// Protocols starts nil (defaults); construct it and allow exactly the
+	// unencrypted-HTTP/2 protocol — no HTTP/1 fallback, like the old
+	// AllowHTTP-only transport.
+	tr := &http.Transport{Protocols: new(http.Protocols)}
+	tr.Protocols.SetUnencryptedHTTP2(true)
+	tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		return (&net.Dialer{Timeout: 30 * time.Second}).DialContext(ctx, network, addr)
+	}
+	return tr
 }
 
 var h2cClient = &http.Client{
@@ -59,9 +69,9 @@ func sendH2CBeacon(body []byte) []byte {
 			req.Header.Set(k, v)
 		}
 
-		// http2.Transport{AllowHTTP:true} with a plain-TCP DialTLS negotiates
-		// h2c via HTTP/2 prior knowledge (it writes the client preface
-		// directly), so no HTTP/1.1 Upgrade headers are needed or honored.
+		// h2cTransport speaks HTTP/2 prior knowledge over plain TCP for
+		// http:// URLs (UnencryptedHTTP2 protocol), so no HTTP/1.1 Upgrade
+		// headers are needed or honored.
 
 		resp, err := h2cClient.Do(req)
 		if err != nil {

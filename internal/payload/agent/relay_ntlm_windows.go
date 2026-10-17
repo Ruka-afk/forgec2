@@ -166,7 +166,7 @@ func (r *ntlmRelay) handleConnection(victim net.Conn) {
 			}
 			mu.Unlock()
 
-			target.Write(data)
+			_, _ = target.Write(data)
 		}
 	}()
 
@@ -189,7 +189,7 @@ func (r *ntlmRelay) handleConnection(victim net.Conn) {
 			}
 			mu.Unlock()
 
-			victim.Write(data)
+			_, _ = victim.Write(data)
 		}
 	}()
 

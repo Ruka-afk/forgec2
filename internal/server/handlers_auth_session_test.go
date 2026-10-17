@@ -52,7 +52,9 @@ func TestHandleLogin_LockoutAfterFailures(t *testing.T) {
 		t.Errorf("expected 401 after lockout, got %d; body=%s", w.Code, w.Body.String())
 	}
 	var resp map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal lockout response %q: %v", w.Body.String(), err)
+	}
 	if errMsg, ok := resp["error"].(string); ok && errMsg != "" {
 		if !strings.Contains(errMsg, "Try again") {
 			t.Errorf("expected lockout error message, got: %s", errMsg)
@@ -401,7 +403,7 @@ func TestHandleLogin_UsernameCaseInsensitive(t *testing.T) {
 		t.Log("case-insensitive username matched (expected behavior)")
 	} else {
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		errVal, _ := resp["error"]
 		t.Logf("case mismatch returned status=%d error=%v", w.Code, errVal)
 	}

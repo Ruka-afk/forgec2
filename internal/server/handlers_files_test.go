@@ -355,7 +355,7 @@ func TestHandleUploadFile(t *testing.T) {
 		writer := multipart.NewWriter(&buf)
 		writer.WriteField("target_path", `C:\temp\injected.dll`)
 		part, _ := writer.CreateFormFile("file", "injected.dll")
-		part.Write([]byte("fake-payload"))
+		_, _ = part.Write([]byte("fake-payload"))
 		writer.Close()
 
 		w, c := newMultipartContext(http.MethodPost, "/", bytes.NewReader(buf.Bytes()), writer.Boundary())
@@ -369,7 +369,7 @@ func TestHandleUploadFile(t *testing.T) {
 		writer := multipart.NewWriter(&buf)
 		// target_path omitted
 		part, _ := writer.CreateFormFile("file", "test.txt")
-		part.Write([]byte("content"))
+		_, _ = part.Write([]byte("content"))
 		writer.Close()
 
 		w, c := newMultipartContext(http.MethodPost, "/", bytes.NewReader(buf.Bytes()), writer.Boundary())
@@ -383,7 +383,7 @@ func TestHandleUploadFile(t *testing.T) {
 		writer := multipart.NewWriter(&buf)
 		writer.WriteField("target_path", `C:\temp\uploaded.txt`)
 		part, _ := writer.CreateFormFile("file", "uploaded.txt")
-		part.Write([]byte("hello world from test"))
+		_, _ = part.Write([]byte("hello world from test"))
 		writer.Close()
 
 		w, c := newMultipartContext(http.MethodPost, "/", bytes.NewReader(buf.Bytes()), writer.Boundary())
@@ -406,7 +406,7 @@ func TestHandleUploadFile(t *testing.T) {
 		writer := multipart.NewWriter(&buf)
 		writer.WriteField("path", `C:\temp\alias.bin`)
 		part, _ := writer.CreateFormFile("file", "alias.bin")
-		part.Write([]byte("alias"))
+		_, _ = part.Write([]byte("alias"))
 		writer.Close()
 
 		w, c := newMultipartContext(http.MethodPost, "/", bytes.NewReader(buf.Bytes()), writer.Boundary())
@@ -432,7 +432,7 @@ func TestHandleFileUploadFromAgent(t *testing.T) {
 		writer := multipart.NewWriter(&buf)
 		writer.WriteField("path", `C:\temp\secret.txt`)
 		part, _ := writer.CreateFormFile("file", "payload.bin")
-		part.Write([]byte("should-not-be-pushed-here"))
+		_, _ = part.Write([]byte("should-not-be-pushed-here"))
 		writer.Close()
 
 		w, c := newMultipartContext(http.MethodPost, "/", bytes.NewReader(buf.Bytes()), writer.Boundary())
@@ -546,7 +546,7 @@ func TestReadFileToBase64(t *testing.T) {
 		var buf bytes.Buffer
 		writer := multipart.NewWriter(&buf)
 		part, _ := writer.CreateFormFile("file", "empty.txt")
-		part.Write([]byte{})
+		_, _ = part.Write([]byte{})
 		writer.Close()
 
 		reader := multipart.NewReader(&buf, writer.Boundary())

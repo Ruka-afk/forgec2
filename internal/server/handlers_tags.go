@@ -135,7 +135,7 @@ func (s *Server) handleAPITagDelete(c *gin.Context) {
 	if !s.findOrFail(c, &tag, id, "tag") {
 		return
 	}
-	s.db.Model(&tag).Association("Agents").Clear()
+	_ = s.db.Model(&tag).Association("Agents").Clear() // the tag delete below is the source of truth for the cascade
 	if err := s.db.Delete(&tag).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Tag deletion"))
 		return

@@ -24,8 +24,12 @@ import (
 
 // ensureBeaconImplantRow creates a minimal implant row for fresh agents whose
 // first contact is a v2 registration frame (register frames carry no host info,
-// so the normal processAgentRegistration path is not available).
-func (s *Server) ensureBeaconImplantRow(agentID string) {
+// so the normal processAgentRegistration path is not available). secretID is
+// the presented per-implant secret: when that secret was minted by an operator
+// of a non-default tenant, the fresh row lands in THAT tenant instead of the
+// bootstrap default, so multi-tenant isolation (tenantScope) never hides a
+// newly-registered agent from its building team.
+func (s *Server) ensureBeaconImplantRow(agentID, secretID string) {
 	var existing db.Implant
 	res := s.db.Unscoped().Where("id = ?", agentID).First(&existing)
 	if res.Error == nil {
@@ -39,10 +43,13 @@ func (s *Server) ensureBeaconImplantRow(agentID string) {
 	if res.Error != gorm.ErrRecordNotFound {
 		return
 	}
-	// Fresh rows fall into the bootstrap "default" tenant so multi-tenant
-	// isolation (tenantScope) never hides a newly-registered agent from the
-	// owning operator.
-	row := db.Implant{ID: agentID, TenantID: s.defaultTenantID(), LastSeen: time.Now(), Status: "online"}
+	// Fresh rows fall into the minting secret's tenant when it names one
+	// (non-default builder team); everything else keeps the bootstrap default.
+	tenant := s.regSecretTenantByID(secretID)
+	if tenant == 0 {
+		tenant = s.defaultTenantID()
+	}
+	row := db.Implant{ID: agentID, TenantID: tenant, LastSeen: time.Now(), Status: "online"}
 	if err := s.db.Create(&row).Error; err != nil {
 		// Concurrent create for the same UUID: someone else won the race.
 		slog.Debug("ensureBeaconImplantRow create skipped", "agent_id", agentID, "error", err)
@@ -107,7 +114,7 @@ func (s *Server) processAuthFrame(env beaconEnvelope, kind beaconFrameKind) ([]b
 	// soft-deleted row (preserving its secret_id/registered state) and creates
 	// a fresh unregistered row when the row is hard-deleted — both let a v3
 	// agent recover via the handshake below.
-	s.ensureBeaconImplantRow(env.UUID)
+	s.ensureBeaconImplantRow(env.UUID, env.SecretID)
 	var imp db.Implant
 	s.db.First(&imp, "id = ?", env.UUID)
 

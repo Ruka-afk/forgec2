@@ -46,3 +46,33 @@
 #
 windows=306
 linux=236
+
+# Batch N (2026-10): RegSecret tenant attribution shipped together with the
+# lint tail paid to the floor. SA1019 zeroed on both targets: the whole
+# syscall.Syscall{,6,9,12,15} family migrated to syscall.SyscallN with every
+# argument slot preserved (the nargs literal is dropped; slot padding stays
+# so amd64/386/arm64 stack ABI is bit-identical), StringToUTF16Ptr ->
+# windows.UTF16PtrFromString, grpc.DialContext -> grpc.NewClient (the
+# connection now materializes lazily under the per-beacon RPC deadline),
+# http2.Transport{AllowHTTP,DialTLS} -> net/http Transport.Protocols with
+# SetUnencryptedHTTP2 (the Go 1.24+ first-class h2c support, both the agent
+# beacon transport and the server h2c test client), and net.Error.Temporary
+# -> the isTemporaryNetErr helper (Timeout via errors.As plus the transient
+# resource classes). G306's 5 named operator-side generated writes hardened
+# to 0600 (donut assembly, generator_env staged tree, stager_token main.go
+# AND go.mod). errcheck divide-and-conquer finished: typed config exclude
+# groups recorded with rationales (gorilla/websocket deadline+writer family,
+# dns/g/gin/csv/json response writers, listener Stop teardown family,
+# (*Server).stopExtraListener, BackupManager self-journaling, (*gorm.DB).DB,
+# multipart test fixtures, windows victim-memory teardown free functions,
+# syscall.SyscallN slot idiom, fmt.Sscanf fallback parses) — note
+# exclude-functions match ONLY by full declaration import path, alias
+# spellings silently do nothing — plus ~95 point fixes (agent cleanup
+# helpers `_, _ =`ed, socks handshake writes, ssh session replies,
+# TrustedProxies nil clears, webhook goroutines). The errcheck typed-wrapper
+# debt (185/146) and S1011/S1001 one-offs are closed; both targets are
+# down to the pure gosec backlog: 70 (win, carrying the +1 CI observation
+# headroom as before) and 71 (lin); errcheck 0/0, staticcheck 0/0, and the
+# mechanical linters stay zero on both targets.
+windows=71
+linux=71

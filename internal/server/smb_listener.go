@@ -16,7 +16,7 @@ var newSMBListener = defaultSMBListen
 func defaultSMBListen(addr string) (net.Listener, error) {
 	dir := filepath.Dir(addr)
 	if dir != "." {
-		os.MkdirAll(dir, 0700)
+		_ = os.MkdirAll(dir, 0700) // net.Listen below is the real gate
 	}
 	os.Remove(addr)
 	return net.Listen("unix", addr)

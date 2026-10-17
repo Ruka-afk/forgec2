@@ -368,7 +368,7 @@ func (s *Server) sendTextMessage(beacon *WebSocketBeacon, data []byte) error {
 		slog.Error("WebSocket write error", "agent_id", beacon.AgentID, "error", err)
 		return err
 	}
-	w.Write(data)
+	_, _ = w.Write(data) // the Close() below reports the fatal error
 	if err := w.Close(); err != nil {
 		slog.Error("WebSocket close writer error", "agent_id", beacon.AgentID, "error", err)
 		return err
@@ -383,7 +383,7 @@ func (s *Server) sendCompressedMessage(beacon *WebSocketBeacon, data []byte) err
 		slog.Error("WebSocket compressed write error", "agent_id", beacon.AgentID, "error", err)
 		return err
 	}
-	w.Write(data)
+	_, _ = w.Write(data) // the Close() below reports the fatal error
 	if err := w.Close(); err != nil {
 		slog.Error("WebSocket compressed close writer error", "agent_id", beacon.AgentID, "error", err)
 		return err

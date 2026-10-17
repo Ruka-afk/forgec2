@@ -47,9 +47,7 @@ func init() {
 
 func taskSpecToInfo(sp protocol.TaskSpec) TaskTypeInfo {
 	params := make([]TaskTypeParam, len(sp.Parameters))
-	for i, p := range sp.Parameters {
-		params[i] = p
-	}
+	copy(params, sp.Parameters)
 	return TaskTypeInfo{
 		Type:             sp.Type,
 		Name:             sp.Name,

@@ -224,7 +224,7 @@ func (l *SSHBeaconListener) handleConnection(conn net.Conn) {
 		// Any channel activity counts as progress; extend the window.
 		conn.SetDeadline(time.Now().Add(idle))
 		if newCh.ChannelType() != "session" {
-			newCh.Reject(ssh.UnknownChannelType, "only session channels are supported")
+			_ = newCh.Reject(ssh.UnknownChannelType, "only session channels are supported") // a vanished peer fails the later Accept instead
 			continue
 		}
 		ch, requests, err := newCh.Accept()
@@ -250,8 +250,8 @@ func (l *SSHBeaconListener) handleSession(user string, ch ssh.Channel, requests 
 		switch req.Type {
 		case "exec":
 			var payload struct{ Command string }
-			ssh.Unmarshal(req.Payload, &payload)
-			req.Reply(true, nil)
+			_ = ssh.Unmarshal(req.Payload, &payload) // a malformed payload leaves the zero Command, rejected below
+			_ = req.Reply(true, nil)                 // best-effort ack; a vanished peer fails later IO
 
 			// Bounded read: the idle deadline set in handleConnection covers
 			// this too, but keep the session loop honest about activity.
@@ -261,16 +261,16 @@ func (l *SSHBeaconListener) handleSession(user string, ch ssh.Channel, requests 
 			} else if err != nil {
 				slog.Debug("SSH session read failed", "user", user, "err", err)
 			}
-			ch.SendRequest("exit-status", false, ssh.Marshal(struct{ Status uint32 }{0}))
-			ch.CloseWrite()
+			_, _ = ch.SendRequest("exit-status", false, ssh.Marshal(struct{ Status uint32 }{0}))
+			_ = ch.CloseWrite()
 			return
 		case "shell", "pty-req", "window-change":
 			// The beacon transport never needs a pty or an interactive shell.
-			req.Reply(false, nil)
+			_ = req.Reply(false, nil) // best-effort refusal; a vanished peer fails later IO
 		case "env":
-			req.Reply(true, nil)
+			_ = req.Reply(true, nil) // best-effort ack; a vanished peer fails later IO
 		default:
-			req.Reply(false, nil)
+			_ = req.Reply(false, nil) // best-effort refusal; a vanished peer fails later IO
 		}
 	}
 }

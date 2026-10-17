@@ -309,7 +309,18 @@ func (s *Server) bindRelayChildToParent(childID, parentUUID string) bool {
 	// than causing a primary-key conflict on Create.
 	err := s.db.Unscoped().Where("id = ?", childID).First(&agent).Error
 	if err == gorm.ErrRecordNotFound {
-		row := db.Implant{ID: childID, ParentID: parentUUID, TenantID: s.defaultTenantID(), LastSeen: time.Now(), Status: "online"}
+		// A fresh child belongs to the relaying parent's tenant: the mesh
+		// grows inside the team that owns the parent, not the bootstrap
+		// default (a legacy tenant-0 parent keeps its legacy 0 and is
+		// self-healed by the regular beacon path).
+		var parentTenant uint
+		var parent db.Implant
+		if perr := s.db.Select("tenant_id").Where("id = ?", parentUUID).First(&parent).Error; perr == nil {
+			parentTenant = parent.TenantID
+		} else {
+			parentTenant = s.defaultTenantID()
+		}
+		row := db.Implant{ID: childID, ParentID: parentUUID, TenantID: parentTenant, LastSeen: time.Now(), Status: "online"}
 		if cerr := s.withBusyRetryDB("enroll", func() *gorm.DB {
 			return s.db.Create(&row)
 		}).Error; cerr != nil {

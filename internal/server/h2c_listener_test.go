@@ -1,7 +1,7 @@
 package server
 
 import (
-	"crypto/tls"
+	"context"
 	"io"
 	"net"
 	"net/http"
@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"golang.org/x/net/http2"
 )
 
 func newTestH2CRouter() http.Handler {
@@ -27,12 +26,17 @@ func newTestH2CRouter() http.Handler {
 }
 
 func h2cTestClient() *http.Client {
-	transport := &http2.Transport{
-		AllowHTTP: true,
-		DialTLS: func(network, addr string, tlsConfig *tls.Config) (net.Conn, error) {
-			return net.DialTimeout(network, addr, 10*time.Second)
-		},
-	}
+	// Same modern unencrypted-HTTP/2 configuration as the agent beacon
+	// transport (Transport.Protocols, Go 1.24+); the deprecated
+	// http2.Transport{AllowHTTP,DialTLS} literal it used to mirror is gone.
+	transport := func() *http.Transport {
+		tr := &http.Transport{Protocols: new(http.Protocols)}
+		tr.Protocols.SetUnencryptedHTTP2(true)
+		tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, network, addr)
+		}
+		return tr
+	}()
 	return &http.Client{Transport: transport, Timeout: 15 * time.Second}
 }
 

@@ -330,7 +330,7 @@ func (s *Server) startExtraTCPListener(key, scheme string, o listenerTLSOverride
 					return
 				default:
 				}
-				if ne, ok := aErr.(net.Error); ok && ne.Temporary() {
+				if isTemporaryNetErr(aErr) {
 					time.Sleep(50 * time.Millisecond)
 					continue
 				}

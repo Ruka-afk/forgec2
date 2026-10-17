@@ -74,7 +74,7 @@ Or build: `go build -o reset-password.exe ./cmd/reset-password`
 
 ## Mint a Registration Secret (no UI)
 CLI tool: `go run ./cmd/mint-reg-secret -config config.yaml` (or `-db <path> -beacon-key <hex>`)
-Prints the `set SECRET_ID=` / `set SECRET_B64=` pair for a build. It writes the sealed row straight into `reg_secrets` (no UI, no audit entry) and binds to the first agent id that registers with it. Used by `scripts/e2e-c-implant-local.ps1`.
+Prints the `set SECRET_ID=` / `set SECRET_B64=` pair for a build. It writes the sealed row straight into `reg_secrets` (no UI, no audit entry) and binds to the first agent id that registers with it. Optional `-tenant <n>` stamps the row with a tenant id so the first agent that registers with it lands in that tenant (0 = legacy/unscoped: the agent goes to the default tenant, the pre-batch-N behavior). Used by `scripts/e2e-c-implant-local.ps1`.
 
 ## Deploying the server
 1. `npm run build` (from `frontend/`)

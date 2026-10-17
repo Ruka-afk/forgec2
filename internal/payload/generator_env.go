@@ -317,7 +317,9 @@ func extractAgentSources(efs embed.FS, dir string, slim bool) error {
 				return err
 			}
 		}
-		if err := os.WriteFile(filepath.Join(dir, entry.Name()), data, 0644); err != nil {
+		// 0600: the staged build tree embeds the agent source the operator is
+		// about to compile; keep it owner-only like the resulting binary.
+		if err := os.WriteFile(filepath.Join(dir, entry.Name()), data, 0600); err != nil {
 			return err
 		}
 	}
@@ -325,7 +327,7 @@ func extractAgentSources(efs embed.FS, dir string, slim bool) error {
 		return fmt.Errorf("embedded agent directory missing agent.go")
 	}
 	if slim {
-		if err := os.WriteFile(filepath.Join(dir, "transport_slim_stubs.go"), []byte(slimTransportStubs), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "transport_slim_stubs.go"), []byte(slimTransportStubs), 0600); err != nil {
 			return err
 		}
 	}
@@ -346,5 +348,5 @@ func injectRandomizedStrxor(buildDir string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(buildDir, "strxor.go"), table, 0644)
+	return os.WriteFile(filepath.Join(buildDir, "strxor.go"), table, 0600)
 }

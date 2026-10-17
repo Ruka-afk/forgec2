@@ -460,7 +460,7 @@ func (c *smb2Client) readReply() ([]byte, error) {
 			padLen := secOffVal - (64 + len(fixed))
 			if padLen > 0 {
 				pad := make([]byte, padLen)
-				c.conn.Read(pad)
+				_, _ = c.conn.Read(pad)
 				fixed = append(fixed, pad...)
 			}
 			if secLenVal > 0 {
@@ -494,7 +494,7 @@ func (c *smb2Client) readReply() ([]byte, error) {
 				totalWanted := ctxOff + ctxLen - (64 + 89)
 				if totalWanted > 0 && totalWanted < 65536 {
 					extra := make([]byte, totalWanted)
-					c.conn.Read(extra)
+					_, _ = c.conn.Read(extra)
 					fixed = append(fixed, extra...)
 				}
 			}

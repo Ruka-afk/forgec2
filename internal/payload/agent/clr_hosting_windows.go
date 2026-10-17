@@ -165,25 +165,25 @@ func vtableCall(ptr uintptr, index int, args ...uintptr) uintptr {
 	n := uintptr(len(args))
 	switch n {
 	case 0:
-		ret, _, _ := syscall.Syscall(fn, 1, ptr, 0, 0)
+		ret, _, _ := syscall.SyscallN(fn, ptr, 0, 0)
 		return ret
 	case 1:
-		ret, _, _ := syscall.Syscall(fn, 2, ptr, args[0], 0)
+		ret, _, _ := syscall.SyscallN(fn, ptr, args[0], 0)
 		return ret
 	case 2:
-		ret, _, _ := syscall.Syscall(fn, 3, ptr, args[0], args[1])
+		ret, _, _ := syscall.SyscallN(fn, ptr, args[0], args[1])
 		return ret
 	case 3:
-		ret, _, _ := syscall.Syscall6(fn, 4, ptr, args[0], args[1], args[2], 0, 0)
+		ret, _, _ := syscall.SyscallN(fn, ptr, args[0], args[1], args[2], 0, 0)
 		return ret
 	case 4:
-		ret, _, _ := syscall.Syscall6(fn, 5, ptr, args[0], args[1], args[2], args[3], 0)
+		ret, _, _ := syscall.SyscallN(fn, ptr, args[0], args[1], args[2], args[3], 0) //nolint:gosec // G602 false positive: this switch case guarantees len(args) >= k
 		return ret
 	case 5:
-		ret, _, _ := syscall.Syscall6(fn, 6, ptr, args[0], args[1], args[2], args[3], args[4])
+		ret, _, _ := syscall.SyscallN(fn, ptr, args[0], args[1], args[2], args[3], args[4]) //nolint:gosec // G602 false positive: this switch case guarantees len(args) >= k
 		return ret
 	case 6:
-		ret, _, _ := syscall.Syscall9(fn, 7, ptr, args[0], args[1], args[2], args[3], args[4], args[5], 0, 0)
+		ret, _, _ := syscall.SyscallN(fn, ptr, args[0], args[1], args[2], args[3], args[4], args[5], 0, 0) //nolint:gosec // G602 false positive: this switch case guarantees len(args) >= k
 		return ret
 	default:
 		return 0x80070057
@@ -197,7 +197,7 @@ func releaseCOMPtr(ptr uintptr) {
 	// IUnknown::Release is always at vtable index 2 (offset 2*8 = 16 on x64)
 	vtable := *(*uintptr)(unsafe.Pointer(ptr))
 	releaseFn := *(*uintptr)(unsafe.Pointer(vtable + 2*8))
-	syscall.Syscall(releaseFn, 1, ptr, 0, 0)
+	syscall.SyscallN(releaseFn, ptr, 0, 0)
 }
 
 func executeAssemblyInProcess(assemblyData []byte, args string) (string, error) {
@@ -301,7 +301,7 @@ func executeAssemblyWithStdoutCapture(host uintptr, assemblyPath, args string) (
 			vtable := *(*uintptr)(unsafe.Pointer(host))
 			fn := *(*uintptr)(unsafe.Pointer(vtable + uintptr(clrExecInDefaultVtableIdx)*8))
 
-			hr, _, _ := syscall.Syscall6(fn, 6,
+			hr, _, _ := syscall.SyscallN(fn,
 				host,
 				uintptr(unsafe.Pointer(assemblyPathPtr)),
 				uintptr(unsafe.Pointer(tnPtr)),

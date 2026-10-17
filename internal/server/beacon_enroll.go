@@ -79,9 +79,17 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 			return db.Implant{}, false
 		}
 
+		// Tenant attribution: when the implant's v3 registration secret was
+		// minted by a specific tenant, that secret defines ownership even on
+		// the HTTP enrollment path (which itself presents no secret id).
+		// Legacy agents without a bound secret keep the bootstrap default.
+		tenant := s.regSecretTenantForAgent(req.UUID)
+		if tenant == 0 {
+			tenant = s.defaultTenantID()
+		}
 		agent = db.Implant{
 			ID:              req.UUID,
-			TenantID:        s.defaultTenantID(),
+			TenantID:        tenant,
 			Hostname:        hostname,
 			Username:        username,
 			OS:              req.Info["os"],
@@ -258,9 +266,15 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 		// Self-heal legacy rows that predate multi-tenant isolation (tenant_id=0
 		// placeholders created by ensureBeaconImplantRow before the fix). Without
 		// this, an agent registered while the server was running is invisible to
-		// its tenant via tenantScope and never shows up in the UI.
+		// its tenant via tenantScope and never shows up in the UI. A bound v3
+		// secret with a minting tenant names the correct team; only agents
+		// without one fall to the bootstrap default.
 		if agent.TenantID == 0 {
-			updates["tenant_id"] = s.defaultTenantID()
+			if tenant := s.regSecretTenantForAgent(req.UUID); tenant > 0 {
+				updates["tenant_id"] = tenant
+			} else {
+				updates["tenant_id"] = s.defaultTenantID()
+			}
 		}
 
 		// Atomic update: only update if last_seen hasn't been changed by a concurrent beacon.

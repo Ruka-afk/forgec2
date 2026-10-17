@@ -58,7 +58,7 @@ func TestTCPBeaconV3RegisterAndHandshake(t *testing.T) {
 	s := initV3BeaconServer(t, database, masterHex)
 
 	// The v3 store must be usable.
-	id, secretB64, err := s.createRegSecret()
+	id, secretB64, err := s.createRegSecret(0)
 	if err != nil {
 		t.Fatalf("createRegSecret: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestTCPBeaconV3RejectsUnknownSecret(t *testing.T) {
 
 	// A real secret exists but the attacker does not know it; they register
 	// with a forged secret_id and the master-derived reg key.
-	id, _, err := s.createRegSecret()
+	id, _, err := s.createRegSecret(0)
 	if err != nil {
 		t.Fatalf("createRegSecret: %v", err)
 	}
@@ -186,7 +186,7 @@ func TestTCPBeaconV3DeriveRegKeyUsesBoundSecret(t *testing.T) {
 	const masterHex = "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899"
 	s := initV3BeaconServer(t, database, masterHex)
 
-	id, secretB64, err := s.createRegSecret()
+	id, secretB64, err := s.createRegSecret(0)
 	if err != nil {
 		t.Fatalf("createRegSecret: %v", err)
 	}
@@ -237,7 +237,7 @@ func TestTCPBeaconV3RecoveryAfterRowDeletion(t *testing.T) {
 	const masterHex = "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899"
 	s := initV3BeaconServer(t, database, masterHex)
 
-	id, secretB64, err := s.createRegSecret()
+	id, secretB64, err := s.createRegSecret(0)
 	if err != nil {
 		t.Fatalf("createRegSecret: %v", err)
 	}
@@ -334,7 +334,7 @@ func TestTCPBeaconV3SecretCannotImpersonateOtherAgent(t *testing.T) {
 	const masterHex = "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899"
 	s := initV3BeaconServer(t, database, masterHex)
 
-	id, secretB64, err := s.createRegSecret()
+	id, secretB64, err := s.createRegSecret(0)
 	if err != nil {
 		t.Fatalf("createRegSecret: %v", err)
 	}

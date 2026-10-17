@@ -36,6 +36,9 @@ type stagerGenerateForm struct {
 	MTLSCert        string `form:"mtls_cert"`
 	MTLSKey         string `form:"mtls_key"`
 	MTLSCA          string `form:"mtls_ca"`
+	// mintTenant is not form-bound: bindStagerForm stamps the building
+	// operator's tenant so the minted registration secret names the team.
+	mintTenant uint
 }
 
 func (s *Server) bindStagerForm(c *gin.Context) (*stagerGenerateForm, error) {
@@ -43,6 +46,9 @@ func (s *Server) bindStagerForm(c *gin.Context) (*stagerGenerateForm, error) {
 	if err := c.ShouldBind(&form); err != nil {
 		return nil, fmt.Errorf("invalid request parameters")
 	}
+	// The minting operator's tenant travels with the build so the v3
+	// registration secret names the building team (see createRegSecret).
+	form.mintTenant = s.currentTenantID(c)
 
 	// mTLS material for the listener: both the stage-1 fetch and the stage-2
 	// beacon need it against a require_client_cert listener, so it is validated
@@ -161,7 +167,7 @@ func (s *Server) generateTokenStager(goos string, form *stagerGenerateForm) (str
 
 	// Build the full beacon (stage-2) for the target OS.
 	beaconKey := s.serverBeaconKey()
-	regSecretID, regSecretB64, beaconKey, err := s.ensureV3RegSecret(beaconKey)
+	regSecretID, regSecretB64, beaconKey, err := s.ensureV3RegSecret(beaconKey, form.mintTenant)
 	if err != nil {
 		return "", fmt.Errorf("create v3 registration secret: %w", err)
 	}

@@ -22,7 +22,7 @@ func TestEnsureV3RegSecretCreatesAndClearsKey(t *testing.T) {
 	s := newRegSecretServer(t, make([]byte, 32))
 	const master = "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899"
 
-	id, secret, cleared, err := s.ensureV3RegSecret(master)
+	id, secret, cleared, err := s.ensureV3RegSecret(master, 0)
 	if err != nil {
 		t.Fatalf("ensureV3RegSecret: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestEnsureV3RegSecretCreatesAndClearsKey(t *testing.T) {
 // never register while the build endpoints returned success.
 func TestEnsureV3RegSecretEmptyKeyPassthrough(t *testing.T) {
 	s := newRegSecretServer(t, make([]byte, 32))
-	id, secret, cleared, err := s.ensureV3RegSecret("")
+	id, secret, cleared, err := s.ensureV3RegSecret("", 0)
 	if err == nil {
 		t.Fatal("empty beacon_key must fail generation (dead payload otherwise)")
 	}
@@ -66,7 +66,7 @@ func TestEnsureV3RegSecretEmptyKeyPassthrough(t *testing.T) {
 
 func TestEnsureV3RegSecretNilStoreFailsSafe(t *testing.T) {
 	s := &Server{db: testutil.SetupTestDB(t), regSecrets: nil}
-	_, _, _, err := s.ensureV3RegSecret("aabb")
+	_, _, _, err := s.ensureV3RegSecret("aabb", 0)
 	if err == nil {
 		t.Fatal("expected error when reg secret store is uninitialized")
 	}

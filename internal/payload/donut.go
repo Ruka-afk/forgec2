@@ -94,7 +94,9 @@ func generateWithDonutCLI(donutPath string, cfg DonutConfig) ([]byte, error) {
 	defer os.RemoveAll(tmpDir)
 
 	asmPath := filepath.Join(tmpDir, "assembly.dll")
-	if err := os.WriteFile(asmPath, cfg.Assembly, 0644); err != nil {
+	// 0600: the tmp assembly the donut pipeline executes/reads is uploaded
+	// task material; only the build user needs it.
+	if err := os.WriteFile(asmPath, cfg.Assembly, 0600); err != nil {
 		return nil, fmt.Errorf("write assembly: %w", err)
 	}
 

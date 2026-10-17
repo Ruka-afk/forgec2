@@ -489,7 +489,7 @@ func TestConcurrentCookieProxyLifecycle(t *testing.T) {
 	if _, err := e.start("race-agent", 0); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	defer e.stop("race-agent")
+	defer func() { _ = e.stop("race-agent") }()
 
 	var wg sync.WaitGroup
 	for w := 0; w < 4; w++ {

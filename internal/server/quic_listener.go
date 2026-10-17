@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -118,11 +119,18 @@ func (l *QUICBeaconListener) acceptLoop(ctx context.Context, ln *quic.Listener) 
 	}
 }
 
-// isTemporaryNetErr mirrors net.Error.Temporary for wrapper errors that only
-// implement the interface via Unwrap.
+// isTemporaryNetErr stands in for the deprecated net.Error.Temporary
+// (removed in spirit since Go 1.18: its stdlib implementations now report
+// nothing beyond the timeout flag). Listeners retry timeouts and the
+// transient resource errors they can shrug off; everything else is fatal
+// or handled by the caller.
 func isTemporaryNetErr(err error) bool {
-	if ne, ok := err.(net.Error); ok {
-		return ne.Temporary()
+	if err == nil {
+		return false
+	}
+	var ne net.Error
+	if errors.As(err, &ne) && ne.Timeout() {
+		return true
 	}
 	msg := err.Error()
 	return strings.Contains(msg, "too many open files") ||

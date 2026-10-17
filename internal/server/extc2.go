@@ -330,10 +330,10 @@ func (s *Server) handleExternalC2WebSocket(c *gin.Context) {
 				task := s.extC2TaskQueue[channelID][0]
 				s.extC2TaskQueue[channelID] = s.extC2TaskQueue[channelID][1:]
 				s.extC2TaskMu.Unlock()
-				ch.SendJSON(task)
+				_ = ch.SendJSON(task) // dead channel: the read deadline below reaps it
 			} else {
 				s.extC2TaskMu.Unlock()
-				ch.SendJSON(map[string]string{"type": "noop"})
+				_ = ch.SendJSON(map[string]string{"type": "noop"})
 			}
 		}
 	}

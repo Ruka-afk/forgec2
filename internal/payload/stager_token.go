@@ -362,7 +362,9 @@ func buildTokenStager(cfg ImplantConfig, outputDir string, fetch StagerFetch, go
 	}
 
 	stagerSrc := tokenStagerMainSrc(goos)
-	if err := os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte(stagerSrc), 0644); err != nil {
+	// 0600: the staged stager source is operator build material just like the
+	// mTLS client key next to it.
+	if err := os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte(stagerSrc), 0600); err != nil {
 		return "", err
 	}
 	// 0600: the generated file carries the client private key.
@@ -371,7 +373,7 @@ func buildTokenStager(cfg ImplantConfig, outputDir string, fetch StagerFetch, go
 	}
 
 	goMod := "module stager\n\ngo 1.25\n"
-	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0600); err != nil {
 		return "", err
 	}
 

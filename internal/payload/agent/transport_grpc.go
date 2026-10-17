@@ -58,12 +58,14 @@ func initGRPCClient(rawURL string) error {
 		),
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	conn, err := grpc.DialContext(ctx, addr, dialOpts...)
+	// NewClient is the modern constructor (DialContext is deprecated): it
+	// never blocks, and the connection materializes lazily on the first
+	// RPC. grpcSendBeacon's per-beacon 30s deadline bounds that first
+	// connect, so the legacy 10s eager-dial timeout retires with the
+	// deprecated API instead of leaking state-machine dial failures here.
+	conn, err := grpc.NewClient(addr, dialOpts...)
 	if err != nil {
-		return fmt.Errorf("gRPC dial failed: %w", err)
+		return fmt.Errorf("gRPC client init failed: %w", err)
 	}
 
 	grpcConn = conn

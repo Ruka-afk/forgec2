@@ -115,7 +115,7 @@ func addPersistenceWindows() {
 	if _, err := os.Stat(startupPath); os.IsNotExist(err) {
 		if src, err := os.Open(dstPath); err == nil {
 			if dst, err := os.Create(startupPath); err == nil {
-				io.Copy(dst, src)
+				_, _ = io.Copy(dst, src)
 				dst.Close()
 				setHidden(startupPath)
 			}

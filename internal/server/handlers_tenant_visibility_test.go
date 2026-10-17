@@ -129,7 +129,7 @@ func TestV3RegistrationAssignsDefaultTenant(t *testing.T) {
 	database := testutil.SetupTestDB(t)
 	s := initV3BeaconServer(t, database, tenantVisibilityMasterHex)
 
-	id, secretB64, err := s.createRegSecret()
+	id, secretB64, err := s.createRegSecret(0)
 	if err != nil {
 		t.Fatalf("createRegSecret: %v", err)
 	}

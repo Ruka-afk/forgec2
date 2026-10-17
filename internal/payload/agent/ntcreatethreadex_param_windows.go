@@ -18,7 +18,7 @@ func syscallNtCreateThreadExParam(mgr *syscallManager, hProc uintptr, startAddr 
 		}
 	}
 	var hThread uintptr
-	r1, _, _ := syscall.Syscall9(stub, 8,
+	r1, _, _ := syscall.SyscallN(stub,
 		uintptr(unsafe.Pointer(&hThread)),
 		0x1FFFFF,
 		0,

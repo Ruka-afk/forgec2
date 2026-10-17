@@ -365,7 +365,7 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		}
 		middleware.SetTrustedProxyIPs(cfg.Server.TrustedProxies)
 	} else {
-		r.SetTrustedProxies(nil)
+		_ = r.SetTrustedProxies(nil) // nil never errors: only a CIDR list can fail validation
 		middleware.SetTrustedProxyIPs(nil)
 	}
 	r.Use(gin.Recovery())

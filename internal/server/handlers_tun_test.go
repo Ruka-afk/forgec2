@@ -47,7 +47,7 @@ func TestTunPendingOverflowVisible(t *testing.T) {
 	if err != nil {
 		t.Fatalf("startUDP: %v", err)
 	}
-	defer e.stop(agentID)
+	defer func() { _ = e.stop(agentID) }()
 
 	// Prefill just under the byte budget, then deliver one more datagram.
 	e.mu.Lock()

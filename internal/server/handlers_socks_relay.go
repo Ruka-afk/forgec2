@@ -264,7 +264,7 @@ func (e *socksRelayEngine) acceptLoop(s *Server, sess *socksRelaySession) {
 				return
 			default:
 			}
-			if ne, ok := err.(net.Error); ok && ne.Temporary() {
+			if isTemporaryNetErr(err) {
 				time.Sleep(50 * time.Millisecond)
 				continue
 			}
@@ -295,7 +295,7 @@ func (e *socksRelayEngine) handleOperatorConn(s *Server, sess *socksRelaySession
 		return
 	}
 	// No auth required
-	conn.Write([]byte{0x05, 0x00})
+	_, _ = conn.Write([]byte{0x05, 0x00}) // a vanished client errors on the next read
 
 	// ── SOCKS5 Request ──
 	reqHeader := make([]byte, 4)
@@ -303,7 +303,7 @@ func (e *socksRelayEngine) handleOperatorConn(s *Server, sess *socksRelaySession
 		return
 	}
 	if reqHeader[0] != 0x05 || (reqHeader[1] != 0x01 && reqHeader[1] != 0x03) {
-		conn.Write([]byte{0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
+		_, _ = conn.Write([]byte{0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
 		return
 	}
 	udpAssociate := reqHeader[1] == 0x03
@@ -349,7 +349,7 @@ func (e *socksRelayEngine) handleOperatorConn(s *Server, sess *socksRelaySession
 		}
 		destAddr = fmt.Sprintf("[%s]:%d", net.IP(ip).String(), int(portb[0])<<8|int(portb[1]))
 	default:
-		conn.Write([]byte{0x05, 0x08, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
+		_, _ = conn.Write([]byte{0x05, 0x08, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
 		return
 	}
 
@@ -363,7 +363,7 @@ func (e *socksRelayEngine) handleOperatorConn(s *Server, sess *socksRelaySession
 	}
 	if activeConns >= SocksMaxConns {
 		e.mu.Unlock()
-		conn.Write([]byte{0x05, 0x02, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
+		_, _ = conn.Write([]byte{0x05, 0x02, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
 		slog.Warn("SOCKS relay: max connections reached", "agent_id", sess.agentID, "limit", SocksMaxConns)
 		return
 	}
@@ -408,7 +408,7 @@ func (e *socksRelayEngine) handleOperatorConn(s *Server, sess *socksRelaySession
 	})
 
 	// SOCKS5 success reply (bound address 0.0.0.0:0)
-	conn.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
+	_, _ = conn.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
 
 	// Clear deadline, now we relay
 	conn.SetDeadline(time.Time{})
@@ -922,7 +922,7 @@ func (c *socksRelayConn) close() {
 func (e *socksRelayEngine) startUDPAssociate(s *Server, sess *socksRelaySession, rc *socksRelayConn, ctrl net.Conn) {
 	udpConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
 	if err != nil {
-		ctrl.Write([]byte{0x05, 0x01, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
+		_, _ = ctrl.Write([]byte{0x05, 0x01, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
 		return
 	}
 	port := udpConn.LocalAddr().(*net.UDPAddr).Port

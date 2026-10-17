@@ -268,7 +268,7 @@ func tcpFrameConn(t *testing.T, s *Server) (net.Conn, func()) {
 // v3 secret (the v2 master-key path is deprecated and rejected).
 func v3TestAgent(t testing.TB, s *Server, uuid string) *tcpTestAgent {
 	t.Helper()
-	id, secretB64, err := s.createRegSecret()
+	id, secretB64, err := s.createRegSecret(0)
 	if err != nil {
 		t.Fatalf("createRegSecret: %v", err)
 	}
@@ -364,7 +364,7 @@ func TestTCPBeaconV3RegisterAndEncrypted(t *testing.T) {
 	defer done()
 
 	// v3 per-implant secret (master-key path is deprecated).
-	secretID, secretB64, err := s.createRegSecret()
+	secretID, secretB64, err := s.createRegSecret(0)
 	if err != nil {
 		t.Fatalf("createRegSecret: %v", err)
 	}
@@ -456,7 +456,7 @@ func TestTCPBeaconRestartRecovery(t *testing.T) {
 	conn, done := tcpFrameConn(t, s)
 	defer done()
 
-	secretID, secretB64, err := s.createRegSecret()
+	secretID, secretB64, err := s.createRegSecret(0)
 	if err != nil {
 		t.Fatalf("createRegSecret: %v", err)
 	}

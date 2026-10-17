@@ -803,7 +803,7 @@ func TestHandleOperatorConnRejectsBadHandshakes(t *testing.T) {
 	}{
 		{
 			name:    "non-SOCKS5 version dropped",
-			drive:   func(t *testing.T, c net.Conn) { c.Write([]byte{0x04, 0x01, 0x00}) },
+			drive:   func(t *testing.T, c net.Conn) { _, _ = c.Write([]byte{0x04, 0x01, 0x00}) },
 			wantRep: 0,
 		},
 		{
@@ -811,7 +811,7 @@ func TestHandleOperatorConnRejectsBadHandshakes(t *testing.T) {
 			drive: func(t *testing.T, c net.Conn) {
 				socksGreet(t, c, 0x05, 0x00)
 				// BIND (0x02) is not implemented by the relay.
-				c.Write([]byte{0x05, 0x02, 0x00, 0x01, 10, 0, 0, 1, 0x00, 0x50})
+				_, _ = c.Write([]byte{0x05, 0x02, 0x00, 0x01, 10, 0, 0, 1, 0x00, 0x50})
 			},
 			wantRep: 0x07,
 		},
@@ -819,7 +819,7 @@ func TestHandleOperatorConnRejectsBadHandshakes(t *testing.T) {
 			name: "unknown address type",
 			drive: func(t *testing.T, c net.Conn) {
 				socksGreet(t, c, 0x05, 0x00)
-				c.Write([]byte{0x05, 0x01, 0x00, 0x09, 1, 2, 3, 4, 0x00, 0x50})
+				_, _ = c.Write([]byte{0x05, 0x01, 0x00, 0x09, 1, 2, 3, 4, 0x00, 0x50})
 			},
 			wantRep: 0x08,
 		},

@@ -190,10 +190,16 @@ type Implant struct {
 // Only the secret_id is public (compiled into the implant); the sealed secret
 // lives here at rest and is unsealed server-side to verify beacon frames.
 type RegSecret struct {
-	ID        string    `gorm:"primaryKey" json:"id"`                         // public secret id (compiled into the implant)
-	SecretEnc string    `gorm:"type:text" json:"-"`                           // AES-256-GCM sealed registration secret
-	AgentID   string    `gorm:"size:36;default:''" json:"agent_id,omitempty"` // bound after first registration
-	Bound     bool      `gorm:"default:false" json:"bound"`
+	ID        string `gorm:"primaryKey" json:"id"`                         // public secret id (compiled into the implant)
+	SecretEnc string `gorm:"type:text" json:"-"`                           // AES-256-GCM sealed registration secret
+	AgentID   string `gorm:"size:36;default:''" json:"agent_id,omitempty"` // bound after first registration
+	Bound     bool   `gorm:"default:false" json:"bound"`
+	// TenantID is the tenant of the operator who minted the secret, so an
+	// implant built by one team binds to that team when it first phones home
+	// instead of falling into the bootstrap default tenant (0 = legacy
+	// unscoped row, minted by the CLI without -tenant or before this column;
+	// such an agent still lands in the default tenant).
+	TenantID  uint      `gorm:"index" json:"tenant_id"`
 	CreatedAt time.Time `json:"created_at"`
 }
 

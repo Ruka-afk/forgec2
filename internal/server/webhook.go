@@ -16,7 +16,7 @@ const webhookMaxRetries = 3
 
 func (s *Server) triggerWebhooks(evt Event) {
 	for _, wh := range s.webhooksForEvent(evt) {
-		go s.fireWebhook(wh, evt)
+		go func() { _ = s.fireWebhook(wh, evt) }() // fireWebhook logs its own delivery failures
 	}
 }
 

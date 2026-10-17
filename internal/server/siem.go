@@ -132,9 +132,7 @@ func (sw *SIEMWebhook) Send(event SIEMEvent) {
 	alerts := sw.correlator.ProcessEvent(event)
 	sw.batchMu.Lock()
 	sw.batch = append(sw.batch, event)
-	for _, a := range alerts {
-		sw.batch = append(sw.batch, a)
-	}
+	sw.batch = append(sw.batch, alerts...)
 	sw.batchMu.Unlock()
 }
 

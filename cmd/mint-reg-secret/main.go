@@ -12,6 +12,10 @@
 //	go run ./cmd/mint-reg-secret -config config.yaml
 //	go run ./cmd/mint-reg-secret -db data/db/forgec2.db -beacon-key <hex>
 //
+// -tenant <id> records the minting tenant so the first agent that registers
+// with the secret lands in that team instead of the bootstrap default tenant
+// (0 / omitted = legacy unscoped, same ownership behavior as before).
+//
 // Two operator-facing consequences are worth stating: the secret binds to the
 // first agent id that registers with it, and the row is written directly to
 // disk (no UI, no audit entry). Treat the printed secret like the API token it
@@ -25,6 +29,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/crypto"
@@ -39,7 +44,14 @@ func main() {
 	dbPath := flag.String("db", "data/db/forgec2.db", "path to the server's sqlite database")
 	configPath := flag.String("config", "", "server config.yaml to read server.beacon_key from (ignored when -beacon-key is given)")
 	keyHex := flag.String("beacon-key", "", "server.beacon_key as hex")
+	tenantFlag := flag.String("tenant", "", "minting tenant id (numeric); omitted = legacy unscoped row")
 	flag.Parse()
+
+	if *tenantFlag != "" {
+		if _, err := strconv.ParseUint(*tenantFlag, 10, 64); err != nil {
+			fatal(fmt.Errorf("-tenant must be a numeric tenant id, got %q", *tenantFlag))
+		}
+	}
 
 	key := *keyHex
 	if key == "" && *configPath != "" {
@@ -82,15 +94,25 @@ func main() {
 		fatal(err)
 	}
 	row := db.RegSecret{ID: hex.EncodeToString(idBytes), SecretEnc: sealed, CreatedAt: time.Now()}
+	if *tenantFlag != "" {
+		tid, _ := strconv.ParseUint(*tenantFlag, 10, 64)
+		row.TenantID = uint(tid)
+	}
 	if err := gdb.Create(&row).Error; err != nil {
 		fatal(fmt.Errorf("insert reg_secrets row: %w", err))
 	}
 
 	fmt.Println("set SECRET_ID=" + row.ID)
 	fmt.Println("set SECRET_B64=" + base64.StdEncoding.EncodeToString(secret))
-	fmt.Fprintf(os.Stderr,
-		"minted v3 registration secret %s into %s (no UI, no audit row); it binds to the first agent id that registers with it\n",
-		row.ID, *dbPath)
+	if row.TenantID > 0 {
+		fmt.Fprintf(os.Stderr,
+			"minted v3 registration secret %s (tenant %d) into %s (no UI, no audit row); it binds to the first agent id that registers with it\n",
+			row.ID, row.TenantID, *dbPath)
+	} else {
+		fmt.Fprintf(os.Stderr,
+			"minted v3 registration secret %s into %s (no UI, no audit row); it binds to the first agent id that registers with it\n",
+			row.ID, *dbPath)
+	}
 }
 
 func beaconKeyFromConfig(path string) (string, error) {

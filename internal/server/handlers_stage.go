@@ -147,8 +147,13 @@ func (s *Server) buildStage2Blob(tok *db.StagerToken) error {
 	// secret/beacon key and (with v2 master-key auth rejected) can never
 	// register. The build is cached after the first fetch, so the secret is
 	// created only once per token.
+	//
+	// The fetch is unauthenticated, so the minting tenant is resolved from the
+	// token's creator: whoever registered the stage token owns the implant the
+	// lazy build will produce. Tokens without a creator (pre-tenant rows, test
+	// fixtures) stay on the legacy bootstrap-default path via 0.
 	beaconKey := s.serverBeaconKey()
-	regSecretID, regSecretB64, beaconKey, err := s.ensureV3RegSecret(beaconKey)
+	regSecretID, regSecretB64, beaconKey, err := s.ensureV3RegSecret(beaconKey, s.tenantIDForUser(tok.CreatedBy))
 	if err != nil {
 		return fmt.Errorf("create v3 registration secret: %w", err)
 	}

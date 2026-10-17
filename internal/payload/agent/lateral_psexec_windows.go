@@ -41,6 +41,6 @@ func lateralPsexec(target, user, pass, cmd string) (string, error) {
 	res, err := runCmdScriptFile(script)
 	// Best-effort cleanup in case the script was interrupted before reaching it.
 	cleanup := fmt.Sprintf(`schtasks /s %s /delete /tn %s /f & del /f /q %s`, target, schName, outRemote)
-	runCmdScriptFile(cleanup)
+	_, _ = runCmdScriptFile(cleanup)
 	return res, err
 }

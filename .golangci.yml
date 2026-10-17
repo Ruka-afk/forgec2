@@ -85,6 +85,77 @@ linters:
         # lazy-loading machinery; every caller already inspects r1 (and
         # GetLastError) for the actual outcome.
         - (*syscall.LazyProc).Call
+        # syscall.SyscallN returns (r1, r2, errno) the same way; the errno
+        # slot is a GetLastError shadow the callers inspect separately (see
+        # the syscall stub files).
+        - syscall.SyscallN
+
+        # ─────────────── batch N (2026-10) typed-wrapper groups ───────────────
+        # Note: entries below use FULL import paths. golangci's errcheck
+        # exclude-functions matches only by the declaration's import path —
+        # bare alias names such as (*websocket.Conn).WriteMessage look fine but
+        # match nothing outside the standard library (verified by capture).
+        # 1) Deadline wrappers: same idiom as (net.Conn).Set*Deadline above —
+        #    the setter fails only when the socket is already dead, and the
+        #    next read/write fails loudly anyway. Session channels built on
+        #    gorilla/websocket and packet conns.
+        - (*github.com/gorilla/websocket.Conn).SetReadDeadline
+        - (*github.com/gorilla/websocket.Conn).SetWriteDeadline
+        - (*github.com/gorilla/websocket.Conn).SetDeadline
+        - (net.PacketConn).SetReadDeadline
+        #
+        # 2) Best-effort response/notification writers: when the peer is gone
+        #    the next operation errors out anyway; UI clients refetch, DNS
+        #    resolvers re-ask, and CSV/JSON framing errors surface at their
+        #    stream's own Flush/HTTP layer. Push notifications never gate the
+        #    request result.
+        - (*github.com/gorilla/websocket.Conn).Write
+        - (*github.com/gorilla/websocket.Conn).WriteMessage
+        - (github.com/miekg/dns.ResponseWriter).WriteMsg
+        - (github.com/gin-gonic/gin.ResponseWriter).Write
+        - (github.com/gin-gonic/gin.ResponseWriter).WriteString
+        - (*encoding/csv.Writer).Write
+        - (*encoding/json.Encoder).Encode
+        #
+        # 3) Listener teardown: a Stop error during server shutdown must not
+        #    hold the whole shutdown path hostage — the process is leaving;
+        #    whatever leaked is moot. (Same judgment as the deadline group:
+        #    the shutdown is best-effort by design.)
+        - (*github.com/forgec2/forgec2/internal/server.GRPCListener).Stop
+        - (*github.com/forgec2/forgec2/internal/server.DNSBeaconListener).Stop
+        - (*github.com/forgec2/forgec2/internal/server.H2CBeaconListener).Stop
+        - (*github.com/forgec2/forgec2/internal/server.QUICBeaconListener).Stop
+        - (*github.com/forgec2/forgec2/internal/server.SSHBeaconListener).Stop
+        - (*github.com/forgec2/forgec2/internal/server.Server).stopExtraListener
+        - (*github.com/slack-go/slack.RTM).Disconnect
+        - (*github.com/quic-go/quic-go.Conn).CloseWithError
+        #
+        # 4) (*gorm.DB).DB: the *sql.DB accessor for conn-pool tuning
+        #    (SetMaxOpenConns & friends); the dialector has already provisioned
+        #    it, and a failure here would have failed the wrapper's own Open.
+        - (*gorm.io/gorm.DB).DB
+        #
+        # 5) Test-fixture framing: multipart bodies in upload fixtures are
+        #    best-effort scaffolding for the case under test.
+        - (*mime/multipart.Part).Write
+        - (*mime/multipart.Writer).WriteField
+        #
+        # 6) Victim-side memory teardown in the agent: VirtualFree/VirtualProtect/
+        #    CloseHandle failures on cleanup paths cannot change the task's
+        #    outcome (the payload already ran); inspecting them would only add
+        #    logging to paths that exist to be silent.
+        - golang.org/x/sys/windows.VirtualFree
+        - golang.org/x/sys/windows.VirtualProtect
+        - golang.org/x/sys/windows.CloseHandle
+        #
+        # 8) (*BackupManager).PerformBackup is a self-journaling API: it
+        #    records its own failures via noteBackupResult (log + stats), so
+        #    the scheduled tick loop treats it as fire-and-forget on purpose.
+        - (*github.com/forgec2/forgec2/internal/server.BackupManager).PerformBackup
+        #
+        # 7) fmt.Sscanf here is a best-effort numeric hint parse whose failure
+        #    path applies a graceful fallback value at every call.
+        - fmt.Sscanf
   exclusions:
     generated: lax
     presets:

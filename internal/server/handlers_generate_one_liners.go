@@ -75,7 +75,7 @@ func (s *Server) handleGeneratePS1(c *gin.Context) {
 		beaconKey = s.serverBeaconKey()
 	}
 
-	regSecretID, regSecretB64, beaconKey, err := s.ensureV3RegSecret(beaconKey)
+	regSecretID, regSecretB64, beaconKey, err := s.ensureV3RegSecret(beaconKey, s.currentTenantID(c))
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err.Error())
 		return
@@ -210,7 +210,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 		beaconKey = s.serverBeaconKey()
 	}
 
-	regSecretID, regSecretB64, beaconKey, err := s.ensureV3RegSecret(beaconKey)
+	regSecretID, regSecretB64, beaconKey, err := s.ensureV3RegSecret(beaconKey, s.currentTenantID(c))
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err.Error())
 		return

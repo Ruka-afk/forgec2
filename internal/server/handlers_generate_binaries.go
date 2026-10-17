@@ -28,43 +28,48 @@ func profileAuditHash(cfg payload.ImplantConfig) string {
 }
 
 type binaryGenForm struct {
-	C2URL            string `form:"c2_url"`
-	Protocol         string `form:"protocol"`
-	BeaconTransport  string `form:"beacon_transport"`
-	Interval         int    `form:"interval"`
-	Jitter           int    `form:"jitter"`
-	BeaconTime       int    `form:"beacon_time"`
-	UserAgent        string `form:"user_agent"`
-	Persist          bool   `form:"persist"`
-	SkipTLSVerify    bool   `form:"skip_tls_verify"`
-	Filename         string `form:"filename"`
-	Profile          string `form:"profile"`
-	ListenerID       uint   `form:"listener_id"`
-	P2PMode          string `form:"p2p_mode"`
-	P2PParent        string `form:"p2p_parent"`
-	P2PListenAddr    string `form:"p2p_listen_addr"`
-	DNSDomain        string `form:"dns_domain"`
-	DNSServer        string `form:"dns_server"`
-	DNSDoHURL        string `form:"dns_doh_url"`
-	DNSDoTAddr       string `form:"dns_dot_addr"`
-	Proxy            string `form:"proxy"`
-	CryptoKey        string `form:"crypto_key"`
-	BeaconKey        string `form:"beacon_key"` // pre-shared key; empty = server's configured beacon_key
-	Architecture     string `form:"architecture"`
-	DomainFront      string `form:"domain_front"`
-	Obfuscate        string `form:"obfuscate"`
-	Evasion          string `form:"evasion"`
-	GhostMode        string `form:"ghost_mode"`
-	WorkingStart     string `form:"working_start"`
-	WorkingEnd       string `form:"working_end"`
-	WorkingTZ        string `form:"working_tz"`
-	SSHUser          string `form:"ssh_user"`
-	SSHPassword      string `form:"ssh_password"`
-	SSHKey           string `form:"ssh_key"`
-	SSHHostKey       string `form:"ssh_host_key"` // base64 server host public key pin
-	MTLSCert         string `form:"mtls_cert"`    // PEM client certificate (optional)
-	MTLSKey          string `form:"mtls_key"`     // PEM client private key (required with mtls_cert)
-	MTLSCA           string `form:"mtls_ca"`      // PEM CA bundle to pin the server in mTLS mode (optional)
+	C2URL           string `form:"c2_url"`
+	Protocol        string `form:"protocol"`
+	BeaconTransport string `form:"beacon_transport"`
+	Interval        int    `form:"interval"`
+	Jitter          int    `form:"jitter"`
+	BeaconTime      int    `form:"beacon_time"`
+	UserAgent       string `form:"user_agent"`
+	Persist         bool   `form:"persist"`
+	SkipTLSVerify   bool   `form:"skip_tls_verify"`
+	Filename        string `form:"filename"`
+	Profile         string `form:"profile"`
+	ListenerID      uint   `form:"listener_id"`
+	P2PMode         string `form:"p2p_mode"`
+	P2PParent       string `form:"p2p_parent"`
+	P2PListenAddr   string `form:"p2p_listen_addr"`
+	DNSDomain       string `form:"dns_domain"`
+	DNSServer       string `form:"dns_server"`
+	DNSDoHURL       string `form:"dns_doh_url"`
+	DNSDoTAddr      string `form:"dns_dot_addr"`
+	Proxy           string `form:"proxy"`
+	CryptoKey       string `form:"crypto_key"`
+	BeaconKey       string `form:"beacon_key"` // pre-shared key; empty = server's configured beacon_key
+	Architecture    string `form:"architecture"`
+	DomainFront     string `form:"domain_front"`
+	Obfuscate       string `form:"obfuscate"`
+	Evasion         string `form:"evasion"`
+	GhostMode       string `form:"ghost_mode"`
+	WorkingStart    string `form:"working_start"`
+	WorkingEnd      string `form:"working_end"`
+	WorkingTZ       string `form:"working_tz"`
+	SSHUser         string `form:"ssh_user"`
+	SSHPassword     string `form:"ssh_password"`
+	SSHKey          string `form:"ssh_key"`
+	SSHHostKey      string `form:"ssh_host_key"` // base64 server host public key pin
+	// mintTenant is not form-bound: parseBinaryForm stamps the building
+	// operator's tenant so the minted registration secret (and thus the
+	// implant's first-registration tenant) follows the builder, not the
+	// bootstrap default.
+	mintTenant       uint
+	MTLSCert         string `form:"mtls_cert"` // PEM client certificate (optional)
+	MTLSKey          string `form:"mtls_key"`  // PEM client private key (required with mtls_cert)
+	MTLSCA           string `form:"mtls_ca"`   // PEM CA bundle to pin the server in mTLS mode (optional)
 	PinnedCertSHA256 string `form:"pinned_cert_sha256"`
 	ExpiryDate       string `form:"expiry_date"`              // "YYYY-MM-DD"; implant auto-exits after this date
 	SelfCheck        bool   `form:"self_check"`               // embed + verify a SHA-256 self-integrity hash
@@ -94,6 +99,9 @@ func (s *Server) parseBinaryForm(c *gin.Context) (*binaryGenForm, bool) {
 		respondError(c, http.StatusBadRequest, "Invalid request parameters")
 		return nil, false
 	}
+	// The minting operator's tenant travels with the build so the v3
+	// registration secret names the building team (see createRegSecret).
+	form.mintTenant = s.currentTenantID(c)
 	// Handle icon file upload (multipart "icon" field) — overrides icon_b64 if present
 	if fh, err := c.FormFile("icon"); err == nil && fh != nil {
 		if fh.Size > 256*1024 {
@@ -290,7 +298,7 @@ func (s *Server) buildImplantConfig(form *binaryGenForm) (payload.ImplantConfig,
 
 	var err error
 	var regSecretID, regSecretB64 string
-	regSecretID, regSecretB64, beaconKey, err = s.ensureV3RegSecret(beaconKey)
+	regSecretID, regSecretB64, beaconKey, err = s.ensureV3RegSecret(beaconKey, form.mintTenant)
 	if err != nil {
 		return payload.ImplantConfig{}, err
 	}

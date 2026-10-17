@@ -176,12 +176,12 @@ func TestUploadCertRejectsExpired(t *testing.T) {
 	if err != nil {
 		t.Fatalf("form file: %v", err)
 	}
-	cw.Write(certPEM)
+	_, _ = cw.Write(certPEM)
 	kw, err := mw.CreateFormFile("key", "server.key")
 	if err != nil {
 		t.Fatalf("form file: %v", err)
 	}
-	kw.Write(keyPEM)
+	_, _ = kw.Write(keyPEM)
 	mw.Close()
 
 	w := httptest.NewRecorder()
@@ -213,9 +213,9 @@ func TestUploadCertRejectsBadPEMTypes(t *testing.T) {
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
 	cw, _ := mw.CreateFormFile("cert", "server.crt")
-	cw.Write(keyPEM)
+	_, _ = cw.Write(keyPEM)
 	kw, _ := mw.CreateFormFile("key", "server.key")
-	kw.Write(certPEM)
+	_, _ = kw.Write(certPEM)
 	mw.Close()
 
 	w := httptest.NewRecorder()
@@ -242,9 +242,9 @@ func TestUploadCertHappyPathWritesFiles(t *testing.T) {
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
 	cw, _ := mw.CreateFormFile("cert", "server.crt")
-	cw.Write(certPEM)
+	_, _ = cw.Write(certPEM)
 	kw, _ := mw.CreateFormFile("key", "server.key")
-	kw.Write(keyPEM)
+	_, _ = kw.Write(keyPEM)
 	mw.Close()
 
 	w := httptest.NewRecorder()

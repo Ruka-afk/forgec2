@@ -158,7 +158,7 @@ func serveOneSMBCient(pipeName string) error {
 	if err != nil {
 		return fmt.Errorf("create pipe: %w", err)
 	}
-	defer syscallNtCloseHandle(sm, handle)
+	defer func() { _ = syscallNtCloseHandle(sm, handle) }()
 
 	if err := syscallNtFsControlListen(sm, handle); err != nil {
 		return fmt.Errorf("listen: %w", err)

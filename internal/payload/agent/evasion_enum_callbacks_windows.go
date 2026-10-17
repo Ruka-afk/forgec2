@@ -7,6 +7,8 @@ import (
 	"strings"
 	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 var (
@@ -228,10 +230,16 @@ func checkRegistryCallbacks() string {
 	advapi := syscall.NewLazyDLL("advapi32.dll")
 	procRegOpenKeyEx := advapi.NewProc("RegOpenKeyExW")
 
+	keyPath, err := windows.UTF16PtrFromString("SYSTEM\\CurrentControlSet\\Services")
+	if err != nil {
+		// NUL in a constant path can only mean the constant is corrupt.
+		return fmt.Sprintf("[*] Registry callbacks: path encoding failed: %v\n", err)
+	}
+
 	var hKey uintptr
 	ret, _, _ := procRegOpenKeyEx.Call(
 		0x80000002, // HKEY_LOCAL_MACHINE
-		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr("SYSTEM\\CurrentControlSet\\Services"))),
+		uintptr(unsafe.Pointer(keyPath)),
 		0,
 		0x20019, // KEY_READ
 		uintptr(unsafe.Pointer(&hKey)),
