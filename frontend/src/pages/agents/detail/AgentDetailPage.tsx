@@ -304,7 +304,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     if (!data?.agent || sleepDirtyRef.current) return;
     setSleepValue(data.agent.current_interval ?? 0);
     setJitterValue(data.agent.current_jitter ?? 0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- synced to the server values rather than the data object identity; sleepDirtyRef already guards unsaved edits.
   }, [data?.agent?.current_interval, data?.agent?.current_jitter]);
 
   const agent = data?.agent || ({} as AgentDetailModel);

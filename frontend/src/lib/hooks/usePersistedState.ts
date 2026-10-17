@@ -26,7 +26,7 @@ export function usePersistedState<T>(key: string, initial: T) {
     } catch {
       setValue(initial);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initial is the one-shot fallback for a missing key; a changing initial must not clobber the stored value.
   }, [key]);
 
   useEffect(() => {

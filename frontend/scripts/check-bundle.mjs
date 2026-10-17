@@ -22,16 +22,24 @@
 //           (route-agents-list/detail, route-ai, route-generate,
 //           route-credentials) that no first-paint screen uses; total 3.92 MB
 //   after:  critical path 1076 kB (8 chunks), zero route-* chunks; total 3.95 MB
-// The remaining ~694 kB is vendor (baseui 201, react 194, router 89, zod 65,
-// icons 57, misc 55, sonner 33) plus the ~383 kB entry, which carries the
-// English dictionary. That is the floor this change is not about; lower it by
-// trimming vendor deps, not by raising this number.
+// At the 1076 kB mark the remaining ~694 kB was vendor (baseui 201, react
+// 194, router 89, zod 65, icons 57, misc 55, sonner 33) plus the ~383 kB
+// entry, which carries the English dictionary. That is the floor this change
+// is not about; lower it by trimming vendor deps, not by raising this number.
+//
+// Batch S then took the critical path to 968 kB (7 chunks): the lazy login
+// route drops zod and the base-ui vendor chunk is split by measured
+// reachability; batch T held it at 968 kB with total 3.98 MB / 190 files
+// (measurements and commands in docs/FRONTEND_PERF.md).
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const TOTAL_LIMIT_BYTES = 5.5 * 1024 * 1024;
-const CRITICAL_PATH_LIMIT_BYTES = 1200 * 1024; // ~12% over the measured 1076 kB
+// Sized to catch a re-leaked route chunk (100s of kB; the failure this budget
+// exists for) without flapping on legitimate growth — measured 968 kB after
+// batch S/T, so the slack is ~230 kB on purpose.
+const CRITICAL_PATH_LIMIT_BYTES = 1200 * 1024;
 const staticDir = join(fileURLToPath(new URL(".", import.meta.url)), "..", "out");
 
 function walk(dir, out) {

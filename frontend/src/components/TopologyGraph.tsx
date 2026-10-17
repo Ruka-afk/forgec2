@@ -250,13 +250,13 @@ export default function TopologyGraph({
       netInstanceRef.current?.destroy();
       netInstanceRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-runs only on visibility or a retry (loadAttempt); data updates are the sync effect's job and the loader reads refs by design.
   }, [showGraph, scriptFailed, loadAttempt]);
 
   // Live-update the existing instance with fresh data / physics state.
   useEffect(() => {
     if (showGraph) syncData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- syncData is a fresh closure over the ref-held instance; data/physics identity is exactly when a re-sync is wanted.
   }, [nodes, edges, physicsEnabled]);
 
   if (loading) {

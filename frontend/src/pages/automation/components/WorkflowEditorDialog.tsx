@@ -113,7 +113,7 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
       description: formDesc,
       scope_type: formScope,
       scope_ids: formScope === "all" ? "" : formScopeIds.trim(),
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- _key is the editor-only row identity; it must not reach the API payload.
       steps: formSteps.map(({ _key, ...s }) => s),
     });
   }
