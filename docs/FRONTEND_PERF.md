@@ -74,8 +74,10 @@ Notes:
 The shell HTML preloads only the entry chunk and its static vendor dependencies
 (`vendor-*` modulepreload links); every route chunk is fetched on demand.
 `frontend/scripts/check-bundle.mjs` is the referee for raw bytes: a 5.50 MB
-total budget and a 1,200 KiB critical-path budget (entry + preloaded vendor
-chunks + that route's own chunks).
+total budget and a 1,090 KiB critical-path budget (entry + preloaded vendor
+chunks; tightened from 1,200 KiB in 2026-10 maintenance once batches S/T held
+at 968 kB — the total budget stays 5.50 MB because, unlike the critical path,
+it legitimately grows with every added page).
 
 - The login page is a lazy route (`src/router.tsx`), which keeps zod — pulled in
   through the form schema — out of the critical path: `vendor-zod` now loads
