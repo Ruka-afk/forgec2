@@ -3,6 +3,7 @@ import { subscribeTyped } from "./typed-ws";
 import { logger } from "./logger";
 import { paths } from "./api-paths";
 import { TASK_HARD_TIMEOUT_MS, TASK_HIDDEN_POLL_MS, TASK_POLL_INTERVAL_MS, TASK_SOFT_TIMEOUT_MS } from "./task-poll";
+import { preloadLoginPage } from "./login-preload";
 
 const TIMEOUT_MS = 30000;
 
@@ -90,6 +91,10 @@ export function handleUnauthorized(res: Pick<Response, "status">): void {
   if (p === "/login" || p === "/login/") return;
   if (authRedirecting) return;
   authRedirecting = true;
+
+  // The login route is lazily split; start its chunk fetch now so the redirect
+  // below lands on a form that is already (or about to be) cached.
+  void preloadLoginPage();
 
   // Defer so concurrent 401s collapse into one navigation
   if (authRedirectTimer) clearTimeout(authRedirectTimer);

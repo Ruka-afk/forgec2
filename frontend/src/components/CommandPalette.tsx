@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { NAV_SECTIONS, filterNavByPermissions } from "@/lib/navigation";
+import { prefetchRoute } from "@/lib/route-prefetch";
 import { useI18n } from "@/lib/i18n";
 import { useAppStore } from "@/lib/store";
 import { useAgentList } from "@/lib/hooks/useAgentList";
@@ -239,6 +240,7 @@ export default function CommandPalette() {
                         aria-selected={activeIndex === globalIndex}
                         data-active={activeIndex === globalIndex}
                         onClick={() => handleSelect(globalIndex)}
+                        onMouseEnter={() => prefetchRoute(item.href)}
                         className={`h-auto w-full justify-start gap-3 rounded-none px-4 py-2.5 text-left text-sm ${activeIndex === globalIndex ? "bg-primary/10" : ""}`}
                       >
                         <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-secondary/70">

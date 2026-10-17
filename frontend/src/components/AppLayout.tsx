@@ -15,6 +15,7 @@ import { useLocation } from "react-router-dom";
 import { useAppStore, selectSidebarWidth } from "@/lib/store";
 import { useI18n } from "@/lib/i18n";
 import { getPageTitleKey } from "@/lib/navigation";
+import { startIdleRoutePrefetch } from "@/lib/route-prefetch";
 import { isFlushPath, showBreadcrumbBar } from "@/lib/layout";
 import { cn } from "@/lib/utils";
 import { useWS } from "@/lib/wsContext";
@@ -72,6 +73,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [pathname, setMobileMenuOpen]);
+
+  // Speculatively warm the pages operators open first, once the browser is
+  // idle (sidebar hover/focus covers the rest). No-op on save-data links.
+  useEffect(() => startIdleRoutePrefetch(), []);
 
   // Per-page document.title derived from the route's nav label.
   useEffect(() => {

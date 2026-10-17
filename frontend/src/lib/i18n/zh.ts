@@ -4666,6 +4666,8 @@ export const zh: Record<string, string> = {
     "topology.listeners": "监听器",
     "topology.loading": "加载拓扑数据中...",
     "topology.graph_alt": "网络拓扑图",
+    "topology.graph_load_failed": "图形渲染器加载失败",
+    "topology.graph_load_failed_hint": "vis-network 资源未能加载（可能被拦截或网络中断），请检查连接后重试。",
     "topology.node_details": "节点详情",
     "topology.off": "关",
     "topology.offline": "离线",

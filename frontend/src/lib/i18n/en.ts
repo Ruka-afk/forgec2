@@ -4617,6 +4617,8 @@ export const en: Record<string, string> = {
     "topology.listeners": "Listeners",
     "topology.loading": "Loading topology data...",
     "topology.graph_alt": "Network topology graph",
+    "topology.graph_load_failed": "Could not load the graph renderer",
+    "topology.graph_load_failed_hint": "The vis-network bundle is served by this server; a failed or blocked fetch leaves the graph blank. Retry once the connection is back.",
     "topology.node_details": "Node Details",
     "topology.off": "OFF",
     "topology.offline": "Offline",

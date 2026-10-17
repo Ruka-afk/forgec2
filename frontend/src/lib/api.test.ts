@@ -11,6 +11,9 @@ import {
   getRateLimitRetryAfter,
   parseRetryAfterSeconds,
 } from "./api";
+import { preloadLoginPage } from "./login-preload";
+
+vi.mock("./login-preload", () => ({ preloadLoginPage: vi.fn().mockResolvedValue(undefined) }));
 
 describe("formatThrownError", () => {
   it("uses the Error message without the class name prefix", () => {
@@ -82,6 +85,7 @@ describe("buildUrl", () => {
 describe("handleUnauthorized", () => {
   beforeEach(() => {
     resetAuthRedirectState();
+    vi.clearAllMocks();
     vi.useFakeTimers();
   });
 
@@ -96,6 +100,7 @@ describe("handleUnauthorized", () => {
     handleUnauthorized({ status: 403 });
     vi.advanceTimersByTime(100);
     expect(window.location.href).toBe(href);
+    expect(preloadLoginPage).not.toHaveBeenCalled();
   });
 
   it("skips redirect when already on login", () => {
@@ -114,6 +119,7 @@ describe("handleUnauthorized", () => {
     handleUnauthorized({ status: 401 });
     vi.advanceTimersByTime(100);
     expect(assign).not.toHaveBeenCalled();
+    expect(preloadLoginPage).not.toHaveBeenCalled();
   });
 
   it("debounces concurrent 401s into one navigation with next", () => {
@@ -142,6 +148,8 @@ describe("handleUnauthorized", () => {
     expect(hrefs[0]).toContain("/login?");
     expect(hrefs[0]).toContain("expired=1");
     expect(hrefs[0]).toMatch(/next=%2Fagents%2Fabc%2Fshell/);
+    // The login route is lazy; the redirect warms its chunk exactly once.
+    expect(preloadLoginPage).toHaveBeenCalledTimes(1);
   });
 });
 

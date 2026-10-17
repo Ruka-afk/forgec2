@@ -18,6 +18,7 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Shield, ChevronDown, LayoutGrid, Settings, Search, X } from "lucide-react";
 import { sidebarNavSections, filterNavByPermissions } from "@/lib/navigation";
+import { prefetchRoute } from "@/lib/route-prefetch";
 import type { PermissionKey } from "@/lib/permission-keys";
 import {
   defaultSidebarSections as defaultSections,
@@ -145,6 +146,8 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
               <Link
                 key={item.href}
                 to={item.href}
+                onMouseEnter={() => prefetchRoute(item.href)}
+                onFocus={() => prefetchRoute(item.href)}
                 aria-current={isActive(item.href) ? "page" : undefined}
                 className={`flex items-center gap-x-2.5 rounded-lg transition-colors duration-150 ${collapsed ? 'group relative' : ''}
                   ${collapsed ? 'justify-center px-0 py-2 mx-auto size-10' : 'min-h-9 px-2 py-1.5'}

@@ -1,9 +1,14 @@
 
-import { useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef, useMemo, useState } from "react";
 import { Spinner } from "@/components/ui/spinner";
+import { Button } from "@/components/ui/button";
 import { Network } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { TopoNode, TopoData } from "@/types/topology";
+
+/** A blocked/offline fetch of the vis-network bundle fires neither onload nor
+ *  onerror behind some proxies; without a watchdog the container stayed blank. */
+const SCRIPT_LOAD_TIMEOUT_MS = 15_000;
 
 declare global {
   interface Window {
@@ -63,6 +68,8 @@ export default function TopologyGraph({
   const { t } = useI18n();
   const networkRef = useRef<HTMLDivElement>(null);
   const netInstanceRef = useRef<InstanceType<NonNullable<typeof window.vis>["Network"]> | null>(null);
+  const [scriptFailed, setScriptFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   const nodes = useMemo(() => (useNetSource
     ? (netData?.nodes || [])
@@ -159,10 +166,16 @@ export default function TopologyGraph({
 
   const showGraph = !loading && nodes.length > 0;
 
-  // Create (or destroy) the vis instance only when the graph container's
-  // visibility flips or the component unmounts. Data refreshes update in place.
+  // Create (or destroy) the vis instance only when the graph container flips
+  // visibility, the operator retries a failed bundle load, or the component
+  // unmounts. Data refreshes update in place.
+  //
+  // scriptFailed is a dependency because the fallback branch replaces the
+  // graph container: while it is shown, networkRef points at nothing, and a
+  // retry must first re-mount the container (retry clears scriptFailed) before
+  // this effect can own it again.
   useEffect(() => {
-    if (!showGraph || !networkRef.current) return;
+    if (!showGraph || scriptFailed || !networkRef.current) return;
 
     const init = () => {
       if (!window.vis?.Network || !networkRef.current) return;
@@ -205,13 +218,27 @@ export default function TopologyGraph({
       const script = document.createElement("script");
       script.src = "/js/vis-network.min.js";
       let destroyed = false;
-      script.onload = () => {
-        if (!destroyed) init();
+      let watchdog = 0;
+      const fail = () => {
+        if (destroyed) return;
+        destroyed = true;
+        window.clearTimeout(watchdog);
+        script.remove();
+        link.remove();
+        setScriptFailed(true);
       };
+      watchdog = window.setTimeout(fail, SCRIPT_LOAD_TIMEOUT_MS);
+      script.onload = () => {
+        if (destroyed) return;
+        window.clearTimeout(watchdog);
+        init();
+      };
+      script.onerror = () => fail();
       document.head.appendChild(script);
 
       return () => {
         destroyed = true;
+        window.clearTimeout(watchdog);
         netInstanceRef.current?.destroy();
         netInstanceRef.current = null;
         script.remove();
@@ -224,7 +251,7 @@ export default function TopologyGraph({
       netInstanceRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showGraph]);
+  }, [showGraph, scriptFailed, loadAttempt]);
 
   // Live-update the existing instance with fresh data / physics state.
   useEffect(() => {
@@ -250,6 +277,33 @@ export default function TopologyGraph({
           <Network className="size-4 mx-auto mb-2" />
           <p className="text-muted-foreground text-sm">{t("topology.empty")}</p>
           <p className="text-muted-foreground text-xs mt-1">{t("topology.empty_hint")}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Bundle fetch failed (blocked, offline, or timed out): say so and offer a
+  // retry instead of leaving an empty canvas that never explains itself.
+  if (scriptFailed) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="text-center max-w-sm px-4">
+          <Network className="size-4 mx-auto mb-2 text-destructive" />
+          <p className="text-muted-foreground text-sm">{t("topology.graph_load_failed")}</p>
+          <p className="text-muted-foreground text-xs mt-1">{t("topology.graph_load_failed_hint")}</p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-3"
+            onClick={() => {
+              // Order matters: clearing the flag re-mounts the graph container,
+              // and the bump makes the effect re-run even for a double retry.
+              setScriptFailed(false);
+              setLoadAttempt((n) => n + 1);
+            }}
+          >
+            {t("common.retry")}
+          </Button>
         </div>
       </div>
     );

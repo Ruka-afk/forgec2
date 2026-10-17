@@ -1,9 +1,10 @@
 # Embedded frontend delivery (serving contract)
 
 How `forgec2-server` serves the embedded SPA (`internal/webdist/dist`, embedded
-with `//go:embed all:dist`) over HTTP: cache policy, conditional requests and
-on-the-fly compression. This is the reference for the numbers quoted in
-`CHANGELOG.md` and for judging future serving-layer changes.
+with `//go:embed all:dist`) over HTTP: cache policy, conditional requests,
+on-the-fly compression and what the shell loads before first paint. This is the
+reference for the numbers quoted in `CHANGELOG.md` and for judging future
+serving- and loading-layer changes.
 
 ## Where it lives
 
@@ -12,7 +13,9 @@ on-the-fly compression. This is the reference for the numbers quoted in
 | `internal/server/server_http.go` | `SetStaticFS` middleware: auth redirect for `/`+`/dashboard`, malleable-profile safety net, trailing-slash normalization, cache policy, 304 handling, compression decision |
 | `internal/server/static_assets.go` | boot-time metadata (content-hash ETag, size, compressibility), ETag/`Accept-Encoding` parsing, pooled gzip writer |
 | `internal/server/server_http_static_test.go` | cache/304/compression-skip matrix over a `fstest.MapFS` |
-| `frontend/scripts/check-bundle.mjs` | raw bundle budget (raw bytes only; compression does not shrink what it measures) |
+| `frontend/scripts/check-bundle.mjs` | raw bundle budget (raw bytes only; compression does not shrink what it measures) and the critical-path referee |
+| `frontend/vite.config.ts` | `manualChunks`, incl. the measured base-ui core/forms split (`BASEUI_PAGE_ONLY_KEYS`) |
+| `frontend/src/lib/route-prefetch.ts` + `route-imports.ts` | hover/focus + idle route prefetch; the import map is shared with `router.tsx` so both request the same chunks |
 
 The middleware runs before route handlers and aborts the chain for static
 files; beacon routes, the malleable-profile safety net, `/api`, `/ws`,
@@ -66,26 +69,78 @@ Notes:
   `/extc2`, beacon routes and malleable-profile URIs are not touched, and the
   beacon hot path keeps its allocation profile.
 
-## Measurements (2026-10, local host, `curl -w '%{size_download}'`)
+## Loading contract (2026-10 batch S)
 
-| File | Raw | Gzip |
-| --- | --- | --- |
-| `index-*.js` (entry) | 394,657 | 110,807 |
-| `vendor-baseui-*.js` | 206,278 | 67,573 |
-| `vendor-react-*.js` | 198,366 | 62,747 |
-| `index-*.css` | 212,764 | 30,433 |
-| `vendor-router-*.js` | 90,691 | 30,818 |
-| `vendor-zod-*.js` | 66,393 | 17,827 |
-| `vendor-icons-*.js` | 58,538 | 18,383 |
-| `vendor-misc-*.js` | 56,300 | 19,881 |
-| `vendor-sonner-*.js` | 33,419 | 9,565 |
-| `/login` shell (HTML) | 2,257 | 880 |
-| `/js/vis-network.min.js` (vendored, unhashed) | 476,620 | 128,752 |
+The shell HTML preloads only the entry chunk and its static vendor dependencies
+(`vendor-*` modulepreload links); every route chunk is fetched on demand.
+`frontend/scripts/check-bundle.mjs` is the referee for raw bytes: a 5.50 MB
+total budget and a 1,200 KiB critical-path budget (entry + preloaded vendor
+chunks + that route's own chunks).
 
-Sum of the 8 JS chunks + 1 CSS the `/login` shell references: **1,317,406 raw →
-368,034 gzip** (72% saved), plus the 880-byte shell. A revisit of the shell
-revalidates to `304` with a 0-byte body — the payload moves only on version
-change.
+- The login page is a lazy route (`src/router.tsx`), which keeps zod — pulled in
+  through the form schema — out of the critical path: `vendor-zod` now loads
+  only on pages that actually parse forms. The one extra round trip an
+  unauthenticated visitor pays is compensated by `src/lib/login-preload.ts`:
+  `handleUnauthorized` starts the login chunk as soon as a 401 is seen, so the
+  redirect lands on a page that is already fetching.
+- The base-ui split is driven by **measured reachability**, not module size: a
+  probe build isolated every `@base-ui/*` subpath in its own chunk, then the
+  entry's static import closure over the emitted files named the subpaths no
+  entry-reachable module imports. Those keys (`BASEUI_PAGE_ONLY_KEYS` in
+  `vite.config.ts`) form `vendor-baseui-forms`; everything else stays in the
+  preloaded `vendor-baseui`. Re-run the probe before editing the key list.
+- Prefetch is interaction-driven: sidebar and command-palette hover or focus
+  call `prefetchRoute`, which shares its import map with the router
+  (`src/lib/route-imports.ts`), and once the browser goes idle three likely-next
+  routes (`/dashboard`, `/agents`, `/listeners`) warm — all of it skipped on
+  save-data connections. Only top-level routes prefetch: `/agents/42/shell`
+  would warm the wrong chunk, so it is ignored.
+- The vis-network bundle (`/js/vis-network.min.js`, served by this server, not a
+  CDN) is treated as a fetch that can fail: `TopologyGraph` has `onerror` plus a
+  15 s watchdog, renders a fallback with a working retry, and only then gives
+  up. A blocked or stalled fetch used to leave a blank canvas with no
+  explanation.
+
+## Loading measurements (2026-10 batch S, local host; raw from the bundle, gzip via zlib
+level 6, the same level Go's `compress/gzip` defaults to; `curl` numbers for
+the served bytes are below)
+
+| File | Raw | Gzip | When |
+| --- | --- | --- | --- |
+| `index-*.js` (entry) | 380,907 | 107,705 | critical path |
+| `vendor-react-*.js` | 198,366 | 62,619 | critical path |
+| `vendor-baseui-*.js` (core) | 174,191 | 57,925 | critical path |
+| `vendor-router-*.js` | 90,691 | 30,717 | critical path |
+| `vendor-icons-*.js` | 58,532 | 18,428 | critical path |
+| `vendor-misc-*.js` | 56,300 | 19,888 | critical path |
+| `vendor-sonner-*.js` | 33,419 | 9,547 | critical path |
+| `index-*.css` | 212,764 | 30,437 | critical path |
+| `vendor-zod-*.js` | 66,393 | 17,846 | lazy (form pages) |
+| `vendor-baseui-forms-*.js` | 34,102 | 11,783 | lazy (checkbox/popover/tabs/…) |
+| `LoginPage-*.js` | 10,597 | 3,357 | lazy + prewarmed on 401 |
+| `/login` shell (HTML) | 2,176 | 865 | first request |
+| `/js/vis-network.min.js` (vendored, unhashed) | 476,620 | 128,752 | topology page |
+
+The 7 JS chunks + 1 CSS the shell preloads: **1,205,170 raw → 337,266 gzip**
+(72% saved), plus the 865-byte shell. Batch S took the 7-chunk critical path
+from 1,104,896 to 992,406 raw and keeps the lazy zod / base-ui-forms / login
+chunks out of `index.html`. A revisit of the shell revalidates to `304` with a
+0-byte body — the payload moves only on version change.
+
+## Server measurements (2026-10 batch R, local host, `curl -w '%{size_download}'`)
+
+The bytes on the wire are the same files the loading table lists above; what
+makes them cheap is the serving contract in this document:
+
+- A hashed asset arrives gzip-encoded when `Accept-Encoding: gzip` is offered:
+  measured `index-*.js` 380,907 raw → 107,992 gzip on the wire (Go's gzip,
+  ~0.3% larger than the zlib-6 figures in the loading table),
+  `/js/vis-network.min.js` 476,620 → 128,752, the `/login` shell → 865.
+- A revisit of the shell revalidates to `304` in 0 bytes; immutable assets are
+  never revalidated at all.
+- The pre-batch-S numbers (entry 394,657, `vendor-baseui` 206,278, zod on the
+  critical path at 1,317,406 raw for 8 JS + CSS) are the historical baseline
+  quoted in the batch R `CHANGELOG.md` entry.
 
 ## Verification
 
@@ -103,6 +158,11 @@ curl -sS -D - -o NUL -H 'If-None-Match: "<etag>"' http://localhost:8000/login
 
 # unit matrix (cache policy, 304 semantics, compression skips)
 go test ./internal/server/ -run TestStatic -count=1
+
+# loading contract: budgets + which chunks the shell actually preloads
+cd frontend && npm run build && npm run check:bundle
+node -e "const h=require('node:fs').readFileSync('out/index.html','utf8');\
+console.log(/vendor-baseui-forms/.test(h) ? 'FAIL: forms preloaded' : 'OK: forms lazy')"
 ```
 
 ## Recorded limits / not done
@@ -113,5 +173,13 @@ go test ./internal/server/ -run TestStatic -count=1
 - No precompressed cache at boot: per-request gzip on the operator plane is
   negligible, and the dist is re-embedded on every release anyway.
 - No `Last-Modified`: `embed.FS` has zero modtimes; the ETag carries identity.
+- Page chunks are deliberately not preloaded: the shell carries no page code
+  and a click costs one chunk fetch, which hover/focus and idle prefetch
+  usually hide. Do not "fix" this by preloading routes back into the shell.
+- A cold `/login` visit pays one extra round trip for the lazy login chunk; the
+  401 prewarm covers the common expired-session path, not a first-ever visit.
 - The entry chunk still carries the full i18n dictionaries (~33% of the entry
   chunk is the `en` dictionary); splitting them is tracked separately.
+- `frontend/e2e/layout.spec.ts` win32 visual baselines were last refreshed
+  2026-08-29 and are stale locally; CI enforces the Linux set, which is
+  current. Re-baseline win32 separately before trusting local pixel diffs.

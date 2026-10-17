@@ -159,6 +159,21 @@ HTML 壳、`/js`、`/css`、`favicon.ico`）→ `no-cache` + 启动时算好的�
 `docs/FRONTEND_PERF.md`；`go test ./internal/server/ -run TestStatic` 钉住缓存/304/
 压缩跳过矩阵。
 
+加载层契约（2026-10 批次 S）：登录页改为懒加载路由，zod（经表单 schema 引入）
+随之退出关键路径；401 时 `login-preload.ts` 立即预热登录 chunk，重定向落地时
+已在取包。base-ui 按「入口静态闭包实测」拆桶——探针构建把每个 `@base-ui/*`
+subpath 独立成 chunk，再由闭包判定 `BASEUI_PAGE_ONLY_KEYS`（checkbox、popover、
+tabs 等 14 个 key）为懒加载 `vendor-baseui-forms`（34,102 B），其余留在预载的
+`vendor-baseui`。导航预热由交互驱动：Sidebar/命令面板 hover·focus 走
+`route-prefetch.ts`（import 表与 router 共享 `route-imports.ts`，保证同一 chunk），
+空闲时预热 `/dashboard`、`/agents`、`/listeners`，save-data 连接整体跳过；仅顶层
+路由参与（`/agents/42/shell` 预热会取错 chunk，直接忽略）。TopologyGraph 对
+vis-network 加载失败（`onerror` + 15s 看门狗）给出带重试的回退卡片——重试先清
+回退状态再挂回容器，避免「回退期容器已卸载、重试永远不生效」的陷阱。实测关键路径
+1,104,896→992,406 B（`check:bundle` 1,200 KiB 上限内），壳+CSS gzip 368,034→
+337,266 B；裁判 `npm run check:bundle` + `out/index.html` 不含 `vendor-baseui-forms`，
+度量与复现命令见 `docs/FRONTEND_PERF.md`。
+
 ### 2.8 OTA / Lifecycle（`update_signing.go`, `commands_evasion.go`, `agent_lifecycle.go`）
 
 服务端持有 `data/update_signing.key`（路径跟随 `server.data_dir`，私钥不出目录）；

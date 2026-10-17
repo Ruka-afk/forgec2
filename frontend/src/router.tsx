@@ -6,8 +6,8 @@ import AppLayout from "@/components/AppLayout";
 import RouterErrorView from "@/components/RouterErrorView";
 import NotFound from "@/pages/NotFound";
 import Forbidden from "@/pages/forbidden/ForbiddenPage";
-import LoginPage from "@/pages/login/LoginPage";
 import { NAV_ITEMS } from "@/lib/navigation";
+import { ROUTE_PAGE_IMPORTS } from "@/lib/route-imports";
 import { useAppStore } from "@/lib/store";
 import { canAny } from "@/lib/permissions";
 import type { PermissionKey } from "@/lib/permission-keys";
@@ -15,52 +15,19 @@ import type { PermissionKey } from "@/lib/permission-keys";
 const lazyPage = (imp: () => Promise<{ default: unknown }>) =>
   lazy(imp as () => Promise<{ default: ComponentType }>);
 
-const MAIN_PAGES: Record<string, ReturnType<typeof lazyPage>> = {
-  agents: lazyPage(() => import("@/pages/agents/AgentsPageContent")),
-  "asset-organization": lazyPage(() => import("@/pages/asset-organization/AssetOrganizationPage")),
-  ai: lazyPage(() => import("@/pages/ai/AIPageContent")),
-  attack: lazyPage(() => import("@/pages/attack/AttackPage")),
-  audit: lazyPage(() => import("@/pages/audit/AuditPage")),
-  automation: lazyPage(() => import("@/pages/automation/AutomationPageContent")),
-  autotag: lazyPage(() => import("@/pages/autotag/AutoTagPage")),
-  bloodhound: lazyPage(() => import("@/pages/bloodhound/BloodHoundPage")),
-  bof: lazyPage(() => import("@/pages/bof/BOFPage")),
-  campaign: lazyPage(() => import("@/pages/campaign/CampaignPageContent")),
-  chain: lazyPage(() => import("@/pages/chain/ChainPage")),
-  "circuit-breaker": lazyPage(() => import("@/pages/circuit-breaker/CircuitBreakerPage")),
-  cloud: lazyPage(() => import("@/pages/cloud/CloudPage")),
-  credentials: lazyPage(() => import("@/pages/credentials/CredentialsPageContent")),
-  dashboard: lazyPage(() => import("@/pages/dashboard/DashboardPage")),
-  dns: lazyPage(() => import("@/pages/dns/DnsPage")),
-  "domain-fronting": lazyPage(() => import("@/pages/domain-fronting/DomainFrontingPage")),
-  generate: lazyPage(() => import("@/pages/generate/GeneratePage")),
-  groups: lazyPage(() => import("@/pages/groups/GroupsPage")),
-  infrastructure: lazyPage(() => import("@/pages/infrastructure/InfrastructurePageContent")),
-  integrations: lazyPage(() => import("@/pages/integrations/IntegrationsPage")),
-  lateral: lazyPage(() => import("@/pages/lateral/LateralPageContent")),
-  listeners: lazyPage(() => import("@/pages/listeners/ListenersPageContent")),
-  loot: lazyPage(() => import("@/pages/loot/LootPage")),
-  macros: lazyPage(() => import("@/pages/macros/MacrosPageContent")),
-  ntlm: lazyPage(() => import("@/pages/ntlm/NtlmPage")),
-  opsec: lazyPage(() => import("@/pages/opsec/OpsecPage")),
-  phishing: lazyPage(() => import("@/pages/phishing/PhishingPageContent")),
-  pivoting: lazyPage(() => import("@/pages/pivoting/PivotingPageContent")),
-  plugins: lazyPage(() => import("@/pages/plugins/PluginsPageContent")),
-  privesc: lazyPage(() => import("@/pages/privesc/PrivescPage")),
-  report: lazyPage(() => import("@/pages/report/ReportPageContent")),
-  roles: lazyPage(() => import("@/pages/roles/RolesPage")),
-  scanner: lazyPage(() => import("@/pages/scanner/ScannerPage")),
-  scripting: lazyPage(() => import("@/pages/scripting/ScriptingPage")),
-  settings: lazyPage(() => import("@/pages/settings/SettingsPage")),
-  tags: lazyPage(() => import("@/pages/tags/TagsPage")),
-  timeline: lazyPage(() => import("@/pages/timeline/components/EventsPageContent")),
-  tokens: lazyPage(() => import("@/pages/tokens/TokensPage")),
-  toolkit: lazyPage(() => import("@/pages/toolkit/ToolkitPage")),
-  topology: lazyPage(() => import("@/pages/topology/TopologyPage")),
-  traffic: lazyPage(() => import("@/pages/traffic/TrafficPage")),
-  users: lazyPage(() => import("@/pages/users/UsersPage")),
-};
+// One lazy chunk per page. The import map lives in src/lib/route-imports.ts so
+// nav prefetch (src/lib/route-prefetch.ts) asks for the exact same chunks.
+const MAIN_PAGES: Record<string, ReturnType<typeof lazyPage>> = Object.fromEntries(
+  Object.entries(ROUTE_PAGE_IMPORTS).map(([name, load]) => [name, lazyPage(load)]),
+);
 
+// The login route is lazy like every other page. The sign-in form is the only
+// first-paint route that pulled in zod (its validation schema), which kept the
+// whole zod vendor chunk in the critical path for operators who never saw the
+// form; splitting it drops that chunk from first paint. The 401 handler warms
+// this chunk before redirecting (src/lib/login-preload.ts), so an expired
+// session still lands on an instantly painting form.
+const LoginPage = lazyPage(() => import("@/pages/login/LoginPage"));
 const AgentDetailPage = lazyPage(() => import("@/pages/agents/detail/AgentDetailPage"));
 const AgentConfigPage = lazyPage(() => import("@/pages/agents/detail/config/ConfigPage"));
 const AgentFilesPage = lazyPage(() => import("@/pages/agents/detail/files/FilesPage"));

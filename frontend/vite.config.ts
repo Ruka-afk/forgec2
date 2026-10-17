@@ -35,6 +35,27 @@ function fontPreloadPlugin(): Plugin {
   };
 }
 
+// base-ui subpaths that no entry-reachable module imports. Measured with a
+// per-subpath build (every subpath in its own chunk) and the entry's static
+// import closure over the emitted files; the list is the set of chunks that
+// closure never reached. See the manualChunks comment below.
+const BASEUI_PAGE_ONLY_KEYS = new Set([
+  "accordion",
+  "checkbox",
+  "checkbox-group",
+  "direction-provider",
+  "error.mjs",
+  "fieldset",
+  "getDefaultFormSubmitter.mjs",
+  "popover",
+  "radio",
+  "radio-group",
+  "switch",
+  "tabs",
+  "useForcedRerendering.mjs",
+  "warn.mjs",
+]);
+
 export default defineConfig(({ command }) => {
   // One-release compat: the old NEXT_PUBLIC_* names are ignored; warn loudly
   // instead of failing silently with an empty API base.
@@ -90,7 +111,21 @@ export default defineConfig(({ command }) => {
           // Order matters: react-router is a react lib too.
           if (id.includes("react-router")) return "vendor-router";
           if (id.includes("@xterm")) return "vendor-xterm";
-          if (id.includes("@base-ui")) return "vendor-baseui";
+          if (id.includes("@base-ui")) {
+            // base-ui ships one subpath per component. The shell only needs the
+            // interaction primitives (tooltip/dialog/menu/select/input/button/
+            // progress/collapsible + their shared internals); the form controls,
+            // tabs, popover and accordion are reached exclusively from
+            // lazily-loaded pages. Bucketing the whole package into one
+            // vendor chunk put all of it into first paint, so the page-only
+            // subpaths get their own bucket that only lazy page chunks import.
+            // Membership is empirical: the key set below is exactly the set of
+            // chunks unreachable from the entry (measured with a per-subpath
+            // build via the same key extraction; check:bundle fails if a
+            // "forms" subpath ever becomes entry-reachable again).
+            const key = id.match(/@base-ui\/(?:react|utils)\/([^/]+)/)?.[1] ?? "";
+            return BASEUI_PAGE_ONLY_KEYS.has(key) ? "vendor-baseui-forms" : "vendor-baseui";
+          }
           if (id.includes("lucide-react")) return "vendor-icons";
           if (id.includes("dompurify")) return "vendor-dompurify";
           if (id.includes("html-to-image")) return "vendor-html2image";
