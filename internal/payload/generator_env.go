@@ -296,40 +296,52 @@ func scrubBuildLog(output, ldflags string) string {
 	return output
 }
 
-// extractAgentSources writes ALL Go agent source files (plus any non-Go
+// extractAgentSources writes the Go agent source files (plus any non-Go
 // assets, currently the optional Wintun runtimes) from the embedded FS into
-// the temp build directory. This enables cross-platform builds (windows/linux).
-// When slim is set (light profile), the grpc/quic/wss transports are excluded
-// and replaced by stubs (see slimTransportStubs), cutting ~30% off the binary.
-func extractAgentSources(efs embed.FS, dir string, slim bool) error {
+// the temp build directory. This enables cross-platform builds
+// (windows/linux/darwin) and is where the operator's agent module selection
+// takes effect: excluded modules lose their registry files (their command
+// entry points) and any exclusively-owned implementation files, the
+// hand-build modules_default.go is replaced by the generated
+// modules_excluded.go, and — for the transports_advanced slice — the
+// grpc/quic/wss transports are replaced by stubs and transport_utls.go loses
+// its grpc-only tail, cutting ~30% off the binary.
+func extractAgentSources(efs embed.FS, dir string, plan agentBuildPlan) error {
 	entries, err := efs.ReadDir("agent")
 	if err != nil {
 		return fmt.Errorf("failed to read embedded agent dir: %w", err)
 	}
+	dropped := plan.droppedAgentFiles()
 	hasAgentGo := false
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
 			continue
 		}
-		if slim && slimExcludedTransports[entry.Name()] {
+		name := entry.Name()
+		// Hand builds get modules_default.go from the repo; staged trees get
+		// modules_excluded.go written below.
+		if name == "modules_default.go" {
+			continue
+		}
+		if dropped[name] {
 			continue
 		}
 		// Platform-specific sources use go:build tags; include all .go files so links resolve.
-		if entry.Name() == "agent.go" {
+		if name == "agent.go" {
 			hasAgentGo = true
 		}
-		data, err := efs.ReadFile("agent/" + entry.Name())
+		data, err := efs.ReadFile("agent/" + name)
 		if err != nil {
-			return fmt.Errorf("failed to read embedded agent/%s: %w", entry.Name(), err)
+			return fmt.Errorf("failed to read embedded agent/%s: %w", name, err)
 		}
-		if slim && entry.Name() == "transport_utls.go" {
+		if plan.TransportsExcluded && name == "transport_utls.go" {
 			if data, err = stripUTLSCreds(data); err != nil {
 				return err
 			}
 		}
 		// 0600: the staged build tree embeds the agent source the operator is
 		// about to compile; keep it owner-only like the resulting binary.
-		if err := os.WriteFile(filepath.Join(dir, entry.Name()), data, 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, name), data, 0600); err != nil {
 			return err
 		}
 	}
@@ -341,10 +353,13 @@ func extractAgentSources(efs embed.FS, dir string, slim bool) error {
 	if err := extractAgentAssets(efs, dir); err != nil {
 		return err
 	}
-	if slim {
+	if plan.TransportsExcluded {
 		if err := os.WriteFile(filepath.Join(dir, "transport_slim_stubs.go"), []byte(slimTransportStubs), 0600); err != nil {
 			return err
 		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "modules_excluded.go"), []byte(plan.moduleExcludedSource()), 0600); err != nil {
+		return err
 	}
 
 	// Every agent build gets a freshly randomized string table (fresh XOR keys

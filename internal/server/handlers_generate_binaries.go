@@ -87,6 +87,7 @@ type binaryGenForm struct {
 	PEImportMode        string `form:"pe_imports"`
 	PEManifestMode      string `form:"pe_manifest"`
 	Slim                string `form:"slim"`        // "true" for the light profile (grpc/quic/wss compiled out, ~30% smaller)
+	Modules             string `form:"modules"`     // comma-separated included agent modules; empty = all (see payload/agent_modules.go)
 	UPX                 string `form:"upx"`         // "true" for post-build UPX --lzma (exe/elf; missing binary = skip)
 	Win7Compat          string `form:"win7_compat"` // "true" for Win7/2008R2 (go1.20.14 toolchain, forces slim, forbids garble)
 }
@@ -224,6 +225,14 @@ func (s *Server) parseBinaryForm(c *gin.Context) (*binaryGenForm, bool) {
 		form.PEManifestMode = "default"
 	}
 
+	// Agent module selection: comma-separated catalogue names, empty = every
+	// module. Validated at the API boundary so a typo answers 400 instead of
+	// surfacing as a build error (or, worse, silently narrowing the payload).
+	if _, err := payload.NormalizeAgentModules(parseModuleSelection(form.Modules), false); err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return nil, false
+	}
+
 	// Prefix filename with short UUID to prevent concurrent build collisions.
 	// Sanitize first to block path traversal and header-injection characters.
 	if form.Filename != "" {
@@ -241,6 +250,43 @@ func (s *Server) parseBinaryForm(c *gin.Context) (*binaryGenForm, bool) {
 	}
 
 	return &form, true
+}
+
+// parseModuleSelection splits the `modules` form field (comma-separated agent
+// module names) into a trimmed, de-duplicated list preserving first-seen
+// order. Empty parts are dropped so a trailing comma cannot sketch an empty
+// name; an empty result means "every module".
+func parseModuleSelection(raw string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, part := range strings.Split(raw, ",") {
+		name := strings.TrimSpace(part)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	return out
+}
+
+// handleAgentModules exposes the agent module catalogue so the Generate page
+// can render the module selector (and task counts) without hardcoding the
+// list — the same catalogue the server validates against.
+func (s *Server) handleAgentModules(c *gin.Context) {
+	catalog := payload.AgentModuleCatalog()
+	type moduleJSON struct {
+		Name        string   `json:"name"`
+		Title       string   `json:"title"`
+		Description string   `json:"description"`
+		Tasks       []string `json:"tasks"`
+		Special     string   `json:"special,omitempty"`
+	}
+	out := make([]moduleJSON, 0, len(catalog))
+	for _, m := range catalog {
+		out = append(out, moduleJSON{Name: m.Name, Title: m.Title, Description: m.Description, Tasks: m.Tasks, Special: m.Special})
+	}
+	c.JSON(http.StatusOK, gin.H{"modules": out})
 }
 
 // buildImplantConfig constructs an ImplantConfig from the parsed binary form.
@@ -365,6 +411,7 @@ func (s *Server) buildImplantConfig(form *binaryGenForm) (payload.ImplantConfig,
 		PEImportMode:          form.PEImportMode,
 		PEManifestMode:        form.PEManifestMode,
 		Slim:                  form.Slim == "true" || form.Slim == "1",
+		Modules:               parseModuleSelection(form.Modules),
 		UPX:                   form.UPX == "true" || form.UPX == "1",
 		Win7Compat:            form.Win7Compat == "true" || form.Win7Compat == "1",
 	}, nil

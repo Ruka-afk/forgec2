@@ -20,6 +20,10 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 	if err := slimTransportConflict(&cfg); err != nil {
 		return "", err
 	}
+	plan, err := resolveAgentPlan(&cfg)
+	if err != nil {
+		return "", err
+	}
 
 	// Create temp build dir
 	tmpDir, err := os.MkdirTemp("", "forgec2-agent-*")
@@ -36,12 +40,12 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 	}
 
 	// Write agent source files from embed (supports agent.go + platform-specific agent_*.go)
-	if err := extractAgentSources(payloadFS, tmpDir, cfg.Slim); err != nil {
+	if err := extractAgentSources(payloadFS, tmpDir, plan); err != nil {
 		return "", err
 	}
 
 	// go.mod with required external dependencies
-	goMod := buildGoMod("windows", false, cfg.Slim, cfg.Win7Compat)
+	goMod := buildGoMod("windows", false, plan.TransportsExcluded, cfg.Win7Compat)
 
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
 		return "", err
@@ -242,6 +246,10 @@ func GenerateLinuxELF(cfg ImplantConfig, outputDir string) (string, error) {
 	if err := slimTransportConflict(&cfg); err != nil {
 		return "", err
 	}
+	plan, err := resolveAgentPlan(&cfg)
+	if err != nil {
+		return "", err
+	}
 	if cfg.UserAgent == defaultWindowsUA {
 		cfg.UserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
 	}
@@ -258,11 +266,11 @@ func GenerateLinuxELF(cfg ImplantConfig, outputDir string) (string, error) {
 		}
 	}
 
-	if err := extractAgentSources(payloadFS, tmpDir, cfg.Slim); err != nil {
+	if err := extractAgentSources(payloadFS, tmpDir, plan); err != nil {
 		return "", err
 	}
 
-	goMod := buildGoMod("linux", false, cfg.Slim, cfg.Win7Compat)
+	goMod := buildGoMod("linux", false, plan.TransportsExcluded, cfg.Win7Compat)
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
 		return "", err
 	}
@@ -337,6 +345,10 @@ func GenerateMacOS(cfg ImplantConfig, outputDir string) (string, error) {
 	if err := slimTransportConflict(&cfg); err != nil {
 		return "", err
 	}
+	plan, err := resolveAgentPlan(&cfg)
+	if err != nil {
+		return "", err
+	}
 	if cfg.UserAgent == defaultWindowsUA {
 		cfg.UserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 	}
@@ -353,11 +365,11 @@ func GenerateMacOS(cfg ImplantConfig, outputDir string) (string, error) {
 		}
 	}
 
-	if err := extractAgentSources(payloadFS, tmpDir, cfg.Slim); err != nil {
+	if err := extractAgentSources(payloadFS, tmpDir, plan); err != nil {
 		return "", err
 	}
 
-	goMod := buildGoMod("darwin", false, cfg.Slim, cfg.Win7Compat)
+	goMod := buildGoMod("darwin", false, plan.TransportsExcluded, cfg.Win7Compat)
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
 		return "", err
 	}

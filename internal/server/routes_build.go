@@ -12,6 +12,7 @@ func (s *Server) registerGenerateRoutes(auth *gin.RouterGroup) {
 	{
 		genRead.GET("/generate", s.handleGeneratePage)
 		genRead.GET("/api/generate/profiles", s.handleListProfiles)
+		genRead.GET("/api/generate/modules", s.handleAgentModules)
 		genRead.GET("/generate/builds", s.handleBuildList)
 		genRead.GET("/generate/builds/:id", s.handleBuildStatus)
 		genRead.GET("/generate/builds/:id/download", s.handleBuildDownload)

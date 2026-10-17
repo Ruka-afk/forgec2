@@ -76,7 +76,7 @@ func TestExtractAgentSourcesStagesFetchedWintun(t *testing.T) {
 		t.Skip("wintun runtimes not staged in this checkout")
 	}
 	dir := t.TempDir()
-	if err := extractAgentSources(payloadFS, dir, false); err != nil {
+	if err := extractAgentSources(payloadFS, dir, mustModulePlan(t, &ImplantConfig{})); err != nil {
 		t.Fatalf("extractAgentSources: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "assets", "wintun", "amd64", "wintun.dll")); err != nil {

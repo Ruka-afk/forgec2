@@ -9487,6 +9487,20 @@ paths:
       responses:
         '200':
           description: OK
+  /api/generate/modules:
+    get:
+      tags: [Generate]
+      summary: List build-time agent modules
+      description: |
+        Catalogue of the optional agent modules the generator can compile in or
+        out, backing the Generate page's module selector. An empty `modules`
+        form field on a build request means every module.
+      operationId: get__api_generate_modules
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
   /api/opsec/rules:
     get:
       tags: [Settings]

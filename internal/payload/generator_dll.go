@@ -96,6 +96,10 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 	if err := slimTransportConflict(&cfg); err != nil {
 		return "", err
 	}
+	plan, err := resolveAgentPlan(&cfg)
+	if err != nil {
+		return "", err
+	}
 
 	tmpDir, err := os.MkdirTemp("", "forgec2-agent-dll-*")
 	if err != nil {
@@ -109,11 +113,11 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 		}
 	}
 
-	if err := extractAgentSources(payloadFS, tmpDir, cfg.Slim); err != nil {
+	if err := extractAgentSources(payloadFS, tmpDir, plan); err != nil {
 		return "", err
 	}
 
-	goMod := buildGoMod("windows", true, cfg.Slim, cfg.Win7Compat)
+	goMod := buildGoMod("windows", true, plan.TransportsExcluded, cfg.Win7Compat)
 
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0600); err != nil {
 		return "", err

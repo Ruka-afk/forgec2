@@ -182,15 +182,22 @@ func win7CompatConflict(cfg *ImplantConfig) error {
 	return nil
 }
 
-// slimTransportConflict rejects light builds whose selected transport was
-// compiled out. Failing here beats shipping an implant that can never beacon.
+// slimTransportConflict rejects builds whose selected transport was compiled
+// out. The legacy Slim flag and an explicit module selection that omits
+// transports_advanced both drop grpc/quic/wss. This is also the module
+// selection validator: unknown module names and unmet dependencies fail here,
+// before any staging, instead of surfacing as broken builds.
 func slimTransportConflict(cfg *ImplantConfig) error {
-	if !cfg.Slim {
+	plan, err := resolveAgentPlan(cfg)
+	if err != nil {
+		return err
+	}
+	if !plan.TransportsExcluded {
 		return nil
 	}
 	switch strings.ToLower(strings.TrimSpace(cfg.BeaconTransport)) {
 	case "grpc", "quic", "wss":
-		return fmt.Errorf("slim (light) build excludes the %q transport: pick http/tcp/dns/icmp/ssh/mtls/h2c or disable slim", cfg.BeaconTransport)
+		return fmt.Errorf("build excludes the %q transport (slim/light profile, or agent module \"transports_advanced\" omitted): pick http/tcp/dns/icmp/ssh/mtls/h2c, re-enable the module or disable slim", cfg.BeaconTransport)
 	}
 	return nil
 }

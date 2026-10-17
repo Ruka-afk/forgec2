@@ -154,7 +154,7 @@ func TestGoToolchainEnv(t *testing.T) {
 
 func TestExtractAgentSourcesSlim(t *testing.T) {
 	dir := t.TempDir()
-	if err := extractAgentSources(payloadFS, dir, true); err != nil {
+	if err := extractAgentSources(payloadFS, dir, mustModulePlan(t, &ImplantConfig{Slim: true})); err != nil {
 		t.Fatalf("extractAgentSources slim: %v", err)
 	}
 	for _, dropped := range []string{"transport_grpc.go", "transport_quic.go", "transport_wss.go"} {
@@ -181,7 +181,7 @@ func TestExtractAgentSourcesSlim(t *testing.T) {
 
 	// Full extraction keeps everything and writes no stubs.
 	fullDir := t.TempDir()
-	if err := extractAgentSources(payloadFS, fullDir, false); err != nil {
+	if err := extractAgentSources(payloadFS, fullDir, mustModulePlan(t, &ImplantConfig{})); err != nil {
 		t.Fatalf("extractAgentSources full: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(fullDir, "transport_grpc.go")); err != nil {

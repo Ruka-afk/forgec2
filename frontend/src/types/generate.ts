@@ -85,6 +85,8 @@ export interface BinaryForm {
   slim: boolean;
   upx: boolean;
   win7compat: boolean;
+  /** Included agent modules (see /api/generate/modules). Empty = every module. */
+  modules: string[];
 }
 
 export interface UnixForm {
@@ -98,6 +100,8 @@ export interface UnixForm {
   working_start: string;
   working_end: string;
   working_tz: string;
+  /** Included agent modules (see /api/generate/modules). Empty = every module. */
+  modules: string[];
 }
 
 export interface PS1Form {
@@ -123,6 +127,15 @@ export interface DonutForm {
   args: string;
   filename: string;
   assembly: File | null;
+}
+
+/** One catalogue entry of build-time-selectable agent modules. */
+export interface AgentModuleInfo {
+  name: string;
+  title: string;
+  description: string;
+  tasks: string[];
+  special?: string;
 }
 
 export interface OneLinerForm {
@@ -200,11 +213,13 @@ export const DEFAULT_BINARY_FORM: BinaryForm = {
   working_start: "", working_end: "", working_tz: "",
   icon_file: null, icon_b64: "", icon_preset: "", disguise_as: "", file_description: "", company_name: "", lnk_disguise: false,
   pe_timestamp: "zero", pe_sections: "default", pe_imports: "none", pe_manifest: "default", slim: false, upx: false, win7compat: false,
+  modules: [],
 };
 
 export const DEFAULT_UNIX_FORM: UnixForm = {
   filename: "forge_implant", persist: false, skip_tls: false, obfuscate: false, slim: false, upx: false, domain_front: "",
   working_start: "", working_end: "", working_tz: "",
+  modules: [],
 };
 
 export const DEFAULT_PS1_FORM: PS1Form = { filename: "", persist: false, skip_tls: false };

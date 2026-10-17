@@ -258,6 +258,7 @@ export const paths = {
     /** Binary/stager/shellcode builds: /generate/exe, /dll, /ps1, /linux ... */
     binary: (format: string) => `/generate/${format.startsWith("/") ? format.slice(1) : format}`,
     donut: "/generate/donut",
+    modules: "/api/generate/modules",
   },
   macros: {
     list: "/api/macros",

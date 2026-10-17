@@ -22,4 +22,5 @@ export const DYNAMIC_PREFIXES = [
   "agents.proc_", // process actions via t(`agents.proc_${action}`) template
   "ai.risk_", // AI suggestion risk badge: t(`ai.risk_${suggestion.risk}`)
   "events.source_", // merged timeline source label selected before t(labelKey)
+  "generate.modules.", // agent module catalogue: t(`generate.modules.${name}.title`/`.desc`)
 ];

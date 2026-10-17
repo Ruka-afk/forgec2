@@ -309,6 +309,20 @@ jobs:
           GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags wintun -o "$RUNNER_TEMP/agent-windows-amd64-wintun.exe" ./internal/payload/agent/
           GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -tags wintun -o "$RUNNER_TEMP/agent-windows-arm64-wintun.exe" ./internal/payload/agent/
           GOOS=windows GOARCH=386 CGO_ENABLED=0 go build -tags wintun -o "$RUNNER_TEMP/agent-windows-386-wintun.exe" ./internal/payload/agent/
+      - name: Agent module compile gate (reduced matrix)
+        # TestAgentModuleExclusionBuilds stages a copy of the agent tree per
+        # case, drops the excluded module's registry file (plus the exclusive
+        # files the module fully owns), injects modules_excluded.go and runs a
+        # real `go build` — the gate that turns a wrong ExclusiveFiles claim
+        # into a red build instead of a broken payload. This reduced list
+        # covers every drop shape on every push (max drop, the special
+        # transports/slim path, and the exclusive-file-heavy modules); the full
+        # matrix — all cases x every shipped target — is the local check before
+        # changing agent_modules.go.
+        env:
+          FORGEC2_AGENT_MODULE_BUILD_TEST: "1"
+          FORGEC2_AGENT_MODULE_BUILD_CASES: "core-only,no-transports_advanced,no-creds,no-screen,no-injection,no-evasion,no-lateral"
+        run: go test ./internal/payload/ -run TestAgentModuleExclusionBuilds -count=1 -v
 
   # Operator-path runtime gate for the primary (Go) implant: a throwaway server
   # builds a real Linux agent through the generate API, the agent registers,

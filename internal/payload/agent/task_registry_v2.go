@@ -31,12 +31,25 @@ func RegisterTask(spec protocol.TaskSpec, h taskHandler) {
 // only — no capability details beyond what the server's own API exposes.
 func handleHelp(task Task, res *TaskResult) {
 	specs := protocol.AllSpecs()
+	excluded := 0
+	for _, sp := range specs {
+		if excludedModuleFor(sp.Type) != "" {
+			excluded++
+		}
+	}
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("%d commands available:\n\n", len(specs)))
+	header := fmt.Sprintf("%d commands available", len(specs))
+	if excluded > 0 {
+		header += fmt.Sprintf(" (%d not compiled into this build; agent modules: %s)", excluded, agentModulesSummary())
+	}
+	b.WriteString(header + ":\n\n")
 	for _, sp := range specs {
 		line := fmt.Sprintf("  %-28s", sp.Type)
 		if len(sp.Aliases) > 0 {
 			line += " (alias: " + strings.Join(sp.Aliases, ", ") + ")"
+		}
+		if mod := excludedModuleFor(sp.Type); mod != "" {
+			line += fmt.Sprintf("  [not in this build: module %q]", mod)
 		}
 		b.WriteString(line + "\n")
 		if sp.Description != "" {

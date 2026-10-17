@@ -8723,6 +8723,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/generate/modules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List build-time agent modules
+         * @description Catalogue of the optional agent modules the generator can compile in or
+         *     out, backing the Generate page's module selector. An empty `modules`
+         *     form field on a build request means every module.
+         */
+        get: operations["get__api_generate_modules"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/opsec/rules": {
         parameters: {
             query?: never;
@@ -22742,6 +22764,24 @@ export interface operations {
         };
     };
     get__api_generate_profiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get__api_generate_modules: {
         parameters: {
             query?: never;
             header?: never;

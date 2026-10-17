@@ -215,7 +215,13 @@ type ImplantConfig struct {
 	// Slim builds the light/http-only profile: the grpc/quic/wss transports
 	// are compiled out (stubs report plainly at runtime), cutting ~30% off
 	// the binary. Incompatible with BeaconTransport grpc/quic/wss.
+	// Slim is now the shorthand for excluding the transports_advanced agent
+	// module (see agent_modules.go); Modules below selects the rest.
 	Slim bool
+	// Modules lists the optional agent modules compiled into this build (see
+	// agent_modules.go). Empty = every module. Unknown names and unmet
+	// dependencies are rejected before the build starts.
+	Modules []string
 	// UPX runs an optional post-build UPX --lzma pass (exe/elf only).
 	// Missing upx binary = skip, never a build failure.
 	UPX bool
@@ -282,16 +288,6 @@ type ImplantConfig struct {
 	// Timing jitter extensions.
 	JitterURI      bool
 	ParameterNames []string
-}
-
-// slimExcludedTransports are agent sources dropped for light/http-only
-// builds. utls stays: it is the shared JA3 layer for HTTPS/DoT/mTLS, and
-// transport_utls.go's grpc-only tail (utlsCreds) is stripped separately by
-// stripUTLSCreds. agent.go's dispatch keeps compiling via slimTransportStubs.
-var slimExcludedTransports = map[string]bool{
-	"transport_grpc.go": true,
-	"transport_quic.go": true,
-	"transport_wss.go":  true,
 }
 
 // slimTransportStubs replaces the excluded transports' entry points. A stubbed

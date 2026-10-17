@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CopyButton } from "@/components/ui/copy-button";
-import type { BinaryForm, UnixForm, PS1Form, StagerForm, ShellcodeForm, DonutForm, BinaryVariant, UnixVariant, StagerVariant } from "@/types/generate";
+import type { BinaryForm, UnixForm, PS1Form, StagerForm, ShellcodeForm, DonutForm, BinaryVariant, UnixVariant, StagerVariant, AgentModuleInfo } from "@/types/generate";
 import { AppWindow, Apple, Binary, CheckCircle2, Disc, Download, HardDrive, Info, Package, PackageOpen, Puzzle, Terminal, Wand2 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -17,6 +17,83 @@ import { AdvancedSection, FieldLabel, PayloadCard } from "./PayloadCard";
 import { BuildResult, BuildStatusBadge } from "./BuildResult";
 
 const BTN_CLASS = "h-11 w-full rounded-xl text-sm font-semibold tracking-tight flex items-center justify-center gap-x-2 accent-gradient text-primary-foreground shadow-md shadow-primary/25 outline-none transition-all duration-200 hover:shadow-lg hover:shadow-primary/35 hover:brightness-110 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none";
+
+// ─── Agent module selector (Go builds) ─────────────────────────
+
+interface ModuleSelectorProps {
+  id: string;
+  catalog: AgentModuleInfo[];
+  /** Included module names; empty = every module (the server's default). */
+  value: string[];
+  onChange: (next: string[]) => void;
+  /** Light profile: the advanced transports are forced out server-side. */
+  slimLocked?: boolean;
+}
+
+/**
+ * Build-time agent module selector. The catalogue comes from the server
+ * (GET /api/generate/modules) so the UI cannot drift from what the generator
+ * can actually compile. The selection is an explicit include list, but a full
+ * selection is normalized back to the empty "all" sentinel: a build made
+ * before a module is added to the catalogue should keep including it.
+ */
+function ModuleSelector({ id, catalog, value, onChange, slimLocked = false }: ModuleSelectorProps) {
+  const { t } = useI18n();
+  if (catalog.length === 0) return null;
+  const allNames = catalog.map((m) => m.name);
+  const selected = value.length === 0 ? allNames : value;
+  const selectedSet = new Set(selected);
+  const toggle = (name: string, checked: boolean) => {
+    const next = new Set(selected);
+    if (checked) next.add(name);
+    else next.delete(name);
+    onChange(allNames.every((n) => next.has(n)) ? [] : allNames.filter((n) => next.has(n)));
+  };
+  const label = (m: AgentModuleInfo) => {
+    const key = `generate.modules.${m.name}.title`;
+    const translated = t(key);
+    return translated === key ? m.title : translated;
+  };
+  const details = (m: AgentModuleInfo) => {
+    const key = `generate.modules.${m.name}.desc`;
+    const translated = t(key);
+    return translated === key ? m.description : translated;
+  };
+  const summary = selected.length === allNames.length
+    ? t("generate.modules.all")
+    : t("generate.modules.selected", { count: selected.length, total: allNames.length });
+  return (
+    <AdvancedSection title={`${t("generate.modules.title")} — ${summary}`}>
+      <p className="mb-2 text-xs text-muted-foreground/80">{t("generate.modules.hint")}</p>
+      <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2" role="group" aria-label={t("generate.modules.aria")}>
+        {catalog.map((m) => {
+          const locked = slimLocked && m.special === "transports";
+          return (
+            <label
+              key={m.name}
+              htmlFor={`${id}-module-${m.name}`}
+              className={`flex items-start gap-x-2 rounded-lg border border-border/50 bg-background/40 px-2 py-1.5 transition-colors ${locked ? "opacity-60" : "cursor-pointer hover:border-primary/25 hover:bg-muted/30 has-checked:border-primary/30 has-checked:bg-primary/5"}`}
+            >
+              <Checkbox
+                id={`${id}-module-${m.name}`}
+                aria-label={m.name}
+                checked={locked ? false : selectedSet.has(m.name)}
+                disabled={locked}
+                onCheckedChange={(checked) => toggle(m.name, checked === true)}
+                className="mt-0.5"
+              />
+              <span className="text-sm text-muted-foreground">
+                {label(m)}
+                <span className="block font-normal text-muted-foreground/80 text-xs leading-4">{details(m)}</span>
+                {locked && <span className="block font-normal text-warning text-xs leading-4">{t("generate.modules.slim_locked")}</span>}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </AdvancedSection>
+  );
+}
 
 // ─── BinaryPanel (exe / dll) ───────────────────────────────────
 
@@ -28,6 +105,7 @@ interface BinaryPanelProps {
   result: ReactNode;
   onGenerate: () => void;
   canGenerate?: boolean;
+  agentModules?: AgentModuleInfo[];
 }
 
 const VARIANT_CONFIG: Record<BinaryVariant, { tint: string; icon: ReactNode; titleKey: string; subtitleKey: string; btnKey: string; showP2P: boolean }> = {
@@ -35,7 +113,7 @@ const VARIANT_CONFIG: Record<BinaryVariant, { tint: string; icon: ReactNode; tit
   dll: { tint: "bg-destructive/10 text-destructive", icon: <Puzzle className="size-5" />, titleKey: "generate.panel.dll_title", subtitleKey: "generate.panel.dll_subtitle", btnKey: "generate.panel.generate_dll", showP2P: false },
 };
 
-export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setForm, busy, result, onGenerate, canGenerate = true }: BinaryPanelProps) {
+export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setForm, busy, result, onGenerate, canGenerate = true, agentModules }: BinaryPanelProps) {
   const { t } = useI18n();
   const cfg = VARIANT_CONFIG[variant];
   const id = `binary-${variant}`;
@@ -207,6 +285,7 @@ export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setF
           <div><FieldLabel>Manifest</FieldLabel><Select value={form.pe_manifest || "default"} onValueChange={(val) => val != null && setForm({ ...form, pe_manifest: val })}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="default">Default Go</SelectItem><SelectItem value="blend">Blend (dpiAware+Win10)</SelectItem></SelectContent></Select></div>
         </div>
       </AdvancedSection>
+      <ModuleSelector id={id} catalog={agentModules ?? []} value={form.modules} onChange={(next) => setForm({ ...form, modules: next })} slimLocked={form.slim} />
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <label htmlFor={`${id}-persist`} className="flex cursor-pointer items-center gap-x-2.5 rounded-lg border border-border/50 bg-background/40 px-2.5 py-2 transition-colors hover:border-primary/25 hover:bg-muted/30 has-checked:border-primary/30 has-checked:bg-primary/5">
           <Checkbox id={`${id}-persist`} aria-label={t("generate.panel.persist_aria")} checked={form.persist} onCheckedChange={(checked) => setForm({ ...form, persist: checked === true })} />
@@ -307,6 +386,7 @@ interface UnixPanelProps {
   result: ReactNode;
   onGenerate: () => void;
   canGenerate?: boolean;
+  agentModules?: AgentModuleInfo[];
 }
 
 const UNIX_CONFIG: Record<UnixVariant, { tint: string; icon: ReactNode; titleKey: string; subtitleKey: string; btnKey: string }> = {
@@ -314,7 +394,7 @@ const UNIX_CONFIG: Record<UnixVariant, { tint: string; icon: ReactNode; titleKey
   macos: { tint: "bg-primary/10 text-primary", icon: <Apple className="size-5" />, titleKey: "generate.panel.macos_title", subtitleKey: "generate.panel.unix_subtitle", btnKey: "generate.panel.generate_macos" },
 };
 
-export const UnixPanel = React.memo(function UnixPanel({ variant, form, setForm, busy, result, onGenerate, canGenerate = true }: UnixPanelProps) {
+export const UnixPanel = React.memo(function UnixPanel({ variant, form, setForm, busy, result, onGenerate, canGenerate = true, agentModules }: UnixPanelProps) {
   const { t } = useI18n();
   const cfg = UNIX_CONFIG[variant];
   const id = `unix-${variant}`;
@@ -350,6 +430,7 @@ export const UnixPanel = React.memo(function UnixPanel({ variant, form, setForm,
         <Checkbox id={`${id}-upx`} aria-label={t("generate.panel.upx_aria")} checked={form.upx} onCheckedChange={(checked) => setForm({ ...form, upx: checked === true })} className="ml-3" />
         <Label htmlFor={`${id}-upx`} className="text-sm text-muted-foreground">{t("generate.panel.upx")}</Label>
       </div>
+      <ModuleSelector id={id} catalog={agentModules ?? []} value={form.modules} onChange={(next) => setForm({ ...form, modules: next })} slimLocked={form.slim} />
       <div>
         <FieldLabel>{t("generate.panel.domain_front")}</FieldLabel>
         <Input aria-label={t("generate.panel.domain_front_aria")} name={`${id}-domain-front`} value={form.domain_front} onChange={(e) => setForm({ ...form, domain_front: e.target.value })} placeholder={t("generate.panel.domain_front_aria")} />

@@ -22,6 +22,10 @@
 #     (shell is ops-profile-aware: a host the agent classifies as a sandbox
 #     refuses it by design, so the script asserts that refusal instead of the
 #     marker; read/task output is base64 on the wire and plain text once stored)
+#   * with -Modules (comma-separated include list, e.g. "core") it also
+#     exercises the honest exclusion layer end to end: a task owned by an
+#     excluded module must fail with the named "not compiled into this build"
+#     error, and the help listing must mark the exclusions
 #
 # Requires: go, curl, PowerShell 5.1+ (Windows) or pwsh (Linux).
 # The Windows variant is the primary implant; the Linux variant runs in CI.
@@ -33,6 +37,9 @@ param(
     [int]$BeaconPort = 8111,
     [string]$User = 'admin',
     [string]$Password,
+    # Comma-separated agent module include list (empty = every module, "core" =
+    # the minimal build). See docs/AGENT_MODULES.md.
+    [string]$Modules,
     [ValidateSet('auto', 'windows', 'linux')][string]$TargetOs = 'auto',
     [int]$BuildTimeoutSec = 900,
     [int]$TaskTimeoutSec = 120,
@@ -233,6 +240,7 @@ try {
     $genPath = if ($TargetOs -eq 'windows') { '/generate/exe' } else { '/generate/linux' }
     # interval=2 keeps the round-trip fast; the clamp floor is 1s.
     $genForm = "listener_id=$listenerId&interval=2&jitter=0&filename=$agentName"
+    if ($Modules) { $genForm += "&modules=$Modules" }
     $gen = Api-PostForm "$base$genPath" $genForm "$WorkDir/generate.json"
     if (-not $gen.success) { throw "generate request failed: $(Get-Content "$WorkDir/generate.json" -Raw)" }
     $buildId = $gen.build_id
@@ -332,12 +340,25 @@ try {
         -o "$WorkDir/task-create-read-missing-param.json" -w '%{http_code}' "$base/api/v1/tasks"
     $badErr = [string](Read-Json "$WorkDir/task-create-read-missing-param.json").error
 
+    # Honest-exclusion probes (only when this run compiles a module subset):
+    # gossip_discover belongs to the optional p2p module and is side-effect
+    # free, so it is the probe whenever p2p is not in the include list; help
+    # must mark the exclusions in its listing.
+    $probeTask = $null
+    $probeModule = $null
+    if ($Modules) {
+        $included = @($Modules -split ',' | ForEach-Object { $_.Trim().ToLowerInvariant() })
+        if ($included -notcontains 'p2p') { $probeTask = 'gossip_discover'; $probeModule = 'p2p' }
+    }
+
     $cases = @(
         @{ name = 'shell';          type = 'shell';          command = "echo $shellMarker"; path = $null },
         @{ name = 'read';           type = 'read';           command = $markerPath;         path = $null },
         @{ name = 'find';           type = 'find';           command = 'e2e-marker-*.txt';  path = $WorkDir },
         @{ name = 'get_sleep_mode'; type = 'get_sleep_mode'; command = $null;               path = $null }
     )
+    if ($Modules) { $cases += @{ name = 'help'; type = 'help'; command = $null; path = $null } }
+    if ($probeTask) { $cases += @{ name = $probeTask; type = $probeTask; command = $null; path = $null } }
     $results = @{}
     foreach ($case in $cases) {
         $body = [ordered]@{ agent_id = $agentId; type = $case.type }
@@ -373,7 +394,9 @@ try {
         # outcome there (it still proves dispatch, execution gating and result
         # storage).
         $shellRefused = ($case.name -eq 'shell') -and ($t.error -match 'blocked by ops profile')
-        Check "$($case.name) reached the agent" ($t.status -eq 'completed' -or $shellRefused) `
+        # The excluded-module probe is expected to fail - with the named error.
+        $probeRefused = ($probeTask -and $case.name -eq $probeTask) -and ($t.status -eq 'failed') -and ([string]$t.error -match 'not compiled into this build')
+        Check "$($case.name) reached the agent" ($t.status -eq 'completed' -or $shellRefused -or $probeRefused) `
             $(if ($t.status -ne 'completed') { "error: $($t.error)" } else { '' })
     }
     $shellResult = [string]$results['shell'].result
@@ -393,6 +416,22 @@ try {
     Check 'read file content' ($readResult -match $fileMarker) ''
     Check 'find hit' ($findResult -match "$([regex]::Escape($markerName))`t\d+`t\d{4}-\d{2}-\d{2} \d{2}:\d{2}") ''
     Check 'get_sleep_mode' ($sleepResult -match 'default') ''
+    if ($probeTask) {
+        $probeResult = $results[$probeTask]
+        $probeError = [string]$probeResult.error
+        Check 'excluded module answers honestly' `
+            ($probeResult.status -eq 'failed' -and $probeError -match 'not compiled into this build' -and $probeError -match [regex]::Escape($probeModule)) `
+            "(status=$($probeResult.status) error=$probeError)"
+        $helpResult = [string]$results['help'].result
+        Check 'help marks excluded modules' `
+            ($helpResult -match 'not compiled into this build' -and $helpResult -match "module `"$probeModule`"") `
+            "(help header: $($helpResult.Split("`n")[0]))"
+        # The header summary must describe the actual build: an excluded-module
+        # build must never claim "all modules (hand-built agent)".
+        Check 'help reports the compiled set' `
+            ($helpResult -match 'agent modules: ' -and $helpResult -notmatch 'all modules') `
+            "(help header: $($helpResult.Split("`n")[0]))"
+    }
     $runGreen = ($fail.Count -eq 0)
 }
 finally {

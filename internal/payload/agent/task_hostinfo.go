@@ -38,6 +38,7 @@ type hostInfoReport struct {
 	Category    string         `json:"category"`
 	CollectedAt string         `json:"collected_at"`
 	Platform    string         `json:"platform"`
+	Modules     string         `json:"modules"`
 	Filter      string         `json:"filter,omitempty"`
 	Sections    map[string]any `json:"sections"`
 }
@@ -62,6 +63,7 @@ func handleHostInfo(task Task, res *TaskResult) {
 		Category:    category,
 		CollectedAt: time.Now().UTC().Format(time.RFC3339),
 		Platform:    runtime.GOOS,
+		Modules:     agentModulesSummary(),
 		Filter:      filter,
 		Sections:    make(map[string]any, len(requested)),
 	}

@@ -11,7 +11,7 @@ import { api, getCsrfToken, handleUnauthorized } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import {
   Listener, ProfilePreset, SharedState, PayloadForms, PayloadStates, PayloadExtras,
-  PayloadKey, BinaryForm, UnixForm, createDefaultForms, createDefaultStates,
+  PayloadKey, BinaryForm, UnixForm, AgentModuleInfo, createDefaultForms, createDefaultStates,
 } from "@/types/generate";
 import type { ListenerForm } from "../components/ListenerModal";
 import {
@@ -48,6 +48,10 @@ export function usePayloadGenerator() {
   // must stay blocked rather than proceed against an unknown catalog.
   const [profilesLoaded, setProfilesLoaded] = useState(false);
   const [profilesError, setProfilesError] = useState<string | null>(null);
+  // Agent module catalogue (GET /api/generate/modules). Unlike profiles this is
+  // advisory: an unread list hides the selector and builds keep including every
+  // module (the server's default), so it must not gate generation.
+  const [agentModules, setAgentModules] = useState<AgentModuleInfo[]>([]);
   // A failed listener read is a persistent, retriable condition (rendered as a
   // workspace banner), not a transient toast: the last-known registry is kept
   // visible and generation stays gated until a read succeeds.
@@ -115,6 +119,19 @@ export function usePayloadGenerator() {
       }
     } catch (e) {
       setProfilesError(e instanceof Error ? e.message : t("generate.profiles_unreadable"));
+    }
+    try {
+      const moduleData = await api.get<{ modules?: unknown }>(paths.generate.modules);
+      const list = Array.isArray(moduleData?.modules) ? (moduleData.modules as unknown[]) : [];
+      // Defensive shaping: only entries with a usable name/title render.
+      setAgentModules(
+        list
+          .filter((m): m is AgentModuleInfo =>
+            !!m && typeof (m as AgentModuleInfo).name === "string" && typeof (m as AgentModuleInfo).title === "string")
+          .map((m) => ({ ...m, tasks: Array.isArray(m.tasks) ? m.tasks : [] })),
+      );
+    } catch {
+      // Advisory only: keep the last-known catalogue (if any) and move on.
     } finally {
       // Profiles resolve after listeners; clearing the page-level spinner
       // here (rather than in the listeners block) is what keeps the workspace
@@ -411,6 +428,7 @@ export function usePayloadGenerator() {
     slim: form.slim ? "true" : "",
     upx: form.upx ? "true" : "",
     win7_compat: form.win7compat ? "true" : "",
+    modules: form.modules.join(","),
   }), []);
 
   const unixExtra = useCallback((form: UnixForm): Record<string, string> => ({
@@ -424,6 +442,7 @@ export function usePayloadGenerator() {
     working_start: form.working_start,
     working_end: form.working_end,
     working_tz: form.working_tz,
+    modules: form.modules.join(","),
   }), []);
 
   // Generic standard handler
@@ -723,6 +742,7 @@ export function usePayloadGenerator() {
 
   return {
     listeners, listenersError, loading, profilePresets, profileLocked, profilesLoaded, profilesError, loadData,
+    agentModules,
     showListenerModal, setShowListenerModal,
     listenerForm, setListenerForm,
     shared, setShared,

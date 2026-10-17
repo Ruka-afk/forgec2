@@ -170,6 +170,14 @@ func executeTask(task Task) TaskResult {
 		res.Type = canon
 	}
 
+	// A task whose module the operator excluded at generation time has no
+	// registry entry (it was dropped with the module's registry file); answer
+	// with the honest reason instead of "unknown task type".
+	if mod := excludedModuleFor(task.Type); mod != "" {
+		res.Error = fmt.Sprintf("task type %q is not compiled into this build: agent module %q was excluded at generation time", task.Type, mod)
+		return res
+	}
+
 	if handler, ok := taskHandlers[task.Type]; ok {
 		handler(task, &res)
 	} else {
