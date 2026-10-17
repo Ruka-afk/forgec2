@@ -107,6 +107,12 @@ func TestPreloadWintunFallback(t *testing.T) {
 // TestWintunLiveAdapter stages the embedded runtime and drives a real
 // startAgentTUN. Unelevated hosts must fail with the honest elevation error;
 // elevated hosts must come up, report the adapter, and tear down cleanly.
+//
+// The elevated lab run on 2026-10-17 caught a teardown race on the first stop
+// (session.End() while the read loop was still inside ReceivePacket; the
+// in-flight DLL call faulted on the freed session with 0xc0000005), so the
+// stop path is now serialized and this test deliberately runs several
+// start/stop cycles to keep that class of race caught.
 func TestWintunLiveAdapter(t *testing.T) {
 	requireLiveWintun(t)
 	if err := stageWintunDLL(wintunDLLBytes); err != nil {
@@ -115,22 +121,24 @@ func TestWintunLiveAdapter(t *testing.T) {
 	if v := wintun.Version(); v == "" || v == "unknown" {
 		t.Fatalf("staged wintun.dll did not load (Version()=%q)", v)
 	}
-	msg, err := startAgentTUN("10.66.0.2/24")
-	if err != nil {
-		var errno syscall.Errno
-		if !errors.As(err, &errno) || (errno != windows.ERROR_ACCESS_DENIED && errno != windows.ERROR_ELEVATION_REQUIRED) {
-			t.Fatalf("startAgentTUN failed for a non-elevation reason: %v", err)
+	for cycle := 0; cycle < 3; cycle++ {
+		msg, err := startAgentTUN("10.66.0.2/24")
+		if err != nil {
+			var errno syscall.Errno
+			if !errors.As(err, &errno) || (errno != windows.ERROR_ACCESS_DENIED && errno != windows.ERROR_ELEVATION_REQUIRED) {
+				t.Fatalf("cycle %d: startAgentTUN failed for a non-elevation reason: %v", cycle, err)
+			}
+			if !strings.Contains(err.Error(), "elevated") {
+				t.Fatalf("cycle %d: elevation failure lacks the actionable hint: %v", cycle, err)
+			}
+			t.Logf("adapter creation refused without elevation (expected on this host): %v", err)
+			return
 		}
-		if !strings.Contains(err.Error(), "elevated") {
-			t.Fatalf("elevation failure lacks the actionable hint: %v", err)
+		if !strings.Contains(msg, "fc2tun0 up") || !strings.Contains(msg, "10.66.0.2") {
+			t.Fatalf("cycle %d: unexpected start message: %q", cycle, msg)
 		}
-		t.Logf("adapter creation refused without elevation (expected on this host): %v", err)
-		return
-	}
-	if !strings.Contains(msg, "fc2tun0 up") || !strings.Contains(msg, "10.66.0.2") {
-		t.Fatalf("unexpected start message: %q", msg)
-	}
-	if err := stopAgentTUN(); err != nil {
-		t.Fatalf("stopAgentTUN: %v", err)
+		if err := stopAgentTUN(); err != nil {
+			t.Fatalf("cycle %d: stopAgentTUN: %v", cycle, err)
+		}
 	}
 }
