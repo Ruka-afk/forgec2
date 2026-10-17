@@ -61,4 +61,15 @@ describe("useErrorToast", () => {
     expect(mocks.t).toHaveBeenCalledWith("common.error");
     expect(mocks.toast).toHaveBeenCalledWith("T:common.error");
   });
+
+  it("interpolates fallback params into the fallback key", () => {
+    const { result } = renderHook(() => useErrorToast());
+
+    act(() => {
+      result.current.toastError(new Error(""), "settings.emergency.failed", { action: "arm" });
+    });
+
+    expect(mocks.t).toHaveBeenCalledWith("settings.emergency.failed", { action: "arm" });
+    expect(mocks.toast).toHaveBeenCalledWith("T:settings.emergency.failed");
+  });
 });

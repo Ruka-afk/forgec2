@@ -2,8 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
+import { useMutation } from "@/lib/hooks/useMutation";
 
-export function useTOTP(t: (key: string) => string, setSaving: (v: boolean) => void, activeSection: string) {
+export function useTOTP(t: (key: string) => string, activeSection: string) {
   const [totpStatus, setTotpStatus] = useState<boolean | null>(null);
   const [totpStatusError, setTotpStatusError] = useState<string | null>(null);
   const [totpSecret, setTotpSecret] = useState("");
@@ -14,6 +16,7 @@ export function useTOTP(t: (key: string) => string, setSaving: (v: boolean) => v
   const [totpEnablePassword, setTotpEnablePassword] = useState("");
   const [totpDisablePassword, setTotpDisablePassword] = useState("");
   const [totpDisableCode, setTotpDisableCode] = useState("");
+  const { toastError } = useErrorToast();
 
   const loadTotpStatus = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -38,39 +41,50 @@ export function useTOTP(t: (key: string) => string, setSaving: (v: boolean) => v
     return () => controller.abort();
   }, [activeSection, loadTotpStatus]);
 
-  const handleGenerateTOTP = useCallback(async () => {
-    try {
-      const d = await api.post(paths.settings.totpGenerate);
+  const { mutate: generateTOTP } = useMutation({
+    fn: () => api.post(paths.settings.totpGenerate),
+    onSuccess: (d) => {
       setTotpSecret((d.secret || "") as string);
       setTotpQR((d.qr_url || "") as string);
       setTotpBackupCodes(((d.backup_codes || []) as string[]).join("\n"));
       setShowTotpSetup(true);
-    } catch { toast.error(t("settings.toast.totp_generate_failed")); }
-  }, [t]);
+    },
+    onError: (e) => toastError(e, "settings.toast.totp_generate_failed"),
+  });
 
-  const handleEnableTOTP = useCallback(async () => {
-    if (!totpEnablePassword) { toast.error(t("settings.toast.totp_enter_password")); return; }
-    if (!totpCode) { toast.error(t("settings.toast.totp_enter_code")); return; }
-    setSaving(true);
-    try {
-      await api.post(paths.settings.totpEnable, { password: totpEnablePassword, code: totpCode, secret: totpSecret });
+  const { mutate: enableTOTP, isPending: savingEnable } = useMutation({
+    fn: () => api.post(paths.settings.totpEnable, { password: totpEnablePassword, code: totpCode, secret: totpSecret }),
+    onSuccess: () => {
       toast.success(t("settings.toast.totp_enabled"));
       setTotpStatus(true); setShowTotpSetup(false); setTotpCode(""); setTotpEnablePassword("");
-    } catch { toast.error(t("settings.toast.totp_enable_failed")); }
-    finally { setSaving(false); }
-  }, [totpCode, totpSecret, totpEnablePassword, t, setSaving]);
+    },
+    onError: (e) => toastError(e, "settings.toast.totp_enable_failed"),
+  });
 
-  const handleDisableTOTP = useCallback(async () => {
-    if (!totpDisablePassword) { toast.error(t("settings.toast.totp_enter_password")); return; }
-    if (!totpDisableCode) { toast.error(t("settings.toast.totp_enter_code")); return; }
-    setSaving(true);
-    try {
-      await api.post(paths.settings.totpDisable, { password: totpDisablePassword, code: totpDisableCode });
+  const { mutate: disableTOTP, isPending: savingDisable } = useMutation({
+    fn: () => api.post(paths.settings.totpDisable, { password: totpDisablePassword, code: totpDisableCode }),
+    onSuccess: () => {
       toast.success(t("settings.toast.totp_disabled"));
       setTotpStatus(false); setTotpDisablePassword(""); setTotpDisableCode("");
-    } catch { toast.error(t("settings.toast.totp_disable_failed")); }
-    finally { setSaving(false); }
-  }, [totpDisablePassword, totpDisableCode, t, setSaving]);
+    },
+    onError: (e) => toastError(e, "settings.toast.totp_disable_failed"),
+  });
+
+  const handleGenerateTOTP = useCallback(() => {
+    void generateTOTP();
+  }, [generateTOTP]);
+
+  const handleEnableTOTP = useCallback(() => {
+    if (!totpEnablePassword) { toast.error(t("settings.toast.totp_enter_password")); return; }
+    if (!totpCode) { toast.error(t("settings.toast.totp_enter_code")); return; }
+    void enableTOTP();
+  }, [totpEnablePassword, totpCode, enableTOTP, t]);
+
+  const handleDisableTOTP = useCallback(() => {
+    if (!totpDisablePassword) { toast.error(t("settings.toast.totp_enter_password")); return; }
+    if (!totpDisableCode) { toast.error(t("settings.toast.totp_enter_code")); return; }
+    void disableTOTP();
+  }, [totpDisablePassword, totpDisableCode, disableTOTP, t]);
 
   return {
     totpStatus, totpStatusError, reloadTotpStatus: loadTotpStatus,
@@ -80,5 +94,6 @@ export function useTOTP(t: (key: string) => string, setSaving: (v: boolean) => v
     totpDisablePassword, setTotpDisablePassword,
     totpDisableCode, setTotpDisableCode,
     handleGenerateTOTP, handleEnableTOTP, handleDisableTOTP,
+    totpSaving: savingEnable || savingDisable,
   };
 }

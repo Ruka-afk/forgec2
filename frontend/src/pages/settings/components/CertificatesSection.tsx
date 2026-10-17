@@ -11,6 +11,8 @@ import { useI18n } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
+import { useMutation } from "@/lib/hooks/useMutation";
 import { AlertTriangle, CheckCircle, Globe, RefreshCw, Shield, Upload } from "lucide-react";
 
 interface CertInfo {
@@ -35,59 +37,65 @@ export default function CertificatesSection({
   const [certInfo, setCertInfo] = useState<CertInfo | null>(null);
   const [loadingCert, setLoadingCert] = useState(false);
   const [showRegenDialog, setShowRegenDialog] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const certInputRef = useRef<HTMLInputElement>(null);
   const keyInputRef = useRef<HTMLInputElement>(null);
   const [pendingCertFile, setPendingCertFile] = useState<File | null>(null);
   const [waitingForKey, setWaitingForKey] = useState(false);
+  const { toastError } = useErrorToast();
 
   const loadCertInfo = useCallback(async () => {
     setLoadingCert(true);
     try {
       const info = await api.get(paths.settings.certs) as CertInfo;
       setCertInfo(info);
-    } catch {
-      toast.error(t("settings.toast.cert_load_failed"));
+    } catch (e) {
+      toastError(e, "settings.toast.cert_load_failed");
     } finally {
       setLoadingCert(false);
     }
-  }, [t]);
+  }, [toastError]);
 
-  const handleRegenerate = async () => {
-    setShowRegenDialog(false);
-    setUploading(true);
-    try {
-      const result = await api.post(paths.settings.certsRegenerate) as CertInfo;
-      setCertInfo(result);
+  const { mutate: regenerateCert, isPending: regenerating } = useMutation({
+    fn: () => api.post(paths.settings.certsRegenerate),
+    onSuccess: (result) => {
+      setCertInfo(result as CertInfo);
       toast.success(t("settings.toast.cert_regenerated"));
       onRefresh();
-    } catch {
-      toast.error(t("settings.toast.cert_regenerate_failed"));
-    } finally {
-      setUploading(false);
-    }
+    },
+    onError: (e) => toastError(e, "settings.toast.cert_regenerate_failed"),
+  });
+
+  const handleRegenerate = () => {
+    setShowRegenDialog(false);
+    void regenerateCert();
   };
 
-  const handleUpload = useCallback(async (certFile: File, keyFile: File) => {
-    setUploading(true);
-    try {
+  const { mutate: uploadCert, isPending: uploadingCert } = useMutation({
+    fn: (certFile: File, keyFile: File) => {
       const formData = new FormData();
       formData.append("cert", certFile);
       formData.append("key", keyFile);
-      await api.postFormData(paths.settings.certsUpload, formData);
+      return api.postFormData(paths.settings.certsUpload, formData);
+    },
+    onSuccess: () => {
       toast.success(t("settings.toast.cert_uploaded"));
-      loadCertInfo();
+      void loadCertInfo();
       onRefresh();
-    } catch {
-      toast.error(t("settings.toast.cert_upload_failed"));
-    } finally {
-      setUploading(false);
+    },
+    onError: (e) => toastError(e, "settings.toast.cert_upload_failed"),
+    onSettled: () => {
       setPendingCertFile(null);
       setWaitingForKey(false);
       if (certInputRef.current) certInputRef.current.value = "";
       if (keyInputRef.current) keyInputRef.current.value = "";
-    }
-  }, [t, loadCertInfo, onRefresh]);
+    },
+  });
+
+  const uploading = regenerating || uploadingCert;
+
+  const handleUpload = useCallback((certFile: File, keyFile: File) => {
+    void uploadCert(certFile, keyFile);
+  }, [uploadCert]);
 
   const handleCertFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const certFile = e.target.files?.[0];

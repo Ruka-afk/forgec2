@@ -1,10 +1,12 @@
 
-import { useState, useCallback, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadBlob } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
+import { useMutation } from "@/lib/hooks/useMutation";
 import { PageContainer } from "@/components/ui/page-container";
 import { ErrorState } from "@/components/ui/error-state";
 import { Permission } from "@/components/ui/permission";
@@ -91,9 +93,9 @@ export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState("appearance");
   const [sectionQuery, setSectionQuery] = useState("");
   const [purgeDays, setPurgeDays] = useState({ tasks: "30", audit: "30" });
-  const [saving, setSaving] = useState(false);
   const { confirm: confirmAction, modal: modalAction } = useConfirm();
   const { confirm: confirmPurge, modal: modalPurge } = useConfirm();
+  const { toastError } = useErrorToast();
 
   useEffect(() => {
     const syncFromHash = () => {
@@ -110,67 +112,73 @@ export default function SettingsPage() {
     totpCode, setTotpCode, showTotpSetup,
     totpEnablePassword, setTotpEnablePassword,
     totpDisablePassword, setTotpDisablePassword, totpDisableCode, setTotpDisableCode,
-    handleGenerateTOTP, handleEnableTOTP, handleDisableTOTP,
-  } = useTOTP(t, setSaving, activeSection);
+    handleGenerateTOTP, handleEnableTOTP, handleDisableTOTP, totpSaving,
+  } = useTOTP(t, activeSection);
 
-  const withSaveTimeout = useCallback(<T extends unknown[]>(fn: (...args: T) => Promise<void>) => {
-    return async (...args: T) => {
-      setSaving(true);
-      const timer = setTimeout(() => {
-        setSaving(false);
-        toast.error(t("settings.toast.save_timeout"));
-      }, 10000);
-      try {
-        await fn(...args);
-      } finally {
-        clearTimeout(timer);
-        setSaving(false);
-      }
-    };
-  }, [t]);
-
-  const handleSaveAgent = withSaveTimeout(async (e: React.FormEvent) => {
-    e.preventDefault();
-    await api.post(paths.settings.agent, { interval: String(agentForm.interval), jitter: String(agentForm.jitter), skip_tls: String(agentForm.skip_tls), user_agent: agentForm.user_agent, working_start: agentForm.working_start, working_end: agentForm.working_end, working_tz: agentForm.working_tz });
-    toast.success(t("settings.toast.agent_saved"));
+  const { mutate: saveAgent, isPending: savingAgent } = useMutation({
+    fn: async (e: React.FormEvent) => {
+      e.preventDefault();
+      await api.post(paths.settings.agent, { interval: String(agentForm.interval), jitter: String(agentForm.jitter), skip_tls: String(agentForm.skip_tls), user_agent: agentForm.user_agent, working_start: agentForm.working_start, working_end: agentForm.working_end, working_tz: agentForm.working_tz });
+    },
+    onSuccess: () => toast.success(t("settings.toast.agent_saved")),
+    onError: (e) => toastError(e, "settings.toast.save_failed"),
   });
 
-  const handleSaveServer = withSaveTimeout(async (e: React.FormEvent) => {
-    e.preventDefault();
-    await api.post(paths.settings.server, {
-      log_level: serverForm.log_level, tcp_enabled: String(serverForm.tcp_enabled), tcp_addr: serverForm.tcp_addr,
-      offline_threshold: String(serverForm.offline_threshold), session_max_age: String(serverForm.session_max_age), cleanup_retention: String(serverForm.cleanup_retention),
-    });
-    toast.success(t("settings.toast.server_saved"));
+  const { mutate: saveServer, isPending: savingServer } = useMutation({
+    fn: async (e: React.FormEvent) => {
+      e.preventDefault();
+      await api.post(paths.settings.server, {
+        log_level: serverForm.log_level, tcp_enabled: String(serverForm.tcp_enabled), tcp_addr: serverForm.tcp_addr,
+        offline_threshold: String(serverForm.offline_threshold), session_max_age: String(serverForm.session_max_age), cleanup_retention: String(serverForm.cleanup_retention),
+      });
+    },
+    onSuccess: () => toast.success(t("settings.toast.server_saved")),
+    onError: (e) => toastError(e, "settings.toast.save_failed"),
   });
 
-  const handleSaveMalleable = withSaveTimeout(async (e: React.FormEvent) => {
-    e.preventDefault();
-    await api.post(paths.settings.malleable, {
-      enabled: String(malleableForm.enabled), status_code: String(malleableForm.status_code), content_type: malleableForm.content_type,
-      headers_text: malleableForm.headers_text, prepend: malleableForm.prepend, append: malleableForm.append,
-    });
-    toast.success(t("settings.toast.malleable_saved"));
+  const { mutate: saveMalleable, isPending: savingMalleable } = useMutation({
+    fn: async (e: React.FormEvent) => {
+      e.preventDefault();
+      await api.post(paths.settings.malleable, {
+        enabled: String(malleableForm.enabled), status_code: String(malleableForm.status_code), content_type: malleableForm.content_type,
+        headers_text: malleableForm.headers_text, prepend: malleableForm.prepend, append: malleableForm.append,
+      });
+    },
+    onSuccess: () => toast.success(t("settings.toast.malleable_saved")),
+    onError: (e) => toastError(e, "settings.toast.save_failed"),
   });
 
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (passwordForm.next !== passwordForm.confirm) { toast.error(t("settings.toast.password_mismatch")); return; }
-    setSaving(true);
-    try {
-      await api.post(paths.settings.password, { current_password: passwordForm.current, new_password: passwordForm.next, confirm_password: passwordForm.confirm });
+  const handleSaveAgent = (e: React.FormEvent) => { void saveAgent(e); };
+  const handleSaveServer = (e: React.FormEvent) => { void saveServer(e); };
+  const handleSaveMalleable = (e: React.FormEvent) => { void saveMalleable(e); };
+
+  const { mutate: changePassword, isPending: savingPassword } = useMutation({
+    fn: () => api.post(paths.settings.password, { current_password: passwordForm.current, new_password: passwordForm.next, confirm_password: passwordForm.confirm }),
+    onSuccess: () => {
       toast.success(t("settings.toast.password_changed"));
       setPasswordForm({ current: "", next: "", confirm: "" });
-    } catch { toast.error(t("settings.toast.password_change_failed")); }
-    finally { setSaving(false); }
+    },
+    onError: (e) => toastError(e, "settings.toast.password_change_failed"),
+  });
+
+  const handleChangePassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordForm.next !== passwordForm.confirm) { toast.error(t("settings.toast.password_mismatch")); return; }
+    void changePassword();
   };
+
+  const { mutate: regenerateJWT, isPending: savingJwt } = useMutation({
+    fn: () => api.post(paths.settings.jwtRegenerate),
+    onSuccess: () => {
+      toast.success(t("settings.toast.jwt_regenerated"));
+      loadSettings();
+    },
+    onError: (e) => toastError(e, "settings.toast.jwt_failed"),
+  });
 
   const handleRegenerateJWT = async () => {
     if (!(await confirmAction({ message: t("settings.confirm.jwt") }))) return;
-    setSaving(true);
-    try { await api.post(paths.settings.jwtRegenerate); toast.success(t("settings.toast.jwt_regenerated")); loadSettings(); }
-    catch { toast.error(t("settings.toast.jwt_failed")); }
-    finally { setSaving(false); }
+    void regenerateJWT();
   };
 
   const handleApplyTheme = (th: string) => {
@@ -195,42 +203,52 @@ export default function SettingsPage() {
     setTimeout(() => { window.location.reload(); }, 0);
   };
 
-  const handleVacuum = async () => {
-    setSaving(true);
-    try { await api.post(paths.settings.dbVacuum); toast.success(t("settings.toast.vacuum_done")); }
-    catch { toast.error(t("settings.toast.vacuum_failed")); }
-    finally { setSaving(false); }
+  const { mutate: vacuumDatabase, isPending: savingVacuum } = useMutation({
+    fn: () => api.post(paths.settings.dbVacuum),
+    onSuccess: () => toast.success(t("settings.toast.vacuum_done")),
+    onError: (e) => toastError(e, "settings.toast.vacuum_failed"),
+  });
+
+  const handleVacuum = () => {
+    void vacuumDatabase();
   };
 
-  const handleBackup = async () => {
-    setSaving(true);
-    try {
+  const { mutate: downloadBackup, isPending: savingBackup } = useMutation({
+    fn: async () => {
       const { blob } = await api.download(paths.settings.dbBackup);
       downloadBlob(blob, `forgec2_backup_${Date.now()}.db`);
-      toast.success(t("settings.toast.backup_done"));
-    } catch { toast.error(t("settings.toast.backup_failed")); }
-    finally { setSaving(false); }
+    },
+    onSuccess: () => toast.success(t("settings.toast.backup_done")),
+    onError: (e) => toastError(e, "settings.toast.backup_failed"),
+  });
+
+  const handleBackup = () => {
+    void downloadBackup();
   };
 
   const handleDownloadDB = async () => {
     try {
       const { blob } = await api.downloadGet(paths.settings.configDownload);
       downloadBlob(blob, "forgec2.db");
-    } catch { toast.error(t("settings.toast.download_failed")); }
+    } catch (e) { toastError(e, "settings.toast.download_failed"); }
   };
+
+  const { mutate: purgeData, isPending: savingPurge } = useMutation({
+    fn: (type: string) => {
+      const days = type === "tasks" ? purgeDays.tasks : purgeDays.audit;
+      const path = type === "screenshots"
+        ? paths.settings.maintenancePurge
+        : paths.settings.purge(type);
+      return api.post(path, { days });
+    },
+    onSuccess: (_result, type) => toast.success(t("settings.toast.purge_done", { type })),
+    onError: (e, type) => toastError(e, "settings.toast.purge_failed", { type }),
+  });
 
   const handlePurge = async (type: string) => {
     const days = type === "tasks" ? purgeDays.tasks : purgeDays.audit;
     if (!(await confirmAction({ message: t("settings.confirm.purge", { type, days }) }))) return;
-    setSaving(true);
-    try {
-      const path = type === "screenshots"
-        ? paths.settings.maintenancePurge
-        : paths.settings.purge(type);
-      await api.post(path, { days });
-      toast.success(t("settings.toast.purge_done", { type }));
-    } catch { toast.error(t("settings.toast.purge_failed", { type })); }
-    finally { setSaving(false); }
+    void purgeData(type);
   };
 
   const handleCheckUpdate = async () => {
@@ -242,8 +260,15 @@ export default function SettingsPage() {
       } else {
         toast.success(t("settings.toast.update_latest"));
       }
-    } catch { toast.error(t("settings.toast.update_failed")); }
+    } catch (e) { toastError(e, "settings.toast.update_failed"); }
   };
+
+  // One shared pending flag keeps every settings action button disabled while
+  // any save is in flight (pre-migration behavior), now derived from the
+  // per-action mutations instead of a hand-rolled setSaving.
+  const saving =
+    savingAgent || savingServer || savingMalleable || savingPassword || savingJwt ||
+    savingVacuum || savingBackup || savingPurge || totpSaving;
 
   if (loading) return <PageContainer title={t("settings.title")} subtitle={t("settings.subtitle")}><PageSpinner /></PageContainer>;
 

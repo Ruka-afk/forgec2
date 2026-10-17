@@ -11,6 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
+import { useMutation } from "@/lib/hooks/useMutation";
 import { formatTime } from "@/lib/utils";
 import { Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
 
@@ -58,8 +60,8 @@ export default function SIEMRulesSection() {
   const [editing, setEditing] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<RuleForm>(emptyForm);
-  const [saving, setSaving] = useState(false);
   const { confirm, modal } = useConfirm();
+  const { toastError } = useErrorToast();
 
   const fetchRules = useCallback(async () => {
     setLoadError(null);
@@ -98,33 +100,36 @@ export default function SIEMRulesSection() {
     setShowForm(true);
   };
 
-  const handleSave = async () => {
+  const { mutate: saveRule, isPending: saving } = useMutation({
+    fn: () => {
+      const payload = { ...form, window_sec: Number(form.window_sec), threshold: Number(form.threshold) };
+      return editing == null
+        ? api.postJson(paths.siem.rules, payload)
+        : api.putJson(paths.siem.rule(editing), payload);
+    },
+    onSuccess: () => {
+      toast.success(t("settings.toast.siem_saved"));
+      setShowForm(false);
+      void fetchRules();
+    },
+    onError: (e) => toastError(e, "settings.toast.siem_save_failed"),
+  });
+
+  const handleSave = () => {
     if (!form.name || !form.action || !form.window_sec || !form.threshold) {
       toast.error(t("settings.toast.siem_required"));
       return;
     }
-    setSaving(true);
-    try {
-      const payload = { ...form, window_sec: Number(form.window_sec), threshold: Number(form.threshold) };
-      if (editing == null) {
-        await api.postJson(paths.siem.rules, payload);
-      } else {
-        await api.putJson(paths.siem.rule(editing), payload);
-      }
-      toast.success(t("settings.toast.siem_saved"));
-      setShowForm(false);
-      fetchRules();
-    } catch {
-      toast.error(t("settings.toast.channel_config_failed"));
-    }
-    setSaving(false);
+    void saveRule();
   };
 
   const handleToggle = async (rule: SIEMRule) => {
     try {
       await api.postJson(paths.siem.toggle(rule.id), {});
-      fetchRules();
-    } catch { /* ignore */ }
+      void fetchRules();
+    } catch (e) {
+      toastError(e, "settings.toast.siem_toggle_failed");
+    }
   };
 
   const handleDelete = async (id: number) => {
@@ -132,8 +137,10 @@ export default function SIEMRulesSection() {
     try {
       await api.del(paths.siem.rule(id));
       toast.success(t("settings.toast.siem_deleted"));
-      fetchRules();
-    } catch { /* ignore */ }
+      void fetchRules();
+    } catch (e) {
+      toastError(e, "settings.toast.siem_delete_failed");
+    }
   };
 
   return (

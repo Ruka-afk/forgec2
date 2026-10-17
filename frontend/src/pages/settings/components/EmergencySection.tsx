@@ -10,6 +10,8 @@ import { AlertTriangle, Power, RefreshCw, ShieldCheck } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
+import { useMutation } from "@/lib/hooks/useMutation";
 
 type KillSwitchStatus = {
   armed: boolean;
@@ -23,8 +25,8 @@ export default function EmergencySection() {
   const { t } = useI18n();
   const [status, setStatus] = useState<KillSwitchStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
   const [password, setPassword] = useState("");
+  const { toastError } = useErrorToast();
 
   const refresh = useCallback(async () => {
     try {
@@ -41,21 +43,23 @@ export default function EmergencySection() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const send = useCallback(async (action: "arm" | "disarm") => {
-    if (!password) { toast.error(t("settings.emergency.password_required")); return; }
-    setSaving(true);
-    try {
-      // Handler binds ShouldBindJSON — urlencoded api.post would 400.
-      await api.postJson(paths.settings.killSwitch, { action, password });
+  const { mutate: sendAction, isPending: saving } = useMutation({
+    // Handler binds ShouldBindJSON — urlencoded api.post would 400.
+    fn: (action: "arm" | "disarm") => api.postJson(paths.settings.killSwitch, { action, password }),
+    onSuccess: (_result, action) => {
       toast.success(action === "arm"
         ? t("settings.emergency.armed_toast")
         : t("settings.emergency.disarmed_toast"));
       setPassword("");
-      await refresh();
-    } catch {
-      toast.error(t("settings.emergency.failed", { action }));
-    } finally { setSaving(false); }
-  }, [password, refresh, t]);
+      void refresh();
+    },
+    onError: (e, action) => toastError(e, "settings.emergency.failed", { action }),
+  });
+
+  const send = useCallback((action: "arm" | "disarm") => {
+    if (!password) { toast.error(t("settings.emergency.password_required")); return; }
+    void sendAction(action);
+  }, [password, sendAction, t]);
 
   const armed = !!status?.armed;
   const statusUnknown = status === null;

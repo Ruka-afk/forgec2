@@ -166,6 +166,34 @@ if we adopt strict WCAG 1.4.11 for control boundaries).
 
 ## D3 — Feedback loop (owner: U3)
 
+> **U3 landed — wave 1, the settings tree (2026-10-18):** the mutation and error
+> conventions are no longer single-sample. All 22 hand-rolled mutation handlers
+> in `pages/settings/**` moved onto `useMutation` — 8 in `SettingsPage.tsx`
+> (agent / server / malleable saves, password change, JWT regeneration, vacuum,
+> backup download, purge), plus `useTOTP` (×3), `CertificatesSection` (×2),
+> `EmergencySection` (×1), `BackupSection` (×2), `ModulesSection` (×3),
+> `NotificationsSection` (×1), `SIEMRulesSection` (×1) and `ApiKeysSection`
+> (×1) — replacing ten hand-rolled boolean flags with per-action `isPending`
+> and the hook's stale-completion / unmount guards. The sections' shared
+> `saving` prop stays (derived as the OR of every settings mutation plus
+> `totpSaving`), so the disabled-state behaviour is unchanged; the hand-rolled
+> 10-second `withSaveTimeout` wrapper and its `settings.toast.save_timeout`
+> key are retired (the API layer's own 30 s timeout plus `toastError` cover the
+> stuck-button case). Errors route through `useErrorToast`, extended with an
+> optional `fallbackParams` argument (the `{ action }` emergency template
+> interpolates through it): the last four raw `err.message` toasts in the tree
+> are gone, the three settings saves that previously failed **silently** (the
+> old wrapper let the rejection escape as an unhandled rejection, no toast)
+> now report, SIEM toggle/delete no longer swallow failures, and the SIEM save
+> failure shows its own key instead of the ExtC2 copy-paste
+> (`channel_config_failed`). Counts: `useMutation` call sites 6 → 28,
+> `useErrorToast` importing files 2 → 12, settings-tree raw-message error
+> toasts 4 → 0. Per-row identity spinners (`restoring` / `downloading` /
+> `savingId` / `testingId` / `testingIdx`) intentionally keep local state —
+> the hook tracks pending-ness, not which row was clicked. Remaining clusters
+> (agents detail, users, persistence, phishing, infrastructure, …) migrate in
+> later waves; the conventions are unchanged.
+
 - **F1 · `useMutation` adoption: 6 uses vs 66 hand-rolled `setSaving`
   (15 files) + 8 `setDeleting` (3 files) + per-page `actionLoading` state.**
   The convention exists (`docs/FRONTEND_CONVENTIONS.md`) with one migrated
@@ -221,7 +249,7 @@ if we adopt strict WCAG 1.4.11 for control boundaries).
 | U1a status tokens & primitives (landed 2026-10-18) | C1, C2, C5, C6, C8, C9; component side of C3/C4/C7; `check:contrast` compositing switched to the browser's sRGB blend space |
 | U1b page migration (landed 2026-10-18) | C3/C4/C7 page call sites: 300 × `text-X` → `text-X-ink`, 38 `-foreground`-on-tint chips → ink, light `primary/20` → `/15`; `check:contrast --strict` promoted into `npm run check` |
 | U2 keyboard & names (landed 2026-10-18) | K1–K5: aria-labels on the video overlay and the phase chip, named breadcrumb home link, single skip link, labelled table region; `check:aria --strict` promoted into `npm run check` |
-| U3 feedback loop | F1–F2 |
+| U3 feedback loop (wave 1: settings tree — landed 2026-10-18) | F1/F2 first wave: 22 handlers onto `useMutation` (call sites 6 → 28), settings-tree raw-message error toasts 4 → 0 and previously-silent failures now report; `useErrorToast` gains `fallbackParams`; remaining clusters migrate in later waves |
 | U4 narrow screens | R2–R3 |
 | U5 motion | M1 |
 | U6 page-by-page polish | V1–V2 + per-page checklists |

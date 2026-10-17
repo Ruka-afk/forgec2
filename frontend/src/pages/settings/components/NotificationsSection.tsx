@@ -14,6 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Bell, FlaskConical, Plus, Save, Trash2 } from "lucide-react";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
+import { useMutation } from "@/lib/hooks/useMutation";
 import NotificationRoutesCard from "./NotificationRoutesCard";
 
 interface NotificationTarget {
@@ -47,11 +49,11 @@ const emptyTarget = (): NotificationTarget => ({
 export default function NotificationsSection() {
   const { t } = useI18n();
   const [targets, setTargets] = useState<NotificationTarget[]>([]);
-  const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [testingIdx, setTestingIdx] = useState<number | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
+  const { toastError } = useErrorToast();
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -70,17 +72,15 @@ export default function NotificationsSection() {
     return () => { cancelled = true; };
   }, [t, reloadNonce]);
 
-  const handleSave = async () => {
+  const { mutate: saveTargets, isPending: saving } = useMutation({
+    fn: () => api.postJson(paths.settings.webhooks, { notifications: targets }),
+    onSuccess: () => toast.success(t("settings.toast.notifications_saved")),
+    onError: (e) => toastError(e, "settings.toast.notifications_save_failed"),
+  });
+
+  const handleSave = () => {
     if (loadError) return;
-    setSaving(true);
-    try {
-      await api.postJson(paths.settings.webhooks, { notifications: targets });
-      toast.success(t("settings.toast.notifications_saved"));
-    } catch {
-      toast.error(t("settings.toast.notifications_save_failed"));
-    } finally {
-      setSaving(false);
-    }
+    void saveTargets();
   };
 
   const handleTest = async (idx: number) => {
@@ -100,8 +100,8 @@ export default function NotificationsSection() {
         from: target.from,
       });
       if (d.success) { toast.success(t("settings.toast.test_notification_sent")); } else { toast.error(((d.error as string) || t("settings.toast.test_failed"))); }
-    } catch {
-      toast.error(t("settings.toast.test_failed"));
+    } catch (e) {
+      toastError(e, "settings.toast.test_failed");
     } finally {
       setTestingIdx(null);
     }

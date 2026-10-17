@@ -6,6 +6,8 @@ import { Card } from "@/components/ui/card";
 import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
+import { useMutation } from "@/lib/hooks/useMutation";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -28,12 +30,13 @@ export default function BackupSection() {
   const [backups, setBackups] = useState<BackupInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
+  // Per-row spinners (restoring/downloading) keep their identity state: the
+  // mutation hooks track pending-ness, not which row was clicked.
   const [restoring, setRestoring] = useState<string | null>(null);
   const [confirmRestore, setConfirmRestore] = useState<BackupInfo | null>(null);
-  const [uploading, setUploading] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toastError } = useErrorToast();
 
   const loadBackups = useCallback(async () => {
     setLoading(true);
@@ -54,17 +57,17 @@ export default function BackupSection() {
 
   useEffect(() => { void loadBackups(); }, [loadBackups]);
 
-  const handleCreateBackup = async () => {
-    setCreating(true);
-    try {
-      await api.post(paths.settings.dbBackup);
+  const { mutate: createBackup, isPending: creating } = useMutation({
+    fn: () => api.post(paths.settings.dbBackup),
+    onSuccess: () => {
       toast.success(t("settings.toast.backup_created"));
-      await loadBackups();
-    } catch {
-      toast.error(t("settings.toast.create_backup_failed"));
-    } finally {
-      setCreating(false);
-    }
+      void loadBackups();
+    },
+    onError: (e) => toastError(e, "settings.toast.create_backup_failed"),
+  });
+
+  const handleCreateBackup = () => {
+    void createBackup();
   };
 
   const handleRestoreFromServer = async (name: string) => {
@@ -76,34 +79,38 @@ export default function BackupSection() {
         toast.info(t("settings.toast.server_restarting"), { duration: 5000 });
         setTimeout(() => { window.location.reload(); }, 3000);
       }
-    } catch {
-      toast.error(t("settings.toast.restore_db_failed"));
+    } catch (e) {
+      toastError(e, "settings.toast.restore_db_failed");
     } finally {
       setRestoring(null);
       setConfirmRestore(null);
     }
   };
 
-  const handleUploadRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    try {
+  const { mutate: uploadRestore, isPending: uploading } = useMutation({
+    fn: (file: File) => {
       const fd = new FormData();
       fd.append("type", "upload");
       fd.append("file", file);
-      const d = await api.postFormData<{ message?: string; restart?: boolean }>(paths.settings.dbRestore, fd);
+      return api.postFormData<{ message?: string; restart?: boolean }>(paths.settings.dbRestore, fd);
+    },
+    onSuccess: (d) => {
       toast.success(d.message ?? t("settings.toast.db_restored"));
       if (d.restart) {
         toast.info(t("settings.toast.server_restarting"), { duration: 5000 });
         setTimeout(() => { window.location.reload(); }, 3000);
       }
-    } catch {
-      toast.error(t("settings.toast.restore_upload_failed"));
-    } finally {
-      setUploading(false);
+    },
+    onError: (e) => toastError(e, "settings.toast.restore_upload_failed"),
+    onSettled: () => {
       if (fileInputRef.current) fileInputRef.current.value = "";
-    }
+    },
+  });
+
+  const handleUploadRestore = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    void uploadRestore(file);
   };
 
   const handleDownload = async (name: string) => {
@@ -112,8 +119,8 @@ export default function BackupSection() {
     try {
       const { blob, filename } = await api.downloadGet(paths.settings.dbBackupsDownload(name), name);
       downloadBlob(blob, filename);
-    } catch {
-      toast.error(t("settings.backup.download_failed"));
+    } catch (e) {
+      toastError(e, "settings.backup.download_failed");
     } finally {
       setDownloading(null);
     }

@@ -17,6 +17,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { DataError } from "@/components/ui/data-state";
 import { AgentLoadError } from "@/components/AgentLoadError";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
+import { useMutation } from "@/lib/hooks/useMutation";
 import { formatTime, formatBytes } from "@/lib/utils";
 import { FileCode, Rocket, Trash2, Upload } from "lucide-react";
 
@@ -42,14 +44,13 @@ export default function ModulesSection() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [agentsError, setAgentsError] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [deploying, setDeploying] = useState(false);
   const [hint, setHint] = useState("");
   const [deployModule, setDeployModule] = useState("");
   const [deployAgent, setDeployAgent] = useState("");
   const [deployPath, setDeployPath] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const { confirm, modal } = useConfirm();
+  const { toastError } = useErrorToast();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -100,61 +101,68 @@ export default function ModulesSection() {
     }
   }, [deployModule, deployPath]);
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    try {
+  const { mutate: uploadModule, isPending: uploading } = useMutation({
+    fn: (file: File) => {
       const fd = new FormData();
       fd.append("file", file);
-      await api.postFormData(paths.modules.list, fd);
+      return api.postFormData(paths.modules.list, fd);
+    },
+    onSuccess: () => {
       toast.success(t("settings.modules.uploaded"));
-      load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("settings.modules.upload_failed"));
-    }
-    setUploading(false);
-    e.target.value = "";
+      void load();
+    },
+    onError: (e) => toastError(e, "settings.modules.upload_failed"),
+    onSettled: () => {
+      if (fileRef.current) fileRef.current.value = "";
+    },
+  });
+
+  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    void uploadModule(file);
   };
+
+  const { mutate: deleteModule } = useMutation({
+    fn: (name: string) => api.del(paths.modules.one(name)),
+    onSuccess: (_result, name) => {
+      toast.success(t("settings.modules.deleted"));
+      if (deployModule === name) setDeployModule("");
+      void load();
+    },
+    onError: (e) => toastError(e, "settings.modules.delete_failed"),
+  });
 
   const handleDelete = async (name: string) => {
     if (!(await confirm({ message: t("settings.modules.delete_confirm", { name }) }))) return;
-    confirmDelete(name);
+    void deleteModule(name);
   };
 
-  const confirmDelete = async (name: string) => {
-    try {
-      await api.del(paths.modules.one(name));
-      toast.success(t("settings.modules.deleted"));
-      if (deployModule === name) setDeployModule("");
-      load();
-    } catch {
-      toast.error(t("settings.modules.delete_failed"));
-    }
-  };
-
-  const handleDeploy = async () => {
-    if (!deployModule || !deployAgent) {
-      toast.error(t("settings.modules.deploy_need_selection"));
-      return;
-    }
-    setDeploying(true);
-    try {
+  const { mutate: deployToAgent, isPending: deploying } = useMutation({
+    fn: () => {
       const path = deployPath.trim() || `C:\\Windows\\Temp\\${deployModule}`;
-      const res = await api.postJson<{ success?: boolean; task_id?: number }>(
+      return api.postJson<{ success?: boolean; task_id?: number }>(
         paths.agents.modulesDeploy(deployAgent),
         { name: deployModule, path }
       );
+    },
+    onSuccess: (res) => {
       const taskId = res?.task_id;
       toast.success(
         taskId
           ? t("settings.modules.deployed_task").replace("{id}", String(taskId))
           : t("settings.modules.deployed")
       );
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("settings.modules.deploy_failed"));
+    },
+    onError: (e) => toastError(e, "settings.modules.deploy_failed"),
+  });
+
+  const handleDeploy = () => {
+    if (!deployModule || !deployAgent) {
+      toast.error(t("settings.modules.deploy_need_selection"));
+      return;
     }
-    setDeploying(false);
+    void deployToAgent();
   };
 
   const agentLabel = (a: AgentOption) => {

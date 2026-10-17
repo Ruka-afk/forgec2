@@ -4,6 +4,7 @@ import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { Card } from "@/components/ui/card";
 import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ export default function NotificationRoutesCard() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | number | null>(null);
   const [testingId, setTestingId] = useState<string | number | null>(null);
+  const { toastError } = useErrorToast();
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -75,7 +77,7 @@ export default function NotificationRoutesCard() {
       toast.success(t("settings.routes.toast_created"));
       await load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("settings.routes.toast_save_failed"));
+      toastError(e, "settings.routes.toast_save_failed");
     } finally {
       setSavingId(null);
     }
@@ -87,8 +89,8 @@ export default function NotificationRoutesCard() {
     try {
       await api.putJson(paths.settings.notificationRoute(r.id), r);
       toast.success(t("settings.routes.toast_updated"));
-    } catch {
-      toast.error(t("settings.routes.toast_save_failed"));
+    } catch (e) {
+      toastError(e, "settings.routes.toast_save_failed");
     } finally {
       setSavingId(null);
     }
@@ -101,8 +103,8 @@ export default function NotificationRoutesCard() {
       await api.del(paths.settings.notificationRoute(r.id));
       toast.success(t("settings.routes.toast_deleted"));
       void load();
-    } catch {
-      toast.error(t("settings.routes.toast_delete_failed"));
+    } catch (e) {
+      toastError(e, "settings.routes.toast_delete_failed");
     }
   };
 
@@ -112,8 +114,8 @@ export default function NotificationRoutesCard() {
     try {
       await api.postJson(paths.settings.notificationRouteTest(r.id), {});
       toast.success(t("settings.routes.toast_test_sent"));
-    } catch {
-      toast.error(t("settings.routes.toast_test_failed"));
+    } catch (e) {
+      toastError(e, "settings.routes.toast_test_failed");
     } finally {
       setTestingId(null);
     }

@@ -4,6 +4,8 @@ import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
+import { useMutation } from "@/lib/hooks/useMutation";
 import { timeAgo, formatTime } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { CardHeaderRow } from "@/components/ui/card-header-row";
@@ -77,7 +79,7 @@ export default function ApiKeysSection() {
   const [newExpiresDays, setNewExpiresDays] = useState("");
   const [newScopes, setNewScopes] = useState<PermissionKey[]>([]);
   const [newCidrs, setNewCidrs] = useState("");
-  const [creating, setCreating] = useState(false);
+  const { toastError } = useErrorToast();
 
   const toggleScope = (scope: PermissionKey) => {
     setNewScopes((prev) => prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope]);
@@ -109,26 +111,20 @@ export default function ApiKeysSection() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const handleCreate = async () => {
-    if (!newName.trim()) { toast.error(t("settings.apikeys.toast_name_required")); return; }
-    setCreating(true);
-    try {
+  const { mutate: createKey, isPending: creating } = useMutation({
+    // postJson unwraps {success,data}: the payload (with the show-once key)
+    // arrives directly — reading d.data?.key here meant the one-time secret
+    // was never displayed anywhere.
+    fn: () => {
       const body: Record<string, unknown> = { name: newName.trim() };
       if (newExpiresDays) {
-        const days = Number(newExpiresDays);
-        if (!Number.isFinite(days) || days <= 0) {
-          toast.error(t("settings.apikeys.toast_bad_expiry"));
-          setCreating(false);
-          return;
-        }
-        body.expires_at = new Date(Date.now() + days * 86_400_000).toISOString();
+        body.expires_at = new Date(Date.now() + Number(newExpiresDays) * 86_400_000).toISOString();
       }
       if (newScopes.length > 0) body.scopes = [...newScopes];
       if (newCidrs.trim()) body.allowed_cidrs = newCidrs.trim();
-      // postJson unwraps {success,data}: the payload (with the show-once
-      // key) arrives directly — checking d.data?.key here meant the one-time
-      // secret was never displayed anywhere.
-      const d = await api.postJson<CreatedKey | { data?: CreatedKey }>(paths.settings.apiKeys, body);
+      return api.postJson<CreatedKey | { data?: CreatedKey }>(paths.settings.apiKeys, body);
+    },
+    onSuccess: (d) => {
       setCreateOpen(false);
       setNewName("");
       setNewExpiresDays("");
@@ -139,11 +135,20 @@ export default function ApiKeysSection() {
         setCreatedKey(created);
       }
       void load();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("settings.apikeys.toast_create_failed"));
-    } finally {
-      setCreating(false);
+    },
+    onError: (e) => toastError(e, "settings.apikeys.toast_create_failed"),
+  });
+
+  const handleCreate = () => {
+    if (!newName.trim()) { toast.error(t("settings.apikeys.toast_name_required")); return; }
+    if (newExpiresDays) {
+      const days = Number(newExpiresDays);
+      if (!Number.isFinite(days) || days <= 0) {
+        toast.error(t("settings.apikeys.toast_bad_expiry"));
+        return;
+      }
     }
+    void createKey();
   };
 
   const handleRevoke = async (k: ApiKeyEntry) => {
@@ -152,8 +157,8 @@ export default function ApiKeysSection() {
       await api.del(paths.settings.apiKey(k.id));
       toast.success(t("settings.apikeys.toast_revoked"));
       void load();
-    } catch {
-      toast.error(t("settings.apikeys.toast_revoke_failed"));
+    } catch (e) {
+      toastError(e, "settings.apikeys.toast_revoke_failed");
     }
   };
 
@@ -165,8 +170,8 @@ export default function ApiKeysSection() {
       if (rotated?.key) setCreatedKey(rotated);
       toast.success(t("settings.apikeys.toast_rotated"));
       void load();
-    } catch {
-      toast.error(t("settings.apikeys.toast_rotate_failed"));
+    } catch (e) {
+      toastError(e, "settings.apikeys.toast_rotate_failed");
     }
   };
 
