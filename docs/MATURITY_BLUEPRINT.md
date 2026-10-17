@@ -147,6 +147,18 @@ Vite+React19、~54 pages、i18n en/zh、OpenAPI 类型生成、权限键与
 Tasks/Timeline、Lateral、Evasion、Plugins、OPSEC、Workflow、Audit。
 嵌入路径 `//go:embed all:dist` ← `internal/webdist/dist`（`scripts/build-embedded.ps1`）。
 
+服务层契约（2026-10 批次 R）：`/assets/*`（Vite 内容哈希，精确命中才生效）→
+`public, max-age=31536000, immutable`；其余名字稳定的文件（`index.html`、各路由
+HTML 壳、`/js`、`/css`、`favicon.ico`）→ `no-cache` + 启动时算好的内容哈希 ETag
+（`embed.FS` 无 mtime，ETag 是唯一校验器），`If-None-Match`（精确/弱/`*`）命中即
+304/0 B——`no-store` 退出还恢复了 bfcache 资格。文本体 ≥1 KiB 且客户端协商时经
+池化 gzip writer 压缩（`Vary: Accept-Encoding`，`gzip;q=0` 拒绝被尊重；Range/HEAD、
+二进制、小文件跳过），全部局限在 SPA 静态中间件内，不碰 `/api`、`/ws`、`/extc2`
+与 beacon/malleable 通道。实测：index chunk 394,657→110,807 B、vis-network
+476,620→128,752 B、`/` 壳 2,257→880 B、复访 304/0 B。契约、度量与复现命令见
+`docs/FRONTEND_PERF.md`；`go test ./internal/server/ -run TestStatic` 钉住缓存/304/
+压缩跳过矩阵。
+
 ### 2.8 OTA / Lifecycle（`update_signing.go`, `commands_evasion.go`, `agent_lifecycle.go`）
 
 服务端持有 `data/update_signing.key`（路径跟随 `server.data_dir`，私钥不出目录）；

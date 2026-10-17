@@ -44,6 +44,7 @@ func (s *spaFS) Open(name string) (http.File, error) {
 // Must be called BEFORE SetupRoutes() so the middleware runs before route handlers.
 func (s *Server) SetStaticFS(staticFS fs.FS) {
 	s.staticFS = staticFS
+	s.staticMeta = buildStaticAssetMeta(staticFS)
 
 	// http.FileServer with SPA fallback
 	fsrv := http.FileServer(&spaFS{http.FS(staticFS)})
@@ -100,22 +101,67 @@ func (s *Server) SetStaticFS(staticFS fs.FS) {
 			}
 		}
 
-		// Cache control for hashed static assets (immutable) vs everything else
-		if strings.HasPrefix(path, "/_next/static/") {
-			c.Header("Cache-Control", "public, max-age=31536000, immutable")
-		} else {
-			c.Header("Cache-Control", "no-store")
-		}
-
 		// Normalize trailing slash for SPA client routes so http.FileServer
 		// never emits a 301. Browsers cache 301s aggressively, and the
 		// /login <-> /login/ pair becomes an infinite redirect loop client-side
-		// that never reaches the server.
+		// that never reaches the server. Done before the cache/ETag lookup so
+		// both see the same canonical path.
 		if len(path) > 1 && strings.HasSuffix(path, "/") {
-			c.Request.URL.Path = path[:len(path)-1]
+			path = path[:len(path)-1]
+			c.Request.URL.Path = path
 		}
 
-		fsrv.ServeHTTP(c.Writer, c.Request)
+		// Cache policy for the embedded files. Only Vite's content-addressed
+		// /assets/ files may be immutable. Everything else (index.html, the
+		// per-route HTML shells, the vendored /js and /css files) keeps its
+		// name across upgrades, so it is served no-cache with a content-hash
+		// ETag: revalidation is a cheap 304, and embed.FS has no mtime to
+		// offer as a Last-Modified fallback.
+		//
+		// middleware.NoCache() ran before this middleware and stamped the API
+		// policy (Pragma/Expires) onto every response; drop those so nothing
+		// contradicts the per-file policy below.
+		name, meta, resolved := s.resolveStaticAsset(path)
+		c.Writer.Header().Del("Pragma")
+		c.Writer.Header().Del("Expires")
+		if resolved && strings.HasPrefix(name, "assets/") && name == strings.TrimPrefix(path, "/") {
+			c.Header("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			c.Header("Cache-Control", "no-cache")
+		}
+		if resolved {
+			c.Header("ETag", meta.etag)
+			if inm := c.GetHeader("If-None-Match"); inm != "" && etagMatches(inm, meta.etag) {
+				c.Status(http.StatusNotModified)
+				c.Abort()
+				return
+			}
+		}
+
+		// gzip only for a plain GET of a text body big enough to pay for the
+		// framing and accepted by the client (a Range request needs identity
+		// bytes for Content-Range; a HEAD has no body). Beacon/malleable and
+		// API paths never reach this middleware, so no C2 channel is touched.
+		compressible := resolved && meta.compressible && meta.size >= minCompressBytes
+		if compressible {
+			// Announce negotiability even on the identity variant so shared
+			// caches never hand a gzipped body to a client that refused it.
+			c.Header("Vary", "Accept-Encoding")
+		}
+		var gw *gzipResponseWriter
+		if compressible && c.Request.Method == http.MethodGet && c.GetHeader("Range") == "" &&
+			acceptsGzip(c.GetHeader("Accept-Encoding")) {
+			gw = newGzipResponseWriter(c.Writer)
+		}
+		body := http.ResponseWriter(c.Writer)
+		if gw != nil {
+			body = gw
+		}
+
+		fsrv.ServeHTTP(body, c.Request)
+		if gw != nil {
+			gw.Close()
+		}
 		c.Abort()
 	})
 

@@ -265,6 +265,11 @@ type Server struct {
 	// Embedded frontend static files (nil = API-only mode)
 	staticFS fs.FS
 
+	// Precomputed serving metadata for the embedded files (content-hash ETag,
+	// size, compressibility), built once by SetStaticFS before the server
+	// starts. Read-only afterwards, no lock needed.
+	staticMeta map[string]staticAssetMeta
+
 	// Main HTTP server (for graceful shutdown)
 	httpServer *http.Server
 
