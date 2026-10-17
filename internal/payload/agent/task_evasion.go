@@ -328,12 +328,14 @@ func handleETWHardwareBP(task Task, res *TaskResult) {
 	res.Output = HardwareBreakpointETW()
 }
 
+// handleSetSleepMaskAdvanced keeps the operator endpoint honest: the Go agent
+// carries no full-image mask (advanced/foliage/zilean were retired — a Go
+// process cannot soundly encrypt its own executing code pages, which the
+// runtime keeps using from other threads), so this task answers with the
+// reason instead of pretending to switch.
 func handleSetSleepMaskAdvanced(task Task, res *TaskResult) {
-	if !setActiveSleepMask("advanced") {
-		res.Error = "failed to set advanced sleep mask (not available on this platform)"
-		return
-	}
-	res.Output = "sleep mask switched to: advanced (AES-CBC page encryption + stack splice)"
+	res.Error = "advanced full-image sleep mask is not available in the Go agent; " +
+		"use set_sleep_mask with config-xor/xor (full-image masking lives in the C implant)"
 }
 
 func init() {

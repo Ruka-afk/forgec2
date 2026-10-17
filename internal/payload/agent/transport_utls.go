@@ -16,9 +16,10 @@ import (
 )
 
 // ja3HelloProvider returns the utls ClientHelloID for the next handshake. It is
-// registered by the chameleon build (which performs JA3 rotation). When nil a
-// safe default (Chrome Auto) is used, so every TLS transport gets a realistic,
-// non-Go-stdlib ClientHello instead of the easily-fingerprinted Go stack.
+// registered at startup when per-dial JA3 rotation is enabled (see
+// transport_chameleon.go). When nil a safe default (Chrome Auto) is used, so
+// every TLS transport gets a realistic, non-Go-stdlib ClientHello instead of
+// the easily-fingerprinted Go stack.
 var ja3HelloProvider func() utls.ClientHelloID
 
 // mtlsCAPool, when set, is the CA pool used to verify the team server in mTLS

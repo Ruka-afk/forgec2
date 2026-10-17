@@ -1,7 +1,7 @@
 /* evade.h — C implant evasion primitives (P1-6A).
  *
- *  1. sleepmask: Ekko-inspired sleep obfuscation mirroring the Go agent
- *     (internal/payload/agent/sleepmask_windows.go + ekko_sleep_windows.go):
+ *  1. sleepmask: Ekko-inspired sleep obfuscation mirroring the Go agent's
+ *     config-buffer pass (internal/payload/agent/sleepmask_windows.go):
  *     sensitive config strings live in a VirtualAlloc'd shadow buffer that
  *     is XOR-scrambled with a rolling 32-byte key and parked NOACCESS for
  *     the duration of every sleep, then restored. Sleep itself goes through

@@ -84,8 +84,8 @@ var (
 	PPIDSpoofParent         string            = "explorer.exe"                // Parent process name used for PPID spoofing (e.g. explorer.exe, svchost.exe, runtimebroker.exe)
 	PersistencePrefixStr    string            = ""                            // Custom prefix for persistence artifacts (reg keys, task names, file names); default "ForgeC2"
 	BeaconTransportStr      string            = "http"                        // "http", "wss", "ssh" — transport protocol for beacon
-	ChameleonStr            string            = "true"                        // enable uTLS TLS fingerprint randomization (requires chameleon build tag)
-	ChameleonProfileStr     string            = "random"                      // chrome, firefox, ios, android, random
+	ChameleonStr            string            = "false"                       // per-dial uTLS JA3 rotation (off = stable Chrome Auto); also FORGEC2_CHAMELEON=1 at runtime
+	ChameleonProfileStr     string            = "random"                      // chrome|firefox|safari|edge|ios|android|360|qq|random or a full utls profile name; also FORGEC2_CHAMELEON_PROFILE at runtime
 	SMBPipeName             string            = ""                            // named pipe name for SMB transport (defaults to persistencePrefix)
 	IsSMBParentStr          string            = "false"                       // "true" = this agent is an SMB parent (listens on pipe)
 	SSHUserStr              string            = ""                            // SSH username for SSH transport (defaults to persistencePrefix)

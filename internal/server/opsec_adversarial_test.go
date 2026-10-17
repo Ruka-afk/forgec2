@@ -334,40 +334,6 @@ func TestOpsecCreateTaskBlockedAtCritical(t *testing.T) {
 	}
 }
 
-// TestOpsecSleepMaskAlertEscalatesThreat proves the memory-scanner alert path
-// feeds the adaptive manager: repeated sleep-mask integrity failures push the
-// agent to ThreatCritical, after which credential ops are rejected.
-func TestOpsecSleepMaskAlertEscalatesThreat(t *testing.T) {
-	s := newTasksTestServer(t)
-	s.opsecAdaptive = opsec.NewAdaptiveManager()
-
-	s.autoSwitchSleepMask("agent-mask", "sleep_mask_integrity_failure: mask=advanced page=2")
-	if level := s.opsecAdaptive.GetThreatLevel("agent-mask"); level != opsec.ThreatNormal {
-		t.Fatalf("1 alert should stay ThreatNormal, got %d", level)
-	}
-
-	s.autoSwitchSleepMask("agent-mask", "sleep_mask_integrity_failure: mask=advanced page=2")
-	if level := s.opsecAdaptive.GetThreatLevel("agent-mask"); level != opsec.ThreatElevated {
-		t.Fatalf("2 alerts should yield ThreatElevated, got %d", level)
-	}
-
-	for i := 0; i < 8; i++ {
-		s.autoSwitchSleepMask("agent-mask", "sleep_mask_integrity_failure: mask=advanced page=2")
-	}
-	if level := s.opsecAdaptive.GetThreatLevel("agent-mask"); level != opsec.ThreatCritical {
-		t.Fatalf("10 alerts should yield ThreatCritical, got %d", level)
-	}
-
-	// Auto-switch (set_sleep_mask) is not credential access: it must still
-	// dispatch on a hostile host, while a credential op is now blocked.
-	if _, err := s.createTask("agent-mask", "mimikatz", "sekurlsa::logonpasswords", "", "", "", 0, 0); err == nil {
-		t.Fatal("mimikatz must be blocked at ThreatCritical")
-	}
-	if _, err := s.createTask("agent-mask", "set_sleep_mask", "zilean", "", "", "", 0, 0); err != nil {
-		t.Fatalf("set_sleep_mask must not be blocked: %v", err)
-	}
-}
-
 func TestExtC2Encryption_RoundTrip(t *testing.T) {
 	t.Helper()
 	crypto.InitExtC2Encryption(testStorageKeyHex)

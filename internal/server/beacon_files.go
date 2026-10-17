@@ -18,7 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// 鈹€鈹€ Screenshots, sleep-mask rotation, path/IP/geo helpers, ls normalize 鈹€鈹€鈹€
+// 鈹€鈹€ Screenshots, path/IP/geo helpers, ls normalize 鈹€鈹€鈹€
 
 func (s *Server) saveScreenshot(dataDir, agentID string, taskID uint, b64Data string) {
 	if s.IsScreenMonitoring(agentID) {
@@ -81,61 +81,6 @@ func (s *Server) handleServeScreenshot(c *gin.Context) {
 	}
 
 	serveFileSafe(c, requested, screenshotRoot, "")
-}
-
-// safeJoin verifies that joining base+name stays within base, preventing path traversal.
-// autoSwitchSleepMask rotates to a different sleep mask variant when integrity failure is detected.
-// Output format: "sleep_mask_integrity_failure: mask=<name> page=<idx>"
-func (s *Server) autoSwitchSleepMask(agentID string, output string) {
-	slog.Error("Sleep mask integrity failure 鈥?auto-switching variant", "agent_id", agentID, "output", output)
-
-	// Escalate the adaptive OPSEC threat score: a memory-scanner hit means
-	// the host is actively hostile, and repeated hits push the agent toward
-	// ThreatCritical where credential-access operations are blocked.
-	if s.opsecAdaptive != nil {
-		s.opsecAdaptive.RecordIntegrityFailure(agentID)
-	}
-
-	// Parse the current mask name from the alert output
-	currentMask := ""
-	if idx := strings.Index(output, "mask="); idx >= 0 {
-		rest := output[idx+5:]
-		if end := strings.IndexByte(rest, ' '); end >= 0 {
-			currentMask = rest[:end]
-		} else {
-			currentMask = rest
-		}
-	}
-
-	// Rotation order: advanced 鈫?zilean 鈫?foliage 鈫?advanced
-	var nextMask string
-	switch currentMask {
-	case "advanced":
-		nextMask = "zilean"
-	case "zilean":
-		nextMask = "foliage"
-	case "foliage":
-		nextMask = "advanced"
-	default:
-		nextMask = "advanced"
-	}
-
-	// Create a set_sleep_mask task for the agent with high priority
-	t, err := s.createTask(agentID, "set_sleep_mask", nextMask, "", "", "", 0, 0)
-	if err != nil {
-		slog.Error("Failed to create auto-switch sleep mask task", "agent_id", agentID, "error", err)
-		return
-	}
-	t.Priority = 2
-	if err := s.db.Save(t).Error; err != nil {
-		slog.Error("Failed to save auto-switch sleep mask task", "agent_id", agentID, "error", err)
-		return
-	}
-
-	s.LogAuditRecord(nil, "auto_switch_sleep_mask", "agent", agentID,
-		fmt.Sprintf("Auto-switched sleep mask from %s to %s due to integrity failure", currentMask, nextMask), true, nil)
-
-	slog.Warn("Auto-switched sleep mask", "agent_id", agentID, "from", currentMask, "to", nextMask)
 }
 
 // Returns empty string if the path escapes the base directory.

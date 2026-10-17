@@ -1,22 +1,26 @@
-//go:build chameleon
+//go:build linux || windows || darwin
 
 package main
 
 import (
 	"crypto/rand"
 	"math/big"
-	"sync"
-	"time"
+	"strings"
 
 	utls "github.com/refraction-networking/utls"
 )
 
-var (
-	ja3ProfileName    string
-	ja3RotateInterval time.Duration
-	ja3LastRotate     time.Time
-	ja3Mu             sync.RWMutex
-)
+// JA3 / ClientHello rotation for every TLS transport that goes through the
+// utls dialer (HTTPS/WSS/mTLS/gRPC/DoT). Disabled by default: a stable,
+// realistic Chrome fingerprint is what a real browser presents. When enabled
+// (compile-time ChameleonStr=true or runtime FORGEC2_CHAMELEON=1) the provider
+// hands out a random profile per handshake, or the fixed profile named by
+// ChameleonProfileStr / FORGEC2_CHAMELEON_PROFILE.
+//
+// This used to sit behind a `chameleon` build tag that no build path ever
+// set, so the feature was dead weight in every real binary; the tag is gone
+// and the wiring runs in the default build.
+var ja3ProfileName string
 
 type ja3ProfileEntry struct {
 	Name string
@@ -42,31 +46,44 @@ var ja3Profiles = []ja3ProfileEntry{
 	{"randomized_alpn", utls.HelloRandomizedALPN},
 }
 
-func initJA3Rotator() {
-	n, _ := rand.Int(rand.Reader, big.NewInt(1440))
-	ja3RotateInterval = time.Duration(12*60+int(n.Int64())) * time.Minute
-	ja3LastRotate = time.Now()
-	ja3ProfileName = chameleonProfile
-	if ja3ProfileName == "" {
-		ja3ProfileName = "random"
+// ja3ShortNames maps the operator-facing profile names documented for the
+// generate config onto the full utls profile entries above.
+var ja3ShortNames = map[string]string{
+	"chrome":  "chrome_auto",
+	"firefox": "firefox_auto",
+	"safari":  "safari_auto",
+	"edge":    "edge_auto",
+	"ios":     "ios_auto",
+	"android": "android_11",
+	"360":     "360_auto",
+	"qq":      "qq_auto",
+}
+
+// initJA3Rotation wires the utls ClientHello provider; called from main() once
+// the config and environment are parsed. With rotation disabled the provider
+// stays unregistered and utlsClientHello() falls back to HelloChrome_Auto.
+func initJA3Rotation(profile string, enabled bool) {
+	if !enabled {
+		ja3HelloProvider = nil
+		return
 	}
-	// Route all TLS transports (HTTPS/WSS/mTLS/gRPC/DoT) through the utls
-	// dialer with the rotated JA3 profile selected here.
+	ja3ProfileName = profile
 	ja3HelloProvider = func() utls.ClientHelloID {
 		return getUTLSHelloID(getJA3Profile())
 	}
 }
 
 func getJA3Profile() string {
-	ja3Mu.RLock()
 	base := ja3ProfileName
-	ja3Mu.RUnlock()
-
 	// In random mode, pick a fresh ClientHello on every dial so the JA3
-	// fingerprint varies per connection (instead of being pinned for 12-36h,
-	// which is itself a high-fidelity static IOC). Fixed profiles stay stable.
+	// fingerprint varies per connection (instead of being pinned for the whole
+	// session, which is itself a high-fidelity static IOC). Fixed profiles
+	// stay stable.
 	if base == "random" || base == "randomized" {
-		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(ja3Profiles))))
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(ja3Profiles))))
+		if err != nil {
+			return "chrome_auto"
+		}
 		return ja3Profiles[n.Int64()].Name
 	}
 	return base
@@ -74,8 +91,14 @@ func getJA3Profile() string {
 
 func getUTLSHelloID(profile string) utls.ClientHelloID {
 	if profile == "random" || profile == "" {
-		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(ja3Profiles))))
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(ja3Profiles))))
+		if err != nil {
+			return utls.HelloChrome_Auto
+		}
 		return ja3Profiles[n.Int64()].ID
+	}
+	if mapped, ok := ja3ShortNames[strings.ToLower(profile)]; ok {
+		profile = mapped
 	}
 	for _, p := range ja3Profiles {
 		if p.Name == profile {
