@@ -2,6 +2,14 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Test files are not production input: the scanner reads every literal, so a
+   bare `blur` in `fireEvent.blur(...)` emits a real `.blur` utility, which
+   renames the entry CSS and cascades through the embedded bundle. */
+@source not "../**/*.test.{ts,tsx}";
+@source not "../**/*.spec.{ts,tsx}";
+@source not "../../e2e/**";
+@source not "../../scripts/**";
+
 @custom-variant dark (&:is(.dark *));
 
 /* ── Self-hosted fonts (was next/font/local) ── */
