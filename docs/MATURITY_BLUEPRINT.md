@@ -205,6 +205,16 @@ Builds 验证 `?tab=builds` 深链与 `aria-selected`。三项评估后明确不
 抓取 + 批次 S 看门狗正是把 466 KiB 渲染器与 215 KiB 样式挡在 Vite 依赖图和路由
 chunk 之外的手段）。
 
+UI/UX 审计与量尺（2026-10 批次 A）：`docs/UIUX_AUDIT.md` 固化七维基线
+（对比度/键盘与可及名/反馈闭环/窄屏/动效/文案/视觉一致性）与按修复批次
+（U1–U6）归属的缺陷簇；新增两个报告模式扫描器 `check:contrast`（双主题
+288 对 token 配对，`--selftest` 钉住色彩数学）与 `check:aria`（184 个
+图标触发器可及名），`--strict` 在 U1/U2 修复后收编进 `npm run check`。
+头号发现（均经 Chromium 实测互证）：`text-destructive-foreground` 为幽灵类
+（6 处实心删除按钮回退继承色，light 3.69 / dark 3.01）；light 徽章
+success/info 近白字色配淡底（1.2:1）；dark 实心 warning 按钮 1.75:1。
+零像素改动，视觉基线不动。
+
 ### 2.8 OTA / Lifecycle（`update_signing.go`, `commands_evasion.go`, `agent_lifecycle.go`）
 
 服务端持有 `data/update_signing.key`（路径跟随 `server.data_dir`，私钥不出目录）；

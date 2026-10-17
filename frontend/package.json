@@ -11,6 +11,8 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "check:coverage": "node scripts/check-coverage.mjs",
+    "check:contrast": "node scripts/check-contrast.mjs",
+    "check:aria": "node scripts/check-aria.mjs",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:live": "playwright test --config=playwright.live.config.ts",
