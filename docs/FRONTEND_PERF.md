@@ -170,6 +170,8 @@ console.log(/vendor-baseui-forms/.test(h) ? 'FAIL: forms preloaded' : 'OK: forms
 - No brotli or zstd: stdlib-only policy; gzip already covers the payloads.
 - No API JSON compression: operator payloads are small; the beacon hot path
   must stay allocation-free. Re-evaluate only with a measured win.
+  Re-checked in batch U (2026-10) — still no measured win, and the static
+  gzip middleware deliberately does not cover `/api` or `/ws`.
 - No precompressed cache at boot: per-request gzip on the operator plane is
   negligible, and the dist is re-embedded on every release anyway.
 - No `Last-Modified`: `embed.FS` has zero modtimes; the ETag carries identity.
@@ -183,3 +185,13 @@ console.log(/vendor-baseui-forms/.test(h) ? 'FAIL: forms preloaded' : 'OK: forms
 - `frontend/e2e/layout.spec.ts` win32 visual baselines were last refreshed
   2026-08-29 and are stale locally; CI enforces the Linux set, which is
   current. Re-baseline win32 separately before trusting local pixel diffs.
+- No `?v=` favicon version stamp (batch U): `favicon.ico` already goes out
+  `no-cache` with the boot-time content-hash ETag, so a stale client
+  revalidates to a 304/0 B; a query stamp would fork the URL without giving
+  the validator anything new to compare.
+- vis-network stays vendored (batch U): `frontend/public/js/vis-network.min.js`
+  (466 KiB) and `.min.css` (215 KiB) are injected on demand by
+  `TopologyGraph.tsx` and guarded by the batch S watchdog/retry. npm-izing
+  them would move the same bytes through the Vite graph and into `/assets/*`
+  without improving caching, while the dynamic fetch is exactly what keeps
+  the renderer off the route chunks. Re-check the pair on upgrades.

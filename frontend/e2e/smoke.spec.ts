@@ -153,3 +153,35 @@ test.describe("page shells boot the SPA", () => {
     });
   }
 });
+
+/**
+ * The generate workspace is the deepest static-export route: the router lazy-
+ * loads GeneratePage, and each tab panel is a second lazy chunk behind its own
+ * import. bootRoute only proves React mounted; this probe pins that the
+ * payload workspace chunk actually renders (the agent-format tablist cannot
+ * exist before the chunk loads) and that tab switching lazy-loads the next
+ * panel into the ?tab= deep link.
+ */
+test.describe("generate workspace (static export)", () => {
+  test("payload panel renders its lazy chunk and tabs switch", async ({ page }) => {
+    // Force the UI language so the assertions can use the en strings.
+    await page.addInitScript(() => localStorage.setItem("forgec2_lang", "en"));
+    await mockAuthedApis(page);
+    const res = await page.goto("/generate.html");
+    expect(res?.ok() || res?.status() === 200).toBeTruthy();
+
+    // The route chunk carries the five workspace tabs.
+    await expect(page.getByRole("tab", { name: "Payload", exact: true })).toBeVisible();
+    // The payload panel is its own chunk: the format picker is a second
+    // tablist, labelled from generate.agents_title.
+    await expect(page.getByRole("tablist", { name: "Agent Binaries" })).toBeVisible();
+
+    // Switching tabs loads the next panel and lands in the deep link.
+    await page.getByRole("tab", { name: "Builds", exact: true }).click();
+    await expect(page).toHaveURL(/tab=builds/);
+    await expect(page.getByRole("tab", { name: "Builds", exact: true })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+});

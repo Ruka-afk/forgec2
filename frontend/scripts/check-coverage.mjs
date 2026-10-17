@@ -10,7 +10,7 @@
 // coverage include list, whether or not any test imports it. That is the only
 // figure that reacts to a large new component shipping with no test at all.
 //
-// It reads low (14.2%) because most uncovered code is not a missed branch
+// It reads low (16.5%) because most uncovered code is not a missed branch
 // inside a tested file — it is page components no test ever imports. A "loaded
 // files only" view looks far healthier (~77%) purely because importing a
 // module executes its top level; json-summary does not distinguish the two, so
@@ -23,12 +23,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Pinned at the measured level: 14.8% statements (8473/56846) at the time of
-// the last raise (the remote-desktop hardening batch: RD hook interval-unit
-// fix, WS-live polling shortcut, and the reset-on-stop path). A new uncovered
-// page or helper drops the figure below the floor, and the check fails with
-// the exact delta.
-const FLOOR = Number(process.env.COVERAGE_FLOOR ?? 14.8);
+// Raised in the batch U review: test additions since the last raise put the
+// measured figure at 16.46% statements (9376/56968). The floor is pinned at
+// 15.5 rather than the measured level on purpose — a large new component
+// shipping without tests still trips it, while the ~1-point headroom absorbs
+// ordinary page work between raises. A new uncovered page or helper drops the
+// figure below the floor, and the check fails with the exact delta.
+const FLOOR = Number(process.env.COVERAGE_FLOOR ?? 15.5);
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "..");
 const summaryPath = join(root, "coverage", "coverage-summary.json");

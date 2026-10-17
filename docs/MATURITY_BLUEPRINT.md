@@ -193,6 +193,18 @@ vis-network 加载失败（`onerror` + 15s 看门狗）给出带重试的回退�
 `PageContainer loadingSkeleton`）。实测关键路径 969→968 kB（`check:bundle`
 1,200 KiB 上限内），总包 3.98 MB / 190 文件。
 
+质量闸与评估审计（2026-10 批次 U）：前端语句覆盖率下限 14.8% → 15.5%（实测
+16.46%，9376/56968；~1 点余量是有意留的——大组件无测试仍会击穿，日常页面迭代
+不被噪音卡住）。Playwright 静态冒烟补 `/generate` 深探：先强制
+`forgec2_lang=en`，断言路由 5 个 tab 与 payload 面板自身的懒加载 chunk（格式选择器
+`Agent Binaries` 是第二层 `TabsContent` 懒导入，chunk 未载入则不存在），再切到
+Builds 验证 `?tab=builds` 深链与 `aria-selected`。三项评估后明确不做并记档于
+`docs/FRONTEND_PERF.md`：`/api` JSON 压缩（复评仍无实测收益，beacon 热路径保持
+零分配）、favicon `?v=` 版本戳（批次 R 的 `no-cache`+启动时内容哈希 ETag 已让
+复验只花一个 304/0 B，查询戳只会把 URL 分叉）、vis-network npm 化（按需 `/js`
+抓取 + 批次 S 看门狗正是把 466 KiB 渲染器与 215 KiB 样式挡在 Vite 依赖图和路由
+chunk 之外的手段）。
+
 ### 2.8 OTA / Lifecycle（`update_signing.go`, `commands_evasion.go`, `agent_lifecycle.go`）
 
 服务端持有 `data/update_signing.key`（路径跟随 `server.data_dir`，私钥不出目录）；
