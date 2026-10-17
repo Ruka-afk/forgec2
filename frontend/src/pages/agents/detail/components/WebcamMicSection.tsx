@@ -11,6 +11,7 @@ import { api, pollTask } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadBlob } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
+import { formatDateTime } from "@/lib/intl";
 import { base64ToBytes } from "./task-collect";
 import CollectCard from "./CollectCard";
 
@@ -60,7 +61,7 @@ export default memo(function WebcamMicSection({ agentId, online }: WebcamMicSect
     try {
       const b64 = (await runCapture(agentId, "webcam", device.trim())).replace(/\s+/g, "");
       if (!b64) throw new Error(t("agents.media_empty"));
-      setShots((prev) => [{ b64, time: new Date().toLocaleString(), device: device.trim() || "default" }, ...prev]);
+      setShots((prev) => [{ b64, time: formatDateTime(), device: device.trim() || "default" }, ...prev]);
       toast.success(t("agents.media_captured"));
     } catch (e) {
       if ((e as Error).name !== "AbortError") {
@@ -81,7 +82,7 @@ export default memo(function WebcamMicSection({ agentId, online }: WebcamMicSect
     try {
       const b64 = (await runCapture(agentId, "mic", param)).replace(/\s+/g, "");
       if (!b64) throw new Error(t("agents.media_empty"));
-      setClips((prev) => [{ b64, time: new Date().toLocaleString(), seconds: secs }, ...prev]);
+      setClips((prev) => [{ b64, time: formatDateTime(), seconds: secs }, ...prev]);
       toast.success(t("agents.media_captured"));
     } catch (e) {
       if ((e as Error).name !== "AbortError") {

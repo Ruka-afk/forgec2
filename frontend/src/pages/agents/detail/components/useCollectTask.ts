@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { collectTaskResult } from "./task-collect";
 
-export interface CollectOptions {
+interface CollectOptions {
   body?: Record<string, string>;
   timeoutMs?: number;
   /** Fallback text when the task completes with empty output. */

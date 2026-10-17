@@ -13,7 +13,7 @@ export type AgentDetailTabId =
   | "collect"
   | "timeline";
 
-export interface AgentDetailTab {
+interface AgentDetailTab {
   id: AgentDetailTabId;
   /** i18n key for the tab label */
   labelKey: string;

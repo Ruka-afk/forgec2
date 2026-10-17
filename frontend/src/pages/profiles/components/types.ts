@@ -91,12 +91,3 @@ export const emptyActiveConfig = (): ActiveMalleableConfig => ({
   prepend: "",
   append: "",
 });
-
-export const emptyMalleableForm = (): MalleableForm => ({
-  enabled: false,
-  status_code: 200,
-  content_type: "application/json",
-  headers_text: "",
-  prepend: "",
-  append: "",
-});

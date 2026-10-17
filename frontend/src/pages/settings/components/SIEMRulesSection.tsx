@@ -206,8 +206,8 @@ export default function SIEMRulesSection() {
               {editing == null ? t("settings.siem.addRule") : t("settings.siem.edit")}
             </h4>
             <div className="flex items-center gap-2">
-              <Label className="text-xs">{t("settings.siem.enabled")}</Label>
-              <Switch checked={form.enabled} onCheckedChange={(v) => set({ enabled: v })} />
+              <Label htmlFor="siem-enabled" className="text-xs">{t("settings.siem.enabled")}</Label>
+              <Switch id="siem-enabled" checked={form.enabled} onCheckedChange={(v) => set({ enabled: v })} />
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

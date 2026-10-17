@@ -11,7 +11,7 @@ import { rebuildPayloadHref } from "@/lib/generate-query";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;
 
-export interface MenuActionDeps {
+interface MenuActionDeps {
   t: TKey;
   navigate: NavigateFunction;
   setSelectedAgentId: (id: string | null) => void;

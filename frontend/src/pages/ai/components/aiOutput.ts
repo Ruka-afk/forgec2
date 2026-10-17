@@ -1,6 +1,6 @@
-export type AIToolOutputStatus = "running" | "success" | "error" | "waiting_approval";
+type AIToolOutputStatus = "running" | "success" | "error" | "waiting_approval";
 
-export interface AIToolOutputView {
+interface AIToolOutputView {
   raw: string;
   formatted: string;
   isJson: boolean;

@@ -10,7 +10,7 @@ export interface WeChatMessage {
 export type WeChatSenderFilter = "all" | "me" | "other";
 export type WeChatSortDirection = "desc" | "asc";
 
-export interface WeChatConversation {
+interface WeChatConversation {
   id: string;
   contact: string;
   contactId: string;
@@ -18,7 +18,7 @@ export interface WeChatConversation {
   latest: string;
 }
 
-export interface WeChatHistoryMeta {
+interface WeChatHistoryMeta {
   messages: WeChatMessage[];
   /** JSON-looking lines that could not be turned into messages. */
   skipped: number;

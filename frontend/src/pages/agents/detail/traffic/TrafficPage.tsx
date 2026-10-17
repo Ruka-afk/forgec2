@@ -4,6 +4,7 @@ import { useParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { formatNumber } from "@/lib/intl";
 
 import { Spinner, PageSpinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -201,8 +202,8 @@ export default function AgentTrafficPage() {
               <Card>
                 <CardContent className="p-4">
                   <div className="text-xs text-muted-foreground mb-1">{t("agents.traffic_baseline_packet")}</div>
-                  <div className="text-2xl font-bold text-foreground">{report.mean_packet_size ? Math.round(report.mean_packet_size).toLocaleString() : "—"}b</div>
-                  <div className="text-xs text-muted-foreground mt-1">{t("agents.traffic_baseline_val", { value: report.baseline_packet_size ? report.baseline_packet_size.toLocaleString() : "—" })}</div>
+                  <div className="text-2xl font-bold text-foreground">{report.mean_packet_size ? formatNumber(Math.round(report.mean_packet_size)) : "—"}b</div>
+                  <div className="text-xs text-muted-foreground mt-1">{t("agents.traffic_baseline_val", { value: report.baseline_packet_size ? formatNumber(report.baseline_packet_size) : "—" })}</div>
                 </CardContent>
               </Card>
             </div>
@@ -269,7 +270,7 @@ export default function AgentTrafficPage() {
                       return (
                         <TableRow key={i}>
                           <TableCell className="text-foreground">{formatTime(rec.time)}</TableCell>
-                          <TableCell className="text-right text-foreground">{rec.size.toLocaleString()}b</TableCell>
+                          <TableCell className="text-right text-foreground">{formatNumber(rec.size)}b</TableCell>
                           <TableCell className="text-right text-foreground">{interval}s</TableCell>
                           <TableCell className="text-center text-muted-foreground">{rec.method} {rec.path}</TableCell>
                         </TableRow>

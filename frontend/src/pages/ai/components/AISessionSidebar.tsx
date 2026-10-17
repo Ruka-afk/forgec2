@@ -1,6 +1,7 @@
 
 import { useMemo, useState } from "react";
 import { useI18n } from "@/lib/i18n";
+import { formatDateOnly, formatTimeOnly } from "@/lib/intl";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,9 +36,9 @@ function formatSessionWhen(iso: string): string {
   if (Number.isNaN(d.getTime())) return "";
   const now = new Date();
   if (d.toDateString() === now.toDateString()) {
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return formatTimeOnly(d, { hour: "2-digit", minute: "2-digit" });
   }
-  return d.toLocaleDateString();
+  return formatDateOnly(d);
 }
 
 export default function AISessionSidebar({ sessions, sessionsLoading = false, sessionsError = null, activeSessionId, onSelect, onDelete, onRename, onNewChat, onPin, onArchive, selectingSessionId, runStatuses = {} }: AISessionSidebarProps) {

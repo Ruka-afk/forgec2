@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { formatTimeOnly } from "@/lib/intl";
 import { normalizeListEnvelope } from "@/lib/envelope";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { POLL } from "@/lib/polling";
@@ -99,7 +100,7 @@ export function PendingAIIntents({ activeSessionId }: { activeSessionId: number 
                 <AlertTriangle className="size-3" /> {intent.risk}
               </Badge>
               <span className="font-mono font-medium">{intent.tool_name}</span>
-              <span className="ml-auto flex items-center gap-1 text-muted-foreground"><Clock className="size-3" />{new Date(intent.created_at).toLocaleTimeString()}</span>
+              <span className="ml-auto flex items-center gap-1 text-muted-foreground"><Clock className="size-3" />{formatTimeOnly(intent.created_at)}</span>
             </div>
             <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-muted/55 p-2 text-xs">{intent.arguments_summary || intent.target_summary}</pre>
             {intent.required_permission && <p className="mt-1 text-xs text-muted-foreground">{t("ai.intent_permission", { permission: intent.required_permission })}</p>}

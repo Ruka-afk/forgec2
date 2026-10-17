@@ -1,4 +1,5 @@
 import { api } from "./api";
+import { SHELL_HISTORY_KEY } from "./shell-ui";
 
 export async function fetchAgentBeaconTiming(agentId: string): Promise<{ interval: number; jitter: number }> {
   try {
@@ -13,12 +14,11 @@ export async function fetchAgentBeaconTiming(agentId: string): Promise<{ interva
   }
 }
 
-const HISTORY_KEY = "forgec2_shell_history";
 const MAX_HISTORY = 100;
 
 export function loadCommandHistory(): string[] {
   try {
-    const raw = localStorage.getItem(HISTORY_KEY);
+    const raw = localStorage.getItem(SHELL_HISTORY_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -29,7 +29,7 @@ export function saveCommandHistory(cmd: string) {
   const hist = loadCommandHistory().filter((c) => c !== cmd);
   hist.unshift(cmd);
   try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(hist.slice(0, MAX_HISTORY)));
+    localStorage.setItem(SHELL_HISTORY_KEY, JSON.stringify(hist.slice(0, MAX_HISTORY)));
   } catch {
     // Storage blocked/quota-exceeded (Safari lockdown, webviews): history is
     // best-effort — never let it break command execution.

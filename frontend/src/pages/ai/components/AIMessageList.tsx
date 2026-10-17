@@ -1,6 +1,7 @@
 
 import { memo, useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/lib/i18n";
+import { formatDateTime, formatNumber, formatTimeOnly } from "@/lib/intl";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -139,9 +140,9 @@ function AssistantOutputMeta({ message }: { message: AIMessage }) {
           {message.run_status === "interrupted" ? t("ai.output_interrupted") : message.run_status === "error" ? t("ai.output_error") : t("ai.output_complete")}
         </span>
       )}
-      {completedAt && !Number.isNaN(completedAt.getTime()) && <time dateTime={message.created_at} title={completedAt.toLocaleString()}>{completedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>}
+      {completedAt && !Number.isNaN(completedAt.getTime()) && <time dateTime={message.created_at} title={formatDateTime(completedAt)}>{formatTimeOnly(completedAt, { hour: "2-digit", minute: "2-digit" })}</time>}
       {duration && <span className="inline-flex items-center gap-1"><Clock3 className="size-3" />{duration}</span>}
-      {tokens > 0 && <span>{tokens.toLocaleString()} {t("ai.output_tokens")}</span>}
+      {tokens > 0 && <span>{formatNumber(tokens)} {t("ai.output_tokens")}</span>}
       {message.truncated && <span className="inline-flex items-center gap-1 text-warning"><CircleAlert className="size-3" />{t("ai.output_truncated")}</span>}
       {citations.length > 0 && (
         <span className="flex basis-full flex-wrap items-center gap-1.5 pt-1">

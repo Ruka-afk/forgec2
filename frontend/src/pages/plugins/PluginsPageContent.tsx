@@ -357,7 +357,7 @@ export default function PluginsPage() {
           <div className="space-y-3 mb-4">
             <label className="text-sm font-medium">{t("plugins.execute_agent") || "Target Agent"}</label>
             <Select value={executeAgentId} onValueChange={(v) => setExecuteAgentId(v ?? "")}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger className="w-full" aria-label={t("plugins.execute_agent") || "Target Agent"}>
                 <SelectValue placeholder={t("plugins.execute_agent_ph") || "Select an agent (optional)"} />
               </SelectTrigger>
               <SelectContent>

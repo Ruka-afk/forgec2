@@ -1,4 +1,4 @@
-export interface HistoryRow {
+interface HistoryRow {
   browser: string;
   time: string;
   visits: string;

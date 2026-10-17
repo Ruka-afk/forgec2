@@ -8,7 +8,7 @@
 
 export type VitalName = "TTFB" | "FCP" | "LCP" | "CLS" | "FID" | "INP";
 
-export type TelemetryEntry =
+type TelemetryEntry =
   | { ts: number; kind: "vital"; name: VitalName; value: number }
   | { ts: number; kind: "error"; source: string; message: string };
 

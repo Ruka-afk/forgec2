@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { DataTable } from "@/components/ui/data-table";
 
 vi.mock("@/lib/i18n", () => ({
+  getLocale: () => "en",
   useI18n: () => ({
     t: (key: string, params?: Record<string, string>) => {
       const map: Record<string, string> = {

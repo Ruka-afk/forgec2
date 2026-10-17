@@ -18,6 +18,7 @@ vi.mock("@/lib/wsContext", () => ({
 }));
 
 vi.mock("@/lib/i18n", () => ({
+  getLocale: () => "en",
   // Stable t(): a fresh function every render would re-create loadData and
   // re-trigger its effect forever.
   useI18n: () => ({ t: tMock }),

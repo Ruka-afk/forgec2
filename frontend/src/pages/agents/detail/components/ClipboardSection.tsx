@@ -7,6 +7,7 @@ import { CopyButton } from "@/components/ui/copy-button";
 import { Clipboard, ClipboardPaste, Send } from "lucide-react";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { formatDateTime } from "@/lib/intl";
 import CollectCard from "./CollectCard";
 import { useCollectTask } from "./useCollectTask";
 
@@ -35,7 +36,7 @@ export default memo(function ClipboardSection({ agentId, online }: ClipboardSect
       errorText: t("agents.clipboard_failed"),
     });
     if (text !== null) {
-      setHistory((prev) => [{ text, time: new Date().toLocaleString() }, ...prev].slice(0, HISTORY_CAP));
+      setHistory((prev) => [{ text, time: formatDateTime(), ...prev }].slice(0, HISTORY_CAP));
     }
   };
 

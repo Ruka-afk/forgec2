@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { AIComposer } from "./AIComposer";
 
 vi.mock("@/lib/i18n", () => ({
+  getLocale: () => "en",
   useI18n: () => ({ t: (key: string) => key }),
 }));
 

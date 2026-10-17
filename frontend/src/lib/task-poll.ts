@@ -14,8 +14,6 @@ export const TASK_SOFT_TIMEOUT_MS = 60_000;
 export const TASK_HARD_TIMEOUT_MS = 600_000;
 export const TASK_HIDDEN_POLL_MS = 10_000;
 
-export type TaskTerminalStatus = "completed" | "failed" | "cancelled";
-
 /** Server-terminal states plus the alias spellings agents/history use. */
 export function isTerminalTaskStatus(status: string): boolean {
   return (

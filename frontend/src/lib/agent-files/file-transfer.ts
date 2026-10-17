@@ -9,7 +9,7 @@ type TFn = (key: string, params?: Record<string, string | number>) => string;
 
 // Must match the server's MaxUploadSize (50MiB): larger files upload fully
 // only to be rejected with 400, so fail fast client-side instead.
-export const MAX_PUSH_BYTES = 50 * 1024 * 1024;
+const MAX_PUSH_BYTES = 50 * 1024 * 1024;
 
 // Upper bound for one push (50MB on a slow link); XHR has no default timeout.
 const UPLOAD_TIMEOUT_MS = 600_000;

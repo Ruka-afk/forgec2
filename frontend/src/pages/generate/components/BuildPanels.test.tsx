@@ -12,6 +12,7 @@ if (typeof window.PointerEvent === "undefined") {
 }
 
 vi.mock("@/lib/i18n", () => ({
+  getLocale: () => "en",
   useI18n: () => ({ t: (key: string) => key }),
 }));
 

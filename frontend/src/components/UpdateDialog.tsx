@@ -17,7 +17,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { AlertTriangle, ArrowUpCircle, RotateCw } from "lucide-react";
 
-export interface UpdateDialogInfo {
+interface UpdateDialogInfo {
   latest: string;
   current?: string;
   downloadUrl?: string;

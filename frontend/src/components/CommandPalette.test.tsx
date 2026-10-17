@@ -11,6 +11,7 @@ vi.mock("react-router-dom", async (importOriginal) => ({
 }));
 
 vi.mock("@/lib/i18n", () => ({
+  getLocale: () => "en",
   useI18n: () => ({
     t: (key: string) => {
       if (key === "palette.placeholder") return "Type to jump…";

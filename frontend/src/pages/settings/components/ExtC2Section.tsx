@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
+import { useMutation } from "@/lib/hooks/useMutation";
 import { formatTime } from "@/lib/utils";
 import { Trash2, RefreshCw, Wifi, WifiOff } from "lucide-react";
 
@@ -34,8 +36,8 @@ export default function ExtC2Section() {
   const [formType, setFormType] = useState<"discord" | "slack" | "telegram">("discord");
   const [botToken, setBotToken] = useState("");
   const [channelId, setChannelId] = useState("");
-  const [saving, setSaving] = useState(false);
   const { confirm, modal } = useConfirm();
+  const { toastError } = useErrorToast();
 
   const fetchChannels = useCallback(async () => {
     setLoadError(null);
@@ -52,36 +54,46 @@ export default function ExtC2Section() {
 
   useEffect(() => { fetchChannels(); }, [fetchChannels]);
 
-  const handleSave = async () => {
-    if (!botToken || !channelId) {
-      toast.error(t("settings.toast.extc2_required"));
-      return;
-    }
-    setSaving(true);
-    try {
+  // Mutations go through the shared hooks: pending state, stale-completion
+  // guarding and error normalization come for free (docs/FRONTEND_CONVENTIONS.md).
+  const { mutate: saveChannel, isPending: saving } = useMutation({
+    fn: async () => {
       const endpoint = formType === "discord" ? paths.extc2.discord : formType === "slack" ? paths.extc2.slack : paths.extc2.telegram;
       const payload = formType === "telegram"
         ? { bot_token: botToken, chat_id: channelId }
         : { bot_token: botToken, channel_id: channelId };
       await api.postJson(endpoint, payload);
+    },
+    onSuccess: () => {
       toast.success(t("settings.toast.extc2_configured", { type: formType.charAt(0).toUpperCase() + formType.slice(1) }));
       setBotToken("");
       setChannelId("");
       setShowForm(false);
       fetchChannels();
-    } catch {
-      toast.error(t("settings.toast.channel_config_failed"));
+    },
+    onError: (e) => toastError(e, "settings.toast.channel_config_failed"),
+  });
+
+  const { mutate: deleteChannel } = useMutation({
+    fn: (id: number) => api.del(paths.extc2.config(id)),
+    onSuccess: () => {
+      toast.success(t("settings.toast.channel_removed"));
+      fetchChannels();
+    },
+    onError: (e) => toastError(e, "settings.toast.channel_remove_failed"),
+  });
+
+  const handleSave = () => {
+    if (!botToken || !channelId) {
+      toast.error(t("settings.toast.extc2_required"));
+      return;
     }
-    setSaving(false);
+    void saveChannel();
   };
 
   const handleDelete = async (id: number) => {
     if (!(await confirm({ message: t("settings.extc2.delete_confirm") }))) return;
-    try {
-      await api.del(paths.extc2.config(id));
-      toast.success(t("settings.toast.channel_removed"));
-      fetchChannels();
-    } catch { /* ignore */ }
+    void deleteChannel(id);
   };
 
   return (

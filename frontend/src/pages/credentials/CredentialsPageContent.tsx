@@ -711,8 +711,8 @@ export default function CredentialsPage() {
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_type")}</Label>
-                <Input value={form.type} disabled />
+                <Label htmlFor="edit-cred-type" className="text-xs text-muted-foreground block mb-1">{t("cred.field_type")}</Label>
+                <Input id="edit-cred-type" value={form.type} disabled />
               </div>
               <div>
                 <Label htmlFor="edit-cred-username" className="text-xs text-muted-foreground block mb-1">{t("cred.field_username")}</Label>

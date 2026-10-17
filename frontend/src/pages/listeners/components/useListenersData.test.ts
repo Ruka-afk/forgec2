@@ -26,6 +26,7 @@ vi.mock("sonner", () => ({
 }));
 
 vi.mock("@/lib/i18n", () => ({
+  getLocale: () => "en",
   useI18n: () => ({ t: tMock }),
 }));
 

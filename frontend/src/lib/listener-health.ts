@@ -73,7 +73,7 @@ export interface HealthSample {
 }
 
 /** Ring-buffer cap so long-lived list pages stay bounded. */
-export const HEALTH_HISTORY_MAX = 48;
+const HEALTH_HISTORY_MAX = 48;
 
 /**
  * Merge one poll tick into the per-listener sample history.

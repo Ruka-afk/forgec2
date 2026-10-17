@@ -19,7 +19,7 @@ export interface ResolutionOption {
   interval: number;
 }
 
-export const INTERVAL_BY_RES: Record<string, number> = {
+const INTERVAL_BY_RES: Record<string, number> = {
   low: 2000,
   medium: 1000,
   high: 500,

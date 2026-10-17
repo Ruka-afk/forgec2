@@ -3,6 +3,7 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import { useConfirm } from "./useConfirm";
 
 vi.mock("@/lib/i18n", () => ({
+  getLocale: () => "en",
   useI18n: () => ({
     t: (key: string) => {
       const map: Record<string, string> = {

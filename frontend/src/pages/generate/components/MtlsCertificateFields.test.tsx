@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { MtlsCertificateFields } from "./MtlsCertificateFields";
 
 vi.mock("@/lib/i18n", () => ({
+  getLocale: () => "en",
   useI18n: () => ({ t: (key: string) => key }),
 }));
 

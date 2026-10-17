@@ -3,9 +3,9 @@ export function canGenerateFromListener(listenerId?: string | null): boolean {
   return Boolean(String(listenerId ?? "").trim());
 }
 
-export type TransportFamily = "http" | "tcp" | "dns" | "icmp" | "udp" | "quic" | "other";
+type TransportFamily = "http" | "tcp" | "dns" | "icmp" | "udp" | "quic" | "other";
 
-export function transportFamily(schemeOrTransport: string): TransportFamily {
+function transportFamily(schemeOrTransport: string): TransportFamily {
   const s = (schemeOrTransport || "").toLowerCase().replace(/:$/, "");
   if (["http", "https", "h2c", "wss", "ws", "grpc", "grpcs", "mtls"].includes(s)) return "http";
   if (s === "tcp" || s === "tls") return "tcp";
@@ -58,7 +58,7 @@ export function composeC2URL(opts: {
   return fo ? `${url},${fo}` : url;
 }
 
-export function failoverHasTransport(failover: string, transport: string): boolean {
+function failoverHasTransport(failover: string, transport: string): boolean {
   const family = transportFamily(transport);
   if (family === "other") return false;
   for (const part of failover.split(",")) {

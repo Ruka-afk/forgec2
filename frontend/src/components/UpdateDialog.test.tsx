@@ -12,6 +12,7 @@ vi.mock("@/lib/wsContext", () => ({
 }));
 
 vi.mock("@/lib/i18n", () => ({
+  getLocale: () => "en",
   useI18n: () => ({ t: (key: string, params?: Record<string, unknown>) => {
     if (params && typeof params === "object") {
       let s: string = key;

@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { formatDateTime, formatTimeOnly } from "./intl"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -9,12 +10,12 @@ export function formatTime(iso?: string | null): string {
   if (!iso) return '—'
   const d = new Date(iso)
   if (isNaN(d.getTime())) return '—'
-  return d.toLocaleString()
+  return formatDateTime(d)
 }
 
 /** Local wall-clock time for "last update" indicators. */
 export function nowTime(): string {
-  return new Date().toLocaleTimeString()
+  return formatTimeOnly()
 }
 
 /** Format a byte count (numbers or numeric strings). null/undefined/"" -> "-",

@@ -428,9 +428,9 @@ export const paths = {
     killchain: (id: string) => `/campaigns/${id}/killchain`,
   },
   // Operator chat. These three routes are registered in routes_extended.go
-  // (GET /chat/history, GET /chat/channels, POST /chat/send); the group was
-  // missing here while pages/chat/ChatPage.tsx and api-paths.test.ts already
-  // referenced it, so the committed tree failed `tsc --noEmit`.
+  // (GET /chat/history, GET /chat/channels, POST /chat/send); the standalone
+  // chat page is gone (the AI workspace owns chat now), but the paths stay for
+  // api-paths.test.ts and for any future consumer of the still-live routes.
   chat: {
     history: (channel: string) => `/chat/history?channel=${encodeURIComponent(channel)}`,
     channels: "/chat/channels",

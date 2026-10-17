@@ -1,6 +1,7 @@
 
 import { useState } from "react";
 import { useI18n } from "@/lib/i18n";
+import { formatNumber } from "@/lib/intl";
 import { Spinner } from "@/components/ui/spinner";
 import { Card } from "@/components/ui/card";
 import { IconBadge } from "@/components/ui/icon-badge";
@@ -130,7 +131,7 @@ export function PluginCard({ plugin, actionState, onInstall, onUninstall, onDele
         <span className="text-(--fs-micro-sm) text-muted-foreground ml-1">{(hoverRating || rating).toFixed(1)}</span>
         <Button variant="ghost" size="xs" onClick={onReviews} className="text-(--fs-micro-sm) text-primary ml-1 hover:underline">{t("plugins.reviews")}</Button>
       </div>
-      <div className="text-(--fs-micro-sm) text-muted-foreground mb-3">{downloads.toLocaleString()} {t("plugins.downloads")}</div>
+      <div className="text-(--fs-micro-sm) text-muted-foreground mb-3">{formatNumber(downloads)} {t("plugins.downloads")}</div>
 
       {deps.length > 0 && (
         <div className="mb-3 text-(--fs-micro-sm) text-muted-foreground">
@@ -296,7 +297,7 @@ export function PluginDetailModal({ plugin, open, onOpenChange }: {
               ))}
               <span className="text-xs text-muted-foreground ml-1">{rating.toFixed(1)}</span>
             </div>
-            <span className="text-xs text-muted-foreground"><Download className="size-4" />{downloads.toLocaleString()} {t("plugins.downloads")}</span>
+            <span className="text-xs text-muted-foreground"><Download className="size-4" />{formatNumber(downloads)} {t("plugins.downloads")}</span>
             <span className="text-xs text-muted-foreground"><Clock className="size-4" />{t("plugins.updated")}: {lastUpdated}</span>
           </div>
 

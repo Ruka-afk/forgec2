@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { DASHBOARD_RANGES } from "@/lib/shortcuts";
 import { useUrlState } from "@/lib/hooks/useUrlState";
 import { useAppStore } from "@/lib/store";
-import { useShallow } from "zustand/shallow";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageToolbar } from "@/components/ui/page-toolbar";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +17,7 @@ export default function DashboardPage() {
   const [view, setView] = useUrlState<DashboardView>("view", "ops", DASHBOARD_VIEWS);
   const [timeRange, setTimeRange] = useUrlState("range", "24h", DASHBOARD_RANGES);
   const { t } = useI18n();
-  const stats = useAppStore(useShallow((s) => s.stats));
+  const stats = useAppStore((s) => s.stats);
   const statsError = useAppStore((s) => s.statsError);
   const fetchStats = useAppStore((s) => s.fetchStats);
 

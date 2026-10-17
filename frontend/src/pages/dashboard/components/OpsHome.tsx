@@ -2,7 +2,6 @@
 import { Link } from "react-router-dom";
 import { memo, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
-import { useShallow } from "zustand/shallow";
 import { useI18n } from "@/lib/i18n";
 import { timeAgo } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
@@ -250,7 +249,7 @@ const DashboardStatTiles = memo(function DashboardStatTiles({ loading, healthUnk
   total: number;
 }) {
   const { t } = useI18n();
-  const stats = useAppStore(useShallow((s) => s.stats));
+  const stats = useAppStore((s) => s.stats);
   const s: Partial<DashboardStats> = stats ?? {};
   const pending = s.pending_tasks ?? 0;
   const failed = s.failed_tasks ?? 0;

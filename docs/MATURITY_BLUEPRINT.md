@@ -174,6 +174,25 @@ vis-network 加载失败（`onerror` + 15s 看门狗）给出带重试的回退�
 337,266 B；裁判 `npm run check:bundle` + `out/index.html` 不含 `vendor-baseui-forms`，
 度量与复现命令见 `docs/FRONTEND_PERF.md`。
 
+代码与格式化契约（2026-10 批次 T）：死代码清理把 `audit:unused-exports` 判到零
+（28 个文件 → 0）——`pages/chat/ChatPage.tsx` 及其 14+14 个 `chat.*` 键删除（`/chat`
+重定向与 staticExport 条目保留，`paths.chat` 留待 `api-paths.test.ts` 与路由消费者），
+6 个纯内部定义为删（`isLiveProcessTree`、`resolvedGenerateFormat`、
+`TaskTerminalStatus`、`clearNewAISessionDraft`、`emptyMalleableForm`、`EVENT_COLORS`），
+`lib/shell.ts` 改为 import `SHELL_HISTORY_KEY`（同存储键单一真源），其余 29 个仅文件内
+使用的导出收回 `export`。日期/数字统一经 `lib/intl.ts`（`formatDateTime` /
+`formatDateOnly` / `formatTimeOnly` / `formatNumber`）按 UI 语言（i18n 的
+`getLocale()`，provider 内同步维护）而非浏览器默认格式化，10 处裸 `toLocale*` 迁完
+（无效输入退化为 `-`）；`lib/utils.ts` 的 `formatTime`/`nowTime` 收口到同一实现，
+16 个 `@/lib/i18n` 部分 mock 补 `getLocale` 防回归。`TableHead` 默认 `scope="col"`；
+抽查修掉 3 处真实 a11y 缺口（凭据类型输入、SIEM 启停开关、插件执行目标 Select），
+其余候选已有 `aria-label` 命名。3 处冗余 `useShallow` 移除（选择器返回存储引用时
+`Object.is` 足够）；`ExtC2Section` 迁移为 `useMutation` + `useErrorToast` 范式样本
+（新键 `settings.toast.channel_remove_failed`，删除失败不再静默），约定沉淀在
+`docs/FRONTEND_CONVENTIONS.md`；RolesPage 骨架屏试点（布局匹配的卡片行，
+`PageContainer loadingSkeleton`）。实测关键路径 969→968 kB（`check:bundle`
+1,200 KiB 上限内），总包 3.98 MB / 190 文件。
+
 ### 2.8 OTA / Lifecycle（`update_signing.go`, `commands_evasion.go`, `agent_lifecycle.go`）
 
 服务端持有 `data/update_signing.key`（路径跟随 `server.data_dir`，私钥不出目录）；

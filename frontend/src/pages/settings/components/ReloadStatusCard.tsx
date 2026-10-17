@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { formatDateTime } from "@/lib/intl";
 import { Card } from "@/components/ui/card";
 import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Badge } from "@/components/ui/badge";
@@ -74,7 +75,7 @@ export default function ReloadStatusCard() {
             </div>
             {last ? (
               <div className="rounded-lg border border-border/60 bg-muted/30 p-3 text-xs space-y-1.5">
-                <div className="text-muted-foreground">{t("settings.reload_last_at", { at: new Date(last.at).toLocaleString() })}</div>
+                <div className="text-muted-foreground">{t("settings.reload_last_at", { at: formatDateTime(last.at) })}</div>
                 {(last.applied?.length ?? 0) > 0 && (
                   <div><span className="font-medium text-success">{t("settings.reload_applied")}: </span>
                     <span className="font-mono text-muted-foreground">{last.applied!.join(", ")}</span></div>

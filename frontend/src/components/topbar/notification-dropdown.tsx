@@ -5,7 +5,7 @@ import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { nowTime } from "@/lib/utils";
+import { formatTime, nowTime } from "@/lib/utils";
 import { useAppStore } from "@/lib/store";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
@@ -28,8 +28,8 @@ let notifSeq = 1;
 
 function formatNotifTime(raw: string): string {
   const d = new Date(raw);
-  if (raw && !isNaN(d.getTime())) return d.toLocaleString();
-  return raw || new Date().toLocaleTimeString();
+  if (raw && !isNaN(d.getTime())) return formatTime(raw);
+  return raw || nowTime();
 }
 
 export function NotificationDropdown() {

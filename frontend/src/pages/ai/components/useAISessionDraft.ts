@@ -23,7 +23,3 @@ export function useAISessionDraft(sessionId: number | null, input: string) {
 export function readNewAISessionDraft(): string {
   try { return window.sessionStorage.getItem(NEW_DRAFT_KEY) || ""; } catch { return ""; }
 }
-
-export function clearNewAISessionDraft() {
-  try { window.sessionStorage.removeItem(NEW_DRAFT_KEY); } catch { /* optional browser storage */ }
-}

@@ -27,7 +27,7 @@ function parseFrame(frame: string): ParsedSSEEvent | null {
 	return parsed;
 }
 
-export const SSE_MAX_BUFFER_BYTES = 2 * 1024 * 1024;
+const SSE_MAX_BUFFER_BYTES = 2 * 1024 * 1024;
 
 /**
  * Parses only complete SSE frames and returns the unfinished suffix. This is

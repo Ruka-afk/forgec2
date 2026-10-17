@@ -1,4 +1,4 @@
-import { defaultPayloadFormat, isPayloadFormat, type PayloadFormat } from "./generate-format";
+import { isPayloadFormat, type PayloadFormat } from "./generate-format";
 
 export function formatFromOs(os?: string | null): PayloadFormat | undefined {
   switch ((os || "").toLowerCase()) {
@@ -17,7 +17,7 @@ export function formatFromOs(os?: string | null): PayloadFormat | undefined {
   }
 }
 
-export interface GenerateQuery {
+interface GenerateQuery {
   listenerId?: string;
   format?: PayloadFormat;
   os?: string;
@@ -59,8 +59,4 @@ export function rebuildPayloadHref(agent: {
   if (format) params.set("format", format);
   const q = params.toString();
   return q ? `/generate?${q}` : "/generate";
-}
-
-export function resolvedGenerateFormat(search: string, fallback?: string | null): PayloadFormat {
-  return parseGenerateQuery(search).format || defaultPayloadFormat(fallback);
 }

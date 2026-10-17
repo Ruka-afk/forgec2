@@ -66,7 +66,7 @@ function frameDataUrl(value: string, mime = "image/png") {
   return `data:${detectedMime};base64,${value}`;
 }
 
-export interface ScreenMonitorOpts {
+interface ScreenMonitorOpts {
   interval: number;
   quality: ScreenQuality;
   autoRefresh: boolean;

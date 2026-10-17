@@ -1,5 +1,5 @@
 export type AITraceStage = "analyzing" | "reasoning" | "tool" | "synthesizing" | "answering";
-export type AITraceStepStatus = "active" | "complete" | "error";
+type AITraceStepStatus = "active" | "complete" | "error";
 export type AITraceStatus = "running" | "complete" | "error";
 export const AI_TRACE_TOOL_NAME = "__ai_trace__";
 export const AI_REGENERATE_TOOL_NAME = "__ai_regenerate__";

@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { PageSpinner } from "@/components/ui/spinner";
+import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DataError } from "@/components/ui/data-state";
 import { ErrorState } from "@/components/ui/error-state";
@@ -110,7 +110,15 @@ export default function RolesPage() {
     return perms.includes(perm) ? perms.filter(p => p !== perm) : [...perms, perm];
   };
 
-  if (loading) return <PageContainer title={t("roles.title")} icon={<ShieldUser className="size-4" />} subtitle={t("roles.subtitle")}><PageSpinner /></PageContainer>;
+  if (loading) return (
+    <PageContainer
+      title={t("roles.title")}
+      icon={<ShieldUser className="size-4" />}
+      subtitle={t("roles.subtitle")}
+      loading
+      loadingSkeleton={<RolesLoadingSkeleton />}
+    />
+  );
 
   return (
     <Permission perms="roles.read" fallback={
@@ -196,6 +204,33 @@ export default function RolesPage() {
       </PageContainer>
       {modal}
     </Permission>
+  );
+}
+
+/** Layout-matched loading state (batch T pilot): card rows, not a centered spinner. */
+function RolesLoadingSkeleton() {
+  return (
+    <div className="grid gap-4" aria-busy="true">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <Card key={i} className="p-4">
+          <div className="flex items-start justify-between">
+            <div className="space-y-2">
+              <Skeleton className="h-5 w-36" />
+              <Skeleton className="h-4 w-64" />
+            </div>
+            <div className="flex gap-2">
+              <Skeleton className="size-8 rounded-md" />
+              <Skeleton className="size-8 rounded-md" />
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-1">
+            <Skeleton className="h-5 w-20 rounded-full" />
+            <Skeleton className="h-5 w-24 rounded-full" />
+            <Skeleton className="h-5 w-16 rounded-full" />
+          </div>
+        </Card>
+      ))}
+    </div>
   );
 }
 

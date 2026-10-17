@@ -5,7 +5,7 @@ import { normalizeListEnvelope } from "@/lib/envelope";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { POLL } from "@/lib/polling";
 
-export type AIRunStatus = "queued" | "running" | "waiting_approval" | "completed" | "failed" | "cancelled" | string;
+type AIRunStatus = "queued" | "running" | "waiting_approval" | "completed" | "failed" | "cancelled" | string;
 
 type ActiveRun = { session_id: number; status: AIRunStatus };
 

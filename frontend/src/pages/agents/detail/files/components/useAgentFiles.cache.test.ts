@@ -10,6 +10,7 @@ vi.mock("@/lib/agent-files/file-transfer", () => ({
 
 const { stableT } = vi.hoisted(() => ({ stableT: (k: string) => k }));
 vi.mock("@/lib/i18n", () => ({
+  getLocale: () => "en",
   useI18n: () => ({ t: stableT, lang: "en", setLang: vi.fn() }),
 }));
 

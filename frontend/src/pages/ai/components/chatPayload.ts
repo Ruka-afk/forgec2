@@ -7,12 +7,12 @@ export const AI_INPUT_MAX_CHARS = 16_000;
 export const AI_CONTEXT_MAX_CHARS = 48_000;
 const AI_CONTEXT_MAX_TURNS = 120;
 
-export interface ChatTurn {
+interface ChatTurn {
   role: "user" | "assistant";
   content: string;
 }
 
-export interface PersistedChatMessage {
+interface PersistedChatMessage {
   role: "user" | "assistant" | "tool";
   content: string;
   tool_name: string;

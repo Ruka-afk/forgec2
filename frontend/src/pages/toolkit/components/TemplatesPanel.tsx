@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { FileCode2, Pencil, Play, Plus, Trash2 } from "lucide-react";
 
-export interface CommandTemplate {
+interface CommandTemplate {
   id: number;
   name: string;
   category: string;

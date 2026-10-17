@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo, type ReactNode } from "react";
 import { en } from "./en";
 
-type Locale = "en" | "zh";
+export type Locale = "en" | "zh";
 
 interface I18nContextType {
   locale: Locale;
@@ -24,6 +24,15 @@ type Dict = Record<string, string>;
 const enDict: Dict = en;
 const zhRef: { current: Dict | null } = { current: null };
 let zhPromise: Promise<Dict> | null = null;
+
+// Mirror of the active locale for non-React formatters (`lib/intl.ts`),
+// updated wherever the provider commits a language change below.
+let activeLocale: Locale = "en";
+
+/** UI language for code that formats text outside the React tree. */
+export function getLocale(): Locale {
+  return activeLocale;
+}
 
 // G4 fix: on chunk load failure, reset the cached rejected promise so the
 // user can retry by switching language again (rather than being stuck).
@@ -53,10 +62,12 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       loadZh().then(() => {
         if (pendingRef.current !== "zh") return;
         localeRef.current = "zh";
+        activeLocale = "zh";
         setLocaleState("zh");
       });
     } else if (saved === "en") {
       localeRef.current = "en";
+      activeLocale = "en";
       setLocaleState("en");
     }
   }, []);
@@ -72,10 +83,12 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       loadZh().then(() => {
         if (pendingRef.current !== "zh") return;
         localeRef.current = "zh";
+        activeLocale = "zh";
         setLocaleState("zh");
       });
     } else {
       localeRef.current = "en";
+      activeLocale = "en";
       setLocaleState("en");
     }
     localStorage.setItem("forgec2_lang", newLocale);

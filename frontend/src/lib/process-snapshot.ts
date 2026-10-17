@@ -1,7 +1,7 @@
 /** GET /api/agents/:id/process-tree returns the last completed `ps` blob, not a live tree. */
-export const PROCESS_SNAPSHOT_KIND = "last_ps_snapshot";
+const PROCESS_SNAPSHOT_KIND = "last_ps_snapshot";
 
-export interface PsRow {
+interface PsRow {
   pid: string;
   name: string;
   raw: string;
@@ -30,13 +30,6 @@ export function parsePsRows(text: string, cap = 200): PsRow[] {
     rows.push({ pid: tokens[pidIdx], name, raw: rawLine });
   }
   return rows;
-}
-
-export function isLiveProcessTree(payload: {
-  live?: unknown;
-  kind?: unknown;
-}): boolean {
-  return payload.live === true && String(payload.kind || "") !== PROCESS_SNAPSHOT_KIND;
 }
 
 export function describeProcessSnapshot(payload: Record<string, unknown> | null | undefined): {

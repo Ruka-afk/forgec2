@@ -8,7 +8,7 @@ import type { Beacon, BulkResult } from "./types";
 type TKey = (key: string, params?: Record<string, string | number>) => string;
 type ConfirmState = { type: "kill" | "delete" | "uninstall" | "batch-delete" | "bulk-kill" | "bulk-uninstall"; id?: string; hostname?: string } | null;
 
-export interface BulkOpsDeps {
+interface BulkOpsDeps {
   t: TKey;
   selected: Set<string>;
   setSelected: (next: Set<string>) => void;
