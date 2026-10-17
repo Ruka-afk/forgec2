@@ -209,6 +209,9 @@ func buildAgentBinaryDLL(goCmd, workDir, ldflags, outPath string, obfuscate bool
 	}
 
 	buildArgs := []string{"build", "-buildmode=c-shared"}
+	if tags := wintunBuildTags(goos, goarch, workDir); len(tags) > 0 {
+		buildArgs = append(buildArgs, "-tags", strings.Join(tags, ","))
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), buildTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, goCmd, append(buildArgs,

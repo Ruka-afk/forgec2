@@ -31,6 +31,7 @@ require (
 	golang.org/x/sync v0.23.0
 	golang.org/x/sys v0.48.0
 	golang.org/x/text v0.42.0
+	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2
 	google.golang.org/grpc v1.83.2
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1

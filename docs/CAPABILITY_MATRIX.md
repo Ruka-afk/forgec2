@@ -39,7 +39,7 @@
 | set_sleep / config_push / profile_rotate | Yes | Yes | Yes | Core |
 | process_tree | Yes (PPID tree) | Yes (/proc) | Yes (ps -axo) | Core |
 | socks / rportfwd | Yes | Limited | Limited | Hardened |
-| tun_start / tun_stop | Stub | Yes (/dev/net/tun) | Stub | Linux TUN + teamserver UDP helper; Windows needs Wintun (not bundled) |
+| tun_start / tun_stop | Yes (bundled Wintun; needs admin) | Yes (/dev/net/tun) | Stub | Linux TUN + teamserver UDP helper; Windows ships the signed Wintun runtime — adapter creation needs an elevated implant |
 
 ## Credentials & AD (Windows primary)
 

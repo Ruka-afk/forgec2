@@ -28,6 +28,10 @@ func win7Pins() []string {
 		// while an explicit pin trips the slim no-quic gate.
 		"\tgithub.com/Microsoft/go-winio v0.6.1",
 		"\tmodernc.org/sqlite v1.21.0",
+		// Windows TUN compiles only when the Wintun runtime has been staged
+		// (scripts/fetch-wintun.*) and the build carries -tags wintun; the
+		// pin keeps that build deterministic under go1.20 (module go 1.17).
+		"\tgolang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2",
 		"\tmodernc.org/libc v1.22.3",
 		"\tmodernc.org/mathutil v1.5.0",
 		"\tmodernc.org/memory v1.5.0",
@@ -132,6 +136,10 @@ func buildGoMod(goos string, isDLL bool, slim bool, win7 bool) string {
 	deps := []string{}
 	deps = append(deps, "\tgolang.org/x/sys v0.46.0")
 	deps = append(deps, "\tgolang.org/x/crypto v0.53.0")
+	// Windows TUN support compiles only with the staged Wintun runtime and
+	// -tags wintun (see wintunBuildTags); tie the version here so `go mod
+	// tidy` in the temp build module cannot drift it across generations.
+	deps = append(deps, "\tgolang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2")
 
 	if !isDLL && !slim {
 		deps = append(deps, "\tgolang.org/x/net v0.56.0")

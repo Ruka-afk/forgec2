@@ -15,10 +15,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// tunEngine pairs a Linux implant TUN with a teamserver UDP helper.
-// Each UDP datagram on 127.0.0.1:port is one IP packet framed as tun_data
-// over the beacon SOCKS channel. Windows/macOS implants return an honest
-// error (Wintun is not bundled). The teamserver does not open a TAP.
+// tunEngine pairs an implant TUN with a teamserver UDP helper. Each UDP
+// datagram on 127.0.0.1:port is one IP packet framed as tun_data over the
+// beacon SOCKS channel. Linux uses /dev/net/tun; Windows uses the bundled
+// signed Wintun runtime (adapter creation needs an elevated implant); macOS
+// implants return an honest error. The teamserver does not open a TAP.
 
 type tunEngine struct {
 	mu       sync.Mutex
@@ -410,7 +411,7 @@ func (s *Server) handleTunStart(c *gin.Context) {
 		"cidr":     cidr,
 		"udp_host": "127.0.0.1",
 		"udp_port": actual,
-		"note":     "Linux implant opens /dev/net/tun; each UDP datagram on 127.0.0.1 is one IP packet. Windows/macOS implants return an honest error (Wintun is not bundled).",
+		"note":     "Linux implant opens /dev/net/tun; Windows implants use the bundled signed Wintun runtime (adapter creation needs an elevated implant). Each UDP datagram on 127.0.0.1 is one IP packet. macOS implants return an honest error.",
 	})
 }
 

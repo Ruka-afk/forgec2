@@ -1,1 +1,0 @@
-import{F as r,ah as e,M as o,ai as c}from"./index-C0dgfc9d.js";function t(){const n=r(s=>s.currentPermissions),a=r(s=>s.currentUserRole);return{permissions:n,role:a,can:s=>c(n,s),canAny:s=>o(n,s),canAll:s=>e(n,s)}}export{t as u};

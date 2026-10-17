@@ -281,6 +281,11 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
       - run: go mod download
+      - name: Stage Wintun runtimes (Windows TUN embed)
+        # The generator adds the wintun build tag only when the per-arch
+        # runtime is staged in the source tree; fetching here keeps the smoke
+        # build on the real tagged path (URL + SHA256 pinned in the script).
+        run: bash scripts/fetch-wintun.sh
       - name: Real agent builds (windows amd64/386 + linux ELF + token stagers)
         # Everything in the supporting `for` loops is fast (~10s each). The
         # garble obfuscated path stays manual (needs $GOPATH/bin + takes ~3min).
@@ -295,6 +300,15 @@ jobs:
         run: |
           GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -o "$RUNNER_TEMP/agent-darwin" ./internal/payload/agent/
           GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o "$RUNNER_TEMP/agent-darwin-arm64" ./internal/payload/agent/
+      - name: Cross-compile agent for windows (stub + tagged Wintun)
+        # Untagged: tun_stub.go path (no runtime bundled). Tagged amd64/arm64:
+        # the per-arch //go:embed paths after the fetch step above. Tagged 386:
+        # tun_wintun_unsupported.go keeps the honest no-runtime build compiling.
+        run: |
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o "$RUNNER_TEMP/agent-windows-stub.exe" ./internal/payload/agent/
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags wintun -o "$RUNNER_TEMP/agent-windows-amd64-wintun.exe" ./internal/payload/agent/
+          GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -tags wintun -o "$RUNNER_TEMP/agent-windows-arm64-wintun.exe" ./internal/payload/agent/
+          GOOS=windows GOARCH=386 CGO_ENABLED=0 go build -tags wintun -o "$RUNNER_TEMP/agent-windows-386-wintun.exe" ./internal/payload/agent/
 
   # Operator-path runtime gate for the primary (Go) implant: a throwaway server
   # builds a real Linux agent through the generate API, the agent registers,

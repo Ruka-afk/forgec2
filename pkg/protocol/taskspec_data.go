@@ -257,7 +257,7 @@ func init() {
 		{Type: TaskTypeSSHTunnel, Name: "SSH Tunnel", Description: "Create SSH tunnel", Category: "c2"},
 		{Type: TaskTypeSCPUpload, Name: "SCP Upload", Description: "Upload file via SCP", Category: "execution"},
 		{Type: TaskTypeCloudSteal, Name: "Cloud Token Theft", Description: "Steal cloud access tokens", Category: "credential-access"},
-		{Type: TaskTypeTunStart, Name: "TUN Start", Description: "Open a Linux TUN and frame IP packets over the beacon (needs /dev/net/tun). Pair with teamserver UDP helper.", Category: "c2",
+		{Type: TaskTypeTunStart, Name: "TUN Start", Description: "Open a TUN and frame IP packets over the beacon (Linux /dev/net/tun; Windows uses the bundled Wintun runtime and needs an elevated implant for adapter creation). Pair with teamserver UDP helper.", Category: "c2",
 			Parameters: []TaskParam{{Name: "command", Type: "string", Required: false, Description: "CIDR (default 10.66.0.2/24)"}}},
 		{Type: TaskTypeTunStop, Name: "TUN Stop", Description: "Stop the agent TUN interface", Category: "c2"},
 		{Type: TaskTypeSccmRecon, Name: "SCCM Recon", Description: "Enumerate SCCM/MECM client config (registry + WMI). Windows only, discovery only.", Category: "discovery"},

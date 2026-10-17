@@ -244,7 +244,7 @@
 | `set_working_hours` | Set Working Hours | no | — | — | Set agent working hours |
 | `socks` | SOCKS Proxy | no | — | command:string* | Start a SOCKS proxy through agent |
 | `ssh_tunnel` | SSH Tunnel | no | — | — | Create SSH tunnel |
-| `tun_start` | TUN Start | no | — | command:string | Open a Linux TUN and frame IP packets over the beacon (needs /dev/net/tun). Pair with teamserver UDP helper. |
+| `tun_start` | TUN Start | no | — | command:string | Open a TUN and frame IP packets over the beacon (Linux /dev/net/tun; Windows uses the bundled Wintun runtime and needs an elevated implant for adapter creation). Pair with teamserver UDP helper. |
 | `tun_stop` | TUN Stop | no | — | — | Stop the agent TUN interface |
 | `tunnel_add_route` | Tunnel Add Route | no | — | — | Add tunnel route |
 | `tunnel_remove_route` | Tunnel Remove Route | no | — | — | Remove tunnel route |

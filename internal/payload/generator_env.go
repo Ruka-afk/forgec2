@@ -223,13 +223,18 @@ func buildAgentBinary(goCmd, workDir, ldflags, outPath string, obfuscate bool, g
 	if err := writeConfigInjectFile(workDir, configBlob, sConfigKey); err != nil {
 		return fmt.Errorf("write config inject file: %w", err)
 	}
+	tags := wintunBuildTags(goos, goarch, workDir)
 	if obfuscate {
 		garblePath := getGarbleCmd()
 		if garblePath == "" {
 			return fmt.Errorf("obfuscation requested but garble is not installed: install it with `go install mvdan.cc/garble@latest`")
 		}
 		args := append([]string{"-literals", "-tiny", "-seed=random", "build"},
-			"-ldflags", ldflags, "-o", outPath, "-trimpath", "-buildvcs=false", ".")
+			"-ldflags", ldflags, "-o", outPath, "-trimpath", "-buildvcs=false")
+		if len(tags) > 0 {
+			args = append(args, "-tags", strings.Join(tags, ","))
+		}
+		args = append(args, ".")
 		cmd := exec.CommandContext(ctx, garblePath, args...)
 		cmd.Dir = workDir
 		cmd.Env = goModuleEnv("GOOS="+goos, "GOARCH="+goarch, "CGO_ENABLED=0")
@@ -243,13 +248,17 @@ func buildAgentBinary(goCmd, workDir, ldflags, outPath string, obfuscate bool, g
 		}
 		return nil
 	}
-	cmd := exec.CommandContext(ctx, goCmd, append([]string{"build"},
+	buildArgs := []string{"build",
 		"-ldflags", ldflags,
 		"-o", outPath,
 		"-trimpath",
 		"-buildvcs=false",
-		".",
-	)...)
+	}
+	if len(tags) > 0 {
+		buildArgs = append(buildArgs, "-tags", strings.Join(tags, ","))
+	}
+	buildArgs = append(buildArgs, ".")
+	cmd := exec.CommandContext(ctx, goCmd, buildArgs...)
 	cmd.Dir = workDir
 	cmd.Env = goToolchainEnv(win7, "GOOS="+goos, "GOARCH="+goarch, "CGO_ENABLED=0")
 	var stderr bytes.Buffer
@@ -287,8 +296,9 @@ func scrubBuildLog(output, ldflags string) string {
 	return output
 }
 
-// extractAgentSources writes ALL Go agent source files from the embedded FS
-// into the temp build directory. This enables cross-platform builds (windows/linux).
+// extractAgentSources writes ALL Go agent source files (plus any non-Go
+// assets, currently the optional Wintun runtimes) from the embedded FS into
+// the temp build directory. This enables cross-platform builds (windows/linux).
 // When slim is set (light profile), the grpc/quic/wss transports are excluded
 // and replaced by stubs (see slimTransportStubs), cutting ~30% off the binary.
 func extractAgentSources(efs embed.FS, dir string, slim bool) error {
@@ -325,6 +335,11 @@ func extractAgentSources(efs embed.FS, dir string, slim bool) error {
 	}
 	if !hasAgentGo {
 		return fmt.Errorf("embedded agent directory missing agent.go")
+	}
+	// Non-Go agent assets (the optional Wintun runtimes) are copied verbatim
+	// so tagged windows builds can embed the DLL for their target arch.
+	if err := extractAgentAssets(efs, dir); err != nil {
+		return err
 	}
 	if slim {
 		if err := os.WriteFile(filepath.Join(dir, "transport_slim_stubs.go"), []byte(slimTransportStubs), 0600); err != nil {

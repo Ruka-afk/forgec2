@@ -106,6 +106,10 @@ frontend/*.err
 frontend/*.tsbuildinfo
 frontend/.next-build-output.txt
 
+# Wintun runtimes staged by scripts/fetch-wintun.{ps1,sh} (third-party signed
+# binaries, fetched on demand; embedded into Windows implants at build time)
+/internal/payload/agent/assets/
+
 # Local dev clutter (binary artifacts + scratch patches, never committed)
 /.gomodcache/
 /coverage
