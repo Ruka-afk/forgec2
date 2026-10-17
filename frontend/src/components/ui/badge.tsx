@@ -13,18 +13,18 @@ const badgeVariants = cva(
         secondary:
           "bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80",
         destructive:
-          "bg-destructive/10 text-destructive focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:focus-visible:ring-destructive/40 [a]:hover:bg-destructive/20",
+          "bg-destructive/10 text-destructive-ink focus-visible:ring-destructive/20 dark:bg-destructive/10 dark:focus-visible:ring-destructive/40 [a]:hover:bg-destructive/20 dark:[a]:hover:bg-destructive/15",
         outline:
           "border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
         ghost:
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",
         warning:
-          "bg-warning/15 text-warning-foreground border-transparent dark:bg-warning/20 dark:text-warning-foreground",
+          "bg-warning/15 text-warning-ink border-transparent [a]:hover:bg-warning/20 dark:bg-warning/10 dark:[a]:hover:bg-warning/20",
         success:
-          "bg-success/15 text-success-foreground border-transparent [a]:hover:bg-success/25 dark:bg-success/20 dark:text-success dark:[a]:hover:bg-success/30",
+          "bg-success/15 text-success-ink border-transparent [a]:hover:bg-success/20 dark:bg-success/10 dark:[a]:hover:bg-success/20",
         info:
-          "bg-info/15 text-info-foreground border-transparent [a]:hover:bg-info/25 dark:bg-info/20 dark:text-info dark:[a]:hover:bg-info/30",
+          "bg-info/15 text-info-ink border-transparent [a]:hover:bg-info/20 dark:bg-info/10 dark:[a]:hover:bg-info/20",
       },
     },
     defaultVariants: {

@@ -46,7 +46,7 @@
   --card-foreground: oklch(0.215 0.022 265);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.215 0.022 265);
-  --primary: oklch(0.53 0.225 265);
+  --primary: oklch(0.505 0.225 265);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.956 0.008 265);
   --secondary-foreground: oklch(0.24 0.024 265);
@@ -54,16 +54,29 @@
   --muted-foreground: oklch(0.44 0.025 262);
   --accent: oklch(0.955 0.005 265);
   --accent-foreground: oklch(0.215 0.022 265);
+  /* Status color roles (see docs/frontend-style-conventions.md):
+     --X        base hue — fills, borders, dots; never text on light surfaces
+     --X-solid  full-strength chip/button fill (dark theme darkens warning/
+                destructive so light ink keeps its contrast)
+     --X-foreg  ink placed ON a solid --X / --X-solid fill
+     --X-ink    text-safe --X for neutral surfaces and --X/8..20 tints */
   --destructive: oklch(0.577 0.245 27.325);
+  --destructive-solid: oklch(0.553 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --destructive-ink: oklch(0.44 0.235 27.325);
   --input: oklch(0.91 0.008 265);
   --ring: oklch(0.53 0.225 265);
   --border: oklch(0.90 0.009 265);
   --warning: oklch(0.72 0.145 72);
+  --warning-solid: var(--warning);
   --warning-foreground: oklch(0.33 0.1 70);
+  --warning-ink: oklch(0.44 0.115 70);
   --info: oklch(0.62 0.13 245);
-  --info-foreground: oklch(0.985 0 0);
+  --info-foreground: oklch(0.12 0.03 265);
+  --info-ink: oklch(0.48 0.14 245);
   --success: oklch(0.61 0.15 158);
-  --success-foreground: oklch(0.985 0 0);
+  --success-foreground: oklch(0.15 0.04 158);
+  --success-ink: oklch(0.44 0.13 158);
   --radius: 0.75rem;
   /* small-control caps (buttons, selects must not over-round).
      Derived directly from --radius so xs < sm actually differ. */
@@ -119,10 +132,10 @@
   --avatar-1: oklch(0.53 0.225 265);
   --avatar-2: oklch(0.60 0.18 155);
   --avatar-3: oklch(0.72 0.145 72);
-  --avatar-4: oklch(0.60 0.22 15);
+  --avatar-4: oklch(0.56 0.22 15);
   --avatar-5: oklch(0.65 0.12 210);
   --avatar-6: oklch(0.55 0.20 300);
-  --avatar-7: oklch(0.58 0.18 255);
+  --avatar-7: oklch(0.545 0.18 255);
   --avatar-8: oklch(0.60 0.14 180);
 
   --avatar-1-fg: oklch(0.985 0 0);
@@ -181,15 +194,22 @@
   --accent: oklch(0.245 0.018 265);
   --accent-foreground: oklch(0.93 0.012 264);
   --destructive: oklch(0.64 0.20 25);
+  --destructive-solid: oklch(0.55 0.21 25);
+  --destructive-foreground: oklch(0.985 0 0);
+  --destructive-ink: oklch(0.75 0.19 25);
   --input: oklch(0.245 0.02 265);
   --ring: oklch(0.68 0.19 265);
   --border: oklch(0.275 0.02 265);
   --warning: oklch(0.78 0.15 78);
+  --warning-solid: oklch(0.45 0.12 78);
   --warning-foreground: oklch(0.95 0.07 88);
+  --warning-ink: oklch(0.80 0.15 78);
   --info: oklch(0.72 0.12 245);
   --info-foreground: oklch(0.12 0.03 265);
+  --info-ink: oklch(0.76 0.12 245);
   --success: oklch(0.72 0.15 158);
   --success-foreground: oklch(0.15 0.04 158);
+  --success-ink: oklch(0.76 0.15 158);
 
   --surface-1: oklch(0.13 0.015 265);
   --surface-2: oklch(0.16 0.017 265);
@@ -535,11 +555,18 @@ body {
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-destructive-solid: var(--destructive-solid);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-ink: var(--destructive-ink);
   --color-warning-foreground: var(--warning-foreground);
+  --color-warning-solid: var(--warning-solid);
+  --color-warning-ink: var(--warning-ink);
   --color-warning: var(--warning);
   --color-info-foreground: var(--info-foreground);
+  --color-info-ink: var(--info-ink);
   --color-info: var(--info);
   --color-success-foreground: var(--success-foreground);
+  --color-success-ink: var(--success-ink);
   --color-success: var(--success);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);

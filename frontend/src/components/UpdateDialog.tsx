@@ -176,7 +176,7 @@ export function UpdateDialog() {
       <DialogContent className="sm:max-w-md" aria-live="polite">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <ArrowUpCircle className="size-4 text-info" />
+            <ArrowUpCircle className="size-4 text-info-ink" />
             {t("update_dialog.title")}
           </DialogTitle>
           <DialogDescription>
@@ -192,7 +192,7 @@ export function UpdateDialog() {
             <p className="text-muted-foreground">{t("update_dialog.confirm_hint")}</p>
             {info?.downloadUrl && (
               <a href={info.downloadUrl} target="_blank" rel="noopener noreferrer"
-                className="text-sm text-info-foreground underline-offset-2 hover:underline">
+                className="text-sm text-info-ink underline-offset-2 hover:underline">
                 {t("update_dialog.view_changelog")}
               </a>
             )}
@@ -220,7 +220,7 @@ export function UpdateDialog() {
               </p>
             )}
             {phase === "failed" && (
-              <p className="flex items-start gap-1.5 text-sm text-destructive">
+              <p className="flex items-start gap-1.5 text-sm text-destructive-ink">
                 <AlertTriangle className="size-4 shrink-0" />
                 <span>{progress.error || t("update_dialog.failed")}</span>
               </p>

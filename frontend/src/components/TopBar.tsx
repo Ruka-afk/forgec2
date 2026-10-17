@@ -85,12 +85,12 @@ export default function TopBar({ onMenuToggle }: { onMenuToggle?: () => void }) 
     </header>
     {reconnectFailed && (
       <div
-        className="fixed top-(--shell-topbar-height) right-0 z-30 flex h-10 items-center gap-2 border-b border-destructive/30 bg-destructive/10 px-3 text-xs text-destructive backdrop-blur-sm sm:px-4 sm:text-sm"
+        className="fixed top-(--shell-topbar-height) right-0 z-30 flex h-10 items-center gap-2 border-b border-destructive/30 bg-destructive/10 px-3 text-xs text-destructive-ink backdrop-blur-sm sm:px-4 sm:text-sm"
         style={{ left: focusMode ? 0 : storeSidebarWidth }}
       >
         <AlertTriangle className="size-4 shrink-0" />
         <span className="min-w-0 flex-1 truncate">{t("topbar.ws_disconnected_banner")}</span>
-        <Button variant="outline" size="sm" className="ml-auto h-7 text-xs border-destructive/30 text-destructive hover:bg-destructive/10" onClick={reconnect}>
+        <Button variant="outline" size="sm" className="ml-auto h-7 text-xs border-destructive/30 text-destructive-ink hover:bg-destructive/10" onClick={reconnect}>
           {t("topbar.reconnect")}
         </Button>
       </div>

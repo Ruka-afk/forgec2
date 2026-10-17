@@ -40,28 +40,28 @@ export default function AgentStatusBanner() {
 
           <div className="flex-1 flex items-center gap-2 flex-wrap text-sm">
             {hasOffline && (
-              <Link to="/agents?status=offline" className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors font-medium text-xs">
+              <Link to="/agents?status=offline" className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-destructive/10 text-destructive-ink hover:bg-destructive/20 dark:hover:bg-destructive/15 transition-colors font-medium text-xs">
                 <StatusDot tone="destructive" size="xs" />
                 {offline} {t("status_banner.offline")}
               </Link>
             )}
             {hasStale && (
-              <Link to="/agents?status=stale" className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-warning/15 text-warning hover:bg-warning/25 transition-colors font-medium text-xs">
+              <Link to="/agents?status=stale" className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-warning/15 text-warning-ink hover:bg-warning/25 dark:bg-warning/10 dark:hover:bg-warning/20 transition-colors font-medium text-xs">
                 <StatusDot tone="warning" size="xs" />
                 {stale} {t("status_banner.stale")}
               </Link>
             )}
-            <span className="text-warning text-xs">
+            <span className="text-warning-ink text-xs">
               — {t("status_banner.commands_paused")}{online > 0 ? `, ${online} ${t("status_banner.online")}` : ""}
             </span>
           </div>
 
-          <CollapsibleTrigger render={<Button variant="ghost" size="icon-xs" className="shrink-0 text-warning hover:text-warning/80" aria-label={t("status_banner.toggle_details")} />}>
+          <CollapsibleTrigger render={<Button variant="ghost" size="icon-xs" className="shrink-0 text-warning-ink hover:text-warning-ink/80" aria-label={t("status_banner.toggle_details")} />}>
             <ChevronDown className="size-3" />
           </CollapsibleTrigger>
 
           <Tooltip>
-            <TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => setDismissedSig(sig)} className="shrink-0 text-warning/80 hover:text-warning" aria-label={t("status_banner.dismiss")} />}>
+            <TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => setDismissedSig(sig)} className="shrink-0 text-warning-ink/80 hover:text-warning-ink" aria-label={t("status_banner.dismiss")} />}>
               <X className="size-3" />
             </TooltipTrigger>
             <TooltipContent>{t("status_banner.dismiss_hint")}</TooltipContent>
@@ -69,16 +69,16 @@ export default function AgentStatusBanner() {
         </div>
 
         <CollapsibleContent>
-          <div className="px-4 pb-3 pt-0 text-xs text-warning leading-relaxed border-t border-warning/20">
+          <div className="px-4 pb-3 pt-0 text-xs text-warning-ink leading-relaxed border-t border-warning/20">
             <p className="mt-2">
               {t("status_banner.expanded_message")}
             </p>
             <div className="mt-2 flex items-center gap-2">
-              <Link to="/agents?status=offline" className="text-warning hover:text-warning/80 underline underline-offset-2 transition-colors">
+              <Link to="/agents?status=offline" className="text-warning-ink hover:text-warning-ink/80 underline underline-offset-2 transition-colors">
                 {t("status_banner.view_offline")}
               </Link>
-              <span className="text-warning/60">|</span>
-              <Link to="/agents?status=stale" className="text-warning hover:text-warning/80 underline underline-offset-2 transition-colors">
+              <span className="text-warning-ink/60">|</span>
+              <Link to="/agents?status=stale" className="text-warning-ink hover:text-warning-ink/80 underline underline-offset-2 transition-colors">
                 {t("status_banner.view_stale")}
               </Link>
             </div>

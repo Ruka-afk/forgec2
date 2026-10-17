@@ -234,8 +234,8 @@ export function NotificationDropdown() {
         <ScrollArea className="max-h-64">
           {loadError ? (
             <div className="p-6 text-center text-sm">
-              <AlertTriangle className="size-6 mx-auto mb-2 text-warning" />
-              <p className="text-warning-foreground">{t("topbar.notif_load_failed")}</p>
+              <AlertTriangle className="size-6 mx-auto mb-2 text-warning-ink" />
+              <p className="text-warning-ink">{t("topbar.notif_load_failed")}</p>
               {notifications.length > 0 && (
                 <p className="mt-1 text-xs text-muted-foreground">{t("topbar.notif_showing_cached")}</p>
               )}

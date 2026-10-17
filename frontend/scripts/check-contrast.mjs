@@ -17,8 +17,9 @@
 //   node scripts/check-contrast.mjs --selftest # verify the color math
 //
 // Limitations (deliberate, prototype honesty):
-//   - Alpha compositing is done in linear sRGB (the CSS default for legacy
-//     color spaces); oklch-authored alpha could differ by a hair.
+//   - Alpha compositing runs in gamma-encoded sRGB space, matching how
+//     browsers blend `bg-x/NN` over a surface (cross-checked against the
+//     audit's canvas/pixel harness on the built app).
 //   - Only token-level pairs are checked. A one-off class combination
 //     (`bg-warning text-warning-foreground` is listed; a bespoke
 //     `hover:bg-x/37` is not) needs the runtime sampler or eyeballs.
@@ -78,10 +79,22 @@ function parseColor(value) {
   return null;
 }
 
-/** Deterministic composite over an opaque backdrop. */
+/** Deterministic composite over an opaque backdrop. Alpha blending happens in
+ *  gamma-encoded sRGB space, matching how browsers composite `bg-x/NN` over a
+ *  surface (verified against the audit's canvas/pixel harness). */
+function linearToSrgb(c) {
+  return c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055;
+}
+
+function srgbToLinear(v) {
+  return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+}
+
 function over(fg, bg) {
   if (fg.alpha >= 1) return fg.linear;
-  return fg.linear.map((c, i) => c * fg.alpha + bg.linear[i] * (1 - fg.alpha));
+  return fg.linear.map((c, i) =>
+    srgbToLinear(linearToSrgb(c) * fg.alpha + linearToSrgb(bg.linear[i]) * (1 - fg.alpha)),
+  );
 }
 
 function contrast(fg, bg) {
@@ -179,12 +192,22 @@ function buildPairs(t) {
   add("text", "primary-foreground", "primary");
   add("text", "popover-foreground", "popover");
 
-  // Status tokens, both patterns the UI renders:
-  //   a) `text-X` as the text color — on the page/card, and on the tinted
-  //      chips (`bg-X/8..20`) the badges/banners/method pills use;
-  //   b) `text-X-foreground` on tinted chips and on solid fills (buttons).
+  // Status tokens (three roles; see docs/frontend-style-conventions.md):
+  //   a) `text-X-ink` — text-safe status color on neutral surfaces and on the
+  //      tinted chips (`bg-X/8..20`) badges/banners/method pills render;
+  //   b) `text-X-foreground` — ink on solid `bg-X` / `bg-X-solid` fills;
+  //   c) bare `text-X` — legacy pattern, kept tracked until the U1b page
+  //      migration moves every call site to the ink tokens.
   const statuses = ["warning", "info", "success", "destructive"];
   for (const s of statuses) {
+    add("text", `${s}-ink`, "background");
+    add("text", `${s}-ink`, "card");
+    add("text", `${s}-ink`, "sidebar");
+    for (const pct of [8, 10, 12, 15, 20]) {
+      addTint("text", `${s}-ink`, s, pct, "background");
+      addTint("text", `${s}-ink`, s, pct, "card");
+      addTint("text", `${s}-ink`, s, pct, "sidebar");
+    }
     add("text", s, "background");
     add("text", s, "card");
     for (const pct of [8, 10, 12, 15, 20]) {
@@ -192,29 +215,25 @@ function buildPairs(t) {
       addTint("text", s, s, pct, "card");
     }
     if (s !== "destructive") {
-      add("text", `${s}-foreground`, s, `${s}-foreground on ${s} (solid)`);
       for (const pct of [10, 15, 20]) {
         addTint("text", `${s}-foreground`, s, pct, "background");
         addTint("text", `${s}-foreground`, s, pct, "card");
       }
     }
   }
+  // Ink on solid fills (chips, banners, solid buttons).
+  add("text", "success-foreground", "success", "success-foreground on success (solid)");
+  add("text", "info-foreground", "info", "info-foreground on info (solid)");
+  add("text", "warning-foreground", "warning-solid", "warning-foreground on warning-solid (solid)");
+  add("text", "destructive-foreground", "destructive-solid", "destructive-foreground on destructive-solid (solid)");
   // primary as text: links, active nav (`bg-primary/12 text-primary`).
   add("text", "primary", "background");
   add("text", "primary", "card");
   for (const pct of [10, 12, 15, 20]) {
     addTint("text", "primary", "primary", pct, "background");
     addTint("text", "primary", "primary", pct, "card");
+    addTint("text", "primary", "primary", pct, "sidebar");
   }
-  // `text-destructive-foreground` is used at 6 call sites but has no token
-  // behind it (verified 2026-10): the label inherits `foreground`. Measure the
-  // fallback the user actually sees on solid destructive buttons.
-  add(
-    "text",
-    "foreground",
-    "destructive",
-    "foreground on destructive (text-destructive-foreground fallback)",
-  );
 
   add("text", "code-text", "code-bg");
 
@@ -250,9 +269,9 @@ function selftest() {
     ["#777/#fff ≈ 4.48", contrast(parseColor("#777"), parseColor("#ffffff")), 4.478, 0.01],
     ["#777/#000 ≈ 4.69", contrast(parseColor("#777"), parseColor("#000000")), 4.689, 0.01],
     [
-      "50% white over black = mid gray",
+      "50% white over black = sRGB 0.5 (linear 0.2140)",
       luminance(over({ linear: white.linear, alpha: 0.5 }, black)),
-      0.5,
+      0.214,
       0.01,
     ],
   ];

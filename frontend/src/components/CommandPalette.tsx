@@ -215,7 +215,7 @@ export default function CommandPalette() {
           <div ref={listRef} id="command-palette-list" role="listbox" aria-label={t("palette.title")} className="py-2">
             {/* Agent entries are silently absent while the list is unread. */}
             {agentListError && normalize(query.trim()) !== "" && (
-              <div role="alert" className="mx-4 mb-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
+              <div role="alert" className="mx-4 mb-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-ink">
                 {t("palette.agents_unreadable")}
               </div>
             )}

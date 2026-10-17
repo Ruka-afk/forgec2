@@ -396,11 +396,11 @@ function CampaignDetailView({
                         title={phase}
                       >
                           <div className={`size-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-                            isCompleted ? "bg-success text-success-foreground" : isPending ? "bg-muted-foreground text-white" : "bg-warning text-warning-foreground"
+                            isCompleted ? "bg-success text-success-foreground" : isPending ? "bg-muted-foreground text-background" : "bg-warning-solid text-warning-foreground"
                           }`}>
                             {isCompleted ? <Check className="size-4" /> : isPending ? "" : <Play className="size-4" />}
                           </div>
-                          <span className={`text-(--fs-micro-sm) text-center leading-tight ${isCompleted ? "text-success font-medium" : isPending ? "text-muted-foreground" : "text-warning"}`}>
+                          <span className={`text-(--fs-micro-sm) text-center leading-tight ${isCompleted ? "text-success-ink font-medium" : isPending ? "text-muted-foreground" : "text-warning-ink"}`}>
                             {phase.split(" ").slice(0, 2).join("\n")}
                           </span>
                           {found && (

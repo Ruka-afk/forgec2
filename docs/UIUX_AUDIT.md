@@ -45,6 +45,15 @@ tracked below as defects, not regressions).
 
 ## D1 — Contrast (owner: U1)
 
+> **U1a landed (2026-10-18):** C1, C2, C5, C6, C8 and C9 are fixed at the
+> token/primitive layer, and the component side of C3, C4 and C7 moved to the
+> new `-ink` / `-solid` roles (badge/banner/alert/button/dropdown variants, the
+> shell components, `statusStyles`, task renderers). What stays red in
+> `check:contrast` is the page-level legacy pattern — bare `text-X`,
+> `bg-X/NN text-X-foreground` chips and the light `primary/20` hovers —
+> scheduled for **U1b**, which also promotes `check:contrast --strict` into
+> `npm run check`.
+
 ### C1 · `text-destructive-foreground` is a phantom utility (6 sites)
 
 No `--destructive-foreground` token exists (checked `globals.css` + `@theme`;
@@ -193,7 +202,8 @@ if we adopt strict WCAG 1.4.11 for control boundaries).
 
 | Batch | Clusters |
 | --- | --- |
-| U1 contrast & dark theme | C1–C10; promote `check:contrast --strict` into `npm run check` |
+| U1a status tokens & primitives (landed 2026-10-18) | C1, C2, C5, C6, C8, C9; component side of C3/C4/C7; `check:contrast` compositing switched to the browser's sRGB blend space |
+| U1b page migration | remaining C3/C4/C7 page call sites (`text-X` → `text-X-ink`, `-foreground`-on-tint chips, light `primary/20` hovers); promote `check:contrast --strict` |
 | U2 keyboard & names | K1–K5; promote `check:aria --strict` |
 | U3 feedback loop | F1–F2 |
 | U4 narrow screens | R2–R3 |

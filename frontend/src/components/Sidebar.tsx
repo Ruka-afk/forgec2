@@ -133,7 +133,7 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
               )}
               <span className="mono-eyebrow text-muted-foreground/85">{t("section." + section.titleKey)}</span>
               {section.titleKey === "lab" && (
-                <Badge variant="secondary" className="ml-auto px-1.5 py-px text-(--fs-micro) leading-none rounded bg-warning/15 text-warning-foreground font-medium">
+                <Badge variant="secondary" className="ml-auto px-1.5 py-px text-(--fs-micro) leading-none rounded bg-warning/15 text-warning-ink dark:bg-warning/10 font-medium">
                   {t("section.lab_badge")}
                 </Badge>
               )}
@@ -170,7 +170,7 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
                   <>
                     <span className="truncate flex-1 text-xs">{t(item.labelKey)}</span>
                     {item.badge === "agents" && stats != null && (
-                      <Badge variant="secondary" className="px-1.5 py-px text-(--fs-micro) leading-none rounded bg-primary/20 text-primary font-mono">
+                      <Badge variant="secondary" className="px-1.5 py-px text-(--fs-micro) leading-none rounded bg-primary/15 text-primary dark:bg-primary/10 font-mono">
                         {stats.online_agents ?? 0}
                       </Badge>
                     )}
@@ -180,7 +180,7 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
                       </Badge>
                     )}
                     {item.badge === "notifications" && unreadNotifications > 0 && (
-                      <Badge variant="secondary" className="px-1.5 py-px text-(--fs-micro) leading-none rounded bg-warning/20 text-warning font-mono">
+                      <Badge variant="secondary" className="px-1.5 py-px text-(--fs-micro) leading-none rounded bg-warning/10 text-warning-ink font-mono">
                         {unreadNotifications > 99 ? "99+" : unreadNotifications}
                       </Badge>
                     )}

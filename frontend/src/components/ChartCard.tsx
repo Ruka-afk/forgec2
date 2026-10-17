@@ -61,7 +61,7 @@ export function ChartCard({ title, icon: Icon, iconColor = "primary", children, 
       {error ? (
         <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
           <div className="size-12 rounded-lg bg-warning/10 flex items-center justify-center mb-3">
-            <AlertTriangle className="size-6 text-warning" />
+            <AlertTriangle className="size-6 text-warning-ink" />
           </div>
           <span className="text-sm font-medium">{t("chart.load_failed")}</span>
           <span className="text-xs text-muted-foreground/100 mt-1">{t("chart.try_later")}</span>

@@ -97,7 +97,7 @@ export function DataError({ message, onRetry, onDismiss, className }: DataErrorP
       )}
     >
       <div className="size-14 rounded-lg bg-destructive/10 flex items-center justify-center mb-4">
-        <AlertCircle className="size-7 text-destructive" aria-hidden="true" />
+        <AlertCircle className="size-7 text-destructive-ink" aria-hidden="true" />
       </div>
       <p className="text-sm font-semibold text-foreground mb-1">{message || t("common.error")}</p>
       <p className="text-xs text-muted-foreground mb-4 max-w-xs">{t("common.error_hint")}</p>

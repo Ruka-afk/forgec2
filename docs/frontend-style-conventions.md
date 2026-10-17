@@ -41,6 +41,10 @@
 
 - 颜色一律 token（`--primary`、`--chart-*`…）；裸 hex 由门禁拦截（豁免清单见
   check-design-tokens.mjs）。
+- 状态色有四职责（2026-10 U1a 起）：`--X` 是基础色（fill / border / dot，**不做浅底上的文字**）；
+  `--X-solid` 是实心填充（dark 下 warning/destructive 会加深，保证浅墨对比）；
+  `--X-foreground` 是实心填充上的墨色；`--X-ink` 是中性面与 `bg-X/8..20` 淡底上的文字/图标色。
+  映射见 `lib/ui/statusStyles.ts`；新代码勿在浅底直接用 `text-X`（dark 淡底组合会低于 4.5:1）。
 - Card 契约：`rounded-lg` + `shadow-sm→md`（映射 elevation-1/2）。xl 仅用于
   hero/图标容器。
 - 动效：Card 基元已收窄为 `transition-[transform,box-shadow]`；新增交互动画

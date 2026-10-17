@@ -44,8 +44,8 @@ export function AgentBulkBar({
         <div className="mb-3 px-4 py-3 bg-sidebar border border-border rounded-lg flex flex-wrap items-center gap-2 shadow-sm">
           <span className="text-sm text-foreground font-medium mr-2">{t("agents.n_selected").replace("{n}", String(selected.size))}</span>
           <Button size="sm" onClick={onBulkShell} ><Terminal className="size-4" />{t("agents.execute_command")}</Button>
-          <Button size="sm" onClick={onBulkKill} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"><Power className="size-4" />{t("agents.kill")}</Button>
-          <Button size="sm" onClick={onBulkUninstall} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"><Trash2 className="size-4" />{t("agents.uninstall")}</Button>
+          <Button size="sm" onClick={onBulkKill} className="bg-destructive-solid hover:bg-destructive-solid/90 text-destructive-foreground"><Power className="size-4" />{t("agents.kill")}</Button>
+          <Button size="sm" onClick={onBulkUninstall} className="bg-destructive-solid hover:bg-destructive-solid/90 text-destructive-foreground"><Trash2 className="size-4" />{t("agents.uninstall")}</Button>
           <Button variant="ghost" size="sm" onClick={onClearSelection} className="ml-auto text-muted-foreground/100 hover:text-foreground">{t("agents.clear_selection")}</Button>
         </div>
       )}
@@ -57,7 +57,7 @@ export function AgentBulkBar({
           <Button size="sm" variant="secondary" onClick={onBulkScreenshot}><Camera className="size-4" />{t("agents.screenshot")}</Button>
           <Button size="sm" variant="secondary" onClick={onBulkBeaconNow}><Radio className="size-4" />{t("agents.beacon_now")}</Button>
           <Button size="sm" variant="secondary" onClick={onBulkSleep}><Clock className="size-4" />{t("agents.sleep")}</Button>
-          <Button size="sm" onClick={onBulkDelete} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"><Trash2 className="size-4" />{t("agents.delete")}</Button>
+          <Button size="sm" onClick={onBulkDelete} className="bg-destructive-solid hover:bg-destructive-solid/90 text-destructive-foreground"><Trash2 className="size-4" />{t("agents.delete")}</Button>
           <Button variant="ghost" size="sm" onClick={onClearSelection} className="ml-auto text-muted-foreground/100 hover:text-foreground">{t("agents.clear")}</Button>
         </div>
       )}

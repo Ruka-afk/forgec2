@@ -116,11 +116,11 @@ export default function TrafficPage({ embedded = false }: { embedded?: boolean }
 
   const getMethodStyle = (method: string) => {
     const m = method.toUpperCase();
-    if (m === "POST") return "bg-success/10 text-success";
-    if (m === "GET") return "bg-info/10 text-info";
+    if (m === "POST") return "bg-success/10 text-success-ink";
+    if (m === "GET") return "bg-info/10 text-info-ink";
     if (m === "BEACON") return "bg-chart-6/10 text-chart-6";
-    if (m === "PUT") return "bg-warning/10 text-warning";
-    if (m === "DELETE") return "bg-destructive/10 text-destructive";
+    if (m === "PUT") return "bg-warning/10 text-warning-ink";
+    if (m === "DELETE") return "bg-destructive/10 text-destructive-ink";
     return "bg-muted text-muted-foreground";
   };
 
@@ -148,7 +148,7 @@ export default function TrafficPage({ embedded = false }: { embedded?: boolean }
             <RefreshCw className="size-4" />
             <span>{t("traffic.refresh")}</span>
           </Button>
-          <Button onClick={clearLog} size="lg" className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+          <Button onClick={clearLog} size="lg" className="bg-destructive-solid hover:bg-destructive-solid/90 text-destructive-foreground">
             <Trash2 className="size-4" />
             <span>{t("traffic.clear")}</span>
           </Button>

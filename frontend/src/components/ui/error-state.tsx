@@ -11,7 +11,7 @@ export function ErrorState({ title, message, icon, action, className }: {
 }) {
   const IconComponent = icon || CircleAlert;
   return (
-    <div className={cn("flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive animate-fade-in", className)}>
+    <div className={cn("flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive-ink animate-fade-in", className)}>
       <IconComponent className="size-4 mt-0.5 shrink-0" aria-hidden="true" />
       <div className="flex-1 min-w-0">
         {title && <p className="font-medium mb-0.5">{title}</p>}

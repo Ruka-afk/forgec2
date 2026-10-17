@@ -108,7 +108,7 @@ export function withChartData<T, P extends Record<string, unknown> = Record<stri
             <Spinner size="sm" />{t("common.loading")}
           </div>
         ) : error ? (
-          <div className="h-24 flex items-center justify-center text-destructive text-xs" role="alert">
+          <div className="h-24 flex items-center justify-center text-destructive-ink text-xs" role="alert">
             <AlertTriangle className="size-4 mr-2 inline" />{t("common.load_failed")}
             <Button variant="link" size="sm" onClick={load} className="ml-2">{t("common.retry")}</Button>
           </div>
@@ -119,7 +119,7 @@ export function withChartData<T, P extends Record<string, unknown> = Record<stri
           <ErrorBoundary
             resetKey={crashEpoch}
             fallback={(
-              <div className="h-24 flex items-center justify-center text-destructive text-xs" role="alert">
+              <div className="h-24 flex items-center justify-center text-destructive-ink text-xs" role="alert">
                 <AlertTriangle className="size-4 mr-2 inline" />{t("common.load_failed")}
                 <Button variant="link" size="sm" onClick={() => { setCrashEpoch((e) => e + 1); load(); }} className="ml-2">{t("common.retry")}</Button>
               </div>

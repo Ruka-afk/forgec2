@@ -151,7 +151,7 @@ export default function InfrastructurePage() {
 
           <Card className="overflow-hidden">
             <CardHeader className="px-(--card-spacing) py-(--card-spacing) border-b">
-              <div className="size-8 bg-warning/15 rounded-lg flex items-center justify-center text-warning"><FileUp className="size-4" /></div>
+              <div className="size-8 bg-warning/15 rounded-lg flex items-center justify-center text-warning-ink"><FileUp className="size-4" /></div>
               <div><CardTitle>{t("infra.generate_config")}</CardTitle><CardDescription>{t("infra.generate_desc")}</CardDescription></div>
             </CardHeader>
             <CardContent className="p-(--card-spacing)">
@@ -159,10 +159,10 @@ export default function InfrastructurePage() {
                 <Button onClick={() => generateConfig("nginx")} className="bg-success hover:bg-success text-success-foreground">
                   <Server className="size-4" /> Nginx
                 </Button>
-                <Button onClick={() => generateConfig("apache")} className="bg-warning hover:bg-warning text-warning-foreground">
+                <Button onClick={() => generateConfig("apache")} className="bg-warning-solid hover:bg-warning-solid/90 text-warning-foreground">
                   <Server className="size-4" /> Apache
                 </Button>
-                <Button onClick={() => generateConfig("haproxy")} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+                <Button onClick={() => generateConfig("haproxy")} className="bg-destructive-solid hover:bg-destructive-solid/90 text-destructive-foreground">
                   <Server className="size-4" /> HAProxy
                 </Button>
               </div>

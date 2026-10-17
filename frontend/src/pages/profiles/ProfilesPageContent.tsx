@@ -523,7 +523,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                       <Button onClick={handleDuplicateProfile} variant="secondary"                         className="h-9 px-4 text-xs font-medium transition-colors flex items-center gap-1.5">
                         <Copy className="size-4" />{t("common.duplicate")}
                       </Button>
-                      <Button onClick={handleDeleteProfile} className="h-9 px-4 bg-destructive hover:bg-destructive/90 text-destructive-foreground text-xs font-medium transition-colors flex items-center gap-1.5">
+                      <Button onClick={handleDeleteProfile} className="h-9 px-4 bg-destructive-solid hover:bg-destructive-solid/90 text-destructive-foreground text-xs font-medium transition-colors flex items-center gap-1.5">
                         <Trash2 className="size-4" />{t("common.delete")}
                       </Button>
                       <Button onClick={() => setShowPushModal(true)}                         className="h-9 px-4 text-xs font-medium transition-colors flex items-center gap-1.5">

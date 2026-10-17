@@ -65,7 +65,7 @@ export default function UpdateBanner({ currentVersion }: { currentVersion?: stri
   return (
     <div className={cn(bannerSurface("info"), "flex w-full items-center justify-between gap-3 px-4 py-2.5 animate-fade-in sm:px-5")} aria-live="polite">
       <div className="flex items-center gap-2 min-w-0">
-        <ArrowUpCircle className="size-4 text-info shrink-0" />
+        <ArrowUpCircle className="size-4 text-info-ink shrink-0" />
         <span className="mono-cell text-(--fs-compact) text-foreground/90 truncate">
           {t("update_banner.available")}: <strong className="font-mono">{info.latest}</strong>
           {currentVersion && <span className="text-muted-foreground/100"> {t("update_banner.current", { current: currentVersion })}</span>}
@@ -75,7 +75,7 @@ export default function UpdateBanner({ currentVersion }: { currentVersion?: stri
         <Button
           variant="ghost"
           size="sm"
-          className="text-info-foreground underline-offset-2 hover:underline hidden sm:inline-flex"
+          className="text-info-ink underline-offset-2 hover:underline hidden sm:inline-flex"
           onClick={() => openUpdateDialog({ latest: info.latest, downloadUrl: info.downloadUrl ?? undefined })}
         >
           {t("update_banner.update_now")}
@@ -84,7 +84,7 @@ export default function UpdateBanner({ currentVersion }: { currentVersion?: stri
           href={downloadHref}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-sm text-info-foreground font-medium underline-offset-2 hover:underline transition-colors hidden sm:inline"
+          className="text-sm text-info-ink font-medium underline-offset-2 hover:underline transition-colors hidden sm:inline"
         >
           {t("update_banner.download")}
         </a>

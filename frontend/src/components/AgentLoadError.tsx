@@ -12,7 +12,7 @@ export function AgentLoadError({ message, className = "" }: { message: string | 
   return (
     <div
       role="alert"
-      className={`flex flex-wrap items-center gap-2 rounded-xl border border-warning/30 bg-warning/10 px-4 py-2.5 text-xs text-warning-foreground ${className}`}
+      className={`flex flex-wrap items-center gap-2 rounded-xl border border-warning/30 bg-warning/10 px-4 py-2.5 text-xs text-warning-ink ${className}`}
     >
       <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
       <span className="min-w-0 flex-1">

@@ -5,10 +5,10 @@ import { cn } from "@/lib/utils";
 type BannerTone = "warning" | "destructive" | "info" | "success" | "muted";
 
 const BANNER_SURFACE: Record<BannerTone, string> = {
-  warning: "border-warning/40 bg-warning/10 dark:bg-warning/20 text-warning",
-  destructive: "border-destructive/40 bg-destructive/15 text-destructive",
-  info: "border-info/25 bg-info/8 dark:bg-info/10 text-info",
-  success: "border-success/40 bg-success/10 text-success",
+  warning: "border-warning/40 bg-warning/10 text-warning-ink dark:bg-warning/10",
+  destructive: "border-destructive/40 bg-destructive/15 dark:bg-destructive/10 text-destructive-ink",
+  info: "border-info/25 bg-info/8 dark:bg-info/10 text-info-ink",
+  success: "border-success/40 bg-success/10 text-success-ink dark:bg-success/10",
   muted: "border-border bg-muted/40 text-muted-foreground",
 };
 

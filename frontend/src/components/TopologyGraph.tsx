@@ -288,7 +288,7 @@ export default function TopologyGraph({
     return (
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="text-center max-w-sm px-4">
-          <Network className="size-4 mx-auto mb-2 text-destructive" />
+          <Network className="size-4 mx-auto mb-2 text-destructive-ink" />
           <p className="text-muted-foreground text-sm">{t("topology.graph_load_failed")}</p>
           <p className="text-muted-foreground text-xs mt-1">{t("topology.graph_load_failed_hint")}</p>
           <Button

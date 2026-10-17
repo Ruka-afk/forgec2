@@ -114,7 +114,7 @@ export default function SessionTimeoutWarning() {
       >
         <p
           className={`text-sm font-medium ${
-            urgent ? "text-destructive" : "text-warning-foreground"
+            urgent ? "text-destructive-ink" : "text-warning-ink"
           }`}
         >
           {urgent

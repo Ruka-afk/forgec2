@@ -106,9 +106,9 @@ function MiniTable({ rows }: { rows: Record<string, unknown>[] }) {
 function ProtectionBadge({ state }: { state: string }) {
   const tone =
     state === "enabled"
-      ? "bg-destructive/10 text-destructive"
+      ? "bg-destructive/10 text-destructive-ink"
       : state === "disabled"
-        ? "bg-success/10 text-success"
+        ? "bg-success/10 text-success-ink"
         : "bg-muted text-muted-foreground";
   return <Badge variant="outline" className={cn("text-(--fs-micro-sm)", tone)}>{state}</Badge>;
 }
@@ -124,7 +124,7 @@ export function HostInfoResultView({ result }: TaskRendererProps) {
     report = JSON.parse(result) as HostInfoReport;
     if (!report || typeof report !== "object" || !report.sections) throw new Error("shape");
   } catch {
-    return <pre className="text-xs text-success font-mono overflow-x-auto max-h-96 p-2 whitespace-pre-wrap break-all">{result}</pre>;
+    return <pre className="text-xs text-success-ink font-mono overflow-x-auto max-h-96 p-2 whitespace-pre-wrap break-all">{result}</pre>;
   }
 
   return (
@@ -147,7 +147,7 @@ export function HostInfoResultView({ result }: TaskRendererProps) {
               <span className="text-xs font-semibold">{key}</span>
             </div>
             {typeof data.error === "string" && (
-              <p className="text-xs text-destructive">{data.error}</p>
+              <p className="text-xs text-destructive-ink">{data.error}</p>
             )}
             {av.length > 0 && (
               <div className="mb-1.5 flex flex-wrap gap-1.5">
@@ -183,7 +183,7 @@ registerTaskRenderer("hostinfo", HostInfoResultView);
 
 function RawFallback({ result }: { result: string }) {
   return (
-    <pre className="text-xs text-success font-mono overflow-x-auto max-h-96 p-2 whitespace-pre-wrap break-all">{result}</pre>
+    <pre className="text-xs text-success-ink font-mono overflow-x-auto max-h-96 p-2 whitespace-pre-wrap break-all">{result}</pre>
   );
 }
 
@@ -300,7 +300,7 @@ export function NetstatResultView({ result }: TaskRendererProps) {
         </Badge>
         <span>connections</span>
         {listening > 0 && (
-          <Badge variant="secondary" className="px-1.5 py-px text-(--fs-micro) leading-none rounded bg-warning/15 text-warning font-mono">
+          <Badge variant="secondary" className="px-1.5 py-px text-(--fs-micro) leading-none rounded bg-warning/15 text-warning-ink dark:bg-warning/10 font-mono">
             {listening} listen
           </Badge>
         )}
@@ -322,7 +322,7 @@ export function NetstatResultView({ result }: TaskRendererProps) {
                 <td className="py-1 px-2 font-mono align-top uppercase">{row.proto}</td>
                 <td className="py-1 px-2 font-mono align-top truncate max-w-[160px]" title={row.local}>{row.local}</td>
                 <td className="py-1 px-2 font-mono align-top truncate max-w-[160px]" title={row.remote}>{row.remote}</td>
-                <td className={cn("py-1 px-2 font-mono align-top", /listen/i.test(row.state) ? "text-warning" : "")}>{row.state || "-"}</td>
+                <td className={cn("py-1 px-2 font-mono align-top", /listen/i.test(row.state) ? "text-warning-ink" : "")}>{row.state || "-"}</td>
                 <td className="py-1 px-2 font-mono align-top">{row.pid || "-"}</td>
               </tr>
             ))}
@@ -430,7 +430,7 @@ export function CredsResultView({ result }: TaskRendererProps) {
   return (
     <div className="space-y-1" data-testid="creds-renderer">
       <div className="flex items-center gap-2 mb-2 text-(--fs-micro-sm) text-muted-foreground">
-        <Badge variant="secondary" className="px-1.5 py-px text-(--fs-micro) leading-none rounded bg-warning/15 text-warning font-mono">
+        <Badge variant="secondary" className="px-1.5 py-px text-(--fs-micro) leading-none rounded bg-warning/15 text-warning-ink dark:bg-warning/10 font-mono">
           {rows.length}
         </Badge>
         <span>credentials</span>
@@ -459,7 +459,7 @@ export function CredsResultView({ result }: TaskRendererProps) {
                   {maskSecret(row.secret)}
                 </td>
                 <td className="py-1 px-2 align-top">
-                  <Badge variant="outline" className={cn("text-(--fs-micro-sm)", row.kind === "hash" ? "bg-primary/10 text-primary" : "bg-warning/10 text-warning")}>
+                  <Badge variant="outline" className={cn("text-(--fs-micro-sm)", row.kind === "hash" ? "bg-primary/10 text-primary" : "bg-warning/10 text-warning-ink")}>
                     {row.kind}
                   </Badge>
                 </td>

@@ -141,7 +141,7 @@ export default function SavedViewPicker({ page, getState, applyState }: SavedVie
           {selectedId && (
             <Button variant="ghost" size="icon-sm" onClick={() => void handleDelete()}
               title={t("savedviews.delete_current")} aria-label={t("savedviews.delete_current")}
-              className="text-muted-foreground hover:text-destructive">
+              className="text-muted-foreground hover:text-destructive-ink">
               <Trash2 className="size-4" />
             </Button>
           )}

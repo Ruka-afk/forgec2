@@ -21,25 +21,25 @@ export const toneStyles: Record<Tone, ToneStyle> = {
   success: {
     dot: "bg-success",
     bg: "bg-success/10",
-    text: "text-success",
+    text: "text-success-ink",
     ring: "ring-success/30",
   },
   warning: {
     dot: "bg-warning",
     bg: "bg-warning/10",
-    text: "text-warning",
+    text: "text-warning-ink",
     ring: "ring-warning/30",
   },
   info: {
     dot: "bg-info",
     bg: "bg-info/10",
-    text: "text-info",
+    text: "text-info-ink",
     ring: "ring-info/30",
   },
   destructive: {
     dot: "bg-destructive",
     bg: "bg-destructive/10",
-    text: "text-destructive",
+    text: "text-destructive-ink",
     ring: "ring-destructive/30",
   },
   muted: {
@@ -112,10 +112,10 @@ interface HueStyle {
 
 export const hueStyles: Record<Hue, HueStyle> = {
   primary: { text: "text-primary", bg: "bg-primary/10", glow: "shadow-primary/10" },
-  success: { text: "text-success", bg: "bg-success/10", glow: "shadow-success/10" },
-  warning: { text: "text-warning", bg: "bg-warning/10", glow: "shadow-warning/10" },
-  info: { text: "text-info", bg: "bg-info/10", glow: "shadow-info/10" },
-  destructive: { text: "text-destructive", bg: "bg-destructive/10", glow: "shadow-destructive/10" },
+  success: { text: "text-success-ink", bg: "bg-success/10", glow: "shadow-success/10" },
+  warning: { text: "text-warning-ink", bg: "bg-warning/10", glow: "shadow-warning/10" },
+  info: { text: "text-info-ink", bg: "bg-info/10", glow: "shadow-info/10" },
+  destructive: { text: "text-destructive-ink", bg: "bg-destructive/10", glow: "shadow-destructive/10" },
   muted: { text: "text-muted-foreground", bg: "bg-muted/50", glow: "shadow-muted-foreground/10" },
   emerald: { text: "text-chart-1", bg: "bg-chart-1/10", glow: "shadow-chart-1/10" },
   cyan: { text: "text-chart-2", bg: "bg-chart-2/10", glow: "shadow-chart-2/10" },
