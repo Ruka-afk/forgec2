@@ -16,11 +16,11 @@ interface Analysis {
 }
 
 const KIND_ICON: Record<string, React.ReactNode> = {
-  priv: <ShieldAlert className="size-3.5 text-warning" />,
-  av: <AlertTriangle className="size-3.5 text-destructive" />,
-  network: <Globe className="size-3.5 text-info" />,
+  priv: <ShieldAlert className="size-3.5 text-warning-ink" />,
+  av: <AlertTriangle className="size-3.5 text-destructive-ink" />,
+  network: <Globe className="size-3.5 text-info-ink" />,
   path: <FolderOpen className="size-3.5 text-muted-foreground" />,
-  cred: <KeyRound className="size-3.5 text-destructive" />,
+  cred: <KeyRound className="size-3.5 text-destructive-ink" />,
   other: <Info className="size-3.5 text-muted-foreground" />,
 };
 

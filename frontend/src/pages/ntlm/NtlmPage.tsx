@@ -286,7 +286,7 @@ export default function NtlmPage() {
             ) : relayError ? (
               <>
                 <StatusDot tone="destructive" size="md" />
-                <span className="text-sm font-medium text-destructive">{t("ntlm.relay_status_unknown")}</span>
+                <span className="text-sm font-medium text-destructive-ink">{t("ntlm.relay_status_unknown")}</span>
               </>
             ) : (
               <>

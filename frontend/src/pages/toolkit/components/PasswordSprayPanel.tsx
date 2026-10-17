@@ -132,10 +132,10 @@ export default function PasswordSprayPanel({ selectedAgent }: { selectedAgent: s
 
   const statusIcon = (status: string) => {
     switch (status) {
-      case "valid": return <CheckCircle2 className="size-4 text-success" />;
-      case "locked": return <Lock className="size-4 text-warning" />;
-      case "error": return <AlertTriangle className="size-4 text-warning" />;
-      default: return <XCircle className="size-4 text-destructive" />;
+      case "valid": return <CheckCircle2 className="size-4 text-success-ink" />;
+      case "locked": return <Lock className="size-4 text-warning-ink" />;
+      case "error": return <AlertTriangle className="size-4 text-warning-ink" />;
+      default: return <XCircle className="size-4 text-destructive-ink" />;
     }
   };
 
@@ -181,7 +181,7 @@ export default function PasswordSprayPanel({ selectedAgent }: { selectedAgent: s
                 {vaultLoading ? (
                   <div className="px-2 py-1.5 text-sm text-muted-foreground">{t("common.loading")}</div>
                 ) : vaultError ? (
-                  <div className="px-2 py-1.5 text-sm text-destructive">{t("spray.vault_load_failed")}</div>
+                  <div className="px-2 py-1.5 text-sm text-destructive-ink">{t("spray.vault_load_failed")}</div>
                 ) : vaultPasswords.length === 0 ? (
                   <div className="px-2 py-1.5 text-sm text-muted-foreground">{t("spray.vault_empty")}</div>
                 ) : (

@@ -37,7 +37,7 @@ export default memo(function RdpToolbar({
           <Users className="size-4" />
           {t("agents.rdp_title")}
           {isExperimentalDesktop("remote-desktop") ? (
-            <span className="text-(--fs-micro) font-normal text-warning">{t("generate.quality_experimental")}</span>
+            <span className="text-(--fs-micro) font-normal text-warning-ink">{t("generate.quality_experimental")}</span>
           ) : null}
         </h1>
         <Badge variant="secondary" className="text-xs text-muted-foreground font-mono bg-muted/50 px-2 py-0.5 rounded-lg">

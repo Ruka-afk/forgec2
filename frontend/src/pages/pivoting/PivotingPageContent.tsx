@@ -134,7 +134,7 @@ export default function PivotingPageContent() {
       </>}>
 
       {throughAgent && (
-        <Banner tone="info" icon={<Route className="size-4" />} className="animate-fade-in" action={<Button variant="ghost" size="icon" onClick={() => setThroughAgent("")} className="text-info hover:text-primary" aria-label={t("common.clear")}><X className="size-4" /></Button>}>
+        <Banner tone="info" icon={<Route className="size-4" />} className="animate-fade-in" action={<Button variant="ghost" size="icon" onClick={() => setThroughAgent("")} className="text-info-ink hover:text-primary" aria-label={t("common.clear")}><X className="size-4" /></Button>}>
           {t("pivoting.routing_strip")}: <strong className="font-mono">{throughAgent.substring(0, 12)}</strong>
         </Banner>
       )}

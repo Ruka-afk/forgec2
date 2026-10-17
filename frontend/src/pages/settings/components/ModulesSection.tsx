@@ -172,7 +172,7 @@ export default function ModulesSection() {
         {(() => {
           const hasMimi = modules.some((m) => /invoke-mimikatz|mimikatz\.ps1/i.test(m.name));
           return (
-            <div className={`text-xs rounded-lg px-3 py-2 border ${hasMimi ? "border-success/30 bg-success/10 text-success" : "border-warning/30 bg-warning/10 text-warning-foreground"}`}>
+            <div className={`text-xs rounded-lg px-3 py-2 border ${hasMimi ? "border-success/30 bg-success/10 text-success-ink" : "border-warning/30 bg-warning/10 text-warning-ink"}`}>
               {hasMimi ? t("settings.modules.mimikatz_ready") : t("settings.modules.mimikatz_missing")}
             </div>
           );
@@ -210,7 +210,7 @@ export default function ModulesSection() {
                   </TableCell>
                   <TableCell>
                     <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(m.name)} aria-label={t("common.delete")}>
-                      <Trash2 className="size-3.5 text-destructive" />
+                      <Trash2 className="size-3.5 text-destructive-ink" />
                     </Button>
                   </TableCell>
                 </TableRow>

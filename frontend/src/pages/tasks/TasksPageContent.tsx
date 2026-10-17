@@ -910,14 +910,14 @@ function TaskActions({ task, onCancel, onRerun, onApprove, onReject, onClaim, on
               <Hand className="size-4" />
             </Button>
           ) : (
-            <Button variant="ghost" size="icon-xs" disabled={busy} aria-busy={busy} onClick={() => onRelease(task.id)} className="text-muted-foreground hover:text-warning hover:bg-warning/15" title={t("tasks.release")} aria-label={t("tasks.release")}>
+            <Button variant="ghost" size="icon-xs" disabled={busy} aria-busy={busy} onClick={() => onRelease(task.id)} className="text-muted-foreground hover:text-warning-ink hover:bg-warning/15" title={t("tasks.release")} aria-label={t("tasks.release")}>
               <Hand className="size-4" />
             </Button>
           )}
         </>
       )}
       {(task.status === "pending" || task.status === "running") && !task.operator_claimed_by && (
-        <Button variant="ghost" size="icon-xs" disabled={busy} aria-busy={busy} onClick={() => onCancel(task)} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10" title={t("tasks.cancel")} aria-label={t("tasks.cancel")}>
+        <Button variant="ghost" size="icon-xs" disabled={busy} aria-busy={busy} onClick={() => onCancel(task)} className="text-muted-foreground hover:text-destructive-ink hover:bg-destructive/10" title={t("tasks.cancel")} aria-label={t("tasks.cancel")}>
           <Ban className="size-3" />
         </Button>
       )}
@@ -928,10 +928,10 @@ function TaskActions({ task, onCancel, onRerun, onApprove, onReject, onClaim, on
       )}
       {task.status === "pending_approval" && (
         <>
-          <Button variant="ghost" size="icon-xs" disabled={busy} aria-busy={busy} onClick={() => onApprove(task)} className="text-muted-foreground hover:text-success hover:bg-success/15" title={t("tasks.approve")} aria-label={t("tasks.approve")}>
+          <Button variant="ghost" size="icon-xs" disabled={busy} aria-busy={busy} onClick={() => onApprove(task)} className="text-muted-foreground hover:text-success-ink hover:bg-success/15" title={t("tasks.approve")} aria-label={t("tasks.approve")}>
             <Check className="size-4" />
           </Button>
-          <Button variant="ghost" size="icon-xs" disabled={busy} aria-busy={busy} onClick={() => onReject(task)} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10" title={t("tasks.reject")} aria-label={t("tasks.reject")}>
+          <Button variant="ghost" size="icon-xs" disabled={busy} aria-busy={busy} onClick={() => onReject(task)} className="text-muted-foreground hover:text-destructive-ink hover:bg-destructive/10" title={t("tasks.reject")} aria-label={t("tasks.reject")}>
             <X className="size-4" />
           </Button>
         </>
@@ -966,7 +966,7 @@ function ExpandedResult({ task, onDetail }: { task: Task; onDetail: (task: Task)
 function TaskResultView({ type, result }: { type: string; result: string }) {
   const renderer = getTaskRenderer(type);
   if (renderer) return createElement(renderer, { result, taskType: type });
-  return <pre className="text-xs text-success font-mono overflow-x-auto max-h-60 p-2 whitespace-pre-wrap break-all">{result}</pre>;
+  return <pre className="text-xs text-success-ink font-mono overflow-x-auto max-h-60 p-2 whitespace-pre-wrap break-all">{result}</pre>;
 }
 
 function TaskDetailModal({ task, onClose, getAgentName, getStatusBadge, getTypeBadge }: {
@@ -993,7 +993,7 @@ function TaskDetailModal({ task, onClose, getAgentName, getStatusBadge, getTypeB
           <div><span className="text-muted-foreground">{t("tasks.detail_duration")}</span><p className="font-medium text-foreground mt-0.5">{calcDuration(task.created_at, task.updated_at)}</p></div>
           <div><span className="text-muted-foreground">{t("tasks.detail_by")}</span><p className="font-medium text-foreground mt-0.5">{task.created_by || t("tasks.detail_system")}</p></div>
           {task.approved_by && (
-            <div><span className="text-muted-foreground">{t("tasks.detail_approved_by")}</span><p className="font-medium text-success mt-0.5">{task.approved_by}</p></div>
+            <div><span className="text-muted-foreground">{t("tasks.detail_approved_by")}</span><p className="font-medium text-success-ink mt-0.5">{task.approved_by}</p></div>
           )}
         </div>
         <div className="overflow-y-auto flex-1">

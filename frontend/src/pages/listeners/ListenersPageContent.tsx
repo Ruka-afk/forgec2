@@ -273,14 +273,14 @@ export default function ListenersPageContent() {
       )}
 
       {healthError && (
-        <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-foreground">
+        <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-ink">
           <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1">{t("listeners.health_unavailable", { message: healthError })}</span>
         </div>
       )}
 
       {agentCountError && (
-        <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-foreground">
+        <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-ink">
           <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1">{t("listeners.agent_counts_unavailable", { message: agentCountError })}</span>
         </div>
@@ -289,7 +289,7 @@ export default function ListenersPageContent() {
       <MetricGrid count={6}>
         <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.total")} value={loading ? "…" : total} icon={<Plug className="size-5" />} /></Card>
         <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.running")} value={loading ? "…" : enabledCount} tone="success" icon={<Power className="size-5" />} trend={enabledCount === total && total > 0 ? t("dashboard.all_online") : undefined} /></Card>
-        <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.burned")} value={loading || healthLoading ? "…" : burnedCount} tone={burnedCount > 0 ? "destructive" : "muted"} icon={<Flame className="size-5" />} />{!loading && !healthLoading && healthError && <p className="mt-1 text-(--fs-micro-sm) text-warning-foreground">{t("listeners.health_unknown_burned")}</p>}</Card>
+        <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.burned")} value={loading || healthLoading ? "…" : burnedCount} tone={burnedCount > 0 ? "destructive" : "muted"} icon={<Flame className="size-5" />} />{!loading && !healthLoading && healthError && <p className="mt-1 text-(--fs-micro-sm) text-warning-ink">{t("listeners.health_unknown_burned")}</p>}</Card>
         <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.http")} value={loading ? "…" : httpCount} icon={<Globe className="size-5" />} /></Card>
         <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.tcp")} value={loading ? "…" : tcpCount} icon={<Network className="size-5" />} /></Card>
         <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.dns")} value={loading ? "…" : dnsCount} tone="primary" icon={<Radio className="size-5" />} /></Card>
@@ -426,11 +426,11 @@ export default function ListenersPageContent() {
                             <Pencil className="size-4" />
                             <span className="hidden sm:inline">{t("listeners.edit")}</span>
                          </Button>
-                         <Button variant="ghost" onClick={() => handleToggle(l)} className={`size-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs ${enabled ? "bg-warning/15 text-warning hover:bg-warning/15" : "bg-success/15 text-success hover:bg-success/15"} rounded-lg flex items-center justify-center gap-x-1`}>
+                         <Button variant="ghost" onClick={() => handleToggle(l)} className={`size-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs ${enabled ? "bg-warning/15 text-warning-ink hover:bg-warning/15" : "bg-success/15 text-success-ink hover:bg-success/15"} rounded-lg flex items-center justify-center gap-x-1`}>
                             <Power className="size-4" />
                                <span className="hidden sm:inline">{enabled ? t("listeners.stop") : t("listeners.start")}</span>
                          </Button>
-                          <Button variant="ghost" onClick={() => handleDelete(l)} className="size-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-lg flex items-center justify-center gap-x-1">
+                          <Button variant="ghost" onClick={() => handleDelete(l)} className="size-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs bg-destructive/10 hover:bg-destructive/20 text-destructive-ink rounded-lg flex items-center justify-center gap-x-1">
                            <Trash2 className="size-4" />
                              <span className="hidden sm:inline">{t("listeners.delete")}</span>
                          </Button>

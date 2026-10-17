@@ -247,7 +247,7 @@ export default function AutoTagPage() {
                   placeholder={t("autotag.value_ph")}
                   className="flex-1"
                 />
-                <Button variant="ghost" size="icon-sm" onClick={() => removeCondition(i)} className="text-destructive hover:text-destructive hover:bg-destructive/10" aria-label={t("common.remove")}>
+                <Button variant="ghost" size="icon-sm" onClick={() => removeCondition(i)} className="text-destructive-ink hover:text-destructive-ink hover:bg-destructive/10" aria-label={t("common.remove")}>
                   <X className="size-4" />
                 </Button>
               </div>

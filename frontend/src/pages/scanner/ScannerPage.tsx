@@ -368,7 +368,7 @@ export default function ScannerPage() {
                   {data.results.map((r) => (
                     <TableRow key={`${r.ip}-${r.port}-${r.protocol}`}>
                       <TableCell className="font-mono text-muted-foreground">{r.ip ?? "-"}</TableCell>
-                      <TableCell className="font-mono font-medium text-info dark:text-info">{r.port ?? "-"}</TableCell>
+                      <TableCell className="font-mono font-medium text-info-ink dark:text-info-ink">{r.port ?? "-"}</TableCell>
                       <TableCell className="text-muted-foreground">{r.protocol ?? "-"}</TableCell>
                       <TableCell><Badge variant={getStatusVariant(r.status ?? "open")}>{r.status ?? "open"}</Badge></TableCell>
                       <TableCell className="text-muted-foreground">{r.service ?? "-"}</TableCell>
@@ -445,7 +445,7 @@ export default function ScannerPage() {
                       <TableCell className="font-mono text-muted-foreground truncate max-w-[200px]">{h.target}</TableCell>
                       <TableCell className="text-muted-foreground">{h.type}</TableCell>
                       <TableCell className="text-muted-foreground">{h.ports ?? 0}</TableCell>
-                      <TableCell className="font-medium text-info dark:text-info">{h.results ?? 0}</TableCell>
+                      <TableCell className="font-medium text-info-ink dark:text-info-ink">{h.results ?? 0}</TableCell>
                       <TableCell>
                         <Badge variant={(h.status ?? "") === "completed" ? "success" : "warning"}>
                           {h.status}

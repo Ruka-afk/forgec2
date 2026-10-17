@@ -179,7 +179,7 @@ export default function TagsPage() {
                         variant="ghost"
                         size="icon"
                         onClick={() => setDeleteConfirm(tag)}
-                        className="size-8 text-muted-foreground hover:text-destructive min-w-[2.75rem] min-h-[2.75rem]"
+                        className="size-8 text-muted-foreground hover:text-destructive-ink min-w-[2.75rem] min-h-[2.75rem]"
                         aria-label={t("tags.a11y_delete")}
                       />}>
                       <Trash2 className="size-4" />

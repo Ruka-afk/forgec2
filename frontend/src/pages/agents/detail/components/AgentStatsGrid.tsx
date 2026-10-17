@@ -150,7 +150,7 @@ export default memo(function AgentStatsGrid({
             <div className="flex items-center gap-1.5">
               {killDate ? (
                 <>
-                  <span className="text-xs font-medium text-destructive">{formatTime(killDate)}</span>
+                  <span className="text-xs font-medium text-destructive-ink">{formatTime(killDate)}</span>
                   <Button variant="ghost" size="icon-xs" onClick={onClearKillDate} aria-label={t("agents.detail_clear_kill_date")} className="text-muted-foreground hover:text-foreground">
                     <X className="size-3" />
                   </Button>

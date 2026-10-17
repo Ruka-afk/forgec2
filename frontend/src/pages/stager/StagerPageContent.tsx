@@ -149,7 +149,7 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
 
       {createdToken && (
         <div className="p-4 bg-success/15 border border-success/30 rounded-lg space-y-2">
-          <div className="text-sm font-semibold text-success">{t("stager.token_created")}</div>
+          <div className="text-sm font-semibold text-success-ink">{t("stager.token_created")}</div>
           <div className="text-xs space-y-1">
             <div><span className="font-medium">{t("stager.stager_url")}</span> <code className="text-primary bg-secondary/80 px-1 rounded">{createdToken.stager_url}</code></div>
             <div><span className="font-medium">{t("stager.token_label")}</span>

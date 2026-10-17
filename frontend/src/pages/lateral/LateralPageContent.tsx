@@ -353,7 +353,7 @@ export default function LateralPageContent() {
       </Banner>
 
       {(partialFailures.length > 0 || error) && (
-        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-foreground">
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-ink">
           <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1">{t("lateral.partial_load_failed", { sources: partialFailures.join(", ") })}</span>
           <Button onClick={loadData} size="sm" variant="outline" className="min-h-11 px-4 sm:min-h-7 sm:px-2.5">{t("common.try_again")}</Button>
@@ -432,7 +432,7 @@ export default function LateralPageContent() {
                   })}
                 </SelectContent>
               </Select>
-              <p className="mt-1.5 text-(--fs-micro-sm) text-warning-foreground">
+              <p className="mt-1.5 text-(--fs-micro-sm) text-warning-ink">
                 {t("lateral.pivot_unsupported")}
               </p>
             </div>

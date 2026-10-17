@@ -101,15 +101,15 @@ export default function OpsecPage() {
 
   const riskLabels: Record<number, { label: string; cls: string }> = {
     1: { label: t("opsec.risk_low"), cls: "bg-secondary text-muted-foreground" },
-    2: { label: t("opsec.risk_medium"), cls: "bg-warning/15 dark:bg-chart-4/20 text-warning" },
-    3: { label: t("opsec.risk_high"), cls: "bg-warning/15 text-warning" },
-    4: { label: t("opsec.risk_critical"), cls: "bg-destructive/15 text-destructive" },
+    2: { label: t("opsec.risk_medium"), cls: "bg-warning/15 dark:bg-chart-4/20 text-warning-ink" },
+    3: { label: t("opsec.risk_high"), cls: "bg-warning/15 text-warning-ink" },
+    4: { label: t("opsec.risk_critical"), cls: "bg-destructive/15 text-destructive-ink" },
   };
 
   const actionLabels: Record<number, { label: string; cls: string }> = {
-    0: { label: t("opsec.action_block"), cls: "bg-destructive/15 text-destructive" },
-    1: { label: t("opsec.action_warn"), cls: "bg-warning/15 text-warning" },
-    2: { label: t("opsec.action_bypass"), cls: "bg-success/15 text-success" },
+    0: { label: t("opsec.action_block"), cls: "bg-destructive/15 text-destructive-ink" },
+    1: { label: t("opsec.action_warn"), cls: "bg-warning/15 text-warning-ink" },
+    2: { label: t("opsec.action_bypass"), cls: "bg-success/15 text-success-ink" },
   };
 
   const testTypes = [
@@ -216,7 +216,7 @@ export default function OpsecPage() {
       <PageContainer title={t("opsec.title")} subtitle={t("opsec.subtitle")} actions={<>
         <div className="flex items-center gap-2">
           <span className={cn("size-2 rounded-full animate-pulse", rulesUnread ? "bg-warning" : "bg-success")}></span>
-          <span className={cn("text-xs font-medium", rulesUnread ? "text-warning" : "text-success")}>
+          <span className={cn("text-xs font-medium", rulesUnread ? "text-warning-ink" : "text-success-ink")}>
             {rulesUnread ? "?" : rules.length} {t("opsec.active_rules")}
           </span>
         </div>
@@ -269,7 +269,7 @@ export default function OpsecPage() {
                         <Button onClick={() => openEditRule(rule)} variant="ghost" size="icon" title={t("opsec.dialog_edit")} aria-label={t("opsec.dialog_edit")}>
                           <Pencil className="size-4" />
                         </Button>
-                        <Button onClick={() => handleDeleteRule(rule.name)} variant="ghost" size="icon" className="text-destructive" title={t("opsec.delete")} aria-label={t("opsec.delete")}>
+                        <Button onClick={() => handleDeleteRule(rule.name)} variant="ghost" size="icon" className="text-destructive-ink" title={t("opsec.delete")} aria-label={t("opsec.delete")}>
                           <Trash2 className="size-4" />
                         </Button>
                       </div>
@@ -409,9 +409,9 @@ export default function OpsecPage() {
                       <code className="font-semibold text-foreground">{h.rule_name}</code>
                       <span className={cn(
                         "px-1.5 py-0.5 rounded text-(--fs-micro-sm) font-medium",
-                        h.risk_level >= 4 ? "bg-destructive/15 text-destructive" :
-                        h.risk_level >= 3 ? "bg-warning/15 text-warning dark:bg-warning/20 dark:text-warning" :
-                        "bg-warning/15 text-warning"
+                        h.risk_level >= 4 ? "bg-destructive/15 text-destructive-ink" :
+                        h.risk_level >= 3 ? "bg-warning/15 text-warning-ink dark:bg-warning/20 dark:text-warning-ink" :
+                        "bg-warning/15 text-warning-ink"
                       )}>
                         L{h.risk_level}
                       </span>

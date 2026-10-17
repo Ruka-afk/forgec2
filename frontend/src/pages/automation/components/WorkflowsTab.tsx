@@ -166,7 +166,7 @@ export function WorkflowsTab() {
                     <TooltipContent>{t("workflows.exec_history")}</TooltipContent>
                   </Tooltip>
                   <Tooltip>
-                    <TooltipTrigger render={<Button variant="outline" size="xs" disabled={execBusy === w.id} onClick={() => handleExecute(w)} aria-label={t("workflows.execute_now")} className="border-success text-success hover:bg-success/15" />}>
+                    <TooltipTrigger render={<Button variant="outline" size="xs" disabled={execBusy === w.id} onClick={() => handleExecute(w)} aria-label={t("workflows.execute_now")} className="border-success text-success-ink hover:bg-success/15" />}>
                       <Play className="size-4" />
                     </TooltipTrigger>
                     <TooltipContent>{t("workflows.execute_now")}</TooltipContent>

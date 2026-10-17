@@ -99,7 +99,7 @@ function getDuration(start?: string, end?: string): string {
 function getStatusInfo(status: string, t: (key: string, vars?: Record<string, string | number>) => string) {
   switch (status) {
     case "success": return { icon: <CheckCircle className="size-4 text-primary" />, label: t("builds.success"), bg: "bg-success" };
-    case "failed": return { icon: <XCircle className="size-4 text-destructive" />, label: t("builds.failed"), bg: "bg-destructive" };
+    case "failed": return { icon: <XCircle className="size-4 text-destructive-ink" />, label: t("builds.failed"), bg: "bg-destructive" };
     case "building": return { icon: <Spinner size="sm" />, label: t("builds.building"), bg: "bg-primary" };
     default: return { icon: <Clock className="size-4 text-muted-foreground" />, label: t("builds.pending"), bg: "bg-muted-foreground" };
   }

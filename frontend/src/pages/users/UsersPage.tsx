@@ -54,7 +54,7 @@ interface UserSession {
 function getRoleBadge(role: string) {
   if (role === "admin")
     return { icon: <Crown className="size-2.5" />, key: "users.role_admin", cls: "bg-primary/10 text-primary dark:bg-primary/25 dark:text-primary" };
-  return { icon: <UserIcon className="size-2.5" />, key: "users.role_user", cls: "bg-info/10 text-info" };
+  return { icon: <UserIcon className="size-2.5" />, key: "users.role_user", cls: "bg-info/10 text-info-ink" };
 }
 
 export default function UsersPage() {
@@ -160,30 +160,30 @@ export default function UsersPage() {
             return (
               <div className="flex items-center justify-center gap-1">
                 {!self && (
-                  <Button variant="ghost" size="icon-sm" onClick={() => handleToggle(uid)} disabled={actionLoading === uid + "_toggle"} className={`${isActive ? "text-warning hover:bg-warning/10" : "text-success hover:bg-success/10"}`} title={isActive ? t("users.disable") : t("users.enable")} aria-label={isActive ? t("users.disable") : t("users.enable")}>
+                  <Button variant="ghost" size="icon-sm" onClick={() => handleToggle(uid)} disabled={actionLoading === uid + "_toggle"} className={`${isActive ? "text-warning-ink hover:bg-warning/10" : "text-success-ink hover:bg-success/10"}`} title={isActive ? t("users.disable") : t("users.enable")} aria-label={isActive ? t("users.disable") : t("users.enable")}>
                     {isActive ? <Ban className="size-4" /> : <Check className="size-4" />}
                   </Button>
                 )}
                 {!self && (
-                  <Button variant="ghost" size="icon-sm" onClick={() => { setEditUser(u); setForm({ username: name, password: "", role: urole }); setShowEdit(true); }} className="text-info hover:bg-info/10" title={t("common.edit")} aria-label={t("common.edit")}>
+                  <Button variant="ghost" size="icon-sm" onClick={() => { setEditUser(u); setForm({ username: name, password: "", role: urole }); setShowEdit(true); }} className="text-info-ink hover:bg-info/10" title={t("common.edit")} aria-label={t("common.edit")}>
                     <Pencil className="size-4" />
                   </Button>
                 )}
                 <Button variant="ghost" size="icon-sm" onClick={() => { setPasswordUserId(uid); setNewPassword(""); setShowPasswordModal(true); }} className="text-primary hover:bg-primary/10" title={t("users.set_password")} aria-label={t("users.set_password")}>
                   <Key className="size-4" />
                 </Button>
-                <Button variant="ghost" size="icon-sm" onClick={() => openSessions(u)} className="text-info hover:bg-info/10" title={t("users.sessions")} aria-label={t("users.sessions")}>
+                <Button variant="ghost" size="icon-sm" onClick={() => openSessions(u)} className="text-info-ink hover:bg-info/10" title={t("users.sessions")} aria-label={t("users.sessions")}>
                   <Laptop className="size-4" />
                 </Button>
                 {!self && (
                   <>
-                    <Button variant="ghost" size="icon-sm" onClick={() => handleForceLogout(uid)} className="text-warning hover:bg-warning/10" title={t("users.force_logout")} aria-label={t("users.force_logout")}>
+                    <Button variant="ghost" size="icon-sm" onClick={() => handleForceLogout(uid)} className="text-warning-ink hover:bg-warning/10" title={t("users.force_logout")} aria-label={t("users.force_logout")}>
                       <LogOut className="size-4" />
                     </Button>
-                    <Button variant="ghost" size="icon-sm" onClick={() => handleKick(uid)} className="text-destructive hover:bg-destructive/10" title={t("users.kick_user")} aria-label={t("users.kick_user")}>
+                    <Button variant="ghost" size="icon-sm" onClick={() => handleKick(uid)} className="text-destructive-ink hover:bg-destructive/10" title={t("users.kick_user")} aria-label={t("users.kick_user")}>
                       <LogOut className="size-4" />
                     </Button>
-                    <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(uid, name)} disabled={actionLoading === uid + "_delete"} className="text-destructive hover:bg-destructive/10" title={t("common.delete")} aria-label={t("common.delete")}>
+                    <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(uid, name)} disabled={actionLoading === uid + "_delete"} className="text-destructive-ink hover:bg-destructive/10" title={t("common.delete")} aria-label={t("common.delete")}>
                       <Trash2 className="size-4" />
                     </Button>
                   </>
@@ -386,7 +386,7 @@ export default function UsersPage() {
         <Card className="p-4 shadow-sm hover:shadow-md transition-shadow duration-200">
           <div className="flex items-center gap-2 mb-2">
             <UserIcon className="size-4" />
-            <span className="text-sm font-semibold text-info">{t("users.role_user")}</span>
+            <span className="text-sm font-semibold text-info-ink">{t("users.role_user")}</span>
           </div>
           <ul className="text-xs text-muted-foreground space-y-1">
             <li className="flex items-start gap-1.5"><Check className="size-4" />{t("users.user_desc_1")}</li>
@@ -519,7 +519,7 @@ export default function UsersPage() {
               <LogOut className="size-4" /> {t("users.revoke_all_sessions")}
             </Button>
           </div>
-          {sessionsError && <p className="text-xs text-destructive">{sessionsError}</p>}
+          {sessionsError && <p className="text-xs text-destructive-ink">{sessionsError}</p>}
           {sessionsLoading ? (
             <div className="space-y-2">
               {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
@@ -546,7 +546,7 @@ export default function UsersPage() {
                       </div>
                     </div>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => handleRevokeSession(s.id)} disabled={revokeLoading !== null} className="text-destructive hover:bg-destructive/10 shrink-0">
+                  <Button variant="ghost" size="sm" onClick={() => handleRevokeSession(s.id)} disabled={revokeLoading !== null} className="text-destructive-ink hover:bg-destructive/10 shrink-0">
                     <LogOut className="size-4" /> {t("users.revoke_session")}
                   </Button>
                 </div>

@@ -215,11 +215,11 @@ export default memo(function AgentTaskList({
         <div className="flex items-center gap-2.5 sm:gap-4 flex-wrap">
           <StatCell icon={<ListChecks className="size-3 text-primary" />} label={t("agents.detail_total_tasks")} value={total} tone="text-foreground" />
           <div className="w-px h-3.5 bg-border" />
-          <StatCell icon={<CheckCircle className="size-3 text-success" />} label={t("agents.detail_completed")} value={completed} tone="text-success" />
+          <StatCell icon={<CheckCircle className="size-3 text-success-ink" />} label={t("agents.detail_completed")} value={completed} tone="text-success-ink" />
           <div className="w-px h-3.5 bg-border" />
-          <StatCell icon={<Clock className="size-3 text-warning" />} label={t("agents.detail_pending")} value={pending} tone="text-warning" />
+          <StatCell icon={<Clock className="size-3 text-warning-ink" />} label={t("agents.detail_pending")} value={pending} tone="text-warning-ink" />
           <div className="w-px h-3.5 bg-border" />
-          <StatCell icon={<XCircle className="size-3 text-destructive" />} label={t("agents.detail_failed")} value={failed} tone="text-destructive" />
+          <StatCell icon={<XCircle className="size-3 text-destructive-ink" />} label={t("agents.detail_failed")} value={failed} tone="text-destructive-ink" />
         </div>
         <div className="ml-auto flex items-center gap-1.5">
           <div className="relative">
@@ -367,7 +367,7 @@ export default memo(function AgentTaskList({
                           <div className="md:col-span-2"><span className="text-muted-foreground/100">{t("agents.tasklist_label_result")}</span><div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground/100"><Spinner size="xs" />{t("agents.tasklist_loading_result")}</div></div>
                         ) : null
                       ))}
-                      {((full?.error ?? task.error)) && <div className="md:col-span-2"><span className="text-muted-foreground/100">{t("agents.tasklist_label_error")}</span><pre className="mt-1 max-h-32 overflow-y-auto rounded-lg border border-destructive/20 bg-destructive/10 p-3 font-mono text-xs text-destructive whitespace-pre-wrap break-all">{full?.error ?? task.error}</pre></div>}
+                      {((full?.error ?? task.error)) && <div className="md:col-span-2"><span className="text-muted-foreground/100">{t("agents.tasklist_label_error")}</span><pre className="mt-1 max-h-32 overflow-y-auto rounded-lg border border-destructive/20 bg-destructive/10 p-3 font-mono text-xs text-destructive-ink whitespace-pre-wrap break-all">{full?.error ?? task.error}</pre></div>}
                     </div>
                   </div>
                 </CollapsibleContent>

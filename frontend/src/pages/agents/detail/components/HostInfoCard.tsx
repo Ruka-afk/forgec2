@@ -102,12 +102,12 @@ function SecuritySection({ data }: { data: HostInfoSection }) {
       {(avNames.length > 0 || edrNames.length > 0) && (
         <div className="flex flex-wrap gap-1.5">
           {avNames.map((n) => (
-            <span key={n} className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2.5 py-1 text-xs font-medium text-success ring-1 ring-success/20">
+            <span key={n} className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2.5 py-1 text-xs font-medium text-success-ink ring-1 ring-success/20">
               <ShieldAlert className="size-3" />{n}
             </span>
           ))}
           {edrNames.map((n) => (
-            <span key={n} className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning ring-1 ring-warning/20">
+            <span key={n} className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning-ink ring-1 ring-warning/20">
               <ShieldAlert className="size-3" />{n} (EDR)
             </span>
           ))}
@@ -242,7 +242,7 @@ export function HostInfoCard({ agentId, online }: { agentId: string; online: boo
 
   const renderSection = (key: string, data: HostInfoSection) => {
     if (data.error) {
-      return <p className="text-xs text-destructive">{asStr(data.error)}</p>;
+      return <p className="text-xs text-destructive-ink">{asStr(data.error)}</p>;
     }
     switch (key) {
       case "security":
@@ -312,7 +312,7 @@ export function HostInfoCard({ agentId, online }: { agentId: string; online: boo
       {online && !report && !busy && !error && (
         <p className="text-xs text-muted-foreground">{t("hostinfo.hint")}</p>
       )}
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && <p className="text-xs text-destructive-ink">{error}</p>}
       {report && (
         <div className="space-y-4">
           {Object.entries(report.sections ?? {}).map(([key, data]) => (

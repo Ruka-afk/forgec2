@@ -35,13 +35,13 @@ export default function DatabaseSection({
           ))}
         </div>
         <div className="flex flex-wrap gap-3">
-          <Button onClick={onVacuum} size="lg" disabled={saving} className="px-4 bg-primary/10 hover:bg-primary/20 text-primary text-sm font-medium transition-colors disabled:opacity-50">
+          <Button onClick={onVacuum} size="lg" disabled={saving} className="px-4 bg-primary/10 hover:bg-primary/15 text-primary text-sm font-medium transition-colors disabled:opacity-50">
             <Minimize2 className="size-4" />{t("settings.database.vacuum")}
           </Button>
           <Button onClick={onBackup} size="lg" disabled={saving} className="px-4 bg-accent hover:bg-accent/80 text-accent-foreground text-sm font-medium transition-colors disabled:opacity-50">
             <Copy className="size-4" />{t("settings.database.backup")}
           </Button>
-          <Button onClick={onDownloadDB} size="lg" className="px-4 bg-success/15 hover:bg-success/20 dark:hover:bg-success/60 text-success text-sm font-medium transition-colors">
+          <Button onClick={onDownloadDB} size="lg" className="px-4 bg-success/15 hover:bg-success/20 dark:hover:bg-success/60 text-success-ink text-sm font-medium transition-colors">
             <Download className="size-4" />{t("settings.database.download")}
           </Button>
         </div>

@@ -34,9 +34,9 @@ const SOURCE_ICONS: Record<string, React.ReactNode> = {
 const PAGE_SIZE = 80;
 
 const SOURCE_STYLES: Record<string, { border: string; iconBg: string; iconText: string; bg: string }> = {
-  timeline: { border: "border-l-info", iconBg: "bg-info/15", iconText: "text-info", bg: "" },
+  timeline: { border: "border-l-info", iconBg: "bg-info/15", iconText: "text-info-ink", bg: "" },
   task: { border: "border-l-chart-6", iconBg: "bg-chart-6/15", iconText: "text-chart-6", bg: "bg-chart-6/[0.03]" },
-  alert: { border: "border-l-destructive", iconBg: "bg-destructive/15", iconText: "text-destructive", bg: "bg-destructive/[0.03]" },
+  alert: { border: "border-l-destructive", iconBg: "bg-destructive/15", iconText: "text-destructive-ink", bg: "bg-destructive/[0.03]" },
 };
 
 export default function EventsStream() {
@@ -164,7 +164,7 @@ export default function EventsStream() {
       </div>
 
       {partialFailures.length > 0 && (
-        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-2.5 text-xs text-warning-foreground">
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-2.5 text-xs text-warning-ink">
           <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1">{t("events.partial_load_failed", { sources: partialFailures.join(", ") })}</span>
         </div>
@@ -185,7 +185,7 @@ export default function EventsStream() {
                 {SOURCE_ICONS[src]}
               </span>
               <span className="text-muted-foreground">{t(labelKey)}</span>
-              <span className={`font-mono font-semibold ${failed ? "text-warning-foreground" : "text-foreground"}`}>{failed ? "?" : counts[src]}</span>
+              <span className={`font-mono font-semibold ${failed ? "text-warning-ink" : "text-foreground"}`}>{failed ? "?" : counts[src]}</span>
             </div>
           );
         })}
@@ -247,7 +247,7 @@ export default function EventsStream() {
                   {ev.agentId && (
                     <Link
                       to={`/agents/${ev.agentId}`}
-                      className="shrink-0 rounded-md bg-primary/10 px-1.5 py-0.5 font-mono text-xs text-primary transition-colors hover:bg-primary/20"
+                      className="shrink-0 rounded-md bg-primary/10 px-1.5 py-0.5 font-mono text-xs text-primary transition-colors hover:bg-primary/15"
                     >
                       {ev.agentId.slice(0, 8)}
                     </Link>

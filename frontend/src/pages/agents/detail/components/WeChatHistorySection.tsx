@@ -189,7 +189,7 @@ export default memo(function WeChatHistorySection({ agentId, online }: WeChatHis
               </div>
             </div>
             {meta.skipped > 0 && (
-              <p className="mb-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
+              <p className="mb-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning-ink">
                 {t("agents.wechat_skipped_warning").replace("{n}", String(meta.skipped))}
               </p>
             )}

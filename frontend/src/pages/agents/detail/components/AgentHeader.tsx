@@ -149,8 +149,8 @@ export default memo(function AgentHeader({
                   )}
                   {avProducts.length > 0 ? (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-success/20 bg-success/10 px-2.5 py-1">
-                      <Shield className="size-3 text-success" />
-                      <span className="text-(--fs-micro-sm) uppercase tracking-wide text-success">AV</span>
+                      <Shield className="size-3 text-success-ink" />
+                      <span className="text-(--fs-micro-sm) uppercase tracking-wide text-success-ink">AV</span>
                       <span className="text-foreground">{avProducts.join(", ")}</span>
                     </span>
                   ) : status === "online" && avStatus === "empty" ? (
@@ -161,9 +161,9 @@ export default memo(function AgentHeader({
                     </span>
                   ) : status === "online" ? (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/25 bg-warning/10 px-2.5 py-1">
-                      <Shield className="size-3 text-warning" />
-                      <span className="text-(--fs-micro-sm) uppercase tracking-wide text-warning">AV</span>
-                      <span className="text-warning-foreground text-xs">{t("hostinfo.av_status_unknown")}</span>
+                      <Shield className="size-3 text-warning-ink" />
+                      <span className="text-(--fs-micro-sm) uppercase tracking-wide text-warning-ink">AV</span>
+                      <span className="text-warning-ink text-xs">{t("hostinfo.av_status_unknown")}</span>
                     </span>
                   ) : null}
                 </div>
@@ -198,7 +198,7 @@ export default memo(function AgentHeader({
                   <DropdownMenuItem render={<Link to={`/agents/${agentId}/remote-desktop`} />}>
                     <Monitor className="size-4" /> {t("agents.rdp_title")}
                     {isExperimentalDesktop("remote-desktop") ? (
-                      <span className="ml-auto text-(--fs-micro) text-warning"><QualityMark quality="experimental" /></span>
+                      <span className="ml-auto text-(--fs-micro) text-warning-ink"><QualityMark quality="experimental" /></span>
                     ) : null}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => onQuickAction("beacon_now", t("agents.beacon_now"))}>
@@ -245,7 +245,7 @@ export default memo(function AgentHeader({
               </span>
               <span className="text-(--fs-micro-sm) font-medium text-foreground leading-tight text-center">{item.label}</span>
               {quality && quality !== "core" && (
-                <span className={quality === "scripted" || quality === "experimental" ? "text-(--fs-micro) text-warning" : "text-(--fs-micro) text-muted-foreground"}>
+                <span className={quality === "scripted" || quality === "experimental" ? "text-(--fs-micro) text-warning-ink" : "text-(--fs-micro) text-muted-foreground"}>
                   <QualityMark quality={quality} />
                 </span>
               )}

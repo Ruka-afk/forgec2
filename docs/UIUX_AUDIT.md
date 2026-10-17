@@ -7,9 +7,9 @@ motion and narrow-screen quality. Out of scope by decision (do not re-open):
 information-architecture changes, page re-layouts, a new component system.
 
 Defect clusters below carry an owner batch (U1–U6) and the evidence that
-reproduces them. `npm run check:contrast` / `npm run check:aria` are the two
-new report-mode scanners (prototypes from this batch; strict flags already
-exist, promotion into `npm run check` happens in U1/U2 once clean).
+reproduces them. `npm run check:contrast` became a hard gate inside
+`npm run check` when U1b landed; `npm run check:aria` stays report-mode until
+U2 moves K1–K5.
 
 ## Method
 
@@ -17,15 +17,16 @@ exist, promotion into `npm run check` happens in U1/U2 once clean).
   blocks in `globals.css`, builds every pair the UI renders (solid fills,
   8–20 % tinted surfaces over background/card, text-on-surface, charts, rings)
   and computes WCAG ratios; `--selftest` pins the color math (white/black = 21,
-  `#777` cases, alpha compositing). 288 pairs across light+dark checked;
-  **114 text pairs below 4.5** (≈10 root causes with many usage variants),
-  2 non-text below 3.0, 6 informational (input/border boundaries).
+  `#777` cases, alpha compositing). Audit-time reading: 288 pairs across
+  light+dark, **114 text pairs below 4.5** (≈10 root causes with many usage
+  variants), 2 non-text below 3.0, 6 informational (input/border boundaries).
+  After the U1 batches: 304 pairs, 0 text failures.
 - **Browser cross-check** (temporary harness, not committed): the exact
   Tailwind class combinations were rendered in Chromium against the built CSS
   and measured from canvas pixels — the browser's own oklch/color-mix
   compositing — to confirm the static math. Where the two disagree the browser
-  is authoritative: the static script composites alpha tints in linear space
-  and reads ~0.3–1.3 high on 8–20 % tints.
+  is authoritative; U1a switched the script to compositing alpha tints in the
+  same gamma-encoded sRGB space browsers blend in (agreement within ~0.1).
 - **Runtime probe** (temporary Playwright spec, not committed): tab-order walk
   and screenshots for dashboard / agents / listeners / settings at 390 and 1280,
   light+dark, against the static export with mocked APIs (same `prepare()`
@@ -48,11 +49,15 @@ tracked below as defects, not regressions).
 > **U1a landed (2026-10-18):** C1, C2, C5, C6, C8 and C9 are fixed at the
 > token/primitive layer, and the component side of C3, C4 and C7 moved to the
 > new `-ink` / `-solid` roles (badge/banner/alert/button/dropdown variants, the
-> shell components, `statusStyles`, task renderers). What stays red in
-> `check:contrast` is the page-level legacy pattern — bare `text-X`,
-> `bg-X/NN text-X-foreground` chips and the light `primary/20` hovers —
-> scheduled for **U1b**, which also promotes `check:contrast --strict` into
-> `npm run check`.
+> shell components, `statusStyles`, task renderers).
+>
+> **U1b landed (2026-10-18):** the page-level migration is done — 300 bare
+> `text-X` call sites in 104 files became `text-X-ink`, 38 `-foreground`-on-tint
+> chips moved to ink, the light `primary/20` text chips/hovers became `/15`,
+> and `check:contrast --strict` is now a member of `npm run check` (304 pairs,
+> **0 text failures**). The single deliberate exception is the
+> `ScreenVideoPlayer` overlay, which paints the bright base hues on a dark
+> video surface.
 
 ### C1 · `text-destructive-foreground` is a phantom utility (6 sites)
 
@@ -203,7 +208,7 @@ if we adopt strict WCAG 1.4.11 for control boundaries).
 | Batch | Clusters |
 | --- | --- |
 | U1a status tokens & primitives (landed 2026-10-18) | C1, C2, C5, C6, C8, C9; component side of C3/C4/C7; `check:contrast` compositing switched to the browser's sRGB blend space |
-| U1b page migration | remaining C3/C4/C7 page call sites (`text-X` → `text-X-ink`, `-foreground`-on-tint chips, light `primary/20` hovers); promote `check:contrast --strict` |
+| U1b page migration (landed 2026-10-18) | C3/C4/C7 page call sites: 300 × `text-X` → `text-X-ink`, 38 `-foreground`-on-tint chips → ink, light `primary/20` → `/15`; `check:contrast --strict` promoted into `npm run check` |
 | U2 keyboard & names | K1–K5; promote `check:aria --strict` |
 | U3 feedback loop | F1–F2 |
 | U4 narrow screens | R2–R3 |
@@ -212,8 +217,9 @@ if we adopt strict WCAG 1.4.11 for control boundaries).
 
 ```powershell
 cd frontend
-npm run check:contrast            # report; --strict exits 1 on text failures
-npm run check:contrast -- --selftest
+npm run check                     # includes the strict contrast gate (U1b)
+node scripts/check-contrast.mjs   # report-only run, prints every ratio
+node scripts/check-contrast.mjs --selftest
 npm run check:aria                # report; --strict exits 1 on missing names
 npm run check:aria -- --list
 ```

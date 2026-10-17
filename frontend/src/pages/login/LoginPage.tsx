@@ -195,7 +195,7 @@ function LoginForm() {
                 />
               </div>
               {touched.username && errors.username && (
-                <p id="login-username-error" role="alert" className="text-xs text-destructive mt-1">{errors.username}</p>
+                <p id="login-username-error" role="alert" className="text-xs text-destructive-ink mt-1">{errors.username}</p>
               )}
             </div>
 
@@ -216,7 +216,7 @@ function LoginForm() {
                 />
               </div>
               {touched.password && errors.password && (
-                <p id="login-password-error" role="alert" className="text-xs text-destructive mt-1">{errors.password}</p>
+                <p id="login-password-error" role="alert" className="text-xs text-destructive-ink mt-1">{errors.password}</p>
               )}
             </div>
 
@@ -243,7 +243,7 @@ function LoginForm() {
                 />
               </div>
               {touched.totpCode && errors.totpCode && (
-                <p id="login-totp-error" role="alert" className="text-xs text-destructive mt-1">{errors.totpCode}</p>
+                <p id="login-totp-error" role="alert" className="text-xs text-destructive-ink mt-1">{errors.totpCode}</p>
               )}
             </div>
 

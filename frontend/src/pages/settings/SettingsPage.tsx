@@ -310,7 +310,7 @@ export default function SettingsPage() {
     <PageContainer variant="wide" title={t("settings.title")} subtitle={t("settings.subtitle")}>
 
       {settingsLoaded && settingsError && (
-        <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-foreground">
+        <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-ink">
           <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1">{t("settings.refresh_failed_stale", { message: settingsError })}</span>
           <Button onClick={retrySettings} size="sm" variant="outline" className="min-h-11 px-4 sm:min-h-7 sm:px-2.5">

@@ -54,9 +54,9 @@ export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCou
         const isSelected = selected?.has(id) ?? false;
         const OsIcon = osIcon(os);
         const itone = integrityTone(beacon.integrity);
-        const integrityClass = itone === "destructive" ? "bg-destructive/10 text-destructive"
-          : itone === "success" ? "bg-success/15 text-success"
-          : "bg-warning/15 text-warning";
+        const integrityClass = itone === "destructive" ? "bg-destructive/10 text-destructive-ink"
+          : itone === "success" ? "bg-success/15 text-success-ink"
+          : "bg-warning/15 text-warning-ink";
         return (
           <Card
             key={id}

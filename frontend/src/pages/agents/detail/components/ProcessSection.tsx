@@ -144,7 +144,7 @@ export default memo(function ProcessSection({ agentId, online, processList, load
                             <Tooltip>
                               <TooltipTrigger
                                 render={
-                                  <Button variant="ghost" size="icon-xs" className="text-destructive" disabled={!online || acting !== null} onClick={() => void runAction("killproc", row.pid, true)} aria-label={t("agents.proc_kill")}>
+                                  <Button variant="ghost" size="icon-xs" className="text-destructive-ink" disabled={!online || acting !== null} onClick={() => void runAction("killproc", row.pid, true)} aria-label={t("agents.proc_kill")}>
                                     <Skull className="size-3.5" />
                                   </Button>
                                 }

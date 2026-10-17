@@ -247,7 +247,7 @@ export default function PhishingPageContent() {
                       <TableCell className="px-4 py-3 sm:py-3.5"><Badge variant="outline">{tpl.type}</Badge></TableCell>
                       <TableCell className="px-4 py-3 sm:py-3.5 text-right">
                         <Button variant="ghost" size="icon-xs" onClick={() => handleEditTpl(tpl)} className="text-muted-foreground hover:text-primary mr-3" aria-label={t("phishing.a11y_edit_template")}><Pencil className="size-4" /></Button>
-                        <Button variant="ghost" size="icon-xs" onClick={() => handleDeleteTpl(tid)} className="text-muted-foreground hover:text-destructive" aria-label={t("phishing.a11y_delete_template")}><Trash2 className="size-4" /></Button>
+                        <Button variant="ghost" size="icon-xs" onClick={() => handleDeleteTpl(tid)} className="text-muted-foreground hover:text-destructive-ink" aria-label={t("phishing.a11y_delete_template")}><Trash2 className="size-4" /></Button>
                       </TableCell>
                     </TableRow>
                   );
@@ -355,13 +355,13 @@ export default function PhishingPageContent() {
                     <TableRow key={cid}>
                       <TableCell className="px-4 py-3 sm:py-3.5 font-medium text-foreground">{c.name}</TableCell>
                       <TableCell className="px-4 py-3 sm:py-3.5">{statusBadge(c.status)}</TableCell>
-                      <TableCell className="px-4 py-3 sm:py-3.5 text-right text-muted-foreground">{c.sent_count}{c.failed_count > 0 && <span className="text-destructive"> ({t("phishing.sends_failed", { n: c.failed_count })})</span>}</TableCell>
+                      <TableCell className="px-4 py-3 sm:py-3.5 text-right text-muted-foreground">{c.sent_count}{c.failed_count > 0 && <span className="text-destructive-ink"> ({t("phishing.sends_failed", { n: c.failed_count })})</span>}</TableCell>
                       <TableCell className="px-4 py-3 sm:py-3.5 text-right text-muted-foreground">{c.open_count}</TableCell>
                       <TableCell className="px-4 py-3 sm:py-3.5 text-right text-muted-foreground">{c.cred_count}</TableCell>
                       <TableCell className="px-4 py-3 sm:py-3.5 text-right">
                         {c.status === "draft" && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" disabled={launchingId === cid} onClick={() => handleLaunch(cid)} className="text-primary hover:text-primary dark:hover:text-primary mr-3" aria-label={t("phishing.launch")} />}><Play className="size-4" /></TooltipTrigger><TooltipContent>{t("phishing.launch")}</TooltipContent></Tooltip>}
-                        {c.status === "running" && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleStop(cid)} className="text-warning hover:text-warning-foreground mr-3" aria-label={t("phishing.stop")} />}><Square className="size-4" /></TooltipTrigger><TooltipContent>{t("phishing.stop")}</TooltipContent></Tooltip>}
-                        {(c.status === "draft" || c.status === "completed" || c.status === "stopped") && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleDeleteCamp(cid)} className="text-muted-foreground hover:text-destructive" aria-label={t("phishing.delete")} />}><Trash2 className="size-4" /></TooltipTrigger><TooltipContent>{t("phishing.delete")}</TooltipContent></Tooltip>}
+                        {c.status === "running" && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleStop(cid)} className="text-warning-ink hover:text-warning-ink/80 mr-3" aria-label={t("phishing.stop")} />}><Square className="size-4" /></TooltipTrigger><TooltipContent>{t("phishing.stop")}</TooltipContent></Tooltip>}
+                        {(c.status === "draft" || c.status === "completed" || c.status === "stopped") && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleDeleteCamp(cid)} className="text-muted-foreground hover:text-destructive-ink" aria-label={t("phishing.delete")} />}><Trash2 className="size-4" /></TooltipTrigger><TooltipContent>{t("phishing.delete")}</TooltipContent></Tooltip>}
                       </TableCell>
                     </TableRow>
                   );

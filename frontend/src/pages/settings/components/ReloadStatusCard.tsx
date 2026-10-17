@@ -77,17 +77,17 @@ export default function ReloadStatusCard() {
               <div className="rounded-lg border border-border/60 bg-muted/30 p-3 text-xs space-y-1.5">
                 <div className="text-muted-foreground">{t("settings.reload_last_at", { at: formatDateTime(last.at) })}</div>
                 {(last.applied?.length ?? 0) > 0 && (
-                  <div><span className="font-medium text-success">{t("settings.reload_applied")}: </span>
+                  <div><span className="font-medium text-success-ink">{t("settings.reload_applied")}: </span>
                     <span className="font-mono text-muted-foreground">{last.applied!.join(", ")}</span></div>
                 )}
                 {last.failed && Object.keys(last.failed).length > 0 && (
-                  <div><span className="font-medium text-destructive">{t("settings.reload_failed")}: </span>
+                  <div><span className="font-medium text-destructive-ink">{t("settings.reload_failed")}: </span>
                     <span className="font-mono text-muted-foreground">
                       {Object.entries(last.failed).map(([k, v]) => `${k} (${v})`).join(", ")}
                     </span></div>
                 )}
                 {(last.rejected_static?.length ?? 0) > 0 && (
-                  <div><span className="font-medium text-warning">{t("settings.reload_needs_restart")}: </span>
+                  <div><span className="font-medium text-warning-ink">{t("settings.reload_needs_restart")}: </span>
                     <span className="font-mono text-muted-foreground">{last.rejected_static!.join(", ")}</span></div>
                 )}
                 {(last.applied?.length ?? 0) === 0 && (!last.failed || Object.keys(last.failed).length === 0) && (

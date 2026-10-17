@@ -236,7 +236,7 @@ export default function TrafficPage({ embedded = false }: { embedded?: boolean }
                       <TableCell className="text-xs text-muted-foreground">{ip}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{agent ? agent.substring(0, 8) : "-"}</TableCell>
                       <TableCell className="text-center">
-                        <span className={`text-xs font-medium ${status >= 400 ? "text-destructive" : status >= 300 ? "text-warning" : "text-success"}`}>{status}</span>
+                        <span className={`text-xs font-medium ${status >= 400 ? "text-destructive-ink" : status >= 300 ? "text-warning-ink" : "text-success-ink"}`}>{status}</span>
                       </TableCell>
                       <TableCell className="text-right text-xs text-muted-foreground">{formatBytes(size)}</TableCell>
                       <TableCell className="text-right text-xs text-muted-foreground">{latency}ms</TableCell>

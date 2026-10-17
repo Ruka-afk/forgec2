@@ -199,7 +199,7 @@ export default function IntegrationsPage() {
                           <Power className="size-3.5" />
                         </Button>
                         <Button variant="ghost" size="icon-sm" onClick={() => deleteIntegration(intg.id)} aria-label={t("common.delete")}>
-                          <Trash2 className="size-3.5 text-destructive" />
+                          <Trash2 className="size-3.5 text-destructive-ink" />
                         </Button>
                       </div>
                     ) : null}

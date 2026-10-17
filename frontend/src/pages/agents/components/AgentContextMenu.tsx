@@ -157,7 +157,7 @@ function MenuRow({
       variant="ghost"
       size="sm"
       onClick={onClick}
-      className={`h-8 w-full justify-start gap-2 px-2 font-normal ${danger ? "text-destructive hover:bg-destructive/10 hover:text-destructive" : ""}`}
+      className={`h-8 w-full justify-start gap-2 px-2 font-normal ${danger ? "text-destructive-ink hover:bg-destructive/10 hover:text-destructive-ink" : ""}`}
     >
       {icon}
       {label}

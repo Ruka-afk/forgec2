@@ -30,7 +30,7 @@ const TOOLS: AssetTool[] = [
     titleKey: "nav.groups",
     descriptionKey: "asset_org.groups_desc",
     icon: Layers,
-    tone: "bg-success/10 text-success",
+    tone: "bg-success/10 text-success-ink",
     perms: ["groups.read"],
   },
   {
@@ -38,7 +38,7 @@ const TOOLS: AssetTool[] = [
     titleKey: "nav.autotag",
     descriptionKey: "asset_org.autotag_desc",
     icon: Wand2,
-    tone: "bg-warning/10 text-warning",
+    tone: "bg-warning/10 text-warning-ink",
     perms: ["settings.read"],
   },
 ];

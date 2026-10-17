@@ -39,7 +39,7 @@ export function ListenerCallbackStrip({
         </>
       ) : (
         <>
-          <span className="inline-flex flex-1 items-center gap-1.5 text-sm font-medium text-warning-foreground">
+          <span className="inline-flex flex-1 items-center gap-1.5 text-sm font-medium text-warning-ink">
             <span className="size-1.5 animate-pulse rounded-full bg-warning" aria-hidden="true" />
             {t("generate.toast.select_listener_first")}
           </span>

@@ -40,7 +40,7 @@ export default function MaintenanceSection({
                   <SelectItem value="90">{t("settings.maintenance.days").replace("{n}", "90")}</SelectItem>
                 </SelectContent>
               </Select>
-              <Button onClick={() => onPurge(item.type)} disabled={saving} className="px-4 h-8 bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-lg text-xs font-medium transition-colors disabled:opacity-50">
+              <Button onClick={() => onPurge(item.type)} disabled={saving} className="px-4 h-8 bg-destructive/10 hover:bg-destructive/20 text-destructive-ink rounded-lg text-xs font-medium transition-colors disabled:opacity-50">
                 <Trash2 className="size-4" />{t("settings.maintenance.purge")}
               </Button>
             </div>
@@ -51,7 +51,7 @@ export default function MaintenanceSection({
             <div className="text-sm font-medium text-muted-foreground">{t("settings.maintenance.purge_screenshots")}</div>
             <div className="text-xs text-muted-foreground mt-0.5">{t("settings.maintenance.purge_screenshots_desc")}</div>
           </div>
-          <Button onClick={onPurgeScreenshots} disabled={saving} className="px-4 h-8 bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-lg text-xs font-medium transition-colors disabled:opacity-50">
+          <Button onClick={onPurgeScreenshots} disabled={saving} className="px-4 h-8 bg-destructive/10 hover:bg-destructive/20 text-destructive-ink rounded-lg text-xs font-medium transition-colors disabled:opacity-50">
             <Trash2 className="size-4" />{t("settings.maintenance.purge")}
           </Button>
         </div>

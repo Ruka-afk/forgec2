@@ -45,7 +45,7 @@ export default memo(function RdpStatusCards({ t, monitoring }: RdpStatusCardsPro
           </div>
           <div className="text-sm text-foreground">
             <span
-               className={`inline-flex items-center gap-1 ${monitoring ? "text-success" : "text-muted-foreground/100"}`}
+               className={`inline-flex items-center gap-1 ${monitoring ? "text-success-ink" : "text-muted-foreground/100"}`}
             >
               <StatusDot tone={monitoring ? "success" : "muted"} size="xs" pulse={monitoring} />
               {monitoring ? t("agents.rdp_session_active") : t("agents.rdp_disconnected")}

@@ -235,10 +235,10 @@ export default function ReportPage() {
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-5">
-        <StatCard color="indigo" label={t("report.stat_agents_total")} value={stats?.total_agents ?? "—"} sub={stats ? `${stats.online_agents || 0} ${t("report.online")}` : t("status.unknown")} subColor="text-success" />
+        <StatCard color="indigo" label={t("report.stat_agents_total")} value={stats?.total_agents ?? "—"} sub={stats ? `${stats.online_agents || 0} ${t("report.online")}` : t("status.unknown")} subColor="text-success-ink" />
         <StatCard color="emerald" label={t("report.stat_task_exec")} value={stats?.total_tasks ?? "—"} sub={stats ? `${stats.success_tasks || 0} ${t("report.success")} / ${stats.failed_tasks || 0} ${t("report.failed")}` : t("status.unknown")} subColor="text-muted-foreground" />
         <StatCard color="amber" label={t("report.stat_creds")} value={stats?.total_creds ?? "—"} sub={stats ? t("report.collected") : t("status.unknown")} subColor="text-muted-foreground" />
-        <StatCard color="destructive" label={t("report.stat_findings")} value={stats?.total_findings ?? "—"} sub={stats ? `${t("report.critical")}: ${stats.critical_findings || 0} | ${t("report.high")} ${stats.high_findings || 0}` : t("status.unknown")} subColor="text-destructive" />
+        <StatCard color="destructive" label={t("report.stat_findings")} value={stats?.total_findings ?? "—"} sub={stats ? `${t("report.critical")}: ${stats.critical_findings || 0} | ${t("report.high")} ${stats.high_findings || 0}` : t("status.unknown")} subColor="text-destructive-ink" />
       </div>
 
       {previewError && (
@@ -349,7 +349,7 @@ export default function ReportPage() {
                               >
                                 {downloading === `history-${id}` ? <Spinner size="xs" /> : <Download className="size-4" />}
                               </Button>
-                              <Button variant="ghost" size="icon" onClick={() => handleDeleteReport(id)} className="text-destructive hover:bg-destructive/10" aria-label={t("report.a11y_delete")}>
+                              <Button variant="ghost" size="icon" onClick={() => handleDeleteReport(id)} className="text-destructive-ink hover:bg-destructive/10" aria-label={t("report.a11y_delete")}>
                                 <Trash2 className="size-4" />
                               </Button>
                             </div>
@@ -425,8 +425,8 @@ export default function ReportPage() {
                       <TableRow key={ts.type}>
                         <TableCell className="font-medium">{ts.type || "-"}</TableCell>
                         <TableCell>{ts.total ?? 0}</TableCell>
-                        <TableCell className="text-success">{ts.success ?? 0}</TableCell>
-                        <TableCell className="text-destructive">{ts.failed ?? 0}</TableCell>
+                        <TableCell className="text-success-ink">{ts.success ?? 0}</TableCell>
+                        <TableCell className="text-destructive-ink">{ts.failed ?? 0}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Progress value={ts.success_rate ?? Math.round(((ts.success ?? 0) / (ts.total || 1)) * 100)} className="flex-1 max-w-[100px]" />
@@ -495,7 +495,7 @@ export default function ReportPage() {
                         <TableCell className="font-medium">{l.name || "-"}</TableCell>
                         <TableCell><Badge variant="secondary" className="font-mono">{l.protocol || "-"}</Badge></TableCell>
                         <TableCell>
-                          <span className={`inline-flex items-center gap-1 text-xs font-medium ${l.status === "active" ? "text-success" : "text-muted-foreground"}`}>
+                          <span className={`inline-flex items-center gap-1 text-xs font-medium ${l.status === "active" ? "text-success-ink" : "text-muted-foreground"}`}>
                             <StatusDot tone={l.status === "active" ? "success" : "muted"} size="xs" />
                             {l.status || "-"}
                           </span>
@@ -534,7 +534,7 @@ export default function ReportPage() {
                           <AccordionTrigger className="px-4 py-3 hover:bg-muted/50">
                             <div className="flex items-start gap-3 flex-1 text-left">
                               <div className="mt-0.5">
-                                {f.severity === "critical" ? <CircleAlert className="size-4 text-destructive" /> : f.severity === "high" ? <TriangleAlert className="size-4 text-warning" /> : f.severity === "medium" ? <CircleAlert className="size-4 text-warning" /> : <Info className="size-4 text-info" />}
+                                {f.severity === "critical" ? <CircleAlert className="size-4 text-destructive-ink" /> : f.severity === "high" ? <TriangleAlert className="size-4 text-warning-ink" /> : f.severity === "medium" ? <CircleAlert className="size-4 text-warning-ink" /> : <Info className="size-4 text-info-ink" />}
                               </div>
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 flex-wrap">

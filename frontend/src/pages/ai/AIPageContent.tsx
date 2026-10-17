@@ -1109,7 +1109,7 @@ export default function AIPage() {
             <Button variant="ghost" size="sm" onClick={handleExport} disabled={messages.length === 0} className="hidden sm:inline-flex" aria-label={t("ai.export")} title={t("ai.export")}>
               <Download className="size-4" /> <span className="hidden sm:inline">{t("ai.export")}</span>
             </Button>
-            <Button variant="ghost" size="sm" onClick={handleClear} disabled={messages.length === 0} className="hidden text-muted-foreground hover:text-destructive sm:inline-flex" aria-label={t("ai.clear")} title={t("ai.clear")}>
+            <Button variant="ghost" size="sm" onClick={handleClear} disabled={messages.length === 0} className="hidden text-muted-foreground hover:text-destructive-ink sm:inline-flex" aria-label={t("ai.clear")} title={t("ai.clear")}>
               <Trash2 className="size-4" /> <span className="hidden sm:inline">{t("ai.clear")}</span>
             </Button>
             <DropdownMenu>
@@ -1130,9 +1130,9 @@ export default function AIPage() {
 
         {configError && (
           <div role="alert" className="shrink-0 border-b border-destructive/25 bg-destructive/8 px-3 py-2.5 sm:px-5">
-            <div className="mx-auto flex w-full max-w-4xl flex-col gap-1 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between">
+            <div className="mx-auto flex w-full max-w-4xl flex-col gap-1 text-sm text-destructive-ink sm:flex-row sm:items-center sm:justify-between">
               <span>{t("ai.config_unread", { message: configError })}</span>
-              <Button variant="ghost" size="xs" onClick={() => { void loadConfig(); }} className="h-7 self-start text-destructive sm:self-auto">
+              <Button variant="ghost" size="xs" onClick={() => { void loadConfig(); }} className="h-7 self-start text-destructive-ink sm:self-auto">
                 {t("common.try_again")}
               </Button>
             </div>
@@ -1141,12 +1141,12 @@ export default function AIPage() {
 
         {!configLoading && !configError && !configured && (
           <div className="shrink-0 border-b border-warning/25 bg-warning/8 px-3 py-2.5 sm:px-5">
-            <div className="mx-auto flex w-full max-w-4xl flex-col gap-1 text-sm text-warning sm:flex-row sm:items-center sm:justify-between">
+            <div className="mx-auto flex w-full max-w-4xl flex-col gap-1 text-sm text-warning-ink sm:flex-row sm:items-center sm:justify-between">
               <span>{canConfigure
                 ? (hasApiKey ? t("ai.disabled_warning") : t("ai.no_api_key_warning"))
                 : t("ai.contact_admin_warning")}</span>
               {canConfigure && (
-                <Button variant="ghost" size="xs" onClick={() => setShowSettings(true)} className="h-7 self-start text-warning sm:self-auto">
+                <Button variant="ghost" size="xs" onClick={() => setShowSettings(true)} className="h-7 self-start text-warning-ink sm:self-auto">
                   {t("ai.configure_now")}
                 </Button>
               )}

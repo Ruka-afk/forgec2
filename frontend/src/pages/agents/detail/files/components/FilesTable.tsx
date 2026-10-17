@@ -173,7 +173,7 @@ export default memo(function FilesTable(props: FilesTableProps) {
                       variant="ghost"
                       size="icon-sm"
                       onClick={() => onDelete(entry.name)}
-                      className="text-destructive"
+                      className="text-destructive-ink"
                       aria-label={t("common.delete")}
                     >
                       <Trash2 className="size-4" />

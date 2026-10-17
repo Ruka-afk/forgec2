@@ -251,7 +251,7 @@ export default function ScriptingPage() {
         {error && !data && (
           // First-load failure: no snapshot to retain yet, so the "no scripts /
           // no history" empties below must not stand in for the failure.
-          <div role="alert" className="flex flex-wrap items-center gap-2 border border-warning/30 bg-warning/10 px-3 py-2 rounded-lg text-xs text-warning-foreground">
+          <div role="alert" className="flex flex-wrap items-center gap-2 border border-warning/30 bg-warning/10 px-3 py-2 rounded-lg text-xs text-warning-ink">
             <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
             <span className="min-w-0 flex-1">{t("scripting.data_unreadable", { message: error })}</span>
             <Button onClick={() => void loadData()} size="xs" variant="outline">{t("common.try_again")}</Button>
@@ -290,7 +290,7 @@ export default function ScriptingPage() {
                   </Select>
                   <p className="text-xs text-muted-foreground mt-2">{t("scripting.target_agent_hint")}</p>
                   {!canRun && (
-                    <p className="text-xs text-destructive mt-2">{t("scripting.admin_only")}</p>
+                    <p className="text-xs text-destructive-ink mt-2">{t("scripting.admin_only")}</p>
                   )}
                 </div>
               </Card>
@@ -308,7 +308,7 @@ export default function ScriptingPage() {
                         <Button variant="ghost" size="sm" onClick={() => handleLoadScript(s)} className="text-sm text-muted-foreground hover:text-primary truncate text-left flex-1 justify-start">
                           {s.name || t("scripting.untitled")}
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteScript(s)} className="text-muted-foreground hover:text-destructive ml-2" aria-label={t("scripting.delete_title")}>
+                        <Button variant="ghost" size="sm" onClick={() => handleDeleteScript(s)} className="text-muted-foreground hover:text-destructive-ink ml-2" aria-label={t("scripting.delete_title")}>
                           <Trash2 className="size-4" />
                         </Button>
                       </div>
@@ -321,7 +321,7 @@ export default function ScriptingPage() {
                 <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-border">
                   <span className="text-sm font-semibold text-foreground">{t("scripting.api_reference")}</span>
                 </div>
-                <div className="p-3 text-xs font-mono text-info space-y-1">
+                <div className="p-3 text-xs font-mono text-info-ink space-y-1">
                   {apiRefs.map((ref) => (
                     <div key={ref} className="py-0.5">{ref}</div>
                   ))}
@@ -403,7 +403,7 @@ export default function ScriptingPage() {
                       </div>
                     </div>
                     {run.error && (
-                      <pre className="text-xs font-mono text-destructive bg-background rounded-lg p-3 mt-2 max-h-32 overflow-y-auto whitespace-pre-wrap">{run.error}</pre>
+                      <pre className="text-xs font-mono text-destructive-ink bg-background rounded-lg p-3 mt-2 max-h-32 overflow-y-auto whitespace-pre-wrap">{run.error}</pre>
                     )}
                   </div>
                 ))}

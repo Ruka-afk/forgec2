@@ -133,7 +133,7 @@ export default function CertificatesSection({
         {cert.subject ? (
           <>
             {cert.is_self_signed && (
-              <div className="mb-4 px-4 py-3 bg-warning/10 dark:bg-warning/20 border border-warning/20 dark:border-warning/40 rounded-lg text-sm text-warning flex items-center gap-2">
+              <div className="mb-4 px-4 py-3 bg-warning/10 dark:bg-warning/20 border border-warning/20 dark:border-warning/40 rounded-lg text-sm text-warning-ink flex items-center gap-2">
                 <AlertTriangle className="size-4 shrink-0" />
                 {t("settings.certificates.self_signed_warning")}
               </div>
@@ -152,7 +152,7 @@ export default function CertificatesSection({
               </div>
               <div className="bg-muted rounded-lg p-4 border border-border">
                 <div className="text-xs text-muted-foreground">{t("settings.certificates.expires_in")}</div>
-                <div className={`font-semibold text-sm mt-1 ${isExpiringSoon ? "text-destructive" : "text-foreground"}`}>
+                <div className={`font-semibold text-sm mt-1 ${isExpiringSoon ? "text-destructive-ink" : "text-foreground"}`}>
                   {typeof cert.expires_in === "number" ? <>{cert.expires_in} {t("settings.certificates.days")}</> : "-"}
                 </div>
               </div>
@@ -163,7 +163,7 @@ export default function CertificatesSection({
               <div className="bg-muted rounded-lg p-4 border border-border">
                 <div className="text-xs text-muted-foreground">{t("settings.certificates.type")}</div>
                 <div className="font-semibold text-sm text-foreground mt-1 flex items-center gap-1.5">
-                  {cert.is_self_signed ? <CheckCircle className="size-3.5 text-warning" /> : <CheckCircle className="size-3.5 text-success" />}
+                  {cert.is_self_signed ? <CheckCircle className="size-3.5 text-warning-ink" /> : <CheckCircle className="size-3.5 text-success-ink" />}
                   {cert.is_self_signed ? t("settings.certificates.self_signed") : t("settings.certificates.trusted")}
                 </div>
               </div>
@@ -175,7 +175,7 @@ export default function CertificatesSection({
         <div className="flex flex-wrap gap-3">
           <Input type="file" ref={certInputRef} className="hidden" accept=".crt,.pem,.cer" onChange={handleCertFileChange} />
           <Input type="file" ref={keyInputRef} className="hidden" accept=".key,.pem" onChange={handleKeyFileChange} />
-          <Button onClick={() => { setPendingCertFile(null); setWaitingForKey(false); certInputRef.current?.click(); }} size="lg" disabled={uploading || saving} className="px-4 bg-primary/10 hover:bg-primary/20 text-primary text-sm font-medium transition-colors disabled:opacity-50">
+          <Button onClick={() => { setPendingCertFile(null); setWaitingForKey(false); certInputRef.current?.click(); }} size="lg" disabled={uploading || saving} className="px-4 bg-primary/10 hover:bg-primary/15 text-primary text-sm font-medium transition-colors disabled:opacity-50">
             <Upload className="size-4" />{waitingForKey ? t("settings.certificates.choose_key") : t("settings.certificates.upload")}
           </Button>
           <Button onClick={() => setShowRegenDialog(true)} size="lg" disabled={uploading || saving} className="px-4 bg-accent hover:bg-accent/80 text-accent-foreground text-sm font-medium transition-colors disabled:opacity-50">

@@ -93,7 +93,7 @@ export function AgentBulkBar({
                   </div>
                   <span className="text-muted-foreground/100 shrink-0">
                     {t("agents.n_tasks").replace("{n}", String(r.tasks_created ?? 0))}
-                    {r.failed > 0 && <span className="ml-1 text-destructive">({t("agents.n_failed").replace("{n}", String(r.failed))})</span>}
+                    {r.failed > 0 && <span className="ml-1 text-destructive-ink">({t("agents.n_failed").replace("{n}", String(r.failed))})</span>}
                   </span>
                 </div>
               ))}

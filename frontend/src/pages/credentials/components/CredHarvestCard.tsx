@@ -141,9 +141,9 @@ export function CredHarvestCard() {
         </div>
       </div>
       {hasModule === null ? (
-        <p className="mt-3 text-xs text-destructive">{t("cred.module_status_unknown")}</p>
+        <p className="mt-3 text-xs text-destructive-ink">{t("cred.module_status_unknown")}</p>
       ) : !hasModule ? (
-        <p className="mt-3 text-xs text-warning">
+        <p className="mt-3 text-xs text-warning-ink">
           {t("cred.missing_module")}
         </p>
       ) : (

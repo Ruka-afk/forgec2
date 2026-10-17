@@ -315,7 +315,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
               <div>
                 <Label className="text-xs">{t("packer.shellcode_file")}</Label>
                 <Input type="file" accept=".bin" onChange={handleShellcodeFile} aria-label={t("packer.upload_bof")} />
-                {shellcodeB64 && <span className="text-xs text-success mt-1 flex items-center gap-1"><CheckCircle className="size-4" />{t("packer.shellcode_loaded")}</span>}
+                {shellcodeB64 && <span className="text-xs text-success-ink mt-1 flex items-center gap-1"><CheckCircle className="size-4" />{t("packer.shellcode_loaded")}</span>}
               </div>
             </div>
           </div>
@@ -343,7 +343,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
           <div>
             <Label className="text-xs mb-1.5">{t("packer.payload_exe")}</Label>
             <Input type="file" accept=".exe,.dll" onChange={handleFileSelect} aria-label={t("packer.upload_dll")} />
-            {exeB64 && <span className="text-xs text-success mt-1 flex items-center gap-1"><CheckCircle className="size-4" />{t("packer.exe_loaded", { size: String(Math.round(exeB64.length * 0.75 / 1024)) })}</span>}
+            {exeB64 && <span className="text-xs text-success-ink mt-1 flex items-center gap-1"><CheckCircle className="size-4" />{t("packer.exe_loaded", { size: String(Math.round(exeB64.length * 0.75 / 1024)) })}</span>}
           </div>
 
           <div className="border-t border-border pt-4">
@@ -400,7 +400,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
             <div className="flex items-center gap-3">
               <IconBadge icon={CheckCircle} color="success" size="xl" />
               <div>
-                <p className="text-sm font-medium text-success">{t("packer.ready")}</p>
+                <p className="text-sm font-medium text-success-ink">{t("packer.ready")}</p>
                 <p className="text-xs text-muted-foreground">{(resultSize / 1024).toFixed(1)} KB — {resultFilename}</p>
               </div>
             </div>

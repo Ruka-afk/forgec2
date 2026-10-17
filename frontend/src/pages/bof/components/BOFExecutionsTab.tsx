@@ -36,7 +36,7 @@ export default function BOFExecutionsTab({ executions, loading, error, onRetry }
             <div key={ex.id || i} className="px-5 py-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-3">
-                  <div className="size-8 bg-success/15 rounded-lg flex items-center justify-center text-success">
+                  <div className="size-8 bg-success/15 rounded-lg flex items-center justify-center text-success-ink">
                     <Terminal className="size-4" />
                   </div>
                   <div>

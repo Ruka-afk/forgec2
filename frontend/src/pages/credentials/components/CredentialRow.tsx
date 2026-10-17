@@ -132,7 +132,7 @@ function CredentialRowInner({  entry,
       </TableCell>
       <TableCell className="max-sm:hidden py-3 px-4 text-muted-foreground">{entry.domain || "-"}</TableCell>
       <TableCell className="max-sm:hidden py-3 px-4 text-xs text-muted-foreground">
-        {entry.source === "mimikatz" ? <WandSparkles className="size-3 text-warning mr-1" /> : entry.source === "sam" ? <Database className="size-3 text-info mr-1" /> : entry.source === "kerberoast" ? <Shield className="size-3 text-warning mr-1" /> : <PenLine className="size-3 text-muted-foreground mr-1" />}
+        {entry.source === "mimikatz" ? <WandSparkles className="size-3 text-warning-ink mr-1" /> : entry.source === "sam" ? <Database className="size-3 text-info-ink mr-1" /> : entry.source === "kerberoast" ? <Shield className="size-3 text-warning-ink mr-1" /> : <PenLine className="size-3 text-muted-foreground mr-1" />}
         {entry.source || "manual"}
       </TableCell>
       <TableCell className="max-sm:hidden py-3 px-4">
@@ -178,7 +178,7 @@ function CredentialRowInner({  entry,
         {onMarkUsed && (
           <Tooltip>
             <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => onMarkUsed(entry.id)} aria-label={t("cred.mark_used")} />}>
-              <ShieldCheck className="size-4 text-warning" />
+              <ShieldCheck className="size-4 text-warning-ink" />
             </TooltipTrigger>
             <TooltipContent>{t("cred.mark_used")}</TooltipContent>
           </Tooltip>
@@ -190,7 +190,7 @@ function CredentialRowInner({  entry,
           <TooltipContent>{t("common.edit")}</TooltipContent>
         </Tooltip>
         <Tooltip>
-          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => onDelete(entry.id)} className="text-destructive hover:text-destructive/80 hover:bg-destructive/5" aria-label={t("cred.delete_title")} />}>
+          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => onDelete(entry.id)} className="text-destructive-ink hover:text-destructive-ink/80 hover:bg-destructive/5" aria-label={t("cred.delete_title")} />}>
             <Trash2 className="size-4" />
           </TooltipTrigger>
           <TooltipContent>{t("common.delete")}</TooltipContent>

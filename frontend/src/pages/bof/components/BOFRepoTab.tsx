@@ -107,8 +107,8 @@ export default function BOFRepoTab({ repoItems, loading, error, onRetry, onImpor
               importStatus.loading
                 ? "bg-primary/10 text-primary"
                 : importStatus.success
-                  ? "bg-success/15 text-success"
-                  : "bg-destructive/10 text-destructive"
+                  ? "bg-success/15 text-success-ink"
+                  : "bg-destructive/10 text-destructive-ink"
             }`}
           >
             {importStatus.loading ? <Spinner size="xs" /> : importStatus.success ? <CheckCircle className="size-4" /> : <TriangleAlert className="size-4" />}

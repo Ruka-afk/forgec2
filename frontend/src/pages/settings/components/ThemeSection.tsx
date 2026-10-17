@@ -34,7 +34,7 @@ export default function ThemeSection({ theme, onApplyTheme }: { theme: string; o
               <Button key={id} onClick={() => onApplyTheme(id)} variant="ghost"
                 className={`relative h-auto min-h-32 flex-col items-start justify-start whitespace-normal rounded-xl border p-4 text-left transition-colors ${theme === id ? "border-primary bg-primary/8 shadow-xs" : "border-border bg-muted/45 hover:border-primary/45 hover:bg-primary/5"}`}>
                 {theme === id && <CheckCircle2 className="absolute right-3 top-3 size-4 text-primary" />}
-                <span className={`mb-3 flex size-9 items-center justify-center rounded-lg bg-card shadow-xs ${id === "light" ? "text-warning" : id === "dark" ? "text-chart-3" : "text-muted-foreground"}`}>
+                <span className={`mb-3 flex size-9 items-center justify-center rounded-lg bg-card shadow-xs ${id === "light" ? "text-warning-ink" : id === "dark" ? "text-chart-3" : "text-muted-foreground"}`}>
                   <Icon className="size-5" />
                 </span>
                 <span className="text-sm font-semibold text-foreground">{t(`settings.theme_${id}`)}</span>

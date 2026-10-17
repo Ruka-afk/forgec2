@@ -327,7 +327,7 @@ export default function LootPage() {
                             <Button variant="ghost" size="sm" onClick={() => downloadText(full, `keylog-${agentName}-${k.id}.txt`)} className="text-xs h-auto p-1 text-primary" aria-label={t("common.download")}><Download aria-hidden="true" className="size-4" /></Button>
                           </div>
                         </div>
-                        <div className="bg-background text-success font-mono text-xs p-4 max-h-[500px] overflow-y-auto whitespace-pre-wrap break-all">
+                        <div className="bg-background text-success-ink font-mono text-xs p-4 max-h-[500px] overflow-y-auto whitespace-pre-wrap break-all">
                           <KeylogContent text={full} />
                         </div>
                       </AccordionPanel>

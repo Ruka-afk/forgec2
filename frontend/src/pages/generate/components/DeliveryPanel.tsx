@@ -92,7 +92,7 @@ export default function DeliveryPanel() {
           </div>
         )}
         {format === "iso_lnk" && (
-          <div className="rounded-lg border border-warning/25 bg-warning/10 px-2.5 py-2 text-xs leading-5 text-warning-foreground sm:col-span-2">
+          <div className="rounded-lg border border-warning/25 bg-warning/10 px-2.5 py-2 text-xs leading-5 text-warning-ink sm:col-span-2">
             生成 <code className="rounded bg-background/60 px-1 font-mono">Q3.iso</code> 内含 <code className="rounded bg-background/60 px-1 font-mono">Report.pdf.lnk</code>（PDF 图标） + 隐藏的 <code className="rounded bg-background/60 px-1 font-mono">{filename || "Report.pdf.exe"}</code>，挂载后点击 LNK 即启动。filename 为隐藏 EXE 名。
           </div>
         )}

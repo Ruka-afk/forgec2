@@ -145,11 +145,11 @@ export function AIConfigPanel(props: AIConfigPanelProps) {
           <Checkbox checked={allowExecute} onCheckedChange={(v) => setAllowExecute(v === true)} className="mt-1" />
           <span>
             <span className="text-sm text-muted-foreground">{t("ai.allow_execute")}</span>
-            <span className="block text-(--fs-xs-sm) text-warning mt-0.5">{t("ai.allow_execute_warn")}</span>
+            <span className="block text-(--fs-xs-sm) text-warning-ink mt-0.5">{t("ai.allow_execute_warn")}</span>
           </span>
         </Label>
         {!configLoaded && (
-          <p role="alert" className="rounded-lg border border-destructive/25 bg-destructive/10 p-3 text-xs text-destructive">
+          <p role="alert" className="rounded-lg border border-destructive/25 bg-destructive/10 p-3 text-xs text-destructive-ink">
             {t("ai.config_unread_save_blocked")}
           </p>
         )}

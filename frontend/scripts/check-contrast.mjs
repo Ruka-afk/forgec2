@@ -6,9 +6,9 @@
 // over the page background, chart marks, rings) and checks the WCAG 2.x
 // contrast ratio: 4.5:1 for normal text, 3:1 for large text / non-text UI.
 //
-// This began as the (2026-10) UI/UX audit prototype and stays report-only:
-// it exits 0 unless --strict is passed, so it can run beside the existing
-// gates while findings are being fixed (U1 promotes it into `npm run check`).
+// Since the U1 token pass (2026-10) this is a hard gate inside `npm run check`
+// (the check:contrast script runs with --strict). Run it manually without the
+// flag for a report-only pass while iterating on tokens.
 //
 // Usage:
 //   node scripts/check-contrast.mjs            # report, always exit 0
@@ -20,9 +20,10 @@
 //   - Alpha compositing runs in gamma-encoded sRGB space, matching how
 //     browsers blend `bg-x/NN` over a surface (cross-checked against the
 //     audit's canvas/pixel harness on the built app).
-//   - Only token-level pairs are checked. A one-off class combination
-//     (`bg-warning text-warning-foreground` is listed; a bespoke
-//     `hover:bg-x/37` is not) needs the runtime sampler or eyeballs.
+//   - Only token-level pairs are checked. One-off class combinations (e.g.
+//     `bg-primary/10 hover:bg-primary/15` buttons) are approximated by their
+//     token pairs; the ScreenVideoPlayer overlay deliberately paints bright
+//     base hues on a dark video surface and is out of token scope.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -148,7 +149,7 @@ function loadThemes() {
 
 // kind: "text" → 4.5:1 required; "nontext" → 3:1 required;
 //       "info"  → printed with its ratio, never fails.
-function buildPairs(t) {
+function buildPairs(t, theme = "light") {
   const pairs = [];
   const add = (kind, fgName, bgName, label = `${fgName} on ${bgName}`) => {
     const fg = t.get(fgName);
@@ -192,12 +193,13 @@ function buildPairs(t) {
   add("text", "primary-foreground", "primary");
   add("text", "popover-foreground", "popover");
 
-  // Status tokens (three roles; see docs/frontend-style-conventions.md):
+  // Status tokens (four roles; see docs/frontend-style-conventions.md):
   //   a) `text-X-ink` — text-safe status color on neutral surfaces and on the
   //      tinted chips (`bg-X/8..20`) badges/banners/method pills render;
-  //   b) `text-X-foreground` — ink on solid `bg-X` / `bg-X-solid` fills;
-  //   c) bare `text-X` — legacy pattern, kept tracked until the U1b page
-  //      migration moves every call site to the ink tokens.
+  //   b) `text-X-foreground` — ink on solid `bg-X` / `bg-X-solid` fills.
+  // The legacy bare `text-X` pattern is gone from the app (U1 token pass); the
+  // single remaining site (ScreenVideoPlayer dots) paints on a dark video
+  // surface and intentionally keeps the bright base hue.
   const statuses = ["warning", "info", "success", "destructive"];
   for (const s of statuses) {
     add("text", `${s}-ink`, "background");
@@ -208,18 +210,6 @@ function buildPairs(t) {
       addTint("text", `${s}-ink`, s, pct, "card");
       addTint("text", `${s}-ink`, s, pct, "sidebar");
     }
-    add("text", s, "background");
-    add("text", s, "card");
-    for (const pct of [8, 10, 12, 15, 20]) {
-      addTint("text", s, s, pct, "background");
-      addTint("text", s, s, pct, "card");
-    }
-    if (s !== "destructive") {
-      for (const pct of [10, 15, 20]) {
-        addTint("text", `${s}-foreground`, s, pct, "background");
-        addTint("text", `${s}-foreground`, s, pct, "card");
-      }
-    }
   }
   // Ink on solid fills (chips, banners, solid buttons).
   add("text", "success-foreground", "success", "success-foreground on success (solid)");
@@ -229,7 +219,9 @@ function buildPairs(t) {
   // primary as text: links, active nav (`bg-primary/12 text-primary`).
   add("text", "primary", "background");
   add("text", "primary", "card");
-  for (const pct of [10, 12, 15, 20]) {
+  // Light hover fills stop at /15 (a /20 text chip misses 4.5:1 over the
+  // sidebar); dark keeps /20 (ghost-button hover).
+  for (const pct of theme === "dark" ? [10, 12, 15, 20] : [10, 12, 15]) {
     addTint("text", "primary", "primary", pct, "background");
     addTint("text", "primary", "primary", pct, "card");
     addTint("text", "primary", "primary", pct, "sidebar");
@@ -313,7 +305,7 @@ function main() {
       return;
     }
     console.log(`\n[${theme}] ${tokens.size} color tokens`);
-    const pairs = buildPairs(tokens);
+    const pairs = buildPairs(tokens, theme);
     for (const p of pairs) {
       total += 1;
       const ratio = contrast(p.fg, p.bg);

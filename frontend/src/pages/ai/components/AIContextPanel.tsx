@@ -158,7 +158,7 @@ export function AIContextPanel({
 
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
         {loadError && profiles.length === 0 && collections.length === 0 && attachments.length === 0 && (
-          <div role="alert" className="flex flex-wrap items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
+          <div role="alert" className="flex flex-wrap items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-ink">
             <AlertTriangle className="size-3.5 shrink-0" />
             <span className="min-w-[160px] flex-1">{t("ai.context_unreadable", { message: loadError })}</span>
             <button type="button" className="shrink-0 underline" onClick={() => void refresh()}>
@@ -212,7 +212,7 @@ export function AIContextPanel({
                 <FileText className="size-3.5 text-muted-foreground" />
                 <span className="min-w-0 flex-1 truncate" title={attachment.filename}>{attachment.filename}</span>
                 <span className="text-muted-foreground">{formatBytes(attachment.size)}</span>
-                <Button variant="ghost" size="icon-xs" className="text-muted-foreground hover:text-destructive" onClick={() => void removeAttachment(attachment.id)} aria-label={t("ai.attachment_remove", { name: attachment.filename })}><Trash2 className="size-3" /></Button>
+                <Button variant="ghost" size="icon-xs" className="text-muted-foreground hover:text-destructive-ink" onClick={() => void removeAttachment(attachment.id)} aria-label={t("ai.attachment_remove", { name: attachment.filename })}><Trash2 className="size-3" /></Button>
               </div>
             ))}
           </div>

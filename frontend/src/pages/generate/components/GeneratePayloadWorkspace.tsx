@@ -42,10 +42,10 @@ function SectionHeading({ icon, tint, title, desc, className }: { icon: ReactNod
 
 /** desc is an i18n key (generate.format_desc_*) resolved by the consumer — never render it raw. */
 const FORMAT_META: Record<PayloadFormat, { icon: ReactNode; desc: string; iconTint: string; activeRing: string }> = {
-  exe: { icon: <AppWindow className="size-4" />, desc: "generate.format_desc_exe", iconTint: "bg-warning/10 text-warning", activeRing: "border-warning/30 bg-warning/5" },
-  dll: { icon: <PackageOpen className="size-4" />, desc: "generate.format_desc_dll", iconTint: "bg-destructive/10 text-destructive", activeRing: "border-destructive/30 bg-destructive/5" },
-  ps1: { icon: <Cpu className="size-4" />, desc: "generate.format_desc_ps1", iconTint: "bg-info/10 text-info", activeRing: "border-info/30 bg-info/5" },
-  linux: { icon: <Cpu className="size-4" />, desc: "generate.format_desc_linux", iconTint: "bg-success/10 text-success", activeRing: "border-success/30 bg-success/5" },
+  exe: { icon: <AppWindow className="size-4" />, desc: "generate.format_desc_exe", iconTint: "bg-warning/10 text-warning-ink", activeRing: "border-warning/30 bg-warning/5" },
+  dll: { icon: <PackageOpen className="size-4" />, desc: "generate.format_desc_dll", iconTint: "bg-destructive/10 text-destructive-ink", activeRing: "border-destructive/30 bg-destructive/5" },
+  ps1: { icon: <Cpu className="size-4" />, desc: "generate.format_desc_ps1", iconTint: "bg-info/10 text-info-ink", activeRing: "border-info/30 bg-info/5" },
+  linux: { icon: <Cpu className="size-4" />, desc: "generate.format_desc_linux", iconTint: "bg-success/10 text-success-ink", activeRing: "border-success/30 bg-success/5" },
   macos: { icon: <AppWindow className="size-4" />, desc: "generate.format_desc_macos", iconTint: "bg-chart-6/violet text-chart-6", activeRing: "border-chart-6/30 bg-chart-6/5" },
   oneliner: { icon: <PackageOpen className="size-4" />, desc: "generate.format_desc_oneliner", iconTint: "bg-muted text-muted-foreground", activeRing: "border-primary/30 bg-primary/5" },
 };
@@ -184,12 +184,12 @@ export default function GeneratePayloadWorkspace() {
       />
       {showBanner && (
         <div className="mt-2 flex items-center gap-2.5 rounded-lg border border-warning/25 bg-gradient-to-r from-warning/15 via-warning/10 to-transparent px-3 py-2 shadow-sm">
-          <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-warning/15 text-warning ring-1 ring-warning/20">
+          <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-warning/15 text-warning-ink ring-1 ring-warning/20">
             <Info className="size-4" />
           </div>
-          <span className="flex-1 text-xs leading-5 text-warning-foreground">{t("generate.banner_text")} <a href="https://go.dev/dl/" target="_blank" rel="noopener noreferrer" className="font-medium underline decoration-warning/40 underline-offset-2 transition-colors hover:text-warning">{t("generate.banner_download")}</a></span>
+          <span className="flex-1 text-xs leading-5 text-warning-ink">{t("generate.banner_text")} <a href="https://go.dev/dl/" target="_blank" rel="noopener noreferrer" className="font-medium underline decoration-warning/40 underline-offset-2 transition-colors hover:text-warning-ink/80">{t("generate.banner_download")}</a></span>
           <Tooltip>
-            <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={dismissBanner} className="shrink-0 text-warning hover:bg-warning/10 hover:text-warning" aria-label={t("generate.dismiss")} />}>
+            <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={dismissBanner} className="shrink-0 text-warning-ink hover:bg-warning/10 hover:text-warning-ink" aria-label={t("generate.dismiss")} />}>
             <X className="size-4" />
             </TooltipTrigger>
             <TooltipContent>{t("generate.dismiss")}</TooltipContent>
@@ -198,7 +198,7 @@ export default function GeneratePayloadWorkspace() {
       )}
 
       {g.profilesError && (
-        <div role="alert" className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-foreground">
+        <div role="alert" className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-ink">
           <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1">{t("generate.profiles_blocked")}</span>
           <Button onClick={() => { void g.loadData(); }} size="sm" variant="outline" className="min-h-11 px-4 sm:min-h-7 sm:px-2.5">{t("common.try_again")}</Button>
@@ -206,7 +206,7 @@ export default function GeneratePayloadWorkspace() {
       )}
 
       {g.listenersError && (
-        <div role="alert" className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-foreground">
+        <div role="alert" className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-ink">
           <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1">{t("generate.listeners_blocked")}</span>
           <Button onClick={() => { void g.loadData(); }} size="sm" variant="outline" className="min-h-11 px-4 sm:min-h-7 sm:px-2.5">{t("common.try_again")}</Button>
@@ -314,7 +314,7 @@ export default function GeneratePayloadWorkspace() {
                 <div>
                   <SectionHeading
                     icon={<Cpu className="size-4" />}
-                    tint="bg-warning/10 text-warning"
+                    tint="bg-warning/10 text-warning-ink"
                     title={t("generate.shellcode_donut")}
                     desc={t("generate.shellcode_donut_desc")}
                   />
@@ -333,7 +333,7 @@ export default function GeneratePayloadWorkspace() {
 
           <div className="rounded-xl border border-border/60 bg-card px-4 py-3 text-center text-xs leading-5 text-muted-foreground">
             {t("generate.footer_text")}
-            <span className="mt-1 block font-medium text-warning">{t("generate.footer_warning")}</span>
+            <span className="mt-1 block font-medium text-warning-ink">{t("generate.footer_warning")}</span>
           </div>
         </div>
       </div>

@@ -222,7 +222,7 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
                     </SelectContent>
                   </Select>
                   {taskTypesError && taskTypes.length === 0 && (
-                    <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-2 py-1.5 text-xs text-warning-foreground" role="alert">
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-2 py-1.5 text-xs text-warning-ink" role="alert">
                       <AlertTriangle className="size-3.5 shrink-0" />
                       <span className="flex-1 min-w-[140px]">{t("scheduler.tasktypes_unreadable", { message: taskTypesError })}</span>
                       <button type="button" className="shrink-0 underline" onClick={() => void loadTaskTypes()}>{t("common.try_again")}</button>
@@ -292,7 +292,7 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
                   <Button variant="outline" size="sm" onClick={() => editTask(task)} className="size-8 p-0" aria-label={t("scheduler.a11y_edit")}>
                     <Pencil className="size-4" />
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleDelete(task.id)} className="size-8 p-0 border-destructive/20 text-destructive hover:bg-destructive/10" aria-label={t("scheduler.a11y_delete")}>
+                  <Button variant="outline" size="sm" onClick={() => handleDelete(task.id)} className="size-8 p-0 border-destructive/20 text-destructive-ink hover:bg-destructive/10" aria-label={t("scheduler.a11y_delete")}>
                     <Trash2 className="size-4" />
                   </Button>
                 </div>

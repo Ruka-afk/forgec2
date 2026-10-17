@@ -55,9 +55,9 @@ interface PrivescFinding {
 
 function severityBadge(severity: string) {
   switch (severity) {
-    case "critical": return "bg-destructive/10 text-destructive border-destructive/30";
-    case "high": return "bg-warning/10 text-warning dark:text-warning border-warning/30";
-    case "medium": return "bg-warning/10 text-warning dark:text-warning border-warning/30";
+    case "critical": return "bg-destructive/10 text-destructive-ink border-destructive/30";
+    case "high": return "bg-warning/10 text-warning-ink dark:text-warning-ink border-warning/30";
+    case "medium": return "bg-warning/10 text-warning-ink dark:text-warning-ink border-warning/30";
     case "low": return "bg-primary/10 text-primary border-primary/30";
     default: return "bg-secondary/50 text-muted-foreground border-border";
   }
@@ -65,9 +65,9 @@ function severityBadge(severity: string) {
 
 function severityIcon(severity: string): React.ReactNode {
   switch (severity) {
-    case "critical": return <CircleAlert className="size-4 text-destructive" />;
-    case "high": return <TriangleAlert className="size-4 text-warning" />;
-    case "medium": return <CircleAlert className="size-4 text-warning" />;
+    case "critical": return <CircleAlert className="size-4 text-destructive-ink" />;
+    case "high": return <TriangleAlert className="size-4 text-warning-ink" />;
+    case "medium": return <CircleAlert className="size-4 text-warning-ink" />;
     case "low": return <Info className="size-4 text-primary" />;
     default: return <CircleQuestionMark className="size-4 text-muted-foreground" />;
   }

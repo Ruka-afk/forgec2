@@ -111,7 +111,7 @@ export default function BOFListTab({ files, loading, onUpload, onDelete, onRun, 
                           setRunArgs("");
                           setShowRun(true);
                         }}
-                        className="px-3 py-1.5 text-xs bg-success/15 text-success rounded-lg border border-success/30 hover:bg-success/15 transition-colors"
+                        className="px-3 py-1.5 text-xs bg-success/15 text-success-ink rounded-lg border border-success/30 hover:bg-success/15 transition-colors"
                       >
                         <Play className="size-4" />{t("bof.run")}
                       </Button>
@@ -132,7 +132,7 @@ export default function BOFListTab({ files, loading, onUpload, onDelete, onRun, 
                       <Button
                         onClick={() => onDelete(Number(bid) || 0)}
                         aria-label={t("common.delete")}
-                        className="px-3 py-1.5 text-xs bg-destructive/10 text-destructive rounded-lg border border-destructive/20 hover:bg-destructive/10 transition-colors"
+                        className="px-3 py-1.5 text-xs bg-destructive/10 text-destructive-ink rounded-lg border border-destructive/20 hover:bg-destructive/10 transition-colors"
                       >
                         <Trash2 className="size-4" />
                       </Button>

@@ -21,7 +21,7 @@ export default memo(function ConnectionLogSection({ logs }: ConnectionLogSection
           {logs.map((log, i) => (
             <div key={log.id || i} className="px-4 py-2 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <Circle className={`size-1.5 fill-current ${log.type === "online" ? "text-success" : log.type === "offline" ? "text-destructive" : "text-primary"}`} />
+                <Circle className={`size-1.5 fill-current ${log.type === "online" ? "text-success-ink" : log.type === "offline" ? "text-destructive-ink" : "text-primary"}`} />
                 <span className="text-xs text-foreground">{log.user || t("agents.detail_log_system")}</span>
                 {log.message && <span className="text-xs text-muted-foreground/100">{log.message}</span>}
               </div>

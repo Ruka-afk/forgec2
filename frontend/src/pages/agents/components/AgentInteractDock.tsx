@@ -343,7 +343,7 @@ export function AgentInteractDock({
                             {task.result ? (
                               <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-(--fs-xs-sm) text-foreground">{task.result}</pre>
                             ) : task.error ? (
-                              <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-all font-mono text-(--fs-xs-sm) text-destructive">{task.error}</pre>
+                              <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-all font-mono text-(--fs-xs-sm) text-destructive-ink">{task.error}</pre>
                             ) : (
                               <p className="text-xs text-muted-foreground">{t("agents.dock_waiting_result")}</p>
                             )}
@@ -381,7 +381,7 @@ export function AgentInteractDock({
                                         {diffChangeLines(resultDiff).map((line, i) => (
                                           <span
                                             key={`${line.kind}-${i}`}
-                                            className={`block whitespace-pre-wrap break-all ${line.kind === "add" ? "text-success" : "text-destructive"}`}
+                                            className={`block whitespace-pre-wrap break-all ${line.kind === "add" ? "text-success-ink" : "text-destructive-ink"}`}
                                           >
                                             {line.kind === "add" ? "+" : "-"}{line.text}
                                           </span>

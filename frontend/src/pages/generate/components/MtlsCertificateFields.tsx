@@ -63,7 +63,7 @@ export function MtlsCertificateFields({ value, onChange }: MtlsCertificateFields
         />
       </div>
       {pairIncomplete ? (
-        <p className="text-(--fs-micro-sm) text-warning">{t("generate.mtls_pair_required")}</p>
+        <p className="text-(--fs-micro-sm) text-warning-ink">{t("generate.mtls_pair_required")}</p>
       ) : null}
       <p className="text-(--fs-micro-sm) text-muted-foreground">{t("generate.mtls_local_only")}</p>
     </div>

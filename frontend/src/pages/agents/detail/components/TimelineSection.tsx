@@ -23,8 +23,8 @@ interface TimelineEvent {
 
 const KIND_STYLES: Record<string, { icon: typeof Terminal; ring: string; badge: "default" | "success" | "warning" | "destructive" | "secondary" }> = {
   task: { icon: Terminal, ring: "bg-primary/15 text-primary", badge: "default" },
-  screenshot: { icon: Camera, ring: "bg-info/15 text-info", badge: "secondary" },
-  credential: { icon: KeyRound, ring: "bg-warning/15 text-warning", badge: "warning" },
+  screenshot: { icon: Camera, ring: "bg-info/15 text-info-ink", badge: "secondary" },
+  credential: { icon: KeyRound, ring: "bg-warning/15 text-warning-ink", badge: "warning" },
   status: { icon: History, ring: "bg-muted text-muted-foreground", badge: "secondary" },
 };
 
@@ -124,7 +124,7 @@ export default memo(function TimelineSection({ agentId, online }: { agentId: str
 
       <div className="p-4">
         {loadError && (
-          <div role="alert" className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
+          <div role="alert" className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-ink">
             <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
             <span className="min-w-0 flex-1">
               {events.length > 0 ? t("agents.timeline_stale") : t("agents.timeline_unreadable")}

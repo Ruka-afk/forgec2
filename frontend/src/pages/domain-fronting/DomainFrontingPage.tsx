@@ -209,7 +209,7 @@ export default function DomainFrontingPage() {
                             t("domain_fronting.not_checked")
                           )}
                           {d.error && (
-                            <span className="text-destructive ml-2">{t("domain_fronting.error_prefix")} {d.error}</span>
+                            <span className="text-destructive-ink ml-2">{t("domain_fronting.error_prefix")} {d.error}</span>
                           )}
                         </div>
                       </div>
@@ -218,8 +218,8 @@ export default function DomainFrontingPage() {
                   <TableCell>
                     <Badge variant="outline" className={`${
                       d.healthy
-                        ? "bg-success/15 dark:bg-success/20 text-success dark:text-success border-success dark:border-success"
-                        : "bg-destructive/10 text-destructive border-destructive/20"
+                        ? "bg-success/15 dark:bg-success/20 text-success-ink dark:text-success-ink border-success dark:border-success"
+                        : "bg-destructive/10 text-destructive-ink border-destructive/20"
                     }`}>
                       {d.healthy ? t("domain_fronting.healthy") : t("domain_fronting.unhealthy")}
                     </Badge>
@@ -230,7 +230,7 @@ export default function DomainFrontingPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => removeDomain(d.domain)}
-                          className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                          className="text-muted-foreground hover:text-destructive-ink hover:bg-destructive/10"
                         />}>
                         <Trash2 className="size-4" />
                       </TooltipTrigger>
@@ -246,7 +246,7 @@ export default function DomainFrontingPage() {
         {/* Add domain form */}
         <div className="px-4 py-3 border-t border-border bg-muted/50">
           {error && (
-            <p className="mb-2 text-xs text-destructive">{t("domain_fronting.config_unread")}</p>
+            <p className="mb-2 text-xs text-destructive-ink">{t("domain_fronting.config_unread")}</p>
           )}
           <div className="flex items-center gap-2">
             <Input
@@ -279,9 +279,9 @@ export default function DomainFrontingPage() {
       <div className="mt-6 p-4 bg-warning/10 border border-warning/30 rounded-xl">
         <div className="flex items-start gap-3">
           <Info className="size-4" />
-          <div className="text-sm text-warning dark:text-warning">
+          <div className="text-sm text-warning-ink dark:text-warning-ink">
             <strong>{t("domain_fronting.how_it_works")}</strong> {t("domain_fronting.monitor_head")}{" "}
-            <code className="text-warning dark:text-warning">/api/v1/beacon</code>{t("domain_fronting.monitor_tail")}
+            <code className="text-warning-ink dark:text-warning-ink">/api/v1/beacon</code>{t("domain_fronting.monitor_tail")}
           </div>
         </div>
       </div>

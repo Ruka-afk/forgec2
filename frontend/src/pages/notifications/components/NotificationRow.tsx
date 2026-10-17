@@ -60,7 +60,7 @@ function NotificationRowInner({
         aria-label={`Select notification ${n.title}`}
         className="mt-1 shrink-0"
       />
-      <div className={`shrink-0 size-8 rounded-full flex items-center justify-center text-xs ${SEVERITY_VARIANT[n.severity] === "success" ? "bg-success/15 text-success" : SEVERITY_VARIANT[n.severity] === "destructive" ? "bg-destructive/15 text-destructive" : SEVERITY_VARIANT[n.severity] === "warning" ? "bg-warning/15 text-warning dark:bg-warning/20 dark:text-warning" : "bg-info/15 text-info"}`}>
+      <div className={`shrink-0 size-8 rounded-full flex items-center justify-center text-xs ${SEVERITY_VARIANT[n.severity] === "success" ? "bg-success/15 text-success-ink" : SEVERITY_VARIANT[n.severity] === "destructive" ? "bg-destructive/15 text-destructive-ink" : SEVERITY_VARIANT[n.severity] === "warning" ? "bg-warning/15 text-warning-ink dark:bg-warning/20 dark:text-warning-ink" : "bg-info/15 text-info-ink"}`}>
         {SEVERITY_ICONS[n.severity] || <Info className="size-4" />}
       </div>
       <div className="flex-1 min-w-0">
@@ -86,7 +86,7 @@ function NotificationRowInner({
           </Tooltip>
         )}
         <Tooltip>
-          <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => onDelete(n.id)} className="size-8 p-0 text-muted-foreground hover:text-destructive" aria-label={t("notifications.delete")} />}>
+          <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => onDelete(n.id)} className="size-8 p-0 text-muted-foreground hover:text-destructive-ink" aria-label={t("notifications.delete")} />}>
             <Trash2 className="size-4" />
           </TooltipTrigger>
           <TooltipContent>{t("notifications.delete")}</TooltipContent>

@@ -51,7 +51,7 @@ export default memo(function ScreenViewer({
           <span className="text-sm font-medium text-foreground">{t("agents.screen_live_view")}</span>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-          <span className={`flex items-center gap-1.5 ${status === "error" ? "text-destructive" : ""}`}>
+          <span className={`flex items-center gap-1.5 ${status === "error" ? "text-destructive-ink" : ""}`}>
             <span className={`size-2 rounded-full ${indicator.color}`} aria-hidden="true" />
             {indicator.icon}
             {indicator.text}

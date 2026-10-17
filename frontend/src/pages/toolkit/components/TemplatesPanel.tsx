@@ -228,7 +228,7 @@ export default function TemplatesPanel({
                             variant="ghost"
                             size="icon-xs"
                             onClick={() => void handleDelete(tpl)}
-                            className="text-muted-foreground hover:text-destructive"
+                            className="text-muted-foreground hover:text-destructive-ink"
                             title={t("common.delete")}
                             aria-label={t("common.delete")}
                           >

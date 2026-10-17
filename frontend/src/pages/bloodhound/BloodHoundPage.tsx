@@ -194,7 +194,7 @@ export default function BloodHoundPage() {
             </span>
           </Label>
           {binaryStatus.uploaded && (
-            <span className="text-xs text-success">
+            <span className="text-xs text-success-ink">
               <CheckCircle className="size-4" />{binaryStatus.filename}
             </span>
           )}
@@ -310,12 +310,12 @@ export default function BloodHoundPage() {
                       <TableCell className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <Button variant="ghost" size="icon-xs" onClick={() => handleDownload(id)}
-                            className="bg-success/15 hover:bg-success/25 text-success rounded-lg transition-colors"
+                            className="bg-success/15 hover:bg-success/25 text-success-ink rounded-lg transition-colors"
                             aria-label={t("bloodhound.download_report")}>
                             <Download className="size-4" />
                           </Button>
                           <Button variant="ghost" size="icon-xs" onClick={() => handleDelete(id)}
-                            className="bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-lg transition-colors"
+                            className="bg-destructive/10 hover:bg-destructive/20 text-destructive-ink rounded-lg transition-colors"
                             aria-label={t("bloodhound.a11y_delete_report")}>
                             <Trash2 className="size-4" />
                           </Button>

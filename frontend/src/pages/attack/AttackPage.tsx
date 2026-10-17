@@ -175,7 +175,7 @@ export default function AttackPage() {
       </Banner>
 
       {agentListError && (
-        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-foreground">
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-ink">
           <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1">{t("attack.agent_list_unavailable", { message: agentListError })}</span>
         </div>
@@ -421,9 +421,9 @@ const HEATMAP_TACTIC_COLORS: Record<string, string> = {
   Persistence: "text-chart-2",
   "Privilege Escalation": "text-chart-3",
   "Defense Evasion": "text-chart-4",
-  "Credential Access": "text-destructive",
-  Discovery: "text-info",
-  Collection: "text-warning",
+  "Credential Access": "text-destructive-ink",
+  Discovery: "text-info-ink",
+  Collection: "text-warning-ink",
   "Lateral Movement": "text-chart-5",
   "Command and Control": "text-primary",
 };

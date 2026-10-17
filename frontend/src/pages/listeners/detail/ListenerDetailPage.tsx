@@ -229,7 +229,7 @@ export default function ListenerDetailPage() {
             </Card>
             <Card className="p-(--card-spacing)">
               <div className="text-xs text-muted-foreground">{t("listener.active_now")}</div>
-              <div className="text-4xl font-semibold mt-2 text-success">{stats.active}</div>
+              <div className="text-4xl font-semibold mt-2 text-success-ink">{stats.active}</div>
             </Card>
             <Card className="p-(--card-spacing)">
               <div className="text-xs text-muted-foreground">{t("listener.lb_hint_title")}</div>

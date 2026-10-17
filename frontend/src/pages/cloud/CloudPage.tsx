@@ -255,9 +255,9 @@ export default function CloudPage() {
                 <TableRow key={cred.id}>
                   <TableCell>
                     <Badge variant="secondary" className={`text-(--fs-micro-sm) px-2 py-0.5 rounded-full font-medium ${
-                      cred.provider === "aws" ? "bg-warning/15 text-warning dark:bg-warning/20 dark:text-warning" :
+                      cred.provider === "aws" ? "bg-warning/15 text-warning-ink dark:bg-warning/20 dark:text-warning-ink" :
                       cred.provider === "gcp" ? "bg-primary/10 text-primary" :
-                      cred.provider === "azure" ? "bg-info/15 text-info" :
+                      cred.provider === "azure" ? "bg-info/15 text-info-ink" :
                       ""
                     }`}>
                       {cred.provider.toUpperCase()}

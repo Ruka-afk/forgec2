@@ -135,7 +135,7 @@ function AssistantOutputMeta({ message }: { message: AIMessage }) {
   return (
     <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/60 pt-2 text-(--fs-micro-sm) text-muted-foreground">
       {terminal && (
-        <span className={cn("inline-flex items-center gap-1", unsuccessful ? "text-destructive" : "text-success")}>
+        <span className={cn("inline-flex items-center gap-1", unsuccessful ? "text-destructive-ink" : "text-success-ink")}>
           {unsuccessful ? <CircleAlert className="size-3" /> : <CheckCircle2 className="size-3" />}
           {message.run_status === "interrupted" ? t("ai.output_interrupted") : message.run_status === "error" ? t("ai.output_error") : t("ai.output_complete")}
         </span>
@@ -143,7 +143,7 @@ function AssistantOutputMeta({ message }: { message: AIMessage }) {
       {completedAt && !Number.isNaN(completedAt.getTime()) && <time dateTime={message.created_at} title={formatDateTime(completedAt)}>{formatTimeOnly(completedAt, { hour: "2-digit", minute: "2-digit" })}</time>}
       {duration && <span className="inline-flex items-center gap-1"><Clock3 className="size-3" />{duration}</span>}
       {tokens > 0 && <span>{formatNumber(tokens)} {t("ai.output_tokens")}</span>}
-      {message.truncated && <span className="inline-flex items-center gap-1 text-warning"><CircleAlert className="size-3" />{t("ai.output_truncated")}</span>}
+      {message.truncated && <span className="inline-flex items-center gap-1 text-warning-ink"><CircleAlert className="size-3" />{t("ai.output_truncated")}</span>}
       {citations.length > 0 && (
         <span className="flex basis-full flex-wrap items-center gap-1.5 pt-1">
           <span className="inline-flex items-center gap-1"><BookOpen className="size-3" />{t("ai.output_sources")}</span>
@@ -204,14 +204,14 @@ const AIMessageItem = memo(function AIMessageItem({
   }
   return (
     <div className={`group flex items-start gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-      <div className={`flex size-8 shrink-0 items-center justify-center rounded-xl shadow-xs ring-1 ${msg.role === "user" ? "bg-foreground text-background ring-foreground/10" : msg.error ? "bg-destructive/10 text-destructive ring-destructive/20" : "bg-primary/10 text-primary ring-primary/15"}`}>
+      <div className={`flex size-8 shrink-0 items-center justify-center rounded-xl shadow-xs ring-1 ${msg.role === "user" ? "bg-foreground text-background ring-foreground/10" : msg.error ? "bg-destructive/10 text-destructive-ink ring-destructive/20" : "bg-primary/10 text-primary ring-primary/15"}`}>
         {msg.role === "user" ? <User className="size-4" /> : <Bot className="size-4" />}
       </div>
       <div className={`min-w-0 ${msg.role === "user" ? "max-w-[85%] rounded-2xl rounded-tr-md bg-primary px-4 py-3 text-primary-foreground shadow-sm sm:max-w-[72%]" : msg.error ? "max-w-[94%] flex-1 rounded-2xl rounded-tl-md border border-destructive/25 border-l-2 border-l-destructive/60 bg-card px-4 py-4 text-card-foreground shadow-sm sm:px-5" : "max-w-[94%] flex-1 rounded-2xl rounded-tl-md border border-border/80 border-l-2 border-l-primary/45 bg-card px-4 py-4 text-card-foreground shadow-sm sm:px-5"}`}>
         {msg.role !== "user" && (
           <div className="mb-3 flex min-h-6 items-center justify-between gap-3 border-b border-border/55 pb-2.5">
-            <div className={`flex min-w-0 items-center gap-1.5 text-xs font-semibold ${msg.error ? "text-destructive" : "text-foreground"}`}>
-              {msg.error ? <CircleAlert className="size-3.5 text-destructive" /> : <Bot className="size-3.5 text-primary" />}
+            <div className={`flex min-w-0 items-center gap-1.5 text-xs font-semibold ${msg.error ? "text-destructive-ink" : "text-foreground"}`}>
+              {msg.error ? <CircleAlert className="size-3.5 text-destructive-ink" /> : <Bot className="size-3.5 text-primary" />}
               <span className="truncate">{t("nav.ai")}</span>
             </div>
             <div className="flex items-center gap-0.5 rounded-lg bg-muted/60 p-0.5 opacity-100 transition-opacity sm:opacity-60 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
@@ -290,16 +290,16 @@ function ToolResultBlock({ toolName, content, status = "success", expandAll }: {
         >
           <span className={cn(
             "flex size-6 shrink-0 items-center justify-center rounded-md",
-            view.status === "error" ? "bg-destructive/10 text-destructive" : view.status === "success" ? "bg-success/10 text-success" : "bg-warning/10 text-warning",
+            view.status === "error" ? "bg-destructive/10 text-destructive-ink" : view.status === "success" ? "bg-success/10 text-success-ink" : "bg-warning/10 text-warning-ink",
           )}>
             <StatusIcon className={cn("size-3.5", view.status === "running" && "animate-spin motion-reduce:animate-none")} />
           </span>
           <Wrench className="size-3.5 shrink-0 text-muted-foreground" />
           <span className="shrink-0 font-mono text-xs font-semibold text-foreground">{toolName}</span>
-          <span className={cn("hidden shrink-0 text-(--fs-micro-sm) sm:inline", view.status === "error" ? "text-destructive" : view.status === "success" ? "text-success" : "text-warning")}>{statusLabel}</span>
+          <span className={cn("hidden shrink-0 text-(--fs-micro-sm) sm:inline", view.status === "error" ? "text-destructive-ink" : view.status === "success" ? "text-success-ink" : "text-warning-ink")}>{statusLabel}</span>
           {view.itemCount != null && <span className="hidden shrink-0 items-center gap-1 text-(--fs-micro-sm) text-muted-foreground md:inline-flex"><Database className="size-3" />{t("ai.tool_records", { count: view.itemCount })}</span>}
-          {view.partial && <span className="shrink-0 text-(--fs-micro-sm) text-warning">{t("ai.tool_partial")}</span>}
-          {summary && <span className={cn("min-w-0 flex-1 truncate text-xs text-muted-foreground", view.status === "error" && "text-destructive/85")}>· {summary}</span>}
+          {view.partial && <span className="shrink-0 text-(--fs-micro-sm) text-warning-ink">{t("ai.tool_partial")}</span>}
+          {summary && <span className={cn("min-w-0 flex-1 truncate text-xs text-muted-foreground", view.status === "error" && "text-destructive-ink/85")}>· {summary}</span>}
           <ChevronDown className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
         </button>
         {view.raw && <CopyButton text={view.raw} size="icon-xs" className="shrink-0 text-muted-foreground" title={t("ai.copy")} onError={() => toast.error(t("ai.toast.copy_failed"))} />}
@@ -312,7 +312,7 @@ function ToolResultBlock({ toolName, content, status = "success", expandAll }: {
             {view.byteCount > 1024 && <span>{formatBytes(view.byteCount)}</span>}
             {view.originalBytes != null && <span title={t("ai.tool_original_size")}>{formatBytes(view.originalBytes)} {t("ai.tool_original")}</span>}
           </div>
-          <pre className={cn("max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-lg border px-3 py-2 font-mono text-xs leading-relaxed", view.status === "error" ? "border-destructive/20 bg-destructive/5 text-destructive" : "border-border/70 bg-background/70 text-muted-foreground")}>
+          <pre className={cn("max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-lg border px-3 py-2 font-mono text-xs leading-relaxed", view.status === "error" ? "border-destructive/20 bg-destructive/5 text-destructive-ink" : "border-border/70 bg-background/70 text-muted-foreground")}>
             {view.formatted}
           </pre>
         </div>

@@ -372,7 +372,7 @@ export default function PluginsPage() {
           </Button>
           {executeResult && (
             <div className="bg-card rounded-lg p-4 max-h-96 overflow-y-auto">
-              <pre className="text-xs font-mono text-success whitespace-pre-wrap">{executeResult}</pre>
+              <pre className="text-xs font-mono text-success-ink whitespace-pre-wrap">{executeResult}</pre>
             </div>
           )}
         </DialogContent>

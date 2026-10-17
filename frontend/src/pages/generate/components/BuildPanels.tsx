@@ -85,7 +85,7 @@ function ModuleSelector({ id, catalog, value, onChange, slimLocked = false }: Mo
               <span className="text-sm text-muted-foreground">
                 {label(m)}
                 <span className="block font-normal text-muted-foreground/80 text-xs leading-4">{details(m)}</span>
-                {locked && <span className="block font-normal text-warning text-xs leading-4">{t("generate.modules.slim_locked")}</span>}
+                {locked && <span className="block font-normal text-warning-ink text-xs leading-4">{t("generate.modules.slim_locked")}</span>}
               </span>
             </label>
           );
@@ -109,8 +109,8 @@ interface BinaryPanelProps {
 }
 
 const VARIANT_CONFIG: Record<BinaryVariant, { tint: string; icon: ReactNode; titleKey: string; subtitleKey: string; btnKey: string; showP2P: boolean }> = {
-  exe: { tint: "bg-warning/10 text-warning", icon: <AppWindow className="size-5" />, titleKey: "generate.panel.exe_title", subtitleKey: "generate.panel.exe_subtitle", btnKey: "generate.panel.generate_exe", showP2P: true },
-  dll: { tint: "bg-destructive/10 text-destructive", icon: <Puzzle className="size-5" />, titleKey: "generate.panel.dll_title", subtitleKey: "generate.panel.dll_subtitle", btnKey: "generate.panel.generate_dll", showP2P: false },
+  exe: { tint: "bg-warning/10 text-warning-ink", icon: <AppWindow className="size-5" />, titleKey: "generate.panel.exe_title", subtitleKey: "generate.panel.exe_subtitle", btnKey: "generate.panel.generate_exe", showP2P: true },
+  dll: { tint: "bg-destructive/10 text-destructive-ink", icon: <Puzzle className="size-5" />, titleKey: "generate.panel.dll_title", subtitleKey: "generate.panel.dll_subtitle", btnKey: "generate.panel.generate_dll", showP2P: false },
 };
 
 export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setForm, busy, result, onGenerate, canGenerate = true, agentModules }: BinaryPanelProps) {
@@ -213,7 +213,7 @@ export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setF
             </SelectContent>
           </Select>
         </div>
-        {form.disguise_as && <div className="rounded-lg border border-warning/25 bg-warning/10 px-2.5 py-1.5 text-xs leading-5 text-warning-foreground">{t("generate.panel.disguise_hint")}: *{form.disguise_as === "doc" ? ".docx" : form.disguise_as === "xls" ? ".xlsx" : "."+form.disguise_as}.exe</div>}
+        {form.disguise_as && <div className="rounded-lg border border-warning/25 bg-warning/10 px-2.5 py-1.5 text-xs leading-5 text-warning-ink">{t("generate.panel.disguise_hint")}: *{form.disguise_as === "doc" ? ".docx" : form.disguise_as === "xls" ? ".xlsx" : "."+form.disguise_as}.exe</div>}
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div><FieldLabel>FileDescription</FieldLabel><Input placeholder="JPEG Image" value={form.file_description} onChange={(e) => setForm({ ...form, file_description: e.target.value })} className="bg-background/60 text-xs" /></div>
           <div><FieldLabel>CompanyName</FieldLabel><Input placeholder="Microsoft Corporation" value={form.company_name} onChange={(e) => setForm({ ...form, company_name: e.target.value })} className="bg-background/60 text-xs" /></div>
@@ -390,7 +390,7 @@ interface UnixPanelProps {
 }
 
 const UNIX_CONFIG: Record<UnixVariant, { tint: string; icon: ReactNode; titleKey: string; subtitleKey: string; btnKey: string }> = {
-  linux: { tint: "bg-success/10 text-success", icon: <HardDrive className="size-5" />, titleKey: "generate.panel.elf_title", subtitleKey: "generate.panel.unix_subtitle", btnKey: "generate.panel.generate_elf" },
+  linux: { tint: "bg-success/10 text-success-ink", icon: <HardDrive className="size-5" />, titleKey: "generate.panel.elf_title", subtitleKey: "generate.panel.unix_subtitle", btnKey: "generate.panel.generate_elf" },
   macos: { tint: "bg-primary/10 text-primary", icon: <Apple className="size-5" />, titleKey: "generate.panel.macos_title", subtitleKey: "generate.panel.unix_subtitle", btnKey: "generate.panel.generate_macos" },
 };
 
@@ -520,7 +520,7 @@ export const ShellcodePanel = React.memo(function ShellcodePanel({
   return (
     <PayloadCard
       icon={<Binary className="size-5" />}
-      tint="bg-chart-2/10 text-info"
+      tint="bg-chart-2/10 text-info-ink"
       title={t("generate.panel.shellcode_title")}
       subtitle={t("generate.panel.shellcode_subtitle")}
       badge={<BuildStatusBadge busy={busy} result={result} />}
@@ -562,7 +562,7 @@ export const DonutPanel = React.memo(function DonutPanel({
   return (
     <PayloadCard
       icon={<Disc className="size-5" />}
-      tint="bg-warning/10 text-warning"
+      tint="bg-warning/10 text-warning-ink"
       title={t("generate.panel.donut_title")}
       subtitle={t("generate.panel.donut_subtitle")}
       badge={<BuildStatusBadge busy={busy} result={result} />}
@@ -658,7 +658,7 @@ export const PS1Panel = React.memo(function PS1Panel({
       {code ? (
         <div className="mt-1">
           <div className="mb-2 flex items-center justify-between">
-            <span className="flex items-center gap-x-1.5 text-xs font-medium text-success">
+            <span className="flex items-center gap-x-1.5 text-xs font-medium text-success-ink">
               <CheckCircle2 className="size-4" /> {t("generate.panel.generated_sizes", { original: originalLen ?? 0, obfuscated: obfuscatedLen ?? 0 })}
             </span>
             <CopyButton text={code} label={t("generate.panel.copy")} size="xs" />

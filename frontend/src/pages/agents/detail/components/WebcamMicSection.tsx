@@ -151,7 +151,7 @@ export default memo(function WebcamMicSection({ agentId, online }: WebcamMicSect
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  className="text-destructive"
+                  className="text-destructive-ink"
                   onClick={() => setClips((prev) => prev.filter((_, j) => j !== i))}
                   aria-label={t("common.delete")}
                 >

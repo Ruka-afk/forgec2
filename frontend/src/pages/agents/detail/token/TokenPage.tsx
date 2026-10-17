@@ -295,7 +295,7 @@ export default function AgentTokenPage() {
 
       {whoamiResult && (
         <div className={`border rounded-lg px-4 py-3 text-sm flex items-center gap-2 ${
-          whoamiResult.startsWith("Error")            ? "border-destructive/30 bg-destructive/10 text-destructive"
+          whoamiResult.startsWith("Error")            ? "border-destructive/30 bg-destructive/10 text-destructive-ink"
             : "border-primary/20 bg-primary/10 dark:border-primary/40 dark:bg-primary/20 text-primary"
         }`}>
           {whoamiResult.startsWith("Error") ? <AlertCircle className="size-4" /> : <UserCheck className="size-4" />}
@@ -324,7 +324,7 @@ export default function AgentTokenPage() {
                 </SelectContent>
               </Select>
               {processError && (
-                <div role="alert" className="mt-1.5 flex items-center gap-2 text-(--fs-micro-sm) text-warning-foreground">
+                <div role="alert" className="mt-1.5 flex items-center gap-2 text-(--fs-micro-sm) text-warning-ink">
                   <AlertTriangle className="size-3 shrink-0" aria-hidden="true" />
                   <span className="min-w-0 flex-1">{t("agents.token_load_processes_failed")}</span>
                   <Button type="button" onClick={() => { void loadProcesses(); }} size="xs" variant="outline">{t("common.try_again")}</Button>
@@ -341,7 +341,7 @@ export default function AgentTokenPage() {
           </h2>
           <form onSubmit={handleMakeToken} className="space-y-3">
             <div>
-              <Label htmlFor="make-user" className="text-xs text-muted-foreground mb-1 block">{t("agents.token_username")} <span className="text-destructive">*</span></Label>
+              <Label htmlFor="make-user" className="text-xs text-muted-foreground mb-1 block">{t("agents.token_username")} <span className="text-destructive-ink">*</span></Label>
               <Input id="make-user" type="text" value={makeUser} onChange={(e) => setMakeUser(e.target.value)} placeholder={t("agents.token_username")} />
             </div>
             <div>
@@ -386,7 +386,7 @@ export default function AgentTokenPage() {
           </div>
         </div>
         {tokenError && (
-          <div role="alert" className="flex flex-wrap items-center gap-3 border-b border-border bg-warning/10 px-5 py-2.5 text-xs text-warning-foreground">
+          <div role="alert" className="flex flex-wrap items-center gap-3 border-b border-border bg-warning/10 px-5 py-2.5 text-xs text-warning-ink">
             <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
             <span className="min-w-0 flex-1">
               {tokens.length > 0 ? t("agents.token_load_stale") : t("agents.token_load_failed")}
@@ -455,7 +455,7 @@ export default function AgentTokenPage() {
                             placeholder={t("agents.token_note_ph")}
                             autoFocus
                           />
-                          <Button variant="ghost" size="sm" onClick={() => handleNote(tid)} className="size-7 p-0 text-success hover:text-success">
+                          <Button variant="ghost" size="sm" onClick={() => handleNote(tid)} className="size-7 p-0 text-success-ink hover:text-success-ink">
                             <Check className="size-4" />
                           </Button>
                           <Button variant="ghost" size="sm" onClick={() => setNoteTargetId(null)} className="size-7 p-0 text-muted-foreground hover:text-foreground">
@@ -487,7 +487,7 @@ export default function AgentTokenPage() {
                           <TooltipContent>{t("agents.token_impersonate")}</TooltipContent>
                         </Tooltip>
                         <Tooltip>
-                          <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => handleDrop(tid)} disabled={activeAction === `drop-${tid}`} className={`size-8 p-0 text-destructive hover:text-destructive/80 hover:bg-destructive/5`} />}>
+                          <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => handleDrop(tid)} disabled={activeAction === `drop-${tid}`} className={`size-8 p-0 text-destructive-ink hover:text-destructive-ink/80 hover:bg-destructive/5`} />}>
                             {activeAction === `drop-${tid}` ? <Spinner size="xs" /> : <Trash2 className="size-3" />}
                           </TooltipTrigger>
                           <TooltipContent>{t("agents.token_drop")}</TooltipContent>

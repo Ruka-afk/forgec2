@@ -169,7 +169,7 @@ export default function AgentConfigPage() {
   return (
     <PageContainer>
       {hasPending && (
-        <div className="bg-warning/15 border border-warning/30 rounded-lg px-4 py-3 text-sm text-warning-foreground flex items-center gap-2">
+        <div className="bg-warning/15 border border-warning/30 rounded-lg px-4 py-3 text-sm text-warning-ink flex items-center gap-2">
           <Clock className="size-4" />
           {t("agents.config_pending_push")}
         </div>

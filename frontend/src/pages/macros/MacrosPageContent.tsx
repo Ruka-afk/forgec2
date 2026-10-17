@@ -319,7 +319,7 @@ export default function MacrosPageContent() {
           <div className="py-12 text-center"><Spinner /></div>
         ) : macros.length === 0 ? (
           loadError ? (
-            <div role="alert" className="m-5 flex flex-wrap items-center gap-2 border border-warning/30 bg-warning/10 px-3 py-2 rounded-lg text-xs text-warning-foreground">
+            <div role="alert" className="m-5 flex flex-wrap items-center gap-2 border border-warning/30 bg-warning/10 px-3 py-2 rounded-lg text-xs text-warning-ink">
               <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
               <span className="min-w-0 flex-1">{t("macros.library_unreadable", { message: loadError })}</span>
               <Button onClick={() => void loadMacros()} size="xs" variant="outline">{t("common.try_again")}</Button>
@@ -354,7 +354,7 @@ export default function MacrosPageContent() {
                       <Copy className="size-4" />
                     </Button>
                     <Button variant="ghost" size="icon-sm" onClick={() => void handleDelete(m)} aria-label={t("common.delete")}
-                      className="text-muted-foreground hover:text-destructive">
+                      className="text-muted-foreground hover:text-destructive-ink">
                       <Trash2 className="size-4" />
                     </Button>
                   </div>
@@ -379,7 +379,7 @@ export default function MacrosPageContent() {
           </div>
         ) : runs.length === 0 ? (
           runsError ? (
-            <div role="alert" className="m-5 flex flex-wrap items-center gap-2 border border-warning/30 bg-warning/10 px-3 py-2 rounded-lg text-xs text-warning-foreground">
+            <div role="alert" className="m-5 flex flex-wrap items-center gap-2 border border-warning/30 bg-warning/10 px-3 py-2 rounded-lg text-xs text-warning-ink">
               <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
               <span className="min-w-0 flex-1">{t("macros.runs_unreadable", { message: runsError })}</span>
               <Button onClick={() => void loadRuns()} size="xs" variant="outline">{t("common.try_again")}</Button>
@@ -405,7 +405,7 @@ export default function MacrosPageContent() {
                 </button>
                 {r.status === "running" && (
                   <Button variant="ghost" size="icon-xs" onClick={() => void handleStopRun(r.id)} aria-label={t("macros.stop")}
-                    className="text-destructive">
+                    className="text-destructive-ink">
                     <Square className="size-3.5" />
                   </Button>
                 )}
@@ -454,7 +454,7 @@ export default function MacrosPageContent() {
                       </Button>
                       <Button variant="ghost" size="icon-xs"
                         onClick={() => setSteps(prev => (prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev))}
-                        aria-label={t("common.delete")} className="text-muted-foreground hover:text-destructive">
+                        aria-label={t("common.delete")} className="text-muted-foreground hover:text-destructive-ink">
                         <Trash2 className="size-3.5" />
                       </Button>
                     </div>
@@ -516,7 +516,7 @@ export default function MacrosPageContent() {
             <div className="max-h-56 overflow-y-auto rounded-lg border border-border divide-y divide-border">
               {agents.length === 0 ? (
                 agentsError ? (
-                  <div role="alert" className="m-3 flex flex-wrap items-center gap-2 border border-warning/30 bg-warning/10 px-3 py-2 rounded-lg text-xs text-warning-foreground">
+                  <div role="alert" className="m-3 flex flex-wrap items-center gap-2 border border-warning/30 bg-warning/10 px-3 py-2 rounded-lg text-xs text-warning-ink">
                     <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
                     <span className="min-w-0 flex-1">{t("macros.agents_unreadable", { message: agentsError })}</span>
                     <Button onClick={() => void loadAgents()} size="xs" variant="outline">{t("common.try_again")}</Button>
@@ -581,7 +581,7 @@ export default function MacrosPageContent() {
                 {entry.output && (
                   <pre className="text-xs font-mono bg-muted rounded p-2 mt-1 whitespace-pre-wrap break-all max-h-32 overflow-y-auto">{entry.output}</pre>
                 )}
-                {entry.error && <p className="text-xs text-destructive mt-1">{entry.error}</p>}
+                {entry.error && <p className="text-xs text-destructive-ink mt-1">{entry.error}</p>}
               </div>
             ))}
           </div>

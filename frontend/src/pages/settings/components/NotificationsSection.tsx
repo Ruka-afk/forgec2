@@ -158,7 +158,7 @@ export default function NotificationsSection() {
                 </Select>
                 <span className="text-(--fs-micro-sm) text-muted-foreground font-mono">{target.type}</span>
               </div>
-              <Button onClick={() => removeTarget(i)} className="text-xs px-2 py-1 bg-destructive/10 text-destructive rounded-lg hover:bg-destructive/20" aria-label={t("settings.notifications.remove")}><Trash2 className="size-4" /></Button>
+              <Button onClick={() => removeTarget(i)} className="text-xs px-2 py-1 bg-destructive/10 text-destructive-ink rounded-lg hover:bg-destructive/20" aria-label={t("settings.notifications.remove")}><Trash2 className="size-4" /></Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -233,7 +233,7 @@ export default function NotificationsSection() {
               <Button
                 onClick={() => handleTest(i)}
                 disabled={testingIdx === i}
-                className="text-xs px-3 py-1.5 rounded-lg bg-info/15 hover:bg-info/20 text-info dark:bg-info/20 dark:hover:bg-info/40 dark:text-info flex items-center gap-1.5"
+                className="text-xs px-3 py-1.5 rounded-lg bg-info/15 hover:bg-info/20 text-info-ink dark:bg-info/20 dark:hover:bg-info/40 dark:text-info-ink flex items-center gap-1.5"
               >
                 {testingIdx === i ? <Spinner size="xs" /> : <FlaskConical className="size-4" />}
                 {testingIdx === i ? t("settings.notifications.sending") : t("settings.notifications.test")}

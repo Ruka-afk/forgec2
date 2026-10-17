@@ -99,7 +99,7 @@ export default function AISessionSidebar({ sessions, sessionsLoading = false, se
             ))}
           </div>
         ) : sessionsError ? (
-          <div className="px-4 py-10 text-center text-xs text-destructive">{sessionsError}</div>
+          <div className="px-4 py-10 text-center text-xs text-destructive-ink">{sessionsError}</div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/80 px-4 py-10 text-center">
             <div className="mb-3 flex size-9 items-center justify-center rounded-xl bg-card text-muted-foreground shadow-xs">
@@ -152,7 +152,7 @@ export default function AISessionSidebar({ sessions, sessionsLoading = false, se
 			  <Button
 				variant="ghost" size="icon-xs"
 				onClick={() => handleArchive(s.id)}
-				className="shrink-0 text-muted-foreground opacity-100 transition-opacity hover:text-warning sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+				className="shrink-0 text-muted-foreground opacity-100 transition-opacity hover:text-warning-ink sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
 				aria-label={t("ai.archive_session")}
 			  >
 				<Archive className="size-3.5" />
@@ -160,7 +160,7 @@ export default function AISessionSidebar({ sessions, sessionsLoading = false, se
               <Button
                 variant="ghost" size="icon-xs"
                 onClick={() => onDelete(s.id)}
-                className="shrink-0 text-muted-foreground opacity-100 transition-opacity hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+                className="shrink-0 text-muted-foreground opacity-100 transition-opacity hover:text-destructive-ink sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
                 aria-label={t("ai.delete_session")}
               >
                 <Trash2 className="size-4" />

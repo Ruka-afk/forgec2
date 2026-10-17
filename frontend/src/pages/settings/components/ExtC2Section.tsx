@@ -129,7 +129,7 @@ export default function ExtC2Section() {
       {channels.map(ch => (
         <div key={ch.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
           <div className="flex items-center gap-3">
-            {ch.enabled ? <Wifi className="size-4 text-success" /> : <WifiOff className="size-4 text-muted-foreground" />}
+            {ch.enabled ? <Wifi className="size-4 text-success-ink" /> : <WifiOff className="size-4 text-muted-foreground" />}
             <div>
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="text-xs">{ch.type}</Badge>
@@ -138,7 +138,7 @@ export default function ExtC2Section() {
               <p className="text-xs text-muted-foreground mt-0.5">{t("settings.extc2.created")} {formatTime(ch.created_at)}</p>
             </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => handleDelete(ch.id)} className="rounded-lg text-destructive hover:text-destructive">
+          <Button variant="ghost" size="sm" onClick={() => handleDelete(ch.id)} className="rounded-lg text-destructive-ink hover:text-destructive-ink">
             <Trash2 className="size-4" />
           </Button>
         </div>

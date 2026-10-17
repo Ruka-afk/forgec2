@@ -95,9 +95,9 @@ export function AITracePanel({ steps, status, reasoning }: AITracePanelProps) {
             {status === "running" ? (
               <LoaderCircle className="size-4 shrink-0 animate-spin text-primary motion-reduce:animate-none" />
             ) : status === "complete" ? (
-              <CheckCircle2 className="size-4 shrink-0 text-success" />
+              <CheckCircle2 className="size-4 shrink-0 text-success-ink" />
             ) : (
-              <CircleAlert className="size-4 shrink-0 text-destructive" />
+              <CircleAlert className="size-4 shrink-0 text-destructive-ink" />
             )}
             <span className="min-w-0">
               <span className="block truncate text-sm font-medium text-foreground">
@@ -127,8 +127,8 @@ export function AITracePanel({ steps, status, reasoning }: AITracePanelProps) {
                   <span className={cn(
                     "relative z-10 mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border bg-card",
                     step.status === "active" && "border-primary text-primary",
-                    step.status === "complete" && "border-success/60 text-success",
-                    step.status === "error" && "border-destructive/60 text-destructive",
+                    step.status === "complete" && "border-success/60 text-success-ink",
+                    step.status === "error" && "border-destructive/60 text-destructive-ink",
                   )}>
                     {step.status === "active" ? <LoaderCircle className="size-2.5 animate-spin motion-reduce:animate-none" /> : <Icon className="size-2.5" />}
                   </span>

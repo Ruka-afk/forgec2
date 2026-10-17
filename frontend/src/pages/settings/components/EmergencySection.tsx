@@ -96,7 +96,7 @@ export default function EmergencySection() {
               <Spinner size="sm" />
             )
           ) : (
-            <div className={`text-xs font-semibold px-3 py-1 rounded-full ${armed ? "bg-destructive/20 text-destructive" : "bg-success/15 text-success"}`}>
+            <div className={`text-xs font-semibold px-3 py-1 rounded-full ${armed ? "bg-destructive/20 text-destructive-ink" : "bg-success/15 text-success-ink"}`}>
               {armed ? t("settings.emergency.badge_armed") : t("settings.emergency.badge_safe")}
             </div>
           )}

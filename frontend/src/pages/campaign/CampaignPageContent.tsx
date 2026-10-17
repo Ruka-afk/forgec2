@@ -180,7 +180,7 @@ export default function CampaignPageContent() {
                   <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5 text-muted-foreground">{c.agents?.length || 0}</TableCell>
                   <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5 text-muted-foreground text-sm">{formatTime(c.created_at)}</TableCell>
                   <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5 text-right">
-                    <Button variant="ghost" size="icon-xs" className="text-destructive"
+                    <Button variant="ghost" size="icon-xs" className="text-destructive-ink"
                       onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }} aria-label={t("campaign.a11y_delete")}>
                       <Trash2 className="size-4" />
                     </Button>
@@ -341,7 +341,7 @@ function CampaignDetailView({
               <SelectItem value="archived">{t("campaign.status_archived")}</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="ghost" size="icon" className="text-destructive" onClick={onDelete} aria-label={t("campaign.a11y_delete")}>
+          <Button variant="ghost" size="icon" className="text-destructive-ink" onClick={onDelete} aria-label={t("campaign.a11y_delete")}>
             <Trash2 className="size-4" />
           </Button>
         </div>
@@ -423,8 +423,8 @@ function CampaignDetailView({
                           <span className="font-mono">{task.task_type}</span>
                           <span className="text-muted-foreground">{task.hostname || task.agent_id?.slice(0, 8)}</span>
                           <span className={`${
-                            task.status === "completed" ? "text-success" :
-                            task.status === "failed" ? "text-destructive" : "text-warning"
+                            task.status === "completed" ? "text-success-ink" :
+                            task.status === "failed" ? "text-destructive-ink" : "text-warning-ink"
                           }`}>{t(`tasks.${task.status}`)}</span>
                         </div>
                       ))}
@@ -570,8 +570,8 @@ function CampaignDetailView({
         </>
       ) : statsError ? (
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-destructive/10 rounded-lg border border-destructive/20">
-          <TriangleAlert className="size-4 text-destructive shrink-0" />
-          <p className="flex-1 text-sm text-destructive">{statsError}</p>
+          <TriangleAlert className="size-4 text-destructive-ink shrink-0" />
+          <p className="flex-1 text-sm text-destructive-ink">{statsError}</p>
           <Button variant="outline" size="sm" onClick={onRetryStats} disabled={statsLoading} className="shrink-0">
             <RefreshCw className="size-4" />{t("common.try_again")}
           </Button>

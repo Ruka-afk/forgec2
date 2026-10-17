@@ -189,12 +189,12 @@ export default function ToolkitPage() {
   const colorMap: Record<string, string> = {
     cyan: "bg-chart-2/10 text-chart-2 border-chart-2/30",
     emerald: "bg-success/10 text-chart-1 border-success/30",
-    blue: "bg-info/10 text-info border-info/30",
+    blue: "bg-info/10 text-info-ink border-info/30",
     rose: "bg-chart-5/10 text-chart-5 border-chart-5/30",
-    amber: "bg-warning/10 text-warning border-warning/30",
+    amber: "bg-warning/10 text-warning-ink border-warning/30",
     purple: "bg-chart-6/purple text-chart-6 border-chart-6/purple",
     teal: "bg-chart-2/10 text-chart-2 border-chart-2/30",
-    orange: "bg-warning/10 text-warning border-warning/30",
+    orange: "bg-warning/10 text-warning-ink border-warning/30",
   };
 
   return (
@@ -227,7 +227,7 @@ export default function ToolkitPage() {
         <div className="xl:col-span-3 space-y-4">
           <Card className="p-4">
             <div className="flex items-center gap-2 mb-3">
-              <span className="text-warning text-sm font-bold">!</span>
+              <span className="text-warning-ink text-sm font-bold">!</span>
               <span className="text-xs font-semibold text-muted-foreground">{t("toolkit.quick_actions")}</span>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -258,7 +258,7 @@ export default function ToolkitPage() {
                 <div className="px-5 pb-4 space-y-1">
                   {cat.commands.map((c) => (
                     <Button key={c.cmd} variant="ghost" onClick={() => runAction(c.cmd)} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg justify-start text-left border border-transparent hover:border-border transition-all">
-                      <span className={`text-xs font-mono font-medium w-28 shrink-0 ${colorMap[cat.color]?.split(" ")[1] || "text-info"}`}>{c.cmd}</span>
+                      <span className={`text-xs font-mono font-medium w-28 shrink-0 ${colorMap[cat.color]?.split(" ")[1] || "text-info-ink"}`}>{c.cmd}</span>
                       <span className="text-xs text-muted-foreground">{c.desc}</span>
                       <span className="ml-auto text-(--fs-micro-sm) text-muted-foreground">{t("toolkit.run")}</span>
                     </Button>

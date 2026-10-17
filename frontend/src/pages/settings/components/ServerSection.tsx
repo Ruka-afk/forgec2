@@ -54,7 +54,7 @@ export default function ServerSection({
                     <Lock className="size-3 mr-1" />{t("status.unknown")}
                   </span>
                 ) : (
-                  <span className={`inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg ${data.tls_enabled ? "bg-success/15 text-success" : "bg-secondary text-muted-foreground"}`}>
+                  <span className={`inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg ${data.tls_enabled ? "bg-success/15 text-success-ink" : "bg-secondary text-muted-foreground"}`}>
                     {data.tls_enabled ? <Lock className="size-3 mr-1" /> : <Unlock className="size-3 mr-1" />}
                     {data.tls_enabled ? t("settings.server.enabled") : t("settings.server.disabled")}
                   </span>

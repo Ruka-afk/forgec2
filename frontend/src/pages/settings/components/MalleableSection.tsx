@@ -53,7 +53,7 @@ export default function MalleableSection({
               <Textarea rows={2} aria-label={t("settings.malleable.append")} value={form.append} onChange={(e) => setForm({ ...form, append: e.target.value })} placeholder="--></body></html>"  />
             </div>
           </div>
-          <div className="p-3 bg-warning/10 rounded-lg border border-warning/20 text-xs text-warning-foreground">
+          <div className="p-3 bg-warning/10 rounded-lg border border-warning/20 text-xs text-warning-ink">
             <AlertTriangle className="size-4" />
             {t("settings.malleable.warning")}
           </div>

@@ -125,11 +125,11 @@ export default function BackupSection() {
 
       <div className="p-(--card-spacing) space-y-5">
         <div className="flex flex-wrap gap-3">
-          <Button onClick={handleCreateBackup} size="lg" disabled={creating} className="px-4 bg-primary/10 hover:bg-primary/20 text-primary text-sm font-medium transition-colors disabled:opacity-50">
+          <Button onClick={handleCreateBackup} size="lg" disabled={creating} className="px-4 bg-primary/10 hover:bg-primary/15 text-primary text-sm font-medium transition-colors disabled:opacity-50">
             {creating ? <Spinner size="xs" /> : <Archive className="size-4" />}
             {t("settings.backup.create")}
           </Button>
-          <Button onClick={() => fileInputRef.current?.click()} size="lg" disabled={uploading} className="px-4 bg-success/15 hover:bg-success/20 dark:hover:bg-success/60 text-success text-sm font-medium transition-colors disabled:opacity-50">
+          <Button onClick={() => fileInputRef.current?.click()} size="lg" disabled={uploading} className="px-4 bg-success/15 hover:bg-success/20 dark:hover:bg-success/60 text-success-ink text-sm font-medium transition-colors disabled:opacity-50">
             {uploading ? <Spinner size="xs" /> : <Upload className="size-4" />}
             {t("settings.backup.upload_restore")}
           </Button>
@@ -176,7 +176,7 @@ export default function BackupSection() {
                   <Button variant="ghost" size="sm" disabled={downloading !== null} onClick={() => void handleDownload(b.name)} className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground" aria-label={t("settings.backup.download", { name: b.name })}>
                     {downloading === b.name ? <Spinner size="xs" /> : <Download className="size-3.5" />}
                   </Button>
-                  <Button variant="ghost" size="sm" disabled={restoring === b.name} onClick={() => setConfirmRestore(b)} className="h-8 px-3 text-xs text-warning hover:text-warning hover:bg-warning/15">
+                  <Button variant="ghost" size="sm" disabled={restoring === b.name} onClick={() => setConfirmRestore(b)} className="h-8 px-3 text-xs text-warning-ink hover:text-warning-ink hover:bg-warning/15">
                     {restoring === b.name ? <Spinner size="xs" /> : t("settings.backup.restore")}
                   </Button>
                 </div>

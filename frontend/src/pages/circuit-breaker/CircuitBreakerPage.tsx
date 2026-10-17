@@ -210,7 +210,7 @@ export default function CircuitBreakerPage() {
                       />
                     </TableCell>
                     <TableCell className="px-4 py-3">
-                      <span className={`text-xs font-medium ${l.consecutive_fails >= 3 ? "text-destructive" : l.consecutive_fails > 0 ? "text-warning" : "text-muted-foreground"}`}>
+                      <span className={`text-xs font-medium ${l.consecutive_fails >= 3 ? "text-destructive-ink" : l.consecutive_fails > 0 ? "text-warning-ink" : "text-muted-foreground"}`}>
                         {l.consecutive_fails}
                       </span>
                     </TableCell>
@@ -311,7 +311,7 @@ export default function CircuitBreakerPage() {
           </DialogHeader>
           <div className="space-y-4">
             {!configLoaded && (
-              <p role="alert" className="rounded-lg border border-destructive/25 bg-destructive/10 p-3 text-xs text-destructive">
+              <p role="alert" className="rounded-lg border border-destructive/25 bg-destructive/10 p-3 text-xs text-destructive-ink">
                 {t("cb.config_unread")}
               </p>
             )}

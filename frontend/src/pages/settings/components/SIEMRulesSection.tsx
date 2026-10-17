@@ -192,7 +192,7 @@ export default function SIEMRulesSection() {
             <Button variant="ghost" size="sm" onClick={() => startEdit(rule)} className="rounded-lg">
               <Pencil className="size-4" />
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => handleDelete(rule.id)} className="rounded-lg text-destructive hover:text-destructive">
+            <Button variant="ghost" size="sm" onClick={() => handleDelete(rule.id)} className="rounded-lg text-destructive-ink hover:text-destructive-ink">
               <Trash2 className="size-4" />
             </Button>
           </div>

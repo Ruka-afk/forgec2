@@ -77,10 +77,10 @@ export default function SecuritySection({
           <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2"><Key className="size-4" />{t("settings.security.jwt_secret")}</h3>
           <div className="flex items-center gap-4 p-4 bg-warning/10 rounded-lg border border-warning/20">
             <div className="flex-1">
-              <div className="text-xs text-warning font-medium mb-1">{t("settings.security.current_key")}</div>
-              <code className="text-sm font-mono text-warning-foreground break-all select-all">{data.jwt_masked ?? "????????"}</code>
+              <div className="text-xs text-warning-ink font-medium mb-1">{t("settings.security.current_key")}</div>
+              <code className="text-sm font-mono text-warning-ink break-all select-all">{data.jwt_masked ?? "????????"}</code>
             </div>
-            <Button onClick={onRegenerateJWT} size="lg" disabled={saving} className="shrink-0 px-4 bg-warning/15 text-warning hover:bg-warning/25 text-sm font-medium transition-colors disabled:opacity-50">
+            <Button onClick={onRegenerateJWT} size="lg" disabled={saving} className="shrink-0 px-4 bg-warning/15 text-warning-ink hover:bg-warning/25 text-sm font-medium transition-colors disabled:opacity-50">
               <RotateCw className="size-4" />{t("settings.security.regenerate")}
             </Button>
           </div>
@@ -91,9 +91,9 @@ export default function SecuritySection({
 
           {totpStatusError ? (
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-destructive/10 rounded-lg border border-destructive/20">
-              <AlertTriangle className="size-4 text-destructive shrink-0" />
+              <AlertTriangle className="size-4 text-destructive-ink shrink-0" />
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-destructive">{t("settings.security.totp_status_unknown")}</div>
+                <div className="text-sm font-medium text-destructive-ink">{t("settings.security.totp_status_unknown")}</div>
                 <div className="text-xs text-muted-foreground">{t("settings.security.totp_status_unknown_hint")}</div>
               </div>
               <Button variant="outline" size="sm" onClick={onReloadTOTP} className="shrink-0">
@@ -141,7 +141,7 @@ export default function SecuritySection({
                     <Input id="totp-code" type="text" aria-label={t("settings.security.verification_code")} placeholder="123 456" maxLength={8} value={totpCode} onChange={(e) => setTotpCode(e.target.value)} />
                   </div>
                   {totpBackupCodes && (
-                    <div className="bg-warning/10 border border-warning/20 rounded-lg p-3 text-xs text-warning-foreground">
+                    <div className="bg-warning/10 border border-warning/20 rounded-lg p-3 text-xs text-warning-ink">
                       <AlertTriangle className="size-4" />
                       {t("settings.security.save_backup_codes")} <div className="mt-2 font-mono font-semibold whitespace-pre-wrap">{totpBackupCodes}</div>
                     </div>
@@ -157,9 +157,9 @@ export default function SecuritySection({
               <div className="bg-success/15 border border-success/30 rounded-lg p-4">
                 <div className="flex items-center gap-2">
                   <CheckCircle className="size-4" />
-                  <span className="text-sm font-medium text-success">{t("settings.security.2fa_enabled")}</span>
+                  <span className="text-sm font-medium text-success-ink">{t("settings.security.2fa_enabled")}</span>
                 </div>
-                <div className="text-xs text-success mt-1">{t("settings.security.2fa_login_hint")}</div>
+                <div className="text-xs text-success-ink mt-1">{t("settings.security.2fa_login_hint")}</div>
               </div>
               <div>
                 <span className="block text-xs text-muted-foreground mb-1.5">{t("settings.security.enter_pw_disable")}</span>
@@ -169,7 +169,7 @@ export default function SecuritySection({
                 <span className="block text-xs text-muted-foreground mb-1.5">{t("settings.security.enter_2fa_code")}</span>
                 <Input id="totp-disable-code" type="text" aria-label={t("settings.security.enter_2fa_code")} placeholder="123 456" maxLength={8} value={totpDisableCode} onChange={(e) => setTotpDisableCode(e.target.value)} />
               </div>
-              <Button onClick={async () => { if (await confirm({ message: t("settings.disable_totp") })) onDisableTOTP(); }} size="lg" disabled={saving} className="px-6 bg-destructive/10 hover:bg-destructive/20 text-destructive text-sm font-medium transition-colors disabled:opacity-50">
+              <Button onClick={async () => { if (await confirm({ message: t("settings.disable_totp") })) onDisableTOTP(); }} size="lg" disabled={saving} className="px-6 bg-destructive/10 hover:bg-destructive/20 text-destructive-ink text-sm font-medium transition-colors disabled:opacity-50">
                 <X className="size-4" />{t("settings.security.disable_2fa")}
               </Button>
             </div>

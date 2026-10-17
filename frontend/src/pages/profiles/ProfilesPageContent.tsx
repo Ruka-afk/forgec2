@@ -369,13 +369,13 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
               </div>
 
               {lastReload && (
-                <div className="text-xs text-success flex items-center gap-1">
+                <div className="text-xs text-success-ink flex items-center gap-1">
                   <Clock className="size-4" />
                   {t("profiles.last_reloaded", { time: lastReload })}
                 </div>
               )}
 
-              <div className="p-3 bg-warning/15 rounded-lg border border-warning/30 text-xs text-warning mt-3">
+              <div className="p-3 bg-warning/15 rounded-lg border border-warning/30 text-xs text-warning-ink mt-3">
                 <AlertTriangle className="size-4" />
                 {t("profiles.reload_warning")}
               </div>
@@ -607,7 +607,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                                   className="flex-1 text-xs font-mono"
                                 />
                                 {Object.entries(editing.headers).length > 1 && (
-                                   <Button onClick={() => removeHeader(i)} className="size-9 flex items-center justify-center text-destructive/50 hover:text-destructive hover:bg-destructive/10 transition-colors" variant="ghost" size="icon" aria-label={t("agents.config.remove_header")}>
+                                   <Button onClick={() => removeHeader(i)} className="size-9 flex items-center justify-center text-destructive-ink/50 hover:text-destructive-ink hover:bg-destructive/10 transition-colors" variant="ghost" size="icon" aria-label={t("agents.config.remove_header")}>
                                     <X className="size-4" />
                                   </Button>
                                 )}
@@ -716,7 +716,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                             <div className="font-mono truncate">server_output: {validateResult.wire?.server_output || "(none)"}</div>
                             <div className="font-mono truncate">client_metadata: {validateResult.wire?.client_metadata || "(none)"}</div>
                             {validateResult.sample && <div className="font-mono truncate mt-1">sample: {validateResult.sample.encoded}</div>}
-                            {(validateResult.warnings || []).map((w, i) => <div key={i} className="text-warning mt-1">⚠ {w}</div>)}
+                            {(validateResult.warnings || []).map((w, i) => <div key={i} className="text-warning-ink mt-1">⚠ {w}</div>)}
                           </div>
                         )}
                       </div>

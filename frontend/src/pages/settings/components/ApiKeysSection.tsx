@@ -236,7 +236,7 @@ export default function ApiKeysSection() {
                     </Button>
                     <Button variant="ghost" size="icon-sm" onClick={() => void handleRevoke(k)} disabled={!k.active}
                       title={t("common.delete")} aria-label={t("common.delete")}
-                      className="text-muted-foreground hover:text-destructive">
+                      className="text-muted-foreground hover:text-destructive-ink">
                       <Trash2 className="size-4" />
                     </Button>
                   </div>
@@ -280,7 +280,7 @@ export default function ApiKeysSection() {
                 ))}
               </div>
               {newScopes.includes("settings.write") && (
-                <p className="text-xs text-warning mt-1">{t("settings.apikeys.scopes_settings_warn")}</p>
+                <p className="text-xs text-warning-ink mt-1">{t("settings.apikeys.scopes_settings_warn")}</p>
               )}
             </div>
             <div>

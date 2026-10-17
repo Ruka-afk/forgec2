@@ -310,7 +310,7 @@ export default function AgentsPageContent() {
       )}
 
       {metaFailures.length > 0 && (
-        <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-foreground">
+        <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-ink">
           <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1">{t("agents.meta_partial_failed", { sources: metaFailures.join(", ") })}</span>
           {locksError && (

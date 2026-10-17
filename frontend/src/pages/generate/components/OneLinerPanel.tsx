@@ -108,7 +108,7 @@ export default function OneLinerPanel({
 
       {result === "success" && onelinerData ? (
         <div className="mt-2">
-          <div className="mb-3 flex items-center gap-x-2 text-xs text-success">
+          <div className="mb-3 flex items-center gap-x-2 text-xs text-success-ink">
             <CheckCircle2 className="size-4" />
             {t("generate.oneliner_download_url")} <code className="rounded bg-muted px-2 py-0.5 text-xs">{onelinerData.download_url}</code> {t("generate.oneliner_valid")}
           </div>

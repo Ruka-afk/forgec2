@@ -142,7 +142,7 @@ export function OneShotTasksCard() {
                 ))}
               </select>
               {agentsError && agents.length === 0 && (
-                <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-2 py-1.5 text-xs text-warning-foreground" role="alert">
+                <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-2 py-1.5 text-xs text-warning-ink" role="alert">
                   <AlertTriangle className="size-3.5 shrink-0" />
                   <span className="flex-1 min-w-[140px]">{t("oneshot.agents_unreadable", { message: agentsError })}</span>
                   <button type="button" className="shrink-0 underline" onClick={() => void loadAgents()}>
@@ -196,7 +196,7 @@ export function OneShotTasksCard() {
                 {formatTime(st.run_at)}
               </span>
               {st.status === "pending" && (
-                <Button variant="ghost" size="icon-xs" onClick={() => handleCancel(st)} aria-label={t("common.cancel")} className="text-destructive shrink-0">
+                <Button variant="ghost" size="icon-xs" onClick={() => handleCancel(st)} aria-label={t("common.cancel")} className="text-destructive-ink shrink-0">
                   <Trash2 className="size-3.5" />
                 </Button>
               )}

@@ -112,7 +112,7 @@ export const AgentRow = memo(function AgentRow({
               className="ml-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
               aria-label={t("agents.copy_hostname")}
             >
-              {copiedField === `host-${id}` ? <Check className="size-3 text-success" /> : <Copy className="size-3" />}
+              {copiedField === `host-${id}` ? <Check className="size-3 text-success-ink" /> : <Copy className="size-3" />}
             </Button>
             <Button
               type="button"
@@ -166,7 +166,7 @@ export const AgentRow = memo(function AgentRow({
           className="ml-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
           aria-label={t("agents.copy_ip")}
         >
-          {copiedField === `ip-${id}` ? <Check className="size-3 text-success" /> : <Copy className="size-3" />}
+          {copiedField === `ip-${id}` ? <Check className="size-3 text-success-ink" /> : <Copy className="size-3" />}
         </Button>
       </TableCell>
       )}
@@ -190,7 +190,7 @@ export const AgentRow = memo(function AgentRow({
         {lockUser ? (
           <span className="inline-flex items-center gap-1 text-xs" title={t("agents.locked_by").replace("{user}", lockUser)}>
             <Lock className="size-4" />
-            <span className="text-(--fs-micro-sm) text-warning font-medium truncate max-w-[80px]">{lockUser}</span>
+            <span className="text-(--fs-micro-sm) text-warning-ink font-medium truncate max-w-[80px]">{lockUser}</span>
           </span>
         ) : locksUnread ? (
           // The lock table has never been read successfully. Showing the
@@ -206,8 +206,8 @@ export const AgentRow = memo(function AgentRow({
         )}
         {presenceUsers && presenceUsers.length > 0 && (
           <span className="inline-flex items-center gap-1 text-xs ml-1" title={t("agents.active_operator").replace("{user}", presenceUsers.join(", "))}>
-            <Users className="size-3.5 text-info" />
-            <span className="text-(--fs-micro-sm) text-info truncate max-w-[80px]">{presenceUsers.length}</span>
+            <Users className="size-3.5 text-info-ink" />
+            <span className="text-(--fs-micro-sm) text-info-ink truncate max-w-[80px]">{presenceUsers.length}</span>
           </span>
         )}
       </TableCell>
@@ -236,7 +236,7 @@ export const AgentRow = memo(function AgentRow({
         {version ? (
           version
         ) : (
-          <span className="text-warning" title={t("agents.version_unknown_hint")}>{t("agents.version_unknown")}</span>
+          <span className="text-warning-ink" title={t("agents.version_unknown_hint")}>{t("agents.version_unknown")}</span>
         )}
       </TableCell>
       )}

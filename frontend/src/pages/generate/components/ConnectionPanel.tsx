@@ -116,7 +116,7 @@ export default function ConnectionPanel({
       footer={
         <div className="flex flex-wrap gap-1.5">
           <SummaryChip label={t("generate.connection_listener")} value={currentListener?.name || t("generate.select_listener")} tint="bg-primary/10 text-primary" />
-          <SummaryChip label={t("generate.beacon_transport")} value={transport.toUpperCase()} tint="bg-warning/10 text-warning" />
+          <SummaryChip label={t("generate.beacon_transport")} value={transport.toUpperCase()} tint="bg-warning/10 text-warning-ink" />
           <SummaryChip label={t("generate.malleable_profile")} value={shared.profile || "default"} tint="bg-muted text-muted-foreground" />
         </div>
       }
@@ -210,7 +210,7 @@ export default function ConnectionPanel({
             {showExperimental ? t("generate.hide_experimental") : t("generate.show_experimental")}
           </Button>
           {CONDITIONAL_TRANSPORTS.includes(transport) && (
-            <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
+            <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-ink">
               <div className="font-semibold mb-0.5">{t("generate.transport_security_title")}</div>
               <div>
                 {transport === "grpc" && t("generate.transport_note_grpc")}
@@ -305,7 +305,7 @@ export default function ConnectionPanel({
             )}
           </div>
           {profileLocked && (
-            <p className="flex items-center gap-1 text-(--fs-xs-sm) text-warning">
+            <p className="flex items-center gap-1 text-(--fs-xs-sm) text-warning-ink">
               <Lock className="size-3.5" />{t("generate.profile_locked")}
             </p>
           )}

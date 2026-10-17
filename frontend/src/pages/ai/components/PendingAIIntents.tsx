@@ -65,7 +65,7 @@ export function PendingAIIntents({ activeSessionId }: { activeSessionId: number 
   if (error) {
     return (
       <div role="alert" className="flex justify-center">
-        <Button variant="outline" size="sm" onClick={() => { void refresh(); }} className="gap-1.5 border-destructive/40 text-destructive">
+        <Button variant="outline" size="sm" onClick={() => { void refresh(); }} className="gap-1.5 border-destructive/40 text-destructive-ink">
           <ShieldCheck className="size-4" />
           {t("ai.approvals_unreadable", { message: error })}
         </Button>
@@ -76,7 +76,7 @@ export function PendingAIIntents({ activeSessionId }: { activeSessionId: number 
   return (
     <>
       <div className="flex justify-center">
-        <Button variant="outline" size="sm" onClick={() => setOpen(true)} className="gap-1.5 border-warning/40 text-warning">
+        <Button variant="outline" size="sm" onClick={() => setOpen(true)} className="gap-1.5 border-warning/40 text-warning-ink">
           <ShieldCheck className="size-4" />
           {t("ai.intent_manual_approval")}
           <Badge variant="warning">{intents.length}</Badge>
@@ -86,7 +86,7 @@ export function PendingAIIntents({ activeSessionId }: { activeSessionId: number 
         <DialogContent className="sm:max-w-lg" aria-live="polite">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <ShieldCheck className="size-4 text-warning" />
+              <ShieldCheck className="size-4 text-warning-ink" />
               {t("ai.intent_manual_approval")}
               <Badge variant="warning" className="ml-auto">{intents.length}</Badge>
             </DialogTitle>

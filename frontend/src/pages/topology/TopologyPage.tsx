@@ -105,7 +105,7 @@ function TopologySidebar({
                   </Button>
                 </div>
                 {routeMsg && (
-                  <p className={`text-xs mt-1 ${routeMsg.includes("success") ? "text-success" : "text-destructive"}`}>
+                  <p className={`text-xs mt-1 ${routeMsg.includes("success") ? "text-success-ink" : "text-destructive-ink"}`}>
                     {routeMsg}
                   </p>
                 )}
@@ -227,7 +227,7 @@ function TopologySidebar({
         <div className="p-4 space-y-2">
           <Button variant="ghost" size="sm" onClick={togglePhysics} className="w-full justify-between">
             <span><Snowflake className="size-4" />{t("topology.physics")}</span>
-            <span className={`font-mono ${physicsEnabled ? "text-success" : "text-muted-foreground"}`}>{physicsEnabled ? t("topology.on") : t("topology.off")}</span>
+            <span className={`font-mono ${physicsEnabled ? "text-success-ink" : "text-muted-foreground"}`}>{physicsEnabled ? t("topology.on") : t("topology.off")}</span>
           </Button>
           <Button variant="ghost" size="sm" onClick={exportPng} className="w-full justify-between">
             <span><Download className="size-4" />{t("topology.export_png")}</span>
@@ -397,7 +397,7 @@ export default function TopologyPage() {
         {useNetSource ? (
           <>
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-lg">
-              <Globe2 className="size-4 text-info" />
+              <Globe2 className="size-4 text-info-ink" />
               <span className="text-xs font-medium text-muted-foreground">
                 {netStats?.hosts ?? 0} {t("topology.hosts")}
               </span>
@@ -405,7 +405,7 @@ export default function TopologyPage() {
             {!!netStats?.hosts_lateral && (
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-destructive/10 rounded-lg">
                 <span className="size-2 rounded-full bg-destructive" />
-                <span className="text-xs font-medium text-destructive">
+                <span className="text-xs font-medium text-destructive-ink">
                   {netStats.hosts_lateral} {t("topology.hosts_lateral")}
                 </span>
               </div>

@@ -19,7 +19,7 @@ export default function LanguageSection({ language, onSetLanguage }: { language:
           {SUPPORTED_LANGS.map((lang) => (
             <Button key={lang.code} onClick={() => onSetLanguage(lang.code)} variant="ghost"
               className={`relative h-auto min-h-24 items-center justify-start gap-3 whitespace-normal rounded-xl border p-4 text-left transition-colors ${language === lang.code ? "border-info/50 bg-info/10 shadow-xs" : "border-border bg-muted/45 hover:border-info/45 hover:bg-info/5"}`}>
-              {language === lang.code && <CheckCircle2 className="absolute right-3 top-3 size-4 text-info" />}
+              {language === lang.code && <CheckCircle2 className="absolute right-3 top-3 size-4 text-info-ink" />}
               <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-card text-2xl shadow-xs">{lang.flag}</span>
               <span className="min-w-0">
                 <span className="block text-sm font-semibold text-foreground">{lang.native}</span>

@@ -138,7 +138,7 @@ export default function NotificationRoutesCard() {
             {routes.map((route, idx) => (
               <div key={route.id ?? `new-${idx}`} className="p-4 bg-muted rounded-lg space-y-3 border border-border">
                 {!route.id && (
-                  <p className="text-(--fs-micro-sm) font-medium text-warning">{t("settings.routes.new_badge")}</p>
+                  <p className="text-(--fs-micro-sm) font-medium text-warning-ink">{t("settings.routes.new_badge")}</p>
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
@@ -212,7 +212,7 @@ export default function NotificationRoutesCard() {
                     <>
                       <Button variant="ghost" size="sm" onClick={() => void handleTest(route)}
                         disabled={testingId === route.id}
-                        className="text-info gap-1.5">
+                        className="text-info-ink gap-1.5">
                         {testingId === route.id ? <Spinner size="xs" /> : <FlaskConical className="size-4" />}
                         {t("settings.notifications.test")}
                       </Button>

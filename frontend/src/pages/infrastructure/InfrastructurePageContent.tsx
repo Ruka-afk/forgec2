@@ -112,7 +112,7 @@ export default function InfrastructurePage() {
 
           <Card className="overflow-hidden">
             <CardHeader className="px-(--card-spacing) py-(--card-spacing) border-b">
-              <div className="size-8 bg-success/15 rounded-lg flex items-center justify-center text-success"><Globe className="size-4" /></div>
+              <div className="size-8 bg-success/15 rounded-lg flex items-center justify-center text-success-ink"><Globe className="size-4" /></div>
               <div><CardTitle>{t("infra.domain_params")}</CardTitle><CardDescription>{t("infra.domain_desc")}</CardDescription></div>
             </CardHeader>
             <CardContent className="p-(--card-spacing) space-y-4">
@@ -252,7 +252,7 @@ export default function InfrastructurePage() {
             <div>
               <Card className="overflow-hidden">
                 <CardHeader className="px-(--card-spacing) py-(--card-spacing) border-b">
-                  <div className="size-8 bg-success/15 rounded-lg flex items-center justify-center text-success"><Server className="size-4" /></div>
+                  <div className="size-8 bg-success/15 rounded-lg flex items-center justify-center text-success-ink"><Server className="size-4" /></div>
                   <div><CardTitle>{editingRd ? t("infra.edit_redirector") : t("infra.new_redirector")}</CardTitle></div>
                 </CardHeader>
                 <CardContent className="p-(--card-spacing) space-y-4">
@@ -440,7 +440,7 @@ export default function InfrastructurePage() {
         <TabsContent value="acme" className="mt-0">
         <Card className="overflow-hidden">
           <CardHeader className="px-(--card-spacing) py-(--card-spacing) border-b">
-            <div className="size-8 bg-info/15 rounded-lg flex items-center justify-center text-info"><Award className="size-4" /></div>
+            <div className="size-8 bg-info/15 rounded-lg flex items-center justify-center text-info-ink"><Award className="size-4" /></div>
             <div><CardTitle>{t("infra.acme_title")}</CardTitle><CardDescription>{t("infra.acme_desc")}</CardDescription></div>
           </CardHeader>
           <CardContent className="p-(--card-spacing) space-y-4">
@@ -468,7 +468,7 @@ export default function InfrastructurePage() {
               </Button>
             </div>
             {certPath && keyPath && (
-              <div className="p-3 bg-success/15 rounded-lg text-xs text-success">
+              <div className="p-3 bg-success/15 rounded-lg text-xs text-success-ink">
                 <CheckCircle className="size-4" />
                 <b>{t("infra.cert_success")}</b> {t("infra.cert_set_to")} {certPath}
               </div>
@@ -489,7 +489,7 @@ export default function InfrastructurePage() {
               <div className="flex gap-3">
                 {([
                   { value: "json", label: "JSON", icon: <Code className="size-4" />, active: "border-primary bg-primary/10 text-primary" },
-                  { value: "nginx", label: "Nginx", icon: <Server className="size-4" />, active: "border-success bg-success/15 text-success" },
+                  { value: "nginx", label: "Nginx", icon: <Server className="size-4" />, active: "border-success bg-success/15 text-success-ink" },
                   { value: "env", label: "ENV", icon: <Terminal className="size-4" />, active: "border-secondary bg-secondary/50 text-muted-foreground" },
                 ] as const).map((opt) => (
                   <Button key={opt.value} onClick={() => setExportFormat(opt.value)}

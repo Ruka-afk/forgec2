@@ -43,10 +43,10 @@ interface StepLog {
 }
 
 const statusBadge = (status: string) => {
-  const cls = status === "completed" ? "bg-success/15 text-success"
-    : status === "failed" ? "bg-destructive/15 text-destructive"
-    : status === "aborted" ? "bg-warning/15 text-warning"
-    : "bg-info/15 text-info";
+  const cls = status === "completed" ? "bg-success/15 text-success-ink"
+    : status === "failed" ? "bg-destructive/15 text-destructive-ink"
+    : status === "aborted" ? "bg-warning/15 text-warning-ink"
+    : "bg-info/15 text-info-ink";
   return <Badge className={cls}>{status}</Badge>;
 };
 
@@ -147,7 +147,7 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">{ex.workflow_name}</div>
                     <div className="text-xs text-muted-foreground">{ex.agents_count} agent(s), {ex.tasks_created} task(s) &middot; {formatTime(ex.started_at)}</div>
-                    {ex.error_msg && <div className="text-xs text-destructive truncate">{ex.error_msg}</div>}
+                    {ex.error_msg && <div className="text-xs text-destructive-ink truncate">{ex.error_msg}</div>}
                   </div>
                   <ChevronRight className="size-4 text-muted-foreground shrink-0" />
                 </button>
@@ -174,7 +174,7 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
                 </div>
                 {log.command && <div className="text-xs font-mono text-foreground truncate mb-1">{log.command.substring(0, 120)}</div>}
                 {log.result && <div className="text-xs text-muted-foreground whitespace-pre-wrap max-h-24 overflow-y-auto">{log.result.substring(0, 500)}</div>}
-                {log.error_msg && <div className="text-xs text-destructive mt-1">{log.error_msg}</div>}
+                {log.error_msg && <div className="text-xs text-destructive-ink mt-1">{log.error_msg}</div>}
                 {log.completed_at && <div className="text-(--fs-micro-sm) text-muted-foreground mt-1">{formatTime(log.completed_at)}</div>}
               </div>
             ))}
