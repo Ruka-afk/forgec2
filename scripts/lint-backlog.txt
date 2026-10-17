@@ -44,8 +44,6 @@
 # (39/11-12 — syscall.Syscall6/SyscallN migration and grpc.DialContext/
 # http2.Transport, deliberate keep), S1011/S1001 one-offs.
 #
-windows=306
-linux=236
 
 # Batch N (2026-10): RegSecret tenant attribution shipped together with the
 # lint tail paid to the floor. SA1019 zeroed on both targets: the whole
