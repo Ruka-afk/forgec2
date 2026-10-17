@@ -23,14 +23,15 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Raised again with the shared hook/utility layer tests: the measured figure
-// is now 17.14% statements (9766/56968). The floor is pinned at 16.0 rather
-// than the measured level on purpose — a large new component shipping without
-// tests still trips it, while the ~1-point headroom absorbs ordinary page work
+// Raised again with the automation-layer tests (completions/shell/
+// useLiveTaskResult/file-transfer): the measured figure is now 17.64%
+// statements (10050/56968). The floor is pinned at 16.5 rather than the
+// measured level on purpose — a large new component shipping without tests
+// still trips it, while the ~1-point headroom absorbs ordinary page work
 // between raises. A new uncovered page or helper drops the figure below the
-// floor, and the check fails with the exact delta. (Batch U last raised it to
-// 15.5 at a measured 16.46%.)
-const FLOOR = Number(process.env.COVERAGE_FLOOR ?? 16);
+// floor, and the check fails with the exact delta. (The shared hook/utility
+// tests last raised it to 16.0 at a measured 17.14%.)
+const FLOOR = Number(process.env.COVERAGE_FLOOR ?? 16.5);
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "..");
 const summaryPath = join(root, "coverage", "coverage-summary.json");
