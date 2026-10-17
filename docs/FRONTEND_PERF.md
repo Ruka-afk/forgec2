@@ -182,9 +182,11 @@ console.log(/vendor-baseui-forms/.test(h) ? 'FAIL: forms preloaded' : 'OK: forms
   401 prewarm covers the common expired-session path, not a first-ever visit.
 - The entry chunk still carries the full i18n dictionaries (~33% of the entry
   chunk is the `en` dictionary); splitting them is tracked separately.
-- `frontend/e2e/layout.spec.ts` win32 visual baselines were last refreshed
-  2026-08-29 and are stale locally; CI enforces the Linux set, which is
-  current. Re-baseline win32 separately before trusting local pixel diffs.
+- `frontend/e2e/layout.spec.ts` win32 visual baselines were re-captured
+  2026-10 (13 of 32 had drifted by a few percent of pixels — fonts/rasterizer,
+  not content); the Linux set CI enforces was already current and is
+  untouched. If local diffs reappear, refresh win32 again rather than
+  loosening `maxDiffPixelRatio`.
 - No `?v=` favicon version stamp (batch U): `favicon.ico` already goes out
   `no-cache` with the boot-time content-hash ETag, so a stale client
   revalidates to a 304/0 B; a query stamp would fork the URL without giving
