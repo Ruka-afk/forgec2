@@ -9,9 +9,9 @@
 // tag the way JSX does (brace/quote aware, multi-line), and flags the ones
 // with no accessible-name attribute.
 //
-// Prototype from the (2026-10) UI/UX audit: report-only, exits 0 unless
-// --strict is passed (U2 fixes the findings and promotes it into
-// `npm run check`).
+// Promoted into `npm run check` (--strict) when U2 landed: the audit findings
+// are fixed, and the gate now fails on unnamed triggers as well as on weak
+// title-only fallbacks. Run without the flag for a report-only pass.
 //
 // Usage:
 //   node scripts/check-aria.mjs            # report, always exit 0
@@ -152,8 +152,10 @@ function main() {
     console.log("\n(pass --list for every snippet)");
   }
 
-  if (strict && missing.length) {
-    console.error(`\nFAIL: ${missing.length} icon-only trigger(s) without a label.`);
+  if (strict && (missing.length || weak.length)) {
+    console.error(
+      `\nFAIL: ${missing.length} icon-only trigger(s) without a label, ${weak.length} with only a weak title fallback.`,
+    );
     process.exitCode = 1;
   }
 }

@@ -338,7 +338,7 @@ export default function ListenersPageContent() {
       </PageToolbar>
 
       <Card className="overflow-hidden">
-        <Table>
+        <Table label={t("listeners.title")}>
           <TableHeader className="bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90 sticky top-0 z-10 border-b border-border">
             <TableRow className="hover:bg-transparent">
               <TableHead className="text-left py-3 px-4 sm:py-4 sm:px-6 font-medium text-muted-foreground min-w-[120px]">{t("listeners.col_name")}</TableHead>

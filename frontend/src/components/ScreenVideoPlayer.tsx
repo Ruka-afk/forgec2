@@ -66,7 +66,7 @@ export function ScreenVideoPlayer({ src, wsLive, fps = 5, className, onFullscree
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 opacity-0 transition-opacity group-hover:opacity-100">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Button size="icon-xs" variant="ghost" className="text-white hover:bg-white/20" onClick={() => setIsPlaying(!isPlaying)}>
+            <Button size="icon-xs" variant="ghost" className="text-white hover:bg-white/20" onClick={() => setIsPlaying(!isPlaying)} aria-label={isPlaying ? t("agents.screen_pause") : t("agents.screen_play")}>
               {isPlaying ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
             </Button>
             <Badge variant="secondary" className="gap-1 bg-black/40 text-white text-xs">
@@ -75,7 +75,7 @@ export function ScreenVideoPlayer({ src, wsLive, fps = 5, className, onFullscree
             </Badge>
             <span className="text-xs text-white/80">#{frameCount}</span>
           </div>
-          <Button size="icon-xs" variant="ghost" className="text-white hover:bg-white/20" onClick={onFullscreen}>
+          <Button size="icon-xs" variant="ghost" className="text-white hover:bg-white/20" onClick={onFullscreen} aria-label={t("agents.screen_fullscreen")}>
             <Maximize2 className="size-3.5" />
           </Button>
         </div>

@@ -393,6 +393,7 @@ function CampaignDetailView({
                         className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all cursor-pointer min-w-[80px] h-auto ${
                           expandedPhase === phase ? "ring-2 ring-primary" : ""
                         } ${isCompleted ? "bg-success/15" : isPending ? "" : "bg-warning/15"}`}
+                        aria-label={phase}
                         title={phase}
                       >
                           <div className={`size-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${

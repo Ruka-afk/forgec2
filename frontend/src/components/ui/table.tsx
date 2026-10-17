@@ -3,10 +3,18 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 import { Inbox } from "lucide-react"
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+function Table({
+  className,
+  label,
+  ...props
+}: React.ComponentProps<"table"> & { label?: string }) {
   return (
     <div
       data-slot="table-container"
+      // A labelled scroll container is exposed as a named region. tabIndex
+      // makes the horizontal scroll keyboard-reachable outside Chromium
+      // (which focuses overflowing scrollers implicitly).
+      {...(label ? { role: "region", "aria-label": label, tabIndex: 0 } : {})}
       className="relative w-full overflow-x-auto rounded-lg bg-card scrollbar-thin [scrollbar-gutter:stable]"
     >
       <table

@@ -7,9 +7,8 @@ motion and narrow-screen quality. Out of scope by decision (do not re-open):
 information-architecture changes, page re-layouts, a new component system.
 
 Defect clusters below carry an owner batch (U1–U6) and the evidence that
-reproduces them. `npm run check:contrast` became a hard gate inside
-`npm run check` when U1b landed; `npm run check:aria` stays report-mode until
-U2 moves K1–K5.
+reproduces them. Both scanners are hard gates inside `npm run check` now —
+`check:contrast` since U1b, `check:aria` since U2 closed K1–K5.
 
 ## Method
 
@@ -132,6 +131,18 @@ if we adopt strict WCAG 1.4.11 for control boundaries).
 
 ## D2 — Keyboard & accessible names (owner: U2)
 
+> **U2 landed (2026-10-18):** K1–K5 are fixed and `check:aria --strict` is a
+> member of `npm run check` (184 triggers scanned; zero unnamed, zero
+> title-only). K1/K2 got `aria-label`s (new `agents.screen_play` /
+> `screen_pause` / `screen_fullscreen` EN+ZH keys; the phase chip now carries
+> the full phase name), K3 names the icon-only breadcrumb home link from its
+> item label, K4 deletes the static `index.html` skip link (the localized
+> React one stays as the single pre-content stop), and K5 gives the `Table`
+> primitive an optional `label` that turns the scroll container into a named
+> region (`role="region"` + `aria-label` + explicit `tabIndex=0`, so the
+> horizontal scroll is keyboard-reachable beyond Chromium) — the listeners
+> table passes `t("listeners.title")`.
+
 - **K1 · 2 icon-only buttons with no name** — `ScreenVideoPlayer.tsx:69`
   (play/pause) and `:78` (fullscreen). `npm run check:aria` scans 184
   icon-sized triggers: these 2 missing, 1 title-only, 2 named by `sr-only`
@@ -209,7 +220,7 @@ if we adopt strict WCAG 1.4.11 for control boundaries).
 | --- | --- |
 | U1a status tokens & primitives (landed 2026-10-18) | C1, C2, C5, C6, C8, C9; component side of C3/C4/C7; `check:contrast` compositing switched to the browser's sRGB blend space |
 | U1b page migration (landed 2026-10-18) | C3/C4/C7 page call sites: 300 × `text-X` → `text-X-ink`, 38 `-foreground`-on-tint chips → ink, light `primary/20` → `/15`; `check:contrast --strict` promoted into `npm run check` |
-| U2 keyboard & names | K1–K5; promote `check:aria --strict` |
+| U2 keyboard & names (landed 2026-10-18) | K1–K5: aria-labels on the video overlay and the phase chip, named breadcrumb home link, single skip link, labelled table region; `check:aria --strict` promoted into `npm run check` |
 | U3 feedback loop | F1–F2 |
 | U4 narrow screens | R2–R3 |
 | U5 motion | M1 |
@@ -217,11 +228,10 @@ if we adopt strict WCAG 1.4.11 for control boundaries).
 
 ```powershell
 cd frontend
-npm run check                     # includes the strict contrast gate (U1b)
-node scripts/check-contrast.mjs   # report-only run, prints every ratio
+npm run check                     # strict contrast + aria gates included
+node scripts/check-contrast.mjs   # report-only runs while iterating
 node scripts/check-contrast.mjs --selftest
-npm run check:aria                # report; --strict exits 1 on missing names
-npm run check:aria -- --list
+node scripts/check-aria.mjs --list
 ```
 
 Runtime probes (tab walk, screenshots, canvas contrast harness) were temporary

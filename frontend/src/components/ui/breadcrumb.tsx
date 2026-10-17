@@ -66,7 +66,7 @@ function Breadcrumb() {
               {isLast ? (
                 <span className="mono-cell min-w-0 truncate font-medium text-foreground sm:max-w-[240px]">{item.label}</span>
               ) : item.href ? (
-                <Link to={item.href} className="mono-eyebrow hover:text-foreground transition-colors truncate max-w-[140px]">
+                <Link to={item.href} aria-label={i === 0 ? item.label : undefined} className="mono-eyebrow hover:text-foreground transition-colors truncate max-w-[140px]">
                   {i === 0 ? <Home className="size-3.5" aria-hidden="true" /> : item.label}
                 </Link>
               ) : (
