@@ -20,7 +20,7 @@ require (
 	github.com/miekg/dns v1.1.73
 	github.com/pquerna/otp v1.5.0
 	github.com/prometheus/client_golang v1.25.0
-	github.com/quic-go/quic-go v0.59.0
+	github.com/quic-go/quic-go v0.59.1
 	github.com/refraction-networking/utls v1.8.2
 	github.com/slack-go/slack v0.30.1
 	github.com/tc-hib/winres v0.3.1
