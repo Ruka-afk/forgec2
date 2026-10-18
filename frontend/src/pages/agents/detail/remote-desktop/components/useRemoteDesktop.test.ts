@@ -29,12 +29,14 @@ vi.mock("@/lib/wsContext", () => ({
 
 vi.mock("@/lib/api", () => ({
   api: { get: vi.fn(), post: vi.fn(), postJson: vi.fn() },
+  getRateLimitRetryAfter: vi.fn(() => null),
 }));
 
-vi.mock("@/lib/i18n", () => ({
-  getLocale: () => "en",
-  useI18n: () => ({ t: (key: string) => key }),
-}));
+vi.mock("@/lib/i18n", () => {
+  // `t` must be referentially stable: the hook's callbacks carry it.
+  const t = (key: string) => key;
+  return { getLocale: () => "en", useI18n: () => ({ t }) };
+});
 
 vi.mock("sonner", () => ({
   toast: { success: toastMock.success, error: toastMock.error },
@@ -139,5 +141,31 @@ describe("useRemoteDesktop hardening", () => {
     // capture of the new session.
     expect(screenshotCalls()).toBe(2);
     nowSpy.mockRestore();
+  });
+
+  it("surfaces the backend text when the start is rejected", async () => {
+    const hook = renderHook(() => useRemoteDesktop("agent-1"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    mockedPost.mockRejectedValue({ status: 400, message: "interval must be between 1 and 60 seconds" });
+
+    await act(async () => {
+      await hook.result.current.startMonitoring();
+    });
+
+    expect(toastMock.error).toHaveBeenCalledWith("interval must be between 1 and 60 seconds");
+    expect(hook.result.current.status).toBe("error");
+  });
+
+  it("normalizes a rejected remote click", async () => {
+    const { result } = await mountStarted();
+
+    vi.mocked(api.postJson).mockRejectedValue({ status: 400, message: "input rejected" });
+    await act(async () => {
+      await result.current.handleClick({ clientX: 10, clientY: 20 } as React.MouseEvent<HTMLDivElement>);
+    });
+
+    expect(toastMock.error).toHaveBeenCalledWith("input rejected");
   });
 });

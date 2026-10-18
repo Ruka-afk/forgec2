@@ -19,6 +19,8 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Activity, Wand2 } from "lucide-react";
 import { formatTime } from "@/lib/utils";
+import { useMutation } from "@/lib/hooks/useMutation";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 
 interface BeaconRecord {
   time: string;
@@ -53,20 +55,15 @@ interface BaselineReport {
 
 export default function AgentTrafficPage() {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const params = useParams();
   const id = params?.id as string;
   const [report, setReport] = useState<BaselineReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  const [adapting, setAdapting] = useState(false);
 
   const [autoAdapt, setAutoAdapt] = useState(false);
 
-  // t rotates on locale switch; keep it in a ref so loadReport (and the
-  // effect below it) stay stable and don't refetch on locale changes.
-  // Named tRef so the i18n checker's ref-usage pattern sees the lookups.
-  const tRef = useRef(t);
-  tRef.current = t;
   // A load for a previous agent id must not overwrite the report the new id
   // started fetching when the route param changes mid-flight.
   const loadSeqRef = useRef(0);
@@ -87,8 +84,8 @@ export default function AgentTrafficPage() {
       }
     } catch {
       if (seq !== loadSeqRef.current) return;
+      // No toast: the full-page ErrorState (with retry) is the surface.
       setLoadError(true);
-      toast.error(tRef.current("agents.traffic_load_failed"));
     } finally {
       if (seq === loadSeqRef.current) setLoading(false);
     }
@@ -96,36 +93,39 @@ export default function AgentTrafficPage() {
 
   useEffect(() => { loadReport(); }, [loadReport]);
 
-  const handleAdapt = async () => {
-    if (!id) return;
-    setAdapting(true);
-    try {
-      const data = await api.postJson(paths.agents.trafficAdapt(id), {});
-      if (data.success) {
-        toast.success(t("agents.traffic_adapt_queued").replace("{message}", String(data.message || "")));
-        loadReport();
-      } else {
-        toast.error(t("agents.traffic_adapt_error").replace("{error}", String(data.error || t("agents.unknown"))));
-      }
-    } catch {
-      toast.error(t("agents.traffic_adapt_failed"));
-    } finally {
-      setAdapting(false);
-    }
-  };
+  const { mutate: adaptTraffic, isPending: adapting, reset: resetAdapt } = useMutation({
+    fn: () => api.postJson<{ message?: string }>(paths.agents.trafficAdapt(id), {}),
+    onSuccess: (data) => {
+      toast.success(t("agents.traffic_adapt_queued").replace("{message}", String(data?.message || "")));
+      loadReport();
+    },
+    onError: (e) => toastError(e, "agents.traffic_adapt_failed"),
+  });
 
-  const toggleAutoAdapt = async () => {
+  const { mutate: setAutoAdaptEnabled, isPending: togglingAutoAdapt, reset: resetAutoAdapt } = useMutation({
+    fn: (enabled: boolean) => api.postJson(paths.agents.trafficAutoAdapt(id), { enabled }),
+    onSuccess: (_data, enabled) => {
+      setAutoAdapt(enabled);
+      toast(enabled ? t("agents.traffic_auto_adapt_enabled") : t("agents.traffic_auto_adapt_disabled"));
+    },
+    onError: (e) => toastError(e, "agents.traffic_adapt_failed"),
+  });
+
+  // Route reuse: /agents/A/traffic → /agents/B/traffic keeps this page
+  // mounted; the previous agent's report and in-flight actions must not carry
+  // over (a stale completion would toast for the wrong agent).
+  useEffect(() => {
+    setReport(null);
+    setAutoAdapt(false);
+    setLoadError(false);
+    setLoading(true);
+    resetAdapt();
+    resetAutoAdapt();
+  }, [id, resetAdapt, resetAutoAdapt]);
+
+  const handleAdapt = () => {
     if (!id) return;
-    const next = !autoAdapt;
-    try {
-      const data = await api.postJson(paths.agents.trafficAutoAdapt(id), { enabled: next });
-      if (data.success) {
-        setAutoAdapt(next);
-        toast(next ? t("agents.traffic_auto_adapt_enabled") : t("agents.traffic_auto_adapt_disabled"));
-      }
-    } catch {
-      toast.error(t("agents.traffic_adapt_failed"));
-    }
+    adaptTraffic();
   };
 
   if (loading) {
@@ -156,7 +156,8 @@ export default function AgentTrafficPage() {
             <Label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
               <Checkbox
                 checked={autoAdapt}
-                onCheckedChange={() => toggleAutoAdapt()}
+                disabled={togglingAutoAdapt}
+                onCheckedChange={() => setAutoAdaptEnabled(!autoAdapt)}
               />
               {t("agents.traffic_auto_adapt")}
             </Label>

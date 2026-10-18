@@ -1,9 +1,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { api, formatThrownError } from "@/lib/api";
+import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { nowTime } from "@/lib/utils";
 import { useWS } from "@/lib/wsContext";
 import { dataUrlToBlob, dataUrlToBlobUrl, revokeBlobUrl } from "@/lib/screenImage";
@@ -85,6 +86,7 @@ export function useScreenMonitor(agentId: string, opts: ScreenMonitorOpts) {
   optsRef.current = opts;
 
   const { subscribe } = useWS();
+  const { toastError } = useErrorToast();
 
   const [monitoring, setMonitoring] = useState(false);
   const [monitoringStatus, setMonitoringStatus] = useState<MonitorStatus>("waiting");
@@ -273,12 +275,12 @@ export function useScreenMonitor(agentId: string, opts: ScreenMonitorOpts) {
       if (actionAbort.signal.aborted) return;
       setStatus("error");
       setMonitoringStatus(monitoringRef.current ? "connected" : "waiting");
-      toast.error(formatThrownError(error));
+      toastError(error, "screen.capture_failed");
     } finally {
       if (actionAbortRef.current === actionAbort) actionAbortRef.current = null;
       releaseBusy();
     }
-  }, [captureScreenshot, agentId, t, waitForTask, releaseBusy, tryClaimBusy]);
+  }, [captureScreenshot, agentId, t, waitForTask, releaseBusy, tryClaimBusy, toastError]);
 
   const startMonitoring = useCallback(async () => {
     const { interval, quality } = optsRef.current;
@@ -300,12 +302,12 @@ export function useScreenMonitor(agentId: string, opts: ScreenMonitorOpts) {
       setMonitoring(false);
       setStatus("error");
       setMonitoringStatus("offline");
-      toast.error(`${t("agents.screen_start_failed")}: ${formatThrownError(error)}`);
+      toastError(error, "agents.screen_start_failed");
     } finally {
       if (actionAbortRef.current === actionAbort) actionAbortRef.current = null;
       releaseBusy();
     }
-  }, [agentId, captureScreenshot, t, releaseBusy, tryClaimBusy]);
+  }, [agentId, captureScreenshot, t, releaseBusy, tryClaimBusy, toastError]);
 
   const stopMonitoring = useCallback(async () => {
     if (!tryClaimBusy("stop")) return;
@@ -321,12 +323,12 @@ export function useScreenMonitor(agentId: string, opts: ScreenMonitorOpts) {
       toast.success(t("agents.screen_stopped"));
     } catch (error) {
       if (actionAbort.signal.aborted) return;
-      toast.error(`${t("agents.screen_stop_failed")}: ${formatThrownError(error)}`);
+      toastError(error, "agents.screen_stop_failed");
     } finally {
       if (actionAbortRef.current === actionAbort) actionAbortRef.current = null;
       releaseBusy();
     }
-  }, [agentId, t, releaseBusy, tryClaimBusy]);
+  }, [agentId, t, releaseBusy, tryClaimBusy, toastError]);
 
   const startTitleTrigger = useCallback(async (matchRaw: string) => {
     const { interval } = optsRef.current;
@@ -341,9 +343,9 @@ export function useScreenMonitor(agentId: string, opts: ScreenMonitorOpts) {
       setTriggerOn(true);
       toast.success(t("agents.screen_trigger_started"));
     } catch (error) {
-      toast.error(formatThrownError(error));
+      toastError(error, "agents.trigger_failed");
     }
-  }, [agentId, t]);
+  }, [agentId, t, toastError]);
 
   const stopTitleTrigger = useCallback(async () => {
     if (!agentId) return;
@@ -352,9 +354,9 @@ export function useScreenMonitor(agentId: string, opts: ScreenMonitorOpts) {
       setTriggerOn(false);
       toast.success(t("agents.screen_trigger_stopped"));
     } catch (error) {
-      toast.error(formatThrownError(error));
+      toastError(error, "agents.trigger_failed");
     }
-  }, [agentId, t]);
+  }, [agentId, t, toastError]);
 
   const downloadScreenshot = useCallback((image?: string, filename?: string) => {
     const target = image || screenshot;

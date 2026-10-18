@@ -4,6 +4,7 @@ import { useWS } from "@/lib/wsContext";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { useI18n } from "@/lib/i18n";
 import { logger } from "@/lib/logger";
 import { nowTime } from "@/lib/utils";
@@ -33,6 +34,7 @@ const INTERVAL_BY_RES: Record<string, number> = {
  */
 export function useRemoteDesktop(agentId: string) {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const { subscribe } = useWS();
 
   const RESOLUTIONS: ResolutionOption[] = useMemo(
@@ -194,17 +196,17 @@ export function useRemoteDesktop(agentId: string) {
       setMonitoring(true);
       monitoringRef.current = true;
       await captureFrame(actionAbort.signal, true);
-    } catch {
+    } catch (e) {
       if (actionAbort.signal.aborted) return;
       sessionStartedRef.current = false; // the server rejected the start: no session to stop
       setStatus("error");
       setMonitoring(false);
       monitoringRef.current = false;
-      toast.error(t("agents.rdp_start_failed"));
+      toastError(e, "agents.rdp_start_failed");
     } finally {
       if (actionAbortRef.current === actionAbort) actionAbortRef.current = null;
     }
-  }, [id, versionBlocked, t, pollInterval, captureFrame]);
+  }, [id, versionBlocked, t, pollInterval, captureFrame, toastError]);
 
   const stopMonitoring = useCallback(async () => {
     if (!id) return;
@@ -218,13 +220,13 @@ export function useRemoteDesktop(agentId: string) {
     try {
       await api.post(paths.agents.screenStop(id), undefined, { signal: actionAbort.signal });
       sessionStartedRef.current = false; // stop took effect
-    } catch {
+    } catch (e) {
       if (actionAbort.signal.aborted) return; // the unmount cleanup re-issues the stop
-      toast.error(t("agents.rdp_stop_failed"));
+      toastError(e, "agents.rdp_stop_failed");
     } finally {
       if (actionAbortRef.current === actionAbort) actionAbortRef.current = null;
     }
-  }, [id, t]);
+  }, [id, toastError]);
 
   useVisibleInterval(
     () => { if (shouldCapture()) void captureFrame(); },
@@ -290,10 +292,10 @@ export function useRemoteDesktop(agentId: string) {
     const { x, y } = getRelativeCoords(e);
     try {
       await api.postJson(paths.agents.remoteInput(id), { type: "click", x, y });
-    } catch {
-      toast.error(t("agents.rdp_capture_failed"));
+    } catch (err) {
+      toastError(err, "agents.rdp_capture_failed");
     }
-  }, [monitoring, id, getRelativeCoords, t]);
+  }, [monitoring, id, getRelativeCoords, toastError]);
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {

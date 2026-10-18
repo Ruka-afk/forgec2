@@ -16,6 +16,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Clock, Info, Plus, RotateCcw, Send, SlidersHorizontal, X } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useMutation } from "@/lib/hooks/useMutation";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 
 const COMMON_UAS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
@@ -54,6 +56,7 @@ const defaultConfig: EffectiveConfig = {
 export default function AgentConfigPage() {
   const { id } = useParams<{ id: string }>();
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const [effective, setEffective] = useState<EffectiveConfig | null>(null);
   const [hasPending, setHasPending] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -65,7 +68,6 @@ export default function AgentConfigPage() {
   const [editURI, setEditURI] = useState("");
   const [editMethod, setEditMethod] = useState("POST");
   const [editHeaders, setEditHeaders] = useState<{ key: string; value: string }[]>([]);
-  const [pushing, setPushing] = useState(false);
 
   const resetForm = useCallback((cfg: EffectiveConfig) => {
     setEditSleep(String(cfg.sleep));
@@ -88,15 +90,17 @@ export default function AgentConfigPage() {
       setHasPending(data.has_pending);
       setLoadError(null);
       resetForm(data.effective);
-    } catch {
+    } catch (e) {
       // effective stays null. Defaulting it to defaultConfig rendered the
       // placeholder as if it were this agent's real configuration.
       setLoadError(t("agents.config_load_failed"));
-      toast.error(t("agents.config_load_failed"));
+      // The inline DataError only renders before the first success; a refresh
+      // failure after a push (the form is up) has no other surface.
+      toastError(e, "agents.config_load_failed");
     } finally {
       setLoading(false);
     }
-  }, [id, resetForm, t]);
+  }, [id, resetForm, t, toastError]);
 
   useEffect(() => { loadConfig(); }, [loadConfig]);
 
@@ -121,10 +125,8 @@ export default function AgentConfigPage() {
 
   const resetAll = () => resetForm(defaultConfig);
 
-  const handlePush = async () => {
-    if (!id) return;
-    setPushing(true);
-    try {
+  const { mutate: pushConfig, isPending: pushing, reset: resetPush } = useMutation({
+    fn: (agentId: string) => {
       const headersMap: Record<string, string> = {};
       for (const h of editHeaders) {
         if (h.key.trim()) headersMap[h.key.trim()] = h.value;
@@ -140,19 +142,32 @@ export default function AgentConfigPage() {
       if (editURI.trim()) body.beacon_uri = editURI.trim();
       if (editMethod) body.method = editMethod;
 
-      const res = await api.postJson<{success: boolean; error?: string}>(paths.agents.config(id), body);
-      if (res.success) {
-        toast.success(t("agents.config_push_success"));
-        loadConfig();
-      } else {
-        toast.error(res.error || t("agents.config_push_failed"));
-      }
-    } catch {
-      toast.error(t("agents.config_push_failed"));
-    } finally {
-      setPushing(false);
-    }
+      // postJson throws for a `success:false` envelope, so the rejection path
+      // below is the only failure surface (the old `res.success` else-branch
+      // was dead).
+      return api.postJson(paths.agents.config(agentId), body);
+    },
+    onSuccess: () => {
+      toast.success(t("agents.config_push_success"));
+      loadConfig();
+    },
+    onError: (e) => toastError(e, "agents.config_push_failed"),
+  });
+
+  const handlePush = () => {
+    if (!id) return;
+    pushConfig(id);
   };
+
+  // Route reuse: /agents/A/config → /agents/B/config keeps this page mounted.
+  // The stale form, pending notice and in-flight push must not carry over.
+  useEffect(() => {
+    setEffective(null);
+    setHasPending(false);
+    setLoading(true);
+    setLoadError(null);
+    resetPush();
+  }, [id, resetPush]);
 
   if (loading) {
     return <PageContainer><PageSpinner /></PageContainer>;

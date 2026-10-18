@@ -1,7 +1,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { api, formatThrownError } from "@/lib/api";
+import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,8 @@ import { Card } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useI18n } from "@/lib/i18n";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { useMutation } from "@/lib/hooks/useMutation";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { formatTime } from "@/lib/utils";
 
 interface Token {
@@ -57,6 +59,7 @@ interface Process {
 
 export default function AgentTokenPage() {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const { confirm, modal } = useConfirm();
   const params = useParams();
   const agentId = params.id as string;
@@ -72,6 +75,7 @@ export default function AgentTokenPage() {
   const [activeAction, setActiveAction] = useState<string | null>(null);
 
   const [whoamiResult, setWhoamiResult] = useState<string | null>(null);
+  const [whoamiError, setWhoamiError] = useState(false);
   const [tokenNotes, setTokenNotes] = useState<Record<string, string>>({});
   const [noteTargetId, setNoteTargetId] = useState<string | null>(null);
   const tokenLoadSeqRef = useRef(0);
@@ -129,6 +133,124 @@ export default function AgentTokenPage() {
     if (delayedReloadRef.current) clearTimeout(delayedReloadRef.current);
   }, [agentId]);
 
+  // Each operator action owns its error routing (normalized message) and
+  // stale-completion guard; `activeAction` stays local because the spinners
+  // name the exact row/action.
+  const { mutate: stealToken, reset: resetSteal } = useMutation({
+    fn: (pid: string) => {
+      const body = new URLSearchParams();
+      body.append("pid", pid);
+      return api.post(paths.agents.tokenSteal(agentId), Object.fromEntries(body.entries()));
+    },
+    onSuccess: () => {
+      setStealPid("");
+      // B7 fix: task accepted, poll later
+      toast.info(t("agents.token_task_queued"));
+      scheduleTokenReload();
+    },
+    onError: (e) => toastError(e, "agents.token_steal_failed"),
+  });
+
+  const { mutate: makeToken, reset: resetMake } = useMutation({
+    fn: () => {
+      const body = new URLSearchParams();
+      // B2 fix: backend reads "user" not "username"
+      body.append("user", makeUser);
+      body.append("domain", makeDomain);
+      body.append("password", makePass);
+      return api.post(paths.agents.tokenMake(agentId), Object.fromEntries(body.entries()));
+    },
+    onSuccess: () => {
+      setMakeUser(""); setMakeDomain(""); setMakePass("");
+      // B7 fix: token operations only return task_id, the actual token appears
+      // later via agent callback. Show "task accepted" instead of false success.
+      toast.info(t("agents.token_task_queued"));
+      scheduleTokenReload();
+    },
+    onError: (e) => toastError(e, "agents.token_make_failed"),
+  });
+
+  const { mutate: revertToken, reset: resetRevert } = useMutation({
+    fn: () => api.post(paths.agents.tokenRevert(agentId)),
+    onSuccess: () => {
+      toast.info(t("agents.token_task_queued"));
+      setWhoamiResult(null);
+      setWhoamiError(false);
+      scheduleTokenReload();
+    },
+    onError: (e) => toastError(e, "agents.token_revert_failed"),
+  });
+
+  const { mutate: dropToken, reset: resetDrop } = useMutation({
+    fn: (tokenId: string) => api.del(paths.agents.tokenOne(agentId, tokenId)),
+    onSuccess: () => {
+      toast.success(t("agents.token_drop_success"));
+      void loadTokens();
+    },
+    onError: (e) => toastError(e, "agents.token_drop_failed"),
+  });
+
+  const { mutate: impersonateToken, reset: resetImpersonate } = useMutation({
+    fn: (tokenId: string) => api.post(paths.agents.tokenImpersonate(agentId, tokenId)),
+    onSuccess: () => {
+      toast.success(t("agents.token_impersonate"));
+      void loadTokens();
+    },
+    onError: (e) => toastError(e, "agents.token_impersonate_failed"),
+  });
+
+  const { mutate: queryWhoami, reset: resetWhoami } = useMutation({
+    fn: () => api.post(paths.agents.tokenWhoami(agentId)),
+    onSuccess: (data) => {
+      const d = data as Record<string, unknown>;
+      const user = String(d.user || d.username || d.name || JSON.stringify(data));
+      setWhoamiResult(user);
+      setWhoamiError(false);
+      toast(`Identity: ${d.user || d.username || t("agents.unknown")}`);
+    },
+    onError: (e) => {
+      const normalized = toastError(e, "agents.token_whoami_failed");
+      setWhoamiResult(normalized.message || t("agents.token_whoami_failed"));
+      setWhoamiError(true);
+    },
+  });
+
+  const { mutate: saveNote, reset: resetNote } = useMutation({
+    fn: (tokenId: string, text: string) => {
+      const body = new URLSearchParams();
+      // B3 fix: backend reads "notes" not "note"
+      body.append("notes", text);
+      return api.post(paths.agents.tokenNote(agentId, tokenId), Object.fromEntries(body.entries()));
+    },
+    onSuccess: (_data, _tokenId, text) => {
+      toast.success(text ? t("agents.token_notes_saved") : t("agents.token_notes_cleared"));
+      void loadTokens();
+    },
+    onError: (e) => toastError(e, "agents.token_notes_error"),
+  });
+
+  // Route reuse: /agents/A/token → /agents/B/token keeps the page mounted. The
+  // old agent's drafts, identity banner and in-flight actions must not carry
+  // over — a stale completion would toast for the wrong agent.
+  useEffect(() => {
+    setStealPid("");
+    setMakeUser("");
+    setMakeDomain("");
+    setMakePass("");
+    setActiveAction(null);
+    setWhoamiResult(null);
+    setWhoamiError(false);
+    setTokenNotes({});
+    setNoteTargetId(null);
+    resetSteal();
+    resetMake();
+    resetRevert();
+    resetDrop();
+    resetImpersonate();
+    resetWhoami();
+    resetNote();
+  }, [agentId, resetSteal, resetMake, resetRevert, resetDrop, resetImpersonate, resetWhoami, resetNote]);
+
   const handleStealToken = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!stealPid) return;
@@ -138,34 +260,19 @@ export default function AgentTokenPage() {
     if (!okSteal) return;
     setActiveAction("steal");
     try {
-      const body = new URLSearchParams();
-      body.append("pid", stealPid);
-      await api.post(paths.agents.tokenSteal(agentId), Object.fromEntries(body.entries()));
-      setStealPid("");
-      // B7 fix: task accepted, poll later
-      toast.info(t("agents.token_task_queued"));
-      scheduleTokenReload();
-    } catch (errSteal) {
-      toast.error(errSteal instanceof Error && errSteal.message ? errSteal.message : t("agents.token_steal_failed"));
+      await stealToken(stealPid);
     } finally {
       setActiveAction(null);
     }
-  };  const handleMakeToken = async (e: React.FormEvent) => {    e.preventDefault();
+  };
+
+  const handleMakeToken = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!makeUser) return;
     setActiveAction("make");
     try {
-      const body = new URLSearchParams();      // B2 fix: backend reads "user" not "username"
-      body.append("user", makeUser);
-      body.append("domain", makeDomain);
-      body.append("password", makePass);
-      await api.post(paths.agents.tokenMake(agentId), Object.fromEntries(body.entries()));
-      setMakeUser(""); setMakeDomain(""); setMakePass("");
-      // B7 fix: token operations only return task_id, the actual token appears
-      // later via agent callback. Show "task accepted" instead of false success.
-      toast.info(t("agents.token_task_queued"));
-      scheduleTokenReload();
-    } catch {
-      toast.error(t("agents.token_make_failed"));    } finally {
+      await makeToken();
+    } finally {
       setActiveAction(null);
     }
   };
@@ -173,24 +280,18 @@ export default function AgentTokenPage() {
   const handleRevert = async () => {
     setActiveAction("revert");
     try {
-      await api.post(paths.agents.tokenRevert(agentId));
-      toast.info(t("agents.token_task_queued"));
-      setWhoamiResult(null);
-      scheduleTokenReload();
-    } catch {
-      toast.error(t("agents.token_revert_failed"));    } finally {
+      await revertToken();
+    } finally {
       setActiveAction(null);
     }
-  };  const handleDrop = async (tokenId: string) => {
+  };
+
+  const handleDrop = async (tokenId: string) => {
     const ok = await confirm({ title: t("agents.token_drop_title"), message: t("agents.token_drop_confirm"), danger: true });
     if (!ok) return;
     setActiveAction(`drop-${tokenId}`);
     try {
-      await api.del(paths.agents.tokenOne(agentId, tokenId));
-      toast.success(t("agents.token_drop_success"));
-      await loadTokens();
-    } catch {
-      toast.error(t("agents.token_drop_failed"));
+      await dropToken(tokenId);
     } finally {
       setActiveAction(null);
     }
@@ -201,43 +302,33 @@ export default function AgentTokenPage() {
     // confirm explicitly, like the destructive drop action below.
     const okImp = await confirm({ title: t("agents.token_impersonate_title"), message: t("agents.token_impersonate_confirm"), danger: true });
     if (!okImp) return;
-    setActiveAction(`impersonate-${tokenId}`);    try {
-      await api.post(paths.agents.tokenImpersonate(agentId, tokenId));
-      toast.success(t("agents.token_impersonate"));
-      await loadTokens();
-    } catch (errImp) {
-      toast.error(errImp instanceof Error && errImp.message ? errImp.message : t("agents.token_impersonate_failed"));
-    } finally {      setActiveAction(null);    }
+    setActiveAction(`impersonate-${tokenId}`);
+    try {
+      await impersonateToken(tokenId);
+    } finally {
+      setActiveAction(null);
+    }
   };
 
   const handleWhoami = async () => {
     setActiveAction("whoami");
     try {
-      const data = await api.post(paths.agents.tokenWhoami(agentId));
-      const d = data as Record<string, unknown>;
-      const user = String(d.user || d.username || d.name || JSON.stringify(data));
-      setWhoamiResult(user);
-      toast(`Identity: ${d.user || d.username || t("agents.unknown")}`);
-    } catch (err) {
-      setWhoamiResult(formatThrownError(err));
-      toast.error(t("agents.token_whoami_failed"));    } finally {      setActiveAction(null);    }
+      await queryWhoami();
+    } finally {
+      setActiveAction(null);
+    }
   };
 
   const handleNote = async (tokenId: string) => {
-    const noteText = tokenNotes[tokenId];    setActiveAction(`note-${tokenId}`);
+    const noteText = tokenNotes[tokenId] || "";
+    setActiveAction(`note-${tokenId}`);
     try {
-      const body = new URLSearchParams();
-      // B3 fix: backend reads "notes" not "note"
-      body.append("notes", noteText || "");
-      await api.post(paths.agents.tokenNote(agentId, tokenId), Object.fromEntries(body.entries()));
-      toast.success(noteText ? t("agents.token_notes_saved") : t("agents.token_notes_cleared"));
-      await loadTokens();
-    } catch {
-      toast.error(t("agents.token_notes_error"));
+      await saveNote(tokenId, noteText);
     } finally {
       setActiveAction(null);
       setNoteTargetId(null);
-    }  };
+    }
+  };
 
   const getIntegrityBadge = (integrity: string) => {
     const variants: Record<string, "destructive" | "default" | "secondary" | "outline"> = {
@@ -295,10 +386,11 @@ export default function AgentTokenPage() {
 
       {whoamiResult && (
         <div className={`border rounded-lg px-4 py-3 text-sm flex items-center gap-2 ${
-          whoamiResult.startsWith("Error")            ? "border-destructive/30 bg-destructive/10 text-destructive-ink"
+          whoamiError
+            ? "border-destructive/30 bg-destructive/10 text-destructive-ink"
             : "border-primary/20 bg-primary/10 dark:border-primary/40 dark:bg-primary/20 text-primary"
         }`}>
-          {whoamiResult.startsWith("Error") ? <AlertCircle className="size-4" /> : <UserCheck className="size-4" />}
+          {whoamiError ? <AlertCircle className="size-4" /> : <UserCheck className="size-4" />}
           <span>{t("agents.token_current_context")} <strong>{whoamiResult}</strong></span>
           <Button variant="ghost" size="sm" onClick={() => setWhoamiResult(null)} className="ml-auto opacity-60 hover:opacity-100">
             <X className="size-4" />

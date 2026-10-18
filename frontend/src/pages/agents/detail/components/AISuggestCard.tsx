@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { api } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { api, ApiError } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Lightbulb, Copy, Play, Sparkles } from "lucide-react";
 import { useAIStatus } from "@/lib/hooks/useAIStatus";
+import { useMutation } from "@/lib/hooks/useMutation";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 
 interface Suggestion {
   action: string;
@@ -26,38 +28,51 @@ const RISK_VARIANT: Record<string, "success" | "warning" | "destructive"> = {
 export function AISuggestCard({ agentId, online }: { agentId: string; online: boolean }) {
   const { t } = useI18n();
   const { status } = useAIStatus();
-  const [loading, setLoading] = useState(false);
+  const { toastError } = useErrorToast();
   const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null);
   const [executingIdx, setExecutingIdx] = useState<number>(-1);
+
+  const { mutate: loadSuggestions, isPending: loading, reset: resetLoad } = useMutation({
+    fn: () => api.postJson<{ suggestions?: Suggestion[] }>(paths.ai.suggestNextSteps, {
+      agent_id: agentId,
+    }),
+    onSuccess: (d) => {
+      setSuggestions(d.suggestions || []);
+      if (!d.suggestions?.length) toast.info(t("ai.suggest_empty"));
+    },
+    onError: (e) => toastError(e, "ai.toast.assist_failed"),
+  });
+
+  const { mutate: runCommand, reset: resetRun } = useMutation({
+    fn: (cmd: string) => api.postJson(paths.agents.command(agentId), { command: cmd }),
+    onSuccess: () => toast.success(t("ai.suggest_dispatched")),
+    onError: (e) => {
+      // 409: the command layer enforces its own approval semantics; that is
+      // an outcome, not a retryable failure (same treatment as the header
+      // quick-action in AgentDetailPage).
+      if (e instanceof ApiError && e.status === 409) toast.warning(e.message);
+      else toastError(e, "ai.toast.assist_failed");
+    },
+  });
+
+  // Route reuse: /agents/A → /agents/B keeps this card mounted. Suggestions,
+  // the per-row spinner and in-flight completions must not carry over.
+  useEffect(() => {
+    setSuggestions(null);
+    setExecutingIdx(-1);
+    resetLoad();
+    resetRun();
+  }, [agentId, resetLoad, resetRun]);
 
   if (status === null) return null;
   // A genuinely disabled AI subsystem hides this card; a failed status query
   // must not, so the feature stays visible with an explicit unknown state.
   if (status.known && !status.enabled) return null;
 
-  const loadSuggestions = async () => {
-    setLoading(true);
-    try {
-      const d = await api.postJson<{ suggestions?: Suggestion[] }>(paths.ai.suggestNextSteps, {
-        agent_id: agentId,
-      });
-      setSuggestions(d.suggestions || []);
-      if (!d.suggestions?.length) toast.info(t("ai.suggest_empty"));
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("ai.toast.assist_failed"));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const runCommand = async (idx: number, cmd: string) => {
+  const handleRun = async (idx: number, cmd: string) => {
     setExecutingIdx(idx);
     try {
-      await api.postJson(paths.agents.command(agentId), { command: cmd });
-      toast.success(t("ai.suggest_dispatched"));
-    } catch (e) {
-      // 409 etc.: the command layer enforces its own approval semantics.
-      toast.info(e instanceof Error ? e.message : t("ai.suggest_dispatched"));
+      await runCommand(cmd);
     } finally {
       setExecutingIdx(-1);
     }
@@ -111,7 +126,7 @@ export function AISuggestCard({ agentId, online }: { agentId: string; online: bo
                           size="icon-xs"
                           aria-label={t("ai.suggest_run")}
                           disabled={executingIdx === i}
-                          onClick={() => runCommand(i, sg.command_hint)}
+                          onClick={() => handleRun(i, sg.command_hint)}
                           className="text-primary"
                         >
                           {executingIdx === i ? <Spinner size="xs" /> : <Play className="size-3.5" />}
