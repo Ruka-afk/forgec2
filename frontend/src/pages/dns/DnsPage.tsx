@@ -185,7 +185,7 @@ export default function DnsPage() {
                   setConfigDirty(true);
                 }}
               />
-              <p className="text-(--fs-micro-sm) text-muted-foreground mt-1">{t("dns.domain")}</p>
+              <p className="text-micro-sm text-muted-foreground mt-1">{t("dns.domain")}</p>
             </div>
             <div>
               <Label className="text-xs font-semibold text-muted-foreground mb-1.5">{t("dns.field_listen")}</Label>
@@ -198,7 +198,7 @@ export default function DnsPage() {
                   setConfigDirty(true);
                 }}
               />
-              <p className="text-(--fs-micro-sm) text-muted-foreground mt-1">{t("dns.listen_addr")}</p>
+              <p className="text-micro-sm text-muted-foreground mt-1">{t("dns.listen_addr")}</p>
             </div>
           </div>
         </CardContent>

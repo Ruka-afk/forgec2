@@ -157,13 +157,13 @@ export default function BOFPage() {
               <Card key={bof.name} className="p-(--card-spacing) hover:shadow-lg dark:hover:shadow-xl transition-shadow">
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-sm font-medium text-foreground font-mono">{bof.name}</div>
-                  <Badge variant={isUploaded ? "default" : "secondary"} className="text-(--fs-micro-sm)">
+                  <Badge variant={isUploaded ? "default" : "secondary"} className="text-micro-sm">
                     {isUploaded ? t("bof.uploaded_ready") : t("bof.not_installed")}
                   </Badge>
                 </div>
                 <div className="text-xs text-muted-foreground mb-1">{t(bof.descKey)}</div>
                 <div className="flex items-center justify-between mt-3">
-                  <Badge variant="secondary" className="text-(--fs-micro-sm) font-mono">{bof.arch}</Badge>
+                  <Badge variant="secondary" className="text-micro-sm font-mono">{bof.arch}</Badge>
                   <Button size="sm" onClick={() => handleQuickRun(bof)} disabled={!isUploaded}>
                     <Zap className="size-4" />{t("bof.quick_run")}
                   </Button>

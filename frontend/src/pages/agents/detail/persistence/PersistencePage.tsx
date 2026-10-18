@@ -258,7 +258,7 @@ export default function AgentPersistencePage() {
                 )}
                 <span className="text-left leading-tight">
                   {t(method.labelKey)}
-                  <span className="block text-(--fs-micro) font-normal text-muted-foreground">
+                  <span className="block text-micro font-normal text-muted-foreground">
                     <PersistQualityMark quality={quality} />
                   </span>
                 </span>
@@ -274,13 +274,13 @@ export default function AgentPersistencePage() {
               <ListChecks className="size-4" aria-hidden="true" />
               <h3 className="text-sm font-semibold text-foreground">{t("agents.persistence_installed")} <span className="text-xs font-normal text-muted-foreground">(queued)</span></h3>
             </div>
-            <Badge variant="secondary" className="text-(--fs-micro-sm)">{queuedMethods.length}</Badge>
+            <Badge variant="secondary" className="text-micro-sm">{queuedMethods.length}</Badge>
           </div>
           {queuedMethods.length === 0 ? (
             <div className="text-center py-8">
               <Info className="size-4 mb-2" />
               <p className="text-xs text-muted-foreground">{t("agents.persistence_no_methods")}</p>
-              <p className="text-(--fs-micro-sm) text-muted-foreground mt-1">{t("persistence.queued_hint")}</p>
+              <p className="text-micro-sm text-muted-foreground mt-1">{t("persistence.queued_hint")}</p>
             </div>
           ) : (
             <div className="space-y-2 max-h-[400px] overflow-y-auto">

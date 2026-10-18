@@ -53,7 +53,7 @@ export function SearchInput({
         spellCheck={false}
         autoComplete="off"
         className={cn(
-          "h-9 rounded-lg border-transparent bg-secondary/40 pl-8 pr-8 text-(--fs-compact) placeholder:text-muted-foreground/85 focus:bg-background dark:bg-secondary/30",
+          "h-9 rounded-lg border-transparent bg-secondary/40 pl-8 pr-8 text-compact placeholder:text-muted-foreground/85 focus:bg-background dark:bg-secondary/30",
           inputClassName
         )}
       />

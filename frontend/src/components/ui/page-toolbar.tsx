@@ -14,7 +14,7 @@ export function PageToolbar({
     <div
       data-slot="page-toolbar"
       className={cn(
-        "flex flex-col gap-3 rounded-xl border border-border/80 bg-card px-3 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-4",
+        "flex flex-col gap-3 rounded-lg border border-border/80 bg-card px-3 py-3 shadow-sm transition-[border-color,box-shadow] duration-150 sm:flex-row sm:items-center sm:justify-between sm:px-4",
         className,
       )}
     >

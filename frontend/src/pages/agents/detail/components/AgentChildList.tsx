@@ -17,7 +17,7 @@ export default memo(function AgentChildList({ childAgents }: AgentChildListProps
 
   return (
     <Card className="p-5 mb-5">
-      <div className="text-(--fs-xs-sm) font-semibold uppercase tracking-wider text-muted-foreground/100 mb-3.5">
+      <div className="text-xs-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3.5">
         <GitBranch className="size-3.5 inline mr-1" aria-hidden="true" />
         {t("agents.detail_child_agents")} ({childAgents.length})
       </div>
@@ -43,7 +43,7 @@ export default memo(function AgentChildList({ childAgents }: AgentChildListProps
                 <div className="text-xs font-medium text-foreground truncate group-hover:text-primary dark:group-hover:text-primary transition-colors">
                   {ch}
                 </div>
-                <div className="text-(--fs-micro-sm) text-muted-foreground/100">
+                <div className="text-micro-sm text-muted-foreground">
                   {cip}{cp ? ` (${cp})` : ""}
                 </div>
               </div>

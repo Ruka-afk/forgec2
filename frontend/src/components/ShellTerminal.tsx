@@ -420,8 +420,8 @@ export default function ShellTerminal({
   const iconBtn = "size-7 text-slate-300 hover:bg-white/10 hover:text-white";
 
   return (
-    <div className={className || "relative flex h-full min-h-[20rem] flex-col overflow-hidden bg-(--shell-terminal-bg) text-slate-100"}>
-      <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b border-white/10 px-2 py-1.5">
+    <div className={className || "relative isolate flex h-full min-h-[20rem] flex-col overflow-hidden bg-(--shell-terminal-bg) text-slate-100"}>
+      <div className="flex shrink-0 items-center gap-1.5 overscroll-contain overflow-x-auto border-b border-white/10 px-2 py-1.5 scrollbar-thin">
         <TerminalSquare className="size-3.5 shrink-0 text-sky-400/80" aria-hidden />
         <span className="sr-only">{t("shell.title")}</span>
         <Select value={interpreter} onValueChange={(v) => { if (v) setInterpreter(v); }}>
@@ -434,7 +434,7 @@ export default function ShellTerminal({
             ))}
           </SelectContent>
         </Select>
-        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+        <div className="flex min-w-0 flex-1 items-center gap-1 overscroll-contain overflow-x-auto scrollbar-thin">
           {cmds.map((cmd) => (
             <Button
               key={cmd}
@@ -442,13 +442,13 @@ export default function ShellTerminal({
               size="sm"
               onClick={() => runQuick(cmd)}
               disabled={loading || offline}
-              className="h-6 shrink-0 px-2 font-mono text-(--fs-micro-sm) text-slate-400 hover:bg-white/10 hover:text-slate-100"
+              className="h-6 shrink-0 px-2 font-mono text-micro-sm text-slate-400 hover:bg-white/10 hover:text-slate-100"
             >
               {cmd}
             </Button>
           ))}
         </div>
-        <span className="hidden min-w-0 truncate font-mono text-(--fs-micro-sm) text-slate-500 lg:inline" title={t("shell.banner")}>
+        <span className="hidden min-w-0 truncate font-mono text-micro-sm text-slate-500 lg:inline" title={t("shell.banner")}>
           {t("shell.connected_as", {
             user: username || "user",
             host: hostname || agentId.slice(0, 8),
@@ -530,7 +530,7 @@ export default function ShellTerminal({
         </div>
       )}
       <div ref={a11yLogRef} role="log" aria-live="polite" aria-atomic="false" className="sr-only" />
-      <div className="flex shrink-0 items-center justify-between border-t border-white/10 px-3 py-1 font-mono text-(--fs-micro-sm) text-slate-500">
+      <div className="flex shrink-0 items-center justify-between border-t border-white/10 px-3 py-1 font-mono text-micro-sm text-slate-500">
         <span className="inline-flex min-w-0 items-center gap-2 truncate">
           {loading ? (
             <>

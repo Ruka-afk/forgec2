@@ -1,7 +1,10 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
-const ROUTES = ["dashboard", "agents", "listeners", "timeline", "settings", "ai", "chat"] as const;
-const VISUAL_ROUTES = ["login", "dashboard", "agents", "listeners", "timeline", "settings", "ai", "chat"] as const;
+// Top-10 operator routes: the seven original surfaces plus the three
+// data-dense pages (loot, credentials, generate) that are the most likely to
+// overflow narrow viewports.
+const ROUTES = ["dashboard", "agents", "listeners", "timeline", "loot", "credentials", "generate", "settings", "ai", "chat"] as const;
+const VISUAL_ROUTES = ["login", "dashboard", "agents", "listeners", "timeline", "settings", "ai"] as const;
 
 const envelope = {
   status: "ok",
@@ -63,7 +66,12 @@ async function expectNoPageOverflow(page: Page) {
   expect(overflow.body, JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.viewport + 1);
 }
 
-async function waitForPageSurface(page: Page, route: typeof VISUAL_ROUTES[number]) {
+/** Routes the SPA rewrites client-side; the requested file is not the surface. */
+const REDIRECT_ROUTES: Partial<Record<(typeof ROUTES)[number], string>> = {
+  chat: "/ai",
+};
+
+async function waitForPageSurface(page: Page, route: typeof ROUTES[number] | "login") {
   if (route === "login") {
     await expect(page.getByRole("form")).toBeVisible();
     return;
@@ -71,7 +79,36 @@ async function waitForPageSurface(page: Page, route: typeof VISUAL_ROUTES[number
   // Waiting for <main> only proves that the app shell mounted. Several pages
   // resolve permissions and initial data one tick later, which previously
   // produced misleading blank visual baselines on mobile.
+  const redirect = REDIRECT_ROUTES[route];
+  if (redirect) {
+    await page.waitForURL((url) => url.pathname.replace(/\.html$/, "") === redirect || `${url.pathname}.html`.replace(/\.html\.html$/, ".html") === redirect, {
+      timeout: 15_000,
+    });
+    await page.waitForTimeout(300);
+  }
   await expect(page.locator("main h1").first()).toBeAttached({ timeout: 15_000 });
+  // Lazy chunks (charts, AI panels) resolve after the shell paints. Under the
+  // parallel CI load they can land between the height-settle and the capture,
+  // which shows up as a few thousand stray pixels. Wait for the network to go
+  // quiet first, then settle the height.
+  await page.waitForLoadState("networkidle");
+  // Settle the document height across two frames so a stitching fullPage
+  // screenshot doesn't capture two offset copies during a layout shift.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        let last = -1;
+        let stable = 0;
+        const tick = () => {
+          const h = document.documentElement.scrollHeight;
+          stable = h === last ? stable + 1 : 0;
+          last = h;
+          if (stable >= 2) resolve();
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }),
+  );
 }
 
 test.describe("responsive shell", () => {
@@ -98,6 +135,16 @@ test.describe("responsive shell", () => {
     await page.getByRole("button", { name: /AI Configuration|AI 配置/i }).click();
     await expect(page.getByRole("heading", { name: /AI Configuration|AI 配置/i })).toBeVisible();
     await expect(page.locator("main h1")).toBeAttached();
+  });
+
+  test("connection status stays readable as text at every width", async ({ page }) => {
+    // R2: the TopBar used to hide the live/offline/reconnecting label below lg,
+    // leaving a bare color dot (WCAG 1.4.1) on phones and tablets.
+    await prepare(page);
+    await page.goto("/dashboard.html");
+    const status = page.locator("header [role='status']");
+    await expect(status).toBeVisible();
+    await expect(status).toContainText(/Live|Offline|Reconnecting/);
   });
 });
 

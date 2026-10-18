@@ -107,7 +107,7 @@ export default memo(function OpsHome() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border">
               <div>
-                <div className="px-4 py-1.5 text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground">{t("dashboard.sessions_online")}</div>
+                <div className="px-4 py-1.5 text-micro-sm uppercase tracking-wider text-muted-foreground">{t("dashboard.sessions_online")}</div>
                 {sessions.online.length === 0 ? (
                   <p className="px-4 py-3 text-xs text-muted-foreground">{t("dashboard.no_sessions")}</p>
                 ) : sessions.online.map((a) => (
@@ -117,14 +117,14 @@ export default memo(function OpsHome() {
                         <StatusBadge status="online" variant="dotOnly" size="sm" />
                         <span className="truncate font-mono text-sm">{a.hostname || a.id}</span>
                       </div>
-                      <div className="truncate text-(--fs-micro-sm) text-muted-foreground">{a.username}{a.ip ? ` · ${a.ip}` : ""}</div>
+                      <div className="truncate text-micro-sm text-muted-foreground">{a.username}{a.ip ? ` · ${a.ip}` : ""}</div>
                     </div>
-                    <span className="shrink-0 text-(--fs-micro-sm) text-muted-foreground">{timeAgo(a.last_seen, t)}</span>
+                    <span className="shrink-0 text-micro-sm text-muted-foreground">{timeAgo(a.last_seen, t)}</span>
                   </Link>
                 ))}
               </div>
               <div>
-                <div className="px-4 py-1.5 text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground">{t("dashboard.sessions_dropped")}</div>
+                <div className="px-4 py-1.5 text-micro-sm uppercase tracking-wider text-muted-foreground">{t("dashboard.sessions_dropped")}</div>
                 {sessions.dropped.length === 0 ? (
                   <p className="px-4 py-3 text-xs text-muted-foreground">{t("dashboard.no_sessions")}</p>
                 ) : sessions.dropped.map((a) => (
@@ -134,9 +134,9 @@ export default memo(function OpsHome() {
                         <StatusBadge status={a.status} variant="dotOnly" size="sm" />
                         <span className="truncate font-mono text-sm">{a.hostname || a.id}</span>
                       </div>
-                      <div className="truncate text-(--fs-micro-sm) text-muted-foreground">{a.username}{a.ip ? ` · ${a.ip}` : ""}</div>
+                      <div className="truncate text-micro-sm text-muted-foreground">{a.username}{a.ip ? ` · ${a.ip}` : ""}</div>
                     </div>
-                    <span className="shrink-0 text-(--fs-micro-sm) text-muted-foreground">{timeAgo(a.last_seen, t)}</span>
+                    <span className="shrink-0 text-micro-sm text-muted-foreground">{timeAgo(a.last_seen, t)}</span>
                   </Link>
                 ))}
               </div>
@@ -197,9 +197,9 @@ export default memo(function OpsHome() {
                       <span className="font-mono text-xs">{task.type}</span>
                       <span className="truncate text-xs text-muted-foreground">{task.command}</span>
                     </div>
-                    <div className="truncate text-(--fs-micro-sm) text-muted-foreground">{task.agent_id}</div>
+                    <div className="truncate text-micro-sm text-muted-foreground">{task.agent_id}</div>
                   </div>
-                  <span className="shrink-0 text-(--fs-micro-sm) text-muted-foreground">{timeAgo(task.created_at, t)}</span>
+                  <span className="shrink-0 text-micro-sm text-muted-foreground">{timeAgo(task.created_at, t)}</span>
                 </Link>
               ))}
             </div>
@@ -221,13 +221,13 @@ export default memo(function OpsHome() {
                 >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="text-(--fs-micro-sm)">
+                      <Badge variant="secondary" className="text-micro-sm">
                         {item.kind === "screenshot" ? t("dashboard.loot_screenshot") : item.kind === "keylog" ? t("dashboard.loot_keylog") : t("dashboard.loot_download")}
                       </Badge>
                       <span className="truncate text-xs">{item.label}</span>
                     </div>
                   </div>
-                  <span className="shrink-0 text-(--fs-micro-sm) text-muted-foreground">{timeAgo(item.created_at, t)}</span>
+                  <span className="shrink-0 text-micro-sm text-muted-foreground">{timeAgo(item.created_at, t)}</span>
                 </Link>
               ))}
             </div>

@@ -79,6 +79,9 @@ interface DataTableProps<T> {
   className?: string;
   tableClassName?: string;
 
+  /** Accessible name for the horizontally scrollable table region. */
+  label?: string;
+
   /** Max height of the scroll container (CSS value, e.g. "60vh" or "32rem"). */
   maxHeight?: string;
 }
@@ -106,6 +109,7 @@ export function DataTable<T>({
   overscan = 6,
   className,
   tableClassName,
+  label,
   maxHeight = "min(60vh, 36rem)",
 }: DataTableProps<T>) {
   const { t } = useI18n();
@@ -208,7 +212,7 @@ export function DataTable<T>({
                     <th
                       key={col.id}
                       className={cn(
-                        "h-9 px-3 text-left text-(--fs-micro-sm) uppercase tracking-(--tracking-sublabel) text-muted-foreground",
+                        "h-9 px-3 text-left text-micro-sm uppercase tracking-(--tracking-sublabel) text-muted-foreground",
                         col.headerClassName,
                       )}
                     >
@@ -235,8 +239,10 @@ export function DataTable<T>({
         <div
           ref={scrollRef}
           onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+          aria-busy={loading}
+          {...(label ? { role: "region", "aria-label": label, tabIndex: 0 } : {})}
           className={cn(
-            "relative overflow-auto scrollbar-thin [scrollbar-gutter:stable]",
+            "content-auto relative overflow-auto overscroll-contain scrollbar-thin [scrollbar-gutter:stable]",
             shouldVirtualize && "border rounded-lg border-border bg-background",
           )}
           style={shouldVirtualize ? { maxHeight } : undefined}

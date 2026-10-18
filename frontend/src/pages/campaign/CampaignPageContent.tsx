@@ -401,11 +401,11 @@ function CampaignDetailView({
                           }`}>
                             {isCompleted ? <Check className="size-4" /> : isPending ? "" : <Play className="size-4" />}
                           </div>
-                          <span className={`text-(--fs-micro-sm) text-center leading-tight ${isCompleted ? "text-success-ink font-medium" : isPending ? "text-muted-foreground" : "text-warning-ink"}`}>
+                          <span className={`text-micro-sm text-center leading-tight ${isCompleted ? "text-success-ink font-medium" : isPending ? "text-muted-foreground" : "text-warning-ink"}`}>
                             {phase.split(" ").slice(0, 2).join("\n")}
                           </span>
                           {found && (
-                            <span className="text-(--fs-micro) text-muted-foreground">{found.task_count}</span>
+                            <span className="text-micro text-muted-foreground">{found.task_count}</span>
                           )}
                           </Button>
                       );

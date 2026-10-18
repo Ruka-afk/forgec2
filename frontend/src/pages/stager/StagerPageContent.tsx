@@ -153,7 +153,7 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
           <div className="text-xs space-y-1">
             <div><span className="font-medium">{t("stager.stager_url")}</span> <code className="text-primary bg-secondary/80 px-1 rounded">{createdToken.stager_url}</code></div>
             <div><span className="font-medium">{t("stager.token_label")}</span>
-              <code className="block mt-1 p-2 bg-secondary/80 dark:bg-muted/50 rounded text-(--fs-micro-sm) break-all font-mono">{createdToken.token}</code>
+              <code className="block mt-1 p-2 bg-secondary/80 dark:bg-muted/50 rounded text-micro-sm break-all font-mono">{createdToken.token}</code>
             </div>
             <div><span className="font-medium">{t("stager.stage2_size")}</span> {createdToken.stage2_size > 0 ? `${createdToken.stage2_size} bytes` : t("stager.stage2_lazy")}</div>
             <div><span className="font-medium">{t("stager.expires")}</span> {formatTime(createdToken.expires_at)}</div>

@@ -78,7 +78,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
       data-slot="table-head"
       scope="col"
       className={cn(
-        "h-10 px-4 text-left align-middle font-semibold whitespace-nowrap text-(--fs-micro-sm) uppercase tracking-(--tracking-sublabel) text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>svg]:size-3.5",
+        "h-10 px-4 text-left align-middle font-semibold whitespace-nowrap text-micro-sm uppercase tracking-(--tracking-sublabel) text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>svg]:size-3.5",
         className
       )}
       {...props}
@@ -135,7 +135,7 @@ function TableEmptyState({
               <Icon className="size-4" />
             </span>
           )}
-          {message && <span className="text-(--fs-compact)">{message}</span>}
+          {message && <span className="text-compact">{message}</span>}
         </div>
       </TableCell>
     </TableRow>

@@ -32,17 +32,21 @@ export function StatTile({
   const labelClass = "text-xs font-semibold text-muted-foreground uppercase tracking-wider";
   const iconTone = tone ? hueStyles[resolveHue(tone)] : null;
   return (
-    <div className={cn(centered && "text-center", "relative", className)}>
+    <div className={cn(centered && "text-center", "relative flex h-full flex-col", className)}>
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          {!labelBelow && <div className={cn(labelClass, "mb-1")}>{label}</div>}
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* Two-line label slot: stat grids put one- and two-word labels side
+              by side, and without the reservation the values stair-step
+              (measured on the dashboard: "BEACONS" one line, "QUEUED TASKS"
+              two, values 35px apart). */}
+          {!labelBelow && <div className={cn(labelClass, "mb-1 min-h-8 leading-4")}>{label}</div>}
           <div className={cn("text-2xl font-bold tabular-nums tracking-tight", valueClass)}>{value}</div>
           {labelBelow && <div className={cn(labelClass, "mt-1")}>{label}</div>}
-          {sub && <div className="text-xs text-muted-foreground mt-1">{sub}</div>}
+          {sub && <div className="mt-1 text-xs text-muted-foreground">{sub}</div>}
         </div>
         {icon && <span className={cn("shrink-0 rounded-lg p-2.5 ring-1", iconTone ? `${iconTone.bg} ${iconTone.text} ring-border/50` : "bg-secondary text-muted-foreground ring-border/30")}>{icon}</span>}
       </div>
-      {trend && <div className="mt-2.5 flex items-center gap-1.5 text-xs text-muted-foreground/80 border-t border-border/40 pt-2">{trend}</div>}
+      {trend && <div className="mt-auto flex items-center gap-1.5 border-t border-border/40 pt-2 text-xs text-muted-foreground/80">{trend}</div>}
     </div>
   );
 }

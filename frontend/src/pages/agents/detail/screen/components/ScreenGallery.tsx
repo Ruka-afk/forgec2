@@ -30,7 +30,7 @@ export default memo(function ScreenGallery({ t, agentId, gallery, onOpen, onActi
         <Badge variant="secondary" className="text-xs">{gallery.length}</Badge>
       </div>
       {gallery.length > 0 ? (
-        <div className="grid flex-1 grid-cols-2 content-start gap-2 overflow-y-auto pr-1">
+        <div className="content-auto grid flex-1 grid-cols-2 content-start gap-2 overscroll-contain overflow-y-auto pr-1 scrollbar-thin">
           {gallery.map((item) => (
             <div
               key={item.id}

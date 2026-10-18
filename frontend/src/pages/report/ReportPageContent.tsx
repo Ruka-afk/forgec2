@@ -539,10 +539,10 @@ export default function ReportPage() {
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className="text-sm font-medium text-foreground">{f.title || "-"}</span>
-                                  <Badge variant="outline" className={`text-(--fs-micro-sm) ${severityColor(f.severity || "low")}`}>
+                                  <Badge variant="outline" className={`text-micro-sm ${severityColor(f.severity || "low")}`}>
                                     {(f.severity || "unknown").toUpperCase()}
                                   </Badge>
-                                  {f.cve_id && <Badge variant="secondary" className="text-(--fs-micro-sm) font-mono">{f.cve_id}</Badge>}
+                                  {f.cve_id && <Badge variant="secondary" className="text-micro-sm font-mono">{f.cve_id}</Badge>}
                                 </div>
                               </div>
                             </div>

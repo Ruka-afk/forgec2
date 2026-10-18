@@ -171,7 +171,7 @@ export default function ListenerDetailPage() {
                 size="sm"
               />
               {health.last_probe && (
-                <span className="font-mono text-(--fs-micro-sm)">
+                <span className="font-mono text-micro-sm">
                   {formatTime(health.last_probe)}
                 </span>
               )}

@@ -47,8 +47,8 @@ export function EntraIdentityPanel() {
       });
       setDevice(res);
       toast.success(t("phishing.entra_device_started"));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("phishing.entra_failed"));
+    } catch {
+      toast.error(t("phishing.entra_failed"));
     } finally {
       setBusy(false);
     }
@@ -60,8 +60,8 @@ export function EntraIdentityPanel() {
     try {
       const res = await api.postJson<Record<string, unknown>>(paths.identity.deviceCodePoll(device.id), {});
       setTokenJson(JSON.stringify(res, null, 2));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("phishing.entra_failed"));
+    } catch {
+      toast.error(t("phishing.entra_failed"));
     } finally {
       setBusy(false);
     }
@@ -79,8 +79,8 @@ export function EntraIdentityPanel() {
       });
       setConsent(res);
       toast.success(t("phishing.entra_consent_started"));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("phishing.entra_failed"));
+    } catch {
+      toast.error(t("phishing.entra_failed"));
     } finally {
       setBusy(false);
     }
@@ -92,8 +92,8 @@ export function EntraIdentityPanel() {
     try {
       const res = await api.postJson<Record<string, unknown>>(paths.identity.consentExchange(consent.id), {});
       setTokenJson(JSON.stringify(res, null, 2));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("phishing.entra_failed"));
+    } catch {
+      toast.error(t("phishing.entra_failed"));
     } finally {
       setBusy(false);
     }

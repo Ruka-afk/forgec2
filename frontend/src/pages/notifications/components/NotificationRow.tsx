@@ -73,7 +73,7 @@ function NotificationRowInner({
           <span>{n.created_at ? formatTime(n.created_at) : "-"}</span>
           {n.agent_id && <span>{t("notifications.agent_prefix")} {n.agent_id.substring(0, 8)}</span>}
           <Badge variant={SEVERITY_VARIANT[n.severity] || "default"}>{t(`notifications.severity_${n.severity}`)}</Badge>
-          <span className="font-mono text-(--fs-micro-sm)">{n.type}</span>
+          <span className="font-mono text-micro-sm">{n.type}</span>
         </div>
       </div>
       <div className="flex items-center gap-1 shrink-0">

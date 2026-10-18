@@ -153,7 +153,7 @@ export default function EventsStream() {
             {followSession ? t("events.follow_session") : t("events.follow_all")}
           </Button>
         )}
-        <Badge variant={connected ? "success" : "secondary"} className="font-mono text-(--fs-micro-sm)">
+        <Badge variant={connected ? "success" : "secondary"} className="font-mono text-micro-sm">
           <Radio className="size-3 mr-1" />
           {connected ? t("events.live") : t("events.polling")}
         </Badge>

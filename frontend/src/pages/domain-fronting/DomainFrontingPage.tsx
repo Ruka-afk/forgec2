@@ -198,7 +198,7 @@ export default function DomainFrontingPage() {
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-foreground truncate">{d.domain}</span>
                           {d.active && (
-                            <Badge variant="outline" className="text-(--fs-micro-sm) px-1.5 py-px font-medium">{t("domain_fronting.active")}
+                            <Badge variant="outline" className="text-micro-sm px-1.5 py-px font-medium">{t("domain_fronting.active")}
                             </Badge>
                           )}
                         </div>

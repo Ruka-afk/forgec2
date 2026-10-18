@@ -302,10 +302,10 @@ export default function PrivescPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-medium">{f.title || "-"}</span>
-                          <Badge variant="secondary" className={`px-2 py-0.5 text-(--fs-micro-sm) rounded-full border font-medium ${severityBadge(f.severity || "low")}`}>
+                          <Badge variant="secondary" className={`px-2 py-0.5 text-micro-sm rounded-full border font-medium ${severityBadge(f.severity || "low")}`}>
                             {(f.severity || "unknown").toUpperCase()}
                           </Badge>
-                          {f.cve_id && <Badge variant="secondary" className="font-mono text-(--fs-micro-sm)">{f.cve_id}</Badge>}
+                          {f.cve_id && <Badge variant="secondary" className="font-mono text-micro-sm">{f.cve_id}</Badge>}
                         </div>
                         <CollapsibleContent>
                           <div className="mt-3 space-y-2">

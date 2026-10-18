@@ -283,7 +283,7 @@ export default function PluginsPage() {
             <Button key={cat.key} variant="outline" size="sm" onClick={() => handleCategoryChange(cat.key)} className={`rounded-lg transition-all ${category === cat.key ? "ring-2 ring-primary/50 border-primary/30 " + cat.color : "text-muted-foreground"}`}>
               {cat.icon}
               {t(cat.labelKey)}
-              <Badge variant="secondary" className="text-(--fs-micro-sm)">{count}</Badge>
+              <Badge variant="secondary" className="text-micro-sm">{count}</Badge>
             </Button>
           );
         })}

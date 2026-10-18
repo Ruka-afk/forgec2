@@ -64,7 +64,7 @@ export default function AISessionSidebar({ sessions, sessionsLoading = false, se
       <div className="mb-3 flex items-center justify-between px-1">
         <div>
           <h2 className="text-sm font-semibold text-foreground">{t("ai.sessions")}</h2>
-		  <p className="text-(--fs-micro-sm) text-muted-foreground">{t("ai.session_count", { count: sessions.length })}</p>
+		  <p className="text-micro-sm text-muted-foreground">{t("ai.session_count", { count: sessions.length })}</p>
         </div>
         <Button variant="ghost" size="icon-sm" onClick={onNewChat} aria-label={t("ai.new_chat")} title={t("ai.new_chat")}>
           <Plus className="size-4" />
@@ -91,7 +91,7 @@ export default function AISessionSidebar({ sessions, sessionsLoading = false, se
         </div>
       )}
       {modal}
-      <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
+      <div className="content-auto min-h-0 flex-1 space-y-1 overscroll-contain overflow-y-auto pr-1 scrollbar-thin">
         {sessionsLoading ? (
           <div className="space-y-2 p-2">
             {[1, 2, 3, 4].map((i) => (
@@ -130,7 +130,7 @@ export default function AISessionSidebar({ sessions, sessionsLoading = false, se
                   : <MessageSquare className="size-4 shrink-0" aria-hidden="true" />}
                 <span className="flex min-w-0 flex-1 flex-col items-start">
 				  <span className="flex w-full items-center gap-1.5"><span className="min-w-0 flex-1 truncate">{s.title}</span>{runStatuses[s.id] && <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-primary motion-reduce:animate-none" title={runStatuses[s.id]} />}</span>
-                  <span className="text-(--fs-micro-sm) font-normal text-muted-foreground">{formatSessionWhen(s.updated_at)}</span>
+                  <span className="text-micro-sm font-normal text-muted-foreground">{formatSessionWhen(s.updated_at)}</span>
                 </span>
               </Button>
               <Button

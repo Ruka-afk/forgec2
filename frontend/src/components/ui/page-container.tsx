@@ -112,7 +112,15 @@ export function PageContainer({
         </PageHeader>
       )}
       {toolbar && (
-        <div className={cn(stickyHeader && "sticky top-[calc(var(--shell-breadcrumb-height)+0.5rem)] z-20")}>{toolbar}</div>
+        <div
+          className={cn(
+            "min-w-0",
+            stickyHeader &&
+              "sticky top-[calc(var(--shell-breadcrumb-height)+0.5rem)] z-20 -mx-1 rounded-xl bg-background/95 p-1 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:-mx-2 sm:p-2",
+          )}
+        >
+          {toolbar}
+        </div>
       )}
       {hasHeader ? (
         <div className={cn("flex min-h-0 flex-1 flex-col gap-5 sm:gap-6", variant === "workspace" && "gap-0", contentClassName)}>{content}</div>

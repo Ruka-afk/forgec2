@@ -36,7 +36,7 @@ export function AgentDockShot({ agentId, refreshKey }: { agentId: string; refres
   if (!src) {
     if (!failed) return null;
     return (
-      <div role="alert" className="flex flex-wrap items-center gap-2 border-b border-border bg-warning/10 px-2 py-1.5 text-(--fs-micro-sm) text-warning-ink">
+      <div role="alert" className="flex flex-wrap items-center gap-2 border-b border-border bg-warning/10 px-2 py-1.5 text-micro-sm text-warning-ink">
         <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
         <span className="min-w-0 flex-1">{t("agents.dock_shot_failed")}</span>
         <Button onClick={() => setAttempt((n) => n + 1)} size="xs" variant="outline">{t("common.try_again")}</Button>
@@ -47,7 +47,7 @@ export function AgentDockShot({ agentId, refreshKey }: { agentId: string; refres
   return (
     <div className="border-b border-border bg-muted/30 px-2 py-1">
       {failed && (
-        <div role="alert" className="mb-1 flex items-center gap-1.5 text-(--fs-micro-sm) text-warning-ink">
+        <div role="alert" className="mb-1 flex items-center gap-1.5 text-micro-sm text-warning-ink">
           <AlertTriangle className="size-3 shrink-0" aria-hidden="true" />
           <span>{t("agents.dock_shot_stale")}</span>
         </div>

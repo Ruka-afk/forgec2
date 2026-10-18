@@ -180,7 +180,7 @@ export function WorkflowsTab() {
               <div className="flex flex-col gap-1 mt-2">
                 {w.steps.map((s) => (
                   <div key={s.step_order} className="flex items-center gap-2 px-2.5 py-1.5 rounded bg-muted text-xs">
-                    <span className="size-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-(--fs-micro-sm) font-semibold">{s.step_order}</span>
+                    <span className="size-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-micro-sm font-semibold">{s.step_order}</span>
                     <span className="font-semibold text-primary min-w-[80px]">{s.task_type}</span>
                     <span className="flex-1 font-mono text-foreground truncate">{s.command?.substring(0, 60)}</span>
                     <span className="text-muted-foreground">{s.shell} &middot; {s.timeout_sec}s{s.stop_on_failure ? ` \u00b7 ${t("workflows.stop_on_fail")}` : ""}{s.condition ? ` \u00b7 if: ${s.condition}` : ""}{(s.repeat_count ?? 0) > 0 ? ` \u00b7 repeat ${s.repeat_count}x` : ""}</span>

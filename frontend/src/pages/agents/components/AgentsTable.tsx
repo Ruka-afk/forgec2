@@ -134,7 +134,10 @@ export default memo(function AgentsTable(props: AgentsTableProps) {
       <div
         ref={agentScrollRef}
         onScroll={onAgentScroll}
-        className={agentVirtualized ? "overflow-auto max-h-[min(70vh,720px)] scrollbar-thin" : "overflow-auto scrollbar-thin"}
+        role="region"
+        aria-label={t("agents.title")}
+        tabIndex={0}
+        className={agentVirtualized ? "content-auto overscroll-contain overflow-auto max-h-[min(70vh,720px)] scrollbar-thin" : "content-auto overscroll-contain overflow-auto scrollbar-thin"}
       >
       <Table className="text-sm min-w-[850px]">
         <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90 border-b border-border">
@@ -193,10 +196,10 @@ export default memo(function AgentsTable(props: AgentsTableProps) {
                   <div className="flex items-center gap-2 min-w-0">
                     <StatusBadge status={group.status} variant="dot" size="sm" pulse={group.status === "online"} />
                     <span className="truncate text-sm font-semibold text-foreground">{group.hostname}</span>
-                    {group.ip && <span className="hidden truncate font-mono text-(--fs-micro-sm) text-muted-foreground sm:inline">{group.ip}</span>}
-                    {group.os && <span className="hidden text-(--fs-micro-sm) text-muted-foreground md:inline">{group.os}</span>}
+                    {group.ip && <span className="hidden truncate font-mono text-micro-sm text-muted-foreground sm:inline">{group.ip}</span>}
+                    {group.os && <span className="hidden text-micro-sm text-muted-foreground md:inline">{group.os}</span>}
                     {group.sessions.length > 1 && (
-                      <span className="shrink-0 rounded-md bg-primary/10 px-1.5 py-0.5 text-(--fs-micro-sm) font-medium text-primary">
+                      <span className="shrink-0 rounded-md bg-primary/10 px-1.5 py-0.5 text-micro-sm font-medium text-primary">
                         {t("agents.group_host_sessions", { n: group.sessions.length })}
                       </span>
                     )}

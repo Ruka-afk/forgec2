@@ -104,7 +104,7 @@ export function withChartData<T, P extends Record<string, unknown> = Record<stri
     return (
       <div ref={ref}>
         {loading ? (
-          <div className="h-24 flex items-center justify-center text-muted-foreground/100 text-xs">
+          <div className="h-24 flex items-center justify-center text-muted-foreground text-xs">
             <Spinner size="sm" />{t("common.loading")}
           </div>
         ) : error ? (

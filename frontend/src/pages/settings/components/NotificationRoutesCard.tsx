@@ -140,16 +140,16 @@ export default function NotificationRoutesCard() {
             {routes.map((route, idx) => (
               <div key={route.id ?? `new-${idx}`} className="p-4 bg-muted rounded-lg space-y-3 border border-border">
                 {!route.id && (
-                  <p className="text-(--fs-micro-sm) font-medium text-warning-ink">{t("settings.routes.new_badge")}</p>
+                  <p className="text-micro-sm font-medium text-warning-ink">{t("settings.routes.new_badge")}</p>
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
-                    <Label className="text-(--fs-micro-sm) text-muted-foreground">{t("settings.routes.name")}</Label>
+                    <Label className="text-micro-sm text-muted-foreground">{t("settings.routes.name")}</Label>
                     <Input className="text-xs mt-1" value={route.name} onChange={(e) => update(idx, { name: e.target.value })}
                       placeholder="soc-discord" />
                   </div>
                   <div>
-                    <Label className="text-(--fs-micro-sm) text-muted-foreground">{t("settings.routes.channel")}</Label>
+                    <Label className="text-micro-sm text-muted-foreground">{t("settings.routes.channel")}</Label>
                     <Select value={route.channel} onValueChange={(v) => update(idx, { channel: v ?? "webhook" })}>
                       <SelectTrigger className="text-xs mt-1"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -164,7 +164,7 @@ export default function NotificationRoutesCard() {
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-(--fs-micro-sm) text-muted-foreground">{t("settings.routes.min_severity")}</Label>
+                    <Label className="text-micro-sm text-muted-foreground">{t("settings.routes.min_severity")}</Label>
                     <Select value={route.min_severity} onValueChange={(v) => update(idx, { min_severity: v ?? "info" })}>
                       <SelectTrigger className="text-xs mt-1"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -178,7 +178,7 @@ export default function NotificationRoutesCard() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-(--fs-micro-sm) text-muted-foreground">
+                    <Label className="text-micro-sm text-muted-foreground">
                       {route.channel === "telegram" ? t("settings.routes.chat_id") : t("settings.routes.webhook_url")}
                     </Label>
                     <Input className="text-xs mt-1 font-mono"
@@ -187,7 +187,7 @@ export default function NotificationRoutesCard() {
                   </div>
                   {route.channel === "telegram" && (
                     <div>
-                      <Label className="text-(--fs-micro-sm) text-muted-foreground">{t("settings.routes.bot_token")}</Label>
+                      <Label className="text-micro-sm text-muted-foreground">{t("settings.routes.bot_token")}</Label>
                       <Input className="text-xs mt-1 font-mono" type="password"
                         placeholder="123456:ABC-DEF..."
                         value={route.secret} onChange={(e) => update(idx, { secret: e.target.value })} />
@@ -195,7 +195,7 @@ export default function NotificationRoutesCard() {
                   )}
                   {route.channel === "dingtalk" && (
                     <div>
-                      <Label className="text-(--fs-micro-sm) text-muted-foreground">{t("settings.routes.sign_secret")}</Label>
+                      <Label className="text-micro-sm text-muted-foreground">{t("settings.routes.sign_secret")}</Label>
                       <Input className="text-xs mt-1 font-mono" type="password"
                         placeholder={t("settings.routes.sign_secret_hint")}
                         value={route.secret} onChange={(e) => update(idx, { secret: e.target.value })} />
@@ -244,7 +244,7 @@ export default function NotificationRoutesCard() {
                 + {t("settings.routes.add")}
               </Button>
             </div>
-            <p className="text-(--fs-micro-sm) text-muted-foreground">{t("settings.routes.hint")}</p>
+            <p className="text-micro-sm text-muted-foreground">{t("settings.routes.hint")}</p>
           </>
         )}
       </div>

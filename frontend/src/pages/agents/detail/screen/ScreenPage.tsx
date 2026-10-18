@@ -56,7 +56,7 @@ export default function ScreenPage() {
             onActivatePreview={monitor.activatePreview}
           />
 
-          <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+          <div className="content-auto flex min-h-0 flex-col gap-3 overscroll-contain overflow-y-auto scrollbar-thin">
             <ScreenControls
               t={t}
               monitoring={monitor.monitoring}

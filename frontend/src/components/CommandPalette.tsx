@@ -224,7 +224,7 @@ export default function CommandPalette() {
             ) : (
               [...groups.entries()].map(([section, group]) => (
                 <div key={section}>
-                  <div className="px-4 pt-3 pb-1.5 text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground/100">
+                  <div className="px-4 pt-3 pb-1.5 text-micro-sm uppercase tracking-wider text-muted-foreground">
                     {section}
                   </div>
                   {group.map((item) => {
@@ -249,10 +249,10 @@ export default function CommandPalette() {
                         <span className="flex min-w-0 flex-col">
                           <span className="truncate text-foreground">{item.label}</span>
                           {item.subtitle && (
-                            <span className="truncate text-xs text-muted-foreground/100">{item.subtitle}</span>
+                            <span className="truncate text-xs text-muted-foreground">{item.subtitle}</span>
                           )}
                         </span>
-                        <span className="ml-auto max-w-40 truncate font-mono text-xs text-muted-foreground/100">{item.href}</span>
+                        <span className="ml-auto max-w-40 truncate font-mono text-xs text-muted-foreground">{item.href}</span>
                       </Button>
                     );
                   })}

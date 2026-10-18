@@ -116,7 +116,7 @@ export default function ListenersPageContent() {
         <Input id={`${prefix}-client-ca`} className="font-mono text-xs" value={values.client_ca_file}
           onChange={(e) => setField("client_ca_file", e.target.value)}
           placeholder={t("listeners.client_ca_ph")} />
-        <p className="mt-1 text-(--fs-micro-sm) text-muted-foreground">{t("listeners.client_ca_hint")}</p>
+        <p className="mt-1 text-micro-sm text-muted-foreground">{t("listeners.client_ca_hint")}</p>
       </div>
       <Label className="flex items-center gap-2 text-xs text-foreground">
         <Checkbox checked={values.require_client_cert}
@@ -136,7 +136,7 @@ export default function ListenersPageContent() {
           </SelectContent>
         </Select>
       </div>
-      <p className="text-(--fs-micro-sm) text-muted-foreground">{t("listeners.tls_hint")}</p>
+      <p className="text-micro-sm text-muted-foreground">{t("listeners.tls_hint")}</p>
     </div>
   );
 
@@ -289,7 +289,7 @@ export default function ListenersPageContent() {
       <MetricGrid count={6}>
         <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.total")} value={loading ? "…" : total} icon={<Plug className="size-5" />} /></Card>
         <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.running")} value={loading ? "…" : enabledCount} tone="success" icon={<Power className="size-5" />} trend={enabledCount === total && total > 0 ? t("dashboard.all_online") : undefined} /></Card>
-        <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.burned")} value={loading || healthLoading ? "…" : burnedCount} tone={burnedCount > 0 ? "destructive" : "muted"} icon={<Flame className="size-5" />} />{!loading && !healthLoading && healthError && <p className="mt-1 text-(--fs-micro-sm) text-warning-ink">{t("listeners.health_unknown_burned")}</p>}</Card>
+        <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.burned")} value={loading || healthLoading ? "…" : burnedCount} tone={burnedCount > 0 ? "destructive" : "muted"} icon={<Flame className="size-5" />} />{!loading && !healthLoading && healthError && <p className="mt-1 text-micro-sm text-warning-ink">{t("listeners.health_unknown_burned")}</p>}</Card>
         <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.http")} value={loading ? "…" : httpCount} icon={<Globe className="size-5" />} /></Card>
         <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.tcp")} value={loading ? "…" : tcpCount} icon={<Network className="size-5" />} /></Card>
         <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.dns")} value={loading ? "…" : dnsCount} tone="primary" icon={<Radio className="size-5" />} /></Card>
@@ -383,12 +383,12 @@ export default function ListenersPageContent() {
                   <TableRow key={id} className="hover:bg-muted/50 transition-colors">
                     <TableCell className="py-3 px-4 sm:py-4 sm:px-6 font-medium"><Link to={`/listeners/${id}`} className="text-primary hover:underline">{name}</Link></TableCell>
                     <TableCell className="max-sm:hidden py-3 px-3 sm:py-4 sm:px-4">
-                      <Badge variant={type === "http" ? "outline" : "success"} className="text-(--fs-xs-sm) font-medium">{type}</Badge>
+                      <Badge variant={type === "http" ? "outline" : "success"} className="text-xs-sm font-medium">{type}</Badge>
                     </TableCell>
                     <TableCell className="max-sm:hidden py-3 px-3 sm:py-4 sm:px-4">
                       <div className="flex flex-wrap gap-1">
                         {tagList.length > 0 ? tagList.map((tag) => (
-                          <Badge key={tag} variant="secondary" className="text-(--fs-micro-sm) font-medium">{tag}</Badge>
+                          <Badge key={tag} variant="secondary" className="text-micro-sm font-medium">{tag}</Badge>
                         )) : <span className="text-xs text-muted-foreground">-</span>}
                       </div>
                     </TableCell>

@@ -54,7 +54,7 @@ function Breadcrumb() {
 
   return (
     <nav aria-label={t("common.breadcrumb")}>
-      <ol className="flex min-w-0 items-center gap-1.5 overflow-hidden text-xs text-muted-foreground/100">
+      <ol className="flex min-w-0 items-center gap-1.5 overflow-hidden text-xs text-muted-foreground">
         {items.map((item, i) => {
           const isLast = i === items.length - 1;
           return (

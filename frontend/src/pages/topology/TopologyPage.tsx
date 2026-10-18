@@ -180,7 +180,7 @@ function TopologySidebar({
                 <span className="text-xs font-mono text-muted-foreground">{netStats?.hosts_discovered ?? 0}</span>
               </div>
               {!!netStats?.merged_into_agent && (
-                <p className="text-(--fs-micro-sm) text-muted-foreground">
+                <p className="text-micro-sm text-muted-foreground">
                   {t("topology.legend_merged", { n: String(netStats.merged_into_agent) })}
                 </p>
               )}
@@ -465,7 +465,7 @@ export default function TopologyPage() {
                     </button>
                   ))}
                 </div>
-                <span className="text-(--fs-micro-sm) text-muted-foreground font-mono">{loadError ? `${t("status.unknown")} (${t("common.error")})` : `NODES: ${nodes.length}`}</span>
+                <span className="text-micro-sm text-muted-foreground font-mono">{loadError ? `${t("status.unknown")} (${t("common.error")})` : `NODES: ${nodes.length}`}</span>
               </div>
             </div>
             <div ref={graphContainerRef} className="relative p-4 bg-card [background-image:radial-gradient(ellipse_at_center,var(--card)_0%,var(--background)_100%)] min-h-[500px]">
@@ -492,10 +492,10 @@ export default function TopologyPage() {
               </ErrorBoundary>
             </div>
             <div className="bg-background border-t border-border px-4 py-1.5 flex items-center justify-between">
-              <span className="text-(--fs-micro-sm) text-muted-foreground font-mono">
+              <span className="text-micro-sm text-muted-foreground font-mono">
                 {loading ? t("common.loading") : subtitle}
               </span>
-              <span className="text-(--fs-micro-sm) text-muted-foreground font-mono">{now || "--:--:--"}</span>
+              <span className="text-micro-sm text-muted-foreground font-mono">{now || "--:--:--"}</span>
             </div>
           </Card>
         </div>

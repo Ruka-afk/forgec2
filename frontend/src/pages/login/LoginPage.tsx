@@ -222,7 +222,7 @@ function LoginForm() {
 
             <div>
               <Label htmlFor="login-totp" className="mb-2 block text-sm font-medium text-foreground">
-                {t("login.totp")} <span className="text-muted-foreground/100">({t("login.totp_optional")})</span>
+                {t("login.totp")} <span className="text-muted-foreground">({t("login.totp_optional")})</span>
               </Label>
               <div className="relative group">
                 <Shield className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" aria-hidden="true" />

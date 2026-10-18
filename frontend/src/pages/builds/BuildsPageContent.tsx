@@ -389,12 +389,12 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-semibold text-foreground">#{String(id).substring(0, 8)}</span>
-                        <Badge variant={platformColor(platform) as "success" | "outline"} className="px-2 py-0.5 text-(--fs-micro-sm) rounded-lg">
+                        <Badge variant={platformColor(platform) as "success" | "outline"} className="px-2 py-0.5 text-micro-sm rounded-lg">
                           {platformIcon(platform)} {platform || "unknown"}
                         </Badge>
-                        <Badge variant="outline" className="px-2 py-0.5 text-(--fs-micro-sm) rounded-lg">{build.format || "-"}</Badge>
+                        <Badge variant="outline" className="px-2 py-0.5 text-micro-sm rounded-lg">{build.format || "-"}</Badge>
                         <Badge variant={status === "success" ? "success" : status === "failed" ? "destructive" : "outline"}
-                          className="px-2 py-0.5 text-(--fs-micro-sm) rounded-full">
+                          className="px-2 py-0.5 text-micro-sm rounded-full">
                           <span className={`size-1.5 rounded-full inline-block mr-1 ${info.bg} ${isBuilding ? "animate-pulse" : ""}`}></span>
                           {info.label}
                         </Badge>
@@ -440,7 +440,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
                         <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
                           <Terminal className="size-4" /> {t("builds.log_title")}
                         </span>
-                        <span className="text-(--fs-micro-sm) text-muted-foreground font-mono">{stdout.split("\n").length} {t("builds.lines")}</span>
+                        <span className="text-micro-sm text-muted-foreground font-mono">{stdout.split("\n").length} {t("builds.lines")}</span>
                       </div>
                       <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap leading-relaxed">
                         {stdout || <span className="text-muted-foreground italic">{t("builds.no_output")}</span>}

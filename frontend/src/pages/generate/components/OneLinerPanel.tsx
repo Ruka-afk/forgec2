@@ -117,13 +117,13 @@ export default function OneLinerPanel({
               <div key={idx} className="rounded-lg border border-border p-3 transition-colors hover:border-chart-5/40 dark:hover:border-chart-5/40">
                 <div className="mb-1.5 flex items-center justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2">
-                    <span className="grid size-5 shrink-0 place-items-center rounded-md bg-chart-5/10 text-(--fs-micro-sm) font-semibold text-chart-5">{idx + 1}</span>
+                    <span className="grid size-5 shrink-0 place-items-center rounded-md bg-chart-5/10 text-micro-sm font-semibold text-chart-5">{idx + 1}</span>
                     <span className="truncate text-sm font-medium text-foreground">{item.name}</span>
-                    <span className="truncate text-(--fs-micro-sm) text-muted-foreground">{item.desc}</span>
+                    <span className="truncate text-micro-sm text-muted-foreground">{item.desc}</span>
                   </div>
                   <CopyButton text={item.command} label={t("generate.oneliner_copy")} size="xs" />
                 </div>
-                <code className="block rounded-lg bg-muted p-2 font-mono text-(--fs-xs-sm) leading-relaxed whitespace-pre-wrap break-all text-foreground select-all">{item.command}</code>
+                <code className="block rounded-lg bg-muted p-2 font-mono text-xs-sm leading-relaxed whitespace-pre-wrap break-all text-foreground select-all">{item.command}</code>
               </div>
             ))}
           </div>

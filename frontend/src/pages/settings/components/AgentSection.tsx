@@ -27,7 +27,7 @@ export default function AgentSection({
             <div>
               <Label htmlFor="agent-heartbeat-interval" className="block text-xs text-muted-foreground mb-1.5">{t("settings.agent.heartbeat_interval")}</Label>
               <Input id="agent-heartbeat-interval" type="number" min={0} max={300} value={form.interval} onChange={(e) => setForm({ ...form, interval: Number(e.target.value) })}  />
-              <p className="text-(--fs-micro-sm) text-muted-foreground mt-1">{t("settings.agent.heartbeat_hint")}</p>
+              <p className="text-micro-sm text-muted-foreground mt-1">{t("settings.agent.heartbeat_hint")}</p>
             </div>
             <div>
               <Label htmlFor="agent-jitter" className="block text-xs text-muted-foreground mb-1.5">{t("settings.agent.jitter")}</Label>
@@ -59,10 +59,10 @@ export default function AgentSection({
               <div>
                 <Label htmlFor="agent-working-tz" className="block text-xs text-muted-foreground mb-1.5">{t("settings.agent.timezone")}</Label>
                 <Input id="agent-working-tz" type="text" placeholder="UTC" value={form.working_tz} onChange={(e) => setForm({ ...form, working_tz: e.target.value })} className="font-mono" />
-                <p className="text-(--fs-micro-sm) text-muted-foreground mt-1">{t("settings.agent.tz_hint")}</p>
+                <p className="text-micro-sm text-muted-foreground mt-1">{t("settings.agent.tz_hint")}</p>
               </div>
             </div>
-            <p className="text-(--fs-micro-sm) text-muted-foreground mt-2">{t("settings.agent.working_hint")}</p>
+            <p className="text-micro-sm text-muted-foreground mt-2">{t("settings.agent.working_hint")}</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <Button type="submit" size="lg" disabled={saving || !settingsLoaded} className="px-6 text-sm font-medium transition-colors disabled:opacity-50">

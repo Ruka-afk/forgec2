@@ -1084,7 +1084,7 @@ export default function AIPage() {
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-2">
                 <h1 className="truncate text-sm font-semibold text-foreground sm:text-base">{t("nav.ai")}</h1>
-                <Badge variant={configured ? "success" : "warning"} className="hidden max-w-48 truncate font-mono text-(--fs-micro-sm) sm:inline-flex">
+                <Badge variant={configured ? "success" : "warning"} className="hidden max-w-48 truncate font-mono text-micro-sm sm:inline-flex">
                   {configLoading ? t("common.loading") : configError ? t("ai.config_status_unknown") : enabled ? (model || provider) : t("ai.status_disabled")}
                 </Badge>
 				{activeSessionId != null && runStatuses[activeSessionId] && <Badge variant="info" className="animate-pulse motion-reduce:animate-none">{runStatuses[activeSessionId]}</Badge>}

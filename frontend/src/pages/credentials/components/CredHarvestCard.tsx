@@ -89,8 +89,8 @@ export function CredHarvestCard() {
     try {
       await api.post(paths.agents.cmd(agentId, def.endpoint), {});
       toast.success(t("cred.harvest_sent"));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("cred.harvest_failed"));
+    } catch {
+      toast.error(t("cred.harvest_failed"));
     } finally {
       setBusy(null);
     }
@@ -132,7 +132,7 @@ export function CredHarvestCard() {
                 className="h-auto flex-col items-start gap-0.5 px-3 py-2"
               >
                 <span>{harvestLabel(a.action, t)}</span>
-                <span className="text-(--fs-micro) font-normal text-muted-foreground">
+                <span className="text-micro font-normal text-muted-foreground">
                   <QualityMark quality={a.quality} />
                 </span>
               </Button>
@@ -147,7 +147,7 @@ export function CredHarvestCard() {
           {t("cred.missing_module")}
         </p>
       ) : (
-        <Badge variant="outline" className="mt-3 text-(--fs-micro-sm)">{t("cred.module_ready")}</Badge>
+        <Badge variant="outline" className="mt-3 text-micro-sm">{t("cred.module_ready")}</Badge>
       )}
     </Card>
   );

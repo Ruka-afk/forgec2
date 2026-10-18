@@ -432,7 +432,7 @@ export default function LateralPageContent() {
                   })}
                 </SelectContent>
               </Select>
-              <p className="mt-1.5 text-(--fs-micro-sm) text-warning-ink">
+              <p className="mt-1.5 text-micro-sm text-warning-ink">
                 {t("lateral.pivot_unsupported")}
               </p>
             </div>
@@ -512,7 +512,7 @@ export default function LateralPageContent() {
                   <TableCell className="font-mono text-muted-foreground">{h.source || "-"}</TableCell>
                   <TableCell className="font-mono text-muted-foreground">{h.target || "-"}</TableCell>
                   <TableCell>
-                    <Badge variant="outline" className="text-(--fs-micro-sm)">{h.method || "-"}</Badge>
+                    <Badge variant="outline" className="text-micro-sm">{h.method || "-"}</Badge>
                   </TableCell>
                   <TableCell className="text-muted-foreground text-xs">{h.pivot || t("lateral.direct")}</TableCell>
                   <TableCell>

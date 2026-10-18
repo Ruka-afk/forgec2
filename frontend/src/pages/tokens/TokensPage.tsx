@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { fetchAllAgents } from "@/lib/agents";
+import { firstArray } from "@/lib/envelope";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { paths } from "@/lib/api-paths";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -50,7 +51,12 @@ export default function TokensPage() {
         fetchAllAgents(),
       ]);
       return {
-        tokens: (tokenData.tokens || tokenData.data || tokenData || []) as Token[],
+        // `tokenData.tokens || tokenData.data || tokenData` falls back to the
+        // whole envelope object when the payload has neither key, and the
+        // caller then calls `.filter` on a plain object — a hard crash of the
+        // whole page (ErrorBoundary). firstArray keeps the same key priority
+        // but is total: it never yields a non-array.
+        tokens: firstArray(tokenData, ["tokens", "data", "Tokens"]) as Token[],
         agents: allAgents as Agent[],
       };
     },
@@ -245,6 +251,7 @@ export default function TokensPage() {
       <Card className="overflow-hidden">
         <DataTable<Token>
           data={filtered}
+          label={t("tokens.title")}
           loading={loading}
           error={error}
           onRetry={refresh}

@@ -23,9 +23,9 @@ export default memo(function ConnectionLogSection({ logs }: ConnectionLogSection
               <div className="flex items-center gap-2.5">
                 <Circle className={`size-1.5 fill-current ${log.type === "online" ? "text-success-ink" : log.type === "offline" ? "text-destructive-ink" : "text-primary"}`} />
                 <span className="text-xs text-foreground">{log.user || t("agents.detail_log_system")}</span>
-                {log.message && <span className="text-xs text-muted-foreground/100">{log.message}</span>}
+                {log.message && <span className="text-xs text-muted-foreground">{log.message}</span>}
               </div>
-              <span className="text-(--fs-micro-sm) text-muted-foreground/100 whitespace-nowrap">{(log.created_at) ? timeAgo(String(log.created_at), t) : ""}</span>
+              <span className="text-micro-sm text-muted-foreground whitespace-nowrap">{(log.created_at) ? timeAgo(String(log.created_at), t) : ""}</span>
             </div>
           ))}
         </div>

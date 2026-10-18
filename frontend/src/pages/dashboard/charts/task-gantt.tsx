@@ -14,15 +14,15 @@ function GanttBody({ data }: { data: GanttItem[] }) {
   const { t } = useI18n();
   return (
     <div className="space-y-1.5 max-h-40 overflow-y-auto">
-      {data.length === 0 ? <p className="text-xs text-muted-foreground/100 text-center py-6">{t("dashboard.no_gantt_data")}</p> : data.slice(0, 12).map((item, i) => (
+      {data.length === 0 ? <p className="text-xs text-muted-foreground text-center py-6">{t("dashboard.no_gantt_data")}</p> : data.slice(0, 12).map((item, i) => (
         <div key={i} className="flex items-center gap-2 text-xs">
-          <span className="w-16 truncate text-muted-foreground font-mono text-(--fs-micro-sm)">{item.agent}</span>
+          <span className="w-16 truncate text-muted-foreground font-mono text-micro-sm">{item.agent}</span>
           <div className="flex-1 h-3 bg-secondary rounded-full overflow-hidden">
             <div className={`h-full rounded-full ${item.status === "completed" ? "bg-success" : item.status === "failed" ? "bg-destructive" : "bg-warning"}`}
               style={{ width: `${Math.min(100, Math.max(8, (Number(item.duration) || 0) * 8))}%`, marginLeft: `${Math.min(40, Number(item.start) || 0)}%` }} />
           </div>
-          <span className="text-(--fs-micro-sm) text-muted-foreground/100 w-20 truncate">{item.task}</span>
-          <span className="text-(--fs-micro-sm) w-14 truncate text-muted-foreground">{enumLabel(t, "tasks", item.status)}</span>
+          <span className="text-micro-sm text-muted-foreground w-20 truncate">{item.task}</span>
+          <span className="text-micro-sm w-14 truncate text-muted-foreground">{enumLabel(t, "tasks", item.status)}</span>
         </div>
       ))}
     </div>
@@ -63,7 +63,7 @@ export default function TaskGanttSection({ range }: { range: string }) {
   return (
     <ChartCard title={t("dashboard.task_gantt")} icon={BarChart3} iconColor="violet" loading={loading} exportFilename="task-gantt.png">
       {items.length === 0 ? (
-        <p className="text-xs text-muted-foreground/100 text-center py-6">
+        <p className="text-xs text-muted-foreground text-center py-6">
           {loadError ? t("dashboard.gantt_load_failed") : t("dashboard.no_gantt_data")}
         </p>
       ) : (

@@ -71,8 +71,8 @@ export const StatCard = memo(function StatCard({
     >
       <div className={cn("flex items-start justify-between", iconSide === "left" && "flex-row-reverse")}>
         <div className="flex-1 min-w-0">
-          <p className="mono-eyebrow text-muted-foreground/100">{label}</p>
-          <p className="mt-1.5 text-(--fs-stat-value) font-bold leading-none text-foreground font-mono font-variant-numeric tabular-nums" aria-live="polite">{displayValue}</p>
+          <p className="mono-eyebrow text-muted-foreground">{label}</p>
+          <p className="mt-1.5 text-stat-value font-bold leading-none text-foreground font-mono font-variant-numeric tabular-nums" aria-live="polite">{displayValue}</p>
           <div className={cn("flex items-center gap-1.5 mt-2 min-h-4", iconSide === "left" && "justify-start")}>
             {dot && (
               <span className={cn("size-1.5 rounded-full", dotClasses, "animate-pulse")} />

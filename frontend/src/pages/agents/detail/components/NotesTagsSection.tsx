@@ -83,11 +83,11 @@ export default memo(function NotesTagsSection({
                     </Link>
                   ))}
                 </div>
-              ) : <span className="text-xs text-muted-foreground/100">{t("agents.detail_no_tags")}</span>}
+              ) : <span className="text-xs text-muted-foreground">{t("agents.detail_no_tags")}</span>}
             </div>
             <div>
               <div className="text-xs font-medium text-muted-foreground mb-1">{t("agents.detail_notes")}</div>
-              {note ? <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{note}</p> : <span className="text-xs text-muted-foreground/100">{t("agents.detail_no_notes")}</span>}
+              {note ? <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{note}</p> : <span className="text-xs text-muted-foreground">{t("agents.detail_no_notes")}</span>}
             </div>
           </div>
         )}

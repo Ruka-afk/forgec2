@@ -99,11 +99,45 @@ function rel(f) {
   return f.slice(srcRoot.length + 1).replace(/\\/g, "/");
 }
 
+// --- Rule 5: `text-(--fs-*)` is not a font-size utility ---
+// Tailwind resolves `text-(value)` to `color:` unless the value is a bare
+// color-ish custom property, and even then it never maps to font-size. The
+// old `text-(--fs-compact)` spelling therefore emitted
+// `color: var(--fs-compact)` — a length in a color slot, discarded by the
+// browser — so ~360 call sites silently rendered at the inherited 14/15px
+// instead of the documented ramp (page titles came out at 15px instead of
+// 24px, table headers at 14px instead of 10px). The size ramp must be
+// `@theme --text-<name>` + `text-<name>`.
+const FS_UTILITY_RE = /text-\(--fs-[a-z0-9-]+\)/g;
+for (const f of files) {
+  if (!/\.(ts|tsx)$/.test(f)) continue;
+  const lines = readFileSync(f, "utf-8").split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    for (const mm of lines[i].matchAll(FS_UTILITY_RE)) {
+      const token = mm[0].slice("text-(--fs-".length, -1);
+      errors.push(
+        `${rel(f)}:${i + 1}: "${mm[0]}" compiles to color, not font-size — use "text-${token}" (scripts/migrate-fs-utilities.mjs).`,
+      );
+    }
+  }
+}
+
+// --- Rule 6: the size ramp must actually exist in @theme ---
+// A class name is only a font-size utility when `--text-<name>` is declared,
+// and only tracks density when it points at the --fs-* ramp.
+const REQUIRED_TEXT_TOKENS = ["micro", "micro-sm", "xs-sm", "compact", "page-title", "section", "stat-value", "prose"];
+const declaredText = new Set([...css.matchAll(/--text-([a-z0-9-]+)\s*:/g)].map((m) => m[1]));
+for (const name of REQUIRED_TEXT_TOKENS) {
+  if (!declaredText.has(name)) {
+    errors.push(`globals.css: @theme is missing --text-${name} (the dense-console size ramp).`);
+  }
+}
+
 if (errors.length > 0) {
   console.error("\n❌ design-token contract violations:\n");
   errors.forEach((e) => console.error(`  ${e}`));
   console.error("\nDesign tokens live in src/styles/globals.css (--elevation-*, --shadow-*, --fs-*, ...). Elevations, radii and colors must go through tokens, not raw values.\n");
   process.exit(1);
 } else {
-  console.log("✅ design tokens OK — no raw hex, tokenized shadows, Card radius contract held.");
+  console.log("✅ design tokens OK — no raw hex, tokenized shadows, Card radius contract held, font-size ramp declared.");
 }

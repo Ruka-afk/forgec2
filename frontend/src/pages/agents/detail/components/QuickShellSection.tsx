@@ -92,7 +92,7 @@ export default memo(function QuickShellSection({
             {history.map((entry, idx) => (
               <div key={entry.timestamp + idx} className="p-2.5 rounded-lg bg-muted/50 border border-border">
                 <div className="flex items-center gap-2 mb-1">
-                  <Badge variant="secondary" className="text-(--fs-micro-sm) font-mono">{entry.shell}</Badge>
+                  <Badge variant="secondary" className="text-micro-sm font-mono">{entry.shell}</Badge>
                   <span className="text-xs font-mono text-foreground">{entry.command}</span>
                   <button
                     type="button"
@@ -103,9 +103,9 @@ export default memo(function QuickShellSection({
                   >
                     <RotateCcw className="size-3" />
                   </button>
-                  <span className="text-(--fs-micro-sm) text-muted-foreground/100 ml-auto">{timeAgo(entry.timestamp, t)}</span>
+                  <span className="text-micro-sm text-muted-foreground ml-auto">{timeAgo(entry.timestamp, t)}</span>
                 </div>
-                <pre className="font-mono text-(--fs-micro-sm) text-muted-foreground whitespace-pre-wrap break-all max-h-20 overflow-y-auto">{entry.result}</pre>
+                <pre className="font-mono text-micro-sm text-muted-foreground whitespace-pre-wrap break-all max-h-20 overflow-y-auto">{entry.result}</pre>
               </div>
             ))}
           </div>

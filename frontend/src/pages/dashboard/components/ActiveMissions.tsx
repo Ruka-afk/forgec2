@@ -120,9 +120,9 @@ export default function ActiveMissions({ className = "" }: { className?: string 
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs font-mono font-medium text-foreground truncate">{m.hostname || m.agent_id.slice(0, 8)}</span>
-                    {m.ip && <span className="text-(--fs-micro-sm) text-muted-foreground/100 truncate hidden sm:inline">{m.ip}</span>}
+                    {m.ip && <span className="text-micro-sm text-muted-foreground truncate hidden sm:inline">{m.ip}</span>}
                   </div>
-                  <div className="text-(--fs-micro-sm) text-muted-foreground/80 truncate max-w-[28rem]">{missionLabel(m)}</div>
+                  <div className="text-micro-sm text-muted-foreground/80 truncate max-w-[28rem]">{missionLabel(m)}</div>
                 </div>
               </div>
               <div className="flex items-center gap-3 shrink-0">
@@ -130,7 +130,7 @@ export default function ActiveMissions({ className = "" }: { className?: string 
                   <Badge variant="info">{Math.round(((m.transferred || 0) / m.total_bytes) * 100)}%</Badge>
                 ) : null}
                 <Badge variant="secondary" className="font-mono">{m.type}</Badge>
-                <span className="text-(--fs-micro-sm) text-muted-foreground/100 whitespace-nowrap" title={m.created_by ? `${t("dashboard.missions_by")} ${m.created_by}` : undefined}>
+                <span className="text-micro-sm text-muted-foreground whitespace-nowrap" title={m.created_by ? `${t("dashboard.missions_by")} ${m.created_by}` : undefined}>
                   {formatDuration(now - new Date(m.created_at).getTime())}
                 </span>
               </div>

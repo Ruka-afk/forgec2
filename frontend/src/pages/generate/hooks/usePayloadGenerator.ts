@@ -639,7 +639,7 @@ export function usePayloadGenerator() {
       setProfilePresets((prev) => { const idx = prev.findIndex((p) => p.name === preset.name); if (idx >= 0) { const next = [...prev]; next[idx] = preset; return next; } return [...prev, preset]; });
       changeProfile(preset.name);
       toast.success(t("generate.toast.profile_imported"));
-    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : String(err)); }
+    } catch { toast.error(t("common.error")); }
     finally { e.target.value = ""; }
   }, [t, changeProfile]);
 
@@ -673,7 +673,7 @@ export function usePayloadGenerator() {
         const newId = String(data.listener?.ID || data.listener?.id || "");
         if (newId) setShared((prev) => ({ ...prev, listener_id: newId }));
       } else toast.error(t("generate.toast.creation_failed", { error: data.error || "" }));
-    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : String(err)); }
+    } catch { toast.error(t("common.error")); }
   }, [loadData, t]);
 
   // Keep the C2 preview in sync with listener + selected transport.

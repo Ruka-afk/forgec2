@@ -52,7 +52,7 @@ export function AIMessageList({
       aria-live={loading ? "off" : "polite"}
       aria-relevant="additions text"
       aria-busy={loading}
-      className="min-h-0 flex-1 overflow-y-auto bg-background/40 px-3 py-5 sm:px-5 sm:py-7"
+      className="content-auto min-h-0 flex-1 overscroll-contain overflow-y-auto bg-background/40 px-3 py-5 scrollbar-thin sm:px-5 sm:py-7"
     >
       <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-5">
         {toolMessages.length > 1 && (
@@ -133,7 +133,7 @@ function AssistantOutputMeta({ message }: { message: AIMessage }) {
   const unsuccessful = message.run_status === "error" || message.run_status === "interrupted";
   const completedAt = message.created_at ? new Date(message.created_at) : null;
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/60 pt-2 text-(--fs-micro-sm) text-muted-foreground">
+    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/60 pt-2 text-micro-sm text-muted-foreground">
       {terminal && (
         <span className={cn("inline-flex items-center gap-1", unsuccessful ? "text-destructive-ink" : "text-success-ink")}>
           {unsuccessful ? <CircleAlert className="size-3" /> : <CheckCircle2 className="size-3" />}
@@ -179,11 +179,11 @@ const AIMessageItem = memo(function AIMessageItem({
 }: AIMessageItemProps) {
   const { t } = useI18n();
   if (msg.trace) {
-    return <MemoizedAITracePanel steps={msg.trace} status={msg.trace_status || "complete"} reasoning={msg.reasoning} />;
+    return <div className="content-auto"><MemoizedAITracePanel steps={msg.trace} status={msg.trace_status || "complete"} reasoning={msg.reasoning} /></div>;
   }
   if (msg.thinking) {
     return (
-      <div className="flex items-start gap-3">
+      <div className="content-auto flex items-start gap-3">
         <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Bot className="size-4" /></div>
         <div className="rounded-2xl rounded-tl-md border border-border/75 bg-card px-4 py-3 shadow-xs">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -200,10 +200,10 @@ const AIMessageItem = memo(function AIMessageItem({
     );
   }
   if (msg.role === "tool") {
-    return <MemoizedToolResultBlock toolName={msg.tool_name || t("ai.tool")} content={msg.content} status={msg.tool_status} expandAll={expandAll} />;
+    return <div className="content-auto"><MemoizedToolResultBlock toolName={msg.tool_name || t("ai.tool")} content={msg.content} status={msg.tool_status} expandAll={expandAll} /></div>;
   }
   return (
-    <div className={`group flex items-start gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
+    <div className={`content-auto group flex items-start gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
       <div className={`flex size-8 shrink-0 items-center justify-center rounded-xl shadow-xs ring-1 ${msg.role === "user" ? "bg-foreground text-background ring-foreground/10" : msg.error ? "bg-destructive/10 text-destructive-ink ring-destructive/20" : "bg-primary/10 text-primary ring-primary/15"}`}>
         {msg.role === "user" ? <User className="size-4" /> : <Bot className="size-4" />}
       </div>
@@ -296,9 +296,9 @@ function ToolResultBlock({ toolName, content, status = "success", expandAll }: {
           </span>
           <Wrench className="size-3.5 shrink-0 text-muted-foreground" />
           <span className="shrink-0 font-mono text-xs font-semibold text-foreground">{toolName}</span>
-          <span className={cn("hidden shrink-0 text-(--fs-micro-sm) sm:inline", view.status === "error" ? "text-destructive-ink" : view.status === "success" ? "text-success-ink" : "text-warning-ink")}>{statusLabel}</span>
-          {view.itemCount != null && <span className="hidden shrink-0 items-center gap-1 text-(--fs-micro-sm) text-muted-foreground md:inline-flex"><Database className="size-3" />{t("ai.tool_records", { count: view.itemCount })}</span>}
-          {view.partial && <span className="shrink-0 text-(--fs-micro-sm) text-warning-ink">{t("ai.tool_partial")}</span>}
+          <span className={cn("hidden shrink-0 text-micro-sm sm:inline", view.status === "error" ? "text-destructive-ink" : view.status === "success" ? "text-success-ink" : "text-warning-ink")}>{statusLabel}</span>
+          {view.itemCount != null && <span className="hidden shrink-0 items-center gap-1 text-micro-sm text-muted-foreground md:inline-flex"><Database className="size-3" />{t("ai.tool_records", { count: view.itemCount })}</span>}
+          {view.partial && <span className="shrink-0 text-micro-sm text-warning-ink">{t("ai.tool_partial")}</span>}
           {summary && <span className={cn("min-w-0 flex-1 truncate text-xs text-muted-foreground", view.status === "error" && "text-destructive-ink/85")}>· {summary}</span>}
           <ChevronDown className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
         </button>
@@ -306,7 +306,7 @@ function ToolResultBlock({ toolName, content, status = "success", expandAll }: {
       </div>
       {open && view.formatted && (
         <div className="border-t border-border/65 px-3 py-2.5">
-          <div className="mb-2 flex flex-wrap items-center gap-2 text-(--fs-micro-sm) text-muted-foreground">
+          <div className="mb-2 flex flex-wrap items-center gap-2 text-micro-sm text-muted-foreground">
             {view.isJson && <span className="inline-flex items-center gap-1"><FileJson2 className="size-3" />JSON</span>}
             {view.lineCount > 1 && <span>{t("ai.tool_lines", { count: view.lineCount })}</span>}
             {view.byteCount > 1024 && <span>{formatBytes(view.byteCount)}</span>}

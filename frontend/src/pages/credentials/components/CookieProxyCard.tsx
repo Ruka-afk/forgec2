@@ -60,8 +60,8 @@ export function CookieProxyCard() {
       await api.post(paths.agents.cookieProxyStart(agentId), {});
       toast.success(t("cred.cookie_proxy_started"));
       await refresh(agentId);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("cred.cookie_proxy_failed"));
+    } catch {
+      toast.error(t("cred.cookie_proxy_failed"));
     } finally {
       setBusy(false);
     }
@@ -73,8 +73,8 @@ export function CookieProxyCard() {
     try {
       await api.post(paths.agents.cookieProxyStop(agentId), {});
       await refresh(agentId);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("cred.cookie_proxy_failed"));
+    } catch {
+      toast.error(t("cred.cookie_proxy_failed"));
     } finally {
       setBusy(false);
     }
@@ -85,8 +85,8 @@ export function CookieProxyCard() {
     try {
       const res = await api.get<{ cookies?: unknown }>(paths.agents.cookieProxyJar(agentId));
       downloadText(JSON.stringify(res.cookies ?? res, null, 2), `cookies-${agentId}.json`, "application/json");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("cred.cookie_proxy_failed"));
+    } catch {
+      toast.error(t("cred.cookie_proxy_failed"));
     }
   };
 
@@ -96,8 +96,8 @@ export function CookieProxyCard() {
       const { blob } = await api.downloadGet(paths.agents.cookieProxyNetscape(agentId), `cookies-${agentId}.txt`);
       const text = await blob.text();
       downloadText(text, `cookies-${agentId}.txt`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("cred.cookie_proxy_failed"));
+    } catch {
+      toast.error(t("cred.cookie_proxy_failed"));
     }
   };
 

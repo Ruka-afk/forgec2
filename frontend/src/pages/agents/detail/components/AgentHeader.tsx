@@ -102,73 +102,73 @@ export default memo(function AgentHeader({
                   <h1 className="text-xl font-bold text-foreground truncate">{hostname}</h1>
                   <StatusBadge status={status} pulse={status === "online"} />
                   {integrity && (
-                    <Badge variant={integrity.toLowerCase() === "system" || integrity.toLowerCase() === "high" ? "destructive" : integrity.toLowerCase() === "medium" ? "secondary" : "outline"} className="text-(--fs-micro-sm) uppercase">
+                    <Badge variant={integrity.toLowerCase() === "system" || integrity.toLowerCase() === "high" ? "destructive" : integrity.toLowerCase() === "medium" ? "secondary" : "outline"} className="text-micro-sm uppercase">
                       {integrity}
                     </Badge>
                   )}
                   {elevated && (
-                    <Badge variant="warning" className="text-(--fs-micro-sm)">
+                    <Badge variant="warning" className="text-micro-sm">
                       <Crown className="size-4" />
                       {t("agents.header_elevated")}
                     </Badge>
                   )}
                   {version ? (
-                    <Badge variant="outline" className="font-mono text-(--fs-micro-sm)">{version}</Badge>
+                    <Badge variant="outline" className="font-mono text-micro-sm">{version}</Badge>
                   ) : (
-                    <Badge variant="warning" className="text-(--fs-micro-sm)" title={t("agents.version_unknown_hint")} render={<Link to={rebuildPayloadHref(agent)} />}>
+                    <Badge variant="warning" className="text-micro-sm" title={t("agents.version_unknown_hint")} render={<Link to={rebuildPayloadHref(agent)} />}>
                       {t("agents.version_unknown")}
                     </Badge>
                   )}
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
-                    <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/100">{t("agents.col_ip")}</span>
+                    <span className="text-micro-sm uppercase tracking-wide text-muted-foreground">{t("agents.col_ip")}</span>
                     <span className="font-mono text-foreground">{ip}</span>
                     <CopyButton text={ip} label={t("agents.col_ip")} />
                   </span>
                   {publicIP && (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
-                      <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/100">{t("agents.header_wan")}</span>
+                      <span className="text-micro-sm uppercase tracking-wide text-muted-foreground">{t("agents.header_wan")}</span>
                       <span className="font-mono text-foreground">{publicIP}</span>
                       <CopyButton text={publicIP} label={t("agents.stats_public_ip")} />
                     </span>
                   )}
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
-                    <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/100">{t("agents.header_user")}</span>
+                    <span className="text-micro-sm uppercase tracking-wide text-muted-foreground">{t("agents.header_user")}</span>
                     <span className="text-foreground">{username}</span>
                   </span>
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
-                    <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/100">{t("agents.col_os")}</span>
+                    <span className="text-micro-sm uppercase tracking-wide text-muted-foreground">{t("agents.col_os")}</span>
                     <span className="text-foreground">{os} {arch}</span>
                   </span>
                   {domain && (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
-                      <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/100">{t("agents.header_domain")}</span>
+                      <span className="text-micro-sm uppercase tracking-wide text-muted-foreground">{t("agents.header_domain")}</span>
                       <span className="text-foreground">{domain}</span>
                     </span>
                   )}
                   {avProducts.length > 0 ? (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-success/20 bg-success/10 px-2.5 py-1">
                       <Shield className="size-3 text-success-ink" />
-                      <span className="text-(--fs-micro-sm) uppercase tracking-wide text-success-ink">AV</span>
+                      <span className="text-micro-sm uppercase tracking-wide text-success-ink">AV</span>
                       <span className="text-foreground">{avProducts.join(", ")}</span>
                     </span>
                   ) : status === "online" && avStatus === "empty" ? (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
                       <Shield className="size-3 text-muted-foreground" />
-                      <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/100">AV</span>
+                      <span className="text-micro-sm uppercase tracking-wide text-muted-foreground">AV</span>
                       <span className="text-muted-foreground text-xs">{t("hostinfo.no_security_products")}</span>
                     </span>
                   ) : status === "online" ? (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/25 bg-warning/10 px-2.5 py-1">
                       <Shield className="size-3 text-warning-ink" />
-                      <span className="text-(--fs-micro-sm) uppercase tracking-wide text-warning-ink">AV</span>
+                      <span className="text-micro-sm uppercase tracking-wide text-warning-ink">AV</span>
                       <span className="text-warning-ink text-xs">{t("hostinfo.av_status_unknown")}</span>
                     </span>
                   ) : null}
                 </div>
                 {country && (
-                  <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground/100">
+                  <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
                     <MapPin className="size-4" />
                     {[country, city].filter(Boolean).join(", ")}
                   </p>
@@ -176,11 +176,11 @@ export default memo(function AgentHeader({
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:w-[34rem]">
-              <Button variant="outline" size="sm" render={<Link to={`/agents/${agentId}/shell`} />}><Terminal className="size-4" /> {t("agents.shell_title")} <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">S</kbd></Button>
+              <Button variant="outline" size="sm" render={<Link to={`/agents/${agentId}/shell`} />}><Terminal className="size-4" /> {t("agents.shell_title")} <kbd className="text-micro-sm opacity-50 ml-1">S</kbd></Button>
               <Button variant="outline" size="sm" render={<Link to={`/ai?agent=${encodeURIComponent(agentId)}`} />}><Bot className="size-4" /> {t("ai.open_for_agent")}</Button>
               <Button variant="outline" size="sm" render={<Link to={rebuildPayloadHref(agent)} />}><RefreshCw className="size-4" /> {t("agents.rebuild_payload")}</Button>
-              <Button variant="outline" size="sm" render={<Link to={`/agents/${agentId}/files`} />}><FolderOpen className="size-4" /> {t("agents.files_title")} <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">F</kbd></Button>
-              <Button variant="outline" size="sm" render={<Link to={`/agents/${agentId}/screen`} />}><Monitor className="size-4" /> {t("agents.screen_title")} <span className="text-(--fs-micro) opacity-70"><QualityMark quality="hardened" /></span> <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">D</kbd></Button>
+              <Button variant="outline" size="sm" render={<Link to={`/agents/${agentId}/files`} />}><FolderOpen className="size-4" /> {t("agents.files_title")} <kbd className="text-micro-sm opacity-50 ml-1">F</kbd></Button>
+              <Button variant="outline" size="sm" render={<Link to={`/agents/${agentId}/screen`} />}><Monitor className="size-4" /> {t("agents.screen_title")} <span className="text-micro opacity-70"><QualityMark quality="hardened" /></span> <kbd className="text-micro-sm opacity-50 ml-1">D</kbd></Button>
               <Button variant="outline" size="sm" onClick={onPopOut} aria-label={t("agents.popout_console")}>
                 <PictureInPicture2 className="size-4" /> {t("agents.popout_console")}
               </Button>
@@ -189,16 +189,16 @@ export default memo(function AgentHeader({
                 <DropdownMenuContent className="w-48">
                   <DropdownMenuItem render={<Link to={`/agents/${agentId}/token`} />}>
                     <Key className="size-4" /> {t("agents.token_title")}
-                    <span className="ml-auto text-(--fs-micro) text-muted-foreground"><QualityMark quality="hardened" /></span>
+                    <span className="ml-auto text-micro text-muted-foreground"><QualityMark quality="hardened" /></span>
                   </DropdownMenuItem>
                   <DropdownMenuItem render={<Link to={`/agents/${agentId}/persistence`} />}>
                     <LinkIcon className="size-4" /> {t("agents.persistence_title")}
-                    <span className="ml-auto text-(--fs-micro) text-muted-foreground"><QualityMark quality="hardened" /></span>
+                    <span className="ml-auto text-micro text-muted-foreground"><QualityMark quality="hardened" /></span>
                   </DropdownMenuItem>
                   <DropdownMenuItem render={<Link to={`/agents/${agentId}/remote-desktop`} />}>
                     <Monitor className="size-4" /> {t("agents.rdp_title")}
                     {isExperimentalDesktop("remote-desktop") ? (
-                      <span className="ml-auto text-(--fs-micro) text-warning-ink"><QualityMark quality="experimental" /></span>
+                      <span className="ml-auto text-micro text-warning-ink"><QualityMark quality="experimental" /></span>
                     ) : null}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => onQuickAction("beacon_now", t("agents.beacon_now"))}>
@@ -243,14 +243,14 @@ export default memo(function AgentHeader({
               <span className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary transition-transform group-hover:scale-105">
                 {actionLoading === item.action ? <Spinner size="sm" /> : item.icon}
               </span>
-              <span className="text-(--fs-micro-sm) font-medium text-foreground leading-tight text-center">{item.label}</span>
+              <span className="text-micro-sm font-medium text-foreground leading-tight text-center">{item.label}</span>
               {quality && quality !== "core" && (
-                <span className={quality === "scripted" || quality === "experimental" ? "text-(--fs-micro) text-warning-ink" : "text-(--fs-micro) text-muted-foreground"}>
+                <span className={quality === "scripted" || quality === "experimental" ? "text-micro text-warning-ink" : "text-micro text-muted-foreground"}>
                   <QualityMark quality={quality} />
                 </span>
               )}
               {"badge" in item && item.badge != null && (item.badge as number) > 0 && (
-                <Badge className="absolute top-1 right-1 min-w-[16px] h-4 px-1 text-(--fs-micro-sm)">{(item.badge as number) > 99 ? "99+" : (item.badge as number)}</Badge>
+                <Badge className="absolute top-1 right-1 min-w-[16px] h-4 px-1 text-micro-sm">{(item.badge as number) > 99 ? "99+" : (item.badge as number)}</Badge>
               )}
             </TooltipTrigger>
             <TooltipContent>

@@ -48,7 +48,9 @@ export default function NtlmPage() {
     toastThrottleMs: POLL.toastThrottle,
     errorMessage: t("ntlm.toast.load_agents_failed"),
   });
-  const agents = (agentsData?.agents || agentsData || []) as Agent[];
+  // `agentsData?.agents || agentsData` falls back to the whole wrapper object,
+  // which is truthy and not an array — `.map`/`.filter` downstream then throws.
+  const agents = agentsData?.agents ?? [];
 
   const { data: relayData, loading: relayLoading, error: relayError, refresh: loadRelayStatus } = useApiResource<{ active: Record<string, unknown>[]; count: number; running: boolean }>({
     fetcher: async () => {

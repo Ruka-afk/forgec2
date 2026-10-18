@@ -91,37 +91,37 @@ export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCou
                 <AvatarFallback name={hostname} size="md" shape="xl" color={avatarColor(hostname)} />
                 <div className="min-w-0">
                   <span className="font-semibold text-sm text-primary truncate block group-hover:underline">{hostname}</span>
-                  <span className="text-(--fs-xs-sm) text-muted-foreground/100 truncate block">
+                  <span className="text-xs-sm text-muted-foreground truncate block">
                     {sessionN > 1 ? t("agents.host_sessions", { n: sessionN }) : (beacon.username || "")}
                   </span>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <StatusDot status={status} size="sm" pulse={status === "online"} />
-                <span className="text-(--fs-micro-sm) text-muted-foreground/100 capitalize">{enumLabel(t, "agents", `${status}_label`)}</span>
+                <span className="text-micro-sm text-muted-foreground capitalize">{enumLabel(t, "agents", `${status}_label`)}</span>
               </div>
             </div>
             <div className="space-y-1.5 text-xs text-muted-foreground">
               <div className="flex items-center gap-1.5">
-                <OsIcon className="size-3 text-muted-foreground/100" aria-hidden="true" />
+                <OsIcon className="size-3 text-muted-foreground" aria-hidden="true" />
                 <span>{os}{beacon.arch ? ` ${beacon.arch}` : ""}</span>
-                {beacon.integrity && <span className={`px-1 py-0.5 rounded text-(--fs-micro) font-semibold ${integrityClass}`}>{beacon.integrity}</span>}
+                {beacon.integrity && <span className={`px-1 py-0.5 rounded text-micro font-semibold ${integrityClass}`}>{beacon.integrity}</span>}
               </div>
               <div className="flex items-center gap-1.5">
-                <Globe className="size-3 text-muted-foreground/100" aria-hidden="true" />
+                <Globe className="size-3 text-muted-foreground" aria-hidden="true" />
                 <span className="font-mono">{ip}</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <Clock className="size-3 text-muted-foreground/100" aria-hidden="true" />
+                <Clock className="size-3 text-muted-foreground" aria-hidden="true" />
                 <span title={beacon.last_seen ? formatTime(beacon.last_seen) : ""}>{timeAgo(beacon.last_seen || "", t)}</span>
-                {beacon.created_at && <span className="text-(--fs-micro) text-muted-foreground/100 ml-1">{t("format.uptime.up")} {formatUptime(beacon.last_seen || beacon.created_at, t)}</span>}
+                {beacon.created_at && <span className="text-micro text-muted-foreground ml-1">{t("format.uptime.up")} {formatUptime(beacon.last_seen || beacon.created_at, t)}</span>}
               </div>
             </div>
             <div className="flex items-center gap-1.5 mt-3 pt-2 border-t border-border/40">
               {(tagsByAgent[id] || []).slice(0, 5).map((tag) => (
                 <span key={tag.id} className="size-2.5 rounded-full ring-1.5 ring-white dark:ring-border shadow-sm" style={{ backgroundColor: tag.color }} title={tag.name} />
               ))}
-              <span className="ml-auto text-(--fs-micro-sm) text-muted-foreground/100">{t("agents.n_tasks").replace("{n}", String(taskCountMap[id] ?? 0))}</span>
+              <span className="ml-auto text-micro-sm text-muted-foreground">{t("agents.n_tasks").replace("{n}", String(taskCountMap[id] ?? 0))}</span>
             </div>
           </Card>
         );

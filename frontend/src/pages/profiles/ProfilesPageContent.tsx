@@ -74,8 +74,8 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
       setLastReload(nowTime());
       toast.success(t("profiles.toast.hot_reload_ok"));
       await loadActiveConfig();
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : String(err));
+    } catch {
+      toast.error(t("profiles.toast.reload_failed"));
     } finally {
       setReloading(false);
     }
@@ -130,8 +130,8 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
       await api.postJson(paths.generate.profileSave, payload);
       toast.success(t("profiles.toast.profile_saved"));
       await loadProfiles();
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : t("profiles.toast.save_profile_failed"));
+    } catch {
+      toast.error(t("profiles.toast.save_profile_failed"));
       return;
     }
     downloadJSON(payload, `${editing.name || "profile"}.json`);
@@ -151,8 +151,8 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
     if (!ok) return;
     try {
       await api.del(paths.generate.profileDelete(name));
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : t("profiles.toast.delete_failed") || "delete failed");
+    } catch {
+      toast.error(t("profiles.toast.delete_failed"));
       return;
     }
     // Functional updates avoid the stale-closure index math that previously
@@ -170,8 +170,8 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
     try {
       // Persist server-side so the duplicate isn't lost on reload.
       await api.postJson(paths.generate.profileSave, copy);
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : t("profiles.toast.save_profile_failed"));
+    } catch {
+      toast.error(t("profiles.toast.save_profile_failed"));
       return;
     }
     setProfiles(prev => [...prev, copy]);
@@ -206,8 +206,8 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
       }
       setEditing(normalizeEditing(imported));
       toast.success(t("profiles.toast.profile_imported"));
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : String(err));
+    } catch {
+      toast.error(t("profiles.toast.import_failed"));
     } finally {
       e.target.value = "";
     }
@@ -233,8 +233,8 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
       const warns = (d.data?.warnings || []).length;
       if (warns) toast.warning(t("profiles.validate_warnings", { count: warns }));
       else toast.success(t("profiles.validate_ok"));
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : String(err));
+    } catch {
+      toast.error(t("profiles.validate_failed"));
     } finally {
       setValidating(false);
     }
@@ -261,8 +261,8 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
       setShowCSModal(false);
       setCSText("");
       toast.success(t("profiles.cs_imported"));
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : String(err));
+    } catch {
+      toast.error(t("profiles.cs_import_failed"));
     } finally {
       setCSBusy(false);
     }
@@ -493,7 +493,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                             <span className="font-medium truncate">{p.name}</span>
                           </div>
                           {p.description && (
-                            <p className="text-(--fs-micro-sm) text-muted-foreground mt-0.5 truncate pl-6">{p.description}</p>
+                            <p className="text-micro-sm text-muted-foreground mt-0.5 truncate pl-6">{p.description}</p>
                           )}
                         </Button>
                       );

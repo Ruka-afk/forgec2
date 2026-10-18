@@ -9,11 +9,11 @@ function AttackBody({ data }: { data: AttackPathPoint[] }) {
   const { t } = useI18n();
   return (
     <div className="space-y-1.5 max-h-32 overflow-y-auto">
-      {data.length === 0 ? <p className="text-xs text-muted-foreground/100 text-center py-4">{t("dashboard.no_attack_path_data")}</p> : data.map((d, i) => (
+      {data.length === 0 ? <p className="text-xs text-muted-foreground text-center py-4">{t("dashboard.no_attack_path_data")}</p> : data.map((d, i) => (
         <div key={d.name || d.host || d.target || `node-${i}`} className="flex items-center gap-2 text-xs">
-          <span className="size-5 rounded-full bg-primary/10 dark:bg-primary/25 flex items-center justify-center text-(--fs-micro) text-primary font-bold shrink-0">{i + 1}</span>
+          <span className="size-5 rounded-full bg-primary/10 dark:bg-primary/25 flex items-center justify-center text-micro text-primary font-bold shrink-0">{i + 1}</span>
           <span className="flex-1 text-foreground truncate">{d.name || d.host || d.target || t("dashboard.unknown")}</span>
-          <span className="text-(--fs-micro-sm) text-muted-foreground/100">{d.type || ""}</span>
+          <span className="text-micro-sm text-muted-foreground">{d.type || ""}</span>
         </div>
       ))}
     </div>

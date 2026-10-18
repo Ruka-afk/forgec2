@@ -150,12 +150,12 @@ export function AIPlaybookDialog({ onSaved }: { onSaved: () => void }) {
                 {draft.steps.map((st, i) => (
                   <li key={i} className="rounded-md border border-border bg-background px-2 py-1.5">
                     <div className="flex items-center gap-2">
-                      <span className="size-5 shrink-0 rounded-full bg-primary/15 text-(--fs-micro-sm) font-semibold text-primary flex items-center justify-center">{i + 1}</span>
+                      <span className="size-5 shrink-0 rounded-full bg-primary/15 text-micro-sm font-semibold text-primary flex items-center justify-center">{i + 1}</span>
                       <code className="flex-1 text-xs font-mono text-foreground break-all">{st.command}</code>
-                      <Badge variant="outline" className="shrink-0 text-(--fs-micro-sm)">{st.shell}</Badge>
+                      <Badge variant="outline" className="shrink-0 text-micro-sm">{st.shell}</Badge>
                     </div>
                     {st.rationale && (
-                      <p className="mt-1 ml-7 text-(--fs-micro-sm) text-muted-foreground">{st.rationale}</p>
+                      <p className="mt-1 ml-7 text-micro-sm text-muted-foreground">{st.rationale}</p>
                     )}
                   </li>
                 ))}

@@ -178,7 +178,7 @@ export default function CertificatesSection({
             </div>
           </>
         ) : (
-          <div className="text-center py-8 text-muted-foreground/100 text-sm">{t("settings.certificates.no_cert")}</div>
+          <div className="text-center py-8 text-muted-foreground text-sm">{t("settings.certificates.no_cert")}</div>
         )}
         <div className="flex flex-wrap gap-3">
           <Input type="file" ref={certInputRef} className="hidden" accept=".crt,.pem,.cer" onChange={handleCertFileChange} />

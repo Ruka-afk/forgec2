@@ -1,0 +1,1 @@
+import{a6 as r,aq as e,a9 as o,ar as c}from"./index-khiq_fvF.js";function i(){const n=r(s=>s.currentPermissions),a=r(s=>s.currentUserRole);return{permissions:n,role:a,can:s=>c(n,s),canAny:s=>o(n,s),canAll:s=>e(n,s)}}export{i as u};

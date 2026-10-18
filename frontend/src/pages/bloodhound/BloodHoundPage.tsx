@@ -299,7 +299,7 @@ export default function BloodHoundPage() {
                       <TableCell className="py-3 px-4 font-mono text-xs text-muted-foreground">{id}</TableCell>
                       <TableCell className="py-3 px-4 text-muted-foreground font-medium">{agent}</TableCell>
                       <TableCell className="py-3 px-4">
-                        <Badge variant="outline" className="text-(--fs-micro-sm)">{methodVal}</Badge>
+                        <Badge variant="outline" className="text-micro-sm">{methodVal}</Badge>
                       </TableCell>
                        <TableCell className="py-3 px-4 font-mono text-primary">{users}</TableCell>
                        <TableCell className="py-3 px-4 font-mono text-primary">{computers}</TableCell>

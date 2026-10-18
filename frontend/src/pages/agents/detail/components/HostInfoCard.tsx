@@ -115,7 +115,7 @@ function SecuritySection({ data }: { data: HostInfoSection }) {
       )}
       {av.length > 0 && (
         <div>
-          <div className="text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground mb-1">AV</div>
+          <div className="text-micro-sm uppercase tracking-wider text-muted-foreground mb-1">AV</div>
           <ObjectTable rows={av.map((a) => ({
             name: asStr(a.name),
             protection: asStr(a.protection),
@@ -126,7 +126,7 @@ function SecuritySection({ data }: { data: HostInfoSection }) {
       )}
       {edr.length > 0 && (
         <div>
-          <div className="text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground mb-1">EDR</div>
+          <div className="text-micro-sm uppercase tracking-wider text-muted-foreground mb-1">EDR</div>
           <ObjectTable rows={edr.map((e) => ({
             product: asStr(e.product),
             process: asStr(e.process),
@@ -138,7 +138,7 @@ function SecuritySection({ data }: { data: HostInfoSection }) {
         <p className="text-xs text-muted-foreground">{t("hostinfo.no_security_products")}</p>
       )}
       {typeof data.av_raw === "string" && (
-        <pre className="text-(--fs-micro-sm) bg-muted/50 rounded-lg p-2 overflow-x-auto whitespace-pre-wrap">{asStr(data.av_raw)}</pre>
+        <pre className="text-micro-sm bg-muted/50 rounded-lg p-2 overflow-x-auto whitespace-pre-wrap">{asStr(data.av_raw)}</pre>
       )}
     </div>
   );
@@ -261,7 +261,7 @@ export function HostInfoCard({ agentId, online }: { agentId: string; online: boo
               if (rows.length === 0) return null;
               return (
                 <div key={k}>
-                  <div className="text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground mb-1">{k}</div>
+                  <div className="text-micro-sm uppercase tracking-wider text-muted-foreground mb-1">{k}</div>
                   <ObjectTable rows={rows} />
                 </div>
               );

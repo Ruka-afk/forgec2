@@ -28,19 +28,19 @@ export function UserDropdown() {
             name={name}
             size="md"
             shape="square"
-            className="bg-gradient-to-br from-primary to-primary/80 shadow-sm shadow-primary/20 text-primary-foreground"
+            className="bg-primary shadow-sm text-primary-foreground"
           />
         </div>
         <div className="hidden md:block text-left">
           <div className="text-xs font-medium text-foreground">{name}</div>
-          <div className="text-(--fs-micro-sm) text-muted-foreground/100">{role}</div>
+          <div className="text-micro-sm text-muted-foreground">{role}</div>
         </div>
-        <ChevronDown className="size-3 text-muted-foreground/100 hidden md:block" />
+        <ChevronDown className="size-3 text-muted-foreground hidden md:block" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <div className="px-3 py-2 border-b border-border text-sm font-medium">
           <div>{name}</div>
-          <div className="text-(--fs-micro-sm) text-muted-foreground/100">{t("topbar.role", { role })}</div>
+          <div className="text-micro-sm text-muted-foreground">{t("topbar.role", { role })}</div>
         </div>
         <DropdownMenuItem onClick={() => navigate("/settings")}>
           <Settings className="size-4" />{t("topbar.settings")}

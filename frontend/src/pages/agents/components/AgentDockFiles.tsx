@@ -172,7 +172,7 @@ export function AgentDockFiles({ agentId, osType }: AgentDockFilesProps) {
           <CloudUpload className="size-3.5" />
         </Button>
       </form>
-      <p className="border-b border-border px-3 py-1 text-(--fs-micro-sm) text-muted-foreground">
+      <p className="border-b border-border px-3 py-1 text-micro-sm text-muted-foreground">
         {t("agents.dock_files_transfer_hint")}{" "}
         <Link to={`/agents/${agentId}/files`} className="text-primary hover:underline">
           {t("agents.files_title")}
@@ -190,7 +190,7 @@ export function AgentDockFiles({ agentId, osType }: AgentDockFilesProps) {
           </span>
         )}
       </p>
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="content-auto min-h-0 flex-1 overscroll-contain overflow-auto scrollbar-thin">
         {loading ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-3">
             <Spinner size="sm" />

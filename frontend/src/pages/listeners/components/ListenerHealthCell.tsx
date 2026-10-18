@@ -59,7 +59,7 @@ export function ListenerHealthCell({ health, samples, onReset }: ListenerHealthC
         <HealthSparkline samples={samples} className="hidden sm:inline-flex" />
       )}
       {fails > 0 && (
-        <span className={`font-mono text-(--fs-micro-sm) ${fails >= 3 ? "text-destructive-ink" : "text-warning-ink"}`}>
+        <span className={`font-mono text-micro-sm ${fails >= 3 ? "text-destructive-ink" : "text-warning-ink"}`}>
           {fails}
         </span>
       )}

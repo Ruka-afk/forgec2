@@ -202,7 +202,7 @@ export default function CloudPage() {
               {stealing ? <Spinner size="xs" /> : <CloudUpload className="size-4" />}
               <span>{stealing ? t("cloud.dispatching") : t("cloud.steal_btn")}</span>
             </Button>
-            {pollNote && <span className="text-(--fs-xs-sm) text-muted-foreground">{pollNote}</span>}
+            {pollNote && <span className="text-xs-sm text-muted-foreground">{pollNote}</span>}
           </div>
         </div>
       </Card>
@@ -254,7 +254,7 @@ export default function CloudPage() {
               {results.map((cred) => (
                 <TableRow key={cred.id}>
                   <TableCell>
-                    <Badge variant="secondary" className={`text-(--fs-micro-sm) px-2 py-0.5 rounded-full font-medium ${
+                    <Badge variant="secondary" className={`text-micro-sm px-2 py-0.5 rounded-full font-medium ${
                       cred.provider === "aws" ? "bg-warning/15 text-warning-ink dark:bg-warning/20 dark:text-warning-ink" :
                       cred.provider === "gcp" ? "bg-primary/10 text-primary" :
                       cred.provider === "azure" ? "bg-info/15 text-info-ink" :

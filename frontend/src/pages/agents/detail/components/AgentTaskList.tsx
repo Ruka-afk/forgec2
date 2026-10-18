@@ -117,7 +117,7 @@ function StatCell({ icon, label, value, tone }: { icon: React.ReactNode; label: 
   return (
     <div className="flex items-center gap-1.5">
       {icon}
-      <span className="text-(--fs-micro-sm) font-medium text-muted-foreground/100">{label}</span>
+      <span className="text-micro-sm font-medium text-muted-foreground">{label}</span>
       <span className={`text-xs font-bold ${tone}`}>{value}</span>
     </div>
   );
@@ -256,7 +256,7 @@ export default memo(function AgentTaskList({
               key={type || "all"}
               type="button"
               onClick={() => setFilter(type)}
-              className={`px-2.5 py-1 rounded-full text-(--fs-micro-sm) font-medium transition-colors border ${
+              className={`px-2.5 py-1 rounded-full text-micro-sm font-medium transition-colors border ${
                 filter === type
                   ? "bg-primary/15 border-primary/30 text-primary"
                   : "border-border/70 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -308,12 +308,12 @@ export default memo(function AgentTaskList({
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-xs font-semibold text-foreground truncate">{tType}</span>
                           {(task.command) && (
-                            <span className="text-(--fs-micro-sm) text-muted-foreground/100 font-mono truncate max-w-[220px]">
+                            <span className="text-micro-sm text-muted-foreground font-mono truncate max-w-[220px]">
                               {command}
                             </span>
                           )}
                         </div>
-                        <div className="mt-1 flex items-center gap-2 text-(--fs-micro-sm) text-muted-foreground/100">
+                        <div className="mt-1 flex items-center gap-2 text-micro-sm text-muted-foreground">
                           <span className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 font-mono">#{taskId}</span>
                           {task.created_by && <span className="truncate">{task.created_by}</span>}
                         </div>
@@ -322,40 +322,40 @@ export default memo(function AgentTaskList({
                     <div className="flex items-center gap-2 shrink-0">
                       <StatusBadge status={task.status || "pending"} />
                       {task.result && !hasFullResult && (
-                        <Badge variant="outline" className="text-(--fs-micro-sm)">{t("agents.tasklist_preview")}</Badge>
+                        <Badge variant="outline" className="text-micro-sm">{t("agents.tasklist_preview")}</Badge>
                       )}
                       <Tooltip>
                         <TooltipTrigger>
-                          <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-1 text-(--fs-micro-sm) text-muted-foreground/100 whitespace-nowrap">
+                          <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-1 text-micro-sm text-muted-foreground whitespace-nowrap">
                             {(task.created_at) ? timeAgo(String(task.created_at), t) : ""}
                           </span>
                         </TooltipTrigger>
                         <TooltipContent>{String(task.created_at || "")}</TooltipContent>
                       </Tooltip>
-                      <ChevronDown className="size-2.5 text-muted-foreground/100" />
+                      <ChevronDown className="size-2.5 text-muted-foreground" />
                     </div>
                   </div>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <div className="border-t border-border/70 bg-muted/20 px-4 pb-4">
                     <div className="grid gap-2 pt-3 text-xs md:grid-cols-2">
-                      <div><span className="text-muted-foreground/100">{t("agents.tasklist_label_id")}</span> <span className="font-mono text-foreground">{taskId}</span></div>
-                      <div><span className="text-muted-foreground/100">{t("agents.tasklist_label_type")}</span> <span className="text-foreground">{tType}</span></div>
-                      <div><span className="text-muted-foreground/100">{t("agents.tasklist_label_created")}</span> <span className="text-foreground">{task.created_at ? formatTime(String(task.created_at)) : "\u2014"}</span></div>
-                      {(task.created_by) && <div><span className="text-muted-foreground/100">{t("agents.tasklist_label_by")}</span> <span className="text-foreground">{task.created_by}</span></div>}
-                      {(task.command) && <div className="md:col-span-2"><span className="text-muted-foreground/100">{t("agents.tasklist_label_command")}</span> <span className="font-mono text-foreground break-all">{task.command}</span></div>}
+                      <div><span className="text-muted-foreground">{t("agents.tasklist_label_id")}</span> <span className="font-mono text-foreground">{taskId}</span></div>
+                      <div><span className="text-muted-foreground">{t("agents.tasklist_label_type")}</span> <span className="text-foreground">{tType}</span></div>
+                      <div><span className="text-muted-foreground">{t("agents.tasklist_label_created")}</span> <span className="text-foreground">{task.created_at ? formatTime(String(task.created_at)) : "\u2014"}</span></div>
+                      {(task.created_by) && <div><span className="text-muted-foreground">{t("agents.tasklist_label_by")}</span> <span className="text-foreground">{task.created_by}</span></div>}
+                      {(task.command) && <div className="md:col-span-2"><span className="text-muted-foreground">{t("agents.tasklist_label_command")}</span> <span className="font-mono text-foreground break-all">{task.command}</span></div>}
                       {resultText ? (
                         <div className="md:col-span-2">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-muted-foreground/100">{t("agents.tasklist_label_result")}</span>
+                            <span className="text-muted-foreground">{t("agents.tasklist_label_result")}</span>
                             <div className="flex items-center gap-1">
                               {resultText.length > MAX_RESULT_CHARS && (
-                                <span className="text-(--fs-micro-sm) text-muted-foreground/100">{t("agents.tasklist_result_truncated")}</span>
+                                <span className="text-micro-sm text-muted-foreground">{t("agents.tasklist_result_truncated")}</span>
                               )}
-                              <Button variant="ghost" size="xs" onClick={copyResult} className="text-(--fs-micro-sm) text-muted-foreground hover:text-foreground gap-1">
+                              <Button variant="ghost" size="xs" onClick={copyResult} className="text-micro-sm text-muted-foreground hover:text-foreground gap-1">
                                 <Copy className="size-3" /> {t("agents.tasklist_copy_result")}
                               </Button>
-                              <Button variant="ghost" size="xs" onClick={downloadResult} className="text-(--fs-micro-sm) text-muted-foreground hover:text-foreground gap-1">
+                              <Button variant="ghost" size="xs" onClick={downloadResult} className="text-micro-sm text-muted-foreground hover:text-foreground gap-1">
                                 <Download className="size-3" /> {t("agents.tasklist_download_result")}
                               </Button>
                             </div>
@@ -364,10 +364,10 @@ export default memo(function AgentTaskList({
                         </div>
                       ) : (hasFullResult ? null : (
                         isExpanded ? (
-                          <div className="md:col-span-2"><span className="text-muted-foreground/100">{t("agents.tasklist_label_result")}</span><div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground/100"><Spinner size="xs" />{t("agents.tasklist_loading_result")}</div></div>
+                          <div className="md:col-span-2"><span className="text-muted-foreground">{t("agents.tasklist_label_result")}</span><div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground"><Spinner size="xs" />{t("agents.tasklist_loading_result")}</div></div>
                         ) : null
                       ))}
-                      {((full?.error ?? task.error)) && <div className="md:col-span-2"><span className="text-muted-foreground/100">{t("agents.tasklist_label_error")}</span><pre className="mt-1 max-h-32 overflow-y-auto rounded-lg border border-destructive/20 bg-destructive/10 p-3 font-mono text-xs text-destructive-ink whitespace-pre-wrap break-all">{full?.error ?? task.error}</pre></div>}
+                      {((full?.error ?? task.error)) && <div className="md:col-span-2"><span className="text-muted-foreground">{t("agents.tasklist_label_error")}</span><pre className="mt-1 max-h-32 overflow-y-auto rounded-lg border border-destructive/20 bg-destructive/10 p-3 font-mono text-xs text-destructive-ink whitespace-pre-wrap break-all">{full?.error ?? task.error}</pre></div>}
                     </div>
                   </div>
                 </CollapsibleContent>
@@ -376,7 +376,7 @@ export default memo(function AgentTaskList({
           );
         })}
         {visibleTasks.length === 0 && (
-          <div className="px-4 py-8 text-center text-xs text-muted-foreground/100">{t("agents.tasklist_no_match")}</div>
+          <div className="px-4 py-8 text-center text-xs text-muted-foreground">{t("agents.tasklist_no_match")}</div>
         )}
       </div>
       {tasks.length > visibleCount && (

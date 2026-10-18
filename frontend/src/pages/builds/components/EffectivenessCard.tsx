@@ -106,13 +106,13 @@ export default function EffectivenessCard() {
                     className="w-full flex items-center gap-3 text-left hover:bg-muted/40 rounded-lg px-2 py-1.5 transition-colors"
                     onClick={() => setExpandedId(expandedId === b.id ? null : b.id)}
                   >
-                    <Badge variant={b.deployed > 0 ? "success" : "secondary"} className="shrink-0 font-mono text-(--fs-micro)">
+                    <Badge variant={b.deployed > 0 ? "success" : "secondary"} className="shrink-0 font-mono text-micro">
                       {b.deployed > 0 ? `${b.deployed} ${t("builds.eff_agents_short")}` : t("builds.eff_no_beacon")}
                     </Badge>
                     <span className="text-xs font-medium text-foreground truncate flex-1">{b.filename}</span>
                     <span className="text-xs text-muted-foreground shrink-0">{timeAgo(b.created_at, t)}</span>
                     {b.online_now > 0 && (
-                      <Badge variant="warning" className="shrink-0 text-(--fs-micro)">{b.online_now} online</Badge>
+                      <Badge variant="warning" className="shrink-0 text-micro">{b.online_now} online</Badge>
                     )}
                   </button>
                   {expandedId === b.id && b.agents.length > 0 && (
@@ -130,7 +130,7 @@ export default function EffectivenessCard() {
               ))}
             </div>
           )}
-          <p className="text-(--fs-micro-sm) text-muted-foreground mt-2">
+          <p className="text-micro-sm text-muted-foreground mt-2">
             {t("builds.eff_window_hint", { hours: String(data.window_hours) })}
           </p>
         </>

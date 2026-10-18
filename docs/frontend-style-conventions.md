@@ -37,10 +37,29 @@
   （`min-h-[44px]`）。这些是内容相关的布局参数，spacing scale 不适用。
 - 图标外的元素尺寸同理按需使用任意值。
 
+### 4.1 字号必须用 `text-<name>`，不能用 `text-(--fs-*)`
+
+字号阶梯在 `@theme` 里以 `--text-<name>` 声明（`micro` / `micro-sm` /
+`xs-sm` / `compact` / `page-title` / `section` / `stat-value` / `prose`），
+每个都指向 `--fs-*`，因此 `[data-density="compact"]` 能整体收紧。
+
+```tsx
+<h1 className="text-page-title" />   {/* 24px，density 感知 */}
+<span className="text-micro-sm" />   {/* 10px，表格头/徽标 */}
+```
+
+**禁止** `text-(--fs-compact)`：Tailwind 把它编译成
+`color: var(--fs-compact)`，即把长度塞进颜色槽——浏览器直接丢弃该声明。
+2026-10 之前 360 处调用点因此全部静默退回继承的 14/15px：页面标题实测
+15px（应为 24px）、表头 14px（应为 10px）、徽标 14px（应为 10px）。
+`check-design-tokens.mjs` 的 Rule 5/6 已把该写法与缺失的 `--text-*`
+声明都变成红拦截；迁移脚本为 `scripts/migrate-fs-utilities.mjs`。
+
 ## 5. 颜色 / 圆角 / 阴影
 
 - 颜色一律 token（`--primary`、`--chart-*`…）；裸 hex 由门禁拦截（豁免清单见
   check-design-tokens.mjs）。
+- 不写 `/100` 透明度修饰（`text-muted-foreground/100` 等价于无修饰，纯噪声）。
 - 状态色有四职责（2026-10 U1a 起）：`--X` 是基础色（fill / border / dot，**不做浅底上的文字**）；
   `--X-solid` 是实心填充（dark 下 warning/destructive 会加深，保证浅墨对比）；
   `--X-foreground` 是实心填充上的墨色；`--X-ink` 是中性面与 `bg-X/8..20` 淡底上的文字/图标色。

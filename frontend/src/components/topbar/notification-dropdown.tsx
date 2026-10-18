@@ -207,11 +207,11 @@ export function NotificationDropdown() {
           <TooltipTrigger render={<Button variant="ghost" size="icon" className="relative" aria-label={t("topbar.notifications")} />}>
             <Bell className="size-5 text-muted-foreground" />
             {!unreadKnown ? (
-              <Badge variant="outline" className="absolute -top-0.5 -right-0.5 min-size-4 px-0.5 text-(--fs-micro) font-bold rounded-full flex items-center justify-center" title={loadError ? t("topbar.notif_count_unreadable") : undefined}>
+              <Badge variant="outline" className="absolute -top-0.5 -right-0.5 min-size-4 px-0.5 text-micro font-bold rounded-full flex items-center justify-center" title={loadError ? t("topbar.notif_count_unreadable") : undefined}>
                 ?
               </Badge>
             ) : unreadCount > 0 && (
-              <Badge variant="destructive" className="absolute -top-0.5 -right-0.5 min-size-4 px-0.5 text-(--fs-micro) font-bold rounded-full flex items-center justify-center animate-scale-in">
+              <Badge variant="destructive" className="absolute -top-0.5 -right-0.5 min-size-4 px-0.5 text-micro font-bold rounded-full flex items-center justify-center animate-scale-in">
                 {unreadCount > 99 ? "99+" : String(unreadCount)}
               </Badge>
             )}
@@ -225,7 +225,7 @@ export function NotificationDropdown() {
           <div className="flex items-center justify-between">
             <span>{t("topbar.notifications")}</span>
             {unreadKnown && unreadCount > 0 && (
-              <Button variant="ghost" size="xs" onClick={markAllRead} className="text-(--fs-micro-sm) text-primary hover:text-primary/80">
+              <Button variant="ghost" size="xs" onClick={markAllRead} className="text-micro-sm text-primary hover:text-primary/80">
                 {t("topbar.mark_all_read")}
               </Button>
             )}
@@ -244,7 +244,7 @@ export function NotificationDropdown() {
               </Button>
             </div>
           ) : notifications.length === 0 ? (
-            <div className="p-6 text-center text-muted-foreground/100 text-sm">
+            <div className="p-6 text-center text-muted-foreground text-sm">
               <BellOff className="size-6 mx-auto mb-2" />
               {t("topbar.no_notifications")}
             </div>
@@ -255,7 +255,7 @@ export function NotificationDropdown() {
                   <span className={`size-2 rounded-full mt-1.5 shrink-0 ${typeColors[n.type] || typeColors.info}`} />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-foreground truncate">{n.message}</p>
-                    <p className="text-(--fs-micro-sm) text-muted-foreground/100 mt-0.5">{n.time}</p>
+                    <p className="text-micro-sm text-muted-foreground mt-0.5">{n.time}</p>
                   </div>
                 </div>
               </div>

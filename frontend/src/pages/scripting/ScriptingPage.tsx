@@ -323,7 +323,10 @@ export default function ScriptingPage() {
                 </div>
                 <div className="p-3 text-xs font-mono text-info-ink space-y-1">
                   {apiRefs.map((ref) => (
-                    <div key={ref} className="py-0.5">{ref}</div>
+                    // API signatures are long and unbounded ("query('agents'|
+                    // 'tasks'|…)" measured 374px); let them wrap instead of
+                    // overflowing the card at both 1280 and 390.
+                    <div key={ref} className="py-0.5 break-words whitespace-pre-wrap">{ref}</div>
                   ))}
                 </div>
               </Card>
@@ -396,7 +399,7 @@ export default function ScriptingPage() {
                         {run.agent_id && <span className="text-xs text-muted-foreground font-mono truncate">{run.agent_id}</span>}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <Badge variant={run.status === "failed" ? "destructive" : "success"} className="text-(--fs-micro-sm) px-2 py-0.5 rounded-full">
+                        <Badge variant={run.status === "failed" ? "destructive" : "success"} className="text-micro-sm px-2 py-0.5 rounded-full">
                           {run.status === "failed" ? t("scripting.status_failed") : t("scripting.status_success")}
                         </Badge>
                         <span className="text-xs text-muted-foreground">{run.created_at || ""}</span>

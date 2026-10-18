@@ -486,8 +486,8 @@ export default function PivotingPageContent() {
                     udp_port: String(tunUdpPort || 0),
                   });
                   toast.success(t("pivoting.tun_started", { port: String(res.udp_port ?? 0) }));
-                } catch (err) {
-                  toast.error(err instanceof Error ? err.message : t("pivoting.tun_failed"));
+                } catch {
+                  toast.error(t("pivoting.tun_failed"));
                 } finally {
                   setTunBusy(false);
                 }
@@ -503,8 +503,8 @@ export default function PivotingPageContent() {
                 try {
                   await api.post(paths.agents.tunStop(tunAgent), {});
                   toast.success(t("pivoting.tun_stopped"));
-                } catch (err) {
-                  toast.error(err instanceof Error ? err.message : t("pivoting.tun_failed"));
+                } catch {
+                  toast.error(t("pivoting.tun_failed"));
                 } finally {
                   setTunBusy(false);
                 }

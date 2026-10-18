@@ -43,9 +43,12 @@ jobs:
       - name: Render linux baselines
         # CI is cleared so Playwright treats this as a writable local run; the
         # rendered PNGs are uploaded as an artifact and reviewed in a commit.
+        # `=all` matters: the default (`changed`) only rewrites snapshots whose
+        # diff exceeds the 1.5% pixel-ratio tolerance, so within-tolerance
+        # drift would stay stale in the committed set.
         env:
           CI: ''
-        run: npx playwright test e2e/layout.spec.ts --update-snapshots --project=mobile --project=laptop
+        run: npx playwright test e2e/layout.spec.ts --update-snapshots=all --project=mobile --project=laptop
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: visual-baselines-linux

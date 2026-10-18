@@ -178,6 +178,10 @@
 
 .dark {
   --code-accent: oklch(0.88 0.08 265);
+  /* Code blocks stay dark in the dark theme so markdown and tool output do
+     not inherit the light-theme paper palette. */
+  --code-text: oklch(0.90 0.018 265);
+  --code-bg: oklch(0.105 0.018 265);
 
   --background: oklch(0.13 0.015 265);
   --foreground: oklch(0.93 0.012 264);
@@ -240,26 +244,33 @@
 
 /* ── Density: compact mode tightens the small-type ramp for a denser
    operator console. Base body size is left untouched to avoid large reflow. ── */
-  [data-density="compact"] {
-    --fs-xs: 0.72rem;
-    --fs-xs-sm: 0.7rem;
-    --fs-sm: 0.81rem;
-    --fs-base: 0.85rem;
-    --fs-base-sm: 0.82rem;
-    --fs-micro: 0.64rem;
-    --fs-micro-sm: 0.62rem;
-  }
-
-  [data-density="compact"] .agent-table td { padding-top: 2px; padding-bottom: 2px; }
-  [data-density="compact"] .agent-table th { padding-top: 0.5rem; padding-bottom: 0.5rem; }
-  [data-density="compact"] .agent-table .btn-icon-xs { width: 1.4rem; height: 1.4rem; }
-
-/* ── Focus mode: hide shell chrome and let the active page fill the viewport ── */
-[data-focus="on"] #main-content {
-  padding-top: 0 !important;
+[data-density="compact"] {
+  --fs-xs: 0.72rem;
+  --fs-xs-sm: 0.7rem;
+  --fs-sm: 0.81rem;
+  --fs-base: 0.85rem;
+  --fs-micro: 0.64rem;
+  --fs-micro-sm: 0.62rem;
+  --fs-compact: 0.78rem;
+  --fs-page-title: 1.375rem;
+  --fs-section: 1.0625rem;
 }
-[data-focus="on"] .focus-hide {
-  display: none !important;
+
+/* The rules below used to target `.agent-table`, a class no component ever
+   rendered — so compact mode changed the type ramp and nothing else. They key
+   off the table primitive's own slots now, which every table in the app sets. */
+[data-density="compact"] [data-slot="table-cell"] { padding-top: 0.3125rem; padding-bottom: 0.3125rem; }
+[data-density="compact"] [data-slot="table-head"] { height: 2.25rem; }
+[data-density="compact"] [data-slot="table-row"] { line-height: 1.35; }
+
+/* ── Focus mode: drop the sidebar and breadcrumb, keep the top bar.
+   The top bar is `fixed`, so main's `padding-top` must stay — zeroing it
+   slid the page heading under the bar (measured: h1 top 28px vs bar bottom
+   56px, i.e. the title was fully occluded). Focus mode reclaims the 224px
+   sidebar column plus the breadcrumb strip; that is the real win. ── */
+[data-focus="on"] header {
+  border-bottom-color: color-mix(in oklch, var(--border) 45%, transparent);
+  box-shadow: none;
 }
 
 /* ── Enterprise light console: subtle grid + radial highlight (keeps light default) ── */
@@ -320,6 +331,12 @@ body::before {
   .nav-item-active {
     box-shadow: inset 2px 0 0 0 var(--primary);
   }
+
+  /* Long operator surfaces should yield rendering time to the viewport. */
+  .content-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: 0 24rem;
+  }
 }
 
 /* Data cards wrapping tables stay planted — no hover lift */
@@ -348,6 +365,7 @@ body::before {
 [data-slot="table-container"] {
   border: 1px solid color-mix(in oklch, var(--border) 82%, transparent);
   box-shadow: inset 0 1px 0 color-mix(in oklch, white 35%, transparent);
+  overscroll-behavior-x: contain;
 }
 [data-slot="table-header"] {
   background: var(--table-header);
@@ -528,6 +546,20 @@ body {
 }
 
 @theme inline {
+  /* Dense-console size ramp. These MUST be `--text-*` entries: Tailwind's
+     `text-<name>` utility is a font-size utility only when it resolves from
+     `--text-<name>`. The older `text-(--fs-compact)` spelling emitted
+     `color: var(--fs-compact)`, i.e. a length in a color slot — an invalid
+     declaration the browser drops, so ~360 call sites silently fell back to
+     the inherited 14/15px instead of the documented ramp. */
+  --text-micro: var(--fs-micro);
+  --text-micro-sm: var(--fs-micro-sm);
+  --text-xs-sm: var(--fs-xs-sm);
+  --text-compact: var(--fs-compact);
+  --text-page-title: var(--fs-page-title);
+  --text-section: var(--fs-section);
+  --text-stat-value: var(--fs-stat-value);
+  --text-prose: var(--fs-prose);
   --text-xs: var(--fs-xs);
   --text-xs--line-height: var(--lh-xs);
   --text-sm: var(--fs-sm);

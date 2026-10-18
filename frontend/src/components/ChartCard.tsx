@@ -64,7 +64,7 @@ export function ChartCard({ title, icon: Icon, iconColor = "primary", children, 
             <AlertTriangle className="size-6 text-warning-ink" />
           </div>
           <span className="text-sm font-medium">{t("chart.load_failed")}</span>
-          <span className="text-xs text-muted-foreground/100 mt-1">{t("chart.try_later")}</span>
+          <span className="text-xs text-muted-foreground mt-1">{t("chart.try_later")}</span>
           {onRefresh && (
             <Button variant="outline" size="sm" onClick={onRefresh} className="mt-3">
               <RefreshCw className="size-3 mr-1.5" />{t("common.try_again")}

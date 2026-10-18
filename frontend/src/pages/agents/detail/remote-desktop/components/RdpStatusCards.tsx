@@ -18,7 +18,7 @@ export default memo(function RdpStatusCards({ t, monitoring }: RdpStatusCardsPro
       <Card className="px-4 py-3 flex flex-row items-center gap-3">
         <IconBadge icon={Mouse} color="primary" size="md" />
         <div>
-          <div className="text-(--fs-xs-sm) text-muted-foreground uppercase tracking-wider font-semibold">
+          <div className="text-xs-sm text-muted-foreground uppercase tracking-wider font-semibold">
             {t("agents.rdp_mouse")}
           </div>
           <div className="text-sm text-foreground">
@@ -29,7 +29,7 @@ export default memo(function RdpStatusCards({ t, monitoring }: RdpStatusCardsPro
       <Card className="px-4 py-3 flex flex-row items-center gap-3">
         <IconBadge icon={Keyboard} color="primary" size="md" />
         <div>
-          <div className="text-(--fs-xs-sm) text-muted-foreground uppercase tracking-wider font-semibold">
+          <div className="text-xs-sm text-muted-foreground uppercase tracking-wider font-semibold">
             {t("agents.rdp_keyboard")}
           </div>
           <div className="text-sm text-foreground">
@@ -40,12 +40,12 @@ export default memo(function RdpStatusCards({ t, monitoring }: RdpStatusCardsPro
       <Card className="px-4 py-3 flex flex-row items-center gap-3">
         <IconBadge icon={Wifi} color="primary" size="md" />
         <div>
-          <div className="text-(--fs-xs-sm) text-muted-foreground uppercase tracking-wider font-semibold">
+          <div className="text-xs-sm text-muted-foreground uppercase tracking-wider font-semibold">
             {t("agents.rdp_connection")}
           </div>
           <div className="text-sm text-foreground">
             <span
-               className={`inline-flex items-center gap-1 ${monitoring ? "text-success-ink" : "text-muted-foreground/100"}`}
+               className={`inline-flex items-center gap-1 ${monitoring ? "text-success-ink" : "text-muted-foreground"}`}
             >
               <StatusDot tone={monitoring ? "success" : "muted"} size="xs" pulse={monitoring} />
               {monitoring ? t("agents.rdp_session_active") : t("agents.rdp_disconnected")}

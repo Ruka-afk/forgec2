@@ -110,7 +110,7 @@ export default memo(function TimelineSection({ agentId, online }: { agentId: str
             <button
               key={kind}
               onClick={() => toggleKind(kind)}
-              className={`text-(--fs-micro-sm) px-2 py-0.5 rounded-full border transition-colors ${
+              className={`text-micro-sm px-2 py-0.5 rounded-full border transition-colors ${
                 active
                   ? "border-primary/40 bg-primary/10 text-primary"
                   : "border-border text-muted-foreground hover:text-foreground"
@@ -157,18 +157,18 @@ export default memo(function TimelineSection({ agentId, online }: { agentId: str
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         {ev.kind === "task" && ev.status && (
-                          <Badge variant={STATUS_VARIANT[ev.status] || "secondary"} className="text-(--fs-micro)">
+                          <Badge variant={STATUS_VARIANT[ev.status] || "secondary"} className="text-micro">
                             {ev.status}
                           </Badge>
                         )}
                         {ev.kind === "status" && (
-                          <Badge variant={ev.status === "online" ? "success" : "secondary"} className="text-(--fs-micro)">
+                          <Badge variant={ev.status === "online" ? "success" : "secondary"} className="text-micro">
                             {ev.title}
                           </Badge>
                         )}
                         <span className="text-xs text-foreground break-all">{ev.title}</span>
                       </div>
-                      <div className="text-(--fs-micro-sm) text-muted-foreground mt-0.5 flex items-center gap-2">
+                      <div className="text-micro-sm text-muted-foreground mt-0.5 flex items-center gap-2">
                         <span title={formatTime(ev.time)}>{timeAgo(ev.time, t)}</span>
                         {ev.detail && <span>· {ev.detail}</span>}
                         {ev.type && ev.kind === "task" && <span className="font-mono">· {ev.type}</span>}

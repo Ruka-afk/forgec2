@@ -70,14 +70,14 @@ const SidebarLogo = memo(function SidebarLogo({
         className={`flex items-center gap-x-2.5 hover:opacity-80 transition-all duration-200 ${collapsed ? 'justify-center w-full' : ''}`}
         aria-label={collapsed ? expandLabel : collapseLabel}
         aria-expanded={!collapsed}>
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/75 shadow-lg shadow-primary/25 ring-1 ring-primary/20">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary shadow-sm ring-1 ring-primary/20">
           <Shield className="size-4 text-primary-foreground" />
         </div>
         {!collapsed && (
           <div className="text-left leading-tight">
             <span className="font-bold text-xs tracking-tight text-foreground font-mono">Forge</span>
             <span className="font-bold text-xs tracking-tight text-primary font-mono">C2</span>
-            <div className="mono-eyebrow text-muted-foreground/100">net · ops</div>
+            <div className="mono-eyebrow text-muted-foreground">net · ops</div>
           </div>
         )}
       </Button>
@@ -133,7 +133,7 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
               )}
               <span className="mono-eyebrow text-muted-foreground/85">{t("section." + section.titleKey)}</span>
               {section.titleKey === "lab" && (
-                <Badge variant="secondary" className="ml-auto px-1.5 py-px text-(--fs-micro) leading-none rounded bg-warning/15 text-warning-ink dark:bg-warning/10 font-medium">
+                <Badge variant="secondary" className="ml-auto px-1.5 py-px text-micro leading-none rounded bg-warning/15 text-warning-ink dark:bg-warning/10 font-medium">
                   {t("section.lab_badge")}
                 </Badge>
               )}
@@ -170,17 +170,17 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
                   <>
                     <span className="truncate flex-1 text-xs">{t(item.labelKey)}</span>
                     {item.badge === "agents" && stats != null && (
-                      <Badge variant="secondary" className="px-1.5 py-px text-(--fs-micro) leading-none rounded bg-primary/15 text-primary dark:bg-primary/10 font-mono">
+                      <Badge variant="secondary" className="px-1.5 py-px text-micro leading-none rounded bg-primary/15 text-primary dark:bg-primary/10 font-mono">
                         {stats.online_agents ?? 0}
                       </Badge>
                     )}
                     {item.badge === "listeners" && stats != null && (
-                      <Badge variant="secondary" className="px-1.5 py-px text-(--fs-micro) leading-none rounded bg-primary/10 text-primary font-mono">
+                      <Badge variant="secondary" className="px-1.5 py-px text-micro leading-none rounded bg-primary/10 text-primary font-mono">
                         {stats.total_listeners ?? 0}
                       </Badge>
                     )}
                     {item.badge === "notifications" && unreadNotifications > 0 && (
-                      <Badge variant="secondary" className="px-1.5 py-px text-(--fs-micro) leading-none rounded bg-warning/10 text-warning-ink font-mono">
+                      <Badge variant="secondary" className="px-1.5 py-px text-micro leading-none rounded bg-warning/10 text-warning-ink font-mono">
                         {unreadNotifications > 99 ? "99+" : unreadNotifications}
                       </Badge>
                     )}
@@ -213,15 +213,15 @@ const SidebarFooter = memo(function SidebarFooter({ collapsed, connected, online
     <div className={`border-t border-border/60 ${collapsed ? 'px-2 py-2' : 'px-3 py-2.5'} space-y-2`}>
       {!collapsed && connected && (
         <div className="space-y-1">
-          <div className="mono-eyebrow text-muted-foreground/100">{t("sidebar.online_operators")}</div>
+          <div className="mono-eyebrow text-muted-foreground">{t("sidebar.online_operators")}</div>
           {currentUsername && (
-              <div className="flex items-center gap-x-2 text-(--fs-xs-sm) text-foreground font-medium">
+              <div className="flex items-center gap-x-2 text-xs-sm text-foreground font-medium">
                 <StatusDot tone="success" size="xs" pulse />
                 <span className="truncate mono-cell">{t("sidebar.current_operator", { username: currentUsername })}</span>
               </div>
             )}
             {onlineUsers.filter((u) => u.username !== currentUsername).map((u) => (
-              <div key={u.username} className="flex items-center gap-x-2 text-(--fs-xs-sm) text-muted-foreground">
+              <div key={u.username} className="flex items-center gap-x-2 text-xs-sm text-muted-foreground">
                 <StatusDot tone="success" size="xs" />
                 <span className="truncate">{u.username}</span>
               </div>
@@ -330,7 +330,7 @@ const stats = useAppStore((s) => s.stats);
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t("common.search") + "..."}
             aria-label={t("common.search")}
-            className="h-8 bg-secondary/50 pl-8 pr-8 text-(--fs-xs-sm) placeholder:text-muted-foreground/100"
+            className="h-8 bg-secondary/50 pl-8 pr-8 text-xs-sm placeholder:text-muted-foreground"
           />
           {searchQuery && (
             <Button

@@ -166,9 +166,9 @@ export default function BackupSection() {
                     <div className="text-sm font-medium text-foreground truncate">
                       {b.name}{" "}
                       {b.name.endsWith(".fbk") ? (
-                        <Badge variant="success" className="text-(--fs-micro)">{t("settings.backup.encrypted")}</Badge>
+                        <Badge variant="success" className="text-micro">{t("settings.backup.encrypted")}</Badge>
                       ) : (
-                        <Badge variant="warning" className="text-(--fs-micro)">{t("settings.backup.plaintext")}</Badge>
+                        <Badge variant="warning" className="text-micro">{t("settings.backup.plaintext")}</Badge>
                       )}
                     </div>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">

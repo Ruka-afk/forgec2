@@ -305,9 +305,9 @@ export default function AutoTagPage() {
                         {rule.tag.name}
                       </Badge>
                     )}
-                    <span className="text-(--fs-xs-sm) text-muted-foreground">{t("autotag.priority_label")} {rule.priority}</span>
+                    <span className="text-xs-sm text-muted-foreground">{t("autotag.priority_label")} {rule.priority}</span>
                   </div>
-                  <div className="text-(--fs-compact) text-muted-foreground mt-0.5 font-mono truncate">
+                  <div className="text-compact text-muted-foreground mt-0.5 font-mono truncate">
                     {renderCondition(rule.condition)}
                   </div>
                 </div>

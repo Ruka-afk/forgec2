@@ -42,21 +42,38 @@ export default function TopBar({ onMenuToggle }: { onMenuToggle?: () => void }) 
           aria-label={t("palette.placeholder")}
         >
           <Search className="size-4 shrink-0" />
-          <span className="truncate text-(--fs-compact)">{t("palette.placeholder")}</span>
-          <kbd className="ml-auto shrink-0 rounded-md border border-border/80 bg-card px-1.5 py-0.5 font-mono text-(--fs-micro-sm) text-muted-foreground">Ctrl K</kbd>
+          <span className="truncate text-compact">{t("palette.placeholder")}</span>
+          <kbd className="ml-auto shrink-0 rounded-md border border-border/80 bg-card px-1.5 py-0.5 font-mono text-micro-sm text-muted-foreground">Ctrl K</kbd>
+        </Button>
+        {/* The palette trigger is a full search field from lg up and a bare
+            icon below it. Without the icon variant, phones and tablets had no
+            way to reach navigation at all: the sidebar is a closed sheet and
+            Ctrl+K needs a hardware keyboard. */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => setCommandPaletteOpen(true)}
+          className="lg:hidden"
+          aria-label={t("palette.placeholder")}
+        >
+          <Search className="size-5" />
         </Button>
       </div>
 
       <div className="flex items-center gap-1">
-        {/* WS + Live Agents */}
-        <div className="mr-1 flex shrink-0 items-center gap-2 rounded-lg border border-border/70 bg-secondary/70 px-2.5 py-1 shadow-sm sm:mr-2">
+        {/* WS + Live Agents. The label is always rendered (it used to be
+            `hidden lg:inline`, leaving a bare colour dot on phones, which
+            fails WCAG 1.4.1 use-of-colour) and the pill reserves a minimum
+            width so switching Live/Reconnecting/Offline cannot shift the row. */}
+        <div className="mr-1 flex min-w-0 shrink-0 items-center gap-2 rounded-lg border border-border/70 bg-secondary/70 px-2.5 py-1 shadow-sm sm:mr-2">
           <Tooltip>
-            <TooltipTrigger>
-              <span role="status" aria-live="polite" className="flex items-center gap-2">
+            <TooltipTrigger render={<button type="button" className="flex min-h-8 min-w-0 items-center gap-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/60" />}>
+              <span role="status" aria-live="polite" className="flex min-w-0 items-center gap-2">
                 <ConnectionDot connected={connected} reconnectFailed={reconnectFailed} />
-                <span className="text-(--fs-micro-sm) text-muted-foreground/100 hidden lg:inline">{connected ? t("common.live") : reconnectFailed ? t("common.offline") : t("topbar.reconnecting")}</span>
+                <span className="min-w-16 truncate text-micro-sm text-muted-foreground">{connected ? t("common.live") : reconnectFailed ? t("common.offline") : t("topbar.reconnecting")}</span>
                 {stats && (stats.online_agents ?? 0) > 0 && (
-                  <span className="hidden xl:inline-flex items-center gap-1 text-(--fs-micro-sm) font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
+                  <span className="hidden xl:inline-flex items-center gap-1 text-micro-sm font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
                     {stats.online_agents} {t("agents.online_label")}
                   </span>
                 )}

@@ -252,15 +252,19 @@ export default function ToolkitPage() {
                       <span className="text-xs font-bold">{cat.name[0]}</span>
                     </div>
                     <span className="font-semibold text-sm text-foreground">{cat.name}</span>
-                    <Badge variant="secondary" className="text-(--fs-micro-sm) px-2 py-0.5">{cat.commands.length}</Badge>
+                    <Badge variant="secondary" className="text-micro-sm px-2 py-0.5">{cat.commands.length}</Badge>
                   </div>
                 </div>
                 <div className="px-5 pb-4 space-y-1">
                   {cat.commands.map((c) => (
                     <Button key={c.cmd} variant="ghost" onClick={() => runAction(c.cmd)} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg justify-start text-left border border-transparent hover:border-border transition-all">
-                      <span className={`text-xs font-mono font-medium w-28 shrink-0 ${colorMap[cat.color]?.split(" ")[1] || "text-info-ink"}`}>{c.cmd}</span>
-                      <span className="text-xs text-muted-foreground">{c.desc}</span>
-                      <span className="ml-auto text-(--fs-micro-sm) text-muted-foreground">{t("toolkit.run")}</span>
+                      {/* Task-type ids are unbounded in length
+                          (`screen_trigger_start` clipped at a fixed w-28),
+                          so the label column sizes to its content and the
+                          description takes the remaining width instead. */}
+                      <span className={`shrink-0 whitespace-nowrap font-mono text-xs font-medium ${colorMap[cat.color]?.split(" ")[1] || "text-info-ink"}`}>{c.cmd}</span>
+                      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{c.desc}</span>
+                      <span className="ml-auto shrink-0 text-micro-sm text-muted-foreground">{t("toolkit.run")}</span>
                     </Button>
                   ))}
                 </div>
@@ -280,7 +284,7 @@ export default function ToolkitPage() {
             </Card>
           )}
           <Card className="overflow-hidden">
-            <CardHeaderRow accent={false} title={t("toolkit.recent_results")} action={<Badge variant="secondary" className="text-(--fs-micro-sm) px-1.5 py-0.5">{error ? "—" : recentTasks.length}</Badge>} />
+            <CardHeaderRow accent={false} title={t("toolkit.recent_results")} action={<Badge variant="secondary" className="text-micro-sm px-1.5 py-0.5">{error ? "—" : recentTasks.length}</Badge>} />
             <div className="max-h-[600px] overflow-y-auto">
               {loading ? (
                 <div className="space-y-2 p-(--card-spacing)">
@@ -296,7 +300,7 @@ export default function ToolkitPage() {
                 recentTasks.map((t, i) => (
                   <div key={i} className="px-4 py-3 border-b border-border last:border-0 hover:bg-muted transition-colors">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-(--fs-micro-sm) font-mono text-muted-foreground">{(t.agent_id || "").toString().slice(0, 8)}</span>
+                      <span className="text-micro-sm font-mono text-muted-foreground">{(t.agent_id || "").toString().slice(0, 8)}</span>
                       <StatusBadge status={t.status || ""} />
                     </div>
                     <div className="text-xs font-medium text-muted-foreground truncate">{t.type}: {t.command}</div>

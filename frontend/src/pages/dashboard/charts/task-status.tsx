@@ -18,7 +18,7 @@ function TaskBody({ data }: { data: TaskCounts }) {
     ];
     return { items, total: items.reduce((s, i) => s + i.value, 0) };
   }, [data, t]);
-  if (total === 0) return <p className="text-xs text-muted-foreground/100 text-center py-4">{t("dashboard.no_tasks_yet")}</p>;
+  if (total === 0) return <p className="text-xs text-muted-foreground text-center py-4">{t("dashboard.no_tasks_yet")}</p>;
   return (
     <div className="space-y-2">
       <div className="h-4 rounded-full overflow-hidden flex bg-secondary">
@@ -26,11 +26,11 @@ function TaskBody({ data }: { data: TaskCounts }) {
           <Tooltip key={i.label}><TooltipTrigger><div className={`${i.color} h-full transition-all`} style={{ width: `${(i.value / total) * 100}%` }}></div></TooltipTrigger><TooltipContent>{`${i.label}: ${i.value}`}</TooltipContent></Tooltip>
         ))}
       </div>
-      <div className="grid grid-cols-4 gap-1 text-(--fs-micro-sm) text-center">
+      <div className="grid grid-cols-4 gap-1 text-micro-sm text-center">
         {items.map((i) => (
           <div key={i.label} className="flex flex-col items-center gap-0.5">
             <span className={`size-2 rounded-full ${i.color}`}></span>
-            <span className="text-muted-foreground/100">{i.label}</span>
+            <span className="text-muted-foreground">{i.label}</span>
             <span className="font-mono text-foreground font-medium">{i.value}</span>
           </div>
         ))}

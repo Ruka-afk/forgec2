@@ -406,6 +406,7 @@ export default function UsersPage() {
       <Card className="overflow-hidden">
         <DataTable<User>
           data={filtered}
+          label={t("users.title")}
           loading={loading}
           error={error}
           onRetry={() => void loadUsers()}
@@ -541,7 +542,7 @@ export default function UsersPage() {
                       <div className="text-xs text-muted-foreground truncate max-w-md">
                         {(s.user_agent || "-")}{s.device_fingerprint ? ` · ${s.device_fingerprint}` : ""}
                       </div>
-                      <div className="text-xs text-muted-foreground/100">
+                      <div className="text-xs text-muted-foreground">
                         {t("users.col_expires")}: {formatTime(s.expires_at)}
                       </div>
                     </div>

@@ -62,7 +62,7 @@ export function SectionCard({
       )}
     >
       <div className="flex min-w-0 items-center gap-2">
-        <h3 className="flex min-w-0 items-center gap-2 text-(--fs-section) font-semibold text-foreground">
+        <h3 className="flex min-w-0 items-center gap-2 text-section font-semibold text-foreground">
           {icon}
           <span className="truncate">{title}</span>
           {typeof count === "number" && (
@@ -72,14 +72,19 @@ export function SectionCard({
           )}
         </h3>
         {description && (
-          <p className="truncate text-(--fs-micro-sm) text-muted-foreground">{description}</p>
+          <p className="truncate text-micro-sm text-muted-foreground">{description}</p>
         )}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {action}
-        {collapsible && <ChevronDown className="size-2.5 text-muted-foreground/100" />}
+        {collapsible && <ChevronDown className="size-2.5 text-muted-foreground" />}
         {href && linkLabel && (
-          <Link to={href} className="text-xs text-primary hover:underline">
+          // `-my-2 py-2` grows the hit area to 32px without changing the
+          // header height; a 16px-tall link is not a viable touch target.
+          <Link
+            to={href}
+            className="-my-2 inline-flex min-h-8 items-center rounded-md px-1 text-xs text-primary transition-colors hover:bg-primary/8 hover:underline"
+          >
             {linkLabel}
           </Link>
         )}

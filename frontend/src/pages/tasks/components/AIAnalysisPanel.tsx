@@ -84,7 +84,7 @@ function AIAnalysisButton({ taskId }: { taskId: number }) {
                 <li key={i} className={`flex items-start gap-2 rounded-md border px-2 py-1.5 ${SEVERITY_CLASS[h.severity] || SEVERITY_CLASS.info}`}>
                   <span className="mt-0.5 shrink-0">{KIND_ICON[h.kind] || KIND_ICON.other}</span>
                   <span className="text-xs text-foreground">{h.text}</span>
-                  <Badge variant="secondary" className="ml-auto shrink-0 text-(--fs-micro-sm)">{h.severity}</Badge>
+                  <Badge variant="secondary" className="ml-auto shrink-0 text-micro-sm">{h.severity}</Badge>
                 </li>
               ))}
             </ul>

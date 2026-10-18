@@ -84,10 +84,10 @@ function AuditStrip() {
         {logs.map((log, i) => (
           <div key={i} className="flex items-center justify-between px-5 py-2.5 text-xs">
             <div className="flex items-center gap-2 min-w-0">
-              <Badge variant="secondary" className="text-(--fs-micro-sm) font-mono shrink-0">{log.action || "-"}</Badge>
+              <Badge variant="secondary" className="text-micro-sm font-mono shrink-0">{log.action || "-"}</Badge>
               <span className="text-foreground truncate">{log.details || log.username || ""}</span>
             </div>
-            <span className="text-muted-foreground/100 shrink-0 ml-2">
+            <span className="text-muted-foreground shrink-0 ml-2">
               {log.created_at ? formatTime(log.created_at) : ""}
             </span>
           </div>
@@ -155,13 +155,13 @@ export default function AnalyticsView({
                   size="sm"
                   ariaLabel={task.status}
                 />
-                <span className="text-(--fs-micro-sm) text-muted-foreground w-16 shrink-0">
+                <span className="text-micro-sm text-muted-foreground w-16 shrink-0">
                   {task.status === "completed" ? t("tasks.completed") : task.status === "failed" ? t("tasks.failed") : task.status === "pending" ? t("tasks.pending") : task.status === "cancelled" ? t("tasks.cancelled") : t("tasks.running")}
                 </span>
                 <span className="text-xs font-mono text-foreground">{task.type}</span>
-                <span className="text-xs text-muted-foreground/100 truncate max-w-xs">{task.command}</span>
+                <span className="text-xs text-muted-foreground truncate max-w-xs">{task.command}</span>
               </div>
-              <span className="text-xs text-muted-foreground/100">{task.created_at ? formatTime(task.created_at) : ""}</span>
+              <span className="text-xs text-muted-foreground">{task.created_at ? formatTime(task.created_at) : ""}</span>
             </div>
           ))}
         </div>

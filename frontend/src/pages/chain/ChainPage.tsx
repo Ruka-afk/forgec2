@@ -231,7 +231,7 @@ export default function ChainPage() {
               </p>
               <div className="max-h-60 overflow-y-auto space-y-1">
                 {availableParents.length === 0 ? (
-                  <p className="text-xs text-muted-foreground/100 py-4 text-center">{t("chain.no_other_agents")}</p>
+                  <p className="text-xs text-muted-foreground py-4 text-center">{t("chain.no_other_agents")}</p>
                 ) : (
                   availableParents.map((a) => (
                     <Button
@@ -243,8 +243,8 @@ export default function ChainPage() {
                     >
                       <Bug className="size-4" />
                       <span className="font-medium text-foreground">{a.hostname}</span>
-                      <span className="text-muted-foreground/100 ml-1">({a.ip})</span>
-                      <span className="text-(--fs-micro-sm) text-muted-foreground/100 font-mono ml-auto">{(a.id || "").substring(0, 8)}...</span>
+                      <span className="text-muted-foreground ml-1">({a.ip})</span>
+                      <span className="text-micro-sm text-muted-foreground font-mono ml-auto">{(a.id || "").substring(0, 8)}...</span>
                     </Button>
                   ))
                 )}
@@ -280,14 +280,14 @@ export default function ChainPage() {
                         {node.parent_id ? (
                           <>
                             <ArrowRight className="size-4" />
-                            <span className="text-xs text-muted-foreground/100">
+                            <span className="text-xs text-muted-foreground">
                               via {getAgentInfo(node.parent_id)?.hostname || node.parent_id.substring(0, 8)}
                             </span>
                           </>
                         ) : (
                           <>
                             <ArrowRight className="size-4" />
-                            <Badge variant="success" className="text-(--fs-micro-sm) font-medium">
+                            <Badge variant="success" className="text-micro-sm font-medium">
                               C2
                             </Badge>
                           </>

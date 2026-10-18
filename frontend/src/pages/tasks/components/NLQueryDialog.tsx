@@ -97,7 +97,7 @@ function NLQueryDialog() {
           <div className="flex flex-wrap items-center gap-1.5 mt-2">
             <span className="text-xs text-muted-foreground">{t("ai.nl_parsed")}</span>
             {chips.map((c, i) => (
-              <Badge key={i} variant="secondary" className="text-(--fs-micro-sm)">{c}</Badge>
+              <Badge key={i} variant="secondary" className="text-micro-sm">{c}</Badge>
             ))}
           </div>
         )}
@@ -112,8 +112,8 @@ function NLQueryDialog() {
               <div key={r.id} className="px-3 py-2 text-sm hover:bg-muted/50 transition-colors">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-mono text-xs text-muted-foreground">#{r.id}</span>
-                  <Badge variant="outline" className="text-(--fs-micro-sm)">{r.type}</Badge>
-                  <Badge variant="secondary" className="text-(--fs-micro-sm)">{r.status}</Badge>
+                  <Badge variant="outline" className="text-micro-sm">{r.type}</Badge>
+                  <Badge variant="secondary" className="text-micro-sm">{r.status}</Badge>
                   <span className="text-xs text-muted-foreground truncate">{r.agent_id.slice(0, 12)}</span>
                 </div>
                 <code className="block truncate text-xs font-mono text-muted-foreground mt-0.5" title={r.command}>{r.command}</code>

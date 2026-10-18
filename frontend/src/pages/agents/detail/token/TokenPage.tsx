@@ -324,7 +324,7 @@ export default function AgentTokenPage() {
                 </SelectContent>
               </Select>
               {processError && (
-                <div role="alert" className="mt-1.5 flex items-center gap-2 text-(--fs-micro-sm) text-warning-ink">
+                <div role="alert" className="mt-1.5 flex items-center gap-2 text-micro-sm text-warning-ink">
                   <AlertTriangle className="size-3 shrink-0" aria-hidden="true" />
                   <span className="min-w-0 flex-1">{t("agents.token_load_processes_failed")}</span>
                   <Button type="button" onClick={() => { void loadProcesses(); }} size="xs" variant="outline">{t("common.try_again")}</Button>

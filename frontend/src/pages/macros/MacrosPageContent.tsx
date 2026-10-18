@@ -534,7 +534,7 @@ export default function MacrosPageContent() {
                   />
                   <span className="truncate flex-1">{a.hostname || a.id}</span>
                   <span className="font-mono text-xs text-muted-foreground">{a.ip}</span>
-                  <Badge variant={a.status === "online" ? "success" : "secondary"} className="text-(--fs-micro)">
+                  <Badge variant={a.status === "online" ? "success" : "secondary"} className="text-micro">
                     {a.status}
                   </Badge>
                 </label>
@@ -572,7 +572,7 @@ export default function MacrosPageContent() {
                     entry.status === "ok" || entry.status === "sent" ? "success"
                       : entry.status === "skipped" ? "secondary"
                         : "destructive"
-                  } className="text-(--fs-micro) font-mono">
+                  } className="text-micro font-mono">
                     {entry.status}
                   </Badge>
                   <span className="text-xs font-semibold">#{entry.step}</span>

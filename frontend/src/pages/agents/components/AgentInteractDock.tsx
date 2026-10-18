@@ -238,7 +238,7 @@ export function AgentInteractDock({
             </span>
           )}
           {beacon.ip && (
-            <span className="hidden font-mono text-xs text-muted-foreground/100 md:inline">{beacon.ip}</span>
+            <span className="hidden font-mono text-xs text-muted-foreground md:inline">{beacon.ip}</span>
           )}
           <div className="ml-auto flex items-center gap-1">
             <Button
@@ -332,18 +332,18 @@ export function AgentInteractDock({
                           <StatusBadge status={task.status} />
                           <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground">{task.command}</span>
                           {task.created_by && (
-                            <span className="hidden shrink-0 font-mono text-muted-foreground/100 sm:inline">{task.created_by}</span>
+                            <span className="hidden shrink-0 font-mono text-muted-foreground sm:inline">{task.created_by}</span>
                           )}
                         </button>
                         {open && (
                           <div className="space-y-2 border-t border-border bg-muted/20 px-3 py-2">
                             {task.created_by && (
-                              <p className="text-(--fs-micro-sm) text-muted-foreground">{t("agents.dock_task_by", { user: task.created_by })}</p>
+                              <p className="text-micro-sm text-muted-foreground">{t("agents.dock_task_by", { user: task.created_by })}</p>
                             )}
                             {task.result ? (
-                              <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-(--fs-xs-sm) text-foreground">{task.result}</pre>
+                              <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-xs-sm text-foreground">{task.result}</pre>
                             ) : task.error ? (
-                              <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-all font-mono text-(--fs-xs-sm) text-destructive-ink">{task.error}</pre>
+                              <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-all font-mono text-xs-sm text-destructive-ink">{task.error}</pre>
                             ) : (
                               <p className="text-xs text-muted-foreground">{t("agents.dock_waiting_result")}</p>
                             )}
@@ -364,7 +364,7 @@ export function AgentInteractDock({
                                 </Button>
                                 {diffOpen && resultDiff && (
                                   <div className="space-y-1">
-                                    <p className="text-(--fs-micro-sm) text-muted-foreground">
+                                    <p className="text-micro-sm text-muted-foreground">
                                       {t("agents.dock_diff_summary", {
                                         added: resultDiff.added,
                                         removed: resultDiff.removed,
@@ -372,12 +372,12 @@ export function AgentInteractDock({
                                       })}
                                     </p>
                                     {resultDiff.mode === "unique" && (
-                                      <p className="text-(--fs-micro-sm) text-muted-foreground">{t("agents.dock_diff_unique")}</p>
+                                      <p className="text-micro-sm text-muted-foreground">{t("agents.dock_diff_unique")}</p>
                                     )}
                                     {resultDiff.added === 0 && resultDiff.removed === 0 ? (
                                       <p className="text-xs text-muted-foreground">{t("agents.dock_diff_same")}</p>
                                     ) : (
-                                      <pre className="max-h-40 overflow-auto font-mono text-(--fs-xs-sm)">
+                                      <pre className="max-h-40 overflow-auto font-mono text-xs-sm">
                                         {diffChangeLines(resultDiff).map((line, i) => (
                                           <span
                                             key={`${line.kind}-${i}`}
@@ -419,7 +419,7 @@ export function AgentInteractDock({
                                   {t("agents.dock_task_reject")}
                                 </Button>
                                 {!canApproveOwnTask(task.created_by, currentUsername) && (
-                                  <span className="text-(--fs-micro-sm) text-muted-foreground">{t("agents.dock_task_approve_own")}</span>
+                                  <span className="text-micro-sm text-muted-foreground">{t("agents.dock_task_approve_own")}</span>
                                 )}
                               </div>
                             )}

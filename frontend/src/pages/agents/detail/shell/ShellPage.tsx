@@ -245,7 +245,7 @@ export default function AgentShellPage() {
         {activeMetaResolved?.status ? <StatusBadge status={activeMetaResolved.status} pulse={activeMetaResolved.status === "online"} /> : null}
         <div className="min-w-0 leading-tight">
           <div className="truncate text-sm font-semibold tracking-tight">{title}</div>
-          <div className="truncate font-mono text-(--fs-micro-sm) text-slate-400">
+          <div className="truncate font-mono text-micro-sm text-slate-400">
             {[activeMetaResolved?.ip, activeMetaResolved?.osType].filter(Boolean).join(" · ")}
           </div>
         </div>
@@ -285,7 +285,7 @@ export default function AgentShellPage() {
                 aria-selected={selected}
                 tabIndex={0}
                 className={cn(
-                  "group flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-(--fs-micro-sm) outline-none",
+                  "group flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-micro-sm outline-none",
                   selected
                     ? "border-sky-500/40 bg-sky-500/15 text-slate-100"
                     : "border-white/5 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-slate-200",

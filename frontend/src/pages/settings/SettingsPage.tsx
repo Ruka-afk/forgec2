@@ -345,7 +345,7 @@ export default function SettingsPage() {
       )}
 
       <Tabs value={activeSection} onValueChange={handleSectionChange} orientation="vertical">
-        <div className="grid gap-4 lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-start lg:gap-6">
+        <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)] lg:items-start lg:gap-6 xl:grid-cols-[19rem_minmax(0,1fr)]">
           <aside className="hidden lg:block">
             <div className="sticky top-24 overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm">
               <div className="border-b border-border/70 bg-muted/35 p-3">
@@ -361,15 +361,15 @@ export default function SettingsPage() {
                 label={t("settings.search_sections")}
               />
               </div>
-              <nav aria-label={t("settings.sidebar_header")} className="min-h-0 max-h-[calc(100vh-13rem)] overflow-y-auto p-2.5 supports-[height:100dvh]:max-h-[calc(100dvh-13rem)]">
-                <div className="space-y-4">
+              <nav aria-label={t("settings.sidebar_header")} className="min-h-0 max-h-[calc(100vh-13rem)] overscroll-contain overflow-y-auto p-3 scrollbar-thin supports-[height:100dvh]:max-h-[calc(100dvh-13rem)]">
+                <div className="space-y-5">
                   {visibleSectionGroups.map((group) => (
                     <div key={group.key}>
                       <div className="mono-eyebrow mb-1.5 px-2 text-muted-foreground">{group.label}</div>
-                      <TabsList variant="sidebar" className="gap-1">
+                      <TabsList variant="sidebar" className="gap-1.5">
                         {group.items.map((s) => (
                           <TabsTrigger key={s.key} value={s.key}
-                            className="relative flex min-h-10 w-full items-center justify-start gap-2.5 rounded-lg border-l-2 border-transparent px-2.5 py-2 text-xs text-muted-foreground transition-colors hover:bg-primary/5 data-[selected]:border-l-primary data-[selected]:bg-primary/10 data-[selected]:font-semibold data-[selected]:text-primary data-[selected]:shadow-none data-[selected]:[&>span:first-child]:bg-primary/10 data-[selected]:[&>span:first-child]:text-primary">
+                            className="relative flex min-h-11 w-full items-center justify-start gap-3 rounded-lg border-l-2 border-transparent px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-primary/5 data-[selected]:border-l-primary data-[selected]:bg-primary/10 data-[selected]:font-semibold data-[selected]:text-primary data-[selected]:shadow-none data-[selected]:[&>span:first-child]:bg-primary/10 data-[selected]:[&>span:first-child]:text-primary">
                             <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted/75 text-muted-foreground">{s.icon}</span>
                             <span className="truncate">{s.label}</span>
                           </TabsTrigger>

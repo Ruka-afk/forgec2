@@ -109,7 +109,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
   }, [sortKey]);
 
   const sortIcon = (col: SortKey) => {
-    if (sortKey !== col) return <ArrowUpDown className="size-3 inline-block ml-1 text-muted-foreground/100" />;
+    if (sortKey !== col) return <ArrowUpDown className="size-3 inline-block ml-1 text-muted-foreground" />;
     return sortDir === "asc"
       ? <ArrowUp className="size-3 inline-block ml-1 text-primary" />
       : <ArrowDown className="size-3 inline-block ml-1 text-primary" />;
@@ -543,7 +543,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
         <DataState
           loading={loading}
           error={error}
-          empty={tasks.length === 0}
+          empty={!loading && !error && tasks.length === 0}
           emptyIcon={Inbox}
           emptyTitle={t("tasks.empty_title")}
           emptyMessage={t("tasks.empty_message")}
@@ -559,12 +559,15 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
           <div
             ref={scrollRef}
             onScroll={onScroll}
+            role={isNarrow ? undefined : "region"}
+            aria-label={isNarrow ? undefined : t("tasks.title")}
+            tabIndex={isNarrow ? undefined : 0}
             className={
               isNarrow
                 ? ""
                 : windowingActive
-                  ? "overflow-auto max-h-[min(70vh,720px)]"
-                  : "overflow-x-auto"
+                  ? "content-auto overscroll-contain overflow-auto max-h-[min(70vh,720px)]"
+                  : "content-auto overscroll-contain overflow-x-auto"
             }
           >
           {isNarrow ? (

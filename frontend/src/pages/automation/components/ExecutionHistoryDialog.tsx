@@ -162,11 +162,11 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
             {execLogs.map(log => (
               <div key={log.id} className="p-3 rounded-lg bg-muted border-l-2 border-l-primary">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="size-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-(--fs-micro-sm) font-semibold">{log.step_order}</span>
+                  <span className="size-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-micro-sm font-semibold">{log.step_order}</span>
                   <span className="font-semibold text-xs text-primary">{log.task_type}</span>
-                  <Badge variant={log.status === "completed" ? "default" : log.status === "failed" ? "destructive" : "secondary"} className="text-(--fs-micro-sm)">{enumLabel(t, "tasks", log.status)}</Badge>
+                  <Badge variant={log.status === "completed" ? "default" : log.status === "failed" ? "destructive" : "secondary"} className="text-micro-sm">{enumLabel(t, "tasks", log.status)}</Badge>
                   {log.branch_action && log.branch_action !== "continue" && (
-                    <Badge variant="outline" className="text-(--fs-micro-sm)">
+                    <Badge variant="outline" className="text-micro-sm">
                       {log.branch_action}{log.branch_target ? ` → ${log.branch_target}` : ""}
                     </Badge>
                   )}
@@ -175,7 +175,7 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
                 {log.command && <div className="text-xs font-mono text-foreground truncate mb-1">{log.command.substring(0, 120)}</div>}
                 {log.result && <div className="text-xs text-muted-foreground whitespace-pre-wrap max-h-24 overflow-y-auto">{log.result.substring(0, 500)}</div>}
                 {log.error_msg && <div className="text-xs text-destructive-ink mt-1">{log.error_msg}</div>}
-                {log.completed_at && <div className="text-(--fs-micro-sm) text-muted-foreground mt-1">{formatTime(log.completed_at)}</div>}
+                {log.completed_at && <div className="text-micro-sm text-muted-foreground mt-1">{formatTime(log.completed_at)}</div>}
               </div>
             ))}
           </div>

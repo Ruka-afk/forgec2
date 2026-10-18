@@ -31,7 +31,7 @@ export function MtlsCertificateFields({ value, onChange }: MtlsCertificateFields
         <KeyRound className="size-3.5" />
         {t("generate.mtls_title")}
       </div>
-      <p className="text-(--fs-micro-sm) text-muted-foreground">{t("generate.mtls_hint")}</p>
+      <p className="text-micro-sm text-muted-foreground">{t("generate.mtls_hint")}</p>
       <div>
         <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">{t("generate.mtls_cert")}</span>
         <Textarea
@@ -63,9 +63,9 @@ export function MtlsCertificateFields({ value, onChange }: MtlsCertificateFields
         />
       </div>
       {pairIncomplete ? (
-        <p className="text-(--fs-micro-sm) text-warning-ink">{t("generate.mtls_pair_required")}</p>
+        <p className="text-micro-sm text-warning-ink">{t("generate.mtls_pair_required")}</p>
       ) : null}
-      <p className="text-(--fs-micro-sm) text-muted-foreground">{t("generate.mtls_local_only")}</p>
+      <p className="text-micro-sm text-muted-foreground">{t("generate.mtls_local_only")}</p>
     </div>
   );
 }

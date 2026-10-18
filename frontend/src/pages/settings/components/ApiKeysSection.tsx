@@ -204,24 +204,24 @@ export default function ApiKeysSection() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-foreground">{k.name}</span>
                       {!k.active ? (
-                        <Badge variant="secondary" className="text-(--fs-micro)">{t("settings.apikeys.revoked")}</Badge>
+                        <Badge variant="secondary" className="text-micro">{t("settings.apikeys.revoked")}</Badge>
                       ) : expired ? (
-                        <Badge variant="warning" className="text-(--fs-micro)">{t("settings.apikeys.expired")}</Badge>
+                        <Badge variant="warning" className="text-micro">{t("settings.apikeys.expired")}</Badge>
                       ) : (
-                        <Badge variant="success" className="text-(--fs-micro)">{t("settings.apikeys.active")}</Badge>
+                        <Badge variant="success" className="text-micro">{t("settings.apikeys.active")}</Badge>
                       )}
                     </div>
                     <div className="text-xs text-muted-foreground font-mono mt-0.5">{k.prefix}…</div>
                     <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                       {!k.scopes ? (
-                        <Badge variant="default" className="text-(--fs-micro)">{t("settings.apikeys.full_access")}</Badge>
+                        <Badge variant="default" className="text-micro">{t("settings.apikeys.full_access")}</Badge>
                       ) : (
-                        <Badge variant="secondary" className="text-(--fs-micro) font-mono" title={k.scopes}>
+                        <Badge variant="secondary" className="text-micro font-mono" title={k.scopes}>
                           {k.scopes.split(",").filter(Boolean).length} scopes
                         </Badge>
                       )}
                       {k.allowed_cidrs ? (
-                        <Badge variant="secondary" className="text-(--fs-micro) font-mono" title={k.allowed_cidrs}>
+                        <Badge variant="secondary" className="text-micro font-mono" title={k.allowed_cidrs}>
                           {k.allowed_cidrs}
                         </Badge>
                       ) : null}
@@ -272,7 +272,7 @@ export default function ApiKeysSection() {
               <div className="mt-2 max-h-48 overflow-auto rounded-lg border border-border p-2 space-y-2">
                 {SCOPE_GROUPS.map((g) => (
                   <div key={g.domain}>
-                    <div className="text-(--fs-micro) font-semibold uppercase tracking-wide text-muted-foreground">{g.domain}</div>
+                    <div className="text-micro font-semibold uppercase tracking-wide text-muted-foreground">{g.domain}</div>
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1.5">
                       {g.scopes.map((s) => (
                         <label key={s} className="flex items-center gap-1.5 text-xs cursor-pointer">

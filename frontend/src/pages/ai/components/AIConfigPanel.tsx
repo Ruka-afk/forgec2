@@ -77,7 +77,7 @@ export function AIConfigPanel(props: AIConfigPanelProps) {
             <StatusDot tone={enabled ? "success" : "muted"} size="sm" />
             <span>
               <span className="block text-sm font-medium text-foreground">{t("ai.enable_ai")}</span>
-              <span className="block text-(--fs-xs-sm) text-muted-foreground">
+              <span className="block text-xs-sm text-muted-foreground">
                 {enabled ? t("ai.status_enabled") : t("ai.status_disabled")}
               </span>
             </span>
@@ -125,18 +125,18 @@ export function AIConfigPanel(props: AIConfigPanelProps) {
                 {showApiKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
               </Button>
             </div>
-            <span className="block text-(--fs-xs-sm) text-muted-foreground mt-0.5">{t("ai.api_key_hint")}</span>
+            <span className="block text-xs-sm text-muted-foreground mt-0.5">{t("ai.api_key_hint")}</span>
           </div>
         </div>
         <div>
           <span className="block text-xs text-muted-foreground mb-1">{t("ai.system_prompt")}</span>
           <Textarea maxLength={16 * 1024} aria-label={t("ai.system_prompt")} value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} rows={3} className="w-full text-xs resize-y" placeholder={t("ai.system_prompt_placeholder")} />
-          <span className="block text-(--fs-xs-sm) text-muted-foreground mt-0.5">{t("ai.system_prompt_hint")}</span>
+          <span className="block text-xs-sm text-muted-foreground mt-0.5">{t("ai.system_prompt_hint")}</span>
         </div>
         <div>
           <span className="block text-xs text-muted-foreground mb-1">{t("ai.engagement_notes")}</span>
           <Textarea maxLength={8000} aria-label={t("ai.engagement_notes")} value={engagementNotes} onChange={(e) => setEngagementNotes(e.target.value)} rows={4} className="w-full text-xs resize-y font-mono" />
-          <span className="mt-0.5 flex justify-between gap-3 text-(--fs-xs-sm) text-muted-foreground">
+          <span className="mt-0.5 flex justify-between gap-3 text-xs-sm text-muted-foreground">
             <span>{t("ai.engagement_notes_hint")}</span>
             <span className="shrink-0 font-mono">{engagementNotes.length}/8000</span>
           </span>
@@ -145,7 +145,7 @@ export function AIConfigPanel(props: AIConfigPanelProps) {
           <Checkbox checked={allowExecute} onCheckedChange={(v) => setAllowExecute(v === true)} className="mt-1" />
           <span>
             <span className="text-sm text-muted-foreground">{t("ai.allow_execute")}</span>
-            <span className="block text-(--fs-xs-sm) text-warning-ink mt-0.5">{t("ai.allow_execute_warn")}</span>
+            <span className="block text-xs-sm text-warning-ink mt-0.5">{t("ai.allow_execute_warn")}</span>
           </span>
         </Label>
         {!configLoaded && (

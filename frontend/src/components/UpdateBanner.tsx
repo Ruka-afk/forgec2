@@ -66,9 +66,9 @@ export default function UpdateBanner({ currentVersion }: { currentVersion?: stri
     <div className={cn(bannerSurface("info"), "flex w-full items-center justify-between gap-3 px-4 py-2.5 animate-fade-in sm:px-5")} aria-live="polite">
       <div className="flex items-center gap-2 min-w-0">
         <ArrowUpCircle className="size-4 text-info-ink shrink-0" />
-        <span className="mono-cell text-(--fs-compact) text-foreground/90 truncate">
+        <span className="mono-cell text-compact text-foreground/90 truncate">
           {t("update_banner.available")}: <strong className="font-mono">{info.latest}</strong>
-          {currentVersion && <span className="text-muted-foreground/100"> {t("update_banner.current", { current: currentVersion })}</span>}
+          {currentVersion && <span className="text-muted-foreground"> {t("update_banner.current", { current: currentVersion })}</span>}
         </span>
       </div>
       <div className="flex items-center gap-3 shrink-0 ml-3">

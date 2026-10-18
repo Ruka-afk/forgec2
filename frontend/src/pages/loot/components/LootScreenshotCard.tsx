@@ -37,7 +37,7 @@ function LootScreenshotCardInner({
       <div className="absolute top-1.5 left-1.5 z-10">
         <Checkbox checked={isSelected} onCheckedChange={() => onToggleSelect(s.id)} aria-label={`Select screenshot ${s.filename}`} className="bg-secondary/90" />
       </div>
-      <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-(--fs-micro-sm) text-white px-2 py-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition flex justify-between items-center">
+      <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-micro-sm text-white px-2 py-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition flex justify-between items-center">
         <span className="truncate">{s.agent_id.substring(0, 8)}</span>
         <a href={`/screenshots/${s.path}`} download aria-label={t("common.download")} className="hover:text-primary dark:hover:text-chart-1 px-1 transition-colors"><Download aria-hidden="true" className="size-4" /></a>
       </div>

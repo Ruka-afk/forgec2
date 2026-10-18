@@ -150,8 +150,8 @@ export function useReportData() {
           format: "html",
         });
         await loadHistory();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : t("report.toast.generate_failed"));
+      } catch {
+        toast.error(t("report.toast.generate_failed"));
       } finally {
         setGenerating(false);
       }

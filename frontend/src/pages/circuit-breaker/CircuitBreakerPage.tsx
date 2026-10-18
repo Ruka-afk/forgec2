@@ -295,7 +295,7 @@ export default function CircuitBreakerPage() {
                       />
                       {e.reason && <span className="text-muted-foreground">({e.reason})</span>}
                     </div>
-                    <p className="text-(--fs-micro-sm) text-muted-foreground mt-0.5">{formatTime(e.created_at)}</p>
+                    <p className="text-micro-sm text-muted-foreground mt-0.5">{formatTime(e.created_at)}</p>
                   </div>
                 </div>
               ))}
@@ -319,22 +319,22 @@ export default function CircuitBreakerPage() {
             <div>
               <Label>{t("cb.failure_threshold")}</Label>
               <Input aria-label={t("circuit_breaker.threshold_label")} name="input-0" type="number" className="mt-1" value={configForm.failure_threshold} onChange={(e) => setConfigForm({ ...configForm, failure_threshold: parseInt(e.target.value) || 3 })} min={1} />
-              <p className="text-(--fs-micro-sm) text-muted-foreground mt-1">{t("cb.failure_threshold_desc")}</p>
+              <p className="text-micro-sm text-muted-foreground mt-1">{t("cb.failure_threshold_desc")}</p>
             </div>
             <div>
               <Label>{t("cb.cooldown")}</Label>
               <Input aria-label={t("circuit_breaker.cooldown_label")} name="input-1" type="number" className="mt-1" value={configForm.cooldown_seconds} onChange={(e) => setConfigForm({ ...configForm, cooldown_seconds: parseInt(e.target.value) || 300 })} min={10} />
-              <p className="text-(--fs-micro-sm) text-muted-foreground mt-1">{t("cb.cooldown_desc")}</p>
+              <p className="text-micro-sm text-muted-foreground mt-1">{t("cb.cooldown_desc")}</p>
             </div>
             <div>
               <Label>{t("cb.half_open_max")}</Label>
               <Input aria-label={t("circuit_breaker.half_open_label")} name="input-2" type="number" className="mt-1" value={configForm.half_open_max_reqs} onChange={(e) => setConfigForm({ ...configForm, half_open_max_reqs: parseInt(e.target.value) || 3 })} min={1} />
-              <p className="text-(--fs-micro-sm) text-muted-foreground mt-1">{t("cb.half_open_max_desc")}</p>
+              <p className="text-micro-sm text-muted-foreground mt-1">{t("cb.half_open_max_desc")}</p>
             </div>
             <div>
               <Label>{t("cb.health_check_interval")}</Label>
               <Input aria-label={t("circuit_breaker.health_check_label")} name="input-3" type="number" className="mt-1" value={configForm.health_check_seconds} onChange={(e) => setConfigForm({ ...configForm, health_check_seconds: parseInt(e.target.value) || 60 })} min={5} />
-              <p className="text-(--fs-micro-sm) text-muted-foreground mt-1">{t("cb.health_check_desc")}</p>
+              <p className="text-micro-sm text-muted-foreground mt-1">{t("cb.health_check_desc")}</p>
             </div>
             </fieldset>
           </div>

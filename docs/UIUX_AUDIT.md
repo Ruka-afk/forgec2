@@ -242,24 +242,150 @@ if we adopt strict WCAG 1.4.11 for control boundaries).
   `--code-accent`), so markdown code blocks render light-on-dark. Confirm
   intent (paper-style blocks) or fix in U1.
 
+## D8 — Type system (owner: U1c, landed 2026-10-18)
+
+The highest-impact defect in the console, and the one the U1–U3 batches
+structurally could not see: the contrast gate measures colour, the aria gate
+measures names, and neither reads a font size.
+
+### T1 · `text-(--fs-*)` was never a font-size utility (360 call sites, 113 files)
+
+`text-<value>` is Tailwind's *font-size* utility only when `<name>` resolves
+from `--text-<name>`. The codebase used the arbitrary-value spelling
+`text-(--fs-compact)`, which compiles to `color: var(--fs-compact)` — a length
+in a colour slot, an invalid declaration the browser discards silently. Every
+call site therefore inherited 14/15px instead of the documented ramp.
+Browser-measured before/after on `/agents`:
+
+| Element | Class | Before | After | Intended |
+| --- | --- | --- | --- | --- |
+| Page title (`main h1`) | `text-page-title` | 15px | **24px** | 24px |
+| Table header (`th`) | `text-micro-sm` | 14px | **10px** | 10px |
+| Badge / kbd chip | `text-micro` | 14px | **10px** | 9px |
+| Card section title | `text-section` | 15px | **18px** | 18px |
+
+Consequences beyond cosmetics: table headers were the same size as cell text,
+so the header row lost its hierarchy; 12–13px metadata rendered at 14–15px and
+inflated every dense table; and because the size never changed, the `density`
+preference only ever moved two values that nothing consumed.
+
+Fix: declare the ramp in `@theme inline` as `--text-micro` … `--text-prose`
+(each pointing at its `--fs-*` so `[data-density="compact"]` still cascades),
+and migrate the 360 sites with `scripts/migrate-fs-utilities.mjs`. New
+`check-design-tokens.mjs` Rules 5/6 make both halves permanent: the broken
+spelling is an error, and a missing `--text-*` declaration is an error.
+
+### T2 · Empty-state message clipped inside table cells
+
+`EmptyState` is routinely rendered inside a `TableCell`, which sets
+`whitespace-nowrap` for data cells. The status message therefore refused to
+wrap and was cut off mid-sentence ("Deploy your first implant to establish a…")
+on every table-backed page (measured: `scrollWidth` 360 vs `clientWidth` 320 at
+1280, and 371 vs 320 at 390). Fixed in the primitive with `whitespace-normal`
+plus `text-balance`; the audit probe now reports zero clipped text nodes across
+10 routes × 4 viewports.
+
+### T3 · Focus mode occluded the page title
+
+`[data-focus="on"] #main-content { padding-top: 0 !important }` assumed the
+top bar was hidden, but the bar is `fixed` and stays. Measured: heading top
+28px vs bar bottom 56px — the title sat entirely under the bar. Focus mode now
+keeps the padding and reclaims the 224px sidebar column plus the breadcrumb
+strip, which is the actual win, and only quiets the bar's border/shadow.
+
+### T4 · Stat tiles stair-stepped
+
+One- and two-word labels in the same grid wrapped differently, so values sat
+35px apart (`BEACONS` one line, `QUEUED TASKS` two). The tile now reserves a
+two-line label slot and pushes `trend` to the bottom with `mt-auto`; all five
+dashboard values align on one baseline at both 1280 and 390.
+
+### T5 · Dead density selectors
+
+`[data-density="compact"] .agent-table …` targeted a class no component ever
+rendered — compact mode changed the type ramp and nothing else. Re-keyed to the
+table primitive's own `[data-slot="table-cell|table-head|table-row"]`, which
+every table sets.
+
+### T6 · No command-palette entry on touch devices
+
+The palette trigger was `hidden … lg:flex` and the only other door was Ctrl+K.
+On a phone the sidebar is a closed sheet, so global navigation had no entry
+point at all. Added an icon-sized trigger below `lg`; the header at 390 now
+exposes Menu / Search / Status / Notifications / User.
+
+### T7 · Sub-32px touch targets
+
+`SectionCard`'s "View all" link was a bare `text-xs` anchor (44×16px) on every
+dashboard panel. Now a 32px-tall inline-flex hit area that keeps the header
+height. The status pill was likewise 16px tall; it is a focusable button with
+`min-h-8` and a visible focus ring. Measured on `/dashboard` at 390 with touch
+emulation: small-target count 9 → 0.
+
+### T8 · `-foreground/100` no-op modifiers
+
+`text-muted-foreground/100` is identical to the unmodified class; 140
+occurrences across 46 files were noise that made real opacity decisions harder
+to spot. Removed mechanically.
+
+### Visual baselines
+
+The typography change moves every baseline by design, so both platform sets
+were regenerated for `mobile` + `laptop` (win32 locally; linux via the
+`visual-baselines.yml` workflow). The workflow now passes
+`--update-snapshots=all`: the default `changed` mode only rewrites snapshots
+whose diff exceeds the 1.5% pixel-ratio tolerance, so within-tolerance drift
+would silently stay stale in the committed set. `/chat` was dropped from
+`VISUAL_ROUTES`: it
+is a client-side redirect to `/ai`, so it rendered the *same* surface under a
+second name, and capturing it mid-redirect produced duplicated-content
+baselines. `waitForPageSurface` also now waits for `networkidle` before the
+height settle, so lazy chunks can no longer land between settle and capture
+(this was the source of intermittent 3–4% diffs on `/ai`).
+
+### T9 · Whole-page crashes from a non-total list fallback
+
+`TokensPage` read its payload as
+`tokenData.tokens || tokenData.data || tokenData` — when the response carried
+neither key, the fallback yielded the **envelope object**, and the next
+`.filter(...)` threw `TypeError: x.filter is not a function`, taking the entire
+page down through the ErrorBoundary. `NtlmPage` had the same shape
+(`agentsData?.agents || agentsData`) and would have crashed on `.map`. Both use
+a total helper now (`firstArray` from `lib/envelope.ts`, which returns `[]`
+rather than a mistyped value); the fallback chain keeps its key priority.
+
+Found by the widened route sweep, not by the e2e suite: the mocked envelope in
+`layout.spec.ts` happens to satisfy the old keys, so the crash never fired
+under test.
+
+### T10 · Unbounded strings clipped by fixed-width columns
+
+`ToolkitPage` pinned task-type ids to `w-28`; `screen_trigger_start` needs
+144px in a 112px cell and was silently cut. The column now sizes to content and
+the description truncates instead. `ScriptingPage`'s API reference rendered
+long signatures (`query('agents'|'tasks'|…)`, 374px) in an unwrapped block that
+overflowed its card at both 1280 and 390; it wraps now.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
 | --- | --- |
 | U1a status tokens & primitives (landed 2026-10-18) | C1, C2, C5, C6, C8, C9; component side of C3/C4/C7; `check:contrast` compositing switched to the browser's sRGB blend space |
 | U1b page migration (landed 2026-10-18) | C3/C4/C7 page call sites: 300 × `text-X` → `text-X-ink`, 38 `-foreground`-on-tint chips → ink, light `primary/20` → `/15`; `check:contrast --strict` promoted into `npm run check` |
-| U2 keyboard & names (landed 2026-10-18) | K1–K5: aria-labels on the video overlay and the phase chip, named breadcrumb home link, single skip link, labelled table region; `check:aria --strict` promoted into `npm run check` |
+| U1c type system (landed 2026-10-18) | T1 size ramp (`--text-*` + 360-site migration + token gate Rules 5/6), T2 empty-state wrap, T8 no-op opacity sweep || U2 keyboard & names (landed 2026-10-18) | K1–K5: aria-labels on the video overlay and the phase chip, named breadcrumb home link, single skip link, labelled table region; `check:aria --strict` promoted into `npm run check` |
 | U3 feedback loop (wave 1: settings tree — landed 2026-10-18) | F1/F2 first wave: 22 handlers onto `useMutation` (call sites 6 → 28), settings-tree raw-message error toasts 4 → 0 and previously-silent failures now report; `useErrorToast` gains `fallbackParams`; remaining clusters migrate in later waves |
-| U4 narrow screens | R2–R3 |
+| U4 narrow screens (landed 2026-10-18) | R2 fixed (status label always rendered), T6 mobile palette entry, T7 touch targets, R3 extended to 10 routes |
 | U5 motion | M1 |
-| U6 page-by-page polish | V1–V2 + per-page checklists |
+| U6 page-by-page polish | T3 focus mode, T4 stat tiles, T5 density selectors, T9 non-total list fallbacks (tokens, ntlm), T10 clipped fixed-width columns (toolkit, scripting), V1–V2 + per-page checklists |
 
 ```powershell
 cd frontend
-npm run check                     # strict contrast + aria gates included
+npm run check                     # strict contrast + aria + token gates
 node scripts/check-contrast.mjs   # report-only runs while iterating
 node scripts/check-contrast.mjs --selftest
 node scripts/check-aria.mjs --list
+node scripts/migrate-fs-utilities.mjs --dry-run   # T1 regression sweep
+npm run test:e2e                  # layout + smoke + visual baselines
 ```
 
 Runtime probes (tab walk, screenshots, canvas contrast harness) were temporary

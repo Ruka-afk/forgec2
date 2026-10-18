@@ -183,7 +183,7 @@ export default function TemplatesPanel({
               <CardHeaderRow
                 accent={false}
                 title={category}
-                action={<Badge variant="secondary" className="text-(--fs-micro-sm) px-2 py-0.5">{list.length}</Badge>}
+                action={<Badge variant="secondary" className="text-micro-sm px-2 py-0.5">{list.length}</Badge>}
               />
               <div className="px-4 pb-3 space-y-1">
                 {list.map((tpl) => (
@@ -195,10 +195,10 @@ export default function TemplatesPanel({
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-semibold text-foreground">{tpl.name}</span>
                         {tpl.description && (
-                          <span className="text-(--fs-micro-sm) text-muted-foreground truncate">{tpl.description}</span>
+                          <span className="text-micro-sm text-muted-foreground truncate">{tpl.description}</span>
                         )}
                       </div>
-                      <code className="block mt-1 text-(--fs-micro-sm) font-mono text-muted-foreground truncate">
+                      <code className="block mt-1 text-micro-sm font-mono text-muted-foreground truncate">
                         {tpl.command}
                       </code>
                     </div>

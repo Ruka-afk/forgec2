@@ -110,7 +110,7 @@ function ProtectionBadge({ state }: { state: string }) {
       : state === "disabled"
         ? "bg-success/10 text-success-ink"
         : "bg-muted text-muted-foreground";
-  return <Badge variant="outline" className={cn("text-(--fs-micro-sm)", tone)}>{state}</Badge>;
+  return <Badge variant="outline" className={cn("text-micro-sm", tone)}>{state}</Badge>;
 }
 
 /**
@@ -129,7 +129,7 @@ export function HostInfoResultView({ result }: TaskRendererProps) {
 
   return (
     <div className="space-y-4" data-testid="hostinfo-renderer">
-      <div className="flex items-center gap-2 text-(--fs-micro-sm) text-muted-foreground">
+      <div className="flex items-center gap-2 text-micro-sm text-muted-foreground">
         <RefreshCw className="size-3" />
         <span className="font-mono">{asStr(report.platform)}</span>
         <span>·</span>
@@ -189,8 +189,8 @@ function RawFallback({ result }: { result: string }) {
 
 function ResultMeta({ count, label }: { count: number; label: string }) {
   return (
-    <div className="flex items-center gap-2 mb-2 text-(--fs-micro-sm) text-muted-foreground">
-      <Badge variant="secondary" className="px-1.5 py-px text-(--fs-micro) leading-none rounded bg-primary/15 text-primary font-mono">
+    <div className="flex items-center gap-2 mb-2 text-micro-sm text-muted-foreground">
+      <Badge variant="secondary" className="px-1.5 py-px text-micro leading-none rounded bg-primary/15 text-primary font-mono">
         {count}
       </Badge>
       <span>{label}</span>
@@ -294,13 +294,13 @@ export function NetstatResultView({ result }: TaskRendererProps) {
   const listening = rows.filter((r) => /listen/i.test(r.state)).length;
   return (
     <div className="space-y-1" data-testid="netstat-renderer">
-      <div className="flex items-center gap-2 mb-2 text-(--fs-micro-sm) text-muted-foreground">
-        <Badge variant="secondary" className="px-1.5 py-px text-(--fs-micro) leading-none rounded bg-primary/15 text-primary font-mono">
+      <div className="flex items-center gap-2 mb-2 text-micro-sm text-muted-foreground">
+        <Badge variant="secondary" className="px-1.5 py-px text-micro leading-none rounded bg-primary/15 text-primary font-mono">
           {rows.length}
         </Badge>
         <span>connections</span>
         {listening > 0 && (
-          <Badge variant="secondary" className="px-1.5 py-px text-(--fs-micro) leading-none rounded bg-warning/15 text-warning-ink dark:bg-warning/10 font-mono">
+          <Badge variant="secondary" className="px-1.5 py-px text-micro leading-none rounded bg-warning/15 text-warning-ink dark:bg-warning/10 font-mono">
             {listening} listen
           </Badge>
         )}
@@ -429,13 +429,13 @@ export function CredsResultView({ result }: TaskRendererProps) {
   const hashes = rows.filter((r) => r.kind === "hash").length;
   return (
     <div className="space-y-1" data-testid="creds-renderer">
-      <div className="flex items-center gap-2 mb-2 text-(--fs-micro-sm) text-muted-foreground">
-        <Badge variant="secondary" className="px-1.5 py-px text-(--fs-micro) leading-none rounded bg-warning/15 text-warning-ink dark:bg-warning/10 font-mono">
+      <div className="flex items-center gap-2 mb-2 text-micro-sm text-muted-foreground">
+        <Badge variant="secondary" className="px-1.5 py-px text-micro leading-none rounded bg-warning/15 text-warning-ink dark:bg-warning/10 font-mono">
           {rows.length}
         </Badge>
         <span>credentials</span>
         {hashes > 0 && (
-          <Badge variant="secondary" className="px-1.5 py-px text-(--fs-micro) leading-none rounded bg-primary/15 text-primary font-mono">
+          <Badge variant="secondary" className="px-1.5 py-px text-micro leading-none rounded bg-primary/15 text-primary font-mono">
             {hashes} hash
           </Badge>
         )}
@@ -459,7 +459,7 @@ export function CredsResultView({ result }: TaskRendererProps) {
                   {maskSecret(row.secret)}
                 </td>
                 <td className="py-1 px-2 align-top">
-                  <Badge variant="outline" className={cn("text-(--fs-micro-sm)", row.kind === "hash" ? "bg-primary/10 text-primary" : "bg-warning/10 text-warning-ink")}>
+                  <Badge variant="outline" className={cn("text-micro-sm", row.kind === "hash" ? "bg-primary/10 text-primary" : "bg-warning/10 text-warning-ink")}>
                     {row.kind}
                   </Badge>
                 </td>

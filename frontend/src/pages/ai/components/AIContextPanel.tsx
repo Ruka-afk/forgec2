@@ -156,7 +156,7 @@ export function AIContextPanel({
         </Button>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
+      <div className="content-auto min-h-0 flex-1 space-y-5 overscroll-contain overflow-y-auto p-4 scrollbar-thin">
         {loadError && profiles.length === 0 && collections.length === 0 && attachments.length === 0 && (
           <div role="alert" className="flex flex-wrap items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-ink">
             <AlertTriangle className="size-3.5 shrink-0" />

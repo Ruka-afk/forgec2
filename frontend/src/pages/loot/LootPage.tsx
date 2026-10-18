@@ -414,7 +414,7 @@ export default function LootPage() {
                             {t("loot.download_file")}
                           </Button>
                         ) : isLootUrlFetch(d.command) ? (
-                          <span className="text-(--fs-micro-sm) text-muted-foreground" title={t("loot.download_unavailable")}>
+                          <span className="text-micro-sm text-muted-foreground" title={t("loot.download_unavailable")}>
                             {t("loot.url_fetch")}
                           </span>
                         ) : null}

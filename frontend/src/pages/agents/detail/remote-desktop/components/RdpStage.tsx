@@ -80,7 +80,7 @@ export default memo(function RdpStage({
             {indicator.icon}
             {indicator.text}
           </span>
-            <span className="hidden sm:inline text-muted-foreground/100">
+            <span className="hidden sm:inline text-muted-foreground">
               <Clock className="size-4" />
             {lastUpdate}
           </span>
@@ -98,7 +98,7 @@ export default memo(function RdpStage({
             <Tooltip>
               <TooltipTrigger>
                 <span
-                  className="text-(--fs-micro-sm) text-chart-1 flex items-center gap-1"
+                  className="text-micro-sm text-chart-1 flex items-center gap-1"
                 >
                   <Zap className="size-4" /> WS
                 </span>
@@ -107,7 +107,7 @@ export default memo(function RdpStage({
             </Tooltip>
           )}
           {monitoring && (
-            <span className="text-(--fs-micro-sm) text-primary flex items-center gap-1">
+            <span className="text-micro-sm text-primary flex items-center gap-1">
               <Mouse className="size-4" /> {t("agents.rdp_interactive_label")}
             </span>
           )}
@@ -164,7 +164,7 @@ export default memo(function RdpStage({
               </div>
             )}
             {monitoring && (
-              <div className="absolute bottom-3 left-3 flex items-center gap-2 text-(--fs-xs-sm) text-white/70 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg pointer-events-none">
+              <div className="absolute bottom-3 left-3 flex items-center gap-2 text-xs-sm text-white/70 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg pointer-events-none">
                 <Mouse className="size-4" />
                 {t("agents.rdp_click_to_interact")}
                 <span className="text-white/40 mx-1">|</span>

@@ -124,16 +124,16 @@ export default function IOCTab() {
         <div className="overflow-x-auto max-h-[480px] overflow-y-auto rounded-lg border border-border divide-y divide-border">
           {entries.map((e, i) => (
             <div key={`${e.type}-${e.value}-${i}`} className="px-3 py-2 flex items-center gap-3 hover:bg-muted/40 transition-colors">
-              <Badge variant="outline" className="font-mono text-(--fs-micro) shrink-0 w-16 justify-center">{e.type}</Badge>
+              <Badge variant="outline" className="font-mono text-micro shrink-0 w-16 justify-center">{e.type}</Badge>
               <code className="text-xs font-mono text-foreground truncate flex-1 select-all">{e.value}</code>
-              <span className="text-(--fs-micro-sm) text-muted-foreground shrink-0">×{e.count}</span>
-              <span className="text-(--fs-micro-sm) text-muted-foreground shrink-0 hidden md:block w-28 text-right">{formatTime(e.last_seen)}</span>
+              <span className="text-micro-sm text-muted-foreground shrink-0">×{e.count}</span>
+              <span className="text-micro-sm text-muted-foreground shrink-0 hidden md:block w-28 text-right">{formatTime(e.last_seen)}</span>
             </div>
           ))}
         </div>
       )}
 
-      <p className="text-(--fs-micro-sm) text-muted-foreground mt-2 flex items-center gap-1.5">
+      <p className="text-micro-sm text-muted-foreground mt-2 flex items-center gap-1.5">
         <Download className="size-3.5" />{t("report.ioc_hint")}
       </p>
     </Card>

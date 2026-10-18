@@ -288,7 +288,7 @@ export default function AgentConfigPage() {
           </div>
           <div className="space-y-2">
             {editHeaders.length === 0 ? (
-              <p className="text-xs text-muted-foreground/100 italic px-1">{t("agents.config_no_headers")}</p>
+              <p className="text-xs text-muted-foreground italic px-1">{t("agents.config_no_headers")}</p>
             ) : (
               editHeaders.map((h, i) => (
                 <div key={h.key} className="flex gap-2 items-center">
@@ -357,7 +357,7 @@ export default function AgentConfigPage() {
                 ))}
               </div>
             ) : (
-              <span className="text-xs text-muted-foreground/100">{t("agents.config.none")}</span>
+              <span className="text-xs text-muted-foreground">{t("agents.config.none")}</span>
             )}
           </div>
         </div>

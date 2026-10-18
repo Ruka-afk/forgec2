@@ -111,7 +111,7 @@ export function AgentFilters({
               })}
             </DropdownMenuContent>
           </DropdownMenu>
-          <div className="hidden sm:flex items-center gap-1.5 ml-auto text-(--fs-xs-sm)">
+          <div className="hidden sm:flex items-center gap-1.5 ml-auto text-xs-sm">
             {onlineCount > 0 && <Badge variant="secondary" className="gap-1 text-success-ink"><Wifi className="size-4" />{onlineCount}</Badge>}
             {windowsCount > 0 && <Badge variant="secondary" className="gap-1"><Monitor className="size-4" />{windowsCount}</Badge>}
             {linuxCount > 0 && <Badge variant="secondary" className="gap-1"><Terminal className="size-4" />{linuxCount}</Badge>}

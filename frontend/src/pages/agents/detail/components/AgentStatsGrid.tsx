@@ -27,12 +27,12 @@ function InfoRow({ label, value, mono, title, copyValue, copyLabel, isSelect }: 
     "text-xs text-right",
     mono ? "font-mono" : "",
     "truncate max-w-[120px]",
-    isEmDash ? "text-muted-foreground/100" : "text-foreground font-medium",
+    isEmDash ? "text-muted-foreground" : "text-foreground font-medium",
     isSelect ? "cursor-pointer select-all" : "",
   ].filter(Boolean).join(" ");
   return (
     <div className="flex items-center justify-between gap-2" title={title}>
-      <span className="text-xs text-muted-foreground/100 shrink-0">{label}</span>
+      <span className="text-xs text-muted-foreground shrink-0">{label}</span>
       <div className="flex items-center min-w-0">
         {isSelect ? (
           <button type="button" onClick={handleClick} aria-label={`${label}: ${value}`} className={`${spanClasses} rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}>
@@ -101,7 +101,7 @@ export default memo(function AgentStatsGrid({
   return (
     <div className={`grid grid-cols-1 ${rail ? "gap-3" : "lg:grid-cols-2 gap-3"} mb-4`}>
       <Card className="p-4 gap-0 overflow-hidden">
-        <div className="text-(--fs-micro-sm) font-semibold uppercase tracking-wider text-muted-foreground/100 mb-3"><Cpu className="size-3.5" />{t("agents.stats_system")}</div>
+        <div className="text-micro-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3"><Cpu className="size-3.5" />{t("agents.stats_system")}</div>
         <div className="space-y-2.5">
         <InfoRow label={t("agents.stats_agent_id")} value={agentID || "\u2014"} mono copyValue={agentID || undefined} copyLabel={t("agents.stats_agent_id")} isSelect />
         <InfoRow label={t("agents.stats_pid")} value={pid ? String(pid) : "\u2014"} />
@@ -116,7 +116,7 @@ export default memo(function AgentStatsGrid({
         </div>
       </Card>
       <Card className="p-4 gap-0 overflow-hidden">
-        <div className="text-(--fs-micro-sm) font-semibold uppercase tracking-wider text-muted-foreground/100 mb-3"><Radio className="size-3.5" />{t("agents.stats_beacon")}</div>
+        <div className="text-micro-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3"><Radio className="size-3.5" />{t("agents.stats_beacon")}</div>
         <div className="space-y-2.5">
         <InfoRow label={t("agents.stats_sleep")} value={interval > 0 ? `${interval}s` : "0s"} />
         <InfoRow label={t("agents.stats_jitter")} value={jitter >= 0 ? `${jitter}%` : "\u2014"} />
@@ -124,7 +124,7 @@ export default memo(function AgentStatsGrid({
         <InfoRow label={t("agents.stats_last_seen")} value={lastSeen ? timeAgo(lastSeen, t) : "\u2014"} title={lastSeen ? formatTime(lastSeen) : undefined} />
         <InfoRow label={t("agents.stats_idle")} value={timeSinceLastSeen || "\u2014"} />
         <div className="pt-2 mt-2 border-t border-border">
-          <div className="text-(--fs-micro-sm) text-muted-foreground/100 mb-1.5 flex items-center justify-between">
+          <div className="text-micro-sm text-muted-foreground mb-1.5 flex items-center justify-between">
             <span>{t("agents.stats_quick_adjust")}</span>
             {agentID && <Link to={`/agents/${agentID}/config`} className="text-primary hover:underline">{t("agents.stats_full_config")} &rarr;</Link>}
           </div>
@@ -139,14 +139,14 @@ export default memo(function AgentStatsGrid({
             </Button>
           </div>
         </div>
-        {activeWindow ? (<div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground/100 shrink-0">{t("agents.stats_window")}</span><span className="text-xs text-foreground font-medium truncate max-w-[120px]" title={activeWindow}>{activeWindow}</span></div>) : <InfoRow label={t("agents.stats_window")} value="\u2014" />}
+        {activeWindow ? (<div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground shrink-0">{t("agents.stats_window")}</span><span className="text-xs text-foreground font-medium truncate max-w-[120px]" title={activeWindow}>{activeWindow}</span></div>) : <InfoRow label={t("agents.stats_window")} value="\u2014" />}
         {parentID && <InfoRow label={t("agents.stats_parent")} value={parentID.substring(0, 8) + "..."} />}
         {peerCount > 0 && <InfoRow label={t("agents.stats_peers")} value={String(peerCount)} />}
-        {childAgents.length > 0 ? (<Collapsible open={childrenExpanded} onOpenChange={onToggleChildren}><div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground/100 shrink-0">{t("agents.stats_children")}</span><CollapsibleTrigger><Button variant="ghost" size="xs" className="text-primary font-medium hover:underline">{childAgents.length} {t("agents.agents_count", { count: childAgents.length })} <ChevronDown className="size-2 ml-0.5" /></Button></CollapsibleTrigger></div></Collapsible>) : (!parentID && peerCount === 0 ? <InfoRow label={t("agents.stats_type")} value={t("agents.direct_c2")} /> : null)}
+        {childAgents.length > 0 ? (<Collapsible open={childrenExpanded} onOpenChange={onToggleChildren}><div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground shrink-0">{t("agents.stats_children")}</span><CollapsibleTrigger><Button variant="ghost" size="xs" className="text-primary font-medium hover:underline">{childAgents.length} {t("agents.agents_count", { count: childAgents.length })} <ChevronDown className="size-2 ml-0.5" /></Button></CollapsibleTrigger></div></Collapsible>) : (!parentID && peerCount === 0 ? <InfoRow label={t("agents.stats_type")} value={t("agents.direct_c2")} /> : null)}
         <InfoRow label={t("agents.stats_created")} value={createdAt ? formatTime(createdAt) : "\u2014"} />
         <div className="pt-2 mt-2 border-t border-border">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-(--fs-micro-sm) text-muted-foreground/100">{t("agents.stats_kill_date")}</span>
+            <span className="text-micro-sm text-muted-foreground">{t("agents.stats_kill_date")}</span>
             <div className="flex items-center gap-1.5">
               {killDate ? (
                 <>
@@ -156,7 +156,7 @@ export default memo(function AgentStatsGrid({
                   </Button>
                 </>
               ) : (
-                <Button variant="ghost" size="xs" onClick={onSetKillDate} className="text-(--fs-micro-sm) text-primary hover:bg-transparent gap-1">
+                <Button variant="ghost" size="xs" onClick={onSetKillDate} className="text-micro-sm text-primary hover:bg-transparent gap-1">
                   <Calendar className="size-3" /> {t("agents.set")}
                 </Button>
               )}
@@ -164,7 +164,7 @@ export default memo(function AgentStatsGrid({
           </div>
         </div>
         <div className="flex items-center justify-between gap-2 pt-2 mt-2 border-t border-border">
-          <span className="text-(--fs-micro-sm) text-muted-foreground/100">{t("agents.stats_export")}</span>
+          <span className="text-micro-sm text-muted-foreground">{t("agents.stats_export")}</span>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon-xs" onClick={onExportJSON} aria-label={t("agents.stats_export_json")}>
               <FileCode className="size-4" />

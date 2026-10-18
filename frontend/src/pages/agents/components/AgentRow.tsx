@@ -129,7 +129,7 @@ export const AgentRow = memo(function AgentRow({
               <StickyNote className={`size-3.5 ${notes ? "text-primary" : "text-muted-foreground"}`} />
             </Button>
             {beacon.parent_id && (
-              <span className="ml-1 text-(--fs-micro-sm) text-chart-6" title={t("agents.p2p_chained")}>
+              <span className="ml-1 text-micro-sm text-chart-6" title={t("agents.p2p_chained")}>
                 <LinkIcon className="size-4" />
               </span>
             )}
@@ -145,14 +145,14 @@ export const AgentRow = memo(function AgentRow({
       {visibleCols.os && (
       <TableCell className="py-1 px-2">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <Badge variant="secondary" className="text-(--fs-xs-sm) gap-1.5 whitespace-nowrap bg-secondary/60">
+          <Badge variant="secondary" className="text-xs-sm gap-1.5 whitespace-nowrap bg-secondary/60">
             <OsIcon className="size-3 text-muted-foreground" />
             {os}{arch ? ` ${arch}` : ""}
           </Badge>
           {integrity && (
-            <Badge variant={integrityTone(integrity)} className="text-(--fs-micro-sm) font-medium">{integrity}</Badge>
+            <Badge variant={integrityTone(integrity)} className="text-micro-sm font-medium">{integrity}</Badge>
           )}
-          {elevated && <Badge variant="destructive" className="text-(--fs-micro-sm) font-bold" title={t("agents.elevated")}><Shield className="size-3" /></Badge>}
+          {elevated && <Badge variant="destructive" className="text-micro-sm font-bold" title={t("agents.elevated")}><Shield className="size-3" /></Badge>}
         </div>
       </TableCell>
       )}
@@ -182,7 +182,7 @@ export const AgentRow = memo(function AgentRow({
             <Maximize2 className="size-4" />
             <span className="truncate">{activeWindow}</span>
           </span>
-        ) : <span className="text-muted-foreground/100 dark:text-muted-foreground"></span>}
+        ) : <span className="text-muted-foreground dark:text-muted-foreground"></span>}
       </TableCell>
       )}
       {visibleCols.lock && (
@@ -190,24 +190,24 @@ export const AgentRow = memo(function AgentRow({
         {lockUser ? (
           <span className="inline-flex items-center gap-1 text-xs" title={t("agents.locked_by").replace("{user}", lockUser)}>
             <Lock className="size-4" />
-            <span className="text-(--fs-micro-sm) text-warning-ink font-medium truncate max-w-[80px]">{lockUser}</span>
+            <span className="text-micro-sm text-warning-ink font-medium truncate max-w-[80px]">{lockUser}</span>
           </span>
         ) : locksUnread ? (
           // The lock table has never been read successfully. Showing the
           // unlock glyph here would assert "not locked" for every agent, which
           // is exactly the claim an operator must not be given blind.
-          <span className="text-muted-foreground/100 text-(--fs-xs-sm)" title={t("agents.lock_state_unreadable")}>
+          <span className="text-muted-foreground text-xs-sm" title={t("agents.lock_state_unreadable")}>
             <HelpCircle className="size-4" />
           </span>
         ) : (
-          <span className="text-muted-foreground/100 text-(--fs-xs-sm)">
+          <span className="text-muted-foreground text-xs-sm">
             <Unlock className="size-4" />
           </span>
         )}
         {presenceUsers && presenceUsers.length > 0 && (
           <span className="inline-flex items-center gap-1 text-xs ml-1" title={t("agents.active_operator").replace("{user}", presenceUsers.join(", "))}>
             <Users className="size-3.5 text-info-ink" />
-            <span className="text-(--fs-micro-sm) text-info-ink truncate max-w-[80px]">{presenceUsers.length}</span>
+            <span className="text-micro-sm text-info-ink truncate max-w-[80px]">{presenceUsers.length}</span>
           </span>
         )}
       </TableCell>
@@ -232,7 +232,7 @@ export const AgentRow = memo(function AgentRow({
       </TableCell>
       )}
       {visibleCols.version && (
-      <TableCell className="py-1 px-2 text-xs font-mono text-muted-foreground/100 max-sm:hidden">
+      <TableCell className="py-1 px-2 text-xs font-mono text-muted-foreground max-sm:hidden">
         {version ? (
           version
         ) : (
@@ -266,7 +266,7 @@ export const AgentRow = memo(function AgentRow({
               {tags.slice(0, 3).map((tag) => (
                 <span key={tag.id} className="size-2 rounded-full ring-1 ring-white dark:ring-border shadow-sm" style={{ backgroundColor: tag.color }} title={tag.name} />
               ))}
-              {tags.length > 3 && <span className="text-(--fs-micro) text-muted-foreground">+{tags.length - 3}</span>}
+              {tags.length > 3 && <span className="text-micro text-muted-foreground">+{tags.length - 3}</span>}
             </span>
           )}
           <Button

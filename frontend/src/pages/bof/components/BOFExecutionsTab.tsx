@@ -47,7 +47,7 @@ export default function BOFExecutionsTab({ executions, loading, error, onRetry }
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className={`text-(--fs-micro-sm) px-2 py-0.5 rounded-full ${getStatusColor(ex.status || "")}`}>
+                  <Badge variant="secondary" className={`text-micro-sm px-2 py-0.5 rounded-full ${getStatusColor(ex.status || "")}`}>
                     {ex.status || "pending"}
                   </Badge>
                   <span className="text-xs text-muted-foreground">{ex.created_at || ""}</span>

@@ -12,23 +12,27 @@ export function EmptyState({ icon, title, message, action, className, compact = 
   compact?: boolean;
 }) {
   const IconComponent = icon || Inbox;
+  // `whitespace-normal` is load-bearing: the empty state is routinely rendered
+  // inside a `TableCell`, which sets `whitespace-nowrap` for data cells. That
+  // inherited nowrap clipped the message ("Deploy your first implant to
+  // establish a…") instead of wrapping it, on every table-backed page.
   if (compact) {
     return (
-      <div className={cn("flex flex-col items-center justify-center gap-1.5 py-8 text-center", className)}>
+      <div className={cn("flex flex-col items-center justify-center gap-1.5 whitespace-normal py-8 text-center", className)}>
         <IconComponent className="size-5 text-muted-foreground/70" aria-hidden="true" />
-        <p className="text-(--fs-compact) font-medium text-muted-foreground">{title}</p>
-        {message && <p className="text-xs text-muted-foreground/80 max-w-xs">{message}</p>}
+        <p className="text-compact font-medium text-muted-foreground">{title}</p>
+        {message && <p className="max-w-xs text-balance text-xs text-muted-foreground/80">{message}</p>}
         {action && <div className="mt-1">{action}</div>}
       </div>
     );
   }
   return (
-    <div className={cn("flex flex-col items-center justify-center py-12 sm:py-16 md:py-20 text-center animate-fade-in", className)}>
-      <div className="size-14 rounded-lg bg-muted/80 ring-1 ring-border/50 shadow-sm flex items-center justify-center mb-5" aria-hidden="true">
+    <div role="status" className={cn("flex min-h-40 flex-col items-center justify-center whitespace-normal py-12 text-center animate-fade-in sm:py-16 md:py-20", className)}>
+      <div className="mb-5 flex size-14 items-center justify-center rounded-lg bg-muted/80 shadow-sm ring-1 ring-border/50" aria-hidden="true">
         <IconComponent className="size-8 text-muted-foreground/85" aria-hidden="true" />
       </div>
-      <p className="text-sm font-semibold text-foreground mb-1.5">{title}</p>
-      {message && <p className="text-(--fs-compact) text-muted-foreground mb-5 max-w-xs leading-relaxed">{message}</p>}
+      <p className="mb-1.5 text-sm font-semibold text-foreground">{title}</p>
+      {message && <p className="mb-5 max-w-sm text-balance text-compact leading-relaxed text-muted-foreground">{message}</p>}
       {action && <div>{action}</div>}
     </div>
   );

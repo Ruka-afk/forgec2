@@ -408,7 +408,7 @@ export default function OpsecPage() {
                     <div className="flex items-center gap-2 text-xs">
                       <code className="font-semibold text-foreground">{h.rule_name}</code>
                       <span className={cn(
-                        "px-1.5 py-0.5 rounded text-(--fs-micro-sm) font-medium",
+                        "px-1.5 py-0.5 rounded text-micro-sm font-medium",
                         h.risk_level >= 4 ? "bg-destructive/15 text-destructive-ink" :
                         h.risk_level >= 3 ? "bg-warning/15 text-warning-ink dark:bg-warning/20 dark:text-warning-ink" :
                         "bg-warning/15 text-warning-ink"
@@ -419,7 +419,7 @@ export default function OpsecPage() {
                       <span className="text-muted-foreground">task: {h.task_type}</span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">{h.message}</p>
-                    <p className="text-(--fs-micro-sm) text-muted-foreground mt-0.5">{formatTime(h.created_at)}</p>
+                    <p className="text-micro-sm text-muted-foreground mt-0.5">{formatTime(h.created_at)}</p>
                   </div>
                 </div>
               ))}

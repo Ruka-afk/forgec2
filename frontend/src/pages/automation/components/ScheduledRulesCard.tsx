@@ -232,11 +232,11 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
                 <div>
                   <Label className="text-xs mb-1">{t("scheduler.schedule")}</Label>
                   <Input id="sched-schedule" value={schedule} onChange={e => { setSchedule(e.target.value); if (formErrors.schedule) setFormErrors({ ...formErrors, schedule: undefined }); }} placeholder={t("scheduler.schedule_ph")} aria-label={t("scheduler.a11y_expr")} aria-invalid={!!formErrors.schedule} aria-describedby={formErrors.schedule ? "sched-schedule-error" : undefined} />
-                  <p className="text-(--fs-xs-sm) text-muted-foreground mt-1 space-y-0.5">
-                    <code className="px-1 bg-muted rounded text-(--fs-micro-sm)">every N minutes</code> ·{" "}
-                    <code className="px-1 bg-muted rounded text-(--fs-micro-sm)">hourly</code> ·{" "}
-                    <code className="px-1 bg-muted rounded text-(--fs-micro-sm)">daily HH:MM</code> ·{" "}
-                    <code className="px-1 bg-muted rounded text-(--fs-micro-sm)">* * * * *</code>
+                  <p className="text-xs-sm text-muted-foreground mt-1 space-y-0.5">
+                    <code className="px-1 bg-muted rounded text-micro-sm">every N minutes</code> ·{" "}
+                    <code className="px-1 bg-muted rounded text-micro-sm">hourly</code> ·{" "}
+                    <code className="px-1 bg-muted rounded text-micro-sm">daily HH:MM</code> ·{" "}
+                    <code className="px-1 bg-muted rounded text-micro-sm">* * * * *</code>
                   </p>
                   <FieldError id="sched-schedule-error">{formErrors.schedule}</FieldError>
                 </div>
@@ -279,13 +279,13 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-sm">{task.name}</span>
                     <Badge variant="secondary">{task.task_type}</Badge>
-                    <span className="text-(--fs-xs-sm) text-muted-foreground">{t("scheduler.run_count")} {task.run_count}x</span>
+                    <span className="text-xs-sm text-muted-foreground">{t("scheduler.run_count")} {task.run_count}x</span>
                   </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-(--fs-compact) text-muted-foreground mt-0.5">
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-compact text-muted-foreground mt-0.5">
                     <span className="inline-flex items-center gap-1"><Bug className="size-3.5" />{agents.find(a => a.id === task.agent_id)?.hostname || task.agent_id?.slice(0, 8)}</span>
                     <span className="inline-flex items-center gap-1"><Calendar className="size-3.5" />{task.schedule}</span>
                     {task.next_run && <span className="inline-flex items-center gap-1"><Clock className="size-3.5" />{t("scheduler.next")}: {formatTime(task.next_run)}</span>}
-                    {task.last_run && <span className="text-muted-foreground/100">{t("scheduler.last")}: {formatTime(task.last_run)}</span>}
+                    {task.last_run && <span className="text-muted-foreground">{t("scheduler.last")}: {formatTime(task.last_run)}</span>}
                   </div>
                 </div>
                 <div className="flex gap-1 shrink-0">

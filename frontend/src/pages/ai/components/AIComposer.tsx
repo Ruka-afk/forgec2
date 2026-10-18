@@ -63,12 +63,12 @@ export function AIComposer({
         )}
       </div>
       <div className="flex items-center justify-between gap-3 border-t border-border/60 bg-muted/30 px-3 py-2">
-        <span className="text-(--fs-micro-sm) text-muted-foreground">
+        <span className="text-micro-sm text-muted-foreground">
           {messageCount}
           {maxLength && <> &middot; {input.length}/{maxLength}</>}
           {input.trim() && <> &middot; ~{Math.ceil(input.trim().length / 4)} {t("ai.tokens_est")}</>}
         </span>
-        <span className="flex items-center gap-3 text-(--fs-micro-sm) text-muted-foreground">
+        <span className="flex items-center gap-3 text-micro-sm text-muted-foreground">
           {onChatOnlyChange && (
             <button
               type="button"

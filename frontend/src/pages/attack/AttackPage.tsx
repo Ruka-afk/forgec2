@@ -304,13 +304,13 @@ export default function AttackPage() {
                             <Badge
                               key={tt}
                               variant={usedTaskTypes.has(tt) ? "success" : "outline"}
-                              className="text-(--fs-micro-sm) font-mono"
+                              className="text-micro-sm font-mono"
                             >
                               {tt}
                             </Badge>
                           ))}
                           {tech.task_types.length > 3 && (
-                            <span className="text-(--fs-micro-sm) text-muted-foreground">+{tech.task_types.length - 3}</span>
+                            <span className="text-micro-sm text-muted-foreground">+{tech.task_types.length - 3}</span>
                           )}
                         </div>
                       </div>
@@ -369,10 +369,10 @@ function PhaseCoverageCard() {
                 {isCovered ? (
                   <Check className="size-4" />
                 ) : (
-                  <span className="text-white text-(--fs-micro-sm) font-bold">-</span>
+                  <span className="text-white text-micro-sm font-bold">-</span>
                 )}
               </div>
-              <div className="text-(--fs-micro-sm) font-medium text-foreground leading-tight mb-1">
+              <div className="text-micro-sm font-medium text-foreground leading-tight mb-1">
                 {phase.split(" ").slice(0, 2).join(" ")}
               </div>
               <div className="w-full h-1.5 rounded-full bg-secondary overflow-hidden">
@@ -380,7 +380,7 @@ function PhaseCoverageCard() {
                   style={{ width: `${pct}%` }} />
               </div>
               {found && (
-                <div className="text-(--fs-micro) text-muted mt-1">
+                <div className="text-micro text-muted mt-1">
                   {found.total_tasks} {t("attack.tasks")}
                 </div>
               )}
@@ -480,7 +480,7 @@ function UsageHeatmapCard() {
                 <div className="space-y-1">
                   {data.tactics.map((tactic) => (
                     <div key={tactic} className="flex items-center gap-1">
-                      <span className={`text-(--fs-micro-sm) w-36 shrink-0 truncate ${HEATMAP_TACTIC_COLORS[tactic] || "text-foreground"}`}>
+                      <span className={`text-micro-sm w-36 shrink-0 truncate ${HEATMAP_TACTIC_COLORS[tactic] || "text-foreground"}`}>
                         {tactic}
                       </span>
                       <div className="flex gap-[2px] flex-1">
@@ -503,7 +503,7 @@ function UsageHeatmapCard() {
                   <span className="w-36 shrink-0" />
                   <div className="flex gap-[2px] flex-1">
                     {data.days.map((day, i) => (
-                      <span key={day} className="flex-1 min-w-[6px] text-center text-(--fs-micro) text-muted-foreground/70">
+                      <span key={day} className="flex-1 min-w-[6px] text-center text-micro text-muted-foreground/70">
                         {(i % Math.ceil(data.days.length / 10)) === 0 ? day.slice(8) : ""}
                       </span>
                     ))}
@@ -511,7 +511,7 @@ function UsageHeatmapCard() {
                 </div>
               </div>
             </div>
-            <div className="flex items-center justify-between mt-3 text-(--fs-micro-sm) text-muted-foreground">
+            <div className="flex items-center justify-between mt-3 text-micro-sm text-muted-foreground">
               <span>{t("attack.heatmap_total", { count: data.total_tasks })}</span>
               <span className="flex items-center gap-1">
                 {t("attack.heatmap_less")}

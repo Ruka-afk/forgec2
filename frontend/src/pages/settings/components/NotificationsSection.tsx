@@ -156,18 +156,18 @@ export default function NotificationsSection() {
                     <SelectItem value="email">{t("settings.notifications.mode_email")}</SelectItem>
                   </SelectContent>
                 </Select>
-                <span className="text-(--fs-micro-sm) text-muted-foreground font-mono">{target.type}</span>
+                <span className="text-micro-sm text-muted-foreground font-mono">{target.type}</span>
               </div>
               <Button onClick={() => removeTarget(i)} className="text-xs px-2 py-1 bg-destructive/10 text-destructive-ink rounded-lg hover:bg-destructive/20" aria-label={t("settings.notifications.remove")}><Trash2 className="size-4" /></Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <Label htmlFor={`notif-name-${i}`} className="text-(--fs-micro-sm) font-medium text-muted-foreground">{t("settings.notifications.name")}</Label>
+                <Label htmlFor={`notif-name-${i}`} className="text-micro-sm font-medium text-muted-foreground">{t("settings.notifications.name")}</Label>
                 <Input id={`notif-name-${i}`} className="text-xs" placeholder={t("settings.notifications.name_placeholder")} value={target.name} onChange={(e) => update(i, "name", e.target.value)} />
               </div>
               <div>
-                <span className="text-(--fs-micro-sm) font-medium text-muted-foreground">{t("settings.notifications.enabled")}</span>
+                <span className="text-micro-sm font-medium text-muted-foreground">{t("settings.notifications.enabled")}</span>
                 <Select value={target.enabled ? "true" : "false"} onValueChange={(v) => update(i, "enabled", v === "true")}>
                   <SelectTrigger className="text-xs">
                     <SelectValue placeholder={t("settings.notifications.select_status")} />
@@ -182,14 +182,14 @@ export default function NotificationsSection() {
 
             {target.type !== "email" && (
               <div>
-                <Label htmlFor={`notif-url-${i}`} className="text-(--fs-micro-sm) font-medium text-muted-foreground">{t("settings.notifications.webhook_url")}</Label>
+                <Label htmlFor={`notif-url-${i}`} className="text-micro-sm font-medium text-muted-foreground">{t("settings.notifications.webhook_url")}</Label>
                 <Input id={`notif-url-${i}`} className="text-xs" placeholder={t("settings.notifications.webhook_url_placeholder")} value={target.url} onChange={(e) => update(i, "url", e.target.value)} />
               </div>
             )}
 
             {target.type === "generic" && (
               <div>
-                <Label htmlFor={`notif-secret-${i}`} className="text-(--fs-micro-sm) font-medium text-muted-foreground">{t("settings.notifications.hmac_secret")}</Label>
+                <Label htmlFor={`notif-secret-${i}`} className="text-micro-sm font-medium text-muted-foreground">{t("settings.notifications.hmac_secret")}</Label>
                 <Input id={`notif-secret-${i}`} className="text-xs" placeholder={t("settings.notifications.hmac_placeholder")} value={target.secret} onChange={(e) => update(i, "secret", e.target.value)} />
               </div>
             )}
@@ -198,31 +198,31 @@ export default function NotificationsSection() {
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <Label htmlFor={`notif-smtp-host-${i}`} className="text-(--fs-micro-sm) font-medium text-muted-foreground">{t("settings.notifications.smtp_server")}</Label>
+                    <Label htmlFor={`notif-smtp-host-${i}`} className="text-micro-sm font-medium text-muted-foreground">{t("settings.notifications.smtp_server")}</Label>
                     <Input id={`notif-smtp-host-${i}`} className="text-xs" placeholder="smtp.gmail.com" value={target.smtp_host} onChange={(e) => update(i, "smtp_host", e.target.value)} />
                   </div>
                   <div>
-                    <Label htmlFor={`notif-smtp-port-${i}`} className="text-(--fs-micro-sm) font-medium text-muted-foreground">{t("settings.notifications.port")}</Label>
+                    <Label htmlFor={`notif-smtp-port-${i}`} className="text-micro-sm font-medium text-muted-foreground">{t("settings.notifications.port")}</Label>
                     <Input id={`notif-smtp-port-${i}`} type="number" className="text-xs" placeholder="587" value={target.smtp_port} onChange={(e) => update(i, "smtp_port", parseInt(e.target.value) || 587)} />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <Label htmlFor={`notif-smtp-user-${i}`} className="text-(--fs-micro-sm) font-medium text-muted-foreground">{t("settings.notifications.username")}</Label>
+                    <Label htmlFor={`notif-smtp-user-${i}`} className="text-micro-sm font-medium text-muted-foreground">{t("settings.notifications.username")}</Label>
                     <Input id={`notif-smtp-user-${i}`} className="text-xs" placeholder="user@gmail.com" value={target.smtp_user} onChange={(e) => update(i, "smtp_user", e.target.value)} />
                   </div>
                   <div>
-                    <Label htmlFor={`notif-smtp-pass-${i}`} className="text-(--fs-micro-sm) font-medium text-muted-foreground">{t("settings.notifications.password")}</Label>
+                    <Label htmlFor={`notif-smtp-pass-${i}`} className="text-micro-sm font-medium text-muted-foreground">{t("settings.notifications.password")}</Label>
                     <Input id={`notif-smtp-pass-${i}`} type="password" className="text-xs" placeholder={t("settings.notifications.password_placeholder")} value={target.smtp_pass} onChange={(e) => update(i, "smtp_pass", e.target.value)} />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <Label htmlFor={`notif-from-${i}`} className="text-(--fs-micro-sm) font-medium text-muted-foreground">{t("settings.notifications.from")}</Label>
+                    <Label htmlFor={`notif-from-${i}`} className="text-micro-sm font-medium text-muted-foreground">{t("settings.notifications.from")}</Label>
                     <Input id={`notif-from-${i}`} className="text-xs" placeholder="alerts@example.com" value={target.from} onChange={(e) => update(i, "from", e.target.value)} />
                   </div>
                   <div>
-                    <Label htmlFor={`notif-to-${i}`} className="text-(--fs-micro-sm) font-medium text-muted-foreground">{t("settings.notifications.to")}</Label>
+                    <Label htmlFor={`notif-to-${i}`} className="text-micro-sm font-medium text-muted-foreground">{t("settings.notifications.to")}</Label>
                     <Input id={`notif-to-${i}`} className="text-xs" placeholder="admin@example.com" value={target.to} onChange={(e) => update(i, "to", e.target.value)} />
                   </div>
                 </div>

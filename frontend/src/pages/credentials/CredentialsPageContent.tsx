@@ -124,8 +124,8 @@ export default function CredentialsPage() {
         setShowAddModal(false);
         resetForm();
         loadData();
-      } catch (err) {
-        showToastNotify(String(err), "error");
+      } catch {
+        showToastNotify(t("common.error"), "error");
       }
     },
   });
@@ -151,8 +151,8 @@ export default function CredentialsPage() {
       setEditTarget(null);
       resetForm();
       loadData();
-    } catch (err) {
-      showToastNotify(String(err), "error");
+    } catch {
+      showToastNotify(t("common.error"), "error");
     } finally {
       setSavingEdit(false);
     }
@@ -166,8 +166,8 @@ export default function CredentialsPage() {
       showToastNotify(t("cred.toast.deleted"), "success");
       setShowDeleteConfirm(null);
       loadData();
-    } catch (err) {
-      showToastNotify(String(err), "error");
+    } catch {
+      showToastNotify(t("common.error"), "error");
     }
   }, [t, loadData]);
 
@@ -195,7 +195,7 @@ export default function CredentialsPage() {
       } else if (msg.includes("403") || msg.includes("Forbidden")) {
         showToastNotify(t("cred.toast.verify_forbidden"), "error");
       } else {
-        showToastNotify(t("cred.toast.verify_failed") + ": " + msg, "error");
+        showToastNotify(t("cred.toast.verify_failed"), "error");
       }
     }
   }, [loadData, t]);
@@ -222,8 +222,8 @@ export default function CredentialsPage() {
       setBatchTags("");
       setSelectedIds(new Set());
       loadData();
-    } catch (err) {
-      showToastNotify(String(err), "error");
+    } catch {
+      showToastNotify(t("common.error"), "error");
     }
   };
 
@@ -426,7 +426,7 @@ export default function CredentialsPage() {
               <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("cred.stat_by_type")}</div>
               <div className="flex flex-wrap gap-1 mt-2">
                 {stats.byType.map(s => s.count > 0 && (
-                  <Badge key={s.type} variant={TYPE_BADGE_VARIANT[s.type] || "outline"} className="text-(--fs-micro-sm)">{s.type}: {s.count}</Badge>
+                  <Badge key={s.type} variant={TYPE_BADGE_VARIANT[s.type] || "outline"} className="text-micro-sm">{s.type}: {s.count}</Badge>
                 ))}
                 {stats.byType.every(s => s.count === 0) && <span className="text-xs text-muted-foreground">—</span>}
               </div>
@@ -543,7 +543,7 @@ export default function CredentialsPage() {
         <DataState
           loading={loading}
           error={error}
-          empty={filteredEntries.length === 0}
+          empty={!loading && !error && filteredEntries.length === 0}
           emptyIcon={Lock}
           emptyTitle={t("cred.empty")}
           onRetry={reload}
@@ -556,7 +556,7 @@ export default function CredentialsPage() {
             </div>
           }
         >
-          <div className="overflow-x-auto scrollbar-thin">
+          <div role="region" aria-label={t("cred.vault_title")} tabIndex={0} className="content-auto overscroll-contain overflow-x-auto scrollbar-thin">
             <Table className="w-full text-sm">
               <TableHeader className="bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90 sticky top-0 z-10 border-b border-border">
                 <TableRow className="text-xs text-muted-foreground hover:bg-transparent">

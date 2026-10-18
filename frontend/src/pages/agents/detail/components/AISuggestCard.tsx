@@ -89,7 +89,7 @@ export function AISuggestCard({ agentId, online }: { agentId: string; online: bo
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">{sg.reason}</p>
                   {sg.command_hint && (
-                    <code className="mt-1.5 block truncate rounded bg-background px-1.5 py-1 text-(--fs-micro-sm) font-mono text-muted-foreground" title={sg.command_hint}>
+                    <code className="mt-1.5 block truncate rounded bg-background px-1.5 py-1 text-micro-sm font-mono text-muted-foreground" title={sg.command_hint}>
                       {sg.command_hint}
                     </code>
                   )}

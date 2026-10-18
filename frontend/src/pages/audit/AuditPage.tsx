@@ -211,6 +211,7 @@ export default function AuditPage() {
       <Card className="overflow-hidden">
         <DataTable<AuditLog>
           data={logs.filter(Boolean)}
+          label={t("audit.title")}
           loading={loading}
           error={error}
           onRetry={() => loadLogs()}

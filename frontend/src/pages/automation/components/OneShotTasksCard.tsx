@@ -159,7 +159,7 @@ export function OneShotTasksCard() {
                 onChange={(e) => setRunAtLocal(e.target.value)}
                 className="mt-1"
               />
-              <span className="block text-(--fs-micro-sm) text-muted-foreground mt-0.5">
+              <span className="block text-micro-sm text-muted-foreground mt-0.5">
                 {t("oneshot.run_at_hint")}
               </span>
             </div>
@@ -192,7 +192,7 @@ export function OneShotTasksCard() {
               <Badge variant={STATUS_VARIANT[st.status] || "secondary"} className="shrink-0">{st.status}</Badge>
               <span className="font-medium text-foreground truncate max-w-[200px]">{st.agent_id.slice(0, 12)}</span>
               <code className="text-xs font-mono text-muted-foreground truncate flex-1 min-w-[120px]">{st.command}</code>
-              <span className="text-(--fs-micro-sm) text-muted-foreground shrink-0" title={formatTime(st.run_at)}>
+              <span className="text-micro-sm text-muted-foreground shrink-0" title={formatTime(st.run_at)}>
                 {formatTime(st.run_at)}
               </span>
               {st.status === "pending" && (

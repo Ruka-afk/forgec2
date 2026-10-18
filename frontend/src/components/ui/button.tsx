@@ -26,7 +26,7 @@ const buttonVariants = cva(
         default:
           "h-8 min-h-11 gap-1.5 px-2.5 sm:min-h-0 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
         xs: "h-6 min-h-11 gap-1 rounded-(--radius-control-xs) px-2 text-xs sm:min-h-0 in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-7 min-h-11 gap-1 rounded-(--radius-control-sm) px-2.5 text-(--fs-compact) sm:min-h-0 in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
+        sm: "h-7 min-h-11 gap-1 rounded-(--radius-control-sm) px-2.5 text-compact sm:min-h-0 in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
         lg: "h-9 min-h-[44px] min-w-[44px] gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
         icon: "size-8 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 relative after:absolute after:content-[''] after:-inset-1.5",
         "icon-xs":

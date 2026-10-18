@@ -72,7 +72,7 @@ interface DataSpinnerProps {
 
 export function DataSpinner({ message, className }: DataSpinnerProps) {
   return (
-    <div className={cn("flex flex-col items-center justify-center py-12 sm:py-16 md:py-20 animate-fade-in", className)}>
+    <div role="status" aria-live="polite" aria-busy="true" className={cn("flex min-h-40 flex-col items-center justify-center py-12 animate-fade-in sm:py-16 md:py-20", className)}>
       <Spinner size="md" />
       {message && <p className="text-xs text-muted-foreground mt-3">{message}</p>}
     </div>
@@ -91,15 +91,16 @@ export function DataError({ message, onRetry, onDismiss, className }: DataErrorP
   return (
     <div
       role="alert"
+      aria-live="assertive"
       className={cn(
-        "flex flex-col items-center justify-center py-16 text-center animate-fade-in",
+        "flex min-h-48 flex-col items-center justify-center py-16 text-center animate-fade-in",
         className
       )}
     >
       <div className="size-14 rounded-lg bg-destructive/10 flex items-center justify-center mb-4">
         <AlertCircle className="size-7 text-destructive-ink" aria-hidden="true" />
       </div>
-      <p className="text-sm font-semibold text-foreground mb-1">{message || t("common.error")}</p>
+      <p className="max-w-2xl break-words text-sm font-semibold text-foreground mb-1">{message || t("common.error")}</p>
       <p className="text-xs text-muted-foreground mb-4 max-w-xs">{t("common.error_hint")}</p>
       <div className="flex items-center gap-2">
         {onRetry && (

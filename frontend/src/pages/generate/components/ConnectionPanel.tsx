@@ -37,7 +37,7 @@ const CONDITIONAL_TRANSPORTS = ["grpc", "ssh", "wss", "mtls", "h2c", "icmp"];
 
 function SummaryChip({ label, value, tint }: { label: string; value: string; tint: string }) {
   return (
-    <span className={cn("inline-flex items-center gap-1 rounded-md px-2 py-1 text-(--fs-micro-sm) font-mono", tint)}>
+    <span className={cn("inline-flex items-center gap-1 rounded-md px-2 py-1 text-micro-sm font-mono", tint)}>
       <span className="opacity-60">{label}:</span> {value}
     </span>
   );
@@ -111,7 +111,7 @@ export default function ConnectionPanel({
   return (
     <CraftPanel
       title={t("generate.connection_title")}
-      badge={<span className="rounded-md bg-primary/10 px-2 py-0.5 text-(--fs-micro-sm) font-mono text-primary uppercase">{transport}</span>}
+      badge={<span className="rounded-md bg-primary/10 px-2 py-0.5 text-micro-sm font-mono text-primary uppercase">{transport}</span>}
       bodyClassName="space-y-2.5"
       footer={
         <div className="flex flex-wrap gap-1.5">
@@ -153,7 +153,7 @@ export default function ConnectionPanel({
               <CopyButton text={shared.c2_url} label={t("generate.c2_url_auto")} size="icon-xs" />
             </div>
             {previewUrl ? (
-              <p className="mt-1.5 text-(--fs-micro-sm) text-muted-foreground">
+              <p className="mt-1.5 text-micro-sm text-muted-foreground">
                 {t("generate.c2_preview", { url: previewUrl, transport: transport.toUpperCase() })}
               </p>
             ) : null}
@@ -195,7 +195,7 @@ export default function ConnectionPanel({
                   )}
                 >
                   <span className="block">{tr.label}</span>
-                  <span className="block text-(--fs-micro) font-normal opacity-70"><TransportQualityLabel quality={tr.quality} /></span>
+                  <span className="block text-micro font-normal opacity-70"><TransportQualityLabel quality={tr.quality} /></span>
                 </Button>
               );
             })}
@@ -305,12 +305,12 @@ export default function ConnectionPanel({
             )}
           </div>
           {profileLocked && (
-            <p className="flex items-center gap-1 text-(--fs-xs-sm) text-warning-ink">
+            <p className="flex items-center gap-1 text-xs-sm text-warning-ink">
               <Lock className="size-3.5" />{t("generate.profile_locked")}
             </p>
           )}
           {currentProfile?.description && (
-            <p className="text-(--fs-micro-sm) text-muted-foreground">{currentProfile.description}</p>
+            <p className="text-micro-sm text-muted-foreground">{currentProfile.description}</p>
           )}
         </div>
       </ConfigSection>
@@ -321,7 +321,7 @@ export default function ConnectionPanel({
           <div>
             <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">{t("generate.heartbeat_sec")}</span>
             <Input aria-label={t("generate.heartbeat_sec")} type="number" min={1} max={86400} disabled={profileLocked} value={shared.interval} onChange={(e) => setShared(s => ({ ...s, interval: clampInterval(e.target.value) }))} />
-            <p className="mt-1 text-(--fs-micro-sm) text-muted-foreground">{t("generate.heartbeat_range")}</p>
+            <p className="mt-1 text-micro-sm text-muted-foreground">{t("generate.heartbeat_range")}</p>
           </div>
           <div>
             <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">{t("generate.jitter_pct")}</span>

@@ -52,7 +52,7 @@ export function CopyButton({ text, label, title, className, size = "icon-xs", ch
 
   return (
     <Tooltip>
-      <TooltipTrigger render={<Button variant="ghost" size={size} onClick={copy} className={className || "ml-1 text-muted-foreground/100 hover:text-foreground"} aria-label={t("common.copy_value").replace("{value}", label || "value")} />}>
+      <TooltipTrigger render={<Button variant="ghost" size={size} onClick={copy} className={className || "ml-1 text-muted-foreground hover:text-foreground"} aria-label={t("common.copy_value").replace("{value}", label || "value")} />}>
         {typeof children === "function" ? children(copied) : (children ?? defaultIcon)}
       </TooltipTrigger>
       <TooltipContent>{title || t("common.copy_value").replace("{value}", label || "value")}</TooltipContent>

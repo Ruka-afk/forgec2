@@ -34,7 +34,7 @@ function OSBody({ data }: { data: OSPoint[] }) {
         <div className="absolute inset-2 rounded-full bg-card flex items-center justify-center text-xs font-bold text-foreground">{total}</div>
       </div>
       <div className="flex-1 space-y-1.5">
-        {items.length === 0 ? <p className="text-xs text-muted-foreground/100">{t("common.no_data")}</p> : items.map((d) => (
+        {items.length === 0 ? <p className="text-xs text-muted-foreground">{t("common.no_data")}</p> : items.map((d) => (
           <div key={d.name} className="flex items-center gap-2 text-xs">
             <span className="size-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color }}></span>
             <span className="text-foreground truncate flex-1">{d.name}</span>
