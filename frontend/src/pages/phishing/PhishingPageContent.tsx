@@ -5,9 +5,11 @@ import { paths } from "@/lib/api-paths";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageSpinner } from "@/components/ui/spinner";
+import { DataError } from "@/components/ui/data-state";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { useApiResource } from "@/lib/hooks/useApiResource";
-import { POLL } from "@/lib/polling";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
+import { useMutation } from "@/lib/hooks/useMutation";
 import { formatTime } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -70,20 +72,22 @@ interface CaptureEntry {
 
 type Tab = "templates" | "campaigns" | "captures" | "entra";
 
+const EMPTY_TPL_FORM = { name: "", subject: "", body: "", from_name: "", from_email: "", type: "html" };
+const EMPTY_CAMP_FORM = { name: "", template_id: 0, target_list: "", smtp_host: "", smtp_port: 587, smtp_user: "", smtp_pass: "" };
+
 export default function PhishingPageContent() {
   const { t } = useI18n();
   const { confirm, modal } = useConfirm();
+  const { toastError } = useErrorToast();
 
   // Template form
   const [showTplForm, setShowTplForm] = useState(false);
-  const [tplForm, setTplForm] = useState({ name: "", subject: "", body: "", from_name: "", from_email: "", type: "html" });
+  const [tplForm, setTplForm] = useState(EMPTY_TPL_FORM);
   const [editTplId, setEditTplId] = useState<number | null>(null);
-  const [savingTpl, setSavingTpl] = useState(false);
 
   // Campaign form
   const [showCampForm, setShowCampForm] = useState(false);
-  const [campForm, setCampForm] = useState({ name: "", template_id: 0, target_list: "", smtp_host: "", smtp_port: 587, smtp_user: "", smtp_pass: "" });
-  const [savingCamp, setSavingCamp] = useState(false);
+  const [campForm, setCampForm] = useState(EMPTY_CAMP_FORM);
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: "templates", label: t("phishing.tab_templates"), icon: <FileText className="size-4" /> },
@@ -92,7 +96,7 @@ export default function PhishingPageContent() {
     { key: "entra", label: t("phishing.tab_entra"), icon: <Shield className="size-4" /> },
   ];
 
-  const { data, loading, refresh: loadAll } = useApiResource<{
+  const { data, loading, error: loadError, refresh: loadAll } = useApiResource<{
     templates: PhishingTemplate[];
     campaigns: PhishingCampaign[];
     captures: CaptureEntry[];
@@ -109,7 +113,6 @@ export default function PhishingPageContent() {
         captures: (cap.data as CaptureEntry[]) || [],
       };
     },
-    toastThrottleMs: POLL.toastThrottle,
     errorMessage: t("phishing.toast.load_failed"),
   });
   const templates = data?.templates ?? [];
@@ -118,21 +121,23 @@ export default function PhishingPageContent() {
 
   // 鈹€鈹€ Template CRUD 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
-  const handleSaveTpl = async () => {
-    if (savingTpl) return;
-    setSavingTpl(true);
-    try {
-      if (editTplId) {
-        await api.putJson(paths.phishing.template(editTplId), tplForm);
-      } else {
-        await api.postJson(paths.phishing.templates, tplForm);
-      }
+  const { mutate: saveTemplate, isPending: savingTpl } = useMutation({
+    fn: () =>
+      editTplId
+        ? api.putJson(paths.phishing.template(editTplId), tplForm)
+        : api.postJson(paths.phishing.templates, tplForm),
+    onSuccess: () => {
       setShowTplForm(false);
       setEditTplId(null);
-      setTplForm({ name: "", subject: "", body: "", from_name: "", from_email: "", type: "html" });
+      setTplForm(EMPTY_TPL_FORM);
       loadAll();
-    } catch { toast.error(t("phishing.toast.save_template_failed")); }
-    finally { setSavingTpl(false); }
+    },
+    onError: (e) => toastError(e, "phishing.toast.save_template_failed"),
+  });
+
+  const handleSaveTpl = () => {
+    if (savingTpl) return;
+    void saveTemplate();
   };
 
   const handleEditTpl = (t: PhishingTemplate) => {
@@ -141,35 +146,55 @@ export default function PhishingPageContent() {
     setShowTplForm(true);
   };
 
+  const { mutate: deleteTemplate } = useMutation({
+    fn: (id: number) => api.del(paths.phishing.template(id)),
+    onSuccess: () => loadAll(),
+    onError: (e) => toastError(e, "phishing.toast.delete_template_failed"),
+  });
+
   const handleDeleteTpl = async (id: number) => {
     if (!(await confirm({ message: t("phishing.delete_template") }))) return;
-    try {
-      await api.del(paths.phishing.template(id));
-      loadAll();
-    } catch {
-      toast.error(t("phishing.toast.delete_template_failed"));
-    }
+    void deleteTemplate(id);
   };
 
   // 鈹€鈹€ Campaign CRUD 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
-  const handleSaveCamp = async () => {
+  const { mutate: saveCampaign, isPending: savingCamp } = useMutation({
+    fn: () => api.postJson(paths.phishing.campaigns, campForm),
+    onSuccess: () => {
+      setShowCampForm(false);
+      setCampForm(EMPTY_CAMP_FORM);
+      loadAll();
+    },
+    onError: (e) => toastError(e, "phishing.toast.save_campaign_failed"),
+  });
+
+  const handleSaveCamp = () => {
     if (!campForm.template_id) {
-      toast.error(t("phishing.toast.select_template"));
+      toast.error(t("phishing.toast.select_template")); // validation, not an API failure
       return;
     }
     if (savingCamp) return;
-    setSavingCamp(true);
-    try {
-      await api.postJson(paths.phishing.campaigns, campForm);
-      setShowCampForm(false);
-      setCampForm({ name: "", template_id: 0, target_list: "", smtp_host: "", smtp_port: 587, smtp_user: "", smtp_pass: "" });
-      loadAll();
-    } catch { toast.error(t("phishing.toast.save_campaign_failed")); }
-    finally { setSavingCamp(false); }
+    void saveCampaign();
   };
 
+  // The launch spinner names which campaign is in flight; the mutation owns
+  // error routing and the stale-completion guard.
   const [launchingId, setLaunchingId] = useState<number | null>(null);
+  const { mutate: launchCampaign } = useMutation({
+    fn: (id: number) =>
+      api.postJson<{ success?: boolean; queued?: number; message?: string; error?: string }>(
+        `/phishing/campaigns/${id}/launch`,
+        {},
+      ),
+    onSuccess: (res) => {
+      if (res.message) toast.success(res.message);
+      else toast.success(t("phishing.toast.launched", { count: res.queued ?? 0 }));
+      loadAll();
+    },
+    onError: (e) => toastError(e, "phishing.toast.launch_failed"),
+  });
+
   const handleLaunch = async (id: number) => {
     // Double-click guard: two launches could email the full target list
     // twice (the backend claim is atomic, but the second request still
@@ -177,38 +202,41 @@ export default function PhishingPageContent() {
     if (launchingId !== null) return;
     setLaunchingId(id);
     try {
-      const res = await api.postJson<{ success?: boolean; queued?: number; message?: string; error?: string }>(
-        `/phishing/campaigns/${id}/launch`,
-        {},
-      );
-      if (res.message) toast.success(res.message);
-      else toast.success(t("phishing.toast.launched", { count: res.queued ?? 0 }));
-      loadAll();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("phishing.toast.launch_failed"));
+      await launchCampaign(id);
     } finally {
       setLaunchingId(null);
     }
   };
 
-  const handleStop = async (id: number) => {
-    try {
-      await api.post(paths.phishing.campaignStop(id));
-      loadAll();
-    } catch { toast.error(t("phishing.toast.save_campaign_failed")); }
-  };
+  const { mutate: stopCampaign } = useMutation({
+    fn: (id: number) => api.post(paths.phishing.campaignStop(id)),
+    onSuccess: () => loadAll(),
+    onError: (e) => toastError(e, "phishing.toast.stop_failed"),
+  });
+
+  const { mutate: deleteCampaign } = useMutation({
+    fn: (id: number) => api.del(paths.phishing.campaign(id)),
+    onSuccess: () => loadAll(),
+    onError: (e) => toastError(e, "phishing.toast.delete_campaign_failed"),
+  });
 
   const handleDeleteCamp = async (id: number) => {
     if (!(await confirm({ message: t("phishing.delete_campaign") }))) return;
-    try {
-      await api.del(paths.phishing.campaign(id));
-      loadAll();
-    } catch {
-      toast.error(t("phishing.toast.delete_campaign_failed"));
-    }
+    void deleteCampaign(id);
   };
 
   if (loading) return <PageContainer title={t("phishing.title")} subtitle={t("phishing.subtitle")}><PageSpinner /></PageContainer>;
+
+  // The inline error + retry is the load-failure surface (the config/traffic
+  // page loads do not toast either); an empty-state render would read as
+  // "nothing configured" instead of "could not load".
+  if (loadError) {
+    return (
+      <PageContainer title={t("phishing.title")} subtitle={t("phishing.subtitle")}>
+        <DataError message={loadError} onRetry={() => { void loadAll(); }} />
+      </PageContainer>
+    );
+  }
 
   // 鈹€鈹€ Templates Tab 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
@@ -217,7 +245,7 @@ export default function PhishingPageContent() {
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-foreground">{t("phishing.templates_title")}</h2>
-          <Button onClick={() => { setEditTplId(null); setTplForm({ name: "", subject: "", body: "", from_name: "", from_email: "", type: "html" }); setShowTplForm(true); }}>
+          <Button onClick={() => { setEditTplId(null); setTplForm(EMPTY_TPL_FORM); setShowTplForm(true); }}>
             <Plus className="size-4" /> {t("phishing.new_template")}
           </Button>
         </div>
@@ -360,7 +388,7 @@ export default function PhishingPageContent() {
                       <TableCell className="px-4 py-3 sm:py-3.5 text-right text-muted-foreground">{c.cred_count}</TableCell>
                       <TableCell className="px-4 py-3 sm:py-3.5 text-right">
                         {c.status === "draft" && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" disabled={launchingId === cid} onClick={() => handleLaunch(cid)} className="text-primary hover:text-primary dark:hover:text-primary mr-3" aria-label={t("phishing.launch")} />}><Play className="size-4" /></TooltipTrigger><TooltipContent>{t("phishing.launch")}</TooltipContent></Tooltip>}
-                        {c.status === "running" && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleStop(cid)} className="text-warning-ink hover:text-warning-ink/80 mr-3" aria-label={t("phishing.stop")} />}><Square className="size-4" /></TooltipTrigger><TooltipContent>{t("phishing.stop")}</TooltipContent></Tooltip>}
+                        {c.status === "running" && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => { void stopCampaign(cid); }} className="text-warning-ink hover:text-warning-ink/80 mr-3" aria-label={t("phishing.stop")} />}><Square className="size-4" /></TooltipTrigger><TooltipContent>{t("phishing.stop")}</TooltipContent></Tooltip>}
                         {(c.status === "draft" || c.status === "completed" || c.status === "stopped") && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleDeleteCamp(cid)} className="text-muted-foreground hover:text-destructive-ink" aria-label={t("phishing.delete")} />}><Trash2 className="size-4" /></TooltipTrigger><TooltipContent>{t("phishing.delete")}</TooltipContent></Tooltip>}
                       </TableCell>
                     </TableRow>

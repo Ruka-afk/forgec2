@@ -3080,6 +3080,7 @@ export const en: Record<string, string> = {
     "phishing.toast.save_campaign_failed": "Failed to save campaign",
     "phishing.toast.save_template_failed": "Failed to save template",
     "phishing.toast.select_template": "Please select a template",
+    "phishing.toast.stop_failed": "Failed to stop campaign",
     "phishing.type_html": "HTML",
     "phishing.type_plain": "Plain Text",
     "pivoting.active": "active",

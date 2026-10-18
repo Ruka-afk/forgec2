@@ -3,6 +3,8 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
+import { useMutation } from "@/lib/hooks/useMutation";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,6 +31,7 @@ interface ConsentStart {
 
 export function EntraIdentityPanel() {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const [tenant, setTenant] = useState("organizations");
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
@@ -37,67 +40,49 @@ export function EntraIdentityPanel() {
   const [device, setDevice] = useState<DeviceStart | null>(null);
   const [consent, setConsent] = useState<ConsentStart | null>(null);
   const [tokenJson, setTokenJson] = useState("");
-  const [busy, setBusy] = useState(false);
 
-  const startDevice = async () => {
-    setBusy(true);
-    try {
-      const res = await api.postJson<DeviceStart>(paths.identity.deviceCode, {
-        tenant, client_id: clientId, scope,
-      });
+  const { mutate: startDevice, isPending: startingDevice } = useMutation({
+    fn: () => api.postJson<DeviceStart>(paths.identity.deviceCode, {
+      tenant, client_id: clientId, scope,
+    }),
+    onSuccess: (res) => {
       setDevice(res);
       toast.success(t("phishing.entra_device_started"));
-    } catch {
-      toast.error(t("phishing.entra_failed"));
-    } finally {
-      setBusy(false);
-    }
-  };
+    },
+    onError: (e) => toastError(e, "phishing.entra_failed"),
+  });
 
-  const pollDevice = async () => {
-    if (!device?.id) return;
-    setBusy(true);
-    try {
-      const res = await api.postJson<Record<string, unknown>>(paths.identity.deviceCodePoll(device.id), {});
-      setTokenJson(JSON.stringify(res, null, 2));
-    } catch {
-      toast.error(t("phishing.entra_failed"));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const { mutate: pollDevice, isPending: pollingDevice } = useMutation({
+    fn: (id: string) => api.postJson<Record<string, unknown>>(paths.identity.deviceCodePoll(id), {}),
+    onSuccess: (res) => setTokenJson(JSON.stringify(res, null, 2)),
+    onError: (e) => toastError(e, "phishing.entra_failed"),
+  });
 
-  const startConsent = async () => {
-    setBusy(true);
-    try {
-      const res = await api.postJson<ConsentStart>(paths.identity.consent, {
-        tenant,
-        client_id: clientId,
-        client_secret: clientSecret,
-        redirect_uri: redirectUri,
-        scope,
-      });
+  const { mutate: startConsent, isPending: startingConsent } = useMutation({
+    fn: () => api.postJson<ConsentStart>(paths.identity.consent, {
+      tenant,
+      client_id: clientId,
+      client_secret: clientSecret,
+      redirect_uri: redirectUri,
+      scope,
+    }),
+    onSuccess: (res) => {
       setConsent(res);
       toast.success(t("phishing.entra_consent_started"));
-    } catch {
-      toast.error(t("phishing.entra_failed"));
-    } finally {
-      setBusy(false);
-    }
-  };
+    },
+    onError: (e) => toastError(e, "phishing.entra_failed"),
+  });
 
-  const exchangeConsent = async () => {
-    if (!consent?.id) return;
-    setBusy(true);
-    try {
-      const res = await api.postJson<Record<string, unknown>>(paths.identity.consentExchange(consent.id), {});
-      setTokenJson(JSON.stringify(res, null, 2));
-    } catch {
-      toast.error(t("phishing.entra_failed"));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const { mutate: exchangeConsent, isPending: exchangingConsent } = useMutation({
+    fn: (id: string) => api.postJson<Record<string, unknown>>(paths.identity.consentExchange(id), {}),
+    onSuccess: (res) => setTokenJson(JSON.stringify(res, null, 2)),
+    onError: (e) => toastError(e, "phishing.entra_failed"),
+  });
+
+  // One shared in-flight flag: the four buttons disable together (their old
+  // shared boolean), but as the OR of the four pendings a completion that
+  // lands while a newer action is still running cannot re-enable them early.
+  const busy = startingDevice || pollingDevice || startingConsent || exchangingConsent;
 
   return (
     <div className="space-y-6">
@@ -125,7 +110,7 @@ export function EntraIdentityPanel() {
         <p className="text-xs text-muted-foreground">{t("phishing.entra_device_hint")}</p>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" disabled={busy || !clientId} onClick={() => { void startDevice(); }}>{t("phishing.entra_device_start")}</Button>
-          <Button size="sm" variant="outline" disabled={busy || !device?.id} onClick={() => { void pollDevice(); }}>{t("phishing.entra_device_poll")}</Button>
+          <Button size="sm" variant="outline" disabled={busy || !device?.id} onClick={() => { if (device?.id) void pollDevice(device.id); }}>{t("phishing.entra_device_poll")}</Button>
         </div>
         {device?.user_code && (
           <Banner tone="info">
@@ -147,7 +132,7 @@ export function EntraIdentityPanel() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" disabled={busy || !clientId || !redirectUri} onClick={() => { void startConsent(); }}>{t("phishing.entra_consent_start")}</Button>
-          <Button size="sm" variant="outline" disabled={busy || !consent?.id} onClick={() => { void exchangeConsent(); }}>{t("phishing.entra_consent_exchange")}</Button>
+          <Button size="sm" variant="outline" disabled={busy || !consent?.id} onClick={() => { if (consent?.id) void exchangeConsent(consent.id); }}>{t("phishing.entra_consent_exchange")}</Button>
         </div>
         {consent?.authorize_url && (
           <Banner tone="info">

@@ -3128,6 +3128,7 @@ export const zh: Record<string, string> = {
     "phishing.toast.save_campaign_failed": "保存活动失败",
     "phishing.toast.save_template_failed": "保存模板失败",
     "phishing.toast.select_template": "请先选择模板",
+    "phishing.toast.stop_failed": "停止活动失败",
     "phishing.type_html": "HTML",
     "phishing.type_plain": "纯文本",
     "pivoting.active": "活动",

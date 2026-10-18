@@ -284,6 +284,42 @@ if we adopt strict WCAG 1.4.11 for control boundaries).
 > page). Counts: `useMutation` call sites 46 → 49, `useErrorToast` importing
 > files 16 → 17, persistence-page raw error toasts 7 → 0.
 
+> **U3 landed — wave 5, the phishing page (2026-10-18):** the whole
+> `/phishing` surface moved onto `useMutation` + `useErrorToast` — the
+> page's template save/delete, campaign save/launch/stop/delete and the
+> Entra identity panel's four actions (device-code start/poll, consent
+> start/exchange) became ten mutations. Every rejection now surfaces the
+> backend's message through the normalizer: the page's six API-failure
+> toasts route through it (the launch path's old
+> `e instanceof Error ? e.message` fallback printed the generic key for a
+> status-carrying rejection, which is what the API layer actually throws),
+> and the panel's four `entra_failed` toasts, which swallowed every
+> reason, surface it too. The panel's shared `busy` boolean became the OR
+> of four per-action pendings: two actions leaving in one commit window
+> (both buttons enabled before either pending flushed) previously let the
+> first completion re-enable all four buttons while the second request was
+> still in flight — the OR keeps them disabled until every request settles
+> (pinned by test, verified red against the old boolean). The load-failure
+> surface is real now: the old path toasted once (throttled) and rendered
+> empty tables that read as "nothing configured"; the page shows the
+> inline `DataError` + retry the config/traffic loads use, and
+> `POLL.toastThrottle` is no longer imported. Stop failures gain their own
+> copy (`phishing.toast.stop_failed`, EN+ZH) instead of reporting "Failed
+> to save campaign". The launch identity spinner (`launchingId`) stays
+> local by design and the template-required validation toast stays direct
+> by convention. Coverage: new `PhishingPageContent.test.tsx` (7 component
+> tests — the inline load error + retry, a rejected template save
+> surfacing the backend message with the dialog left open, the successful
+> save close+refresh, the launch double-click guard with the rejected
+> launch's message, a rejected stop, the confirmed delete + refresh, the
+> direct validation toast) and new `EntraIdentityPanel.test.tsx` (3 tests
+> — the rejected device-code start message, the two-actions-in-flight OR
+> race, the polled token JSON render); the load-error, save-rejection,
+> launch-rejection, stop-rejection and both panel cases were verified red
+> against the pre-migration code. Counts: `useMutation` call sites 49 → 59,
+> `useErrorToast` importing files 17 → 19, phishing raw API-failure toasts
+> 10 → 0.
+
 - **F1 · `useMutation` adoption: 6 uses vs 66 hand-rolled `setSaving`
   (15 files) + 8 `setDeleting` (3 files) + per-page `actionLoading` state.**
   The convention exists (`docs/FRONTEND_CONVENTIONS.md`) with one migrated
@@ -477,7 +513,7 @@ overflowed its card at both 1280 and 390; it wraps now.
 | U1a status tokens & primitives (landed 2026-10-18) | C1, C2, C5, C6, C8, C9; component side of C3/C4/C7; `check:contrast` compositing switched to the browser's sRGB blend space |
 | U1b page migration (landed 2026-10-18) | C3/C4/C7 page call sites: 300 × `text-X` → `text-X-ink`, 38 `-foreground`-on-tint chips → ink, light `primary/20` → `/15`; `check:contrast --strict` promoted into `npm run check` |
 | U1c type system (landed 2026-10-18) | T1 size ramp (`--text-*` + 360-site migration + token gate Rules 5/6), T2 empty-state wrap, T8 no-op opacity sweep || U2 keyboard & names (landed 2026-10-18) | K1–K5: aria-labels on the video overlay and the phase chip, named breadcrumb home link, single skip link, labelled table region; `check:aria --strict` promoted into `npm run check` |
-| U3 feedback loop (wave 1: settings tree, wave 2: agent-detail console, wave 3: users page, wave 4: persistence page — landed 2026-10-18) | F1/F2: `useMutation` call sites 6 → 49 across the four waves; wave 1 retires the settings tree's raw-message error toasts (4 → 0) and makes previously-silent failures report; wave 2 migrates the three `/agents/:id` action hooks plus Diagnose/Apply-sleep, discards in-flight completions on an agent switch (notes editor, quick-shell history, sleep toast, Enter-key guard), and routes the console's 9 hand-rolled failure toasts through `useErrorToast`; wave 3 migrates the users page (dialog submits gain pending guards, `revokeLoading` retires into per-action pendings, the toggle/delete row spinners stay local by design) and retires its 10 raw error toasts; wave 4 migrates the persistence page (list/install/remove onto mutations, the poller's run-id guard replaces the shared cancel boolean, the route-id effect resets the page identity) and retires its 7 raw error toasts including the duplicate load toast; `useErrorToast` gains `fallbackParams`; the route-id reset rule lands in `FRONTEND_CONVENTIONS.md`; remaining clusters (phishing, infrastructure, the collect/stealth sections) migrate in later waves |
+| U3 feedback loop (wave 1: settings tree, wave 2: agent-detail console, wave 3: users page, wave 4: persistence page, wave 5: phishing page — landed 2026-10-18) | F1/F2: `useMutation` call sites 6 → 59 across the five waves; wave 1 retires the settings tree's raw-message error toasts (4 → 0) and makes previously-silent failures report; wave 2 migrates the three `/agents/:id` action hooks plus Diagnose/Apply-sleep, discards in-flight completions on an agent switch (notes editor, quick-shell history, sleep toast, Enter-key guard), and routes the console's 9 hand-rolled failure toasts through `useErrorToast`; wave 3 migrates the users page (dialog submits gain pending guards, `revokeLoading` retires into per-action pendings, the toggle/delete row spinners stay local by design) and retires its 10 raw error toasts; wave 4 migrates the persistence page (list/install/remove onto mutations, the poller's run-id guard replaces the shared cancel boolean, the route-id effect resets the page identity) and retires its 7 raw error toasts including the duplicate load toast; wave 5 migrates the phishing page and its Entra identity panel (ten mutations, the panel's shared boolean becomes the OR of four pendings so a first completion cannot re-enable the controls while a second request is in flight, the load failure becomes the inline `DataError` + retry, stop failures gain their own key) and retires the cluster's 10 raw error toasts; `useErrorToast` gains `fallbackParams`; the route-id reset rule lands in `FRONTEND_CONVENTIONS.md`; remaining clusters (infrastructure, the collect/stealth sections) migrate in later waves |
 | U4 narrow screens (landed 2026-10-18) | R2 fixed (status label always rendered), T6 mobile palette entry, T7 touch targets, R3 extended to 10 routes |
 | U5 motion (landed 2026-10-18) | M1: `router.navigate` defaults into `document.startViewTransition` (`?? true` beats a `Link`'s undefined key; explicit `false` kept), reduced-motion and API-absent skip; `src/router-transitions.test.ts` + the 4-viewport Playwright `route transitions` spec; `globals.css` untouched |
 | U6 page-by-page polish | T3 focus mode, T4 stat tiles, T5 density selectors, T9 non-total list fallbacks (tokens, ntlm), T10 clipped fixed-width columns (toolkit, scripting), V1–V2 + per-page checklists |
