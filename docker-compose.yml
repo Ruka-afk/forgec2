@@ -59,7 +59,12 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD when using --profile postgres}
       POSTGRES_DB: forgec2
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # PostgreSQL 18 changed the image layout: PGDATA is now
+      # /var/lib/postgresql/<major>/docker and the declared volume moved to
+      # /var/lib/postgresql, so the data volume must be mounted at the parent
+      # to persist across container re-creations. Pre-18 volumes (files at the
+      # volume root) need a pg_upgrade or a re-init before 18 can serve them.
+      - postgres_data:/var/lib/postgresql
     cap_drop:
       - ALL
     cap_add:
