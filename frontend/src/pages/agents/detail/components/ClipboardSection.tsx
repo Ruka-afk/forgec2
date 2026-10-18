@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -29,11 +29,18 @@ export default memo(function ClipboardSection({ agentId, online }: ClipboardSect
   const [draft, setDraft] = useState("");
   const [history, setHistory] = useState<ClipEntry[]>([]);
 
+  // The clipboard buffer is per-agent: drop the draft and history when the
+  // operator switches (the old entries never belonged to the new agent).
+  useEffect(() => {
+    setDraft("");
+    setHistory([]);
+  }, [agentId]);
+
   const handleGet = async () => {
     const text = await collect("get", paths.agents.clipboardGet(agentId), {
       storeResult: false,
       successText: t("agents.clipboard_got"),
-      errorText: t("agents.clipboard_failed"),
+      errorKey: "agents.clipboard_failed",
     });
     if (text !== null) {
       setHistory((prev) => [{ text, time: formatDateTime(), ...prev }].slice(0, HISTORY_CAP));
@@ -42,7 +49,11 @@ export default memo(function ClipboardSection({ agentId, online }: ClipboardSect
 
   const handleSet = async () => {
     if (!draft.trim()) return;
-    const ok = await fire("set", paths.agents.clipboardSet(agentId), { data: draft }, t("agents.clipboard_set_done"));
+    const ok = await fire("set", paths.agents.clipboardSet(agentId), {
+      body: { data: draft },
+      successText: t("agents.clipboard_set_done"),
+      errorKey: "agents.clipboard_failed",
+    });
     if (ok) setDraft("");
   };
 

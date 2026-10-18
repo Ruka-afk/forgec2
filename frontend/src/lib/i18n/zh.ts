@@ -571,6 +571,7 @@ export const zh: Record<string, string> = {
     "agents.trigger_started": "屏幕触发器已启动",
     "agents.trigger_stopped": "屏幕触发器已停止",
     "agents.trigger_window_queued": "窗口截图已下发——留意下方画廊",
+    "agents.trigger_failed": "屏幕触发请求失败",
     "agents.trigger_window": "截取窗口",
     "agents.trigger_match": "窗口标题包含",
     "agents.trigger_match_ph": "例如 Chrome、Outlook、Teams",

@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -6,6 +6,8 @@ import { SectionCard } from "@/components/ui/section-card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
+import { useMutation } from "@/lib/hooks/useMutation";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { api } from "@/lib/api";
@@ -29,9 +31,27 @@ interface ProcessSectionProps {
 export default memo(function ProcessSection({ agentId, online, processList, loading, loadFailed, expanded, onToggle, onRefresh }: ProcessSectionProps) {
   const { t } = useI18n();
   const { confirm, modal } = useConfirm();
+  const { toastError } = useErrorToast();
   const [acting, setActing] = useState<string | null>(null);
   const [manualPid, setManualPid] = useState("");
   const rows = useMemo(() => parsePsRows(processList || ""), [processList]);
+
+  const { mutate: dispatchAction, reset: resetAction } = useMutation({
+    fn: (action: "suspend" | "resume" | "killproc", target: string) =>
+      api.post(paths.agents.cmd(agentId, action), { target }),
+    onSuccess: (_result, action, target) =>
+      toast.success(t("agents.proc_action_queued").replace("{action}", action).replace("{pid}", target)),
+    onError: (e) => toastError(e, "agents.proc_action_failed"),
+  });
+
+  // Drop the PID draft and any pending row spinner when the operator
+  // switches agents: an in-flight action must not keep blocking the new
+  // agent's process list.
+  useEffect(() => {
+    setManualPid("");
+    setActing(null);
+    resetAction();
+  }, [agentId, resetAction]);
 
   const runAction = async (action: "suspend" | "resume" | "killproc", pid: string, needConfirm: boolean) => {
     const target = pid.trim();
@@ -42,10 +62,7 @@ export default memo(function ProcessSection({ agentId, online, processList, load
     if (needConfirm && !(await confirm({ message: t("agents.proc_kill_confirm").replace("{pid}", target) }))) return;
     setActing(`${action}:${target}`);
     try {
-      await api.post(paths.agents.cmd(agentId, action), { target });
-      toast.success(t("agents.proc_action_queued").replace("{action}", action).replace("{pid}", target));
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("agents.proc_action_failed"));
+      await dispatchAction(action, target);
     } finally {
       setActing(null);
     }

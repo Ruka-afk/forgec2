@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
@@ -18,6 +18,12 @@ export default memo(function KeyloggerSection({ agentId, online }: KeyloggerSect
   const { busy, result: log, collect } = useCollectTask(agentId);
   const [active, setActive] = useState<boolean | null>(null);
 
+  // The running badge describes the agent that was started: a switch resets
+  // it to unknown (the dump `result` is cleared by useCollectTask).
+  useEffect(() => {
+    setActive(null);
+  }, [agentId]);
+
   const run = async (kind: "start" | "stop" | "dump") => {
     const path =
       kind === "start"
@@ -34,7 +40,7 @@ export default memo(function KeyloggerSection({ agentId, online }: KeyloggerSect
           : kind === "stop"
             ? t("agents.keylog_stopped")
             : t("agents.keylog_dumped"),
-      errorText: t("agents.keylog_failed"),
+      errorKey: "agents.keylog_failed",
     });
     if (out === null) return;
     if (kind === "start") setActive(true);

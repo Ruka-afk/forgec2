@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,6 +24,16 @@ export default memo(function RegistrySection({ agentId, online }: RegistrySectio
   const [valueData, setValueData] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  // Registry paths and confirmations are per-agent drafts: a switch clears
+  // them (and the stored dump in useCollectTask) so nothing targets the new
+  // agent by accident.
+  useEffect(() => {
+    setKey("");
+    setValueName("");
+    setValueData("");
+    setConfirmDelete(false);
+  }, [agentId]);
+
   const run = async (kind: "get" | "set" | "delete") => {
     const k = key.trim();
     if (!k) {
@@ -34,7 +44,7 @@ export default memo(function RegistrySection({ agentId, online }: RegistrySectio
       await collect("get", paths.agents.regGet(agentId), {
         body: { command: k },
         emptyText: t("agents.registry_empty"),
-        errorText: t("agents.registry_failed"),
+        errorKey: "agents.registry_failed",
       });
     } else if (kind === "set") {
       if (!valueName.trim()) {
@@ -44,13 +54,13 @@ export default memo(function RegistrySection({ agentId, online }: RegistrySectio
       await collect("set", paths.agents.regSet(agentId), {
         body: { path: k, data: `${valueName.trim()}=${valueData}` },
         successText: t("agents.registry_set_ok"),
-        errorText: t("agents.registry_failed"),
+        errorKey: "agents.registry_failed",
       });
     } else {
       await collect("delete", paths.agents.regDelete(agentId), {
         body: { command: k },
         successText: t("agents.registry_deleted"),
-        errorText: t("agents.registry_failed"),
+        errorKey: "agents.registry_failed",
       });
     }
   };

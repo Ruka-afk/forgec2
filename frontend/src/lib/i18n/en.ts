@@ -571,6 +571,7 @@ export const en: Record<string, string> = {
     "agents.trigger_started": "Screen trigger started",
     "agents.trigger_stopped": "Screen trigger stopped",
     "agents.trigger_window_queued": "Window capture queued — watch the gallery below",
+    "agents.trigger_failed": "Screen trigger request failed",
     "agents.trigger_window": "Capture window",
     "agents.trigger_match": "Window title contains",
     "agents.trigger_match_ph": "e.g. Chrome, Outlook, Teams",

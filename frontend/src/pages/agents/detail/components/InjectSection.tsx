@@ -1,4 +1,4 @@
-import { memo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Banner } from "@/components/ui/banner";
@@ -9,6 +9,8 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
+import { useMutation } from "@/lib/hooks/useMutation";
 import { Syringe, AlertTriangle, Upload } from "lucide-react";
 
 interface InjectSectionProps {
@@ -59,15 +61,47 @@ function techniquesFor(os?: string) {
  */
 export default memo(function InjectSection({ agentId, online, osType }: InjectSectionProps) {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const [pid, setPid] = useState("");
   const [technique, setTechnique] = useState("");
   const [shellcodeB64, setShellcodeB64] = useState("");
   const [shellcodeName, setShellcodeName] = useState("");
-  const [sending, setSending] = useState(false);
   const [confirmStep, setConfirmStep] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const techniques = techniquesFor(osType);
+
+  const clearForm = useCallback(() => {
+    setPid("");
+    setTechnique("");
+    setShellcodeB64("");
+    setShellcodeName("");
+    setConfirmStep(false);
+    if (fileRef.current) fileRef.current.value = "";
+  }, []);
+
+  const { mutate: send, isPending: sending, reset: resetSend } = useMutation({
+    // The existing POST /agents/:id/inject endpoint takes form-encoded
+    // fields: pid, tech, shellcode (base64).
+    fn: () => api.post(paths.agents.inject(agentId), {
+      pid: pid.trim(),
+      tech: technique,
+      shellcode: shellcodeB64,
+    }),
+    onSuccess: () => {
+      toast.success(t("agents.inject_queued"));
+      // Reset the form so a double-click cannot re-fire the same payload.
+      clearForm();
+    },
+    onError: (e) => toastError(e, "agents.inject_failed"),
+  });
+
+  // Abandon the staged payload when the operator switches agents: a stale
+  // file and confirmation must never be aimed at the new implant.
+  useEffect(() => {
+    clearForm();
+    resetSend();
+  }, [agentId, clearForm, resetSend]);
 
   const handleFile = (file: File | undefined | null) => {
     if (!file) return;
@@ -91,7 +125,7 @@ export default memo(function InjectSection({ agentId, online, osType }: InjectSe
     reader.readAsArrayBuffer(file);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     // pid must be a positive integer: it is posted as a raw string and a
     // garbage value ("abc", "-1") went straight to the agent dispatcher.
     if (!/^\d+$/.test(pid.trim()) || Number(pid) <= 0) return;
@@ -100,28 +134,7 @@ export default memo(function InjectSection({ agentId, online, osType }: InjectSe
       setConfirmStep(true);
       return;
     }
-    setSending(true);
-    try {
-      // The existing POST /agents/:id/inject endpoint takes form-encoded
-      // fields: pid, tech, shellcode (base64).
-      await api.post(paths.agents.inject(agentId), {
-        pid: pid.trim(),
-        tech: technique,
-        shellcode: shellcodeB64,
-      });
-      toast.success(t("agents.inject_queued"));
-      // Reset the form so a double-click cannot re-fire the same payload.
-      setPid("");
-      setTechnique("");
-      setShellcodeB64("");
-      setShellcodeName("");
-      setConfirmStep(false);
-      if (fileRef.current) fileRef.current.value = "";
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("agents.inject_failed"));
-    } finally {
-      setSending(false);
-    }
+    void send();
   };
 
   return (

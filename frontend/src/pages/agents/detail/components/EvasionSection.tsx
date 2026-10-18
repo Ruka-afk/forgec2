@@ -1,5 +1,4 @@
-
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Banner } from "@/components/ui/banner";
@@ -8,6 +7,8 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
+import { useMutation } from "@/lib/hooks/useMutation";
 import { Shield, Zap, AlertTriangle } from "lucide-react";
 import { EVASION_TECHNIQUES, EVASION_GROUPS } from "@/lib/evasion-techniques";
 
@@ -18,27 +19,37 @@ interface EvasionSectionProps {
 
 export default memo(function EvasionSection({ agentId, online }: EvasionSectionProps) {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const [selectedTechnique, setSelectedTechnique] = useState("");
-  const [sending, setSending] = useState(false);
   const [confirmStep, setConfirmStep] = useState(false);
+  const { mutate: execute, isPending: sending, reset: resetExecute } = useMutation({
+    // The technique travels as an argument so a mid-flight re-selection
+    // cannot rename the toast (or clear the wrong choice) on completion.
+    fn: (technique: string) => api.post(paths.agents.runEvasion(agentId), { technique }),
+    onSuccess: (_result, technique) => {
+      const tech = EVASION_TECHNIQUES.find((entry) => entry.value === technique);
+      toast.success(t("agents.evasion_sent").replace("{technique}", t(tech?.labelKey || "")));
+      setSelectedTechnique("");
+      setConfirmStep(false);
+    },
+    onError: (e) => toastError(e, "agents.evasion_failed"),
+  });
 
-  const handleExecute = async () => {
+  // Abandon a pending confirmation when the operator switches agents: the
+  // armed technique must never fire against the new implant by accident.
+  useEffect(() => {
+    setSelectedTechnique("");
+    setConfirmStep(false);
+    resetExecute();
+  }, [agentId, resetExecute]);
+
+  const handleExecute = () => {
     if (!selectedTechnique) return;
     if (!confirmStep) {
       setConfirmStep(true);
       return;
     }
-    setSending(true);
-    try {
-      await api.post(paths.agents.runEvasion(agentId), { technique: selectedTechnique });
-      const tech = EVASION_TECHNIQUES.find(tech => tech.value === selectedTechnique);
-      toast.success(t("agents.evasion_sent").replace("{technique}", t(tech?.labelKey || "")));
-      setSelectedTechnique("");
-      setConfirmStep(false);
-    } catch {
-      toast.error(t("agents.evasion_failed"));
-    }
-    setSending(false);
+    void execute(selectedTechnique);
   };
 
   return (
@@ -82,4 +93,4 @@ export default memo(function EvasionSection({ agentId, online }: EvasionSectionP
       </div>
     </Card>
   );
-})
+});

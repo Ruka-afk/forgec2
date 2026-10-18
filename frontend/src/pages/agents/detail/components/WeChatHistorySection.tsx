@@ -69,7 +69,7 @@ export default memo(function WeChatHistorySection({ agentId, online }: WeChatHis
     const output = await collect("wechat", paths.agents.wechatHistory(agentId), {
       body: { contact: contact.trim() },
       storeResult: false,
-      errorText: t("agents.wechat_collect_failed"),
+      errorKey: "agents.wechat_collect_failed",
     });
     if (output === null) return;
     setRaw(output);

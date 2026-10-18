@@ -26,9 +26,9 @@ const USE_TICK = /\bt\?*\.?\(\s*`([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)`\s*[
 const USE_REF_DOUBLE = /\bt[A-Za-z]*\.current\(\s*"([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)"\s*[),]/g;
 const USE_REF_SINGLE = /\bt[A-Za-z]*\.current\(\s*'([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)'\s*[),]/g;
 const USE_REF_TICK = /\bt[A-Za-z]*\.current\(\s*`([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)`\s*[),]/g;
-// Keys referenced indirectly as data (labelKey/descKey/…: "x.y") are used
-// but would otherwise look dead. Fold them into the used set.
-const USE_KEYFIELD = /(?:labelKey|descKey|titleKey|subtitleKey|valueKey|inputLabel|btnKey|i18nKey)\s*[:=]\s*"([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)"/g;
+// Keys referenced indirectly as data (labelKey/descKey/errorKey/…: "x.y") are
+// used but would otherwise look dead. Fold them into the used set.
+const USE_KEYFIELD = /(?:labelKey|descKey|titleKey|subtitleKey|valueKey|inputLabel|btnKey|i18nKey|errorKey)\s*[:=]\s*"([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)"/g;
 // useErrorToast(err, "fallback.i18n_key"[, fallbackParams]) — the second
 // useErrorToast argument is a key resolved with t() inside the hook and must
 // be counted as used; the optional third argument carries the template params.

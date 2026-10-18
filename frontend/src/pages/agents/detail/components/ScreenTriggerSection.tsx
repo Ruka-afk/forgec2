@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +23,14 @@ export default memo(function ScreenTriggerSection({ agentId, online }: ScreenTri
   const [interval, changeInterval] = useState("5");
   const [watching, setWatching] = useState<string | null>(null);
 
+  // The watching badge and the match draft describe one agent: a switch
+  // clears them so a start/stop never arms the wrong implant from stale UI.
+  useEffect(() => {
+    setMatch("");
+    changeInterval("5");
+    setWatching(null);
+  }, [agentId]);
+
   const run = async (kind: "start" | "stop" | "window") => {
     if (kind === "start" && !match.trim()) {
       toast.error(t("agents.trigger_match_required"));
@@ -30,18 +38,23 @@ export default memo(function ScreenTriggerSection({ agentId, online }: ScreenTri
     }
     if (kind === "start") {
       const secs = Math.max(2, Math.min(120, parseInt(interval, 10) || 5));
-      const ok = await fire(
-        kind,
-        paths.agents.screenTriggerStart(agentId),
-        { match: match.trim(), interval: String(secs) },
-        t("agents.trigger_started"),
-      );
+      const ok = await fire(kind, paths.agents.screenTriggerStart(agentId), {
+        body: { match: match.trim(), interval: String(secs) },
+        successText: t("agents.trigger_started"),
+        errorKey: "agents.trigger_failed",
+      });
       if (ok) setWatching(match.trim());
     } else if (kind === "stop") {
-      const ok = await fire(kind, paths.agents.screenTriggerStop(agentId), {}, t("agents.trigger_stopped"));
+      const ok = await fire(kind, paths.agents.screenTriggerStop(agentId), {
+        successText: t("agents.trigger_stopped"),
+        errorKey: "agents.trigger_failed",
+      });
       if (ok) setWatching(null);
     } else {
-      await fire(kind, paths.agents.screenshotWindow(agentId), {}, t("agents.trigger_window_queued"));
+      await fire(kind, paths.agents.screenshotWindow(agentId), {
+        successText: t("agents.trigger_window_queued"),
+        errorKey: "agents.trigger_failed",
+      });
     }
   };
 

@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +11,8 @@ import { api, pollTask } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadBlob } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
+import { useMutation } from "@/lib/hooks/useMutation";
 import { formatDateTime } from "@/lib/intl";
 import { base64ToBytes } from "./task-collect";
 import CollectCard from "./CollectCard";
@@ -47,26 +49,51 @@ async function runCapture(agentId: string, action: "webcam" | "mic", param: stri
   return task.result ?? task.data?.result ?? "";
 }
 
+type CaptureKind = "webcam" | "mic";
+
 export default memo(function WebcamMicSection({ agentId, online }: WebcamMicSectionProps) {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const [device, setDevice] = useState("");
   const [seconds, setSeconds] = useState("10");
-  const [capturing, setCapturing] = useState<"webcam" | "mic" | null>(null);
+  const [capturing, setCapturing] = useState<CaptureKind | null>(null);
   const [shots, setShots] = useState<Shot[]>([]);
   const [clips, setClips] = useState<Clip[]>([]);
+
+  const { mutate: capture, reset: resetCapture } = useMutation({
+    fn: (kind: CaptureKind, param: string) => runCapture(agentId, kind, param),
+    onSuccess: (raw, kind, param) => {
+      const b64 = raw.replace(/\s+/g, "");
+      // An empty payload is a capture-side dead end, not an API failure:
+      // it keeps the direct toast the sections use for local capability.
+      if (!b64) {
+        toast.error(t("agents.media_empty"));
+        return;
+      }
+      if (kind === "webcam") {
+        setShots((prev) => [{ b64, time: formatDateTime(), device: param || "default" }, ...prev]);
+      } else {
+        setClips((prev) => [{ b64, time: formatDateTime(), seconds: parseInt(param, 10) || 10 }, ...prev]);
+      }
+      toast.success(t("agents.media_captured"));
+    },
+    onError: (e) => toastError(e, "agents.media_failed"),
+  });
+
+  // Captures are per-agent evidence: a switch drops the gallery (and the
+  // in-flight completion with it) rather than mixing the two implants.
+  useEffect(() => {
+    setCapturing(null);
+    setShots([]);
+    setClips([]);
+    resetCapture();
+  }, [agentId, resetCapture]);
 
   const handleWebcam = async () => {
     if (!agentId || capturing) return;
     setCapturing("webcam");
     try {
-      const b64 = (await runCapture(agentId, "webcam", device.trim())).replace(/\s+/g, "");
-      if (!b64) throw new Error(t("agents.media_empty"));
-      setShots((prev) => [{ b64, time: formatDateTime(), device: device.trim() || "default" }, ...prev]);
-      toast.success(t("agents.media_captured"));
-    } catch (e) {
-      if ((e as Error).name !== "AbortError") {
-        toast.error(e instanceof Error ? e.message : t("agents.media_failed"));
-      }
+      await capture("webcam", device.trim());
     } finally {
       setCapturing(null);
     }
@@ -77,17 +104,9 @@ export default memo(function WebcamMicSection({ agentId, online }: WebcamMicSect
     const secs = Math.max(1, Math.min(300, parseInt(seconds, 10) || 10));
     // Duration only: the agent reads the first field as seconds, so a
     // multi-word device hint would corrupt device selection upstream.
-    const param = String(secs);
     setCapturing("mic");
     try {
-      const b64 = (await runCapture(agentId, "mic", param)).replace(/\s+/g, "");
-      if (!b64) throw new Error(t("agents.media_empty"));
-      setClips((prev) => [{ b64, time: formatDateTime(), seconds: secs }, ...prev]);
-      toast.success(t("agents.media_captured"));
-    } catch (e) {
-      if ((e as Error).name !== "AbortError") {
-        toast.error(e instanceof Error ? e.message : t("agents.media_failed"));
-      }
+      await capture("mic", String(secs));
     } finally {
       setCapturing(null);
     }

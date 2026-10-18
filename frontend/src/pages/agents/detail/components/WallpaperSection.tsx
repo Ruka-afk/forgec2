@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -22,6 +22,12 @@ export default memo(function WallpaperSection({ agentId, online }: WallpaperSect
   const [image, setImage] = useState("");
   const [style, setStyle] = useState<string>("fill");
 
+  // Drop the previous agent's image URL so a stale path cannot be pushed to
+  // the new one; the fit style is agent-independent and stays.
+  useEffect(() => {
+    setImage("");
+  }, [agentId]);
+
   const handleSet = async () => {
     const src = image.trim();
     if (!src) return;
@@ -29,7 +35,7 @@ export default memo(function WallpaperSection({ agentId, online }: WallpaperSect
       body: { image: src, style },
       emptyText: t("agents.wallpaper_done"),
       successText: t("agents.wallpaper_done"),
-      errorText: t("agents.wallpaper_failed"),
+      errorKey: "agents.wallpaper_failed",
     });
   };
 

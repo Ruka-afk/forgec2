@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,16 @@ export default memo(function WindowSection({ agentId, online }: WindowSectionPro
   // Cap first paint: 500 table rows mount at once without virtualization.
   const [renderLimit, setRenderLimit] = useState(100);
 
+  // A window list belongs to the agent it was pulled from: switching agents
+  // clears the list, the filter and the close-target draft.
+  useEffect(() => {
+    setTarget("");
+    setRaw("");
+    setCollected(false);
+    setQuery("");
+    setRenderLimit(100);
+  }, [agentId]);
+
   const rows = useMemo(() => parseWindowList(raw), [raw]);
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -43,7 +53,7 @@ export default memo(function WindowSection({ agentId, online }: WindowSectionPro
   const handleList = async () => {
     const output = await collect("list", paths.agents.windowList(agentId), {
       storeResult: false,
-      errorText: t("agents.window_failed"),
+      errorKey: "agents.window_failed",
     });
     if (output === null) return;
     setRaw(output);
@@ -57,7 +67,7 @@ export default memo(function WindowSection({ agentId, online }: WindowSectionPro
       body: { command: hwndOrTitle },
       storeResult: false,
       successText: t("agents.window_closed"),
-      errorText: t("agents.window_failed"),
+      errorKey: "agents.window_failed",
     });
     if (output === null) return;
     // Refresh the list so a closed window disappears without manual reload.

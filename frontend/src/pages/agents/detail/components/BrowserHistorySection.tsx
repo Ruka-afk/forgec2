@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,15 @@ export default memo(function BrowserHistorySection({ agentId, online }: BrowserH
   // Cap first paint: 500 table rows mount at once without virtualization.
   const [renderLimit, setRenderLimit] = useState(100);
 
+  // A collected dump belongs to the agent it was pulled from: switching
+  // agents clears the result, the filter and the paging window.
+  useEffect(() => {
+    setRaw("");
+    setCollected(false);
+    setQuery("");
+    setRenderLimit(100);
+  }, [agentId]);
+
   const rows = useMemo(() => parseBrowserHistory(raw), [raw]);
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -47,7 +56,7 @@ export default memo(function BrowserHistorySection({ agentId, online }: BrowserH
     const output = await collect("collect", paths.agents.browserHistory(agentId), {
       body: { browser },
       storeResult: false,
-      errorText: t("agents.history_collect_failed"),
+      errorKey: "agents.history_collect_failed",
     });
     if (output === null) return;
     setRaw(output);
