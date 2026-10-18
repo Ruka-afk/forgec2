@@ -229,6 +229,28 @@ if we adopt strict WCAG 1.4.11 for control boundaries).
 > phishing, infrastructure, the collect/stealth sections) migrate in later
 > waves.
 
+> **U3 landed — wave 3, the users page (2026-10-18):** the operator
+> management surface moved onto `useMutation` + `useErrorToast`. Nine
+> mutations replace the page's hand-rolled paths — create / update /
+> password submit (which also gain the missing pending guards: a second
+> click lands on a disabled button), force-logout, kick, session revoke,
+> revoke-all, and the row-scoped toggle/delete calls. The toggle/delete
+> identity spinner (`actionLoading = uid + "_toggle" / uid + "_delete"`)
+> stays in local state by design — the hook tracks pending-ness, not which
+> row was clicked — while those calls still route failures through the
+> normalizer. The sessions dialog's `revokeLoading` string is retired:
+> "one revoke at a time" is `revokingSession || revokingAll`, so a
+> completion that lands after a newer revoke cannot re-enable the buttons
+> early, and the promise-chain row handler becomes a plain mutation call.
+> All ten raw `toast.error(t(...))` sites on the page (including the
+> secondary roles fetch) now surface the normalized message instead of the
+> generic copy. Coverage: new `UsersPage.test.tsx` (3 component tests —
+> the double-submit guard, a 409 create surfacing "username already
+> exists", a failed toggle reporting its message while the row spinner
+> stays local; all three were verified red against the pre-migration
+> page). Counts: `useMutation` call sites 37 → 46, `useErrorToast`
+> importing files 15 → 16, users-page raw error toasts 10 → 0.
+
 - **F1 · `useMutation` adoption: 6 uses vs 66 hand-rolled `setSaving`
   (15 files) + 8 `setDeleting` (3 files) + per-page `actionLoading` state.**
   The convention exists (`docs/FRONTEND_CONVENTIONS.md`) with one migrated
@@ -422,7 +444,7 @@ overflowed its card at both 1280 and 390; it wraps now.
 | U1a status tokens & primitives (landed 2026-10-18) | C1, C2, C5, C6, C8, C9; component side of C3/C4/C7; `check:contrast` compositing switched to the browser's sRGB blend space |
 | U1b page migration (landed 2026-10-18) | C3/C4/C7 page call sites: 300 × `text-X` → `text-X-ink`, 38 `-foreground`-on-tint chips → ink, light `primary/20` → `/15`; `check:contrast --strict` promoted into `npm run check` |
 | U1c type system (landed 2026-10-18) | T1 size ramp (`--text-*` + 360-site migration + token gate Rules 5/6), T2 empty-state wrap, T8 no-op opacity sweep || U2 keyboard & names (landed 2026-10-18) | K1–K5: aria-labels on the video overlay and the phase chip, named breadcrumb home link, single skip link, labelled table region; `check:aria --strict` promoted into `npm run check` |
-| U3 feedback loop (wave 1: settings tree, wave 2: agent-detail console — landed 2026-10-18) | F1/F2: 31 handlers onto `useMutation` (call sites 6 → 37); wave 1 retires the settings tree's raw-message error toasts (4 → 0) and makes previously-silent failures report; wave 2 migrates the three `/agents/:id` action hooks plus Diagnose/Apply-sleep, discards in-flight completions on an agent switch (notes editor, quick-shell history, sleep toast, Enter-key guard), and routes the console's 9 hand-rolled failure toasts through `useErrorToast`; `useErrorToast` gains `fallbackParams`; the route-id reset rule lands in `FRONTEND_CONVENTIONS.md`; remaining clusters migrate in later waves |
+| U3 feedback loop (wave 1: settings tree, wave 2: agent-detail console, wave 3: users page — landed 2026-10-18) | F1/F2: 40 handlers onto `useMutation` (call sites 6 → 46); wave 1 retires the settings tree's raw-message error toasts (4 → 0) and makes previously-silent failures report; wave 2 migrates the three `/agents/:id` action hooks plus Diagnose/Apply-sleep, discards in-flight completions on an agent switch (notes editor, quick-shell history, sleep toast, Enter-key guard), and routes the console's 9 hand-rolled failure toasts through `useErrorToast`; wave 3 migrates the users page (dialog submits gain pending guards, `revokeLoading` retires into per-action pendings, the toggle/delete row spinners stay local by design) and retires its 10 raw error toasts; `useErrorToast` gains `fallbackParams`; the route-id reset rule lands in `FRONTEND_CONVENTIONS.md`; remaining clusters (persistence, phishing, infrastructure, the collect/stealth sections) migrate in later waves |
 | U4 narrow screens (landed 2026-10-18) | R2 fixed (status label always rendered), T6 mobile palette entry, T7 touch targets, R3 extended to 10 routes |
 | U5 motion (landed 2026-10-18) | M1: `router.navigate` defaults into `document.startViewTransition` (`?? true` beats a `Link`'s undefined key; explicit `false` kept), reduced-motion and API-absent skip; `src/router-transitions.test.ts` + the 4-viewport Playwright `route transitions` spec; `globals.css` untouched |
 | U6 page-by-page polish | T3 focus mode, T4 stat tiles, T5 density selectors, T9 non-total list fallbacks (tokens, ntlm), T10 clipped fixed-width columns (toolkit, scripting), V1–V2 + per-page checklists |

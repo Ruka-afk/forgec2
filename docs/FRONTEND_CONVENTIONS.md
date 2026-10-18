@@ -34,6 +34,11 @@ Why not hand-rolled `useState(saving)` + `try/catch`:
   `/agents/:id`), call the mutation's `reset()` from an effect on id change:
   a completion that lands after the operator switched resources must not fire
   `onSuccess` (toast, reload, history entry) against the new one.
+- When the pending indicator must name *which* row is in flight, keep that
+  identity in local state and wrap the mutation call (`await mutate(...)`) in
+  `try/finally`; the mutation still owns error routing and the
+  stale-completion guard. (The settings tree's `savingId`-style spinners and
+  the users page's toggle/delete actions follow this.)
 
 Reference migrations: `src/pages/settings/components/ExtC2Section.tsx` (the
 settings tree) and the agent-detail hooks (`useAgentNotes`,

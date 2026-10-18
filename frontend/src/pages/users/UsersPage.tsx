@@ -12,6 +12,8 @@ import { StatusBadge } from "@/components/ui/status-indicator";
 import { PageContainer } from "@/components/ui/page-container";
 import { IconBadge } from "@/components/ui/icon-badge";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
+import { useMutation } from "@/lib/hooks/useMutation";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { usePermissions } from "@/lib/hooks/usePermissions";
 import { DataTable } from "@/components/ui/data-table";
@@ -27,6 +29,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { Ban, Check, Crown, Key, Laptop, LogOut, Pencil, Plus, Trash2, User as UserIcon, Users } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -74,8 +77,8 @@ export default function UsersPage() {
   const [sessions, setSessions] = useState<UserSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
-  const [revokeLoading, setRevokeLoading] = useState<string | null>(null);
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
 
   const { data, loading, error, refresh } = useApiResource<{ users: User[]; customRoles: string[] }>({
     fetcher: async () => {
@@ -84,8 +87,8 @@ export default function UsersPage() {
       try {
         const d = await api.get<{ success?: boolean; data?: unknown }>(paths.roles.list);
         if (d.success) customRoles = ((d.data as unknown[]) || []).map((r: unknown) => (r as { name: string }).name as string);
-      } catch {
-        toast.error(t("users.toast.load_roles_failed"));
+      } catch (e) {
+        toastError(e, "users.toast.load_roles_failed");
       }
       return {
         users: normalizeListEnvelope(data, ["users", "Users", "data"]) as User[],
@@ -199,6 +202,92 @@ export default function UsersPage() {
     void refresh();
   };
 
+  const { mutate: createUser, isPending: creating } = useMutation({
+    fn: () => api.post(paths.users.add, { ...form, username: form.username.trim() }),
+    onSuccess: () => {
+      toast.success(t("users.toast.created"));
+      setShowAdd(false);
+      setForm({ username: "", password: "", role: "user" });
+      loadUsers();
+    },
+    onError: (e) => toastError(e, "users.toast.create_failed"),
+  });
+
+  const { mutate: updateUser, isPending: updating } = useMutation({
+    fn: (uid: string) => api.post(paths.users.edit(uid), { username: form.username, role: form.role, ...(form.password ? { password: form.password } : {}) }),
+    onSuccess: () => {
+      toast.success(t("users.toast.updated"));
+      setShowEdit(false);
+      setEditUser(null);
+      loadUsers();
+    },
+    onError: (e) => toastError(e, "users.toast.update_failed"),
+  });
+
+  // Row-scoped spinners keep their identity in local state (the hook tracks
+  // pending-ness, not which row was clicked); the calls are still mutations,
+  // so failures route through the normalizer.
+  const { mutate: toggleUser } = useMutation({
+    fn: (id: string) => api.post(paths.users.toggle(id), {}),
+    onSuccess: () => {
+      toast.success(t("users.toast.toggle_success"));
+      loadUsers();
+    },
+    onError: (e) => toastError(e, "users.toast.toggle_failed"),
+  });
+
+  const { mutate: deleteUser } = useMutation({
+    fn: (id: string) => api.del(paths.users.one(id)),
+    onSuccess: () => {
+      toast.success(t("users.toast.deleted"));
+      loadUsers();
+    },
+    onError: (e) => toastError(e, "users.toast.delete_failed"),
+  });
+
+  const { mutate: setUserPassword, isPending: settingPassword } = useMutation({
+    fn: () => api.post(paths.users.password(passwordUserId), { password: newPassword }),
+    onSuccess: () => {
+      toast.success(t("users.toast.password_updated"));
+      setShowPasswordModal(false);
+      setNewPassword("");
+      setPasswordUserId("");
+    },
+    onError: (e) => toastError(e, "users.toast.password_failed"),
+  });
+
+  const { mutate: forceLogout } = useMutation({
+    fn: (id: string) => api.post(paths.users.forceLogout(id)),
+    onSuccess: () => toast.success(t("users.toast.force_logout_success")),
+    onError: (e) => toastError(e, "users.toast.force_logout_failed"),
+  });
+
+  const { mutate: kickUser } = useMutation({
+    fn: (id: string) => api.post(paths.users.forceLogout(id)),
+    onSuccess: () => toast.success(t("users.toast.kick_success")),
+    onError: (e) => toastError(e, "users.toast.kick_failed"),
+  });
+
+  const { mutate: revokeSession, isPending: revokingSession } = useMutation({
+    fn: (uid: string, sessionId: number) => api.post(paths.users.revokeSession(uid, sessionId), {}),
+    onSuccess: (_result, _uid, sessionId) => {
+      toast.success(t("users.toast.session_revoked"));
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    },
+    onError: (e) => toastError(e, "users.toast.session_revoke_failed"),
+  });
+
+  const { mutate: revokeAllSessions, isPending: revokingAll } = useMutation({
+    fn: (uid: string) => api.post(paths.users.revokeAllSessions(uid), {}),
+    onSuccess: () => {
+      toast.success(t("users.toast.sessions_revoked"));
+      setSessions([]);
+    },
+    onError: (e) => toastError(e, "users.toast.sessions_revoke_failed"),
+  });
+
+  const sessionsBusy = revokingSession || revokingAll;
+
   const filtered = users.filter((u) => {
     const name = (u.username || "").toLowerCase();
     const urole = (u.role || "").toLowerCase();
@@ -211,92 +300,66 @@ export default function UsersPage() {
   const userCount = users.filter((u) => (u.role || "") !== "admin").length;
   const activeCount = users.filter((u) => u.is_active === true).length;
 
-  const handleAdd = async (e: React.FormEvent) => {
+  const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
     const errors: { username?: string; password?: string } = {};
     if (form.username.trim().length < 3) errors.username = t("users.err_username_min");
     if (form.password.length < 8) errors.password = t("users.err_password_min");
     setFormErrors(errors);
     if (Object.keys(errors).length > 0) return;
-    try {
-      await api.post(paths.users.add, { ...form, username: form.username.trim() });
-      toast.success(t("users.toast.created"));
-      setShowAdd(false);
-      setForm({ username: "", password: "", role: "user" });
-      loadUsers();
-    } catch { toast.error(t("users.toast.create_failed")); }
+    void createUser();
   };
 
-  const handleEdit = async (e: React.FormEvent) => {
+  const handleEdit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editUser) return;
+    const uid = editUser?.id;
+    if (!uid) return;
     const errors: { username?: string; password?: string } = {};
     if (form.username.trim().length < 3) errors.username = t("users.err_username_min");
     if (form.password && form.password.length < 8) errors.password = t("users.err_password_min");
     setFormErrors(errors);
     if (Object.keys(errors).length > 0) return;
-    try {
-      const uid = editUser.id;
-      await api.post(paths.users.edit(String(uid)), { username: form.username, role: form.role, ...(form.password ? { password: form.password } : {}) });
-      toast.success(t("users.toast.updated"));
-      setShowEdit(false);
-      setEditUser(null);
-      loadUsers();
-    } catch { toast.error(t("users.toast.update_failed")); }
+    void updateUser(uid);
   };
 
   const handleToggle = async (id: string) => {
     if (!(await confirm({ message: t("users.confirm.toggle") }))) return;
     setActionLoading(id + "_toggle");
     try {
-      await api.post(paths.users.toggle(id), {});
-      toast.success(t("users.toast.toggle_success"));
-      loadUsers();
-    } catch { toast.error(t("users.toast.toggle_failed")); }
-    finally { setActionLoading(null); }
+      await toggleUser(id);
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const handleDelete = async (id: string, name: string) => {
     if (!(await confirm({ message: t("users.confirm.delete"), requireText: name }))) return;
     setActionLoading(id + "_delete");
     try {
-      await api.del(paths.users.one(id));
-      toast.success(t("users.toast.deleted"));
-      loadUsers();
-    } catch { toast.error(t("users.toast.delete_failed")); }
-    finally { setActionLoading(null); }
+      await deleteUser(id);
+    } finally {
+      setActionLoading(null);
+    }
   };
 
-  const handleSetPassword = async (e: React.FormEvent) => {
+  const handleSetPassword = (e: React.FormEvent) => {
     e.preventDefault();
     if (!passwordUserId) return;
     if (newPassword.length < 8) {
       setPasswordError(t("users.err_password_min"));
       return;
     }
-    try {
-      await api.post(paths.users.password(passwordUserId), { password: newPassword });
-      toast.success(t("users.toast.password_updated"));
-      setShowPasswordModal(false);
-      setNewPassword("");
-      setPasswordUserId("");
-    } catch { toast.error(t("users.toast.password_failed")); }
+    void setUserPassword();
   };
 
   const handleForceLogout = async (id: string) => {
     if (!(await confirm({ message: t("users.confirm.force_logout") }))) return;
-    try {
-      await api.post(paths.users.forceLogout(id));
-      toast.success(t("users.toast.force_logout_success"));
-    } catch { toast.error(t("users.toast.force_logout_failed")); }
+    void forceLogout(id);
   };
 
   const handleKick = async (id: string) => {
     if (!(await confirm({ message: t("users.confirm.kick") }))) return;
-    try {
-      await api.post(paths.users.forceLogout(id));
-      toast.success(t("users.toast.kick_success"));
-    } catch { toast.error(t("users.toast.kick_failed")); }
+    void kickUser(id);
   };
 
   const loadSessions = async (user: User) => {
@@ -322,28 +385,16 @@ export default function UsersPage() {
   };
 
   const handleRevokeSession = (sessionId: number) => {
-    if (!sessionsUser?.id) return;
-    setRevokeLoading("s" + sessionId);
-    api.post(paths.users.revokeSession(sessionsUser.id, sessionId), {})
-      .then(() => {
-        toast.success(t("users.toast.session_revoked"));
-        setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-      })
-      .catch(() => toast.error(t("users.toast.session_revoke_failed")))
-      .finally(() => setRevokeLoading(null));
+    const uid = sessionsUser?.id;
+    if (!uid) return;
+    void revokeSession(uid, sessionId);
   };
 
   const handleRevokeAll = async () => {
     const uid = sessionsUser?.id;
     if (!uid || !sessionsUser?.username) return;
     if (!(await confirm({ message: t("users.confirm.revoke_all", { name: sessionsUser.username }) }))) return;
-    setRevokeLoading("all");
-    try {
-      await api.post(paths.users.revokeAllSessions(uid), {});
-      toast.success(t("users.toast.sessions_revoked"));
-      setSessions([]);
-    } catch { toast.error(t("users.toast.sessions_revoke_failed")); }
-    finally { setRevokeLoading(null); }
+    void revokeAllSessions(uid);
   };
 
   return (
@@ -448,7 +499,9 @@ export default function UsersPage() {
                 </SelectContent>
               </Select>
             </div>
-            <Button type="submit" className="w-full h-11">{t("users.btn.create_user")}</Button>
+            <Button type="submit" className="w-full h-11" disabled={creating}>
+              {creating ? <Spinner size="xs" color="white" /> : null}{t("users.btn.create_user")}
+            </Button>
           </form>
         </DialogContent>
       </Dialog>
@@ -484,7 +537,7 @@ export default function UsersPage() {
             </div>
             <DialogFooter>
               <Button variant="outline" type="button" onClick={() => setShowEdit(false)}>{t("users.btn.cancel")}</Button>
-              <Button type="submit">{t("users.btn.save")}</Button>
+              <Button type="submit" disabled={updating}>{updating ? <Spinner size="xs" color="white" /> : null}{t("users.btn.save")}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -503,7 +556,7 @@ export default function UsersPage() {
             </div>
             <DialogFooter>
               <Button variant="outline" type="button" onClick={() => setShowPasswordModal(false)}>{t("users.btn.cancel")}</Button>
-              <Button type="submit">{t("users.btn.update_password")}</Button>
+              <Button type="submit" disabled={settingPassword}>{settingPassword ? <Spinner size="xs" color="white" /> : null}{t("users.btn.update_password")}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -516,7 +569,7 @@ export default function UsersPage() {
           </DialogHeader>
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground">{t("users.showing", { filtered: String(sessions.length), total: String(sessions.length) })}</span>
-            <Button variant="destructive" size="sm" onClick={handleRevokeAll} disabled={sessions.length === 0 || revokeLoading !== null}>
+            <Button variant="destructive" size="sm" onClick={handleRevokeAll} disabled={sessions.length === 0 || sessionsBusy}>
               <LogOut className="size-4" /> {t("users.revoke_all_sessions")}
             </Button>
           </div>
@@ -547,7 +600,7 @@ export default function UsersPage() {
                       </div>
                     </div>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => handleRevokeSession(s.id)} disabled={revokeLoading !== null} className="text-destructive-ink hover:bg-destructive/10 shrink-0">
+                  <Button variant="ghost" size="sm" onClick={() => handleRevokeSession(s.id)} disabled={sessionsBusy} className="text-destructive-ink hover:bg-destructive/10 shrink-0">
                     <LogOut className="size-4" /> {t("users.revoke_session")}
                   </Button>
                 </div>
