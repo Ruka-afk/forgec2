@@ -2,10 +2,12 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { Link } from "react-router-dom";
-import { api, formatThrownError } from "@/lib/api";
+import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
+import { useMutation } from "@/lib/hooks/useMutation";
 
 import { Spinner, PageSpinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
@@ -43,19 +45,22 @@ const PERSISTENCE_METHODS: { key: string; labelKey: string; icon: React.ReactNod
 
 export default function AgentPersistencePage() {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const params = useParams();
   const id = params?.id as string;
   const [agent, setAgent] = useState<AgentDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [queuedMethods, setQueuedMethods] = useState<string[]>([]);
+  // The per-method spinner names which action is in flight; the mutations own
+  // error routing and the stale-completion guard.
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [listOutput, setListOutput] = useState<string | null>(null);
-  const [listLoading, setListLoading] = useState(false);
 
-  // t rotates on locale switch; keep it in a ref so the load callbacks stay
-  // stable (deps [id]) and don't re-fire the agent list action on locale
-  // changes. Named tRef so the i18n checker's ref-usage pattern sees the lookups.
+  // t rotates on locale switch; the load callback keeps it in a ref so its
+  // deps stay [id]: a locale switch must not reset the page to its spinner
+  // and refetch. Named tRef so the i18n checker's ref-usage pattern sees the
+  // lookups.
   const tRef = useRef(t);
   tRef.current = t;
   // A load for a previous agent id must not overwrite the agent the new id
@@ -74,79 +79,110 @@ export default function AgentPersistencePage() {
     } catch {
       if (seq !== loadSeqRef.current) return;
       // Distinguish "could not load" from "no such agent": a failed request used
-      // to render the not-found page, which reads as a deleted implant.
+      // to render the not-found page, which reads as a deleted implant. The
+      // inline DataError + retry is the failure surface — a toast would only
+      // repeat its text (the config/traffic page loads do not toast either).
       setLoadError(tRef.current("agents.persistence_load_failed"));
-      toast.error(tRef.current("agents.persistence_load_failed"));
     } finally {
       if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [id]);
 
-  // Shared cancellation flag: an async callback can't hand React a synchronous
-  // cleanup function, so the poll loop below checks this ref instead. The
-  // effect resets it at the start of each run and sets it on cleanup, which
-  // stops the 10×1.5s poll on unmount or id change.
-  const listCancelledRef = useRef(false);
+  // The list run polls for up to 15 s; a monotonically increasing run id lets
+  // a superseded run (id change, unmount, re-click) stop at its next check.
+  // A shared boolean would have to be reset for the new run — un-cancelling
+  // the old one, whose output then lands on the wrong agent's page.
+  const listRunRef = useRef(0);
 
-  const listPersistence = useCallback(async () => {
-    if (!id) return;
-    setListLoading(true);
-    try {
-      const data = await api.post(paths.agents.persistence(id), { action: "list" });
-      if (data.success) {
-        toast.success(tRef.current("agents.persistence_list_success"));
-        for (let attempt = 0; attempt < 10; attempt++) {
-          await new Promise((resolve) => setTimeout(resolve, 1500));
-          if (listCancelledRef.current) break;
-          const tasks = await api.get<{ tasks?: Array<{ type: string; result: string }> }>(
-            paths.agents.tasks(id),
-          );
-          const latest = (tasks.tasks || []).find(
-            (task) => task.type === "persistence_list" && task.result && task.result.trim(),
-          );
-          if (latest) {
-            setListOutput(latest.result);
-            break;
-          }
+  const { mutate: runList, isPending: listLoading, reset: resetList } = useMutation({
+    // `run` identifies this launch; every step re-checks it. The POST uses
+    // the id captured when the button was clicked.
+    fn: async (run: number) => {
+      await api.post(paths.agents.persistence(id), { action: "list" });
+      // `api.post` throws on a success:false envelope, so reaching here means
+      // the task was queued; the failure path is the mutation's onError.
+      if (listRunRef.current !== run) return;
+      toast.success(t("agents.persistence_list_success"));
+      for (let attempt = 0; attempt < 10; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        if (listRunRef.current !== run) break;
+        const tasks = await api.get<{ tasks?: Array<{ type: string; result: string }> }>(
+          paths.agents.tasks(id),
+        );
+        if (listRunRef.current !== run) break;
+        const latest = (tasks.tasks || []).find(
+          (task) => task.type === "persistence_list" && task.result && task.result.trim(),
+        );
+        if (latest) {
+          setListOutput(latest.result);
+          break;
         }
-      } else {
-        toast.error((data.error as string) || tRef.current("agents.persistence_load_failed"));
       }
-    } catch (e) {
-      toast.error(formatThrownError(e));
-    } finally {
-      setListLoading(false);
-    }
-  }, [id]);
+    },
+    onError: (e) => toastError(e, "agents.persistence_load_failed"),
+  });
 
-  useEffect(() => { loadAgent(); }, [loadAgent]);
+  const { mutate: addMethod, reset: resetAdd } = useMutation({
+    fn: (method: string) =>
+      api.post<{ task_id?: number }>(paths.agents.persistence(id), { action: "add", method }),
+    onSuccess: (data, method) => {
+      setQueuedMethods((prev) => (prev.includes(method) ? prev : [...prev, method]));
+      toast.success(t("agents.persistence_task_queued", { id: String(data.task_id ?? "") }));
+    },
+    onError: (e) => toastError(e, "agents.persistence_install_failed"),
+  });
+
+  const { mutate: removeMethod, reset: resetRemove } = useMutation({
+    fn: (method: string) =>
+      api.post<{ task_id?: number }>(paths.agents.persistence(id), { action: "remove", method }),
+    onSuccess: (data, method) => {
+      setQueuedMethods((prev) => prev.filter((m) => m !== method));
+      toast.success(t("agents.persistence_task_queued", { id: String(data.task_id ?? "") }));
+    },
+    onError: (e) => toastError(e, "agents.persistence_remove_failed"),
+  });
+
+  // Route reuse: /agents/A/persistence → /agents/B/persistence keeps this
+  // instance (the route carries no per-id key), so A's page state is dropped
+  // and A's in-flight callbacks retired before B's fetch lands — B must not
+  // render A's hostname, queued methods or detection output.
+  useEffect(() => {
+    setAgent(null);
+    setLoading(true);
+    setLoadError(null);
+    setQueuedMethods([]);
+    setListOutput(null);
+    setActionLoading(null);
+    resetList();
+    resetAdd();
+    resetRemove();
+    void loadAgent();
+  }, [loadAgent, resetList, resetAdd, resetRemove]);
+
   useEffect(() => {
     if (!id) return;
-    listCancelledRef.current = false;
-    void listPersistence();
-    return () => { listCancelledRef.current = true; };
-  }, [id, listPersistence]);
+    const run = ++listRunRef.current;
+    void runList(run);
+    return () => {
+      listRunRef.current += 1; // retire this run on unmount or id change
+    };
+  }, [id, runList]);
+
   const confirmDialog = useConfirm();
 
   const addPersistence = async (method: string) => {
     if (!id) return;
     if (implantBlocksDest(agent?.version, persistenceMethodQuality(method))) {
-      toast.error(t("agents.version_unknown_dest"));
+      toast.error(t("agents.version_unknown_dest")); // validation, not an API failure
       return;
     }
     const okInstall = await confirmDialog.confirm({ message: t("agents.persistence_install") + "?", danger: true });
     if (!okInstall) return;
+    // Identity spinner local by design (see the conventions); the mutation
+    // owns error routing and the stale-completion guard.
     setActionLoading(method);
     try {
-      const data = await api.post(paths.agents.persistence(id), { action: "add", method });
-      if (data.success) {
-        setQueuedMethods((prev) => (prev.includes(method) ? prev : [...prev, method]));
-        toast.success(t("agents.persistence_task_queued", { id: String(data.task_id ?? "") }));
-      } else {
-        toast.error((data.error as string) || t("agents.persistence_install_failed"));
-      }
-    } catch (e) {
-      toast.error(formatThrownError(e));
+      await addMethod(method);
     } finally {
       setActionLoading(null);
     }
@@ -158,15 +194,7 @@ export default function AgentPersistencePage() {
     if (!okRemove) return;
     setActionLoading(`remove_${method}`);
     try {
-      const data = await api.post(paths.agents.persistence(id), { action: "remove", method });
-      if (data.success) {
-        setQueuedMethods((prev) => prev.filter((m) => m !== method));
-        toast.success(t("agents.persistence_task_queued", { id: String(data.task_id ?? "") }));
-      } else {
-        toast.error((data.error as string) || t("agents.persistence_remove_failed"));
-      }
-    } catch (e) {
-      toast.error(formatThrownError(e));
+      await removeMethod(method);
     } finally {
       setActionLoading(null);
     }
@@ -217,11 +245,12 @@ export default function AgentPersistencePage() {
             </div>
           </div>
           <Button
-            onClick={listPersistence}
+            onClick={() => void runList(++listRunRef.current)}
             size="sm"
             className="flex items-center gap-1.5"
           >
-            <RotateCw className="size-4" aria-hidden="true" /> {t("agents.persistence_refresh_list")}
+            {listLoading ? <Spinner size="sm" /> : <RotateCw className="size-4" aria-hidden="true" />}{" "}
+            {t("agents.persistence_refresh_list")}
           </Button>
         </div>
       </Card>

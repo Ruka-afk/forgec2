@@ -251,6 +251,39 @@ if we adopt strict WCAG 1.4.11 for control boundaries).
 > page). Counts: `useMutation` call sites 37 → 46, `useErrorToast`
 > importing files 15 → 16, users-page raw error toasts 10 → 0.
 
+> **U3 landed — wave 4, the persistence page (2026-10-18):** the
+> `/agents/:id/persistence` surface moves onto `useMutation` +
+> `useErrorToast`. The three action paths — list, install, remove — become
+> mutations; the per-method spinner (`actionLoading = method` /
+> `` `remove_${method}` ``) keeps local identity state by design, while the
+> calls route failures through the normalizer, so a rejected install now
+> shows the backend's message (the old `formatThrownError` path rendered
+> `[object Object]` for a status-carrying rejection) and the three
+> `data.success` else-branches drop out: `api.post` already throws an
+> `ApiError` carrying the envelope's `error` text, which `toastError`
+> surfaces as the message. The list poller trades its shared
+> `listCancelledRef` boolean for a monotonic run id: a boolean has to be
+> reset for the new run, which *un-cancels* the old one — its 10×1.5 s loop
+> kept polling the previous agent's tasks and could paint that output onto
+> the new agent's page after a route-id switch (pinned by the fourth test).
+> The refresh control shows a spinner while a run is in flight without
+> disabling (a re-click supersedes the run instead of stacking a second
+> poll), and the route-id effect now resets the whole page identity — agent,
+> `loadError`, queued methods, detection output, spinner and all three
+> mutation guards — because `/agents/A/persistence →
+> /agents/B/persistence` reuses the instance (no per-id key on the route)
+> and B briefly rendered A's queue. The duplicate load-failure toast is
+> retired: the inline `DataError` + retry is the surface (the config/traffic
+> page loads do not toast either), so the one translated `toast.error` left
+> on the page is the version-blocked validation, which stays direct by
+> convention. Coverage: new `PersistencePage.test.tsx` (6 component tests —
+> the mount list plus its polled output, the confirmed install with its task
+> id, a rejected install surfacing "agent offline" while the local spinner
+> clears, the confirmed remove, the route-id reset and the superseded-run
+> output guard; the last three were verified red against the pre-migration
+> page). Counts: `useMutation` call sites 46 → 49, `useErrorToast` importing
+> files 16 → 17, persistence-page raw error toasts 7 → 0.
+
 - **F1 · `useMutation` adoption: 6 uses vs 66 hand-rolled `setSaving`
   (15 files) + 8 `setDeleting` (3 files) + per-page `actionLoading` state.**
   The convention exists (`docs/FRONTEND_CONVENTIONS.md`) with one migrated
@@ -444,7 +477,7 @@ overflowed its card at both 1280 and 390; it wraps now.
 | U1a status tokens & primitives (landed 2026-10-18) | C1, C2, C5, C6, C8, C9; component side of C3/C4/C7; `check:contrast` compositing switched to the browser's sRGB blend space |
 | U1b page migration (landed 2026-10-18) | C3/C4/C7 page call sites: 300 × `text-X` → `text-X-ink`, 38 `-foreground`-on-tint chips → ink, light `primary/20` → `/15`; `check:contrast --strict` promoted into `npm run check` |
 | U1c type system (landed 2026-10-18) | T1 size ramp (`--text-*` + 360-site migration + token gate Rules 5/6), T2 empty-state wrap, T8 no-op opacity sweep || U2 keyboard & names (landed 2026-10-18) | K1–K5: aria-labels on the video overlay and the phase chip, named breadcrumb home link, single skip link, labelled table region; `check:aria --strict` promoted into `npm run check` |
-| U3 feedback loop (wave 1: settings tree, wave 2: agent-detail console, wave 3: users page — landed 2026-10-18) | F1/F2: 40 handlers onto `useMutation` (call sites 6 → 46); wave 1 retires the settings tree's raw-message error toasts (4 → 0) and makes previously-silent failures report; wave 2 migrates the three `/agents/:id` action hooks plus Diagnose/Apply-sleep, discards in-flight completions on an agent switch (notes editor, quick-shell history, sleep toast, Enter-key guard), and routes the console's 9 hand-rolled failure toasts through `useErrorToast`; wave 3 migrates the users page (dialog submits gain pending guards, `revokeLoading` retires into per-action pendings, the toggle/delete row spinners stay local by design) and retires its 10 raw error toasts; `useErrorToast` gains `fallbackParams`; the route-id reset rule lands in `FRONTEND_CONVENTIONS.md`; remaining clusters (persistence, phishing, infrastructure, the collect/stealth sections) migrate in later waves |
+| U3 feedback loop (wave 1: settings tree, wave 2: agent-detail console, wave 3: users page, wave 4: persistence page — landed 2026-10-18) | F1/F2: `useMutation` call sites 6 → 49 across the four waves; wave 1 retires the settings tree's raw-message error toasts (4 → 0) and makes previously-silent failures report; wave 2 migrates the three `/agents/:id` action hooks plus Diagnose/Apply-sleep, discards in-flight completions on an agent switch (notes editor, quick-shell history, sleep toast, Enter-key guard), and routes the console's 9 hand-rolled failure toasts through `useErrorToast`; wave 3 migrates the users page (dialog submits gain pending guards, `revokeLoading` retires into per-action pendings, the toggle/delete row spinners stay local by design) and retires its 10 raw error toasts; wave 4 migrates the persistence page (list/install/remove onto mutations, the poller's run-id guard replaces the shared cancel boolean, the route-id effect resets the page identity) and retires its 7 raw error toasts including the duplicate load toast; `useErrorToast` gains `fallbackParams`; the route-id reset rule lands in `FRONTEND_CONVENTIONS.md`; remaining clusters (phishing, infrastructure, the collect/stealth sections) migrate in later waves |
 | U4 narrow screens (landed 2026-10-18) | R2 fixed (status label always rendered), T6 mobile palette entry, T7 touch targets, R3 extended to 10 routes |
 | U5 motion (landed 2026-10-18) | M1: `router.navigate` defaults into `document.startViewTransition` (`?? true` beats a `Link`'s undefined key; explicit `false` kept), reduced-motion and API-absent skip; `src/router-transitions.test.ts` + the 4-viewport Playwright `route transitions` spec; `globals.css` untouched |
 | U6 page-by-page polish | T3 focus mode, T4 stat tiles, T5 density selectors, T9 non-total list fallbacks (tokens, ntlm), T10 clipped fixed-width columns (toolkit, scripting), V1–V2 + per-page checklists |
