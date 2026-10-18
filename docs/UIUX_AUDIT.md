@@ -216,7 +216,7 @@ if we adopt strict WCAG 1.4.11 for control boundaries).
 - **R3 · Overflow assertions cover the 8 baseline routes**; extend the list to
   the top-10 operator routes × 4 viewports in U4.
 
-## D5 — Motion (owner: U5)
+## D5 — Motion (owner: U5, landed 2026-10-18)
 
 - **M1 · No route transitions** — `startViewTransition` has 0 call sites while
   `globals.css` already carries `::view-transition` rules *and* their
@@ -224,6 +224,20 @@ if we adopt strict WCAG 1.4.11 for control boundaries).
   add it where route chunks now swap instantly.
 - Skeleton usage (80) and `animate-*` classes are consistent; the global
   reduced-motion kill switch covers third-party animation.
+
+> **U5 landed (2026-10-18):** M1 is fixed in `frontend/src/router.tsx` — the
+> module wraps `router.navigate`, the single funnel every navigation passes
+> through (the `<Link>` sites and the programmatic `navigate()` calls stay
+> untouched), defaulting `viewTransition` to `true` with
+> `options?.viewTransition ?? true` (a `Link` forwards a present-but-undefined
+> key that an unconditional spread clobbered — link navigations fired no
+> transition), keeping an explicit `false` opt-out, and skipping the API under
+> `prefers-reduced-motion: reduce` or where `document.startViewTransition` is
+> missing. `globals.css` (the cross-fade rules and their reduced-motion
+> override) is unchanged. Pinned by `src/router-transitions.test.ts` (the four
+> wrapper decisions against a spied `createBrowserRouter`) and the Playwright
+> `route transitions` spec (the real `/chat → /ai` client-side redirect on all
+> four viewports: calls > 0; 0 under emulated reduced motion).
 
 ## D6 — Copy & i18n (owner: U6, per page)
 
@@ -375,7 +389,7 @@ overflowed its card at both 1280 and 390; it wraps now.
 | U1c type system (landed 2026-10-18) | T1 size ramp (`--text-*` + 360-site migration + token gate Rules 5/6), T2 empty-state wrap, T8 no-op opacity sweep || U2 keyboard & names (landed 2026-10-18) | K1–K5: aria-labels on the video overlay and the phase chip, named breadcrumb home link, single skip link, labelled table region; `check:aria --strict` promoted into `npm run check` |
 | U3 feedback loop (wave 1: settings tree — landed 2026-10-18) | F1/F2 first wave: 22 handlers onto `useMutation` (call sites 6 → 28), settings-tree raw-message error toasts 4 → 0 and previously-silent failures now report; `useErrorToast` gains `fallbackParams`; remaining clusters migrate in later waves |
 | U4 narrow screens (landed 2026-10-18) | R2 fixed (status label always rendered), T6 mobile palette entry, T7 touch targets, R3 extended to 10 routes |
-| U5 motion | M1 |
+| U5 motion (landed 2026-10-18) | M1: `router.navigate` defaults into `document.startViewTransition` (`?? true` beats a `Link`'s undefined key; explicit `false` kept), reduced-motion and API-absent skip; `src/router-transitions.test.ts` + the 4-viewport Playwright `route transitions` spec; `globals.css` untouched |
 | U6 page-by-page polish | T3 focus mode, T4 stat tiles, T5 density selectors, T9 non-total list fallbacks (tokens, ntlm), T10 clipped fixed-width columns (toolkit, scripting), V1–V2 + per-page checklists |
 
 ```powershell

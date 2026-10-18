@@ -1,5 +1,11 @@
 import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
-import { createBrowserRouter, Outlet, Navigate, useLocation } from "react-router-dom";
+import {
+  createBrowserRouter,
+  Outlet,
+  Navigate,
+  useLocation,
+  type To,
+} from "react-router-dom";
 import { PageSpinner } from "@/components/ui/spinner";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import AppLayout from "@/components/AppLayout";
@@ -167,3 +173,36 @@ export const router = createBrowserRouter([
     errorElement: <RouterErrorView />,
   },
 ]);
+
+// ── Route transitions (UI/UX M1) ─────────────────────────────────────────
+// Every router-driven navigation — <Link> clicks and navigate() calls, the
+// redirect elements included — funnels through router.navigate(), so wrapping
+// that single method opts the whole console into the View Transitions API
+// instead of touching the ~90 call sites. The animation already lives in
+// globals.css (fadeSlideOut/fadeSlideUp on ::view-transition-*(root)) beside
+// its prefers-reduced-motion kill switch; we additionally skip the API
+// entirely when the user prefers reduced motion (no snapshots are taken at
+// all), and environments without document.startViewTransition (jsdom, older
+// browsers) keep the instant swap — react-router feature-detects the same
+// thing internally, but checking here keeps its warning quiet.
+const rawNavigate: typeof router.navigate = router.navigate.bind(router);
+
+function routeTransitionAllowed() {
+  if (typeof document === "undefined" || typeof document.startViewTransition !== "function") {
+    return false;
+  }
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return true;
+  }
+  return !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+router.navigate = ((to: To | null | number, options?: Parameters<typeof rawNavigate>[1]) => {
+  if (typeof to === "number") return rawNavigate(to);
+  if (to === null || !routeTransitionAllowed()) return rawNavigate(to, options);
+  // `Link` forwards its own `viewTransition` prop, which is a present-but-
+  // undefined key when unset — a plain spread would clobber the default, so
+  // only an explicit boolean may override it.
+  const viewTransition = options?.viewTransition ?? true;
+  return rawNavigate(to, { ...options, viewTransition });
+}) as typeof router.navigate;

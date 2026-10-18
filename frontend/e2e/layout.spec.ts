@@ -148,6 +148,52 @@ test.describe("responsive shell", () => {
   });
 });
 
+test.describe("route transitions", () => {
+  // M1: the router wraps every client-side navigation in
+  // document.startViewTransition (globals.css owns the animation). Count the
+  // invocations without changing the transition itself.
+  async function installTransitionCounter(page: Page) {
+    await page.addInitScript(() => {
+      const state = window as unknown as { __vtCalls?: number };
+      state.__vtCalls = 0;
+      if (typeof document.startViewTransition !== "function") return;
+      const native = document.startViewTransition.bind(document);
+      document.startViewTransition = (callbackOrOptions) => {
+        state.__vtCalls = (state.__vtCalls ?? 0) + 1;
+        return native(callbackOrOptions);
+      };
+    });
+  }
+
+  async function loadChatRedirect(page: Page) {
+    // /chat is rewritten client-side to /ai by the route table (see
+    // REDIRECT_ROUTES above): a deterministic router navigation that needs no
+    // operator interaction, so the assertion cannot drift with page data or
+    // viewport-specific chrome.
+    await page.goto("/chat.html");
+    await page.waitForURL(/\/ai/);
+  }
+
+  async function transitionCalls(page: Page) {
+    return page.evaluate(() => (window as unknown as { __vtCalls?: number }).__vtCalls);
+  }
+
+  test("client navigation opts into the View Transitions API", async ({ page }) => {
+    await prepare(page);
+    await installTransitionCounter(page);
+    await loadChatRedirect(page);
+    expect(await transitionCalls(page)).toBeGreaterThan(0);
+  });
+
+  test("reduced motion keeps the instant swap", async ({ page }) => {
+    await prepare(page);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await installTransitionCounter(page);
+    await loadChatRedirect(page);
+    expect(await transitionCalls(page)).toBe(0);
+  });
+});
+
 test.describe("light and dark visual baselines", () => {
   for (const route of VISUAL_ROUTES) {
     for (const theme of ["light", "dark"] as const) {
