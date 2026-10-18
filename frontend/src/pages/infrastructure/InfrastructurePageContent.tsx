@@ -3,6 +3,9 @@ import { useEffect } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { normalizeError } from "@/lib/errors";
+import { useMutation } from "@/lib/hooks/useMutation";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { Banner } from "@/components/ui/banner";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -38,7 +41,7 @@ export default function InfrastructurePage() {
     generating, copied, activeSection, setActiveSection,
     acmeDomain, setAcmeDomain, acmeEmail, setAcmeEmail, acmePort, setAcmePort,
     acmeStaging, setAcmeStaging, acmeProvisioning, exportFormat, setExportFormat,
-    exporting, setExporting, generateConfig, copyConfig, downloadConfig, provisionCert, exportProfile,
+    exporting, generateConfig, copyConfig, downloadConfig, provisionCert, exportProfile,
   } = useInfrastructureConfigForm(listeners);
   const {
     rdName, setRdName, rdHost, setRdHost, rdType, setRdType,
@@ -47,10 +50,86 @@ export default function InfrastructurePage() {
     rdConfig, setRdConfig, rdGenerateHost, setRdGenerateHost,
     rdGenerateDomain, setRdGenerateDomain, rdGeneratePort, setRdGeneratePort,
     rdGenerateTLS, setRdGenerateTLS, rdGenerateWS, setRdGenerateWS,
-    deploying, setDeploying, saving, setSaving, deleting, setDeleting,
-    testingSSH, setTestingSSH, generatingModal, setGeneratingModal,
+    deleting, setDeleting,
     deployResult, setDeployResult, backendURL, setBackendURL,
   } = useInfrastructureRedirectorForm();
+
+  const { toastError } = useErrorToast();
+
+  // Mirrors useErrorToast's resolution for the inline deploy banner: a mapped
+  // locale key first, backend/validation text otherwise.
+  const errorText = (err: unknown): string => {
+    const normalized = normalizeError(err);
+    return normalized.i18nKey
+      ? t(normalized.i18nKey, normalized.params as Record<string, number | string> | undefined)
+      : normalized.message.trim() || t("infra.unknown_error");
+  };
+
+  const saveRedirector = useMutation({
+    fn: () => {
+      const payload = editingRd
+        ? { name: rdName, host: rdHost, type: rdType, ssh_user: rdSSHUser, ssh_port: rdSSHPort, ssh_key: rdSSHKey, ssh_password: rdSSHPassword, config: rdConfig }
+        : { name: rdName, host: rdHost, type: rdType, ssh_user: rdSSHUser, ssh_port: rdSSHPort, ssh_key: rdSSHKey, ssh_password: rdSSHPassword };
+      return editingRd ? api.putJson(paths.redirectors.one(editingRd), payload) : api.postJson(paths.redirectors.list, payload);
+    },
+    onSuccess: () => { loadRedirectors(); setEditingRd(null); },
+    onError: (e) => toastError(e, "infrastructure.toast.save_redirector_failed"),
+  });
+
+  const removeRedirector = useMutation({
+    // The row-scoped spinner (`deleting === rd.id`) keeps its identity in
+    // local state; the mutation tracks pending-ness only.
+    fn: (id: number) => api.del(paths.redirectors.one(id)),
+    onSuccess: () => loadRedirectors(),
+    onError: (e) => toastError(e, "infrastructure.toast.delete_redirector_failed"),
+  });
+
+  const testSSH = useMutation({
+    fn: () => api.postJson<{ success?: boolean; message?: string }>(paths.redirectors.testSsh, { host: rdHost, port: rdSSHPort, user: rdSSHUser, password: rdSSHPassword, ssh_key: rdSSHKey }),
+    // The backend reports reachability in `message`; the old call read a
+    // nonexistent `stdout` field and rendered "SSH OK: undefined".
+    onSuccess: (data) => toast.success(t("infrastructure.toast.ssh_ok", { message: String(data.message ?? "") })),
+    onError: (e) => toastError(e, "infrastructure.toast.ssh_test_failed"),
+  });
+
+  const generateRedirector = useMutation({
+    fn: async () => {
+      const data = await api.postJson<{ config?: string }>(`/redirectors/generate/${rdType}`, {
+        domain: rdGenerateDomain,
+        listen_port: rdGeneratePort,
+        backend_url: backendURL,
+        ws_enabled: rdGenerateWS,
+      });
+      if (!data.config) return;
+      setRdConfig(data.config);
+      const payload = {
+        name: rdName || rdGenerateHost,
+        host: rdGenerateHost,
+        type: rdType,
+        ssh_user: rdSSHUser,
+        ssh_port: rdSSHPort,
+        ssh_key: rdSSHKey,
+        ssh_password: rdSSHPassword,
+        config: data.config,
+      };
+      if (editingRd) {
+        await api.putJson(paths.redirectors.one(editingRd), payload);
+      } else {
+        await api.postJson(paths.redirectors.list, payload);
+      }
+    },
+    onError: (e) => toastError(e, "infrastructure.toast.generate_config_failed"),
+  });
+
+  const deploySSH = useMutation({
+    fn: () => api.postJson<{ success: boolean; message?: string; stdout?: string; stderr?: string }>("/redirectors/deploy-ssh", {
+      host: rdGenerateHost, port: rdSSHPort, user: rdSSHUser, password: rdSSHPassword,
+      ssh_key: rdSSHKey, config: rdConfig, config_type: rdType,
+    }),
+    onSuccess: (data) => { setDeployResult(data); loadRedirectors(); },
+    // The banner is the failure surface; a toast would only repeat it.
+    onError: (e) => setDeployResult({ success: false, message: errorText(e) }),
+  });
 
   useEffect(() => { loadListeners(); }, [loadListeners]);
 
@@ -229,8 +308,7 @@ export default function InfrastructurePage() {
                                   <Button onClick={async () => {
                                     if (!(await confirm({ message: t("infra.delete_redirector_confirm") }))) return;
                                     setDeleting(rd.id);
-                                    try { await api.del(paths.redirectors.one(rd.id)); loadRedirectors(); } catch { toast.error(t("infrastructure.toast.delete_redirector_failed")); }
-                                    setDeleting(null);
+                                    try { await removeRedirector.mutate(rd.id); } finally { setDeleting(null); }
                                   }} variant="destructive" size="sm">
                                     {deleting === rd.id ? <Spinner size="sm" className="mr-1" /> : <Trash2 className="size-4 mr-1" />}{deleting === rd.id ? t("infra.deleting") : t("common.delete")}
                                   </Button>
@@ -297,33 +375,11 @@ export default function InfrastructurePage() {
                     <Input aria-label={t("infra.ssh_password")} name="input-13" type="password" value={rdSSHPassword} onChange={e => setRdSSHPassword(e.target.value)} placeholder="password" />
                   </div>
                   <div className="flex gap-2">
-                    <Button onClick={async () => {
-                      setSaving(true);
-                      try {
-                        const payload = editingRd
-                          ? { name: rdName, host: rdHost, type: rdType, ssh_user: rdSSHUser, ssh_port: rdSSHPort, ssh_key: rdSSHKey, ssh_password: rdSSHPassword, config: rdConfig }
-                          : { name: rdName, host: rdHost, type: rdType, ssh_user: rdSSHUser, ssh_port: rdSSHPort, ssh_key: rdSSHKey, ssh_password: rdSSHPassword };
-                        if (editingRd) {
-                          await api.putJson(paths.redirectors.one(editingRd), payload);
-                        } else {
-                          await api.postJson(paths.redirectors.list, payload);
-                        }
-                        loadRedirectors();
-                        setEditingRd(null);
-                      } catch { toast.error(t("infrastructure.toast.save_redirector_failed")); }
-                      setSaving(false);
-                    }} disabled={saving} className="flex-1">
-                      <Save className="size-4" /> {saving ? t("infra.saving") : editingRd ? t("infra.update") : t("common.save")}
+                    <Button onClick={() => { void saveRedirector.mutate(); }} disabled={saveRedirector.isPending} className="flex-1">
+                      <Save className="size-4" /> {saveRedirector.isPending ? t("infra.saving") : editingRd ? t("infra.update") : t("common.save")}
                     </Button>
-                    <Button onClick={async () => {
-                      setTestingSSH(true);
-                      try {
-                        const data = await api.postJson(paths.redirectors.testSsh, { host: rdHost, port: rdSSHPort, user: rdSSHUser, password: rdSSHPassword, ssh_key: rdSSHKey });
-                        if (data.success) { toast.success(t("infrastructure.toast.ssh_ok", { stdout: String(data.stdout) })); } else { toast.error(t("infrastructure.toast.ssh_failed", { message: String(data.message) })); }
-                      } catch { toast.error(t("infrastructure.toast.ssh_test_failed")); }
-                      setTestingSSH(false);
-                    }} disabled={testingSSH} variant="outline" aria-label={t("infra.test_ssh")}>
-                      {testingSSH ? <Spinner size="sm" /> : <Plug className="size-4" />}
+                    <Button onClick={() => { void testSSH.mutate(); }} disabled={testSSH.isPending} variant="outline" aria-label={t("infra.test_ssh")}>
+                      {testSSH.isPending ? <Spinner size="sm" /> : <Plug className="size-4" />}
                     </Button>
                   </div>
                 </CardContent>
@@ -363,59 +419,11 @@ export default function InfrastructurePage() {
               </div>
 
               <div className="flex gap-2">
-                <Button onClick={async () => {
-                  setGeneratingModal(true);
-                  try {
-                    const data = await api.postJson<{ config?: string }>(`/redirectors/generate/${rdType}`, {
-                      domain: rdGenerateDomain,
-                      listen_port: rdGeneratePort,
-                      backend_url: backendURL,
-                      ws_enabled: rdGenerateWS,
-                    });
-                    if (data.config) {
-                      setRdConfig(data.config as string);
-                      const payload = {
-                        name: rdName || rdGenerateHost,
-                        host: rdGenerateHost,
-                        type: rdType,
-                        ssh_user: rdSSHUser,
-                        ssh_port: rdSSHPort,
-                        ssh_key: rdSSHKey,
-                        ssh_password: rdSSHPassword,
-                        config: data.config,
-                      };
-                      if (editingRd) {
-                        await api.putJson(paths.redirectors.one(editingRd), payload);
-                      } else {
-                        await api.postJson(paths.redirectors.list, payload);
-                      }
-                    }
-                  } catch { toast.error(t("infrastructure.toast.generate_config_failed")); }
-                  setGeneratingModal(false);
-                }} disabled={generatingModal}>
-                  {generatingModal ? <Spinner size="sm" className="mr-1" /> : <WandSparkles className="size-4 mr-1" />} {generatingModal ? t("infra.generating") : t("infra.generate_config")}
+                <Button onClick={() => { void generateRedirector.mutate(); }} disabled={generateRedirector.isPending}>
+                  {generateRedirector.isPending ? <Spinner size="sm" className="mr-1" /> : <WandSparkles className="size-4 mr-1" />} {generateRedirector.isPending ? t("infra.generating") : t("infra.generate_config")}
                 </Button>
-                <Button disabled={!rdConfig || deploying} onClick={async () => {
-                  setDeploying(true);
-                  setDeployResult(null);
-                  try {
-                    const data = await api.postJson<{ success: boolean; message?: string; stdout?: string; stderr?: string }>("/redirectors/deploy-ssh", {
-                      host: rdGenerateHost,
-                      port: rdSSHPort,
-                      user: rdSSHUser,
-                      password: rdSSHPassword,
-                      ssh_key: rdSSHKey,
-                      config: rdConfig,
-                      config_type: rdType,
-                    });
-                    setDeployResult(data as { success: boolean; message?: string; stdout?: string; stderr?: string });
-                    loadRedirectors();
-                  } catch (e: unknown) {
-                    setDeployResult({ success: false, message: e instanceof Error ? e.message : t("infra.unknown_error") });
-                  }
-                  setDeploying(false);
-                }}>
-                  {deploying ? <Spinner size="xs" className="mr-1" /> : <Rocket className="size-4" />} {deploying ? t("infra.deploying") : t("infra.deploy_via_ssh")}
+                <Button disabled={!rdConfig || deploySSH.isPending} onClick={() => { setDeployResult(null); void deploySSH.mutate(); }}>
+                  {deploySSH.isPending ? <Spinner size="xs" className="mr-1" /> : <Rocket className="size-4" />} {deploySSH.isPending ? t("infra.deploying") : t("infra.deploy_via_ssh")}
                 </Button>
               </div>
 
@@ -500,7 +508,7 @@ export default function InfrastructurePage() {
                 ))}
               </div>
             </div>
-            <Button onClick={async () => { setExporting(true); await exportProfile(); setExporting(false); }} disabled={exporting} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+            <Button onClick={exportProfile} disabled={exporting} className="bg-primary hover:bg-primary/90 text-primary-foreground">
               {exporting ? <Spinner size="sm" /> : <Download className="size-4" />} {exporting ? t("infra.exporting") : `${t("infra.export_as")} ${exportFormat.toUpperCase()}`}
             </Button>
             <Card className="bg-muted">

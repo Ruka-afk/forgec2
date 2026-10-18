@@ -14,11 +14,9 @@ export function useInfrastructureRedirectorForm() {
   const [rdGeneratePort, setRdGeneratePort] = useState(443);
   const [rdGenerateTLS, setRdGenerateTLS] = useState(true);
   const [rdGenerateWS, setRdGenerateWS] = useState(true);
-  const [deploying, setDeploying] = useState(false);
-  const [saving, setSaving] = useState(false);
+  // The row-scoped delete spinner keeps its identity here; the four action
+  // pending flags are owned by the page's mutations now.
   const [deleting, setDeleting] = useState<number | null>(null);
-  const [testingSSH, setTestingSSH] = useState(false);
-  const [generatingModal, setGeneratingModal] = useState(false);
   const [deployResult, setDeployResult] = useState<{ success: boolean; message?: string; stdout?: string; stderr?: string } | null>(null);
   const [backendURL, setBackendURL] = useState("");
 
@@ -59,11 +57,7 @@ export function useInfrastructureRedirectorForm() {
     rdGeneratePort, setRdGeneratePort,
     rdGenerateTLS, setRdGenerateTLS,
     rdGenerateWS, setRdGenerateWS,
-    deploying, setDeploying,
-    saving, setSaving,
     deleting, setDeleting,
-    testingSSH, setTestingSSH,
-    generatingModal, setGeneratingModal,
     deployResult, setDeployResult,
     backendURL, setBackendURL,
     resetForm, populateForEdit,

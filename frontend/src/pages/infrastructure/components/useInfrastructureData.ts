@@ -1,7 +1,6 @@
 ﻿import { useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 
 export interface InfraListener {
@@ -41,8 +40,8 @@ export function useInfrastructureData() {
       setListeners((data.listeners || []) as InfraListener[]);
     } catch {
       setListeners([]);
+      // The inline DataError + retry is the surface; a toast only repeated it.
       setError(t("infrastructure.toast.load_listeners_failed"));
-      toast.error(t("infrastructure.toast.load_listeners_failed"));
     } finally {
       setLoading(false);
     }
@@ -57,7 +56,6 @@ export function useInfrastructureData() {
     } catch {
       setRedirectors([]);
       setError(t("infrastructure.toast.load_redirectors_failed"));
-      toast.error(t("infrastructure.toast.load_redirectors_failed"));
     } finally {
       setLoading(false);
     }
