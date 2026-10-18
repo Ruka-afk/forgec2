@@ -1,29 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, renderHook } from "@testing-library/react";
+
+const mocks = vi.hoisted(() => ({
+  t: vi.fn((key: string) => `T:${key}`),
+}));
+
+vi.mock("@/lib/i18n", () => ({ useI18n: () => ({ t: mocks.t }) }));
+
 import { useAgentDangerActions } from "./useAgentDangerActions";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
-const MESSAGES = {
-  killSuccess: "killed",
-  killFailed: "kill failed",
-  uninstallSuccess: "uninstalled",
-  uninstallFailed: "uninstall failed",
-  killDateSuccess: "date set",
-  killDateFailed: "date failed",
-  clearKillDateSuccess: "date cleared",
-  clearKillDateFailed: "clear failed",
-  migrateSuccess: "migrated",
-  migrateFailed: "migrate failed",
-};
-
-function setup() {
-  return renderHook(() => useAgentDangerActions("a1", () => {}, MESSAGES));
+function setup(agentId = "a1") {
+  return renderHook(() => useAgentDangerActions(agentId, () => {}));
 }
 
 describe("useAgentDangerActions", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    mocks.t.mockClear();
     vi.spyOn(toast, "success").mockImplementation(() => "");
     vi.spyOn(toast, "error").mockImplementation(() => "");
   });
@@ -38,7 +33,7 @@ describe("useAgentDangerActions", () => {
     let ok: boolean | undefined;
     await act(async () => { ok = await result.current.setKillDate("2026-01-01"); });
     expect(ok).toBe(true);
-    expect(toast.success).toHaveBeenCalledWith(MESSAGES.killDateSuccess);
+    expect(toast.success).toHaveBeenCalledWith("T:agents.detail_kill_date_set");
   });
 
   it("resolves false instead of rejecting when the call fails", async () => {
@@ -49,7 +44,18 @@ describe("useAgentDangerActions", () => {
     await act(async () => { ok = await result.current.setKillDate("2026-01-01"); });
 
     expect(ok).toBe(false);
-    expect(toast.error).toHaveBeenCalledWith(MESSAGES.killDateFailed);
+    // Unmapped errors keep their raw message (normalizeError convention).
+    expect(toast.error).toHaveBeenCalledWith("network");
+  });
+
+  it("maps API error statuses through useErrorToast", async () => {
+    vi.spyOn(api, "postJson").mockRejectedValue({ status: 403, message: "nope" });
+    const { result } = setup();
+
+    await act(async () => { await result.current.killAgent(); });
+
+    expect(mocks.t).toHaveBeenCalledWith("common.forbidden", undefined);
+    expect(toast.error).toHaveBeenCalledWith("T:common.forbidden");
   });
 
   it("reports failure for the other four actions too", async () => {
@@ -68,18 +74,24 @@ describe("useAgentDangerActions", () => {
     expect(out).toEqual([false, false, false, false]);
   });
 
-  it("always clears busy, so the disabled button cannot get stuck", async () => {
-    vi.spyOn(api, "postJson").mockRejectedValue(new Error("network"));
+  it("tracks busy across the in-flight window", async () => {
+    let release!: () => void;
+    vi.spyOn(api, "postJson").mockImplementation(
+      () => new Promise((resolve) => { release = () => resolve({} as never); }),
+    );
     const { result } = setup();
 
-    expect(result.current.busy).toBeNull();
-    await act(async () => { await result.current.killAgent(); });
-    expect(result.current.busy).toBeNull();
+    expect(result.current.busy).toBe(false);
+    await act(async () => { void result.current.killAgent(); });
+    expect(result.current.busy).toBe(true);
+
+    await act(async () => { release(); });
+    expect(result.current.busy).toBe(false);
   });
 
   it("reports false when there is no agent to act on", async () => {
     const post = vi.spyOn(api, "postJson");
-    const { result } = renderHook(() => useAgentDangerActions("", () => {}, MESSAGES));
+    const { result } = renderHook(() => useAgentDangerActions("", () => {}));
 
     let ok: boolean | undefined;
     await act(async () => { ok = await result.current.killAgent(); });

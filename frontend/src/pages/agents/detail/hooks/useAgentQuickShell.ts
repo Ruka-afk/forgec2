@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api, ApiError } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { useMutation } from "@/lib/hooks/useMutation";
 import { usePersistedState } from "@/lib/hooks/usePersistedState";
 
 interface ShellHistoryEntry {
@@ -19,22 +20,51 @@ export function useAgentQuickShell(agentId: string, os: string | undefined, succ
   const [command, setCommand] = useState("");
   const [shell, setShell] = useState(() => defaultShellForOS(os));
   const [history, setHistory] = useState<ShellHistoryEntry[]>([]);
-  const [sending, setSending] = useState(false);
   const [expanded, setExpanded] = usePersistedState(
     persistKey ?? `agents.detail.${agentId}.quick_shell`,
     false,
   );
-  const mountedRef = useRef(true);
   const shellTouchedRef = useRef(false);
   // In-flight guard: the Enter key handler bypasses the disabled Button, so
   // rapid Enter presses would otherwise fire the same command twice on the
-  // agent (dangerous for destructive/lateral commands).
+  // agent (dangerous for destructive/lateral commands). `mutate` supersedes
+  // callbacks but does not drop concurrent calls — this ref does the dropping.
   const sendingRef = useRef(false);
 
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
+  const pushEntry = useCallback((entry: ShellHistoryEntry) => {
+    setHistory((prev) => [entry, ...prev].slice(0, 10));
   }, []);
+
+  const {
+    mutate: send,
+    isPending: sending,
+    reset: resetSend,
+  } = useMutation({
+    fn: async (entry: ShellHistoryEntry) => {
+      const response = await api.postJson(paths.agents.command(agentId), { command: entry.command, shell: entry.shell }) as { output?: string; result?: string; message?: string };
+      return response?.output || response?.result || response?.message || successMessage;
+    },
+    onSuccess: (result, entry) => {
+      pushEntry({ ...entry, result });
+      setCommand("");
+      sendingRef.current = false;
+    },
+    onError: (err, entry) => {
+      const conflict = err instanceof ApiError && err.status === 409;
+      if (conflict) toast.warning(err.message);
+      pushEntry({ ...entry, result: conflict ? err.message : errorMessage });
+      setCommand("");
+      sendingRef.current = false;
+    },
+  });
+
+  // Abandon an in-flight command when the agent changes: its result must not
+  // land in the new agent's history, and its guard must not keep blocking the
+  // new agent's sends.
+  useEffect(() => {
+    sendingRef.current = false;
+    resetSend();
+  }, [agentId, resetSend]);
 
   // Reset operator state when navigating to a different agent so drafts
   // and history never carry over (or get sent to the wrong agent).
@@ -57,30 +87,13 @@ export function useAgentQuickShell(agentId: string, os: string | undefined, succ
     setShell(v);
   }, []);
 
-  const sendCommand = useCallback(async () => {
-    if (!command.trim() || !agentId) return;
+  const sendCommand = useCallback(() => {
+    const cmd = command.trim();
+    if (!cmd || !agentId) return;
     if (sendingRef.current) return;
     sendingRef.current = true;
-    setSending(true);
-    const cmd = command.trim();
-    const entry: ShellHistoryEntry = { command: cmd, shell, result: "", timestamp: new Date().toISOString() };
-    try {
-      const response = await api.postJson(paths.agents.command(agentId), { command: cmd, shell }) as { output?: string; result?: string; message?: string };
-      entry.result = response?.output || response?.result || response?.message || successMessage;
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        entry.result = err.message;
-        toast.warning(err.message);
-      } else {
-        entry.result = errorMessage;
-      }
-    }
-    if (!mountedRef.current) return;
-    setHistory((prev) => [entry, ...prev].slice(0, 10));
-    setCommand("");
-    setSending(false);
-    sendingRef.current = false;
-  }, [agentId, command, shell, successMessage, errorMessage]);
+    return send({ command: cmd, shell, result: "", timestamp: new Date().toISOString() });
+  }, [agentId, command, shell, send]);
 
   return {
     command,

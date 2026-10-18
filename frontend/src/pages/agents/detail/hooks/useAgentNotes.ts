@@ -1,28 +1,33 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { toast } from "sonner";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
+import { useMutation } from "@/lib/hooks/useMutation";
 
-export function useAgentNotes(agentId: string, reloadDetail: () => Promise<void> | void, errorMessage: string) {
+export function useAgentNotes(agentId: string, reloadDetail: () => Promise<void> | void) {
+  const { toastError } = useErrorToast();
   const [editing, setEditing] = useState(false);
   const [tags, setTags] = useState("");
   const [notes, setNotes] = useState("");
-  const [saving, setSaving] = useState(false);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
+  const { mutate: saveNote, isPending: saving, reset: resetSave } = useMutation({
+    fn: () => api.post(paths.agents.note(agentId), { notes, tags }),
+    onSuccess: () => {
+      setEditing(false);
+      // useAgentDetail never rejects; keep the reload off the promise chain.
+      void Promise.resolve(reloadDetail());
+    },
+    onError: (e) => toastError(e, "agents.detail_notes_save_failed"),
+  });
 
   // Abandon in-progress edits when switching agents so unsaved drafts
-  // never get written to the wrong implant.
+  // never get written to the wrong implant — and so a save still in flight
+  // for the previous agent cannot close the new agent's editor or reload it.
   useEffect(() => {
     setEditing(false);
     setTags("");
     setNotes("");
-    setSaving(false);
-  }, [agentId]);
+    resetSave();
+  }, [agentId, resetSave]);
 
   const startEditing = useCallback((currentTags: string, currentNotes: string) => {
     setTags(currentTags);
@@ -32,20 +37,10 @@ export function useAgentNotes(agentId: string, reloadDetail: () => Promise<void>
 
   const cancelEditing = useCallback(() => setEditing(false), []);
 
-  const save = useCallback(async () => {
-    if (!agentId) return;
-    setSaving(true);
-    try {
-      await api.post(paths.agents.note(agentId), { notes, tags });
-      if (!mountedRef.current) return;
-      setEditing(false);
-      await Promise.resolve(reloadDetail());
-    } catch {
-      if (mountedRef.current) toast.error(errorMessage);
-    } finally {
-      if (mountedRef.current) setSaving(false);
-    }
-  }, [agentId, notes, tags, reloadDetail, errorMessage]);
+  const save = useCallback(() => {
+    if (!agentId) return Promise.resolve();
+    return saveNote();
+  }, [agentId, saveNote]);
 
   return {
     editing,

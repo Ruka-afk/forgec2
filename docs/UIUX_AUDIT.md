@@ -194,6 +194,41 @@ if we adopt strict WCAG 1.4.11 for control boundaries).
 > (agents detail, users, persistence, phishing, infrastructure, …) migrate in
 > later waves; the conventions are unchanged.
 
+> **U3 landed — wave 2, the agent-detail console (2026-10-18):** the three
+> action hooks behind `/agents/:id` moved onto `useMutation` +
+> `useErrorToast`. `useAgentNotes` loses its hand-rolled `saving` flag and
+> `mountedRef` (the hook's stale-completion and unmount guards replace both;
+> save failures resolve through `normalizeError` instead of a pre-translated
+> string). `useAgentQuickShell` keeps its Enter-key `sendingRef` guard — the
+> hook supersedes stale callbacks but does not drop concurrent calls, so the
+> ref is what stops a double command — while `sending` becomes `isPending`.
+> `useAgentDangerActions` replaces the identity `busy` string with a boolean
+> OR of five per-action pendings (kill / uninstall / set / clear kill date /
+> migrate); the ten-string `messages` object is gone (successes resolve from
+> `t()` inside the hook) and each failure key routes through `toastError`,
+> keeping the `await run() → keep-the-dialog-open-on-failure` contract. In
+> `AgentDetailPage`, Diagnose and Apply-sleep are mutations too, and the
+> header quick-action handler's generic failure routes through
+> `toastError(..., { label })` (its 409 warning and `logger.error` stay).
+> Route-id semantics sharpen: both per-agent hooks call `reset()` from their
+> id effect, so a completion that lands after the operator switched agents is
+> discarded — it can no longer close the new agent's notes editor, push the
+> old command's result into the new agent's history, toast "sleep updated"
+> with the wrong hostname, or leave the old send's guard blocking the new
+> agent. The header's per-button spinner and the persistence page's
+> per-method spinner keep local identity state by design. Coverage: new
+> `useAgentNotes.test.ts` and `useAgentQuickShell.test.ts` plus the extended
+> `useAgentDangerActions.test.ts` (12 hook tests; the two abandon cases were
+> verified red against the pre-reset form). Counts: `useMutation` call sites
+> 28 → 37, `useErrorToast` importing files 12 → 15, hand-rolled error toasts
+> in the console's action paths 9 → 0. `check-i18n` now also recognises
+> `toastError(err, "key", params)` — the optional third argument wave 1
+> introduced (two settings call sites were previously exempt only via the
+> `settings.` dynamic prefix). The route-id reset rule is written into
+> `docs/FRONTEND_CONVENTIONS.md`; remaining clusters (users, persistence,
+> phishing, infrastructure, the collect/stealth sections) migrate in later
+> waves.
+
 - **F1 · `useMutation` adoption: 6 uses vs 66 hand-rolled `setSaving`
   (15 files) + 8 `setDeleting` (3 files) + per-page `actionLoading` state.**
   The convention exists (`docs/FRONTEND_CONVENTIONS.md`) with one migrated
@@ -387,7 +422,7 @@ overflowed its card at both 1280 and 390; it wraps now.
 | U1a status tokens & primitives (landed 2026-10-18) | C1, C2, C5, C6, C8, C9; component side of C3/C4/C7; `check:contrast` compositing switched to the browser's sRGB blend space |
 | U1b page migration (landed 2026-10-18) | C3/C4/C7 page call sites: 300 × `text-X` → `text-X-ink`, 38 `-foreground`-on-tint chips → ink, light `primary/20` → `/15`; `check:contrast --strict` promoted into `npm run check` |
 | U1c type system (landed 2026-10-18) | T1 size ramp (`--text-*` + 360-site migration + token gate Rules 5/6), T2 empty-state wrap, T8 no-op opacity sweep || U2 keyboard & names (landed 2026-10-18) | K1–K5: aria-labels on the video overlay and the phase chip, named breadcrumb home link, single skip link, labelled table region; `check:aria --strict` promoted into `npm run check` |
-| U3 feedback loop (wave 1: settings tree — landed 2026-10-18) | F1/F2 first wave: 22 handlers onto `useMutation` (call sites 6 → 28), settings-tree raw-message error toasts 4 → 0 and previously-silent failures now report; `useErrorToast` gains `fallbackParams`; remaining clusters migrate in later waves |
+| U3 feedback loop (wave 1: settings tree, wave 2: agent-detail console — landed 2026-10-18) | F1/F2: 31 handlers onto `useMutation` (call sites 6 → 37); wave 1 retires the settings tree's raw-message error toasts (4 → 0) and makes previously-silent failures report; wave 2 migrates the three `/agents/:id` action hooks plus Diagnose/Apply-sleep, discards in-flight completions on an agent switch (notes editor, quick-shell history, sleep toast, Enter-key guard), and routes the console's 9 hand-rolled failure toasts through `useErrorToast`; `useErrorToast` gains `fallbackParams`; the route-id reset rule lands in `FRONTEND_CONVENTIONS.md`; remaining clusters migrate in later waves |
 | U4 narrow screens (landed 2026-10-18) | R2 fixed (status label always rendered), T6 mobile palette entry, T7 touch targets, R3 extended to 10 routes |
 | U5 motion (landed 2026-10-18) | M1: `router.navigate` defaults into `document.startViewTransition` (`?? true` beats a `Link`'s undefined key; explicit `false` kept), reduced-motion and API-absent skip; `src/router-transitions.test.ts` + the 4-viewport Playwright `route transitions` spec; `globals.css` untouched |
 | U6 page-by-page polish | T3 focus mode, T4 stat tiles, T5 density selectors, T9 non-total list fallbacks (tokens, ntlm), T10 clipped fixed-width columns (toolkit, scripting), V1–V2 + per-page checklists |

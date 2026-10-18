@@ -30,8 +30,14 @@ Why not hand-rolled `useState(saving)` + `try/catch`:
   into the UI.
 - Keep *validation* toasts direct (`toast.error(t("x.required"))`): that is not
   an API failure and must not go through error normalization.
+- When a hook drives actions bound to the route's resource id (e.g.
+  `/agents/:id`), call the mutation's `reset()` from an effect on id change:
+  a completion that lands after the operator switched resources must not fire
+  `onSuccess` (toast, reload, history entry) against the new one.
 
-Reference migration: `src/pages/settings/components/ExtC2Section.tsx`.
+Reference migrations: `src/pages/settings/components/ExtC2Section.tsx` (the
+settings tree) and the agent-detail hooks (`useAgentNotes`,
+`useAgentQuickShell`, `useAgentDangerActions`) for the route-id reset pattern.
 
 ## Locale-aware formatting: `@/lib/intl`
 

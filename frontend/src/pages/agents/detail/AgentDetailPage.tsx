@@ -72,6 +72,8 @@ import { useAgentProcessTree } from "./hooks/useAgentProcessTree";
 import { useAgentNotes } from "./hooks/useAgentNotes";
 import { useAgentDangerActions } from "./hooks/useAgentDangerActions";
 import { useAgentTaskSync } from "./hooks/useAgentTaskSync";
+import { useMutation } from "@/lib/hooks/useMutation";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { usePersistedState } from "@/lib/hooks/usePersistedState";
 import { credActionBlockReason, credActionEndpoint, hasMimikatzModule, parseModuleNames, type ModuleAvailability } from "@/lib/cred-quality";
 import { sessionActionQuality } from "./components/session-quality";
@@ -84,6 +86,7 @@ interface AgentDetailPageProps {
 
 export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: AgentDetailPageProps = {}) {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const params = useParams();
   const navigate = useNavigate();
   const id = agentIdProp || (params?.id as string);
@@ -146,8 +149,40 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
 
   const [sleepValue, setSleepValue] = useState(0);
   const [jitterValue, setJitterValue] = useState(0);
-  const [sleepSaving, setSleepSaving] = useState(false);
   const sleepDirtyRef = useRef(false);
+
+  // Per-agent actions. The id effect below calls reset() on both, so a
+  // completion that lands after the route id changed is discarded: it cannot
+  // toast (or reload) against the agent the operator is now looking at.
+  const {
+    mutate: saveSleep,
+    isPending: sleepSaving,
+    reset: resetSleep,
+  } = useMutation({
+    fn: async ({ interval, jitter }: { interval: number; jitter: number }) => {
+      await api.postJson(paths.agents.setSleep(id), { interval, jitter });
+    },
+    onSuccess: () => {
+      toast.success(t("agents.sleep_updated").replace("{name}", data?.agent?.hostname || ""));
+      sleepDirtyRef.current = false;
+      void Promise.resolve(loadDetail());
+    },
+    onError: (e) => toastError(e, "agents.sleep_failed"),
+  });
+  const {
+    mutate: runDiagnose,
+    isPending: diagnosing,
+    reset: resetDiagnose,
+  } = useMutation({
+    fn: async () => {
+      const res = await api.post(paths.agents.diagnose(id), {}) as { count?: number };
+      return res;
+    },
+    onSuccess: (res) => {
+      toast.success(t("agents.detail_diagnose_queued").replace("{count}", String(res.count ?? 5)));
+    },
+    onError: (e) => toastError(e, "agents.detail_diagnose_failed"),
+  });
 
   // Route reuse: /agents/[id] keeps the same component instance when
   // navigating parent → child, so per-agent editor state (dirty flag,
@@ -156,7 +191,9 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   useEffect(() => {
     sleepDirtyRef.current = false;
     setExpandedTask(null);
-  }, [id]);
+    resetSleep();
+    resetDiagnose();
+  }, [id, resetSleep, resetDiagnose]);
 
   // Lightbox index clamp: screenshots refresh (WS push / deletion) can
   // shrink the array while the viewer is open — without this, lbIndex
@@ -194,19 +231,8 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     startEditing: startEditNotes,
     cancelEditing: cancelEditNotes,
     save: handleSaveNote,
-  } = useAgentNotes(id, loadDetail, t("agents.detail_notes_save_failed"));
-  const { busy: dangerBusy, killAgent: runKillAgent, uninstallAgent: runUninstallAgent, migrateAgent: runMigrateAgent, setKillDate: runSetKillDate, clearKillDate: runClearKillDate } = useAgentDangerActions(id, loadDetail, {
-    killSuccess: t("agents.detail_kill_sent"),
-    killFailed: t("agents.detail_kill_failed"),
-    uninstallSuccess: t("agents.detail_uninstall_sent"),
-    uninstallFailed: t("agents.detail_uninstall_failed"),
-    killDateSuccess: t("agents.detail_kill_date_set"),
-    killDateFailed: t("agents.detail_kill_date_set_failed"),
-    clearKillDateSuccess: t("agents.detail_kill_date_cleared"),
-    clearKillDateFailed: t("agents.detail_kill_date_clear_failed"),
-    migrateSuccess: t("agents.detail_migrate_sent"),
-    migrateFailed: t("agents.detail_migrate_failed"),
-  });
+  } = useAgentNotes(id, loadDetail);
+  const { busy: dangerBusy, killAgent: runKillAgent, uninstallAgent: runUninstallAgent, migrateAgent: runMigrateAgent, setKillDate: runSetKillDate, clearKillDate: runClearKillDate } = useAgentDangerActions(id, loadDetail);
 
   useEffect(() => {
     if (!lbOpen) return;
@@ -321,17 +347,9 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   const pendingTasks = data?.pending_tasks ?? 0;
   const failedTasks = data?.failed_tasks ?? 0;
 
-  const handleDiagnose = useCallback(async () => {
-    setActionLoading("diagnose");
-    try {
-      const res = await api.post(paths.agents.diagnose(id), {}) as { count?: number };
-      toast.success(t("agents.detail_diagnose_queued").replace("{count}", String(res.count ?? 5)));
-    } catch {
-      toast.error(t("agents.detail_diagnose_failed"));
-    } finally {
-      setActionLoading(null);
-    }
-  }, [id, t]);
+  const handleDiagnose = useCallback(() => {
+    void runDiagnose();
+  }, [runDiagnose]);
 
   const quickAction = useCallback(
     async (action: string, label: string) => {
@@ -370,16 +388,16 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
           toast.warning(err.message);
         } else {
           logger.error("quickAction failed", err);
-          toast.error(t("agents.detail_action_failed").replace("{label}", label));
+          toastError(err, "agents.detail_action_failed", { label });
         }
       } finally {
         setActionLoading(null);
       }
     },
-    [id, t, mimikatzReady, agent.version],
+    [id, t, mimikatzReady, agent.version, toastError],
   );
 
-  const handleApplySleep = useCallback(async () => {
+  const handleApplySleep = useCallback(() => {
     // Same bounds as the agents-list quick-sleep path: HTML min/max don't
     // stop typing, and Number("") === 0 would silently flip a beacon toward
     // real-time cadence.
@@ -390,17 +408,8 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
       toast.error(t("agents.sleep_invalid"));
       return;
     }
-    setSleepSaving(true);
-    try {
-      await api.postJson(paths.agents.setSleep(id), { interval, jitter });
-      toast.success(t("agents.sleep_updated").replace("{name}", agent?.hostname || ""));
-      sleepDirtyRef.current = false;
-      loadDetail();
-    } catch {
-      toast.error(t("agents.sleep_failed"));
-    }
-    setSleepSaving(false);
-  }, [id, t, sleepValue, jitterValue, loadDetail, agent?.hostname]);
+    void saveSleep({ interval, jitter });
+  }, [t, sleepValue, jitterValue, saveSleep]);
 
   const exportJSON = useCallback(() => {
     if (!data) return;
@@ -568,7 +577,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
 
             <TabsContent value="overview">
               <div className="flex gap-2 mb-4">
-                <Button size="sm" variant="outline" onClick={handleDiagnose} disabled={actionLoading === "diagnose" || status !== "online"}>{actionLoading === "diagnose" ? t("agents.detail_diagnosing") : t("agents.detail_diagnose")}</Button>
+                <Button size="sm" variant="outline" onClick={handleDiagnose} disabled={diagnosing || status !== "online"}>{diagnosing ? t("agents.detail_diagnosing") : t("agents.detail_diagnose")}</Button>
                 <span className="text-xs text-muted-foreground self-center">{t("agents.detail_diagnose_hint")}</span>
               </div>
               {isC && (
