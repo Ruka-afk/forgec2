@@ -1253,6 +1253,50 @@ every absence marker before the run (all zero, the AI one excluded by constructi
 This closes the defect the previous probe surfaced: the same check failed on
 "Agent 离线" against the previous bundle and now passes.
 
+## U7 — Professional naming & page emoji (wave 3, body copy 5: the listeners domain, landed 2026-10-19)
+
+The first wave to start from the pages instead of a prefix. `pages/listeners/**` is
+scanned for every namespace it renders (`t("<ns>.`), which turns up `cb.*`,
+`dashboard.*`, `generate.*`, `listener.*`, `listeners.*` and `status.*` — and the
+*singular* `listener.*` is a namespace no prefix list had included, exactly the hole
+that bit wave 1.
+
+1. **12 flagged → 12 rewritten (24 value edits), 0 kept, 2 deferred.** The deferrals
+   are attribution, not scope creep: `cb.honesty_desc` renders on the
+   circuit-breaker page (`pages/circuit-breaker/CircuitBreakerPage.tsx`) and
+   `dashboard.quick_generate` on the dashboard (`pages/dashboard/components/
+   OpsHome.tsx`) — separate pages with their own waves, and the dashboard is a
+   visual route, so its wave carries the baseline work. `status.*` has nothing
+   flagged; `generate.*` was already swept in wave 2.
+2. **The detail page.** Stats and headings follow the rows they count:
+   `listener.agent_total` "Associated Agent Total" → **Associated Beacon Total**,
+   `agents_using` → **Beacons Using This Listener**, `view_all_agents` → **View All
+   Beacons** (the link goes to `/beacons`). The empty state stops calling the client
+   an implant: `listener.empty` "No Implant uses this listener" → **"No beacons use
+   this listener"**. The action follows rule 7: `listener.generate_implant`
+   "Generate Implant for this Listener" → **"Generate Payload for this Listener"**
+   (it links to `/payload-generator?listener_id=…`). The load-balancing hint
+   (`lb_hint`) moves "Agents can randomly or by policy connect" → "Beacons can…",
+   and the ZH side follows throughout (关联 Beacon 总数, 使用此监听器的 Beacon,
+   暂无 Beacon 使用此监听器, 为此监听器生成载荷, 查看全部 Beacon).
+3. **The list page.** `listeners.col_agent` "Agent" → **Beacon** and `col_agents`
+   "Agents" → **Beacons** (the ZH stays 无复数), the two count warnings
+   (`agent_count_failed`, `agent_counts_unavailable`) become beacon counts, and the
+   hero subtitle and tip follow rule 7 twice over: "Configure C2 listeners to
+   receive implant connections. Select a target listener when generating implants."
+   → "…to receive **beacon connections**. Select a target listener when generating a
+   **payload**." and "…when generating an implant to connect **agents**…" → "…when
+   generating a **payload** to connect **beacons**…".
+4. **Verification.** eslint and `tsc --noEmit` clean; 172 files / 883 unit tests;
+   `npm run check` 11/11 (parity 4727, bundle 3.99 MB / 190 files, critical path
+   972 kB); `out/` rebuilt and `internal/webdist/dist` re-synced (337 files); full
+   e2e 184 passed / 36 skipped with **no visual failure** — the listeners copy stays
+   under the 1.5 % pixel tolerance on the win32 set, so the committed win32 baselines
+   are deliberately left alone (refreshing sub-tolerance frames is what the wave-1
+   linux lesson warned against). The linux set was re-rendered from this commit by
+   `visual-baselines.yml` and compared file by file; see the deployment probe below
+   for the numbers and the adoption decision.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
@@ -1269,6 +1313,7 @@ This closes the defect the previous probe surfaced: the same check failed on
 | U7 naming & personality (wave 3, landed 2026-10-19) | L1 body copy, first page domain (Beacons): inventory flags 100 values (97 `agents.*` + 3 `status_banner.*`), 87 rewritten per language (170 value edits, keys untouched per rule 3), 13 kept with reasons (UA header family, AMSI-session technique, recon/logon/RDP/console sessions, WeChat chat); new rules recorded in `docs/TERMINOLOGY.md` (running implant → beacon, generated artifact → payload, check-in event → "check-in" / 回连, `detail_session` → `Beacon`); two e2e locators follow their copy; win32 baselines refreshed only for the four `beacons-*` files, ten regenerated candidates rejected as unrelated noise (evidence: banner `null` under mocked stats, no rewritten key on those pages, byte-identical re-regeneration); the linux half landed from `visual-baselines.yml` run 39220123316 with the same scoping (4 of 28 rendered files adopted, 3 rejects all under 0.5 % of the canvas) |
 | U7 naming & personality (wave 3, body copy 3, landed 2026-10-19) | L1 body copy, third page domain (automation cluster): inventory flags 27 across six namespaces (`auto.*` 6, `scheduler.*` 4, `oneshot.*` 4, `workflows.*` 5, `macros.*` 5, `autotag.*` 3), 19 rewritten per language (38 value edits), 0 kept, 8 deferred to their own pages (macros / auto-tag rules); event and rule-type labels become "Beacon offline/online" while the wire enum ids stay `agent_*`; `oneshot.*` closed here after wave 2's deferral; no locator or baseline depended on the strings |
 | U7 naming & personality (wave 3, body copy 4 — residue pass, landed 2026-10-19) | L1 body copy, scope fix: the Beacons cluster was inventoried by key prefix in wave 1, leaving `shell.*` 11, `cred.*` 14, `screen.*` 2, `hostinfo.*` 1 unreviewed; 28 flagged, 21 rewritten (39 value edits), 7 kept (the cookie-proxy family: 代理 = proxy), 0 deferred; shell tabs are beacon-keyed so "Shell sessions" → "Beacon shells", "Switch session" → "Switch beacon"; method now starts from the pages, and the re-scan queued `listeners.*` (rendered by the payload generator) as its own wave |
+| U7 naming & personality (wave 3, body copy 5, landed 2026-10-19) | L1 body copy, fourth page domain (listeners, run with the method fix): page-cluster scan over `pages/listeners/**` finds `listener.*` (singular) that prefix lists missed — 12 flagged, 12 rewritten (24 value edits), 0 kept, 2 deferred by attribution (`cb.honesty_desc` → circuit-breaker page, `dashboard.quick_generate` → dashboard); detail stats/headings/empty/action and list columns/subtitle/tip/hint swept; win32 visual tests pass with no snapshot update (diff under the 1.5 % tolerance), linux set re-rendered from this commit and compared |
 | U7 naming & personality (wave 3, body copy 2, landed 2026-10-19) | L1 body copy, second page domain (payload pipeline): inventory flags 33 values (`generate.*` 14, `profiles.*` 10, `builds.*` 5, `oneshot.*` 4), 24 rewritten per language (46 value edits), 5 kept (proxy / UA header / login sessions), 4 deferred to the automation card; "Agent Binaries" → **Payload Formats** / 载荷格式 (smoke locator follows); format descriptors name the format (GUI implant → GUI executable) and subjectless clauses replace the banned noun; no visual route touched, so no baseline churn on either platform |
 
 ```powershell
