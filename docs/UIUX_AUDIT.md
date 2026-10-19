@@ -1138,6 +1138,49 @@ in the repo or the scratch tree (the README's example `labtest`/`labtest` return
 401), and the rendering side is already covered by the e2e suite against the
 identical bundle — the probe is noted as open rather than silently skipped.
 
+## U7 — Professional naming & page emoji (wave 3, body copy 3: the automation domain, landed 2026-10-19)
+
+Third domain of the sweep. The automation page cluster — the triggers/alert-rule
+cards, the scheduled-tasks card, the one-shot card and the workflow workspace with
+its editor and execution-history dialogs — is swept as **one page**, so the shared
+pickers and the `workflows.*` strings the page hosts move together.
+
+1. **Inventory & scope.** Same method as before, run over six namespaces because the
+   page hosts cards whose keys live elsewhere: 27 values flag (`auto.*` 6,
+   `scheduler.*` 4, `oneshot.*` 4, `workflows.*` 5, `macros.*` 5, `autotag.*` 3).
+   The macros page (`pages/macros/MacrosPageContent.tsx`) and the auto-tag rules page
+   (`pages/autotag/AutoTagPage.tsx`) are separate pages with their own domains, and
+   the attribution is checked per key — the automation page itself touches only two
+   unflagged keys from those namespaces (`macros.global_stop_on_error`,
+   `autotag.create`/`autotag.update`), so their 8 flagged values are deferred with
+   that reason.
+2. **Rewrites (19 values, 38 value edits, 0 keeps).** This is the first domain with
+   nothing to keep: no `User-Agent`, no login-session copy, no network proxy hides in
+   it. The event and alert-rule labels follow the entity — "Agent offline" / "Agent
+   online" → **Beacon offline** / **Beacon online** in `auto.event_*` and
+   `auto.type_*` — and the enum ids behind them (`agent_offline`, `agent_online`,
+   the `agent.checkin` / `agent.disconnect` event list) stay untouched, because those
+   are wire contract rather than copy. The pickers converge: `scheduler.agent`
+   ("Agent" / 代理) → **Beacon**, `scheduler.select_agent` ("Select agent…" /
+   选择代理…) → "Select beacon…", `scheduler.a11y_agent` → "Select beacon",
+   `scheduler.err_agent_required` → "A beacon is required", and the four
+   `oneshot.*` strings deferred by wave 2 land here too ("Select a beacon…", the
+   beacon-list warning).
+3. **Workflows read beacons.** `workflows.scope_all` "All Agents" → **All Beacons**,
+   `scope_selected` → **Selected Beacons**, the scope-id placeholder "…or agent
+   ids" → "…or beacon ids" (it doubles as that input's a11y label), the workspace
+   subtitle → "…for beacon operations", and the dispatch toast → "Executed:
+   {task_count} tasks to {agents_count} **beacons**" / 发送至 {agents_count} 个
+   Beacon.
+4. **Verification.** eslint and `tsc --noEmit` clean; 172 files / 883 unit tests;
+   `npm run check` 11/11 (parity 4727, bundle 3.99 MB / 190 files, critical path
+   972 kB); `out/` rebuilt and the 337-file `internal/webdist/dist` re-synced; the
+   full e2e suite 184 passed / 36 skipped. No locator needed updating: nothing in the
+   e2e or unit suites asserts on these strings (the `agent offline` literals the grep
+   turns up are mock rejection messages in the beacons suites, not copy).
+5. **No baseline move.** The automation page is not in `VISUAL_ROUTES`; the visual
+   sets stay as committed.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
@@ -1152,6 +1195,7 @@ identical bundle — the probe is noted as open rather than silently skipped.
 | U7 naming & personality (wave 1, landed 2026-10-19) | "Beacon" vocabulary across nav/titles/tiles (45 nav + 42 titles + 5 tile/subtitle values per language, 92 keys); one emoji identity per page (nav = h1 = breadcrumb = document title, `aria-hidden` in chips); U6 residue: DNS tile tone, card-header 2-line clamp, privesc mojibake icons, geo 📍 fallback; contract in `docs/TERMINOLOGY.md` — L2 routes landed in wave 2, body copy swept page domain by page domain from wave 3 (Beacons done) |
 | U7 naming & personality (wave 2, landed 2026-10-19) | L2 routing layer: six route renames plus the `/agents/:id` family → `/beacons/:id`, the 15-entry `LEGACY_REDIRECTS` table (id/sub-route/query/hash preserved), 175 files moved (page directories + route-entry components), 151 link literals across 48 files, visual baselines renamed not regenerated, 7 new e2e redirect cases; HTTP API, sqlite schema and OpenAPI untouched per the L3 boundary |
 | U7 naming & personality (wave 3, landed 2026-10-19) | L1 body copy, first page domain (Beacons): inventory flags 100 values (97 `agents.*` + 3 `status_banner.*`), 87 rewritten per language (170 value edits, keys untouched per rule 3), 13 kept with reasons (UA header family, AMSI-session technique, recon/logon/RDP/console sessions, WeChat chat); new rules recorded in `docs/TERMINOLOGY.md` (running implant → beacon, generated artifact → payload, check-in event → "check-in" / 回连, `detail_session` → `Beacon`); two e2e locators follow their copy; win32 baselines refreshed only for the four `beacons-*` files, ten regenerated candidates rejected as unrelated noise (evidence: banner `null` under mocked stats, no rewritten key on those pages, byte-identical re-regeneration); the linux half landed from `visual-baselines.yml` run 39220123316 with the same scoping (4 of 28 rendered files adopted, 3 rejects all under 0.5 % of the canvas) |
+| U7 naming & personality (wave 3, body copy 3, landed 2026-10-19) | L1 body copy, third page domain (automation cluster): inventory flags 27 across six namespaces (`auto.*` 6, `scheduler.*` 4, `oneshot.*` 4, `workflows.*` 5, `macros.*` 5, `autotag.*` 3), 19 rewritten per language (38 value edits), 0 kept, 8 deferred to their own pages (macros / auto-tag rules); event and rule-type labels become "Beacon offline/online" while the wire enum ids stay `agent_*`; `oneshot.*` closed here after wave 2's deferral; no locator or baseline depended on the strings |
 | U7 naming & personality (wave 3, body copy 2, landed 2026-10-19) | L1 body copy, second page domain (payload pipeline): inventory flags 33 values (`generate.*` 14, `profiles.*` 10, `builds.*` 5, `oneshot.*` 4), 24 rewritten per language (46 value edits), 5 kept (proxy / UA header / login sessions), 4 deferred to the automation card; "Agent Binaries" → **Payload Formats** / 载荷格式 (smoke locator follows); format descriptors name the format (GUI implant → GUI executable) and subjectless clauses replace the banned noun; no visual route touched, so no baseline churn on either platform |
 
 ```powershell

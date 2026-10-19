@@ -135,10 +135,11 @@ identity**, not every heading.
   domain per wave; the **Beacons domain** landed first (100 flagged values: 87
   rewritten per language, 13 kept under rule 6) with the shared status banner, then
   the **Payload domain** — payload generator, build records, profiles — (33 flagged:
-  24 rewritten, 5 kept, 4 deferred to the automation card). Domains still open:
-  dashboard, events/tasks, automation, listeners, settings, users,
-  credentials/NTLM/cloud, pivoting/topology/chains, AI, and the long tail (see the
-  batch map in `docs/UIUX_AUDIT.md`).
+  24 rewritten, 5 kept, 4 deferred to the automation card), then the **Automation
+  domain** (27 flagged: 19 rewritten, 0 kept, 8 deferred to the macros and auto-tag
+  pages). Domains still open: dashboard, events/tasks, listeners, settings, users,
+  macros, auto-tag rules, credentials/NTLM/cloud, pivoting/topology/chains, AI, and
+  the long tail (see the batch map in `docs/UIUX_AUDIT.md`).
 - **L2 — frontend structure (done, wave 2):** route URLs and page directory/component
   names follow the vocabulary — `/agents` → `/beacons`, `/timeline` → `/events`,
   `/generate` → `/payload-generator`, `/privesc` → `/privilege-escalation`,
