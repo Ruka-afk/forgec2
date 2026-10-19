@@ -1772,6 +1772,20 @@ pickers and table columns: 37 flagged, 32 rewritten (64 value edits), 5 kept.
    972 kB); `out/` rebuilt and dist re-synced (337 files); full e2e 184 passed / 36
    skipped. No page here is in `VISUAL_ROUTES`.
 
+**Deployment probe.** The rebuilt binary (PID 38004 → **19988**, started 23:42:32)
+answers `/health` with `ok`, and the served chunks are byte-identical to
+`internal/webdist/dist` (`assets/index-C_MzXKIQ.js` = `9074E516…C8D1`,
+`assets/zh-DEzxG3Y3.js` = `EDACBB54…1606`). Ninety-eight of ninety-eight markers as
+expected: scripting serves "Select Beacon", "Beacon Enumeration", "Wait for beacons to
+check in"; BOF "Select Beacon...", "Available Beacons"; the privilege-escalation page the
+beacon subtitle, picker and validation; the toolkit "Beacon Info", "Stop beacon TUN",
+"Select a beacon first"; BloodHound the beacon collection dialog; the scanner "runs from
+the beacon context" and "Beacon-side recon scan" — with every old agent form gone in both
+languages. The five keeps are intact ("Enumerate Remote Desktop sessions", "Logged-on
+sessions, idle, active window", "Scopes the `agents` global…", the BOF `{agent}`
+placeholder). Absence is scoped as before: "Target Agent" / 目标 Agent still live in
+`plugins.*` (wave 16).
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
