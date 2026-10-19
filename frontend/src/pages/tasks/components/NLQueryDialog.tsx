@@ -2,7 +2,7 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
-import { toast } from "sonner";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,7 @@ interface NLTaskRow {
 // operator can see exactly how their question was interpreted.
 function NLQueryDialog() {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState("");
   const { status } = useAIStatus();
@@ -54,7 +55,7 @@ function NLQueryDialog() {
       setFilter(d.filter || {});
       setRows(d.tasks || []);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("ai.toast.assist_failed"));
+      toastError(e, "ai.toast.assist_failed");
     } finally {
       setLoading(false);
     }

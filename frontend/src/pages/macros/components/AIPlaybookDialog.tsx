@@ -16,6 +16,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { useAIStatus } from "@/lib/hooks/useAIStatus";
 import { Sparkles, Wand2, Save } from "lucide-react";
 
@@ -30,6 +31,7 @@ interface PBStep {
 // through the ordinary macro runner and its approval semantics.
 export function AIPlaybookDialog({ onSaved }: { onSaved: () => void }) {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const { status } = useAIStatus();
   const [open, setOpen] = useState(false);
   const [goal, setGoal] = useState("");
@@ -68,7 +70,7 @@ export function AIPlaybookDialog({ onSaved }: { onSaved: () => void }) {
         toast.error(t("ai.pb_generate_failed"));
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("ai.pb_generate_failed"));
+      toastError(e, "ai.pb_generate_failed");
     } finally {
       setGenerating(false);
     }
@@ -85,7 +87,7 @@ export function AIPlaybookDialog({ onSaved }: { onSaved: () => void }) {
       setGoal("");
       onSaved();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("ai.pb_save_failed"));
+      toastError(e, "ai.pb_save_failed");
     } finally {
       setSaving(false);
     }

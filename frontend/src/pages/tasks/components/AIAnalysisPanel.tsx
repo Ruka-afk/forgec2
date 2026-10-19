@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { useAIStatus } from "@/lib/hooks/useAIStatus";
 import { Sparkles, AlertTriangle, ShieldAlert, Globe, FolderOpen, KeyRound, Info, ArrowRight } from "lucide-react";
 
@@ -35,6 +36,7 @@ const SEVERITY_CLASS: Record<string, string> = {
 // subsystem is disabled (graceful degradation contract).
 function AIAnalysisButton({ taskId }: { taskId: number }) {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const { status } = useAIStatus();
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
@@ -53,7 +55,7 @@ function AIAnalysisButton({ taskId }: { taskId: number }) {
         toast.error(t("ai.toast.assist_failed"));
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("ai.toast.assist_failed"));
+      toastError(e, "ai.toast.assist_failed");
     } finally {
       setLoading(false);
     }

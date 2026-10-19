@@ -4,6 +4,8 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { fetchAgentListCached } from "@/lib/agents";
 import { useI18n } from "@/lib/i18n";
+import { errorText } from "@/lib/errors";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { useWS } from "@/lib/wsContext";
 import { PageContainer } from "@/components/ui/page-container";
 import { Card } from "@/components/ui/card";
@@ -106,6 +108,7 @@ export default function MacrosPageContent() {
   const { t } = useI18n();
   const { subscribe } = useWS();
   const { confirm, modal } = useConfirm();
+  const { toastError } = useErrorToast();
 
   const [macros, setMacros] = useState<Macro[]>([]);
   const [runs, setRuns] = useState<MacroRun[]>([]);
@@ -141,11 +144,11 @@ export default function MacrosPageContent() {
     } catch (e) {
       // Retain the last good list: wiping it to [] meant an API blip read
       // to the operator as "no macros exist".
-      setLoadError(e instanceof Error ? e.message : String(e));
+      setLoadError(errorText(t, e, () => t("common.load_failed")));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const loadRuns = useCallback(async () => {
     setRunsLoading(true);
@@ -156,11 +159,11 @@ export default function MacrosPageContent() {
     } catch (e) {
       // Retain the previous run list; only report the failure so a blip
       // cannot masquerade as "no runs".
-      setRunsError(e instanceof Error ? e.message : String(e));
+      setRunsError(errorText(t, e, () => t("common.load_failed")));
     } finally {
       setRunsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const loadAgents = useCallback(async () => {
     setAgentsError(null);
@@ -168,9 +171,9 @@ export default function MacrosPageContent() {
       setAgents(await fetchAgentListCached());
     } catch (e) {
       // Same: a wiped agent list read as "no agents on the network".
-      setAgentsError(e instanceof Error ? e.message : String(e));
+      setAgentsError(errorText(t, e, () => t("common.load_failed")));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void loadMacros();
@@ -234,7 +237,7 @@ export default function MacrosPageContent() {
       setEditorOpen(false);
       void loadMacros();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("macros.toast.save_failed"));
+      toastError(e, "macros.toast.save_failed");
     } finally {
       setSaving(false);
     }
@@ -246,8 +249,8 @@ export default function MacrosPageContent() {
       await api.del(paths.macros.one(m.id!));
       toast.success(t("macros.toast.deleted"));
       void loadMacros();
-    } catch {
-      toast.error(t("macros.toast.delete_failed"));
+    } catch (e) {
+      toastError(e, "macros.toast.delete_failed");
     }
   };
 
@@ -276,7 +279,7 @@ export default function MacrosPageContent() {
       setRunTarget(null);
       void loadRuns();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("macros.toast.run_failed"));
+      toastError(e, "macros.toast.run_failed");
     } finally {
       setRunning(false);
     }
@@ -287,8 +290,8 @@ export default function MacrosPageContent() {
       await api.postJson(paths.macros.stopRun(id), {});
       toast.success(t("macros.toast.stopped"));
       void loadRuns();
-    } catch {
-      toast.error(t("macros.toast.stop_failed"));
+    } catch (e) {
+      toastError(e, "macros.toast.stop_failed");
     }
   };
 

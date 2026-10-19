@@ -19,6 +19,7 @@ import OperatorBadge from "@/components/OperatorBadge";
 import { useAppStore } from "@/lib/store";
 import { paths } from "@/lib/api-paths";
 import { firstArray, firstNumber } from "@/lib/envelope";
+import { errorText } from "@/lib/errors";
 import { csvCell } from "@/lib/csv";
 import { formatTime } from "@/lib/utils";
 import { useVirtualWindow } from "@/lib/hooks/useVirtualWindow";
@@ -167,7 +168,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
         }
         setTasks([]);
         setTotal(0);
-        const msg = e instanceof Error ? e.message : t("tasks.toast_load_failed");
+        const msg = errorText(t, e, () => t("tasks.toast_load_failed"));
         setError(msg);
         toast.error(msg);
       })
@@ -223,8 +224,10 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
   // whom, 404, validation) instead of a bare "failed" toast. The fallback is
   // translated at the call site so check:i18n still sees the t("…") key.
   const mutationError = useCallback((e: unknown, fallback: string) => {
-    toast.error(e instanceof Error && e.message ? e.message : fallback);
-  }, []);
+    // Normalize first: a status-carrying rejection maps to the shared copy,
+    // and the server's own message stays preferred for 409/404/validation.
+    toast.error(errorText(t, e, () => fallback));
+  }, [t]);
 
   const handleExportCSV = () => {
     const headers = ["Time", "Agent", "Type", "Command", "Status", "Result", "Duration"].map(csvCell);
