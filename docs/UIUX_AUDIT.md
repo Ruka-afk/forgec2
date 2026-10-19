@@ -914,11 +914,62 @@ green and wrote nothing). When the visual language itself changes, regenerate wi
 `--update-snapshots=all`, exactly what `visual-baselines.yml` documents for the linux
 set; a sub-threshold diff is a pass by design, not evidence of staleness.
 
-**Still open.** Wave 2: route renames `/agents`→`/beacons`, `/timeline`→`/events`,
-`/generate`→`/payload-generator`, `/privesc`→`/privilege-escalation`,
-`/chain`→`/proxy-chains`, `/asset-organization`→`/asset-management` (old URLs
-redirect), plus page directory/component renames. Wave 3+: body-copy sweep per page
-domain (descriptions, empty states, toasts) still saying Agent/Session/Implant.
+**Still open.** Wave 3+: body-copy sweep per page domain (descriptions, empty states,
+toasts) still saying Agent/Session/Implant.
+
+## U7 — Professional naming & page emoji (wave 2, landed 2026-10-19)
+
+Wave 2 is the routing layer of the same program (the copy layer landed in wave 1
+above; the source of truth stays `docs/TERMINOLOGY.md`).
+
+1. **Six routes renamed, detail family included.** `/agents` → `/beacons`,
+   `/timeline` → `/events`, `/generate` → `/payload-generator`, `/privesc` →
+   `/privilege-escalation`, `/chain` → `/proxy-chains`, `/asset-organization` →
+   `/asset-management`; the nine `/agents/:id/…` detail routes follow their list
+   page to `/beacons/:id/…`. `navigation.ts` (six hrefs), `route-imports.ts` (six
+   ids), `route-prefetch.ts` and `layout.ts`'s flush-path predicate moved with them,
+   and every internal link (dashboard tiles, palette entries, status-banner filters,
+   cross-page buttons, dock navigation, menu actions — 151 literals across 48 files)
+   now points at the new slug. A post-change audit finds the old literals only in the
+   redirect table, one comment, and the backend API clients.
+2. **Old URLs keep working — through the router, not the server.** `router.tsx`
+   gains a `LEGACY_REDIRECTS` table (15 entries: six top-level plus the detail
+   family) rendered by one shared `LegacyPrefixRedirect` that swaps the first path
+   segment and carries the id, sub-route, query string and hash through
+   (`/agents?status=offline` → `/beacons?status=offline`). Because they are ordinary
+   routes they are pinned by the same machinery as pages: the static-export lockstep
+   test (`vite-plugins/staticExport.ts` lists both name sets; `agents.html` stays a
+   shipped shell so a bookmark still boots the SPA) and `requiredPerms`. No backend
+   edit was needed: gin's legacy page handlers are Next.js-era JSON renderers that
+   browser GETs never reach (the static middleware answers navigations first), and
+   the API / DB / OpenAPI layer is the program's L3 boundary.
+3. **Directories and entry components follow.** `pages/agents` → `pages/beacons`
+   (`BeaconsPageContent`), `timeline` → `events` (`EventsPageContent`), `generate` →
+   `payload-generator` (`PayloadGeneratorPage`), `privesc` →
+   `privilege-escalation` (`PrivilegeEscalationPage`), `chain` → `proxy-chains`
+   (`ProxyChainsPage`), `asset-organization` → `asset-management`
+   (`AssetManagementPage`), and `AgentDetailPage` → `BeaconDetailPage`: 175 files
+   moved with `git mv`. The boundary is deliberate — identifiers that mirror the
+   server contract (`agentId`, `lib/api-paths.ts`, the detail sub-components such as
+   `AgentHeader`/`AgentStatusBar`) keep the agent vocabulary, because the API is the
+   contract and the URL is the label.
+4. **Baselines: renamed, not regenerated.** `agents-*` → `beacons-*` and
+   `timeline-*` → `events-*` on both platforms (16 files, `git mv`, byte-identical —
+   the same page at a new address), with the parity check still reporting 28 names
+   per platform. The static e2e suite gained seven redirect cases (canonical URL +
+   surviving query string) and the final run was 184 passed / 36 skipped. One
+   `ai-dark` visual failure in the first run was re-run-verified as a pre-existing
+   flake in the AI welcome block's vertical offset: no `pages/ai/**` file is touched
+   by this wave.
+
+**Method note (codemod).** The 151 link literals were rewritten by a one-shot Node
+script whose dry-run report was reviewed line by line before applying; five matches
+were excluded as false positives because they are backend endpoints or
+module-relative imports (`lib/agents.test.ts`'s `from "./agents"`,
+`lib/cred-quality.ts`'s `GET /agents/:id/` doc line, `InjectSection`'s dual-use
+endpoint note, `useCollectTask.test.ts` and `useRemoteDesktop.test.ts`'s API-path
+assertions). `router.tsx` and `vite-plugins/staticExport.ts` were edited by hand so
+the legacy tables could not be rewritten into themselves.
 
 ## Batch map & reproduction
 
@@ -931,7 +982,8 @@ domain (descriptions, empty states, toasts) still saying Agent/Session/Implant.
 | U4 narrow screens (landed 2026-10-18) | R2 fixed (status label always rendered), T6 mobile palette entry, T7 touch targets, R3 extended to 10 routes |
 | U5 motion (landed 2026-10-18) | M1: `router.navigate` defaults into `document.startViewTransition` (`?? true` beats a `Link`'s undefined key; explicit `false` kept), reduced-motion and API-absent skip; `src/router-transitions.test.ts` + the 4-viewport Playwright `route transitions` spec; `globals.css` untouched |
 | U6 page-by-page polish | T3 focus mode, T4 stat tiles, T5 density selectors, T9 non-total list fallbacks (tokens, ntlm), T10 clipped fixed-width columns (toolkit, scripting), V1–V2 + per-page checklists |
-| U7 naming & personality (wave 1, landed 2026-10-19) | "Beacon" vocabulary across nav/titles/tiles (45 nav + 42 titles + 5 tile/subtitle values per language, 92 keys); one emoji identity per page (nav = h1 = breadcrumb = document title, `aria-hidden` in chips); U6 residue: DNS tile tone, card-header 2-line clamp, privesc mojibake icons, geo 📍 fallback; contract in `docs/TERMINOLOGY.md` — L2 routes and body copy still open |
+| U7 naming & personality (wave 1, landed 2026-10-19) | "Beacon" vocabulary across nav/titles/tiles (45 nav + 42 titles + 5 tile/subtitle values per language, 92 keys); one emoji identity per page (nav = h1 = breadcrumb = document title, `aria-hidden` in chips); U6 residue: DNS tile tone, card-header 2-line clamp, privesc mojibake icons, geo 📍 fallback; contract in `docs/TERMINOLOGY.md` — L2 routes landed in wave 2; body copy still open |
+| U7 naming & personality (wave 2, landed 2026-10-19) | L2 routing layer: six route renames plus the `/agents/:id` family → `/beacons/:id`, the 15-entry `LEGACY_REDIRECTS` table (id/sub-route/query/hash preserved), 175 files moved (page directories + route-entry components), 151 link literals across 48 files, visual baselines renamed not regenerated, 7 new e2e redirect cases; HTTP API, sqlite schema and OpenAPI untouched per the L3 boundary |
 
 ```powershell
 cd frontend

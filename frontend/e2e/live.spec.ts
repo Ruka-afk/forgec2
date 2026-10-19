@@ -27,7 +27,7 @@ test.describe("live server login + agents", () => {
     expect(body.status || body.Status).toBeTruthy();
   });
 
-  test("login then agents list loads", async ({ page }) => {
+  test("login then beacons list loads", async ({ page }) => {
     await page.goto("/login");
     await expect(page.locator("#login-username")).toBeVisible({ timeout: 15_000 });
     await page.locator("#login-username").fill(USER);
@@ -37,7 +37,7 @@ test.describe("live server login + agents", () => {
     // Successful login leaves /login
     await expect(page).not.toHaveURL(/login/, { timeout: 20_000 });
 
-    await page.goto("/agents");
+    await page.goto("/beacons");
     await expect(page.locator("body")).toBeVisible();
     // Page chrome or empty-state must render; no hard error page
     await page.waitForTimeout(1_200);

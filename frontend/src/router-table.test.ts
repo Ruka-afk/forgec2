@@ -21,7 +21,7 @@ describe("router table", () => {
 
   it("registers every top-level section exactly once", () => {
     const paths = collectPaths(router.routes as never, []);
-    // "tasks" is a tab of /timeline now, not a top-level route.
+    // "tasks" is a tab of /events now, not a top-level route.
     for (const section of ["agents", "timeline", "loot", "settings", "generate"]) {
       expect(paths.filter((p) => p === `/${section}`)).toHaveLength(1);
     }
@@ -44,7 +44,7 @@ describe("router table", () => {
       expect(paths).not.toContain(gone);
     }
     // ...and the content they pointed at is still served.
-    for (const host of ["/generate", "/timeline"]) {
+    for (const host of ["/payload-generator", "/events"]) {
       expect(paths).toContain(host);
     }
   });

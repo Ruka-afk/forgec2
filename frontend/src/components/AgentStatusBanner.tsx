@@ -40,13 +40,13 @@ export default function AgentStatusBanner() {
 
           <div className="flex-1 flex items-center gap-2 flex-wrap text-sm">
             {hasOffline && (
-              <Link to="/agents?status=offline" className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-destructive/10 text-destructive-ink hover:bg-destructive/20 dark:hover:bg-destructive/15 transition-colors font-medium text-xs">
+              <Link to="/beacons?status=offline" className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-destructive/10 text-destructive-ink hover:bg-destructive/20 dark:hover:bg-destructive/15 transition-colors font-medium text-xs">
                 <StatusDot tone="destructive" size="xs" />
                 {offline} {t("status_banner.offline")}
               </Link>
             )}
             {hasStale && (
-              <Link to="/agents?status=stale" className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-warning/15 text-warning-ink hover:bg-warning/25 dark:bg-warning/10 dark:hover:bg-warning/20 transition-colors font-medium text-xs">
+              <Link to="/beacons?status=stale" className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-warning/15 text-warning-ink hover:bg-warning/25 dark:bg-warning/10 dark:hover:bg-warning/20 transition-colors font-medium text-xs">
                 <StatusDot tone="warning" size="xs" />
                 {stale} {t("status_banner.stale")}
               </Link>
@@ -74,11 +74,11 @@ export default function AgentStatusBanner() {
               {t("status_banner.expanded_message")}
             </p>
             <div className="mt-2 flex items-center gap-2">
-              <Link to="/agents?status=offline" className="text-warning-ink hover:text-warning-ink/80 underline underline-offset-2 transition-colors">
+              <Link to="/beacons?status=offline" className="text-warning-ink hover:text-warning-ink/80 underline underline-offset-2 transition-colors">
                 {t("status_banner.view_offline")}
               </Link>
               <span className="text-warning-ink/60">|</span>
-              <Link to="/agents?status=stale" className="text-warning-ink hover:text-warning-ink/80 underline underline-offset-2 transition-colors">
+              <Link to="/beacons?status=stale" className="text-warning-ink hover:text-warning-ink/80 underline underline-offset-2 transition-colors">
                 {t("status_banner.view_stale")}
               </Link>
             </div>

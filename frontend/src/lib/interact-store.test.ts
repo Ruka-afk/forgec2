@@ -3,21 +3,21 @@ import { isAgentSessionPath, nextRevealKind, shouldCloseOnNavigate } from "./int
 
 describe("shouldCloseOnNavigate", () => {
   it("keeps a pinned session when the route changes", () => {
-    expect(shouldCloseOnNavigate(true, "/agents", "/loot")).toBe(false);
+    expect(shouldCloseOnNavigate(true, "/beacons", "/loot")).toBe(false);
   });
   it("closes an unpinned session on navigation", () => {
-    expect(shouldCloseOnNavigate(false, "/agents", "/loot")).toBe(true);
+    expect(shouldCloseOnNavigate(false, "/beacons", "/loot")).toBe(true);
   });
   it("does not close on the same path", () => {
-    expect(shouldCloseOnNavigate(false, "/agents", "/agents")).toBe(false);
+    expect(shouldCloseOnNavigate(false, "/beacons", "/beacons")).toBe(false);
   });
   it("keeps an unpinned dock when entering that session's dest", () => {
-    expect(shouldCloseOnNavigate(false, "/agents", "/agents/abc", "abc")).toBe(false);
-    expect(shouldCloseOnNavigate(false, "/agents/abc", "/agents/abc/files", "abc")).toBe(false);
+    expect(shouldCloseOnNavigate(false, "/beacons", "/beacons/abc", "abc")).toBe(false);
+    expect(shouldCloseOnNavigate(false, "/beacons/abc", "/beacons/abc/files", "abc")).toBe(false);
   });
   it("closes when leaving that session", () => {
-    expect(shouldCloseOnNavigate(false, "/agents/abc", "/agents", "abc")).toBe(true);
-    expect(shouldCloseOnNavigate(false, "/agents/abc", "/agents/other", "abc")).toBe(true);
+    expect(shouldCloseOnNavigate(false, "/beacons/abc", "/beacons", "abc")).toBe(true);
+    expect(shouldCloseOnNavigate(false, "/beacons/abc", "/beacons/other", "abc")).toBe(true);
   });
 });
 
@@ -31,9 +31,9 @@ describe("nextRevealKind", () => {
 
 describe("isAgentSessionPath", () => {
   it("matches the session and its dests only", () => {
-    expect(isAgentSessionPath("/agents/abc", "abc")).toBe(true);
-    expect(isAgentSessionPath("/agents/abc/shell", "abc")).toBe(true);
-    expect(isAgentSessionPath("/agents/abcd", "abc")).toBe(false);
-    expect(isAgentSessionPath("/agents", "abc")).toBe(false);
+    expect(isAgentSessionPath("/beacons/abc", "abc")).toBe(true);
+    expect(isAgentSessionPath("/beacons/abc/shell", "abc")).toBe(true);
+    expect(isAgentSessionPath("/beacons/abcd", "abc")).toBe(false);
+    expect(isAgentSessionPath("/beacons", "abc")).toBe(false);
   });
 });

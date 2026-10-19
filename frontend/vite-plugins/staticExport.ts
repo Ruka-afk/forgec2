@@ -13,17 +13,25 @@ import type { Plugin } from "vite";
  * Kept in lockstep with the router table (src/router.tsx) by
  * src/static-export-routes.test.ts: a retired route left here ships dead
  * HTML, and a new page missing here never gets its own file.
+ *
+ * The pre-U7 names (agents, timeline, generate, privesc, chain,
+ * asset-organization and the /agents/:id family) stay listed on purpose: the
+ * router keeps them as compatibility redirects (U7 w2), and shipping their
+ * shell is what lets a bookmarked URL — or the legacy server-side page
+ * handlers — hand the SPA control before it rewrites to the new route.
  */
 export const STATIC_ROUTES: string[] = [
   "login",
   "forbidden",
   "agents",
   "ai",
+  "asset-management",
   "asset-organization",
   "attack",
   "audit",
   "automation",
   "autotag",
+  "beacons",
   "bloodhound",
   "bof",
   "campaign",
@@ -35,6 +43,7 @@ export const STATIC_ROUTES: string[] = [
   "dashboard",
   "dns",
   "domain-fronting",
+  "events",
   "generate",
   "groups",
   "infrastructure",
@@ -45,10 +54,13 @@ export const STATIC_ROUTES: string[] = [
   "macros",
   "ntlm",
   "opsec",
+  "payload-generator",
   "phishing",
   "pivoting",
   "plugins",
   "privesc",
+  "privilege-escalation",
+  "proxy-chains",
   "report",
   "roles",
   "scanner",
@@ -70,6 +82,15 @@ export const STATIC_ROUTES: string[] = [
   "agents/_/shell",
   "agents/_/token",
   "agents/_/traffic",
+  "beacons/_",
+  "beacons/_/config",
+  "beacons/_/files",
+  "beacons/_/persistence",
+  "beacons/_/remote-desktop",
+  "beacons/_/screen",
+  "beacons/_/shell",
+  "beacons/_/token",
+  "beacons/_/traffic",
   "listeners/_",
 ];
 

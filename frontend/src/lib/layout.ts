@@ -6,7 +6,7 @@ const FLUSH_AGENT_SUFFIX = /\/(files|shell|screen|remote-desktop)$/;
 export function isFlushPath(pathname: string | null | undefined): boolean {
   if (!pathname) return false;
   if (NAV_LAYOUT_BY_HREF[pathname] === "workspace") return true;
-  return /^\/agents\/[^/]+/.test(pathname) && FLUSH_AGENT_SUFFIX.test(pathname);
+  return /^\/beacons\/[^/]+/.test(pathname) && FLUSH_AGENT_SUFFIX.test(pathname);
 }
 
 /** Hide the breadcrumb strip when it would be empty or redundant. */

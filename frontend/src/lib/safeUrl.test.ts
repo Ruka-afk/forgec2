@@ -3,7 +3,7 @@ import { isSafeUrl, safeHref, isSafeImageSrc, safeImageSrc } from "./safeUrl";
 
 describe("isSafeUrl", () => {
   it("accepts relative paths", () => {
-    expect(isSafeUrl("/agents/abc")).toBe(true);
+    expect(isSafeUrl("/beacons/abc")).toBe(true);
     expect(isSafeUrl("/screenshots/agent1/shot.png")).toBe(true);
   });
 
@@ -38,7 +38,7 @@ describe("isSafeUrl", () => {
 
 describe("safeHref", () => {
   it("returns the value when safe, undefined otherwise", () => {
-    expect(safeHref("/agents/x")).toBe("/agents/x");
+    expect(safeHref("/beacons/x")).toBe("/beacons/x");
     expect(safeHref("javascript:alert(1)")).toBeUndefined();
   });
 });

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Beacon } from "@/pages/agents/components/types";
+import type { Beacon } from "@/pages/beacons/components/types";
 import {
   defaultInteractPrefs,
   readInteractPrefs,
@@ -9,7 +9,7 @@ import {
 
 export function isAgentSessionPath(path: string, agentId: string): boolean {
   if (!agentId || !path) return false;
-  const prefix = `/agents/${agentId}`;
+  const prefix = `/beacons/${agentId}`;
   return path === prefix || path.startsWith(`${prefix}/`);
 }
 

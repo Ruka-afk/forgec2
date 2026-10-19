@@ -5,13 +5,13 @@ import { paths } from "@/lib/api-paths";
 import { isEditableTarget, tabFromDigit } from "@/lib/interact-workspace";
 import { shouldCloseOnNavigate, useInteractStore } from "@/lib/interact-store";
 
-// The dock body lives under src/pages/agents, so a static import here drags
+// The dock body lives under src/pages/beacons, so a static import here drags
 // page JS into the entry graph even though the dock is closed on first paint.
 // Measured: the entry chunk carried ~900 kB of route JS that no first-paint
 // screen touches. Lazy keeps the dock out of the initial download and loads it
 // the first time one is actually opened.
 const AgentInteractDock = lazy(() =>
-  import("@/pages/agents/components/AgentInteractDock").then((m) => ({
+  import("@/pages/beacons/components/AgentInteractDock").then((m) => ({
     default: m.AgentInteractDock,
   })),
 );
@@ -33,7 +33,7 @@ export default function GlobalInteractDock() {
   const setBeacon = useInteractStore((s) => s.setBeacon);
 
   const openAgentDetails = useCallback(() => {
-    if (agentId) navigate(`/agents/${agentId}`);
+    if (agentId) navigate(`/beacons/${agentId}`);
   }, [navigate, agentId]);
 
   const handleClose = useCallback(() => {

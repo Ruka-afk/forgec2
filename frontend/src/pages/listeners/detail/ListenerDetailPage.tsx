@@ -216,7 +216,7 @@ export default function ListenerDetailPage() {
               </div>
             </div>
             <div className="mt-6 flex gap-2">
-               <Button render={<Link to={`/generate?listener_id=${id}`} />} className="flex-1">{t("listener.generate_implant")}</Button>
+               <Button render={<Link to={`/payload-generator?listener_id=${id}`} />} className="flex-1">{t("listener.generate_implant")}</Button>
             </div>
           </Card>
         </div>
@@ -242,7 +242,7 @@ export default function ListenerDetailPage() {
       <div className="mt-8">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-foreground">{t("listener.agents_using")} ({stats.total})</h2>
-          <Link to="/agents" className="text-sm text-primary hover:text-primary transition-colors">{t("listener.view_all_agents")}</Link>
+          <Link to="/beacons" className="text-sm text-primary hover:text-primary transition-colors">{t("listener.view_all_agents")}</Link>
         </div>
 
         <Card className="overflow-hidden">
@@ -276,7 +276,7 @@ export default function ListenerDetailPage() {
                         )}
                       </TableCell>
                       <TableCell className="py-3 px-6 text-right">
-                        <Link to={`/agents/${aid}`} className="text-primary hover:text-primary hover:underline text-sm transition-colors">{t("listener.detail")}</Link>
+                        <Link to={`/beacons/${aid}`} className="text-primary hover:text-primary hover:underline text-sm transition-colors">{t("listener.detail")}</Link>
                       </TableCell>
                     </TableRow>
                   );

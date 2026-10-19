@@ -15,12 +15,12 @@ async function fresh() {
 describe("routeIdFromPath", () => {
   it("maps only top-level routes that have a lazy page", async () => {
     const { routeIdFromPath } = await fresh();
-    expect(routeIdFromPath("/agents")).toBe("agents");
-    expect(routeIdFromPath("/agents/")).toBe("agents");
-    expect(routeIdFromPath("/agents?tab=1")).toBe("agents");
+    expect(routeIdFromPath("/beacons")).toBe("beacons");
+    expect(routeIdFromPath("/beacons/")).toBe("beacons");
+    expect(routeIdFromPath("/beacons?tab=1")).toBe("beacons");
     expect(routeIdFromPath("/dashboard#top")).toBe("dashboard");
     // Detail routes must not warm the list chunk they are not going to use.
-    expect(routeIdFromPath("/agents/42/shell")).toBeNull();
+    expect(routeIdFromPath("/beacons/42/shell")).toBeNull();
     expect(routeIdFromPath("/not-a-route")).toBeNull();
     expect(routeIdFromPath("/")).toBeNull();
     expect(routeIdFromPath("")).toBeNull();
@@ -30,17 +30,17 @@ describe("routeIdFromPath", () => {
 describe("prefetchRoute", () => {
   it("imports the chunk once, however often hover fires", async () => {
     const { prefetchRoute, spy } = await fresh();
-    const load = spy("agents");
-    prefetchRoute("/agents");
-    prefetchRoute("/agents");
-    prefetchRoute("/agents/");
+    const load = spy("beacons");
+    prefetchRoute("/beacons");
+    prefetchRoute("/beacons");
+    prefetchRoute("/beacons/");
     await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(1));
   });
 
   it("ignores detail routes and unknown paths", async () => {
     const { prefetchRoute, spy } = await fresh();
-    const load = spy("agents");
-    prefetchRoute("/agents/42/shell");
+    const load = spy("beacons");
+    prefetchRoute("/beacons/42/shell");
     prefetchRoute("/not-a-route");
     await Promise.resolve();
     expect(load).not.toHaveBeenCalled();

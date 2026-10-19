@@ -56,7 +56,7 @@ describe("navigation single source", () => {
     expect(hrefs).toContain("/automation");
     expect(hrefs).not.toContain("/bof");
     expect(hrefs).toContain("/plugins");
-    expect(hrefs).toContain("/asset-organization");
+    expect(hrefs).toContain("/asset-management");
     expect(NAV_BY_HREF["/lateral"]).toBe("nav.lateral");
     expect(NAV_BY_HREF["/campaign"]).toBe("nav.campaign");
   });
@@ -64,7 +64,7 @@ describe("navigation single source", () => {
   it("keeps retired or high-risk tools addressable without advertising them", () => {
     const hidden = [
       "/phishing", "/ntlm", "/bof", "/macros",
-      "/privesc", "/pivoting", "/lateral", "/chat", "/domain-fronting",
+      "/privilege-escalation", "/pivoting", "/lateral", "/chat", "/domain-fronting",
       "/tags", "/groups", "/autotag",
       "/traffic",
       // NOTE: "/password-spray" was removed from this list when the page was
@@ -83,7 +83,7 @@ describe("navigation single source", () => {
 
   it("does not advertise merged routes as sidebar destinations", () => {
       const hrefs = NAV_ITEMS.map((i) => i.href);
-      // All of these are tabs (of /generate, /timeline or /agents/:id) rather
+      // All of these are tabs (of /generate, /events or /beacons/:id) rather
       // than destinations. /notifications joined them when the alerts tab
       // absorbed the standalone page; its unread badge rides on /timeline.
       for (const dead of [
@@ -105,9 +105,9 @@ describe("navigation single source", () => {
     expect(primary.items.length).toBeLessThanOrEqual(8);
       expect(primary.items.map((i) => i.href)).toEqual([
         "/dashboard",
-        "/agents",
+        "/beacons",
         "/listeners",
-        "/timeline",
+        "/events",
       ]);
       // The notification count must still surface somewhere in the sidebar,
       // now carried by the events entry.

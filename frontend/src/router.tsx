@@ -34,20 +34,46 @@ const MAIN_PAGES: Record<string, ReturnType<typeof lazyPage>> = Object.fromEntri
 // this chunk before redirecting (src/lib/login-preload.ts), so an expired
 // session still lands on an instantly painting form.
 const LoginPage = lazyPage(() => import("@/pages/login/LoginPage"));
-const AgentDetailPage = lazyPage(() => import("@/pages/agents/detail/AgentDetailPage"));
-const AgentConfigPage = lazyPage(() => import("@/pages/agents/detail/config/ConfigPage"));
-const AgentFilesPage = lazyPage(() => import("@/pages/agents/detail/files/FilesPage"));
-const AgentPersistencePage = lazyPage(() => import("@/pages/agents/detail/persistence/PersistencePage"));
-const AgentRemoteDesktopPage = lazyPage(() => import("@/pages/agents/detail/remote-desktop/RemoteDesktopPage"));
-const AgentScreenPage = lazyPage(() => import("@/pages/agents/detail/screen/ScreenPage"));
-const AgentShellPage = lazyPage(() => import("@/pages/agents/detail/shell/ShellPage"));
-const AgentTokenPage = lazyPage(() => import("@/pages/agents/detail/token/TokenPage"));
-const AgentTrafficPage = lazyPage(() => import("@/pages/agents/detail/traffic/TrafficPage"));
+const BeaconDetailPage = lazyPage(() => import("@/pages/beacons/detail/BeaconDetailPage"));
+const BeaconConfigPage = lazyPage(() => import("@/pages/beacons/detail/config/ConfigPage"));
+const BeaconFilesPage = lazyPage(() => import("@/pages/beacons/detail/files/FilesPage"));
+const BeaconPersistencePage = lazyPage(() => import("@/pages/beacons/detail/persistence/PersistencePage"));
+const BeaconRemoteDesktopPage = lazyPage(() => import("@/pages/beacons/detail/remote-desktop/RemoteDesktopPage"));
+const BeaconScreenPage = lazyPage(() => import("@/pages/beacons/detail/screen/ScreenPage"));
+const BeaconShellPage = lazyPage(() => import("@/pages/beacons/detail/shell/ShellPage"));
+const BeaconTokenPage = lazyPage(() => import("@/pages/beacons/detail/token/TokenPage"));
+const BeaconTrafficPage = lazyPage(() => import("@/pages/beacons/detail/traffic/TrafficPage"));
 const ListenerDetailPage = lazyPage(() => import("@/pages/listeners/detail/ListenerDetailPage"));
 
 type MainRoute =
   | { path: string; comp: ReturnType<typeof lazyPage> }
-  | { path: string; redirect: string };
+  | { path: string; redirect: string }
+  | { path: string; legacyTo: string };
+
+/**
+ * U7 w2 renamed six sections (and the /agents detail family) to the Beacon
+ * vocabulary. Every pre-rename URL stays addressable: the export still ships
+ * its HTML shell, the router rewrites it client-side, and the query string
+ * survives the hop (/agents?status=offline -> /beacons?status=offline), so
+ * bookmarks, external links and muscle memory keep working.
+ */
+const LEGACY_REDIRECTS: { path: string; to: string }[] = [
+  { path: "/agents", to: "/beacons" },
+  { path: "/agents/:id", to: "/beacons" },
+  { path: "/agents/:id/config", to: "/beacons" },
+  { path: "/agents/:id/files", to: "/beacons" },
+  { path: "/agents/:id/persistence", to: "/beacons" },
+  { path: "/agents/:id/remote-desktop", to: "/beacons" },
+  { path: "/agents/:id/screen", to: "/beacons" },
+  { path: "/agents/:id/shell", to: "/beacons" },
+  { path: "/agents/:id/token", to: "/beacons" },
+  { path: "/agents/:id/traffic", to: "/beacons" },
+  { path: "/timeline", to: "/events" },
+  { path: "/generate", to: "/payload-generator" },
+  { path: "/privesc", to: "/privilege-escalation" },
+  { path: "/chain", to: "/proxy-chains" },
+  { path: "/asset-organization", to: "/asset-management" },
+];
 
 const MAIN_ROUTES: MainRoute[] = [
   ...Object.keys(MAIN_PAGES).map((name) => ({ path: `/${name}`, comp: MAIN_PAGES[name] })),
@@ -55,15 +81,16 @@ const MAIN_ROUTES: MainRoute[] = [
   // compatibility redirect so bookmarks and external links continue to work
   // without shipping a second chat application bundle.
   { path: "/chat", redirect: "/ai" },
-  { path: "/agents/:id", comp: AgentDetailPage },
-  { path: "/agents/:id/config", comp: AgentConfigPage },
-  { path: "/agents/:id/files", comp: AgentFilesPage },
-  { path: "/agents/:id/persistence", comp: AgentPersistencePage },
-  { path: "/agents/:id/remote-desktop", comp: AgentRemoteDesktopPage },
-  { path: "/agents/:id/screen", comp: AgentScreenPage },
-  { path: "/agents/:id/shell", comp: AgentShellPage },
-  { path: "/agents/:id/token", comp: AgentTokenPage },
-  { path: "/agents/:id/traffic", comp: AgentTrafficPage },
+  ...LEGACY_REDIRECTS.map((r) => ({ path: r.path, legacyTo: r.to })),
+  { path: "/beacons/:id", comp: BeaconDetailPage },
+  { path: "/beacons/:id/config", comp: BeaconConfigPage },
+  { path: "/beacons/:id/files", comp: BeaconFilesPage },
+  { path: "/beacons/:id/persistence", comp: BeaconPersistencePage },
+  { path: "/beacons/:id/remote-desktop", comp: BeaconRemoteDesktopPage },
+  { path: "/beacons/:id/screen", comp: BeaconScreenPage },
+  { path: "/beacons/:id/shell", comp: BeaconShellPage },
+  { path: "/beacons/:id/token", comp: BeaconTokenPage },
+  { path: "/beacons/:id/traffic", comp: BeaconTrafficPage },
   { path: "/listeners/:id", comp: ListenerDetailPage },
 ];
 
@@ -72,6 +99,14 @@ const MAIN_ROUTES: MainRoute[] = [
  *  router). */
 function withSuspense(node: ReactNode): ReactNode {
   return <Suspense fallback={<PageSpinner />}>{node}</Suspense>;
+}
+
+/** Compatibility redirect for a renamed section: swaps the first path segment
+ *  for the new canonical one and keeps the id, sub-route, query and hash. */
+function LegacyPrefixRedirect({ to }: { to: string }) {
+  const { pathname, search, hash } = useLocation();
+  const rest = pathname.replace(/^\/[^/]+/, "");
+  return <Navigate to={{ pathname: `${to}${rest}`, search, hash }} replace />;
 }
 
 function MainLayout() {
@@ -119,7 +154,7 @@ function guard(name: string, Comp: ComponentType): ReactNode {
 /** Per-route crash isolation: a rendering error takes down only its own
  *  page (with retry), never the nav sidebar or sibling routes. resetKey on
  *  the live pathname also recovers same-pattern navigation
- *  (e.g. /agents/1 -> /agents/2). */
+ *  (e.g. /beacons/1 -> /beacons/2). */
 function RouteErrorBoundary({ routeKey, children }: { routeKey: string; children: ReactNode }) {
   const pathname = useLocation().pathname;
   return (
@@ -154,17 +189,23 @@ export const router = createBrowserRouter([
       // Single route table: path -> lazy page or redirect target. Adding a
       // page means adding one entry here (plus its lazy import above) —
       // paths, guards and redirects can no longer drift apart.
-      ...MAIN_ROUTES.map((r) => ("redirect" in r
+      ...MAIN_ROUTES.map((r) => ("legacyTo" in r
         ? {
             path: r.path,
-            element: <Navigate to={r.redirect} replace />,
+            element: <LegacyPrefixRedirect to={r.legacyTo} />,
             errorElement: <RouterErrorView />,
           }
-        : {
-            path: r.path,
-            element: guard(r.path, r.comp),
-            errorElement: <RouterErrorView />,
-          })),
+        : "redirect" in r
+          ? {
+              path: r.path,
+              element: <Navigate to={r.redirect} replace />,
+              errorElement: <RouterErrorView />,
+            }
+          : {
+              path: r.path,
+              element: guard(r.path, r.comp),
+              errorElement: <RouterErrorView />,
+            })),
     ],
   },
   {

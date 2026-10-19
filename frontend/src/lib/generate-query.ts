@@ -58,5 +58,5 @@ export function rebuildPayloadHref(agent: {
   const format = formatFromOs(os);
   if (format) params.set("format", format);
   const q = params.toString();
-  return q ? `/generate?${q}` : "/generate";
+  return q ? `/payload-generator?${q}` : "/payload-generator";
 }

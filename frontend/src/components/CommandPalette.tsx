@@ -78,7 +78,7 @@ export default function CommandPalette() {
       const base = [agent.hostname, agent.ip, agent.username, agent.os].filter(Boolean).join(" ");
       if (matchesQuery(q, base, name, meta, id)) {
         out.push({
-          href: `/agents/${id}`,
+          href: `/beacons/${id}`,
           label: name,
           section: t("palette.agents"),
           icon: Server,
@@ -86,9 +86,9 @@ export default function CommandPalette() {
         });
       }
       const shellHay = `${base} shell ${shellLabel} ${name} ${shellLabel}`;
-      if (matchesQuery(q, shellHay, `${name} ${shellLabel}`, meta, `/agents/${id}/shell`)) {
+      if (matchesQuery(q, shellHay, `${name} ${shellLabel}`, meta, `/beacons/${id}/shell`)) {
         out.push({
-          href: `/agents/${id}/shell`,
+          href: `/beacons/${id}/shell`,
           label: `${name} → ${shellLabel}`,
           section: t("palette.agents"),
           icon: Terminal,

@@ -1,10 +1,10 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
 // Top-10 operator routes: the seven original surfaces plus the three
-// data-dense pages (loot, credentials, generate) that are the most likely to
-// overflow narrow viewports.
-const ROUTES = ["dashboard", "agents", "listeners", "timeline", "loot", "credentials", "generate", "settings", "ai", "chat"] as const;
-const VISUAL_ROUTES = ["login", "dashboard", "agents", "listeners", "timeline", "settings", "ai"] as const;
+// data-dense pages (loot, credentials, payload-generator) that are the most
+// likely to overflow narrow viewports.
+const ROUTES = ["dashboard", "beacons", "listeners", "events", "loot", "credentials", "payload-generator", "settings", "ai", "chat"] as const;
+const VISUAL_ROUTES = ["login", "dashboard", "beacons", "listeners", "events", "settings", "ai"] as const;
 
 const envelope = {
   status: "ok",
@@ -206,7 +206,8 @@ test.describe("light and dark visual baselines", () => {
         // and locally; other platforms skip instead of failing on a missing
         // snapshot. Regenerate linux via .github/workflows/visual-baselines.yml
         // and win32 with `npx playwright test e2e/layout.spec.ts
-        // --update-snapshots` on Windows.
+        // --update-snapshots=all` on Windows (plain --update-snapshots only
+        // rewrites snapshots whose diff exceeds maxDiffPixelRatio).
         test.skip(
           !["win32", "linux"].includes(process.platform),
           "Visual baselines exist for win32 and linux only",

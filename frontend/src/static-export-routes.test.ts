@@ -15,7 +15,7 @@ function collectPaths(routes: unknown[], out: string[]): string[] {
   return out;
 }
 
-/** "/agents/:id/files" -> "agents/_/files"; the export replaces dynamic
+/** "/beacons/:id/files" -> "agents/_/files"; the export replaces dynamic
  *  segments with an underscore placeholder. */
 function toStaticRoute(path: string): string | null {
   if (path === "/" || path === "*") return null;

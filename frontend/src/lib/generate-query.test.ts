@@ -28,12 +28,12 @@ describe("parseGenerateQuery", () => {
 describe("rebuildPayloadHref", () => {
   it("builds a generate deep link from a beacon", () => {
     expect(rebuildPayloadHref({ listener_id: 3, os: "windows", arch: "amd64" }))
-      .toBe("/generate?listener_id=3&os=windows&arch=amd64&format=exe");
+      .toBe("/payload-generator?listener_id=3&os=windows&arch=amd64&format=exe");
   });
   it("omits a missing listener", () => {
-    expect(rebuildPayloadHref({ os: "linux" })).toBe("/generate?os=linux&format=linux");
+    expect(rebuildPayloadHref({ os: "linux" })).toBe("/payload-generator?os=linux&format=linux");
   });
   it("returns /generate when nothing is known", () => {
-    expect(rebuildPayloadHref({})).toBe("/generate");
+    expect(rebuildPayloadHref({})).toBe("/payload-generator");
   });
 });

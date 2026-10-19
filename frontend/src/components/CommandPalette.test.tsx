@@ -88,7 +88,7 @@ describe("CommandPalette", () => {
     const input = screen.getByLabelText(/type to jump/i);
     fireEvent.change(input, { target: { value: "srv-linux" } });
     fireEvent.click(screen.getByText("srv-linux-01"));
-    expect(pushMock).toHaveBeenCalledWith("/agents/a2");
+    expect(pushMock).toHaveBeenCalledWith("/beacons/a2");
   });
 
   it("offers a shell deep link for matching agents", () => {
@@ -97,7 +97,7 @@ describe("CommandPalette", () => {
     const input = screen.getByLabelText(/type to jump/i);
     fireEvent.change(input, { target: { value: "desktop-win shell" } });
     fireEvent.click(screen.getByText(/desktop-win11 → Shell/));
-    expect(pushMock).toHaveBeenCalledWith("/agents/a1/shell");
+    expect(pushMock).toHaveBeenCalledWith("/beacons/a1/shell");
   });
 
   it("lists shell actions when only shell is queried", () => {

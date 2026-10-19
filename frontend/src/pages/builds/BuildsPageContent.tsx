@@ -255,7 +255,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
     <PageContainer embedded={embedded} title={t("builds.title")} subtitle={`${t("builds.subtitle")} · ${successCount} ${t("builds.success")} · ${failedCount} ${t("builds.failed")} · Avg ${avgDuration}s`}>
         {!embedded && (
           <div className={`flex items-center gap-2 ${embedded ? "ml-auto" : ""}`}>
-            <Button render={<Link to="/generate" />}>
+            <Button render={<Link to="/payload-generator" />}>
               <Plus className="size-4" /> {t("builds.new_build")}
             </Button>
             <Button variant="secondary" onClick={() => loadBuilds({ showLoading: true })}>
@@ -345,7 +345,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
         emptyTitle={t("builds.empty")}
         emptyMessage={t("builds.generate_new_implant")}
         emptyAction={
-          <Button render={<Link to="/generate" />}>
+          <Button render={<Link to="/payload-generator" />}>
             <Plus className="size-4" /> {t("builds.go_generate")}
           </Button>
         }

@@ -5,7 +5,7 @@ import { ROUTE_PAGE_IMPORTS } from "./route-imports";
  * three: each entry is a full page chunk, and speculative bandwidth on a C2
  * console should stay a rounding error.
  */
-const IDLE_PREFETCH_PATHS = ["/dashboard", "/agents", "/listeners"];
+const IDLE_PREFETCH_PATHS = ["/dashboard", "/beacons", "/listeners"];
 
 /** Route ids whose import already started (hover fires repeatedly). */
 const started = new Set<string>();
@@ -18,7 +18,7 @@ function saveDataEnabled(): boolean {
 /**
  * Route id for a *top-level* nav href, or null when the path is not one of the
  * lazily-loaded main pages. Dynamic routes are deliberately excluded: warming
- * the list page for `/agents/42/shell` would fetch the wrong chunk.
+ * the list page for `/beacons/42/shell` would fetch the wrong chunk.
  */
 export function routeIdFromPath(path: string): string | null {
   const id = /^\/([^/?#]+)\/?(?:[?#].*)?$/.exec(path)?.[1];

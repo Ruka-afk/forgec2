@@ -1,7 +1,8 @@
 # Terminology & Naming — ForgeC2 UI
 
-Status: **U7 wave 1 landed (2026-10-19).** This file is the contract for what the
-console calls things, in English and Chinese, and for the per-page emoji identity.
+Status: **U7 waves 1–2 landed (2026-10-19).** This file is the contract for what the
+console calls things — in English, in Chinese, in the sidebar, in the page titles and
+in the address bar — and for the per-page emoji identity.
 `frontend/src/lib/i18n/en.ts` / `zh.ts` remain the runtime source; this document is
 what the source is checked against.
 
@@ -18,9 +19,11 @@ what the source is checked against.
 | A human console user | **Operator** | **操作员** | User (except user *management*) |
 
 The backend contract is out of scope: the HTTP API, sqlite schema and
-`api/openapi.yaml` keep saying `agents`, and UI code keeps `agents.*` i18n keys and
-`/agents/:id` route params where they are contractual. The vocabulary above governs
-**operator-facing copy** only.
+`api/openapi.yaml` keep saying `agents` — including the dual-use `/agents/:id/…`
+endpoints the SPA still calls — and UI code keeps `agents.*` i18n keys. Client-side
+URLs say **beacons** since wave 2 (`/beacons/:id/…`), and only code that mirrors the
+API keeps the agent word (`agentId`, `lib/api-paths.ts`, detail sub-components). The
+vocabulary above governs **operator-facing copy and URLs**.
 
 ## Naming rules
 
@@ -107,12 +110,37 @@ identity**, not every heading.
 - **L1 — copy (done, wave 1):** nav, page titles, dashboard tiles, subtitles touched
   by the Beacon rename. Body copy (per-page descriptions, toasts, empty states) is
   swept in waves 3+, page domain by page domain.
-- **L2 — frontend structure (wave 2):** route URLs and page directory/component names
-  follow the vocabulary — `/agents` → `/beacons`, `/timeline` → `/events`,
+- **L2 — frontend structure (done, wave 2):** route URLs and page directory/component
+  names follow the vocabulary — `/agents` → `/beacons`, `/timeline` → `/events`,
   `/generate` → `/payload-generator`, `/privesc` → `/privilege-escalation`,
-  `/chain` → `/proxy-chains`, `/asset-organization` → `/asset-management`; every old
-  URL keeps a redirect. Backend paths stay as they are.
+  `/chain` → `/proxy-chains`, `/asset-organization` → `/asset-management`, and the
+  `/agents/:id/…` detail family → `/beacons/:id/…`. Old URLs redirect client-side
+  (table below). Backend paths stay as they are.
 - **L3 — contract (out of scope):** HTTP API, DB schema, OpenAPI, generated clients.
+
+### Route renames (L2, landed wave 2)
+
+| Old URL | New URL | Notes |
+| --- | --- | --- |
+| `/agents`, `/agents/:id` + its 8 tabs | `/beacons`, `/beacons/:id/…` | tab segments keep their names: `config`, `files`, `persistence`, `remote-desktop`, `screen`, `shell`, `token`, `traffic` |
+| `/timeline` | `/events` | `?tab=tasks`-style state survives the hop |
+| `/generate` | `/payload-generator` | |
+| `/privesc` | `/privilege-escalation` | |
+| `/chain` | `/proxy-chains` | |
+| `/asset-organization` | `/asset-management` | |
+
+Redirects live in `frontend/src/router.tsx` (`LEGACY_REDIRECTS`, rendered by
+`LegacyPrefixRedirect`) and rewrite the first path segment only, so the id,
+sub-route, query string and hash are preserved — `/agents?status=offline` lands on
+`/beacons?status=offline`. The old shells stay listed in
+`frontend/vite-plugins/staticExport.ts` (pinned by `static-export-routes.test.ts`) so
+a bookmarked URL boots the SPA before the router rewrites it.
+
+**Boundary.** The rename stops at the URL, the page directory and the route-entry
+component: anything that mirrors the backend contract keeps the `agent` word
+(`agentId`, `lib/api-paths.ts`, the dual-use `/agents/:id/…` API endpoints, detail
+sub-components such as `AgentHeader` / `AgentStatusBar` / `AgentInteractDock`). The
+API is the contract; the URL is the label.
 
 ## Changing a name
 

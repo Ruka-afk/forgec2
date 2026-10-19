@@ -133,8 +133,8 @@ test.describe("login page", () => {
 // /workflows, /tasks, /packer, /stager, /profiles, /files, /notifications)
 // merged into tabs elsewhere; probing them proved nothing about the app.
 const SHELL_ROUTES = [
-  "/agents.html",
-  "/generate.html",
+  "/beacons.html",
+  "/payload-generator.html",
   "/credentials.html",
   "/loot.html",
   "/users.html",
@@ -155,8 +155,36 @@ test.describe("page shells boot the SPA", () => {
 });
 
 /**
- * The generate workspace is the deepest static-export route: the router lazy-
- * loads GeneratePage, and each tab panel is a second lazy chunk behind its own
+ * U7 w2 renamed six routes to the Beacon vocabulary. The export still ships
+ * the pre-rename shells (vite-plugins/staticExport.ts) and the router rewrites
+ * them client-side, so an old bookmark must land on the canonical URL with its
+ * query string intact.
+ */
+test.describe("legacy routes redirect to the renamed destinations", () => {
+  const CASES = [
+    ["/agents.html", "/beacons"],
+    ["/agents.html?status=offline", "/beacons?status=offline"],
+    ["/generate.html", "/payload-generator"],
+    ["/timeline.html?tab=tasks", "/events?tab=tasks"],
+    ["/privesc.html", "/privilege-escalation"],
+    ["/chain.html", "/proxy-chains"],
+    ["/asset-organization.html", "/asset-management"],
+  ] as const;
+
+  for (const [legacy, expected] of CASES) {
+    test(`${legacy} redirects to ${expected}`, async ({ page }) => {
+      await mockAuthedApis(page);
+      await page.goto(legacy);
+      await page.waitForURL((url) => `${url.pathname}${url.search}` === expected, {
+        timeout: 15_000,
+      });
+    });
+  }
+});
+
+/**
+ * The payload workspace is the deepest static-export route: the router lazy-
+ * loads PayloadGeneratorPage, and each tab panel is a second lazy chunk behind its own
  * import. bootRoute only proves React mounted; this probe pins that the
  * payload workspace chunk actually renders (the agent-format tablist cannot
  * exist before the chunk loads) and that tab switching lazy-loads the next
@@ -167,7 +195,7 @@ test.describe("generate workspace (static export)", () => {
     // Force the UI language so the assertions can use the en strings.
     await page.addInitScript(() => localStorage.setItem("forgec2_lang", "en"));
     await mockAuthedApis(page);
-    const res = await page.goto("/generate.html");
+    const res = await page.goto("/payload-generator.html");
     expect(res?.ok() || res?.status() === 200).toBeTruthy();
 
     // The route chunk carries the five workspace tabs.

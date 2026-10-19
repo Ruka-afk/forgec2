@@ -44,8 +44,8 @@ describe("parseLoginErrorBody", () => {
 
 describe("safeNextPath", () => {
   it("allows relative app paths", () => {
-    expect(safeNextPath("/agents")).toBe("/agents");
-    expect(safeNextPath("/agents/abc/shell")).toBe("/agents/abc/shell");
+    expect(safeNextPath("/beacons")).toBe("/beacons");
+    expect(safeNextPath("/beacons/abc/shell")).toBe("/beacons/abc/shell");
   });
 
   it("rejects open redirects", () => {

@@ -57,13 +57,13 @@ describe("route transitions", () => {
   // present-but-undefined when unset; an unconditional spread would clobber the
   // default and transitions would silently stop firing on link navigation.
   it("defaults link-driven navigations into a view transition", () => {
-    router.navigate("/agents", { viewTransition: undefined });
+    router.navigate("/beacons", { viewTransition: undefined });
     expect(navigateCalls).toHaveLength(1);
     expect(navigateCalls[0].options?.viewTransition).toBe(true);
   });
 
   it("keeps an explicit opt-out untouched", () => {
-    router.navigate("/agents", { viewTransition: false });
+    router.navigate("/beacons", { viewTransition: false });
     expect(navigateCalls).toHaveLength(1);
     expect(navigateCalls[0].options?.viewTransition).toBe(false);
   });
@@ -73,14 +73,14 @@ describe("route transitions", () => {
       "matchMedia",
       vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
     );
-    router.navigate("/agents", { viewTransition: undefined });
+    router.navigate("/beacons", { viewTransition: undefined });
     expect(navigateCalls).toHaveLength(1);
     expect(navigateCalls[0].options?.viewTransition).not.toBe(true);
   });
 
   it("leaves navigations untouched when the API is unavailable", () => {
     removeTransitionApi();
-    router.navigate("/agents", { viewTransition: undefined });
+    router.navigate("/beacons", { viewTransition: undefined });
     expect(navigateCalls).toHaveLength(1);
     expect(navigateCalls[0].options?.viewTransition).not.toBe(true);
   });

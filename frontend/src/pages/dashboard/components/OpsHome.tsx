@@ -50,9 +50,9 @@ function Panel({
 function QuickLaunch() {
   const { t } = useI18n();
   const actions = [
-    { href: "/generate", label: t("dashboard.quick_generate"), icon: <Wand2 className="size-5" /> },
+    { href: "/payload-generator", label: t("dashboard.quick_generate"), icon: <Wand2 className="size-5" /> },
     { href: "/listeners", label: t("dashboard.quick_listeners"), icon: <Radio className="size-5" /> },
-    { href: "/agents", label: t("dashboard.quick_agents"), icon: <Terminal className="size-5" /> },
+    { href: "/beacons", label: t("dashboard.quick_agents"), icon: <Terminal className="size-5" /> },
   ];
   return (
     <SectionCard title={t("dashboard.quick_actions")}>
@@ -99,7 +99,7 @@ export default memo(function OpsHome() {
       <QuickLaunch />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <Panel title={t("dashboard.sessions")} href="/agents" linkLabel={t("dashboard.view_all")} count={agents.length}>
+        <Panel title={t("dashboard.sessions")} href="/beacons" linkLabel={t("dashboard.view_all")} count={agents.length}>
           {loading ? (
             <div className="p-4 space-y-2"><Skeleton className="h-8" /><Skeleton className="h-8" /><Skeleton className="h-8" /></div>
           ) : agents.length === 0 ? (
@@ -111,7 +111,7 @@ export default memo(function OpsHome() {
                 {sessions.online.length === 0 ? (
                   <p className="px-4 py-3 text-xs text-muted-foreground">{t("dashboard.no_sessions")}</p>
                 ) : sessions.online.map((a) => (
-                  <Link key={a.id} to={`/agents/${a.id}`} className="flex items-center justify-between gap-2 px-4 py-2 hover:bg-secondary/50">
+                  <Link key={a.id} to={`/beacons/${a.id}`} className="flex items-center justify-between gap-2 px-4 py-2 hover:bg-secondary/50">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <StatusBadge status="online" variant="dotOnly" size="sm" />
@@ -128,7 +128,7 @@ export default memo(function OpsHome() {
                 {sessions.dropped.length === 0 ? (
                   <p className="px-4 py-3 text-xs text-muted-foreground">{t("dashboard.no_sessions")}</p>
                 ) : sessions.dropped.map((a) => (
-                  <Link key={a.id} to={`/agents/${a.id}`} className="flex items-center justify-between gap-2 px-4 py-2 hover:bg-secondary/50">
+                  <Link key={a.id} to={`/beacons/${a.id}`} className="flex items-center justify-between gap-2 px-4 py-2 hover:bg-secondary/50">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <StatusBadge status={a.status} variant="dotOnly" size="sm" />
@@ -173,7 +173,7 @@ export default memo(function OpsHome() {
           )}
         </Panel>
 
-        <Panel title={t("dashboard.attention")} href="/timeline?tab=tasks" linkLabel={t("dashboard.view_all")} count={attention.length}>
+        <Panel title={t("dashboard.attention")} href="/events?tab=tasks" linkLabel={t("dashboard.view_all")} count={attention.length}>
           {loading ? (
             <div className="p-4 space-y-2"><Skeleton className="h-8" /><Skeleton className="h-8" /></div>
           ) : attention.length === 0 ? (
@@ -183,7 +183,7 @@ export default memo(function OpsHome() {
               {attention.map((task) => (
                 <Link
                   key={task.id}
-                  to={`/timeline?tab=tasks&agent_id=${encodeURIComponent(task.agent_id || "")}`}
+                  to={`/events?tab=tasks&agent_id=${encodeURIComponent(task.agent_id || "")}`}
                   className="flex items-center justify-between gap-2 px-4 py-2.5 hover:bg-secondary/50"
                 >
                   <div className="min-w-0">
@@ -257,17 +257,17 @@ const DashboardStatTiles = memo(function DashboardStatTiles({ loading, healthUnk
 
   return (
     <MetricGrid count={5}>
-      <Link to="/agents">
+      <Link to="/beacons">
         <Card interactive className="p-4 hover:ring-1 hover:ring-primary/20">
           <StatTile label={t("dashboard.beacons")} value={loading && !stats ? "…" : `${online}/${total}`} sub={online === total && total > 0 ? t("dashboard.all_online") : t("dashboard.online_suffix")} tone="success" icon={<Radio className="size-5" />} trend={total > 0 ? <span className="inline-flex items-center gap-1"><span className="size-1.5 rounded-full bg-success animate-pulse" />{t("dashboard.live_agents")}</span> : undefined} />
         </Card>
       </Link>
-      <Link to="/timeline?tab=tasks">
+      <Link to="/events?tab=tasks">
         <Card interactive className="p-4 hover:ring-1 hover:ring-primary/20">
           <StatTile label={t("dashboard.pending_tasks_label")} value={loading && !stats ? "…" : pending} tone={pending > 0 ? "warning" : "muted"} icon={<Clock className="size-5" />} trend={totalTasks > 0 ? `${Math.round((pending/totalTasks)*100)}% ${t("dashboard.queue_share")}` : undefined} />
         </Card>
       </Link>
-      <Link to="/timeline?tab=tasks">
+      <Link to="/events?tab=tasks">
         <Card interactive className="p-4 hover:ring-1 hover:ring-primary/20">
           <StatTile label={t("dashboard.failed_tasks")} value={loading && !stats ? "…" : failed} tone={failed > 0 ? "destructive" : "muted"} icon={<Bug className="size-5" />} trend={failed > 0 ? t("dashboard.needs_attention") : t("dashboard.all_clear")} />
         </Card>

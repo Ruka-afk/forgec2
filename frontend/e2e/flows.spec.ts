@@ -153,12 +153,12 @@ async function withSession(page: Page) {
   ]);
 }
 
-test.describe("agents list interplay", () => {
+test.describe("beacons list interplay", () => {
   test("renders beacon items, debounced search narrows the list, bulk bar appears on select", async ({ page }) => {
     await mockAuthedApis(page);
     await withSession(page);
 
-    await page.goto("/agents.html");
+    await page.goto("/beacons.html");
     await expect(page.getByText("acme-domain-wks01")).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText("edge-linux-node")).toBeVisible();
 
@@ -177,7 +177,7 @@ test.describe("agents list interplay", () => {
 });
 
 test.describe("tasks list interplay", () => {
-  // The standalone /tasks page was folded into the timeline workspace as its
+  // The standalone /tasks page was folded into the events workspace as its
   // "tasks" tab (EventsPageContent renders <TasksPageContent embedded />), so
   // /tasks.html 404s — the test was asserting against a page that no longer
   // exists, and had been silently unreachable behind the failing npm audit
@@ -186,7 +186,7 @@ test.describe("tasks list interplay", () => {
     await mockAuthedApis(page);
     await withSession(page);
 
-    await page.goto("/timeline.html?tab=tasks");
+    await page.goto("/events.html?tab=tasks");
     await expect(page.getByText("whoami")).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText("capture")).toBeVisible();
 
