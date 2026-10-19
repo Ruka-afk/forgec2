@@ -151,9 +151,12 @@ identity**, not every heading.
   `common.session_expired`, a real login session), and the **Dashboard domain** (1
   rewritten — `dashboard.quick_generate` "Generate Implant" → "Generate Payload" /
   生成木马 → 生成载荷, the last 木马, with the visual diff measured at ≤0.05 % —, 0
-  kept, 5 `tasks.*` deferred to the tasks page). Domains still open:
-  events/tasks, settings, credentials/NTLM/cloud,
-  pivoting/topology/chains, AI (27 flagged left), and the long tail
+  kept, 5 `tasks.*` deferred to the tasks page), and the **Events + tasks domain** (9
+  rewritten — the events follow toggle's "session" turned out to be the dock's beacon,
+  the tasks filter/column/empty state, and the two NL-query keys the tasks dialog owns;
+  0 kept, 0 deferred, leaving 25 `ai.*` for the AI page). Domains still open:
+  settings, credentials/NTLM/cloud,
+  pivoting/topology/chains, AI (25 flagged left), and the long tail
   (see the batch map in `docs/UIUX_AUDIT.md`).
   - **A domain is a page cluster, not a key prefix** — learned the hard way. Wave 1
     inventoried `agents.*` + `status_banner.*` and declared Beacons done, but the

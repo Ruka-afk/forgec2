@@ -1496,6 +1496,47 @@ listener entry points), "Generate Implant" is now zero in the bundle, and on the
 side 生成载荷 is served (seven occurrences across the console) while 生成木马 and the
 bare 木马 are zero — the trojan loan word is gone from the shipped copy entirely.
 
+## U7 — Professional naming & page emoji (wave 3, body copy 10: the events & tasks domains, landed 2026-10-19)
+
+Two page clusters, one of them the last data-dense surface whose "session" wording was
+not a login session — plus the first *app* fix the visual gate forced.
+
+1. **Page clusters & the session ruling.** `pages/events/**` renders only `events.*`;
+   its two flagged values are the follow toggle's labels. The code passes
+   `followSession ? dockAgentId : null` into the event filter — the "session" is the
+   interact dock's beacon, not the operator's login session, so rule 6 does not apply:
+   "This session" / "All sessions" → **"This Beacon" / "All Beacons"** (当前 / 全部
+   Beacon), matching `workflows.scope_all`. `pages/tasks/**` renders `tasks.*`,
+   `common.*` and `ai.*`; the five `tasks.*` values deferred by the dashboard wave are
+   rewritten here ("Agent filter" → **"Beacon filter"**, "All Agents" → **"All
+   Beacons"**, the column and detail field "Agent" → **"Beacon"**, "Select an agent and
+   dispatch a task…" → "Select a **beacon**…").
+2. **The NL-query attribution.** The tasks page's `NLQueryDialog` is the only consumer
+   of `ai.nl_placeholder` and `ai.nl_hint` (grep-verified against `src/`), so the two
+   flagged values move with this page while the rest of `ai.*` stays for the AI domain
+   — 25 flagged values remain there. Rewrite: "…which beacons uploaded files…" /
+   "…find beacons that ran mimikatz…", and the ZH examples (机器) move to Beacon too,
+   since the entity being queried is the beacon.
+3. **The flake, root-caused and fixed in the app.** The full suite failed twice in
+   three waves on `ai light` / `ai dark` mobile (3–4 %, always green on rerun). The
+   diff first looked like a font-swap re-wrap; a `document.fonts.ready` wait was tried,
+   did not fix it, and was reverted. The images showed the whole centered block exactly
+   32 px higher with the fourth quick action fully visible — the message log was
+   scrolled. `AIPageContent`'s `activeSessionId` effect unconditionally called
+   `scheduleScrollToBottom`, so when the session list resolved during capture an empty
+   conversation sat 32 px down. The effect now skips empty conversations
+   (`hasMessagesRef`), which is also the right user-facing behaviour — an empty chat has
+   nothing to reveal. Two consecutive full runs (184 passed / 36 skipped) confirm it,
+   and the committed baselines needed no change.
+4. **Baseline measurement.** The events route is in `VISUAL_ROUTES`; the zero-tolerance
+   probe on mobile/laptop light+dark found three captures pixel-identical and mobile
+   light at 80 px (0.02 %), far inside the 1.5 % contract → no snapshot adopted, linux
+   not re-rendered.
+5. **Verification.** eslint and `tsc --noEmit` clean; 172 files / 883 unit tests;
+   `npm run check` 11/11 (parity 4727, bundle 3.99 MB / 190 files, critical path
+   972 kB); `out/` rebuilt and `internal/webdist/dist` re-synced (337 files); full e2e
+   184 passed / 36 skipped twice.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
@@ -1517,6 +1558,7 @@ bare 木马 are zero — the trojan loan word is gone from the shipped copy enti
 | U7 naming & personality (wave 3, body copy 7, landed 2026-10-19) | L1 body copy, sixth page domain (users): 14 flagged, **2 rewritten** (4 value edits — the role legend's beacon-permission bullets), **12 kept under rule 6** (every session string is a real login session), 0 deferred; no visual route, no baseline |
 | U7 naming & personality (wave 3, body copy 8, landed 2026-10-19) | L1 body copy, seventh page domain (circuit breaker): 2 flagged, **1 rewritten** (2 value edits — `cb.honesty_desc`'s "implant multi-C2 config" → "the payload's multi-C2 config", closing wave 5's handover), **1 kept under rule 6** (`common.session_expired`, a real login session in the global 401 path), 0 deferred; `circuit_breaker.*` clean; non-visual route, no baseline (the one `ai light` mobile diff was a font-swap flake, passed on rerun, not adopted) |
 | U7 naming & personality (wave 3, body copy 9, landed 2026-10-19) | L1 body copy, eighth page domain (dashboard): 1 rewritten (`dashboard.quick_generate` "Generate Implant" → "Generate Payload" / 生成木马 → 生成载荷 — the last 木马 in the copy), 0 kept, 5 `tasks.*` deferred by attribution to the tasks page; visual route **measured** with a zero-tolerance probe: 78–536 px (≤0.05 %) on mobile/laptop light+dark → no baseline adopted, linux not re-rendered |
+| U7 naming & personality (wave 3, body copy 10, landed 2026-10-19) | L1 body copy, ninth page domain (events + tasks): 9 rewritten (18 value edits — the events follow toggle's "session" is the dock's beacon (`dockAgentId`), tasks filter/column/empty state, and the two `ai.nl_*` keys the tasks dialog owns), 0 kept, 0 deferred (25 `ai.*` remain); app fix: empty AI conversations no longer scroll to the bottom (the 3–4 % mobile visual flake, root-caused); events visual route measured: 3/4 captures pixel-identical, mobile light 80 px (0.02 %) → no baseline adopted |
 | U7 naming & personality (wave 3, body copy 2, landed 2026-10-19) | L1 body copy, second page domain (payload pipeline): inventory flags 33 values (`generate.*` 14, `profiles.*` 10, `builds.*` 5, `oneshot.*` 4), 24 rewritten per language (46 value edits), 5 kept (proxy / UA header / login sessions), 4 deferred to the automation card; "Agent Binaries" → **Payload Formats** / 载荷格式 (smoke locator follows); format descriptors name the format (GUI implant → GUI executable) and subjectless clauses replace the banned noun; no visual route touched, so no baseline churn on either platform |
 
 ```powershell
