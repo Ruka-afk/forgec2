@@ -175,8 +175,14 @@ identity**, not every heading.
   query now act on beacons, while "elevated hosts" and "do not invent hosts" stay
   host-level, and the chat surface's remaining "session" becomes **conversation** in both
   languages, the word the page already used in 12 sibling strings; 1 kept,
-  `common.session_expired`). The last major domain is closed; what remains is the long
-  tail (see the batch map in `docs/UIUX_AUDIT.md`).
+  `common.session_expired`), and the **long tail's first half** (37 flagged across
+  scripting, BOF, priv esc, toolkit, BloodHound and scanner: 32 rewritten — every beacon
+  picker, column and template hint on the six pages — with 5 keeps: the scripting `agents`
+  global, two real-session strings, the BOF `{agent}` placeholder and BloodHound's Session
+  collection method). The last major domain is closed and the tail is more than half done;
+  what remains is the tail's second half (opsec, campaign, report, asset organisation,
+  attack, loot, plugins, tokens, chrome helpers and the listener docs), then the
+  documented keeps (see the batch map in `docs/UIUX_AUDIT.md`).
   - **A domain is a page cluster, not a key prefix** — learned the hard way. Wave 1
     inventoried `agents.*` + `status_banner.*` and declared Beacons done, but the
     beacon *detail* pages also render `shell.*`, `cred.*`, `screen.*` and

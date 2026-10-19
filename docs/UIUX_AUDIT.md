@@ -1744,6 +1744,34 @@ create/delete/load/rename toasts); Chinese serves the same set (允许 AI 在 Be
 with every old Agent/主机/Implant/会话 form absent. Key names are untouched (the bundles
 still call the API's `*_session` objects); the one kept string is `common.session_expired`.
 
+## U7 — Professional naming & page emoji (wave 3, body copy 15: the operation pages' pickers, landed 2026-10-19)
+
+The long tail's first half — six page clusters whose flags are almost all `<select>`
+pickers and table columns: 37 flagged, 32 rewritten (64 value edits), 5 kept.
+
+1. **Scripting (8).** The editor's beacon picker and its four templates ("Select Beacon",
+   "Target Beacon", "Beacon Enumeration", "Create tasks for all beacons", "Run network
+   scan on all beacons", "Wait for beacons to check in" — the last one also settles the
+   callback → check-in rule).
+2. **BOF (4).** The library's target column, picker, available count and no-beacon toast
+   all say beacon.
+3. **Privilege Escalation (6).** The subtitle, the target picker and its validation, the
+   new-task hint and the column.
+4. **Toolkit (5).** "Beacon Info", "Stop beacon TUN", "Target Beacon:", the picker
+   placeholder and the select-first toast.
+5. **BloodHound (4) + scanner (5).** The collection dialog's beacon selector and its
+   column; the scanner's honesty card ("runs from the beacon context", "Beacon-side recon
+   scan") and its pickers.
+6. **The 5 keeps.** The scripting `agents` global is an API identifier (the copy names the
+   variable); "Enumerate Remote Desktop sessions" and "Logged-on sessions, idle, active
+   window" are rule-6 real sessions; the BOF run confirmation's only hit is its `{agent}`
+   placeholder (it renders the hostname, not the word); BloodHound's `Session` is the
+   collection method sent to the backend.
+7. **Verification.** eslint and `tsc --noEmit` clean; 172 files / 883 unit tests;
+   `npm run check` 11/11 (parity 4727, bundle 3.99 MB / 190 files, critical path
+   972 kB); `out/` rebuilt and dist re-synced (337 files); full e2e 184 passed / 36
+   skipped. No page here is in `VISUAL_ROUTES`.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
@@ -1765,6 +1793,7 @@ still call the API's `*_session` objects); the one kept string is `common.sessio
 | U7 naming & personality (wave 3, body copy 7, landed 2026-10-19) | L1 body copy, sixth page domain (users): 14 flagged, **2 rewritten** (4 value edits — the role legend's beacon-permission bullets), **12 kept under rule 6** (every session string is a real login session), 0 deferred; no visual route, no baseline |
 | U7 naming & personality (wave 3, body copy 8, landed 2026-10-19) | L1 body copy, seventh page domain (circuit breaker): 2 flagged, **1 rewritten** (2 value edits — `cb.honesty_desc`'s "implant multi-C2 config" → "the payload's multi-C2 config", closing wave 5's handover), **1 kept under rule 6** (`common.session_expired`, a real login session in the global 401 path), 0 deferred; `circuit_breaker.*` clean; non-visual route, no baseline (the one `ai light` mobile diff was a font-swap flake, passed on rerun, not adopted) |
 | U7 naming & personality (wave 3, body copy 9, landed 2026-10-19) | L1 body copy, eighth page domain (dashboard): 1 rewritten (`dashboard.quick_generate` "Generate Implant" → "Generate Payload" / 生成木马 → 生成载荷 — the last 木马 in the copy), 0 kept, 5 `tasks.*` deferred by attribution to the tasks page; visual route **measured** with a zero-tolerance probe: 78–536 px (≤0.05 %) on mobile/laptop light+dark → no baseline adopted, linux not re-rendered |
+| U7 naming & personality (wave 3, body copy 15, landed 2026-10-19) | L1 body copy, fourteenth page domain (long tail i: scripting + BOF + privesc + toolkit + BloodHound + scanner): 37 flagged → 32 rewritten (64 value edits — every beacon picker, column, template hint and honesty card on the six pages), 5 keeps (the `agents` scripting global, two real-session strings, the BOF `{agent}` placeholder, BloodHound's Session collection method), 0 deferred; no visual route |
 | U7 naming & personality (wave 3, body copy 14, landed 2026-10-19) | L1 body copy, thirteenth and last major page domain (AI): 26 flagged → 25 rewritten (40 value edits — the assistant's beacon permission/greeting/quick actions, and the chat surface's session→conversation wording in EN and ZH), 1 keep (`common.session_expired`), 0 deferred; visual route measured at zero diff (the layout spec mocks no AI provider, so the captured card never renders the changed copy) — no baseline |
 | U7 naming & personality (wave 3, body copy 13, landed 2026-10-19) | L1 body copy, twelfth page domain (pivoting + topology + proxy-chains + lateral): 43 flagged → 31 rewritten (62 value edits — the pivoting relay/TUN hints, topology legends and nodes, the chain subtitle/parent/pickers, and the lateral page's last implant strings), 12 keeps (7 local-proxy strings where 代理 = proxy, 2 real relay sessions, `chain.set_proxy_parent`, `topology.net_view`'s controlled hosts, `common.session_expired`), 0 deferred; no visual route, no baseline |
 | U7 naming & personality (wave 3, body copy 12, landed 2026-10-19) | L1 body copy, eleventh page domain (credentials + NTLM + cloud): 31 flagged → 17 rewritten (34 value edits — the NTLM pickers/targets/toasts/listener sides, the cloud pickers, beacon-side tasks, "harvested from beacons", "from beacon hosts"), 14 evidence-backed keeps (7 cookie-proxy strings where 代理 = proxy, 6 real NTLM relay sessions, `common.session_expired`), 0 deferred; none of the three pages is a visual route, no baseline |
