@@ -1117,6 +1117,27 @@ reason per key.
    `settings`, `ai`), so the wave changes no screenshot the suites compare — unlike
    wave 1, there is nothing to adjudicate here, and `gh` needed no dispatch.
 
+**Deployment probe.** The rebuilt binary (PID 36260 → **32364**, started 16:31:20)
+answers `/health` with `ok` and serves the new bundle byte-for-byte: the entry chunk
+`assets/index-CqJpFQtm.js` hashes `3611C26B…6AD5` and the ZH chunk
+`assets/zh-g-9iSHmH.js` `73C788FB…3290`, both identical to `internal/webdist/dist` —
+and `check:webdist` pins that tree to `frontend/out`, the export the e2e suite served
+— so what shipped is what was tested. The served bytes were then read back and
+asserted marker by marker (33 assertions, all as expected): the EN entry carries
+`Payload Formats`, `Beacon modules` (title, hint and aria-label), `Payload build
+records`, `Generated payloads connect back to C2 automatically`, `Push to Beacon`,
+`Load beacons`, `GUI executable`, `Beacon Version Distribution`, `Regenerate the
+payload after code changes` and `Not available in macOS builds`, while `Agent
+Binaries`, `Agent Profiles`, `Implant build records`, `Agent modules`, `Push to
+Agent`, `Load agents`, `GUI implant`, `Agent Version Distribution` and `After implant
+changes` are gone; the ZH chunk carries 载荷格式 / 载荷构建记录 / 推送至 Beacon /
+加载 Beacon / Beacon 版本分布 / 构建时嵌入 Beacon and no longer 代理模块 / 加载主机 /
+推送至 Agent / Agent 配置文件 / GUI 植入体 / Agent 版本分布. No authenticated DOM
+probe ran this time, unlike wave 1: the lab credential used earlier is not recorded
+in the repo or the scratch tree (the README's example `labtest`/`labtest` returns
+401), and the rendering side is already covered by the e2e suite against the
+identical bundle — the probe is noted as open rather than silently skipped.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
