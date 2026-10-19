@@ -1040,6 +1040,26 @@ regenerated **byte-identical** on the triage pass (so the first pass's rewrite w
 noise), and `events-dark-laptop`'s 29-pixel diff sat in the top-bar strip
 (`(913,24)–(1191,41)`) where this wave changes nothing.
 
+**Deployment probe.** The rebuilt server (old PID 22104 → new **36260**) answers
+`/health` with `ok`, and the served entry chunk `assets/index-Ccwie1A9.js` hashes
+identically to `internal/webdist/dist` (`6B060D03…A204DE`), so what shipped is what
+was tested. The strings are verifiable in the served bytes: the EN chunk carries
+`Search beacons`, `Generate Payload` and `next check-in` and no longer contains
+`Search agents`, while the ZH chunk carries 搜索 Beacon / 终止 Beacon / 生成载荷 /
+下次回连 / 复制 Beacon ID and no longer 复制会话 ID. An authenticated probe (real
+lab session, `/beacons`) confirms the rendering side: the toolbar search input's
+placeholder is `Search beacons… ( / )`, the primary button reads **Generate
+Payload**, neither `Search agents` nor `Generate Implant` appears anywhere in the
+page, and `document.title` is `🐝 Beacons — ForgeC2`.
+
+**Open follow-up (linux set).** The four `beacons-*` **win32** baselines are updated
+here; the **linux** set is rendered by the dispatch-only `visual-baselines.yml`
+(download the artifact, commit the PNGs). It could not be run from this machine —
+`gh` reports the keyring token invalid — and the CI frontend job compares against
+the linux files, so until that artifact is committed the four beacons shots are the
+one place CI can fail on this wave: their win32 drift measured 0.97–1.77 % against
+the 1.5 % tolerance.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
