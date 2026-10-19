@@ -981,6 +981,65 @@ endpoint note, `useCollectTask.test.ts` and `useRemoteDesktop.test.ts`'s API-pat
 assertions). `router.tsx` and `vite-plugins/staticExport.ts` were edited by hand so
 the legacy tables could not be rewritten into themselves.
 
+## U7 — Professional naming & page emoji (wave 3, landed 2026-10-19)
+
+Wave 3 is the body-copy layer of the program (wave 1 did nav, titles and tiles,
+wave 2 the URLs; `docs/TERMINOLOGY.md` remains the contract). It runs **page domain
+by page domain**, and this wave takes the Beacons domain — the page whose rename
+started the program, and the one that still said "Agent" in its own toolbar.
+
+1. **Inventory before editing.** A throwaway Node script parses both language
+   blocks and flags every *value* (never a key) that still matches the pre-Beacon
+   vocabulary: EN `\b(agents?|sessions?|implants?)\b`, ZH 代理/会话/植入/受控/木马
+   plus the English loan words the Chinese block carries in Latin script
+   (`implant 版本`, `已导出 {count} 个 agent`). The Beacons domain flags 100
+   values — 97 `agents.*` and the 3 `status_banner.*` strings the global banner
+   renders — and the codemod refuses to run until every one of them is classified
+   either as a change or as a deliberate keep, so a value cannot be silently
+   skipped.
+2. **The rules** (now also in `TERMINOLOGY.md`): the *running* implant is a
+   beacon ("Waiting for the implant to return this result" → "…for the beacon…");
+   the *generated artifact* is a payload ("Generate Implant" → **Generate
+   Payload**, the toolbar button the baseline diff shows, "Deploy your first
+   implant" → "…your first payload"); the check-in *event* is "check-in" in EN and
+   回连 in ZH ("Agent will exit on next beacon" → "The beacon will exit on its next
+   check-in", cf. the pre-existing "下次心跳" values left alone); the per-host
+   count reads beacons, not sessions (`{n} sessions` → `{n} beacons`); and the
+   detail header's fallback title (`agents.detail_session`, used when a host has
+   no hostname) collapses to `Beacon` beside the `Beacon ID` / `Copy beacon ID`
+   pair.
+3. **Kept on purpose (13 values).** The `User-Agent` HTTP header family
+   (`agents.config.ua`, `config.reset_ua`, `config_user_agent`), `AMSI Session
+   Bypass` (a Windows technique name), the recon category `Sessions`
+   (`agents.recon_session` — host logon/network sessions, not beacons), the
+   remote-desktop trio plus the media panel's console-session strings ("results
+   stay in this session gallery"), the Windows logon-session token source
+   (`Logon Create` / 创建登录会话), and the WeChat pair where 会话 means *chat*.
+   "Session" is banned as a synonym for a beacon, not as a word.
+4. **Verification.** eslint and `tsc --noEmit` clean; unit suite 172 files /
+   883 tests; `npm run check` 11/11 (i18n parity 4727 keys — values only, so the
+   parity set is unchanged; bundle 3.99 MB / 190 files, critical path 972 kB);
+   e2e 184 passed / 36 skipped. The first e2e run failed the four beacons-list
+   cases for a mechanical reason worth recording: the suite serves the *prebuilt*
+   `out/` export (`node scripts/serve-static.mjs out 4173`), so a copy change needs
+   `npm run build` before the suite can see it — the failure was the old placeholder
+   text still shipping in the served bundle, not a bad locator.
+
+**Baseline adjudication.** The win32 refresh is scoped by evidence, not by
+convenience. `--update-snapshots=all` rewrote twelve files on the first pass and a
+partly different fourteen on the second; only the four `beacons-*` ones
+(`dark|light` × `laptop|mobile`) are adopted, on the strength of a cropped diff:
+the committed baseline still reads `Generate Implant` where the new build says
+`Generate Payload` (the toolbar band of the laptop shot; the footer band is the
+second copy cluster — the row count and pagination copy). The other ten files were
+restored, and the reasons are measurable rather than aesthetic: the status banner
+the wave touches is mounted in `AppLayout` but returns `null` under the visual
+suite's mocked stats (`if (!counts) return null`), no rewritten key renders on
+dashboard/events/listeners/login at all, `login-light-laptop` and `ai-dark-laptop`
+regenerated **byte-identical** on the triage pass (so the first pass's rewrite was
+noise), and `events-dark-laptop`'s 29-pixel diff sat in the top-bar strip
+(`(913,24)–(1191,41)`) where this wave changes nothing.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
@@ -992,8 +1051,9 @@ the legacy tables could not be rewritten into themselves.
 | U4 narrow screens (landed 2026-10-18) | R2 fixed (status label always rendered), T6 mobile palette entry, T7 touch targets, R3 extended to 10 routes |
 | U5 motion (landed 2026-10-18) | M1: `router.navigate` defaults into `document.startViewTransition` (`?? true` beats a `Link`'s undefined key; explicit `false` kept), reduced-motion and API-absent skip; `src/router-transitions.test.ts` + the 4-viewport Playwright `route transitions` spec; `globals.css` untouched |
 | U6 page-by-page polish | T3 focus mode, T4 stat tiles, T5 density selectors, T9 non-total list fallbacks (tokens, ntlm), T10 clipped fixed-width columns (toolkit, scripting), V1–V2 + per-page checklists |
-| U7 naming & personality (wave 1, landed 2026-10-19) | "Beacon" vocabulary across nav/titles/tiles (45 nav + 42 titles + 5 tile/subtitle values per language, 92 keys); one emoji identity per page (nav = h1 = breadcrumb = document title, `aria-hidden` in chips); U6 residue: DNS tile tone, card-header 2-line clamp, privesc mojibake icons, geo 📍 fallback; contract in `docs/TERMINOLOGY.md` — L2 routes landed in wave 2; body copy still open |
+| U7 naming & personality (wave 1, landed 2026-10-19) | "Beacon" vocabulary across nav/titles/tiles (45 nav + 42 titles + 5 tile/subtitle values per language, 92 keys); one emoji identity per page (nav = h1 = breadcrumb = document title, `aria-hidden` in chips); U6 residue: DNS tile tone, card-header 2-line clamp, privesc mojibake icons, geo 📍 fallback; contract in `docs/TERMINOLOGY.md` — L2 routes landed in wave 2, body copy swept page domain by page domain from wave 3 (Beacons done) |
 | U7 naming & personality (wave 2, landed 2026-10-19) | L2 routing layer: six route renames plus the `/agents/:id` family → `/beacons/:id`, the 15-entry `LEGACY_REDIRECTS` table (id/sub-route/query/hash preserved), 175 files moved (page directories + route-entry components), 151 link literals across 48 files, visual baselines renamed not regenerated, 7 new e2e redirect cases; HTTP API, sqlite schema and OpenAPI untouched per the L3 boundary |
+| U7 naming & personality (wave 3, landed 2026-10-19) | L1 body copy, first page domain (Beacons): inventory flags 100 values (97 `agents.*` + 3 `status_banner.*`), 87 rewritten per language (170 value edits, keys untouched per rule 3), 13 kept with reasons (UA header family, AMSI-session technique, recon/logon/RDP/console sessions, WeChat chat); new rules recorded in `docs/TERMINOLOGY.md` (running implant → beacon, generated artifact → payload, check-in event → "check-in" / 回连, `detail_session` → `Beacon`); two e2e locators follow their copy; win32 baselines refreshed only for the four `beacons-*` files, ten regenerated candidates rejected as unrelated noise (evidence: banner `null` under mocked stats, no rewritten key on those pages, byte-identical re-regeneration) |
 
 ```powershell
 cd frontend

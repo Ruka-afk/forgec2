@@ -162,14 +162,14 @@ test.describe("beacons list interplay", () => {
     await expect(page.getByText("acme-domain-wks01")).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText("edge-linux-node")).toBeVisible();
 
-    const searchBox = page.getByPlaceholder(/搜索 Agent|search agent/i);
+    const searchBox = page.getByPlaceholder(/搜索 Beacon|search beacon/i);
     await searchBox.fill("edge");
     await expect(page.getByText("acme-domain-wks01")).toBeHidden({ timeout: 10_000 });
     await expect(page.getByText("edge-linux-node")).toBeVisible();
 
     // Bulk mode on, select the single visible row → bar appears, then clear.
     await page.getByRole("button", { name: /批量操作|bulk ops/i }).click();
-    await page.getByRole("checkbox", { name: /选择项目|选择 Agent|select (item|agent)/i }).first().click();
+    await page.getByRole("checkbox", { name: /选择项目|选择 Beacon|select (item|beacon)/i }).first().click();
     await expect(page.getByRole("button", { name: /执行命令|execute command/i })).toBeVisible();
     await page.getByRole("button", { name: /清除选择|clear selection/i }).click();
     await expect(page.getByRole("button", { name: /执行命令|execute command/i })).toHaveCount(0);

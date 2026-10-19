@@ -1,8 +1,9 @@
 # Terminology & Naming — ForgeC2 UI
 
-Status: **U7 waves 1–2 landed (2026-10-19).** This file is the contract for what the
-console calls things — in English, in Chinese, in the sidebar, in the page titles and
-in the address bar — and for the per-page emoji identity.
+Status: **U7 waves 1–3 landed (2026-10-19).** This file is the contract for what the
+console calls things — in English, in Chinese, in the sidebar, in the page titles, in
+the address bar, and in the body copy the operator actually reads — and for the
+per-page emoji identity.
 `frontend/src/lib/i18n/en.ts` / `zh.ts` remain the runtime source; this document is
 what the source is checked against.
 
@@ -38,6 +39,21 @@ vocabulary above governs **operator-facing copy and URLs**.
    Both language files change in the same commit (the 4727-key parity gate enforces it).
 4. **Chinese mirrors meaning, not word order.** e.g. `Privilege Escalation` →
    「权限提升」, `Token Store` → 「令牌仓库」, `Loot` → 「战利品」.
+5. **The entity a sentence is about decides the noun.** A *running* implant is a
+   beacon ("Waiting for the implant to return this result" → "Waiting for the
+   beacon…"); the *generated artifact* is a payload ("Generate Implant" →
+   **Generate Payload**, "Deploy your first implant" → "…your first payload"); the
+   periodic contact is a **check-in** in English and 回连 in Chinese ("Agent will
+   exit on next beacon" → "The beacon will exit on its next check-in"), never
+   "next beacon" *as an event*. Chinese says **Beacon** for the running implant
+   (代理 / 植入体 / 会话 retire from that sense).
+6. **A banned synonym is banned for the beacon sense, not as a word.** "Session"
+   stays where it names something real: the `User-Agent` HTTP header (`用户代理`),
+   the AMSI-session technique, host logon/network sessions (recon category
+   `Sessions`), the Windows logon session (`Logon Create`), remote-desktop
+   sessions, the console session lifetime in the media panel, and WeChat 会话
+   (*chat*). Technique and platform names (`AMSI Session Bypass`) keep their own
+   terminology.
 
 ## Emoji identity
 
@@ -107,9 +123,14 @@ identity**, not every heading.
 
 ## Scope & roadmap
 
-- **L1 — copy (done, wave 1):** nav, page titles, dashboard tiles, subtitles touched
-  by the Beacon rename. Body copy (per-page descriptions, toasts, empty states) is
-  swept in waves 3+, page domain by page domain.
+- **L1 — copy (wave 1: chrome, wave 3: body copy per page domain):** nav, page
+  titles, dashboard tiles and the subtitles the rename touched landed in wave 1.
+  Body copy — per-page descriptions, toasts, empty states — is swept one page
+  domain per wave; the **Beacons domain landed in wave 3** (100 flagged values:
+  87 rewritten per language, 13 kept under rule 6) and the shared status banner
+  with it. Domains still open: dashboard, events/tasks, payload generator,
+  listeners, settings, users, credentials/NTLM/cloud, pivoting/topology/chains,
+  AI, and the long tail (see the batch map in `docs/UIUX_AUDIT.md`).
 - **L2 — frontend structure (done, wave 2):** route URLs and page directory/component
   names follow the vocabulary — `/agents` → `/beacons`, `/timeline` → `/events`,
   `/generate` → `/payload-generator`, `/privesc` → `/privilege-escalation`,
