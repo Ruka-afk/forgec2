@@ -1786,6 +1786,42 @@ sessions, idle, active window", "Scopes the `agents` global…", the BOF `{agent
 placeholder). Absence is scoped as before: "Target Agent" / 目标 Agent still live in
 `plugins.*` (wave 16).
 
+## U7 — Professional naming & page emoji (wave 3, body copy 16: the long tail's second half, landed 2026-10-19)
+
+Eighteen namespaces in one sweep — the last flagged values that were neither a page's own
+domain nor a documented keep: 42 flagged, 38 rewritten (75 value edits), 4 kept.
+
+1. **Operations pages.** opsec (4: the beacon column, the subtitle and the two rekey tiles
+   that named agents), campaign (5: breakdown title, columns, stat tiles and the seeded
+   toast), the report page (5: the "Implant" section label → **Beacon**, the details
+   heading, the column, the total tile and the count unit "agents" → "beacons"; ZH keeps
+   台).
+2. **Asset organisation.** groups, tags and the three asset-management cards — every
+   "Agent" that organised, labelled or filtered beacons.
+3. **Selection and chrome helpers.** attack/loot scope options ("All Beacons", "Filter by
+   beacon"), the attack load warning, the plugin execution picker, the token table, the
+   command palette action ("Kill **Beacon**"), the shortcuts description and the templates
+   empty state.
+4. **Rule-5 rewrites, not noun swaps.** The DNS listener copy ("Agents send A-type queries
+   as beacons" → "**Beacons** send A-type queries as their **check-in**… each **beacon**
+   UUID") and the domain-fronting note ("Agents should be generated" → "**Payloads** should
+   be built" — the artifact is a payload).
+5. **The 4 keeps.** opsec's crypto sessions (rekey status, active sessions, the
+   `session rekeys` source that doubles as an API-response lookup key, and the unread
+   banner), all rule 6.
+6. **The sweep is complete.** The inventory now reports 73 flagged values, every one
+   adjudicated as a keep: `User-Agent` headers (agents config, generate, profiles,
+   settings, stager), real login/JWT sessions (users, session, settings, login, profiles),
+   real protocol sessions (NTLM relay, opsec crypto, RDP/WTS, logon, recon, AMSI,
+   BloodHound's Session collection method), the proxy families (cred cookie proxy,
+   pivoting local proxy), the WeChat 会话 chat word, the scripting `agents` global, the BOF
+   `{agent}` placeholder, `topology.net_view`'s controlled hosts, and
+   `common.session_expired`.
+7. **Verification.** eslint and `tsc --noEmit` clean; 172 files / 883 unit tests;
+   `npm run check` 11/11 (parity 4727, bundle 3.99 MB / 190 files, critical path
+   972 kB); `out/` rebuilt and dist re-synced (337 files); full e2e 184 passed / 36
+   skipped.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
@@ -1807,6 +1843,7 @@ placeholder). Absence is scoped as before: "Target Agent" / 目标 Agent still l
 | U7 naming & personality (wave 3, body copy 7, landed 2026-10-19) | L1 body copy, sixth page domain (users): 14 flagged, **2 rewritten** (4 value edits — the role legend's beacon-permission bullets), **12 kept under rule 6** (every session string is a real login session), 0 deferred; no visual route, no baseline |
 | U7 naming & personality (wave 3, body copy 8, landed 2026-10-19) | L1 body copy, seventh page domain (circuit breaker): 2 flagged, **1 rewritten** (2 value edits — `cb.honesty_desc`'s "implant multi-C2 config" → "the payload's multi-C2 config", closing wave 5's handover), **1 kept under rule 6** (`common.session_expired`, a real login session in the global 401 path), 0 deferred; `circuit_breaker.*` clean; non-visual route, no baseline (the one `ai light` mobile diff was a font-swap flake, passed on rerun, not adopted) |
 | U7 naming & personality (wave 3, body copy 9, landed 2026-10-19) | L1 body copy, eighth page domain (dashboard): 1 rewritten (`dashboard.quick_generate` "Generate Implant" → "Generate Payload" / 生成木马 → 生成载荷 — the last 木马 in the copy), 0 kept, 5 `tasks.*` deferred by attribution to the tasks page; visual route **measured** with a zero-tolerance probe: 78–536 px (≤0.05 %) on mobile/laptop light+dark → no baseline adopted, linux not re-rendered |
+| U7 naming & personality (wave 3, body copy 16, landed 2026-10-19) | L1 body copy, the tail's second half (18 namespaces: opsec, campaign, report, groups, asset_org, attack, loot, plugins, tags, tokens, command, dns, domain_fronting, notifications, palette, shortcuts, templates, traffic): 42 flagged → 38 rewritten (75 value edits — the last beacon nouns plus the DNS check-in and payload-build rule-5 rewrites), 4 keeps (opsec crypto sessions), 0 deferred; the inventory's remaining 73 flags are all documented keeps; no visual route |
 | U7 naming & personality (wave 3, body copy 15, landed 2026-10-19) | L1 body copy, fourteenth page domain (long tail i: scripting + BOF + privesc + toolkit + BloodHound + scanner): 37 flagged → 32 rewritten (64 value edits — every beacon picker, column, template hint and honesty card on the six pages), 5 keeps (the `agents` scripting global, two real-session strings, the BOF `{agent}` placeholder, BloodHound's Session collection method), 0 deferred; no visual route |
 | U7 naming & personality (wave 3, body copy 14, landed 2026-10-19) | L1 body copy, thirteenth and last major page domain (AI): 26 flagged → 25 rewritten (40 value edits — the assistant's beacon permission/greeting/quick actions, and the chat surface's session→conversation wording in EN and ZH), 1 keep (`common.session_expired`), 0 deferred; visual route measured at zero diff (the layout spec mocks no AI provider, so the captured card never renders the changed copy) — no baseline |
 | U7 naming & personality (wave 3, body copy 13, landed 2026-10-19) | L1 body copy, twelfth page domain (pivoting + topology + proxy-chains + lateral): 43 flagged → 31 rewritten (62 value edits — the pivoting relay/TUN hints, topology legends and nodes, the chain subtitle/parent/pickers, and the lateral page's last implant strings), 12 keeps (7 local-proxy strings where 代理 = proxy, 2 real relay sessions, `chain.set_proxy_parent`, `topology.net_view`'s controlled hosts, `common.session_expired`), 0 deferred; no visual route, no baseline |

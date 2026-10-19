@@ -179,10 +179,13 @@ identity**, not every heading.
   scripting, BOF, priv esc, toolkit, BloodHound and scanner: 32 rewritten — every beacon
   picker, column and template hint on the six pages — with 5 keeps: the scripting `agents`
   global, two real-session strings, the BOF `{agent}` placeholder and BloodHound's Session
-  collection method). The last major domain is closed and the tail is more than half done;
-  what remains is the tail's second half (opsec, campaign, report, asset organisation,
-  attack, loot, plugins, tokens, chrome helpers and the listener docs), then the
-  documented keeps (see the batch map in `docs/UIUX_AUDIT.md`).
+  collection method), and the **long tail's second half** (42 flagged across eighteen
+  namespaces — opsec, campaign, report, asset organisation, attack, loot, plugins, tokens,
+  chrome helpers and the listener docs: 38 rewritten, including the DNS check-in sentence
+  and the domain-fronting payload-build rewrite, with 4 keeps, all opsec crypto sessions).
+  The sweep is **complete**: the inventory's remaining 73 flags are all documented keeps,
+  and new copy should read the rule-6 list above before adding another “session”
+  (see the batch map in `docs/UIUX_AUDIT.md`).
   - **A domain is a page cluster, not a key prefix** — learned the hard way. Wave 1
     inventoried `agents.*` + `status_banner.*` and declared Beacons done, but the
     beacon *detail* pages also render `shell.*`, `cred.*`, `screen.*` and
