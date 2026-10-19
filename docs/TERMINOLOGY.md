@@ -154,8 +154,14 @@ identity**, not every heading.
   kept, 5 `tasks.*` deferred to the tasks page), and the **Events + tasks domain** (9
   rewritten — the events follow toggle's "session" turned out to be the dock's beacon,
   the tasks filter/column/empty state, and the two NL-query keys the tasks dialog owns;
-  0 kept, 0 deferred, leaving 25 `ai.*` for the AI page). Domains still open:
-  settings, credentials/NTLM/cloud,
+  0 kept, 0 deferred, leaving 25 `ai.*` for the AI page), and the **Settings domain**
+  (29 flagged: 23 rewritten — About "Implants"→Beacons, the agent section/title/toast
+  and "Default beacon behavior for new payloads", the kill switch (implants→beacons,
+  "next beacon"→next check-in), module deploy, the routes alert, the database card, the
+  access cards' session-table wording, and the last "No agents available" — with 6
+  kept under rule 6: operator/login sessions, telemetry's console session,
+  `common.session_expired`, plus the literal `User-Agent` header). Domains still open:
+  credentials/NTLM/cloud,
   pivoting/topology/chains, AI (25 flagged left), and the long tail
   (see the batch map in `docs/UIUX_AUDIT.md`).
   - **A domain is a page cluster, not a key prefix** — learned the hard way. Wave 1

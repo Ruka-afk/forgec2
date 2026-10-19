@@ -1551,6 +1551,46 @@ the quoted events value is asserted absent, and "All Agents" is likewise left al
 (attack/loot still own it). The empty-conversation scroll fix ships in the same build
 and is covered by the double full-suite run rather than by a string marker.
 
+## U7 — Professional naming & page emoji (wave 3, body copy 11: the settings domain, landed 2026-10-19)
+
+The largest configuration surface: 29 flagged values across the settings cards, with six
+genuine login-session keepers.
+
+1. **Beacons and payloads.** The About card's "Implants" labels `total_agents` /
+   `online_agents`, so it becomes **"Beacons"** (Agent → Beacon in ZH). The agent
+   section's label, its "Agent Behavior" title, the group label and the save toast all
+   become **Beacon**; its subtitle turns "Default agent behavior for new implants" into
+   "Default **beacon** behavior for new **payloads**" (running = beacon, artifact =
+   payload). The database card's "Agents" row counts beacon rows → **"Beacons"**.
+2. **The kill switch.** `settings.emergency.*` said implants and treated "beacon" as a
+   time noun: "self-destructs ALL implants" → **beacons**, "on its next beacon" → "on its
+   next **check-in**", "Implants behave normally" → "**Beacons** behave normally", and
+   the ZH "已上报过" → "已回连过". The fleet is beacons and the event is a check-in
+   (rule 5).
+3. **Module deployment & routes.** The deploy card targets one beacon ("Select beacon",
+   "Deploy to beacon", "writes the module to the **beacon** path on its next
+   **check-in**"), the modules subtitle reads "for **beacon** tasks", the routes hint
+   alerts on "**beacon** offline", and `settings.modules.no_agents` ("No agents
+   available" → "No beacons available") closes the last clone of the wave-3 macros
+   string.
+4. **The access cards.** "Operator accounts, roles, and session labels" → "**beacon**
+   labels", "filter the session table" → "filter the **beacon** table"; the ZH side still
+   carried 会话集合 / 会话表 / 会话标签 and moves with them (the groups card already said
+   beacons in EN).
+5. **Rule-6 keeps (6).** `settings.access_users_desc` (operator accounts and their login
+   sessions), `settings.confirm.jwt` (invalidates login sessions),
+   `settings.security.subtitle`, `settings.server.session_timeout`,
+   `settings.telemetry_empty_desc` (the current console session), and
+   `common.session_expired` (kept in wave 8 too). `settings.agent.user_agent` is the
+   literal HTTP header and keeps its name.
+6. **Verification & baseline.** eslint and `tsc --noEmit` clean; 172 files / 883 unit
+   tests; `npm run check` 11/11 (parity 4727, bundle 3.99 MB / 190 files, critical path
+   972 kB); `out/` rebuilt and dist re-synced (337 files); full e2e 184 passed / 36
+   skipped once. The settings route is in `VISUAL_ROUTES`; the zero-tolerance probe on
+   mobile/laptop light+dark found mobile dark pixel-identical and the others at 46, 377
+   and 327 px (0.01 %) → inside the 1.5 % contract, no snapshot adopted, linux not
+   re-rendered.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
@@ -1572,6 +1612,7 @@ and is covered by the double full-suite run rather than by a string marker.
 | U7 naming & personality (wave 3, body copy 7, landed 2026-10-19) | L1 body copy, sixth page domain (users): 14 flagged, **2 rewritten** (4 value edits — the role legend's beacon-permission bullets), **12 kept under rule 6** (every session string is a real login session), 0 deferred; no visual route, no baseline |
 | U7 naming & personality (wave 3, body copy 8, landed 2026-10-19) | L1 body copy, seventh page domain (circuit breaker): 2 flagged, **1 rewritten** (2 value edits — `cb.honesty_desc`'s "implant multi-C2 config" → "the payload's multi-C2 config", closing wave 5's handover), **1 kept under rule 6** (`common.session_expired`, a real login session in the global 401 path), 0 deferred; `circuit_breaker.*` clean; non-visual route, no baseline (the one `ai light` mobile diff was a font-swap flake, passed on rerun, not adopted) |
 | U7 naming & personality (wave 3, body copy 9, landed 2026-10-19) | L1 body copy, eighth page domain (dashboard): 1 rewritten (`dashboard.quick_generate` "Generate Implant" → "Generate Payload" / 生成木马 → 生成载荷 — the last 木马 in the copy), 0 kept, 5 `tasks.*` deferred by attribution to the tasks page; visual route **measured** with a zero-tolerance probe: 78–536 px (≤0.05 %) on mobile/laptop light+dark → no baseline adopted, linux not re-rendered |
+| U7 naming & personality (wave 3, body copy 11, landed 2026-10-19) | L1 body copy, tenth page domain (settings): 29 flagged → 23 rewritten (46 value edits — About "Implants"→Beacons, the agent section/title/toast/subtitle, the kill switch (implants→beacons, next beacon→next check-in), module deploy, the routes alert, the database card, the access cards' session-table wording, the last "No agents available"), 6 rule-6 keeps (login sessions + the literal User-Agent header), 0 deferred; settings visual route measured: mobile dark pixel-identical, others 46–377 px (0.01 %) → no baseline adopted |
 | U7 naming & personality (wave 3, body copy 10, landed 2026-10-19) | L1 body copy, ninth page domain (events + tasks): 9 rewritten (18 value edits — the events follow toggle's "session" is the dock's beacon (`dockAgentId`), tasks filter/column/empty state, and the two `ai.nl_*` keys the tasks dialog owns), 0 kept, 0 deferred (25 `ai.*` remain); app fix: empty AI conversations no longer scroll to the bottom (the 3–4 % mobile visual flake, root-caused); events visual route measured: 3/4 captures pixel-identical, mobile light 80 px (0.02 %) → no baseline adopted |
 | U7 naming & personality (wave 3, body copy 2, landed 2026-10-19) | L1 body copy, second page domain (payload pipeline): inventory flags 33 values (`generate.*` 14, `profiles.*` 10, `builds.*` 5, `oneshot.*` 4), 24 rewritten per language (46 value edits), 5 kept (proxy / UA header / login sessions), 4 deferred to the automation card; "Agent Binaries" → **Payload Formats** / 载荷格式 (smoke locator follows); format descriptors name the format (GUI implant → GUI executable) and subjectless clauses replace the banned noun; no visual route touched, so no baseline churn on either platform |
 
