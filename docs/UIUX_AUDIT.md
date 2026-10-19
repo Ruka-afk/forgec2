@@ -1052,13 +1052,19 @@ placeholder is `Search beacons… ( / )`, the primary button reads **Generate
 Payload**, neither `Search agents` nor `Generate Implant` appears anywhere in the
 page, and `document.title` is `🐝 Beacons — ForgeC2`.
 
-**Open follow-up (linux set).** The four `beacons-*` **win32** baselines are updated
-here; the **linux** set is rendered by the dispatch-only `visual-baselines.yml`
-(download the artifact, commit the PNGs). It could not be run from this machine —
-`gh` reports the keyring token invalid — and the CI frontend job compares against
-the linux files, so until that artifact is committed the four beacons shots are the
-one place CI can fail on this wave: their win32 drift measured 0.97–1.77 % against
-the 1.5 % tolerance.
+**Linux set (landed).** The CI frontend job compares against the **linux** files,
+which come from the dispatch-only `visual-baselines.yml` (the workflow renders and
+uploads; committing the PNGs is manual). Run `39220123316` was dispatched from the
+commit that carries the wave (`955c534f`) and its `visual-baselines-linux` artifact
+was scoped by the same evidence rule as the win32 pass: of the 28 rendered files, 21
+are byte-identical to the committed set and 7 differ — the four `beacons-*` shots are
+taken (the page whose copy moved; the dark-laptop diff is 14,347 px, 1.401 % of the
+canvas, spanning the toolbar band and the table's copy clusters), and three are
+rejected as jitter: `ai-light-laptop` at 11 px (0.001 %, a `(463,69)–(536,123)` strip
+in the streaming area) and the two `listeners-*-mobile` shots at 0.445 % / 0.109 % —
+all far under the 1.5 % tolerance the committed baselines are compared with, and no
+rewritten key renders on those pages. The baseline follow-up is closed on both
+platforms.
 
 ## Batch map & reproduction
 
@@ -1073,7 +1079,7 @@ the 1.5 % tolerance.
 | U6 page-by-page polish | T3 focus mode, T4 stat tiles, T5 density selectors, T9 non-total list fallbacks (tokens, ntlm), T10 clipped fixed-width columns (toolkit, scripting), V1–V2 + per-page checklists |
 | U7 naming & personality (wave 1, landed 2026-10-19) | "Beacon" vocabulary across nav/titles/tiles (45 nav + 42 titles + 5 tile/subtitle values per language, 92 keys); one emoji identity per page (nav = h1 = breadcrumb = document title, `aria-hidden` in chips); U6 residue: DNS tile tone, card-header 2-line clamp, privesc mojibake icons, geo 📍 fallback; contract in `docs/TERMINOLOGY.md` — L2 routes landed in wave 2, body copy swept page domain by page domain from wave 3 (Beacons done) |
 | U7 naming & personality (wave 2, landed 2026-10-19) | L2 routing layer: six route renames plus the `/agents/:id` family → `/beacons/:id`, the 15-entry `LEGACY_REDIRECTS` table (id/sub-route/query/hash preserved), 175 files moved (page directories + route-entry components), 151 link literals across 48 files, visual baselines renamed not regenerated, 7 new e2e redirect cases; HTTP API, sqlite schema and OpenAPI untouched per the L3 boundary |
-| U7 naming & personality (wave 3, landed 2026-10-19) | L1 body copy, first page domain (Beacons): inventory flags 100 values (97 `agents.*` + 3 `status_banner.*`), 87 rewritten per language (170 value edits, keys untouched per rule 3), 13 kept with reasons (UA header family, AMSI-session technique, recon/logon/RDP/console sessions, WeChat chat); new rules recorded in `docs/TERMINOLOGY.md` (running implant → beacon, generated artifact → payload, check-in event → "check-in" / 回连, `detail_session` → `Beacon`); two e2e locators follow their copy; win32 baselines refreshed only for the four `beacons-*` files, ten regenerated candidates rejected as unrelated noise (evidence: banner `null` under mocked stats, no rewritten key on those pages, byte-identical re-regeneration) |
+| U7 naming & personality (wave 3, landed 2026-10-19) | L1 body copy, first page domain (Beacons): inventory flags 100 values (97 `agents.*` + 3 `status_banner.*`), 87 rewritten per language (170 value edits, keys untouched per rule 3), 13 kept with reasons (UA header family, AMSI-session technique, recon/logon/RDP/console sessions, WeChat chat); new rules recorded in `docs/TERMINOLOGY.md` (running implant → beacon, generated artifact → payload, check-in event → "check-in" / 回连, `detail_session` → `Beacon`); two e2e locators follow their copy; win32 baselines refreshed only for the four `beacons-*` files, ten regenerated candidates rejected as unrelated noise (evidence: banner `null` under mocked stats, no rewritten key on those pages, byte-identical re-regeneration); the linux half landed from `visual-baselines.yml` run 39220123316 with the same scoping (4 of 28 rendered files adopted, 3 rejects all under 0.5 % of the canvas) |
 
 ```powershell
 cd frontend
