@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { BookOpen, ClipboardList, LoaderCircle } from "lucide-react";
-import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { errorText } from "@/lib/errors";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { useI18n } from "@/lib/i18n";
 import { normalizeListEnvelope } from "@/lib/envelope";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ interface AIAssistBarProps {
 // input, or debrief the session's latest finished run.
 export function AIAssistBar({ sessionId, disabled, onInsertPrompt }: AIAssistBarProps) {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const [macros, setMacros] = useState<PlaybookMacro[]>([]);
   const [macrosLoading, setMacrosLoading] = useState(true);
   const [macrosError, setMacrosError] = useState<string | null>(null);
@@ -55,7 +57,7 @@ export function AIAssistBar({ sessionId, disabled, onInsertPrompt }: AIAssistBar
       } catch (err) {
         if (controller.signal.aborted) return;
         setMacros([]);
-        setMacrosError(err instanceof Error ? err.message : t("ai.playbook_empty"));
+        setMacrosError(errorText(t, err, () => t("ai.playbook_empty")));
       } finally {
         if (!controller.signal.aborted) setMacrosLoading(false);
       }
@@ -83,7 +85,7 @@ export function AIAssistBar({ sessionId, disabled, onInsertPrompt }: AIAssistBar
       setReviewOpen(true);
     } catch (error) {
       if (controller.signal.aborted) return;
-      toast.error(error instanceof Error ? error.message : t("ai.review_failed"));
+      toastError(error, "ai.review_failed");
     } finally {
       if (reviewAbortRef.current === controller) {
         reviewAbortRef.current = null;

@@ -3,11 +3,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
+import { errorText } from "@/lib/errors";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { useI18n } from "@/lib/i18n";
 import type { AIConfig } from "./types";
 
 export function useAIConfig() {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const [enabled, setEnabled] = useState(false);
   const [provider, setProvider] = useState("deepseek");
   const [model, setModel] = useState("deepseek-chat");
@@ -48,7 +51,7 @@ export function useAIConfig() {
       if (seq !== loadSeqRef.current) return;
       // Never leave the defaults in place as if they were the real config:
       // they would report a working AI setup as disabled and API-key-less.
-      const msg = e instanceof Error ? e.message : t("ai.toast.load_config_failed");
+      const msg = errorText(t, e, () => t("ai.toast.load_config_failed"));
       setConfigError(msg);
       toast.error(msg);
     } finally {
@@ -90,7 +93,7 @@ export function useAIConfig() {
         toast.success(t("ai.toast.config_saved"));
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("ai.toast.save_config_failed"));
+      toastError(e, "ai.toast.save_config_failed");
     } finally {
       setConfigSaving(false);
       saveLockRef.current = false;

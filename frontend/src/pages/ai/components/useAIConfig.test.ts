@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
 import { useAIConfig } from "./useAIConfig";
 
 const { getMock, postJsonMock, tMock } = vi.hoisted(() => ({
@@ -13,6 +14,7 @@ vi.mock("@/lib/api", () => ({
     get: (...args: unknown[]) => getMock(...args),
     postJson: (...args: unknown[]) => postJsonMock(...args),
   },
+  getRateLimitRetryAfter: vi.fn(() => 5),
 }));
 
 vi.mock("sonner", () => ({
@@ -28,6 +30,7 @@ describe("useAIConfig", () => {
   beforeEach(() => {
     getMock.mockReset();
     postJsonMock.mockReset();
+    vi.mocked(toast.error).mockClear();
   });
 
   it("enables first-time setup immediately and clears the API key field", async () => {
@@ -99,5 +102,31 @@ describe("useAIConfig", () => {
     });
 
     expect(postJsonMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("maps a status-carrying config read failure onto the shared copy", async () => {
+    getMock.mockRejectedValueOnce(Object.assign(new Error("boom"), { status: 500 }));
+
+    const { result } = renderHook(() => useAIConfig());
+    await waitFor(() => expect(result.current.configError).toBe("common.server_error"));
+
+    // The inline banner and the toast show the same mapped copy.
+    expect(vi.mocked(toast.error)).toHaveBeenCalledWith("common.server_error");
+    expect(result.current.configLoaded).toBe(false);
+  });
+
+  it("maps a rejected save onto the shared copy and unlocks the form", async () => {
+    getMock.mockResolvedValue({ AIConfig: { enabled: true, provider: "deepseek", model: "deepseek-chat", has_api_key: true } });
+    postJsonMock.mockRejectedValueOnce(Object.assign(new Error("boom"), { status: 429 }));
+
+    const { result } = renderHook(() => useAIConfig());
+    await waitFor(() => expect(result.current.configLoaded).toBe(true));
+
+    await act(async () => {
+      await result.current.handleSaveConfig();
+    });
+
+    expect(vi.mocked(toast.error)).toHaveBeenCalledWith("common.rate_limited");
+    expect(result.current.configSaving).toBe(false);
   });
 });

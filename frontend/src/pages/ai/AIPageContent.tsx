@@ -34,6 +34,7 @@ import { AIContextPanel } from "./components/AIContextPanel";
 import { AI_INPUT_MAX_CHARS, buildConversationPayload, sessionTitleFromQuery } from "./components/chatPayload";
 import { readAIResponseError } from "./components/streamErrors";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { usePermissions } from "@/lib/hooks/usePermissions";
 import { useAIRunStatuses } from "./components/useAIRunStatuses";
 import { useAISessionDraft, readNewAISessionDraft } from "./components/useAISessionDraft";
@@ -46,6 +47,7 @@ function nowMs(): number {
 export default function AIPage() {
   const { t } = useI18n();
   const { role: currentUserRole, can } = usePermissions();
+  const { toastError } = useErrorToast();
   const [messages, setMessages] = useState<AIMessage[]>([]);
   const [input, setInput] = useState("");
   const inputRef = useRef("");
@@ -261,7 +263,7 @@ export default function AIPage() {
     try {
       await api.putJson(paths.ai.session(renameTarget.id), { title });
       setSessions((prev) => prev.map((s) => (s.id === renameTarget.id ? { ...s, title } : s)));
-    } catch { toast.error(t("ai.toast.rename_session_failed")); }
+    } catch (e) { toastError(e, "ai.toast.rename_session_failed"); }
     setRenameTarget(null);
   };
 
@@ -326,9 +328,9 @@ export default function AIPage() {
           draftsRef.current.delete(draftKey(sessionId));
           loadSessions();
         }
-      } catch {
+      } catch (e) {
         sessionId = null;
-        toast.error(t("ai.toast.create_session_failed"));
+        toastError(e, "ai.toast.create_session_failed");
       }
     }
 
@@ -812,8 +814,8 @@ export default function AIPage() {
   const handleStop = () => {
 	const runId = activeRunIdRef.current;
 	if (runId) {
-	  void api.postJson(paths.ai.runCancel(runId), {}).catch(() => {
-		toast.error(t("ai.error_connection"));
+	  void api.postJson(paths.ai.runCancel(runId), {}).catch((e) => {
+		toastError(e, "ai.error_connection");
 	  });
 	  activeRunIdRef.current = null;
 	}
@@ -858,9 +860,9 @@ export default function AIPage() {
 		await selectSession(child.id);
 		toast.success(t("ai.branch_created"));
 	  } catch (error) {
-		toast.error(error instanceof Error ? error.message : t("ai.branch_failed"));
+		toastError(error, "ai.branch_failed");
 	  }
-	}, [activeSessionId, loadSessions, selectSession, t]);
+	}, [activeSessionId, loadSessions, selectSession, t, toastError]);
 
   const handleClear = () => {
     handleNewChat();
@@ -916,7 +918,7 @@ export default function AIPage() {
 		setSessions((current) => current.map((session) => session.id === id ? { ...session, pinned } : session));
 		void loadSessions();
 	  } catch (error) {
-		toast.error(error instanceof Error ? error.message : t("ai.pin_session_failed"));
+		toastError(error, "ai.pin_session_failed");
 	  }
 	};
 
@@ -926,7 +928,7 @@ export default function AIPage() {
 		setSessions((current) => current.filter((session) => session.id !== id));
 		if (activeSessionId === id) handleStartNewChat();
 	  } catch (error) {
-		toast.error(error instanceof Error ? error.message : t("ai.archive_session_failed"));
+		toastError(error, "ai.archive_session_failed");
 	  }
 	};
 

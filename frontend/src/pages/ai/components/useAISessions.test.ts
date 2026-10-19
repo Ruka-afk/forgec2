@@ -1,6 +1,31 @@
-import { describe, expect, it } from "vitest";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
 import { AI_ERROR_TOOL_NAME, AI_REGENERATE_TOOL_NAME } from "./types";
-import { restoreSessionMessages } from "./useAISessions";
+import { restoreSessionMessages, useAISessions } from "./useAISessions";
+
+const { getMock, delMock, tMock } = vi.hoisted(() => ({
+  getMock: vi.fn(),
+  delMock: vi.fn(),
+  tMock: (key: string) => key,
+}));
+
+vi.mock("@/lib/api", () => ({
+  api: {
+    get: (...args: unknown[]) => getMock(...args),
+    del: (...args: unknown[]) => delMock(...args),
+  },
+  getRateLimitRetryAfter: vi.fn(() => null),
+}));
+
+vi.mock("sonner", () => ({
+  toast: { error: vi.fn(), success: vi.fn() },
+}));
+
+vi.mock("@/lib/i18n", () => ({
+  getLocale: () => "en",
+  useI18n: () => ({ t: tMock }),
+}));
 
 describe("restoreSessionMessages", () => {
   it("restores only the latest regenerated branch", () => {
@@ -42,5 +67,60 @@ describe("restoreSessionMessages", () => {
       content: "partial response",
       error: true,
     });
+  });
+});
+
+describe("useAISessions failure surfaces", () => {
+  beforeEach(() => {
+    getMock.mockReset();
+    delMock.mockReset();
+    vi.mocked(toast.error).mockClear();
+  });
+
+  it("maps a failed session list read onto the shared copy on both surfaces", async () => {
+    getMock.mockRejectedValueOnce(Object.assign(new Error("boom"), { status: 500 }));
+
+    const { result } = renderHook(() => useAISessions(vi.fn()));
+    await waitFor(() => expect(result.current.sessionsError).toBe("common.server_error"));
+
+    expect(vi.mocked(toast.error)).toHaveBeenCalledWith("common.server_error");
+    expect(result.current.sessionsLoading).toBe(false);
+  });
+
+  it("maps a failed message load and leaves the conversation unchanged", async () => {
+    getMock
+      .mockResolvedValueOnce([{ id: 1, title: "alpha", updated_at: "2026-10-01T10:00:00.000Z" }])
+      .mockRejectedValueOnce(Object.assign(new Error("boom"), { status: 500 }));
+
+    const { result } = renderHook(() => useAISessions(vi.fn()));
+    await waitFor(() => expect(result.current.sessionsLoading).toBe(false));
+    vi.mocked(toast.error).mockClear();
+
+    let selected: boolean | undefined;
+    await act(async () => {
+      selected = await result.current.selectSession(1);
+    });
+
+    expect(selected).toBe(false);
+    expect(vi.mocked(toast.error)).toHaveBeenCalledWith("common.server_error");
+    expect(result.current.activeSessionId).toBeNull();
+  });
+
+  it("maps a failed delete onto the shared copy and keeps the session listed", async () => {
+    getMock.mockResolvedValueOnce([{ id: 1, title: "alpha", updated_at: "2026-10-01T10:00:00.000Z" }]);
+    delMock.mockRejectedValueOnce(Object.assign(new Error("boom"), { status: 500 }));
+
+    const { result } = renderHook(() => useAISessions(vi.fn()));
+    await waitFor(() => expect(result.current.sessionsLoading).toBe(false));
+    vi.mocked(toast.error).mockClear();
+
+    let deleted: boolean | undefined;
+    await act(async () => {
+      deleted = await result.current.deleteSession(1);
+    });
+
+    expect(deleted).toBe(false);
+    expect(vi.mocked(toast.error)).toHaveBeenCalledWith("common.server_error");
+    expect(result.current.sessions.map((session) => session.id)).toContain(1);
   });
 });

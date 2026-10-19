@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
+import { errorText } from "@/lib/errors";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { useI18n } from "@/lib/i18n";
 import { AI_ERROR_TOOL_NAME, AI_REGENERATE_TOOL_NAME, AI_TRACE_TOOL_NAME, type AIMessage, type AISession, type AITraceStatus, type AITraceStep } from "./types";
 
@@ -109,6 +111,7 @@ export function useAISessions(
   options?: { restoreLast?: boolean },
 ) {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const [sessions, setSessions] = useState<AISession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
@@ -128,8 +131,9 @@ export function useAISessions(
       setSessions(list as AISession[]);
       setSessionsError(null);
     } catch (e) {
-      setSessionsError(e instanceof Error ? e.message : t("ai.toast.load_sessions_failed"));
-      toast.error(e instanceof Error ? e.message : t("ai.toast.load_sessions_failed"));
+      const msg = errorText(t, e, () => t("ai.toast.load_sessions_failed"));
+      setSessionsError(msg);
+      toast.error(msg);
     } finally {
       setSessionsLoading(false);
     }
@@ -168,12 +172,12 @@ export function useAISessions(
       return true;
     } catch (e) {
       if (seq !== selectSeqRef.current) return false;
-      toast.error(e instanceof Error ? e.message : t("ai.toast.load_session_messages_failed"));
+      toastError(e, "ai.toast.load_session_messages_failed");
       return false;
     } finally {
       if (seq === selectSeqRef.current) setSelectingSessionId(null);
     }
-  }, [activeSessionId, onLeaveConversation, setMessagesBoth, t]);
+  }, [activeSessionId, onLeaveConversation, setMessagesBoth, toastError]);
 
   const deleteSession = async (id: number) => {
     try {
@@ -193,7 +197,7 @@ export function useAISessions(
       }
       return true;
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("ai.toast.delete_session_failed"));
+      toastError(e, "ai.toast.delete_session_failed");
       return false;
     }
   };

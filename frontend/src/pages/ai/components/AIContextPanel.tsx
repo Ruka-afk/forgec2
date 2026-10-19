@@ -3,7 +3,9 @@ import { AlertTriangle, Bot, FileText, LoaderCircle, Paperclip, RefreshCw, Shiel
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { errorText } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { normalizeListEnvelope } from "@/lib/envelope";
 import { formatBytes } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -56,6 +58,7 @@ export function AIContextPanel({
   onLowRiskAutoChange,
 }: AIContextPanelProps) {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const [profiles, setProfiles] = useState<AIProfile[]>([]);
   const [attachments, setAttachments] = useState<AIAttachment[]>([]);
   const [collections, setCollections] = useState<AIKnowledgeCollection[]>([]);
@@ -87,8 +90,9 @@ export function AIContextPanel({
       // Retain the last good lists; the banner below only appears when
       // nothing is on screen, so a failed refresh never masquerades as
       // "no profiles / no attachments / no collections".
-      setLoadError(error instanceof Error ? error.message : t("ai.context_load_failed"));
-      toast.error(error instanceof Error ? error.message : t("ai.context_load_failed"));
+      const msg = errorText(t, error, () => t("ai.context_load_failed"));
+      setLoadError(msg);
+      toast.error(msg);
     }
   }, [onProfileChange, profileId, sessionId, t]);
 
@@ -115,7 +119,7 @@ export function AIContextPanel({
       onAttachmentIdsChange([...new Set([...selectedAttachmentIds, ...created.map((item) => item.id)])]);
       toast.success(t("ai.attachment_saved"));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t("ai.attachment_upload_failed"));
+      toastError(error, "ai.attachment_upload_failed");
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -128,7 +132,7 @@ export function AIContextPanel({
       setAttachments((current) => current.filter((item) => item.id !== id));
       onAttachmentIdsChange(selectedAttachmentIds.filter((value) => value !== id));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t("ai.attachment_remove_failed"));
+      toastError(error, "ai.attachment_remove_failed");
     }
   };
 
@@ -139,7 +143,7 @@ export function AIContextPanel({
       await api.putJson(paths.ai.session(sessionId), { write_policy: enabled ? "low_risk_auto" : "approval" });
     } catch (error) {
       onLowRiskAutoChange(!enabled);
-      toast.error(error instanceof Error ? error.message : t("ai.policy_update_failed"));
+      toastError(error, "ai.policy_update_failed");
     }
   };
 

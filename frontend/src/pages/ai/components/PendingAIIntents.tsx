@@ -7,6 +7,7 @@ import { useI18n } from "@/lib/i18n";
 import { formatTimeOnly } from "@/lib/intl";
 import { normalizeListEnvelope } from "@/lib/envelope";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { POLL } from "@/lib/polling";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ interface AIExecutionIntent {
 
 export function PendingAIIntents({ activeSessionId }: { activeSessionId: number | null }) {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const [acting, setActing] = useState<Set<string>>(() => new Set());
   const [open, setOpen] = useState(false);
   const prevCount = useRef(0);
@@ -51,7 +53,7 @@ export function PendingAIIntents({ activeSessionId }: { activeSessionId: number 
       toast.success(approve ? t("ai.intent_approved") : t("ai.intent_rejected"));
       await refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t("ai.intent_action_failed"));
+      toastError(error, "ai.intent_action_failed");
     } finally {
       setActing((current) => {
         const next = new Set(current);
