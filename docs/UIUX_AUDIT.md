@@ -1633,6 +1633,20 @@ deliberate keeps.
    rebuilt and dist re-synced (337 files); full e2e 184 passed / 36 skipped. None of
    credentials/NTLM/cloud is in `VISUAL_ROUTES`, so no baseline was measured or moved.
 
+**Deployment probe.** The rebuilt binary (PID 10072 → **30312**, started 21:46:40)
+answers `/health` with `ok`, and the served chunks are byte-identical to
+`internal/webdist/dist` (`assets/index-CnX0HdCW.js` = `FBB3AF18…B4D4`,
+`assets/zh-BmbZGV0c.js` = `894540B5…8E3F`). Fifty of fifty markers as expected: the NTLM
+page serves "-- Select Beacon --", "Target Beacon", "NTLM: load beacons failed" and both
+"(beacon side)" listener labels; the cloud page serves the beacon picker, "Dispatches
+beacon-side credential steal tasks", "Filter by Beacon", "harvested from beacons", "from
+beacon hosts" and the beacon-holds-none warning, with the old agent strings gone in both
+languages. Four absence markers are deliberately scoped instead of global: "-- Select
+Agent --" and "Target Agent" still belong to other domains (loot/toolkit), and "Select an
+agent first" / 请先选择代理 are shared with `toolkit.toast.select_agent_first`; only the
+NTLM/cloud-specific absences are asserted. The cookie-proxy and relay-session keeps are
+unchanged in this build.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
