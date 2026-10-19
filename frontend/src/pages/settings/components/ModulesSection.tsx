@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { errorText } from "@/lib/errors";
 import { fetchAgentListCached } from "@/lib/agents";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
@@ -63,7 +64,7 @@ export default function ModulesSection() {
       // "No modules" is a security-relevant claim here: an unread module list
       // must never read as "mimikatz is not installed".
       setModules([]);
-      const msg = e instanceof Error ? e.message : t("settings.modules.load_failed");
+      const msg = errorText(t, e, () => t("settings.modules.load_failed"));
       setLoadError(msg);
       toast.error(msg);
     } finally {
@@ -78,7 +79,7 @@ export default function ModulesSection() {
       setAgents((await fetchAgentListCached()) as AgentOption[]);
     } catch (e) {
       setAgents([]);
-      setAgentsError(e instanceof Error ? e.message : t("settings.modules.load_failed"));
+      setAgentsError(errorText(t, e, () => t("settings.modules.load_failed")));
     } finally {
       setAgentsLoading(false);
     }

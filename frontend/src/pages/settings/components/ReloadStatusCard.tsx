@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { formatDateTime } from "@/lib/intl";
 import { Card } from "@/components/ui/card";
 import { CardHeaderRow } from "@/components/ui/card-header-row";
@@ -9,7 +10,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { RefreshCw, RotateCcw, Zap } from "lucide-react";
-import { toast } from "sonner";
 
 interface ReloadGroup {
   token: string;
@@ -34,6 +34,7 @@ interface ReloadStatus {
 // edits apply live, which need a restart, and what the last reload did.
 export default function ReloadStatusCard() {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const [data, setData] = useState<ReloadStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -42,12 +43,12 @@ export default function ReloadStatusCard() {
     try {
       const d = await api.get<ReloadStatus>(paths.settings.reloadStatus);
       setData(d);
-    } catch {
-      toast.error(t("settings.reload_status_failed"));
+    } catch (e) {
+      toastError(e, "settings.reload_status_failed");
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [toastError]);
 
   useEffect(() => { void load(); }, [load]);
 

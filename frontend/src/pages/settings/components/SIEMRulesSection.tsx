@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { errorText } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -70,7 +71,7 @@ export default function SIEMRulesSection() {
       setRules(data.rules || []);
     } catch (e) {
       setRules([]);
-      setLoadError(e instanceof Error ? e.message : t("settings.toast.load_failed"));
+      setLoadError(errorText(t, e, () => t("settings.toast.load_failed")));
     } finally {
       setLoading(false);
     }

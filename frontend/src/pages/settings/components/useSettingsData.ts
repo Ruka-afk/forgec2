@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { errorText } from "@/lib/errors";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import type { AgentForm, MalleableForm, PasswordForm, ServerForm, SettingsData } from "./types";
@@ -87,7 +88,7 @@ export function useSettingsData() {
       } catch { /* silent */ }
     } catch (e) {
       if (signal?.aborted || (e instanceof Error && e.name === "AbortError")) return;
-      const msg = e instanceof Error ? e.message : t("settings.toast.load_failed");
+      const msg = errorText(t, e, () => t("settings.toast.load_failed"));
       setError(msg);
       toast.error(msg);
     } finally {

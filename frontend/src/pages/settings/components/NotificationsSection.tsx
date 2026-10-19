@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { errorText } from "@/lib/errors";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -66,7 +67,7 @@ export default function NotificationsSection() {
       })
       .catch((e: unknown) => {
         if (cancelled) return;
-        setLoadError(e instanceof Error ? e.message : t("settings.toast.load_failed"));
+        setLoadError(errorText(t, e, () => t("settings.toast.load_failed")));
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };

@@ -12,6 +12,7 @@ vi.mock("@/lib/api", () => ({
   api: {
     get: (...args: unknown[]) => getMock(...args),
   },
+  getRateLimitRetryAfter: () => 7,
 }));
 
 vi.mock("sonner", () => ({
@@ -83,5 +84,43 @@ describe("useSettingsData", () => {
 
     expect(result.current.loaded).toBe(true);
     expect(result.current.agentForm.interval).toBe(9);
+  });
+
+  it("maps a 5xx and reports the shared server copy on both the error state and the toast", async () => {
+    getMock.mockRejectedValueOnce({ status: 500, message: "internals leaked" });
+
+    const { result } = renderHook(() => useSettingsData());
+    await waitFor(() => expect(result.current.error).toBe("common.server_error"));
+
+    expect(toastError).toHaveBeenCalledWith("common.server_error");
+    expect(result.current.loading).toBe(false);
+    expect(result.current.loaded).toBe(false);
+  });
+
+  it("maps a browser network failure on both surfaces", async () => {
+    getMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+    const { result } = renderHook(() => useSettingsData());
+    await waitFor(() => expect(result.current.error).toBe("common.network_error"));
+
+    expect(toastError).toHaveBeenCalledWith("common.network_error");
+  });
+
+  it("falls back to the settings copy when the failure carries no message", async () => {
+    getMock.mockRejectedValueOnce(new Error(""));
+
+    const { result } = renderHook(() => useSettingsData());
+    await waitFor(() => expect(result.current.error).toBe("settings.toast.load_failed"));
+
+    expect(toastError).toHaveBeenCalledWith("settings.toast.load_failed");
+  });
+
+  it("resolves a rate limit through the shared copy on both surfaces", async () => {
+    getMock.mockRejectedValueOnce({ status: 429, message: "slow down" });
+
+    const { result } = renderHook(() => useSettingsData());
+    await waitFor(() => expect(result.current.error).toBe("common.rate_limited"));
+
+    expect(toastError).toHaveBeenCalledWith("common.rate_limited");
   });
 });

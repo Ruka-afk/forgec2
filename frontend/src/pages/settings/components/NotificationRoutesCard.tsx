@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { errorText } from "@/lib/errors";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { useConfirm } from "@/lib/hooks/useConfirm";
@@ -53,7 +54,7 @@ export default function NotificationRoutesCard() {
       const d = await api.get<{ routes?: NotificationRoute[] }>(paths.settings.notificationRoutes);
       setRoutes(d.routes || []);
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : t("settings.toast.load_failed"));
+      setLoadError(errorText(t, e, () => t("settings.toast.load_failed")));
     } finally {
       setLoading(false);
     }

@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { errorText } from "@/lib/errors";
 import { Card } from "@/components/ui/card";
 import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Button } from "@/components/ui/button";
@@ -47,7 +48,7 @@ export default function BackupSection() {
     } catch (e) {
       // An unread backup list is not the same as "there are no backups" —
       // that empty state reads as a reassurance that recovery is impossible.
-      const msg = e instanceof Error ? e.message : t("settings.toast.load_backups_failed");
+      const msg = errorText(t, e, () => t("settings.toast.load_backups_failed"));
       setLoadError(msg);
       toast.error(msg);
     } finally {
