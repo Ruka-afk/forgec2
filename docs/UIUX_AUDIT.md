@@ -1591,6 +1591,19 @@ genuine login-session keepers.
    and 327 px (0.01 %) → inside the 1.5 % contract, no snapshot adopted, linux not
    re-rendered.
 
+**Deployment probe.** The rebuilt binary (PID 6944 → **10072**, started 21:27:47)
+answers `/health` with `ok`, and the served chunks are byte-identical to
+`internal/webdist/dist` (`assets/index-WCV_vzoe.js` = `AA99F1B5…5E07`,
+`assets/zh-CSR6yqJ9.js` = `60A31BB6…586D`). Thirty-seven of thirty-seven markers as
+expected: the settings page serves the beacon-form agent section/title/toast ("Beacon
+Behavior", "Beacon configuration saved", the payload-aware subtitle), the kill switch
+("ARMED — every beacon will self-destruct on its next check-in." / 已武装 —— 所有 Beacon
+将在下次回连时自毁。), the module deploy card, the routes alert, the access cards'
+beacon labels/table (including the ZH 会话集合 → Beacon 集合), and the last "No agents
+available" clone is gone (asserted quoted; the longer `bof.toast.no_agents` sentence
+legitimately keeps the words). The rule-6 keepers (`User-Agent`, the JWT/login-session
+strings, the session timeout) are unchanged in this build.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
