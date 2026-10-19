@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { api, pollTask } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { errorText } from "@/lib/errors";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { pullRemoteFile, pushLocalFile } from "@/lib/agent-files/file-transfer";
 import {
   isImageFile,
@@ -40,6 +42,7 @@ function storeListing(
 
 export function useAgentFiles(agentId: string) {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const [currentPath, setCurrentPath] = useState("C:\\");
   const [currentPathInput, setCurrentPathInput] = useState("C:\\");
   const [entries, setEntries] = useState<FileEntry[]>([]);
@@ -120,15 +123,17 @@ export function useAgentFiles(agentId: string) {
         setCurrentPathInput(path);
       } catch (err) {
         if (ac.signal.aborted) return;
-        showToast(String(err), "error");
+        // The toast and the persistent retry card must show the same text:
+        // both go through the shared normalizer with the same fallback key.
+        toastError(err, "agents.files_ls_failed");
         // Keep the last good listing: a failed load is shown via listError,
         // never by wiping entries into a reassuring "directory is empty" card.
-        setListError(err instanceof Error ? err.message : String(err));
+        setListError(errorText(t, err, () => t("agents.files_ls_failed")));
       } finally {
         if (!ac.signal.aborted) setLoading(false);
       }
     },
-    [agentId, showToast, t],
+    [agentId, toastError, t],
   );
 
   const detectOs = useCallback(async (): Promise<"windows" | "linux" | null> => {
@@ -153,7 +158,7 @@ export function useAgentFiles(agentId: string) {
     } catch (e) {
       // Guessing "windows" here would send C:\ paths and Windows path semantics
       // to a Linux agent, so stay unknown and block browsing instead.
-      setOsError(e instanceof Error ? e.message : t("agents.files_detect_os_failed"));
+      setOsError(errorText(t, e, () => t("agents.files_detect_os_failed")));
       return null;
     }
   }, [agentId, t]);
@@ -218,13 +223,13 @@ export function useAgentFiles(agentId: string) {
           showToast(t("agents.files_pulled", { filename }), "success");
         }
       } catch (err) {
-        showToast(String(err), "error");
+        toastError(err, "agents.files_pull_failed");
       } finally {
         setPullName(null);
         setPullProgress(null);
       }
     },
-    [agentId, currentPath, entries, osType, showToast, t],
+    [agentId, currentPath, entries, osType, showToast, toastError, t],
   );
 
   const readFile = useCallback(
@@ -256,10 +261,10 @@ export function useAgentFiles(agentId: string) {
         setShowPreview(true);
         setSelectedFile(filename);
       } catch (err) {
-        showToast(String(err), "error");
+        toastError(err, "agents.files_read_failed");
       }
     },
-    [agentId, currentPath, entries, osType, showToast, t],
+    [agentId, currentPath, entries, osType, showToast, toastError, t],
   );
 
   const deleteFile = useCallback(
@@ -282,10 +287,10 @@ export function useAgentFiles(agentId: string) {
         await loadDirectory(pathAtStart, { refresh: true });
         if (selectedFile === filename) setSelectedFile(null);
       } catch (err) {
-        showToast(String(err), "error");
+        toastError(err, "agents.files_delete_failed");
       }
     },
-    [agentId, osType, selectedFile, loadDirectory, showToast, t],
+    [agentId, osType, selectedFile, loadDirectory, showToast, toastError, t],
   );
 
   const mkdir = useCallback(
@@ -307,10 +312,10 @@ export function useAgentFiles(agentId: string) {
         if (currentPathRef.current !== pathAtStart) return;
         await loadDirectory(pathAtStart, { refresh: true });
       } catch (err) {
-        showToast(String(err), "error");
+        toastError(err, "agents.files_mkdir_failed");
       }
     },
-    [agentId, osType, loadDirectory, showToast, t],
+    [agentId, osType, loadDirectory, showToast, toastError, t],
   );
 
   const renameFile = useCallback(
@@ -335,10 +340,10 @@ export function useAgentFiles(agentId: string) {
         await loadDirectory(pathAtStart, { refresh: true });
         if (selectedFile === filename) setSelectedFile(null);
       } catch (err) {
-        showToast(String(err), "error");
+        toastError(err, "agents.files_rename_failed");
       }
     },
-    [agentId, osType, selectedFile, loadDirectory, showToast, t],
+    [agentId, osType, selectedFile, loadDirectory, showToast, toastError, t],
   );
 
   const chmodFile = useCallback(
@@ -360,10 +365,10 @@ export function useAgentFiles(agentId: string) {
         if (currentPathRef.current !== pathAtStart) return;
         await loadDirectory(pathAtStart, { refresh: true });
       } catch (err) {
-        showToast(String(err), "error");
+        toastError(err, "agents.files_chmod_failed");
       }
     },
-    [agentId, osType, loadDirectory, showToast, t],
+    [agentId, osType, loadDirectory, showToast, toastError, t],
   );
 
   // Uploads run through a serial queue: concurrent pushLocalFile calls used
@@ -411,7 +416,7 @@ export function useAgentFiles(agentId: string) {
       })
       .catch((err) => {
         if (abort.signal.aborted) return;
-        showToast(err instanceof Error ? err.message : t("agents.files_push_failed"), "error");
+        toastError(err, "agents.files_push_failed");
       })
       .finally(() => {
         uploadActiveRef.current = false;
@@ -424,7 +429,7 @@ export function useAgentFiles(agentId: string) {
         }
         pumpRef.current();
       });
-  }, [agentId, loadDirectory, showToast, t]);
+  }, [agentId, loadDirectory, showToast, toastError, t]);
   pumpRef.current = pumpUploadQueue;
 
   const cancelUpload = useCallback(() => {
@@ -470,7 +475,7 @@ export function useAgentFiles(agentId: string) {
           } catch (err) {
             if (abort.signal.aborted) break;
             failed++;
-            showToast(`${filename}: ${String(err)}`, "error");
+            showToast(`${filename}: ${errorText(t, err, () => t("agents.files_delete_failed"))}`, "error");
           }
         }
         // Phase 2: poll everything concurrently instead of serial 90s polls.
@@ -485,7 +490,7 @@ export function useAgentFiles(agentId: string) {
             } catch (err) {
               if (abort.signal.aborted) return;
               failed++;
-              showToast(`${job.filename}: ${String(err)}`, "error");
+              showToast(`${job.filename}: ${errorText(t, err, () => t("agents.files_delete_failed"))}`, "error");
             } finally {
               finished++;
               if (!abort.signal.aborted) {
@@ -547,7 +552,7 @@ export function useAgentFiles(agentId: string) {
           } catch (err) {
             if (abort.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) break;
             failed++;
-            showToast(`${filename}: ${String(err)}`, "error");
+            showToast(`${filename}: ${errorText(t, err, () => t("agents.files_pull_failed"))}`, "error");
           } finally {
             setPullProgress(null);
           }
@@ -587,9 +592,9 @@ export function useAgentFiles(agentId: string) {
       setDriveOutput(st.result || "");
       setShowDrives(true);
     } catch (err) {
-      showToast(String(err), "error");
+      toastError(err, "agents.files_drives_failed");
     }
-  }, [agentId, showToast, t]);
+  }, [agentId, showToast, toastError, t]);
 
   const findFiles = useCallback(async () => {
     if (!findPattern.trim()) return;
@@ -604,9 +609,9 @@ export function useAgentFiles(agentId: string) {
       setFindResults(results);
       showToast(t("agents.files_found_results", { n: results.length }), results.length > 0 ? "success" : "info");
     } catch (err) {
-      showToast(String(err), "error");
+      toastError(err, "agents.files_find_failed");
     }
-  }, [agentId, findPattern, currentPath, showToast, t]);
+  }, [agentId, findPattern, currentPath, showToast, toastError, t]);
 
   const huntFiles = useCallback(async () => {
     if (!findPattern.trim()) return;
@@ -625,9 +630,9 @@ export function useAgentFiles(agentId: string) {
       setFindResults(results);
       showToast(t("agents.files_found_results", { n: results.length }), results.length > 0 ? "success" : "info");
     } catch (err) {
-      showToast(String(err), "error");
+      toastError(err, "agents.files_find_failed");
     }
-  }, [agentId, findPattern, currentPath, huntDownload, showToast, t]);
+  }, [agentId, findPattern, currentPath, huntDownload, showToast, toastError, t]);
 
   const loadUsb = useCallback(async () => {
     try {
@@ -640,9 +645,9 @@ export function useAgentFiles(agentId: string) {
       setUsbOutput(st.result || "");
       setShowUsb(true);
     } catch (err) {
-      showToast(String(err), "error");
+      toastError(err, "agents.files_usb_failed");
     }
-  }, [agentId, showToast, t]);
+  }, [agentId, showToast, toastError, t]);
 
   const quickPaths = useMemo(
     () =>

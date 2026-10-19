@@ -337,6 +337,7 @@ export const zh: Record<string, string> = {
     "agents.files_download": "下载",
     "agents.files_download_content": "下载内容",
     "agents.files_drives": "磁盘",
+    "agents.files_drives_failed": "驱动器枚举失败",
     "agents.files_drives_output": "植入体磁盘列表",
     "agents.files_drives_waiting": "磁盘列表已排队 — 等待植入体",
     "agents.files_empty": "目录为空或无法访问",

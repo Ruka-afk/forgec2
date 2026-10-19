@@ -337,6 +337,7 @@ export const en: Record<string, string> = {
     "agents.files_download": "Download",
     "agents.files_download_content": "Download content",
     "agents.files_drives": "Drives",
+    "agents.files_drives_failed": "Drive list failed",
     "agents.files_drives_output": "Implant drive listing",
     "agents.files_drives_waiting": "Drive list queued — waiting for the implant",
     "agents.files_empty": "Directory is empty or inaccessible",
