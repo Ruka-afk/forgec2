@@ -1730,6 +1730,20 @@ The last major domain, and the only one of the thirteen that is also a visual ro
    972 kB); `out/` rebuilt and dist re-synced (337 files); full e2e 184 passed / 36
    skipped.
 
+**Deployment probe.** The rebuilt binary (PID 38952 → **38004**, started 22:21:47)
+answers `/health` with `ok`, and the served chunks are byte-identical to
+`internal/webdist/dist` (`assets/index-DlXzCzK0.js` = `8DEB9661…188B`,
+`assets/zh-DC-Q7ZhV.js` = `A1E6B8DE…7F5E`). Seventy of seventy markers as expected:
+English serves the beacon permission and quick actions ("Allow AI to execute commands on
+beacons", "list live beacons", "List online beacons", "online/offline beacons",
+"high-integrity beacons", "Based on live beacons", "beacons that look stale…"), keeps
+"flag elevated hosts" and "do not invent hosts", and speaks conversation everywhere
+("consider starting a new conversation", "Toggle conversations", the five
+create/delete/load/rename toasts); Chinese serves the same set (允许 AI 在 Beacon 上执行命令,
+列出在线 Beacon, 结合当前 Beacon, 建议开启新对话, 切换对话列表, 对话上下文, 置顶对话, 归档该对话)
+with every old Agent/主机/Implant/会话 form absent. Key names are untouched (the bundles
+still call the API's `*_session` objects); the one kept string is `common.session_expired`.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
