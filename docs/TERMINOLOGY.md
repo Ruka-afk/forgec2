@@ -170,9 +170,13 @@ identity**, not every heading.
   TUN hints, topology legends/nodes, the chain subtitle/parent/pickers where ZH 代理
   meant agent, and the lateral page's last implant strings; 12 keeps: 7 local-proxy
   strings, 2 real relay sessions, `chain.set_proxy_parent`, `topology.net_view`'s
-  controlled hosts, and `common.session_expired`). Domains still open:
-  AI (25 flagged left), and the long tail
-  (see the batch map in `docs/UIUX_AUDIT.md`).
+  controlled hosts, and `common.session_expired`), and the **AI domain** (26 flagged:
+  25 rewritten — the assistant's permission warnings, greeting, quick actions and stale
+  query now act on beacons, while "elevated hosts" and "do not invent hosts" stay
+  host-level, and the chat surface's remaining "session" becomes **conversation** in both
+  languages, the word the page already used in 12 sibling strings; 1 kept,
+  `common.session_expired`). The last major domain is closed; what remains is the long
+  tail (see the batch map in `docs/UIUX_AUDIT.md`).
   - **A domain is a page cluster, not a key prefix** — learned the hard way. Wave 1
     inventoried `agents.*` + `status_banner.*` and declared Beacons done, but the
     beacon *detail* pages also render `shell.*`, `cred.*`, `screen.*` and

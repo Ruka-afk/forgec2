@@ -1696,6 +1696,40 @@ languages. Three absence markers are deliberately scoped instead of global: 选�
 still appears in `ai.quick_stale_query` (the AI domain, 25 flagged). The proxy-family and
 relay-session keeps are unchanged in this build.
 
+## U7 — Professional naming & page emoji (wave 3, body copy 14: the AI domain, landed 2026-10-19)
+
+The last major domain, and the only one of the thirteen that is also a visual route
+(`ai` is in `VISUAL_ROUTES`): 26 flagged (25 `ai.*` plus `common.session_expired`),
+25 rewritten (40 value edits), 1 kept.
+
+1. **Beacon vocabulary (8).** The assistant's permission copy ("Allow AI to execute
+   commands on beacons", "…on your beacons") and its empty-state promise ("list live
+   beacons") now match the objects it acts on; the quick actions follow ("List online
+   beacons", "online/offline beacons", "high-integrity beacons", "Based on live
+   beacons", "stale (missed check-ins) beacons"). Host-level vocabulary stays: "flag
+   elevated hosts" and "do not invent hosts" are about machines, not running beacons.
+   The ZH side, which had drifted between 主机 and Implant for the same objects, moves
+   to Beacon only where the English names a beacon.
+2. **Conversation vocabulary (17).** The AI chat object is a conversation — the page
+   already said so in 12 ZH strings ("新建对话", "对话历史", "暂无保存的对话", "搜索对话")
+   and in its English pin/archive/branch labels. The remaining "session" wording (the
+   context-budget hint, the conversation-list toggle, the five create/delete/load/rename
+   toasts) now says conversation in both languages, and ten ZH-only values that trailed
+   (context title, attachment gate, policy failure, pin/archive/branch states, archive
+   confirmation) move from 会话 to 对话. Key names keep their `*_session` spelling: the
+   parity gate counts keys and the API object is still a session.
+3. **The keep.** `common.session_expired` remains a real expired login session (rule 6).
+4. **Visual route measured, not moved.** The AI page is a visual route, so the
+   zero-tolerance probe was mandatory: all four captures (mobile/laptop × light/dark)
+   passed against the committed win32 baselines. The reason is structural — `prepare()`
+   mocks `/api/ai/profiles` as `[]`, so the captured state is the "not configured" card
+   and never renders the greeting or the quick actions that changed. No baseline is
+   adopted, and linux is not re-rendered.
+5. **Verification.** eslint and `tsc --noEmit` clean; 172 files / 883 unit tests;
+   `npm run check` 11/11 (parity 4727, bundle 3.99 MB / 190 files, critical path
+   972 kB); `out/` rebuilt and dist re-synced (337 files); full e2e 184 passed / 36
+   skipped.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
@@ -1717,6 +1751,7 @@ relay-session keeps are unchanged in this build.
 | U7 naming & personality (wave 3, body copy 7, landed 2026-10-19) | L1 body copy, sixth page domain (users): 14 flagged, **2 rewritten** (4 value edits — the role legend's beacon-permission bullets), **12 kept under rule 6** (every session string is a real login session), 0 deferred; no visual route, no baseline |
 | U7 naming & personality (wave 3, body copy 8, landed 2026-10-19) | L1 body copy, seventh page domain (circuit breaker): 2 flagged, **1 rewritten** (2 value edits — `cb.honesty_desc`'s "implant multi-C2 config" → "the payload's multi-C2 config", closing wave 5's handover), **1 kept under rule 6** (`common.session_expired`, a real login session in the global 401 path), 0 deferred; `circuit_breaker.*` clean; non-visual route, no baseline (the one `ai light` mobile diff was a font-swap flake, passed on rerun, not adopted) |
 | U7 naming & personality (wave 3, body copy 9, landed 2026-10-19) | L1 body copy, eighth page domain (dashboard): 1 rewritten (`dashboard.quick_generate` "Generate Implant" → "Generate Payload" / 生成木马 → 生成载荷 — the last 木马 in the copy), 0 kept, 5 `tasks.*` deferred by attribution to the tasks page; visual route **measured** with a zero-tolerance probe: 78–536 px (≤0.05 %) on mobile/laptop light+dark → no baseline adopted, linux not re-rendered |
+| U7 naming & personality (wave 3, body copy 14, landed 2026-10-19) | L1 body copy, thirteenth and last major page domain (AI): 26 flagged → 25 rewritten (40 value edits — the assistant's beacon permission/greeting/quick actions, and the chat surface's session→conversation wording in EN and ZH), 1 keep (`common.session_expired`), 0 deferred; visual route measured at zero diff (the layout spec mocks no AI provider, so the captured card never renders the changed copy) — no baseline |
 | U7 naming & personality (wave 3, body copy 13, landed 2026-10-19) | L1 body copy, twelfth page domain (pivoting + topology + proxy-chains + lateral): 43 flagged → 31 rewritten (62 value edits — the pivoting relay/TUN hints, topology legends and nodes, the chain subtitle/parent/pickers, and the lateral page's last implant strings), 12 keeps (7 local-proxy strings where 代理 = proxy, 2 real relay sessions, `chain.set_proxy_parent`, `topology.net_view`'s controlled hosts, `common.session_expired`), 0 deferred; no visual route, no baseline |
 | U7 naming & personality (wave 3, body copy 12, landed 2026-10-19) | L1 body copy, eleventh page domain (credentials + NTLM + cloud): 31 flagged → 17 rewritten (34 value edits — the NTLM pickers/targets/toasts/listener sides, the cloud pickers, beacon-side tasks, "harvested from beacons", "from beacon hosts"), 14 evidence-backed keeps (7 cookie-proxy strings where 代理 = proxy, 6 real NTLM relay sessions, `common.session_expired`), 0 deferred; none of the three pages is a visual route, no baseline |
 | U7 naming & personality (wave 3, body copy 11, landed 2026-10-19) | L1 body copy, tenth page domain (settings): 29 flagged → 23 rewritten (46 value edits — About "Implants"→Beacons, the agent section/title/toast/subtitle, the kill switch (implants→beacons, next beacon→next check-in), module deploy, the routes alert, the database card, the access cards' session-table wording, the last "No agents available"), 6 rule-6 keeps (login sessions + the literal User-Agent header), 0 deferred; settings visual route measured: mobile dark pixel-identical, others 46–377 px (0.01 %) → no baseline adopted |
