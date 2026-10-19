@@ -137,17 +137,21 @@ identity**, not every heading.
   the **Payload domain** — payload generator, build records, profiles — (33 flagged:
   24 rewritten, 5 kept, 4 deferred to the automation card), then the **Automation
   domain** (27 flagged: 19 rewritten, 0 kept, 8 deferred to the macros and auto-tag
-  pages). Domains still open: dashboard, events/tasks, listeners, settings, users,
-  macros, auto-tag rules, credentials/NTLM/cloud, pivoting/topology/chains, AI, and
-  the long tail (see the batch map in `docs/UIUX_AUDIT.md`).
+  pages), and the **residue pass** (28 flagged: 21 rewritten, 7 kept — the
+  cookie-proxy family —, 0 deferred) closed what the prefix-scoped waves had left on
+  the beacon sub-pages. Domains still open: dashboard, events/tasks, listeners,
+  settings, users, macros, auto-tag rules, credentials/NTLM/cloud,
+  pivoting/topology/chains, AI, and the long tail (see the batch map in
+  `docs/UIUX_AUDIT.md`).
   - **A domain is a page cluster, not a key prefix** — learned the hard way. Wave 1
     inventoried `agents.*` + `status_banner.*` and declared Beacons done, but the
     beacon *detail* pages also render `shell.*`, `cred.*`, `screen.*` and
     `hostinfo.*`, which nobody had flagged; the wave-3 deployment marker check found
     one live instance ("Agent 离线" on the host-info card) and a re-scan found 28.
-    Later waves start from the pages (`t("<ns>.` over the domain's directory) and
-    then adjudicate every namespace they touch, and the residue pass closes what the
-    prefix-scoped waves left behind.
+    The residue pass then swept all four (keeping the seven cookie-proxy strings,
+    where 代理 really is a proxy). Later waves start from the pages (`t("<ns>.` over
+    the domain's directory) and adjudicate every namespace they touch, never a prefix
+    alone.
 - **L2 — frontend structure (done, wave 2):** route URLs and page directory/component
   names follow the vocabulary — `/agents` → `/beacons`, `/timeline` → `/events`,
   `/generate` → `/payload-generator`, `/privesc` → `/privilege-escalation`,

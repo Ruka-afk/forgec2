@@ -1185,6 +1185,51 @@ pickers and the `workflows.*` strings the page hosts move together.
 
 The one unexpected marker is worth more than the wave: **"Agent 离线" still ships**, and the source says why — `hostinfo.offline_hint` ("Agent is offline — collection unavailable." / "Agent 离线——无法采集。") renders on the **beacon detail** page, and wave 1 had scoped its inventory by *key prefix* (`agents.*` + `status_banner.*`), so sibling namespaces the beacon pages render were never flagged. Re-scanning every namespace the beacon pages consume (`t("<ns>.` over `pages/beacons/**`) widens the finding: `shell.*` 11, `cred.*` 14, `screen.*` 2, `hostinfo.*` 1 — **28 flagged values the "Beacons domain done" claim had missed**, living in the shell console, the screen viewer, the credentials/harvest card and the host-info card (`persistence.*`, `format.*`, `notes.*`, `files.*`, `quick_shell.*` are clean). The same scan over the domains already swept found one more shared namespace: `listeners.*` (6 flagged) is rendered by the payload generator as well as by the listeners page. Both are queued as the next waves — the residue pass first, then listeners — instead of being quietly folded into this one.
 
+## U7 — Professional naming & page emoji (wave 3, body copy 4: the residue pass, landed 2026-10-19)
+
+The wave that fixes a scope mistake rather than adding a domain. Wave 1 inventoried
+the Beacons cluster by **key prefix** (`agents.*` + `status_banner.*`) and declared it
+done; but the beacon *pages* also render `shell.*` (the shell console), `cred.*` (the
+credentials page and the detail's credential surfaces), `screen.*` (the screen
+viewer) and `hostinfo.*` (the host-info card). Nothing had flagged them, and the
+wave-3 deployment marker check found one of them still shipping — "Agent 离线" on the
+host-info card. So the cluster was never actually complete.
+
+1. **Method fix, then the scan.** The inventory now starts from the pages
+   (`t("<ns>.` over `pages/beacons/**`) and adjudicates *every* namespace they touch;
+   the same scan was re-run over the domains already swept to catch other holes (the
+   payload generator renders `listeners.*`, carried as its own wave).
+2. **28 flagged, 21 rewritten (39 value edits), 7 kept, 0 deferred.** The keeps are
+   the cookie-proxy family (`Cookie proxy failed` / Cookie 代理失败, start/stop,
+   status unknown) — a real local HTTP proxy that injects harvested cookies, i.e.
+   代理 = proxy, not an implant synonym. That is rule 6 working as intended.
+3. **The shell console settles.** Each shell tab is keyed by beacon id
+   (`closeTab(tab.agentId)`, the select calls `openAgentTab`), so "session" there was
+   the banned sense: `shell.tabs_label` "Shell sessions" → **Beacon shells**,
+   `new_tab` "New session tab" → "New shell tab", `close_tab` "Close session" →
+   "Close tab", `switch_session` "Switch session" → **Switch beacon**,
+   `back_to_session` "Back to agent" → **Back to beacon** (it links to the detail
+   page), `tab_limit` → "Shell tab limit ({max}) reached". The status strings follow:
+   "Agent is {status}" → **Beacon is {status}**, "…still running on the agent" →
+   "…on the beacon", `waiting_output` "waiting for implant output…" → "waiting for
+   beacon output…", and the ZH side retires two bare `implant` loan words
+   (`offline_body` 等 implant 回连 → 等 Beacon 回连).
+4. **The credential and screen surfaces.** "Target session" → **Target beacon**,
+   "Harvest from session" → **Harvest from beacon**, "Select a session first" →
+   "Select a beacon first", "…auto-parsed from agent tasks" → "…from beacon tasks",
+   the harvest explainer's "implant tasks" → "beacon tasks", the skipped-entries
+   toast "…(no password/agent or fuse)" → "…(no password/beacon or fuse)"; the
+   screen viewer's "Waiting for the agent to return a fresh frame…" → "…for the
+   beacon…" and its timeout copy; and `hostinfo.offline_hint` → **Beacon is
+   offline — collection unavailable.** / **Beacon 离线——无法采集。**
+5. **Verification.** eslint and `tsc --noEmit` clean; 172 files / 883 unit tests;
+   `npm run check` 11/11 (parity 4727, bundle 3.99 MB / 190 files, critical path
+   972 kB); `out/` rebuilt and `internal/webdist/dist` re-synced (337 files); full
+   e2e 184 passed / 36 skipped. The `/beacons` visual baseline does not move: the only
+   `cred.*` keys that route renders (`quality_scripted`, `missing_module`,
+   `module_status_unknown`) are unflagged, and no other rewritten key renders on a
+   `VISUAL_ROUTES` page.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
@@ -1200,6 +1245,7 @@ The one unexpected marker is worth more than the wave: **"Agent 离线" still sh
 | U7 naming & personality (wave 2, landed 2026-10-19) | L2 routing layer: six route renames plus the `/agents/:id` family → `/beacons/:id`, the 15-entry `LEGACY_REDIRECTS` table (id/sub-route/query/hash preserved), 175 files moved (page directories + route-entry components), 151 link literals across 48 files, visual baselines renamed not regenerated, 7 new e2e redirect cases; HTTP API, sqlite schema and OpenAPI untouched per the L3 boundary |
 | U7 naming & personality (wave 3, landed 2026-10-19) | L1 body copy, first page domain (Beacons): inventory flags 100 values (97 `agents.*` + 3 `status_banner.*`), 87 rewritten per language (170 value edits, keys untouched per rule 3), 13 kept with reasons (UA header family, AMSI-session technique, recon/logon/RDP/console sessions, WeChat chat); new rules recorded in `docs/TERMINOLOGY.md` (running implant → beacon, generated artifact → payload, check-in event → "check-in" / 回连, `detail_session` → `Beacon`); two e2e locators follow their copy; win32 baselines refreshed only for the four `beacons-*` files, ten regenerated candidates rejected as unrelated noise (evidence: banner `null` under mocked stats, no rewritten key on those pages, byte-identical re-regeneration); the linux half landed from `visual-baselines.yml` run 39220123316 with the same scoping (4 of 28 rendered files adopted, 3 rejects all under 0.5 % of the canvas) |
 | U7 naming & personality (wave 3, body copy 3, landed 2026-10-19) | L1 body copy, third page domain (automation cluster): inventory flags 27 across six namespaces (`auto.*` 6, `scheduler.*` 4, `oneshot.*` 4, `workflows.*` 5, `macros.*` 5, `autotag.*` 3), 19 rewritten per language (38 value edits), 0 kept, 8 deferred to their own pages (macros / auto-tag rules); event and rule-type labels become "Beacon offline/online" while the wire enum ids stay `agent_*`; `oneshot.*` closed here after wave 2's deferral; no locator or baseline depended on the strings |
+| U7 naming & personality (wave 3, body copy 4 — residue pass, landed 2026-10-19) | L1 body copy, scope fix: the Beacons cluster was inventoried by key prefix in wave 1, leaving `shell.*` 11, `cred.*` 14, `screen.*` 2, `hostinfo.*` 1 unreviewed; 28 flagged, 21 rewritten (39 value edits), 7 kept (the cookie-proxy family: 代理 = proxy), 0 deferred; shell tabs are beacon-keyed so "Shell sessions" → "Beacon shells", "Switch session" → "Switch beacon"; method now starts from the pages, and the re-scan queued `listeners.*` (rendered by the payload generator) as its own wave |
 | U7 naming & personality (wave 3, body copy 2, landed 2026-10-19) | L1 body copy, second page domain (payload pipeline): inventory flags 33 values (`generate.*` 14, `profiles.*` 10, `builds.*` 5, `oneshot.*` 4), 24 rewritten per language (46 value edits), 5 kept (proxy / UA header / login sessions), 4 deferred to the automation card; "Agent Binaries" → **Payload Formats** / 载荷格式 (smoke locator follows); format descriptors name the format (GUI implant → GUI executable) and subjectless clauses replace the banned noun; no visual route touched, so no baseline churn on either platform |
 
 ```powershell
