@@ -1647,6 +1647,40 @@ agent first" / 请先选择代理 are shared with `toolkit.toast.select_agent_fi
 NTLM/cloud-specific absences are asserted. The cookie-proxy and relay-session keeps are
 unchanged in this build.
 
+## U7 — Professional naming & page emoji (wave 3, body copy 13: the pivoting, topology & proxy-chain domain, landed 2026-10-19)
+
+Four page clusters in one wave, including the lateral page that carried the last
+implant strings: 43 flagged, 31 rewritten (62 value edits), 12 kept.
+
+1. **Pivoting (12).** The relay hints name the beacon at both ends ("Direct Beacon
+   SOCKS", "…on the beacon host… the beacon IP", "Beacon connects outbound", "via the
+   beacon", "Traffic routing via beacon", "through beacon infrastructure"), the pickers
+   follow ("-- Select Beacon --", "Target Beacon"), and the TUN block turns every
+   "implant" into a beacon ("Beacon CIDR", "Linux beacons open /dev/net/tun…", "adapter
+   creation needs an elevated beacon", "macOS beacons return an honest error"). ZH had
+   been split between 主机 and Agent for the same entity.
+2. **Topology (6).** Legends, node hints and the merged-note speak beacons ("Online /
+   Offline Beacon", "Discovered by beacon", "{n} discovered IPs matched existing
+   beacons", "parent beacon ID", "Beacons will appear here when they connect").
+3. **Proxy chains (6).** The subtitle reads "route beacon traffic through other beacons
+   (Beacon → Beacon → C2)" — the ZH 代理 there meant agent, now Beacon — with "Set
+   Parent Beacon", both pickers and the cleared toast. `set_proxy_parent` keeps its
+   Proxy: the dialog picks a parent that acts as the proxy role.
+4. **Lateral (7).** The last implants on this page become beacons: "Online Beacon",
+   "Pivot Beacon", "Select online beacon…", "Source Beacon", "Select Beacon, target host
+   and execution method", and "the beacon has no pivot channel, so movement… from the
+   selected beacon".
+5. **The 12 keeps.** Seven local-proxy strings (ZH 代理 = proxy, the wave-4/cookie-proxy
+   ruling), the two real relay-session strings on the pivoting page ("No relay sessions
+   configured", "Active Sessions"), `chain.set_proxy_parent` (proxy role),
+   `topology.net_view` ("controlled hosts" is the correct host-level word; EN has no
+   agent term) and `common.session_expired`.
+6. **Verification.** eslint and `tsc --noEmit` clean; 172 files / 883 unit tests;
+   `npm run check` 11/11 (parity 4727, bundle 3.99 MB / 190 files, critical path
+   972 kB); `out/` rebuilt and dist re-synced (337 files); full e2e 184 passed / 36
+   skipped. None of the four pages is in `VISUAL_ROUTES` (and no e2e spec references
+   topology), so no baseline was measured or moved.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
@@ -1668,6 +1702,7 @@ unchanged in this build.
 | U7 naming & personality (wave 3, body copy 7, landed 2026-10-19) | L1 body copy, sixth page domain (users): 14 flagged, **2 rewritten** (4 value edits — the role legend's beacon-permission bullets), **12 kept under rule 6** (every session string is a real login session), 0 deferred; no visual route, no baseline |
 | U7 naming & personality (wave 3, body copy 8, landed 2026-10-19) | L1 body copy, seventh page domain (circuit breaker): 2 flagged, **1 rewritten** (2 value edits — `cb.honesty_desc`'s "implant multi-C2 config" → "the payload's multi-C2 config", closing wave 5's handover), **1 kept under rule 6** (`common.session_expired`, a real login session in the global 401 path), 0 deferred; `circuit_breaker.*` clean; non-visual route, no baseline (the one `ai light` mobile diff was a font-swap flake, passed on rerun, not adopted) |
 | U7 naming & personality (wave 3, body copy 9, landed 2026-10-19) | L1 body copy, eighth page domain (dashboard): 1 rewritten (`dashboard.quick_generate` "Generate Implant" → "Generate Payload" / 生成木马 → 生成载荷 — the last 木马 in the copy), 0 kept, 5 `tasks.*` deferred by attribution to the tasks page; visual route **measured** with a zero-tolerance probe: 78–536 px (≤0.05 %) on mobile/laptop light+dark → no baseline adopted, linux not re-rendered |
+| U7 naming & personality (wave 3, body copy 13, landed 2026-10-19) | L1 body copy, twelfth page domain (pivoting + topology + proxy-chains + lateral): 43 flagged → 31 rewritten (62 value edits — the pivoting relay/TUN hints, topology legends and nodes, the chain subtitle/parent/pickers, and the lateral page's last implant strings), 12 keeps (7 local-proxy strings where 代理 = proxy, 2 real relay sessions, `chain.set_proxy_parent`, `topology.net_view`'s controlled hosts, `common.session_expired`), 0 deferred; no visual route, no baseline |
 | U7 naming & personality (wave 3, body copy 12, landed 2026-10-19) | L1 body copy, eleventh page domain (credentials + NTLM + cloud): 31 flagged → 17 rewritten (34 value edits — the NTLM pickers/targets/toasts/listener sides, the cloud pickers, beacon-side tasks, "harvested from beacons", "from beacon hosts"), 14 evidence-backed keeps (7 cookie-proxy strings where 代理 = proxy, 6 real NTLM relay sessions, `common.session_expired`), 0 deferred; none of the three pages is a visual route, no baseline |
 | U7 naming & personality (wave 3, body copy 11, landed 2026-10-19) | L1 body copy, tenth page domain (settings): 29 flagged → 23 rewritten (46 value edits — About "Implants"→Beacons, the agent section/title/toast/subtitle, the kill switch (implants→beacons, next beacon→next check-in), module deploy, the routes alert, the database card, the access cards' session-table wording, the last "No agents available"), 6 rule-6 keeps (login sessions + the literal User-Agent header), 0 deferred; settings visual route measured: mobile dark pixel-identical, others 46–377 px (0.01 %) → no baseline adopted |
 | U7 naming & personality (wave 3, body copy 10, landed 2026-10-19) | L1 body copy, ninth page domain (events + tasks): 9 rewritten (18 value edits — the events follow toggle's "session" is the dock's beacon (`dockAgentId`), tasks filter/column/empty state, and the two `ai.nl_*` keys the tasks dialog owns), 0 kept, 0 deferred (25 `ai.*` remain); app fix: empty AI conversations no longer scroll to the bottom (the 3–4 % mobile visual flake, root-caused); events visual route measured: 3/4 captures pixel-identical, mobile light 80 px (0.02 %) → no baseline adopted |

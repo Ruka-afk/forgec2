@@ -165,8 +165,13 @@ identity**, not every heading.
   targets, toast validations and "(beacon side)" listener labels, plus the cloud
   pickers, beacon-side tasks, "harvested from beacons" and "from beacon hosts"; 14
   evidence-backed keeps: the 7 cookie-proxy strings where 代理 is the proxy and the 6
-  real NTLM relay sessions, plus `common.session_expired`). Domains still open:
-  pivoting/topology/chains, AI (25 flagged left), and the long tail
+  real NTLM relay sessions, plus `common.session_expired`), and the
+  **Pivoting/topology/chains domain** (43 flagged: 31 rewritten — the pivoting relay and
+  TUN hints, topology legends/nodes, the chain subtitle/parent/pickers where ZH 代理
+  meant agent, and the lateral page's last implant strings; 12 keeps: 7 local-proxy
+  strings, 2 real relay sessions, `chain.set_proxy_parent`, `topology.net_view`'s
+  controlled hosts, and `common.session_expired`). Domains still open:
+  AI (25 flagged left), and the long tail
   (see the batch map in `docs/UIUX_AUDIT.md`).
   - **A domain is a page cluster, not a key prefix** — learned the hard way. Wave 1
     inventoried `agents.*` + `status_banner.*` and declared Beacons done, but the
