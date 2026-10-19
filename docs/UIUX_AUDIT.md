@@ -1537,6 +1537,20 @@ not a login session — plus the first *app* fix the visual gate forced.
    972 kB); `out/` rebuilt and `internal/webdist/dist` re-synced (337 files); full e2e
    184 passed / 36 skipped twice.
 
+**Deployment probe.** The rebuilt binary (PID 36392 → **6944**, started 21:03:41)
+answers `/health` with `ok`, and the served chunks are byte-identical to
+`internal/webdist/dist` (`assets/index-DrAwE8I1.js` = `2849E675…68B6`,
+`assets/zh-D65CJkSs.js` = `C0ED90E3…8658`). Twenty-two of twenty-two markers as
+expected: the events toggle serves "This Beacon" / "All Beacons" (当前 / 全部 Beacon)
+with the old quoted value gone, and the tasks page serves "Beacon filter", the rewritten
+empty state and the NL examples ("…which beacons uploaded files…", "…find beacons that
+ran mimikatz…" / 哪些 Beacon 上传过文件, 跑过 mimikatz 的 Beacon) with the agent/machine
+twins gone. Two absence markers are deliberately scoped: the bare 全部会话 is still
+served by `agents.wechat_all_conversations` (WeChat history, its own domain), so only
+the quoted events value is asserted absent, and "All Agents" is likewise left alone
+(attack/loot still own it). The empty-conversation scroll fix ships in the same build
+and is covered by the double full-suite run rather than by a string marker.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
