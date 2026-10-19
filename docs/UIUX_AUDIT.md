@@ -1230,6 +1230,29 @@ host-info card. So the cluster was never actually complete.
    `module_status_unknown`) are unflagged, and no other rewritten key renders on a
    `VISUAL_ROUTES` page.
 
+**Deployment probe.** The rebuilt binary (PID 9044 → **27356**, started 17:11:14)
+answers `/health` with `ok`, and the served chunks are byte-identical to
+`internal/webdist/dist` (`assets/index-DuXXv_rO.js` = `CD2F159F…E8B8`,
+`assets/zh-toP-6Bt8.js` = `81293D6D…00B9`). The served bytes were then asserted
+marker by marker, 60 of 60 as expected: the whole residue is gone from the wire
+("Agent is offline" / "Agent 离线——无法采集。", "Target session", "Select a session
+first", "Harvest from session", "Back to agent", "Switch session", "Shell sessions",
+"New session tab", "Close session", "Session tab limit", "waiting for implant
+output…", "queue implant tasks", "password/agent or fuse", and the screen viewer's
+pair), and the new copy is live ("Beacon is offline — collection unavailable." /
+**Beacon 离线——无法采集。**, "Target beacon" / 目标 Beacon, "Harvest from beacon" /
+从 Beacon 采集, "Select a beacon first" / 请先选择 Beacon, "Back to beacon" /
+返回 Beacon, "Switch beacon" / 切换 Beacon, "Beacon shells" / **Beacon Shell**,
+"New shell tab", "Close tab" / 关闭标签, "Shell tab limit ({max}) reached",
+"waiting for beacon output…" / 等待 Beacon 返回输出, "…still running on the beacon",
+and the shell offline body's 等 Beacon 回连后再执行). One marker needed pinning
+down first: `切换会话` still exists in the AI domain (`ai.toggle_sessions` =
+切换会话列表), so that assertion matches the exact value *with its closing quote*
+rather than the bare substring — and the bundle was checked against the source for
+every absence marker before the run (all zero, the AI one excluded by construction).
+This closes the defect the previous probe surfaced: the same check failed on
+"Agent 离线" against the previous bundle and now passes.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
