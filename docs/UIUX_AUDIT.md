@@ -1366,6 +1366,34 @@ assertions by design — `settings.modules.no_agents` still carries it and belon
 the settings domain — and every other absence marker was verified zero in the source
 before the run, so the check cannot trip on another page's copy.
 
+## U7 — Professional naming & page emoji (wave 3, body copy 7: the users domain, landed 2026-10-19)
+
+The shortest wave so far, and the one that shows rule 6 doing the deciding rather
+than the sweep: page-cluster scan over `pages/users/**` returns only `users.*` and
+`common.*` (the phishing page borrows exactly one unflagged key, `label_username`),
+and of the 14 flagged `users.*` values, **12 are kept**.
+
+1. **The keeps (real login sessions).** `users.sessions` "Sessions" / 会话,
+   `sessions_title` "Active Sessions" / 活动会话, `sessions_subtitle` "Sessions for
+   {name}" / {name} 的会话, `sessions_empty` "No active sessions" / 暂无活动会话,
+   `revoke_session` "Revoke Session" / 撤销会话, `confirm.kick` "Kick this user from
+   all sessions?" / 踢出此用户的所有会话？, `confirm.revoke_all` "Revoke ALL active
+   sessions for {name}?" / 撤销 {name} 的所有活动会话？, and the five toasts
+   (`session_revoked`, `session_revoke_failed`, `sessions_revoked`,
+   `sessions_revoke_failed`, `sessions_load_failed`). These name the operator's own
+   console sessions — revocable, per-user, nothing to do with beacons — which is
+   exactly the sense rule 6 protects. Rewriting any of them would have been a
+   regression dressed up as consistency.
+2. **The changes (beacon permission copy).** Only the role legend's two bullets talk
+   about the target fleet: `users.admin_desc_4` "Lock/unlock agents" → **"Lock/unlock
+   beacons"** / 锁定/解锁 Beacon, and `users.user_desc_4` "Lock agents for exclusive
+   ops" → **"Lock beacons for exclusive ops"** / 锁定 Beacon 进行专属作业. Both render
+   in `UsersPage.tsx`'s legend only.
+3. **Verification.** eslint and `tsc --noEmit` clean; 172 files / 883 unit tests;
+   `npm run check` 11/11 (parity 4727, bundle 3.99 MB / 190 files, critical path
+   972 kB); `out/` rebuilt and `internal/webdist/dist` re-synced (337 files); full
+   e2e 184 passed / 36 skipped, no visual route involved and no baseline touched.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
@@ -1384,6 +1412,7 @@ before the run, so the check cannot trip on another page's copy.
 | U7 naming & personality (wave 3, body copy 4 — residue pass, landed 2026-10-19) | L1 body copy, scope fix: the Beacons cluster was inventoried by key prefix in wave 1, leaving `shell.*` 11, `cred.*` 14, `screen.*` 2, `hostinfo.*` 1 unreviewed; 28 flagged, 21 rewritten (39 value edits), 7 kept (the cookie-proxy family: 代理 = proxy), 0 deferred; shell tabs are beacon-keyed so "Shell sessions" → "Beacon shells", "Switch session" → "Switch beacon"; method now starts from the pages, and the re-scan queued `listeners.*` (rendered by the payload generator) as its own wave |
 | U7 naming & personality (wave 3, body copy 5, landed 2026-10-19) | L1 body copy, fourth page domain (listeners, run with the method fix): page-cluster scan over `pages/listeners/**` finds `listener.*` (singular) that prefix lists missed — 12 flagged, 12 rewritten (24 value edits), 0 kept, 2 deferred by attribution (`cb.honesty_desc` → circuit-breaker page, `dashboard.quick_generate` → dashboard); detail stats/headings/empty/action and list columns/subtitle/tip/hint swept; win32 visual tests pass with no snapshot update (diff under the 1.5 % tolerance), linux set re-rendered from this commit and compared |
 | U7 naming & personality (wave 3, body copy 6, landed 2026-10-19) | L1 body copy, fifth page domain (macros + auto-tag rules, plus the shared `ai.pb_agent` the macros page renders): 9 flagged, 9 rewritten (17 value edits; `macros.empty_message` EN-only), 0 kept, 0 deferred; `settings.modules.no_agents` keeps "No agents available" by design (its own domain) so it is excluded from the bundle absence check; neither page is a visual route and the shared key sits in a dialog → no baseline move |
+| U7 naming & personality (wave 3, body copy 7, landed 2026-10-19) | L1 body copy, sixth page domain (users): 14 flagged, **2 rewritten** (4 value edits — the role legend's beacon-permission bullets), **12 kept under rule 6** (every session string is a real login session), 0 deferred; no visual route, no baseline |
 | U7 naming & personality (wave 3, body copy 2, landed 2026-10-19) | L1 body copy, second page domain (payload pipeline): inventory flags 33 values (`generate.*` 14, `profiles.*` 10, `builds.*` 5, `oneshot.*` 4), 24 rewritten per language (46 value edits), 5 kept (proxy / UA header / login sessions), 4 deferred to the automation card; "Agent Binaries" → **Payload Formats** / 载荷格式 (smoke locator follows); format descriptors name the format (GUI implant → GUI executable) and subjectless clauses replace the banned noun; no visual route touched, so no baseline churn on either platform |
 
 ```powershell

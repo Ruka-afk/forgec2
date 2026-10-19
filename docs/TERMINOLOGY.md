@@ -143,8 +143,10 @@ identity**, not every heading.
   kept, 2 deferred by attribution to their own pages) is the first wave to scan by
   page cluster from the start, and the **Macros + auto-tag domains** (9 flagged: 9
   rewritten — including the shared `ai.pb_agent` the macros page renders —, 0 kept,
-  0 deferred) close the namespaces the automation wave handed over. Domains still
-  open: dashboard, events/tasks, settings, users, credentials/NTLM/cloud,
+  0 deferred) close the namespaces the automation wave handed over, and the **Users
+  domain** (14 flagged: just 2 rewritten — the role legend's beacon permissions — with
+  12 kept under rule 6, all of them real login sessions). Domains still open:
+  dashboard, events/tasks, settings, credentials/NTLM/cloud,
   pivoting/topology/chains, AI (27 flagged left), circuit-breaker, and the long tail
   (see the batch map in `docs/UIUX_AUDIT.md`).
   - **A domain is a page cluster, not a key prefix** — learned the hard way. Wave 1
