@@ -1,6 +1,6 @@
 # Terminology & Naming — ForgeC2 UI
 
-Status: **U7 waves 1–3 landed (2026-10-19).** This file is the contract for what the
+Status: **U7 waves 1–3 landed, body-copy sweep at its second domain (2026-10-19).** This file is the contract for what the
 console calls things — in English, in Chinese, in the sidebar, in the page titles, in
 the address bar, and in the body copy the operator actually reads — and for the
 per-page emoji identity.
@@ -54,6 +54,12 @@ vocabulary above governs **operator-facing copy and URLs**.
    sessions, the console session lifetime in the media panel, and WeChat 会话
    (*chat*). Technique and platform names (`AMSI Session Bypass`) keep their own
    terminology.
+7. **Non-beacon nouns stay literal.** A *format descriptor* names the format, not
+   the entity: `GUI implant` → **GUI executable** / GUI 可执行文件, beside
+   `sideload` / `script one-liner` / `ELF · amd64/arm`. And where the sentence is
+   about the code or the build, a subjectless clause beats reintroducing a banned
+   noun: "After implant changes, regenerate the payload" → "Regenerate the payload
+   after code changes"; "Not available on macOS implants" → "…in macOS builds".
 
 ## Emoji identity
 
@@ -126,11 +132,13 @@ identity**, not every heading.
 - **L1 — copy (wave 1: chrome, wave 3: body copy per page domain):** nav, page
   titles, dashboard tiles and the subtitles the rename touched landed in wave 1.
   Body copy — per-page descriptions, toasts, empty states — is swept one page
-  domain per wave; the **Beacons domain landed in wave 3** (100 flagged values:
-  87 rewritten per language, 13 kept under rule 6) and the shared status banner
-  with it. Domains still open: dashboard, events/tasks, payload generator,
-  listeners, settings, users, credentials/NTLM/cloud, pivoting/topology/chains,
-  AI, and the long tail (see the batch map in `docs/UIUX_AUDIT.md`).
+  domain per wave; the **Beacons domain** landed first (100 flagged values: 87
+  rewritten per language, 13 kept under rule 6) with the shared status banner, then
+  the **Payload domain** — payload generator, build records, profiles — (33 flagged:
+  24 rewritten, 5 kept, 4 deferred to the automation card). Domains still open:
+  dashboard, events/tasks, automation, listeners, settings, users,
+  credentials/NTLM/cloud, pivoting/topology/chains, AI, and the long tail (see the
+  batch map in `docs/UIUX_AUDIT.md`).
 - **L2 — frontend structure (done, wave 2):** route URLs and page directory/component
   names follow the vocabulary — `/agents` → `/beacons`, `/timeline` → `/events`,
   `/generate` → `/payload-generator`, `/privesc` → `/privilege-escalation`,

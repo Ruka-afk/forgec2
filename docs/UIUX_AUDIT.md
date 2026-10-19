@@ -1066,6 +1066,57 @@ all far under the 1.5 % tolerance the committed baselines are compared with, and
 rewritten key renders on those pages. The baseline follow-up is closed on both
 platforms.
 
+## U7 — Professional naming & page emoji (wave 3, body copy 2: the payload domain, landed 2026-10-19)
+
+The second domain of the body-copy sweep, same method as the first: an inventory over
+both language blocks flags the domain's pre-Beacon values (`generate.*` 14,
+`profiles.*` 10, `builds.*` 5, plus the neighbouring `oneshot.*` 4), and the codemod
+refuses to run until every flagged value is classified, with the map recording a
+reason per key.
+
+1. **The domain is the Build & Deploy pipeline** — the payload generator
+   (`generate.*`), the build-record page (`builds.*`) and the profiles page
+   (`profiles.*`): three surfaces talking about one generated artifact.
+2. **Rewrites (24 values, 46 value edits).** The format grid stops calling itself
+   "Agent Binaries": it offers six *formats* (exe, dll, ps1, ELF, Mach-O, one-liner),
+   so the tablist is "Payload Formats" / 载荷格式 (`generate.agents_title`, whose
+   accessible name the e2e smoke case asserts — the locator follows). The generated
+   artifact is a payload wherever it is named ("Implant build records" → **Payload
+   build records**, "Generate a new implant to get started" → "Generate a new
+   payload to get started", "Generated agents connect back to C2 automatically" →
+   "…payloads…", "Agents already generated with it are unaffected" → "Payloads…").
+   The running thing is a beacon ("The implant would dial a port…" → "The beacon
+   would dial…", "…so the agent can authenticate against a listener…" → "…the
+   beacon…", "Agent modules" → **Beacon modules** in the title, the hint *and* the
+   picker's aria-label). The counts follow the entity: "Agent Version Distribution"
+   → **Beacon Version Distribution** with the unit "{n} agents" → "{n} beacons", and
+   the profile push target is a beacon ("Push to Agent" → **Push to Beacon**, "Load
+   agents" → **Load beacons** — the Chinese button had said 加载主机, i.e. hosts,
+   and now says 加载 Beacon, with its hint and both toasts in step).
+3. **Two rules the domain settles** (recorded in `TERMINOLOGY.md` as rule 7). A
+   *format descriptor* names the format, not the entity: "GUI implant" →
+   **GUI executable** / GUI 可执行文件, in a tile family that already reads
+   `sideload` / `script one-liner` / `ELF · amd64/arm`. And where the sentence is
+   about the *code* or the *build*, a subjectless clause beats smuggling the banned
+   noun back in: "After implant changes, regenerate the payload" → "Regenerate the
+   payload after code changes", "Not available on macOS implants" → "…in macOS
+   builds" (the ZH side of the ICMP note had carried a bare `implant` loan word).
+4. **Kept on purpose (5).** `HTTP Proxy` / HTTP 代理 (a network proxy in the build
+   form), the two `User-Agent` labels (`generate.user_agent`,
+   `profiles.user_agent_label` — the HTTP header family) and the settings-reload
+   warning's "new sessions" (login sessions, rule 6).
+5. **Deferred (4).** `oneshot.*` reads like the one-shot payload, but the values
+   render in the automation page's **One-Shot Scheduled Tasks** card, so they sweep
+   with the automation domain rather than here.
+6. **Verification.** eslint and `tsc --noEmit` clean; unit suite 172 files / 883
+   tests; `npm run check` 11/11 (i18n parity 4727 keys, bundle 3.99 MB / 190 files,
+   critical path 972 kB); the `out/` export rebuilt and the 337-file
+   `internal/webdist/dist` re-synced; the full e2e suite 184 passed / 36 skipped.
+7. **No baseline move on either platform.** None of the three pages is in
+   `VISUAL_ROUTES` (`login`, `dashboard`, `beacons`, `listeners`, `events`,
+   `settings`, `ai`), so the wave changes no screenshot the suites compare — unlike
+   wave 1, there is nothing to adjudicate here, and `gh` needed no dispatch.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
@@ -1080,6 +1131,7 @@ platforms.
 | U7 naming & personality (wave 1, landed 2026-10-19) | "Beacon" vocabulary across nav/titles/tiles (45 nav + 42 titles + 5 tile/subtitle values per language, 92 keys); one emoji identity per page (nav = h1 = breadcrumb = document title, `aria-hidden` in chips); U6 residue: DNS tile tone, card-header 2-line clamp, privesc mojibake icons, geo 📍 fallback; contract in `docs/TERMINOLOGY.md` — L2 routes landed in wave 2, body copy swept page domain by page domain from wave 3 (Beacons done) |
 | U7 naming & personality (wave 2, landed 2026-10-19) | L2 routing layer: six route renames plus the `/agents/:id` family → `/beacons/:id`, the 15-entry `LEGACY_REDIRECTS` table (id/sub-route/query/hash preserved), 175 files moved (page directories + route-entry components), 151 link literals across 48 files, visual baselines renamed not regenerated, 7 new e2e redirect cases; HTTP API, sqlite schema and OpenAPI untouched per the L3 boundary |
 | U7 naming & personality (wave 3, landed 2026-10-19) | L1 body copy, first page domain (Beacons): inventory flags 100 values (97 `agents.*` + 3 `status_banner.*`), 87 rewritten per language (170 value edits, keys untouched per rule 3), 13 kept with reasons (UA header family, AMSI-session technique, recon/logon/RDP/console sessions, WeChat chat); new rules recorded in `docs/TERMINOLOGY.md` (running implant → beacon, generated artifact → payload, check-in event → "check-in" / 回连, `detail_session` → `Beacon`); two e2e locators follow their copy; win32 baselines refreshed only for the four `beacons-*` files, ten regenerated candidates rejected as unrelated noise (evidence: banner `null` under mocked stats, no rewritten key on those pages, byte-identical re-regeneration); the linux half landed from `visual-baselines.yml` run 39220123316 with the same scoping (4 of 28 rendered files adopted, 3 rejects all under 0.5 % of the canvas) |
+| U7 naming & personality (wave 3, body copy 2, landed 2026-10-19) | L1 body copy, second page domain (payload pipeline): inventory flags 33 values (`generate.*` 14, `profiles.*` 10, `builds.*` 5, `oneshot.*` 4), 24 rewritten per language (46 value edits), 5 kept (proxy / UA header / login sessions), 4 deferred to the automation card; "Agent Binaries" → **Payload Formats** / 载荷格式 (smoke locator follows); format descriptors name the format (GUI implant → GUI executable) and subjectless clauses replace the banned noun; no visual route touched, so no baseline churn on either platform |
 
 ```powershell
 cd frontend

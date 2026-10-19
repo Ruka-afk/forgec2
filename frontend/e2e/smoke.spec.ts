@@ -202,7 +202,7 @@ test.describe("generate workspace (static export)", () => {
     await expect(page.getByRole("tab", { name: "Payload", exact: true })).toBeVisible();
     // The payload panel is its own chunk: the format picker is a second
     // tablist, labelled from generate.agents_title.
-    await expect(page.getByRole("tablist", { name: "Agent Binaries" })).toBeVisible();
+    await expect(page.getByRole("tablist", { name: "Payload Formats" })).toBeVisible();
 
     // Switching tabs loads the next panel and lands in the deep link.
     await page.getByRole("tab", { name: "Builds", exact: true }).click();

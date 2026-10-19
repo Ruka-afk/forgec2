@@ -1,1 +1,0 @@
-import{j as s}from"./vendor-react-DNfTkzgn.js";import{k as o}from"./index-Ccwie1A9.js";function n({id:r,children:t,className:e}){return t?s.jsx("p",{id:r,role:"alert",className:o("text-xs text-destructive-ink mt-1",e),children:t}):null}export{n as F};
