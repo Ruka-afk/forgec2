@@ -141,9 +141,12 @@ identity**, not every heading.
   cookie-proxy family —, 0 deferred) closed what the prefix-scoped waves had left on
   the beacon sub-pages, and the **Listeners domain** (12 flagged: 12 rewritten, 0
   kept, 2 deferred by attribution to their own pages) is the first wave to scan by
-  page cluster from the start. Domains still open: dashboard, events/tasks, settings,
-  users, macros, auto-tag rules, credentials/NTLM/cloud, pivoting/topology/chains, AI,
-  circuit-breaker, and the long tail (see the batch map in `docs/UIUX_AUDIT.md`).
+  page cluster from the start, and the **Macros + auto-tag domains** (9 flagged: 9
+  rewritten — including the shared `ai.pb_agent` the macros page renders —, 0 kept,
+  0 deferred) close the namespaces the automation wave handed over. Domains still
+  open: dashboard, events/tasks, settings, users, credentials/NTLM/cloud,
+  pivoting/topology/chains, AI (27 flagged left), circuit-breaker, and the long tail
+  (see the batch map in `docs/UIUX_AUDIT.md`).
   - **A domain is a page cluster, not a key prefix** — learned the hard way. Wave 1
     inventoried `agents.*` + `status_banner.*` and declared Beacons done, but the
     beacon *detail* pages also render `shell.*`, `cred.*`, `screen.*` and

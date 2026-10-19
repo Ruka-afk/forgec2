@@ -1301,6 +1301,49 @@ that bit wave 1.
 
 **Linux baseline check — evidence says leave the set alone.** `visual-baselines.yml` run **39230315724** re-rendered the 28-file linux set from this commit. 20 files are byte-identical to the committed ones; 8 differ, and pixel triage splits them cleanly. The four `listeners-*` frames — the ones this wave changed — differ by 0.866 % (dark mobile), 0.928 % (light mobile), 1.087 % (light laptop) and 1.094 % (dark laptop): all **below** the 1.5 % tolerance, with the diffs spread over the content column (`bbox=(467,153)-(1105,752)` on laptop, `(124,141)-(373,760)` on mobile — the hero and table copy plus the small reflow it causes). The other four (`ai-light-laptop` 0.001 %, 11 px at the same `(463,69)-(536,123)` box wave 1 saw; `beacons-dark-mobile` 0.084 %; `beacons-light-mobile` 0.094 %; `events-dark-mobile` 0.011 %) are jitter on pages this wave never touched. So **nothing is adopted**: the committed win32 and linux sets stay exactly as they are, and the decision is recorded with its numbers instead of assumed — the local suite enforces the win32 set and passed unmodified, which is the same answer reached from the other direction.
 
+## U7 — Professional naming & page emoji (wave 3, body copy 6: the macros & auto-tag domains, landed 2026-10-19)
+
+Two small pages in one wave, both deferred here by earlier waves with their reasons
+attached — the macro library (`pages/macros/**`, whose flagged keys were handed over
+from the automation wave) and the auto-tag rules page (`pages/autotag/**`).
+
+1. **Inventory & the one shared key.** The page-cluster scan returns `macros.*`,
+   `autotag.*`, `common.*` and `ai.*`; nothing is flagged in `common.*`, and in `ai.*`
+   exactly one key is: `ai.pb_agent`, the playbook builder's target selector
+   ("Personalize for agent (optional)" / 针对 Agent 定制（可选）) — and the macros
+   page renders it (`ai.pb_*` is the shared playbook component used by the AI page
+   too). Attribution rule 6 from the residue pass applies: a key a page renders moves
+   with that page, so it is rewritten here and the remaining 27 flagged `ai.*` values
+   stay with the AI domain. The two automation-page keys that touch these namespaces
+   (`macros.global_stop_on_error`, `autotag.create`/`autotag.update`) are unflagged and
+   untouched, which is why the automation wave could hand the namespaces over
+   wholesale.
+2. **Nine flagged → nine rewritten (17 value edits), 0 kept, 0 deferred.** The macro
+   flow: `macros.no_agents` "No agents available" → **"No beacons available"**,
+   `select_agents_hint` "Select the agents to run this macro on. Each agent executes
+   the steps independently and sequentially." → "Select the **beacons**… Each
+   **beacon**…", `toast.dispatched` "Macro dispatched to {count} agents" → "…**beacons**"
+   / 已下发至 {count} 个 Beacon, `empty_message` "…replay it on any agent with one
+   click." → "…any beacon…" (EN-only: the ZH value already said Beacon), and
+   `agents_unreadable` "The agent list could not be read - this is not a report that no
+   agents exist." → "The **beacon** list…". The auto-tag page: `applied` "Applied
+   auto-tags to {count} agent(s)" → "…**beacon**(s)", `subtitle` "Automatically assign
+   tags to agents…" → "…to **beacons**…" (ZH said 代理), and `empty_message`
+   "…automatically tag agents on check-in." → "…**beacons** on check-in." with the ZH
+   side retiring 签入 for **回连** — rule 5's check-in wording finally reaching the
+   auto-tag copy.
+3. **Marker discipline.** `No agents available` is deliberately *not* asserted absent
+   from the bundle: `settings.modules.no_agents` still carries it and belongs to the
+   settings domain. The check pins only what this wave owns — the macro/auto-tag
+   strings, plus `Personalize for agent (optional)` — and every absence marker was
+   verified zero in the source before the bundle assertion ran.
+4. **Verification.** eslint and `tsc --noEmit` clean; 172 files / 883 unit tests;
+   `npm run check` 11/11 (parity 4727, bundle 3.99 MB / 190 files, critical path
+   972 kB); `out/` rebuilt and `internal/webdist/dist` re-synced (337 files); full e2e
+   184 passed / 36 skipped with **no visual failure** — neither page is in
+   `VISUAL_ROUTES` and `ai.pb_agent` renders inside a dialog, so no baseline is
+   affected and no linux re-render is needed for this wave.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
@@ -1318,6 +1361,7 @@ that bit wave 1.
 | U7 naming & personality (wave 3, body copy 3, landed 2026-10-19) | L1 body copy, third page domain (automation cluster): inventory flags 27 across six namespaces (`auto.*` 6, `scheduler.*` 4, `oneshot.*` 4, `workflows.*` 5, `macros.*` 5, `autotag.*` 3), 19 rewritten per language (38 value edits), 0 kept, 8 deferred to their own pages (macros / auto-tag rules); event and rule-type labels become "Beacon offline/online" while the wire enum ids stay `agent_*`; `oneshot.*` closed here after wave 2's deferral; no locator or baseline depended on the strings |
 | U7 naming & personality (wave 3, body copy 4 — residue pass, landed 2026-10-19) | L1 body copy, scope fix: the Beacons cluster was inventoried by key prefix in wave 1, leaving `shell.*` 11, `cred.*` 14, `screen.*` 2, `hostinfo.*` 1 unreviewed; 28 flagged, 21 rewritten (39 value edits), 7 kept (the cookie-proxy family: 代理 = proxy), 0 deferred; shell tabs are beacon-keyed so "Shell sessions" → "Beacon shells", "Switch session" → "Switch beacon"; method now starts from the pages, and the re-scan queued `listeners.*` (rendered by the payload generator) as its own wave |
 | U7 naming & personality (wave 3, body copy 5, landed 2026-10-19) | L1 body copy, fourth page domain (listeners, run with the method fix): page-cluster scan over `pages/listeners/**` finds `listener.*` (singular) that prefix lists missed — 12 flagged, 12 rewritten (24 value edits), 0 kept, 2 deferred by attribution (`cb.honesty_desc` → circuit-breaker page, `dashboard.quick_generate` → dashboard); detail stats/headings/empty/action and list columns/subtitle/tip/hint swept; win32 visual tests pass with no snapshot update (diff under the 1.5 % tolerance), linux set re-rendered from this commit and compared |
+| U7 naming & personality (wave 3, body copy 6, landed 2026-10-19) | L1 body copy, fifth page domain (macros + auto-tag rules, plus the shared `ai.pb_agent` the macros page renders): 9 flagged, 9 rewritten (17 value edits; `macros.empty_message` EN-only), 0 kept, 0 deferred; `settings.modules.no_agents` keeps "No agents available" by design (its own domain) so it is excluded from the bundle absence check; neither page is a visual route and the shared key sits in a dialog → no baseline move |
 | U7 naming & personality (wave 3, body copy 2, landed 2026-10-19) | L1 body copy, second page domain (payload pipeline): inventory flags 33 values (`generate.*` 14, `profiles.*` 10, `builds.*` 5, `oneshot.*` 4), 24 rewritten per language (46 value edits), 5 kept (proxy / UA header / login sessions), 4 deferred to the automation card; "Agent Binaries" → **Payload Formats** / 载荷格式 (smoke locator follows); format descriptors name the format (GUI implant → GUI executable) and subjectless clauses replace the banned noun; no visual route touched, so no baseline churn on either platform |
 
 ```powershell
