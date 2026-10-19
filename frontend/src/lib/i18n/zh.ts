@@ -1570,7 +1570,7 @@ export const zh: Record<string, string> = {
     "cb.half_open_max_desc": "半开状态允许的请求数量",
     "cb.health_check_desc": "探测监听器健康的频率",
     "cb.health_check_interval": "健康检查间隔（秒）",
-    "cb.honesty_desc": "跟踪探测失败与状态（闭合/半开/打开）。故障转移质量取决于 implant 多 C2 配置与监听器拓扑。实战依赖前请先实验室验证。",
+    "cb.honesty_desc": "跟踪探测失败与状态（闭合/半开/打开）。故障转移质量取决于载荷的多 C2 配置与监听器拓扑。实战依赖前请先实验室验证。",
     "cb.honesty_title": "监听器健康探测 — 非完整多 C2 编排",
     "cb.listener_reset": "已重置监听器 {id} 的熔断器",
     "cb.listener_toggled": "监听器 {id} 已{state}",

@@ -1570,7 +1570,7 @@ export const en: Record<string, string> = {
     "cb.half_open_max_desc": "Requests allowed in half-open state",
     "cb.health_check_desc": "How often to probe listener health",
     "cb.health_check_interval": "Health Check Interval (seconds)",
-    "cb.honesty_desc": "Tracks probe failures and state (closed/half-open/open). Failover quality depends on implant multi-C2 config and listener topology. Validate in lab before relying on it mid-engagement.",
+    "cb.honesty_desc": "Tracks probe failures and state (closed/half-open/open). Failover quality depends on the payload's multi-C2 config and listener topology. Validate in lab before relying on it mid-engagement.",
     "cb.honesty_title": "Listener health probe — not full multi-C2 orchestration",
     "cb.listener_reset": "Reset circuit breaker for listener {id}",
     "cb.listener_toggled": "Listener {id} {state}",

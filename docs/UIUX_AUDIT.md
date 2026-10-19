@@ -1409,6 +1409,41 @@ twelve rule-6 keeps is still on the wire unchanged — "Active Sessions", "Sessi
 加载会话失败). 25 of 25 markers as expected — the keeps are asserted on purpose, so a
 later sweep cannot quietly rewrite the login-session copy without failing this check.
 
+## U7 — Professional naming & page emoji (wave 3, body copy 8: the circuit-breaker domain, landed 2026-10-19)
+
+The smallest domain yet — and the one that closes the key wave 5 handed over.
+
+1. **Page cluster.** `pages/circuit-breaker/**` renders `cb.*`, `circuit_breaker.*` and
+   `common.*`. `circuit_breaker.*` has no flagged values at all — the parameter labels
+   (`threshold_label`, `cooldown_label`, `half_open_label`, `force_state`, …) already
+   read clean. `common.*` flags exactly one key, `common.session_expired` ("Session
+   expired - please sign in again" / 会话已过期，请重新登录): this page does not render
+   it (its consumer is `lib/errors.ts`'s global 401 mapping) and it names a real login
+   session, so it is kept under rule 6.
+2. **The rewrite.** `cb.honesty_desc` — the explainer wave 5 deferred by attribution —
+   read "Failover quality depends on implant multi-C2 config and listener topology."
+   The multi-C2 endpoint list is baked into the generated artifact at build time, so
+   the owner is the payload: **"…depends on the payload's multi-C2 config and listener
+   topology."** / **"…取决于载荷的多 C2 配置与监听器拓扑。"** (rule 5: generated
+   artifact = payload / 载荷). The rest of the paragraph ("Tracks probe failures and
+   state (closed/half-open/open)… Validate in lab before relying on it mid-engagement.")
+   needed no change, and `cb.honesty_title` ("Listener health probe — not full multi-C2
+   orchestration") was never flagged.
+3. **Where "implant" stands now.** After this edit the noun survives only in domains
+   that are still open: the AI copy (`ai.greeting_desc`, the quick-action trio), the
+   dashboard's `quick_generate` ("Generate Implant"), and the lateral/pivoting strings
+   (`lateral.online_implant`, `source_implant`, the two "Select …implant" labels, and
+   `pivot_unsupported`).
+4. **Verification, with one flake on record.** eslint and `tsc --noEmit` clean;
+   172 files / 883 unit tests; `npm run check` 11/11 (parity 4727, bundle 3.99 MB /
+   190 files, critical path 972 kB); `out/` rebuilt and `internal/webdist/dist`
+   re-synced (337 files). The first full e2e run reported one failure — `ai light` on
+   the mobile project, 9405 px (3 % of the image) — which passed in isolation and again
+   on the full rerun (184 passed / 36 skipped). The diff showed the AI page's centered
+   greeting block shifted about 20 px, i.e. a font-swap re-wrap, not this page's copy;
+   under the evidence-scoped baseline protocol no snapshot file was adopted and the
+   win32 set is untouched.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
@@ -1428,6 +1463,7 @@ later sweep cannot quietly rewrite the login-session copy without failing this c
 | U7 naming & personality (wave 3, body copy 5, landed 2026-10-19) | L1 body copy, fourth page domain (listeners, run with the method fix): page-cluster scan over `pages/listeners/**` finds `listener.*` (singular) that prefix lists missed — 12 flagged, 12 rewritten (24 value edits), 0 kept, 2 deferred by attribution (`cb.honesty_desc` → circuit-breaker page, `dashboard.quick_generate` → dashboard); detail stats/headings/empty/action and list columns/subtitle/tip/hint swept; win32 visual tests pass with no snapshot update (diff under the 1.5 % tolerance), linux set re-rendered from this commit and compared |
 | U7 naming & personality (wave 3, body copy 6, landed 2026-10-19) | L1 body copy, fifth page domain (macros + auto-tag rules, plus the shared `ai.pb_agent` the macros page renders): 9 flagged, 9 rewritten (17 value edits; `macros.empty_message` EN-only), 0 kept, 0 deferred; `settings.modules.no_agents` keeps "No agents available" by design (its own domain) so it is excluded from the bundle absence check; neither page is a visual route and the shared key sits in a dialog → no baseline move |
 | U7 naming & personality (wave 3, body copy 7, landed 2026-10-19) | L1 body copy, sixth page domain (users): 14 flagged, **2 rewritten** (4 value edits — the role legend's beacon-permission bullets), **12 kept under rule 6** (every session string is a real login session), 0 deferred; no visual route, no baseline |
+| U7 naming & personality (wave 3, body copy 8, landed 2026-10-19) | L1 body copy, seventh page domain (circuit breaker): 2 flagged, **1 rewritten** (2 value edits — `cb.honesty_desc`'s "implant multi-C2 config" → "the payload's multi-C2 config", closing wave 5's handover), **1 kept under rule 6** (`common.session_expired`, a real login session in the global 401 path), 0 deferred; `circuit_breaker.*` clean; non-visual route, no baseline (the one `ai light` mobile diff was a font-swap flake, passed on rerun, not adopted) |
 | U7 naming & personality (wave 3, body copy 2, landed 2026-10-19) | L1 body copy, second page domain (payload pipeline): inventory flags 33 values (`generate.*` 14, `profiles.*` 10, `builds.*` 5, `oneshot.*` 4), 24 rewritten per language (46 value edits), 5 kept (proxy / UA header / login sessions), 4 deferred to the automation card; "Agent Binaries" → **Payload Formats** / 载荷格式 (smoke locator follows); format descriptors name the format (GUI implant → GUI executable) and subjectless clauses replace the banned noun; no visual route touched, so no baseline churn on either platform |
 
 ```powershell
