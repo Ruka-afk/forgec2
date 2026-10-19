@@ -1394,6 +1394,21 @@ and of the 14 flagged `users.*` values, **12 are kept**.
    972 kB); `out/` rebuilt and `internal/webdist/dist` re-synced (337 files); full
    e2e 184 passed / 36 skipped, no visual route involved and no baseline touched.
 
+**Deployment probe.** The rebuilt binary (PID 20300 → **24088**, started 19:38:08)
+answers `/health` with `ok`, and the served chunks are byte-identical to
+`internal/webdist/dist` (`assets/index-BZFcikvX.js` = `91CD1812…6B6C`,
+`assets/zh-B1u61LTC.js` = `1DBECC24…B772`). The marker check asserts both halves of
+this wave. The two rewrites are live ("Lock/unlock beacons", "Lock beacons for
+exclusive ops" / 锁定/解锁 Beacon, 锁定 Beacon 进行专属作业) and the old bullets are
+gone ("Lock/unlock agents", "Lock agents for exclusive ops"). And every one of the
+twelve rule-6 keeps is still on the wire unchanged — "Active Sessions", "Sessions for
+{name}", "No active sessions", "Revoke Session", "Kick this user from all sessions?",
+"Revoke ALL active sessions for {name}?", "Session revoked", "All sessions revoked",
+"Failed to load sessions", with the ZH twins (活动会话, 暂无活动会话, 撤销会话,
+踢出此用户的所有会话？, 撤销 {name} 的所有活动会话？, 会话已撤销, 所有会话已撤销,
+加载会话失败). 25 of 25 markers as expected — the keeps are asserted on purpose, so a
+later sweep cannot quietly rewrite the login-session copy without failing this check.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
