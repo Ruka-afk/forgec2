@@ -1888,7 +1888,7 @@ export const zh: Record<string, string> = {
     "dashboard.source_loot": "战利品",
     "dashboard.cred_types": "凭据类型",
     "dashboard.quick_actions": "快捷操作",
-    "dashboard.quick_generate": "生成木马",
+    "dashboard.quick_generate": "生成载荷",
     "dashboard.quick_listeners": "监听器",
     "dashboard.quick_agents": "Beacon",
 

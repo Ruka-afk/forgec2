@@ -1888,7 +1888,7 @@ export const en: Record<string, string> = {
     "dashboard.source_loot": "loot",
     "dashboard.cred_types": "Credential Types",
     "dashboard.quick_actions": "Quick actions",
-    "dashboard.quick_generate": "Generate Implant",
+    "dashboard.quick_generate": "Generate Payload",
     "dashboard.quick_listeners": "Listeners",
     "dashboard.quick_agents": "Beacons",
 

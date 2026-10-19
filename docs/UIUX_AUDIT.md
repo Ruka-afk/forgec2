@@ -1456,6 +1456,37 @@ please sign in again" / "会话已过期，请重新登录"). That string appear
 bundle because `common.session_expired` and `login.session_expired` share the value,
 so the marker asserts presence rather than an exact count.
 
+## U7 — Professional naming & page emoji (wave 3, body copy 9: the dashboard domain, landed 2026-10-19)
+
+The first visual route since the listeners wave, and the first wave to *measure* its
+baseline impact instead of inferring it.
+
+1. **Page cluster.** `pages/dashboard/**` renders `dashboard.*`, `common.*` and
+   `tasks.*`. The `tasks.*` scan returns five flagged values (`agent_filter`,
+   `all_agents`, `col_agent`, `detail_agent`, `empty_message`), none of which the
+   dashboard renders — it only uses the five status labels
+   (`tasks.cancelled` / `completed` / `failed` / `pending` / `running`), all unflagged —
+   so they are deferred by attribution to the tasks page (events/tasks domain).
+   `common.*` has nothing flagged on this page.
+2. **The rewrite.** `dashboard.quick_generate` in `OpsHome.tsx`'s Quick launch card:
+   "Generate Implant" → **"Generate Payload"** / 木马 → **载荷**. The ZH value was the
+   last 木马 in the console copy (grep-verified: one occurrence repo-wide, now zero),
+   and the new pair matches `agents.generate_implant` exactly.
+3. **The baseline, measured.** The dashboard is in `VISUAL_ROUTES`, so this wave could
+   not simply assert "no baseline move". A temporary zero-tolerance probe (the same
+   `prepare`/settle logic as `layout.spec.ts`, the four dashboard baselines copied into
+   a throwaway snapshot directory, both deleted afterwards) compared the rebuilt page
+   against the committed win32 files on mobile (390×844) and laptop (1280×800), light
+   and dark: 78 px on mobile light and at most 536 px on laptop light — worst ≈0.05 %
+   of the image against the 0.015 ratio contract. No snapshot file was adopted. Linux
+   was not re-rendered: the change is one same-length label inside a fixed grid cell,
+   and the listeners wave's linux data (worst 1.09 % for several long sentences across
+   four pages) bounds it far below tolerance.
+4. **Verification.** eslint and `tsc --noEmit` clean; 172 files / 883 unit tests;
+   `npm run check` 11/11 (parity 4727, bundle 3.99 MB / 190 files, critical path
+   972 kB); `out/` rebuilt and `internal/webdist/dist` re-synced (337 files); full e2e
+   184 passed / 36 skipped.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
@@ -1476,6 +1507,7 @@ so the marker asserts presence rather than an exact count.
 | U7 naming & personality (wave 3, body copy 6, landed 2026-10-19) | L1 body copy, fifth page domain (macros + auto-tag rules, plus the shared `ai.pb_agent` the macros page renders): 9 flagged, 9 rewritten (17 value edits; `macros.empty_message` EN-only), 0 kept, 0 deferred; `settings.modules.no_agents` keeps "No agents available" by design (its own domain) so it is excluded from the bundle absence check; neither page is a visual route and the shared key sits in a dialog → no baseline move |
 | U7 naming & personality (wave 3, body copy 7, landed 2026-10-19) | L1 body copy, sixth page domain (users): 14 flagged, **2 rewritten** (4 value edits — the role legend's beacon-permission bullets), **12 kept under rule 6** (every session string is a real login session), 0 deferred; no visual route, no baseline |
 | U7 naming & personality (wave 3, body copy 8, landed 2026-10-19) | L1 body copy, seventh page domain (circuit breaker): 2 flagged, **1 rewritten** (2 value edits — `cb.honesty_desc`'s "implant multi-C2 config" → "the payload's multi-C2 config", closing wave 5's handover), **1 kept under rule 6** (`common.session_expired`, a real login session in the global 401 path), 0 deferred; `circuit_breaker.*` clean; non-visual route, no baseline (the one `ai light` mobile diff was a font-swap flake, passed on rerun, not adopted) |
+| U7 naming & personality (wave 3, body copy 9, landed 2026-10-19) | L1 body copy, eighth page domain (dashboard): 1 rewritten (`dashboard.quick_generate` "Generate Implant" → "Generate Payload" / 生成木马 → 生成载荷 — the last 木马 in the copy), 0 kept, 5 `tasks.*` deferred by attribution to the tasks page; visual route **measured** with a zero-tolerance probe: 78–536 px (≤0.05 %) on mobile/laptop light+dark → no baseline adopted, linux not re-rendered |
 | U7 naming & personality (wave 3, body copy 2, landed 2026-10-19) | L1 body copy, second page domain (payload pipeline): inventory flags 33 values (`generate.*` 14, `profiles.*` 10, `builds.*` 5, `oneshot.*` 4), 24 rewritten per language (46 value edits), 5 kept (proxy / UA header / login sessions), 4 deferred to the automation card; "Agent Binaries" → **Payload Formats** / 载荷格式 (smoke locator follows); format descriptors name the format (GUI implant → GUI executable) and subjectless clauses replace the banned noun; no visual route touched, so no baseline churn on either platform |
 
 ```powershell

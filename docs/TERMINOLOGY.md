@@ -148,8 +148,11 @@ identity**, not every heading.
   12 kept under rule 6, all of them real login sessions), and the **Circuit-breaker
   domain** (2 flagged: 1 rewritten — `cb.honesty_desc`'s "implant multi-C2 config" →
   "the payload's multi-C2 config", closing wave 5's handover — and 1 kept,
-  `common.session_expired`, a real login session). Domains still open:
-  dashboard, events/tasks, settings, credentials/NTLM/cloud,
+  `common.session_expired`, a real login session), and the **Dashboard domain** (1
+  rewritten — `dashboard.quick_generate` "Generate Implant" → "Generate Payload" /
+  生成木马 → 生成载荷, the last 木马, with the visual diff measured at ≤0.05 % —, 0
+  kept, 5 `tasks.*` deferred to the tasks page). Domains still open:
+  events/tasks, settings, credentials/NTLM/cloud,
   pivoting/topology/chains, AI (27 flagged left), and the long tail
   (see the batch map in `docs/UIUX_AUDIT.md`).
   - **A domain is a page cluster, not a key prefix** — learned the hard way. Wave 1
