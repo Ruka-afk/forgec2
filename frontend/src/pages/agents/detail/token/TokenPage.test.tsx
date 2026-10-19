@@ -136,6 +136,20 @@ describe("AgentTokenPage", () => {
     await waitFor(() => expect(errorToast).toHaveBeenCalledWith("common.rate_limited"));
   });
 
+  it("keeps the retry banner when the token list read fails", async () => {
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (String(path) === paths.agents.tokenList("a1")) {
+        return Promise.reject({ status: 500, message: "token read exploded" });
+      }
+      return Promise.resolve([]);
+    });
+    render(<AgentTokenPage />);
+    await screen.findByRole("combobox");
+
+    // The unreadable banner replaces the "no tokens harvested yet" claim.
+    expect(await screen.findByText("agents.token_load_failed")).toBeTruthy();
+  });
+
   it("clears drafts and drops an in-flight steal when the route switches agents", async () => {
     const view = render(<AgentTokenPage />);
     await screen.findByRole("combobox");

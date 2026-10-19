@@ -8,14 +8,20 @@ import { useI18n } from "@/lib/i18n";
  * and shows a sonner toast. Replaces scattered `toast.error(err.message)`
  * call sites. `fallbackKey` is used only for errors with no mapped key;
  * `fallbackParams` interpolates that key (e.g. `{ action }` templates).
+ *
+ * `warnError` is the warning-toned twin for deliberate "outcome, not failure"
+ * results (e.g. the 409 command-layer approval conflict): same normalization
+ * and message resolution, different toast tone. Both absorb aborted requests
+ * silently and return the normalized error.
  */
 export function useErrorToast() {
   const { t } = useI18n();
 
-  const toastError = useCallback(
+  const emit = useCallback(
     (
+      tone: (msg: string) => void,
       err: unknown,
-      fallbackKey = "common.error",
+      fallbackKey: string,
       fallbackParams?: Record<string, number | string>,
     ): NormalizedError => {
       const normalized = normalizeError(err);
@@ -23,11 +29,23 @@ export function useErrorToast() {
       const msg = resolveErrorText(t, normalized, () =>
         fallbackParams ? t(fallbackKey, fallbackParams) : t(fallbackKey),
       );
-      toast.error(msg);
+      tone(msg);
       return normalized;
     },
     [t],
   );
 
-  return { toastError };
+  const toastError = useCallback(
+    (err: unknown, fallbackKey = "common.error", fallbackParams?: Record<string, number | string>) =>
+      emit((msg) => toast.error(msg), err, fallbackKey, fallbackParams),
+    [emit],
+  );
+
+  const warnError = useCallback(
+    (err: unknown, fallbackKey = "common.error", fallbackParams?: Record<string, number | string>) =>
+      emit((msg) => toast.warning(msg), err, fallbackKey, fallbackParams),
+    [emit],
+  );
+
+  return { toastError, warnError };
 }

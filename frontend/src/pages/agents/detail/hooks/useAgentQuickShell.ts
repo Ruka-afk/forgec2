@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import { api, ApiError } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { errorText } from "@/lib/errors";
+import { useI18n } from "@/lib/i18n";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { useMutation } from "@/lib/hooks/useMutation";
 import { usePersistedState } from "@/lib/hooks/usePersistedState";
 
@@ -25,6 +27,9 @@ export function useAgentQuickShell(agentId: string, os: string | undefined, succ
     false,
   );
   const shellTouchedRef = useRef(false);
+
+  const { t } = useI18n();
+  const { warnError } = useErrorToast();
   // In-flight guard: the Enter key handler bypasses the disabled Button, so
   // rapid Enter presses would otherwise fire the same command twice on the
   // agent (dangerous for destructive/lateral commands). `mutate` supersedes
@@ -51,8 +56,17 @@ export function useAgentQuickShell(agentId: string, os: string | undefined, succ
     },
     onError: (err, entry) => {
       const conflict = err instanceof ApiError && err.status === 409;
-      if (conflict) toast.warning(err.message);
-      pushEntry({ ...entry, result: conflict ? err.message : errorMessage });
+      if (conflict) {
+        // 409 is a deliberate command-layer outcome (approval conflict): the
+        // warning tone stays, but the toast and the history row both resolve
+        // their text through the shared error rules, with the same fallback
+        // key the caller's pre-translated `errorMessage` stands for.
+        const fallbackKey = "agents.detail_command_send_failed";
+        warnError(err, fallbackKey);
+        pushEntry({ ...entry, result: errorText(t, err, () => t(fallbackKey)) });
+      } else {
+        pushEntry({ ...entry, result: errorMessage });
+      }
       setCommand("");
       sendingRef.current = false;
     },

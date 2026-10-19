@@ -86,7 +86,7 @@ interface AgentDetailPageProps {
 
 export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: AgentDetailPageProps = {}) {
   const { t } = useI18n();
-  const { toastError } = useErrorToast();
+  const { toastError, warnError } = useErrorToast();
   const params = useParams();
   const navigate = useNavigate();
   const id = agentIdProp || (params?.id as string);
@@ -385,7 +385,9 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
         });
       } catch (err) {
         if (err instanceof ApiError && err.status === 409) {
-          toast.warning(err.message);
+          // Approval conflict: a command-layer outcome, not a failure, so it
+          // keeps the warning tone (text resolved through the shared rules).
+          warnError(err, "agents.detail_action_failed", { label });
         } else {
           logger.error("quickAction failed", err);
           toastError(err, "agents.detail_action_failed", { label });
@@ -394,7 +396,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
         setActionLoading(null);
       }
     },
-    [id, t, mimikatzReady, agent.version, toastError],
+    [id, t, mimikatzReady, agent.version, toastError, warnError],
   );
 
   const handleApplySleep = useCallback(() => {

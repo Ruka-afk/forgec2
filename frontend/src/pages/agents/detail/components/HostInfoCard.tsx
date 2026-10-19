@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw, ShieldAlert, Monitor, Package, Network, Clock } from "lucide-react";
 import { api, pollTask } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { errorText } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n";
 import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
@@ -215,7 +216,7 @@ export function HostInfoCard({ agentId, online }: { agentId: string; online: boo
       setReport(parsed);
     } catch (e) {
       if ((e as Error).name === "AbortError") return;
-      setError(e instanceof Error ? e.message : t("hostinfo.error_generic"));
+      setError(errorText(t, e, () => t("hostinfo.error_generic")));
     } finally {
       setBusy(false);
     }

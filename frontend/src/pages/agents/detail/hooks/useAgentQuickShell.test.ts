@@ -1,7 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { toast } from "sonner";
+import { ApiError, api } from "@/lib/api";
 import { useAgentQuickShell } from "./useAgentQuickShell";
-import { api } from "@/lib/api";
+
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
+}));
+
+vi.mock("@/lib/i18n", () => {
+  // `t` must be referentially stable: the send/load callbacks carry it.
+  const t = (key: string) => key;
+  return { getLocale: () => "en", useI18n: () => ({ t }) };
+});
 
 function setup(agentId = "a1") {
   return renderHook(
@@ -13,6 +24,7 @@ function setup(agentId = "a1") {
 describe("useAgentQuickShell", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.mocked(toast.warning).mockClear();
     window.localStorage.clear();
   });
 
@@ -72,5 +84,41 @@ describe("useAgentQuickShell", () => {
     expect(api.postJson).toHaveBeenCalledTimes(2);
     await act(async () => { release(); });
     expect(result.current.history).toHaveLength(1);
+  });
+
+  it("treats a 409 as a warning outcome and records the reason in history", async () => {
+    vi.spyOn(api, "postJson").mockRejectedValueOnce(new ApiError("approval required", 409));
+    const { result } = setup();
+
+    act(() => { result.current.setCommand("whoami"); });
+    await act(async () => { void result.current.sendCommand(); });
+
+    await waitFor(() => expect(vi.mocked(toast.warning)).toHaveBeenCalledWith("approval required"));
+    expect(result.current.history[0]).toMatchObject({ command: "whoami", result: "approval required" });
+    expect(result.current.sending).toBe(false);
+    expect(result.current.command).toBe("");
+  });
+
+  it("falls back to the send-failure copy for a message-less 409 instead of a blank row", async () => {
+    vi.spyOn(api, "postJson").mockRejectedValueOnce(new ApiError("", 409));
+    const { result } = setup();
+
+    act(() => { result.current.setCommand("hostname"); });
+    await act(async () => { void result.current.sendCommand(); });
+
+    await waitFor(() => expect(vi.mocked(toast.warning)).toHaveBeenCalledWith("agents.detail_command_send_failed"));
+    expect(result.current.history[0]?.result).toBe("agents.detail_command_send_failed");
+  });
+
+  it("records a non-conflict failure with the pre-translated message and no warning", async () => {
+    vi.spyOn(api, "postJson").mockRejectedValueOnce({ status: 500, message: "command backend exploded" });
+    const { result } = setup();
+
+    act(() => { result.current.setCommand("whoami"); });
+    await act(async () => { void result.current.sendCommand(); });
+
+    expect(result.current.history[0]).toMatchObject({ command: "whoami", result: "send failed" });
+    expect(vi.mocked(toast.warning)).not.toHaveBeenCalled();
+    expect(result.current.sending).toBe(false);
   });
 });

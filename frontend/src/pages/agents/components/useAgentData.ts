@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { errorText } from "@/lib/errors";
 import { useCachedData } from "@/lib/hooks/useCachedData";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import type { Beacon } from "./types";
@@ -129,9 +130,9 @@ export function useAgentData(t: (key: string) => string) {
         if (ac.signal.aborted) return;
         // Keep the last good map so a transient failure does not clear known
         // lock holders; locksLoaded stays as-is to distinguish never-read.
-        setLocksError(err instanceof Error ? err.message : String(err));
+        setLocksError(errorText(t, err, () => t("agents.locks_unreadable")));
       });
-  }, []);
+  }, [t]);
 
   useEffect(() => () => locksAbortRef.current?.abort(), []);
 

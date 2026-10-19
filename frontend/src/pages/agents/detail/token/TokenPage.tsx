@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { errorText } from "@/lib/errors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -96,9 +97,9 @@ export default function AgentTokenPage() {
       if (signal?.aborted || seq !== tokenLoadSeqRef.current) return;
       // Keep the last good list; only the error flag changes so the UI can
       // report the failure instead of claiming "no tokens harvested yet".
-      setTokenError(err instanceof Error ? err.message : String(err));
+      setTokenError(errorText(t, err, () => t("agents.token_load_failed")));
     }
-  }, [agentId]);
+  }, [agentId, t]);
 
   const loadProcesses = useCallback(async (signal?: AbortSignal) => {
     const seq = ++processLoadSeqRef.current;
@@ -109,9 +110,9 @@ export default function AgentTokenPage() {
       setProcesses(data.processes || data.data || []);
     } catch (err) {
       if (signal?.aborted || seq !== processLoadSeqRef.current) return;
-      setProcessError(err instanceof Error ? err.message : String(err));
+      setProcessError(errorText(t, err, () => t("agents.token_load_processes_failed")));
     }
-  }, [agentId]);
+  }, [agentId, t]);
 
   useEffect(() => {
     const controller = new AbortController();

@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { errorText } from "@/lib/errors";
 import { timeAgo, formatTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { Card } from "@/components/ui/card";
@@ -72,13 +73,13 @@ export default memo(function TimelineSection({ agentId, online }: { agentId: str
         // Deliberately keep the previously loaded events: replacing them with
         // [] turned a refresh failure into "this agent has no history", which
         // reads as a fact about the agent rather than about the request.
-        setLoadError(err instanceof Error ? err.message : String(err));
+        setLoadError(errorText(t, err, () => t("agents.timeline_unreadable")));
       })
       .finally(() => {
         if (gen === genRef.current) setLoading(false);
       });
     // Reload when the agent transitions to online so fresh activity shows up.
-  }, [agentId, kinds, expanded]);
+  }, [agentId, kinds, expanded, t]);
 
   // Reload when the agent transitions to online so fresh activity shows up.
   useEffect(() => { void load(); }, [load, online]);

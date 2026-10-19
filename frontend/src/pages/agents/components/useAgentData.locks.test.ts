@@ -104,4 +104,25 @@ describe("useAgentData lock state", () => {
     expect(result.current.locksUnread).toBe(false);
     expect(result.current.locksError).toBeTruthy();
   });
+
+  it("normalizes a status-carrying lock read failure through the shared rules", async () => {
+    const { result } = renderHook(() => useAgentData(t));
+    await waitFor(() => expect(getMock).toHaveBeenCalled());
+
+    getMock.mockImplementation((url: string) => {
+      const which = route(url);
+      if (which === "locks") return Promise.reject({ status: 500, message: "collab exploded" });
+      if (which === "tags") return Promise.resolve([]);
+      return Promise.resolve({ agents: [], total: 0 });
+    });
+
+    await act(async () => {
+      result.current.loadLocks();
+    });
+
+    // A plain rejection object used to land as "[object Object]"; the shared
+    // normalizer maps the 5xx to the server-error copy instead.
+    expect(result.current.locksError).toBe("common.server_error");
+    expect(result.current.locksUnread).toBe(true);
+  });
 });

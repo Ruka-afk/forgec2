@@ -107,6 +107,24 @@ describe("AISuggestCard", () => {
     await waitFor(() => expect(errorToast).toHaveBeenCalledWith("agent is offline"));
   });
 
+  it("falls back to the assist copy when a 409 carries no message", async () => {
+    apiMock.postJson.mockResolvedValueOnce({ suggestions: [SUGGESTION] });
+    render(<AISuggestCard agentId="a1" online />);
+    await act(async () => {
+      fireEvent.click(loadButton());
+    });
+    const run = await screen.findByRole("button", { name: "ai.suggest_run" });
+
+    apiMock.postJson.mockRejectedValueOnce(new ApiError("", 409));
+    await act(async () => {
+      fireEvent.click(run);
+    });
+
+    // An empty approval notice must not render an empty warning toast.
+    await waitFor(() => expect(warningToast).toHaveBeenCalledWith("ai.toast.assist_failed"));
+    expect(errorToast).not.toHaveBeenCalled();
+  });
+
   it("clears suggestions and drops an in-flight load when the agent switches", async () => {
     const pending = deferred<{ suggestions: typeof SUGGESTION[] }>();
     apiMock.postJson.mockImplementation(() => pending.promise);

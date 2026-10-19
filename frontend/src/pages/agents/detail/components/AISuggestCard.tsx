@@ -28,7 +28,7 @@ const RISK_VARIANT: Record<string, "success" | "warning" | "destructive"> = {
 export function AISuggestCard({ agentId, online }: { agentId: string; online: boolean }) {
   const { t } = useI18n();
   const { status } = useAIStatus();
-  const { toastError } = useErrorToast();
+  const { toastError, warnError } = useErrorToast();
   const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null);
   const [executingIdx, setExecutingIdx] = useState<number>(-1);
 
@@ -49,8 +49,9 @@ export function AISuggestCard({ agentId, online }: { agentId: string; online: bo
     onError: (e) => {
       // 409: the command layer enforces its own approval semantics; that is
       // an outcome, not a retryable failure (same treatment as the header
-      // quick-action in AgentDetailPage).
-      if (e instanceof ApiError && e.status === 409) toast.warning(e.message);
+      // quick-action in AgentDetailPage). `warnError` keeps the warning tone
+      // while resolving the text through the shared error rules.
+      if (e instanceof ApiError && e.status === 409) warnError(e, "ai.toast.assist_failed");
       else toastError(e, "ai.toast.assist_failed");
     },
   });
