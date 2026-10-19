@@ -1,6 +1,7 @@
 # Terminology & Naming — ForgeC2 UI
 
-Status: **U7 waves 1–3 landed, body-copy sweep at its second domain (2026-10-19).** This file is the contract for what the
+Status: **U7 body-copy sweep complete — 16 page/domain waves landed; the inventory's
+remaining 73 flags are all documented keeps (2026-10-19).** This file is the contract for what the
 console calls things — in English, in Chinese, in the sidebar, in the page titles, in
 the address bar, and in the body copy the operator actually reads — and for the
 per-page emoji identity.

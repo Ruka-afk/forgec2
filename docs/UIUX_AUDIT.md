@@ -1822,6 +1822,19 @@ domain nor a documented keep: 42 flagged, 38 rewritten (75 value edits), 4 kept.
    972 kB); `out/` rebuilt and dist re-synced (337 files); full e2e 184 passed / 36
    skipped.
 
+**Deployment probe.** The rebuilt binary (PID 19988 → **18184**, started 23:51:09)
+answers `/health` with `ok`, and the served chunks are byte-identical to
+`internal/webdist/dist` (`assets/index-DmuSAS5L.js` = `DD81CC09…5B88`,
+`assets/zh-DCqxLg01.js` = `1A568938…9D1E`). Eighty-one of eighty-one markers as expected:
+opsec serves "Beacon ID" and "Rekeyed Beacons"; campaign "Beacon Breakdown" and
+"({skipped} beacons skipped)"; the report serves "Beacon Details", "Beacon Count" and
+`"report.units":"beacons"`; groups/tags/asset cards, attack/loot ("All Beacons", "Filter
+by beacon"), the plugin picker, the token table, "Kill Beacon", the palette and shortcut
+copy, the DNS check-in sentence and the payload-build line all match — with every old
+agent/代理 form gone in both languages. No scoped absences were needed this time: all 45
+absence candidates count zero in the source (the single FAIL during authoring was a typo'd
+marker — a spaced `"units": "beacons"` — not a product defect).
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
