@@ -140,6 +140,14 @@ identity**, not every heading.
   pages). Domains still open: dashboard, events/tasks, listeners, settings, users,
   macros, auto-tag rules, credentials/NTLM/cloud, pivoting/topology/chains, AI, and
   the long tail (see the batch map in `docs/UIUX_AUDIT.md`).
+  - **A domain is a page cluster, not a key prefix** — learned the hard way. Wave 1
+    inventoried `agents.*` + `status_banner.*` and declared Beacons done, but the
+    beacon *detail* pages also render `shell.*`, `cred.*`, `screen.*` and
+    `hostinfo.*`, which nobody had flagged; the wave-3 deployment marker check found
+    one live instance ("Agent 离线" on the host-info card) and a re-scan found 28.
+    Later waves start from the pages (`t("<ns>.` over the domain's directory) and
+    then adjudicate every namespace they touch, and the residue pass closes what the
+    prefix-scoped waves left behind.
 - **L2 — frontend structure (done, wave 2):** route URLs and page directory/component
   names follow the vocabulary — `/agents` → `/beacons`, `/timeline` → `/events`,
   `/generate` → `/payload-generator`, `/privesc` → `/privilege-escalation`,
