@@ -1444,6 +1444,18 @@ The smallest domain yet — and the one that closes the key wave 5 handed over.
    under the evidence-scoped baseline protocol no snapshot file was adopted and the
    win32 set is untouched.
 
+**Deployment probe.** The rebuilt binary (PID 24088 → **31872**, started 20:08:12)
+answers `/health` with `ok`, and the served chunks are byte-identical to
+`internal/webdist/dist` (`assets/index-CITkks3B.js` = `E5C96269…4070`,
+`assets/zh-nDeZPJPW.js` = `03640AED…3FCF`). Ten of ten markers as expected: the new
+copy is on the wire ("…depends on the payload's multi-C2 config and listener
+topology." / "…取决于载荷的多 C2 配置与监听器拓扑。", with the paragraph's opening and
+closing sentences intact), the old noun is gone ("implant multi-C2 config" / "implant
+多 C2 配置"), and the kept login-session string is still served ("Session expired —
+please sign in again" / "会话已过期，请重新登录"). That string appears twice in each
+bundle because `common.session_expired` and `login.session_expired` share the value,
+so the marker asserts presence rather than an exact count.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
