@@ -61,7 +61,7 @@ export function CardHeaderRow({
     >
       {Icon && <IconBadge icon={Icon} color={tone} size="lg" />}
       <div className="flex-1 min-w-0">
-        <h2 className="text-section font-semibold text-foreground leading-tight truncate">{title}</h2>
+        <h2 className="text-section font-semibold text-foreground leading-tight line-clamp-2">{title}</h2>
         {description && <p className="text-xs text-muted-foreground mt-0.5 truncate">{description}</p>}
       </div>
       {action && <div className="flex items-center gap-2 shrink-0">{action}</div>}

@@ -292,7 +292,7 @@ export default function ListenersPageContent() {
         <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.burned")} value={loading || healthLoading ? "…" : burnedCount} tone={burnedCount > 0 ? "destructive" : "muted"} icon={<Flame className="size-5" />} />{!loading && !healthLoading && healthError && <p className="mt-1 text-micro-sm text-warning-ink">{t("listeners.health_unknown_burned")}</p>}</Card>
         <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.http")} value={loading ? "…" : httpCount} icon={<Globe className="size-5" />} /></Card>
         <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.tcp")} value={loading ? "…" : tcpCount} icon={<Network className="size-5" />} /></Card>
-        <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.dns")} value={loading ? "…" : dnsCount} tone="primary" icon={<Radio className="size-5" />} /></Card>
+        <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.dns")} value={loading ? "…" : dnsCount} icon={<Radio className="size-5" />} /></Card>
       </MetricGrid>
 
       <PageToolbar>

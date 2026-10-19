@@ -872,6 +872,53 @@ the description truncates instead. `ScriptingPage`'s API reference rendered
 long signatures (`query('agents'|'tasks'|…)`, 374px) in an unwrapped block that
 overflowed its card at both 1280 and 390; it wraps now.
 
+## U7 — Professional naming & page emoji (wave 1, landed 2026-10-19)
+
+The batch's copy debt closes in one vocabulary. Source of truth:
+`docs/TERMINOLOGY.md` (core terms, nav-equals-title rule, emoji catalog, scope).
+Program scope: **L1** operator-facing copy + **L2** frontend route URLs and page
+directory/component names (wave 2); **L3** — HTTP API, sqlite schema, OpenAPI — is
+deliberately untouched (`agents` stays the contract word; the UI translates).
+
+1. **Terminology.** Chrome no longer mixes Session / Agent / Implant: it says
+   **Beacon** — 45 nav labels × 42 page titles × EN/ZH, plus the dashboard tiles
+   (Sessions → Beacons, "No sessions" → "No beacons"). Abbreviations were replaced
+   with professional terms (Generate → Payload Generator, PrivEsc → Privilege
+   Escalation, Exploit Toolkit → Post-Exploitation Toolkit, Network Map → Network
+   Topology, Chain → Proxy Chains, Cloud → Cloud Credential Theft, NTLM → NTLM Relay
+   & Coercion, User Mgmt → User Management, Asset organization → Asset Management,
+   Agent Groups → Beacon Groups …). The ZH side mirrors it and repairs six
+   mistranslations (链式攻击→代理链, 横向穿透→跳板, 截图收集→战利品, 事件流→事件,
+   熔断器→断路器, 全局令牌库→令牌仓库).
+2. **Emoji identity.** One emoji per page, identical across sidebar label, h1,
+   breadcrumb and `document.title` (all read the same value). Decoration only:
+   `aria-hidden` inside chips, Windows-safe single codepoints (no ZWJ sequences, no
+   flags), never the sole carrier of meaning. Catalog lives in `TERMINOLOGY.md`.
+3. **U6 residue closed.** DNS stat tile loses the stray `tone="primary"` (the
+   six-tile listeners grid reads as one family); `CardHeaderRow` h2 `truncate` →
+   `line-clamp-2` (the traffic card's "Beacon Com…" mobile truncation);
+   `PrivescPage.CHECK_TYPES` carried eleven mojibake `"??"`/`"???"` icon literals →
+   real emoji with `aria-hidden` and 2-line descriptions (the desktop ellipsis
+   "Run all available privilege es…" retires); the dashboard geo legend's `"??"`
+   fallback → 📍.
+4. **Verified-resolved from U6 (no change).** V1: `SectionCard`'s default
+   `headerAccent` is the app-wide accent language, not a per-page defect. V2:
+   `globals.css` `.dark` overrides `--code-text/--code-bg`, so code blocks keep
+   contrast. Probe noise ruled deliberate: sr-only labels, hidden select values, and
+   single-line ellipsis.
+
+**Method note.** The nav/title repaint fell **under** the baseline suite's
+`maxDiffPixelRatio: 0.015`, so an `--update-snapshots` pass silently kept the old
+PNGs (the comparison "passed", nothing was written). When the visual language itself
+changes, delete the platform baseline set first and regenerate — a sub-threshold diff
+is a pass by design, not evidence of staleness.
+
+**Still open.** Wave 2: route renames `/agents`→`/beacons`, `/timeline`→`/events`,
+`/generate`→`/payload-generator`, `/privesc`→`/privilege-escalation`,
+`/chain`→`/proxy-chains`, `/asset-organization`→`/asset-management` (old URLs
+redirect), plus page directory/component renames. Wave 3+: body-copy sweep per page
+domain (descriptions, empty states, toasts) still saying Agent/Session/Implant.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
@@ -883,6 +930,7 @@ overflowed its card at both 1280 and 390; it wraps now.
 | U4 narrow screens (landed 2026-10-18) | R2 fixed (status label always rendered), T6 mobile palette entry, T7 touch targets, R3 extended to 10 routes |
 | U5 motion (landed 2026-10-18) | M1: `router.navigate` defaults into `document.startViewTransition` (`?? true` beats a `Link`'s undefined key; explicit `false` kept), reduced-motion and API-absent skip; `src/router-transitions.test.ts` + the 4-viewport Playwright `route transitions` spec; `globals.css` untouched |
 | U6 page-by-page polish | T3 focus mode, T4 stat tiles, T5 density selectors, T9 non-total list fallbacks (tokens, ntlm), T10 clipped fixed-width columns (toolkit, scripting), V1–V2 + per-page checklists |
+| U7 naming & personality (wave 1, landed 2026-10-19) | "Beacon" vocabulary across nav/titles/tiles (45 nav + 42 titles + 5 tile/subtitle values per language, 92 keys); one emoji identity per page (nav = h1 = breadcrumb = document title, `aria-hidden` in chips); U6 residue: DNS tile tone, card-header 2-line clamp, privesc mojibake icons, geo 📍 fallback; contract in `docs/TERMINOLOGY.md` — L2 routes and body copy still open |
 
 ```powershell
 cd frontend

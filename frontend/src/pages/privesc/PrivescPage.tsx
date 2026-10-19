@@ -90,18 +90,18 @@ export default function PrivescPage() {
   const { t } = useI18n();
 
   const CHECK_TYPES = [
-    { value: "all", icon: "??", label: t("privesc.ct_all"), desc: t("privesc.ct_all_desc") },
-    { value: "printnightmare", icon: "???", label: "PrintNightmare", desc: t("privesc.ct_printnightmare_desc") },
-    { value: "elevate", icon: "??", label: t("privesc.ct_elevate"), desc: t("privesc.ct_elevate_desc") },
-    { value: "uac_bypass", icon: "???", label: t("privesc.ct_uac"), desc: t("privesc.ct_uac_desc") },
-    { value: "amsi_bypass", icon: "???", label: t("privesc.ct_amsi"), desc: t("privesc.ct_amsi_desc") },
-    { value: "etw_bypass", icon: "??", label: t("privesc.ct_etw"), desc: t("privesc.ct_etw_desc") },
-    { value: "cvescan", icon: "??", label: t("privesc.ct_cvescan"), desc: t("privesc.ct_cvescan_desc") },
-    { value: "binary_abuse", icon: "??", label: t("privesc.ct_binary"), desc: t("privesc.ct_binary_desc") },
-    { value: "service_exploit", icon: "??", label: t("privesc.ct_service"), desc: t("privesc.ct_service_desc") },
-    { value: "token_abuse", icon: "??", label: t("privesc.ct_token"), desc: t("privesc.ct_token_desc") },
-    { value: "kernel_exploit", icon: "??", label: t("privesc.ct_kernel"), desc: t("privesc.ct_kernel_desc") },
-    { value: "password_finder", icon: "??", label: t("privesc.ct_password"), desc: t("privesc.ct_password_desc") },
+    { value: "all", icon: "🔍", label: t("privesc.ct_all"), desc: t("privesc.ct_all_desc") },
+    { value: "printnightmare", icon: "🖨️", label: "PrintNightmare", desc: t("privesc.ct_printnightmare_desc") },
+    { value: "elevate", icon: "⬆️", label: t("privesc.ct_elevate"), desc: t("privesc.ct_elevate_desc") },
+    { value: "uac_bypass", icon: "🛂", label: t("privesc.ct_uac"), desc: t("privesc.ct_uac_desc") },
+    { value: "amsi_bypass", icon: "🦠", label: t("privesc.ct_amsi"), desc: t("privesc.ct_amsi_desc") },
+    { value: "etw_bypass", icon: "🙈", label: t("privesc.ct_etw"), desc: t("privesc.ct_etw_desc") },
+    { value: "cvescan", icon: "🐛", label: t("privesc.ct_cvescan"), desc: t("privesc.ct_cvescan_desc") },
+    { value: "binary_abuse", icon: "🔨", label: t("privesc.ct_binary"), desc: t("privesc.ct_binary_desc") },
+    { value: "service_exploit", icon: "🛠️", label: t("privesc.ct_service"), desc: t("privesc.ct_service_desc") },
+    { value: "token_abuse", icon: "🆔", label: t("privesc.ct_token"), desc: t("privesc.ct_token_desc") },
+    { value: "kernel_exploit", icon: "💥", label: t("privesc.ct_kernel"), desc: t("privesc.ct_kernel_desc") },
+    { value: "password_finder", icon: "🔓", label: t("privesc.ct_password"), desc: t("privesc.ct_password_desc") },
   ];
 
   const loadBusyRef = useRef(false);
@@ -254,8 +254,8 @@ export default function PrivescPage() {
                 <div key={ct.value} className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${checkType === ct.value ? "border-2 border-primary bg-primary/10" : "border border-border hover:bg-muted/50"}`}>
                   <RadioGroupItem value={ct.value} id={`ct-${ct.value}`} />
                   <Label htmlFor={`ct-${ct.value}`} className="min-w-0 cursor-pointer">
-                    <div className="text-sm font-medium">{ct.icon} {ct.label}</div>
-                    <div className="text-xs text-muted-foreground truncate">{ct.desc}</div>
+                    <div className="text-sm font-medium"><span aria-hidden="true">{ct.icon}</span> {ct.label}</div>
+                    <div className="text-xs text-muted-foreground line-clamp-2">{ct.desc}</div>
                   </Label>
                 </div>
               ))}
