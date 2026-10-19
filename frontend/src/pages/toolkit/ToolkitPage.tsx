@@ -8,11 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { api, formatThrownError } from "@/lib/api";
+import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { fetchAgentListCached } from "@/lib/agents";
 import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataError } from "@/components/ui/data-state";
@@ -43,6 +44,7 @@ interface RecentTask {
 
 export default function ToolkitPage() {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const [selectedAgent, setSelectedAgent] = useState("");
   const [activeTab, setActiveTab] = useState<"commands" | "templates" | "spray">("commands");
   const [agentInfo, setAgentInfo] = useState<Record<string, unknown> | null>(null);
@@ -60,7 +62,7 @@ export default function ToolkitPage() {
         toast.error((data.error as string) || t("toolkit.toast.action_failed"));
       }
     } catch (e) {
-      toast.error(formatThrownError(e));
+      toastError(e, "toolkit.toast.action_failed");
     }
   };
 
@@ -327,7 +329,7 @@ export default function ToolkitPage() {
                   toast.success(t("templates.toast.run_dispatched", { name: command.slice(0, 40) }));
                   loadData();
                 } catch (e) {
-                  toast.error(formatThrownError(e));
+                  toastError(e, "templates.toast.run_failed");
                 }
               })();
             }}

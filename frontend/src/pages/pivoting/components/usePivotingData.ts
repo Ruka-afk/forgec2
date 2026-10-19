@@ -1,16 +1,18 @@
 
 import { useCallback } from "react";
 import { toast } from "sonner";
-import { api, formatThrownError } from "@/lib/api";
+import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { normalizeListEnvelope } from "@/lib/envelope";
 import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { POLL } from "@/lib/polling";
 import type { PivotAgent, RelaySession, RPortForwardStatus } from "./types";
 
 export function usePivotingData() {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
 
   const { data, loading, refresh: loadData } = useApiResource<{
     sessions: RelaySession[];
@@ -61,12 +63,12 @@ export function usePivotingData() {
         toast.success(t("pivoting.toast.socks_relay_started"));
         await loadData();
         return true;
-      } catch {
-        toast.error(t("pivoting.toast.socks_relay_start_failed"));
+      } catch (e) {
+        toastError(e, "pivoting.toast.socks_relay_start_failed");
         return false;
       }
     },
-    [loadData, t],
+    [loadData, t, toastError],
   );
 
   const stopRelay = useCallback(
@@ -74,12 +76,12 @@ export function usePivotingData() {
       try {
         await api.post(paths.agents.socksRelayStop(agentId), { agent_id: agentId });
         toast.success(t("pivoting.toast.socks_relay_stopped"));
-      } catch {
-        toast.error(t("pivoting.toast.socks_relay_stop_failed"));
+      } catch (e) {
+        toastError(e, "pivoting.toast.socks_relay_stop_failed");
       }
       await loadData();
     },
-    [loadData, t],
+    [loadData, t, toastError],
   );
 
   const startLocalProxy = useCallback(
@@ -101,12 +103,12 @@ export function usePivotingData() {
         await api.post(paths.agents.socks(throughAgent), body);
         toast.success(t("pivoting.toast.local_proxy_started", { localPort: String(localPort) }));
         return true;
-      } catch {
-        toast.error(t("pivoting.toast.local_proxy_start_failed"));
+      } catch (e) {
+        toastError(e, "pivoting.toast.local_proxy_start_failed");
         return false;
       }
     },
-    [t],
+    [t, toastError],
   );
 
   const startRPort = useCallback(
@@ -126,12 +128,12 @@ export function usePivotingData() {
         toast.success(t("pivoting.toast.rport_started"));
         await loadData();
         return true;
-      } catch (err) {
-        toast.error(formatThrownError(err));
+      } catch (e) {
+        toastError(e, "pivoting.toast.rport_start_failed");
         return false;
       }
     },
-    [loadData, t],
+    [loadData, t, toastError],
   );
 
   const stopRPort = useCallback(
@@ -139,12 +141,12 @@ export function usePivotingData() {
       try {
         await api.post(paths.agents.rportfwdStop(agentId), { lport: lport.toString() });
         toast.success(t("pivoting.toast.rport_stopped"));
-      } catch {
-        toast.error(t("pivoting.toast.rport_stop_failed"));
+      } catch (e) {
+        toastError(e, "pivoting.toast.rport_stop_failed");
       }
       await loadData();
     },
-    [loadData, t],
+    [loadData, t, toastError],
   );
 
   const checkRPortStatus = useCallback(
@@ -157,11 +159,11 @@ export function usePivotingData() {
             status: data.active ? "Active" : "Inactive",
           }),
         );
-      } catch {
-        toast.error(t("pivoting.toast.rport_status_check_failed"));
+      } catch (e) {
+        toastError(e, "pivoting.toast.rport_status_check_failed");
       }
     },
-    [t],
+    [t, toastError],
   );
 
   return {

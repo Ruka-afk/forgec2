@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { Spinner } from "@/components/ui/spinner";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Banner } from "@/components/ui/banner";
@@ -20,11 +21,12 @@ import { ArrowDown, ArrowLeftRight, ArrowRight, ArrowUp, Check, Info, Network, P
 import { formatCreated } from "./components/types";
 import { formatBytes } from "@/lib/utils";
 import { usePivotingData } from "./components/usePivotingData";
-import { api, formatThrownError } from "@/lib/api";
+import { api } from "@/lib/api";
 import { toast } from "sonner";
 
 export default function PivotingPageContent() {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const {
     sessions,
     agents,
@@ -330,7 +332,7 @@ export default function PivotingPageContent() {
                           await api.post(paths.agents.socks(a.id), { port: localPort.toString() });
                           toast.success(t("pivoting.toast.direct_socks", { host: a.hostname, port: String(localPort) }));
                         } catch (err) {
-                          toast.error(formatThrownError(err));
+                          toastError(err, "pivoting.toast.direct_socks_failed");
                         } finally {
                           setDirectSocksBusy("");
                         }

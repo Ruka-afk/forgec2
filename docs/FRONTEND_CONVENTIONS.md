@@ -40,6 +40,10 @@ Why not hand-rolled `useState(saving)` + `try/catch`:
   concurrent requests (e.g. the agents dock's per-row pull/push): a single
   `useMutation` holds one generation, so a sibling request's completion would
   be dropped. Those paths still route errors through `toastError`/`errorText`.
+- Every action surface routes failures through the normalizer as of the wave-10
+  sweep; do not add `formatThrownError` call sites — it renders a non-`Error`
+  rejection as `[object Object]` and stays only for `ShellTerminal`'s
+  deliberate 409 branch.
 - When a hook drives actions bound to the route's resource id (e.g.
   `/agents/:id`), call the mutation's `reset()` from an effect on id change:
   a completion that lands after the operator switched resources must not fire

@@ -7,11 +7,13 @@ import { PageContainer } from "@/components/ui/page-container";
 import { IconBadge } from "@/components/ui/icon-badge";
 import { ErrorState } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/button";
-import { api, formatThrownError } from "@/lib/api";
+import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { fetchAgentListCached } from "@/lib/agents";
 import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { useMutation } from "@/lib/hooks/useMutation";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { POLL } from "@/lib/polling";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -37,7 +39,6 @@ export default function NtlmPage() {
   const [relayListener, setRelayListener] = useState("0.0.0.0:8445");
   const [relayTarget, setRelayTarget] = useState("");
   const [relayFlags, setRelayFlags] = useState("");
-  const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("coerce");
 
   const { data: agentsData, error: agentsError, setError: setAgentsError } = useApiResource<{ agents?: Agent[] }>({
@@ -66,48 +67,68 @@ export default function NtlmPage() {
   const getHostname = (a: Agent) => a.hostname || "";
   const getIP = (a: Agent) => a.ip || "";
 
-  const handleCoerce = async () => {
+  const { toastError } = useErrorToast();
+
+  // All three NTLM actions share one pending indicator: an in-flight request
+  // disables every action button (the old shared bool's job), so a second
+  // request cannot start while a first is out. Validation stays direct.
+  const coerce = useMutation<[], Record<string, unknown>>({
+    fn: () => {
+      const body = new URLSearchParams({ target, listen_addr: listenAddr });
+      return api.post(paths.agents.coerce(selectedAgent, coerceType), Object.fromEntries(body));
+    },
+    onSuccess: (data) => {
+      if (data.success) toast.success(t("ntlm.toast.coerce_dispatched", { task_id: String(data.task_id) }));
+      else toast.error((data.error as string) || t("ntlm.toast.coerce_failed"));
+    },
+    onError: (e) => toastError(e, "ntlm.toast.coerce_failed"),
+  });
+
+  const relayStart = useMutation<[], Record<string, unknown>>({
+    fn: () => {
+      const body = new URLSearchParams({ target: relayTarget, listener: relayListener, flags: relayFlags });
+      return api.post(paths.agents.relayStart(selectedAgent), Object.fromEntries(body));
+    },
+    onSuccess: (data) => {
+      if (data.success) toast.success(t("ntlm.toast.relay_started", { task_id: String(data.task_id) }));
+      else toast.error((data.error as string) || t("ntlm.toast.start_failed"));
+    },
+    onError: (e) => toastError(e, "ntlm.toast.start_failed"),
+  });
+
+  const relayStop = useMutation<[], Record<string, unknown>>({
+    fn: () => api.post(paths.agents.relayStop(selectedAgent), {}),
+    onSuccess: (data) => {
+      if (data.success) toast.success(t("ntlm.toast.relay_stopped"));
+      else toast.error((data.error as string) || t("ntlm.toast.stop_failed"));
+    },
+    onError: (e) => toastError(e, "ntlm.toast.stop_failed"),
+  });
+
+  const loading = coerce.isPending || relayStart.isPending || relayStop.isPending;
+
+  const handleCoerce = () => {
     if (!selectedAgent || !target) {
       toast.error(t("ntlm.toast.select_agent_target"));
       return;
     }
-    setLoading(true);
-    try {
-      const body = new URLSearchParams({ target, listen_addr: listenAddr });
-      const data = await api.post(paths.agents.coerce(selectedAgent, coerceType), Object.fromEntries(body));
-      if (data.success) toast.success(t("ntlm.toast.coerce_dispatched", { task_id: String(data.task_id) }));
-      else toast.error((data.error as string) || t("ntlm.toast.coerce_failed"));
-    } catch (e) { toast.error(formatThrownError(e)); }
-    setLoading(false);
+    void coerce.mutate();
   };
 
-  const handleRelayStart = async () => {
+  const handleRelayStart = () => {
     if (!selectedAgent || !relayTarget) {
       toast.error(t("ntlm.toast.select_agent_relay"));
       return;
     }
-    setLoading(true);
-    try {
-      const body = new URLSearchParams({ target: relayTarget, listener: relayListener, flags: relayFlags });
-      const data = await api.post(paths.agents.relayStart(selectedAgent), Object.fromEntries(body));
-      if (data.success) toast.success(t("ntlm.toast.relay_started", { task_id: String(data.task_id) }));
-      else toast.error((data.error as string) || t("ntlm.toast.start_failed"));
-    } catch (e) { toast.error(formatThrownError(e)); }
-    setLoading(false);
+    void relayStart.mutate();
   };
 
-  const handleRelayStop = async () => {
+  const handleRelayStop = () => {
     if (!selectedAgent) {
       toast.error(t("ntlm.toast.select_agent_first"));
       return;
     }
-    setLoading(true);
-    try {
-      const data = await api.post(paths.agents.relayStop(selectedAgent), {});
-      if (data.success) toast.success(t("ntlm.toast.relay_stopped"));
-      else toast.error((data.error as string) || t("ntlm.toast.stop_failed"));
-    } catch (e) { toast.error(formatThrownError(e)); }
-    setLoading(false);
+    void relayStop.mutate();
   };
 
   const tabs: { key: TabType; label: string; icon: React.ReactNode }[] = [

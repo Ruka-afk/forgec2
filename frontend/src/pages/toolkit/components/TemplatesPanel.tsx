@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { api, formatThrownError } from "@/lib/api";
+import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { errorText } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
+import { useMutation } from "@/lib/hooks/useMutation";
 import { usePermissions } from "@/lib/hooks/usePermissions";
 import { Card } from "@/components/ui/card";
 import { CardHeaderRow } from "@/components/ui/card-header-row";
@@ -13,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -45,27 +49,30 @@ export default function TemplatesPanel({
   onRun?: (command: string) => void;
 }) {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const { confirm, modal } = useConfirm();
   const { can } = usePermissions();
   const canWrite = can("agents.write");
 
   const [templates, setTemplates] = useState<CommandTemplate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm());
-  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const d = await api.get<{ templates?: CommandTemplate[] }>(paths.templates.list);
       setTemplates(d.templates || []);
-    } catch {
+      setLoadError(null);
+    } catch (e) {
       setTemplates([]);
+      setLoadError(errorText(t, e, () => t("common.load_failed")));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -97,13 +104,8 @@ export default function TemplatesPanel({
     setEditorOpen(true);
   };
 
-  const handleSave = async () => {
-    if (!form.name.trim() || !form.category.trim() || !form.command.trim()) {
-      toast.error(t("templates.toast.fields_required"));
-      return;
-    }
-    setSaving(true);
-    try {
+  const save = useMutation<[], void>({
+    fn: async () => {
       const body = {
         name: form.name.trim(),
         category: form.category.trim(),
@@ -112,14 +114,21 @@ export default function TemplatesPanel({
       };
       if (editingId != null) await api.putJson(paths.templates.one(editingId), body);
       else await api.postJson(paths.templates.list, body);
+    },
+    onSuccess: () => {
       toast.success(editingId != null ? t("templates.toast.updated") : t("templates.toast.created"));
       setEditorOpen(false);
-      await load();
-    } catch (e) {
-      toast.error(formatThrownError(e));
-    } finally {
-      setSaving(false);
+      void load();
+    },
+    onError: (e) => toastError(e, "templates.toast.save_failed"),
+  });
+
+  const handleSave = () => {
+    if (!form.name.trim() || !form.category.trim() || !form.command.trim()) {
+      toast.error(t("templates.toast.fields_required"));
+      return;
     }
+    void save.mutate();
   };
 
   const handleDelete = async (tpl: CommandTemplate) => {
@@ -129,7 +138,7 @@ export default function TemplatesPanel({
       toast.success(t("templates.toast.deleted"));
       await load();
     } catch (e) {
-      toast.error(formatThrownError(e));
+      toastError(e, "templates.toast.delete_failed");
     }
   };
 
@@ -146,7 +155,7 @@ export default function TemplatesPanel({
       await api.postJson(paths.agents.command(selectedAgent), { command: tpl.command });
       toast.success(t("templates.toast.run_dispatched", { name: tpl.name }));
     } catch (e) {
-      toast.error(formatThrownError(e));
+      toastError(e, "templates.toast.run_failed");
     }
   };
 
@@ -167,6 +176,15 @@ export default function TemplatesPanel({
 
       {loading ? (
         <div className="flex items-center justify-center py-16"><Spinner size="sm" /></div>
+      ) : loadError ? (
+        <ErrorState
+          message={loadError}
+          action={
+            <Button variant="outline" size="sm" onClick={() => { setLoading(true); setLoadError(null); void load(); }}>
+              {t("common.retry")}
+            </Button>
+          }
+        />
       ) : templates.length === 0 ? (
         <EmptyState
           icon={FileCode2}
@@ -300,11 +318,11 @@ export default function TemplatesPanel({
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditorOpen(false)} disabled={saving}>
+            <Button variant="outline" onClick={() => setEditorOpen(false)} disabled={save.isPending}>
               {t("common.cancel")}
             </Button>
-            <Button onClick={() => void handleSave()} disabled={saving}>
-              {saving ? <Spinner size="sm" /> : t("common.save")}
+            <Button onClick={handleSave} disabled={save.isPending}>
+              {save.isPending ? <Spinner size="sm" /> : t("common.save")}
             </Button>
           </DialogFooter>
         </DialogContent>
