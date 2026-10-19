@@ -1487,6 +1487,15 @@ baseline impact instead of inferring it.
    972 kB); `out/` rebuilt and `internal/webdist/dist` re-synced (337 files); full e2e
    184 passed / 36 skipped.
 
+**Deployment probe.** The rebuilt binary (PID 31872 → **36392**, started 20:27:51)
+answers `/health` with `ok`, and the served chunks are byte-identical to
+`internal/webdist/dist` (`assets/index-CJsXA1YU.js` = `9267C629…13F1`,
+`assets/zh-BoChKmsw.js` = `C690FD01…D30A`). Five of five markers as expected:
+"Generate Payload" is served (three times — the quick launch plus the beacons and
+listener entry points), "Generate Implant" is now zero in the bundle, and on the ZH
+side 生成载荷 is served (seven occurrences across the console) while 生成木马 and the
+bare 木马 are zero — the trojan loan word is gone from the shipped copy entirely.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
