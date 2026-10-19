@@ -1681,6 +1681,21 @@ implant strings: 43 flagged, 31 rewritten (62 value edits), 12 kept.
    skipped. None of the four pages is in `VISUAL_ROUTES` (and no e2e spec references
    topology), so no baseline was measured or moved.
 
+**Deployment probe.** The rebuilt binary (PID 30312 → **38952**, started 22:00:25)
+answers `/health` with `ok`, and the served chunks are byte-identical to
+`internal/webdist/dist` (`assets/index-DsthL0H-.js` = `9921497F…2423`,
+`assets/zh-CRgEOprb.js` = `F7707502…77D5`). Seventy-one of seventy-one markers as
+expected: pivoting serves "Direct Beacon SOCKS", the beacon-host hint, "Traffic routing
+via beacon", "Beacon CIDR" and the Linux/Windows/macOS beacon TUN note; topology serves
+"Online Beacon", "Discovered by beacon", "Beacons will appear here when they connect"
+and "parent beacon ID"; the proxy-chain page serves the beacon subtitle, "Set Parent
+Beacon" and the beacon pickers; and the lateral page serves "Pivot Beacon", "Select
+online beacon…" and "Source Beacon", with the old agent/implant strings gone in both
+languages. Three absence markers are deliberately scoped instead of global: 选择代理 and
+目标 Agent still belong to scripting/toolkit/bloodhound/plugins/privesc, and 在线 Implant
+still appears in `ai.quick_stale_query` (the AI domain, 25 flagged). The proxy-family and
+relay-session keeps are unchanged in this build.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
