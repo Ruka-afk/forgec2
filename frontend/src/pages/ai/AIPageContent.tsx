@@ -72,6 +72,7 @@ export default function AIPage() {
 	const activeRunIdRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollFrameRef = useRef<number | null>(null);
+  const hasMessagesRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const {
@@ -205,6 +206,9 @@ export default function AIPage() {
   }, []);
 
   useEffect(() => {
+    hasMessagesRef.current = messages.length > 0;
+  }, [messages.length]);
+  useEffect(() => {
     if (messages.length === 0) {
       const viewport = messagesEndRef.current?.closest<HTMLElement>("[data-ai-message-scroll]");
       viewport?.scrollTo({ top: 0, behavior: "auto" });
@@ -215,6 +219,10 @@ export default function AIPage() {
     if (stickToBottomRef.current) scheduleScrollToBottom(!loading);
   }, [loading, messages, scheduleScrollToBottom]);
   useEffect(() => {
+    // An empty conversation has nothing to reveal: scrolling to the bottom here
+    // shifted the centered mobile empty state by ~32px once the session list
+    // resolved (a race the visual baselines caught). Keep it pinned to the top.
+    if (!hasMessagesRef.current) return;
     stickToBottomRef.current = true;
     setShowJumpToLatest(false);
     scheduleScrollToBottom(false);
