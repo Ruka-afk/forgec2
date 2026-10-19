@@ -931,7 +931,9 @@ above; the source of truth stays `docs/TERMINOLOGY.md`).
    and every internal link (dashboard tiles, palette entries, status-banner filters,
    cross-page buttons, dock navigation, menu actions — 151 literals across 48 files)
    now points at the new slug. A post-change audit finds the old literals only in the
-   redirect table, one comment, and the backend API clients.
+   redirect table and in references to backend endpoints (the dual-use
+   `/agents/:id/…` API paths, `/toolkit/agents/…`, `/api/agents/…`), inline endpoint
+   comments included — no stale client link survives.
 2. **Old URLs keep working — through the router, not the server.** `router.tsx`
    gains a `LEGACY_REDIRECTS` table (15 entries: six top-level plus the detail
    family) rendered by one shared `LegacyPrefixRedirect` that swaps the first path
@@ -961,6 +963,14 @@ above; the source of truth stays `docs/TERMINOLOGY.md`).
    `ai-dark` visual failure in the first run was re-run-verified as a pre-existing
    flake in the AI welcome block's vertical offset: no `pages/ai/**` file is touched
    by this wave.
+
+**Deployment probe.** Against the live server (embedded bundle, unauthenticated
+session) `/beacons`, `/beacons/abc/shell`, `/events` and `/payload-generator` all
+resolve in the shipped SPA and hand off to the login guard with their own path in
+`?next=`, while `/agents` is rewritten to `/beacons` *before* the guard fires — the
+compatibility redirect is in the deployed bundle, not only in the test server. The
+served entry chunk hashes identically to `internal/webdist/dist`
+(`92C14B56…D36151CD`), so what shipped is what was tested.
 
 **Method note (codemod).** The 151 link literals were rewritten by a one-shot Node
 script whose dry-run report was reviewed line by line before applying; five matches
