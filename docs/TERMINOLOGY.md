@@ -160,8 +160,12 @@ identity**, not every heading.
   "next beacon"→next check-in), module deploy, the routes alert, the database card, the
   access cards' session-table wording, and the last "No agents available" — with 6
   kept under rule 6: operator/login sessions, telemetry's console session,
-  `common.session_expired`, plus the literal `User-Agent` header). Domains still open:
-  credentials/NTLM/cloud,
+  `common.session_expired`, plus the literal `User-Agent` header), and the
+  **Credentials/NTLM/cloud domain** (31 flagged: 17 rewritten — the NTLM pickers,
+  targets, toast validations and "(beacon side)" listener labels, plus the cloud
+  pickers, beacon-side tasks, "harvested from beacons" and "from beacon hosts"; 14
+  evidence-backed keeps: the 7 cookie-proxy strings where 代理 is the proxy and the 6
+  real NTLM relay sessions, plus `common.session_expired`). Domains still open:
   pivoting/topology/chains, AI (25 flagged left), and the long tail
   (see the batch map in `docs/UIUX_AUDIT.md`).
   - **A domain is a page cluster, not a key prefix** — learned the hard way. Wave 1

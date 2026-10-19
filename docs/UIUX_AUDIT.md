@@ -1604,6 +1604,35 @@ available" clone is gone (asserted quoted; the longer `bof.toast.no_agents` sent
 legitimately keeps the words). The rule-6 keepers (`User-Agent`, the JWT/login-session
 strings, the session timeout) are unchanged in this build.
 
+## U7 — Professional naming & page emoji (wave 3, body copy 12: the credentials, NTLM & cloud domain, landed 2026-10-19)
+
+Three related pages in one wave: the credential tools are where the ZH 代理 (agent)
+wording survived longest, while the cookie-proxy and relay-session strings are
+deliberate keeps.
+
+1. **NTLM.** The page selects a beacon (8 rewrites): "-- Select Agent --" → "-- Select
+   Beacon --", "Target Agent" → "Target Beacon", the three toast validations ("Select a
+   beacon first", "…and enter a relay target", "…and enter a target"), "load agents
+   failed" → "load beacons failed", and both listener labels say "(**beacon** side)".
+   The ZH side carried 代理/代理端 in all eight and now reads Beacon.
+2. **Cloud.** Nine rewrites: the dispatch/empty/filter/target pickers say beacon, the
+   experimental note dispatches "**beacon-side**" tasks, credentials are "harvested from
+   **beacons**", the subtitle steals "from **beacon hosts**" (从 Beacon 主机; the last
+   "agent machines" wording here), and the unreadable-rows warning no longer says the
+   agent holds none but the **beacon**.
+3. **The 14 keeps are evidence-backed.** The seven `cred.cookie_proxy_*` strings describe
+   a real local 127.0.0.1 HTTP proxy that injects harvested cookies — ZH 代理 = proxy,
+   the wave-4 ruling, and a detector false positive. The six `ntlm.*` session strings
+   ("Session ID", "Relay Sessions", "No relay sessions", the active/inactive counts and
+   description) are genuine NTLM relay sessions (rule 6), and `common.session_expired`
+   stays the login session.
+4. **Verification.** eslint and `tsc --noEmit` clean; 172 files / 883 unit tests — one
+   `src/lib/i18n/index.test.tsx` localStorage case failed once in the parallel full run,
+   passed alone and on the full rerun (test isolation, not a copy dependency); `npm run
+   check` 11/11 (parity 4727, bundle 3.99 MB / 190 files, critical path 972 kB); `out/`
+   rebuilt and dist re-synced (337 files); full e2e 184 passed / 36 skipped. None of
+   credentials/NTLM/cloud is in `VISUAL_ROUTES`, so no baseline was measured or moved.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
@@ -1625,6 +1654,7 @@ strings, the session timeout) are unchanged in this build.
 | U7 naming & personality (wave 3, body copy 7, landed 2026-10-19) | L1 body copy, sixth page domain (users): 14 flagged, **2 rewritten** (4 value edits — the role legend's beacon-permission bullets), **12 kept under rule 6** (every session string is a real login session), 0 deferred; no visual route, no baseline |
 | U7 naming & personality (wave 3, body copy 8, landed 2026-10-19) | L1 body copy, seventh page domain (circuit breaker): 2 flagged, **1 rewritten** (2 value edits — `cb.honesty_desc`'s "implant multi-C2 config" → "the payload's multi-C2 config", closing wave 5's handover), **1 kept under rule 6** (`common.session_expired`, a real login session in the global 401 path), 0 deferred; `circuit_breaker.*` clean; non-visual route, no baseline (the one `ai light` mobile diff was a font-swap flake, passed on rerun, not adopted) |
 | U7 naming & personality (wave 3, body copy 9, landed 2026-10-19) | L1 body copy, eighth page domain (dashboard): 1 rewritten (`dashboard.quick_generate` "Generate Implant" → "Generate Payload" / 生成木马 → 生成载荷 — the last 木马 in the copy), 0 kept, 5 `tasks.*` deferred by attribution to the tasks page; visual route **measured** with a zero-tolerance probe: 78–536 px (≤0.05 %) on mobile/laptop light+dark → no baseline adopted, linux not re-rendered |
+| U7 naming & personality (wave 3, body copy 12, landed 2026-10-19) | L1 body copy, eleventh page domain (credentials + NTLM + cloud): 31 flagged → 17 rewritten (34 value edits — the NTLM pickers/targets/toasts/listener sides, the cloud pickers, beacon-side tasks, "harvested from beacons", "from beacon hosts"), 14 evidence-backed keeps (7 cookie-proxy strings where 代理 = proxy, 6 real NTLM relay sessions, `common.session_expired`), 0 deferred; none of the three pages is a visual route, no baseline |
 | U7 naming & personality (wave 3, body copy 11, landed 2026-10-19) | L1 body copy, tenth page domain (settings): 29 flagged → 23 rewritten (46 value edits — About "Implants"→Beacons, the agent section/title/toast/subtitle, the kill switch (implants→beacons, next beacon→next check-in), module deploy, the routes alert, the database card, the access cards' session-table wording, the last "No agents available"), 6 rule-6 keeps (login sessions + the literal User-Agent header), 0 deferred; settings visual route measured: mobile dark pixel-identical, others 46–377 px (0.01 %) → no baseline adopted |
 | U7 naming & personality (wave 3, body copy 10, landed 2026-10-19) | L1 body copy, ninth page domain (events + tasks): 9 rewritten (18 value edits — the events follow toggle's "session" is the dock's beacon (`dockAgentId`), tasks filter/column/empty state, and the two `ai.nl_*` keys the tasks dialog owns), 0 kept, 0 deferred (25 `ai.*` remain); app fix: empty AI conversations no longer scroll to the bottom (the 3–4 % mobile visual flake, root-caused); events visual route measured: 3/4 captures pixel-identical, mobile light 80 px (0.02 %) → no baseline adopted |
 | U7 naming & personality (wave 3, body copy 2, landed 2026-10-19) | L1 body copy, second page domain (payload pipeline): inventory flags 33 values (`generate.*` 14, `profiles.*` 10, `builds.*` 5, `oneshot.*` 4), 24 rewritten per language (46 value edits), 5 kept (proxy / UA header / login sessions), 4 deferred to the automation card; "Agent Binaries" → **Payload Formats** / 载荷格式 (smoke locator follows); format descriptors name the format (GUI implant → GUI executable) and subjectless clauses replace the banned noun; no visual route touched, so no baseline churn on either platform |

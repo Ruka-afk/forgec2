@@ -1,1 +1,0 @@
-import{a5 as a,ap as e,a8 as o,aq as c}from"./index-WCV_vzoe.js";function i(){const n=a(s=>s.currentPermissions),r=a(s=>s.currentUserRole);return{permissions:n,role:r,can:s=>c(n,s),canAny:s=>o(n,s),canAll:s=>e(n,s)}}export{i as u};
