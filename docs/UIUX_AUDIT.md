@@ -1344,6 +1344,28 @@ from the automation wave) and the auto-tag rules page (`pages/autotag/**`).
    `VISUAL_ROUTES` and `ai.pb_agent` renders inside a dialog, so no baseline is
    affected and no linux re-render is needed for this wave.
 
+**Deployment probe.** The rebuilt binary (PID 28200 → **20300**, started 18:24:16,
+launched with the `.NET Process` variant) answers `/health` with `ok`, and the served
+chunks are byte-identical to `internal/webdist/dist`
+(`assets/index-BA-tvbjw.js` = `9059414A…792F`, `assets/zh-8ORT-df3.js` =
+`B300BA5C…DE8A`). The served bytes were then asserted marker by marker, 32 of 32 as
+expected: the macro flow is live on the wire ("No beacons available", "Select the
+beacons to run this macro on. Each beacon executes the steps independently and
+sequentially.", "Macro dispatched to {count} beacons", "…replay it on any beacon with
+one click.", "The beacon list could not be read - this is not a report that no
+beacons exist."), the auto-tag page follows ("Applied auto-tags to {count}
+beacon(s)", "…tag beacons on check-in.", "Automatically assign tags to beacons…",
+with ZH 已为 {count} 个 Beacon 应用自动标签 / 在 Beacon 回连时自动打标签 / 自动为
+Beacon 分配标签), and the shared playbook key reads "Personalize for beacon
+(optional)" / 针对 Beacon 定制. The agent-side twins are gone in both languages
+("Applied auto-tags to {count} agent(s)", "…tag agents on check-in", "assign tags to
+agents", "replay it on any agent with one click", "Select the agents to run this
+macro on", "Macro dispatched to {count} agents", "Personalize for agent (optional)"
+and their ZH counterparts). "No agents available" is excluded from the absence
+assertions by design — `settings.modules.no_agents` still carries it and belongs to
+the settings domain — and every other absence marker was verified zero in the source
+before the run, so the check cannot trip on another page's copy.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
