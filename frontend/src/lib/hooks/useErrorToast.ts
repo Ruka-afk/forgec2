@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { toast } from "sonner";
-import { normalizeError, type NormalizedError } from "@/lib/errors";
+import { normalizeError, resolveErrorText, type NormalizedError } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n";
 
 /**
@@ -20,9 +20,9 @@ export function useErrorToast() {
     ): NormalizedError => {
       const normalized = normalizeError(err);
       if (normalized.kind === "aborted") return normalized;
-      const msg = normalized.i18nKey
-        ? t(normalized.i18nKey, normalized.params as Record<string, number | string> | undefined)
-        : normalized.message.trim() || (fallbackParams ? t(fallbackKey, fallbackParams) : t(fallbackKey));
+      const msg = resolveErrorText(t, normalized, () =>
+        fallbackParams ? t(fallbackKey, fallbackParams) : t(fallbackKey),
+      );
       toast.error(msg);
       return normalized;
     },

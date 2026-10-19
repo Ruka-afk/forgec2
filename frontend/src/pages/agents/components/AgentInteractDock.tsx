@@ -6,6 +6,8 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { firstArray } from "@/lib/envelope";
 import { useI18n } from "@/lib/i18n";
+import { errorText } from "@/lib/errors";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { toast } from "sonner";
 import { useWS } from "@/lib/wsContext";
 import { Button } from "@/components/ui/button";
@@ -14,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { StatusBadge } from "@/components/ui/status-indicator";
 import { Spinner } from "@/components/ui/spinner";
+import { ErrorState } from "@/components/ui/error-state";
 import { GitCompare, Maximize2, Pin, PinOff, X } from "lucide-react";
 import type { Beacon } from "./types";
 import type { AgentTaskRecord } from "@/types/agent";
@@ -56,11 +59,13 @@ export function AgentInteractDock({
   onOpenDetails,
 }: AgentInteractDockProps) {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const id = beacon.id || "";
   const os = (beacon.os || "").toLowerCase();
   const osType = os.includes("linux") || os.includes("darwin") ? "linux" : "windows";
   const [tasks, setTasks] = useState<AgentTaskRecord[]>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
+  const [tasksError, setTasksError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [shotKey, setShotKey] = useState(0);
   const [diffOpen, setDiffOpen] = useState(false);
@@ -70,17 +75,27 @@ export function AgentInteractDock({
 
   const loadTasks = useCallback(async (silent = false) => {
     if (!id) return;
-    if (!silent) setTasksLoading(true);
+    if (!silent) {
+      setTasksLoading(true);
+      setTasksError(null);
+    }
     try {
       const data = await api.get(paths.agents.tasks(id));
       const raw = firstArray(data, ["tasks", "data", "Tasks"]);
       setTasks(raw as AgentTaskRecord[]);
-    } catch {
-      if (!silent) setTasks([]);
+      setTasksError(null);
+    } catch (e) {
+      // Silent reloads (WS-down polling) keep the last list; the first load
+      // reports into the inline ErrorState instead of rendering an empty
+      // list that reads as "no tasks".
+      if (!silent) {
+        setTasks([]);
+        setTasksError(errorText(t, e, () => t("common.load_failed")));
+      }
     } finally {
       if (!silent) setTasksLoading(false);
     }
-  }, [id]);
+  }, [id, t]);
 
   // Load the task list as soon as the dock mounts (or the agent changes);
   // WS only pushes events after that, so without this an idle agent would
@@ -133,11 +148,11 @@ export function AgentInteractDock({
       })));
       if (action === "approve") toast.success(t("agents.dock_task_approved"));
       else toast.success(t("agents.dock_task_rejected"));
-    } catch {
-      if (action === "approve") toast.error(t("agents.dock_task_approve_failed"));
-      else toast.error(t("agents.dock_task_reject_failed"));
+    } catch (e) {
+      if (action === "approve") toastError(e, "agents.dock_task_approve_failed");
+      else toastError(e, "agents.dock_task_reject_failed");
     }
-  }, [id, t]);
+  }, [id, t, toastError]);
 
   const cancelTask = useCallback(async (taskId: number) => {
     if (!id) return;
@@ -147,10 +162,10 @@ export function AgentInteractDock({
       if (res?.outcome === "abort_queued") toast.success(t("agents.dock_task_cancel_abort_queued"));
       else if (res?.outcome === "already_executing") toast.success(t("agents.dock_task_cancel_executing"));
       else toast.success(t("agents.dock_task_cancelled"));
-    } catch {
-      toast.error(t("agents.dock_task_cancel_failed"));
+    } catch (e) {
+      toastError(e, "agents.dock_task_cancel_failed");
     }
-  }, [id, t]);
+  }, [id, t, toastError]);
 
   const openTask = useCallback(async (taskId: number) => {
     if (expandedId === taskId) {
@@ -314,6 +329,12 @@ export function AgentInteractDock({
           <TabsContent value="tasks" className="mt-0 min-h-0 flex-1 p-0">
             {tasksLoading ? (
               <div className="flex h-full items-center justify-center"><Spinner size="sm" /></div>
+            ) : tasksError ? (
+              <ErrorState
+                message={tasksError}
+                className="mx-3 my-6"
+                action={<Button variant="outline" size="sm" onClick={() => { void loadTasks(); }}>{t("agents.detail_retry")}</Button>}
+              />
             ) : tasks.length === 0 ? (
               <p className="px-4 py-8 text-center text-sm text-muted-foreground">{t("agents.dock_no_tasks")}</p>
             ) : (

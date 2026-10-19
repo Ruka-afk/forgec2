@@ -30,6 +30,16 @@ Why not hand-rolled `useState(saving)` + `try/catch`:
   into the UI.
 - Keep *validation* toasts direct (`toast.error(t("x.required"))`): that is not
   an API failure and must not go through error normalization.
+- For an inline failure surface (an `ErrorState` next to the content that
+  failed), use `errorText(t, e, () => t("x.load_failed"))` from
+  `src/lib/errors.ts`: the same normalization `useErrorToast` applies, with
+  the fallback key lazy — it only resolves when the thrown value carries no
+  mapped code and no backend message. `useErrorToast` is a thin wrapper over
+  the same resolver; do not re-implement the mapping locally.
+- Hand-rolled fan-out stays correct when one operator action fires several
+  concurrent requests (e.g. the agents dock's per-row pull/push): a single
+  `useMutation` holds one generation, so a sibling request's completion would
+  be dropped. Those paths still route errors through `toastError`/`errorText`.
 - When a hook drives actions bound to the route's resource id (e.g.
   `/agents/:id`), call the mutation's `reset()` from an effect on id change:
   a completion that lands after the operator switched resources must not fire

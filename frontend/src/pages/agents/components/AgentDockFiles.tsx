@@ -3,6 +3,8 @@ import { toast } from "sonner";
 import { api, pollTask } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { errorText } from "@/lib/errors";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -21,6 +23,7 @@ interface AgentDockFilesProps {
 
 export function AgentDockFiles({ agentId, osType }: AgentDockFilesProps) {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const initial = osType === "linux" ? "/" : "C:\\";
   const [path, setPath] = useState(initial);
   const [pathInput, setPathInput] = useState(initial);
@@ -64,7 +67,7 @@ export function AgentDockFiles({ agentId, osType }: AgentDockFilesProps) {
     } catch (e) {
       if (ac.signal.aborted) return;
       setEntries([]);
-      setError(e instanceof Error ? e.message : t("agents.dock_files_empty"));
+      setError(errorText(t, e, () => t("common.load_failed")));
     } finally {
       if (!ac.signal.aborted) setLoading(false);
     }
@@ -79,6 +82,10 @@ export function AgentDockFiles({ agentId, osType }: AgentDockFilesProps) {
 
   const go = (next: string) => { void load(next); };
 
+  // Rows transfer independently (each row's button gates only itself), so the
+  // fan-out stays hand-rolled: a single mutation's stale-completion guard
+  // would silently drop a sibling transfer's completion. Only the error
+  // routing is normalized.
   const pull = async (entry: FileEntry) => {
     const remote = joinPath(path, entry.name, osType);
     setBusyName(entry.name);
@@ -97,7 +104,7 @@ export function AgentDockFiles({ agentId, osType }: AgentDockFilesProps) {
         ? t("agents.files_pull_partial", { filename: entry.name, size: String(entry.size) })
         : t("agents.files_pulled", { filename: entry.name }));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("agents.files_pull_failed"));
+      toastError(e, "agents.files_pull_failed");
     } finally {
       setBusyName(null);
       setPullProgress(null);
@@ -121,7 +128,7 @@ export function AgentDockFiles({ agentId, osType }: AgentDockFilesProps) {
         void load(path);
       })
       .catch((e) => {
-        toast.error(e instanceof Error ? e.message : t("agents.files_push_failed"));
+        toastError(e, "agents.files_push_failed");
       })
       .finally(() => {
         setBusyName(null);

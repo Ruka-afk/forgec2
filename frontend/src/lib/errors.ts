@@ -98,3 +98,24 @@ export function normalizeError(err: unknown): NormalizedError {
 
   return { kind: "unknown", retryable: false, message: raw };
 }
+
+export type ErrorTextFn = (key: string, params?: Record<string, string | number>) => string;
+
+/**
+ * Resolve the operator-facing text for a normalized error: a mapped locale key
+ * first, backend/validation text otherwise, and `fallback` only for a
+ * message-less failure. Shared by `useErrorToast` (toasts) and inline error
+ * surfaces via `errorText`, so the two rules cannot drift. The fallback is a
+ * thunk so a call site never translates a key it will not show.
+ */
+export function resolveErrorText(t: ErrorTextFn, normalized: NormalizedError, fallback: () => string): string {
+  if (normalized.i18nKey) {
+    return t(normalized.i18nKey, normalized.params as Record<string, string | number> | undefined);
+  }
+  return normalized.message.trim() || fallback();
+}
+
+/** Normalize + resolve in one step for inline error surfaces (text only, no toast). */
+export function errorText(t: ErrorTextFn, err: unknown, fallback: () => string): string {
+  return resolveErrorText(t, normalizeError(err), fallback);
+}

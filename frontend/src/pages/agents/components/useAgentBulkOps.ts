@@ -2,6 +2,8 @@ import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { errorText } from "@/lib/errors";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { downloadText } from "@/lib/download";
 import type { Beacon, BulkResult } from "./types";
 
@@ -65,6 +67,7 @@ export function useAgentBulkOps(deps: BulkOpsDeps) {
     searchQuery, statusFilter, osFilter, tagFilter, linkedFilter, sortKey, sortDir,
   } = deps;
 
+  const { toastError } = useErrorToast();
   const [exporting, setExporting] = useState(false);
   const exportAbortRef = useRef<AbortController | null>(null);
 
@@ -78,8 +81,11 @@ export function useAgentBulkOps(deps: BulkOpsDeps) {
       } else {
         setActionMsg(data.error || t("agents.batch_failed"));
       }
-    } catch {
-      setActionMsg(t("agents.batch_failed"));
+    } catch (e) {
+      // The rejection carries the envelope's error text (api.postJson throws
+      // an ApiError for a success:false envelope), so the banner shows the
+      // reason instead of only "failed".
+      setActionMsg(errorText(t, e, () => t("agents.batch_failed")));
     }
   }, [t, selected.size, setSelected, loadBeacons, setActionMsg]);
 
@@ -95,8 +101,8 @@ export function useAgentBulkOps(deps: BulkOpsDeps) {
       } else {
         setActionMsg(data.error || t("agents.bulk_task_failed"));
       }
-    } catch {
-      setActionMsg(t("agents.bulk_task_failed"));
+    } catch (e) {
+      setActionMsg(errorText(t, e, () => t("agents.bulk_task_failed")));
     }
   }, [t, setSelected, loadBeacons, setActionMsg]);
 
@@ -139,8 +145,8 @@ export function useAgentBulkOps(deps: BulkOpsDeps) {
       } else {
         setActionMsg(data.error || t("agents.delete_failed"));
       }
-    } catch {
-      setActionMsg(t("agents.delete_failed"));
+    } catch (e) {
+      setActionMsg(errorText(t, e, () => t("agents.delete_failed")));
     }
     setConfirm(null);
   }, [selected, t, setActionMsg, setSelected, loadBeacons, setConfirm]);
@@ -150,8 +156,8 @@ export function useAgentBulkOps(deps: BulkOpsDeps) {
       await api.postJson(paths.agents.kill(id), {});
       setActionMsg(t("agents.kill_sent"));
       loadBeacons();
-    } catch {
-      setActionMsg(t("agents.kill_failed"));
+    } catch (e) {
+      setActionMsg(errorText(t, e, () => t("agents.kill_failed")));
     }
     setConfirm(null);
   }, [t, setActionMsg, loadBeacons, setConfirm]);
@@ -161,8 +167,8 @@ export function useAgentBulkOps(deps: BulkOpsDeps) {
       await api.del(paths.agents.one(id));
       setActionMsg(t("agents.deleted"));
       loadBeacons();
-    } catch {
-      setActionMsg(t("agents.delete_failed"));
+    } catch (e) {
+      setActionMsg(errorText(t, e, () => t("agents.delete_failed")));
     }
     setConfirm(null);
   }, [t, setActionMsg, loadBeacons, setConfirm]);
@@ -172,8 +178,8 @@ export function useAgentBulkOps(deps: BulkOpsDeps) {
       await api.postJson(paths.agents.uninstall(id), {});
       setActionMsg(t("agents.detail_uninstall_sent"));
       loadBeacons();
-    } catch {
-      setActionMsg(t("agents.detail_uninstall_failed"));
+    } catch (e) {
+      setActionMsg(errorText(t, e, () => t("agents.detail_uninstall_failed")));
     }
     setConfirm(null);
   }, [t, setActionMsg, loadBeacons, setConfirm]);
@@ -211,7 +217,7 @@ export function useAgentBulkOps(deps: BulkOpsDeps) {
       setActionMsg(t("agents.sleep_updated").replace("{name}", quickSleepAgent.hostname));
       closeQuickSleep();
       loadBeacons();
-    } catch { setActionMsg(t("agents.sleep_failed")); }
+    } catch (e) { setActionMsg(errorText(t, e, () => t("agents.sleep_failed"))); }
   }, [quickSleepAgent, sleepInterval, sleepJitter, t, setActionMsg, closeQuickSleep, loadBeacons]);
 
   const submitNotes = useCallback(async () => {
@@ -221,7 +227,7 @@ export function useAgentBulkOps(deps: BulkOpsDeps) {
       setActionMsg(t("agents.notes_updated"));
       closeNotesEdit();
       loadBeacons();
-    } catch { setActionMsg(t("agents.notes_failed")); }
+    } catch (e) { setActionMsg(errorText(t, e, () => t("agents.notes_failed"))); }
   }, [editingNotesId, editNotesText, t, setActionMsg, closeNotesEdit, loadBeacons]);
 
   const exportCSV = useCallback(async () => {
@@ -274,13 +280,13 @@ export function useAgentBulkOps(deps: BulkOpsDeps) {
       if (e instanceof DOMException && e.name === "AbortError") {
         toast.info(t("agents.export_cancelled"));
       } else {
-        toast.error(t("agents.export_failed"));
+        toastError(e, "agents.export_failed");
       }
     } finally {
       exportAbortRef.current = null;
       setExporting(false);
     }
-  }, [exporting, t, searchQuery, statusFilter, osFilter, tagFilter, linkedFilter, sortKey, sortDir]);
+  }, [exporting, t, searchQuery, statusFilter, osFilter, tagFilter, linkedFilter, sortKey, sortDir, toastError]);
 
   return {
     exporting, runBatch, bulkTask,

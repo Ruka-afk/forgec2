@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { normalizeError } from "./errors";
+import { describe, it, expect, vi } from "vitest";
+import { normalizeError, errorText } from "./errors";
 
 function apiError(status: number, message: string): Error & { status: number } {
   const e = new Error(message) as Error & { status: number };
@@ -69,5 +69,29 @@ describe("normalizeError", () => {
     const n = normalizeError("weird payload");
     expect(n.kind).toBe("unknown");
     expect(n.message).toBe("weird payload");
+  });
+});
+
+describe("errorText", () => {
+  it("resolves a mapped status through t with its params", () => {
+    const t = vi.fn((key: string) => `T:${key}`);
+    const text = errorText(t, apiError(429, "slow down"), () => "fallback");
+    expect(text).toBe("T:common.rate_limited");
+    expect(t).toHaveBeenCalledWith("common.rate_limited", expect.objectContaining({ seconds: expect.any(Number) }));
+  });
+
+  it("keeps the backend message for unmapped 4xx without translating", () => {
+    const t = vi.fn((key: string) => `T:${key}`);
+    const fallback = vi.fn(() => "fallback");
+    expect(errorText(t, apiError(400, "invalid host"), fallback)).toBe("invalid host");
+    expect(t).not.toHaveBeenCalled();
+    expect(fallback).not.toHaveBeenCalled();
+  });
+
+  it("uses the fallback only for a message-less failure", () => {
+    const t = vi.fn((key: string) => `T:${key}`);
+    const fallback = vi.fn(() => "fallback");
+    expect(errorText(t, new Error(""), fallback)).toBe("fallback");
+    expect(fallback).toHaveBeenCalledTimes(1);
   });
 });

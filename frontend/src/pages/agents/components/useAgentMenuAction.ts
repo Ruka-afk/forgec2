@@ -3,6 +3,7 @@ import type { NavigateFunction } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { useInteractStore } from "@/lib/interact-store";
 import type { Beacon } from "./types";
 import type { AgentConfirmType } from "./useAgentModals";
@@ -28,6 +29,7 @@ function toastQueued(t: TKey) {
 /** Row/grid context-menu + quick-nav dispatch for the agents list. */
 export function useAgentMenuAction(deps: MenuActionDeps) {
   const { t, navigate, setSelectedAgentId, setMenuPoint, openQuickSleep, openNotesEdit, setConfirm } = deps;
+  const { toastError } = useErrorToast();
 
   const handleMenuAction = useCallback((action: AgentMenuAction, point: AgentMenuPoint) => {
     const id = point.beacon.id || "";
@@ -47,7 +49,7 @@ export function useAgentMenuAction(deps: MenuActionDeps) {
             if (queued) useInteractStore.getState().revealTask(id, taskId);
             toastQueued(t);
           })
-          .catch(() => toast.error(t("agents.screenshot_failed")));
+          .catch((e) => toastError(e, "agents.screenshot_failed"));
         break;
       case "beacon_now":
         api.post(paths.agents.cmd(id, "beacon_now"))
@@ -57,7 +59,7 @@ export function useAgentMenuAction(deps: MenuActionDeps) {
             if (queued) useInteractStore.getState().revealTask(id, taskId);
             toast.success(t("agents.beacon_now_queued"));
           })
-          .catch(() => toast.error(t("agents.beacon_now_failed")));
+          .catch((e) => toastError(e, "agents.beacon_now_failed"));
         break;
       case "rebuild": {
         if (!point.beacon.listener_id) toast.warning(t("agents.rebuild_no_listener"));
@@ -95,7 +97,7 @@ export function useAgentMenuAction(deps: MenuActionDeps) {
         break;
     }
     setMenuPoint(null);
-  }, [t, openQuickSleep, openNotesEdit, navigate, setConfirm, setMenuPoint, setSelectedAgentId]);
+  }, [t, openQuickSleep, openNotesEdit, navigate, setConfirm, setMenuPoint, setSelectedAgentId, toastError]);
 
   const handleQuickNav = useCallback((beacon: Beacon, view: "shell" | "files" | "screen") => {
     const id = beacon.id || "";

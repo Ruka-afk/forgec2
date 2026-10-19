@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { errorText } from "@/lib/errors";
 import { POLL } from "@/lib/polling";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -187,7 +188,7 @@ export default function AgentsPageContent() {
         const results = (d.results || d.data || []) as BulkResult[];
         setBulkResults(results);
       })
-      .catch(() => { if (mountedRef.current) setActionMsg(t("agents.bulk_results_failed")); });
+      .catch((e) => { if (mountedRef.current) setActionMsg(errorText(t, e, () => t("agents.bulk_results_failed"))); });
   }, [showResults, t]);
 
   useEffect(() => {

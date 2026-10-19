@@ -1,5 +1,24 @@
-import { describe, it, expect } from "vitest";
-import { parseSleepInput } from "./useAgentBulkOps";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { act, renderHook } from "@testing-library/react";
+import { toast } from "sonner";
+import { api } from "@/lib/api";
+import { useAgentBulkOps, parseSleepInput } from "./useAgentBulkOps";
+
+vi.mock("@/lib/api", () => ({
+  api: { get: vi.fn(), del: vi.fn(), postJson: vi.fn() },
+  getRateLimitRetryAfter: vi.fn(() => null),
+}));
+
+vi.mock("@/lib/i18n", () => {
+  const t = (key: string) => key;
+  return { getLocale: () => "en", useI18n: () => ({ t }) };
+});
+
+vi.mock("sonner", () => ({
+  toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() }),
+}));
+
+const errorToast = vi.mocked(toast.error);
 
 describe("parseSleepInput", () => {
   it("accepts in-range interval/jitter", () => {
@@ -21,5 +40,110 @@ describe("parseSleepInput", () => {
     expect(parseSleepInput("30", "abc")).toBeNull();
     // Number("") is 0: empty jitter coerces to 0, same as the legacy inline check.
     expect(parseSleepInput("30", "")).toEqual({ interval: 30, jitter: 0 });
+  });
+});
+
+function makeDeps(overrides: Record<string, unknown> = {}) {
+  const setActionMsg = vi.fn();
+  const setConfirm = vi.fn();
+  const deps = {
+    t: (key: string) => key,
+    selected: new Set(["a1"]),
+    setSelected: vi.fn(),
+    loadBeacons: vi.fn(),
+    setActionMsg,
+    setConfirm,
+    setScreenshotConfirm: vi.fn(),
+    openBatchSleep: vi.fn(),
+    closeBatchSleep: vi.fn(),
+    batchSleepInterval: "30",
+    batchSleepJitter: "10",
+    cmdType: "shell",
+    cmdText: "whoami",
+    closeCmdModal: vi.fn(),
+    quickSleepAgent: null as { id: string; hostname: string } | null,
+    sleepInterval: "30",
+    sleepJitter: "10",
+    closeQuickSleep: vi.fn(),
+    editingNotesId: null as string | null,
+    editNotesText: "",
+    closeNotesEdit: vi.fn(),
+    searchQuery: "",
+    statusFilter: "",
+    osFilter: "",
+    tagFilter: "",
+    linkedFilter: "",
+    sortKey: "",
+    sortDir: "",
+    ...overrides,
+  };
+  return { deps, setActionMsg, setConfirm };
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+describe("useAgentBulkOps failure reporting", () => {
+  it("surfaces the backend reason when a kill is rejected", async () => {
+    const { deps, setActionMsg, setConfirm } = makeDeps();
+    const { result } = renderHook(() => useAgentBulkOps(deps));
+
+    vi.mocked(api.postJson).mockRejectedValue({ status: 400, message: "agent offline" });
+    await act(async () => {
+      await result.current.killAgent("a1");
+    });
+
+    expect(setActionMsg).toHaveBeenCalledWith("agent offline");
+    expect(setConfirm).toHaveBeenCalledWith(null);
+  });
+
+  it("resolves mapped statuses for a rejected batch delete", async () => {
+    const { deps, setActionMsg } = makeDeps();
+    const { result } = renderHook(() => useAgentBulkOps(deps));
+
+    vi.mocked(api.postJson).mockRejectedValue({ status: 500, message: "boom" });
+    await act(async () => {
+      await result.current.batchDelete();
+    });
+
+    expect(setActionMsg).toHaveBeenCalledWith("common.server_error");
+  });
+
+  it("surfaces the backend reason when a quick sleep is rejected", async () => {
+    const { deps, setActionMsg } = makeDeps({ quickSleepAgent: { id: "a1", hostname: "host1" } });
+    const { result } = renderHook(() => useAgentBulkOps(deps));
+
+    vi.mocked(api.postJson).mockRejectedValue({ status: 400, message: "interval too low" });
+    await act(async () => {
+      await result.current.submitQuickSleep();
+    });
+
+    expect(setActionMsg).toHaveBeenCalledWith("interval too low");
+  });
+
+  it("reports a successful batch run", async () => {
+    const { deps, setActionMsg } = makeDeps();
+    const { result } = renderHook(() => useAgentBulkOps(deps));
+
+    vi.mocked(api.postJson).mockResolvedValue({ success: true, tasks_created: 2 });
+    await act(async () => {
+      await result.current.runBatch({ agent_ids: ["a1"], task_type: "screenshot" });
+    });
+
+    expect(setActionMsg).toHaveBeenCalledWith("agents.batch_result");
+  });
+
+  it("routes an export failure through the normalizer", async () => {
+    const { deps } = makeDeps();
+    const { result } = renderHook(() => useAgentBulkOps(deps));
+
+    vi.mocked(api.get).mockRejectedValue({ status: 500, message: "boom" });
+    await act(async () => {
+      await result.current.exportCSV();
+    });
+
+    expect(errorToast).toHaveBeenCalledWith("common.server_error");
+    expect(toast.info).not.toHaveBeenCalled();
   });
 });

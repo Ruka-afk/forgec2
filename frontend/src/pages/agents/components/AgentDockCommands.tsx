@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
+import { useMutation } from "@/lib/hooks/useMutation";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Camera, ListChecks, Network, Timer } from "lucide-react";
@@ -23,6 +25,7 @@ interface AgentDockCommandsProps {
 
 export function AgentDockCommands({ agentId, intervalHint, jitterHint, onQueued }: AgentDockCommandsProps) {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const [sleepRaw, setSleepRaw] = useState(
     `${intervalHint && intervalHint > 0 ? intervalHint : 60},${jitterHint && jitterHint >= 0 ? jitterHint : 10}`,
   );
@@ -55,6 +58,38 @@ export function AgentDockCommands({ agentId, intervalHint, jitterHint, onQueued 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId]);
 
+  // The busy identity stays in local state (naming which command is in
+  // flight disables the whole row); the mutations own error routing and the
+  // stale-completion guard.
+  const { mutate: queueCommand } = useMutation({
+    fn: (kind: DockCommandKind, sleep: { interval: number; jitter: number } | undefined) =>
+      queueDockCommand(agentId, kind, sleep),
+    onSuccess: (queued) => {
+      toast.success(t("agents.dock_cmd_queued", { type: queued.type }));
+      onQueued(queued);
+    },
+    onError: (e, kind) => toastError(e, "agents.detail_action_failed", { label: kind }),
+  });
+
+  const { mutate: startSocks } = useMutation({
+    fn: (port: number) => startDockSocks(agentId, port),
+    onSuccess: (res) => {
+      setSocksOn(true);
+      setSocksPort(String(res.port));
+      toast.success(res.message || t("agents.dock_socks_started", { port: String(res.port) }));
+    },
+    onError: (e) => toastError(e, "agents.dock_socks_failed"),
+  });
+
+  const { mutate: stopSocks } = useMutation({
+    fn: () => stopDockSocks(agentId),
+    onSuccess: () => {
+      setSocksOn(false);
+      toast.success(t("agents.dock_socks_stopped"));
+    },
+    onError: (e) => toastError(e, "agents.dock_socks_failed"),
+  });
+
   const run = async (kind: DockCommandKind) => {
     if (!agentId || busy) return;
     let sleep: { interval: number; jitter: number } | undefined;
@@ -68,11 +103,31 @@ export function AgentDockCommands({ agentId, intervalHint, jitterHint, onQueued 
     }
     setBusy(kind);
     try {
-      const queued = await queueDockCommand(agentId, kind, sleep);
-      toast.success(t("agents.dock_cmd_queued", { type: queued.type }));
-      onQueued(queued);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("agents.detail_action_failed", { label: kind }));
+      await queueCommand(kind, sleep);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const toggleSocks = async () => {
+    if (!agentId || busy) return;
+    if (socksOn) {
+      setBusy("socks");
+      try {
+        await stopSocks();
+      } finally {
+        setBusy(null);
+      }
+      return;
+    }
+    const port = parseSocksPort(socksPort);
+    if (!port) {
+      toast.error(t("agents.dock_socks_port_invalid"));
+      return;
+    }
+    setBusy("socks");
+    try {
+      await startSocks(port);
     } finally {
       setBusy(null);
     }
@@ -111,33 +166,7 @@ export function AgentDockCommands({ agentId, intervalHint, jitterHint, onQueued 
         size="xs"
         disabled={!!busy || socksOn === null}
         title={socksOn === null ? t("agents.dock_socks_status_unknown") : undefined}
-        onClick={() => {
-          if (socksOn) {
-            setBusy("socks");
-            void stopDockSocks(agentId)
-              .then(() => {
-                setSocksOn(false);
-                toast.success(t("agents.dock_socks_stopped"));
-              })
-              .catch((e) => toast.error(e instanceof Error ? e.message : t("agents.dock_socks_failed")))
-              .finally(() => setBusy(null));
-            return;
-          }
-          const port = parseSocksPort(socksPort);
-          if (!port) {
-            toast.error(t("agents.dock_socks_port_invalid"));
-            return;
-          }
-          setBusy("socks");
-          void startDockSocks(agentId, port)
-            .then((res) => {
-              setSocksOn(true);
-              setSocksPort(String(res.port));
-              toast.success(res.message || t("agents.dock_socks_started", { port: String(res.port) }));
-            })
-            .catch((e) => toast.error(e instanceof Error ? e.message : t("agents.dock_socks_failed")))
-            .finally(() => setBusy(null));
-        }}
+        onClick={() => void toggleSocks()}
       >
         <Network className="size-3.5" />
         {socksOn === null ? t("agents.dock_socks_unknown") : socksOn ? t("agents.dock_socks_stop") : t("agents.dock_cmd_socks")}

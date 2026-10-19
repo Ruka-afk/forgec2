@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
-import { normalizeError } from "@/lib/errors";
+import { errorText } from "@/lib/errors";
 import { useMutation } from "@/lib/hooks/useMutation";
 import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { Banner } from "@/components/ui/banner";
@@ -55,15 +55,6 @@ export default function InfrastructurePage() {
   } = useInfrastructureRedirectorForm();
 
   const { toastError } = useErrorToast();
-
-  // Mirrors useErrorToast's resolution for the inline deploy banner: a mapped
-  // locale key first, backend/validation text otherwise.
-  const errorText = (err: unknown): string => {
-    const normalized = normalizeError(err);
-    return normalized.i18nKey
-      ? t(normalized.i18nKey, normalized.params as Record<string, number | string> | undefined)
-      : normalized.message.trim() || t("infra.unknown_error");
-  };
 
   const saveRedirector = useMutation({
     fn: () => {
@@ -128,7 +119,7 @@ export default function InfrastructurePage() {
     }),
     onSuccess: (data) => { setDeployResult(data); loadRedirectors(); },
     // The banner is the failure surface; a toast would only repeat it.
-    onError: (e) => setDeployResult({ success: false, message: errorText(e) }),
+    onError: (e) => setDeployResult({ success: false, message: errorText(t, e, () => t("infra.unknown_error")) }),
   });
 
   useEffect(() => { loadListeners(); }, [loadListeners]);
