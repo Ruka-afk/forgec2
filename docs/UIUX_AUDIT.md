@@ -908,10 +908,11 @@ deliberately untouched (`agents` stays the contract word; the UI translates).
    single-line ellipsis.
 
 **Method note.** The nav/title repaint fell **under** the baseline suite's
-`maxDiffPixelRatio: 0.015`, so an `--update-snapshots` pass silently kept the old
-PNGs (the comparison "passed", nothing was written). When the visual language itself
-changes, delete the platform baseline set first and regenerate — a sub-threshold diff
-is a pass by design, not evidence of staleness.
+`maxDiffPixelRatio: 0.015`, and plain `--update-snapshots` only rewrites snapshots
+whose diff exceeds that tolerance — the pass silently kept the old PNGs (it reported
+green and wrote nothing). When the visual language itself changes, regenerate with
+`--update-snapshots=all`, exactly what `visual-baselines.yml` documents for the linux
+set; a sub-threshold diff is a pass by design, not evidence of staleness.
 
 **Still open.** Wave 2: route renames `/agents`→`/beacons`, `/timeline`→`/events`,
 `/generate`→`/payload-generator`, `/privesc`→`/privilege-escalation`,

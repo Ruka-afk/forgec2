@@ -119,5 +119,6 @@ identity**, not every heading.
 1. Edit the value in **both** `en.ts` and `zh.ts` (same key, both languages).
 2. Keep nav label and h1 in sync (rule 1), and keep the catalog above accurate.
 3. `npm run check` (i18n parity + tokens + bundle) → unit tests → rebuild the static
-   export → regenerate the win32 visual baselines locally and the linux ones through
-   `visual-baselines.yml` after pushing.
+   export → regenerate the win32 visual baselines locally with
+   `--update-snapshots=all` (plain `--update-snapshots` skips sub-tolerance drift) and
+   the linux ones through `visual-baselines.yml` after pushing.
