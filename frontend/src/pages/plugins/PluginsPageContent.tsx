@@ -355,10 +355,10 @@ export default function PluginsPage() {
             <DialogTitle>{t("plugins.execute_title")} {executePlugin?.Name || executePlugin?.name}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 mb-4">
-            <label className="text-sm font-medium">{t("plugins.execute_agent") || "Target Agent"}</label>
+            <label className="text-sm font-medium">{t("plugins.execute_agent") || "Target Beacon"}</label>
             <Select value={executeAgentId} onValueChange={(v) => setExecuteAgentId(v ?? "")}>
-              <SelectTrigger className="w-full" aria-label={t("plugins.execute_agent") || "Target Agent"}>
-                <SelectValue placeholder={t("plugins.execute_agent_ph") || "Select an agent (optional)"} />
+              <SelectTrigger className="w-full" aria-label={t("plugins.execute_agent") || "Target Beacon"}>
+                <SelectValue placeholder={t("plugins.execute_agent_ph") || "Select target beacon"} />
               </SelectTrigger>
               <SelectContent>
                 {executeAgents.map((a) => (

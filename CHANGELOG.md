@@ -187,6 +187,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The Vite config moved from the deprecated `build.rollupOptions` alias to `build.rolldownOptions` (Vite 8.3 / Rolldown 1.2). The build output is byte-identical (344 files, critical 1015 kB), so there is no dist or deployment change
 - `frontend/package.json` declares `"engines": { "node": ">=24.15.0" }`, matching the CI/release/visual Node 24 floor
 - Dependabot holds TypeScript at 5.x (ignore `>=7.0.0 <8.0.0`): `typescript-eslint@8.72.0` peers `<6.1.0` and `openapi-typescript@7.13.0` peers `^5.x`, so 7.0.2 cannot be adopted yet
+- U7 residue: the Plugins execute dialog's fallback literals now say "Target Beacon" / "Select target beacon" instead of "Target Agent" / "Select an agent (optional)". The live strings were already correct (the i18n keys exist); this only removes a latent banned term for missing translations
 
 ## [2.6.2] - 2026-09-24
 

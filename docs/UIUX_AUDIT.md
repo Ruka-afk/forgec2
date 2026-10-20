@@ -1835,6 +1835,15 @@ agent/代理 form gone in both languages. No scoped absences were needed this ti
 absence candidates count zero in the source (the single FAIL during authoring was a typo'd
 marker — a spaced `"units": "beacons"` — not a product defect).
 
+## U7 residue - Plugins execute dialog fallbacks (landed 2026-10-20)
+
+The live `plugins.execute_agent` / `plugins.execute_agent_ph` values were
+already "Target Beacon" / "Select target beacon", but the JSX fallbacks still
+read "Target Agent" / "Select an agent (optional)". Those literals are only
+reachable when a translation is missing; both now match the vocabulary. No
+visual or i18n-key change: 883 tests, e2e 184/36 and the bundle gates pass, and
+the built Plugins chunk contains none of the banned literals.
+
 ## Batch map & reproduction
 
 | Batch | Clusters |
