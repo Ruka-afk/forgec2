@@ -96,6 +96,9 @@ var agentModuleCatalog = []AgentModule{
 		RegistryFiles: []string{"task_registry_webrtc.go"},
 		ExclusiveFiles: []string{
 			"task_screen_webrtc.go",
+			"screen_webrtc_windows.go",
+			"screen_webrtc_linux.go",
+			"screen_webrtc_darwin.go",
 		},
 	},
 	{
