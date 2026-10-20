@@ -24,6 +24,10 @@ updates:
       # revisit when the floor moves.
       - dependency-name: "@types/node"
         versions: [">=25.0.0 <27.0.0"]
+      # typescript-eslint 8.72 peers <6.1.0 and openapi-typescript 7.13
+      # peers ^5.x; TypeScript 7.0.2 cannot be adopted until both accept it.
+      - dependency-name: "typescript"
+        versions: [">=7.0.0 <8.0.0"]
 
   - package-ecosystem: github-actions
     directory: /

@@ -185,6 +185,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - @base-ui/react moved from 1.6.0 to 1.9.0 under Vite 8. Rolldown no longer makes vendor-baseui and vendor-baseui-forms import each other (verified 0/0), and the 1.9.0 e2e run passes with no TDZ, so the `~1.6.0` pin and its Dependabot ignore are gone; BASEUI_PAGE_ONLY_KEYS still keeps page-only form primitives out of first paint. Output: total 4.12 MB / 197 JS+CSS files, critical path 1015 kB / 13 chunks (under 5.50 MB / 1090 kB), dist 344 files. Gates: tsc, lint, 883 tests, coverage 34.01%, `npm run check` 11/11, e2e 184/36, audit and `npm ci --dry-run` all pass
 - Linux Playwright baselines were regenerated on `ubuntu-latest` from the Vite 8/base-ui 1.9 build (`visual-baselines.yml`, run 39364467189, `--update-snapshots=all` as prescribed). 27 of 28 PNGs changed; the win32 baselines were not touched, and dashboard/login samples were visually checked for a valid render
 - The Vite config moved from the deprecated `build.rollupOptions` alias to `build.rolldownOptions` (Vite 8.3 / Rolldown 1.2). The build output is byte-identical (344 files, critical 1015 kB), so there is no dist or deployment change
+- `frontend/package.json` declares `"engines": { "node": ">=24.15.0" }`, matching the CI/release/visual Node 24 floor
+- Dependabot holds TypeScript at 5.x (ignore `>=7.0.0 <8.0.0`): `typescript-eslint@8.72.0` peers `<6.1.0` and `openapi-typescript@7.13.0` peers `^5.x`, so 7.0.2 cannot be adopted yet
 
 ## [2.6.2] - 2026-09-24
 
