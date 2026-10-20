@@ -76,6 +76,7 @@ Pass criteria:
 | 8 | Lower `rate_limit.beacon`, exceed it, and scrape `/metrics`: `forgec2_beacon_rate_limited_total` increases while the 429 keeps `Retry-After` | |
 | 9 | Mint a secret and leave it unused past `server.reg_secret_orphan_ttl_hours` (age the row to avoid waiting): registration is refused before the hourly sweep runs | |
 | 10 | Use a secret that is already bound to a deployed agent after any TTL: it still authenticates | |
+| 11 | Enable a sleep mask (`set_sleep_mask`) or evasion on a build with a long sleep, then change networks during the sleep | |
 
 Pass criteria:
 
@@ -83,6 +84,7 @@ Pass criteria:
 - Datagram transports (UDP/ICMP/DNS) skip a blob that cannot fit one response frame; the next fitting beacon delivers it.
 - Re-applying the identical config is a no-op — no persisted-blob rewrite and no network reparse.
 - Both the regular sleep and the JIT-scheduler sleep are interrupted by a confirmed network change (two consecutive polls); a flapping link does not wake the agent on every poll, and confirmed wakes are capped at one per minute.
+- Masked and evasive sleeps observe the same confirmed change: a masked sleep runs in 5 s chunks inside one encrypt/decrypt window and returns early, and the evasion path checks the wake after each chunk, so a multi-hour sleep does not delay the reconnect beyond the monitor's confirmation window.
 - A clock-skewed agent recovers from the `Date` header of the rejection itself; no server-side change is needed, and the offset drops back to zero once the host clock is correct.
 - Expired unbound secrets are refused at authentication, not only deleted later; bound secrets never expire; the orphan sweep runs at startup and hourly.
 

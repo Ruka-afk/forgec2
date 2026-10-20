@@ -143,10 +143,7 @@ func (sm *sleepMaskState) xorCrypt(buf []byte) {
 // (indirect NtDelayExecution on Windows), then restores the buffer. The active
 // mask is always non-nil after package init.
 func sleepWithMask(d time.Duration) {
-	activeSleepMask.Encrypt()
-	activeSleepMask.BeforeSleep(uintptr(d.Milliseconds()))
-	activeSleepMask.AfterWake()
-	activeSleepMask.Decrypt()
+	sleepWithMaskInterruptible(d)
 }
 
 func init() {

