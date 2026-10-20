@@ -318,6 +318,27 @@ type Config struct {
 		FailureWindowMinutes  int     `yaml:"failure_window_minutes"`    // default 10
 		FailureMinSamples     int     `yaml:"failure_min_samples"`       // default 20
 	} `yaml:"monitoring"`
+
+	// WebRTC drives the real-time remote-desktop stream (Pion + embedded TURN).
+	// Off by default: enabling it opens a TURN listener (UDP by default), which
+	// operators must deliberately expose on their network.
+	WebRTC struct {
+		Enabled bool `yaml:"enabled"`
+		// TurnAddr is the UDP listen address for the embedded TURN/STUN server
+		// (":3478" = all interfaces, port 3478).
+		TurnAddr string `yaml:"turn_addr"`
+		// PublicIP is the relay address advertised to peers. Empty = detect a
+		// non-loopback local IPv4 at startup; set this for a NAT/public host.
+		PublicIP string `yaml:"public_ip"`
+		Realm    string `yaml:"realm"`
+		// RelayMinPort / RelayMaxPort bound TURN relay allocations.
+		RelayMinPort int `yaml:"relay_min_port"`
+		RelayMaxPort int `yaml:"relay_max_port"`
+		// SessionTTLSeconds bounds one live remote-desktop session (0 = 3600).
+		SessionTTLSeconds int `yaml:"session_ttl_seconds"`
+		// MaxSessions caps concurrent live sessions (0 = 32).
+		MaxSessions int `yaml:"max_sessions"`
+	} `yaml:"webrtc"`
 }
 
 // DefaultConfig returns sensible defaults
@@ -377,6 +398,16 @@ func DefaultConfig() *Config {
 	cfg.Monitoring.TaskFailureRateMaxPct = 25
 	cfg.Monitoring.FailureWindowMinutes = 10
 	cfg.Monitoring.FailureMinSamples = 20
+
+	// Live remote desktop (WebRTC + embedded TURN) is opt-in.
+	cfg.WebRTC.Enabled = false
+	cfg.WebRTC.TurnAddr = ":3478"
+	cfg.WebRTC.PublicIP = ""
+	cfg.WebRTC.Realm = "forgec2"
+	cfg.WebRTC.RelayMinPort = 49152
+	cfg.WebRTC.RelayMaxPort = 65535
+	cfg.WebRTC.SessionTTLSeconds = 3600
+	cfg.WebRTC.MaxSessions = 32
 
 	// Secure by default: enforce the two-man rule for all task types flagged
 	// dangerous (see server/tasktypes.go dangerousTaskTypes). Solo operators
@@ -856,6 +887,22 @@ func (c *Config) Validate() error {
 
 	if c.Server.Port <= 0 || c.Server.Port > 65535 {
 		errs = append(errs, errors.New("server.port must be between 1 and 65535"))
+	}
+	if c.WebRTC.Enabled {
+		if strings.TrimSpace(c.WebRTC.TurnAddr) == "" {
+			errs = append(errs, errors.New("webrtc.turn_addr is required when webrtc.enabled is true"))
+		}
+		if c.WebRTC.RelayMinPort < 1 || c.WebRTC.RelayMinPort > 65535 ||
+			c.WebRTC.RelayMaxPort < 1 || c.WebRTC.RelayMaxPort > 65535 ||
+			c.WebRTC.RelayMinPort > c.WebRTC.RelayMaxPort {
+			errs = append(errs, errors.New("webrtc relay ports must be valid (1-65535, min <= max)"))
+		}
+		if c.WebRTC.SessionTTLSeconds < 0 || c.WebRTC.SessionTTLSeconds > 86400 {
+			errs = append(errs, errors.New("webrtc.session_ttl_seconds must be between 0 and 86400"))
+		}
+		if c.WebRTC.MaxSessions < 0 || c.WebRTC.MaxSessions > 256 {
+			errs = append(errs, errors.New("webrtc.max_sessions must be between 0 and 256"))
+		}
 	}
 	if (c.Database.Driver == "" || c.Database.Driver == "sqlite") && c.Server.DBMaxOpenConns > 1 {
 		errs = append(errs, errors.New("server.db_max_open_conns must be 1 for sqlite (single writer; larger pools cause SQLITE_BUSY under load)"))

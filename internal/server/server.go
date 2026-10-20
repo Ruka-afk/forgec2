@@ -73,6 +73,12 @@ type Server struct {
 	// (operator, agent). Value type: zero value works on bare test servers.
 	remoteInputLimiter fixedWindowLimiter
 
+	// WebRTC live desktop hub (Pion sessions + embedded TURN). Lazily created
+	// so bare test servers and operators who leave webrtc.enabled=false do not
+	// allocate or bind anything.
+	webrtc       *webrtcHub
+	webrtcInitMu sync.Mutex
+
 	// P0-3: rportfwd (reverse port forward)
 	rportfwdListeners map[string]*rportfwdRelay
 	rportfwdMu        sync.Mutex

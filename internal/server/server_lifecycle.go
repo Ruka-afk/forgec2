@@ -154,6 +154,15 @@ func (s *Server) shutdown() {
 		s.ctxCancel()
 	}
 
+	// Tear down live WebRTC sessions and the embedded TURN listener before
+	// waiting on background workers.
+	s.webrtcInitMu.Lock()
+	hub := s.webrtc
+	s.webrtcInitMu.Unlock()
+	if hub != nil {
+		hub.close()
+	}
+
 	// Wait for tracked goroutines to finish, bounded so a wedged worker
 	// cannot hang shutdown forever (the orchestrator would SIGKILL mid-WAL).
 	waitDone := make(chan struct{})
@@ -179,6 +188,14 @@ func (s *Server) shutdown() {
 }
 
 func (s *Server) Run() error {
+	// Embedded TURN for WebRTC remote desktop. Start it before serving so the
+	// first webrtc/start request sees a ready relay; a bind failure is logged
+	// and surfaced as 503 by the handler, not fatal to the C2 server.
+	if s.cfg != nil && s.cfg.WebRTC.Enabled {
+		if err := s.webRTCHub().ensureTURN(); err != nil {
+			slog.Error("Embedded TURN failed to start", "err", err)
+		}
+	}
 	certPath := s.cfg.Server.CertFile
 	keyPath := s.cfg.Server.KeyFile
 

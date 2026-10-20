@@ -215,3 +215,15 @@ monitoring:
   tasks_pending_max: 100   # alert when the pending-task backlog exceeds this
   cooldown_seconds: 600    # per-rule silence window between repeat alerts
   eval_seconds: 30         # evaluation cadence
+
+# Real-time remote desktop (WebRTC + embedded TURN). Off by default: enabling
+# it opens a TURN/STUN listener that must be reachable by operators and agents.
+# webrtc:
+#   enabled: true
+#   turn_addr: ":3478"          # UDP listen address; open this port in the firewall
+#   public_ip: ""               # relay address peers should use; empty = first non-loopback IPv4
+#   realm: forgec2
+#   relay_min_port: 49152       # TURN relay allocation range (open UDP too)
+#   relay_max_port: 65535
+#   session_ttl_seconds: 3600
+#   max_sessions: 32

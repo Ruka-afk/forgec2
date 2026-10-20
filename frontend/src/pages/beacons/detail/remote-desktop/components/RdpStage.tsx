@@ -14,9 +14,12 @@ interface RdpStageProps {
   t: TKey;
   status: RdpStatus;
   monitoring: boolean;
+  live: boolean;
+  liveMode: boolean;
   lastUpdate: string;
   wsLive: boolean;
   screenData: string | null;
+  liveError: string;
   nativeWidth: number;
   nativeHeight: number;
   mouseX: number;
@@ -24,17 +27,19 @@ interface RdpStageProps {
   showCursor: boolean;
   containerRef: RefObject<HTMLDivElement | null>;
   imgRef: RefObject<HTMLImageElement | null>;
+  videoRef: RefObject<HTMLVideoElement | null>;
   onImageLoad: (w: number, h: number) => void;
+  onVideoPlaying: () => void;
   onClick: (e: React.MouseEvent<HTMLDivElement>) => void;
   onMouseMove: (e: React.MouseEvent<HTMLDivElement>) => void;
   onMouseLeave: () => void;
 }
 
-/** Interactive remote canvas: status strip, frame, cursor, hints, overlay. */
+/** Interactive remote canvas: status strip, frame/video, cursor, hints, overlay. */
 export default memo(function RdpStage({
-  t, status, monitoring, lastUpdate, wsLive, screenData,
+  t, status, monitoring, live, liveMode, lastUpdate, wsLive, screenData, liveError,
   nativeWidth, nativeHeight, mouseX, mouseY, showCursor,
-  containerRef, imgRef, onImageLoad, onClick, onMouseMove, onMouseLeave,
+  containerRef, imgRef, videoRef, onImageLoad, onVideoPlaying, onClick, onMouseMove, onMouseLeave,
 }: RdpStageProps) {
   const statusConfig = {
     waiting: {
@@ -121,7 +126,29 @@ export default memo(function RdpStage({
         onMouseMove={onMouseMove}
         onMouseLeave={onMouseLeave}
       >
-        {screenData ? (
+        {live ? (
+          <>
+            <video
+              ref={videoRef}
+              className="max-w-full max-h-full object-contain bg-black"
+              autoPlay
+              playsInline
+              muted
+              onPlaying={onVideoPlaying}
+            />
+            {monitoring && status !== "error" && (
+              <div className="absolute bottom-3 left-3 flex items-center gap-2 text-xs-sm text-white/70 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg pointer-events-none">
+                <Mouse className="size-4" />
+                {t("agents.rdp_click_to_interact")}
+                <span className="text-white/40 mx-1">|</span>
+                <Keyboard className="size-4" />
+                {t("agents.rdp_keyboard_active")}
+              </div>
+            )}
+          </>
+        ) : liveMode ? (
+          <EmptyState icon={Users} title={t("agents.rdp_standby")} message={t("agents.rdp_start_hint")} />
+        ) : screenData ? (
           <>
             <SafeImg
               ref={imgRef}
@@ -175,6 +202,12 @@ export default memo(function RdpStage({
           </>
         ) : (
               <EmptyState icon={Users} title={t("agents.rdp_standby")} message={t("agents.rdp_start_hint")} />
+        )}
+
+        {status === "error" && liveError && (liveMode || live) && (
+          <div className="absolute inset-x-4 bottom-4 rounded-lg bg-destructive/90 px-3 py-2 text-xs text-white shadow-lg">
+            {liveError}
+          </div>
         )}
 
         {status === "capturing" && (

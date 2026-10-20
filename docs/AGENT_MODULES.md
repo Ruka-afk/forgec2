@@ -9,7 +9,7 @@ enforced by code and tests, not by convention:
 
 | where | what |
 | --- | --- |
-| [`internal/payload/agent_modules.go`](../internal/payload/agent_modules.go) | the catalogue (17 modules + the always-on core), and the selection normalizer |
+| [`internal/payload/agent_modules.go`](../internal/payload/agent_modules.go) | the catalogue (18 modules + the always-on core), and the selection normalizer |
 | [`internal/payload/agent/task_registry_<module>.go`](../internal/payload/agent) | one registry file per module — the commands it owns |
 | [`internal/payload/agent/task_modules.go`](../internal/payload/agent/task_modules.go) | the runtime bookkeeping (`agentModulesSummary`, `excludedModuleFor`) |
 | [`internal/payload/agent/modules_default.go`](../internal/payload/agent/modules_default.go) | hand-built agents: nothing excluded |
@@ -39,6 +39,7 @@ config, timing, transports, session control — `task_registry.go` plus
 | --- | --- | --- |
 | `transports_advanced` | (transport) | gRPC, QUIC and WSS beacon transports — see below |
 | `screen` | 9 | screenshots, streamed screen, on-screen triggers, remote input, window control |
+| `webrtc` | 2 | live WebRTC H.264 screen streaming (`screen_webrtc_start/stop`) with ffmpeg; adds Pion to the agent |
 | `collection` | 11 | clipboard, keylogger, webcam/mic capture, browser/WeChat history |
 | `creds` | 11 | LSASS/katz-style dumps, DPAPI, LSA bypass, cert store, password spray, VPN/WiFi secrets |
 | `ad` | 32 | ADCS ESC1-8, LDAP recon, DCSync, Kerberos tickets and delegation abuse, SharpHound |
@@ -54,6 +55,11 @@ config, timing, transports, session control — `task_registry.go` plus
 | `container` | 4 | container detection and escape helpers (Docker/K8s) |
 | `usb` | 2 | USB device enumeration and payload dropping (autorun) |
 | `p2p` | 1 | gossip-based peer discovery |
+
+`webrtc` is the only module that adds a large third-party dependency tree
+(Pion). It is included by default like the other modules, but excluding it drops
+Pion and the ffmpeg pipeline from the build. Win7-compatible builds always
+exclude it because the pinned Go 1.20 toolchain cannot compile Pion (Go 1.24+).
 
 `transports_advanced` is the special one: it owns no commands. Excluding it
 is the legacy **slim / light build** — the build strips the `utls` dependency,
@@ -83,7 +89,8 @@ on, because the server forces it out.
 ## What exclusion actually saves
 
 Measured locally (windows/amd64, the repo's pinned Go toolchain, UPX and
-obfuscation off, one module off per row):
+obfuscation off, one module off per row). These rows are the pre-`webrtc`
+baseline; the Pion module is measured separately below.
 
 | build | size | vs. full |
 | --- | --- | --- |
@@ -104,6 +111,11 @@ obfuscation off, one module off per row):
 | no `tokens` | 31.9 MB | −19 KB |
 | no `usb` | 31.9 MB | −17 KB |
 | no `tun` / `container` / `p2p` | 31.9 MB | ≤ 3 KB |
+
+`webrtc` is the largest single-module saving. On the same toolchain a stripped
+windows/amd64 build with every module is 28.6 MB; dropping `webrtc` and its
+Pion tree is 23.9 MB, so excluding it saves about 4.7 MB (and removes the
+`screen_webrtc_*` command surface and the Pion runtime).
 
 The honest reading of this table: the transport module and the core set carry
 the weight that a build can actually shed; the small modules mostly lose

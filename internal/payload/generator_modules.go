@@ -27,6 +27,19 @@ func resolveAgentPlan(cfg *ImplantConfig) (agentBuildPlan, error) {
 	if err != nil {
 		return agentBuildPlan{}, err
 	}
+	// WebRTC depends on Pion, which requires Go 1.24; the Win7 build pins the
+	// go1.20 toolchain, so the module is always excluded there (its task map
+	// entry then reports "module not compiled in" instead of breaking the
+	// build).
+	if cfg.Win7Compat {
+		filtered := included[:0]
+		for _, name := range included {
+			if name != "webrtc" {
+				filtered = append(filtered, name)
+			}
+		}
+		included = filtered
+	}
 	plan := agentBuildPlan{Included: included, Excluded: ExcludedAgentModules(included)}
 	for _, m := range plan.Excluded {
 		if m.Special == SpecialTransports {
@@ -34,6 +47,16 @@ func resolveAgentPlan(cfg *ImplantConfig) (agentBuildPlan, error) {
 		}
 	}
 	return plan, nil
+}
+
+// includes reports whether the named optional module is compiled in.
+func (p agentBuildPlan) includes(name string) bool {
+	for _, n := range p.Included {
+		if n == name {
+			return true
+		}
+	}
+	return false
 }
 
 // droppedAgentFiles is the set of embedded agent files the plan removes from

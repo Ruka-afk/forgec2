@@ -36,6 +36,7 @@ func (s *Server) registerPublicRoutes() {
 	wsRateLimiter := middleware.NewRateLimiter(s.ctx, 10, time.Minute)
 	s.router.GET("/ws", wsRateLimiter.Limit(), s.handleWebSocket)
 	s.router.GET("/ws/beacon", wsRateLimiter.Limit(), s.handleWebSocketBeacon)
+	s.router.GET("/ws/rd/agent", wsRateLimiter.Limit(), s.handleRDWebRTCAgent)
 	s.router.GET("/extc2/ws", wsRateLimiter.Limit(), s.handleExternalC2WebSocket)
 	s.router.GET("/ws/operator", wsRateLimiter.Limit(), s.operatorPlaneGuard(), s.handleOperatorWS)
 

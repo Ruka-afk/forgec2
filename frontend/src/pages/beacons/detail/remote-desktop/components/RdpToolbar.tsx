@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Compass, Expand, Maximize2, Play, Square, Users } from "lucide-react";
 import { isExperimentalDesktop } from "../../components/session-quality";
 import type { ResolutionOption } from "./useRemoteDesktop";
+import type { LivePreset } from "./useWebRTCLive";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;
 
@@ -17,7 +18,12 @@ interface RdpToolbarProps {
   resolutions: ResolutionOption[];
   resolution: string;
   setResolution: (v: string) => void;
-  monitoring: boolean;
+  mode: "snapshot" | "live";
+  setMode: (mode: "snapshot" | "live") => void;
+  livePresets: Array<LivePreset & { label: string }>;
+  livePreset: LivePreset["value"];
+  setLivePreset: (preset: LivePreset["value"]) => void;
+  active: boolean;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
   versionBlocked: boolean;
@@ -25,10 +31,11 @@ interface RdpToolbarProps {
   onStop: () => void;
 }
 
-/** Remote-desktop header: title, resolution, fullscreen, start/stop. */
+/** Remote-desktop header: title, transport, resolution, fullscreen, start/stop. */
 export default memo(function RdpToolbar({
   t, agentId, nativeWidth, nativeHeight, resolutions, resolution, setResolution,
-  monitoring, isFullscreen, onToggleFullscreen, versionBlocked, onStart, onStop,
+  mode, setMode, livePresets, livePreset, setLivePreset,
+  active, isFullscreen, onToggleFullscreen, versionBlocked, onStart, onStop,
 }: RdpToolbarProps) {
   return (
     <div className="flex items-center justify-between mb-3 gap-3 flex-wrap shrink-0">
@@ -51,18 +58,52 @@ export default memo(function RdpToolbar({
         )}
       </div>
       <div className="flex items-center gap-2 flex-wrap">
-        <Select value={resolution} onValueChange={(v) => { if (v !== null) setResolution(v); }} disabled={monitoring}>
-          <SelectTrigger className="w-[180px]">
+        <Select
+          value={mode}
+          onValueChange={(v) => { if (v === "snapshot" || v === "live") setMode(v); }}
+          disabled={active}
+        >
+          <SelectTrigger className="w-[150px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {resolutions.map((r) => (
-              <SelectItem key={r.value} value={r.value}>
-                {r.label}
-              </SelectItem>
-            ))}
+            <SelectItem value="snapshot">{t("agents.rdp_mode_snapshot")}</SelectItem>
+            <SelectItem value="live">{t("agents.rdp_mode_live")}</SelectItem>
           </SelectContent>
         </Select>
+        {mode === "snapshot" ? (
+          <Select value={resolution} onValueChange={(v) => { if (v !== null) setResolution(v); }} disabled={active}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {resolutions.map((r) => (
+                <SelectItem key={r.value} value={r.value}>
+                  {r.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <Select
+            value={livePreset}
+            onValueChange={(v) => {
+              if (v === "720p" || v === "1080p") setLivePreset(v);
+            }}
+            disabled={active}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {livePresets.map((preset) => (
+                <SelectItem key={preset.value} value={preset.value}>
+                  {preset.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <Tooltip>
           <TooltipTrigger render={<Button
               variant="outline"
@@ -74,7 +115,7 @@ export default memo(function RdpToolbar({
           </TooltipTrigger>
           <TooltipContent>{isFullscreen ? t("agents.rdp_exit_fullscreen") : t("agents.rdp_fullscreen")}</TooltipContent>
         </Tooltip>
-        {!monitoring ? (
+        {!active ? (
           <Button
             onClick={onStart}
             disabled={versionBlocked}

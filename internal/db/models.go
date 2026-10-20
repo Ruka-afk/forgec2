@@ -299,6 +299,9 @@ var SensitiveTaskTypes = map[string]bool{
 	"inject": true, "spawn": true, "shinject": true, "shspawn": true,
 	"powerpick": true, "reg_set": true, "clipboard_set": true,
 	"wechat_history": true,
+	// screen_webrtc_start carries the one-shot signaling token and TURN
+	// credentials in Data; encrypt it at rest and on the wire.
+	"screen_webrtc_start": true,
 }
 
 // SensitiveShellTypes are task types whose Shell field carries a secret

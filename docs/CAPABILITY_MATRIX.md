@@ -136,7 +136,7 @@ Rebuild implants after changing placement/header/timing fields — old agents ke
 
 > **Generated** from `pkg/protocol/taskspec_data.go` by `node scripts/gen-capability-matrix.mjs`. Do not edit inside these markers.
 
-- **Dispatchable task types:** 220 · **aliases:** 3 · **approval-gated:** 57
+- **Dispatchable task types:** 222 · **aliases:** 3 · **approval-gated:** 57
 
 | Category | Types |
 |----------|-------|
@@ -150,7 +150,7 @@ Rebuild implants after changing placement/header/timing fields — old agents ke
 | Persistence (4) | `adminsdholder`, `persistence_add`, `persistence_list`, `persistence_remove` |
 | C2 / Session (27) | `beacon_now`, `clear_kill_date`, `config_push`, `get_sleep_mode`, `ghost_mode_exit`, `ghost_mode_status`, `gossip_discover`, `help`, `kill`, `lportfwd_start`, `lportfwd_stop`, `profile_rotate`, `rportfwd_start`, `rportfwd_stop`, `self_update`, `set_c2_mode`, `set_kill_date`, `set_sleep`, `set_sleep_mode`, `set_working_hours`, `socks`, `ssh_tunnel`, `tun_start`, `tun_stop`, `tunnel_add_route`, `tunnel_remove_route`, `uninstall` |
 | Impact (4) | `delete`, `reboot`, `shutdown`, `wallpaper` |
-| Other (11) | `amsi_session_bypass`, `etw_ntrace_bypass`, `execute_assembly_forkrun`, `lateral_list`, `lateral_scf`, `list_inject_methods`, `net_enum_hosts`, `net_scan_smb`, `rev2self`, `screen_stream_start`, `screen_stream_stop` |
+| Other (13) | `amsi_session_bypass`, `etw_ntrace_bypass`, `execute_assembly_forkrun`, `lateral_list`, `lateral_scf`, `list_inject_methods`, `net_enum_hosts`, `net_scan_smb`, `rev2self`, `screen_stream_start`, `screen_stream_stop`, `screen_webrtc_start`, `screen_webrtc_stop` |
 
 Full per-command parameters, aliases and help: [`COMMAND_REFERENCE.md`](COMMAND_REFERENCE.md).
 

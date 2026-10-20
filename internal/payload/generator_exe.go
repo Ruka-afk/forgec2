@@ -45,7 +45,7 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 	}
 
 	// go.mod with required external dependencies
-	goMod := buildGoMod("windows", false, plan.TransportsExcluded, cfg.Win7Compat)
+	goMod := buildGoMod("windows", false, plan.TransportsExcluded, cfg.Win7Compat, plan.includes("webrtc"))
 
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
 		return "", err
@@ -270,7 +270,7 @@ func GenerateLinuxELF(cfg ImplantConfig, outputDir string) (string, error) {
 		return "", err
 	}
 
-	goMod := buildGoMod("linux", false, plan.TransportsExcluded, cfg.Win7Compat)
+	goMod := buildGoMod("linux", false, plan.TransportsExcluded, cfg.Win7Compat, plan.includes("webrtc"))
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
 		return "", err
 	}
@@ -369,7 +369,7 @@ func GenerateMacOS(cfg ImplantConfig, outputDir string) (string, error) {
 		return "", err
 	}
 
-	goMod := buildGoMod("darwin", false, plan.TransportsExcluded, cfg.Win7Compat)
+	goMod := buildGoMod("darwin", false, plan.TransportsExcluded, cfg.Win7Compat, plan.includes("webrtc"))
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
 		return "", err
 	}

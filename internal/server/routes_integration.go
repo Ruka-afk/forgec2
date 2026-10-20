@@ -96,6 +96,11 @@ func (s *Server) registerIntegrationRoutes(auth *gin.RouterGroup) {
 	rdWrite.Use(middleware.RequirePermission(db.PermAgentsWrite))
 	{
 		rdWrite.POST("/rd/:id/screenshot", s.handleRDAPIScreenshot)
+		// Live WebRTC signaling + input. The handler re-checks the operator
+		// role/session ownership before upgrading; media itself is P2P/TURN.
+		// Keep the operator-plane middleware here as well so CIDR/mTLS policy
+		// applies to the live stream, not just the dashboard socket.
+		rdWrite.GET("/ws/rd/operator", s.operatorPlaneGuard(), s.handleRDWebRTCSignal)
 	}
 }
 

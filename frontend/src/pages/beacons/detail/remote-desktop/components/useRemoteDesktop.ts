@@ -9,6 +9,7 @@ import { useI18n } from "@/lib/i18n";
 import { logger } from "@/lib/logger";
 import { nowTime } from "@/lib/utils";
 import { implantBlocksDest } from "@/lib/implant-version";
+import { useWebRTCLive } from "./useWebRTCLive";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;
 
@@ -48,6 +49,23 @@ export function useRemoteDesktop(agentId: string) {
   );
 
   const id = agentId;
+  const live = useWebRTCLive(id);
+  const {
+    active: liveActive,
+    status: liveStatus,
+    error: liveError,
+    presets: livePresets,
+    livePreset,
+    setLivePreset,
+    liveWidth,
+    liveHeight,
+    videoRef: liveVideoRef,
+    start: startLive,
+    stop: stopLive,
+    sendInput: sendLiveInput,
+    markPlaying: markLivePlaying,
+  } = live;
+  const [mode, setModeState] = useState<"snapshot" | "live">("snapshot");
   const [monitoring, setMonitoring] = useState(false);
   const monitoringRef = useRef(false);
   // A monitor session is "started" the moment the start request is dispatched
@@ -108,6 +126,24 @@ export function useRemoteDesktop(agentId: string) {
 
   const pollInterval = INTERVAL_BY_RES[resolution] ?? 1000;
   const versionBlocked = implantBlocksDest(agentVersion, "experimental");
+  const sessionActive = monitoring || liveActive;
+  const displayStatus: RdpStatus = liveActive
+    ? liveStatus === "connected"
+      ? "connected"
+      : liveStatus === "error"
+        ? "error"
+        : "capturing"
+    : mode === "live"
+      ? liveStatus === "error"
+        ? "error"
+        : liveStatus === "connecting"
+          ? "capturing"
+          : "waiting"
+      : status;
+
+  useEffect(() => {
+    if (liveStatus === "connected") setLastUpdate(nowTime());
+  }, [liveStatus]);
 
   useEffect(() => {
     if (!id) return;
@@ -267,6 +303,27 @@ export function useRemoteDesktop(agentId: string) {
   }, [id]);
 
   const coordsFromClient = useCallback((clientX: number, clientY: number) => {
+    if (liveActive) {
+      const video = liveVideoRef.current;
+      if (!video) return { x: 0, y: 0 };
+      const sourceW = video.videoWidth || liveWidth || 1280;
+      const sourceH = video.videoHeight || liveHeight || 720;
+      const rect = video.getBoundingClientRect();
+      // The <video> keeps the source aspect ratio inside a larger stage, so
+      // map through the contained rectangle and clamp clicks on the black
+      // bars instead of sending coordinates outside the remote screen.
+      const scale = Math.min(rect.width / sourceW, rect.height / sourceH) || 1;
+      const renderW = sourceW * scale;
+      const renderH = sourceH * scale;
+      const offsetX = (rect.width - renderW) / 2;
+      const offsetY = (rect.height - renderH) / 2;
+      const x = Math.round((clientX - rect.left - offsetX) / scale);
+      const y = Math.round((clientY - rect.top - offsetY) / scale);
+      return {
+        x: Math.min(Math.max(x, 0), sourceW - 1),
+        y: Math.min(Math.max(y, 0), sourceH - 1),
+      };
+    }
     const img = imgRef.current;
     if (!img) return { x: 0, y: 0 };
     const rect = img.getBoundingClientRect();
@@ -275,7 +332,7 @@ export function useRemoteDesktop(agentId: string) {
     const x = Math.round((clientX - rect.left) * scaleX);
     const y = Math.round((clientY - rect.top) * scaleY);
     return { x, y };
-  }, [nativeWidth, nativeHeight]);
+  }, [liveActive, liveVideoRef, liveWidth, liveHeight, nativeWidth, nativeHeight]);
 
   const getRelativeCoords = useCallback((e: React.MouseEvent<HTMLDivElement | HTMLImageElement>) => {
     // Read synchronously: the throttled move sender below must not touch a
@@ -288,18 +345,22 @@ export function useRemoteDesktop(agentId: string) {
   const moveInflightRef = useRef(false);
 
   const handleClick = useCallback(async (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!monitoring || !id) return;
+    if (!sessionActive || !id) return;
     const { x, y } = getRelativeCoords(e);
+    if (liveActive) {
+      sendLiveInput({ type: "click", x, y });
+      return;
+    }
     try {
       await api.postJson(paths.agents.remoteInput(id), { type: "click", x, y });
     } catch (err) {
       toastError(err, "agents.rdp_capture_failed");
     }
-  }, [monitoring, id, getRelativeCoords, toastError]);
+  }, [sessionActive, liveActive, sendLiveInput, id, getRelativeCoords, toastError]);
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!monitoring || !id) return;
+      if (!sessionActive || !id) return;
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) {
         // Throttle cursor re-renders to once per animation frame instead
@@ -322,6 +383,10 @@ export function useRemoteDesktop(agentId: string) {
       const { x, y } = coordsFromClient(e.clientX, e.clientY);
       moveThrottleRef.current = setTimeout(() => {
         moveThrottleRef.current = null;
+        if (liveActive) {
+          sendLiveInput({ type: "move", x, y });
+          return;
+        }
         if (moveInflightRef.current) return;
         moveInflightRef.current = true;
         api.postJson(paths.agents.remoteInput(id), { type: "move", x, y })
@@ -329,13 +394,20 @@ export function useRemoteDesktop(agentId: string) {
           .finally(() => { moveInflightRef.current = false; });
       }, 50);
     },
-    [monitoring, id, coordsFromClient],
+    [sessionActive, liveActive, sendLiveInput, id, coordsFromClient],
   );
 
   const hideCursor = useCallback(() => setShowCursor(false), []);
 
   useEffect(() => {
-    if (!monitoring || !id) return;
+    if (!sessionActive || !id) return;
+    const sendKey = (key: string) => {
+      if (liveActive) {
+        sendLiveInput({ type: "key", key });
+        return;
+      }
+      api.postJson(paths.agents.remoteInput(id), { type: "key", key }).catch(() => {});
+    };
     const handler = (e: KeyboardEvent) => {
       if (
         e.target instanceof HTMLInputElement ||
@@ -347,8 +419,7 @@ export function useRemoteDesktop(agentId: string) {
       const modifierKeys = ["Shift", "Control", "Alt", "Meta", "CapsLock"];
       if (modifierKeys.includes(e.key)) {
         const keyMap: Record<string, string> = { Shift: "shift", Control: "ctrl", Alt: "alt", Meta: "meta", CapsLock: "capslock" };
-        const key = keyMap[e.key] || e.key;
-        api.postJson(paths.agents.remoteInput(id), { type: "key", key }).catch(() => {});
+        sendKey(keyMap[e.key] || e.key);
         return;
       }
       if (e.ctrlKey || e.metaKey) return;
@@ -366,11 +437,11 @@ export function useRemoteDesktop(agentId: string) {
       };
       const key = keyMap[e.key] || e.key;
       if (e.key !== "Escape") e.preventDefault();
-      api.postJson(paths.agents.remoteInput(id), { type: "key", key }).catch(() => {});
+      sendKey(key);
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [monitoring, id]);
+  }, [sessionActive, liveActive, sendLiveInput, id]);
 
   const toggleFullscreen = useCallback(async () => {
     if (!containerRef.current) return;
@@ -387,17 +458,55 @@ export function useRemoteDesktop(agentId: string) {
     return () => document.removeEventListener("fullscreenchange", handler);
   }, []);
 
+  const setMode = useCallback((next: "snapshot" | "live") => {
+    if (monitoringRef.current || liveActive) return;
+    setModeState(next);
+    if (next === "snapshot") setStatus("waiting");
+  }, [liveActive]);
+
+  const startLiveMode = useCallback(async () => {
+    if (!id) return;
+    if (versionBlocked) {
+      toast.error(t("agents.version_unknown_dest"));
+      return;
+    }
+    try {
+      await startLive(livePreset);
+    } catch (e) {
+      toastError(e, "agents.rdp_live_start_failed");
+    }
+  }, [id, versionBlocked, startLive, livePreset, t, toastError]);
+
+  const handleStart = useCallback(() => {
+    if (mode === "live") {
+      void startLiveMode();
+      return;
+    }
+    void startMonitoring();
+  }, [mode, startLiveMode, startMonitoring]);
+
+  const handleStop = useCallback(() => {
+    if (liveActive) {
+      void stopLive();
+      return;
+    }
+    void stopMonitoring();
+  }, [liveActive, stopLive, stopMonitoring]);
+
   return {
     t: t as TKey,
     RESOLUTIONS, pollInterval,
-    monitoring, status, screenData, resolution, setResolution,
+    monitoring, sessionActive, status: displayStatus, rawStatus: status, screenData, resolution, setResolution,
     isFullscreen, lastUpdate, wsLive,
     mouseX, mouseY, showCursor, nativeWidth, nativeHeight,
     versionBlocked,
     imgRef, containerRef,
-    startMonitoring, stopMonitoring,
+    startMonitoring, stopMonitoring, handleStart, handleStop,
     handleClick, handleMouseMove, hideCursor,
     toggleFullscreen,
     setNativeWidth, setNativeHeight,
+    mode, setMode,
+    liveActive, liveStatus, liveError, livePresets, livePreset, setLivePreset,
+    liveWidth, liveHeight, liveVideoRef, markLivePlaying,
   };
 }

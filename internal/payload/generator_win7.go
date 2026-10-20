@@ -128,11 +128,28 @@ func buildGoModWin7() string {
 	return base
 }
 
-func buildGoMod(goos string, isDLL bool, slim bool, win7 bool) string {
+// appendUniqueModDep adds a require line unless the same module path is
+// already present (non-slim builds already list gorilla/websocket and x/net).
+func appendUniqueModDep(deps []string, line string) []string {
+	fields := strings.Fields(line)
+	if len(fields) == 0 {
+		return deps
+	}
+	for _, dep := range deps {
+		df := strings.Fields(dep)
+		if len(df) > 0 && df[0] == fields[0] {
+			return deps
+		}
+	}
+	return append(deps, line)
+}
+
+func buildGoMod(goos string, isDLL bool, slim bool, win7 bool, withWebRTC ...bool) string {
 	replaceDir := forgeC2ModuleReplace()
 	if win7 {
 		return buildGoModWin7()
 	}
+	webrtc := len(withWebRTC) > 0 && withWebRTC[0]
 	deps := []string{}
 	deps = append(deps, "\tgolang.org/x/sys v0.46.0")
 	deps = append(deps, "\tgolang.org/x/crypto v0.53.0")
@@ -163,6 +180,15 @@ func buildGoMod(goos string, isDLL bool, slim bool, win7 bool) string {
 	if goos == "windows" && !isDLL && !slim {
 		deps = append(deps, "\tgoogle.golang.org/grpc v1.82.0")
 		deps = append(deps, "\tnhooyr.io/websocket v1.8.17")
+	}
+
+	if webrtc {
+		// The optional WebRTC module imports Pion and gorilla/websocket (the
+		// long-lived signaling channel). Slim builds still need gorilla even
+		// though transports_advanced is compiled out.
+		deps = appendUniqueModDep(deps, "\tgithub.com/gorilla/websocket v1.5.3")
+		deps = append(deps, "\tgithub.com/pion/webrtc/v4 v4.2.24")
+		deps = appendUniqueModDep(deps, "\tgolang.org/x/net v0.56.0")
 	}
 
 	base := "module agent\n\ngo 1.25\n\nrequire (\n"

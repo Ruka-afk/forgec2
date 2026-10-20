@@ -3,11 +3,11 @@
 > **Generated** from `pkg/protocol/taskspec_data.go` by
 > `node scripts/gen-command-reference.mjs`. Do not edit by hand.
 
-- **Task types:** 220
-- **Constants in tasks.go:** 221
+- **Task types:** 222
+- **Constants in tasks.go:** 223
 - **Aliases:** 3
 - **Approval-gated:** 57
-- **Parameters (total):** 78
+- **Parameters (total):** 79
 - **Constants without specs:** shell_output (intentional: RESULT-type only, not dispatchable — see pkg/protocol/tasks.go)
 
 ## Categories
@@ -21,7 +21,7 @@
 - [Persistence](#persistence) (4)
 - [C2 / Session](#c2-session) (27)
 - [Impact](#impact) (4)
-- [Other](#other) (26)
+- [Other](#other) (28)
 
 ## Execution
 
@@ -286,6 +286,8 @@
 | `rev2self` | Rev2 Self | no | — | — |  |
 | `screen_stream_start` | Screen Stream St | no | — | — |  |
 | `screen_stream_stop` | Screen Stream Sp | no | — | — |  |
+| `screen_webrtc_start` | WebRTC Screen Stream | no | — | data:string | Start a real-time H.264 WebRTC remote-desktop stream (Pion + TURN). The server returns a short-lived operator signaling URL; video is sent peer-to-peer or through TURN. Requires the optional webrtc agent module and ffmpeg on the target. |
+| `screen_webrtc_stop` | WebRTC Screen Stop | no | — | — | Stop the active WebRTC screen stream and release the capture/encoder pipeline. |
 | `slui` | Slui UAC | no | — | — | Slui UAC bypass |
 | `token_list_procs` | Token List Procs | no | — | — | List processes for token theft |
 | `token_make` | Token Make | no | — | command:string* | Create access token for user |

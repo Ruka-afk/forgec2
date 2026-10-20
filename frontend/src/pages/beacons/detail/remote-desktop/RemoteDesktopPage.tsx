@@ -26,27 +26,35 @@ export default function RemoteDesktopPage() {
         <RdpToolbar
           t={t}
           agentId={id}
-          nativeWidth={rdp.nativeWidth}
-          nativeHeight={rdp.nativeHeight}
+          nativeWidth={rdp.liveActive ? rdp.liveWidth : rdp.nativeWidth}
+          nativeHeight={rdp.liveActive ? rdp.liveHeight : rdp.nativeHeight}
           resolutions={rdp.RESOLUTIONS}
           resolution={rdp.resolution}
           setResolution={rdp.setResolution}
-          monitoring={rdp.monitoring}
+          mode={rdp.mode}
+          setMode={rdp.setMode}
+          livePresets={rdp.livePresets}
+          livePreset={rdp.livePreset}
+          setLivePreset={rdp.setLivePreset}
+          active={rdp.sessionActive}
           isFullscreen={rdp.isFullscreen}
           onToggleFullscreen={() => void rdp.toggleFullscreen()}
           versionBlocked={rdp.versionBlocked}
-          onStart={() => void rdp.startMonitoring()}
-          onStop={() => void rdp.stopMonitoring()}
+          onStart={rdp.handleStart}
+          onStop={rdp.handleStop}
         />
 
         <div className="flex-1 min-h-0 flex flex-col">
           <RdpStage
             t={t}
             status={rdp.status}
-            monitoring={rdp.monitoring}
+            monitoring={rdp.sessionActive}
+            live={rdp.liveActive}
+            liveMode={rdp.mode === "live"}
             lastUpdate={rdp.lastUpdate}
             wsLive={rdp.wsLive}
             screenData={rdp.screenData}
+            liveError={rdp.liveError}
             nativeWidth={rdp.nativeWidth}
             nativeHeight={rdp.nativeHeight}
             mouseX={rdp.mouseX}
@@ -54,7 +62,9 @@ export default function RemoteDesktopPage() {
             showCursor={rdp.showCursor}
             containerRef={rdp.containerRef}
             imgRef={rdp.imgRef}
+            videoRef={rdp.liveVideoRef}
             onImageLoad={(w, h) => { rdp.setNativeWidth(w); rdp.setNativeHeight(h); }}
+            onVideoPlaying={rdp.markLivePlaying}
             onClick={(e) => void rdp.handleClick(e)}
             onMouseMove={rdp.handleMouseMove}
             onMouseLeave={rdp.hideCursor}

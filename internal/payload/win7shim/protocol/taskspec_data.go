@@ -321,6 +321,11 @@ func init() {
 		{Type: TaskTypeGhostModeExit, Name: "Ghost Mode Exit", Description: "Exit ghost mode", Category: "c2"},
 		{Type: TaskTypeScreenStreamSt, Name: "Screen Stream St", Category: "other"},
 		{Type: TaskTypeScreenStreamSp, Name: "Screen Stream Sp", Category: "other"},
+		{Type: TaskTypeScreenWebRTCSt, Name: "WebRTC Screen Stream", Description: "Start a real-time H.264 WebRTC remote-desktop stream (Pion + TURN). The server returns a short-lived operator signaling URL; video is sent peer-to-peer or through TURN. Requires the optional webrtc agent module and ffmpeg on the target.", Category: "remote",
+			Parameters: []TaskParam{
+				{Name: "data", Type: "string", Required: false, Description: "Server-generated session JSON (session id, token, ICE servers, dimensions, FPS, bitrate, encoder)"},
+			}},
+		{Type: TaskTypeScreenWebRTCSp, Name: "WebRTC Screen Stop", Description: "Stop the active WebRTC screen stream and release the capture/encoder pipeline.", Category: "remote"},
 		{Type: TaskTypeListInjectMeth, Name: "List Inject Meth", Category: "other"},
 		{Type: TaskTypeLateralSCF, Name: "Lateral SCF", Category: "other"},
 		{Type: TaskTypeLateralList, Name: "Lateral List", Category: "other"},

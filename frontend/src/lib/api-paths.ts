@@ -43,6 +43,8 @@ export const paths = {
     screenshotWindow: (id: string) => `/agents/${id}/screenshot_window`,
     screenStart: (id: string) => `/agents/${id}/screen/start`,
     screenStop: (id: string) => `/agents/${id}/screen/stop`,
+    webrtcStart: (id: string) => `/agents/${id}/webrtc/start`,
+    webrtcStop: (id: string) => `/agents/${id}/webrtc/stop`,
     remoteInput: (id: string) => `/api/agents/${id}/input`,
     /** Generic `/agents/:id/...` builder (suffix may omit leading /). */
     cmd: (id: string, suffix: string) => {

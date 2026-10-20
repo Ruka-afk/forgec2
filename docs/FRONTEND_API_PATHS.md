@@ -42,6 +42,7 @@ Source of truth: `frontend/src/lib/api-paths.ts`.
 | Agent cmd builder | `paths.agents.cmd(id, "shell")` → `/agents/:id/shell` |
 | Agent files/token/socks | `paths.agents.filesLs` / `filesSearch` / `filesScan` / `filesThumb` / `filesThumbGet` / `tokenList` / `socks` / … |
 | Agent remote input | `paths.agents.remoteInput(id)` → `/api/agents/:id/input` |
+| Agent live desktop | `paths.agents.webrtcStart(id)` / `webrtcStop(id)` → `/agents/:id/webrtc/*`; signaling sockets are `/ws/rd/operator?session=` (operator) and `/ws/rd/agent?session=&token=&agent=` (agent, single-use token) |
 | Campaigns | `paths.campaigns.list` / `one` / `mitre` |
 | SOCKS sessions | `paths.socks.sessions` |
 | RPort status | `paths.rportfwd.status` |
