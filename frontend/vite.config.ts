@@ -89,7 +89,7 @@ export default defineConfig(({ command }) => {
     assetsDir: "assets",
     target: "es2020",
     chunkSizeWarningLimit: 500,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
         manualChunks(id) {
           // NOTE: no page-directory buckets on purpose.
