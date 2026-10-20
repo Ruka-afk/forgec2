@@ -40,10 +40,11 @@ function fontPreloadPlugin(): Plugin {
 // import closure over the emitted files; the list is the set of chunks that
 // closure never reached. See the manualChunks comment below.
 //
-// Pinned to the 1.6 line on purpose: @base-ui/react 1.9.0 makes vendor-baseui
-// and vendor-baseui-forms import each other, which throws
-// "Cannot access 'we' before initialization" before the SPA mounts. Re-measure
-// this set (and the chunk graph) before lifting the ~1.6.0 pin.
+// The 1.9.0 cycle that forced the ~1.6.0 pin ("Cannot access 'we' before
+// initialization" via vendor-baseui <-> vendor-baseui-forms) is gone under
+// Vite 8/Rolldown: the two chunks no longer import each other (verified 0/0)
+// and the 1.9.0 e2e run passes. The set still keeps page-only subpaths out of
+// first paint; re-measure it if a future base-ui reshuffles subpaths.
 const BASEUI_PAGE_ONLY_KEYS = new Set([
   "accordion",
   "checkbox",
