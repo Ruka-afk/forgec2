@@ -1,1 +1,0 @@
-import{r as e}from"./vendor-react-D_8_2I4I.js";function c(){const r=e.useRef(!1),a=e.useCallback((t=!1)=>t||!r.current,[]),s=e.useCallback(()=>{r.current=!0},[]);return{beginRefresh:a,markLoaded:s}}export{c as u};
