@@ -14,7 +14,20 @@ const MAX_PUSH_BYTES = 50 * 1024 * 1024;
 // Upper bound for one push (50MB on a slow link); XHR has no default timeout.
 const UPLOAD_TIMEOUT_MS = 600_000;
 
-export async function pullRemoteFile(opts: {
+interface StagedRemoteFile {
+  /** Server-side `files/exfil` URL; supports HTTP Range once staged. */
+  url: string;
+  filename: string;
+  partial: boolean;
+}
+
+/**
+ * Pull a remote file into the teamserver's per-agent upload cache without
+ * downloading it to the browser. Playback uses this so `<video>`/`<audio>` can
+ * issue Range requests against the staged copy instead of buffering base64
+ * task results.
+ */
+export async function stageRemoteFile(opts: {
   agentId: string;
   remotePath: string;
   filename: string;
@@ -22,7 +35,7 @@ export async function pullRemoteFile(opts: {
   t: TFn;
   signal?: AbortSignal;
   onProgress?: (p: TransferProgress) => void;
-}): Promise<"pulled" | "partial"> {
+}): Promise<StagedRemoteFile> {
   const plan = pullPlan(opts.fileSize ?? 0);
   let offset = 0;
   opts.onProgress?.(transferProgressAt(0, plan));
@@ -41,11 +54,26 @@ export async function pullRemoteFile(opts: {
     offset += size;
     opts.onProgress?.(transferProgressAt(offset, plan));
   }
-  const { blob, filename: saved } = await api.downloadGet(
-    paths.agents.filesExfilGet(opts.agentId, exfilBasename(opts.remotePath)),
-  );
+  return {
+    url: paths.agents.filesExfilGet(opts.agentId, exfilBasename(opts.remotePath)),
+    filename: exfilBasename(opts.remotePath),
+    partial: plan.partial,
+  };
+}
+
+export async function pullRemoteFile(opts: {
+  agentId: string;
+  remotePath: string;
+  filename: string;
+  fileSize?: number;
+  t: TFn;
+  signal?: AbortSignal;
+  onProgress?: (p: TransferProgress) => void;
+}): Promise<"pulled" | "partial"> {
+  const staged = await stageRemoteFile(opts);
+  const { blob, filename: saved } = await api.downloadGet(staged.url);
   downloadBlob(blob, saved || opts.filename);
-  return plan.partial ? "partial" : "pulled";
+  return staged.partial ? "partial" : "pulled";
 }
 
 export function pushLocalFile(opts: {

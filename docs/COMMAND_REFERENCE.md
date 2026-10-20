@@ -3,18 +3,18 @@
 > **Generated** from `pkg/protocol/taskspec_data.go` by
 > `node scripts/gen-command-reference.mjs`. Do not edit by hand.
 
-- **Task types:** 218
-- **Constants in tasks.go:** 219
+- **Task types:** 219
+- **Constants in tasks.go:** 220
 - **Aliases:** 3
 - **Approval-gated:** 57
-- **Parameters (total):** 73
+- **Parameters (total):** 75
 - **Constants without specs:** shell_output (intentional: RESULT-type only, not dispatchable — see pkg/protocol/tasks.go)
 
 ## Categories
 
 - [Execution](#execution) (29)
 - [Discovery](#discovery) (35)
-- [Collection](#collection) (17)
+- [Collection](#collection) (18)
 - [Credential Access](#credential-access) (37)
 - [Defense Evasion](#defense-evasion) (29)
 - [Lateral Movement](#lateral-movement) (10)
@@ -106,6 +106,7 @@
 | `clipboard_set` | Clipboard Set | no | — | command:string* | Write to clipboard |
 | `cookie_export` | Cookie Export | **yes** | — | — | Export browser cookies |
 | `download` | Download File | no | — | command:string* | Download a file from the agent |
+| `file_thumb` | File Thumbnails | no | — | path:string, data:string | Generate bounded JPEG thumbnails for up to 12 operator-selected image/video paths. Images use built-in decoders; video frames use ffmpeg when installed. Go agent only; thumbnails are cached server-side and never returned as task text. |
 | `keylogger_dump` | Keylogger Dump | no | — | — | Dump captured keystrokes |
 | `keylogger_start` | Keylogger Start | no | — | — | Start keylogging |
 | `keylogger_stop` | Keylogger Stop | no | — | — | Stop keylogging |

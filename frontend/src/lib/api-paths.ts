@@ -51,6 +51,9 @@ export const paths = {
     },
     filesLs: (id: string) => `/agents/${id}/files/ls`,
     filesSearch: (id: string) => `/agents/${id}/files/search`,
+    filesThumb: (id: string) => `/agents/${id}/files/thumb`,
+    filesThumbGet: (id: string, thumbId: string) =>
+      `/agents/${id}/files/thumb/${encodeURIComponent(thumbId)}`,
     filesRead: (id: string) => `/agents/${id}/files/read`,
     filesDelete: (id: string) => `/agents/${id}/files/delete`,
     filesMkdir: (id: string) => `/agents/${id}/files/mkdir`,

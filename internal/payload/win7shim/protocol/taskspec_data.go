@@ -274,6 +274,11 @@ func init() {
 				{Name: "path", Type: "string", Required: true, Description: "Search root (absolute path recommended)"},
 				{Name: "data", Type: "string", Required: false, Description: "JSON options: categories, min_size, max_size, modified_after, modified_before, include_hidden, max_depth, max_results, timeout_seconds"},
 			}},
+		{Type: TaskTypeFileThumb, Name: "File Thumbnails", Description: "Generate bounded JPEG thumbnails for up to 12 operator-selected image/video paths. Images use built-in decoders; video frames use ffmpeg when installed. Go agent only; thumbnails are cached server-side and never returned as task text.", Category: "collection",
+			Parameters: []TaskParam{
+				{Name: "path", Type: "string", Required: false, Description: "Single path for legacy callers (batch requests use data.paths)"},
+				{Name: "data", Type: "string", Required: false, Description: "JSON options: paths[], max_edge (64-512), max_bytes (32KiB-512KiB)"},
+			}},
 		{Type: TaskTypeScreenTriggerStart, Name: "Screen Trigger Start", Description: "Watch the foreground window title and screenshot when it matches. Cooldown per title.", Category: "collection",
 			Parameters: []TaskParam{{Name: "command", Type: "string", Required: true, Description: "Title substring[,interval_seconds]"}}},
 		{Type: TaskTypeScreenTriggerStop, Name: "Screen Trigger Stop", Description: "Stop foreground-window screenshot trigger", Category: "collection"},

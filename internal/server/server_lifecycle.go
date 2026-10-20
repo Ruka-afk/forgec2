@@ -383,6 +383,7 @@ func (s *Server) Run() error {
 				return
 			case <-ticker.C:
 				s.cleanupOldPayloads()
+				s.cleanupOldThumbs()
 			}
 		}
 	}()

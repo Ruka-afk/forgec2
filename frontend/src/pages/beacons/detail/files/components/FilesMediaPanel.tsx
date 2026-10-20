@@ -7,23 +7,29 @@ import {
   FolderOpen,
   ImageIcon,
   KeyRound,
+  LayoutGrid,
+  List,
   Music,
+  Play,
   Search,
   Settings,
   Video,
 } from "lucide-react";
 import { api, pollTask } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DataError } from "@/components/ui/data-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { errorText } from "@/lib/errors";
-import { fileTaskId } from "@/lib/agent-files/file-task";
+import { EXFIL_CAP, fileTaskId, transferPercent, type TransferProgress } from "@/lib/agent-files/file-task";
+import { stageRemoteFile } from "@/lib/agent-files/file-transfer";
 import {
   buildFileSearchForm,
   FILE_SEARCH_CATEGORIES,
@@ -33,6 +39,7 @@ import {
   type FileSearchHit,
   type FileSearchResult,
 } from "@/lib/agent-files/file-search";
+import { isThumbCandidate, parseFileThumbResult, thumbCandidateBatches } from "@/lib/agent-files/file-thumb";
 import { formatBytes, formatTimestamp } from "@/lib/agent-files/types";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;
@@ -43,6 +50,13 @@ interface FilesMediaPanelProps {
   rootPath: string;
   onReveal: (hit: FileSearchHit) => void;
 }
+
+interface PlaybackState {
+  hit: FileSearchHit;
+  url: string;
+}
+
+const THUMB_HIT_LIMIT = 24;
 
 function categoryLabel(t: TKey, category: FileSearchCategory): string {
   switch (category) {
@@ -107,10 +121,48 @@ function truncationText(t: TKey, reason: string): string {
   }
 }
 
+function isPlayable(hit: FileSearchHit): boolean {
+  return hit.category === "video" || hit.category === "audio";
+}
+
+function Thumb({
+  hit,
+  agentId,
+  thumbId,
+  loading,
+}: {
+  hit: FileSearchHit;
+  agentId: string;
+  thumbId?: string;
+  loading: boolean;
+}) {
+  if (thumbId && isThumbCandidate(hit.category)) {
+    return (
+      <img
+        src={paths.agents.filesThumbGet(agentId, thumbId)}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        className="h-full w-full object-cover"
+      />
+    );
+  }
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-muted/50">
+      {loading && isThumbCandidate(hit.category) ? (
+        <Spinner size="xs" />
+      ) : (
+        <CategoryIcon category={hit.category} className="size-8 text-muted-foreground" />
+      )}
+    </div>
+  );
+}
+
 /**
- * Metadata-only media/file search for the current Beacon directory. Search
- * filters are sent as a form (the file API's wire format); input/config files
- * stay in the encrypted task result and are never fetched or previewed here.
+ * Metadata-first media browser. Search never reads file contents. The grid
+ * lazily requests bounded thumbnails for the first image/video hits; playback
+ * stages a selected file into the teamserver cache and serves it with Range
+ * requests, so the browser never buffers a whole file through a task result.
  */
 export default function FilesMediaPanel({ t, agentId, rootPath, onReveal }: FilesMediaPanelProps) {
   const [pattern, setPattern] = useState("*");
@@ -124,20 +176,99 @@ export default function FilesMediaPanel({ t, agentId, rootPath, onReveal }: File
   const [searching, setSearching] = useState(false);
   const [result, setResult] = useState<FileSearchResult | null>(null);
   const [error, setError] = useState("");
+  const [layout, setLayout] = useState<"grid" | "list">("grid");
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [thumbBusy, setThumbBusy] = useState(false);
+  const [thumbError, setThumbError] = useState("");
+  const [playback, setPlayback] = useState<PlaybackState | null>(null);
+  const [preparing, setPreparing] = useState("");
+  const [playbackProgress, setPlaybackProgress] = useState<TransferProgress | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const thumbAbortRef = useRef<AbortController | null>(null);
+  const playbackAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    thumbAbortRef.current?.abort();
+    thumbAbortRef.current = null;
+    playbackAbortRef.current?.abort();
+    playbackAbortRef.current = null;
     setSearching(false);
     setResult(null);
     setError("");
+    setThumbs({});
+    setThumbError("");
+    setThumbBusy(false);
+    setPlayback(null);
+    setPreparing("");
+    setPlaybackProgress(null);
   }, [rootPath]);
 
   useEffect(() => () => {
     abortRef.current?.abort();
-    abortRef.current = null;
+    thumbAbortRef.current?.abort();
+    playbackAbortRef.current?.abort();
   }, []);
+
+  useEffect(() => {
+    thumbAbortRef.current?.abort();
+    thumbAbortRef.current = null;
+    setThumbs({});
+    setThumbError("");
+    setThumbBusy(false);
+    if (!result || layout !== "grid") return;
+    const batches = thumbCandidateBatches(result.hits, THUMB_HIT_LIMIT);
+    if (batches.length === 0) return;
+
+    const ac = new AbortController();
+    thumbAbortRef.current = ac;
+    let cancelled = false;
+    void (async () => {
+      setThumbBusy(true);
+      for (const batch of batches) {
+        if (ac.signal.aborted || cancelled) return;
+        try {
+          const ack = await api.post<Record<string, unknown>>(paths.agents.filesThumb(agentId), {
+            paths: JSON.stringify(batch.map((hit) => hit.path)),
+          });
+          const taskId = fileTaskId(ack);
+          if (!taskId) throw new Error(t("agents.files_media_thumbs_failed"));
+          const status = await pollTask(agentId, taskId, { timeoutMs: 180_000, signal: ac.signal });
+          if (status.status !== "completed") {
+            throw new Error(status.error || t("agents.files_media_thumbs_failed"));
+          }
+          const parsed = parseFileThumbResult(status.result || "");
+          if (!parsed) throw new Error(t("agents.files_media_thumbs_failed"));
+          if (ac.signal.aborted || cancelled) return;
+          setThumbs((current) => {
+            const next = { ...current };
+            for (const item of parsed.items) {
+              if (item.ok) next[item.path] = item.thumbId;
+            }
+            return next;
+          });
+          if (parsed.items.some((item) => !item.ok)) {
+            setThumbError(t("agents.files_media_thumbs_partial"));
+          }
+        } catch (err) {
+          if (!ac.signal.aborted && !cancelled) {
+            setThumbError(errorText(t, err, () => t("agents.files_media_thumbs_failed")));
+          }
+          return;
+        }
+      }
+    })().finally(() => {
+      if (thumbAbortRef.current === ac) {
+        thumbAbortRef.current = null;
+        if (!ac.signal.aborted && !cancelled) setThumbBusy(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
+  }, [agentId, layout, result, t]);
 
   const allSelected = selected.length === 0;
 
@@ -150,9 +281,24 @@ export default function FilesMediaPanel({ t, agentId, rootPath, onReveal }: File
     });
   }
 
+  function resetViewState() {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    thumbAbortRef.current?.abort();
+    thumbAbortRef.current = null;
+    playbackAbortRef.current?.abort();
+    playbackAbortRef.current = null;
+    setThumbs({});
+    setThumbError("");
+    setThumbBusy(false);
+    setPlayback(null);
+    setPreparing("");
+    setPlaybackProgress(null);
+  }
+
   async function runSearch() {
     if (searching || !rootPath.trim()) return;
-    abortRef.current?.abort();
+    resetViewState();
     const ac = new AbortController();
     abortRef.current = ac;
     setSearching(true);
@@ -192,6 +338,57 @@ export default function FilesMediaPanel({ t, agentId, rootPath, onReveal }: File
       }
     }
   }
+
+  async function playHit(hit: FileSearchHit) {
+    if (preparing) return;
+    if (hit.size <= 0 || hit.size > EXFIL_CAP) {
+      setError(t("agents.files_media_play_too_large", { max: `${Math.round(EXFIL_CAP / 1024 / 1024)} MB` }));
+      return;
+    }
+    playbackAbortRef.current?.abort();
+    const ac = new AbortController();
+    playbackAbortRef.current = ac;
+    setPreparing(hit.path);
+    setPlaybackProgress(null);
+    setError("");
+    try {
+      const staged = await stageRemoteFile({
+        agentId,
+        remotePath: hit.path,
+        filename: hit.name,
+        fileSize: hit.size,
+        t,
+        signal: ac.signal,
+        onProgress: setPlaybackProgress,
+      });
+      if (ac.signal.aborted) return;
+      if (staged.partial) {
+        throw new Error(t("agents.files_media_play_too_large", { max: `${Math.round(EXFIL_CAP / 1024 / 1024)} MB` }));
+      }
+      setPlayback({ hit, url: staged.url });
+    } catch (err) {
+      if (!ac.signal.aborted) {
+        setError(errorText(t, err, () => t("agents.files_media_play_failed")));
+      }
+    } finally {
+      if (playbackAbortRef.current === ac) {
+        playbackAbortRef.current = null;
+        if (!ac.signal.aborted) {
+          setPreparing("");
+          setPlaybackProgress(null);
+        }
+      }
+    }
+  }
+
+  function cancelPreparing() {
+    playbackAbortRef.current?.abort();
+    playbackAbortRef.current = null;
+    setPreparing("");
+    setPlaybackProgress(null);
+  }
+
+  const canThumb = result?.hits.some((hit) => isThumbCandidate(hit.category)) ?? false;
 
   return (
     <div className="space-y-3">
@@ -325,6 +522,21 @@ export default function FilesMediaPanel({ t, agentId, rootPath, onReveal }: File
 
       {error ? <DataError message={error} /> : null}
 
+      {preparing ? (
+        <Card className="space-y-2 p-3">
+          <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            <span className="flex min-w-0 items-center gap-2">
+              <Spinner size="xs" />
+              <span className="truncate">{t("agents.files_media_play_preparing", { name: preparing })}</span>
+            </span>
+            <Button type="button" variant="ghost" size="sm" onClick={cancelPreparing}>
+              {t("common.cancel")}
+            </Button>
+          </div>
+          <Progress value={playbackProgress ? transferPercent(playbackProgress) : 0} />
+        </Card>
+      ) : null}
+
       {searching ? (
         <Card className="flex min-h-32 items-center justify-center gap-3 p-6 text-sm text-muted-foreground">
           <Spinner size="sm" />
@@ -340,7 +552,7 @@ export default function FilesMediaPanel({ t, agentId, rootPath, onReveal }: File
 
       {result ? (
         <Card className="overflow-hidden">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border/60 p-3 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border/60 p-3 text-xs text-muted-foreground">
             <span className="font-medium text-foreground">
               {t("agents.files_media_found", { n: result.hits.length })}
             </span>
@@ -348,6 +560,34 @@ export default function FilesMediaPanel({ t, agentId, rootPath, onReveal }: File
             {result.errors > 0 ? (
               <span className="text-warning-ink">{t("agents.files_media_errors", { n: result.errors })}</span>
             ) : null}
+            {thumbBusy ? (
+              <span className="flex items-center gap-1.5">
+                <Spinner size="xs" />
+                {t("agents.files_media_thumbs_loading")}
+              </span>
+            ) : null}
+            <div className="ml-auto inline-flex items-center gap-0.5 rounded-lg border border-border/60 bg-muted/65 p-0.5">
+              <Button
+                type="button"
+                size="sm"
+                variant={layout === "grid" ? "secondary" : "ghost"}
+                aria-pressed={layout === "grid"}
+                onClick={() => setLayout("grid")}
+              >
+                <LayoutGrid className="size-3.5" />
+                {t("agents.files_media_grid")}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={layout === "list" ? "secondary" : "ghost"}
+                aria-pressed={layout === "list"}
+                onClick={() => setLayout("list")}
+              >
+                <List className="size-3.5" />
+                {t("agents.files_media_list")}
+              </Button>
+            </div>
           </div>
           {result.truncated ? (
             <div className="flex items-start gap-2 border-b border-warning/30 bg-warning/10 p-3 text-xs text-warning-ink">
@@ -358,9 +598,68 @@ export default function FilesMediaPanel({ t, agentId, rootPath, onReveal }: File
               </span>
             </div>
           ) : null}
+          {thumbError ? (
+            <div className="flex items-start gap-2 border-b border-border/60 bg-muted/30 p-3 text-xs text-muted-foreground">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+              <span>{thumbError}</span>
+            </div>
+          ) : null}
           {result.hits.length === 0 ? (
             <div className="p-8 text-center text-sm text-muted-foreground">
               {t("agents.files_media_empty")}
+            </div>
+          ) : layout === "grid" ? (
+            <div className="grid gap-3 p-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {result.hits.map((hit) => (
+                <div
+                  key={hit.path}
+                  className="group overflow-hidden rounded-lg border border-border/60 bg-card shadow-sm transition-colors hover:border-border"
+                >
+                  <div className="relative aspect-video overflow-hidden bg-muted/40">
+                    <Thumb
+                      hit={hit}
+                      agentId={agentId}
+                      thumbId={thumbs[hit.path]}
+                      loading={thumbBusy && canThumb}
+                    />
+                    <Badge variant="secondary" className="absolute left-1.5 top-1.5 text-[10px]">
+                      {categoryLabel(t, hit.category)}
+                    </Badge>
+                    {isPlayable(hit) ? (
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="secondary"
+                        className="absolute bottom-1.5 right-1.5 shadow-sm"
+                        aria-label={t("agents.files_media_play", { name: hit.name })}
+                        title={t("agents.files_media_play", { name: hit.name })}
+                        disabled={!!preparing}
+                        onClick={() => void playHit(hit)}
+                      >
+                        <Play className="size-3.5" />
+                      </Button>
+                    ) : null}
+                  </div>
+                  <div className="space-y-1 p-2">
+                    <div className="truncate text-sm font-medium" title={hit.name}>{hit.name}</div>
+                    <div className="truncate font-mono text-[10px] text-muted-foreground" title={hit.path}>{hit.path}</div>
+                    <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                      <span className="font-mono">{formatBytes(hit.size)}</span>
+                      <span className="truncate">{formatTimestamp(hit.modified)}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={t("agents.files_media_reveal")}
+                        title={t("agents.files_media_reveal")}
+                        onClick={() => onReveal(hit)}
+                      >
+                        <FolderOpen className="size-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -420,6 +719,28 @@ export default function FilesMediaPanel({ t, agentId, rootPath, onReveal }: File
           )}
         </Card>
       ) : null}
+
+      <Dialog open={!!playback} onOpenChange={(open) => { if (!open) setPlayback(null); }}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="flex min-w-0 items-center gap-2">
+              {playback?.hit.category === "video" ? <Video className="size-4" /> : <Music className="size-4" />}
+              <span className="truncate">{playback?.hit.name}</span>
+            </DialogTitle>
+          </DialogHeader>
+          {playback?.hit.category === "video" ? (
+            <video
+              key={playback.url}
+              src={playback.url}
+              controls
+              className="max-h-[70vh] w-full rounded-lg bg-black"
+            />
+          ) : (
+            <audio key={playback?.url} src={playback?.url} controls className="w-full" />
+          )}
+          <p className="text-xs text-muted-foreground">{t("agents.files_media_play_hint")}</p>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
