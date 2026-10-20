@@ -31,6 +31,7 @@ Authorized lab validation only. Goal: prove **Generate → Listener → Check-in
 | 6 | Stop the primary listener (keep the backup up); the next beacon fails over and returns online | |
 | 7 | Restart the primary; the agent may continue on the backup or move back, and tasks still round-trip | |
 | 8 | Re-register/restart the artifact; the server-delivered primary replaces the first entry but the backup list survives | |
+| 9 | Repeat with a Go artifact built for a raw transport (`tcp://primary:4444,tcp://backup:4444`, or `quic://`): stop the primary listener; the next beacon answers from the backup and keeps using it | |
 
 Pass criteria:
 
@@ -39,6 +40,7 @@ Pass criteria:
 - The stager's stage-1 fetch goes to the primary origin; stage-2 keeps the full list.
 - Unsupported failover schemes, credentials or query strings are rejected at generate time (400), not baked into a dead payload.
 - The PowerShell one-liner is intentionally single-endpoint (its template dials one URL); use a Go artifact for failover.
+- Endpoint failover is not HTTP-only: TCP/TLS, UDP, QUIC and ICMP sweeps try every configured endpoint of their own scheme (active endpoint first), remember the one that answered, and never dial a foreign-scheme entry with the wrong framing. DNS keeps its dedicated `dns.domain`/`dns.server` config and SMB its local pipe/socket.
 
 ## Backpressure, 5xx and invalid 200s
 

