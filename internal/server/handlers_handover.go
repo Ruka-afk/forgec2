@@ -126,7 +126,7 @@ func (s *Server) handleHandoverExport(c *gin.Context) {
 			line := map[string]interface{}{
 				"id": t.ID, "agent_id": t.AgentID, "type": t.Type,
 				"command": t.Command, "status": t.Status,
-				"result":   truncateStr(t.Result, HandoverResultMaxLen),
+				"result":   truncateStr(redactSensitiveResultForAuxiliary(t.Type, t.Result), HandoverResultMaxLen),
 				"error":    t.Error,
 				"created":  t.CreatedAt.Format(time.RFC3339),
 				"operator": t.CreatedBy,

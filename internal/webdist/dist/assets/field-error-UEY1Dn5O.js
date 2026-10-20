@@ -1,0 +1,1 @@
+import{qn as e}from"./vendor-baseui-DgYvN4vf.js";import{t}from"./utils-TvGvpHe6.js";var n=e();function r({id:e,children:r,className:i}){return r?(0,n.jsx)(`p`,{id:e,role:`alert`,className:t(`text-xs text-destructive-ink mt-1`,i),children:r}):null}export{r as t};

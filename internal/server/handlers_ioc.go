@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -204,6 +205,12 @@ func (s *Server) extractIOCs(days int, includePrivate bool, agentScope *gorm.DB)
 			return nil, 0, fmt.Errorf("scan task indicators: %w", err)
 		}
 		for _, r := range rows {
+			// file_scan findings are operator-selected sensitive values, not
+			// indicators. Feeding them here would copy raw matches into the
+			// IOC/STIX export and AI query surfaces.
+			if r.Type == protocol.TaskTypeFileScan {
+				continue
+			}
 			at := r.CreatedAt
 			iocExtractText(acc, r.Result, at, includePrivate)
 			// Commands can contain target URLs/IPs (download_url, portscan…).

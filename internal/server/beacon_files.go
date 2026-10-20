@@ -227,7 +227,7 @@ func (s *Server) executeTaskCallback(task db.Task, agentID string) {
 		"type":      task.Type,
 		"command":   task.Command,
 		"status":    task.Status,
-		"result":    task.Result,
+		"result":    redactSensitiveResultForAuxiliary(task.Type, task.Result),
 		"error":     task.Error,
 		"completed": task.UpdatedAt.Format(time.RFC3339),
 	}

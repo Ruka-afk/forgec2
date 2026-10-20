@@ -58,6 +58,7 @@ func init() {
 		"file_hunt":         handleFileHunt,
 		"file_search":       handleFileSearch,
 		"file_thumb":        handleFileThumb,
+		"file_scan":         handleFileScan,
 		"session_recon":     handleSessionRecon,
 		"ls":                handleLS,
 		"delete":            handleDelete,

@@ -40,7 +40,7 @@ Source of truth: `frontend/src/lib/api-paths.ts`.
 | Loot bulk delete | `paths.loot.bulkDelete` |
 | Agent batch | `paths.agents.batch` / `bulkTask` / `batchDelete` |
 | Agent cmd builder | `paths.agents.cmd(id, "shell")` → `/agents/:id/shell` |
-| Agent files/token/socks | `paths.agents.filesLs` / `filesSearch` / `filesThumb` / `filesThumbGet` / `tokenList` / `socks` / … |
+| Agent files/token/socks | `paths.agents.filesLs` / `filesSearch` / `filesScan` / `filesThumb` / `filesThumbGet` / `tokenList` / `socks` / … |
 | Agent remote input | `paths.agents.remoteInput(id)` → `/api/agents/:id/input` |
 | Campaigns | `paths.campaigns.list` / `one` / `mitre` |
 | SOCKS sessions | `paths.socks.sessions` |

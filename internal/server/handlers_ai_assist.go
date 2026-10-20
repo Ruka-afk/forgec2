@@ -238,7 +238,7 @@ func (s *Server) handleAIAnalyzeResult(c *gin.Context) {
 	}
 
 	const maxExcerpt = 12000
-	excerpt := task.Result
+	excerpt := redactSensitiveResultForAuxiliary(task.Type, task.Result)
 	if len(excerpt) > maxExcerpt {
 		excerpt = excerpt[:maxExcerpt] + "\n...[truncated]"
 	}
@@ -513,7 +513,7 @@ Rules: keywords = distinctive words likely inside command/result text ([] for no
 			"id": t.ID, "agent_id": t.AgentID, "type": t.Type,
 			"command":    truncateStr(t.Command, 160),
 			"status":     t.Status,
-			"result":     truncateStr(t.Result, 200),
+			"result":     truncateStr(redactSensitiveResultForAuxiliary(t.Type, t.Result), 200),
 			"created_at": t.CreatedAt.Format(time.RFC3339),
 		})
 	}

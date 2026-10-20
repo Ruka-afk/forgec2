@@ -218,7 +218,7 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 				"status": t.Status, "created_at": t.CreatedAt.Format(time.RFC3339),
 			}
 			if t.Result != "" {
-				r["result"] = truncateStr(t.Result, AIToolResultTruncLen)
+				r["result"] = truncateStr(redactSensitiveResultForAuxiliary(t.Type, t.Result), AIToolResultTruncLen)
 			}
 			if t.Error != "" {
 				r["error"] = t.Error
@@ -312,7 +312,7 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 		for _, t := range tasks {
 			out = append(out, map[string]interface{}{
 				"id": t.ID, "agent_id": t.AgentID, "type": t.Type, "command": truncateStr(t.Command, 200),
-				"status": t.Status, "result": truncateStr(t.Result, 500),
+				"status": t.Status, "result": truncateStr(redactSensitiveResultForAuxiliary(t.Type, t.Result), 500),
 			})
 		}
 		b, ok := marshalJSONSafe(out)
@@ -347,7 +347,7 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 		s.db.Where("agent_id = ?", aid2).Order("created_at desc").Limit(10).Find(&creds)
 		var events []map[string]interface{}
 		for _, t := range tasks2 {
-			events = append(events, map[string]interface{}{"kind": "task", "type": t.Type, "command": truncateStr(t.Command, 120), "status": t.Status, "time": t.CreatedAt.Format(time.RFC3339), "result": truncateStr(t.Result, 300)})
+			events = append(events, map[string]interface{}{"kind": "task", "type": t.Type, "command": truncateStr(t.Command, 120), "status": t.Status, "time": t.CreatedAt.Format(time.RFC3339), "result": truncateStr(redactSensitiveResultForAuxiliary(t.Type, t.Result), 300)})
 		}
 		for _, c := range creds {
 			events = append(events, map[string]interface{}{"kind": "credential", "username": c.Username, "domain": c.Domain, "type": c.Type, "time": c.CreatedAt.Format(time.RFC3339)})
@@ -567,7 +567,7 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 		// truncation here defeats its purpose.
 		const maxDetail = 16 * 1024
 		if task.Result != "" {
-			out["result"] = truncateStr(task.Result, maxDetail)
+			out["result"] = truncateStr(redactSensitiveResultForAuxiliary(task.Type, task.Result), maxDetail)
 		}
 		if task.Error != "" {
 			out["error"] = truncateStr(task.Error, maxDetail)

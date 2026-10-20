@@ -43,7 +43,7 @@ func marshalTaskResult(task db.Task, extra map[string]interface{}) string {
 		result[k] = v
 	}
 	if task.Result != "" {
-		result["result"] = truncateStr(task.Result, AITaskResultTruncLen)
+		result["result"] = truncateStr(redactSensitiveResultForAuxiliary(task.Type, task.Result), AITaskResultTruncLen)
 	}
 	if task.Error != "" {
 		result["error"] = task.Error

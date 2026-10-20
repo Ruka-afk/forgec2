@@ -229,7 +229,7 @@ func (s *Server) buildAIMarkdownReport(scope string, reqCtx *aiReqCtx) (string, 
 			for _, t := range failed {
 				errMsg := t.Error
 				if errMsg == "" {
-					errMsg = truncateStr(t.Result, 80)
+					errMsg = truncateStr(redactSensitiveResultForAuxiliary(t.Type, t.Result), 80)
 				}
 				w("- #%d `%s` on %s -- %s", t.ID, t.Type, t.AgentID, truncateStr(errMsg, 120))
 			}

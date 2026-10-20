@@ -51,6 +51,7 @@ export const paths = {
     },
     filesLs: (id: string) => `/agents/${id}/files/ls`,
     filesSearch: (id: string) => `/agents/${id}/files/search`,
+    filesScan: (id: string) => `/agents/${id}/files/scan`,
     filesThumb: (id: string) => `/agents/${id}/files/thumb`,
     filesThumbGet: (id: string, thumbId: string) =>
       `/agents/${id}/files/thumb/${encodeURIComponent(thumbId)}`,

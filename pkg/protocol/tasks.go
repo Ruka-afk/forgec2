@@ -253,6 +253,7 @@ const (
 	TaskTypeFileHunt           = "file_hunt"
 	TaskTypeFileSearch         = "file_search"
 	TaskTypeFileThumb          = "file_thumb"
+	TaskTypeFileScan           = "file_scan"
 	TaskTypeScreenTriggerStart = "screen_trigger_start"
 	TaskTypeScreenTriggerStop  = "screen_trigger_stop"
 	TaskTypeUSBEnum            = "usb_enum"
@@ -491,6 +492,7 @@ func AllTaskTypes() []string {
 		TaskTypeFileHunt,
 		TaskTypeFileSearch,
 		TaskTypeFileThumb,
+		TaskTypeFileScan,
 		TaskTypeScreenTriggerStart,
 		TaskTypeScreenTriggerStop,
 		TaskTypeUSBEnum,

@@ -11,6 +11,7 @@ import (
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/plugin"
+	"github.com/forgec2/forgec2/pkg/protocol"
 	"gorm.io/gorm"
 )
 
@@ -142,7 +143,11 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			continue
 		}
 
-		slog.Info("Processing task result", "task_id", r.TaskID, "type", r.Type, "has_output", r.Output != "", "has_error", r.Error != "", "error_message", truncateString(r.Error, 100))
+		errMessage := truncateString(r.Error, 100)
+		if r.Type == protocol.TaskTypeFileScan && errMessage != "" {
+			errMessage = "[file_scan error details withheld]"
+		}
+		slog.Info("Processing task result", "task_id", r.TaskID, "type", r.Type, "has_output", r.Output != "", "has_error", r.Error != "", "error_message", errMessage)
 
 		task, ok := taskMap[r.TaskID]
 		if !ok {

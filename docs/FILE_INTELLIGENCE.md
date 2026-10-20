@@ -4,10 +4,11 @@ File Intelligence is the read-only discovery layer behind the Beacon **Files →
 Media** tab. It answers "what files are on this target?" without turning the
 console into a content indexer.
 
-M1a shipped metadata search; M1b adds bounded thumbnails for image/video
-hits and HTTP Range playback of staged audio/video. Sensitive-data scans
-remain a separate follow-on batch so the wire format, caps and security
-boundary are settled before any file bytes are parsed.
+M1a shipped metadata search; M1b adds bounded thumbnails for image/video hits
+and HTTP Range playback of staged audio/video; M1c adds an explicit,
+text-only sensitive-data scan. Search never reads file contents. Thumbnails and
+scans only run when the operator asks for them, and raw scan matches remain on
+the encrypted operator surface.
 
 ## M1a: metadata search
 
@@ -127,12 +128,13 @@ content claim.
 
 ### UI (M1a)
 
-`FilesPage` has two views:
+`FilesPage` has three views:
 
 - **Browse** - the existing directory table, previews, upload/pull and Find/Hunt.
 - **Media** - category chips, glob, size/date/depth filters, hidden toggle, and
   the result view. **Show in folder** switches back to Browse at the hit's
   parent directory and selects the file.
+- **Sensitive** - the M1c detector form and raw match table described below.
 
 The Media view defaults to `image`, `video` and `audio`; clicking **All** clears
 the category filter. It shows the scanned count, unreadable-path count and a
@@ -242,38 +244,173 @@ buffering work without a custom media server.
 - Thumbnails are not frames of live capture and playback is not a webcam or
   microphone stream.
 
+## M1c: sensitive-data scan
+
+M1c adds `file_scan`, a bounded read-only text scan. It is deliberately not an
+indexer: there is no OCR, no document parsing, no archive extraction and no
+background crawl. The operator selects a root, a filename glob and an explicit
+detector set.
+
+### API
+
+`POST /agents/:id/files/scan`
+
+Requires `agents.write` and an operator session. The body is form-encoded or
+JSON:
+
+| Field | Type | Default | Hard maximum | Notes |
+|-------|------|---------|--------------|-------|
+| `path` | string | — | 4,096 chars | Required scan root; NUL is rejected. |
+| `pattern` / `command` | string | `*` | — | Comma-separated filename globs, same matching rules as metadata search. |
+| `rules` | string | `email,phone,bank_card` | — | Comma-separated allowlist. `all` selects every detector; unknown names are rejected. |
+| `include_hidden` | `1`/`true`/`0` | false | — | Hidden files and directories are skipped unless set. |
+| `max_depth` | int | 8 | 16 | Root is depth 0. |
+| `max_files` | int | 200 | 1,000 | Matching regular files read. |
+| `max_file_bytes` | bytes | 1 MiB | 8 MiB | Larger files are skipped, not partially scanned. |
+| `max_total_bytes` | bytes | 32 MiB | 64 MiB | Stops the scan before the file that would exceed the budget. |
+| `max_findings` | int | 500 | 2,000 | Unique path/rule/value findings. |
+| `timeout_seconds` | int | 30 | 60 | Wall-clock cap checked during the walk and between files. |
+
+The handler clamps limits, validates the detector list and queues one
+`file_scan` task. It responds with the normal
+`{"success":true,"task_id":N}` acknowledgement. Poll
+`GET /agents/:id/tasks/:taskId` until the task is `completed` or `failed`.
+
+### Detectors
+
+| Rule | Default | Match |
+|------|---------|-------|
+| `email` | yes | ASCII email address with local/domain length and dot checks. |
+| `phone` | yes | 7–15 digits with common `+`, spaces, dots, parentheses and hyphens. Dates, IPv4 addresses and SSN-shaped strings are rejected. |
+| `bank_card` | yes | 13–19 digits (separators allowed) that pass the Luhn checksum. |
+| `ssn` | opt-in | US SSN shape with area/group/serial validity checks. |
+| `aws_key` | opt-in | `AKIA`/`ASIA` access-key IDs. |
+| `private_key` | opt-in | `-----BEGIN … PRIVATE KEY-----` markers. The key body is not parsed. |
+| `jwt` | opt-in | Three base64url JWT segments beginning with `eyJ`. |
+| `password` | opt-in | Conservative `password/passwd/pwd/pass/secret/api_key/access_token/client_secret` assignment; quoted or a single token. Placeholders and variable references are rejected. |
+
+Detectors run in a fixed specificity order so a broad phone match cannot
+consume a card, SSN, key or assignment first. Findings are unique per file and
+rule; repeated occurrences increment `occurrences` instead of duplicating rows.
+
+### Agent scanning behavior
+
+- Files are matched by the same walk, hidden/system-directory and symlink rules
+  as `file_search`. Only regular files are read. Known binary/container
+  extensions (images, media, archives, Office/PDF, executables, databases and
+  keystores) are skipped before reading.
+- Unknown files with NUL bytes or a high control-byte ratio are reported as
+  skipped binary. UTF-8 and UTF-16LE/BE with a BOM are decoded; malformed UTF-8
+  is scanned with replacement characters so ASCII indicators are not lost.
+- The scan reads each accepted file once. It never uploads the file, stores a
+  copy, extracts archives or invokes `ffmpeg`/OCR.
+- The raw JSON result is kept under **900 KiB**. If findings exceed the byte
+  budget, the lowest-sorted rows are dropped and `truncated_reason` becomes
+  `max_bytes`; counts describe only rows still present.
+- `truncated` is also set for `max_files`, `max_total_bytes`, `max_findings`,
+  `timeout` and `cancelled`.
+
+### Result shape
+
+```json
+{
+  "root": "C:\\Users\\alice",
+  "patterns": ["*.txt", "*.log"],
+  "rules": ["email", "phone", "bank_card"],
+  "files_scanned": 42,
+  "files_skipped": 7,
+  "skipped_binary": 6,
+  "skipped_large": 1,
+  "bytes_scanned": 208411,
+  "findings": [
+    {
+      "path": "C:\\Users\\alice\\notes.txt",
+      "name": "notes.txt",
+      "rule": "email",
+      "value": "alice@example.com",
+      "line": 4,
+      "occurrences": 2
+    }
+  ],
+  "counts": {"email": 1},
+  "errors": 0,
+  "truncated": false,
+  "elapsed_ms": 81
+}
+```
+
+`value` is the raw match. `line` is 1-based. `counts` is a per-rule summary of
+the returned findings. Per-path read failures increment `errors` without
+failing the whole task.
+
+### Redaction boundary
+
+The raw values are only for the authenticated operator view. The teamserver
+stores the result with the normal encrypted task-result hook and replaces every
+`value` with `[redacted]` before the result reaches:
+
+- AI tools, AI task context, timeline/query context and result analysis;
+- task-completion callbacks;
+- handover export and task CSV export;
+- IOC extraction (the `file_scan` task type is skipped entirely, so raw matches
+  are not copied into IOC/STIX data).
+
+The redacted copy carries `auxiliary_redacted: true` plus a note. A malformed or
+unparseable `file_scan` document is withheld rather than passed through, so a
+truncated or hand-crafted result cannot bypass redaction. Webhook/automation
+events never carried task result bodies; they continue to receive only task
+metadata. Logs suppress `file_scan` error text, and audit details contain only
+the root, glob, detector names and limits.
+
+### UI (M1c)
+
+The **Sensitive** tab exposes:
+
+- eight detector checkboxes, with email, phone and bank card selected and marked
+  **default**; the scan button is disabled when no detector is selected;
+- glob, depth, file/byte/finding limits, timeout and hidden-file controls;
+- a prominent warning that the table shows raw values;
+- a summary line (files scanned, bytes read, skipped binary/oversized, errors),
+  truncation banner, per-rule rows, line number and occurrence count;
+- **Copy value** and **Show in folder**. Revealing a finding switches to Browse
+  at its parent directory and selects the file.
+
+Nothing is written to `localStorage`, logs or the clipboard automatically.
+
 ## Security boundary
 
-- Search results contain metadata only. `file_thumb` is the first operation
-  that opens target file bytes; it returns only downscaled JPEGs, never the
-  original file. Sensitive-data scans in M1c will be the first feature that
-  puts raw values in a result; those values will remain in the encrypted task
-  result and must not enter logs, audit details, AI tools, callbacks or
-  webhooks.
+- Search results contain metadata only. `file_thumb` opens target bytes and
+  returns only downscaled JPEGs, never the original file. `file_scan` is the
+  first feature that puts raw matched values in a task result; those values
+  remain in the encrypted operator result and are redacted from AI, callbacks,
+  IOC extraction and exports. Logs and audit details never contain them.
 - Thumbnail task results contain base64 only on the wire; the server replaces
   it with an opaque content id before storing the encrypted result. Cached
   images live under `data/thumbs` and expire after 7 days.
-- Audit details contain the root, patterns, categories, limits or the first
-  thumbnail path - never file contents or image bytes.
+- Audit details contain the root, patterns, categories, detector names, limits
+  or the first thumbnail path - never file contents, image bytes or scan
+  matches.
 - The agent has no network listener for this feature. It only responds to the
   normal Beacon task channel.
-- Server-side validation rejects negative sizes, inverted size/date ranges,
-  unknown categories, NUL bytes, oversized roots, more than 12 thumbnail paths
-  and paths over the length limit. The agent re-applies its own hard caps so a
-  hand-issued task cannot bypass them.
+- Server-side validation rejects negative limits, unknown detectors, NUL bytes,
+  oversized roots, more than 12 thumbnail paths and paths over the length
+  limit. The agent re-applies its own hard caps so a hand-issued task cannot
+  bypass them.
 
 ## Compatibility
 
-- The Go agent (`internal/payload/agent`) implements `file_search` and
-  `file_thumb` as core commands. They are not optional modules.
+- The Go agent (`internal/payload/agent`) implements `file_search`,
+  `file_thumb` and `file_scan` as core commands. They are not optional modules.
 - `file_thumb` relies on target-side `ffmpeg` for video frames; image
-  thumbnails use only the Go standard library. A target without `ffmpeg`
-  still returns image thumbnails and an explicit per-item video error.
+  thumbnails and all `file_scan` detection use only the Go standard library. A
+  target without `ffmpeg` still returns image thumbnails and an explicit
+  per-item video error.
 - The C implant does not implement these tasks yet; a C Beacon returns the
   normal unsupported-task error. The UI is usable against any Beacon, but
   results only arrive from agents that implement the command.
-- `file_search` and `file_thumb` are declared in `pkg/protocol` and mirrored to
-  the Win7 shim, so older build toolchains see the same task type metadata.
+- `file_search`, `file_thumb` and `file_scan` are declared in `pkg/protocol` and
+  mirrored to the Win7 shim, so older build toolchains see the same task type
+  metadata.
 
 ## Roadmap
 
@@ -281,11 +418,10 @@ buffering work without a custom media server.
 playback described above. Container/codec coverage follows the browser and the
 target's `ffmpeg`; there is no server-side transcoding.
 
-**M1c - sensitive data scan.** Add `file_scan` for explicit opt-in rules
-(email, phone and bank card enabled by default; other detectors opt-in). Raw
-findings stay unmasked only in the encrypted task result; the server stores
-them exactly as it stores other encrypted results, and every auxiliary surface
-(logs, audit values, AI tools, callbacks, webhooks) receives redacted summaries.
+**M1c - sensitive data scan is complete.** `file_scan` supports the default
+email/phone/bank-card detectors and five opt-in detectors, keeps raw values on
+the encrypted operator surface, and redacts every auxiliary consumer described
+above.
 
 **M2 - real-time screen.** The per-frame HTTP/base64 path cannot reach 30 fps.
 M2 replaces it with a WebRTC (Pion) sender using an embedded TURN relay;

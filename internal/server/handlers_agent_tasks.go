@@ -169,7 +169,7 @@ func (s *Server) handleExportTasks(c *gin.Context) {
 			agentName,
 			t.Type,
 			csvSafe(t.Command),
-			csvSafe(truncateString(t.Result, CSVResultTruncLen)),
+			csvSafe(truncateString(redactSensitiveResultForAuxiliary(t.Type, t.Result), CSVResultTruncLen)),
 			csvSafe(truncateString(t.Error, CSVErrorTruncLen)),
 			t.Status,
 		})

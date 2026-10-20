@@ -3,17 +3,17 @@
 > **Generated** from `pkg/protocol/taskspec_data.go` by
 > `node scripts/gen-command-reference.mjs`. Do not edit by hand.
 
-- **Task types:** 219
-- **Constants in tasks.go:** 220
+- **Task types:** 220
+- **Constants in tasks.go:** 221
 - **Aliases:** 3
 - **Approval-gated:** 57
-- **Parameters (total):** 75
+- **Parameters (total):** 78
 - **Constants without specs:** shell_output (intentional: RESULT-type only, not dispatchable — see pkg/protocol/tasks.go)
 
 ## Categories
 
 - [Execution](#execution) (29)
-- [Discovery](#discovery) (35)
+- [Discovery](#discovery) (36)
 - [Collection](#collection) (18)
 - [Credential Access](#credential-access) (37)
 - [Defense Evasion](#defense-evasion) (29)
@@ -69,6 +69,7 @@
 | `drives` | List Drives | no | — | — | List available drives |
 | `edr_status` | EDR Status | no | — | — | Check EDR status |
 | `file_hunt` | File Hunt | no | `hunt` | command:string, path:string, data:string | Capped recursive glob listing (default: user profile, max 200 hits). Optional small-file download with byte caps — not whole-disk exfil. |
+| `file_scan` | Sensitive File Scan | no | — | command:string, path:string*, data:string | Bounded read-only scan of text files for explicit sensitive-data rules. Email, phone and bank card are enabled by default; SSN, AWS key, private key, JWT and password detectors are opt-in. Raw matches stay in the encrypted task result and are redacted from AI, callbacks and exports. No OCR or document parsing. |
 | `file_search` | File Metadata Search | no | — | command:string, path:string*, data:string | Structured, read-only file metadata search by category, glob, size, modification time and depth. Returns paths and metadata only (no file contents, thumbnails or OCR). |
 | `find` | Find Files | no | — | command:string* | Search for files matching a pattern |
 | `find_delegation` | Find Delegation | no | — | — | Find Kerberos delegation |

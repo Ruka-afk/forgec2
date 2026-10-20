@@ -279,6 +279,12 @@ func init() {
 				{Name: "path", Type: "string", Required: false, Description: "Single path for legacy callers (batch requests use data.paths)"},
 				{Name: "data", Type: "string", Required: false, Description: "JSON options: paths[], max_edge (64-512), max_bytes (32KiB-512KiB)"},
 			}},
+		{Type: TaskTypeFileScan, Name: "Sensitive File Scan", Description: "Bounded read-only scan of text files for explicit sensitive-data rules. Email, phone and bank card are enabled by default; SSN, AWS key, private key, JWT and password detectors are opt-in. Raw matches stay in the encrypted task result and are redacted from AI, callbacks and exports. No OCR or document parsing.", Category: "discovery",
+			Parameters: []TaskParam{
+				{Name: "command", Type: "string", Required: false, Description: "Comma-separated filename globs (default *)"},
+				{Name: "path", Type: "string", Required: true, Description: "Scan root (absolute path recommended)"},
+				{Name: "data", Type: "string", Required: false, Description: "JSON options: rules[], include_hidden, max_depth, max_files, max_file_bytes, max_total_bytes, max_findings, timeout_seconds"},
+			}},
 		{Type: TaskTypeScreenTriggerStart, Name: "Screen Trigger Start", Description: "Watch the foreground window title and screenshot when it matches. Cooldown per title.", Category: "collection",
 			Parameters: []TaskParam{{Name: "command", Type: "string", Required: true, Description: "Title substring[,interval_seconds]"}}},
 		{Type: TaskTypeScreenTriggerStop, Name: "Screen Trigger Stop", Description: "Stop foreground-window screenshot trigger", Category: "collection"},

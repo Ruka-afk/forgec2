@@ -18,6 +18,7 @@ import FilesToolbar from "./components/FilesToolbar";
 import FilesPathBar from "./components/FilesPathBar";
 import FilesFindPanel from "./components/FilesFindPanel";
 import FilesMediaPanel from "./components/FilesMediaPanel";
+import FilesScanPanel from "./components/FilesScanPanel";
 import FilesTable from "./components/FilesTable";
 import FilesDialogs from "./components/FilesDialogs";
 
@@ -29,7 +30,7 @@ export default function FilesPage() {
   const [showUpload, setShowUpload] = useState(false);
   const [uploadName, setUploadName] = useState("");
   const [showFind, setShowFind] = useState(false);
-  const [view, setView] = useState<"browse" | "media">("browse");
+  const [view, setView] = useState<"browse" | "media" | "scan">("browse");
   const [showMkdir, setShowMkdir] = useState(false);
   const [mkdirName, setMkdirName] = useState("");
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
@@ -153,6 +154,12 @@ export default function FilesPage() {
     setView("browse");
   };
 
+  const handleRevealScanFinding = (path: string, name: string) => {
+    navigateTo(parentPath(path, osType));
+    setSelectedFile(name);
+    setView("browse");
+  };
+
   return (
     <PageContainer className="h-full gap-3 px-4 py-3 sm:px-6">
       {osError && (
@@ -206,6 +213,15 @@ export default function FilesPage() {
           >
             {t("agents.files_tab_media")}
           </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={view === "scan" ? "secondary" : "ghost"}
+            aria-pressed={view === "scan"}
+            onClick={() => { setShowFind(false); setView("scan"); }}
+          >
+            {t("agents.files_tab_scan")}
+          </Button>
         </div>
       </div>
 
@@ -233,6 +249,15 @@ export default function FilesPage() {
           agentId={id}
           rootPath={currentPath}
           onReveal={handleRevealSearchHit}
+        />
+      )}
+
+      {view === "scan" && (
+        <FilesScanPanel
+          t={t}
+          agentId={id}
+          rootPath={currentPath}
+          onReveal={handleRevealScanFinding}
         />
       )}
 
