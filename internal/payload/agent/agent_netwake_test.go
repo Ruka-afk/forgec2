@@ -18,32 +18,37 @@ func TestNetworkFingerprintStable(t *testing.T) {
 	}
 }
 
-// TestMonitorNetworkChangesWakesOnChange verifies the monitor calls wake once
-// when the fingerprint changes and then goes quiet while it stays put.
-func TestMonitorNetworkChangesWakesOnChange(t *testing.T) {
+// runMonitor starts the monitor and returns a channel closed when it exits.
+func runMonitor(t *testing.T, interval time.Duration, fingerprint func() string, wake func()) {
+	t.Helper()
 	stop := make(chan struct{})
 	done := make(chan struct{})
-	defer func() {
-		close(stop)
-		<-done
-	}()
-
-	var calls atomic.Int64
-	woken := make(chan struct{}, 4)
 	go func() {
 		defer close(done)
-		monitorNetworkChanges(2*time.Millisecond, func() string {
-			if calls.Add(1) < 3 {
-				return "iface-a|up"
-			}
-			return "iface-b|up"
-		}, func() { woken <- struct{}{} }, stop)
+		monitorNetworkChanges(interval, 0, fingerprint, wake, stop)
 	}()
+	t.Cleanup(func() {
+		close(stop)
+		<-done
+	})
+}
+
+// TestMonitorNetworkChangesWakesOnStableChange verifies the monitor wakes once
+// a change has been observed twice, and then goes quiet while it stays put.
+func TestMonitorNetworkChangesWakesOnStableChange(t *testing.T) {
+	var calls atomic.Int64
+	woken := make(chan struct{}, 4)
+	runMonitor(t, 2*time.Millisecond, func() string {
+		if calls.Add(1) < 4 {
+			return "iface-a|up"
+		}
+		return "iface-b|up"
+	}, func() { woken <- struct{}{} })
 
 	select {
 	case <-woken:
 	case <-time.After(2 * time.Second):
-		t.Fatal("network change did not wake the agent")
+		t.Fatal("stable network change did not wake the agent")
 	}
 
 	// Stable again: no second wake.
@@ -54,22 +59,64 @@ func TestMonitorNetworkChangesWakesOnChange(t *testing.T) {
 	}
 }
 
-// TestMonitorNetworkChangesIgnoresUnknownFingerprint ensures a transient OS
-// error (empty fingerprint) never counts as a change.
-func TestMonitorNetworkChangesIgnoresUnknownFingerprint(t *testing.T) {
+// TestMonitorNetworkChangesIgnoresFlapping ensures a link that alternates
+// between two states on every poll never looks like a confirmed move.
+func TestMonitorNetworkChangesIgnoresFlapping(t *testing.T) {
+	var calls atomic.Int64
+	woken := make(chan struct{}, 1)
+	runMonitor(t, time.Millisecond, func() string {
+		if calls.Add(1)%2 == 0 {
+			return "iface-a|up"
+		}
+		return "iface-b|up"
+	}, func() { woken <- struct{}{} })
+
+	select {
+	case <-woken:
+		t.Fatal("flapping interface must not wake the agent")
+	case <-time.After(60 * time.Millisecond):
+	}
+}
+
+// TestMonitorNetworkChangesRateLimitsWakes proves a sequence of genuine moves
+// is coalesced to one wake inside the minimum interval.
+func TestMonitorNetworkChangesRateLimitsWakes(t *testing.T) {
+	states := []string{"a", "b", "b", "c", "c", "d", "d"}
+	var calls atomic.Int64
+	var wakes atomic.Int64
 	stop := make(chan struct{})
 	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		monitorNetworkChanges(time.Millisecond, time.Hour, func() string {
+			n := int(calls.Add(1)) - 1
+			if n >= len(states) {
+				n = len(states) - 1
+			}
+			return states[n]
+		}, func() { wakes.Add(1) }, stop)
+	}()
 	defer func() {
 		close(stop)
 		<-done
 	}()
 
+	// One confirmed wake (b) in the first hour; c and d are suppressed.
+	deadline := time.Now().Add(100 * time.Millisecond)
+	for time.Now().Before(deadline) && calls.Load() < int64(len(states))+2 {
+		time.Sleep(time.Millisecond)
+	}
+	if got := wakes.Load(); got != 1 {
+		t.Fatalf("wake count = %d, want 1 (min interval must coalesce moves)", got)
+	}
+}
+
+// TestMonitorNetworkChangesIgnoresUnknownFingerprint ensures a transient OS
+// error (empty fingerprint) never counts as a change.
+func TestMonitorNetworkChangesIgnoresUnknownFingerprint(t *testing.T) {
 	woken := make(chan struct{}, 1)
-	go func() {
-		defer close(done)
-		monitorNetworkChanges(time.Millisecond, func() string { return "" },
-			func() { woken <- struct{}{} }, stop)
-	}()
+	runMonitor(t, time.Millisecond, func() string { return "" },
+		func() { woken <- struct{}{} })
 
 	select {
 	case <-woken:

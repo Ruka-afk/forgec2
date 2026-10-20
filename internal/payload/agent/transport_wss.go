@@ -119,9 +119,17 @@ func wssDial(wsURL string) (*websocket.Conn, error) {
 		HandshakeTimeout: 10 * time.Second,
 		NetDialContext:   utlsDialContext,
 	}
-	conn, _, err := dialer.Dial(wsURL, header)
+	conn, resp, err := dialer.Dial(wsURL, header)
 	if err != nil {
+		// An upgrade rejection still carries the server clock; learn it so the
+		// retry (and any other transport) can correct a skewed host clock.
+		if resp != nil {
+			noteServerClock(resp.Header)
+		}
 		return nil, err
+	}
+	if resp != nil {
+		noteServerClock(resp.Header)
 	}
 	conn.SetPongHandler(func(string) error {
 		_ = conn.SetReadDeadline(time.Now().Add(90 * time.Second))

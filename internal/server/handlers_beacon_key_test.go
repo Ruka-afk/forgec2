@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
@@ -102,9 +103,25 @@ func TestV2BeaconRegistrationAuth(t *testing.T) {
 		idPub := agent.publicKeyB64()
 		regHMAC := base64.StdEncoding.EncodeToString(crypto.ComputeRegHMAC(agent.regKey, agentUUID, idPub, oldTS, seq))
 		body := `{"uuid":"` + agentUUID + `","seq":` + strconv.FormatUint(seq, 10) + `,"ts":` + strconv.FormatInt(oldTS, 10) + `,"ecdh_pub":"` + idPub + `","id_pub":"` + idPub + `","reg_hmac":"` + regHMAC + `"}`
-		w := v2Post(t, s, body)
-		if w.Code == http.StatusOK {
-			t.Fatalf("expected rejection for stale timestamp, got 200; body=%s", w.Body.String())
+		// The agent recovers from a skewed clock by reading the Date header of
+		// this very rejection. A ResponseRecorder never gets one, so exercise
+		// the route through a real HTTP server to prove nothing strips it.
+		real := httptest.NewServer(s.router)
+		defer real.Close()
+		resp, err := real.Client().Post(real.URL+"/beacon", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatalf("post stale frame: %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			t.Fatal("expected rejection for stale timestamp, got 200")
+		}
+		date := resp.Header.Get("Date")
+		if date == "" {
+			t.Fatal("stale-timestamp rejection must carry a Date header for clock recovery")
+		}
+		if _, err := http.ParseTime(date); err != nil {
+			t.Fatalf("rejection Date header %q is unparsable: %v", date, err)
 		}
 	})
 
