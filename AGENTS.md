@@ -25,7 +25,8 @@ The frontend is **Vite** (not Next.js).
 - **Check out with LF line endings.** CI builds the bundle on Linux and compares it byte for byte, so the committed `internal/webdist/dist` must come from an LF checkout. With `core.autocrlf=true`, `frontend/index.html` is CRLF and vite's static export re-converts the newlines, emitting a doubled CR (`\r\r\n`) that no amount of normalization removes. `check-webdist.mjs` detects exactly that case and prints the fix; the short version is `git config core.autocrlf false` in this clone, then re-checkout and rebuild.
 
 ## Frontend verification
-Run from `frontend/`:
+Node **24.15+** is the floor (CI and release workflows use `24`; Vitest 5 and
+jsdom 30 set the minimum). Run from `frontend/`:
 - `npm run build` (vite)
 - `npm run check` (strict gate running all `check:*` scripts)
 - `npm run test` (vitest)
