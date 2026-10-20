@@ -111,6 +111,34 @@ Pass criteria:
 - A failed quick send from a self-exiting task (`kill`, `uninstall`, `migrate`) is flushed before the caller exits; a result lost while its initial fast-path send is still on the wire is not covered (it was never queued).
 - Task acks are not restored: unacknowledged tasks may be redelivered and re-executed after a restart, exactly as before this change.
 
+## Crash-safe agent state
+
+The agent state directory holds the identity (`agent.uuid`, the X25519 key), the frame
+sequence (`beacon.seq`), the registration marker, the pinned update key and the
+last delivered network config. All of them are replaced through a same-directory
+temp file + rename, so an interrupted write leaves the previous value instead of a
+truncated file.
+
+| Step | Action | Pass? |
+|------|--------|-------|
+| 1 | Start an agent and record the SHA-256 of `agent.uuid` and the identity key file | |
+| 2 | While results are flowing, kill the process (`taskkill /f` / `kill -9`) and restart it | |
+| 3 | Compare the hashes: the UUID and identity key are unchanged and `results.spool` still decrypts | |
+| 4 | Run a second restart loop with the machine powered off mid-session (or simulate it by truncating `beacon.seq` to `0`) | |
+| 5 | Confirm the agent recovers on the next beacon (signed resync / handshake); it does not stay stuck in a replay loop | |
+| 6 | Drop a fake `.state-dead.tmp` (and `.results-dead.tmp`) into the state dir and start the agent | |
+| 7 | Confirm both temp files are gone, `beacon.seq`/`agent.uuid`/the key are intact, and no plaintext key material remains on disk | |
+| 8 | Leave the agent running for several beacons: the `registered` file's mtime stops changing (it is only rewritten when its value changes) | |
+
+Pass criteria:
+
+- A crash can leave the old or the new value, never a zero-length/partial state file; on Unix the mode stays `0600`, on Windows the files stay hidden.
+- `beacon.seq` is flushed before the frame is sent; a lost/regressed sequence is recovered by the existing signed resync instead of a permanent replay rejection.
+- The identity key is synced before its first use, so a power cut right after first start cannot rotate the identity and orphan the result spool.
+- The delivered network config and pinned update key survive a crash; the agent does not silently fall back to a dead build-time endpoint or drop update pinning.
+- Startup removes stale `.state-*.tmp` / `.results-*.tmp` files without touching live state, so a crashed write cannot leave private key bytes in a stray temp file.
+- The registration marker is not rewritten on every beacon; a `reregister` still removes it and the next start attempts registration again.
+
 ## WSS (Hardened / Experimental)
 
 | Step | Action | Pass? |

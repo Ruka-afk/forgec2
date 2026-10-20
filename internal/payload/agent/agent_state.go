@@ -24,11 +24,10 @@ func registerOrGetUUID() string {
 		buf[8] = (buf[8] & 0x3f) | 0x80 // variant 10
 		newUUID := fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
 			buf[0:4], buf[4:6], buf[6:8], buf[8:10], buf[10:16])
-		// Regeneration on next start is an acceptable fallback for a failed persist.
-		_ = os.WriteFile(uuidFile, []byte(newUUID), 0o600)
-		if runtime.GOOS == "windows" {
-			setHidden(uuidFile)
-		}
+		// Regeneration on next start is an acceptable fallback for a failed
+		// persist. Atomic + synced so a crash cannot leave a truncated id that
+		// the next start would replace with a fresh identity.
+		_ = writeStateFileAtomic(uuidFile, []byte(newUUID), 0o600, true)
 		return newUUID
 	}
 	// Fallback (should never happen)
@@ -36,10 +35,7 @@ func registerOrGetUUID() string {
 		rng.Uint32(), rng.Uint32()&0xffff, rng.Uint32()&0xffff|0x4000,
 		rng.Uint32()&0x3fff|0x8000, rng.Uint64())
 	// Regeneration on next start is an acceptable fallback for a failed persist.
-	_ = os.WriteFile(uuidFile, []byte(newUUID), 0o600)
-	if runtime.GOOS == "windows" {
-		setHidden(uuidFile)
-	}
+	_ = writeStateFileAtomic(uuidFile, []byte(newUUID), 0o600, true)
 	return newUUID
 }
 
@@ -113,6 +109,7 @@ func getBeaconStateFilePath(name string) string {
 func loadBeaconState() {
 	seqMu.Lock()
 	defer seqMu.Unlock()
+	cleanupStateTempFiles(filepath.Dir(getBeaconStateFilePath("beacon.seq")))
 	if data, err := os.ReadFile(getBeaconStateFilePath("beacon.seq")); err == nil {
 		if v, err := strconv.ParseUint(strings.TrimSpace(string(data)), 10, 64); err == nil {
 			beaconSeq = v
@@ -120,6 +117,13 @@ func loadBeaconState() {
 	}
 	if data, err := os.ReadFile(getBeaconStateFilePath("registered")); err == nil {
 		registered = strings.TrimSpace(string(data)) == "1"
+		// Only "1" is a valid persisted true. A truncated/stale file that
+		// reads as false stays "unknown" so the next persist removes it.
+		registeredMarkerKnown = registered
+		registeredMarkerPersisted = registered
+	} else if os.IsNotExist(err) {
+		registeredMarkerKnown = true
+		registeredMarkerPersisted = false
 	}
 	// Update trust root: delivered once over the encrypted session via
 	// config_push and persisted so self_update keeps verifying across restarts.
@@ -133,26 +137,40 @@ func loadBeaconState() {
 // persistUpdatePubKey stores the pinned update public key next to the other
 // beacon state, hidden on Windows like its siblings.
 func persistUpdatePubKey(keyHex string) {
-	path := getBeaconStateFilePath("update.key")
-	if err := os.WriteFile(path, []byte(keyHex), 0600); err == nil && runtime.GOOS == "windows" {
-		setHidden(path)
-	}
+	_ = writeStateFileAtomic(getBeaconStateFilePath("update.key"), []byte(keyHex), 0o600, true)
 }
+
+// registeredMarkerKnown/Persisted track the last marker value successfully
+// written, so the per-beacon persist does not rewrite an unchanged 1-byte file
+// (and fsync) every frame. Guarded by seqMu.
+var (
+	registeredMarkerKnown     bool
+	registeredMarkerPersisted bool
+)
 
 // persistBeaconState saves the current frame sequence and registration marker.
 func persistBeaconState() {
 	seqMu.Lock()
 	seq := beaconSeq
 	reg := registered
+	markerKnown := registeredMarkerKnown
+	markerPersisted := registeredMarkerPersisted
 	seqMu.Unlock()
-	path := getBeaconStateFilePath("beacon.seq")
-	if err := os.WriteFile(path, []byte(strconv.FormatUint(seq, 10)), 0600); err == nil && runtime.GOOS == "windows" {
-		setHidden(path)
+	// Sync before sending (the caller persists first) so the sequence cannot
+	// silently regress after a power loss — a regression is recoverable via the
+	// server's signed resync, but it costs a handshake and a rejected frame.
+	_ = writeStateFileAtomic(getBeaconStateFilePath("beacon.seq"), []byte(strconv.FormatUint(seq, 10)), 0o600, true)
+	if markerKnown && markerPersisted == reg {
+		return
 	}
 	rp := getBeaconStateFilePath("registered")
-	if err := writeRegistrationMarker(rp, reg); err == nil && reg && runtime.GOOS == "windows" {
-		setHidden(rp)
+	if err := writeRegistrationMarker(rp, reg); err != nil {
+		return
 	}
+	seqMu.Lock()
+	registeredMarkerKnown = true
+	registeredMarkerPersisted = reg
+	seqMu.Unlock()
 }
 
 // writeRegistrationMarker writes "1" while registered and removes the marker
@@ -160,7 +178,7 @@ func persistBeaconState() {
 // next process start believe it was still registered.
 func writeRegistrationMarker(path string, reg bool) error {
 	if reg {
-		return os.WriteFile(path, []byte("1"), 0600)
+		return writeStateFileAtomic(path, []byte("1"), 0o600, false)
 	}
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return err

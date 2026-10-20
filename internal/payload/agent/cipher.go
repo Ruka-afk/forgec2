@@ -12,7 +12,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sync"
 
 	"golang.org/x/crypto/chacha20poly1305"
@@ -136,11 +135,8 @@ func loadOrCreateIdentityKey() (*ecdh.PrivateKey, bool) {
 	if err != nil {
 		return nil, false
 	}
-	if err := os.WriteFile(path, k.Bytes(), 0600); err != nil {
+	if err := writeStateFileAtomic(path, k.Bytes(), 0o600, true); err != nil {
 		return nil, false
-	}
-	if runtime.GOOS == "windows" {
-		setHidden(path)
 	}
 	identityPriv = k
 	return k, true

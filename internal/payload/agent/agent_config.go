@@ -10,7 +10,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -531,14 +530,9 @@ func loadPersistedNetworkConfig() {
 }
 
 func saveNetworkConfig(b64 string) error {
-	path := getBeaconStateFilePath("network_config")
-	if err := os.WriteFile(path, []byte(b64), 0o600); err != nil {
-		return err
-	}
-	if runtime.GOOS == "windows" {
-		setHidden(path)
-	}
-	return nil
+	// Sync: losing this file after a power cut sends the agent back to its
+	// build-time endpoint, which may no longer exist.
+	return writeStateFileAtomic(getBeaconStateFilePath("network_config"), []byte(b64), 0o600, true)
 }
 
 func boolToStr(b bool) string {
