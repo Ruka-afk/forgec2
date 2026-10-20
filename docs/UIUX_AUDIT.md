@@ -737,6 +737,23 @@ if we adopt strict WCAG 1.4.11 for control boundaries).
   systemic defect found; terminology spot-checks ride along with the page
   batches.
 
+### U6 evidence archived (2026-10-20)
+
+The four U6 captures that were missing from the original review are archived
+under `docs/design/u6/`. They predate the U7 vocabulary sweep, so they are
+**before** evidence; the current copy is Beacon:
+
+- [Payload Generator (laptop)](design/u6/generate-laptop.png): the capture
+  still reads "Agent Binaries"; current `generate.agents_title` is
+  "Payload Formats".
+- [Post-Exploitation Toolkit (mobile)](design/u6/toolkit-mobile.png):
+  "Target Agent:"; current `toolkit.target_agent` is "Target Beacon:".
+- [Network Topology (mobile)](design/u6/topology-mobile.png): "Agents will
+  appear here..."; current `topology.empty_hint` is "Beacons will appear here
+  when they connect".
+- [Privilege Escalation (mobile)](design/u6/privesc-mobile.png): no banned
+  term; retained as visual evidence.
+
 ## D7 — Visual consistency (owner: U6 / U1)
 
 - **V1 · Dashboard card headers**: the lower "Sessions" / "Listener health"
