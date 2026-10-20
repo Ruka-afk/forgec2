@@ -30,7 +30,7 @@ export default function TelemetryCollector() {
             recordVital(metric.name as VitalName, metric.value);
           }
         };
-        // web-vitals v5 on* functions register once; no cleanup needed.
+        // web-vitals v6 on* functions register once; no cleanup needed.
         onLCP(report);
         onFCP(report);
         onINP(report);
