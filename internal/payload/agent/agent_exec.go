@@ -36,6 +36,10 @@ func sendTaskResult(res TaskResult) {
 	seqMu.Unlock()
 	if ecdhSess == nil || ecdhSess.needsHandshake() || !ready {
 		enqueueResult(res)
+		// Callers such as kill/uninstall/migrate exit moments after this
+		// returns; persist a failed quick send now instead of waiting for the
+		// debounced flush that the exit would cut short.
+		flushPendingResultsSpool()
 		inFastMode.Store(true)
 		return
 	}
@@ -52,6 +56,7 @@ func sendTaskResult(res TaskResult) {
 	sendBody, kind, _, ok := buildBeaconEnvelope(body)
 	if !ok || kind != agentFrameEncrypted {
 		enqueueResult(res)
+		flushPendingResultsSpool()
 		inFastMode.Store(true)
 		return
 	}
@@ -83,6 +88,7 @@ func sendTaskResult(res TaskResult) {
 	}
 	if resp == nil {
 		enqueueResult(res)
+		flushPendingResultsSpool()
 	}
 }
 

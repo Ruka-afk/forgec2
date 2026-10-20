@@ -119,9 +119,13 @@ func evictQueuedTask(task Task) {
 // result is dropped; a single result larger than maxPendingResultBytes is
 // dropped outright (it would otherwise build a beacon the server rejects).
 func enqueueResult(r TaskResult) {
+	// Assign the idempotency id at enqueue time, not at transmit time: a
+	// result restored from the disk spool after a restart must keep the same id
+	// so the server can dedupe a replay whose reply was lost.
+	ensureResultID(&r)
 	pendingMu.Lock()
-	defer pendingMu.Unlock()
 	if len(r.Output) > maxPendingResultBytes {
+		pendingMu.Unlock()
 		if Debug {
 			fmt.Printf("[!] dropping oversized task result (type=%s size=%d)\n", r.Type, len(r.Output))
 		}
@@ -133,6 +137,8 @@ func enqueueResult(r TaskResult) {
 		droppedResults.Add(1)
 	}
 	pendingResults = append(pendingResults, r)
+	pendingMu.Unlock()
+	markPendingResultsDirty()
 }
 
 // enqueueResults appends several results, applying the same bounds as
@@ -148,10 +154,13 @@ func enqueueResults(results []TaskResult) {
 // enqueueResult), so repeated failures cannot grow memory without bound:
 // results beyond maxPendingResults and aggregate output beyond
 // maxPendingResultBytes are dropped oldest-first. Caller holds pendingMu.
-func reenforcePendingBounds() {
+// Returns the number of results dropped so callers can persist the change.
+func reenforcePendingBounds() int {
+	dropped := 0
 	for len(pendingResults) > maxPendingResults {
 		pendingResults = pendingResults[1:]
 		droppedResults.Add(1)
+		dropped++
 	}
 	totalBytes := 0
 	for i := range pendingResults {
@@ -161,7 +170,9 @@ func reenforcePendingBounds() {
 		totalBytes -= len(pendingResults[0].Output)
 		pendingResults = pendingResults[1:]
 		droppedResults.Add(1)
+		dropped++
 	}
+	return dropped
 }
 
 func availableTaskCapacity() int {

@@ -86,6 +86,31 @@ Pass criteria:
 - A clock-skewed agent recovers from the `Date` header of the rejection itself; no server-side change is needed, and the offset drops back to zero once the host clock is correct.
 - Expired unbound secrets are refused at authentication, not only deleted later; bound secrets never expire; the orphan sweep runs at startup and hourly.
 
+## Pending-result spool (crash recovery)
+
+Run this with a Go-agent build on plain HTTP so the server can be stopped without certificate noise.
+
+| Step | Action | Pass? |
+|------|--------|-------|
+| 1 | Queue a task whose output carries a unique marker (e.g. `shell` → `echo spool-marker`), then stop the server (or firewall the beacon port) before the result is delivered | |
+| 2 | Wait ~2 s, then inspect the agent state directory: `results.spool` exists, and a string search finds no `spool-marker` plaintext in it | |
+| 3 | Kill the agent process abruptly (Task Manager / `taskkill /f`), restart it while the server is still unreachable | |
+| 4 | Start the server again; after the first encrypted beacon the result arrives exactly once, with the marker intact | |
+| 5 | Deliver another result successfully, restart the agent, and confirm no duplicate result row appears | |
+| 6 | Append bytes to `results.spool`, restart the agent, and confirm it discards the file and beacons normally (no crash loop) | |
+| 7 | Copy the state directory to a build with a different registration secret/identity key and start it: the spool is discarded instead of decrypted | |
+| 8 | Queue >1024 results (or >16 MiB of output) with the server unreachable, restart, and confirm the oldest are dropped and `dropped_results` reports the gap | |
+
+Pass criteria:
+
+- Results enqueued more than the 1 s debounce before the crash are restored in order; only results created inside the final debounce window may be lost.
+- The spool is AES-256-GCM ciphertext (`FC2SP1` header, random nonce, AAD bound to the agent UUID); no task output, filename or path appears in plaintext.
+- In-flight results stay in the snapshot until the server reply decrypts, so a mid-beacon kill replays them; ResultID idempotency absorbs the replay.
+- A successful delivery shrinks the spool and an empty queue removes the file; a restart after a clean delivery does not resurrect results.
+- Corrupt, foreign or otherwise unauthentic spools are removed, never retried forever; the restored queue is re-bounded on load.
+- A failed quick send from a self-exiting task (`kill`, `uninstall`, `migrate`) is flushed before the caller exits; a result lost while its initial fast-path send is still on the wire is not covered (it was never queued).
+- Task acks are not restored: unacknowledged tasks may be redelivered and re-executed after a restart, exactly as before this change.
+
 ## WSS (Hardened / Experimental)
 
 | Step | Action | Pass? |

