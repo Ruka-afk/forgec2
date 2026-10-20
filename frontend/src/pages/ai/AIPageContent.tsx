@@ -521,7 +521,7 @@ export default function AIPage() {
     // A 4s interval kept waking the main thread for every active run. A
     // recursive timeout is sufficient for a 120s idle threshold and reduces
     // wakeups by an order of magnitude while still aborting stalled streams.
-    let idleWatchdog: number | null = null;
+    let idleWatchdog: number | null;
     const checkIdle = () => {
       if (nowMs() - lastEventAt > 120_000) {
         controller.abort("idle");
@@ -783,7 +783,6 @@ export default function AIPage() {
 	  }
     } catch (err: unknown) {
       if (gen !== streamGenRef.current) return;
-      streamFailed = true;
       if (err instanceof Error && err.name === "AbortError") {
         finishTrace(true);
         if (controller.signal.reason === "idle") {

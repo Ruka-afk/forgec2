@@ -5,7 +5,7 @@ function withObjExtension(name: string): string {
 }
 
 function sanitizeBaseName(base: string): string {
-  let decoded = base;
+  let decoded: string;
   try {
     decoded = decodeURIComponent(base);
   } catch {
@@ -25,7 +25,7 @@ export function bofImportFilename(url: string, explicitName?: string): string {
   const explicit = (explicitName || "").trim();
   if (explicit) return withObjExtension(sanitizeBaseName(explicit));
 
-  let base = "";
+  let base: string;
   try {
     const parsed = new URL(url.trim());
     base = parsed.pathname.split("/").filter(Boolean).pop() || "";

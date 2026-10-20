@@ -30,8 +30,8 @@ function chunkReloadsExhausted(): boolean {
 
 /** Pure chunk-error policy (testable): throttle bursts, cap total reloads. */
 export function chunkReloadDecision(now = Date.now()): "reload" | "throttled" | "exhausted" {
-  let last = 0;
-  let count = 0;
+  let last: number;
+  let count: number;
   try {
     last = Number(sessionStorage.getItem(RELOAD_FLAG) || 0);
     count = Number(sessionStorage.getItem(RELOAD_COUNT_FLAG) || 0);

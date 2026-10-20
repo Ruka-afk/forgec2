@@ -55,7 +55,7 @@ export async function queueDockCommand(
   sleep?: { interval: number; jitter: number },
 ): Promise<{ task_id: number; type: string; command: string }> {
   let data: { task_id?: number };
-  let command = "";
+  let command: string;
   if (kind === "ps") {
     data = await api.post(paths.agents.cmd(agentId, "ps"));
     command = "ps";
