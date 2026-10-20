@@ -716,7 +716,12 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                             <div className="font-mono truncate">server_output: {validateResult.wire?.server_output || "(none)"}</div>
                             <div className="font-mono truncate">client_metadata: {validateResult.wire?.client_metadata || "(none)"}</div>
                             {validateResult.sample && <div className="font-mono truncate mt-1">sample: {validateResult.sample.encoded}</div>}
-                            {(validateResult.warnings || []).map((w, i) => <div key={i} className="text-warning-ink mt-1">⚠ {w}</div>)}
+                            {(validateResult.warnings || []).map((w, i) => (
+                              <div key={i} className="mt-1 flex items-start gap-1 text-warning-ink">
+                                <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+                                <span>{w}</span>
+                              </div>
+                            ))}
                           </div>
                         )}
                       </div>
