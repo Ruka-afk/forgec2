@@ -189,6 +189,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Dependabot holds TypeScript at 5.x (ignore `>=6.0.0 <8.0.0`): `openapi-typescript@7.13.0` peers `^5.x`, so 6.0.3/7.0.2 cannot be adopted yet; `typescript-eslint@8.72.0` would accept 6.0.x (`<6.1.0`) but not 7
 - U7 residue: the Plugins execute dialog's fallback literals now say "Target Beacon" / "Select target beacon" instead of "Target Agent" / "Select an agent (optional)". The live strings were already correct (the i18n keys exist); this only removes a latent banned term for missing translations
 - Archived the four U6 evidence captures (Payload Generator, Toolkit, Network Topology, PrivEsc) under `docs/design/u6/` and linked them from the audit as pre-U7 before evidence; docs-only, no code or dist change
+- Removed the deprecated `@types/dompurify` stub (3.2.0): `dompurify@3.4.17` ships its own declarations, so the stub only added a redundant `dompurify: *` dependency and an outdated-package warning; no runtime, bundle or dist change. The lockfile also picked up the `engines.node >=24.15.0` metadata from the earlier `package.json` change
 
 ## [2.6.2] - 2026-09-24
 
