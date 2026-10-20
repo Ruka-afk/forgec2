@@ -1,0 +1,12 @@
+# Historical key material that no longer exists on main. Fingerprints are
+# commit-scoped, so re-introducing any of these values in a new commit is still
+# reported by the scan (value-level allowlists would hide that).
+#
+# Static config-blob builder key in internal/payload/config_blob.go. Introduced in
+# 704e0f40; this is the commit whose diff removed it. Treat the old value as
+# compromised: it was published in this repository's history.
+0fc138e09e9c27a835649098b833b7378b84211b:internal/payload/config_blob.go:generic-api-key:63
+#
+# setup-dev.sh's pre-v2.4 hardcoded XOR key. The script has generated a random
+# key per run since 2cd15a84.
+64b48799017a387d5e4cf0d351e52337f4b15c18:scripts/setup-dev.sh:generic-api-key:53

@@ -1,6 +1,12 @@
 # ForgeC2 gitleaks config — extends default rules with project-specific key names.
 # Usage: gitleaks detect --config .gitleaks.toml
 # See scripts/gitleaks-pre-commit.sh for the pre-commit hook.
+#
+# The allowlist below keeps the weekly full-history scan (CI `secrets` job) green
+# without weakening current sources: every entry is either a generated artifact,
+# a tree removed from main, or a synthetic value that cannot be a live credential.
+# Historical real-looking values are ignored per commit in `.gitleaksignore`
+# instead, so re-introducing them is still reported.
 
 [extend]
 useDefault = true
@@ -27,14 +33,32 @@ regex = '''(?i)(extc2.*api_token|FORGEC2_EXTC2.*TOKEN)\s*[:=]\s*["']?\S{16,}["']
 tags = ["forgec2", "token"]
 
 [allowlist]
-description = "Allow example/placeholder values"
+description = "Allow example/placeholder values and adjudicated historical false positives"
 paths = [
   "config.example.yaml",
   ".env.example",
   '''\.md$''',
+  # Generated UI bundles: rebuilt on every UI change, so each deploy adds new
+  # hashed chunks to history. The sources are scanned; the artifacts are not.
+  '''^internal/webdist/dist/''',
+  # Legacy server-rendered templates and the Next.js app-router tree, both
+  # removed from main when the Vite SPA replaced them (historical only).
+  '''^internal/server/templates/''',
+  '''^frontend/src/app/''',
+  # Vendored minified vis-network bundle (identifiers trip generic-api-key).
+  '''^frontend/public/js/vis-network\.min\.js$''',
 ]
 regexes = [
   '''YOUR_SECRET''',
   '''change_me''',
   '''leave empty to auto-generate''',
+  # Synthetic key material in unit tests: repeated byte ramps and explicit
+  # test-* names. Real keys are random, so these prefixes cannot collide.
+  '''^(?:aabbccddeeff0011|0011223344556677|0123456789abcdef|1a2b3c4d5e6f7a8b|5dd4e19cbf285aa8)[0-9a-f]*$''',
+  '''^test-jwt-secret''',
+  '''^valid-api-key-12345$''',
+  # localStorage keys and i18n ids that the generic rule reads as credentials.
+  '''^forgec2_(?:density|ui_prefs_v1|nav_collapsed|notifications|ai_pending)$''',
+  # A field expression, not a value.
+  '''^s\.cfg\.Crypto\.ExtC2Key$''',
 ]
