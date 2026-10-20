@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,80 @@ import (
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/obfuscation"
 )
+
+// implantC2Schemes is the set of transports the generated agents understand.
+// Keep this in sync with resolveListener and the agent's transport dispatcher:
+// a failover entry that cannot be dialled is worse than no entry at all.
+var implantC2Schemes = map[string]struct{}{
+	"http": {}, "https": {}, "ws": {}, "wss": {}, "h2c": {},
+	"grpc": {}, "grpcs": {}, "mtls": {},
+	"tcp": {}, "tls": {}, "udp": {}, "quic": {},
+	"icmp": {}, "dns": {}, "ssh": {}, "smb": {},
+}
+
+// mergeC2URLList makes the listener-resolved primary authoritative while
+// preserving the operator's failover chain from the form. The Generate page
+// sends "primary,failover1,failover2" in c2_url; the server used to replace
+// that whole value with resolved.C2URL, silently dropping every backup.
+func mergeC2URLList(primary, requested string) (string, error) {
+	merged := make([]string, 0, 8)
+	seen := make(map[string]struct{}, 8)
+	add := func(raw string) error {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			return nil
+		}
+		normalized, err := normalizeC2URL(raw)
+		if err != nil {
+			return err
+		}
+		key := strings.ToLower(normalized)
+		if _, ok := seen[key]; ok {
+			return nil
+		}
+		seen[key] = struct{}{}
+		merged = append(merged, normalized)
+		return nil
+	}
+	if err := add(primary); err != nil {
+		return "", err
+	}
+	for _, part := range strings.Split(requested, ",") {
+		if err := add(part); err != nil {
+			return "", err
+		}
+	}
+	return strings.Join(merged, ","), nil
+}
+
+// normalizeC2URL validates an operator-supplied C2 endpoint and gives a bare
+// host:port the same http:// default the Generate page preview assumes.
+func normalizeC2URL(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("empty URL")
+	}
+	if !strings.Contains(raw, "://") {
+		raw = "http://" + raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("malformed URL")
+	}
+	if _, ok := implantC2Schemes[strings.ToLower(u.Scheme)]; !ok {
+		return "", fmt.Errorf("unsupported scheme %q", u.Scheme)
+	}
+	if u.Hostname() == "" {
+		return "", fmt.Errorf("missing host")
+	}
+	if u.User != nil {
+		return "", fmt.Errorf("credentials are not allowed")
+	}
+	if u.RawQuery != "" || u.Fragment != "" {
+		return "", fmt.Errorf("query and fragment are not allowed")
+	}
+	return u.String(), nil
+}
 
 // resolvedListener holds the result of resolving a listener to C2 connection parameters.
 type resolvedListener struct {

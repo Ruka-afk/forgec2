@@ -19,6 +19,27 @@ Authorized lab validation only. Goal: prove **Generate → Listener → Check-in
 | 4 | Run implant; agent appears online | |
 | 5 | Shell `whoami` / `id` returns output | |
 
+## Multi-C2 failover (HTTP(S) baseline extension)
+
+| Step | Action | Pass? |
+|------|--------|-------|
+| 1 | Create two HTTP(S) listeners, e.g. primary `:8443` and backup `:9443` | |
+| 2 | Generate page: select the primary listener; set **Failover C2** to `https://backup-host:9443` | |
+| 3 | Confirm the preview/sent `c2_url` is `https://primary-host:8443,https://backup-host:9443` | |
+| 4 | Build a Go artifact (EXE/ELF/DLL) or token stager; the full comma-separated list is embedded | |
+| 5 | Run the artifact with both listeners up; the beacon registers over the primary | |
+| 6 | Stop the primary listener (keep the backup up); the next beacon fails over and returns online | |
+| 7 | Restart the primary; the agent may continue on the backup or move back, and tasks still round-trip | |
+| 8 | Re-register/restart the artifact; the server-delivered primary replaces the first entry but the backup list survives | |
+
+Pass criteria:
+
+- The generated config contains the whole list, not just the listener origin.
+- A server-delivered network config updates the primary without deleting the operator's backups.
+- The stager's stage-1 fetch goes to the primary origin; stage-2 keeps the full list.
+- Unsupported failover schemes, credentials or query strings are rejected at generate time (400), not baked into a dead payload.
+- The PowerShell one-liner is intentionally single-endpoint (its template dials one URL); use a Go artifact for failover.
+
 ## WSS (Hardened / Experimental)
 
 | Step | Action | Pass? |

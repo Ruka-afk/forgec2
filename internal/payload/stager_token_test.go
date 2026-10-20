@@ -83,6 +83,7 @@ func TestOriginFromC2URL(t *testing.T) {
 		{"http://10.0.0.1:8080/api/v1/beacon", "http://10.0.0.1:8080"},
 		{"https://c2.example.com:8443/beacon?a=b", "https://c2.example.com:8443"},
 		{"http://10.0.0.2:9999", "http://10.0.0.2:9999"},
+		{"https://primary:8443,https://backup:9443", "https://primary:8443"},
 		{"not-a-url", "not-a-url"},
 	}
 	for _, c := range cases {

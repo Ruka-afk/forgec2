@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/base64"
+	"strings"
 	"testing"
 
 	"github.com/forgec2/forgec2/pkg/protocol"
@@ -33,6 +34,12 @@ func TestApplyServerNetworkConfig(t *testing.T) {
 	}(C2URL, UserAgent, ProxyStr, MalleablePrepend, MalleableAppend,
 		DomainFront, DNSDomain, DNSServer, BeaconTransport, C2URL, Protocol,
 		Interval, Jitter, SkipTLSVerify, ListenerID, currentC2Idx.Load(), c2URLsSnapshot())()
+
+	// Build-time chain: the delivered primary must replace this first entry
+	// while the operator's failover backups survive.
+	const backupURL = "https://backup.example.com:9443"
+	C2URL = "https://compile-primary.example.com:443," + backupURL
+	c2URLsStore(splitC2URLList(C2URL), 0)
 
 	nc := &protocol.NetworkConfig{
 		C2URL:            "https://delivered.example.com/http",
@@ -71,11 +78,71 @@ func TestApplyServerNetworkConfig(t *testing.T) {
 	if SkipTLSVerify != nc.SkipTLSVerify {
 		t.Errorf("SkipTLSVerify = %v, want %v", SkipTLSVerify, nc.SkipTLSVerify)
 	}
-	if C2URL != nc.C2URL {
-		t.Errorf("C2URL = %q, want %q", C2URL, nc.C2URL)
+	wantURLs := []string{nc.C2URL, backupURL}
+	if C2URL != strings.Join(wantURLs, ",") {
+		t.Errorf("C2URL = %q, want %q", C2URL, strings.Join(wantURLs, ","))
 	}
-	if urls := c2URLsSnapshot(); len(urls) != 1 || urls[0] != nc.C2URL {
-		t.Errorf("C2URLs = %v, want [%q]", urls, nc.C2URL)
+	if urls := c2URLsSnapshot(); strings.Join(urls, ",") != strings.Join(wantURLs, ",") {
+		t.Errorf("C2URLs = %v, want %v", urls, wantURLs)
+	}
+}
+
+func TestMergeServerC2URL(t *testing.T) {
+	tests := []struct {
+		name     string
+		primary  string
+		existing []string
+		want     string
+	}{
+		{
+			name:     "replaces primary and keeps backups",
+			primary:  "https://new.example.com:443",
+			existing: []string{"https://old.example.com:443", "https://b1.example.com:443", "https://b2.example.com:443"},
+			want:     "https://new.example.com:443,https://b1.example.com:443,https://b2.example.com:443",
+		},
+		{
+			name:     "dedupes a backup that becomes primary",
+			primary:  "https://b1.example.com:443",
+			existing: []string{"https://old.example.com:443", "https://b1.example.com:443", "https://b2.example.com:443"},
+			want:     "https://b1.example.com:443,https://b2.example.com:443",
+		},
+		{
+			name:     "empty primary leaves chain untouched",
+			primary:  "",
+			existing: []string{"https://old.example.com:443", "https://b1.example.com:443"},
+			want:     "https://old.example.com:443,https://b1.example.com:443",
+		},
+		{
+			name:     "empty chain yields primary",
+			primary:  "https://new.example.com:443",
+			existing: nil,
+			want:     "https://new.example.com:443",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := strings.Join(mergeServerC2URL(tc.primary, tc.existing), ","); got != tc.want {
+				t.Fatalf("mergeServerC2URL() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestHasValidC2SchemeCoversAllTransports(t *testing.T) {
+	for _, u := range []string{
+		"https://c2.example.com:443",
+		"wss://c2.example.com:443",
+		"h2c://c2.example.com:8080",
+		"grpc://c2.example.com:443",
+		"quic://c2.example.com:443",
+		"mtls://c2.example.com:443",
+	} {
+		if !hasValidC2Scheme(u) {
+			t.Errorf("hasValidC2Scheme(%q) = false", u)
+		}
+	}
+	if hasValidC2Scheme("javascript://evil") {
+		t.Error("javascript scheme was accepted")
 	}
 }
 

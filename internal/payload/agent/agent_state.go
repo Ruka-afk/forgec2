@@ -163,14 +163,7 @@ func persistBeaconState() {
 // touches the network globals — EDR/SSH/mTLS init is not delivered dynamically
 // and is intentionally left untouched.
 func reparseNetworkConfig() {
-	parts := strings.Split(C2URL, ",")
-	urls := make([]string, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			urls = append(urls, p)
-		}
-	}
+	urls := splitC2URLList(C2URL)
 	if len(urls) == 0 {
 		urls = []string{C2URL}
 	}

