@@ -18,12 +18,13 @@ updates:
       npm-deps:
         patterns: ["*"]
         update-types: ["minor", "patch"]
-    # 1.9.0 makes vendor-baseui and vendor-baseui-forms import each other,
-    # throwing "Cannot access 'we' before initialization" before the SPA mounts.
-    # Remove once BASEUI_PAGE_ONLY_KEYS and the chunk graph are re-measured.
+    # The `~1.6.0` pin is deliberate: 1.9.0 makes vendor-baseui and
+    # vendor-baseui-forms import each other, throwing "Cannot access 'we'
+    # before initialization" before the SPA mounts. 1.7/1.8 sit outside the
+    # pin and are untested; revisit them with BASEUI_PAGE_ONLY_KEYS.
     ignore:
       - dependency-name: "@base-ui/react"
-        versions: [">=1.9.0 <2.0.0"]
+        versions: [">=1.7.0 <2.0.0"]
 
   - package-ecosystem: github-actions
     directory: /
