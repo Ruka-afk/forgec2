@@ -25,11 +25,11 @@ updates:
     ignore:
       - dependency-name: "@base-ui/react"
         versions: [">=1.7.0 <2.0.0"]
-      # The frontend floor is Node 24.15 (CI/release use 24). Node 26 types
-      # would advertise APIs the supported runtime does not provide; revisit
-      # when the floor moves to 26.
+      # The frontend floor is Node 24.15 (CI/release use 24). Node 25/26
+      # types would advertise APIs the supported runtime does not provide;
+      # revisit when the floor moves.
       - dependency-name: "@types/node"
-        versions: [">=26.0.0 <27.0.0"]
+        versions: [">=25.0.0 <27.0.0"]
 
   - package-ecosystem: github-actions
     directory: /
