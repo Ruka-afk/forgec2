@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -45,6 +46,11 @@ func TestRateLimiterBasic(t *testing.T) {
 	rl.Limit()(c)
 	if w.Code != http.StatusTooManyRequests {
 		t.Errorf("third request should be rate limited, got %d", w.Code)
+	}
+	if got := w.Header().Get("Retry-After"); got == "" {
+		t.Error("429 response must carry a standard Retry-After header")
+	} else if n, err := strconv.Atoi(got); err != nil || n < 1 {
+		t.Errorf("Retry-After = %q, want a positive integer", got)
 	}
 }
 

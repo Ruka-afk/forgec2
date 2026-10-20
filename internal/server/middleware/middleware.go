@@ -147,11 +147,20 @@ func (rl *RateLimiter) Limit() gin.HandlerFunc {
 
 		// Check limit
 		if v.count >= rl.limit {
+			remaining := rl.window - now.Sub(v.timestamp)
+			retryAfter := int((remaining + time.Second - 1) / time.Second)
+			if retryAfter < 1 {
+				retryAfter = 1
+			}
 			rl.mu.Unlock()
+			// Standard Retry-After lets HTTP agents back off instead of
+			// retrying immediately; keep retry_after in the JSON body for
+			// existing API clients.
+			c.Header("Retry-After", strconv.Itoa(retryAfter))
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"error":       "rate_limit_exceeded",
 				"message":     "Too many requests, please try again later",
-				"retry_after": int(rl.window.Seconds()),
+				"retry_after": retryAfter,
 			})
 			c.Abort()
 			return

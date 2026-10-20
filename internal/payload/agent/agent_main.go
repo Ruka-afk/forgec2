@@ -492,13 +492,24 @@ func main() {
 		doBeaconSafe()
 		beaconCount++
 
-		// Exponential backoff on consecutive beacon failures
+		// Exponential backoff on consecutive beacon failures. A server-sent
+		// Retry-After raises the floor so a 429 does not turn into a retry
+		// storm; the value is capped by parse/storage to five minutes.
 		if beaconConsecutiveFailures > 0 {
 			backoffSec := beaconBackoffSec(beaconConsecutiveFailures)
+			retryFloor := 0
+			if retryAfter := takeHTTPRetryAfter(); retryAfter > 0 {
+				retryFloor = int((retryAfter + time.Second - 1) / time.Second)
+			}
 			// Add jitter: ±25%
 			jitterRange := backoffSec / 4
 			if jitterRange > 0 {
 				backoffSec += rng.Intn(2*jitterRange+1) - jitterRange
+			}
+			// Honour the server's floor after jitter so a short backoff plus
+			// negative jitter can never retry before Retry-After expires.
+			if retryFloor > backoffSec {
+				backoffSec = retryFloor
 			}
 			if Debug {
 				fmt.Printf("[!] Beacon backoff: sleeping %ds (failures=%d)\n", backoffSec, beaconConsecutiveFailures)

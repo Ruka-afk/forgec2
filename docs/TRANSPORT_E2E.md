@@ -40,6 +40,26 @@ Pass criteria:
 - Unsupported failover schemes, credentials or query strings are rejected at generate time (400), not baked into a dead payload.
 - The PowerShell one-liner is intentionally single-endpoint (its template dials one URL); use a Go artifact for failover.
 
+## Backpressure, 5xx and invalid 200s
+
+| Step | Action | Pass? |
+|------|--------|-------|
+| 1 | Temporarily lower `rate_limit.beacon` in the lab config or drive more than the default 100 requests/60 s from one IP | |
+| 2 | Observe the 429 response: `Retry-After` header and JSON `retry_after` are both present | |
+| 3 | Keep the agent running; it stays registered and wakes after the advertised delay instead of re-handshaking in a tight loop | |
+| 4 | Return 503 (or 500) from the beacon route for a few requests; the agent backs off and recovers without dropping its ECDH session | |
+| 5 | Put a proxy/captive portal in front that answers `200 text/html`; the agent treats it as a failure, keeps pending results and retries | |
+| 6 | Return a malformed 200 once, then restore the real beacon; queued results arrive after recovery and are not lost | |
+| 7 | Force a 400 on the register frame (e.g. clear the local state marker against an already-registered UUID); the next beacon uses the authenticated handshake path | |
+| 8 | Trigger a server-side re-registration (`reregister`); the local `registered` marker is removed, so a restart re-enrolls instead of assuming a stale registration | |
+
+Pass criteria:
+
+- 429/5xx do not invalidate the session or force immediate fast-mode retries; the backoff floor is at least the server's `Retry-After`.
+- Invalid 200 bodies do not clear `beaconConsecutiveFailures` and do not silently drop task results.
+- Encrypted-frame results/acks are re-queued on transport/parse failure; auth frames requeue before transmission because they carry no task body.
+- Result replay is safe: the server's ResultID idempotency cache absorbs a duplicate when the request was processed but the reply was lost.
+
 ## WSS (Hardened / Experimental)
 
 | Step | Action | Pass? |

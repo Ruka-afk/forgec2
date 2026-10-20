@@ -149,12 +149,23 @@ func persistBeaconState() {
 	if err := os.WriteFile(path, []byte(strconv.FormatUint(seq, 10)), 0600); err == nil && runtime.GOOS == "windows" {
 		setHidden(path)
 	}
-	if reg {
-		rp := getBeaconStateFilePath("registered")
-		if err := os.WriteFile(rp, []byte("1"), 0600); err == nil && runtime.GOOS == "windows" {
-			setHidden(rp)
-		}
+	rp := getBeaconStateFilePath("registered")
+	if err := writeRegistrationMarker(rp, reg); err == nil && reg && runtime.GOOS == "windows" {
+		setHidden(rp)
 	}
+}
+
+// writeRegistrationMarker writes "1" while registered and removes the marker
+// when the server asks for re-registration. Leaving the file behind made the
+// next process start believe it was still registered.
+func writeRegistrationMarker(path string, reg bool) error {
+	if reg {
+		return os.WriteFile(path, []byte("1"), 0600)
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 // reparseNetworkConfig re-derives the network-relevant runtime globals from the
