@@ -13,8 +13,11 @@ updates:
     schedule:
       interval: weekly
     groups:
+      # Only group semver-compatible bumps; majors arrive as individual PRs so a
+      # breaking update cannot red the whole batch (see #23: TS 7 vs openapi-typescript).
       npm-deps:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: github-actions
     directory: /
