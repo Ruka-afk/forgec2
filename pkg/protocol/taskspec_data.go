@@ -268,6 +268,12 @@ func init() {
 				{Name: "path", Type: "string", Required: false, Description: "Search root (default user profile / HOME, not C:\\ or /)"},
 				{Name: "data", Type: "string", Required: false, Description: "max_files=200,max_bytes=524288,download=0,max_depth=8"},
 			}},
+		{Type: TaskTypeFileSearch, Name: "File Metadata Search", Description: "Structured, read-only file metadata search by category, glob, size, modification time and depth. Returns paths and metadata only (no file contents, thumbnails or OCR).", Category: "discovery",
+			Parameters: []TaskParam{
+				{Name: "command", Type: "string", Required: false, Description: "Comma-separated filename globs (default *)"},
+				{Name: "path", Type: "string", Required: true, Description: "Search root (absolute path recommended)"},
+				{Name: "data", Type: "string", Required: false, Description: "JSON options: categories, min_size, max_size, modified_after, modified_before, include_hidden, max_depth, max_results, timeout_seconds"},
+			}},
 		{Type: TaskTypeScreenTriggerStart, Name: "Screen Trigger Start", Description: "Watch the foreground window title and screenshot when it matches. Cooldown per title.", Category: "collection",
 			Parameters: []TaskParam{{Name: "command", Type: "string", Required: true, Description: "Title substring[,interval_seconds]"}}},
 		{Type: TaskTypeScreenTriggerStop, Name: "Screen Trigger Stop", Description: "Stop foreground-window screenshot trigger", Category: "collection"},

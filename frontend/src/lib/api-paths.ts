@@ -50,6 +50,7 @@ export const paths = {
       return `/agents/${id}${s}`;
     },
     filesLs: (id: string) => `/agents/${id}/files/ls`,
+    filesSearch: (id: string) => `/agents/${id}/files/search`,
     filesRead: (id: string) => `/agents/${id}/files/read`,
     filesDelete: (id: string) => `/agents/${id}/files/delete`,
     filesMkdir: (id: string) => `/agents/${id}/files/mkdir`,

@@ -251,6 +251,7 @@ const (
 	TaskTypeEntraPRT  = "entra_prt"
 
 	TaskTypeFileHunt           = "file_hunt"
+	TaskTypeFileSearch         = "file_search"
 	TaskTypeScreenTriggerStart = "screen_trigger_start"
 	TaskTypeScreenTriggerStop  = "screen_trigger_stop"
 	TaskTypeUSBEnum            = "usb_enum"
@@ -487,6 +488,7 @@ func AllTaskTypes() []string {
 		TaskTypeSccmRecon,
 		TaskTypeEntraPRT,
 		TaskTypeFileHunt,
+		TaskTypeFileSearch,
 		TaskTypeScreenTriggerStart,
 		TaskTypeScreenTriggerStop,
 		TaskTypeUSBEnum,

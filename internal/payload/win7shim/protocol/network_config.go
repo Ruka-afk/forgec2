@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -109,6 +110,19 @@ func EncryptNetworkConfig(secret []byte, nc *NetworkConfig) (string, error) {
 	}
 	ct := gcm.Seal(nil, nonce, plain, nil)
 	return base64.StdEncoding.EncodeToString(append(nonce, ct...)), nil
+}
+
+// NetworkConfigFingerprint returns a stable digest of the config's plaintext
+// contents. The server compares it with the last value it shipped to decide
+// whether another (random-nonce) ciphertext is worth sending, so an unchanged
+// config is not retransmitted on every beacon.
+func NetworkConfigFingerprint(nc *NetworkConfig) string {
+	raw, err := json.Marshal(nc)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
 }
 
 // DecryptNetworkConfig reverses EncryptNetworkConfig.

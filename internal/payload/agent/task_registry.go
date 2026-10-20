@@ -56,6 +56,7 @@ func init() {
 		"set_c2_mode":       handleSetC2Mode,
 		"run_egress":        handleRunEgress,
 		"file_hunt":         handleFileHunt,
+		"file_search":       handleFileSearch,
 		"session_recon":     handleSessionRecon,
 		"ls":                handleLS,
 		"delete":            handleDelete,

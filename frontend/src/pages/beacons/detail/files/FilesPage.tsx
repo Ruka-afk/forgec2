@@ -9,13 +9,15 @@ import { Spinner } from "@/components/ui/spinner";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { FolderOpen, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
-import { joinPath, type FileEntry } from "@/lib/agent-files/types";
+import { joinPath, parentPath, type FileEntry } from "@/lib/agent-files/types";
+import type { FileSearchHit } from "@/lib/agent-files/file-search";
 import { transferPercent } from "@/lib/agent-files/file-task";
 import { useAgentFiles } from "./components/useAgentFiles";
 import { useFilesView } from "./components/useFilesView";
 import FilesToolbar from "./components/FilesToolbar";
 import FilesPathBar from "./components/FilesPathBar";
 import FilesFindPanel from "./components/FilesFindPanel";
+import FilesMediaPanel from "./components/FilesMediaPanel";
 import FilesTable from "./components/FilesTable";
 import FilesDialogs from "./components/FilesDialogs";
 
@@ -27,6 +29,7 @@ export default function FilesPage() {
   const [showUpload, setShowUpload] = useState(false);
   const [uploadName, setUploadName] = useState("");
   const [showFind, setShowFind] = useState(false);
+  const [view, setView] = useState<"browse" | "media">("browse");
   const [showMkdir, setShowMkdir] = useState(false);
   const [mkdirName, setMkdirName] = useState("");
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
@@ -144,6 +147,12 @@ export default function FilesPage() {
     [...files].forEach((file) => uploadFile(file));
   };
 
+  const handleRevealSearchHit = (hit: FileSearchHit) => {
+    navigateTo(parentPath(hit.path, osType));
+    setSelectedFile(hit.name);
+    setView("browse");
+  };
+
   return (
     <PageContainer className="h-full gap-3 px-4 py-3 sm:px-6">
       {osError && (
@@ -157,7 +166,7 @@ export default function FilesPage() {
       <FilesToolbar
         t={t}
         agentId={id}
-        onToggleFind={() => setShowFind((v) => !v)}
+        onToggleFind={() => { setView("browse"); setShowFind((v) => !v); }}
         onUpload={() => setShowUpload(true)}
         onDrives={() => void loadDrives()}
         onMkdir={() => { setMkdirName(""); setShowMkdir(true); }}
@@ -177,7 +186,30 @@ export default function FilesPage() {
         quickPaths={quickPaths}
       />
 
-      {showFind && (
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-flex items-center gap-0.5 rounded-lg border border-border/60 bg-muted/65 p-0.5 shadow-sm">
+          <Button
+            type="button"
+            size="sm"
+            variant={view === "browse" ? "secondary" : "ghost"}
+            aria-pressed={view === "browse"}
+            onClick={() => setView("browse")}
+          >
+            {t("agents.files_tab_browse")}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={view === "media" ? "secondary" : "ghost"}
+            aria-pressed={view === "media"}
+            onClick={() => { setShowFind(false); setView("media"); }}
+          >
+            {t("agents.files_tab_media")}
+          </Button>
+        </div>
+      </div>
+
+      {view === "browse" && showFind && (
         <FilesFindPanel
           t={t}
           sep={sep}
@@ -192,6 +224,15 @@ export default function FilesPage() {
           huntFiles={() => void huntFiles()}
           navigateTo={navigateTo}
           setSelectedFile={setSelectedFile}
+        />
+      )}
+
+      {view === "media" && (
+        <FilesMediaPanel
+          t={t}
+          agentId={id}
+          rootPath={currentPath}
+          onReveal={handleRevealSearchHit}
         />
       )}
 
@@ -235,59 +276,63 @@ export default function FilesPage() {
         </Card>
       )}
 
-      {loading && (
-        <div className="flex items-center justify-center gap-3 py-10">
-          <Spinner size="sm" />
-          <p className="text-sm text-muted-foreground">{t("agents.dock_files_waiting")}</p>
-        </div>
-      )}
+      {view === "browse" && (
+        <>
+          {loading && (
+            <div className="flex items-center justify-center gap-3 py-10">
+              <Spinner size="sm" />
+              <p className="text-sm text-muted-foreground">{t("agents.dock_files_waiting")}</p>
+            </div>
+          )}
 
-      {/* A failed listing stays visible with a retry; the table below (if any)
-          holds the last good contents, which may be stale. */}
-      {!loading && listError && (
-        <DataError
-          message={listError}
-          onRetry={() => void loadDirectory(currentPath, { refresh: true })}
-          className="py-6"
-        />
-      )}
+          {/* A failed listing stays visible with a retry; the table below (if any)
+              holds the last good contents, which may be stale. */}
+          {!loading && listError && (
+            <DataError
+              message={listError}
+              onRetry={() => void loadDirectory(currentPath, { refresh: true })}
+              className="py-6"
+            />
+          )}
 
-      {!loading && !listError && entries.length === 0 && (
-        <Card className="flex flex-col items-center gap-2 py-10">
-          <FolderOpen className="size-6 text-muted-foreground" />
-          <p className="text-muted-foreground">{t("agents.files_empty")}</p>
-        </Card>
-      )}
+          {!loading && !listError && entries.length === 0 && (
+            <Card className="flex flex-col items-center gap-2 py-10">
+              <FolderOpen className="size-6 text-muted-foreground" />
+              <p className="text-muted-foreground">{t("agents.files_empty")}</p>
+            </Card>
+          )}
 
-      {!loading && entries.length > 0 && (
-        <FilesTable
-          t={t}
-          sortedEntries={sortedEntries}
-          selected={selected}
-          allSelected={allSelected}
-          toggleSelect={toggleSelect}
-          selectAll={(on) => setSelected(on ? new Set(entries.map((e) => e.name)) : new Set())}
-          clearSelection={() => setSelected(new Set())}
-          sortKey={sortKey}
-          sortDir={sortDir}
-          toggleSort={toggleSort}
-          selectedFile={selectedFile}
-          batchBusy={batchBusy}
-          pullName={pullName}
-          onFileClick={handleFileClick}
-          onPreview={(name) => void readFile(name)}
-          onDownload={(name) => void downloadFile(name)}
-          onRename={(name) => { setRenameTarget(name); setRenameName(name); }}
-          onChmod={(name) => { setChmodTarget(name); setChmodMode("644"); }}
-          onDelete={(name) => void handleDelete(name)}
-          onBatchPull={() => void handleBatchPull()}
-          onBatchDelete={() => void handleBatchDelete()}
-          onCancelBatch={cancelBatch}
-          dragOver={dragOver}
-          onDragOver={() => setDragOver(true)}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={handleDrop}
-        />
+          {!loading && entries.length > 0 && (
+            <FilesTable
+              t={t}
+              sortedEntries={sortedEntries}
+              selected={selected}
+              allSelected={allSelected}
+              toggleSelect={toggleSelect}
+              selectAll={(on) => setSelected(on ? new Set(entries.map((e) => e.name)) : new Set())}
+              clearSelection={() => setSelected(new Set())}
+              sortKey={sortKey}
+              sortDir={sortDir}
+              toggleSort={toggleSort}
+              selectedFile={selectedFile}
+              batchBusy={batchBusy}
+              pullName={pullName}
+              onFileClick={handleFileClick}
+              onPreview={(name) => void readFile(name)}
+              onDownload={(name) => void downloadFile(name)}
+              onRename={(name) => { setRenameTarget(name); setRenameName(name); }}
+              onChmod={(name) => { setChmodTarget(name); setChmodMode("644"); }}
+              onDelete={(name) => void handleDelete(name)}
+              onBatchPull={() => void handleBatchPull()}
+              onBatchDelete={() => void handleBatchDelete()}
+              onCancelBatch={cancelBatch}
+              dragOver={dragOver}
+              onDragOver={() => setDragOver(true)}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+            />
+          )}
+        </>
       )}
 
       <FilesDialogs

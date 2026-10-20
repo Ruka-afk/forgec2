@@ -172,6 +172,7 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/files/push", s.handleUploadFile)
 
 		agentCmd.POST("/files/ls", s.handleListDir)
+		agentCmd.POST("/files/search", s.handleFileSearch)
 		agentCmd.POST("/files/delete", s.handleFileDelete)
 		agentCmd.POST("/files/read", s.handleFileRead)
 		agentCmd.POST("/files/mkdir", s.handleFileMkdir)
