@@ -1150,10 +1150,23 @@ Agent`, `Load agents`, `GUI implant`, `Agent Version Distribution` and `After im
 changes` are gone; the ZH chunk carries 载荷格式 / 载荷构建记录 / 推送至 Beacon /
 加载 Beacon / Beacon 版本分布 / 构建时嵌入 Beacon and no longer 代理模块 / 加载主机 /
 推送至 Agent / Agent 配置文件 / GUI 植入体 / Agent 版本分布. No authenticated DOM
-probe ran this time, unlike wave 1: the lab credential used earlier is not recorded
-in the repo or the scratch tree (the README's example `labtest`/`labtest` returns
-401), and the rendering side is already covered by the e2e suite against the
-identical bundle — the probe is noted as open rather than silently skipped.
+probe ran at the time, unlike wave 1: the lab credential used earlier was not
+recorded in the repo or the scratch tree (the README's example `labtest`/`labtest`
+returns 401). **The probe is now closed** (2026-10-20, credential supplied by the
+operator; live server PID 17704, `/health` ok). A real `/login` session on
+`/payload-generator` rendered the wave's copy with no page errors: the format grid's
+tablist is `Payload Formats` / `载荷格式`, the exe tile is `GUI executable` /
+`GUI 可执行文件`, the advanced section is `Beacon modules` / `Beacon 模块`; the
+Beacon Profiles inner tab shows `Push to Beacon` / `推送至 Beacon`, its push dialog
+shows `Load beacons` / `加载 Beacon` (the click round-trips without an error), and
+the build records subtitle is `Payload build records` / `载荷构建记录`. None of
+`Agent Binaries`, `Agent modules`, `GUI implant`, `Push to Agent`, `Load agents`,
+`After implant changes`, `Agent Version Distribution` or their ZH twins appeared in
+any of the three tabs. `Beacon Version Distribution` / `Beacon 版本分布` is data-gated
+on a non-empty beacon list (the card derives `versionDist` from beacons, and this lab
+server currently has zero), so its rendering is covered by the data-present unit/e2e
+fixtures rather than this zero-beacon probe; the string remains present in the served
+bundle.
 
 ## U7 — Professional naming & page emoji (wave 3, body copy 3: the automation domain, landed 2026-10-19)
 
