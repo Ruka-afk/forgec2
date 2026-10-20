@@ -89,6 +89,7 @@ func reloadGroups() []reloadGroup {
 		{Token: "malleable", Mode: reloadHot},
 		{Token: "server.geoip_enabled", Mode: reloadHot},
 		{Token: "server.cleanup_retention_days", Mode: reloadHot},
+		{Token: "server.reg_secret_orphan_ttl_hours", Mode: reloadHot},
 		{Token: "server.host", Mode: reloadStatic},
 		{Token: "server.offline_threshold", Mode: reloadStatic},
 		{Token: "server.session_max_age_hours", Mode: reloadStatic},

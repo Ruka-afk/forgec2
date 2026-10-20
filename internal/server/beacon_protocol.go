@@ -192,8 +192,9 @@ const maxSeqJumpAbsolute = 1 << 20
 // on restart; the operator can also recover via the admin reset path.
 const seqLockoutDuration = 5 * time.Minute
 
-// regSecretOrphanTTL is how long an unbound v3 registration secret is retained
-// before the periodic sweep deletes it. A secret is created before the
+// defaultRegSecretOrphanTTL is how long an unbound v3 registration secret is
+// retained before the periodic sweep deletes it. A secret is created before the
 // toolchain runs, so a failed build leaves an unbound row; a successfully
 // deployed agent binds its secret on first check-in well within this window.
-const regSecretOrphanTTL = 7 * 24 * time.Hour
+// Operators can override it with server.reg_secret_orphan_ttl_hours.
+const defaultRegSecretOrphanTTL = 7 * 24 * time.Hour

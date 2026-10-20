@@ -134,6 +134,13 @@ type Server struct {
 	// v3 per-implant registration secret store (seals/unseals reg secrets)
 	regSecrets *crypto.RegSecretStore
 
+	// Per-agent bookkeeping for online network-config refresh (config-over-wire
+	// on encrypted beacon responses). Lazily initialised; see
+	// beacon_netconfig.go.
+	networkConfigMu         sync.Mutex
+	networkConfigDelivered  map[string]networkConfigDelivery
+	networkConfigGeneration uint64
+
 	monitorCollector *MonitorCollector
 
 	// Plugin marketplace
@@ -545,18 +552,26 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 
 	// Periodic cleanup of orphaned v3 registration secrets: a secret is created
 	// before the toolchain runs, so a failed build leaves an unbound, unusable
-	// row. Sweep unbound secrets older than regSecretOrphanTTL so they don't
-	// accumulate indefinitely.
+	// row. Sweep unbound secrets older than server.reg_secret_orphan_ttl_hours
+	// (default 7 days) at startup and hourly; the authentication path also
+	// rejects expired unbound secrets between sweeps, so a stale build secret
+	// cannot enroll an agent just because the tick has not fired yet. The same
+	// pass prunes the online network-config delivery bookkeeping.
 	if s.regSecrets != nil {
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
+			cleanup := func() {
+				s.cleanupOrphanedRegSecrets(s.regSecretOrphanTTL())
+				s.pruneNetworkConfigDeliveries(time.Now().Add(-networkConfigDeliveryTTL))
+			}
+			cleanup()
 			ticker := time.NewTicker(time.Hour)
 			defer ticker.Stop()
 			for {
 				select {
 				case <-ticker.C:
-					s.cleanupOrphanedRegSecrets(regSecretOrphanTTL)
+					cleanup()
 				case <-s.ctx.Done():
 					return
 				}
@@ -568,6 +583,13 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 
 	s.metrics = NewMetricsCollector(s)
 	s.metrics.Register(prometheus.DefaultRegisterer)
+	// Feed beacon 429s into Prometheus. middleware cannot import server (cycle),
+	// so the limiter exposes a rejection callback.
+	s.rateLimiter.SetOnLimit(func() {
+		if s.metrics != nil {
+			s.metrics.BeaconRateLimitedTotal.Inc()
+		}
+	})
 	r.Use(metricsMiddleware(s.metrics))
 	if s.socksEngine != nil {
 		s.socksEngine.SetDropCounter(s.metrics.SocksDroppedTotal)
@@ -722,6 +744,10 @@ func (s *Server) InitOptimizations(configPath string) {
 		s.configMu.Lock()
 		s.cfg.CopyFrom(cfg)
 		s.configMu.Unlock()
+		// Malleable/profile settings are part of the delivered network config;
+		// refresh every agent on its next beacon rather than waiting for the
+		// periodic window.
+		s.markNetworkConfigChanged()
 
 		// Table-driven sync: every hot token either runs its Apply hook or
 		// is documented live-read (Apply == nil). Static tokens are rejected

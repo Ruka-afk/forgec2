@@ -54,6 +54,47 @@ func TestRateLimiterBasic(t *testing.T) {
 	}
 }
 
+// TestRateLimiterOnLimitHook pins the metric hook: it fires once per rejected
+// request (never for allowed ones), and clearing it stops further callbacks.
+func TestRateLimiterOnLimitHook(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rl := NewRateLimiter(context.Background(), 1, time.Minute)
+	defer rl.Stop()
+
+	rejections := 0
+	rl.SetOnLimit(func() { rejections++ })
+
+	send := func() int {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request, _ = http.NewRequest("POST", "/", nil)
+		c.Request.RemoteAddr = "10.9.9.9:12345"
+		rl.Limit()(c)
+		return w.Code
+	}
+
+	if code := send(); code != http.StatusOK {
+		t.Fatalf("first request should be allowed, got %d", code)
+	}
+	if rejections != 0 {
+		t.Fatalf("hook fired for an allowed request (count=%d)", rejections)
+	}
+	if code := send(); code != http.StatusTooManyRequests {
+		t.Fatalf("second request should be limited, got %d", code)
+	}
+	if rejections != 1 {
+		t.Fatalf("hook count = %d, want 1", rejections)
+	}
+
+	rl.SetOnLimit(nil)
+	if code := send(); code != http.StatusTooManyRequests {
+		t.Fatalf("third request should still be limited, got %d", code)
+	}
+	if rejections != 1 {
+		t.Fatalf("cleared hook must not fire, count=%d", rejections)
+	}
+}
+
 func TestRateLimiterDifferentIPs(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rl := NewRateLimiter(context.Background(), 1, 1*time.Minute)

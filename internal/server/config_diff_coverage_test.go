@@ -67,6 +67,7 @@ func TestDiffConfigTokenCoverage(t *testing.T) {
 		{"malleable", "hot", func(c *config.Config) { c.Malleable.StatusCode++ }},
 		{"server.geoip_enabled", "hot", func(c *config.Config) { c.Server.GeoIPEnabled = !c.Server.GeoIPEnabled }},
 		{"server.cleanup_retention_days", "hot", func(c *config.Config) { c.Server.CleanupRetentionDays++ }},
+		{"server.reg_secret_orphan_ttl_hours", "hot", func(c *config.Config) { c.Server.RegSecretOrphanTTLHours++ }},
 		{"server.allowed_origins", "hot", func(c *config.Config) { c.Server.AllowedOrigins = append(c.Server.AllowedOrigins, "x") }},
 		{"server.trusted_proxies", "hot", func(c *config.Config) { c.Server.TrustedProxies = append(c.Server.TrustedProxies, "x") }},
 		{"server.operator_allowed_cidrs", "hot", func(c *config.Config) {

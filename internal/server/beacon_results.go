@@ -297,6 +297,9 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 					slog.Error("Failed to update sleep settings on agent", "agent_id", uuid, "error", err)
 				} else {
 					s.broadcastAgentDataUpdate(uuid, sleepUpdates)
+					// The operator-visible sleep values are part of the delivered
+					// network config; refresh on this agent's next beacon.
+					s.markNetworkConfigChanged()
 				}
 			}
 		}

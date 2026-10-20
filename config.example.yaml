@@ -20,6 +20,10 @@ server:
   offline_threshold: 60
   session_max_age_hours: 24
   cleanup_retention_days: 30
+  # Unbound v3 registration secrets expire after this many hours (default 168 =
+  # 7 days) and are rejected at authentication as well as swept hourly. Secrets
+  # already bound to a deployed agent never expire.
+  reg_secret_orphan_ttl_hours: 168
   enable_metrics: false
   socks_listen_host: "127.0.0.1"
   allowed_origins: []

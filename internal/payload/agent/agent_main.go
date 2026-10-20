@@ -423,6 +423,11 @@ func main() {
 		getBeaconScheduler()
 	}
 
+	// Network-change wake: an interface up/down or address change interrupts
+	// the current sleep so the agent reconnects promptly on the new network
+	// instead of waiting out the full interval.
+	startNetworkWakeMonitor()
+
 	// Start gossip protocol for P2P mesh auto-routing
 	if GossipEnabled {
 		go startGossipProtocol()

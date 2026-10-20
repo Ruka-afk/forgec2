@@ -25,8 +25,12 @@ type RateLimiter struct {
 	limit       int           // requests per window
 	window      time.Duration // time window
 	maxVisitors int           // max entries before eviction
-	stop        chan struct{}
-	stopOnce    sync.Once
+	// onLimit, when set, runs once per rejected request. The server uses it to
+	// increment the beacon rate-limit metric without this package importing
+	// Prometheus (or the server package).
+	onLimit  func()
+	stop     chan struct{}
+	stopOnce sync.Once
 }
 
 type visitor struct {
@@ -95,6 +99,15 @@ func (rl *RateLimiter) SetLimits(limit int, window time.Duration) {
 	rl.window = window
 }
 
+// SetOnLimit installs a callback invoked whenever a request is rejected with
+// 429. Passing nil removes it. The callback runs outside the limiter lock and
+// must not block.
+func (rl *RateLimiter) SetOnLimit(fn func()) {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	rl.onLimit = fn
+}
+
 // Snapshot returns the live quota for status reporting.
 func (rl *RateLimiter) Snapshot() (limit int, window time.Duration) {
 	rl.mu.Lock()
@@ -152,6 +165,7 @@ func (rl *RateLimiter) Limit() gin.HandlerFunc {
 			if retryAfter < 1 {
 				retryAfter = 1
 			}
+			onLimit := rl.onLimit
 			rl.mu.Unlock()
 			// Standard Retry-After lets HTTP agents back off instead of
 			// retrying immediately; keep retry_after in the JSON body for
@@ -163,6 +177,9 @@ func (rl *RateLimiter) Limit() gin.HandlerFunc {
 				"retry_after": retryAfter,
 			})
 			c.Abort()
+			if onLimit != nil {
+				onLimit()
+			}
 			return
 		}
 

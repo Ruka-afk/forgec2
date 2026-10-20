@@ -75,6 +75,11 @@ type Config struct {
 		OfflineThreshold     int    `yaml:"offline_threshold"`      // seconds
 		SessionMaxAgeHours   int    `yaml:"session_max_age_hours"`  // JWT expiry
 		CleanupRetentionDays int    `yaml:"cleanup_retention_days"` // auto-purge cutoff
+		// RegSecretOrphanTTLHours bounds how long an unbound v3 registration
+		// secret stays usable. 0 = built-in default (168h = 7 days). A bound
+		// secret (already used by a deployed agent) never expires: it is that
+		// agent's long-term credential.
+		RegSecretOrphanTTLHours int `yaml:"reg_secret_orphan_ttl_hours"`
 		// AuditRetentionDays bounds audit_logs/opsec_history/circuit events
 		// separately: forensic timelines outlive operational data. Floor 90,
 		// default 365. The one-click maintenance purge never touches these
@@ -346,6 +351,7 @@ func DefaultConfig() *Config {
 	cfg.Server.OfflineThreshold = 60
 	cfg.Server.SessionMaxAgeHours = 24
 	cfg.Server.CleanupRetentionDays = 30
+	cfg.Server.RegSecretOrphanTTLHours = 168
 	cfg.Server.AuditRetentionDays = 365
 	cfg.Server.UpdateCheckRepo = "forgec2/forgec2"
 	cfg.Server.UpdateCheckEnabled = false // update checks phone home to api.github.com — opt-in only
@@ -871,6 +877,12 @@ func (c *Config) Validate() error {
 	}
 	if c.Server.CleanupRetentionDays > 3650 {
 		errs = append(errs, errors.New("server.cleanup_retention_days must be <= 3650 (10 years)"))
+	}
+	if c.Server.RegSecretOrphanTTLHours < 0 {
+		errs = append(errs, errors.New("server.reg_secret_orphan_ttl_hours must be >= 0 (0 = built-in 7 days)"))
+	}
+	if c.Server.RegSecretOrphanTTLHours > 8760 {
+		errs = append(errs, errors.New("server.reg_secret_orphan_ttl_hours must be <= 8760 (1 year)"))
 	}
 	if c.Server.AuditRetentionDays < 0 {
 		errs = append(errs, errors.New("server.audit_retention_days must be >= 0"))

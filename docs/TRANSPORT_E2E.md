@@ -60,6 +60,28 @@ Pass criteria:
 - Encrypted-frame results/acks are re-queued on transport/parse failure; auth frames requeue before transmission because they carry no task body.
 - Result replay is safe: the server's ResultID idempotency cache absorbs a duplicate when the request was processed but the reply was lost.
 
+## Online config refresh, network changes and secret TTL
+
+| Step | Action | Pass? |
+|------|--------|-------|
+| 1 | Keep a Go beacon online with a long sleep (e.g. 300 s) and note its listener endpoint / sleep values | |
+| 2 | Change the bound listener's host or port, or change the agent's sleep via the UI / `set_sleep`, without rebuilding | |
+| 3 | On the next beacon the encrypted response carries `network_config`; the agent applies the new endpoint/sleep and persists it | |
+| 4 | Leave the config unchanged for several beacons: no `network_config` is attached; after 15 minutes it is resent as a self-heal | |
+| 5 | Restart the agent: it starts from the persisted applied config, not the original build-time values | |
+| 6 | Toggle the network (Wi-Fi/VPN unplug/replug); the agent wakes within ~20 s instead of sleeping out the interval and reconnects | |
+| 7 | Lower `rate_limit.beacon`, exceed it, and scrape `/metrics`: `forgec2_beacon_rate_limited_total` increases while the 429 keeps `Retry-After` | |
+| 8 | Mint a secret and leave it unused past `server.reg_secret_orphan_ttl_hours` (age the row to avoid waiting): registration is refused before the hourly sweep runs | |
+| 9 | Use a secret that is already bound to a deployed agent after any TTL: it still authenticates | |
+
+Pass criteria:
+
+- Config delivery is change-triggered and periodic (15 min); an unchanged config is not retransmitted on every beacon.
+- Datagram transports (UDP/ICMP/DNS) skip a blob that cannot fit one response frame; the next fitting beacon delivers it.
+- Re-applying the identical config is a no-op — no persisted-blob rewrite and no network reparse.
+- Both the regular sleep and the JIT-scheduler sleep are interrupted by a network change; empty/transient interface enumeration never wakes the agent.
+- Expired unbound secrets are refused at authentication, not only deleted later; bound secrets never expire; the orphan sweep runs at startup and hourly.
+
 ## WSS (Hardened / Experimental)
 
 | Step | Action | Pass? |

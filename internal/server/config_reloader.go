@@ -330,6 +330,9 @@ func diffConfig(old, new *config.Config) (hotReloadable []string, staticOnly []s
 	if old.Server.CleanupRetentionDays != new.Server.CleanupRetentionDays {
 		hotReloadable = append(hotReloadable, "server.cleanup_retention_days")
 	}
+	if old.Server.RegSecretOrphanTTLHours != new.Server.RegSecretOrphanTTLHours {
+		hotReloadable = append(hotReloadable, "server.reg_secret_orphan_ttl_hours")
+	}
 	// --- Static-only fields not yet tracked above ---
 	if old.Server.Host != new.Server.Host {
 		staticOnly = append(staticOnly, "server.host")

@@ -35,6 +35,10 @@ type MetricsCollector struct {
 	BackupAgeSeconds     prometheus.Gauge
 	BackupFailuresTotal  prometheus.Counter
 	BackupSuccessTotal   prometheus.Counter
+	// BeaconRateLimitedTotal counts beacon requests rejected with 429. A
+	// sustained climb means either an attack or a NAT/fleet sharing one IP
+	// that needs rate_limit.beacon raised.
+	BeaconRateLimitedTotal prometheus.Counter
 }
 
 func NewMetricsCollector(s *Server) *MetricsCollector {
@@ -140,6 +144,10 @@ func NewMetricsCollector(s *Server) *MetricsCollector {
 			Name: "forgec2_backup_success_total",
 			Help: "Total successful encrypted database backups.",
 		}),
+		BeaconRateLimitedTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "forgec2_beacon_rate_limited_total",
+			Help: "Total beacon requests rejected with 429 by the per-IP beacon rate limiter.",
+		}),
 	}
 }
 
@@ -169,6 +177,7 @@ func (mc *MetricsCollector) Register(reg prometheus.Registerer) {
 		mc.BackupAgeSeconds,
 		mc.BackupFailuresTotal,
 		mc.BackupSuccessTotal,
+		mc.BeaconRateLimitedTotal,
 	}
 	for _, c := range collectors {
 		err := reg.Register(c)

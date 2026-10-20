@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/config"
 	"github.com/forgec2/forgec2/internal/crypto"
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/testutil"
@@ -98,5 +99,57 @@ func TestCleanupOrphanedRegSecrets(t *testing.T) {
 	}
 	if boundCount != 1 {
 		t.Fatalf("bound secret must be preserved, count=%d", boundCount)
+	}
+}
+
+// TestRegSecretForAuthEnforcesOrphanTTL pins the difference between the hourly
+// sweep and the actual security boundary: an unbound build secret older than
+// server.reg_secret_orphan_ttl_hours must be refused at authentication, even
+// before the sweep has run. A secret already bound to a deployed agent is that
+// agent's long-term credential and must keep working.
+func TestRegSecretForAuthEnforcesOrphanTTL(t *testing.T) {
+	s := newRegSecretServer(t, make([]byte, 32))
+	const master = "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899"
+	id, _, _, err := s.ensureV3RegSecret(master, 0)
+	if err != nil {
+		t.Fatalf("ensureV3RegSecret: %v", err)
+	}
+
+	// Fresh unbound secret: accepted (normal first registration).
+	if _, ok := s.regSecretForAuth(id, "agent-ttl"); !ok {
+		t.Fatal("fresh unbound secret must authenticate")
+	}
+
+	age := func(d time.Duration) {
+		t.Helper()
+		if err := s.db.Model(&db.RegSecret{}).Where("id = ?", id).
+			UpdateColumn("created_at", time.Now().Add(-d)).Error; err != nil {
+			t.Fatalf("age secret: %v", err)
+		}
+	}
+
+	// Older than the built-in default: rejected at auth.
+	age(defaultRegSecretOrphanTTL + time.Minute)
+	if _, ok := s.regSecretForAuth(id, "agent-ttl"); ok {
+		t.Fatal("expired unbound secret must be rejected at authentication")
+	}
+
+	// The configured TTL is honoured (live-read): 2h old passes 3h, fails 1h.
+	s.cfg = config.DefaultConfig()
+	s.cfg.Server.RegSecretOrphanTTLHours = 3
+	age(2 * time.Hour)
+	if _, ok := s.regSecretForAuth(id, "agent-ttl"); !ok {
+		t.Fatal("unbound secret inside the configured TTL must authenticate")
+	}
+	s.cfg.Server.RegSecretOrphanTTLHours = 1
+	if _, ok := s.regSecretForAuth(id, "agent-ttl"); ok {
+		t.Fatal("unbound secret outside the configured TTL must be rejected")
+	}
+
+	// Bound secrets never expire: the agent row may outlive any orphan TTL.
+	s.bindRegSecret(id, "agent-ttl")
+	age(30 * 24 * time.Hour)
+	if _, ok := s.regSecretForAuth(id, "agent-ttl"); !ok {
+		t.Fatal("a bound secret must never expire")
 	}
 }

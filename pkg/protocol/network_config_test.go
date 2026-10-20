@@ -74,3 +74,21 @@ func TestNetworkConfigKeyLength(t *testing.T) {
 		t.Fatal("non-32-byte secret must be rejected")
 	}
 }
+
+// TestNetworkConfigFingerprint pins the change detector used by the server to
+// avoid retransmitting an unchanged config: stable across marshals, distinct
+// when any delivered field changes, and never empty for a valid config.
+func TestNetworkConfigFingerprint(t *testing.T) {
+	nc := &NetworkConfig{C2URL: "https://c2.example", Interval: 30, Jitter: 10}
+	first := NetworkConfigFingerprint(nc)
+	if first == "" {
+		t.Fatal("fingerprint must not be empty")
+	}
+	if second := NetworkConfigFingerprint(&NetworkConfig{C2URL: "https://c2.example", Interval: 30, Jitter: 10}); second != first {
+		t.Fatalf("fingerprint is not deterministic: %q != %q", first, second)
+	}
+	nc.Interval = 45
+	if changed := NetworkConfigFingerprint(nc); changed == first {
+		t.Fatal("fingerprint must change when a delivered field changes")
+	}
+}

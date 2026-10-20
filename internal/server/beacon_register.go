@@ -235,14 +235,21 @@ func (s *Server) processAuthFrame(env beaconEnvelope, kind beaconFrameKind) ([]b
 }
 
 // buildNetworkConfig assembles the agent's operational network configuration
-// from the bound listener, the server-wide malleable profile, and the
-// server-tracked per-agent sleep values, then encrypts it under the per-implant
-// registration secret (AES-256-GCM, key = HKDF(secret, network-config info)).
-// v2 (master-key) implants never reach here with a usable secret and get "".
+// and encrypts it under the per-implant registration secret (AES-256-GCM,
+// key = HKDF(secret, network-config info)). v2 (master-key) implants never
+// reach here with a usable secret and get "".
 func (s *Server) buildNetworkConfig(imp db.Implant, regKey []byte) (string, error) {
 	if len(regKey) != 32 {
 		return "", fmt.Errorf("invalid reg key")
 	}
+	return protocol.EncryptNetworkConfig(regKey, s.assembleNetworkConfig(imp))
+}
+
+// assembleNetworkConfig collects the agent's live operational configuration
+// from the bound listener, the server-wide malleable profile, and the
+// server-tracked per-agent sleep values. Pure read-only: callers decide
+// whether to encrypt/ship it.
+func (s *Server) assembleNetworkConfig(imp db.Implant) *protocol.NetworkConfig {
 	nc := &protocol.NetworkConfig{}
 	if imp.ListenerID != 0 {
 		if rl, err := s.resolveListener(imp.ListenerID); err == nil {
@@ -301,7 +308,7 @@ func (s *Server) buildNetworkConfig(imp db.Implant, regKey []byte) (string, erro
 	if imp.CurrentJitter > 0 {
 		nc.Jitter = imp.CurrentJitter
 	}
-	return protocol.EncryptNetworkConfig(regKey, nc)
+	return nc
 }
 
 // buildBeaconResponse wraps a processed beacon response in the transport

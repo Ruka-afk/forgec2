@@ -361,6 +361,12 @@ func (s *Server) processBeaconWithBudget(req beaconRequest, publicIP string, fra
 		LastSeq:         s.currentLastSeq(req.UUID),
 	}
 
+	// Online config refresh: deliver the operator's live network config when it
+	// changed (or the periodic refresh is due) so a long-running beacon picks
+	// up rotated endpoints/sleep/malleable settings without re-registering.
+	// Datagram transports (frameSize > 0) only get it when it fits one frame.
+	resp.NetworkConfig = s.networkConfigForBeacon(agent, now, frameSize)
+
 	s.enforceKillDate(agent, &resp, now)
 	s.enforceKillSwitch(agent, &resp)
 	s.processSOCKSRelayWithBudget(req.UUID, req.SocksData, &resp, frameSize, budget)

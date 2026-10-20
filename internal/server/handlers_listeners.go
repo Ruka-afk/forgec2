@@ -16,6 +16,10 @@ import (
 // changed (created/updated/deleted/enabled/disabled) so open Listener tables
 // can refresh without polling.
 func (s *Server) broadcastListenerUpdate(action string, l *db.Listener) {
+	// A listener endpoint/enabled change alters the network config delivered
+	// to every agent bound to it; refresh it on their next beacon instead of
+	// waiting for the periodic window.
+	s.markNetworkConfigChanged()
 	payload := map[string]interface{}{
 		"type":          "listener_update",
 		"action":        action,

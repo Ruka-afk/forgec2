@@ -93,12 +93,34 @@ func (s *Server) regSecretTenantForAgent(agentID string) uint {
 	return row.TenantID
 }
 
+// regSecretOrphanTTL returns the configured lifetime of an unbound v3
+// registration secret. The value is read live so a reload applies to both the
+// sweep and authentication checks; a missing/zero value keeps the built-in
+// seven-day default.
+func (s *Server) regSecretOrphanTTL() time.Duration {
+	if s != nil && s.cfg != nil {
+		// s.cfg is mutated in place by the hot reloader; take the read lock so
+		// a concurrent reload cannot race this read.
+		s.configMu.RLock()
+		hours := s.cfg.Server.RegSecretOrphanTTLHours
+		s.configMu.RUnlock()
+		if hours > 0 {
+			return time.Duration(hours) * time.Hour
+		}
+	}
+	return defaultRegSecretOrphanTTL
+}
+
 // regSecretForAuth resolves the per-implant secret for an authentication frame
 // and enforces that the secret is bound to the presenting agent. A secret that
 // has already been bound to a different agent_id is rejected, so a secret
 // extracted from one implant cannot be replayed to impersonate another. An
 // unbound secret (agent_id == "") is allowed and is bound to agentID on first
-// registration (see bindRegSecret).
+// registration (see bindRegSecret) — but only while it is younger than the
+// configured orphan TTL. Enforcing the TTL here (not just in the hourly sweep)
+// closes the window where an expired build secret could still enroll an agent.
+// Bound secrets never expire: they are the deployed agent's long-term
+// credential, and revoking one is an explicit operator action.
 func (s *Server) regSecretForAuth(id, agentID string) ([]byte, bool) {
 	if id == "" || s.regSecrets == nil {
 		return nil, false
@@ -108,6 +130,12 @@ func (s *Server) regSecretForAuth(id, agentID string) ([]byte, bool) {
 		return nil, false
 	}
 	if row.AgentID != "" && row.AgentID != agentID {
+		return nil, false
+	}
+	if row.AgentID == "" && time.Since(row.CreatedAt) > s.regSecretOrphanTTL() {
+		slog.Warn("rejected expired unbound registration secret",
+			"secret_id", id, "age", time.Since(row.CreatedAt).Round(time.Hour),
+			"ttl", s.regSecretOrphanTTL())
 		return nil, false
 	}
 	secret, err := s.regSecrets.Unseal(row.SecretEnc)
