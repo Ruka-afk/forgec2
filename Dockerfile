@@ -6,7 +6,7 @@
 # Stage 1: Build Vite frontend
 # Node 20.19 is the floor for Vite 7 (require(esm) must be enabled by default,
 # otherwise loading the ESM-only @vitejs/plugin-react fails with ERR_REQUIRE_ESM).
-FROM node:26.11-alpine@sha256:143494b1da2945f061539253adc65e4f1569ddf07da2d384c022c791a9d90a4a AS frontend-builder
+FROM node:26.12-alpine@sha256:6f08a523443ddedf52941874c203475b0ad503e859ad70cb26ab8be9a517dbd5 AS frontend-builder
 WORKDIR /build/frontend
 COPY frontend/package*.json ./
 RUN npm ci
