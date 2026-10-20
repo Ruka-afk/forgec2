@@ -1,7 +1,7 @@
 import { fileURLToPath, URL } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
-import { staticExportPlugin } from "./vite-plugins/staticExport";
+import { staticExportPlugin } from "./vite-plugins/staticExport.js";
 
 // Inject <link rel="preload" as="font"> for the hashed woff2 assets emitted
 // during the build. The hashed filename is only known after bundling, so the

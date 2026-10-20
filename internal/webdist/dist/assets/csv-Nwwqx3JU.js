@@ -1,0 +1,1 @@
+function e(e){let t=e==null?``:String(e);return t=t.replace(/\r/g,``),/^[=+\-@\t]/.test(t)&&(t=`'${t}`),`"${t.replace(/"/g,`""`)}"`}export{e as t};

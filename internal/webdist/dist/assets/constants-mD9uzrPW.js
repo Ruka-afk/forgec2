@@ -1,0 +1,1 @@
+var e=`localhost`,t=`8000`,n=`127.0.0.1:443`;export{e as n,t as r,n as t};

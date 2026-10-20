@@ -1,0 +1,1 @@
+function e(e,t,n,r,i=6){let a=Math.max(0,e|0),o=Math.max(1,t|0),s=a*o;if(a===0)return{start:0,end:0,offsetTop:0,totalHeight:0,visibleCount:0};let c=Math.ceil(Math.max(0,r)/o)+i*2,l=Math.max(0,a-Math.max(1,c)),u=Math.floor(Math.max(0,n)/o)-i,d=Math.min(l,Math.max(0,u)),f=Math.min(a,d+Math.max(1,c));return{start:d,end:f,offsetTop:d*o,totalHeight:s,visibleCount:f-d}}export{e as t};

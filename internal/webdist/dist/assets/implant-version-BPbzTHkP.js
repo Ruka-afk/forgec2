@@ -1,1 +1,0 @@
-function t(n){return(n||"").trim()}function r(n){return n==="scripted"||n==="experimental"}function s(n,e){return r(e)&&!t(n)}function i(n){return t(n).toLowerCase().startsWith("c-")}export{i as a,s as i,t as k};

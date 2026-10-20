@@ -107,11 +107,31 @@ export function staticExportPlugin(): Plugin {
       // Vite sees the lazy router imports from the application entry and
       // emits modulepreload tags for every route. That defeats route-level
       // code splitting: a dashboard visit downloads Agent, AI, credentials,
-      // and every other page before the operator opens it. Keep only shared
-      // vendor preloads; route chunks are fetched by React.lazy on navigation.
-      const shell = source.replace(/<link rel="modulepreload"[^>]*>/g, (tag) =>
-        /href="\/assets\/vendor-/.test(tag) ? tag : "",
+      // and every other page before the operator opens it. Keep only the
+      // entry's static import closure: those are the chunks first paint needs
+      // anyway (vendor-*, plus since Vite 8 the shared `utils` chunk that
+      // carries the English dictionary). Route chunks stay out.
+      type ChunkLike = { type: "chunk"; fileName: string; imports: string[] };
+      const critical = new Set<string>();
+      const visit = (chunk: ChunkLike) => {
+        if (critical.has(chunk.fileName)) return;
+        critical.add(chunk.fileName);
+        for (const dep of chunk.imports) {
+          const next = bundle[dep];
+          if (next && next.type === "chunk") visit(next);
+        }
+      };
+      const entry = Object.values(bundle).find(
+        (item) => item.type === "chunk" && item.isEntry,
       );
+      if (entry && entry.type === "chunk") visit(entry);
+      const shell = source.replace(/<link rel="modulepreload"[^>]*>/g, (tag) => {
+        const href = tag.match(/href="\/assets\/([^"]+)"/)?.[1];
+        if (!href) return "";
+        const keep =
+          critical.size > 0 ? critical.has(`assets/${href}`) : href.startsWith("vendor-");
+        return keep ? tag : "";
+      });
       html.source = shell;
       this.emitFile({ type: "asset", fileName: "404.html", source: shell });
       for (const route of STATIC_ROUTES) {
