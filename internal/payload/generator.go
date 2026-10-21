@@ -3,6 +3,7 @@ package payload
 import (
 	"embed"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 )
@@ -288,6 +289,29 @@ type ImplantConfig struct {
 	// Timing jitter extensions.
 	JitterURI      bool
 	ParameterNames []string
+	// Authenticode code signing (Windows EXE/DLL only). SignMode is "",
+	// "none", "self", "pfx" or "pem". PFX/PEM material is per-build and kept
+	// in memory only: it is never persisted, logged or audited.
+	SignMode        string
+	SignOrg         string // organization for self-signed certificates
+	SignPFX         []byte // PKCS#12 bundle for sign_mode=pfx
+	SignPFXPassword string
+	SignCertPEM     []byte // PEM certificate chain for sign_mode=pem
+	SignKeyPEM      []byte // PEM private key for sign_mode=pem
+	// OriginalFilename is the operator-visible filename without the server's
+	// 8-hex uniqueness prefix; it is embedded in VersionInfo. Empty falls back
+	// to the output filename.
+	OriginalFilename string
+}
+
+// CodeSigningEnabled reports whether this build requested Authenticode signing.
+func (c ImplantConfig) CodeSigningEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(c.SignMode)) {
+	case "", "none":
+		return false
+	default:
+		return true
+	}
 }
 
 // slimTransportStubs replaces the excluded transports' entry points. A stubbed

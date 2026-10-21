@@ -16,7 +16,7 @@ import (
 // parseAuthenticode walks ContentInfo → SignedData and returns the embedded
 // certificate plus the signer info, so tests can cryptographically verify the
 // signature the way a verifier would.
-func parseAuthenticode(t *testing.T, pkcs7 []byte) (*x509.Certificate, signerInfo) {
+func parseAuthenticode(t *testing.T, pkcs7 []byte) (*x509.Certificate, signerInfo, []byte) {
 	t.Helper()
 	var ci contentInfo
 	if _, err := asn1.Unmarshal(pkcs7, &ci); err != nil {
@@ -36,7 +36,7 @@ func parseAuthenticode(t *testing.T, pkcs7 []byte) (*x509.Certificate, signerInf
 	if len(sd.SignerInfos) != 1 {
 		t.Fatalf("signer infos = %d, want 1", len(sd.SignerInfos))
 	}
-	return cert, sd.SignerInfos[0]
+	return cert, sd.SignerInfos[0], sd.ContentInfo.Content.Bytes
 }
 
 func TestSignPESelfSignedRoundTrip(t *testing.T) {
@@ -72,7 +72,7 @@ func TestSignPESelfSignedRoundTrip(t *testing.T) {
 	}
 
 	pkcs7 := signed[tableOff+8 : tableOff+tableSize]
-	cert, si := parseAuthenticode(t, pkcs7)
+	cert, si, contentDER := parseAuthenticode(t, pkcs7)
 
 	// Certificate subject carries the requested organization.
 	if org := cert.Subject.Organization; len(org) != 1 || org[0] != "Acme Corp" {
@@ -94,9 +94,10 @@ func TestSignPESelfSignedRoundTrip(t *testing.T) {
 		t.Fatalf("signature over authenticated attributes invalid: %v", err)
 	}
 
-	// The signed messageDigest attribute must equal the Authenticode digest of
-	// the unsigned image AND of the signed image (the certificate table is
-	// excluded from both).
+	// The SpcIndirectDataContent carries the Authenticode digest of the image,
+	// while the PKCS#7 messageDigest attribute covers the CONTENTS OCTETS of
+	// that SEQUENCE (not the full TLV) — the Authenticode quirk signtool and
+	// WinVerifyTrust follow.
 	wantDigest, err := AuthenticodeDigest(pe)
 	if err != nil {
 		t.Fatalf("digest(unsigned): %v", err)
@@ -108,6 +109,13 @@ func TestSignPESelfSignedRoundTrip(t *testing.T) {
 	if !bytes.Equal(wantDigest, gotDigestSigned) {
 		t.Fatal("digest invariance broken: signed-image digest differs from unsigned")
 	}
+	var content spcIndirectDataContent
+	if _, err := asn1.Unmarshal(contentDER, &content); err != nil {
+		t.Fatalf("unmarshal SpcIndirectDataContent: %v", err)
+	}
+	if !bytes.Equal(content.MessageDigest.Digest, wantDigest) {
+		t.Fatal("SpcIndirectDataContent does not carry the recomputed PE digest")
+	}
 
 	var attrs []pkcs7Attribute
 	// AuthenticatedAttributes.Bytes is a concatenation of attribute TLVs;
@@ -115,12 +123,16 @@ func TestSignPESelfSignedRoundTrip(t *testing.T) {
 	if _, err := asn1.Unmarshal(derTLV(0x30, si.AuthenticatedAttributes.Bytes), &attrs); err != nil {
 		t.Fatalf("unmarshal attributes: %v", err)
 	}
+	contentDigest, err := spcContentDigest(contentDER)
+	if err != nil {
+		t.Fatalf("digest SpcIndirectDataContent: %v", err)
+	}
 	foundDigest, foundTime := false, false
 	for _, a := range attrs {
 		switch {
 		case a.Type.Equal(oidMessageDigest):
-			if len(a.Value) != 1 || !bytes.Equal(a.Value[0].Bytes, wantDigest) {
-				t.Fatal("messageDigest attribute does not match recomputed PE digest")
+			if len(a.Value) != 1 || !bytes.Equal(a.Value[0].Bytes, contentDigest[:]) {
+				t.Fatal("messageDigest attribute does not match SpcIndirectDataContent")
 			}
 			foundDigest = true
 		case a.Type.Equal(oidSigningTime):
@@ -170,6 +182,62 @@ func TestSignPESelfSignedRejectsNonPE(t *testing.T) {
 	}
 }
 
+// TestAuthenticodeDigestSkipsMutableHeaderFields pins the WinVerifyTrust hashing
+// rule: the optional-header Checksum field and the Security Directory entry are
+// omitted from the hash (not hashed as zeros, which yields TRUST_E_BAD_DIGEST).
+func TestAuthenticodeDigestSkipsMutableHeaderFields(t *testing.T) {
+	pe := makePE(t, 0x8664, true)
+	checksumOff, secDirOff, err := peSecurityFields(pe)
+	if err != nil {
+		t.Fatalf("peSecurityFields: %v", err)
+	}
+	want, err := AuthenticodeDigest(pe)
+	if err != nil {
+		t.Fatalf("AuthenticodeDigest: %v", err)
+	}
+
+	mutated := append([]byte(nil), pe...)
+	binary.LittleEndian.PutUint32(mutated[checksumOff:], 0xDEADBEEF)
+	binary.LittleEndian.PutUint32(mutated[secDirOff:], 0x12345678)
+	binary.LittleEndian.PutUint32(mutated[secDirOff+4:], 0x9ABCDEF0)
+	got, err := AuthenticodeDigest(mutated)
+	if err != nil {
+		t.Fatalf("AuthenticodeDigest(mutated): %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatal("digest changed when only the checksum/security directory fields changed")
+	}
+
+	// Bytes outside the skipped fields must still be covered.
+	bodyMutated := append([]byte(nil), pe...)
+	bodyMutated[testPETextRawOff] ^= 0xFF
+	got, err = AuthenticodeDigest(bodyMutated)
+	if err != nil {
+		t.Fatalf("AuthenticodeDigest(bodyMutated): %v", err)
+	}
+	if bytes.Equal(got, want) {
+		t.Fatal("digest ignored a change outside the skipped header fields")
+	}
+}
+
+// TestSpcContentDigestCoversSequenceBody pins the second Authenticode quirk:
+// the PKCS#7 messageDigest attribute hashes the contents octets of
+// SpcIndirectDataContent, not its full SEQUENCE TLV.
+func TestSpcContentDigestCoversSequenceBody(t *testing.T) {
+	body := []byte{0x02, 0x01, 0x2A}
+	full := derTLV(0x30, body)
+	got, err := spcContentDigest(full)
+	if err != nil {
+		t.Fatalf("spcContentDigest: %v", err)
+	}
+	if want := sha256.Sum256(body); got != want {
+		t.Fatalf("digest = %x, want SHA-256 of the SEQUENCE body %x", got, want)
+	}
+	if fullDigest := sha256.Sum256(full); got == fullDigest {
+		t.Fatal("digest unexpectedly covers the full SEQUENCE TLV")
+	}
+}
+
 // TestBuildArtifactSelfSignedRequiresPE pins the honesty guard: a shellcode
 // blob with cert_option=self_signed is rejected instead of silently ignoring
 // the certificate request. Uses the raw output path so no Go toolchain runs.
@@ -213,7 +281,7 @@ func TestBuildArtifact_SelfSignedEXE(t *testing.T) {
 		t.Fatalf("certificate table not registered correctly (off=%d size=%d len=%d)",
 			tableOff, tableSize, len(artifact))
 	}
-	cert, _ := parseAuthenticode(t, artifact[tableOff+8:tableOff+tableSize])
+	cert, _, _ := parseAuthenticode(t, artifact[tableOff+8:tableOff+tableSize])
 	if org := cert.Subject.Organization; len(org) != 1 || org[0] != "Integration Org" {
 		t.Fatalf("cert org = %v, want [Integration Org]", org)
 	}

@@ -3,9 +3,10 @@ package payload
 // Authenticode signing for packer artifacts.
 //
 // Implements the subset of Microsoft Authenticode needed to embed a
-// self-signed code-signing signature into a PE image:
+// code-signing signature into a PE image:
 //
-//   - a fresh self-signed X.509 certificate (RSA-2048, SHA-256, CodeSigning EKU)
+//   - a supplied RSA certificate chain (PFX/PEM) or a fresh self-signed
+//     X.509 certificate (RSA-2048, SHA-256, CodeSigning EKU)
 //   - a PKCS#7 SignedData whose encapContentInfo is SpcIndirectDataContent
 //     carrying the Authenticode message digest of the image
 //   - a WIN_CERTIFICATE (v2, PKCS_SIGNED_DATA) entry appended to the file and
@@ -13,16 +14,17 @@ package payload
 //
 // The digest is computed exactly as WinVerifyTrust does: SHA-256 over the
 // whole image with the optional-header Checksum field and the Security
-// Directory entry (offset+size) zeroed. Everything else — section tables,
+// Directory entry (offset+size) omitted. Everything else — section tables,
 // timestamps, imports, resources — is covered by the digest.
 //
 // DER encoding notes: encoding/asn1 cannot express IMPLICIT context tags or
 // hand-sorted SET OF payloads, so the few structures that need them
 // ([0] EXPLICIT content, [0] IMPLICIT certificates, [0] IMPLICIT SET of
-// authenticated attributes, the [1] IMPLICIT SpcSerializedObject moniker) are
-// pre-encoded as asn1.RawValue with explicit TLV helpers below.
+// authenticated attributes, the [0] EXPLICIT SpcLink holding an empty
+// SpcString) are pre-encoded as asn1.RawValue with explicit TLV helpers below.
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
@@ -34,6 +36,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sort"
 	"strings"
 	"time"
 )
@@ -44,16 +47,6 @@ const (
 )
 
 var (
-	// spcMonikerClassID is the classId GUID signtool writes into the
-	// SpcPeImageData moniker for PE images
-	// (C43F7AA6-448C-11D4-9CBA-00C04FC2ADC9, little-endian byte order).
-	// It is signed metadata only — verification never inspects it — but it is
-	// kept identical to signtool output so parsers see a familiar shape.
-	spcMonikerClassID = []byte{
-		0xA6, 0x7A, 0x3F, 0xC4, 0x8C, 0x44, 0xD4, 0x11,
-		0x9C, 0xBA, 0x00, 0xC0, 0x4F, 0xC2, 0xAD, 0xC9,
-	}
-
 	oidSignedData      = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 7, 2}
 	oidSHA256          = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 2, 1}
 	oidRSAEncryption   = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 1}
@@ -62,6 +55,10 @@ var (
 	oidSigningTime     = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 5}
 	oidSPCIndirectData = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 311, 2, 1, 4}
 	oidSPCPEImageData  = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 311, 2, 1, 15}
+	// oidSHA256WithRSA is accepted on verification for signatures produced by
+	// signtool (which may put the combined algorithm in
+	// digestEncryptionAlgorithm instead of rsaEncryption).
+	oidSHA256WithRSA = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 11}
 )
 
 // ── minimal DER helpers ─────────────────────────────────────────────────────
@@ -94,7 +91,7 @@ type algorithmIdentifier struct {
 var nullParams = asn1.RawValue{Tag: asn1.TagNull}
 
 type issuerAndSerialNumber struct {
-	IssuerName   asn1.RawValue // cert.RawSubject
+	IssuerName   asn1.RawValue // cert.RawIssuer
 	SerialNumber *big.Int
 }
 
@@ -115,7 +112,7 @@ type spcAttributeTypeAndOptionalValue struct {
 
 type spcPeImageData struct {
 	Flags asn1.BitString
-	File  asn1.RawValue `asn1:"optional"` // [1] IMPLICIT moniker, pre-encoded
+	File  asn1.RawValue `asn1:"optional"` // [0] EXPLICIT SpcLink, pre-encoded
 }
 
 type spcIndirectDataContent struct {
@@ -178,17 +175,61 @@ func buildAuthenticatedAttributes(digest []byte, signingTime time.Time) ([]byte,
 	return body, nil
 }
 
-// spcMoniker encodes the [1] IMPLICIT SpcSerializedObject inside
-// SpcPeImageData: classId OCTET STRING + empty data OCTET STRING. IMPLICIT
-// replaces the inner SEQUENCE tag, so the body carries the sequence's
-// contents under a constructed context-1 tag.
-func spcMoniker() asn1.RawValue {
-	body := append(derTLV(0x04, spcMonikerClassID), derTLV(0x04, nil)...)
-	return asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 1, IsCompound: true, Bytes: body}
+// spcFileLink encodes SpcPeImageData.file the way signtool does: [0] EXPLICIT
+// SpcLink containing the "file" choice [2] EXPLICIT with an empty SpcString.
+// Using the same shape as Microsoft's signer avoids relying on optional
+// moniker handling in WinVerifyTrust.
+func spcFileLink() asn1.RawValue {
+	inner := derTLV(0xA2, derTLV(0x80, nil))
+	return asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 0, IsCompound: true, Bytes: inner}
 }
 
-func buildPKCS7(cert *x509.Certificate, key *rsa.PrivateKey, digest []byte, signingTime time.Time) ([]byte, error) {
-	attrBody, err := buildAuthenticatedAttributes(digest, signingTime)
+// spcContentDigest hashes the contents octets of the SpcIndirectDataContent
+// SEQUENCE. Authenticode quirk: the PKCS#7 messageDigest attribute covers the
+// SEQUENCE body, not the full DER TLV. Signtool/WinVerifyTrust do the same, and
+// hashing the full TLV produces a structurally valid signature that Windows
+// rejects with TRUST_E_BAD_DIGEST.
+func spcContentDigest(contentDER []byte) ([32]byte, error) {
+	var raw asn1.RawValue
+	if _, err := asn1.Unmarshal(contentDER, &raw); err != nil {
+		return [32]byte{}, fmt.Errorf("parse SpcIndirectDataContent: %w", err)
+	}
+	if raw.Class != asn1.ClassUniversal || raw.Tag != asn1.TagSequence || !raw.IsCompound {
+		return [32]byte{}, errors.New("SpcIndirectDataContent is not a SEQUENCE")
+	}
+	return sha256.Sum256(raw.Bytes), nil
+}
+
+func buildPKCS7(chain []*x509.Certificate, key *rsa.PrivateKey, peDigest []byte, signingTime time.Time) ([]byte, error) {
+	if len(chain) == 0 || chain[0] == nil {
+		return nil, errors.New("authenticode: empty certificate chain")
+	}
+	leaf := chain[0]
+
+	// The encapsulated content is SpcIndirectDataContent; PKCS#7's
+	// messageDigest attribute covers the contents octets of that SEQUENCE, not
+	// the PE file itself. The PE digest lives inside SpcIndirectDataContent and
+	// is checked by WinVerifyTrust against the image.
+	contentVal := spcIndirectDataContent{
+		Data: spcAttributeTypeAndOptionalValue{
+			Type:  oidSPCPEImageData,
+			Value: spcPeImageData{File: spcFileLink()},
+		},
+		MessageDigest: digestInfo{
+			Algorithm: algorithmIdentifier{Algorithm: oidSHA256, Parameters: nullParams},
+			Digest:    peDigest,
+		},
+	}
+	contentDER, err := asn1.Marshal(contentVal)
+	if err != nil {
+		return nil, fmt.Errorf("spc indirect data: %w", err)
+	}
+	contentDigest, err := spcContentDigest(contentDER)
+	if err != nil {
+		return nil, err
+	}
+
+	attrBody, err := buildAuthenticatedAttributes(contentDigest[:], signingTime)
 	if err != nil {
 		return nil, fmt.Errorf("authenticated attributes: %w", err)
 	}
@@ -200,20 +241,19 @@ func buildPKCS7(cert *x509.Certificate, key *rsa.PrivateKey, digest []byte, sign
 		return nil, fmt.Errorf("sign attributes: %w", err)
 	}
 
-	contentVal := spcIndirectDataContent{
-		Data: spcAttributeTypeAndOptionalValue{
-			Type:  oidSPCPEImageData,
-			Value: spcPeImageData{File: spcMoniker()},
-		},
-		MessageDigest: digestInfo{
-			Algorithm: algorithmIdentifier{Algorithm: oidSHA256, Parameters: nullParams},
-			Digest:    digest,
-		},
+	// Certificates is a SET OF Certificate. DER requires the members to be
+	// sorted; preserving a usable chain matters to verifiers and to operators
+	// inspecting the signature, while the signer is located by issuer+serial.
+	certDER := make([][]byte, 0, len(chain))
+	for _, c := range chain {
+		if c != nil {
+			certDER = append(certDER, c.Raw)
+		}
 	}
-	contentDER, err := asn1.Marshal(contentVal)
-	if err != nil {
-		return nil, fmt.Errorf("spc indirect data: %w", err)
-	}
+	sort.Slice(certDER, func(i, j int) bool {
+		return bytes.Compare(certDER[i], certDER[j]) < 0
+	})
+	certBytes := bytes.Join(certDER, nil)
 
 	sd := signedData{
 		Version: 1,
@@ -224,12 +264,12 @@ func buildPKCS7(cert *x509.Certificate, key *rsa.PrivateKey, digest []byte, sign
 			ContentType: oidSPCIndirectData,
 			Content:     asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 0, IsCompound: true, Bytes: contentDER},
 		},
-		Certificates: asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 0, IsCompound: true, Bytes: cert.Raw},
+		Certificates: asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 0, IsCompound: true, Bytes: certBytes},
 		SignerInfos: []signerInfo{{
 			Version: 1,
 			IssuerAndSerialNumber: issuerAndSerialNumber{
-				IssuerName:   asn1.RawValue{FullBytes: cert.RawSubject},
-				SerialNumber: cert.SerialNumber,
+				IssuerName:   asn1.RawValue{FullBytes: leaf.RawIssuer},
+				SerialNumber: leaf.SerialNumber,
 			},
 			DigestAlgorithm:           algorithmIdentifier{Algorithm: oidSHA256, Parameters: nullParams},
 			AuthenticatedAttributes:   asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 0, IsCompound: true, Bytes: attrBody},
@@ -254,7 +294,9 @@ func buildPKCS7(cert *x509.Certificate, key *rsa.PrivateKey, digest []byte, sign
 func selfSignedCodeCert(organization string) (*x509.Certificate, *rsa.PrivateKey, error) {
 	org := strings.TrimSpace(organization)
 	if org == "" {
-		org = "ForgeC2"
+		// Neutral default: the certificate is self-signed and untrusted either
+		// way, but a product name in the subject is an unnecessary fingerprint.
+		org = "Software Publisher"
 	}
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -300,6 +342,9 @@ func peSecurityFields(data []byte) (checksumOff, secDirOff int, err error) {
 		return 0, 0, errors.New("not a PE image (missing PE signature)")
 	}
 	opt := peOff + 24
+	if opt+2 > len(data) {
+		return 0, 0, errors.New("not a PE image (truncated optional header)")
+	}
 	magic := binary.LittleEndian.Uint16(data[opt:])
 	var ddOff int
 	switch magic {
@@ -319,11 +364,13 @@ func peSecurityFields(data []byte) (checksumOff, secDirOff int, err error) {
 }
 
 // AuthenticodeDigest computes the SHA-256 message digest WinVerifyTrust
-// verifies: the whole image with the optional-header checksum field and the
-// security-directory entry zeroed, EXCLUDING the certificate table itself
-// (everything from the registered table offset onward is not hashed — the
-// table contains the signature). On an unsigned image this hashes the full
-// file; on a signed image it reproduces exactly the digest that was signed.
+// verifies: the image bytes up to the certificate table, with the
+// optional-header Checksum field and the Security Directory entry OMITTED
+// (WinVerifyTrust hashes the remaining bytes; it does not hash zeros in their
+// place). The certificate table itself — everything from the registered table
+// offset onward — is excluded. On an unsigned image this hashes the file with
+// those two fields removed; on a signed image it reproduces exactly the digest
+// that was signed.
 func AuthenticodeDigest(data []byte) ([]byte, error) {
 	checksumOff, secDirOff, err := peSecurityFields(data)
 	if err != nil {
@@ -333,12 +380,14 @@ func AuthenticodeDigest(data []byte) ([]byte, error) {
 	if tableOff := int(binary.LittleEndian.Uint32(data[secDirOff:])); tableOff > 0 && tableOff <= len(data) {
 		end = tableOff
 	}
-	scrub := make([]byte, end)
-	copy(scrub, data[:end])
-	binary.LittleEndian.PutUint32(scrub[checksumOff:], 0)
-	clear(scrub[secDirOff : secDirOff+8])
-	sum := sha256.Sum256(scrub)
-	return sum[:], nil
+	if checksumOff+4 > secDirOff || secDirOff+8 > end {
+		return nil, errors.New("PE security fields overlap or are truncated")
+	}
+	h := sha256.New()
+	h.Write(data[:checksumOff])
+	h.Write(data[checksumOff+4 : secDirOff])
+	h.Write(data[secDirOff+8 : end])
+	return h.Sum(nil), nil
 }
 
 // computePEChecksum implements the standard PE optional-header checksum
@@ -360,7 +409,7 @@ func computePEChecksum(data []byte, checksumOff int) uint32 {
 // appendCertificateTable appends an 8-byte-aligned WIN_CERTIFICATE entry and
 // registers it in the security directory, then refreshes the optional-header
 // checksum so loaders that validate it see a consistent image (WinVerifyTrust
-// zeroes that field for its digest either way).
+// omits that field from its digest either way).
 func appendCertificateTable(pe []byte, secDirOff, checksumOff int, pkcs7 []byte) ([]byte, error) {
 	const align = 8
 	pad := (align - len(pkcs7)%align) % align
@@ -388,39 +437,56 @@ func appendCertificateTable(pe []byte, secDirOff, checksumOff int, pkcs7 []byte)
 	return out, nil
 }
 
-// SignPESelfSigned appends an Authenticode signature generated with a fresh
-// self-signed certificate to a PE image and registers it in the security data
-// directory. organization becomes the certificate subject CN/O (empty →
-// "ForgeC2"). The returned slice is a new buffer; the input is not modified.
-func SignPESelfSigned(pe []byte, organization string) ([]byte, error) {
-	checksumOff, secDirOff, err := peSecurityFields(pe)
+// SignPEWithChain appends an Authenticode signature to peBytes using chain[0]
+// as the signing certificate and key. The rest of chain is embedded in the
+// PKCS#7 Certificates set so a verifier can build the path. The input slice is
+// never modified.
+func SignPEWithChain(peBytes []byte, chain []*x509.Certificate, key *rsa.PrivateKey) ([]byte, error) {
+	if len(chain) == 0 || chain[0] == nil {
+		return nil, errors.New("authenticode: empty certificate chain")
+	}
+	if key == nil {
+		return nil, errors.New("authenticode: missing private key")
+	}
+	if err := validateCodeSigningCert(chain[0], key); err != nil {
+		return nil, fmt.Errorf("authenticode: %w", err)
+	}
+	checksumOff, secDirOff, err := peSecurityFields(peBytes)
 	if err != nil {
 		return nil, fmt.Errorf("authenticode: %w", err)
 	}
 	// Appending a second table would invalidate the first one's directory
 	// registration; refuse rather than ship a doubly-signed image.
-	if dirOff := binary.LittleEndian.Uint32(pe[secDirOff:]); dirOff != 0 {
+	if dirOff := binary.LittleEndian.Uint32(peBytes[secDirOff:]); dirOff != 0 {
 		return nil, errors.New("authenticode: image already carries a signature table")
 	}
 
-	cert, key, err := selfSignedCodeCert(organization)
+	digest, err := AuthenticodeDigest(peBytes)
 	if err != nil {
 		return nil, fmt.Errorf("authenticode: %w", err)
 	}
 
-	digest, err := AuthenticodeDigest(pe)
+	pkcs7, err := buildPKCS7(chain, key, digest, time.Now().UTC())
 	if err != nil {
 		return nil, fmt.Errorf("authenticode: %w", err)
 	}
 
-	pkcs7, err := buildPKCS7(cert, key, digest, time.Now().UTC())
-	if err != nil {
-		return nil, fmt.Errorf("authenticode: %w", err)
-	}
-
-	signed, err := appendCertificateTable(pe, secDirOff, checksumOff, pkcs7)
+	signed, err := appendCertificateTable(peBytes, secDirOff, checksumOff, pkcs7)
 	if err != nil {
 		return nil, fmt.Errorf("authenticode: %w", err)
 	}
 	return signed, nil
+}
+
+// SignPESelfSigned appends an Authenticode signature generated with a fresh
+// self-signed certificate to a PE image and registers it in the security data
+// directory. organization becomes the certificate subject CN/O (empty →
+// "Software Publisher"). The returned slice is a new buffer; the input is not
+// modified.
+func SignPESelfSigned(pe []byte, organization string) ([]byte, error) {
+	cert, key, err := selfSignedCodeCert(organization)
+	if err != nil {
+		return nil, fmt.Errorf("authenticode: %w", err)
+	}
+	return SignPEWithChain(pe, []*x509.Certificate{cert}, key)
 }

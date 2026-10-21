@@ -42,6 +42,7 @@ require (
 	gorm.io/driver/postgres v1.6.3
 	gorm.io/gorm v1.31.2
 	modernc.org/sqlite v1.60.1
+	software.sslmate.com/src/go-pkcs12 v0.7.4
 )
 
 require (

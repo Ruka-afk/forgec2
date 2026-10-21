@@ -173,7 +173,7 @@ func ApplyTimestamp(data []byte, ts uint32) {
 	if data[0] != 'M' || data[1] != 'Z' {
 		return
 	}
-	peOffset := int(data[0x3C]) | int(data[0x3D])<<8
+	peOffset := int(binary.LittleEndian.Uint32(data[0x3C:0x40]))
 	tsOffset := peOffset + 8
 	if tsOffset+4 <= len(data) {
 		binary.LittleEndian.PutUint32(data[tsOffset:], ts)
