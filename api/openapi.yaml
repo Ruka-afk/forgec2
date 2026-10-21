@@ -12,7 +12,7 @@ info:
     State-changing requests need double-submit CSRF: cookie `forgec2_csrf` + header `X-CSRF-Token`.
 
     ## Spec quality (honest)
-    - Route inventory is kept near-complete (CI coverage ≥90%, stale=0).
+    - Route inventory is kept near-complete (CI coverage 鈮?0%, stale=0).
     - **Core operator paths** (health, agents, modules, listeners, dashboard, deploy)
       include request/response schemas; many secondary routes remain summary-only.
     - Dual-use paths (e.g. `GET /agents`) serve SPA HTML or JSON depending on Accept/auth.
@@ -180,7 +180,7 @@ paths:
     get:
       tags: [Monitor]
       summary: Health check
-      description: Liveness probe — no authentication required
+      description: Liveness probe 鈥?no authentication required
       operationId: healthCheck
       responses:
         '200':
@@ -709,7 +709,7 @@ paths:
     post:
       tags: [Files, Agents]
       summary: Instruct the implant to fetch a URL
-      description: Queues a download_url-style task. The implant fetches `url` onto `path`. This is not operator exfil — use POST /agents/{id}/files/upload then GET /agents/{id}/files/exfil/{filename}.
+      description: Queues a download_url-style task. The implant fetches `url` onto `path`. This is not operator exfil 鈥?use POST /agents/{id}/files/upload then GET /agents/{id}/files/exfil/{filename}.
       operationId: downloadFile
       security:
         - SessionCookie: []
@@ -2852,6 +2852,66 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Plugin'
+
+  /api/plugins/load-failures:
+    get:
+      tags: [Plugins]
+      summary: List plugin load failures
+      description: Return sanitized diagnostics for plugin packages rejected during the latest scan
+      operationId: listPluginLoadFailures
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Plugin load failure diagnostics
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data, count]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [name, reason]
+                      properties:
+                        name:
+                          type: string
+                        reason:
+                          type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/plugins/load-failures/retry:
+    post:
+      tags: [Plugins]
+      summary: Recheck failed plugins
+      description: Re-verify plugin packages rejected during the latest scan without changing trust policy
+      operationId: retryPluginLoadFailures
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Retry result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, retried, remaining]
+                properties:
+                  success:
+                    type: boolean
+                  retried:
+                    type: integer
+                  remaining:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   /api/plugins/{id}/toggle:
     post:
@@ -9361,7 +9421,7 @@ paths:
     get:
       tags: [Monitor]
       summary: Readiness probe
-      description: Readiness for load balancers — no authentication required
+      description: Readiness for load balancers 鈥?no authentication required
       operationId: ready
       responses:
         '200':
@@ -10975,7 +11035,6 @@ components:
               wait: {type: boolean}
               timeout_s: {type: integer, minimum: 0, maximum: 1800}
               stop_on_error: {type: boolean}
-
     SavedViewInput:
       type: object
       required: [page, name, state]
@@ -10983,7 +11042,6 @@ components:
         page: {type: string}
         name: {type: string}
         state: {type: string}
-
     NotificationRouteInput:
       type: object
       required: [channel]
@@ -10997,7 +11055,6 @@ components:
           type: string
           enum: [info, low, medium, high, critical]
         enabled: {type: boolean}
-
     SIEMRuleInput:
       type: object
       required: [name, action]
@@ -11098,7 +11155,7 @@ components:
         checks:
           type: object
           additionalProperties: true
-          description: Component readiness (database, listeners, …)
+          description: Component readiness (database, listeners, 鈥?
 
     ModuleInfo:
       type: object
@@ -11838,6 +11895,11 @@ components:
           type: integer
         update_available:
           type: boolean
+        runtime_loaded:
+          type: boolean
+        load_failure:
+          type: string
+          description: Sanitized runtime load failure, when the package was rejected
         created_at:
           type: string
           format: date-time

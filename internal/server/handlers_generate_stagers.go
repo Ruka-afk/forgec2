@@ -210,6 +210,11 @@ func (s *Server) generateTokenStager(goos string, form *stagerGenerateForm) (str
 		return "", fmt.Errorf("stage-2 build: %w", err)
 	}
 
+	// The plaintext stage-2 binary exists only until the encrypted blob is
+	// written; remove it on every path so a failed build/encrypt cannot leave
+	// an unscoped agent binary in the build directory.
+	defer os.Remove(stagePath)
+
 	plaintext, err := os.ReadFile(stagePath)
 	if err != nil {
 		return "", err
@@ -217,8 +222,6 @@ func (s *Server) generateTokenStager(goos string, form *stagerGenerateForm) (str
 	if err := payload.WriteStage2Blob(dataDir, token, plaintext); err != nil {
 		return "", fmt.Errorf("encrypt stage-2: %w", err)
 	}
-	// Only the encrypted form is kept at rest.
-	_ = os.Remove(stagePath)
 
 	// Build the stager that fetches and decrypts the blob.
 	cfg := payload.ImplantConfig{

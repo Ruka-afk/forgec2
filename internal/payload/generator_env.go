@@ -40,7 +40,9 @@ func configuredGoProxyValue() string {
 }
 
 // goModuleEnv copies the process environment and injects GOPROXY from config
-// when the env var is unset. extra is appended last (GOOS/GOARCH/CGO).
+// when the env var is unset. extra entries replace inherited values with the
+// same key instead of appending duplicate GOOS/GOARCH/CGO_ENABLED entries:
+// duplicate keys make the child environment platform-dependent.
 func goModuleEnv(extra ...string) []string {
 	env := os.Environ()
 	if strings.TrimSpace(os.Getenv("GOPROXY")) == "" {
@@ -48,17 +50,27 @@ func goModuleEnv(extra ...string) []string {
 			env = replaceOrAppendEnv(env, "GOPROXY", p)
 		}
 	}
-	if len(extra) == 0 {
-		return env
+	for _, entry := range extra {
+		key, value, ok := strings.Cut(entry, "=")
+		if !ok || key == "" {
+			continue
+		}
+		env = replaceOrAppendEnv(env, key, value)
 	}
-	return append(env, extra...)
+	return env
 }
 
 // goToolchainEnv wraps goModuleEnv and pins GOTOOLCHAIN for legacy
 // (Win7) builds so the stock toolchain auto-fetches go1.20.14 on first
 // use. Non-legacy builds keep the host default untouched.
+//
+// Temporary agent modules are deliberately isolated from the operator's
+// go.work and GOFLAGS: a workspace or vendor mode that applies to the server
+// repository must not change how the throwaway agent module resolves.
 func goToolchainEnv(win7 bool, extra ...string) []string {
 	env := goModuleEnv(extra...)
+	env = replaceOrAppendEnv(env, "GOWORK", "off")
+	env = replaceOrAppendEnv(env, "GOFLAGS", "")
 	if win7 {
 		env = replaceOrAppendEnv(env, "GOTOOLCHAIN", win7Toolchain)
 	}
@@ -166,13 +178,10 @@ func resolveGarbleCmd() string {
 	return ""
 }
 
-// forgeC2ModuleReplace returns a `replace` directive for the local
-// github.com/forgec2/forgec2 module, so the temp agent build can
-// find it without requiring a remote git repository.
-func forgeC2ModuleReplace() string {
-	// Walk upward from the working directory to find the module root
-	// (handles the server running from the project root AND go test runs,
-	// where the working directory is a subpackage).
+// forgeC2ModuleRoot walks upward from the working directory to find the
+// root go.mod (handles the server running from the project root AND go test
+// runs, where the working directory is a subpackage).
+func forgeC2ModuleRoot() (string, error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		wd = "."
@@ -180,8 +189,7 @@ func forgeC2ModuleReplace() string {
 	dir := wd
 	for {
 		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			// go.mod replace targets must use forward slashes even on Windows.
-			return "\nreplace github.com/forgec2/forgec2 => " + filepath.ToSlash(dir) + "\n"
+			return dir, nil
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir || parent == "." || len(parent) <= len(filepath.VolumeName(parent)) {
@@ -189,7 +197,93 @@ func forgeC2ModuleReplace() string {
 		}
 		dir = parent
 	}
-	return ""
+	return "", fmt.Errorf("could not locate forgec2 module root from %s", wd)
+}
+
+// forgeC2ModuleReplace returns a `replace` directive for the local
+// github.com/forgec2/forgec2 module, so the temp agent build can
+// find it without requiring a remote git repository.
+func forgeC2ModuleReplace() string {
+	dir, err := forgeC2ModuleRoot()
+	if err != nil {
+		return ""
+	}
+	// go.mod replace targets must use forward slashes even on Windows.
+	return "\nreplace github.com/forgec2/forgec2 => " + filepath.ToSlash(dir) + "\n"
+}
+
+// stageRootAgentModule seeds a temp agent module from the repository's own
+// go.mod/go.sum. The root module already contains every dependency the agent
+// imports, and its sum file is complete for the versions the server is tested
+// with. Reusing it avoids a network-dependent `go mod tidy` on every build and,
+// importantly, keeps the implant's dependency versions aligned with the
+// server's security patches instead of the stale hard-coded pins in
+// buildGoMod.
+//
+// Returns ok=false when the root module files are unavailable (for example a
+// deployment that ships only the binary), in which case the caller falls back
+// to the generated module plus `go mod tidy`.
+func stageRootAgentModule(workDir string) (ok bool, err error) {
+	root, err := forgeC2ModuleRoot()
+	if err != nil {
+		return false, nil
+	}
+	goMod, err := os.ReadFile(filepath.Join(root, "go.mod"))
+	if err != nil {
+		return false, nil
+	}
+	goSum, err := os.ReadFile(filepath.Join(root, "go.sum"))
+	if err != nil || len(goSum) == 0 {
+		return false, nil
+	}
+	staged := replaceModuleDirective(string(goMod), "agent")
+	staged = strings.TrimRight(staged, "\r\n") + "\n\nreplace github.com/forgec2/forgec2 => " + filepath.ToSlash(root) + "\n"
+	if err := os.WriteFile(filepath.Join(workDir, "go.mod"), []byte(staged), 0600); err != nil {
+		return false, err
+	}
+	if err := os.WriteFile(filepath.Join(workDir, "go.sum"), goSum, 0600); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// replaceModuleDirective rewrites only the module line, leaving the root
+// module's require/replace/toolchain directives intact.
+func replaceModuleDirective(mod, name string) string {
+	lines := strings.Split(mod, "\n")
+	for i, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "module ") {
+			lines[i] = "module " + name
+			break
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// prepareAgentModule writes the temporary module files and resolves go.sum.
+// Modern builds first try the root module (no tidy, no network); legacy Win7
+// builds and deployments without module sources keep the generated go.mod and
+// explicit tidy fallback.
+func prepareAgentModule(goCmd, workDir, goos string, isDLL bool, plan agentBuildPlan, win7 bool) error {
+	if win7 {
+		if err := os.WriteFile(filepath.Join(workDir, "go.mod"), []byte(buildGoModWin7()), 0600); err != nil {
+			return err
+		}
+		if err := materializeWin7Shim(workDir); err != nil {
+			return err
+		}
+		return runGoModTidy(goCmd, workDir, true)
+	}
+	if ok, err := stageRootAgentModule(workDir); err != nil {
+		return err
+	} else if ok {
+		return nil
+	}
+	goMod := buildGoMod(goos, isDLL, plan.TransportsExcluded, false, plan.includes("webrtc"))
+	if err := os.WriteFile(filepath.Join(workDir, "go.mod"), []byte(goMod), 0600); err != nil {
+		return err
+	}
+	return runGoModTidy(goCmd, workDir, false)
 }
 
 // runGoModTidy resolves go.sum entries for the temp build module. Every
@@ -229,7 +323,7 @@ func buildAgentBinary(goCmd, workDir, ldflags, outPath string, obfuscate bool, g
 		if garblePath == "" {
 			return fmt.Errorf("obfuscation requested but garble is not installed: install it with `go install mvdan.cc/garble@latest`")
 		}
-		args := append([]string{"-literals", "-tiny", "-seed=random", "build"},
+		args := append([]string{"-literals", "-tiny", "-seed=random", "build", "-mod=mod"},
 			"-ldflags", ldflags, "-o", outPath, "-trimpath", "-buildvcs=false")
 		if len(tags) > 0 {
 			args = append(args, "-tags", strings.Join(tags, ","))
@@ -249,6 +343,7 @@ func buildAgentBinary(goCmd, workDir, ldflags, outPath string, obfuscate bool, g
 		return nil
 	}
 	buildArgs := []string{"build",
+		"-mod=mod",
 		"-ldflags", ldflags,
 		"-o", outPath,
 		"-trimpath",

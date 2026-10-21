@@ -18,6 +18,7 @@ import (
 type BuildJob struct {
 	ID          string
 	Status      string // "building", "completed", "failed"
+	Phase       string // "queued", "building", "completed", "failed"
 	Output      string // file path on success
 	Error       string // error message on failure
 	Platform    string // "windows", "linux", "macos"
@@ -28,6 +29,7 @@ type BuildJob struct {
 	ProfileName string
 	ProfileHash string
 	CreatedAt   time.Time
+	StartedAt   time.Time
 	CompletedAt time.Time
 }
 
@@ -41,6 +43,7 @@ func (s *Server) startBuildJobWithProfile(platform, format, c2URL string, listen
 	job := &BuildJob{
 		ID:          protocol.UUIDv7(),
 		Status:      "building",
+		Phase:       "queued",
 		Platform:    platform,
 		Format:      format,
 		C2URL:       c2URL,
@@ -63,9 +66,11 @@ func (s *Server) completeBuildJob(job *BuildJob, outputPath string, err error) {
 	job.CompletedAt = time.Now()
 	if err != nil {
 		job.Status = "failed"
+		job.Phase = "failed"
 		job.Error = sanitizeError(err, "Build failed")
 	} else {
 		job.Status = "completed"
+		job.Phase = "completed"
 		job.Output = outputPath
 	}
 }
@@ -133,9 +138,13 @@ func (s *Server) handleBuildStatus(c *gin.Context) {
 		"success":    true,
 		"build_id":   job.ID,
 		"status":     job.Status,
+		"phase":      job.Phase,
 		"platform":   job.Platform,
 		"format":     job.Format,
 		"created_at": job.CreatedAt,
+	}
+	if !job.StartedAt.IsZero() {
+		resp["started_at"] = job.StartedAt
 	}
 	if job.Status == "completed" {
 		resp["download_url"] = fmt.Sprintf("/generate/builds/%s/download", job.ID)
@@ -191,6 +200,7 @@ func (s *Server) buildJobSnapshots() []gin.H {
 		entry := gin.H{
 			"id":           j.ID,
 			"status":       j.Status,
+			"phase":        j.Phase,
 			"platform":     j.Platform,
 			"format":       j.Format,
 			"filename":     j.Filename,
@@ -201,6 +211,9 @@ func (s *Server) buildJobSnapshots() []gin.H {
 		}
 		if j.Error != "" {
 			entry["error"] = j.Error
+		}
+		if !j.StartedAt.IsZero() {
+			entry["started_at"] = j.StartedAt
 		}
 		if !j.CompletedAt.IsZero() {
 			entry["completed_at"] = j.CompletedAt
@@ -234,10 +247,15 @@ func (s *Server) runBuildAndUpdateJob(job *BuildJob, buildFn func() (string, err
 	}()
 	// The job is registered as "building" already; tell dashboards it has
 	// actually started executing (queue wait is over).
+	s.buildJobsMu.Lock()
+	job.Phase = "building"
+	job.StartedAt = time.Now()
+	s.buildJobsMu.Unlock()
 	s.broadcastOperatorEvent(map[string]interface{}{
 		"type":     "build_update",
 		"build_id": job.ID,
 		"status":   "building",
+		"phase":    "building",
 		"platform": platform,
 		"format":   format,
 	})

@@ -467,12 +467,37 @@ func (s *Server) loadSSHHostPublicKeyB64() string {
 	return base64.StdEncoding.EncodeToString(ssh.MarshalAuthorizedKey(pub))
 }
 
+// validateBinaryBuild runs request-level checks before a registration secret is
+// minted or a job is queued. This keeps predictable option/architecture errors
+// out of the asynchronous worker and avoids consuming a one-shot secret for a
+// request that can never build.
+func (s *Server) validateBinaryBuild(form *binaryGenForm, goos, format string) error {
+	if err := payload.CheckGoToolchain(); err != nil {
+		return err
+	}
+	cfg := payload.ImplantConfig{
+		Architecture:    parseArchitecture(form.Architecture),
+		BeaconTransport: form.BeaconTransport,
+		Slim:            form.Slim == "true" || form.Slim == "1",
+		Modules:         parseModuleSelection(form.Modules),
+		UPX:             form.UPX == "true" || form.UPX == "1",
+		Win7Compat:      form.Win7Compat == "true" || form.Win7Compat == "1",
+		Obfuscate:       form.Obfuscate == "true" || form.Obfuscate == "1",
+		SelfCheck:       form.SelfCheck,
+	}
+	return payload.ValidateImplantBuild(goos, format, &cfg)
+}
+
 func (s *Server) handleGenerateEXE(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
 	}
 	form, ok := s.parseBinaryForm(c)
 	if !ok {
+		return
+	}
+	if err := s.validateBinaryBuild(form, "windows", "exe"); err != nil {
+		respondError(c, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	cfg, err := s.buildImplantConfig(form)
@@ -500,6 +525,10 @@ func (s *Server) handleGenerateDLL(c *gin.Context) {
 	}
 	form, ok := s.parseBinaryForm(c)
 	if !ok {
+		return
+	}
+	if err := s.validateBinaryBuild(form, "windows", "dll"); err != nil {
+		respondError(c, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	cfg, err := s.buildImplantConfig(form)
@@ -537,6 +566,10 @@ func (s *Server) handleGenerateLinux(c *gin.Context) {
 	if !ok {
 		return
 	}
+	if err := s.validateBinaryBuild(form, "linux", "elf"); err != nil {
+		respondError(c, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
 	cfg, err := s.buildImplantConfig(form)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err.Error())
@@ -562,6 +595,10 @@ func (s *Server) handleGenerateMacOS(c *gin.Context) {
 	}
 	form, ok := s.parseBinaryForm(c)
 	if !ok {
+		return
+	}
+	if err := s.validateBinaryBuild(form, "darwin", "macho"); err != nil {
+		respondError(c, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	cfg, err := s.buildImplantConfig(form)

@@ -117,6 +117,20 @@ export default defineConfig(({ command }) => {
           // Order matters: react-router is a react lib too.
           if (id.includes("react-router")) return "vendor-router";
           if (id.includes("@xterm")) return "vendor-xterm";
+          // CodeMirror is reached only from the lazily-loaded profile editor.
+          // Without a dedicated bucket its transitive deps fall into
+          // vendor-misc, which the entry imports for other packages, so the
+          // whole editor would be fetched before first paint.
+          if (
+            id.includes("@codemirror") ||
+            id.includes("@lezer") ||
+            id.includes("@marijn") ||
+            id.includes("style-mod") ||
+            id.includes("w3c-keyname") ||
+            id.includes("/crelt/")
+          ) {
+            return "vendor-codemirror";
+          }
           if (id.includes("@base-ui")) {
             // base-ui ships one subpath per component. The shell only needs the
             // interaction primitives (tooltip/dialog/menu/select/input/button/

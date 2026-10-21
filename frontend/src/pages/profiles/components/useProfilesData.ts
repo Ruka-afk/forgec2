@@ -3,94 +3,143 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
-import {
-  emptyActiveConfig,
-  emptyProfile,
-  type ActiveMalleableConfig,
-  type AgentProfile,
-} from "./types";
+import type { AgentProfile, ProfileValidationData } from "./types";
+
+interface ImportResponse {
+  success?: boolean;
+  profile?: AgentProfile;
+  warnings?: string[];
+  diagnostics?: ProfileValidationData["diagnostics"];
+  ignored?: string[];
+}
 
 export function useProfilesData() {
   const { t } = useI18n();
   const [profiles, setProfiles] = useState<AgentProfile[]>([]);
+  const profilesRef = useRef<AgentProfile[]>([]);
+  profilesRef.current = profiles;
   const [selectedIdx, setSelectedIdx] = useState(-1);
-  const selectedIdxRef = useRef(selectedIdx);
+  const selectedIdxRef = useRef(-1);
   selectedIdxRef.current = selectedIdx;
-  const [editing, setEditing] = useState<AgentProfile>(emptyProfile);
+  const [source, setSource] = useState("");
+  const [savedSource, setSavedSource] = useState("");
   const [loadingProfiles, setLoadingProfiles] = useState(true);
-  const [activeConfig, setActiveConfig] = useState<ActiveMalleableConfig>(emptyActiveConfig);
-  const [loadingActiveConfig, setLoadingActiveConfig] = useState(true);
-  const [activeConfigError, setActiveConfigError] = useState<string | null>(null);
   const [profilesError, setProfilesError] = useState<string | null>(null);
+  const [validating, setValidating] = useState(false);
+  const [validation, setValidation] = useState<ProfileValidationData | null>(null);
+  const validationSeq = useRef(0);
 
-  // Single read of the server-wide Malleable config. It used to be fetched
-  // twice — once here for the read-only card and once by loadMalleableSettings
-  // to seed a local edit form. That form was a duplicate of the one in
-  // Settings writing the same POST /settings/malleable, so it is gone; this
-  // tab is now display-only and Settings owns every write.
-  const loadActiveConfig = useCallback(async () => {
-    setLoadingActiveConfig(true);
-    setActiveConfigError(null);
-    try {
-      // Read /settings, not /integrations/malleable: the latter returns bare
-      // keys (enabled/status_code/...) with no `malleable_enabled`, so the
-      // card's Enabled toggle read undefined and always showed "disabled".
-      const d = await api.get<Record<string, unknown>>(paths.settings.root);
-      setActiveConfig({
-        malleable_enabled: (d.malleable_enabled ?? false) as boolean,
-        status_code: (d.malleable_status ?? 200) as number,
-        content_type: (d.malleable_ct ?? "application/json") as string,
-        headers: (d.malleable_headers ?? {}) as Record<string, string>,
-        prepend: (d.malleable_prepend ?? "") as string,
-        append: (d.malleable_append ?? "") as string,
-      });
-    } catch (e) {
-      setActiveConfigError(e instanceof Error ? e.message : t("profiles.toast.load_failed"));
-    } finally {
-      setLoadingActiveConfig(false);
-    }
-  }, [t]);
+  const selectProfile = useCallback((idx: number, list = profilesRef.current) => {
+    const profile = list[idx];
+    if (!profile) return;
+    validationSeq.current += 1;
+    setValidating(false);
+    setSelectedIdx(idx);
+    const nextSource = profile.source || "";
+    setSource(nextSource);
+    setSavedSource(nextSource);
+    setValidation(null);
+  }, []);
 
-  const loadProfiles = useCallback(async () => {
+  const loadProfiles = useCallback(async (selectName?: string) => {
     setLoadingProfiles(true);
     setProfilesError(null);
     try {
-      const d = await api.get(paths.generate.profiles);
-      const list = (d.profiles || d.Profiles || []) as AgentProfile[];
+      const d = await api.get<{ profiles?: AgentProfile[] }>(paths.generate.profiles);
+      const list = d.profiles || [];
       setProfiles(list);
-      if (list.length > 0 && selectedIdxRef.current < 0) {
-        setSelectedIdx(0);
-        setEditing({ ...list[0] });
+      if (list.length === 0) {
+        validationSeq.current += 1;
+        setValidating(false);
+        setSelectedIdx(-1);
+        setSource("");
+        setSavedSource("");
+        setValidation(null);
+        return list;
       }
+      let idx = 0;
+      if (selectName) {
+        const found = list.findIndex((p) => p.name === selectName);
+        if (found >= 0) idx = found;
+      } else if (selectedIdxRef.current >= 0) {
+        idx = Math.min(selectedIdxRef.current, list.length - 1);
+      }
+      selectProfile(idx, list);
+      return list;
     } catch (e) {
       const msg = e instanceof Error ? e.message : t("profiles.toast.load_profiles_failed");
       setProfilesError(msg);
       toast.error(msg);
+      return [];
     } finally {
       setLoadingProfiles(false);
     }
-  }, [t]);
+  }, [selectProfile, t]);
 
   useEffect(() => {
-    loadActiveConfig();
-    loadProfiles();
-  }, [loadActiveConfig, loadProfiles]);
+    void loadProfiles();
+  }, [loadProfiles]);
+
+  const validate = useCallback(async (name: string, content: string) => {
+    const seq = ++validationSeq.current;
+    setValidating(true);
+    try {
+      const data = await api.postJson<ProfileValidationData>(paths.generate.profileValidate, {
+        name,
+        format: "cs",
+        content,
+      });
+      if (seq === validationSeq.current) setValidation(data);
+      return data;
+    } finally {
+      if (seq === validationSeq.current) setValidating(false);
+    }
+  }, []);
+
+  const save = useCallback(async (name: string, content: string) => {
+    const d = await api.postJson<ImportResponse>(paths.generate.profileImportText, {
+      name,
+      format: "cs",
+      content,
+    });
+    const savedName = d.profile?.name || name;
+    await loadProfiles(savedName);
+    return d;
+  }, [loadProfiles]);
+
+  const remove = useCallback(async (name: string) => {
+    await api.del(paths.generate.profileDelete(name));
+    return loadProfiles();
+  }, [loadProfiles]);
+
+  const importFile = useCallback(async (file: File) => {
+    const fd = new FormData();
+    fd.append("profile", file);
+    const d = await api.postFormData<ImportResponse>(paths.generate.profileImport, fd);
+    if (d.profile?.name) await loadProfiles(d.profile.name);
+    return d;
+  }, [loadProfiles]);
 
   return {
     profiles,
     setProfiles,
     selectedIdx,
     setSelectedIdx,
-    selectedIdxRef,
-    editing,
-    setEditing,
+    source,
+    setSource,
+    savedSource,
+    setSavedSource,
+    dirty: source !== savedSource,
     loadingProfiles,
-    activeConfig,
-    setActiveConfig,
-    loadingActiveConfig,
-    activeConfigError,
     profilesError,
-    loadActiveConfig,
+    validating,
+    validation,
+    setValidation,
+    selectProfile,
     loadProfiles,
+    validate,
+    save,
+    remove,
+    importFile,
   };
 }

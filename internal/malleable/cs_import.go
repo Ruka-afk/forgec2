@@ -5,69 +5,22 @@ import (
 	"strings"
 )
 
-// ParseCSFull parses a full Cobalt Strike .profile text into v2, including
-// http-get/http-post client{metadata,id} and server{output} blocks,
-// header/parameter/uri-append terminators, and http-config user-agent.
+// ParseCSFull parses a full Cobalt Strike .profile text into v2. It is the
+// compatibility wrapper around ParseCSProfile used by import/build callers
+// that only need an error/no-error result.
 func ParseCSFull(name, text string) (*ProfileV2, error) {
-	base, err := Parse(name, text)
-	if err != nil {
-		return nil, err
+	res := ParseCSProfile(name, text)
+	if res.Profile == nil {
+		return nil, fmt.Errorf("CS profile could not be parsed")
 	}
-	v2 := FromLegacyProfile(base)
-	if v2.Name == "" {
-		v2.Name = name
-	}
-	// Deep parse for blocks Parse() drops.
-	full := parseCSBlocks(text)
-	if full.userAgent != "" && v2.UserAgent == "" {
-		v2.UserAgent = full.userAgent
-	}
-	if len(full.getURIs) > 0 || len(full.postURIs) > 0 {
-		v2.URIs = append(append([]string{}, full.getURIs...), full.postURIs...)
-		v2.BeaconURIs = dedupStrings(v2.URIs)
-		if v2.BeaconURI == "" && len(v2.URIs) > 0 {
-			v2.BeaconURI = v2.URIs[0]
+	if res.HasErrors() {
+		msgs := res.ErrorMessages()
+		if len(msgs) > 0 {
+			return res.Profile, fmt.Errorf("CS profile has %d error(s): %s", len(msgs), msgs[0])
 		}
+		return res.Profile, fmt.Errorf("CS profile has syntax errors")
 	}
-	if full.getVerb != "" || full.postVerb != "" {
-		v2.Verbs = nil
-		if full.getVerb != "" {
-			v2.Verbs = append(v2.Verbs, strings.ToUpper(full.getVerb))
-		}
-		if full.postVerb != "" {
-			v2.Verbs = append(v2.Verbs, strings.ToUpper(full.postVerb))
-		}
-		v2.Method = v2.Verbs[len(v2.Verbs)-1]
-	}
-	for k, val := range full.headers {
-		if v2.Headers == nil {
-			v2.Headers = map[string]string{}
-		}
-		if _, ok := v2.Headers[k]; !ok {
-			v2.Headers[k] = val
-		}
-	}
-	if len(full.getMetadata) > 0 {
-		v2.ClientMetadata = full.getMetadata
-	}
-	if len(full.postID) > 0 {
-		v2.ClientID = full.postID
-	}
-	if len(full.postOutput) > 0 {
-		v2.ServerOutput = full.postOutput
-	} else if len(full.getOutput) > 0 {
-		v2.ServerOutput = full.getOutput
-	}
-	if full.parameter != "" {
-		v2.Parameter = full.parameter
-	}
-	if v2.Description == "" && full.description != "" {
-		v2.Description = full.description
-	}
-	if err := ValidateProfileV2(v2); err != nil {
-		return v2, fmt.Errorf("CS profile converts with warnings: %w", err)
-	}
-	return v2, nil
+	return res.Profile, nil
 }
 
 type csBlocks struct {

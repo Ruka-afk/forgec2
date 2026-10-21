@@ -336,13 +336,15 @@ export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setF
           <span className="block font-normal text-muted-foreground/80 text-xs leading-4">{t("generate.panel.slim_hint")}</span>
         </span>
       </label>
-      <label htmlFor={`${id}-upx`} className="flex cursor-pointer items-start gap-x-2.5 rounded-lg border border-border/50 bg-background/40 px-2.5 py-2 transition-colors hover:border-primary/25 hover:bg-muted/30 has-checked:border-primary/30 has-checked:bg-primary/5">
-        <Checkbox id={`${id}-upx`} aria-label={t("generate.panel.upx_aria")} checked={form.upx} onCheckedChange={(checked) => setForm({ ...form, upx: checked === true })} className="mt-0.5" />
-        <span className="text-sm text-muted-foreground">
-          {t("generate.panel.upx")}
-          <span className="block font-normal text-muted-foreground/80 text-xs leading-4">{t("generate.panel.upx_hint")}</span>
-        </span>
-      </label>
+      {variant === "exe" && (
+        <label htmlFor={`${id}-upx`} className="flex cursor-pointer items-start gap-x-2.5 rounded-lg border border-border/50 bg-background/40 px-2.5 py-2 transition-colors hover:border-primary/25 hover:bg-muted/30 has-checked:border-primary/30 has-checked:bg-primary/5">
+          <Checkbox id={`${id}-upx`} aria-label={t("generate.panel.upx_aria")} checked={form.upx} onCheckedChange={(checked) => setForm({ ...form, upx: checked === true })} className="mt-0.5" />
+          <span className="text-sm text-muted-foreground">
+            {t("generate.panel.upx")}
+            <span className="block font-normal text-muted-foreground/80 text-xs leading-4">{t("generate.panel.upx_hint")}</span>
+          </span>
+        </label>
+      )}
       {variant === "exe" && (
         <label htmlFor={`${id}-win7`} className="flex cursor-pointer items-start gap-x-2.5 rounded-lg border border-border/50 bg-background/40 px-2.5 py-2 transition-colors hover:border-primary/25 hover:bg-muted/30 has-checked:border-primary/30 has-checked:bg-primary/5">
           <Checkbox id={`${id}-win7`} aria-label={t("generate.panel.win7_aria")} checked={form.win7compat} onCheckedChange={(checked) => setForm({ ...form, win7compat: checked === true })} className="mt-0.5" />
@@ -418,6 +420,19 @@ export const UnixPanel = React.memo(function UnixPanel({ variant, form, setForm,
         <FieldLabel>{t("generate.panel.filename")}</FieldLabel>
         <Input aria-label={t("generate.panel.output_filename")} name={`${id}-filename`} value={form.filename} onChange={(e) => setForm({ ...form, filename: e.target.value })} />
       </div>
+      <div>
+        <FieldLabel>{t("generate.panel.architecture")}</FieldLabel>
+        <Select value={form.arch} onValueChange={(val) => val != null && setForm({ ...form, arch: val })}>
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="amd64">x64 (amd64)</SelectItem>
+            <SelectItem value="arm64">ARM64</SelectItem>
+            {variant === "linux" && <SelectItem value="arm">ARM (armv7)</SelectItem>}
+          </SelectContent>
+        </Select>
+      </div>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
         <Checkbox id={`${id}-persist`} aria-label={t("generate.panel.persist_aria")} checked={form.persist} onCheckedChange={(checked) => setForm({ ...form, persist: checked === true })} />
         <Label htmlFor={`${id}-persist`} className="text-sm text-foreground">{t("generate.panel.persist")}</Label>
@@ -427,8 +442,18 @@ export const UnixPanel = React.memo(function UnixPanel({ variant, form, setForm,
         <Label htmlFor={`${id}-obfuscate`} className="text-sm text-muted-foreground">{t("generate.panel.obfuscate_aria")}</Label>
         <Checkbox id={`${id}-slim`} aria-label={t("generate.panel.slim_aria")} checked={form.slim} onCheckedChange={(checked) => setForm({ ...form, slim: checked === true })} className="ml-3" />
         <Label htmlFor={`${id}-slim`} className="text-sm text-muted-foreground">{t("generate.panel.slim")}</Label>
-        <Checkbox id={`${id}-upx`} aria-label={t("generate.panel.upx_aria")} checked={form.upx} onCheckedChange={(checked) => setForm({ ...form, upx: checked === true })} className="ml-3" />
-        <Label htmlFor={`${id}-upx`} className="text-sm text-muted-foreground">{t("generate.panel.upx")}</Label>
+        <Checkbox
+          id={`${id}-upx`}
+          aria-label={t("generate.panel.upx_aria")}
+          checked={variant === "macos" ? false : form.upx}
+          disabled={variant === "macos"}
+          onCheckedChange={(checked) => setForm({ ...form, upx: checked === true })}
+          className="ml-3"
+        />
+        <Label htmlFor={`${id}-upx`} className="text-sm text-muted-foreground">
+          {t("generate.panel.upx")}
+          {variant === "macos" && <span className="ml-1 text-xs text-muted-foreground/80">— {t("generate.panel.upx_unsupported_macos")}</span>}
+        </Label>
       </div>
       <ModuleSelector id={id} catalog={agentModules ?? []} value={form.modules} onChange={(next) => setForm({ ...form, modules: next })} slimLocked={form.slim} />
       <div>

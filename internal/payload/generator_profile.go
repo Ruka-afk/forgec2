@@ -56,6 +56,26 @@ func profileDataPath(dataDir, name string) string {
 	return filepath.Join(dataDir, "profiles", sanitized+".json")
 }
 
+func profileSourcePath(dataDir, name string) string {
+	if dataDir == "" {
+		dataDir = "data"
+	}
+	sanitized := profileNameSanitizer.ReplaceAllString(strings.TrimSpace(name), "_")
+	return filepath.Join(dataDir, "profiles", sanitized+".profile")
+}
+
+// IsBuiltinProfile reports whether name resolves to an embedded profile. Custom
+// files with the same name are intentionally not allowed to shadow a built-in:
+// the list and the build loader must agree on which definition is authoritative.
+func IsBuiltinProfile(name string) bool {
+	name = profileNameSanitizer.ReplaceAllString(strings.TrimSpace(name), "_")
+	if name == "" {
+		return false
+	}
+	_, err := payloadFS.ReadFile(fmt.Sprintf("profiles/%s.json", name))
+	return err == nil
+}
+
 func parseMalleableProfileJSON(data []byte, fallbackName string) MalleableProfile {
 	var p MalleableProfile
 	if err := json.Unmarshal(data, &p); err != nil {
@@ -437,32 +457,25 @@ func validateMalleableProfile(p MalleableProfile) error {
 	return nil
 }
 
-// SaveImportedProfile stores a user-uploaded profile under data/profiles/.
-// It accepts v1/v2 JSON and full Cobalt Strike .profile text (http-get blocks).
-func SaveImportedProfile(dataDir string, raw []byte) (MalleableProfile, error) {
-	trimmed := strings.TrimSpace(string(raw))
-	if looksLikeCSProfile(trimmed) {
-		v2, err := malleableParseCSFallback(trimmed)
-		if err != nil {
-			return MalleableProfile{}, err
-		}
-		return saveMalleableV2(dataDir, v2)
+// normalizeCustomProfileName validates a name that will become a filename and
+// rejects embedded profiles. Silently sanitizing here would make "Save As"
+// appear to succeed while writing to a different name, so reject instead.
+func normalizeCustomProfileName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", fmt.Errorf("profile name is required")
 	}
-	p := parseMalleableProfileJSON(raw, "")
-	if p.Name == "" {
-		// Try v2 migration path (beacon_uris / chains).
-		if v2, err := malleableMigrateFallback(raw, ""); err == nil && v2.Name != "" {
-			return saveMalleableV2(dataDir, v2)
-		}
-		return p, fmt.Errorf("profile name is required")
+	sanitized := profileNameSanitizer.ReplaceAllString(name, "_")
+	if sanitized != name {
+		return "", fmt.Errorf("profile name may only contain letters, numbers, _ and -")
 	}
-	if err := validateMalleableProfile(p); err != nil {
-		return p, err
+	if sanitized == "default" || IsBuiltinProfile(sanitized) {
+		return "", fmt.Errorf("cannot overwrite built-in profile %q; choose another name", sanitized)
 	}
-	p.Name = profileNameSanitizer.ReplaceAllString(strings.TrimSpace(p.Name), "_")
-	if p.Name == "" {
-		return p, fmt.Errorf("invalid profile name")
-	}
+	return sanitized, nil
+}
+
+func writeProfileFiles(dataDir string, p MalleableProfile, source string) (MalleableProfile, error) {
 	if dataDir == "" {
 		dataDir = "data"
 	}
@@ -470,18 +483,150 @@ func SaveImportedProfile(dataDir string, raw []byte) (MalleableProfile, error) {
 	if err := os.MkdirAll(dir, 0750); err != nil {
 		return p, err
 	}
-	p.Name = strings.TrimPrefix(p.Name, "default_")
-	if p.Name == "default" {
-		return p, fmt.Errorf("cannot override built-in default profile")
-	}
+	jsonPath := filepath.Join(dir, p.Name+".json")
 	out, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
 		return p, err
 	}
-	if err := os.WriteFile(filepath.Join(dir, p.Name+".json"), out, 0644); err != nil {
+	if err := os.WriteFile(jsonPath, out, 0644); err != nil {
+		return p, err
+	}
+	if strings.TrimSpace(source) == "" {
+		source = RenderProfileCS(p)
+	}
+	if err := os.WriteFile(profileSourcePath(dataDir, p.Name), []byte(source), 0644); err != nil {
+		_ = os.Remove(jsonPath)
 		return p, err
 	}
 	return p, nil
+}
+
+// SaveImportedProfile stores a user-uploaded profile under data/profiles/.
+// It accepts v1/v2 JSON and full Cobalt Strike .profile text.
+func SaveImportedProfile(dataDir string, raw []byte) (MalleableProfile, error) {
+	return SaveImportedProfileNamed(dataDir, "", raw)
+}
+
+// SaveImportedProfileNamed is SaveImportedProfile with an optional explicit
+// name. An explicit name overrides the name found in JSON so the editor's
+// Save As flow is unambiguous.
+func SaveImportedProfileNamed(dataDir, name string, raw []byte) (MalleableProfile, error) {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" {
+		return MalleableProfile{}, fmt.Errorf("profile is empty")
+	}
+	if looksLikeCSProfile(trimmed) {
+		if strings.TrimSpace(name) == "" {
+			name = "imported"
+		}
+		return SaveCSProfile(dataDir, name, trimmed)
+	}
+	// Prefer the v2 migration path: it preserves transform chains and
+	// beacon_uris from modern JSON. Fall back to the legacy v1 parser for
+	// shapes MigrateProfileJSON cannot interpret (e.g. v1 string chains).
+	if v2, err := malleableMigrateFallback(raw, strings.TrimSpace(name)); err == nil {
+		if strings.TrimSpace(name) != "" {
+			v2.Name = strings.TrimSpace(name)
+		}
+		return saveMalleableV2(dataDir, v2)
+	}
+	p := parseMalleableProfileJSON(raw, "")
+	if strings.TrimSpace(name) != "" {
+		p.Name = strings.TrimSpace(name)
+	}
+	if p.Name == "" {
+		// Try v2 migration path (beacon_uris / chains).
+		if v2, err := malleableMigrateFallback(raw, ""); err == nil && v2.Name != "" {
+			if strings.TrimSpace(name) != "" {
+				v2.Name = strings.TrimSpace(name)
+			}
+			return saveMalleableV2(dataDir, v2)
+		}
+		return p, fmt.Errorf("profile name is required")
+	}
+	normalized, err := normalizeCustomProfileName(p.Name)
+	if err != nil {
+		return p, err
+	}
+	p.Name = normalized
+	if err := validateMalleableProfile(p); err != nil {
+		return p, err
+	}
+	return writeProfileFiles(dataDir, p, "")
+}
+
+// SaveCSProfile compiles a CS-syntax source, stores the compiled JSON used by
+// the build pipeline, and keeps the source sidecar for the online editor.
+func SaveCSProfile(dataDir, name, source string) (MalleableProfile, error) {
+	normalized, err := normalizeCustomProfileName(name)
+	if err != nil {
+		return MalleableProfile{}, err
+	}
+	res := malleable.ParseCSProfile(normalized, source)
+	if res.Profile == nil {
+		return MalleableProfile{}, fmt.Errorf("CS profile could not be parsed")
+	}
+	if res.HasErrors() {
+		return MalleableProfile{}, fmt.Errorf("%s", strings.Join(res.ErrorMessages(), "; "))
+	}
+	res.Profile.Name = normalized
+	if err := malleable.ValidateProfileV2(res.Profile); err != nil {
+		return MalleableProfile{}, err
+	}
+	p, err := saveMalleableV2(dataDir, res.Profile)
+	if err != nil {
+		return p, err
+	}
+	if err := os.WriteFile(profileSourcePath(dataDir, p.Name), []byte(source), 0644); err != nil {
+		_ = os.Remove(profileDataPath(dataDir, p.Name))
+		return p, err
+	}
+	return p, nil
+}
+
+// ProfileSource returns the editable CS source for a profile. Older custom
+// JSON profiles have no sidecar; their source is rendered on demand.
+func ProfileSource(dataDir, name string) (string, error) {
+	path := profileSourcePath(dataDir, name)
+	if data, err := os.ReadFile(path); err == nil {
+		return string(data), nil
+	} else if !os.IsNotExist(err) {
+		return "", err
+	}
+	p := loadMalleableProfile(name, dataDir)
+	if strings.TrimSpace(p.Name) == "" {
+		return "", fmt.Errorf("profile %q not found", name)
+	}
+	return RenderProfileCS(p), nil
+}
+
+// RenderProfileCS renders the current compiled profile as CS syntax.
+func RenderProfileCS(p MalleableProfile) string {
+	return malleable.RenderCS(malleableProfileToV2(p))
+}
+
+func malleableProfileToV2(p MalleableProfile) *malleable.ProfileV2 {
+	v2 := &malleable.ProfileV2{
+		Name: p.Name, Description: p.Description, UserAgent: p.UserAgent,
+		BeaconURI: p.BeaconURI, Method: p.Method, Verb: p.Method,
+		Headers: p.Headers, Sleep: p.Sleep, Jitter: p.Jitter,
+		Prepend: p.Prepend, Append: p.Append,
+		RequestPrepend: p.RequestPrepend, RequestAppend: p.RequestAppend,
+		RequestHeaders: p.RequestHeaders, RequestHeaderPool: p.RequestHeaderPool,
+		BeaconURIs: p.BeaconURIs, URIs: p.URIs,
+		ClientMetadata:      malleable.ParseWire(p.ClientMetadata),
+		ClientID:            malleable.ParseWire(p.ClientID),
+		ServerOutput:        malleable.ParseWire(p.ServerOutput),
+		ContentLengthJitter: p.ContentLengthJitter,
+		JitterURI:           p.JitterURI, JitterParameter: p.JitterParameter,
+		Parameter: p.Parameter, ParameterNames: p.ParameterNames,
+		UserAgents: p.UserAgents,
+		WorkStart:  p.WorkStart, WorkEnd: p.WorkEnd, WorkTZ: p.WorkTZ,
+	}
+	if strings.TrimSpace(p.Placements) != "" {
+		_ = json.Unmarshal([]byte(p.Placements), &v2.Placements)
+	}
+	return v2
 }
 
 func marshalPlacements(pls []malleable.PlacementV2) string {
@@ -496,8 +641,15 @@ func marshalPlacements(pls []malleable.PlacementV2) string {
 }
 
 func looksLikeCSProfile(s string) bool {
-	low := strings.ToLower(s)
-	return strings.Contains(low, "http-get") || strings.Contains(low, "http-post") || strings.Contains(low, "http-config")
+	trimmed := strings.TrimSpace(s)
+	if trimmed == "" || strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
+		return false
+	}
+	low := strings.ToLower(trimmed)
+	return strings.Contains(low, "http-get") || strings.Contains(low, "http-post") ||
+		strings.Contains(low, "http-config") || strings.Contains(low, "forgec2") ||
+		strings.Contains(low, "set sleeptime") || strings.Contains(low, "set useragent") ||
+		strings.Contains(low, "set jitter")
 }
 
 func malleableMigrateFallback(raw []byte, fallback string) (*malleable.ProfileV2, error) {
@@ -511,6 +663,14 @@ func malleableParseCSFallback(text string) (*malleable.ProfileV2, error) {
 }
 
 func saveMalleableV2(dataDir string, v2 *malleable.ProfileV2) (MalleableProfile, error) {
+	if v2 == nil {
+		return MalleableProfile{}, fmt.Errorf("profile is empty")
+	}
+	normalized, err := normalizeCustomProfileName(v2.Name)
+	if err != nil {
+		return MalleableProfile{}, err
+	}
+	v2.Name = normalized
 	p := MalleableProfile{
 		Name: v2.Name, Description: v2.Description, UserAgent: v2.UserAgent,
 		BeaconURI: v2.PrimaryURI(), Method: v2.PrimaryMethod(), Headers: v2.Headers,
@@ -530,40 +690,34 @@ func saveMalleableV2(dataDir string, v2 *malleable.ProfileV2) (MalleableProfile,
 	if err := validateMalleableProfile(p); err != nil {
 		return p, err
 	}
-	if dataDir == "" {
-		dataDir = "data"
-	}
-	dir := filepath.Join(dataDir, "profiles")
-	if err := os.MkdirAll(dir, 0750); err != nil {
-		return p, err
-	}
-	p.Name = profileNameSanitizer.ReplaceAllString(strings.TrimSpace(p.Name), "_")
-	p.Name = strings.TrimPrefix(p.Name, "default_")
-	if p.Name == "" || p.Name == "default" {
-		return p, fmt.Errorf("cannot override built-in default profile")
-	}
-	out, err := json.MarshalIndent(p, "", "  ")
-	if err != nil {
-		return p, err
-	}
-	if err := os.WriteFile(filepath.Join(dir, p.Name+".json"), out, 0644); err != nil {
-		return p, err
-	}
-	return p, nil
+	return writeProfileFiles(dataDir, p, "")
 }
 
-// DeleteProfile removes a custom profile JSON from data/profiles/.
+// DeleteProfile removes a custom profile JSON and its editable source sidecar
+// from data/profiles/.
 func DeleteProfile(dataDir string, name string) error {
 	if dataDir == "" {
 		dataDir = "data"
 	}
 	sanitized := profileNameSanitizer.ReplaceAllString(strings.TrimSpace(name), "_")
-	if sanitized == "" || sanitized == "default" {
-		return fmt.Errorf("cannot delete default profile")
+	if sanitized == "" || sanitized == "default" || IsBuiltinProfile(sanitized) {
+		return fmt.Errorf("cannot delete built-in profile")
 	}
-	path := filepath.Join(dataDir, "profiles", sanitized+".json")
-	if _, err := os.Stat(path); os.IsNotExist(err) {
+	jsonPath := profileDataPath(dataDir, sanitized)
+	sourcePath := profileSourcePath(dataDir, sanitized)
+	removed := false
+	if err := os.Remove(jsonPath); err == nil {
+		removed = true
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.Remove(sourcePath); err == nil {
+		removed = true
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if !removed {
 		return fmt.Errorf("profile not found")
 	}
-	return os.Remove(path)
+	return nil
 }

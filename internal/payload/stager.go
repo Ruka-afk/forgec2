@@ -155,6 +155,10 @@ func DecryptStage2Payload(data []byte, key []byte) ([]byte, error) {
 // the historical asymmetry: the Windows stage-2 carries DNS transport settings,
 // the Linux one does not.
 func stagerImplantConfig(cfg StagerConfig, proto string, withDNS bool) ImplantConfig {
+	// The stage-2 binary must not share a path with a concurrent stage-2
+	// build: the handler reads the artifact back right after the build and
+	// deletes it, so a fixed name let a second request overwrite the first
+	// binary (and its registration secret) before it was read.
 	implantCfg := ImplantConfig{
 		C2URL:         cfg.C2URL,
 		Protocol:      proto,
@@ -162,7 +166,7 @@ func stagerImplantConfig(cfg StagerConfig, proto string, withDNS bool) ImplantCo
 		Jitter:        20,
 		UserAgent:     cfg.UserAgent,
 		SkipTLSVerify: cfg.SkipTLSVerify,
-		Filename:      "forgec2_stage2",
+		Filename:      uniqueBuildName("forgec2_stage2", ""),
 		Debug:         false,
 		Profile:       cfg.Profile,
 		ListenerID:    cfg.ListenerID,

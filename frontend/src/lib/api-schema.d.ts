@@ -74,7 +74,7 @@ export interface paths {
         };
         /**
          * Health check
-         * @description Liveness probe — no authentication required
+         * @description Liveness probe 鈥?no authentication required
          */
         get: operations["healthCheck"];
         put?: never;
@@ -381,7 +381,7 @@ export interface paths {
         put?: never;
         /**
          * Instruct the implant to fetch a URL
-         * @description Queues a download_url-style task. The implant fetches `url` onto `path`. This is not operator exfil — use POST /agents/{id}/files/upload then GET /agents/{id}/files/exfil/{filename}.
+         * @description Queues a download_url-style task. The implant fetches `url` onto `path`. This is not operator exfil 鈥?use POST /agents/{id}/files/upload then GET /agents/{id}/files/exfil/{filename}.
          */
         post: operations["downloadFile"];
         delete?: never;
@@ -1868,6 +1868,46 @@ export interface paths {
          * @description Register a new plugin
          */
         post: operations["createPlugin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/load-failures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List plugin load failures
+         * @description Return sanitized diagnostics for plugin packages rejected during the latest scan
+         */
+        get: operations["listPluginLoadFailures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/load-failures/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recheck failed plugins
+         * @description Re-verify plugin packages rejected during the latest scan without changing trust policy
+         */
+        post: operations["retryPluginLoadFailures"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8592,7 +8632,7 @@ export interface paths {
         };
         /**
          * Readiness probe
-         * @description Readiness for load balancers — no authentication required
+         * @description Readiness for load balancers 鈥?no authentication required
          */
         get: operations["ready"];
         put?: never;
@@ -10658,7 +10698,7 @@ export interface components {
              * @example ok
              */
             status?: string;
-            /** @description Component readiness (database, listeners, …) */
+            /** @description Component readiness (database, listeners, 鈥? */
             checks?: {
                 [key: string]: unknown;
             };
@@ -11085,6 +11125,9 @@ export interface components {
             rating_overall?: number;
             rating_count?: number;
             update_available?: boolean;
+            runtime_loaded?: boolean;
+            /** @description Sanitized runtime load failure, when the package was rejected */
+            load_failure?: string;
             /** Format: date-time */
             created_at?: string;
         };
@@ -13890,6 +13933,59 @@ export interface operations {
                     "application/json": components["schemas"]["Plugin"];
                 };
             };
+        };
+    };
+    listPluginLoadFailures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plugin load failure diagnostics */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        count: number;
+                        data: {
+                            name: string;
+                            reason: string;
+                        }[];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    retryPluginLoadFailures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retry result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        retried: number;
+                        remaining: number;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
     };
     togglePlugin: {

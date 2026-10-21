@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 
 import { useI18n } from "@/lib/i18n";
 import { useUrlState } from "@/lib/hooks/useUrlState";
@@ -16,13 +16,22 @@ const ProfilesPageContent = lazy(() => import("../profiles/ProfilesPageContent")
 export default function GeneratePage() {
   const { t } = useI18n();
   const [tab, setTab] = useUrlState<GenerateTab>("tab", "payload", GENERATE_TABS);
+  // Keep the profile editor mounted after the first visit so an unsaved draft
+  // survives switching between Generate tabs. It stays lazy on first paint.
+  const [profilesVisited, setProfilesVisited] = useState(tab === "profiles");
+  useEffect(() => {
+    if (tab === "profiles") setProfilesVisited(true);
+  }, [tab]);
 
   return (
     <PageContainer title={t("generate.title")} subtitle={t("generate.subtitle")}>
       <Tabs
         value={tab}
         onValueChange={(v) => {
-          if (v && (GENERATE_TABS as readonly string[]).includes(v)) setTab(v as GenerateTab);
+          if (v && (GENERATE_TABS as readonly string[]).includes(v)) {
+            if (v === "profiles") setProfilesVisited(true);
+            setTab(v as GenerateTab);
+          }
         }}
       >
         <TabsList>
@@ -35,8 +44,8 @@ export default function GeneratePage() {
         <TabsContent value="payload" className="mt-0">
           <Suspense fallback={null}><GeneratePayloadWorkspace /></Suspense>
         </TabsContent>
-        <TabsContent value="profiles" className="mt-0">
-          <Suspense fallback={null}><ProfilesPageContent embedded /></Suspense>
+        <TabsContent value="profiles" className="mt-0" keepMounted={profilesVisited}>
+          {profilesVisited ? <Suspense fallback={null}><ProfilesPageContent embedded /></Suspense> : null}
         </TabsContent>
         <TabsContent value="stager" className="mt-0">
           <Suspense fallback={null}><StagerPageContent embedded /></Suspense>

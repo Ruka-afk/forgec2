@@ -1,33 +1,134 @@
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { Link } from "react-router-dom";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Code2,
+  Copy,
+  Download,
+  FileCode2,
+  FileDown,
+  FileWarning,
+  List,
+  Plus,
+  RotateCcw,
+  Save,
+  Search,
+  Settings,
+  Trash2,
+  Upload,
+  XCircle,
+} from "lucide-react";
+import { toast } from "sonner";
 import { PageContainer } from "@/components/ui/page-container";
 import { CardHeaderRow } from "@/components/ui/card-header-row";
-
-  import { useState, useCallback, useRef } from "react";
-  import { Link } from "react-router-dom";
-import { api } from "@/lib/api";
-import { paths } from "@/lib/api-paths";
-import { fetchAllAgents } from "@/lib/agents";
-import { downloadJSON } from "@/lib/download";
-import { nowTime } from "@/lib/utils";
-import { useI18n } from "@/lib/i18n";
-import { useConfirm } from "@/lib/hooks/useConfirm";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Spinner } from "@/components/ui/spinner";
-import { DataError } from "@/components/ui/data-state";
-import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
-import { StatusDot } from "@/components/ui/status-dot";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { DataError } from "@/components/ui/data-state";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { AlertTriangle, Clock, Code, Copy, Download, FileCode, FileDown, FileEdit, FileWarning, List, PenTool, Plus, RotateCw, Search, Send, Server, Settings, Shield, Trash2, X } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { commonUAs, emptyProfile, type AgentProfile } from "./components/types";
+import { Spinner } from "@/components/ui/spinner";
+import { useConfirm } from "@/lib/hooks/useConfirm";
+import { useI18n } from "@/lib/i18n";
+import { downloadText } from "@/lib/download";
+import { formatThrownError } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import { ProfileEditor, type ProfileEditorHandle } from "./components/ProfileEditor";
+import { starterProfile } from "./components/cs-language";
 import { useProfilesData } from "./components/useProfilesData";
+import type {
+  AgentProfile,
+  CompiledProfileSummary,
+  ProfileDiagnostic,
+} from "./components/types";
+
+const PROFILE_NAME_RE = /^[A-Za-z0-9_-]+$/;
+
+function uniqueProfileName(base: string, profiles: AgentProfile[]): string {
+  const cleaned = base.replace(/[^A-Za-z0-9_-]/g, "_").replace(/^_+|_+$/g, "") || "profile";
+  const names = new Set(profiles.map((p) => p.name));
+  if (!names.has(cleaned)) return cleaned;
+  let index = 2;
+  while (names.has(`${cleaned}_${index}`)) index += 1;
+  return `${cleaned}_${index}`;
+}
+
+function draftProfile(name: string, source: string): AgentProfile {
+  return {
+    name,
+    description: "",
+    user_agent: "",
+    beacon_uri: "",
+    method: "POST",
+    headers: {},
+    sleep: 0,
+    jitter: 0,
+    source,
+    builtin: false,
+    draft: true,
+  };
+}
+
+function profileNameFromFile(filename: string): string {
+  return filename
+    .replace(/\.(profile|json|txt)$/i, "")
+    .replace(/[^A-Za-z0-9_-]/g, "_")
+    .replace(/^_+|_+$/g, "") || "imported";
+}
+
+function fallbackSummary(profile: AgentProfile | undefined): CompiledProfileSummary | null {
+  if (!profile) return null;
+  const uris = profile.beacon_uris?.length
+    ? profile.beacon_uris
+    : profile.uris?.length
+      ? profile.uris
+      : profile.beacon_uri
+        ? [profile.beacon_uri]
+        : [];
+  return {
+    name: profile.name,
+    method: profile.method,
+    uris,
+    sleep: profile.sleep,
+    jitter: profile.jitter,
+    user_agent: profile.user_agent,
+    headers: profile.headers,
+    client_metadata: profile.client_metadata,
+    client_id: profile.client_id,
+    server_output: profile.server_output,
+    parameter: profile.parameter,
+    content_length_jitter: profile.content_length_jitter,
+    jitter_uri: profile.jitter_uri,
+    jitter_parameter: profile.jitter_parameter,
+  };
+}
+
+function SummaryField({
+  label,
+  value,
+  mono = false,
+  className,
+}: {
+  label: string;
+  value: string | number | undefined | null;
+  mono?: boolean;
+  className?: string;
+}) {
+  const shown = value === undefined || value === null || value === "" ? "—" : String(value);
+  return (
+    <div className={cn("min-w-0 rounded-md border border-border/70 bg-background/50 px-3 py-2", className)}>
+      <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={cn("mt-0.5 break-words text-sm", mono && "font-mono text-xs")}>{shown}</div>
+    </div>
+  );
+}
+
+function DiagnosticIcon({ severity }: { severity: ProfileDiagnostic["severity"] }) {
+  return severity === "error"
+    ? <XCircle className="mt-0.5 size-3.5 shrink-0 text-destructive" />
+    : <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning-ink" />;
+}
 
 export default function ProfilesPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useI18n();
@@ -37,802 +138,641 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
     setProfiles,
     selectedIdx,
     setSelectedIdx,
-    editing,
-    setEditing,
+    source,
+    setSource,
+    savedSource,
+    setSavedSource,
+    dirty,
     loadingProfiles,
-    activeConfig,
-    loadingActiveConfig,
-    activeConfigError,
     profilesError,
-    loadActiveConfig,
+    validating,
+    validation,
+    setValidation,
+    selectProfile,
     loadProfiles,
+    validate,
+    save,
+    remove,
+    importFile,
   } = useProfilesData();
-  const [search, setSearch] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [reloading, setReloading] = useState(false);
-  const [lastReload, setLastReload] = useState<string | null>(null);
-  const [showPushModal, setShowPushModal] = useState(false);
-  const [pushAgents, setPushAgents] = useState<{ id: string; hostname: string; ip: string }[]>([]);
-  const [pushSelected, setPushSelected] = useState<string[]>([]);
-  const [pushing, setPushing] = useState(false);
-  const [loadingAgents, setLoadingAgents] = useState(false);
-  const [showCSModal, setShowCSModal] = useState(false);
-  const [csName, setCSName] = useState("");
-  const [csText, setCSText] = useState("");
-  const [csBusy, setCSBusy] = useState(false);
-  const [validating, setValidating] = useState(false);
-  const [validateResult, setValidateResult] = useState<{ wire?: Record<string, string>; sample?: { input: string; encoded: string }; warnings?: string[] } | null>(null);
 
-  const handleReloadConfig = useCallback(async () => {
-    setReloading(true);
+  const [name, setName] = useState("");
+  const [search, setSearch] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const editorRef = useRef<ProfileEditorHandle | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const selectedProfile = selectedIdx >= 0 ? profiles[selectedIdx] : undefined;
+  const diagnostics = useMemo(() => validation?.diagnostics ?? [], [validation?.diagnostics]);
+  const diagnosticErrors = diagnostics.filter((d) => d.severity === "error");
+  const hasErrors = validation?.valid === false || diagnosticErrors.length > 0;
+  const warningMessages = useMemo(() => {
+    const seen = new Set<string>();
+    return (validation?.warnings ?? []).filter((message) => {
+      if (diagnostics.some((d) => d.severity === "warning" && d.message === message)) return false;
+      if (seen.has(message)) return false;
+      seen.add(message);
+      return true;
+    });
+  }, [validation?.warnings, diagnostics]);
+  const preview = validation?.compiled ?? fallbackSummary(selectedProfile);
+  const nameValid = PROFILE_NAME_RE.test(name);
+  const builtinNameUnchanged = Boolean(selectedProfile?.builtin && name === selectedProfile.name);
+  const canSave = Boolean(source.trim()) && nameValid && !saving && !builtinNameUnchanged;
+  const sourceEdited = source !== savedSource;
+  const filteredProfiles = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return profiles
+      .map((profile, index) => ({ profile, index }))
+      .filter(({ profile }) => {
+        if (!needle) return true;
+        return profile.name.toLowerCase().includes(needle) ||
+          (profile.description || "").toLowerCase().includes(needle);
+      });
+  }, [profiles, search]);
+
+  useEffect(() => {
+    if (selectedProfile) setName(selectedProfile.name);
+    // Only re-seed the editable name when the selected profile changes, not on
+    // every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIdx, selectedProfile?.name]);
+
+  const runValidation = useCallback(async (candidateName: string, content: string, silent = false) => {
     try {
-      const data = await api.post(paths.config.reload);
-      if (!data.success) {
-        toast.error((data.error as string) || t("profiles.toast.reload_failed"));
+      return await validate(candidateName || "draft", content);
+    } catch (e) {
+      if (!silent && content.trim()) toast.error(formatThrownError(e));
+      return null;
+    }
+  }, [validate]);
+
+  // Live validation is debounced: operators can type freely without a request
+  // per keystroke, while syntax errors still appear without pressing Validate.
+  useEffect(() => {
+    if (!source.trim() || loadingProfiles) return;
+    const timer = window.setTimeout(() => {
+      void runValidation(name, source, true);
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [name, source, loadingProfiles, runValidation]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
+  const discardIfNeeded = useCallback(async () => {
+    if (!dirty) return true;
+    return confirm({
+      title: t("profiles.discard_title"),
+      message: t("profiles.discard"),
+      danger: true,
+      confirmText: t("profiles.discard_confirm"),
+    });
+  }, [confirm, dirty, t]);
+
+  const handleSelect = async (index: number) => {
+    if (index === selectedIdx) return;
+    if (!(await discardIfNeeded())) return;
+    let nextProfiles = profiles;
+    let nextIndex = index;
+    if (selectedProfile?.draft) {
+      nextProfiles = profiles.filter((_, i) => i !== selectedIdx);
+      nextIndex = index > selectedIdx ? index - 1 : index;
+      setProfiles(nextProfiles);
+    }
+    selectProfile(nextIndex, nextProfiles);
+    const next = nextProfiles[nextIndex];
+    if (next) setName(next.name);
+  };
+
+  const handleNew = async () => {
+    if (!(await discardIfNeeded())) return;
+    let base = profiles;
+    if (selectedProfile?.draft) {
+      base = profiles.filter((_, index) => index !== selectedIdx);
+    }
+    const draftName = uniqueProfileName("new_profile", base);
+    const nextSource = starterProfile(draftName);
+    const draft = draftProfile(draftName, nextSource);
+    const nextProfiles = [...base, draft];
+    setProfiles(nextProfiles);
+    setSelectedIdx(nextProfiles.length - 1);
+    setSource(nextSource);
+    setSavedSource("");
+    setValidation(null);
+    setName(draftName);
+    setSearch("");
+    window.setTimeout(() => editorRef.current?.focus(), 0);
+  };
+
+  const handleDuplicate = async () => {
+    if (!source.trim()) {
+      toast.error(t("profiles.empty_editor"));
+      return;
+    }
+    let base = profiles;
+    if (selectedProfile?.draft) {
+      base = profiles.filter((_, index) => index !== selectedIdx);
+    }
+    const draftName = uniqueProfileName(`${name || selectedProfile?.name || "profile"}_copy`, base);
+    const draft = draftProfile(draftName, source);
+    const nextProfiles = [...base, draft];
+    setProfiles(nextProfiles);
+    setSelectedIdx(nextProfiles.length - 1);
+    setSource(source);
+    setSavedSource("");
+    setValidation(null);
+    setName(draftName);
+    window.setTimeout(() => editorRef.current?.focus(), 0);
+  };
+
+  const handleSave = async () => {
+    if (!source.trim()) {
+      toast.error(t("profiles.empty_editor"));
+      return;
+    }
+    if (!nameValid) {
+      toast.error(t("profiles.name_invalid"));
+      return;
+    }
+    if (builtinNameUnchanged) {
+      toast.error(t("profiles.builtin_read_only"));
+      return;
+    }
+    if (profiles.some((profile) => profile.builtin && profile.name === name)) {
+      toast.error(t("profiles.builtin_read_only"));
+      return;
+    }
+    const target = profiles.find((profile) => !profile.builtin && profile.name === name);
+    if (target && target.name !== selectedProfile?.name) {
+      const overwrite = await confirm({
+        title: t("profiles.overwrite_title"),
+        message: t("profiles.overwrite_confirm", { name }),
+        danger: true,
+      });
+      if (!overwrite) return;
+    }
+    setSaving(true);
+    try {
+      const check = await runValidation(name, source);
+      if (!check) return;
+      if (check.valid === false || (check.diagnostics ?? []).some((d) => d.severity === "error")) {
+        toast.error(t("profiles.fix_errors_first"));
         return;
       }
-      setLastReload(nowTime());
-      toast.success(t("profiles.toast.hot_reload_ok"));
-      await loadActiveConfig();
-    } catch {
-      toast.error(t("profiles.toast.reload_failed"));
+      const result = await save(name, source);
+      const savedName = result.profile?.name || name;
+      setName(savedName);
+      if (check) setValidation(check);
+      toast.success(t("profiles.save_success"));
+    } catch (e) {
+      toast.error(formatThrownError(e) || t("profiles.save_failed"));
     } finally {
-      setReloading(false);
+      setSaving(false);
     }
-  }, [loadActiveConfig, t]);
-
-  const normalizeEditing = (p: AgentProfile): AgentProfile => {
-    const e = { ...p } as unknown as Record<string, unknown>;
-    if (Array.isArray(e.placements)) {
-      e.placements = (e.placements as { target: string; chain?: string }[])
-        .map((pl) => (pl.chain ? `${pl.target} | ${pl.chain}` : pl.target))
-        .join("\n") as unknown as AgentProfile["placements"];
-    }
-    return e as unknown as AgentProfile;
   };
 
-  const selectProfile = (idx: number) => {
-    setSelectedIdx(idx);
-    setEditing(normalizeEditing(profiles[idx]));
+  const handleValidate = async () => {
+    if (!source.trim()) {
+      toast.error(t("profiles.empty_editor"));
+      return;
+    }
+    const result = await runValidation(name, source);
+    if (!result) return;
+    if (result.valid === false || (result.diagnostics ?? []).some((d) => d.severity === "error")) {
+      toast.error(t("profiles.invalid"));
+    } else if ((result.warnings ?? []).length > 0) {
+      toast.warning(t("profiles.validate_warnings", { count: (result.warnings ?? []).length }));
+    } else {
+      toast.success(t("profiles.validate_ok"));
+    }
   };
 
-  const filteredProfiles = profiles.filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    (p.description || "").toLowerCase().includes(search.toLowerCase())
+  const handleDelete = async () => {
+    if (!selectedProfile) return;
+    if (selectedProfile.builtin) {
+      toast.error(t("profiles.delete_builtin"));
+      return;
+    }
+    const isDraft = Boolean(selectedProfile.draft);
+    const ok = await confirm({
+      title: t("profiles.delete_title"),
+      message: isDraft
+        ? t("profiles.discard_draft", { name: selectedProfile.name })
+        : t("profiles.delete_confirm", { name: selectedProfile.name }),
+      danger: true,
+    });
+    if (!ok) return;
+    if (isDraft) {
+      const nextProfiles = profiles.filter((_, index) => index !== selectedIdx);
+      setProfiles(nextProfiles);
+      if (nextProfiles.length === 0) {
+        setSelectedIdx(-1);
+        setSource("");
+        setSavedSource("");
+        setValidation(null);
+        setName("");
+      } else {
+        const nextIdx = Math.min(selectedIdx, nextProfiles.length - 1);
+        setSelectedIdx(nextIdx);
+        setSource(nextProfiles[nextIdx].source || "");
+        setSavedSource(nextProfiles[nextIdx].source || "");
+        setValidation(null);
+        setName(nextProfiles[nextIdx].name);
+      }
+      return;
+    }
+    setDeleting(true);
+    try {
+      const nextProfiles = await remove(selectedProfile.name);
+      const nextIdx = nextProfiles.length > 0 ? Math.min(selectedIdx, nextProfiles.length - 1) : -1;
+      setName(nextIdx >= 0 ? nextProfiles[nextIdx].name : "");
+      toast.success(t("profiles.toast.profile_removed", { name: selectedProfile.name }));
+    } catch (e) {
+      toast.error(formatThrownError(e) || t("profiles.toast.delete_failed"));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleFileInput = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error(t("profiles.file_too_large"));
+      return;
+    }
+    const isJSON = file.name.toLowerCase().endsWith(".json");
+    if (isJSON) {
+      if (!(await discardIfNeeded())) return;
+      setImporting(true);
+      try {
+        const result = await importFile(file);
+        setName(result.profile?.name || "");
+        toast.success(t("profiles.toast.profile_imported"));
+      } catch (e) {
+        toast.error(formatThrownError(e) || t("profiles.toast.import_failed"));
+      } finally {
+        setImporting(false);
+      }
+      return;
+    }
+    if (!(await discardIfNeeded())) return;
+    try {
+      const text = await file.text();
+      let base = profiles;
+      if (selectedProfile?.draft) {
+        base = profiles.filter((_, index) => index !== selectedIdx);
+      }
+      const draftName = uniqueProfileName(profileNameFromFile(file.name), base);
+      const draft = draftProfile(draftName, text);
+      const nextProfiles = [...base, draft];
+      setProfiles(nextProfiles);
+      setSelectedIdx(nextProfiles.length - 1);
+      setSource(text);
+      setSavedSource("");
+      setValidation(null);
+      setName(draftName);
+      setSearch("");
+      toast.success(t("profiles.imported_draft"));
+      window.setTimeout(() => editorRef.current?.focus(), 0);
+    } catch (e) {
+      toast.error(formatThrownError(e) || t("profiles.toast.import_failed"));
+    }
+  };
+
+  const handleRevert = () => {
+    if (!selectedProfile || selectedProfile.draft) return;
+    setSource(savedSource);
+    setValidation(null);
+  };
+
+  const handleDownload = () => {
+    if (!source.trim()) {
+      toast.error(t("profiles.empty_editor"));
+      return;
+    }
+    const filename = `${name || "profile"}.profile`;
+    downloadText(source, filename);
+  };
+
+  const handleCopy = async () => {
+    if (!source.trim()) {
+      toast.error(t("profiles.empty_editor"));
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(source);
+      toast.success(t("profiles.copied"));
+    } catch {
+      toast.error(t("profiles.copy_failed"));
+    }
+  };
+
+  const statusBadge = validating ? (
+    <Badge variant="secondary" className="gap-1">
+      <Spinner size="xs" /> {t("profiles.validating")}
+    </Badge>
+  ) : !validation ? (
+    <Badge variant="outline">{t("profiles.not_validated")}</Badge>
+  ) : hasErrors ? (
+    <Badge variant="destructive" className="gap-1"><XCircle className="size-3" /> {t("profiles.invalid")}</Badge>
+  ) : warningMessages.length > 0 ? (
+    <Badge variant="warning" className="gap-1"><AlertTriangle className="size-3" /> {t("profiles.valid_warnings")}</Badge>
+  ) : (
+    <Badge variant="success" className="gap-1"><CheckCircle2 className="size-3" /> {t("profiles.valid")}</Badge>
   );
 
-  const placementsToJSON = (raw: unknown): unknown => {
-    if (Array.isArray(raw)) return raw;
-    if (typeof raw !== "string" || !raw.trim()) return undefined;
-    const t = raw.trim();
-    if (t.startsWith("[")) return JSON.parse(t);
-    return t.split("\n").map((s) => s.trim()).filter(Boolean).map((line) => {
-      const i = line.indexOf("|");
-      if (i < 0) return { target: line, chain: "" };
-      return { target: line.slice(0, i).trim(), chain: line.slice(i + 1).trim() };
-    });
-  };
-
-  const handleSaveProfile = async () => {
-    // Persist to the server (survives restarts) and keep the local export.
-    // Convert the placements textarea lines into the JSON array the backend
-    // validates, keeping the editor state human-friendly.
-    const payload: Record<string, unknown> = { ...(editing as unknown as Record<string, unknown>) };
-    try {
-      const conv = placementsToJSON((editing as unknown as Record<string, unknown>).placements);
-      if (conv === undefined) delete payload.placements;
-      else payload.placements = conv;
-    } catch {
-      toast.error(t("profiles.placements_invalid"));
-      return;
-    }
-    try {
-      await api.postJson(paths.generate.profileSave, payload);
-      toast.success(t("profiles.toast.profile_saved"));
-      await loadProfiles();
-    } catch {
-      toast.error(t("profiles.toast.save_profile_failed"));
-      return;
-    }
-    downloadJSON(payload, `${editing.name || "profile"}.json`);
-    toast.success(t("profiles.toast.profile_exported"));
-  };
-
-  const handleDeleteProfile = async () => {
-    if (selectedIdx < 0) return;
-    const target = profiles[selectedIdx];
-    const name = target?.name;
-    if (!name) return;
-    if (name === "default") {
-      toast.error(t("profiles.toast.delete_default_forbidden") || "cannot delete default profile");
-      return;
-    }
-    const ok = await confirm({ title: t("profiles.delete_title"), message: t("profiles.delete_confirm", { name }), danger: true });
-    if (!ok) return;
-    try {
-      await api.del(paths.generate.profileDelete(name));
-    } catch {
-      toast.error(t("profiles.toast.delete_failed"));
-      return;
-    }
-    // Functional updates avoid the stale-closure index math that previously
-    // selected the wrong (or a removed) profile after deletion.
-    setProfiles(prev => prev.filter((_, i) => i !== selectedIdx));
-    setSelectedIdx(prev => Math.min(Math.max(0, prev), Math.max(0, profiles.length - 2)));
-    toast.success(t("profiles.toast.profile_removed", { name }));
-  };
-
-  const handleDuplicateProfile = async () => {
-    const copy: AgentProfile = {
-      ...editing,
-      name: editing.name + "_copy",
-    };
-    try {
-      // Persist server-side so the duplicate isn't lost on reload.
-      await api.postJson(paths.generate.profileSave, copy);
-    } catch {
-      toast.error(t("profiles.toast.save_profile_failed"));
-      return;
-    }
-    setProfiles(prev => [...prev, copy]);
-    setSelectedIdx(profiles.length);
-    setEditing(copy);
-    toast.success(t("profiles.toast.profile_duplicated"));
-  };
-
-  const handleImportProfile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const fd = new FormData();
-    fd.append("profile", file);
-    try {
-      const d = await api.postFormData(paths.generate.profileImport, fd) as { success?: boolean; error?: string; profile?: AgentProfile };
-      if (!d.success) {
-        toast.error(d.error || t("profiles.toast.import_failed"));
-        return;
-      }
-      const imported: AgentProfile = d.profile!;
-      // Resolve the target index against the CURRENT list: importing over an
-      // existing name must select the replaced slot, not profiles.length.
-      const existingIdx = profiles.findIndex((p) => p.name === imported.name);
-      if (existingIdx >= 0) {
-        const next = [...profiles];
-        next[existingIdx] = imported;
-        setProfiles(next);
-        setSelectedIdx(existingIdx);
-      } else {
-        setProfiles((prev) => [...prev, imported]);
-        setSelectedIdx(profiles.length);
-      }
-      setEditing(normalizeEditing(imported));
-      toast.success(t("profiles.toast.profile_imported"));
-    } catch {
-      toast.error(t("profiles.toast.import_failed"));
-    } finally {
-      e.target.value = "";
-    }
-  };
-
-  const handleValidateEditing = async () => {
-    setValidating(true);
-    setValidateResult(null);
-    const content = { ...(editing as unknown as Record<string, unknown>) };
-    try {
-      const conv = placementsToJSON((editing as unknown as Record<string, unknown>).placements);
-      if (conv === undefined) delete content.placements;
-      else content.placements = conv;
-    } catch {
-      toast.error(t("profiles.placements_invalid"));
-      setValidating(false);
-      return;
-    }
-    try {
-      const d = await api.postJson(paths.generate.profileValidate, { name: editing.name, format: "json", content: JSON.stringify(content) }) as { success?: boolean; data?: { wire?: Record<string, string>; sample?: { input: string; encoded: string }; warnings?: string[] }; error?: string };
-      if (!d.success) { toast.error((d as { error?: string }).error || t("profiles.validate_failed")); return; }
-      setValidateResult(d.data || null);
-      const warns = (d.data?.warnings || []).length;
-      if (warns) toast.warning(t("profiles.validate_warnings", { count: warns }));
-      else toast.success(t("profiles.validate_ok"));
-    } catch {
-      toast.error(t("profiles.validate_failed"));
-    } finally {
-      setValidating(false);
-    }
-  };
-
-  const handleImportCSText = async () => {
-    if (!csText.trim()) { toast.error(t("profiles.cs_paste_first")); return; }
-    setCSBusy(true);
-    try {
-      const d = await api.postJson(paths.generate.profileImportText, { name: csName.trim() || "imported", format: "cs", content: csText }) as { success?: boolean; error?: string; profile?: AgentProfile };
-      if (!d.success) { toast.error(d.error || t("profiles.cs_import_failed")); return; }
-      const imported = d.profile!;
-      const existingIdx = profiles.findIndex((p) => p.name === imported.name);
-      if (existingIdx >= 0) {
-        const next = [...profiles];
-        next[existingIdx] = imported;
-        setProfiles(next);
-        setSelectedIdx(existingIdx);
-      } else {
-        setProfiles((prev) => [...prev, imported]);
-        setSelectedIdx(profiles.length);
-      }
-      setEditing(normalizeEditing(imported));
-      setShowCSModal(false);
-      setCSText("");
-      toast.success(t("profiles.cs_imported"));
-    } catch {
-      toast.error(t("profiles.cs_import_failed"));
-    } finally {
-      setCSBusy(false);
-    }
-  };
-
-  const updateHeader = (idx: number, key: string, value: string) => {
-    const entries = Object.entries(editing.headers);
-    if (key === "") {
-      const [, ...rest] = entries;
-      const newHeaders: Record<string, string> = {};
-      for (const [k, v] of rest) newHeaders[k] = v;
-      setEditing({ ...editing, headers: newHeaders });
-      return;
-    }
-    const newHeaders: Record<string, string> = {};
-    entries.forEach(([k, v], i) => {
-      if (i === idx) newHeaders[key] = value;
-      else newHeaders[k] = v;
-    });
-    setEditing({ ...editing, headers: newHeaders });
-  };
-
-  const addHeader = () => {
-    setEditing({ ...editing, headers: { ...editing.headers, "": "" } });
-  };
-
-  const removeHeader = (idx: number) => {
-    const entries = Object.entries(editing.headers).filter((_, i) => i !== idx);
-    const newHeaders: Record<string, string> = {};
-    for (const [k, v] of entries) newHeaders[k] = v;
-    setEditing({ ...editing, headers: newHeaders });
-  };
-
-  const headerEntries = Object.entries(activeConfig.headers);
+  const listBody = loadingProfiles ? (
+    <div className="flex items-center justify-center py-14"><Spinner size="sm" /></div>
+  ) : profilesError ? (
+    <DataError message={profilesError} onRetry={() => { void loadProfiles(); }} className="py-8" />
+  ) : filteredProfiles.length === 0 ? (
+    <div className="px-3 py-12 text-center text-xs text-muted-foreground">
+      <FileWarning className="mx-auto mb-2 size-5" />
+      {search ? t("profiles.no_match") : t("profiles.none_loaded")}
+    </div>
+  ) : (
+    <div className="max-h-[560px] space-y-1 overflow-y-auto pr-1">
+      {filteredProfiles.map(({ profile, index }) => {
+        const active = index === selectedIdx;
+        return (
+          <button
+            key={`${profile.name}-${index}`}
+            type="button"
+            onClick={() => { void handleSelect(index); }}
+            className={cn(
+              "w-full rounded-lg border px-3 py-2 text-left transition-colors",
+              active
+                ? "border-primary/40 bg-primary/10 text-foreground"
+                : "border-transparent hover:border-border hover:bg-muted/50",
+            )}
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-sm font-medium">{profile.name}</span>
+              {profile.builtin && <Badge variant="secondary" className="ml-auto">{t("profiles.builtin")}</Badge>}
+              {profile.draft && <Badge variant="warning" className="ml-auto">{t("profiles.draft")}</Badge>}
+              {active && dirty && !profile.builtin && !profile.draft && (
+                <span className="ml-auto size-1.5 shrink-0 rounded-full bg-warning" aria-hidden="true" />
+              )}
+            </div>
+            {profile.description && (
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">{profile.description}</p>
+            )}
+            <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
+              {profile.method || "POST"} {profile.beacon_uri || ""}
+            </p>
+          </button>
+        );
+      })}
+    </div>
+  );
 
   return (
-    <PageContainer embedded={embedded} title={!embedded ? t("profiles.title") : undefined} subtitle={!embedded ? t("profiles.subtitle") : undefined}>
+    <PageContainer
+      embedded={embedded}
+      title={!embedded ? t("profiles.title") : undefined}
+      subtitle={!embedded ? t("profiles.subtitle") : undefined}
+      className="space-y-4"
+    >
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3">
+        <Code2 className="size-4 shrink-0 text-primary" />
+        <p className="min-w-0 flex-1 text-sm text-muted-foreground">{t("profiles.editor_hint")}</p>
+        <Button variant="outline" size="sm" render={<Link to="/settings?tab=malleable" />}>
+          <Settings className="size-4" /> {t("profiles.malleable_open_settings")}
+        </Button>
+      </div>
 
-      {/* Active Config Hot-Reload Card */}
-      <Card className="overflow-hidden mb-6 shadow-sm hover:shadow-md transition-shadow duration-200">
-        <CardHeaderRow icon={RotateCw} tone="success" title={t("profiles.active_config")} description={t("profiles.active_config_desc")} action={
-          <Button
-            onClick={handleReloadConfig}
-            disabled={reloading}
-            className="px-5 bg-secondary/60 hover:bg-secondary/80 text-foreground text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
-          >
-            {reloading ? <Spinner size="xs" /> : <RotateCw className="size-4" />}
-            {reloading ? t("profiles.reloading") : t("profiles.reload_config")}
-          </Button>
-        } />
-        <CardContent className="p-5">
-          {loadingActiveConfig ? (
-            <div className="flex items-center justify-center py-6">
-              <Spinner color="emerald" />
-              <span className="ml-3 text-sm text-muted-foreground">{t("profiles.loading_active")}</span>
+      <div className="grid gap-4 xl:grid-cols-[minmax(240px,300px)_minmax(0,1fr)]">
+        <Card className="overflow-hidden self-start">
+          <CardHeaderRow
+            icon={List}
+            tone="primary"
+            title={t("profiles.list_title")}
+            description={t("profiles.list_count", { count: profiles.length })}
+          />
+          <CardContent className="space-y-3 p-3 sm:p-4">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={t("profiles.search_profiles")}
+                aria-label={t("profiles.search_profiles")}
+                className="pl-9"
+              />
             </div>
-          ) : activeConfigError ? (
-            <DataError message={activeConfigError} onRetry={() => { void loadActiveConfig(); }} />
-          ) : (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                <div className="bg-secondary rounded-lg p-3 border border-border">
-                  <div className="text-xs text-muted-foreground mb-1">{t("profiles.malleable_enabled")}</div>
-                  <div className="flex items-center gap-2">
-                     <StatusDot tone={activeConfig.malleable_enabled ? "success" : "muted"} size="sm" />
-                    <span className="text-sm font-medium">{activeConfig.malleable_enabled ? t("profiles.enabled") : t("profiles.disabled")}</span>
-                  </div>
-                </div>
-                <div className="bg-secondary rounded-lg p-3 border border-border">
-                  <div className="text-xs text-muted-foreground mb-1">{t("profiles.status_code")}</div>
-                  <div className="text-sm font-medium font-mono">{activeConfig.status_code}</div>
-                </div>
-                <div className="bg-secondary rounded-lg p-3 border border-border">
-                  <div className="text-xs text-muted-foreground mb-1">{t("profiles.content_type")}</div>
-                  <div className="text-sm font-medium font-mono">{activeConfig.content_type}</div>
-                </div>
-              </div>
-
-              <div className="bg-secondary rounded-lg p-3 border border-border mb-4">
-                <div className="text-xs text-muted-foreground mb-2">Headers ({headerEntries.length})</div>
-                {headerEntries.length === 0 ? (
-                  <span className="text-xs text-muted-foreground italic">{t("profiles.no_headers")}</span>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {headerEntries.map(([key, value]) => (
-                      <div key={key} className="flex items-center gap-2 text-xs font-mono">
-                        <span className="text-primary">{key}:</span>
-                        <span className="text-muted-foreground truncate">{value}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                <div className="bg-secondary rounded-lg p-3 border border-border">
-                  <div className="text-xs text-muted-foreground mb-1">{t("profiles.prepend_content")}</div>
-                  <div className="text-xs font-mono text-muted-foreground truncate">{activeConfig.prepend || t("profiles.empty_value")}</div>
-                </div>
-                <div className="bg-secondary rounded-lg p-3 border border-border">
-                  <div className="text-xs text-muted-foreground mb-1">{t("profiles.append_content")}</div>
-                  <div className="text-xs font-mono text-muted-foreground truncate">{activeConfig.append || t("profiles.empty_value")}</div>
-                </div>
-              </div>
-
-              {lastReload && (
-                <div className="text-xs text-success-ink flex items-center gap-1">
-                  <Clock className="size-4" />
-                  {t("profiles.last_reloaded", { time: lastReload })}
-                </div>
-              )}
-
-              <div className="p-3 bg-warning/15 rounded-lg border border-warning/30 text-xs text-warning-ink mt-3">
-                <AlertTriangle className="size-4" />
-                {t("profiles.reload_warning")}
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Tab switcher */}
-      <Tabs defaultValue="server">
-        <TabsList>
-          <TabsTrigger value="server" className="gap-2">
-            <Server className="size-4" />{t("profiles.tab_server")}
-          </TabsTrigger>
-          <TabsTrigger value="agents" className="gap-2">
-            <PenTool className="size-4" />{t("profiles.tab_agents")}
-          </TabsTrigger>
-        </TabsList>
-
-      <TabsContent value="server">
-        <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
-          <CardHeaderRow icon={Shield} tone="violet" title={t("profiles.card_title")} description={t("profiles.card_desc")} />
-          <CardContent className="p-(--card-spacing)">
-            {/* The server-wide Malleable editor used to be duplicated here and in
-                Settings. Two forms wrote the same live C2 camouflage to
-                POST /settings/malleable, so an operator had no way to tell which
-                one was authoritative. Settings owns it now; this tab keeps the
-                read-only view, the hot-reload button, and the agent-profile
-                editor on the "agents" tab. */}
-            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3">
-              <Settings className="size-4 shrink-0 text-muted-foreground" />
-              <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-                {t("profiles.malleable_edit_in_settings")}
-              </p>
-              <Button variant="outline" size="sm" render={<Link to="/settings?tab=malleable" />}>
-                {t("profiles.malleable_open_settings")}
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" className="flex-1" onClick={() => { void handleNew(); }}>
+                <Plus className="size-4" /> {t("profiles.new_profile")}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                disabled={importing}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {importing ? <Spinner size="xs" /> : <Upload className="size-4" />} {t("profiles.import_short")}
               </Button>
             </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".profile,.txt,.json,application/json"
+              className="hidden"
+              onChange={(event) => { void handleFileInput(event); }}
+            />
+            {listBody}
           </CardContent>
         </Card>
-      </TabsContent>
 
-      <TabsContent value="agents">
-        <div className="flex flex-col lg:flex-row gap-4">
-          {/* Left sidebar - profile list */}
-          <div className="w-full lg:w-72 shrink-0">
-            <Card className="overflow-hidden">
-              <div className="bg-primary/10 border-b border-primary/20 px-5 py-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <List className="size-4" />
-                    <span className="text-sm font-semibold text-foreground">{t("profiles.list_title")}</span>
-                    <span className="text-xs text-primary ml-1">({profiles.length})</span>
+        <Card className="overflow-hidden">
+          <CardHeaderRow
+            icon={FileCode2}
+            tone="violet"
+            title={name || selectedProfile?.name || t("profiles.editor_title")}
+            description={t("profiles.editor_desc")}
+            action={statusBadge}
+          />
+          <CardContent className="space-y-3 p-3 sm:p-4">
+            {!selectedProfile && !loadingProfiles ? (
+              <EmptyState
+                icon={FileCode2}
+                title={t("profiles.empty_title")}
+                message={t("profiles.empty_message")}
+                action={<Button onClick={() => { void handleNew(); }}><Plus className="size-4" /> {t("profiles.new_profile")}</Button>}
+              />
+            ) : (
+              <>
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+                  <div className="min-w-0 flex-1">
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="profile-name">
+                      {t("profiles.profile_name_label")}
+                    </label>
+                    <Input
+                      id="profile-name"
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                      className="font-mono"
+                      aria-invalid={!nameValid}
+                      spellCheck={false}
+                    />
+                    {!nameValid ? (
+                      <p className="mt-1 text-xs text-destructive">{t("profiles.name_invalid")}</p>
+                    ) : builtinNameUnchanged ? (
+                      <p className="mt-1 text-xs text-muted-foreground">{t("profiles.builtin_read_only")}</p>
+                    ) : null}
                   </div>
-                  <div className="flex gap-1">
-                    <Tooltip>
-                      <TooltipTrigger render={<Button onClick={() => fileInputRef.current?.click()} className="size-7 bg-secondary/50 hover:bg-secondary/70 flex items-center justify-center transition-colors" aria-label={t("profiles.import_btn")} size="icon" />}>
-                        <FileDown className="size-4" />
-                      </TooltipTrigger>
-                      <TooltipContent>{t("profiles.import_btn")}</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger render={<Button onClick={() => setShowCSModal(true)} className="size-7 bg-secondary/50 hover:bg-secondary/70 flex items-center justify-center transition-colors" aria-label={t("profiles.import_cs_text")} size="icon" />}>
-                        <Code className="size-4" />
-                      </TooltipTrigger>
-                      <TooltipContent>{t("profiles.import_cs_text")}</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger render={<Button onClick={() => {
-                          const p = emptyProfile();
-                          const idx = profiles.length;
-                          setProfiles((prev) => [...prev, p]);
-                          setSelectedIdx(idx);
-                          setEditing(p);
-                        }} className="size-7 bg-secondary/50 hover:bg-secondary/70 flex items-center justify-center transition-colors" aria-label={t("profiles.new_profile")} size="icon" />}>
-                        <Plus className="size-4" />
-                      </TooltipTrigger>
-                      <TooltipContent>{t("profiles.new_profile")}</TooltipContent>
-                    </Tooltip>
+                  <div className="flex flex-wrap gap-2 lg:justify-end">
+                    <Button size="sm" onClick={() => { void handleSave(); }} disabled={!canSave}>
+                      {saving ? <Spinner size="xs" /> : <Save className="size-4" />}
+                      {selectedProfile?.builtin || (selectedProfile && name !== selectedProfile.name)
+                        ? t("profiles.save_as")
+                        : t("profiles.save")}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => { void handleValidate(); }} disabled={validating || !source.trim()}>
+                      {validating ? <Spinner size="xs" /> : <CheckCircle2 className="size-4" />} {t("profiles.validate")}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={handleRevert} disabled={!sourceEdited || Boolean(selectedProfile?.draft)}>
+                      <RotateCcw className="size-4" /> {t("profiles.revert")}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={handleDownload} disabled={!source.trim()}>
+                      <Download className="size-4" /> {t("profiles.download")}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => { void handleCopy(); }} disabled={!source.trim()}>
+                      <Copy className="size-4" /> {t("profiles.copy")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => { void handleDuplicate(); }}
+                      disabled={!source.trim()}
+                    >
+                      <FileDown className="size-4" /> {t("profiles.duplicate")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => { void handleDelete(); }}
+                      disabled={!selectedProfile || Boolean(selectedProfile.builtin) || deleting}
+                    >
+                      {deleting ? <Spinner size="xs" /> : <Trash2 className="size-4" />} {t("profiles.delete")}
+                    </Button>
                   </div>
                 </div>
-              </div>
-              <CardContent className="p-(--card-spacing)">
-                <div className="relative mb-3">
-                  <Search className="size-4" />
-                  <Input aria-label={t("profiles.filter_ph")} name="filter-by-name-6"
-                    type="text" placeholder={t("profiles.filter_ph")}
-                    value={search} onChange={(e) => setSearch(e.target.value)}
-                    className="w-full pl-9 pr-4 text-xs"
-                  />
+
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  {dirty ? <Badge variant="warning">{t("profiles.dirty")}</Badge> : <Badge variant="outline">{t("profiles.saved")}</Badge>}
+                  {selectedProfile?.builtin && <Badge variant="secondary">{t("profiles.builtin")}</Badge>}
+                  {selectedProfile?.draft && <Badge variant="warning">{t("profiles.draft")}</Badge>}
+                  <span className="ml-auto font-mono">{source.split("\n").length} lines</span>
                 </div>
-                <div className="space-y-1 max-h-[500px] overflow-y-auto">
-                  {loadingProfiles ? (
-                    <div className="flex items-center justify-center py-16 sm:py-20"><Spinner size="sm" /></div>
-                  ) : profilesError ? (
-                    <DataError message={profilesError} onRetry={loadProfiles} className="py-10" />
-                  ) : filteredProfiles.length === 0 ? (
-                    <div className="text-center py-16 sm:py-20 text-xs text-muted-foreground">
-                      <FileWarning className="size-4 mx-auto mb-2" />
-                      {search ? t("profiles.no_match") : t("profiles.none_loaded")}
+
+                <ProfileEditor
+                  ref={editorRef}
+                  value={source}
+                  onChange={setSource}
+                  diagnostics={diagnostics}
+                  onSave={() => { void handleSave(); }}
+                  ariaLabel={t("profiles.editor_aria")}
+                  placeholderText={t("profiles.editor_placeholder")}
+                />
+
+                {diagnostics.length > 0 && (
+                  <div className="overflow-hidden rounded-lg border border-border">
+                    <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-3 py-2 text-xs font-medium">
+                      <FileWarning className="size-4 text-warning-ink" />
+                      {t("profiles.problems")}
+                      <Badge variant={diagnosticErrors.length > 0 ? "destructive" : "warning"} className="ml-auto">
+                        {diagnostics.length}
+                      </Badge>
                     </div>
-                  ) : (
-                    filteredProfiles.map((p) => {
-                      const realIdx = profiles.indexOf(p);
-                      return (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          key={p.name}
-                          onClick={() => selectProfile(realIdx)}
-                          className={"w-full text-left px-3 py-2.5 rounded-lg text-xs transition-colors " + (selectedIdx === realIdx ? "bg-primary/10 dark:bg-primary/20 text-primary dark:text-primary border border-primary/30 dark:border-primary/40" : "hover:bg-secondary text-muted-foreground border border-transparent")}
+                    <div className="max-h-44 divide-y divide-border overflow-y-auto">
+                      {diagnostics.map((diagnostic, index) => (
+                        <button
+                          key={`${diagnostic.line}-${diagnostic.column}-${diagnostic.code}-${index}`}
+                          type="button"
+                          onClick={() => editorRef.current?.goToLine(diagnostic.line, diagnostic.column)}
+                          className="flex w-full items-start gap-2 px-3 py-2 text-left text-xs hover:bg-muted/40"
                         >
-                          <div className="flex items-center gap-2">
-                            <FileCode className={`size-4 ${selectedIdx === realIdx ? "text-primary" : "text-muted-foreground"}`} />
-                            <span className="font-medium truncate">{p.name}</span>
-                          </div>
-                          {p.description && (
-                            <p className="text-micro-sm text-muted-foreground mt-0.5 truncate pl-6">{p.description}</p>
-                          )}
-                        </Button>
-                      );
-                    })
+                          <DiagnosticIcon severity={diagnostic.severity} />
+                          <span className="shrink-0 font-mono text-muted-foreground">
+                            {diagnostic.line}:{diagnostic.column}
+                          </span>
+                          <span className="min-w-0 break-words">{diagnostic.message}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {warningMessages.length > 0 && (
+                  <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2">
+                    <div className="mb-1 flex items-center gap-2 text-xs font-medium text-warning-ink">
+                      <AlertTriangle className="size-4" /> {t("profiles.warnings")} ({warningMessages.length})
+                    </div>
+                    <ul className="max-h-32 space-y-1 overflow-y-auto text-xs text-warning-ink/90">
+                      {warningMessages.map((message, index) => (
+                        <li key={`${message}-${index}`} className="break-words">• {message}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <div className="rounded-lg border border-border bg-muted/20 p-3">
+                  <div className="mb-2 flex flex-wrap items-baseline gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("profiles.compiled")}</span>
+                    <span className="text-xs text-muted-foreground">{t("profiles.compiled_desc")}</span>
+                  </div>
+                  {!preview ? (
+                    <p className="text-xs text-muted-foreground">{t("profiles.not_validated")}</p>
+                  ) : (
+                    <>
+                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                        <SummaryField label={t("profiles.method")} value={preview.method || "POST"} />
+                        <SummaryField label={t("profiles.sleep_jitter")} value={`${preview.sleep ?? 0}s / ${preview.jitter ?? 0}%`} />
+                        <SummaryField label={t("profiles.parameter")} value={preview.parameter} mono />
+                        <SummaryField label={t("profiles.content_jitter")} value={preview.content_length_jitter ?? 0} />
+                      </div>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        <SummaryField label={t("profiles.uris")} value={(preview.uris ?? []).join(", ")} mono />
+                        <SummaryField label={t("profiles.user_agent")} value={preview.user_agent} mono />
+                        <SummaryField label={t("profiles.client_metadata")} value={preview.client_metadata} mono />
+                        <SummaryField label={t("profiles.client_id")} value={preview.client_id} mono />
+                        <SummaryField label={t("profiles.server_output")} value={preview.server_output} mono />
+                        <SummaryField
+                          label={t("profiles.flags")}
+                          value={[preview.jitter_uri ? "jitter_uri" : "", preview.jitter_parameter ? "jitter_parameter" : ""].filter(Boolean).join(", ")}
+                          mono
+                        />
+                      </div>
+                      {preview.ignored && preview.ignored.length > 0 && (
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                          <span>{t("profiles.ignored")}:</span>
+                          {preview.ignored.map((block) => <Badge key={block} variant="outline">{block}</Badge>)}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-          {/* Right panel - profile editor */}
-          <div className="flex-1 min-w-0">
-            {loadingProfiles ? (
-              <div className="flex items-center justify-center py-16 sm:py-20"><Spinner size="sm" /></div>
-            ) : selectedIdx < 0 ? (
-                <EmptyState icon={FileEdit} title={t("profiles.empty_title")} />
-            ) : (
-              <div className="space-y-5">
-                <Card className="overflow-hidden">
-                  <CardHeaderRow icon={FileCode} tone="primary" title={`${t("profiles.editing")}: ${editing.name || t("common.untitled")}`} description={editing.description || t("common.no_description")} action={
-                    <div className="flex gap-2">
-                      <Button onClick={handleValidateEditing} disabled={validating} variant="outline" className="h-9 px-4 text-xs font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50">
-                        <Shield className="size-4" />{validating ? "Validating…" : "Validate"}
-                      </Button>
-                      <Button onClick={handleSaveProfile}                         className="h-9 px-4 text-xs font-medium transition-colors flex items-center gap-1.5">
-                        <Download className="size-4" />Save (Export JSON)
-                      </Button>
-                      <Button onClick={handleDuplicateProfile} variant="secondary"                         className="h-9 px-4 text-xs font-medium transition-colors flex items-center gap-1.5">
-                        <Copy className="size-4" />{t("common.duplicate")}
-                      </Button>
-                      <Button onClick={handleDeleteProfile} className="h-9 px-4 bg-destructive-solid hover:bg-destructive-solid/90 text-destructive-foreground text-xs font-medium transition-colors flex items-center gap-1.5">
-                        <Trash2 className="size-4" />{t("common.delete")}
-                      </Button>
-                      <Button onClick={() => setShowPushModal(true)}                         className="h-9 px-4 text-xs font-medium transition-colors flex items-center gap-1.5">
-                        <Send className="size-4" />{t("profiles.push_to_agent")}
-                        </Button>
-                      </div>
-                      } />
-<CardContent className="p-(--card-spacing)">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                      <div className="space-y-4">
-                        <div>
-                          <Label className="text-xs text-muted-foreground mb-1.5">{t("profiles.profile_name_label")}</Label>
-                          <Input aria-label={t("profiles.name_ph")} name="input-7" type="text" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} placeholder={t("profiles.name_ph")} />
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground mb-1.5">{t("profiles.description")}</Label>
-                          <Textarea aria-label={t("profiles.brief_desc")} name="textarea-8" rows={2} value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} placeholder={t("profiles.brief_desc")} />
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground mb-1.5">{t("profiles.user_agent_label")}</Label>
-                          <div className="flex gap-2">
-                            <Input aria-label={t("agents.config.ua")} name="input-9" type="text" value={editing.user_agent} onChange={(e) => setEditing({ ...editing, user_agent: e.target.value })} className="font-mono text-xs" />
-                            <Select value="" onValueChange={(v) => { if (v) setEditing({ ...editing, user_agent: v }); }}>
-                              <SelectTrigger className="shrink-0 w-[180px] h-9 text-xs">
-                                <SelectValue placeholder={t("profiles.ua_ph")} />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {commonUAs.map((ua) => (
-                                  <SelectItem key={ua.label} value={ua.value}>{ua.label}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground mb-1.5">{t("profiles.beacon_uri")}</Label>
-                          <Input aria-label="/api/v1/beacon" name="input-11" type="text" value={editing.beacon_uri} onChange={(e) => setEditing({ ...editing, beacon_uri: e.target.value })} className="font-mono" placeholder="/api/v1/beacon" />
-                        </div>
-                      </div>
-                      <div className="space-y-4">
-                        <div>
-                          <Label className="text-xs text-muted-foreground mb-1.5">{t("profiles.http_method")}</Label>
-                          <Select value={editing.method} onValueChange={(v) => { if (v) setEditing({ ...editing, method: v }); }}>
-                             <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="GET">GET</SelectItem>
-                              <SelectItem value="POST">POST</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <Label className="text-xs text-muted-foreground mb-1.5">{t("agents.config.sleep")}</Label>
-                            <Input aria-label={t("agents.config.sleep")} name="input-13" type="number" min={0} max={86400} value={editing.sleep} onChange={(e) => setEditing({ ...editing, sleep: Number(e.target.value) })} />
-                          </div>
-                          <div>
-                            <Label className="text-xs text-muted-foreground mb-1.5">{t("agents.config.jitter")}</Label>
-                            <Input aria-label={t("agents.config.jitter")} name="input-14" type="number" min={0} max={100} value={editing.jitter} onChange={(e) => setEditing({ ...editing, jitter: Number(e.target.value) })} />
-                          </div>
-                        </div>
-                        <div>
-                          <div className="flex items-center justify-between mb-1.5">
-                            <Label className="text-xs text-muted-foreground">{t("profiles.custom_headers")}</Label>
-                            <Button type="button" onClick={addHeader} className="text-xs text-primary hover:underline flex items-center gap-1" variant="link" size="sm">
-                              <Plus className="size-4" />{t("profiles.add_header")}
-                            </Button>
-                          </div>
-                          <div className="space-y-2">
-                            {Object.entries(editing.headers).map(([key, value], i) => (
-                              <div key={key} className="flex gap-2 items-start">
-                                <Input aria-label={t("agents.config.header_name")} name="header-name-15"
-                                  type="text" placeholder={t("agents.config.header_name")}
-                                  value={key} onChange={(e) => updateHeader(i, e.target.value, value)}
-                                  className="w-2/5 text-xs font-mono"
-                                />
-                                <Input aria-label={t("agents.config.header_value")} name="value-16"
-                                  type="text" placeholder={t("agents.config.header_value")}
-                                  value={value} onChange={(e) => updateHeader(i, key, e.target.value)}
-                                  className="flex-1 text-xs font-mono"
-                                />
-                                {Object.entries(editing.headers).length > 1 && (
-                                   <Button onClick={() => removeHeader(i)} className="size-9 flex items-center justify-center text-destructive-ink/50 hover:text-destructive-ink hover:bg-destructive/10 transition-colors" variant="ghost" size="icon" aria-label={t("agents.config.remove_header")}>
-                                    <X className="size-4" />
-                                  </Button>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* v2 advanced: multi-URI, chains, jitter */}
-                <Card className="overflow-hidden">
-                  <div className="bg-secondary/60 border-b border-border px-6 py-3">
-                    <div className="flex items-center gap-2">
-                      <PenTool className="size-4" />
-                      <span className="text-sm font-semibold text-foreground">Advanced (v2)</span>
-                      <span className="text-xs text-muted-foreground">multi-URI · transform chains · jitter</span>
-                    </div>
-                  </div>
-                  <CardContent className="p-(--card-spacing)">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      <div className="space-y-3">
-                        <div>
-                          <Label className="text-xs text-muted-foreground mb-1.5">beacon_uris (one per line, first = primary)</Label>
-                          <Textarea rows={3} value={(editing.beacon_uris || []).join("\n")} onChange={(e) => setEditing({ ...editing, beacon_uris: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean) })} placeholder="/api/v1/beacon&#10;/config/v1/autodiscover" className="font-mono text-xs" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <Label className="text-xs text-muted-foreground mb-1.5">parameter</Label>
-                            <Input type="text" value={editing.parameter || ""} onChange={(e) => setEditing({ ...editing, parameter: e.target.value })} placeholder="id" className="font-mono text-xs" />
-                          </div>
-                          <div>
-                            <Label className="text-xs text-muted-foreground mb-1.5">content_length_jitter (0..4096)</Label>
-                            <Input type="number" min={0} max={4096} value={editing.content_length_jitter ?? 0} onChange={(e) => setEditing({ ...editing, content_length_jitter: Number(e.target.value) })} />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <Label className="text-xs text-muted-foreground mb-1.5">prepend (response wrap)</Label>
-                            <Input type="text" value={editing.prepend || ""} onChange={(e) => setEditing({ ...editing, prepend: e.target.value })} className="font-mono text-xs" />
-                          </div>
-                          <div>
-                            <Label className="text-xs text-muted-foreground mb-1.5">append (response wrap)</Label>
-                            <Input type="text" value={editing.append || ""} onChange={(e) => setEditing({ ...editing, append: e.target.value })} className="font-mono text-xs" />
-                          </div>
-                          <div>
-                            <Label className="text-xs text-muted-foreground mb-1.5">request_prepend</Label>
-                            <Input type="text" value={editing.request_prepend || ""} onChange={(e) => setEditing({ ...editing, request_prepend: e.target.value })} className="font-mono text-xs" />
-                          </div>
-                          <div>
-                            <Label className="text-xs text-muted-foreground mb-1.5">request_append</Label>
-                            <Input type="text" value={editing.request_append || ""} onChange={(e) => setEditing({ ...editing, request_append: e.target.value })} className="font-mono text-xs" />
-                          </div>
-                        </div>
-                      </div>
-                      <div className="space-y-3">
-                        <div>
-                          <Label className="text-xs text-muted-foreground mb-1.5">server_output chain (wire: base64;xor:key)</Label>
-                          <Textarea rows={2} value={editing.server_output || ""} onChange={(e) => setEditing({ ...editing, server_output: e.target.value })} placeholder="base64" className="font-mono text-xs" />
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground mb-1.5">client_metadata chain</Label>
-                          <Textarea rows={2} value={editing.client_metadata || ""} onChange={(e) => setEditing({ ...editing, client_metadata: e.target.value })} placeholder="base64;prepend:SES" className="font-mono text-xs" />
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground mb-1.5">client_id chain</Label>
-                          <Textarea rows={2} value={editing.client_id || ""} onChange={(e) => setEditing({ ...editing, client_id: e.target.value })} placeholder="base64" className="font-mono text-xs" />
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground mb-1.5">placements (one per line: target | chain)</Label>
-                          <Textarea rows={2} value={editing.placements || ""} onChange={(e) => setEditing({ ...editing, placements: e.target.value })} placeholder={"cookie:SESSION | base64\nquery:id | base64"} className="font-mono text-xs" />
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground mb-1.5">user_agents (one per line, rotates per beacon)</Label>
-                          <Textarea rows={2} value={(editing.user_agents || []).join("\n")} onChange={(e) => setEditing({ ...editing, user_agents: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean) })} placeholder="Mozilla/5.0 ..." className="font-mono text-xs" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <Checkbox checked={!!editing.jitter_uri} onCheckedChange={(v) => setEditing({ ...editing, jitter_uri: v === true })} />
-                            URI jitter (junk query)
-                          </label>
-                          <div>
-                            <Label className="text-xs text-muted-foreground mb-1.5">parameter_names (one per line)</Label>
-                            <Textarea rows={2} value={(editing.parameter_names || []).join("\n")} onChange={(e) => setEditing({ ...editing, parameter_names: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean) })} placeholder="id" className="font-mono text-xs" />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-3 gap-3">
-                          <div>
-                            <Label className="text-xs text-muted-foreground mb-1.5">work_start</Label>
-                            <Input type="time" value={editing.work_start || ""} onChange={(e) => setEditing({ ...editing, work_start: e.target.value })} />
-                          </div>
-                          <div>
-                            <Label className="text-xs text-muted-foreground mb-1.5">work_end</Label>
-                            <Input type="time" value={editing.work_end || ""} onChange={(e) => setEditing({ ...editing, work_end: e.target.value })} />
-                          </div>
-                          <div>
-                            <Label className="text-xs text-muted-foreground mb-1.5">work_tz</Label>
-                            <Input type="text" value={editing.work_tz || ""} onChange={(e) => setEditing({ ...editing, work_tz: e.target.value })} placeholder="UTC" className="font-mono text-xs" />
-                          </div>
-                        </div>
-                        {validateResult && (
-                          <div className="rounded-lg border border-border bg-secondary/40 p-3 text-xs">
-                            <div className="font-semibold mb-1">Wire preview</div>
-                            <div className="font-mono truncate">server_output: {validateResult.wire?.server_output || "(none)"}</div>
-                            <div className="font-mono truncate">client_metadata: {validateResult.wire?.client_metadata || "(none)"}</div>
-                            {validateResult.sample && <div className="font-mono truncate mt-1">sample: {validateResult.sample.encoded}</div>}
-                            {(validateResult.warnings || []).map((w, i) => (
-                              <div key={i} className="mt-1 flex items-start gap-1 text-warning-ink">
-                                <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
-                                <span>{w}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* JSON Preview */}
-                <Card className="overflow-hidden">
-                  <div className="bg-secondary/60 border-b border-border px-6 py-3">
-                    <div className="flex items-center gap-2">
-                      <Code className="size-4" />
-                      <span className="text-sm font-semibold text-foreground">{t("profiles.json_preview")}</span>
-                    </div>
-                  </div>
-                  <div className="p-4 bg-card">
-                    <pre className="text-xs text-muted-foreground font-mono overflow-x-auto whitespace-pre-wrap">{JSON.stringify(editing, null, 2)}</pre>
-                  </div>
-                </Card>
-              </div>
+              </>
             )}
-          </div>
-
-          <Input aria-label={t("profiles.import_json")} name="input-17" ref={fileInputRef} type="file" accept=".json,application/json" className="hidden" onChange={handleImportProfile} />
-        </div>
-      </TabsContent>
-      </Tabs>
-
-      <Dialog open={showCSModal} onOpenChange={setShowCSModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Import Cobalt Strike .profile text</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1.5">Profile name</Label>
-              <Input type="text" value={csName} onChange={(e) => setCSName(e.target.value)} placeholder="imported" className="font-mono text-xs" />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1.5">CS profile text (http-get/http-post blocks)</Label>
-              <Textarea rows={10} value={csText} onChange={(e) => setCSText(e.target.value)} placeholder={'http-get {\n  set uri "/api/v1/beacon";\n  client {\n    metadata {\n      base64;\n    }\n  }\n}'} className="font-mono text-xs" />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCSModal(false)} className="h-9 px-4">Cancel</Button>
-            <Button disabled={csBusy || !csText.trim()} onClick={handleImportCSText} className="h-9 px-4 text-sm disabled:opacity-50">
-              {csBusy ? "Importing…" : "Import"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showPushModal} onOpenChange={setShowPushModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("profiles.push_title")}: {editing.name}</DialogTitle>
-          </DialogHeader>
-          <div className="mb-3">
-            <Button onClick={async () => {
-              setLoadingAgents(true);
-              try {
-                // Full-fleet fetch: the push modal must reach every agent,
-                // not just the first 100 rows the server page cap allows.
-                const list = await fetchAllAgents();
-                setPushAgents(list.map((a) => ({ id: String(a.id || ""), hostname: String(a.hostname || a.ip || ""), ip: String(a.ip || "") })));
-              } catch { toast.error(t("profiles.toast.load_agents_failed")); }
-              setLoadingAgents(false);
-            }} disabled={loadingAgents} variant="link" size="sm" className="text-xs text-primary hover:underline disabled:opacity-50">{loadingAgents ? t("common.loading") : t("profiles.load_agents")}</Button>
-          </div>
-          <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
-            {pushAgents.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t("profiles.load_agents_hint")}</p>
-            ) : (
-              pushAgents.map(a => (
-                <Label key={a.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-secondary transition-colors cursor-pointer">
-                  <Checkbox aria-label={t("profiles.select_agent", { hostname: a.hostname })} name="input-18" checked={pushSelected.includes(a.id)} onCheckedChange={() => {
-                    setPushSelected(prev => prev.includes(a.id) ? prev.filter(id => id !== a.id) : [...prev, a.id])
-                  }} />
-                  <span className="text-sm font-mono">{a.hostname}</span>
-                  <span className="text-xs text-muted-foreground">{a.ip}</span>
-                </Label>
-              ))
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPushModal(false)} className="h-9 px-4">{t("common.cancel")}</Button>
-            <Button disabled={pushSelected.length === 0 || pushing} onClick={async () => {
-              setPushing(true);
-              let success = 0, fail = 0;
-              for (const agentId of pushSelected) {
-                try {
-                  const d = await api.postJson(paths.agents.profileRotate(agentId), {
-                    beacon_uri: editing.beacon_uri,
-                    beacon_method: editing.method,
-                    user_agent: editing.user_agent,
-                  });
-                  if (d.success) success++; else fail++;
-                } catch { fail++; }
-              }
-              setPushing(false);
-              setShowPushModal(false);
-              toast.success(t("profiles.toast.push_complete", { success: String(success), fail: String(fail) }));
-              setPushSelected([]);
-            }} className="h-9 px-4 text-sm disabled:opacity-50">
-              {pushing ? t("profiles.pushing") : t("profiles.push_to", { count: String(pushSelected.length) })}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </CardContent>
+        </Card>
+      </div>
       {modal}
     </PageContainer>
   );
 }
-

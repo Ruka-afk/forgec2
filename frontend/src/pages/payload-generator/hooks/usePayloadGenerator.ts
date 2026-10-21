@@ -23,6 +23,12 @@ import { parseGenerateQuery } from "@/lib/generate-query";
 
 const DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
 
+// The backend budget is 6 minutes for module resolution plus 15 minutes for
+// compilation, and requests may wait in the worker queue. Keep the client
+// watching at least that long instead of declaring a timeout while the server
+// is still building (which previously left a valid artifact orphaned).
+const BUILD_WAIT_TIMEOUT_MS = 25 * 60 * 1000;
+
 /*
  * No hard-coded profile catalog on purpose. A frontend copy silently drifts
  * from the server's embedded profiles — the stale "google" preset here said
@@ -304,7 +310,7 @@ export function usePayloadGenerator() {
         if (msg.status === "completed") finish({ status: "completed" });
         else if (msg.status === "failed") finish({ status: "failed", error: typeof msg.error === "string" ? msg.error : undefined });
       });
-      timeout = setTimeout(() => finish({ status: "timeout" }), 10 * 60 * 1000);
+      timeout = setTimeout(() => finish({ status: "timeout" }), BUILD_WAIT_TIMEOUT_MS);
       signal.addEventListener("abort", onAbort);
       fallback = setTimeout(poll, 100);
     });
@@ -437,6 +443,7 @@ export function usePayloadGenerator() {
     obfuscate: form.obfuscate ? "true" : "",
     slim: form.slim ? "true" : "",
     upx: form.upx ? "true" : "",
+    architecture: form.arch || "amd64",
     filename: form.filename,
     domain_front: form.domain_front,
     working_start: form.working_start,

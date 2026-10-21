@@ -386,32 +386,25 @@ func buildTokenStager(cfg ImplantConfig, outputDir string, fetch StagerFetch, go
 	ldflags := tokenStagerLdflags(fetch)
 
 	outName := cfg.Filename
-	if outName == "" {
-		outName = "stager"
-	}
 	if goos == "windows" {
-		if !strings.HasSuffix(strings.ToLower(outName), ".exe") {
+		if outName == "" {
+			outName = uniqueBuildName("stager", ".exe")
+		} else if !strings.HasSuffix(strings.ToLower(outName), ".exe") {
 			outName += ".exe"
 		}
-	} else if strings.HasSuffix(strings.ToLower(outName), ".exe") {
-		outName = outName[:len(outName)-4]
-	}
-	outPath := filepath.Join(outputDir, outName)
-	if !filepath.IsAbs(outPath) {
-		if abs, err := filepath.Abs(outPath); err == nil {
-			outPath = abs
+	} else {
+		if outName == "" {
+			outName = uniqueBuildName("stager", "")
+		} else if strings.HasSuffix(strings.ToLower(outName), ".exe") {
+			outName = outName[:len(outName)-4]
 		}
 	}
-	absOutputDir, absErr := filepath.Abs(outputDir)
-	if absErr != nil {
-		absOutputDir = outputDir
-	}
-	if !strings.HasPrefix(outPath, absOutputDir+string(filepath.Separator)) {
-		return "", fmt.Errorf("invalid stager filename: escapes output directory")
-	}
-	if err := os.MkdirAll(filepath.Dir(outPath), 0750); err != nil {
+	outName = safeBuildFileName(outName)
+	outPath, buildPath, err := prepareBuildOutput(outputDir, outName)
+	if err != nil {
 		return "", err
 	}
+	defer os.Remove(buildPath)
 
 	goCmd := getGoCmd()
 	if goCmd == "" {
@@ -421,19 +414,14 @@ func buildTokenStager(cfg ImplantConfig, outputDir string, fetch StagerFetch, go
 	ctx, cancel := context.WithTimeout(context.Background(), buildTimeout)
 	defer cancel()
 
-	tidyCmd := exec.CommandContext(ctx, goCmd, "mod", "tidy")
-	tidyCmd.Dir = tmpDir
-	tidyCmd.Env = goModuleEnv()
-	if out, err := tidyCmd.CombinedOutput(); err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return "", fmt.Errorf("go mod tidy timed out after %s (module proxy unreachable?). Set GOPROXY or implant.goproxy in config.yaml: %w", buildTimeout, err)
-		}
-		return "", fmt.Errorf("go mod tidy failed: %w\n%s", err, string(out))
-	}
-
+	// The token stager imports only the standard library, so there is nothing
+	// for `go mod tidy` to resolve. Building straight from the generated module
+	// removes a full Go process from every stager request and keeps generation
+	// working offline (no module proxy needed).
 	cmd := exec.CommandContext(ctx, goCmd, "build",
+		"-mod=mod",
 		"-ldflags", ldflags,
-		"-o", outPath,
+		"-o", buildPath,
 		"-trimpath",
 		"-buildvcs=false",
 		".",
@@ -443,7 +431,7 @@ func buildTokenStager(cfg ImplantConfig, outputDir string, fetch StagerFetch, go
 	if err != nil {
 		return "", err
 	}
-	cmd.Env = goModuleEnv(
+	cmd.Env = goToolchainEnv(false,
 		"GOOS="+goos,
 		"GOARCH="+goarch,
 		"CGO_ENABLED=0",
@@ -456,6 +444,18 @@ func buildTokenStager(cfg ImplantConfig, outputDir string, fetch StagerFetch, go
 			return "", fmt.Errorf("stager build timed out after %s: %w", buildTimeout, err)
 		}
 		return "", fmt.Errorf("stager build failed: %w\n%s", err, scrubBuildLog(stderr.String(), ldflags))
+	}
+	if goos == "windows" {
+		if err := validatePE(buildPath, windowsMachine(goarch)); err != nil {
+			return "", fmt.Errorf("generated stager failed PE validation: %w", err)
+		}
+	} else {
+		if err := validateELF(buildPath, goarch); err != nil {
+			return "", fmt.Errorf("generated stager failed ELF validation: %w", err)
+		}
+	}
+	if err := commitBuildOutput(buildPath, outPath, 0755); err != nil {
+		return "", err
 	}
 	if _, err := os.Stat(outPath); err != nil {
 		return "", fmt.Errorf("stager build succeeded but no output: %w", err)

@@ -90,10 +90,7 @@ func CheckDLLBuildPreconditions(architecture string, obfuscate bool) error {
 func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 	dataDir := filepath.Dir(outputDir)
 	profile := NormalizeImplantConfig(&cfg, dataDir)
-	if err := win7CompatConflict(&cfg); err != nil {
-		return "", err
-	}
-	if err := slimTransportConflict(&cfg); err != nil {
+	if err := ValidateImplantBuild("windows", "dll", &cfg); err != nil {
 		return "", err
 	}
 	plan, err := resolveAgentPlan(&cfg)
@@ -112,20 +109,17 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 			outputDir = abs
 		}
 	}
+	goCmd := getGoCmd()
+	if goCmd == "" {
+		return "", fmt.Errorf("go executable not found in PATH")
+	}
 
 	if err := extractAgentSources(payloadFS, tmpDir, plan); err != nil {
 		return "", err
 	}
 
-	goMod := buildGoMod("windows", true, plan.TransportsExcluded, cfg.Win7Compat, plan.includes("webrtc"))
-
-	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0600); err != nil {
+	if err := prepareAgentModule(goCmd, tmpDir, "windows", true, plan, cfg.Win7Compat); err != nil {
 		return "", err
-	}
-	if cfg.Win7Compat {
-		if err := materializeWin7Shim(tmpDir); err != nil {
-			return "", err
-		}
 	}
 
 	ldflags, blob, sKey := buildLdflags(cfg, profile, "windows")
@@ -137,60 +131,51 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 
 	outName := cfg.Filename
 	if outName == "" {
-		outName = "forgec2_agent.dll"
+		outName = uniqueBuildName("forgec2_agent", ".dll")
 	}
 	if !strings.HasSuffix(strings.ToLower(outName), ".dll") {
 		outName += ".dll"
 	}
 	outName = safeBuildFileName(outName)
-	outPath := filepath.Join(outputDir, outName)
-	if !filepath.IsAbs(outPath) {
-		if abs, err := filepath.Abs(outPath); err == nil {
-			outPath = abs
-		}
-	}
-	outDir := filepath.Dir(outPath)
-	if err := os.MkdirAll(outDir, 0750); err != nil {
+	outPath, buildPath, err := prepareBuildOutput(outputDir, outName)
+	if err != nil {
 		return "", err
 	}
-
-	goCmd := getGoCmd()
-	if goCmd == "" {
-		return "", fmt.Errorf("go executable not found in PATH")
-	}
-
-	if err := runGoModTidy(goCmd, tmpDir, cfg.Win7Compat); err != nil {
-		return "", err
-	}
+	defer os.Remove(buildPath)
+	// c-shared writes a C header next to the DLL; remove it on every path so a
+	// failed post-processing step cannot leave build material orphaned.
+	hPath := strings.TrimSuffix(buildPath, filepath.Ext(buildPath)) + ".h"
+	defer os.Remove(hPath)
 
 	goarch, err := resolveBuildArch("windows", cfg.Architecture)
 	if err != nil {
 		return "", err
 	}
-	if err := buildAgentBinaryDLL(goCmd, tmpDir, ldflags, outPath, cfg.Obfuscate, "windows", goarch, blob, sKey, cfg.Win7Compat); err != nil {
+	if err := buildAgentBinaryDLL(goCmd, tmpDir, ldflags, buildPath, cfg.Obfuscate, "windows", goarch, blob, sKey, cfg.Win7Compat); err != nil {
 		return "", err
 	}
 
 	// Strip PE forensic artifacts in every mode (garble does not clean them)
 	// and remove the Go-generated .h export header next to the DLL.
-	if err := stripPEArtifacts(outPath); err != nil {
+	if err := stripPEArtifacts(buildPath); err != nil {
 		return "", fmt.Errorf("strip PE artifacts: %w", err)
 	}
 
 	if cfg.SelfCheck {
-		if err := patchSelfCheckHash(outPath); err != nil {
+		if err := patchSelfCheckHash(buildPath); err != nil {
 			return "", err
 		}
 	}
 
 	// Fail loudly (rather than deliver a corrupt binary) if the produced DLL is
 	// malformed or the wrong architecture.
-	if err := validatePE(outPath, windowsMachine(goarch)); err != nil {
+	if err := validatePE(buildPath, windowsMachine(goarch)); err != nil {
 		return "", fmt.Errorf("generated dll failed PE validation: %w", err)
 	}
-	hPath := strings.TrimSuffix(outPath, ".dll") + ".h"
-	os.Remove(hPath)
 
+	if err := commitBuildOutput(buildPath, outPath, 0755); err != nil {
+		return "", err
+	}
 	if _, err := os.Stat(outPath); err != nil {
 		return "", fmt.Errorf("build succeeded but no output file at %s: %w", outPath, err)
 	}
@@ -212,7 +197,7 @@ func buildAgentBinaryDLL(goCmd, workDir, ldflags, outPath string, obfuscate bool
 		return fmt.Errorf("DLL build requires CGO: %w", err)
 	}
 
-	buildArgs := []string{"build", "-buildmode=c-shared"}
+	buildArgs := []string{"build", "-buildmode=c-shared", "-mod=mod"}
 	if tags := wintunBuildTags(goos, goarch, workDir); len(tags) > 0 {
 		buildArgs = append(buildArgs, "-tags", strings.Join(tags, ","))
 	}

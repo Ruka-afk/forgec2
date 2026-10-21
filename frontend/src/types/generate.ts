@@ -96,6 +96,8 @@ export interface UnixForm {
   obfuscate: boolean;
   slim: boolean;
   upx: boolean;
+  /** Target architecture: amd64/arm64 (Linux also arm). */
+  arch: string;
   domain_front: string;
   working_start: string;
   working_end: string;
@@ -217,7 +219,7 @@ export const DEFAULT_BINARY_FORM: BinaryForm = {
 };
 
 export const DEFAULT_UNIX_FORM: UnixForm = {
-  filename: "forge_implant", persist: false, skip_tls: false, obfuscate: false, slim: false, upx: false, domain_front: "",
+  filename: "forge_implant", persist: false, skip_tls: false, obfuscate: false, slim: false, upx: false, arch: "amd64", domain_front: "",
   working_start: "", working_end: "", working_tz: "",
   modules: [],
 };
