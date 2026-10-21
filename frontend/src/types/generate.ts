@@ -85,6 +85,14 @@ export interface BinaryForm {
   slim: boolean;
   upx: boolean;
   win7compat: boolean;
+  /** Authenticode signing: "none", "self" or "pfx" (PEM is API-only). */
+  sign_mode: string;
+  sign_org: string;
+  /** Base64 PKCS#12 bundle; sent only when sign_mode is "pfx". */
+  sign_pfx_b64: string;
+  sign_pfx_password: string;
+  /** UI-only label for the selected PFX file. */
+  sign_pfx_filename: string;
   /** Included agent modules (see /api/generate/modules). Empty = every module. */
   modules: string[];
 }
@@ -215,6 +223,7 @@ export const DEFAULT_BINARY_FORM: BinaryForm = {
   working_start: "", working_end: "", working_tz: "",
   icon_file: null, icon_b64: "", icon_preset: "", disguise_as: "", file_description: "", company_name: "", lnk_disguise: false,
   pe_timestamp: "zero", pe_sections: "default", pe_imports: "none", pe_manifest: "default", slim: false, upx: false, win7compat: false,
+  sign_mode: "none", sign_org: "", sign_pfx_b64: "", sign_pfx_password: "", sign_pfx_filename: "",
   modules: [],
 };
 

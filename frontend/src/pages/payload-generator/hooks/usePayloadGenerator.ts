@@ -434,6 +434,10 @@ export function usePayloadGenerator() {
     slim: form.slim ? "true" : "",
     upx: form.upx ? "true" : "",
     win7_compat: form.win7compat ? "true" : "",
+    sign_mode: form.sign_mode === "none" ? "" : form.sign_mode,
+    sign_org: form.sign_mode === "self" ? form.sign_org : "",
+    sign_pfx_b64: form.sign_mode === "pfx" ? form.sign_pfx_b64 : "",
+    sign_pfx_password: form.sign_mode === "pfx" ? form.sign_pfx_password : "",
     modules: form.modules.join(","),
   }), []);
 

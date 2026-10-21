@@ -285,6 +285,92 @@ export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setF
           <div><FieldLabel>Manifest</FieldLabel><Select value={form.pe_manifest || "default"} onValueChange={(val) => val != null && setForm({ ...form, pe_manifest: val })}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="default">Default Go</SelectItem><SelectItem value="blend">Blend (dpiAware+Win10)</SelectItem></SelectContent></Select></div>
         </div>
       </AdvancedSection>
+      <AdvancedSection title={t("generate.panel.signing") || "Authenticode Signing"}>
+        <div className="space-y-2">
+          <div>
+            <FieldLabel>{t("generate.panel.sign_mode") || "Signing"}</FieldLabel>
+            <Select
+              value={form.sign_mode || "none"}
+              onValueChange={(val) =>
+                val != null &&
+                setForm({
+                  ...form,
+                  sign_mode: val,
+                  ...(val !== "pfx"
+                    ? { sign_pfx_b64: "", sign_pfx_password: "", sign_pfx_filename: "" }
+                    : {}),
+                })
+              }
+            >
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">{t("generate.panel.sign_mode_none") || "Unsigned (default)"}</SelectItem>
+                <SelectItem value="self">{t("generate.panel.sign_mode_self") || "Self-signed certificate"}</SelectItem>
+                <SelectItem value="pfx">{t("generate.panel.sign_mode_pfx") || "PFX certificate"}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {form.sign_mode === "self" && (
+            <div className="space-y-1.5">
+              <FieldLabel>{t("generate.panel.sign_org") || "Certificate organization"}</FieldLabel>
+              <Input
+                value={form.sign_org}
+                onChange={(e) => setForm({ ...form, sign_org: e.target.value })}
+                placeholder={t("generate.panel.sign_org_placeholder") || "Software Publisher"}
+                className="bg-background/60"
+              />
+              <p className="text-xs leading-4 text-muted-foreground">{t("generate.panel.sign_self_hint")}</p>
+            </div>
+          )}
+          {form.sign_mode === "pfx" && (
+            <div className="space-y-2">
+              <div>
+                <FieldLabel>{t("generate.panel.sign_pfx") || "PFX / P12 file"}</FieldLabel>
+                <Input
+                  type="file"
+                  accept=".pfx,.p12,application/x-pkcs12"
+                  aria-label={t("generate.panel.sign_pfx") || "PFX / P12 file"}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    if (!file) {
+                      setForm({ ...form, sign_pfx_b64: "", sign_pfx_filename: "" });
+                      return;
+                    }
+                    if (file.size > 64 * 1024) {
+                      toast.error(t("generate.toast.pfx_too_large"));
+                      e.target.value = "";
+                      return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      const b64 = (reader.result as string).split(",")[1] || "";
+                      setForm((prev) => ({ ...prev, sign_pfx_b64: b64, sign_pfx_filename: file.name }));
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                />
+                {form.sign_pfx_filename && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t("generate.panel.sign_pfx_selected", { name: form.sign_pfx_filename })}
+                  </p>
+                )}
+              </div>
+              <div>
+                <FieldLabel>{t("generate.panel.sign_pfx_password") || "PFX password"}</FieldLabel>
+                <Input
+                  type="password"
+                  autoComplete="new-password"
+                  value={form.sign_pfx_password}
+                  onChange={(e) => setForm({ ...form, sign_pfx_password: e.target.value })}
+                  className="bg-background/60"
+                  placeholder="••••••••"
+                />
+              </div>
+              <p className="text-xs leading-4 text-muted-foreground">{t("generate.panel.sign_pfx_hint")}</p>
+            </div>
+          )}
+        </div>
+      </AdvancedSection>
       <ModuleSelector id={id} catalog={agentModules ?? []} value={form.modules} onChange={(next) => setForm({ ...form, modules: next })} slimLocked={form.slim} />
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <label htmlFor={`${id}-persist`} className="flex cursor-pointer items-center gap-x-2.5 rounded-lg border border-border/50 bg-background/40 px-2.5 py-2 transition-colors hover:border-primary/25 hover:bg-muted/30 has-checked:border-primary/30 has-checked:bg-primary/5">
