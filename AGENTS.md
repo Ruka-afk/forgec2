@@ -23,6 +23,10 @@ The frontend is **Vite** (not Next.js).
 - **Canonical sync script**: `scripts/build-embedded.ps1` (uses `Remove-Item` + `Copy-Item -Recurse frontend/out/*` → `internal/webdist/dist`; includes assets; runs `scripts/normalize-webdist.mjs` afterwards). Use this, NOT robocopy directly.
 - After syncing, verify with `scripts/check-webdist.mjs` (expects "OK: matches frontend/out").
 - **Check out with LF line endings.** CI builds the bundle on Linux and compares it byte for byte, so the committed `internal/webdist/dist` must come from an LF checkout. With `core.autocrlf=true`, `frontend/index.html` is CRLF and vite's static export re-converts the newlines, emitting a doubled CR (`\r\r\n`) that no amount of normalization removes. `check-webdist.mjs` detects exactly that case and prints the fix; the short version is `git config core.autocrlf false` in this clone, then re-checkout and rebuild.
+- **The bundle must be byte-identical on every platform.** Two traps, both fixed but easy to re-introduce:
+  - The CSS target is pinned to `safari16` (`vite.config.ts`). With an older target, lightningcss downgrades the `oklch()` palette to `lab()` and prints the converted numbers with a platform-dependent precision (36.4219 on Windows, 36.422 on Linux) — one byte changes the CSS hash, then every chunk name and every HTML page name, so the Windows build never matches the CI's Linux build.
+  - **No two modules may share a basename.** The bundler disambiguates chunk names from the module path, which Windows and Linux spell differently (`pages/traffic/TrafficPage` vs `pages/beacons/detail/traffic/TrafficPage` produced different chunk names on the two platforms). Keep the page components uniquely named (`BeaconTrafficPage`, `BeaconFilesPage`, …).
+  - To refresh the committed bundle from a Linux host: dispatch `.github/workflows/webdist-export.yml` (upload-artifact) and replace `internal/webdist/dist` with the artifact — the same way the Linux visual baselines are refreshed.
 
 ## Frontend verification
 Node **24.15+** is the floor (CI and release workflows use `24`; Vitest 5 and
