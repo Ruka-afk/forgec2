@@ -210,7 +210,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
           <>
           {templates.length > 0 && (
             <div>
-              <Label className="text-xs mb-1.5">{t("packer.template")}</Label>
+              <Label className="mb-1.5">{t("packer.template")}</Label>
               <Select value={selectedTemplate} onValueChange={(v) => handleTemplateSelect(v ?? "")}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder={t("packer.custom")} />
@@ -227,7 +227,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">{t("packer.output_type")}</Label>
+              <Label>{t("packer.output_type")}</Label>
               <Select value={outputType} onValueChange={(v) => setOutputType(v ?? "exe")}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -238,7 +238,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
               </Select>
             </div>
             <div>
-              <Label className="text-xs">{t("packer.entry_point")}</Label>
+              <Label>{t("packer.entry_point")}</Label>
               <Select value={entryPoint} onValueChange={(v) => setEntryPoint(v ?? "direct")}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -249,7 +249,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
               </Select>
             </div>
             <div>
-              <Label className="text-xs">{t("packer.timestamp")}</Label>
+              <Label>{t("packer.timestamp")}</Label>
               <Select value={timestamp} onValueChange={(v) => setTimestamp(v ?? "random")}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -264,7 +264,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
               )}
             </div>
             <div>
-              <Label className="text-xs">{t("packer.certificate")}</Label>
+              <Label>{t("packer.certificate")}</Label>
               <Select value={certOption} onValueChange={(v) => setCertOption(v ?? "none")}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -280,19 +280,19 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
             <h3 className="text-sm font-semibold text-foreground mb-3">{t("packer.pe_sections")}</h3>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div>
-                <Label className="text-xs">.text</Label>
+                <Label>.text</Label>
                 <Input value={peText} onChange={e => setPeText(e.target.value)} />
               </div>
               <div>
-                <Label className="text-xs">.data</Label>
+                <Label>.data</Label>
                 <Input value={peData} onChange={e => setPeData(e.target.value)} />
               </div>
               <div>
-                <Label className="text-xs">.rdata</Label>
+                <Label>.rdata</Label>
                 <Input value={peRdata} onChange={e => setPeRdata(e.target.value)} />
               </div>
               <div>
-                <Label className="text-xs">.reloc</Label>
+                <Label>.reloc</Label>
                 <Input value={peReloc} onChange={e => setPeReloc(e.target.value)} />
               </div>
             </div>
@@ -302,7 +302,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
             <h3 className="text-sm font-semibold text-foreground mb-3">{t("packer.shellcode_encoding")}</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs">{t("packer.encode_type")}</Label>
+                <Label>{t("packer.encode_type")}</Label>
                 <Select value={encodeType} onValueChange={(v) => setEncodeType(v ?? "none")}>
                   <SelectTrigger className="w-full">
                     <SelectValue />
@@ -313,7 +313,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
                 </Select>
               </div>
               <div>
-                <Label className="text-xs">{t("packer.shellcode_file")}</Label>
+                <Label>{t("packer.shellcode_file")}</Label>
                 <Input type="file" accept=".bin" onChange={handleShellcodeFile} aria-label={t("packer.upload_bof")} />
                 {shellcodeB64 && <span className="text-xs text-success-ink mt-1 flex items-center gap-1"><CheckCircle className="size-4" />{t("packer.shellcode_loaded")}</span>}
               </div>
@@ -323,7 +323,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
           <div className="border-t border-border pt-4">
             <h3 className="text-sm font-semibold text-foreground mb-3">{t("packer.import_manipulation")}</h3>
             <div>
-              <Label className="text-xs">{t("packer.benign_dlls")}</Label>
+              <Label>{t("packer.benign_dlls")}</Label>
               <Input value={importDLLs} onChange={e => setImportDLLs(e.target.value)}
                 placeholder="kernel32.dll, advapi32.dll, ws2_32.dll" />
             </div>
@@ -341,7 +341,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
       <TabsContent value="bundle">
         <Card className="p-(--card-spacing) space-y-5">
           <div>
-            <Label className="text-xs mb-1.5">{t("packer.payload_exe")}</Label>
+            <Label className="mb-1.5">{t("packer.payload_exe")}</Label>
             <Input type="file" accept=".exe,.dll" onChange={handleFileSelect} aria-label={t("packer.upload_dll")} />
             {exeB64 && <span className="text-xs text-success-ink mt-1 flex items-center gap-1"><CheckCircle className="size-4" />{t("packer.exe_loaded", { size: String(Math.round(exeB64.length * 0.75 / 1024)) })}</span>}
           </div>
@@ -350,7 +350,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
             <h3 className="text-sm font-semibold text-foreground mb-3">{t("packer.pe_transformations")}</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-              <Label className="text-xs">{t("packer.timestamp")}</Label>
+              <Label>{t("packer.timestamp")}</Label>
                 <Select value={bundleTimestamp} onValueChange={(v) => setBundleTimestamp(v ?? "")}>
                   <SelectTrigger className="w-full">
                     <SelectValue />
@@ -368,19 +368,19 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
               <div>
-                <Label className="text-xs">.text</Label>
+                <Label>.text</Label>
                 <Input value={peText} onChange={e => setPeText(e.target.value)} />
               </div>
               <div>
-                <Label className="text-xs">.data</Label>
+                <Label>.data</Label>
                 <Input value={peData} onChange={e => setPeData(e.target.value)} />
               </div>
               <div>
-                <Label className="text-xs">.rdata</Label>
+                <Label>.rdata</Label>
                 <Input value={peRdata} onChange={e => setPeRdata(e.target.value)} />
               </div>
               <div>
-                <Label className="text-xs">.reloc</Label>
+                <Label>.reloc</Label>
                 <Input value={peReloc} onChange={e => setPeReloc(e.target.value)} />
               </div>
             </div>

@@ -214,33 +214,33 @@ export default function SIEMRulesSection() {
               {editing == null ? t("settings.siem.addRule") : t("settings.siem.edit")}
             </h4>
             <div className="flex items-center gap-2">
-              <Label htmlFor="siem-enabled" className="text-xs">{t("settings.siem.enabled")}</Label>
+              <Label htmlFor="siem-enabled" >{t("settings.siem.enabled")}</Label>
               <Switch id="siem-enabled" checked={form.enabled} onCheckedChange={(v) => set({ enabled: v })} />
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label required htmlFor="siem-name" className="text-xs">{t("settings.siem.name")}</Label>
+              <Label required htmlFor="siem-name" >{t("settings.siem.name")}</Label>
               <Input id="siem-name" value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder={t("settings.siem.namePlaceholder")} className="h-8 text-xs" />
             </div>
             <div className="space-y-1.5">
-              <Label required htmlFor="siem-action" className="text-xs">{t("settings.siem.action")}</Label>
+              <Label required htmlFor="siem-action" >{t("settings.siem.action")}</Label>
               <Input id="siem-action" value={form.action} onChange={(e) => set({ action: e.target.value })} placeholder={t("settings.siem.actionPlaceholder")} className="h-8 text-xs" />
             </div>
             <div className="space-y-1.5">
-              <Label required htmlFor="siem-window" className="text-xs">{t("settings.siem.windowSec")}</Label>
+              <Label required htmlFor="siem-window" >{t("settings.siem.windowSec")}</Label>
               <Input id="siem-window" type="number" min={1} value={form.window_sec} onChange={(e) => set({ window_sec: Number(e.target.value) || 0 })} className="h-8 text-xs" />
             </div>
             <div className="space-y-1.5">
-              <Label required htmlFor="siem-threshold" className="text-xs">{t("settings.siem.threshold")}</Label>
+              <Label required htmlFor="siem-threshold" >{t("settings.siem.threshold")}</Label>
               <Input id="siem-threshold" type="number" min={1} value={form.threshold} onChange={(e) => set({ threshold: Number(e.target.value) || 0 })} className="h-8 text-xs" />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="siem-alert-action" className="text-xs">{t("settings.siem.alertAction")}</Label>
+              <Label htmlFor="siem-alert-action" >{t("settings.siem.alertAction")}</Label>
               <Input id="siem-alert-action" value={form.alert_action} onChange={(e) => set({ alert_action: e.target.value })} className="h-8 text-xs" />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="siem-alert-details" className="text-xs">{t("settings.siem.alertDetails")}</Label>
+              <Label htmlFor="siem-alert-details" >{t("settings.siem.alertDetails")}</Label>
               <Input id="siem-alert-details" value={form.alert_details} onChange={(e) => set({ alert_details: e.target.value })} className="h-8 text-xs" />
             </div>
           </div>

@@ -227,7 +227,7 @@ export default function PrivescPage() {
 
         <div className="flex flex-col gap-(--page-gap)">
           <div>
-            <Label className="text-sm font-medium mb-2 block">
+            <Label className="text-sm mb-2 block">
               <Bot className="size-4" />{t("privesc.target_agent")}
             </Label>
             <Select value={selectedAgent || "placeholder"} onValueChange={(v) => setSelectedAgent(v === "placeholder" ? "" : v ?? "")}>

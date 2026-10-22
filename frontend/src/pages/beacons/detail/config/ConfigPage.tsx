@@ -201,7 +201,7 @@ export default function AgentConfigPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
           <div>
-            <Label className="text-xs mb-1.5">{t("agents.config_sleep_seconds")}</Label>
+            <Label className="mb-1.5">{t("agents.config_sleep_seconds")}</Label>
             <div className="flex gap-2">
               <Input aria-label={t("agents.config.sleep")} name="input-0" type="number" min="1" value={editSleep} onChange={(e) => setEditSleep(e.target.value)}
                 className="flex-1" />
@@ -214,7 +214,7 @@ export default function AgentConfigPage() {
             </div>
           </div>
           <div>
-            <Label className="text-xs mb-1.5">{t("agents.config_jitter_pct")}</Label>
+            <Label className="mb-1.5">{t("agents.config_jitter_pct")}</Label>
             <div className="flex gap-2">
               <Input aria-label={t("agents.config.jitter")} name="input-1" type="number" min="0" max="100" value={editJitter} onChange={(e) => setEditJitter(e.target.value)}
                 className="flex-1" />
@@ -229,7 +229,7 @@ export default function AgentConfigPage() {
         </div>
 
         <div className="mb-4">
-          <Label className="text-xs mb-1.5">{t("agents.config_user_agent")}</Label>
+          <Label className="mb-1.5">{t("agents.config_user_agent")}</Label>
           <div className="flex gap-2">
             <div className="flex-1 flex gap-2">
               <Input aria-label={t("agents.config.ua")} name="input-2" type="text" value={editUA} onChange={(e) => setEditUA(e.target.value)}
@@ -256,7 +256,7 @@ export default function AgentConfigPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
-            <Label className="text-xs mb-1.5">{t("agents.config_beacon_uri")}</Label>
+            <Label className="mb-1.5">{t("agents.config_beacon_uri")}</Label>
             <div className="flex gap-2">
               <Input aria-label={t("agents.config.uri")} name="input-4" type="text" value={editURI} onChange={(e) => setEditURI(e.target.value)}
                 className="flex-1 font-mono" />
@@ -269,7 +269,7 @@ export default function AgentConfigPage() {
             </div>
           </div>
           <div>
-            <Label className="text-xs mb-1.5">{t("agents.config_http_method")}</Label>
+            <Label className="mb-1.5">{t("agents.config_http_method")}</Label>
             <div className="flex gap-2">
               <Select value={editMethod} onValueChange={(v) => { if (v !== null) setEditMethod(v); }}>
                 <SelectTrigger className="flex-1">
@@ -292,7 +292,7 @@ export default function AgentConfigPage() {
 
         <div className="mb-5">
           <div className="flex items-center justify-between mb-1.5">
-            <Label className="text-xs">{t("agents.config_custom_headers")}</Label>
+            <Label>{t("agents.config_custom_headers")}</Label>
             <div className="flex gap-2">
               <Button variant="ghost" size="sm" onClick={addHeader}>
                 <Plus className="size-4" /> {t("agents.config_add")}

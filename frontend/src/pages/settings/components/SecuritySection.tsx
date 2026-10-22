@@ -54,16 +54,16 @@ export default function SecuritySection({
           <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2"><Key className="size-4" />{t("settings.security.change_password")}</h3>
           <form onSubmit={onChangePassword} className="max-w-md space-y-4">
             <div>
-              <Label htmlFor="sec-current-pw" className="text-xs text-muted-foreground mb-1.5">{t("settings.security.current_password")}</Label>
+              <Label htmlFor="sec-current-pw" className="mb-1.5">{t("settings.security.current_password")}</Label>
               <Input id="sec-current-pw" type="password" value={passwordForm.current} onChange={(e) => setPasswordForm({ ...passwordForm, current: e.target.value })} />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="sec-new-pw" className="text-xs text-muted-foreground mb-1.5">{t("settings.security.new_password")}</Label>
+                <Label htmlFor="sec-new-pw" className="mb-1.5">{t("settings.security.new_password")}</Label>
                 <Input id="sec-new-pw" type="password" minLength={8} value={passwordForm.next} onChange={(e) => setPasswordForm({ ...passwordForm, next: e.target.value })} />
               </div>
               <div>
-                <Label htmlFor="sec-confirm-pw" className="text-xs text-muted-foreground mb-1.5">{t("settings.security.confirm_password")}</Label>
+                <Label htmlFor="sec-confirm-pw" className="mb-1.5">{t("settings.security.confirm_password")}</Label>
                 <Input id="sec-confirm-pw" type="password" minLength={8} value={passwordForm.confirm} onChange={(e) => setPasswordForm({ ...passwordForm, confirm: e.target.value })} />
               </div>
             </div>

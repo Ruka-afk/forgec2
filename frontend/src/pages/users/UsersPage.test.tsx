@@ -60,8 +60,8 @@ async function renderPage() {
 
 function openAddDialog(): HTMLButtonElement {
   fireEvent.click(screen.getByRole("button", { name: "users.add_user" }));
-  fireEvent.change(screen.getByLabelText("users.label_username"), { target: { value: "bob" } });
-  fireEvent.change(screen.getByLabelText("users.label_password"), { target: { value: "password1" } });
+  fireEvent.change(screen.getByLabelText(/users\.label_username/), { target: { value: "bob" } });
+  fireEvent.change(screen.getByLabelText(/users\.label_password/), { target: { value: "password1" } });
   return screen.getByRole("button", { name: "users.btn.create_user" }) as HTMLButtonElement;
 }
 

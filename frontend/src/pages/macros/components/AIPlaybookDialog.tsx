@@ -109,7 +109,7 @@ export function AIPlaybookDialog({ onSaved }: { onSaved: () => void }) {
 
         <div className="space-y-3">
           <div>
-            <Label className="text-xs text-muted-foreground">{t("ai.pb_goal")}</Label>
+            <Label>{t("ai.pb_goal")}</Label>
             <Input
               value={goal}
               onChange={(e) => setGoal(e.target.value)}
@@ -119,7 +119,7 @@ export function AIPlaybookDialog({ onSaved }: { onSaved: () => void }) {
             />
           </div>
           <div>
-            <Label className="text-xs text-muted-foreground">{t("ai.pb_agent")}</Label>
+            <Label>{t("ai.pb_agent")}</Label>
             <select
               value={agentId}
               onChange={(e) => setAgentId(e.target.value)}

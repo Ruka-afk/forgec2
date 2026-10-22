@@ -174,7 +174,7 @@ export default function ExtC2Section() {
             </Button>
           </div>
           <div className="space-y-2">
-            <Label required htmlFor="extc2-bot-token" className="text-xs">{t("settings.extc2.botToken")}</Label>
+            <Label required htmlFor="extc2-bot-token" >{t("settings.extc2.botToken")}</Label>
             <Input
               id="extc2-bot-token"
               type="password"
@@ -185,7 +185,7 @@ export default function ExtC2Section() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="extc2-channel-id" className="text-xs">{formType === "telegram" ? t("settings.extc2.chatId") : t("settings.extc2.channelId")}</Label>
+            <Label htmlFor="extc2-channel-id" >{formType === "telegram" ? t("settings.extc2.chatId") : t("settings.extc2.channelId")}</Label>
             <Input
               id="extc2-channel-id"
               value={channelId}

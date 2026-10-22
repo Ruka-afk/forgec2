@@ -143,7 +143,7 @@ export default function ChainPage() {
 
       {/* Agent Selector */}
       <Card className="p-(--card-spacing) mb-6">
-        <Label className="text-xs font-medium text-muted-foreground mb-2 block">{t("chain.select_agent")}</Label>
+        <Label className="mb-2 block">{t("chain.select_agent")}</Label>
         <AgentLoadError message={agentListError} className="mb-2" />
         <Select value={selectedAgent} onValueChange={(v) => setSelectedAgent(v ?? "")}>
           <SelectTrigger className="w-full">

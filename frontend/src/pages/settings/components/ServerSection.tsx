@@ -27,11 +27,11 @@ export default function ServerSection({
         <form onSubmit={onSave} className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <Label htmlFor="server-http-port" className="block text-xs text-muted-foreground mb-1.5">{t("settings.server.http_port")}</Label>
+              <Label htmlFor="server-http-port" className="block mb-1.5">{t("settings.server.http_port")}</Label>
               <Input id="server-http-port" type="number" defaultValue={data.server_port} readOnly className="bg-muted cursor-not-allowed text-muted-foreground" />
             </div>
             <div>
-              <Label htmlFor="server-listen-address" className="block text-xs text-muted-foreground mb-1.5">{t("settings.server.listen_address")}</Label>
+              <Label htmlFor="server-listen-address" className="block mb-1.5">{t("settings.server.listen_address")}</Label>
               <Input id="server-listen-address" type="text" defaultValue={data.server_address ?? ""} readOnly className="bg-muted cursor-not-allowed text-muted-foreground font-mono" />
             </div>
             <div>
@@ -71,22 +71,22 @@ export default function ServerSection({
               </div>
             </div>
             <div>
-              <Label htmlFor="server-tcp-address" className="block text-xs text-muted-foreground mb-1.5">{t("settings.server.tcp_address")}</Label>
+              <Label htmlFor="server-tcp-address" className="block mb-1.5">{t("settings.server.tcp_address")}</Label>
               <Input id="server-tcp-address" type="text" placeholder="0.0.0.0:4444" value={form.tcp_addr} onChange={(e) => setForm({ ...form, tcp_addr: e.target.value })} className="font-mono" />
             </div>
           </div>
           <div className="border-t border-border pt-4 mt-2">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <Label htmlFor="server-offline-threshold" className="block text-xs text-muted-foreground mb-1.5">{t("settings.server.offline_threshold")}</Label>
+                <Label htmlFor="server-offline-threshold" className="block mb-1.5">{t("settings.server.offline_threshold")}</Label>
                 <Input id="server-offline-threshold" type="number" min={5} max={3600} value={form.offline_threshold} onChange={(e) => setForm({ ...form, offline_threshold: Number(e.target.value) })} />
               </div>
               <div>
-                <Label htmlFor="server-session-timeout" className="block text-xs text-muted-foreground mb-1.5">{t("settings.server.session_timeout")}</Label>
+                <Label htmlFor="server-session-timeout" className="block mb-1.5">{t("settings.server.session_timeout")}</Label>
                 <Input id="server-session-timeout" type="number" min={1} max={720} value={form.session_max_age} onChange={(e) => setForm({ ...form, session_max_age: Number(e.target.value) })} />
               </div>
               <div>
-                <Label htmlFor="server-cleanup-retention" className="block text-xs text-muted-foreground mb-1.5">{t("settings.server.cleanup_retention")}</Label>
+                <Label htmlFor="server-cleanup-retention" className="block mb-1.5">{t("settings.server.cleanup_retention")}</Label>
                 <Input id="server-cleanup-retention" type="number" min={1} max={365} value={form.cleanup_retention} onChange={(e) => setForm({ ...form, cleanup_retention: Number(e.target.value) })} />
               </div>
             </div>

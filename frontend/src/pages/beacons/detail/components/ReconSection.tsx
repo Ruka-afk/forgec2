@@ -98,7 +98,7 @@ export default memo(function ReconSection({ agentId, online }: ReconSectionProps
         ))}
       </div>
       <div className="max-w-md">
-        <Label className="mb-1 block text-xs text-muted-foreground">{t("agents.recon_target")}</Label>
+        <Label className="block mb-1.5">{t("agents.recon_target")}</Label>
         <Input
           value={target}
           onChange={(e) => setTarget(e.target.value)}

@@ -151,11 +151,11 @@ export default memo(function InjectSection({ agentId, online, osType }: InjectSe
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
-            <Label className="text-xs text-muted-foreground">{t("agents.inject_pid")}</Label>
+            <Label>{t("agents.inject_pid")}</Label>
             <Input type="number" min={1} value={pid} onChange={(e) => setPid(e.target.value)} placeholder="4820" className="mt-1 h-9 font-mono" />
           </div>
           <div>
-            <Label className="text-xs text-muted-foreground">{t("agents.inject_technique")}</Label>
+            <Label>{t("agents.inject_technique")}</Label>
             <Select value={technique} onValueChange={(v) => { if (v) { setTechnique(v); setConfirmStep(false); } }}>
               <SelectTrigger className="mt-1"><SelectValue placeholder={t("agents.inject_select_tech")} /></SelectTrigger>
               <SelectContent>
@@ -168,7 +168,7 @@ export default memo(function InjectSection({ agentId, online, osType }: InjectSe
         </div>
 
         <div>
-          <Label className="text-xs text-muted-foreground">{t("agents.inject_shellcode")}</Label>
+          <Label>{t("agents.inject_shellcode")}</Label>
           <div className="mt-1 flex items-center gap-2">
             <input
               ref={fileRef}

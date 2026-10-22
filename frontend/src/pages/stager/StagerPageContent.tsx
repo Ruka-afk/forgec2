@@ -183,7 +183,7 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
           ) : (
           <>
           <div>
-            <Label className="text-xs">{t("stager.field_listener")}</Label>
+            <Label>{t("stager.field_listener")}</Label>
             <Select value={listenerId} onValueChange={(v) => setListenerId(v ?? "")}>
               <SelectTrigger className="w-full mt-1">
                 <SelectValue placeholder={t("stager.select_listener_ph")} />
@@ -200,7 +200,7 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label className="text-xs">{t("stager.field_os")}</Label>
+              <Label>{t("stager.field_os")}</Label>
               <Select value={os} onValueChange={(v) => v && setOs(v)}>
                 <SelectTrigger className="w-full mt-1">
                   <SelectValue />
@@ -212,7 +212,7 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
               </Select>
             </div>
             <div>
-              <Label className="text-xs">{t("stager.field_arch")}</Label>
+              <Label>{t("stager.field_arch")}</Label>
               <Select value={arch} onValueChange={(v) => v && setArch(v)}>
                 <SelectTrigger className="w-full mt-1">
                   <SelectValue />
@@ -227,7 +227,7 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label className="text-xs">{t("stager.field_format")}</Label>
+              <Label>{t("stager.field_format")}</Label>
               <Select value={format} onValueChange={(v) => v && setFormat(v)}>
                 <SelectTrigger className="w-full mt-1">
                   <SelectValue />
@@ -239,32 +239,32 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
               </Select>
             </div>
             <div>
-              <Label className="text-xs">{t("stager.field_ttl")}</Label>
+              <Label>{t("stager.field_ttl")}</Label>
               <Input type="number" value={ttl} onChange={e => setTtl(e.target.value)} className="w-full mt-1" />
             </div>
           </div>
 
           <div>
-            <Label className="text-xs">{t("stager.field_ua")}</Label>
+            <Label>{t("stager.field_ua")}</Label>
             <Input type="text" value={userAgent} onChange={e => setUserAgent(e.target.value)} placeholder={t("stager.empty_default")} className="w-full mt-1" />
           </div>
 
           <div>
-            <Label className="text-xs">{t("stager.field_profile")}</Label>
+            <Label>{t("stager.field_profile")}</Label>
             <Input type="text" value={profile} onChange={e => setProfile(e.target.value)} placeholder={t("stager.optional")} className="w-full mt-1" />
           </div>
 
           <div>
-            <Label className="text-xs">{t("stager.field_dns_domain")}</Label>
+            <Label>{t("stager.field_dns_domain")}</Label>
             <Input type="text" value={dnsDomain} onChange={e => setDnsDomain(e.target.value)} placeholder={t("stager.optional")} className="w-full mt-1" />
           </div>
 
           <div>
-            <Label className="text-xs">{t("stager.field_dns_server")}</Label>
+            <Label>{t("stager.field_dns_server")}</Label>
             <Input type="text" value={dnsServer} onChange={e => setDnsServer(e.target.value)} placeholder={t("stager.optional")} className="w-full mt-1" />
           </div>
 
-          <Label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Label className="flex items-center gap-2">
             <Checkbox checked={skipTls} onCheckedChange={(checked) => setSkipTls(checked === true)} />
             {t("stager.field_skip_tls")}
           </Label>

@@ -193,12 +193,12 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                 <div>
-                  <Label className="text-xs mb-1">{t("scheduler.name")}</Label>
+                  <Label className="mb-1.5">{t("scheduler.name")}</Label>
                   <Input id="sched-name" value={name} onChange={e => { setName(e.target.value); if (formErrors.name) setFormErrors({ ...formErrors, name: undefined }); }} aria-label={t("scheduler.a11y_name")} aria-invalid={!!formErrors.name} aria-describedby={formErrors.name ? "sched-name-error" : undefined} />
                   <FieldError id="sched-name-error">{formErrors.name}</FieldError>
                 </div>
                 <div>
-                  <Label className="text-xs mb-1">{t("scheduler.agent")}</Label>
+                  <Label className="mb-1.5">{t("scheduler.agent")}</Label>
                   <Select value={agentId} onValueChange={(v) => { setAgentId(v ?? ""); if (formErrors.agentId) setFormErrors({ ...formErrors, agentId: undefined }); }}>
                     <SelectTrigger id="sched-agent" aria-label={t("scheduler.a11y_agent")} aria-invalid={!!formErrors.agentId} aria-describedby={formErrors.agentId ? "sched-agent-error" : undefined}>
                       <SelectValue placeholder={t("scheduler.select_agent")} />
@@ -212,7 +212,7 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
                   <FieldError id="sched-agent-error">{formErrors.agentId}</FieldError>
                 </div>
                 <div>
-                  <Label className="text-xs mb-1">{t("scheduler.task_type")}</Label>
+                  <Label className="mb-1.5">{t("scheduler.task_type")}</Label>
                   <Select value={taskType} onValueChange={(v) => setTaskType(v ?? "shell")}>
                     <SelectTrigger aria-label={t("scheduler.a11y_type")}>
                       <SelectValue />
@@ -230,7 +230,7 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
                   )}
                 </div>
                 <div>
-                  <Label className="text-xs mb-1">{t("scheduler.schedule")}</Label>
+                  <Label className="mb-1.5">{t("scheduler.schedule")}</Label>
                   <Input id="sched-schedule" value={schedule} onChange={e => { setSchedule(e.target.value); if (formErrors.schedule) setFormErrors({ ...formErrors, schedule: undefined }); }} placeholder={t("scheduler.schedule_ph")} aria-label={t("scheduler.a11y_expr")} aria-invalid={!!formErrors.schedule} aria-describedby={formErrors.schedule ? "sched-schedule-error" : undefined} />
                   <p className="text-xs-sm text-muted-foreground mt-1 space-y-0.5">
                     <code className="px-1 bg-muted rounded text-micro-sm">every N minutes</code> ·{" "}
@@ -242,12 +242,12 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
                 </div>
               </div>
               <div className="mb-4">
-                <Label className="text-xs mb-1">{t("scheduler.command")}</Label>
+                <Label className="mb-1.5">{t("scheduler.command")}</Label>
                   <Input id="sched-command" value={command} onChange={e => { setCommand(e.target.value); if (formErrors.command) setFormErrors({ ...formErrors, command: undefined }); }} placeholder={t("scheduler.cmd_ph")} aria-label={t("scheduler.command")} aria-invalid={!!formErrors.command} aria-describedby={formErrors.command ? "sched-command-error" : undefined} />
                   <FieldError id="sched-command-error">{formErrors.command}</FieldError>
               </div>
               <div className="mb-4">
-                <Label className="text-xs mb-1">{t("scheduler.params")}</Label>
+                <Label className="mb-1.5">{t("scheduler.params")}</Label>
                 <Textarea value={params} onChange={e => setParams(e.target.value)} rows={2} aria-label={t("scheduler.a11y_params")} />
               </div>
               <div className="flex gap-2">

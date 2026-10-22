@@ -277,13 +277,13 @@ export default function ReportPage() {
               <h2 className="text-lg font-semibold text-foreground mb-6">{t("report.settings")}</h2>
               <div className="space-y-6">
                 <div>
-                  <Label className="text-sm font-medium mb-3">{t("report.report_template")}</Label>
+                  <Label className="text-sm mb-3">{t("report.report_template")}</Label>
                   <RadioGroup value={template} onValueChange={setTemplate} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {TEMPLATES.map((tpl) => (
                       <div key={tpl.value} className={`flex flex-col items-start p-4 rounded-lg cursor-pointer transition-colors ${template === tpl.value ? "border-2 border-primary bg-primary/10" : "border border-border hover:bg-muted/50"}`}>
                         <div className="flex items-center space-x-2 mb-2">
                           <RadioGroupItem value={tpl.value} id={`tpl-${tpl.value}`} />
-                          <Label htmlFor={`tpl-${tpl.value}`} className="text-sm font-medium text-foreground cursor-pointer">{tpl.label}</Label>
+                          <Label htmlFor={`tpl-${tpl.value}`} className="text-sm text-foreground cursor-pointer">{tpl.label}</Label>
                         </div>
                         <div className="text-xs text-muted-foreground mt-1">{tpl.desc}</div>
                       </div>
@@ -292,7 +292,7 @@ export default function ReportPage() {
                 </div>
 
                 <div>
-                  <Label className="text-sm font-medium mb-3">{t("report.date_range")}</Label>
+                  <Label className="text-sm mb-3">{t("report.date_range")}</Label>
                   <div className="flex flex-wrap gap-2 mb-3">
                     {DATE_PRESETS.map((p) => (
                       <Button key={p.value} variant={datePreset === p.value ? "default" : "secondary"} size="sm" onClick={() => setDatePreset(p.value)}>

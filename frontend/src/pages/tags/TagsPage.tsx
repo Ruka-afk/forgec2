@@ -203,7 +203,7 @@ export default function TagsPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label className="text-xs font-medium mb-1">{t("tags.field_name")}</Label>
+              <Label className="mb-1.5">{t("tags.field_name")}</Label>
               <Input aria-label={t("tags.a11y_name")} name="input-0"
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
@@ -214,7 +214,7 @@ export default function TagsPage() {
               />
             </div>
             <div>
-              <Label className="text-xs font-medium mb-1">{t("tags.field_color")}</Label>
+              <Label className="mb-1.5">{t("tags.field_color")}</Label>
               <div className="flex flex-wrap gap-2">
                 {TAG_COLORS.map((color) => (
                   <Button

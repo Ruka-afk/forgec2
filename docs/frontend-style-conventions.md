@@ -28,6 +28,34 @@
 - 标签统一 `text-xs`（或默认 text-sm），左对齐置于控件上方。
 - 校验失败走表单自身的 aria-invalid 链路，不手写红框。
 
+### 3.1 表单字段用 `<Field>`
+
+`components/ui/field.tsx` 是字段的唯一结构：标签 → 控件 → 提示/错误，
+间距由它负责（`gap-1.5`），错误通过 `aria-describedby` 指向控件。
+
+```tsx
+<Field
+  label={t("cred.field_username")}
+  required
+  htmlFor="add-cred-username"
+  error={formErrors.username}
+>
+  <Input
+    id="add-cred-username"
+    aria-invalid={!!formErrors.username}
+    aria-describedby={formErrors.username ? fieldErrorId("add-cred-username") : undefined}
+  />
+</Field>
+```
+
+- 标签样式由 `Label` 原语决定（`text-xs font-medium text-muted-foreground`），
+  **调用点不要再写** `text-xs` / `font-medium` / `text-muted-foreground`，
+  只写布局类（`mb-1.5`、`block`）。2026-10 之前 233 处调用点重复了这三个
+  类，已机械归一。
+- 必填标记用 `required` 属性，不要在标签文本里手写 `*`。
+- 错误文案用 `Field` 的 `error`（内部即 `FieldError`），不要再手写
+  `<FieldError>` 再手算 id。
+
 ## 4. 尺寸与间距
 
 - **间距（p/m/gap）必须使用 spacing scale**（`p-(--card-spacing)`、`gap-3`…），

@@ -162,7 +162,7 @@ export default function NtlmPage() {
 
       {/* Agent selector (common) */}
       <Card className="p-(--card-spacing)">
-        <Label className="text-xs mb-1.5">{t("ntlm.target_agent")}</Label>
+        <Label className="mb-1.5">{t("ntlm.target_agent")}</Label>
         <Select value={selectedAgent || "none"} onValueChange={(v) => setSelectedAgent(v === "none" ? "" : v ?? "")}>
           <SelectTrigger className="max-w-md">
             <SelectValue>
@@ -192,7 +192,7 @@ export default function NtlmPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
             <div>
-              <Label className="text-xs mb-1.5">{t("ntlm.coerce_technique")}</Label>
+              <Label className="mb-1.5">{t("ntlm.coerce_technique")}</Label>
               <Select value={coerceType} onValueChange={(v) => { if (v) setCoerceType(v); }}>
                 <SelectTrigger>
                   <SelectValue />
@@ -205,7 +205,7 @@ export default function NtlmPage() {
               </Select>
             </div>
             <div>
-              <Label className="text-xs mb-1.5">{t("ntlm.target_ip")}</Label>
+              <Label className="mb-1.5">{t("ntlm.target_ip")}</Label>
               <Input
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
@@ -213,7 +213,7 @@ export default function NtlmPage() {
               />
             </div>
             <div>
-              <Label className="text-xs mb-1.5">{t("ntlm.callback_listener")}</Label>
+              <Label className="mb-1.5">{t("ntlm.callback_listener")}</Label>
               <Input
                 value={listenAddr}
                 onChange={(e) => setListenAddr(e.target.value)}
@@ -246,7 +246,7 @@ export default function NtlmPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
               <div>
-                <Label className="text-xs mb-1.5">{t("ntlm.relay_target")}</Label>
+                <Label className="mb-1.5">{t("ntlm.relay_target")}</Label>
                 <Input
                   value={relayTarget}
                   onChange={(e) => setRelayTarget(e.target.value)}
@@ -254,7 +254,7 @@ export default function NtlmPage() {
                 />
               </div>
               <div>
-                <Label className="text-xs mb-1.5">{t("ntlm.relay_listener")}</Label>
+                <Label className="mb-1.5">{t("ntlm.relay_listener")}</Label>
                 <Input
                   value={relayListener}
                   onChange={(e) => setRelayListener(e.target.value)}
@@ -262,7 +262,7 @@ export default function NtlmPage() {
                 />
               </div>
               <div>
-                <Label className="text-xs mb-1.5">{t("ntlm.flags")}</Label>
+                <Label className="mb-1.5">{t("ntlm.flags")}</Label>
                 <Input
                   value={relayFlags}
                   onChange={(e) => setRelayFlags(e.target.value)}

@@ -127,11 +127,11 @@ export default function TrafficPage({ embedded = false }: { embedded?: boolean }
   return (
     <PageContainer embedded={embedded} title={!embedded ? t("traffic.title") : undefined} subtitle={!embedded ? `${t("traffic.request_log")} · C2 Beacon ${t("traffic.comm_record")}` : undefined} actions={<>
         <div className="flex items-center gap-2 flex-wrap">
-          <Label className="flex items-center gap-x-2 text-sm text-muted-foreground cursor-pointer">
+          <Label className="flex items-center gap-x-2 text-sm cursor-pointer">
             <Checkbox checked={autoRefresh} onCheckedChange={setAutoRefresh} />
              {t("traffic.auto_refresh")}
           </Label>
-          <Label className="flex items-center gap-x-2 text-sm text-muted-foreground cursor-pointer">
+          <Label className="flex items-center gap-x-2 text-sm cursor-pointer">
             <Checkbox checked={autoScroll} onCheckedChange={setAutoScroll} />
             {t("traffic.auto_scroll")}
           </Label>

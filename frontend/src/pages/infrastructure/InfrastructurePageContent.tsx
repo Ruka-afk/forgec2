@@ -193,21 +193,21 @@ export default function InfrastructurePage() {
             <CardContent className="p-(--card-spacing) space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-xs">{t("infra.domain")}</Label>
+                  <Label>{t("infra.domain")}</Label>
                   <Input aria-label={t("infra.domain")} name="input-1" type="text" value={domain} onChange={e => setDomain(e.target.value)} placeholder="c2.example.com" />
                 </div>
                 <div>
-                  <Label className="text-xs">{t("infra.listen_port")}</Label>
+                  <Label>{t("infra.listen_port")}</Label>
                   <Input aria-label={t("infra.listen_port")} name="input-2" type="number" value={port} onChange={e => setPort(Number(e.target.value))} />
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-xs">{t("infra.ssl_cert_path")}</Label>
+                  <Label>{t("infra.ssl_cert_path")}</Label>
                   <Input aria-label="/etc/letsencrypt/live/c2.example.com/fullchain.pem" name="input-3" type="text" value={certPath} onChange={e => setCertPath(e.target.value)} placeholder="/etc/letsencrypt/live/c2.example.com/fullchain.pem" className="font-mono text-xs" />
                 </div>
                 <div>
-                  <Label className="text-xs">{t("infra.ssl_key_path")}</Label>
+                  <Label>{t("infra.ssl_key_path")}</Label>
                   <Input aria-label="/etc/letsencrypt/live/c2.example.com/privkey.pem" name="input-4" type="text" value={keyPath} onChange={e => setKeyPath(e.target.value)} placeholder="/etc/letsencrypt/live/c2.example.com/privkey.pem" className="font-mono text-xs" />
                 </div>
               </div>
@@ -338,15 +338,15 @@ export default function InfrastructurePage() {
                 />
                 <CardContent className="p-(--card-spacing) space-y-4">
                   <div>
-                    <Label className="text-xs">{t("common.name")}</Label>
+                    <Label>{t("common.name")}</Label>
                     <Input aria-label={t("infra.name_label")} name="input-7" type="text" value={rdName} onChange={e => setRdName(e.target.value)} placeholder={t("infra.name_label")} />
                   </div>
                   <div>
-                    <Label className="text-xs">{t("infra.host")}</Label>
+                    <Label>{t("infra.host")}</Label>
                     <Input aria-label={t("infra.host")} name="input-8" type="text" value={rdHost} onChange={e => setRdHost(e.target.value)} placeholder="192.168.1.100" />
                   </div>
                   <div>
-                    <Label className="text-xs">{t("common.type")}</Label>
+                    <Label>{t("common.type")}</Label>
                     <Select value={rdType} onValueChange={(v) => { if (v) setRdType(v); }}>
                       <SelectTrigger className="w-full">
                         <SelectValue />
@@ -361,20 +361,20 @@ export default function InfrastructurePage() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label className="text-xs">{t("infra.ssh_user")}</Label>
+                      <Label>{t("infra.ssh_user")}</Label>
                       <Input aria-label={t("infra.ssh_user")} name="input-10" type="text" value={rdSSHUser} onChange={e => setRdSSHUser(e.target.value)} placeholder="root" />
                     </div>
                     <div>
-                      <Label className="text-xs">{t("infra.ssh_port")}</Label>
+                      <Label>{t("infra.ssh_port")}</Label>
                       <Input aria-label={t("infra.ssh_port")} name="input-11" type="number" value={rdSSHPort} onChange={e => setRdSSHPort(Number(e.target.value))} />
                     </div>
                   </div>
                   <div>
-                    <Label className="text-xs">{t("infra.ssh_key")}</Label>
+                    <Label>{t("infra.ssh_key")}</Label>
                     <Textarea aria-label={t("infra.ssh_key")} name="textarea-12" value={rdSSHKey} onChange={e => setRdSSHKey(e.target.value)} placeholder={"-----BEGIN OPENSSH PRIVATE KEY-----\n..."} rows={3} className="font-mono text-xs" />
                   </div>
                   <div>
-                    <Label className="text-xs">{t("infra.ssh_password")}</Label>
+                    <Label>{t("infra.ssh_password")}</Label>
                     <Input aria-label={t("infra.ssh_password")} name="input-13" type="password" value={rdSSHPassword} onChange={e => setRdSSHPassword(e.target.value)} placeholder="password" />
                   </div>
                   <div className="flex gap-2">
@@ -398,15 +398,15 @@ export default function InfrastructurePage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs">{t("infra.domain")}</Label>
+                  <Label>{t("infra.domain")}</Label>
                   <Input aria-label={t("infra.domain")} name="input-14" type="text" value={rdGenerateDomain} onChange={e => setRdGenerateDomain(e.target.value)} placeholder="c2.example.com" />
                 </div>
                 <div>
-                  <Label className="text-xs">{t("infra.backend_url")}</Label>
+                  <Label>{t("infra.backend_url")}</Label>
                   <Input aria-label={t("infra.backend_url")} name="input-15" type="text" value={backendURL} onChange={e => setBackendURL(e.target.value)} placeholder="https://127.0.0.1:8080" />
                 </div>
                 <div>
-                  <Label className="text-xs">{t("infra.listen_port")}</Label>
+                  <Label>{t("infra.listen_port")}</Label>
                   <Input aria-label={t("infra.redirector_listen_port")} name="input-16" type="number" value={rdGeneratePort} onChange={e => setRdGeneratePort(Number(e.target.value))} />
                 </div>
                 <div className="flex items-center gap-4 pt-6">
@@ -432,7 +432,7 @@ export default function InfrastructurePage() {
 
               {rdConfig && (
                 <div>
-                  <Label className="text-xs">{t("infra.generated_config")} ({rdType.toUpperCase()})</Label>
+                  <Label>{t("infra.generated_config")} ({rdType.toUpperCase()})</Label>
                    <pre className="bg-card text-chart-1 p-4 rounded-xl text-xs overflow-auto max-h-[300px] whitespace-pre-wrap font-mono leading-relaxed border border-border">{rdConfig}</pre>
                 </div>
               )}
@@ -459,15 +459,15 @@ export default function InfrastructurePage() {
           <CardContent className="p-(--card-spacing) space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <Label className="text-xs"><Globe className="size-4" />{t("infra.domain")}</Label>
+                <Label><Globe className="size-4" />{t("infra.domain")}</Label>
                 <Input aria-label="c2.example.com" name="input-19" type="text" value={acmeDomain} onChange={e => setAcmeDomain(e.target.value)} placeholder="c2.example.com" />
               </div>
               <div>
-                <Label className="text-xs"><Mail className="size-4" />{t("infra.email")}</Label>
+                <Label><Mail className="size-4" />{t("infra.email")}</Label>
                 <Input aria-label="admin@example.com" name="input-20" type="email" value={acmeEmail} onChange={e => setAcmeEmail(e.target.value)} placeholder="admin@example.com" />
               </div>
               <div>
-                <Label className="text-xs"><Plug className="size-4" />{t("infra.http01_port")}</Label>
+                <Label><Plug className="size-4" />{t("infra.http01_port")}</Label>
                 <Input aria-label={t("infra.http01_port")} name="input-21" type="number" value={acmePort} onChange={e => setAcmePort(Number(e.target.value))} />
               </div>
             </div>
@@ -500,7 +500,7 @@ export default function InfrastructurePage() {
           />
           <CardContent className="p-(--card-spacing) space-y-4">
             <div className="mb-4">
-              <Label className="text-xs mb-2 block">{t("infra.export_format")}</Label>
+              <Label className="mb-2 block">{t("infra.export_format")}</Label>
               <div className="flex gap-3">
                 {([
                   { value: "json", label: "JSON", icon: <Code className="size-4" />, active: "border-primary bg-primary/10 text-primary" },

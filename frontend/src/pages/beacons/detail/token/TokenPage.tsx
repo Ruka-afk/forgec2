@@ -405,7 +405,7 @@ export default function AgentTokenPage() {
           </h2>
           <form onSubmit={handleStealToken} className="space-y-3">
             <div>
-              <Label htmlFor="steal-pid" className="text-xs text-muted-foreground mb-1 block">{t("agents.token_pid")}</Label>
+              <Label htmlFor="steal-pid" className="block mb-1.5">{t("agents.token_pid")}</Label>
               <Select value={stealPid} onValueChange={(v) => setStealPid(v ?? "")} disabled={!!processError}>
                 <SelectTrigger id="steal-pid" className="w-full">
                   <SelectValue placeholder={processError ? t("agents.token_processes_unreadable") : t("agents.token_steal")} />
@@ -434,15 +434,15 @@ export default function AgentTokenPage() {
           </h2>
           <form onSubmit={handleMakeToken} className="space-y-3">
             <div>
-              <Label htmlFor="make-user" className="text-xs text-muted-foreground mb-1 block">{t("agents.token_username")} <span className="text-destructive-ink">*</span></Label>
+              <Label htmlFor="make-user" className="block mb-1.5">{t("agents.token_username")} <span className="text-destructive-ink">*</span></Label>
               <Input id="make-user" type="text" value={makeUser} onChange={(e) => setMakeUser(e.target.value)} placeholder={t("agents.token_username")} />
             </div>
             <div>
-              <Label htmlFor="make-domain" className="text-xs text-muted-foreground mb-1 block">{t("agents.token_domain")}</Label>
+              <Label htmlFor="make-domain" className="block mb-1.5">{t("agents.token_domain")}</Label>
               <Input id="make-domain" type="text" value={makeDomain} onChange={(e) => setMakeDomain(e.target.value)} placeholder={t("agents.token_domain")} />
             </div>
             <div>
-              <Label htmlFor="make-pass" className="text-xs text-muted-foreground mb-1 block">{t("agents.token_password")}</Label>
+              <Label htmlFor="make-pass" className="block mb-1.5">{t("agents.token_password")}</Label>
               <Input id="make-pass" type="password" value={makePass} onChange={(e) => setMakePass(e.target.value)} placeholder={t("agents.token_password")} />
             </div>
             <Button type="submit" disabled={!makeUser || activeAction === "make"} className="w-full" variant="default">

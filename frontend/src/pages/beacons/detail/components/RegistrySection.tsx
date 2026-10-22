@@ -78,7 +78,7 @@ export default memo(function RegistrySection({ agentId, online }: RegistrySectio
         resultLabel={key.trim() || undefined}
       >
         <div>
-          <Label className="mb-1 block text-xs text-muted-foreground">{t("agents.registry_key")}</Label>
+          <Label className="block mb-1.5">{t("agents.registry_key")}</Label>
           <Input
             value={key}
             onChange={(e) => setKey(e.target.value)}
@@ -88,7 +88,7 @@ export default memo(function RegistrySection({ agentId, online }: RegistrySectio
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div>
-            <Label className="mb-1 block text-xs text-muted-foreground">{t("agents.registry_value")}</Label>
+            <Label className="block mb-1.5">{t("agents.registry_value")}</Label>
             <Input
               value={valueName}
               onChange={(e) => setValueName(e.target.value)}
@@ -97,7 +97,7 @@ export default memo(function RegistrySection({ agentId, online }: RegistrySectio
             />
           </div>
           <div>
-            <Label className="mb-1 block text-xs text-muted-foreground">{t("agents.registry_data")}</Label>
+            <Label className="block mb-1.5">{t("agents.registry_data")}</Label>
             <Input
               value={valueData}
               onChange={(e) => setValueData(e.target.value)}

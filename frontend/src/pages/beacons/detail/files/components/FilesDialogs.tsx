@@ -124,7 +124,7 @@ export default memo(function FilesDialogs(props: FilesDialogsProps) {
           <form onSubmit={onUploadSubmit} className="space-y-4">
             <p className="text-xs text-muted-foreground">{t("agents.files_upload_hint")}</p>
             <div>
-              <Label className="mb-1.5 block text-xs text-muted-foreground">{t("agents.files_dest_file")}</Label>
+              <Label className="mb-1.5 block">{t("agents.files_dest_file")}</Label>
               <Input
                 value={uploadName ? joinPath(currentPath, uploadName, osType) : currentPath}
                 readOnly
@@ -132,7 +132,7 @@ export default memo(function FilesDialogs(props: FilesDialogsProps) {
               />
             </div>
             <div>
-              <Label className="mb-1.5 block text-xs text-muted-foreground">{t("agents.files_select_file")}</Label>
+              <Label className="mb-1.5 block">{t("agents.files_select_file")}</Label>
               <Input
                 ref={fileInputRef}
                 type="file"
@@ -182,7 +182,7 @@ export default memo(function FilesDialogs(props: FilesDialogsProps) {
           </DialogHeader>
           <form onSubmit={onMkdirSubmit} className="space-y-4">
             <div>
-              <Label className="mb-1.5 block text-xs text-muted-foreground">{t("agents.files_mkdir_placeholder")}</Label>
+              <Label className="mb-1.5 block">{t("agents.files_mkdir_placeholder")}</Label>
               <Input
                 value={mkdirName}
                 onChange={(e) => setMkdirName(e.target.value)}
@@ -213,7 +213,7 @@ export default memo(function FilesDialogs(props: FilesDialogsProps) {
           </DialogHeader>
           <form onSubmit={onRenameSubmit} className="space-y-4">
             <div>
-              <Label className="mb-1.5 block text-xs text-muted-foreground">{t("agents.files_rename_placeholder")}</Label>
+              <Label className="mb-1.5 block">{t("agents.files_rename_placeholder")}</Label>
               <Input
                 value={renameName}
                 onChange={(e) => setRenameName(e.target.value)}
@@ -244,7 +244,7 @@ export default memo(function FilesDialogs(props: FilesDialogsProps) {
           </DialogHeader>
           <form onSubmit={onChmodSubmit} className="space-y-4">
             <div>
-              <Label className="mb-1.5 block text-xs text-muted-foreground">{t("agents.files_chmod_placeholder")}</Label>
+              <Label className="mb-1.5 block">{t("agents.files_chmod_placeholder")}</Label>
               <Input
                 value={chmodMode}
                 onChange={(e) => setChmodMode(e.target.value)}

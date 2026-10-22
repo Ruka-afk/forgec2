@@ -5,7 +5,7 @@ import { paths } from "@/lib/api-paths";
 import { normalizeListEnvelope } from "@/lib/envelope";
 import { useAppStore } from "@/lib/store";
 import { ErrorState } from "@/components/ui/error-state";
-import { FieldError } from "@/components/ui/field-error";
+import { Field, fieldErrorId } from "@/components/ui/field";
 import { Permission } from "@/components/ui/permission";
 import { StatCard } from "@/components/ui/animated-stat-card";
 import { StatusBadge } from "@/components/ui/status-indicator";
@@ -485,16 +485,12 @@ export default function UsersPage() {
             <DialogTitle>{t("users.add_user")}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleAdd} className="space-y-4">
-            <div>
-              <Label htmlFor="add-username">{t("users.label_username")}</Label>
-              <Input id="add-username" type="text" required minLength={3} value={form.username} onChange={(e) => { setForm({ ...form, username: e.target.value }); if (formErrors.username) setFormErrors({ ...formErrors, username: undefined }); }} />
-              <FieldError>{formErrors.username}</FieldError>
-            </div>
-            <div>
-              <Label htmlFor="add-password">{t("users.label_password")}</Label>
-              <Input id="add-password" type="password" required minLength={8} value={form.password} onChange={(e) => { setForm({ ...form, password: e.target.value }); if (formErrors.password) setFormErrors({ ...formErrors, password: undefined }); }} />
-              <FieldError>{formErrors.password}</FieldError>
-            </div>
+            <Field label={t("users.label_username")} required htmlFor="add-username" error={formErrors.username}>
+              <Input id="add-username" type="text" required minLength={3} value={form.username} onChange={(e) => { setForm({ ...form, username: e.target.value }); if (formErrors.username) setFormErrors({ ...formErrors, username: undefined }); }} aria-invalid={!!formErrors.username} aria-describedby={formErrors.username ? fieldErrorId("add-username") : undefined} />
+            </Field>
+            <Field label={t("users.label_password")} required htmlFor="add-password" error={formErrors.password}>
+              <Input id="add-password" type="password" required minLength={8} value={form.password} onChange={(e) => { setForm({ ...form, password: e.target.value }); if (formErrors.password) setFormErrors({ ...formErrors, password: undefined }); }} aria-invalid={!!formErrors.password} aria-describedby={formErrors.password ? fieldErrorId("add-password") : undefined} />
+            </Field>
             <div>
               <Label htmlFor="add-role">{t("users.label_role")}</Label>
               <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v ?? "user" })}>
@@ -521,16 +517,12 @@ export default function UsersPage() {
             <DialogTitle>{t("users.edit_title")}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleEdit} className="space-y-4">
-            <div>
-              <Label htmlFor="edit-username">{t("users.label_username")}</Label>
-              <Input id="edit-username" type="text" required minLength={3} value={form.username} onChange={(e) => { setForm({ ...form, username: e.target.value }); if (formErrors.username) setFormErrors({ ...formErrors, username: undefined }); }} />
-              <FieldError>{formErrors.username}</FieldError>
-            </div>
-            <div>
-              <Label htmlFor="edit-password">{t("users.label_password")}</Label>
-              <Input id="edit-password" type="password" placeholder={t("users.placeholder.leave_blank")} value={form.password} onChange={(e) => { setForm({ ...form, password: e.target.value }); if (formErrors.password) setFormErrors({ ...formErrors, password: undefined }); }} />
-              <FieldError>{formErrors.password}</FieldError>
-            </div>
+            <Field label={t("users.label_username")} required htmlFor="edit-username" error={formErrors.username}>
+              <Input id="edit-username" type="text" required minLength={3} value={form.username} onChange={(e) => { setForm({ ...form, username: e.target.value }); if (formErrors.username) setFormErrors({ ...formErrors, username: undefined }); }} aria-invalid={!!formErrors.username} aria-describedby={formErrors.username ? fieldErrorId("edit-username") : undefined} />
+            </Field>
+            <Field label={t("users.label_password")} htmlFor="edit-password" error={formErrors.password}>
+              <Input id="edit-password" type="password" placeholder={t("users.placeholder.leave_blank")} value={form.password} onChange={(e) => { setForm({ ...form, password: e.target.value }); if (formErrors.password) setFormErrors({ ...formErrors, password: undefined }); }} aria-invalid={!!formErrors.password} aria-describedby={formErrors.password ? fieldErrorId("edit-password") : undefined} />
+            </Field>
             <div>
               <Label htmlFor="edit-role">{t("users.label_role")}</Label>
               <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v ?? "user" })}>
@@ -558,11 +550,9 @@ export default function UsersPage() {
             <DialogTitle>{t("users.password_title")}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSetPassword} className="space-y-4">
-            <div>
-              <Label htmlFor="pw-new">{t("users.password_label")}</Label>
-              <Input id="pw-new" type="password" required minLength={8} placeholder={t("users.password_placeholder")} value={newPassword} onChange={(e) => { setNewPassword(e.target.value); if (passwordError) setPasswordError(""); }} />
-              <FieldError>{passwordError}</FieldError>
-            </div>
+            <Field label={t("users.password_label")} required htmlFor="pw-new" error={passwordError}>
+              <Input id="pw-new" type="password" required minLength={8} placeholder={t("users.password_placeholder")} value={newPassword} onChange={(e) => { setNewPassword(e.target.value); if (passwordError) setPasswordError(""); }} aria-invalid={!!passwordError} aria-describedby={passwordError ? fieldErrorId("pw-new") : undefined} />
+            </Field>
             <DialogFooter>
               <Button variant="outline" type="button" onClick={() => setShowPasswordModal(false)}>{t("users.btn.cancel")}</Button>
               <Button type="submit" disabled={settingPassword}>{settingPassword ? <Spinner size="xs" color="white" /> : null}{t("users.btn.update_password")}</Button>

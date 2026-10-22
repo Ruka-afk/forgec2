@@ -127,11 +127,11 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label className="mb-1">{t("workflows.field_name")} *</Label>
+              <Label className="mb-1.5">{t("workflows.field_name")} *</Label>
               <Input aria-label={t("workflows.a11y_name")} name="wf-name" value={formName} onChange={e => setFormName(e.target.value)} placeholder={t("workflows.field_name")} />
             </div>
             <div>
-              <Label className="mb-1">{t("workflows.field_scope")}</Label>
+              <Label className="mb-1.5">{t("workflows.field_scope")}</Label>
               <Select value={formScope} onValueChange={v => { if (v !== null) setFormScope(v); }}>
                 <SelectTrigger className="w-full"><SelectValue placeholder={t("workflows.field_scope")} /></SelectTrigger>
                 <SelectContent>
@@ -145,12 +145,12 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
           </div>
           {formScope !== "all" && (
             <div>
-              <Label className="mb-1">{t("workflows.scope_ids_label")}</Label>
+              <Label className="mb-1.5">{t("workflows.scope_ids_label")}</Label>
               <Input aria-label={t("workflows.scope_ids_label")} name="wf-scope-ids" value={formScopeIds} onChange={e => setFormScopeIds(e.target.value)} placeholder={t("workflows.scope_ids_ph")} className="font-mono" />
             </div>
           )}
           <div>
-            <Label className="mb-1">{t("workflows.field_desc")}</Label>
+            <Label className="mb-1.5">{t("workflows.field_desc")}</Label>
             <Input aria-label={t("workflows.a11y_desc")} name="wf-desc" value={formDesc} onChange={e => setFormDesc(e.target.value)} placeholder={t("workflows.field_desc")} />
           </div>
           <div>
@@ -187,11 +187,11 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
                       </SelectContent>
                     </Select>
                     <Input aria-label={t("workflows.a11y_timeout")} name={`timeout-${idx}`} type="number" value={step.timeout_sec} onChange={e => updateStep(idx, "timeout_sec", parseInt(e.target.value) || 60)} className="w-16 h-8 px-2 text-xs" />
-                    <Label className="text-xs text-muted-foreground whitespace-nowrap">{t("workflows.repeats")}</Label>
+                    <Label className="whitespace-nowrap">{t("workflows.repeats")}</Label>
                     <Input type="number" min={0} value={step.repeat_count || 0} onChange={e => updateStep(idx, "repeat_count", parseInt(e.target.value) || 0)} className="h-8 text-xs w-16" />
-                    <Label className="text-xs text-muted-foreground whitespace-nowrap">{t("workflows.delay")}</Label>
+                    <Label className="whitespace-nowrap">{t("workflows.delay")}</Label>
                     <Input type="number" min={0} value={step.repeat_delay || 0} onChange={e => updateStep(idx, "repeat_delay", parseInt(e.target.value) || 0)} className="h-8 text-xs w-16" />
-                    <Label className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap"><Checkbox checked={step.stop_on_failure} onCheckedChange={v => updateStep(idx, "stop_on_failure", v)} /> {t("workflows.stop")}</Label>
+                    <Label className="flex items-center gap-1 whitespace-nowrap"><Checkbox checked={step.stop_on_failure} onCheckedChange={v => updateStep(idx, "stop_on_failure", v)} /> {t("workflows.stop")}</Label>
                     <Button variant="destructive" size="icon-xs" onClick={() => removeStep(idx)} aria-label={t("workflows.remove_step")}>&times;</Button>
                   </div>
                   <div className="flex items-center gap-2 ml-7">

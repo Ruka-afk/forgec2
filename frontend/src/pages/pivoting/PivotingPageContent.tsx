@@ -228,7 +228,7 @@ export default function PivotingPageContent() {
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
-                <Label className="text-xs font-medium mb-1 block">{t("pivoting.target_agent")}</Label>
+                <Label className="block mb-1.5">{t("pivoting.target_agent")}</Label>
                 <Select value={selectedAgent} onValueChange={(v) => setSelectedAgent(v ?? "")}>
                   <SelectTrigger className="w-full"><SelectValue placeholder={t("pivoting.select_agent")} /></SelectTrigger>
                   <SelectContent>
@@ -238,7 +238,7 @@ export default function PivotingPageContent() {
                   </SelectContent>
                 </Select>
               </div>              <div>
-                <Label className="text-xs font-medium mb-1 block">{t("pivoting.listen_port")}</Label>
+                <Label className="block mb-1.5">{t("pivoting.listen_port")}</Label>
                 <Input aria-label={t("pivoting.socks_listen_port")} name="input-2" type="number" value={relayPort} onChange={e => setRelayPort(Number(e.target.value))} min={1} max={65535} />
               </div>
             </div>
@@ -262,11 +262,11 @@ export default function PivotingPageContent() {
               <span>{t("pivoting.local_proxy")}</span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">              <div>
-                <Label className="text-xs font-medium mb-1 block">{t("pivoting.proxy_port")}</Label>
+                <Label className="block mb-1.5">{t("pivoting.proxy_port")}</Label>
                 <Input aria-label={t("pivoting.local_proxy_port")} name="input-4" type="number" value={localPort} onChange={e => setLocalPort(Number(e.target.value))} min={1} max={65535} />
               </div>
               <div>
-                <Label className="text-xs font-medium mb-1 block">{t("pivoting.route_through")}</Label>
+                <Label className="block mb-1.5">{t("pivoting.route_through")}</Label>
                 <Select value={throughAgent} onValueChange={(v) => setThroughAgent(v ?? "")}>
                   <SelectTrigger className="w-full"><SelectValue placeholder="-- Direct (no pivot) --" /></SelectTrigger>
                   <SelectContent>
@@ -279,7 +279,7 @@ export default function PivotingPageContent() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>                <Label className="text-xs font-medium mb-1 block">{t("pivoting.auth_label")}</Label>
+              <div>                <Label className="block mb-1.5">{t("pivoting.auth_label")}</Label>
                 <div className="flex items-center gap-3 mt-2">                  <Label className="flex items-center gap-2 cursor-pointer">
                     <Checkbox checked={localAuthEnabled} onCheckedChange={setLocalAuthEnabled} />                    <span className="text-sm text-muted-foreground">{t("pivoting.enable")}</span>
                   </Label>
@@ -287,10 +287,10 @@ export default function PivotingPageContent() {
               </div>
             </div>            {localAuthEnabled && (
               <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>                  <Label className="text-xs font-medium mb-1 block">{t("pivoting.username_label")}</Label>
+                <div>                  <Label className="block mb-1.5">{t("pivoting.username_label")}</Label>
                   <Input aria-label={t("pivoting.operator_label")} name="input-7" type="text" value={localUsername} onChange={e => setLocalUsername(e.target.value)} placeholder="operator" />
                 </div>                <div>
-                  <Label className="text-xs font-medium mb-1 block">{t("pivoting.password")}</Label>
+                  <Label className="block mb-1.5">{t("pivoting.password")}</Label>
                   <Input aria-label={t("pivoting.password")} name="input-8" type="password" value={localPassword} onChange={e => setLocalPassword(e.target.value)} placeholder={t("pivoting.password")} />                </div>
               </div>
             )}
@@ -399,7 +399,7 @@ export default function PivotingPageContent() {
           <Card className="p-(--card-spacing)">
             <div className="font-semibold text-foreground flex items-center gap-x-2 mb-4">              <PlusCircle className="size-4" /> New Reverse Port Forward
             </div>            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div>                <Label className="text-xs font-medium mb-1 block">{t("pivoting.agent")}</Label>
+              <div>                <Label className="block mb-1.5">{t("pivoting.agent")}</Label>
                 <Select value={rportAgent} onValueChange={(v) => setRportAgent(v ?? "")}>
                   <SelectTrigger className="w-full"><SelectValue placeholder={t("pivoting.select_agent")} /></SelectTrigger>
                   <SelectContent>
@@ -408,14 +408,14 @@ export default function PivotingPageContent() {
                   </SelectContent>
                 </Select>              </div>
               <div>
-                <Label className="text-xs font-medium mb-1 block">{t("pivoting.remote_host")}</Label>                <Input aria-label={t("pivoting.remote_host")} name="input-10" type="text" value={rportRemoteHost} onChange={e => setRportRemoteHost(e.target.value)} placeholder="127.0.0.1" />
-              </div>              <div>                <Label className="text-xs font-medium mb-1 block">{t("pivoting.remote_port")}</Label>
+                <Label className="block mb-1.5">{t("pivoting.remote_host")}</Label>                <Input aria-label={t("pivoting.remote_host")} name="input-10" type="text" value={rportRemoteHost} onChange={e => setRportRemoteHost(e.target.value)} placeholder="127.0.0.1" />
+              </div>              <div>                <Label className="block mb-1.5">{t("pivoting.remote_port")}</Label>
                 <Input aria-label={t("pivoting.remote_port")} name="input-11" type="number" value={rportRemotePort} onChange={e => setRportRemotePort(Number(e.target.value))} min={1} max={65535} />              </div>
               <div>
-                <Label className="text-xs font-medium mb-1 block">{t("pivoting.local_forward_port")}</Label>                <Input aria-label={t("pivoting.local_forward_port")} name="input-12" type="number" value={rportLocalPort} onChange={e => setRportLocalPort(Number(e.target.value))} min={1} max={65535} />              </div>
+                <Label className="block mb-1.5">{t("pivoting.local_forward_port")}</Label>                <Input aria-label={t("pivoting.local_forward_port")} name="input-12" type="number" value={rportLocalPort} onChange={e => setRportLocalPort(Number(e.target.value))} min={1} max={65535} />              </div>
             </div>            <div className="flex items-center gap-3">
               <div>
-                <Label className="text-xs font-medium mb-1 block">{t("pivoting.protocol")}</Label>
+                <Label className="block mb-1.5">{t("pivoting.protocol")}</Label>
                 {/* Server-side relay is TCP-only (net.Listen "tcp"); UDP here
                     silently created a TCP tunnel — lock the selector to TCP. */}
                 <Select value={rportProtocol} onValueChange={v => setRportProtocol(v as "tcp" | "udp")} disabled>
@@ -450,7 +450,7 @@ export default function PivotingPageContent() {
           <p className="text-xs text-muted-foreground">{t("pivoting.tun_hint")}</p>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div>
-              <Label className="text-xs font-medium mb-1 block">{t("pivoting.target_agent")}</Label>
+              <Label className="block mb-1.5">{t("pivoting.target_agent")}</Label>
               <Select value={tunAgent} onValueChange={(v) => setTunAgent(v ?? "")}>
                 <SelectTrigger className="w-full"><SelectValue placeholder={t("pivoting.agent")} /></SelectTrigger>
                 <SelectContent>
@@ -461,11 +461,11 @@ export default function PivotingPageContent() {
               </Select>
             </div>
             <div>
-              <Label className="text-xs font-medium mb-1 block">{t("pivoting.tun_cidr")}</Label>
+              <Label className="block mb-1.5">{t("pivoting.tun_cidr")}</Label>
               <Input value={tunCidr} onChange={(e) => setTunCidr(e.target.value)} />
             </div>
             <div>
-              <Label className="text-xs font-medium mb-1 block">{t("pivoting.tun_udp_port")}</Label>
+              <Label className="block mb-1.5">{t("pivoting.tun_udp_port")}</Label>
               <Input type="number" value={tunUdpPort} onChange={(e) => setTunUdpPort(Number(e.target.value))} min={0} max={65535} />
             </div>
           </div>

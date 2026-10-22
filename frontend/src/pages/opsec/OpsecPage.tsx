@@ -287,34 +287,34 @@ export default function OpsecPage() {
           <p className="text-xs text-muted-foreground mb-4">{t("opsec.test_desc")}</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
-              <Label className="text-xs font-medium text-muted-foreground">{t("opsec.field_agent")}</Label>
+              <Label>{t("opsec.field_agent")}</Label>
               <Input aria-label={t("opsec.field_agent")} name="input-0" className="w-full mt-1" value={testForm.agent_id} onChange={(e) => setTestForm({ ...testForm, agent_id: e.target.value })} />
             </div>
             <div>
-              <Label className="text-xs font-medium text-muted-foreground">{t("opsec.field_user")}</Label>
+              <Label>{t("opsec.field_user")}</Label>
               <Input aria-label={t("opsec.field_user")} name="input-1" className="w-full mt-1" value={testForm.username} onChange={(e) => setTestForm({ ...testForm, username: e.target.value })} />
             </div>
             <div>
-              <Label className="text-xs font-medium text-muted-foreground">{t("opsec.field_hostname")}</Label>
+              <Label>{t("opsec.field_hostname")}</Label>
               <Input aria-label={t("opsec.field_hostname")} name="input-2" className="w-full mt-1" value={testForm.hostname} onChange={(e) => setTestForm({ ...testForm, hostname: e.target.value })} />
             </div>
             <div>
-              <Label className="text-xs font-medium text-muted-foreground">{t("opsec.field_domain")}</Label>
+              <Label>{t("opsec.field_domain")}</Label>
               <Input aria-label={t("opsec.field_domain")} name="input-3" className="w-full mt-1" value={testForm.domain} onChange={(e) => setTestForm({ ...testForm, domain: e.target.value })} />
             </div>
             <div>
-              <Label className="text-xs font-medium text-muted-foreground">{t("opsec.field_ip")}</Label>
+              <Label>{t("opsec.field_ip")}</Label>
               <Input aria-label={t("opsec.field_ip")} name="input-4" className="w-full mt-1" value={testForm.ip} onChange={(e) => setTestForm({ ...testForm, ip: e.target.value })} />
             </div>
             <div>
-              <Label className="text-xs font-medium text-muted-foreground">{t("opsec.field_procs")}</Label>
+              <Label>{t("opsec.field_procs")}</Label>
               <Input aria-label={t("opsec.procs_ph")} name="input-5" className="w-full mt-1" value={testForm.processes} onChange={(e) => setTestForm({ ...testForm, processes: e.target.value })} placeholder="explorer.exe, svchost.exe" />
             </div>
           </div>
           <div className="flex items-center gap-3 mb-4">
             <div className="flex items-center gap-2">
               <Checkbox aria-label={t("opsec.domain_admin")} id="is-da" checked={testForm.is_da} onCheckedChange={(checked) => setTestForm({ ...testForm, is_da: checked === true })} />
-              <Label htmlFor="is-da" className="text-xs text-muted-foreground">{t("opsec.domain_admin")}</Label>
+              <Label htmlFor="is-da" >{t("opsec.domain_admin")}</Label>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -435,15 +435,15 @@ export default function OpsecPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label className="text-xs font-medium text-muted-foreground">{t("opsec.field_rule_name")}</Label>
+              <Label>{t("opsec.field_rule_name")}</Label>
               <Input aria-label={t("opsec.rule_ex_ph")} name="input-7" className="w-full mt-1" value={ruleForm.name} onChange={(e) => setRuleForm({ ...ruleForm, name: e.target.value })} placeholder="e.g. block_mimikatz_da" />
             </div>
             <div>
-              <Label className="text-xs font-medium text-muted-foreground">{t("opsec.col_desc")}</Label>
+              <Label>{t("opsec.col_desc")}</Label>
               <Input aria-label={t("opsec.name_ex_ph")} name="input-8" className="w-full mt-1" value={ruleForm.description} onChange={(e) => setRuleForm({ ...ruleForm, description: e.target.value })} placeholder="e.g. Block mimikatz when Domain Admin" />
             </div>
             <div>
-              <Label className="text-xs font-medium text-muted-foreground">{t("opsec.field_risk")}</Label>
+              <Label>{t("opsec.field_risk")}</Label>
               <Select
                 value={String(ruleForm.risk_level)}
                 onValueChange={(v) => v !== null && setRuleForm({ ...ruleForm, risk_level: parseInt(v) })}
@@ -460,7 +460,7 @@ export default function OpsecPage() {
               </Select>
             </div>
             <div>
-              <Label className="text-xs font-medium text-muted-foreground">{t("opsec.field_default_action")}</Label>
+              <Label>{t("opsec.field_default_action")}</Label>
               <Select
                 value={String(ruleForm.default_action)}
                 onValueChange={(v) => v !== null && setRuleForm({ ...ruleForm, default_action: parseInt(v) })}
@@ -477,7 +477,7 @@ export default function OpsecPage() {
             </div>
             <div className="flex items-center gap-2">
               <Checkbox aria-label={t("opsec.field_enabled")} id="rule-enabled" checked={ruleForm.enabled} onCheckedChange={(checked) => setRuleForm({ ...ruleForm, enabled: checked === true })} />
-              <Label htmlFor="rule-enabled" className="text-xs text-muted-foreground">{t("opsec.field_enabled")}</Label>
+              <Label htmlFor="rule-enabled" >{t("opsec.field_enabled")}</Label>
             </div>
           </div>
           <DialogFooter className="gap-2">

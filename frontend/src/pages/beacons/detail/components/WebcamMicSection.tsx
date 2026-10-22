@@ -200,7 +200,7 @@ export default memo(function WebcamMicSection({ agentId, online }: WebcamMicSect
     >
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_5rem_auto_auto]">
         <div>
-          <Label className="mb-1 block text-xs text-muted-foreground">{t("agents.media_device")}</Label>
+          <Label className="block mb-1.5">{t("agents.media_device")}</Label>
           <Input
             value={device}
             onChange={(e) => setDevice(e.target.value)}
@@ -209,7 +209,7 @@ export default memo(function WebcamMicSection({ agentId, online }: WebcamMicSect
           />
         </div>
         <div>
-          <Label className="mb-1 block text-xs text-muted-foreground">{t("agents.media_seconds")}</Label>
+          <Label className="block mb-1.5">{t("agents.media_seconds")}</Label>
           <Input
             value={seconds}
             onChange={(e) => setSeconds(e.target.value.replace(/[^0-9]/g, "").slice(0, 3))}

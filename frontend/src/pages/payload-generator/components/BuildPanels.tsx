@@ -524,11 +524,11 @@ export const UnixPanel = React.memo(function UnixPanel({ variant, form, setForm,
         <Checkbox id={`${id}-persist`} aria-label={t("generate.panel.persist_aria")} checked={form.persist} onCheckedChange={(checked) => setForm({ ...form, persist: checked === true })} />
         <Label htmlFor={`${id}-persist`} className="text-sm text-foreground">{t("generate.panel.persist")}</Label>
         <Checkbox id={`${id}-skip-tls`} aria-label={t("generate.panel.skip_tls_aria")} checked={form.skip_tls} onCheckedChange={(checked) => setForm({ ...form, skip_tls: checked === true })} className="ml-3" />
-        <Label htmlFor={`${id}-skip-tls`} className="text-sm text-muted-foreground">{t("generate.panel.skip_tls_short")}</Label>
+        <Label htmlFor={`${id}-skip-tls`} className="text-sm">{t("generate.panel.skip_tls_short")}</Label>
         <Checkbox id={`${id}-obfuscate`} aria-label={t("generate.panel.obfuscate_aria")} checked={form.obfuscate} onCheckedChange={(checked) => setForm({ ...form, obfuscate: checked === true })} className="ml-3" />
-        <Label htmlFor={`${id}-obfuscate`} className="text-sm text-muted-foreground">{t("generate.panel.obfuscate_aria")}</Label>
+        <Label htmlFor={`${id}-obfuscate`} className="text-sm">{t("generate.panel.obfuscate_aria")}</Label>
         <Checkbox id={`${id}-slim`} aria-label={t("generate.panel.slim_aria")} checked={form.slim} onCheckedChange={(checked) => setForm({ ...form, slim: checked === true })} className="ml-3" />
-        <Label htmlFor={`${id}-slim`} className="text-sm text-muted-foreground">{t("generate.panel.slim")}</Label>
+        <Label htmlFor={`${id}-slim`} className="text-sm">{t("generate.panel.slim")}</Label>
         <Checkbox
           id={`${id}-upx`}
           aria-label={t("generate.panel.upx_aria")}
@@ -537,7 +537,7 @@ export const UnixPanel = React.memo(function UnixPanel({ variant, form, setForm,
           onCheckedChange={(checked) => setForm({ ...form, upx: checked === true })}
           className="ml-3"
         />
-        <Label htmlFor={`${id}-upx`} className="text-sm text-muted-foreground">
+        <Label htmlFor={`${id}-upx`} className="text-sm">
           {t("generate.panel.upx")}
           {variant === "macos" && <span className="ml-1 text-xs text-muted-foreground/80">— {t("generate.panel.upx_unsupported_macos")}</span>}
         </Label>
@@ -765,7 +765,7 @@ export const PS1Panel = React.memo(function PS1Panel({
       </div>
       <div className="flex items-center gap-x-2">
         <Checkbox id="ps1-skip-tls" aria-label={t("generate.panel.skip_tls_aria")} checked={form.skip_tls} onCheckedChange={(checked) => setForm({ ...form, skip_tls: checked === true })} />
-        <Label htmlFor="ps1-skip-tls" className="text-sm text-muted-foreground">{t("generate.panel.skip_tls")}</Label>
+        <Label htmlFor="ps1-skip-tls" className="text-sm">{t("generate.panel.skip_tls")}</Label>
       </div>
       {code ? (
         <div className="mt-1">

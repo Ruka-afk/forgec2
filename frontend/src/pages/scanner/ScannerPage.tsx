@@ -210,7 +210,7 @@ export default function ScannerPage() {
         <div className="flex flex-col gap-(--page-gap)">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
-              <Label className="block text-xs font-medium text-muted-foreground mb-1.5">{t("scanner.target_agent")}</Label>
+              <Label className="block mb-1.5">{t("scanner.target_agent")}</Label>
               <Select value={selectedAgent} onValueChange={v => setSelectedAgent(v ?? "")}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder={t("scanner.select_agent")} />
@@ -226,11 +226,11 @@ export default function ScannerPage() {
               </Select>
             </div>
             <div>
-              <Label className="block text-xs font-medium text-muted-foreground mb-1.5">{t("scanner.target_addr")}</Label>
+              <Label className="block mb-1.5">{t("scanner.target_addr")}</Label>
               <Input aria-label={t("scanner.target_addr_ph")} type="text" value={targetAddr} onChange={e => setTargetAddr(e.target.value)} placeholder={t("scanner.target_addr_ph")} className="font-mono" />
             </div>
             <div>
-              <Label className="block text-xs font-medium text-muted-foreground mb-1.5">{t("scanner.scan_type")}</Label>
+              <Label className="block mb-1.5">{t("scanner.scan_type")}</Label>
               <Select value={scanType} onValueChange={v => setScanType(v ?? "tcp_connect")}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -243,7 +243,7 @@ export default function ScannerPage() {
               </Select>
             </div>
             <div>
-              <Label className="block text-xs font-medium text-muted-foreground mb-1.5">{t("scanner.port_range")}</Label>
+              <Label className="block mb-1.5">{t("scanner.port_range")}</Label>
               <Select value={portMode} onValueChange={v => setPortMode(v ?? "top")}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -259,7 +259,7 @@ export default function ScannerPage() {
 
           {showCustomRange && (
             <div>
-              <Label className="block text-xs font-medium text-muted-foreground mb-1.5">{t("scanner.port_range")}</Label>
+              <Label className="block mb-1.5">{t("scanner.port_range")}</Label>
               <Input aria-label={t("scanner.port_range")} type="text" value={customPorts} onChange={e => setCustomPorts(e.target.value)} placeholder="1-1000,8080,8443" className="font-mono" />
               <p className="text-xs text-muted-foreground mt-1">{t("scanner.port_format_hint")}</p>
             </div>

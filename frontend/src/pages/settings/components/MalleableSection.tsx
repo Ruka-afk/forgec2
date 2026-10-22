@@ -31,11 +31,11 @@ export default function MalleableSection({
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <Label htmlFor="malleable-http-status-code" className="block text-xs text-muted-foreground mb-1.5">{t("settings.malleable.http_status_code")}</Label>
+              <Label htmlFor="malleable-http-status-code" className="block mb-1.5">{t("settings.malleable.http_status_code")}</Label>
               <Input id="malleable-http-status-code" type="number" min={100} max={599} value={form.status_code} onChange={(e) => setForm({ ...form, status_code: Number(e.target.value) })}  />
             </div>
             <div>
-              <Label htmlFor="malleable-content-type" className="block text-xs text-muted-foreground mb-1.5">{t("settings.malleable.content_type")}</Label>
+              <Label htmlFor="malleable-content-type" className="block mb-1.5">{t("settings.malleable.content_type")}</Label>
               <Input id="malleable-content-type" type="text" placeholder="application/json" value={form.content_type} onChange={(e) => setForm({ ...form, content_type: e.target.value })} className="font-mono" />
             </div>
           </div>

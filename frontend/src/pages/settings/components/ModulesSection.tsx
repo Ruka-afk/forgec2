@@ -239,7 +239,7 @@ export default function ModulesSection() {
             <p className="text-xs text-muted-foreground">{t("settings.modules.deploy_hint")}</p>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label className="text-xs">{t("settings.modules.deploy_module")}</Label>
+                <Label>{t("settings.modules.deploy_module")}</Label>
                 <Select value={deployModule} onValueChange={(v) => { setDeployModule(v || ""); setDeployPath(v ? `C:\\Windows\\Temp\\${v}` : ""); }}>
                   <SelectTrigger className="text-xs">
                     <SelectValue placeholder={t("settings.modules.deploy_module")} />
@@ -252,7 +252,7 @@ export default function ModulesSection() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">{t("settings.modules.deploy_agent")}</Label>
+                <Label>{t("settings.modules.deploy_agent")}</Label>
                 <AgentLoadError message={agentsError} className="mb-1" />
                 <Select value={deployAgent} onValueChange={(v) => setDeployAgent(v || "")}>
                   <SelectTrigger className="text-xs">
@@ -274,7 +274,7 @@ export default function ModulesSection() {
                 </Select>
               </div>
               <div className="space-y-1.5 sm:col-span-2">
-                <Label className="text-xs">{t("settings.modules.deploy_path")}</Label>
+                <Label>{t("settings.modules.deploy_path")}</Label>
                 <Input
                   className="text-xs font-mono"
                   value={deployPath}

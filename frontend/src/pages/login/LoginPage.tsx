@@ -178,7 +178,7 @@ function LoginForm() {
 
           <form onSubmit={handleSubmit} className="space-y-5" aria-label={t("login.form_aria")} noValidate>
             <div>
-              <Label htmlFor="login-username" className="mb-2 block text-sm font-medium text-foreground">{t("login.username")}</Label>
+              <Label htmlFor="login-username" className="mb-2 block text-sm text-foreground">{t("login.username")}</Label>
               <div className="relative group">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" aria-hidden="true" />
                 <Input
@@ -200,7 +200,7 @@ function LoginForm() {
             </div>
 
             <div>
-              <Label htmlFor="login-password" className="mb-2 block text-sm font-medium text-foreground">{t("login.password")}</Label>
+              <Label htmlFor="login-password" className="mb-2 block text-sm text-foreground">{t("login.password")}</Label>
               <div className="relative group">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" aria-hidden="true" />
                 <Input
@@ -221,7 +221,7 @@ function LoginForm() {
             </div>
 
             <div>
-              <Label htmlFor="login-totp" className="mb-2 block text-sm font-medium text-foreground">
+              <Label htmlFor="login-totp" className="mb-2 block text-sm text-foreground">
                 {t("login.totp")} <span className="text-muted-foreground">({t("login.totp_optional")})</span>
               </Label>
               <div className="relative group">

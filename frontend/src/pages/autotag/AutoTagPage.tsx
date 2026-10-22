@@ -197,11 +197,11 @@ export default function AutoTagPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <Label htmlFor="autotag-name" className="mb-1 text-xs">{t("autotag.name")}</Label>
+              <Label htmlFor="autotag-name" className="mb-1.5">{t("autotag.name")}</Label>
               <Input id="autotag-name" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div>
-              <Label htmlFor="autotag-tag" className="mb-1 text-xs">{t("autotag.tag")}</Label>
+              <Label htmlFor="autotag-tag" className="mb-1.5">{t("autotag.tag")}</Label>
               <Select value={tagId} onValueChange={(v) => setTagId(v ?? "")}>
                 <SelectTrigger id="autotag-tag" className="w-full">
                   <SelectValue placeholder={t("autotag.select_tag")} />
@@ -214,13 +214,13 @@ export default function AutoTagPage() {
               </Select>
             </div>
             <div>
-              <Label htmlFor="autotag-priority" className="mb-1 text-xs">{t("autotag.priority")}</Label>
+              <Label htmlFor="autotag-priority" className="mb-1.5">{t("autotag.priority")}</Label>
               <Input id="autotag-priority" type="number" value={priority} onChange={(e) => setPriority(parseInt(e.target.value) || 0)} />
             </div>
           </div>
 
           <div>
-            <Label className="mb-2 text-xs">{t("autotag.conditions")}</Label>
+            <Label className="mb-2">{t("autotag.conditions")}</Label>
             {conditions.map((c, i) => (
               <div key={c._key ?? i} className="flex flex-col sm:flex-row gap-2 mb-2">
                 <Select value={c.field} onValueChange={(v) => updateCondition(i, "field", v ?? "")}>

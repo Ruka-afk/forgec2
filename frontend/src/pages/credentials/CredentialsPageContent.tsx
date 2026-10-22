@@ -8,7 +8,7 @@ import { downloadText } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
 import { useForm } from "@/lib/hooks/useForm";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
-import { FieldError } from "@/components/ui/field-error";
+import { Field, fieldErrorId } from "@/components/ui/field";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageToolbar } from "@/components/ui/page-toolbar";
 import { CardHeaderRow } from "@/components/ui/card-header-row";
@@ -626,9 +626,8 @@ export default function CredentialsPage() {
           </DialogHeader>
           <form onSubmit={formSubmit} noValidate>
           <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_type")} *</Label>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label={t("cred.field_type")} required>
                 <Select value={form.type} onValueChange={(v) => formSetField("type", v ?? "cleartext")}>
                   <SelectTrigger className="w-full">
                     <SelectValue />
@@ -639,65 +638,62 @@ export default function CredentialsPage() {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-              <div>
-                <Label htmlFor="add-cred-username" className="text-xs text-muted-foreground block mb-1">{t("cred.field_username")} *</Label>
+              </Field>
+              <Field
+                label={t("cred.field_username")}
+                required
+                htmlFor="add-cred-username"
+                error={formTouched.username ? formErrors.username : undefined}
+              >
                 <Input
                   id="add-cred-username"
                   value={form.username}
                   onChange={formChange("username")}
                   onBlur={formBlur("username")}
                   aria-invalid={!!(formTouched.username && formErrors.username)}
-                  aria-describedby={formErrors.username ? "add-cred-username-error" : undefined}
+                  aria-describedby={formErrors.username ? fieldErrorId("add-cred-username") : undefined}
                 />
-                {formTouched.username && <FieldError id="add-cred-username-error">{formErrors.username}</FieldError>}
-              </div>
-              <div>
-                <Label htmlFor="add-cred-password" className="text-xs text-muted-foreground block mb-1">{t("cred.field_password")}</Label>
+              </Field>
+              <Field label={t("cred.field_password")} htmlFor="add-cred-password">
                 <Input
                   id="add-cred-password"
                   value={form.password}
                   onChange={formChange("password")}
                 />
-              </div>
-              <div>
-                <Label htmlFor="add-cred-domain" className="text-xs text-muted-foreground block mb-1">{t("cred.field_domain")}</Label>
+              </Field>
+              <Field label={t("cred.field_domain")} htmlFor="add-cred-domain">
                 <Input
                   id="add-cred-domain"
                   value={form.domain}
                   onChange={formChange("domain")}
                 />
-              </div>
-              <div>
-                <Label htmlFor="add-cred-source" className="text-xs text-muted-foreground block mb-1">{t("cred.field_source")}</Label>
+              </Field>
+              <Field label={t("cred.field_source")} htmlFor="add-cred-source">
                 <Input
                   id="add-cred-source"
                   value={form.source}
                   onChange={formChange("source")}
                   placeholder={t("cred.ph_source")}
                 />
-              </div>
-              <div>
-                <Label htmlFor="add-cred-hash" className="text-xs text-muted-foreground block mb-1">{t("cred.field_hash")}</Label>
+              </Field>
+              <Field label={t("cred.field_hash")} htmlFor="add-cred-hash">
                 <Input
                   id="add-cred-hash"
                   value={form.hash}
                   onChange={formChange("hash")}
                   className="font-mono text-xs"
                 />
-              </div>
+              </Field>
             </div>
-            <div>
-              <Label htmlFor="add-cred-tags" className="text-xs text-muted-foreground block mb-1">{t("cred.field_tags")}</Label>
+            <Field label={t("cred.field_tags")} htmlFor="add-cred-tags">
               <Input
                 id="add-cred-tags"
                 value={form.tags}
                 onChange={formChange("tags")}
                 placeholder={t("cred.ph_tags")}
               />
-            </div>
-            <div>
-              <Label htmlFor="add-cred-notes" className="text-xs text-muted-foreground block mb-1">{t("cred.field_notes")}</Label>
+            </Field>
+            <Field label={t("cred.field_notes")} htmlFor="add-cred-notes">
               <Textarea
                 id="add-cred-notes"
                 value={form.notes}
@@ -705,7 +701,7 @@ export default function CredentialsPage() {
                 rows={2}
                 className="resize-none"
               />
-            </div>
+            </Field>
           </div>
           <DialogFooter>
             <Button variant="outline" type="button" onClick={() => setShowAddModal(false)} className="flex-1">
@@ -726,64 +722,56 @@ export default function CredentialsPage() {
           </DialogHeader>
           <p className="text-xs text-muted-foreground">{t("cred.edit_readonly_hint")}</p>
           <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="edit-cred-type" className="text-xs text-muted-foreground block mb-1">{t("cred.field_type")}</Label>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label={t("cred.field_type")} htmlFor="edit-cred-type">
                 <Input id="edit-cred-type" value={form.type} disabled />
-              </div>
-              <div>
-                <Label htmlFor="edit-cred-username" className="text-xs text-muted-foreground block mb-1">{t("cred.field_username")}</Label>
+              </Field>
+              <Field label={t("cred.field_username")} htmlFor="edit-cred-username">
                 <Input
                   id="edit-cred-username"
                   value={form.username}
                   disabled
                 />
-              </div>
-              <div>
-                <Label htmlFor="edit-cred-password" className="text-xs text-muted-foreground block mb-1">{t("cred.field_password")}</Label>
+              </Field>
+              <Field label={t("cred.field_password")} htmlFor="edit-cred-password">
                 <Input
                   id="edit-cred-password"
                   value={form.password}
                   type="password"
                   disabled
                 />
-              </div>
-              <div>
-                <Label htmlFor="edit-cred-domain" className="text-xs text-muted-foreground block mb-1">{t("cred.field_domain")}</Label>
+              </Field>
+              <Field label={t("cred.field_domain")} htmlFor="edit-cred-domain">
                 <Input
                   id="edit-cred-domain"
                   value={form.domain}
                   disabled
                 />
-              </div>
-              <div>
-                <Label htmlFor="edit-cred-source" className="text-xs text-muted-foreground block mb-1">{t("cred.field_source")}</Label>
+              </Field>
+              <Field label={t("cred.field_source")} htmlFor="edit-cred-source">
                 <Input
                   id="edit-cred-source"
                   value={form.source}
                   disabled
                 />
-              </div>
-              <div>
-                <Label htmlFor="edit-cred-hash" className="text-xs text-muted-foreground block mb-1">{t("cred.field_hash")}</Label>
+              </Field>
+              <Field label={t("cred.field_hash")} htmlFor="edit-cred-hash">
                 <Input
                   id="edit-cred-hash"
                   value={form.hash}
                   className="font-mono text-xs"
                   disabled
                 />
-              </div>
+              </Field>
             </div>
-            <div>
-              <Label htmlFor="edit-cred-tags" className="text-xs text-muted-foreground block mb-1">{t("cred.field_tags")}</Label>
+            <Field label={t("cred.field_tags")} htmlFor="edit-cred-tags">
               <Input
                 id="edit-cred-tags"
                 value={form.tags}
                 onChange={formChange("tags")}
               />
-            </div>
-            <div>
-              <Label htmlFor="edit-cred-notes" className="text-xs text-muted-foreground block mb-1">{t("cred.field_notes")}</Label>
+            </Field>
+            <Field label={t("cred.field_notes")} htmlFor="edit-cred-notes">
               <Textarea
                 id="edit-cred-notes"
                 value={form.notes}
@@ -791,7 +779,7 @@ export default function CredentialsPage() {
                 rows={2}
                 className="resize-none"
               />
-            </div>
+            </Field>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowEditModal(false); setEditTarget(null); }} className="flex-1">
@@ -813,7 +801,7 @@ export default function CredentialsPage() {
             {t("cred.batch_desc", { count: selectedIds.size })}
           </p>
           <div>
-            <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_tags")}</Label>
+            <Label className="block mb-1.5">{t("cred.field_tags")}</Label>
             <Input
               value={batchTags}
               onChange={e => setBatchTags(e.target.value)}

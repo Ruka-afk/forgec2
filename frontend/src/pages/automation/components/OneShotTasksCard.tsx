@@ -128,7 +128,7 @@ export function OneShotTasksCard() {
         <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-3 mb-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs text-muted-foreground">{t("oneshot.agent")}</Label>
+              <Label>{t("oneshot.agent")}</Label>
               <select
                 value={agentId}
                 onChange={(e) => setAgentId(e.target.value)}
@@ -152,7 +152,7 @@ export function OneShotTasksCard() {
               )}
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">{t("oneshot.run_at")}</Label>
+              <Label>{t("oneshot.run_at")}</Label>
               <Input
                 type="datetime-local"
                 value={runAtLocal}
@@ -165,7 +165,7 @@ export function OneShotTasksCard() {
             </div>
           </div>
           <div>
-            <Label className="text-xs text-muted-foreground">{t("auto.command")}</Label>
+            <Label>{t("auto.command")}</Label>
             <Input value={command} onChange={(e) => setCommand(e.target.value)} placeholder="mimikatz # sekurlsa::logonpasswords" className="mt-1 font-mono" />
           </div>
           <div className="flex justify-end gap-2">

@@ -85,7 +85,7 @@ export default memo(function ScreenTriggerSection({ agentId, online }: ScreenTri
     >
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_6rem_auto]">
         <div>
-          <Label className="mb-1 block text-xs text-muted-foreground">{t("agents.trigger_match")}</Label>
+          <Label className="block mb-1.5">{t("agents.trigger_match")}</Label>
           <Input
             value={match}
             onChange={(e) => setMatch(e.target.value)}
@@ -94,7 +94,7 @@ export default memo(function ScreenTriggerSection({ agentId, online }: ScreenTri
           />
         </div>
         <div>
-          <Label className="mb-1 block text-xs text-muted-foreground">{t("agents.trigger_interval")}</Label>
+          <Label className="block mb-1.5">{t("agents.trigger_interval")}</Label>
           <Input
             value={interval}
             onChange={(e) => changeInterval(e.target.value.replace(/[^0-9]/g, "").slice(0, 3))}

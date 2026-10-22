@@ -112,19 +112,19 @@ export default function ListenersPageContent() {
     <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
       <p className="text-xs font-semibold text-muted-foreground">{t("listeners.tls_section")}</p>
       <div>
-        <Label className="text-xs mb-1" htmlFor={`${prefix}-client-ca`}>{t("listeners.field_client_ca")}</Label>
+        <Label className="mb-1.5" htmlFor={`${prefix}-client-ca`}>{t("listeners.field_client_ca")}</Label>
         <Input id={`${prefix}-client-ca`} className="font-mono text-xs" value={values.client_ca_file}
           onChange={(e) => setField("client_ca_file", e.target.value)}
           placeholder={t("listeners.client_ca_ph")} />
         <p className="mt-1 text-micro-sm text-muted-foreground">{t("listeners.client_ca_hint")}</p>
       </div>
-      <Label className="flex items-center gap-2 text-xs text-foreground">
+      <Label className="flex items-center gap-2 text-foreground">
         <Checkbox checked={values.require_client_cert}
           onCheckedChange={(v) => setField("require_client_cert", v === true)} />
         {t("listeners.field_require_client_cert")}
       </Label>
       <div>
-        <Label className="text-xs mb-1" htmlFor={`${prefix}-min-tls`}>{t("listeners.field_min_tls")}</Label>
+        <Label className="mb-1.5" htmlFor={`${prefix}-min-tls`}>{t("listeners.field_min_tls")}</Label>
         <Select value={values.min_tls_version} onValueChange={(val) => setField("min_tls_version", val ?? "")}>
           <SelectTrigger id={`${prefix}-min-tls`} className="w-full">
             <SelectValue placeholder={t("listeners.min_tls_inherit")} />
@@ -466,7 +466,7 @@ export default function ListenersPageContent() {
           <form onSubmit={handleCreateSubmit} noValidate>
             <div className="space-y-3">
               <div>
-                <Label required className="text-xs mb-1" htmlFor="create-name">{t("listeners.field_name")}</Label>
+                <Label required className="mb-1.5" htmlFor="create-name">{t("listeners.field_name")}</Label>
                 <Input id="create-name" value={createForm.name} onChange={createChange("name")} onBlur={createBlur("name")}
                   placeholder={t("listeners.name_ph")}
                   aria-invalid={!!(createTouched.name && createErrors.name)}
@@ -474,7 +474,7 @@ export default function ListenersPageContent() {
                 {createTouched.name && <FieldError id="create-name-error">{createErrors.name}</FieldError>}
               </div>
               <div>
-                <Label className="text-xs mb-1" htmlFor="create-type">{t("listeners.field_type")}</Label>
+                <Label className="mb-1.5" htmlFor="create-type">{t("listeners.field_type")}</Label>
                 <Select value={createForm.type} onValueChange={typeChange(createSetField)}>
                   <SelectTrigger id="create-type" className="w-full">
                     <SelectValue />
@@ -494,14 +494,14 @@ export default function ListenersPageContent() {
                 </Select>
               </div>
               <div>
-                <Label className="text-xs mb-1" htmlFor="create-host">{t("listeners.field_host")}</Label>
+                <Label className="mb-1.5" htmlFor="create-host">{t("listeners.field_host")}</Label>
                 <Input id="create-host" value={createForm.host} onChange={createChange("host")} onBlur={createBlur("host")}
                   aria-invalid={!!(createTouched.host && createErrors.host)}
                   aria-describedby={createErrors.host ? "create-host-error" : undefined} />
                 {createTouched.host && <FieldError id="create-host-error">{createErrors.host}</FieldError>}
               </div>
               <div>
-                <Label required className="text-xs mb-1" htmlFor="create-port">{t("listeners.field_port")}</Label>
+                <Label required className="mb-1.5" htmlFor="create-port">{t("listeners.field_port")}</Label>
                 <Input id="create-port" type="number" min="1" max="65535" value={createForm.port} onChange={createChange("port")} onBlur={createBlur("port")}
                   placeholder="8443"
                   aria-invalid={!!(createTouched.port && createErrors.port)}
@@ -510,12 +510,12 @@ export default function ListenersPageContent() {
               </div>
               {isTLSScheme(createForm.protocol || createForm.type) && tlsFields("create", createForm, createSetField)}
               <div>
-                <Label className="text-xs mb-1" htmlFor="create-tags">{t("listeners.field_tags")}</Label>
+                <Label className="mb-1.5" htmlFor="create-tags">{t("listeners.field_tags")}</Label>
                 <Input id="create-tags" value={createForm.tags} onChange={createChange("tags")}
                   placeholder={t("listeners.tags_ph")} />
               </div>
               <div>
-                <Label className="text-xs mb-1" htmlFor="create-color">{t("listeners.field_color")}</Label>
+                <Label className="mb-1.5" htmlFor="create-color">{t("listeners.field_color")}</Label>
                 <Select value={createForm.color} onValueChange={(val) => createSetField("color", val ?? "")}>
                   <SelectTrigger id="create-color" className="w-full">
                     <SelectValue placeholder={t("listeners.color_none")} />
@@ -552,14 +552,14 @@ export default function ListenersPageContent() {
           <form onSubmit={handleEditSubmit} noValidate>
             <div className="space-y-3">
               <div>
-                <Label className="text-xs mb-1" htmlFor="edit-name">{t("listeners.field_name")}</Label>
+                <Label className="mb-1.5" htmlFor="edit-name">{t("listeners.field_name")}</Label>
                 <Input id="edit-name" value={editForm.name} onChange={handleEditChange("name")} onBlur={handleEditBlur("name")}
                   aria-invalid={!!(editTouched.name && editErrors.name)}
                   aria-describedby={editErrors.name ? "edit-name-error" : undefined} />
                 {editTouched.name && <FieldError id="edit-name-error">{editErrors.name}</FieldError>}
               </div>
               <div>
-                <Label className="text-xs mb-1" htmlFor="edit-type">{t("listeners.field_type")}</Label>
+                <Label className="mb-1.5" htmlFor="edit-type">{t("listeners.field_type")}</Label>
                 <Select value={editForm.type} onValueChange={typeChange(setEditChange)}>
                   <SelectTrigger id="edit-type" className="w-full">
                     <SelectValue />
@@ -579,14 +579,14 @@ export default function ListenersPageContent() {
                 </Select>
               </div>
               <div>
-                <Label className="text-xs mb-1" htmlFor="edit-host">{t("listeners.field_host")}</Label>
+                <Label className="mb-1.5" htmlFor="edit-host">{t("listeners.field_host")}</Label>
                 <Input id="edit-host" value={editForm.host} onChange={handleEditChange("host")} onBlur={handleEditBlur("host")}
                   aria-invalid={!!(editTouched.host && editErrors.host)}
                   aria-describedby={editErrors.host ? "edit-host-error" : undefined} />
                 {editTouched.host && <FieldError id="edit-host-error">{editErrors.host}</FieldError>}
               </div>
               <div>
-                <Label className="text-xs mb-1" htmlFor="edit-port">{t("listeners.field_port")}</Label>
+                <Label className="mb-1.5" htmlFor="edit-port">{t("listeners.field_port")}</Label>
                 <Input id="edit-port" type="number" min="1" max="65535" value={editForm.port} onChange={handleEditChange("port")} onBlur={handleEditBlur("port")}
                   aria-invalid={!!(editTouched.port && editErrors.port)}
                   aria-describedby={editErrors.port ? "edit-port-error" : undefined} />
@@ -594,16 +594,16 @@ export default function ListenersPageContent() {
               </div>
               {isTLSScheme(editForm.protocol || editForm.type) && tlsFields("edit", editForm, setEditChange)}
               <div>
-                <Label className="text-xs mb-1" htmlFor="edit-notes">{t("listeners.field_notes")}</Label>
+                <Label className="mb-1.5" htmlFor="edit-notes">{t("listeners.field_notes")}</Label>
                 <Input id="edit-notes" value={editForm.notes} onChange={handleEditChange("notes")} />
               </div>
               <div>
-                <Label className="text-xs mb-1" htmlFor="edit-tags">{t("listeners.field_tags")}</Label>
+                <Label className="mb-1.5" htmlFor="edit-tags">{t("listeners.field_tags")}</Label>
                 <Input id="edit-tags" value={editForm.tags} onChange={handleEditChange("tags")}
                   placeholder={t("listeners.tags_ph")} />
               </div>
               <div>
-                <Label className="text-xs mb-1" htmlFor="edit-color">{t("listeners.field_color")}</Label>
+                <Label className="mb-1.5" htmlFor="edit-color">{t("listeners.field_color")}</Label>
                 <Select value={editForm.color} onValueChange={(val) => setEditChange("color", val ?? "")}>
                   <SelectTrigger id="edit-color" className="w-full">
                     <SelectValue placeholder={t("listeners.color_none")} />

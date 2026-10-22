@@ -102,7 +102,7 @@ export default function OneLinerPanel({
         </div>
         <div className="flex items-center gap-x-2">
           <Checkbox aria-label={t("generate.panel.persist_aria")} checked={form.persist} onCheckedChange={(v) => setForm({ ...form, persist: v === true })} id="persist-oneliner" />
-          <Label htmlFor="persist-oneliner" className="text-sm text-muted-foreground">{t("generate.panel.persist")}</Label>
+          <Label htmlFor="persist-oneliner" className="text-sm">{t("generate.panel.persist")}</Label>
         </div>
       </div>
 

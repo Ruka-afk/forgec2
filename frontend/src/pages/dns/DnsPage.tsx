@@ -176,7 +176,7 @@ export default function DnsPage() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <Label className="text-xs font-semibold text-muted-foreground mb-1.5">{t("dns.field_domain")}</Label>
+              <Label className="font-semibold mb-1.5">{t("dns.field_domain")}</Label>
               <Input
                 value={domain}
                 placeholder="c2.example.com"
@@ -189,7 +189,7 @@ export default function DnsPage() {
               <p className="text-micro-sm text-muted-foreground mt-1">{t("dns.domain")}</p>
             </div>
             <div>
-              <Label className="text-xs font-semibold text-muted-foreground mb-1.5">{t("dns.field_listen")}</Label>
+              <Label className="font-semibold mb-1.5">{t("dns.field_listen")}</Label>
               <Input
                 value={addr}
                 placeholder=":53"
