@@ -9,6 +9,8 @@ forgec2-server-linux-arm64
 forgec2-server-darwin-amd64
 forgec2-server-darwin-arm64
 reset-password.exe
+# Rollback copies kept by scripts/deploy.ps1 and scripts/deploy.sh
+*.prev
 
 # ForgeC2 specific
 data/

@@ -16,8 +16,8 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Server.Port != 8000 {
 		t.Errorf("expected port 8000, got %d", cfg.Server.Port)
 	}
-	if cfg.Server.Host != "127.0.0.1" {
-		t.Errorf("expected host 127.0.0.1, got %s", cfg.Server.Host)
+	if cfg.Server.Host != "0.0.0.0" {
+		t.Errorf("expected host 0.0.0.0 (the console must be reachable from another host), got %s", cfg.Server.Host)
 	}
 	if !cfg.Server.TLSEnabled {
 		t.Errorf("expected tls_enabled true (secure default), got %v", cfg.Server.TLSEnabled)

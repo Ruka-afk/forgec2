@@ -82,14 +82,30 @@ CLI tool: `go run ./cmd/mint-reg-secret -config config.yaml` (or `-db <path> -be
 Prints the `set SECRET_ID=` / `set SECRET_B64=` pair for a build. It writes the sealed row straight into `reg_secrets` (no UI, no audit entry) and binds to the first agent id that registers with it. Optional `-tenant <n>` stamps the row with a tenant id so the first agent that registers with it lands in that tenant (0 = legacy/unscoped: the agent goes to the default tenant, the pre-batch-N behavior). Used by `scripts/e2e-c-implant-local.ps1`.
 
 ## Deploying the server
+One command (build + webdist sync + gates + restart + health + rollback):
+- Windows: `powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1`
+- Linux/macOS: `bash scripts/deploy.sh`
+
+It preflights the toolchain and the config, builds through `scripts/build-embedded.ps1` (the canonical
+frontend → `internal/webdist/dist` sync), keeps the previous binary as `forgec2-server.exe.prev`
+(`forgec2-server.prev` on Linux), stops the old instance and waits for the port, starts the new one
+detached with `logs/stdout.log` + `logs/stderr.log`, probes `/health` (HTTP and the self-signed HTTPS
+profile), `/ready` and `/login`, and rolls back to `.prev` — then starts it — when the new build does
+not come up healthy. The log tail is printed on failure. Flags: `-SkipChecks`, `-SkipFrontend`
+(backend-only change), `-NoStart` (build only), `-NoRollback`, `-Port`, `-HealthTimeoutSeconds`.
+
+Manual equivalent when a step has to be isolated:
 1. `npm run build` (from `frontend/`)
-2. Sync dist via `scripts/build-embedded.ps1`
+2. Sync dist via `scripts/build-embedded.ps1` (add `-NoRestart` to build without touching a running server)
 3. `go build -o forgec2-server.exe ./cmd/server`
 4. Kill running instance: `taskkill /f /im forgec2-server.exe`
-5. Start detached (NO redirect flags — they break the process):
-   `Start-Process -WindowStyle Hidden -FilePath ".\forgec2-server.exe" -ArgumentList "-config config.yaml" -PassThru`
-6. Logs go to `logs/forgec2.log`.
-7. Verify with `GET /health` (expects `ok`).
+5. Start detached and redirect the child's stdout/stderr: without the redirect the server inherits the
+   caller's console handles and a script that started it blocks until the server exits.
+   `Start-Process -WindowStyle Hidden -FilePath ".\forgec2-server.exe" -ArgumentList "-config config.yaml" -PassThru -RedirectStandardOutput logs\stdout.log -RedirectStandardError logs\stderr.log`
+6. Logs go to `logs/forgec2.log`. Verify with `GET /health` (expects `ok`).
+7. The server binds `0.0.0.0` by default (reachable from other hosts). A browser on another host also
+   needs its hostname in `server.allowed_origins`, otherwise the API refuses it as cross-origin — the
+   server logs a startup warning for a wildcard bind with an empty list.
 
 ## Misc
 - `scripts/setup-dev.sh` generates `config.yaml` (port 8000).

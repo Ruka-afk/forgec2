@@ -552,6 +552,15 @@ func (s *Server) Run() error {
 
 	slog.Info("Starting ForgeC2 server", "addr", addr, "tls", s.cfg.Server.TLSEnabled)
 
+	// The console listens on every interface by default. A browser on another
+	// host then has to be allowed explicitly (server.allowed_origins), or the
+	// API calls are refused as a cross-origin request - a confusing first
+	// symptom for an operator who just changed the bind address.
+	if isWildcardHost(s.cfg.Server.Host) && len(s.cfg.Server.AllowedOrigins) == 0 {
+		slog.Warn("The console listens on all interfaces and server.allowed_origins is empty: only browsers on localhost can use the API. Add the hostnames you operate from to server.allowed_origins.",
+			"addr", addr)
+	}
+
 	if s.cfg.Server.GeoIPEnabled {
 		slog.Warn("GeoIP lookups are ENABLED: the public IP of every beaconing host will be sent to the third-party service ip-api.com. Disable server.geoip_enabled unless this exfiltration is acceptable for the engagement.")
 	}

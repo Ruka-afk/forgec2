@@ -55,7 +55,7 @@ if [ ! -f config.yaml ]; then
   cat > config.yaml <<EOF
 server:
   port: 8000
-  host: "127.0.0.1"
+  host: "0.0.0.0"
   tls_enabled: true
   jwt_secret: "$JWT_SECRET"
   beacon_key: "$BEACON_KEY"
@@ -145,5 +145,11 @@ echo ""
 echo "Start the server:"
 echo "  ./forgec2-server.exe -config config.yaml"
 echo ""
-echo "Or use the dev script:"
-echo "  powershell -File scripts/dev-backend.ps1"
+echo "Or build, deploy and verify in one step (build + restart + health + rollback):"
+echo "  bash scripts/deploy.sh          # Linux/macOS"
+echo "  powershell -File scripts/deploy.ps1   # Windows"
+echo ""
+echo "The console binds 0.0.0.0 (reachable from other hosts). A browser on"
+echo "another host must be allowed explicitly - add its hostname under"
+echo "server.allowed_origins in config.yaml, or the API calls are refused"
+echo "as cross-origin."

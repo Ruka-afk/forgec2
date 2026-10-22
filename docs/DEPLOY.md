@@ -4,6 +4,42 @@ Prebuilt `forgec2-server` binaries for Linux and Windows are published on every
 `v*` tag via `.github/workflows/release.yml` (frontend already embedded —
 single file, no Node.js needed at runtime).
 
+## Option 0 — from a source checkout: one command
+
+The deploy script takes the working tree to a running, verified server:
+
+```
+preflight -> build (frontend bundle + Go binary) -> stop the old instance
+-> start the new one -> health/ready/login smoke -> rollback
+```
+
+```bash
+bash scripts/deploy.sh                 # Linux / macOS
+powershell -File scripts/deploy.ps1    # Windows
+```
+
+What it adds over "build and restart by hand":
+
+- **Preflight** — the toolchain and the config must exist; the probe port is
+  read from `server.port`; a wildcard bind without `server.allowed_origins`
+  is called out (remote browsers would be refused as cross-origin).
+- **One build path** — `scripts/build-embedded.ps1` owns the
+  frontend → `internal/webdist/dist` sync (staged copy, LF-normalized, so the
+  committed bundle stays byte-identical on every platform). The deploy script
+  never copies the bundle itself.
+- **A clean handover** — the old instance is stopped and the port is waited
+  out, so the new one never fights for the bind.
+- **Verification** — `/health`, `/ready` and `/login` are probed; a failed
+  `/health` is not silently ignored.
+- **Rollback** — the previous binary is kept as `forgec2-server.prev` (or
+  `forgec2-server.exe.prev`). A new instance that does not come up healthy
+  is rolled back to it and started again: a bad build never leaves the box
+  down.
+
+Useful flags: `--skip-checks` (skip the frontend gates), `--skip-frontend`
+(backend-only change), `--no-start` (build only), `--no-rollback`,
+`--port`, `--timeout`.
+
 ## Option A — Linux, Docker (recommended, SQLite, zero-config)
 
 ```bash
@@ -82,6 +118,15 @@ Copy-Item config.example.yaml config.yaml
 
 Open `https://<host>:8000` (self-signed cert on first run; TLS on by default).
 Data (SQLite + uploads) lives under `data/` (or the `forgec2_data` volume).
+
+The console binds **every interface** by default (`server.host: 0.0.0.0`), so
+it can be operated from another host or container network. Two consequences:
+
+- A browser on another host is refused as cross-origin unless its hostname is
+  listed under `server.allowed_origins` in `config.yaml`. The server logs a
+  warning at startup when the bind is a wildcard and the list is empty.
+- Set `server.host: 127.0.0.1` to keep the console local. The SOCKS relay
+  stays local either way (`server.socks_listen_host`).
 
 TLS posture is configurable per termination point: extra `https`/`tls`
 listeners can require verified client certificates, verify them against their

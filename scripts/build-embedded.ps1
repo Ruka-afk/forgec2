@@ -1,4 +1,19 @@
 # build-embedded.ps1 — Build frontend, embed into Go binary, and restart server.
+#
+# This is the canonical frontend -> internal/webdist/dist sync. The committed
+# bundle must be byte-identical on every platform, so the copy is staged
+# (dist.new -> dist) and the line endings are normalized to LF afterwards.
+#
+# Parameters:
+#   -SkipChecks   skip the frontend gates (npm run check)
+#   -SkipFrontend skip the frontend build and the webdist sync (backend only)
+#   -NoRestart    build only; do not touch the running instance
+#                 (scripts/deploy.ps1 owns the stop/start/health/rollback)
+param(
+    [switch]$SkipChecks,
+    [switch]$SkipFrontend,
+    [switch]$NoRestart
+)
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Push-Location $root
@@ -18,13 +33,15 @@ try {
     # 0.5. Regenerate OpenAPI types before building. The full consistency gate
     # runs after dist has been refreshed; check:webdist would otherwise reject
     # every legitimate frontend change before this script had a chance to copy it.
-    Write-Host "==> Regenerating OpenAPI types..." -ForegroundColor Cyan
-    Push-Location frontend
-    try {
-        npm run gen:openapi
-        if ($LASTEXITCODE -ne 0) { throw "openapi regeneration failed" }
-    } finally {
-        Pop-Location
+    if (-not $SkipFrontend) {
+        Write-Host "==> Regenerating OpenAPI types..." -ForegroundColor Cyan
+        Push-Location frontend
+        try {
+            npm run gen:openapi
+            if ($LASTEXITCODE -ne 0) { throw "openapi regeneration failed" }
+        } finally {
+            Pop-Location
+        }
     }
 
     # 0.6. Refresh the Win7 shim mirror (embedded parent sources for the
@@ -34,6 +51,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "win7shim sync failed" }
 
     # 1. Build frontend
+    if (-not $SkipFrontend) {
     Write-Host "==> Building frontend..." -ForegroundColor Cyan
     Push-Location frontend
     # PS 5.1: native stderr lines become ErrorRecords under 2>&1 and would
@@ -45,9 +63,15 @@ try {
     Write-Host $buildOut
     if ($LASTEXITCODE -ne 0) { throw "Frontend build failed" }
     Pop-Location
+    } else {
+        Write-Host "==> Skipping the frontend build (-SkipFrontend)" -ForegroundColor DarkGray
+    }
 
     # 2. Copy output to webdist (skip when byte-identical to avoid 258-file churn)
     Write-Host "==> Syncing frontend output to webdist..." -ForegroundColor Cyan
+    if ($SkipFrontend) {
+        Write-Host "  skipped (-SkipFrontend): the committed bundle stays as it is" -ForegroundColor DarkGray
+    } else {
     if (-not (Test-Path "frontend/out")) {
         throw "frontend/out missing after build — frontend build produced no output"
     }
@@ -94,6 +118,7 @@ try {
 
     # 2.5. Validate source contracts, the freshly-built bundle and the embedded
     # copy together before compiling or restarting the backend.
+    if (-not $SkipChecks) {
     Write-Host "==> Checking frontend consistency..." -ForegroundColor Cyan
     Push-Location frontend
     try {
@@ -102,11 +127,20 @@ try {
     } finally {
         Pop-Location
     }
+    } else {
+        Write-Host "==> Skipping the frontend gates (-SkipChecks)" -ForegroundColor DarkGray
+    }
+    }
 
     # 3. Build backend
     Write-Host "==> Building Go backend..." -ForegroundColor Cyan
     go build -o forgec2-server.exe ./cmd/server 2>&1 | ForEach-Object { Write-Host $_ }
     if ($LASTEXITCODE -ne 0) { throw "Backend build failed" }
+
+    if ($NoRestart) {
+        Write-Host "`nBuild only (-NoRestart): the running instance was not touched." -ForegroundColor DarkGray
+        return
+    }
 
     # 4. Restart server
     Write-Host "==> Restarting server..." -ForegroundColor Cyan

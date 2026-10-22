@@ -358,7 +358,12 @@ type Config struct {
 func DefaultConfig() *Config {
 	cfg := &Config{}
 	cfg.Server.Port = 8000
-	cfg.Server.Host = "127.0.0.1" // change to "0.0.0.0" for production access
+	// The console listens on every interface by default: a C2 server that is
+	// only reachable from localhost cannot be operated from another host
+	// (or from a container network) without editing the config first. The
+	// console is protected by TLS + authentication, and an operator who wants
+	// it local sets server.host to 127.0.0.1.
+	cfg.Server.Host = "0.0.0.0"
 	cfg.Server.TLSEnabled = true // self-signed cert auto-generated on first run
 	cfg.Server.RequireTLSForAuth = true
 	cfg.Server.TCPEnabled = false
