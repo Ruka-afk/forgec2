@@ -100,7 +100,7 @@ describe("InfrastructurePageContent mutations", () => {
     await renderPage();
     await openRedirectorsTab();
 
-    fireEvent.change(screen.getByLabelText("infra.name_label"), { target: { value: "rd-b" } });
+    fireEvent.change(screen.getByLabelText("common.name"), { target: { value: "rd-b" } });
     fireEvent.change(screen.getByLabelText("infra.host"), { target: { value: "10.0.0.10" } });
     const save = screen.getByRole("button", { name: "common.save" });
     fireEvent.click(save);

@@ -183,8 +183,8 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
           ) : (
           <>
           <div>
-            <Label>{t("stager.field_listener")}</Label>
-            <Select value={listenerId} onValueChange={(v) => setListenerId(v ?? "")}>
+            <Label htmlFor="stager-field-listener">{t("stager.field_listener")}</Label>
+            <Select id="stager-field-listener" value={listenerId} onValueChange={(v) => setListenerId(v ?? "")}>
               <SelectTrigger className="w-full mt-1">
                 <SelectValue placeholder={t("stager.select_listener_ph")} />
               </SelectTrigger>
@@ -200,8 +200,8 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label>{t("stager.field_os")}</Label>
-              <Select value={os} onValueChange={(v) => v && setOs(v)}>
+              <Label htmlFor="stager-field-os">{t("stager.field_os")}</Label>
+              <Select id="stager-field-os" value={os} onValueChange={(v) => v && setOs(v)}>
                 <SelectTrigger className="w-full mt-1">
                   <SelectValue />
                 </SelectTrigger>
@@ -212,8 +212,8 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
               </Select>
             </div>
             <div>
-              <Label>{t("stager.field_arch")}</Label>
-              <Select value={arch} onValueChange={(v) => v && setArch(v)}>
+              <Label htmlFor="stager-field-arch">{t("stager.field_arch")}</Label>
+              <Select id="stager-field-arch" value={arch} onValueChange={(v) => v && setArch(v)}>
                 <SelectTrigger className="w-full mt-1">
                   <SelectValue />
                 </SelectTrigger>
@@ -227,8 +227,8 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label>{t("stager.field_format")}</Label>
-              <Select value={format} onValueChange={(v) => v && setFormat(v)}>
+              <Label htmlFor="stager-field-format">{t("stager.field_format")}</Label>
+              <Select id="stager-field-format" value={format} onValueChange={(v) => v && setFormat(v)}>
                 <SelectTrigger className="w-full mt-1">
                   <SelectValue />
                 </SelectTrigger>
@@ -239,29 +239,29 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
               </Select>
             </div>
             <div>
-              <Label>{t("stager.field_ttl")}</Label>
-              <Input type="number" value={ttl} onChange={e => setTtl(e.target.value)} className="w-full mt-1" />
+              <Label htmlFor="stager-field-ttl">{t("stager.field_ttl")}</Label>
+              <Input id="stager-field-ttl" type="number" value={ttl} onChange={e => setTtl(e.target.value)} className="w-full mt-1" />
             </div>
           </div>
 
           <div>
-            <Label>{t("stager.field_ua")}</Label>
-            <Input type="text" value={userAgent} onChange={e => setUserAgent(e.target.value)} placeholder={t("stager.empty_default")} className="w-full mt-1" />
+            <Label htmlFor="stager-field-ua">{t("stager.field_ua")}</Label>
+            <Input id="stager-field-ua" type="text" value={userAgent} onChange={e => setUserAgent(e.target.value)} placeholder={t("stager.empty_default")} className="w-full mt-1" />
           </div>
 
           <div>
-            <Label>{t("stager.field_profile")}</Label>
-            <Input type="text" value={profile} onChange={e => setProfile(e.target.value)} placeholder={t("stager.optional")} className="w-full mt-1" />
+            <Label htmlFor="stager-field-profile">{t("stager.field_profile")}</Label>
+            <Input id="stager-field-profile" type="text" value={profile} onChange={e => setProfile(e.target.value)} placeholder={t("stager.optional")} className="w-full mt-1" />
           </div>
 
           <div>
-            <Label>{t("stager.field_dns_domain")}</Label>
-            <Input type="text" value={dnsDomain} onChange={e => setDnsDomain(e.target.value)} placeholder={t("stager.optional")} className="w-full mt-1" />
+            <Label htmlFor="stager-field-dns-domain">{t("stager.field_dns_domain")}</Label>
+            <Input id="stager-field-dns-domain" type="text" value={dnsDomain} onChange={e => setDnsDomain(e.target.value)} placeholder={t("stager.optional")} className="w-full mt-1" />
           </div>
 
           <div>
-            <Label>{t("stager.field_dns_server")}</Label>
-            <Input type="text" value={dnsServer} onChange={e => setDnsServer(e.target.value)} placeholder={t("stager.optional")} className="w-full mt-1" />
+            <Label htmlFor="stager-field-dns-server">{t("stager.field_dns_server")}</Label>
+            <Input id="stager-field-dns-server" type="text" value={dnsServer} onChange={e => setDnsServer(e.target.value)} placeholder={t("stager.optional")} className="w-full mt-1" />
           </div>
 
           <Label className="flex items-center gap-2">

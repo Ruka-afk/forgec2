@@ -63,8 +63,8 @@ export default function DeliveryPanel() {
           ISO+LNK 为经典钓鱼投递：挂载后可见文档图标 LNK，点击即启动隐藏载荷。
         </div>
         <div>
-          <Label>{t("generate.delivery_format")}</Label>
-          <Select value={format} onValueChange={(v) => v && setFormat(v)}>
+          <Label htmlFor="generate-delivery-format">{t("generate.delivery_format")}</Label>
+          <Select id="generate-delivery-format" value={format} onValueChange={(v) => v && setFormat(v)}>
             <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="html">{t("generate.delivery_html")}</SelectItem>
@@ -76,19 +76,19 @@ export default function DeliveryPanel() {
           </Select>
         </div>
         <div>
-          <Label>{t("generate.delivery_filename")}</Label>
-          <Input value={filename} onChange={(e) => setFilename(e.target.value)} />
+          <Label htmlFor="generate-delivery-filename">{t("generate.delivery_filename")}</Label>
+          <Input id="generate-delivery-filename" value={filename} onChange={(e) => setFilename(e.target.value)} />
         </div>
         {format === "url" && (
           <div className="sm:col-span-2">
-            <Label>{t("generate.delivery_url_target")}</Label>
-            <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://c2.example/payload" />
+            <Label htmlFor="generate-delivery-url-target">{t("generate.delivery_url_target")}</Label>
+            <Input id="generate-delivery-url-target" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://c2.example/payload" />
           </div>
         )}
         {format === "lnk" && (
           <div className="sm:col-span-2">
-            <Label>{t("generate.delivery_cmd")}</Label>
-            <Input value={command} onChange={(e) => setCommand(e.target.value)} />
+            <Label htmlFor="generate-delivery-cmd">{t("generate.delivery_cmd")}</Label>
+            <Input id="generate-delivery-cmd" value={command} onChange={(e) => setCommand(e.target.value)} />
           </div>
         )}
         {format === "iso_lnk" && (

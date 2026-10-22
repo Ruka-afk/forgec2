@@ -109,8 +109,8 @@ export function AIPlaybookDialog({ onSaved }: { onSaved: () => void }) {
 
         <div className="space-y-3">
           <div>
-            <Label>{t("ai.pb_goal")}</Label>
-            <Input
+            <Label htmlFor="ai-pb-goal">{t("ai.pb_goal")}</Label>
+            <Input id="ai-pb-goal"
               value={goal}
               onChange={(e) => setGoal(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !draft) generate(); }}

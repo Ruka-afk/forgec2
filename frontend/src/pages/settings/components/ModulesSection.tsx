@@ -239,8 +239,8 @@ export default function ModulesSection() {
             <p className="text-xs text-muted-foreground">{t("settings.modules.deploy_hint")}</p>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>{t("settings.modules.deploy_module")}</Label>
-                <Select value={deployModule} onValueChange={(v) => { setDeployModule(v || ""); setDeployPath(v ? `C:\\Windows\\Temp\\${v}` : ""); }}>
+                <Label htmlFor="settings-modules-deploy-module">{t("settings.modules.deploy_module")}</Label>
+                <Select id="settings-modules-deploy-module" value={deployModule} onValueChange={(v) => { setDeployModule(v || ""); setDeployPath(v ? `C:\\Windows\\Temp\\${v}` : ""); }}>
                   <SelectTrigger className="text-xs">
                     <SelectValue placeholder={t("settings.modules.deploy_module")} />
                   </SelectTrigger>
@@ -274,8 +274,8 @@ export default function ModulesSection() {
                 </Select>
               </div>
               <div className="space-y-1.5 sm:col-span-2">
-                <Label>{t("settings.modules.deploy_path")}</Label>
-                <Input
+                <Label htmlFor="settings-modules-deploy-path">{t("settings.modules.deploy_path")}</Label>
+                <Input id="settings-modules-deploy-path"
                   className="text-xs font-mono"
                   value={deployPath}
                   onChange={(e) => setDeployPath(e.target.value)}

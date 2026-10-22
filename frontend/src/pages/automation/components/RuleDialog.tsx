@@ -72,12 +72,12 @@ export function RuleDialog({ open, onOpenChange, ruleForm, setRuleForm, sendingT
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <Label>{t("auto.rule_name")}</Label>
-            <Input value={ruleForm.name} onChange={(e) => setRuleForm({ ...ruleForm, name: e.target.value })} placeholder={t("auto.rule_name_placeholder")} className="mt-1" aria-label={t("auto.rule_name")} />
+            <Label htmlFor="auto-rule-name">{t("auto.rule_name")}</Label>
+            <Input id="auto-rule-name" value={ruleForm.name} onChange={(e) => setRuleForm({ ...ruleForm, name: e.target.value })} placeholder={t("auto.rule_name_placeholder")} className="mt-1" />
           </div>
           <div>
-            <Label>{t("auto.event_type")}</Label>
-            <Select value={ruleForm.event_type} onValueChange={(v) => setRuleForm({ ...ruleForm, event_type: v ?? "" })}>
+            <Label htmlFor="auto-event-type">{t("auto.event_type")}</Label>
+            <Select id="auto-event-type" value={ruleForm.event_type} onValueChange={(v) => setRuleForm({ ...ruleForm, event_type: v ?? "" })}>
               <SelectTrigger className="w-full mt-1" aria-label={t("auto.event_type")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="agent.checkin">agent.checkin</SelectItem>
@@ -89,8 +89,8 @@ export function RuleDialog({ open, onOpenChange, ruleForm, setRuleForm, sendingT
             </Select>
           </div>
           <div>
-            <Label>{t("auto.action_type")}</Label>
-            <Select value={ruleForm.action_type} onValueChange={(v) => setRuleForm({ ...ruleForm, action_type: v ?? "" })}>
+            <Label htmlFor="auto-action-type">{t("auto.action_type")}</Label>
+            <Select id="auto-action-type" value={ruleForm.action_type} onValueChange={(v) => setRuleForm({ ...ruleForm, action_type: v ?? "" })}>
               <SelectTrigger className="w-full mt-1" aria-label={t("auto.action_type")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="command">{t("auto.action_send_command")}</SelectItem>
@@ -102,21 +102,21 @@ export function RuleDialog({ open, onOpenChange, ruleForm, setRuleForm, sendingT
           </div>
           {ruleForm.action_type === "command" && (
             <div>
-              <Label>{t("auto.command")}</Label>
-              <Input placeholder={t("auto.command_placeholder")} value={ruleForm.action_config} onChange={(e) => setRuleForm({ ...ruleForm, action_config: e.target.value })} className="mt-1" aria-label={t("auto.command")} />
+              <Label htmlFor="auto-command">{t("auto.command")}</Label>
+              <Input id="auto-command" placeholder={t("auto.command_placeholder")} value={ruleForm.action_config} onChange={(e) => setRuleForm({ ...ruleForm, action_config: e.target.value })} className="mt-1" />
             </div>
           )}
           {ruleForm.action_type === "notify" && (
             <div>
-              <Label>{t("auto.notification_message")}</Label>
-              <Input placeholder={t("auto.notification_placeholder")} value={ruleForm.action_config} onChange={(e) => setRuleForm({ ...ruleForm, action_config: e.target.value })} className="mt-1" aria-label={t("auto.notification_message")} />
+              <Label htmlFor="auto-notification-message">{t("auto.notification_message")}</Label>
+              <Input id="auto-notification-message" placeholder={t("auto.notification_placeholder")} value={ruleForm.action_config} onChange={(e) => setRuleForm({ ...ruleForm, action_config: e.target.value })} className="mt-1" />
             </div>
           )}
           {ruleForm.action_type === "run_macro" && (
             <div className="space-y-3">
               <div>
-                <Label>{t("auto.macro_select")}</Label>
-                <Select
+                <Label htmlFor="auto-macro-select">{t("auto.macro_select")}</Label>
+                <Select id="auto-macro-select"
                   value={ruleForm.macro_id != null ? String(ruleForm.macro_id) : ""}
                   onValueChange={(v) => setRuleForm({ ...ruleForm, macro_id: v ? Number(v) : null })}
                 >
@@ -148,8 +148,8 @@ export function RuleDialog({ open, onOpenChange, ruleForm, setRuleForm, sendingT
           {ruleForm.action_type === "webhook" && (
             <div className="space-y-4">
               <div>
-                <Label>{t("auto.webhook_type")}</Label>
-                <Select value={ruleForm.webhook.type} onValueChange={(v) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, type: v as WebhookType } })}>
+                <Label htmlFor="auto-webhook-type">{t("auto.webhook_type")}</Label>
+                <Select id="auto-webhook-type" value={ruleForm.webhook.type} onValueChange={(v) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, type: v as WebhookType } })}>
                   <SelectTrigger className="w-full mt-1" aria-label={t("auto.webhook_type")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="generic">{t("auto.webhook_type_generic")}</SelectItem>
@@ -162,42 +162,42 @@ export function RuleDialog({ open, onOpenChange, ruleForm, setRuleForm, sendingT
               {ruleForm.webhook.type !== "email" && (
                 <>
                   <div>
-                    <Label>{t("auto.webhook_url")}</Label>
-                    <Input placeholder="https://hooks.example.com/..." value={ruleForm.webhook.url} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, url: e.target.value } })} className="mt-1" aria-label={t("auto.webhook_url")} />
+                    <Label htmlFor="auto-webhook-url">{t("auto.webhook_url")}</Label>
+                    <Input id="auto-webhook-url" placeholder="https://hooks.example.com/..." value={ruleForm.webhook.url} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, url: e.target.value } })} className="mt-1" />
                   </div>
                   <div>
-                    <Label>{t("auto.webhook_secret")}</Label>
-                    <Input placeholder={t("automation.hmac_key_ph")} value={ruleForm.webhook.secret} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, secret: e.target.value } })} className="mt-1" aria-label={t("auto.webhook_secret")} />
+                    <Label htmlFor="auto-webhook-secret">{t("auto.webhook_secret")}</Label>
+                    <Input id="auto-webhook-secret" placeholder={t("automation.hmac_key_ph")} value={ruleForm.webhook.secret} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, secret: e.target.value } })} className="mt-1" />
                   </div>
                 </>
               )}
               {ruleForm.webhook.type === "email" && (
                 <>
                   <div>
-                    <Label>{t("auto.smtp_server")}</Label>
-                    <Input placeholder="smtp.gmail.com" value={ruleForm.webhook.smtp_host} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, smtp_host: e.target.value } })} className="mt-1" aria-label={t("auto.smtp_server")} />
+                    <Label htmlFor="auto-smtp-server">{t("auto.smtp_server")}</Label>
+                    <Input id="auto-smtp-server" placeholder="smtp.gmail.com" value={ruleForm.webhook.smtp_host} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, smtp_host: e.target.value } })} className="mt-1" />
                   </div>
                   <div className="flex gap-2">
                     <div className="flex-1">
-                      <Label>{t("auto.smtp_port")}</Label>
-                      <Input type="number" placeholder="587" value={ruleForm.webhook.smtp_port} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, smtp_port: parseInt(e.target.value) || 587 } })} className="mt-1" aria-label={t("auto.smtp_port")} />
+                      <Label htmlFor="auto-smtp-port">{t("auto.smtp_port")}</Label>
+                      <Input id="auto-smtp-port" type="number" placeholder="587" value={ruleForm.webhook.smtp_port} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, smtp_port: parseInt(e.target.value) || 587 } })} className="mt-1" />
                     </div>
                     <div className="flex-1">
-                      <Label>{t("auto.smtp_from")}</Label>
-                      <Input placeholder="alerts@example.com" value={ruleForm.webhook.from} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, from: e.target.value } })} className="mt-1" aria-label={t("auto.smtp_from")} />
+                      <Label htmlFor="auto-smtp-from">{t("auto.smtp_from")}</Label>
+                      <Input id="auto-smtp-from" placeholder="alerts@example.com" value={ruleForm.webhook.from} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, from: e.target.value } })} className="mt-1" />
                     </div>
                   </div>
                   <div>
-                    <Label>{t("auto.smtp_username")}</Label>
-                    <Input placeholder="user@gmail.com" value={ruleForm.webhook.smtp_user} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, smtp_user: e.target.value } })} className="mt-1" aria-label={t("auto.smtp_username")} />
+                    <Label htmlFor="auto-smtp-username">{t("auto.smtp_username")}</Label>
+                    <Input id="auto-smtp-username" placeholder="user@gmail.com" value={ruleForm.webhook.smtp_user} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, smtp_user: e.target.value } })} className="mt-1" />
                   </div>
                   <div>
-                    <Label>{t("auto.smtp_password")}</Label>
-                    <Input type="password" placeholder={t("automation.app_password_ph")} value={ruleForm.webhook.smtp_pass} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, smtp_pass: e.target.value } })} className="mt-1" aria-label={t("auto.smtp_password")} />
+                    <Label htmlFor="auto-smtp-password">{t("auto.smtp_password")}</Label>
+                    <Input id="auto-smtp-password" type="password" placeholder={t("automation.app_password_ph")} value={ruleForm.webhook.smtp_pass} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, smtp_pass: e.target.value } })} className="mt-1" />
                   </div>
                   <div>
-                    <Label>{t("auto.smtp_to")}</Label>
-                    <Input placeholder="admin@example.com" value={ruleForm.webhook.to} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, to: e.target.value } })} className="mt-1" aria-label={t("auto.smtp_to")} />
+                    <Label htmlFor="auto-smtp-to">{t("auto.smtp_to")}</Label>
+                    <Input id="auto-smtp-to" placeholder="admin@example.com" value={ruleForm.webhook.to} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, to: e.target.value } })} className="mt-1" />
                   </div>
                 </>
               )}

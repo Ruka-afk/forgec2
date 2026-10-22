@@ -152,8 +152,8 @@ export function OneShotTasksCard() {
               )}
             </div>
             <div>
-              <Label>{t("oneshot.run_at")}</Label>
-              <Input
+              <Label htmlFor="oneshot-run-at">{t("oneshot.run_at")}</Label>
+              <Input id="oneshot-run-at"
                 type="datetime-local"
                 value={runAtLocal}
                 onChange={(e) => setRunAtLocal(e.target.value)}
@@ -165,8 +165,8 @@ export function OneShotTasksCard() {
             </div>
           </div>
           <div>
-            <Label>{t("auto.command")}</Label>
-            <Input value={command} onChange={(e) => setCommand(e.target.value)} placeholder="mimikatz # sekurlsa::logonpasswords" className="mt-1 font-mono" />
+            <Label htmlFor="auto-command">{t("auto.command")}</Label>
+            <Input id="auto-command" value={command} onChange={(e) => setCommand(e.target.value)} placeholder="mimikatz # sekurlsa::logonpasswords" className="mt-1 font-mono" />
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>{t("common.cancel")}</Button>

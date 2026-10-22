@@ -154,8 +154,8 @@ export default function PasswordSprayPanel({ selectedAgent }: { selectedAgent: s
               <Input value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="CORP" />
             </div>
             <div className="space-y-1.5">
-              <Label>{t("spray.dc_ip")}</Label>
-              <Input value={dc} onChange={(e) => setDc(e.target.value)} placeholder={t("spray.dc_hint")} />
+              <Label htmlFor="spray-dc-ip">{t("spray.dc_ip")}</Label>
+              <Input id="spray-dc-ip" value={dc} onChange={(e) => setDc(e.target.value)} placeholder={t("spray.dc_hint")} />
             </div>
           </div>
 
@@ -199,8 +199,8 @@ export default function PasswordSprayPanel({ selectedAgent }: { selectedAgent: s
               <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t("spray.password_placeholder")} />
             </div>
             <div className="space-y-1.5">
-              <Label>{t("spray.delay_ms")}</Label>
-              <Input type="number" value={delayMs} onChange={(e) => setDelayMs(e.target.value)} min="0" max="30000" />
+              <Label htmlFor="spray-delay-ms">{t("spray.delay_ms")}</Label>
+              <Input id="spray-delay-ms" type="number" value={delayMs} onChange={(e) => setDelayMs(e.target.value)} min="0" max="30000" />
             </div>
           </div>
 

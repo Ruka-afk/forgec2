@@ -433,12 +433,12 @@ export default function MacrosPageContent() {
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <Label>{t("macros.field_name")}</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="recon-sweep" />
+                <Label htmlFor="macros-field-name">{t("macros.field_name")}</Label>
+                <Input id="macros-field-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="recon-sweep" />
               </div>
               <div>
-                <Label>{t("macros.field_desc")}</Label>
-                <Input value={description} onChange={(e) => setDescription(e.target.value)} />
+                <Label htmlFor="macros-field-desc">{t("macros.field_desc")}</Label>
+                <Input id="macros-field-desc" value={description} onChange={(e) => setDescription(e.target.value)} />
               </div>
             </div>
 

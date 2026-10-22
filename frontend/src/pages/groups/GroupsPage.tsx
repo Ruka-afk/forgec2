@@ -164,8 +164,8 @@ export default function GroupsPage() {
               <Input id="group-color" aria-label={t("groups.a11y_color")} type="color" value={formColor} onChange={e => setFormColor(e.target.value)} />
             </div>
             <div>
-              <Label>{t("groups.field_parent")}</Label>
-              <Select value={formParent || "__none__"} onValueChange={(v) => setFormParent(v === "__none__" || v === null ? "" : v)}>
+              <Label htmlFor="groups-field-parent">{t("groups.field_parent")}</Label>
+              <Select id="groups-field-parent" value={formParent || "__none__"} onValueChange={(v) => setFormParent(v === "__none__" || v === null ? "" : v)}>
                 <SelectTrigger className="w-full" aria-label={t("groups.a11y_parent")}>
                   <SelectValue placeholder={t("groups.none_root")} />
                 </SelectTrigger>

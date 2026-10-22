@@ -30,16 +30,16 @@ export function WebhookDialog({ open, onOpenChange, webhookForm, setWebhookForm,
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <Label>{t("auto.name")}</Label>
-            <Input value={webhookForm.name} onChange={(e) => setWebhookForm({ ...webhookForm, name: e.target.value })} placeholder="e.g. Slack alert" className="mt-1" aria-label={t("auto.name")} />
+            <Label htmlFor="auto-name">{t("auto.name")}</Label>
+            <Input id="auto-name" value={webhookForm.name} onChange={(e) => setWebhookForm({ ...webhookForm, name: e.target.value })} placeholder="e.g. Slack alert" className="mt-1" />
           </div>
           <div>
-            <Label>{t("auto.url")}</Label>
-            <Input placeholder="https://hooks.example.com/forgec2" value={webhookForm.url} onChange={(e) => setWebhookForm({ ...webhookForm, url: e.target.value })} className="mt-1" aria-label={t("auto.url")} />
+            <Label htmlFor="auto-url">{t("auto.url")}</Label>
+            <Input id="auto-url" placeholder="https://hooks.example.com/forgec2" value={webhookForm.url} onChange={(e) => setWebhookForm({ ...webhookForm, url: e.target.value })} className="mt-1" />
           </div>
           <div>
-            <Label>{t("auto.event_type")}</Label>
-            <Select value={webhookForm.event_type} onValueChange={(v) => setWebhookForm({ ...webhookForm, event_type: v ?? "" })}>
+            <Label htmlFor="auto-event-type">{t("auto.event_type")}</Label>
+            <Select id="auto-event-type" value={webhookForm.event_type} onValueChange={(v) => setWebhookForm({ ...webhookForm, event_type: v ?? "" })}>
               <SelectTrigger className="w-full mt-1" aria-label={t("auto.event_type")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="agent.checkin">agent.checkin</SelectItem>
@@ -51,8 +51,8 @@ export function WebhookDialog({ open, onOpenChange, webhookForm, setWebhookForm,
             </Select>
           </div>
           <div>
-            <Label>{t("auto.request_method")}</Label>
-            <Select value={webhookForm.method} onValueChange={(v) => setWebhookForm({ ...webhookForm, method: v ?? "" })}>
+            <Label htmlFor="auto-request-method">{t("auto.request_method")}</Label>
+            <Select id="auto-request-method" value={webhookForm.method} onValueChange={(v) => setWebhookForm({ ...webhookForm, method: v ?? "" })}>
               <SelectTrigger className="w-full mt-1" aria-label={t("auto.request_method")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="POST">POST</SelectItem>

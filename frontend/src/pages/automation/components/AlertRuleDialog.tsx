@@ -30,12 +30,12 @@ export function AlertRuleDialog({ open, onOpenChange, alertRuleForm, setAlertRul
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <Label>{t("auto.name")}</Label>
-            <Input value={alertRuleForm.name} onChange={(e) => setAlertRuleForm({ ...alertRuleForm, name: e.target.value })} className="mt-1" aria-label={t("auto.name")} />
+            <Label htmlFor="auto-name">{t("auto.name")}</Label>
+            <Input id="auto-name" value={alertRuleForm.name} onChange={(e) => setAlertRuleForm({ ...alertRuleForm, name: e.target.value })} className="mt-1" />
           </div>
           <div>
-            <Label>{t("auto.type")}</Label>
-            <Select value={alertRuleForm.type} onValueChange={(v) => setAlertRuleForm({ ...alertRuleForm, type: v ?? "" })}>
+            <Label htmlFor="auto-type">{t("auto.type")}</Label>
+            <Select id="auto-type" value={alertRuleForm.type} onValueChange={(v) => setAlertRuleForm({ ...alertRuleForm, type: v ?? "" })}>
               <SelectTrigger className="w-full mt-1" aria-label={t("auto.type")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="agent_offline">{t("auto.type_agent_offline")}</SelectItem>
@@ -47,12 +47,12 @@ export function AlertRuleDialog({ open, onOpenChange, alertRuleForm, setAlertRul
             </Select>
           </div>
           <div>
-            <Label>{t("auto.threshold")}</Label>
-            <Input type="number" value={alertRuleForm.threshold} onChange={(e) => setAlertRuleForm({ ...alertRuleForm, threshold: parseInt(e.target.value) || 0 })} className="mt-1" aria-label={t("auto.threshold")} />
+            <Label htmlFor="auto-threshold">{t("auto.threshold")}</Label>
+            <Input id="auto-threshold" type="number" value={alertRuleForm.threshold} onChange={(e) => setAlertRuleForm({ ...alertRuleForm, threshold: parseInt(e.target.value) || 0 })} className="mt-1" />
           </div>
           <div>
-            <Label>{t("auto.description")}</Label>
-            <Input value={alertRuleForm.description} onChange={(e) => setAlertRuleForm({ ...alertRuleForm, description: e.target.value })} className="mt-1" aria-label={t("auto.description")} />
+            <Label htmlFor="auto-description">{t("auto.description")}</Label>
+            <Input id="auto-description" value={alertRuleForm.description} onChange={(e) => setAlertRuleForm({ ...alertRuleForm, description: e.target.value })} className="mt-1" />
           </div>
         </div>
         <DialogFooter>

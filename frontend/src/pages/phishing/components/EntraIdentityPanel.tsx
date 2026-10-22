@@ -91,16 +91,16 @@ export function EntraIdentityPanel() {
         <div className="text-sm font-semibold">{t("phishing.entra_shared")}</div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <Label>{t("phishing.entra_tenant")}</Label>
-            <Input value={tenant} onChange={(e) => setTenant(e.target.value)} />
+            <Label htmlFor="phishing-entra-tenant">{t("phishing.entra_tenant")}</Label>
+            <Input id="phishing-entra-tenant" value={tenant} onChange={(e) => setTenant(e.target.value)} />
           </div>
           <div>
-            <Label>{t("phishing.entra_client_id")}</Label>
-            <Input value={clientId} onChange={(e) => setClientId(e.target.value)} />
+            <Label htmlFor="phishing-entra-client-id">{t("phishing.entra_client_id")}</Label>
+            <Input id="phishing-entra-client-id" value={clientId} onChange={(e) => setClientId(e.target.value)} />
           </div>
           <div className="sm:col-span-2">
-            <Label>{t("phishing.entra_scope")}</Label>
-            <Input value={scope} onChange={(e) => setScope(e.target.value)} />
+            <Label htmlFor="phishing-entra-scope">{t("phishing.entra_scope")}</Label>
+            <Input id="phishing-entra-scope" value={scope} onChange={(e) => setScope(e.target.value)} />
           </div>
         </div>
       </Card>
@@ -123,12 +123,12 @@ export function EntraIdentityPanel() {
         <div className="text-sm font-semibold">{t("phishing.entra_consent_title")}</div>
         <p className="text-xs text-muted-foreground">{t("phishing.entra_consent_hint")}</p>
         <div>
-          <Label>{t("phishing.entra_redirect")}</Label>
-          <Input value={redirectUri} onChange={(e) => setRedirectUri(e.target.value)} placeholder={t("phishing.entra_redirect_ph")} />
+          <Label htmlFor="phishing-entra-redirect">{t("phishing.entra_redirect")}</Label>
+          <Input id="phishing-entra-redirect" value={redirectUri} onChange={(e) => setRedirectUri(e.target.value)} placeholder={t("phishing.entra_redirect_ph")} />
         </div>
         <div>
-          <Label>{t("phishing.entra_client_secret")}</Label>
-          <Input type="password" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} />
+          <Label htmlFor="phishing-entra-client-secret">{t("phishing.entra_client_secret")}</Label>
+          <Input id="phishing-entra-client-secret" type="password" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} />
         </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" disabled={busy || !clientId || !redirectUri} onClick={() => { void startConsent(); }}>{t("phishing.entra_consent_start")}</Button>

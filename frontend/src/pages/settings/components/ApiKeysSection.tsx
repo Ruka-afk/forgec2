@@ -259,12 +259,12 @@ export default function ApiKeysSection() {
           <DialogHeader><DialogTitle>{t("settings.apikeys.create_title")}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div>
-              <Label>{t("settings.apikeys.name_label")}</Label>
-              <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="ci-pipeline" className="mt-1" />
+              <Label htmlFor="settings-apikeys-name-label">{t("settings.apikeys.name_label")}</Label>
+              <Input id="settings-apikeys-name-label" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="ci-pipeline" className="mt-1" />
             </div>
             <div>
-              <Label>{t("settings.apikeys.expiry_label")}</Label>
-              <Input type="number" min={1} value={newExpiresDays} onChange={(e) => setNewExpiresDays(e.target.value)}
+              <Label htmlFor="settings-apikeys-expiry-label">{t("settings.apikeys.expiry_label")}</Label>
+              <Input id="settings-apikeys-expiry-label" type="number" min={1} value={newExpiresDays} onChange={(e) => setNewExpiresDays(e.target.value)}
                 placeholder={t("settings.apikeys.expiry_ph")} className="mt-1" />
             </div>
             <div>
@@ -290,8 +290,8 @@ export default function ApiKeysSection() {
               )}
             </div>
             <div>
-              <Label>{t("settings.apikeys.cidr_label")}</Label>
-              <Input value={newCidrs} onChange={(e) => setNewCidrs(e.target.value)}
+              <Label htmlFor="settings-apikeys-cidr-label">{t("settings.apikeys.cidr_label")}</Label>
+              <Input id="settings-apikeys-cidr-label" value={newCidrs} onChange={(e) => setNewCidrs(e.target.value)}
                 placeholder={t("settings.apikeys.cidr_ph")} className="mt-1 font-mono" />
               <p className="text-xs text-muted-foreground mt-0.5">{t("settings.apikeys.cidr_hint")}</p>
             </div>

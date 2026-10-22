@@ -296,12 +296,12 @@ export default function PhishingPageContent() {
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label>{t("phishing.field_template_name")}</Label>
-                  <Input value={tplForm.name} onChange={(e) => setTplForm({ ...tplForm, name: e.target.value })} />
+                  <Label htmlFor="phishing-field-template-name">{t("phishing.field_template_name")}</Label>
+                  <Input id="phishing-field-template-name" value={tplForm.name} onChange={(e) => setTplForm({ ...tplForm, name: e.target.value })} />
                 </div>
                 <div>
-                  <Label>{t("common.type")}</Label>
-                  <Select value={tplForm.type} onValueChange={(v) => setTplForm({ ...tplForm, type: v || "html" })}>
+                  <Label htmlFor="common-type">{t("common.type")}</Label>
+                  <Select id="common-type" value={tplForm.type} onValueChange={(v) => setTplForm({ ...tplForm, type: v || "html" })}>
                     <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
@@ -313,17 +313,17 @@ export default function PhishingPageContent() {
                 </div>
               </div>
               <div>
-                <Label>{t("phishing.field_subject")}</Label>
-                <Input value={tplForm.subject} onChange={(e) => setTplForm({ ...tplForm, subject: e.target.value })} />
+                <Label htmlFor="phishing-field-subject">{t("phishing.field_subject")}</Label>
+                <Input id="phishing-field-subject" value={tplForm.subject} onChange={(e) => setTplForm({ ...tplForm, subject: e.target.value })} />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label>{t("phishing.field_from_name")}</Label>
-                  <Input value={tplForm.from_name} onChange={(e) => setTplForm({ ...tplForm, from_name: e.target.value })} />
+                  <Label htmlFor="phishing-field-from-name">{t("phishing.field_from_name")}</Label>
+                  <Input id="phishing-field-from-name" value={tplForm.from_name} onChange={(e) => setTplForm({ ...tplForm, from_name: e.target.value })} />
                 </div>
                 <div>
-                  <Label>{t("phishing.field_from_email")}</Label>
-                  <Input value={tplForm.from_email} onChange={(e) => setTplForm({ ...tplForm, from_email: e.target.value })} />
+                  <Label htmlFor="phishing-field-from-email">{t("phishing.field_from_email")}</Label>
+                  <Input id="phishing-field-from-email" value={tplForm.from_email} onChange={(e) => setTplForm({ ...tplForm, from_email: e.target.value })} />
                 </div>
               </div>
               <div>
@@ -406,12 +406,12 @@ export default function PhishingPageContent() {
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label>{t("phishing.campaign_name")}</Label>
-                <Input value={campForm.name} onChange={(e) => setCampForm({ ...campForm, name: e.target.value })} />
+                <Label htmlFor="phishing-campaign-name">{t("phishing.campaign_name")}</Label>
+                <Input id="phishing-campaign-name" value={campForm.name} onChange={(e) => setCampForm({ ...campForm, name: e.target.value })} />
               </div>
               <div>
-                <Label>{t("phishing.field_template")}</Label>
-                <Select value={String(campForm.template_id)} onValueChange={(v) => {
+                <Label htmlFor="phishing-field-template">{t("phishing.field_template")}</Label>
+                <Select id="phishing-field-template" value={String(campForm.template_id)} onValueChange={(v) => {
                   if (v !== null) setCampForm({ ...campForm, template_id: parseInt(v) });
                 }}>
                   <SelectTrigger className="w-full">
@@ -424,27 +424,27 @@ export default function PhishingPageContent() {
                 </Select>
               </div>
               <div>
-                <Label>{t("phishing.field_targets")}</Label>
-                <Textarea rows={4} className="font-mono" value={campForm.target_list} onChange={(e) => setCampForm({ ...campForm, target_list: e.target.value })} placeholder='["user1@example.com","user2@example.com"]' />
+                <Label htmlFor="phishing-field-targets">{t("phishing.field_targets")}</Label>
+                <Textarea id="phishing-field-targets" rows={4} className="font-mono" value={campForm.target_list} onChange={(e) => setCampForm({ ...campForm, target_list: e.target.value })} placeholder='["user1@example.com","user2@example.com"]' />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label>{t("phishing.field_smtp_host")}</Label>
-                  <Input value={campForm.smtp_host} onChange={(e) => setCampForm({ ...campForm, smtp_host: e.target.value })} />
+                  <Label htmlFor="phishing-field-smtp-host">{t("phishing.field_smtp_host")}</Label>
+                  <Input id="phishing-field-smtp-host" value={campForm.smtp_host} onChange={(e) => setCampForm({ ...campForm, smtp_host: e.target.value })} />
                 </div>
                 <div>
-                  <Label>{t("phishing.field_smtp_port")}</Label>
-                  <Input type="number" value={campForm.smtp_port} onChange={(e) => setCampForm({ ...campForm, smtp_port: parseInt(e.target.value, 10) || 587 })} />
+                  <Label htmlFor="phishing-field-smtp-port">{t("phishing.field_smtp_port")}</Label>
+                  <Input id="phishing-field-smtp-port" type="number" value={campForm.smtp_port} onChange={(e) => setCampForm({ ...campForm, smtp_port: parseInt(e.target.value, 10) || 587 })} />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label>{t("phishing.field_smtp_user")}</Label>
-                  <Input value={campForm.smtp_user} onChange={(e) => setCampForm({ ...campForm, smtp_user: e.target.value })} />
+                  <Label htmlFor="phishing-field-smtp-user">{t("phishing.field_smtp_user")}</Label>
+                  <Input id="phishing-field-smtp-user" value={campForm.smtp_user} onChange={(e) => setCampForm({ ...campForm, smtp_user: e.target.value })} />
                 </div>
                 <div>
-                  <Label>{t("phishing.field_smtp_pass")}</Label>
-                  <Input type="password" value={campForm.smtp_pass} onChange={(e) => setCampForm({ ...campForm, smtp_pass: e.target.value })} />
+                  <Label htmlFor="phishing-field-smtp-pass">{t("phishing.field_smtp_pass")}</Label>
+                  <Input id="phishing-field-smtp-pass" type="password" value={campForm.smtp_pass} onChange={(e) => setCampForm({ ...campForm, smtp_pass: e.target.value })} />
                 </div>
               </div>
             </div>

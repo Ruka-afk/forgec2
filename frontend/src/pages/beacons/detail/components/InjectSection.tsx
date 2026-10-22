@@ -151,12 +151,12 @@ export default memo(function InjectSection({ agentId, online, osType }: InjectSe
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
-            <Label>{t("agents.inject_pid")}</Label>
-            <Input type="number" min={1} value={pid} onChange={(e) => setPid(e.target.value)} placeholder="4820" className="mt-1 h-9 font-mono" />
+            <Label htmlFor="agents-inject-pid">{t("agents.inject_pid")}</Label>
+            <Input id="agents-inject-pid" type="number" min={1} value={pid} onChange={(e) => setPid(e.target.value)} placeholder="4820" className="mt-1 h-9 font-mono" />
           </div>
           <div>
-            <Label>{t("agents.inject_technique")}</Label>
-            <Select value={technique} onValueChange={(v) => { if (v) { setTechnique(v); setConfirmStep(false); } }}>
+            <Label htmlFor="agents-inject-technique">{t("agents.inject_technique")}</Label>
+            <Select id="agents-inject-technique" value={technique} onValueChange={(v) => { if (v) { setTechnique(v); setConfirmStep(false); } }}>
               <SelectTrigger className="mt-1"><SelectValue placeholder={t("agents.inject_select_tech")} /></SelectTrigger>
               <SelectContent>
                 {techniques.map((tech) => (
