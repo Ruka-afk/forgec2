@@ -21,6 +21,7 @@
     "test:e2e": "playwright test",
     "test:e2e:live": "playwright test --config=playwright.live.config.ts",
     "check:css": "node scripts/check-css.mjs",
+    "check:layout": "node scripts/check-layout.mjs",
     "check:tokens": "node scripts/check-design-tokens.mjs",
     "check:webdist": "node ../scripts/check-webdist.mjs",
     "check:i18n": "node scripts/check-i18n.mjs",
@@ -33,8 +34,8 @@
     "audit:layout": "node scripts/audit-layout.mjs",
     "gen:openapi": "openapi-typescript ../api/openapi.yaml -o src/lib/api-schema.d.ts",
     "gen:permissions": "node scripts/gen-permissions.mjs",
-    "check": "npx concurrently -n css,tokens,contrast,aria,i18n,paths,dialogs,openapi,perms,webdist,bundle \"npm:check:css\" \"npm:check:tokens\" \"npm:check:contrast\" \"npm:check:aria\" \"npm:check:i18n\" \"npm:check:paths\" \"npm:check:native-dialogs\" \"npm:check:openapi-types\" \"npm:check:permissions\" \"npm:check:webdist\" \"npm:check:bundle\"",
-    "check:pre": "npx concurrently -n css,tokens,i18n,paths,dialogs,openapi,perms \"npm:check:css\" \"npm:check:tokens\" \"npm:check:i18n\" \"npm:check:paths\" \"npm:check:native-dialogs\" \"npm:check:openapi-types\" \"npm:check:permissions\"",
+    "check": "npx concurrently -n css,tokens,contrast,aria,i18n,paths,dialogs,openapi,perms,layout,webdist,bundle \"npm:check:css\" \"npm:check:tokens\" \"npm:check:contrast\" \"npm:check:aria\" \"npm:check:i18n\" \"npm:check:paths\" \"npm:check:native-dialogs\" \"npm:check:openapi-types\" \"npm:check:permissions\" \"npm:check:layout\" \"npm:check:webdist\" \"npm:check:bundle\"",
+    "check:pre": "npx concurrently -n css,tokens,i18n,paths,dialogs,openapi,perms,layout \"npm:check:css\" \"npm:check:tokens\" \"npm:check:i18n\" \"npm:check:paths\" \"npm:check:native-dialogs\" \"npm:check:openapi-types\" \"npm:check:permissions\" \"npm:check:layout\"",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run check",
     "check:audit": "node scripts/check-audit.mjs"
   },

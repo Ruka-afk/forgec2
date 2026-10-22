@@ -19,7 +19,7 @@ interface ScreenLightboxProps {
 export default memo(function ScreenLightbox({ t, open, image, onClose, onDownload }: ScreenLightboxProps) {
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent size="md" showCloseButton={false} className="max-h-[95vh] border-0 bg-transparent p-0 ring-0 sm:max-w-[95vw]">
+      <DialogContent size="full" showCloseButton={false} className="max-h-[95vh] border-0 bg-transparent p-0 ring-0">
         <div className="relative flex max-h-[95vh] items-center justify-center">
           <div className="absolute right-2 top-2 z-10 flex items-center gap-2">
             <Button size="icon" variant="secondary" aria-label={t("agents.screen_download")} onClick={onDownload}>
