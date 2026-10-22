@@ -83,7 +83,7 @@ export default memo(function OpsHome() {
   const healthUnknown = partialFailures.includes(t("dashboard.source_listener_health"));
 
   return (
-    <div className="space-y-5">
+    <div className="flex flex-col gap-(--page-gap)">
       {error && <DataError message={error} onRetry={refresh} className="mb-2" />}
 
       {partialFailures.length > 0 && (

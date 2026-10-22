@@ -161,6 +161,16 @@
   --chart-5: oklch(0.54 0.160 27);    /* cinnabar */
   --chart-6: oklch(0.50 0.020 80);    /* warm gray */
 
+  /* ── Page shell rhythm (U9.1) ──
+     One scale for the page padding and the vertical gap between the blocks
+     of a page. The values mirror the Tailwind steps the shell used before
+     (16 / 24 / 32 horizontal, 16 / 20 / 24 vertical, 16 / 20 gap) so the
+     first render is pixel-identical; from here on the shell, the cards and
+     the density mode all read the same three numbers. */
+  --page-pad-x: 1rem;
+  --page-pad-y: 1rem;
+  --page-gap: 1rem;
+
   --content-standard: 80rem;
   --content-wide: 96rem;
   --content-width: var(--content-wide);
@@ -174,6 +184,22 @@
   --tracking-label: 0.12em;
   --tracking-sublabel: 0.08em;
   --blur-orb: 60px;
+}
+
+/* The shell rhythm steps up with the viewport, mirroring the padding scale the
+   shell used before the tokens existed (16/24/32 x 16/20/24, gap 16/20). */
+@media (min-width: 640px) {
+  :root {
+    --page-pad-x: 1.5rem;
+    --page-pad-y: 1.25rem;
+    --page-gap: 1.25rem;
+  }
+}
+@media (min-width: 1024px) {
+  :root {
+    --page-pad-x: 2rem;
+    --page-pad-y: 1.5rem;
+  }
 }
 
 .dark {

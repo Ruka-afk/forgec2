@@ -18,7 +18,7 @@ export function PageToolbar({
       data-slot="page-toolbar"
       className={cn(
         "flex flex-col gap-3 rounded-xl border border-border/70 bg-card/90 px-3 py-2.5 shadow-none transition-[border-color,box-shadow] duration-150 sm:flex-row sm:items-center sm:justify-between sm:px-3.5",
-        sticky && "sticky top-0 z-20 bg-card",
+        sticky && "sticky top-0 z-20 bg-card shadow-sm",
         className,
       )}
     >

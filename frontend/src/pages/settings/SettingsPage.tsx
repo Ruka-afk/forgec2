@@ -412,7 +412,7 @@ export default function SettingsPage() {
               <span className="shrink-0 font-mono text-[10px] text-muted-foreground">{activeSectionIndex + 1}/{sections.length}</span>
             </div>
 
-            <div className="space-y-6">
+            <div className="flex flex-col gap-(--page-gap)">
         <TabsContent value="appearance" className="mt-0"><AppearanceSection theme={theme} onApplyTheme={handleApplyTheme} language={language} onSetLanguage={handleSetLanguage} /></TabsContent>
               <TabsContent value="security" className="mt-0">
                 <SecuritySection

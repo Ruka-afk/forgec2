@@ -18,7 +18,11 @@ export function SystemStatePage({
   tone?: "primary" | "destructive";
 }) {
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-5 py-12">
+    // Not a <main>: this surface renders inside the shell's <main>, and a
+    // nested main landmark is invalid HTML. `min-h-full` instead of
+    // `min-h-screen` — the shell already reserves the top bar's height, so
+    // 100vh overflowed the viewport by exactly one bar.
+    <div className="relative flex min-h-full items-center justify-center overflow-hidden bg-background px-5 py-12">
       <div aria-hidden="true" className="absolute inset-0 opacity-[0.2] [background-image:linear-gradient(var(--border)_1px,transparent_1px),linear-gradient(90deg,var(--border)_1px,transparent_1px)] [background-size:40px_40px] [mask-image:radial-gradient(circle_at_center,black,transparent_72%)]" />
       <Card className="relative w-full max-w-lg items-center px-6 py-10 text-center shadow-lg sm:px-10">
         {code && <div className="mono-eyebrow text-primary">{code}</div>}
@@ -29,6 +33,6 @@ export function SystemStatePage({
         </div>
         {action && <div className="mt-1">{action}</div>}
       </Card>
-    </main>
+    </div>
   );
 }

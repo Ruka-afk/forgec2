@@ -122,7 +122,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               "mx-auto flex w-full min-h-0 flex-col",
               flush
                 ? "max-w-none flex-1 px-0 py-0"
-                : "max-w-(--content-wide) gap-4 px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6",
+                // The shell owns the page padding; the content width belongs to
+                // PageContainer (standard / wide / workspace). Two nested
+                // max-widths used to clamp the same value twice.
+                : "gap-(--page-gap) px-(--page-pad-x) py-(--page-pad-y)",
             )}
           >
             {!flush && (

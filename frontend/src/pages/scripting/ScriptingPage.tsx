@@ -247,7 +247,7 @@ export default function ScriptingPage() {
         </Card>
       )}
 
-      <div className="space-y-4">
+      <div className="flex flex-col gap-(--page-gap)">
         {error && !data && (
           // First-load failure: no snapshot to retain yet, so the "no scripts /
           // no history" empties below must not stand in for the failure.

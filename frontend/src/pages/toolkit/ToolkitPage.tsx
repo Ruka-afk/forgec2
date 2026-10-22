@@ -226,7 +226,7 @@ export default function ToolkitPage() {
 
         <TabsContent value="commands">
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
-        <div className="xl:col-span-3 space-y-4">
+        <div className="xl:col-span-3 flex flex-col gap-(--page-gap)">
           <Card className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-warning-ink text-sm font-bold">!</span>
@@ -242,7 +242,7 @@ export default function ToolkitPage() {
           </Card>
 
           {loading ? (
-            <div className="space-y-4">
+            <div className="flex flex-col gap-(--page-gap)">
               {[1,2,3].map(i => <Skeleton key={i} className="h-32 rounded-lg" />)}
             </div>
           ) : (
@@ -275,7 +275,7 @@ export default function ToolkitPage() {
           )}
         </div>
 
-        <div className="space-y-4">
+        <div className="flex flex-col gap-(--page-gap)">
           {agentInfo && (
             <Card className="p-4 text-xs space-y-1">
               <div className="font-semibold text-muted-foreground mb-2">{t("toolkit.agent_info")}</div>

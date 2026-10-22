@@ -391,7 +391,7 @@ export default function LateralPageContent() {
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="flex flex-col gap-(--page-gap)">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <span className="block text-xs font-semibold text-muted-foreground mb-1.5">

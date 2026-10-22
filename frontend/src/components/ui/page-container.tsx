@@ -29,10 +29,8 @@ interface PageContainerProps {
   variant?: "standard" | "wide" | "workspace";
   /** Optional page-level filters/actions rendered between the header and content. */
   toolbar?: ReactNode;
-  /** Optional contextual rail rendered beside the main content on wide screens. */
-  aside?: ReactNode;
-  /** Keep the toolbar visible inside a scrolling standard/wide page. */
-  stickyHeader?: boolean;
+  /** Keep the toolbar row pinned under the top bar while the page scrolls. */
+  stickyToolbar?: boolean;
   /** Extra classes on the inner content region. */
   contentClassName?: string;
   loading?: boolean;
@@ -77,8 +75,7 @@ export function PageContainer({
   embedded = false,
   variant = "wide",
   toolbar,
-  aside,
-  stickyHeader = false,
+  stickyToolbar = true,
   contentClassName,
   loading = false,
   loadingSkeleton,
@@ -110,17 +107,12 @@ export function PageContainer({
   );
 
   const hasHeader = title !== undefined;
-  const content = aside ? (
-    <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[minmax(0,1fr)_20rem] xl:gap-6">
-      <div className="min-w-0">{body}</div>
-      <aside className="min-w-0 xl:sticky xl:top-4 xl:self-start">{aside}</aside>
-    </div>
-  ) : body;
+  const content = body;
   return (
     <div
       data-slot="page-container"
       className={cn(
-        "flex min-h-0 w-full flex-col gap-4 sm:gap-5",
+        "flex min-h-0 w-full flex-col gap-(--page-gap)",
         !embedded && "animate-fade-slide-up",
         !embedded && variant === "standard" && "mx-auto max-w-(--content-standard)",
         !embedded && variant === "wide" && "mx-auto max-w-(--content-wide)",
@@ -140,15 +132,21 @@ export function PageContainer({
         <div
           className={cn(
             "min-w-0",
-            stickyHeader &&
-              "sticky top-0 z-20 -mx-1 rounded-xl bg-background/95 py-1 backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:-mx-2 sm:py-2",
+            // The toolbar row is pinned under the top bar while the page
+            // scrolls. It lives in the page container (not in the scrolling
+            // body), so the sticky travel budget is the page header's height
+            // instead of zero — a toolbar that was the body's first child
+            // could never pin, because the sticky box is bounded by its
+            // parent's top edge.
+            stickyToolbar &&
+              "sticky top-0 z-20 -mx-1 rounded-xl bg-background/95 py-1 backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:-mx-2 sm:py-1.5",
           )}
         >
           {toolbar}
         </div>
       )}
       {hasHeader ? (
-        <div className={cn("flex min-h-0 flex-1 flex-col gap-4 sm:gap-5", variant === "workspace" && "gap-0", contentClassName)}>{content}</div>
+        <div className={cn("flex min-h-0 flex-1 flex-col gap-(--page-gap)", variant === "workspace" && "gap-0", contentClassName)}>{content}</div>
       ) : (
         content
       )}

@@ -234,7 +234,7 @@ export default function NtlmPage() {
 
       {/* Relay Tab */}
       <TabsContent value="relay">
-        <div className="space-y-6">
+        <div className="flex flex-col gap-(--page-gap)">
 <Card className="p-(--card-spacing)">
             <div className="flex items-center gap-x-3 mb-5">
 <IconBadge icon={TowerControl} color="primary" size="lg" />

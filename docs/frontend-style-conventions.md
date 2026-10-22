@@ -55,6 +55,28 @@
 `check-design-tokens.mjs` 的 Rule 5/6 已把该写法与缺失的 `--text-*`
 声明都变成红拦截；迁移脚本为 `scripts/migrate-fs-utilities.mjs`。
 
+### 4.2 页面骨架节奏：`--page-pad-x` / `--page-pad-y` / `--page-gap`
+
+页面级留白与块间距只有一套令牌，定义在 `globals.css` 的 `:root`
+（`<640px` 16/16/16；`≥640px` 24/20/20；`≥1024px` 32/24/20）：
+
+- `AppLayout` 只负责**页面外边距**（`px-(--page-pad-x) py-(--page-pad-y)`）；
+  内容宽度归 `PageContainer`（`standard` 80rem / `wide` 96rem / `workspace`
+  满宽）。壳层不再自带 `max-w`，避免两层同值裁切。
+- 页面块的纵向间距用 `gap-(--page-gap)`（容器层）或
+  `flex flex-col gap-(--page-gap)`（页面自带的分组根节点）。
+  **禁止** `space-y-4/5/6` 出现在页面级分组根节点上：它不随断点变化，
+  同一屏里就会出现 16 / 20 / 24 三种块间距。表单、弹窗、对话框内部的
+  `space-y-4` 不受此限。
+- **Tailwind v4 不编译 `space-y` 的自定义属性写法**：`space-y-(--page-gap)`
+  与 `space-y-[var(--page-gap)]` 都不产出 CSS（实测），页面级分组只能用
+  `gap-(--page-gap)`。
+- 吸顶筛选条只有一个实现：`PageContainer` 的 `toolbar` 槽位
+  （`stickyToolbar`，默认吸顶）。槽位是页面容器的直接子元素，sticky 的
+  位移预算 = 页头高度；把筛选条放在 body 的**第一个**位置时，sticky 会被
+  父盒顶边锁死为 0（父盒顶边即筛选条顶边），永远无法吸顶——这正是
+  Dashboard 的视图切换条此前随页面滚走的原因。
+
 ## 5. 颜色 / 圆角 / 阴影
 
 - 颜色一律 token（`--primary`、`--chart-*`…）；裸 hex 由门禁拦截（豁免清单见

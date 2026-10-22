@@ -500,7 +500,7 @@ export default memo(function BeaconDetailPage({ agentId: agentIdProp, onClose }:
   if (loading) {
     return wrap(
       <PageContainer embedded={embedded}>
-        <div className="space-y-4">
+        <div className="flex flex-col gap-(--page-gap)">
           <Skeleton className="h-4 w-24" />
           <Card className="p-(--card-spacing)"><div className="flex items-center gap-4">
             <Skeleton className="size-14 rounded-lg" />

@@ -85,7 +85,7 @@ export function EntraIdentityPanel() {
   const busy = startingDevice || pollingDevice || startingConsent || exchangingConsent;
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-(--page-gap)">
       <Banner tone="warning">{t("phishing.entra_lab_only")}</Banner>
       <Card className="p-(--card-spacing) space-y-3">
         <div className="text-sm font-semibold">{t("phishing.entra_shared")}</div>

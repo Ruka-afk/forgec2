@@ -207,7 +207,7 @@ export default function ScannerPage() {
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="flex flex-col gap-(--page-gap)">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <Label className="block text-xs font-medium text-muted-foreground mb-1.5">{t("scanner.target_agent")}</Label>

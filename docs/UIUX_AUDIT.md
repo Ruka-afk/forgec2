@@ -1916,3 +1916,90 @@ npm run test:e2e                  # layout + smoke + visual baselines
 
 Runtime probes (tab walk, screenshots, canvas contrast harness) were temporary
 by design and are not committed; their method is reproducible from this file.
+
+## U9 — Layout & UI program (2026-10)
+
+U1–U8 closed colour, type, keyboard, motion, copy and the card header. What
+the audit deliberately left out of scope — page re-layout and the spacing
+contract — is what U9 opens, with the same evidence discipline: measure
+first, change the primitive, keep the gates green.
+
+### Method
+
+A Playwright harness drives the **live** console (real login, real data) over
+10 operator routes × 4 viewports (390 / 768 / 1024 / 1440) and records, per
+route: the page container's width and row gap, the gap between the page's own
+blocks, whether the filter row is `position: sticky` and where it lands after
+an 800 px scroll, the page-level horizontal overflow, and the horizontal
+overflow **inside** every table container.
+
+### L1 · The shell clamped the content width twice
+
+`AppLayout` centred its column at `--content-wide` (96rem) and
+`PageContainer` applied `--content-standard` / `--content-wide` again on the
+inside. Two nested max-widths, one value: harmless until a page needed a
+narrower column, then the outer clamp fought the inner one.
+
+**Fixed**: the shell owns the page padding only; the content width belongs to
+`PageContainer` (`standard` / `wide` / `workspace`). The padding moved from
+hard-coded Tailwind steps (`px-4 sm:px-6 lg:px-8` …) to three tokens
+(`--page-pad-x` / `--page-pad-y` / `--page-gap`) that step at 640 px and
+1024 px exactly like the steps they replaced — measured identical page widths
+before and after (358 / 720 / 728 / 1144 px at the four viewports).
+
+### L2 · Four vertical rhythms on one screen
+
+Page blocks were spaced by `space-y-3` (71 call sites), `space-y-4` (68),
+`space-y-5` (11) and `space-y-6` (6) — none of them breakpoint-aware, all of
+them fighting the container's own `gap-4 sm:gap-5`.
+
+**Fixed**: the container gap and the page's own group roots read
+`--page-gap` (16 px < 640, 20 px above). Measured after the change: every
+route reports the same row gap (16 px at 390, 20 px at 768/1024/1440) and the
+dashboard's inner blocks report 16 / 20 px. Forms, dialogs and panel bodies
+keep their `space-y-4` — a form's rhythm is its own business.
+
+**Trap, worth writing down**: Tailwind v4 does **not** compile `space-y` with
+a custom property. Neither `space-y-(--page-gap)` nor
+`space-y-[var(--page-gap)]` produces a rule (verified against the built
+CSS: the `.space-y-\(--page-gap\)` selector is absent), and the page silently
+loses every block gap. Page-level groups use `gap-(--page-gap)` on a
+`flex flex-col` container.
+
+### L3 · A sticky filter row that could never stick
+
+`position: sticky` is bounded by the top edge of its containing block. When
+the filter row was the **first** child of the page body, that containing
+block's top edge *was* the filter row's top edge — the travel budget was
+zero and the row could never pin, however long the page scrolled. The
+Dashboard's view switcher lived in the shell's `toolbar` slot instead, which
+had no sticky behaviour at all: it scrolled away with the panels.
+
+Measured after the fix (800 px scroll, 390 px viewport): the Dashboard row
+pins at 60 px (56 px top bar + the band's 4 px padding), the Audit and
+Plugins rows pin at 56 px, and no route reports a row that scrolls away
+while its page still has content below.
+
+**Fixed**: one implementation — the `PageContainer` `toolbar` slot, sticky by
+default (`stickyToolbar`, opt-out for the panels embedded in the Events tab
+rail, whose own rail is already sticky). The dead `stickyHeader` and `aside`
+props are gone (0 call sites).
+
+### L4 · A nested `<main>` and a 100vh overflow
+
+`SystemStatePage` (the 403 surface) rendered a `<main>` inside the shell's
+`<main>` — invalid HTML, and `min-h-screen` in a column that already
+reserves the top bar's height overflowed the viewport by exactly one bar.
+
+**Fixed**: a `<div>` with `min-h-full`.
+
+### Backlog (U9.2 → U9.7)
+
+| Batch | Defect | Evidence |
+| --- | --- | --- |
+| U9.2 | Cards have no interior padding contract: `SectionCard` renders its body unpadded, so 61 `Card` call sites set their own (`p-3` 10 / `p-4` 40 / `p-5` 5 / `p-6` 6) while the primitive already derives `--card-spacing`; the dashboard copies one list row five times | grep over `pages/**` + `components/**` |
+| U9.3 | Narrow screens: tables scroll horizontally inside their own container — Listeners overflows by 219 px at 390, 568 px at 768, 560 px at 1024, 144 px at 1440; Beacons by 269 px at 1024. `hidden md:table-cell` is used once in the whole app | measured in the harness above |
+| U9.4 | Dialogs: 72 `DialogContent` instances across nine widths (`default` 16, `md` 18, `lg` 14, `2xl` 8, `3xl` 4, `sm` 4, `xl` 3, `4xl` 2, `5xl` 2) plus one raw `w-[95vw]`; the footer's negative margins are hard-wired to the popup's `p-5` | measured in the harness above |
+| U9.5 | Detail pages (beacon: 15 sections, listener, campaign, report, circuit breaker) and the four workspace surfaces (shell / files / screen / remote desktop) each grow their own chrome | page-by-page review |
+| U9.6 | Density mode changes the type ramp and the table cell padding only — not the card padding, the page gap or the control heights | `[data-density="compact"]` in `globals.css` |
+| U9.7 | No layout gate: the defects above are all reachable by a single class name | — |

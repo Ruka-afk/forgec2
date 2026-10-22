@@ -1,0 +1,1 @@
+import{n as e,r as t,t as n,ut as r}from"./index-Bv9R8Qgb.js";function i(){let i=r(e=>e.currentPermissions);return{permissions:i,role:r(e=>e.currentUserRole),can:e=>n(i,e),canAny:e=>t(i,e),canAll:t=>e(i,t)}}export{i as t};
