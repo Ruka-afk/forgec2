@@ -4,7 +4,21 @@ All notable changes to ForgeC2 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [2.7.1] - 2026-10-23
+
+### Upgrade note
+
+- **2.7.0 cannot update itself.** Its update checker asked `forgec2/forgec2` for
+  releases and read the 404 as "up to date", and even a release it did see could
+  not be installed or restarted (wrong asset, lost `-config`, no rollback). Update
+  a 2.7.0 installation by hand once: download the 2.7.1 binary for your platform
+  (or the one-click archive), stop the server, replace `forgec2-server[.exe]`,
+  start it again. From 2.7.1 on, the console's **update now** works, and every
+  later release can be installed from the browser.
+- The hot update needs the release to carry `forgec2-server-<os>-<arch>[.exe]`
+  plus its `.sha256`; the release workflow builds exactly those names, and a
+  release without a binary for the running platform is refused instead of
+  guessed at.
 
 ### Fixed
 
