@@ -10,6 +10,7 @@ import { useAgentList } from "@/lib/hooks/useAgentList";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { POLL } from "@/lib/polling";
 import { Card } from "@/components/ui/card";
+import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -21,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ArrowRight, Bug, Link, Pencil, X } from "lucide-react";
+import { ArrowRight, Bug, Link, Network, Pencil, Waypoints, X } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { DataError } from "@/components/ui/data-state";
 import { useI18n } from "@/lib/i18n";
@@ -162,8 +163,14 @@ export default function ChainPage() {
       {selectedAgent && (
         <>
           {/* Current Configuration */}
-          <Card className="p-(--card-spacing) mb-6">
-            <h3 className="text-sm font-semibold text-foreground mb-3">{t("chain.current_chain")}</h3>
+          <SectionCard
+            title={t("chain.current_chain")}
+            icon={Waypoints}
+            tone="primary"
+            headerAccent
+            className="mb-6"
+          >
+            <div className="p-(--card-spacing)">
             {chainLoading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Spinner size="sm" />{t("common.loading")}
@@ -201,7 +208,8 @@ export default function ChainPage() {
                 </Badge>
               </div>
             )}
-          </Card>
+            </div>
+          </SectionCard>
 
           {/* Actions */}
           <div className="flex flex-wrap gap-3 mb-6">
@@ -259,9 +267,14 @@ export default function ChainPage() {
 
           {/* Chain Visualization - Full Topology */}
           {graph.length > 0 && (
-            <Card className="p-(--card-spacing) mb-6">
-              <h3 className="text-sm font-semibold text-foreground mb-3">{t("chain.topology_view")}</h3>
-              <div className="space-y-2">
+            <SectionCard
+              title={t("chain.topology_view")}
+              icon={Network}
+              tone="info"
+              headerAccent
+              className="mb-6"
+            >
+              <div className="space-y-2 p-(--card-spacing)">
                 {graph
                   .filter((n) => n.parent_id || n.id === selectedAgent)
                   .map((node) => {
@@ -296,7 +309,7 @@ export default function ChainPage() {
                     );
                   })}
               </div>
-            </Card>
+            </SectionCard>
           )}
         </>
       )}

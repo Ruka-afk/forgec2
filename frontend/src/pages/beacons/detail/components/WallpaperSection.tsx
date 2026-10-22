@@ -42,7 +42,8 @@ export default memo(function WallpaperSection({ agentId, online }: WallpaperSect
   return (
     <CollectCard
       title={t("agents.wallpaper_title")}
-      icon={<Image className="size-3.5" />}
+      icon={Image}
+      tone="primary"
       emptyIcon={Image}
       emptyTitle={t("agents.wallpaper_empty")}
       emptyHint={t("agents.wallpaper_empty_hint")}

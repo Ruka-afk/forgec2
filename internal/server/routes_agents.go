@@ -53,6 +53,7 @@ func (s *Server) registerAgentRoutes(auth *gin.RouterGroup) {
 		agentsWrite.POST("/agents/batch", s.handleBatchCommand)
 		agentsWrite.POST("/agents/bulk/task", s.handleBatchCommand)
 		agentsWrite.GET("/agents/bulk/results", s.handleBulkResults)
+		agentsWrite.POST("/api/agents/:id/processes", s.handleCollectProcesses)
 		agentsWrite.POST("/agents/:id/trust", s.handleToggleAgentTrust)
 		agentsWrite.POST("/api/agents/:id/input", s.handleAgentRemoteInput)
 		agentsWrite.GET("/agents/:id/socks_relay/status", s.handleSocksRelayStatus)

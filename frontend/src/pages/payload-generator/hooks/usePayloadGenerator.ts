@@ -11,7 +11,8 @@ import { api, getCsrfToken, handleUnauthorized } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import {
   Listener, ProfilePreset, SharedState, PayloadForms, PayloadStates, PayloadExtras,
-  PayloadKey, BinaryForm, UnixForm, AgentModuleInfo, createDefaultForms, createDefaultStates,
+  PayloadKey, BinaryForm, UnixForm, AgentModuleInfo, BuildSignature, BuildSignatureStatus,
+  createDefaultForms, createDefaultStates,
 } from "@/types/generate";
 import type { ListenerForm } from "../components/ListenerModal";
 import {
@@ -22,6 +23,27 @@ import {
 import { parseGenerateQuery } from "@/lib/generate-query";
 
 const DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
+
+const BUILD_SIGNATURE_STATUSES: BuildSignatureStatus[] = ["valid", "untrusted_root", "invalid", "unsigned"];
+
+type BuildOutcome = {
+  status: "completed" | "failed" | "timeout" | "aborted";
+  error?: string;
+  signature?: BuildSignature;
+};
+
+/** Read the flat signature fields returned by the build status endpoint/WS. */
+function readBuildSignature(data: Record<string, unknown>): BuildSignature | undefined {
+  const status = data.signature_status;
+  if (typeof status !== "string" || !BUILD_SIGNATURE_STATUSES.includes(status as BuildSignatureStatus)) return undefined;
+  const str = (key: string) => (typeof data[key] === "string" && data[key] ? data[key] as string : undefined);
+  return {
+    status: status as BuildSignatureStatus,
+    signer: str("signature_signer"),
+    issuer: str("signature_issuer"),
+    error: str("signature_error"),
+  };
+}
 
 // The backend budget is 6 minutes for module resolution plus 15 minutes for
 // compilation, and requests may wait in the worker queue. Keep the client
@@ -278,12 +300,12 @@ export function usePayloadGenerator() {
   // While the socket is unavailable a 2s HTTP fallback poll keeps the build
   // wait from stalling. Cancelled via the abort signal.
   const waitForBuildResult = useCallback((buildId: string, signal: AbortSignal) => {
-    return new Promise<{ status: "completed" | "failed" | "timeout" | "aborted"; error?: string }>((resolve) => {
+    return new Promise<BuildOutcome>((resolve) => {
       let settled = false;
       let fallback: ReturnType<typeof setTimeout> | null = null;
       let timeout: ReturnType<typeof setTimeout> | null = null;
       let unsub: () => void = () => {};
-      const finish = (outcome: { status: "completed" | "failed" | "timeout" | "aborted"; error?: string }) => {
+      const finish = (outcome: BuildOutcome) => {
         if (settled) return;
         settled = true;
         unsub();
@@ -297,9 +319,9 @@ export function usePayloadGenerator() {
         if (settled) return;
         if (connectedRef.current) { fallback = setTimeout(poll, 2000); return; }
         try {
-          const pollData = await api.get<{ status?: string; error?: string }>(paths.generate.buildStatus(buildId), { signal });
-          if (pollData.status === "completed") finish({ status: "completed" });
-          else if (pollData.status === "failed") finish({ status: "failed", error: pollData.error });
+          const pollData = await api.get<Record<string, unknown>>(paths.generate.buildStatus(buildId), { signal });
+          if (pollData.status === "completed") finish({ status: "completed", signature: readBuildSignature(pollData) });
+          else if (pollData.status === "failed") finish({ status: "failed", error: typeof pollData.error === "string" ? pollData.error : undefined });
           else fallback = setTimeout(poll, 2000);
         } catch {
           fallback = setTimeout(poll, 2000);
@@ -307,7 +329,7 @@ export function usePayloadGenerator() {
       };
       unsub = subscribe((msg) => {
         if (msg.type !== "build_update" || msg.build_id !== buildId) return;
-        if (msg.status === "completed") finish({ status: "completed" });
+        if (msg.status === "completed") finish({ status: "completed", signature: readBuildSignature(msg) });
         else if (msg.status === "failed") finish({ status: "failed", error: typeof msg.error === "string" ? msg.error : undefined });
       });
       timeout = setTimeout(() => finish({ status: "timeout" }), BUILD_WAIT_TIMEOUT_MS);
@@ -387,7 +409,7 @@ export function usePayloadGenerator() {
         // 3) Download the result
         const { blob, filename } = await api.downloadGet(paths.generate.buildDownload(buildId), formName);
         downloadBlob(blob, filename);
-        return { success: true };
+        return { success: true, signature: outcome.signature };
       } finally {
         asyncAbortsRef.current.delete(ac);
       }
@@ -471,7 +493,7 @@ export function usePayloadGenerator() {
       setStates((s) => ({ ...s, [key]: { busy: false, result: result.error! } }));
     } else if (result?.success) {
       toast.success(successMsg);
-      setStates((s) => ({ ...s, [key]: { busy: false, result: "" } }));
+      setStates((s) => ({ ...s, [key]: { busy: false, result: "", signature: result.signature } }));
     } else {
       setStates((s) => ({ ...s, [key]: { busy: false, result: "" } }));
     }

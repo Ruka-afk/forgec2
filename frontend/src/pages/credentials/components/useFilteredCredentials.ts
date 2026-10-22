@@ -32,7 +32,7 @@ export function useFilteredCredentials(
         if (typeFilter !== "all" && entry.type !== typeFilter) return false;
         if (confirmedFilter === "true" && !entry.confirmed) return false;
         if (confirmedFilter === "false" && entry.confirmed) return false;
-        if (lifecycleFilter && entry.lifecycle !== lifecycleFilter) return false;
+        if (lifecycleFilter !== "all" && entry.lifecycle !== lifecycleFilter) return false;
         return true;
       }),
     [vaultEntries, searchQuery, typeFilter, confirmedFilter, lifecycleFilter],

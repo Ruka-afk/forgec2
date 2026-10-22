@@ -122,7 +122,7 @@ export default function ConnectionPanel({
       }
     >
       {/* ── Listener & C2 ── */}
-      <ConfigSection title={t("generate.connection_listener")} icon={<Radio className="size-4" />} actions={
+      <ConfigSection title={t("generate.connection_listener")} icon={Radio} tone="primary" actions={
         <Button type="button" size="sm" variant="outline" onClick={handleCreateListener} className="gap-1 text-xs">
           <Plus className="size-3.5" /> {t("generate.create_listener")}
         </Button>
@@ -171,7 +171,7 @@ export default function ConnectionPanel({
       </ConfigSection>
 
       {/* ── Transport ── */}
-      <ConfigSection title={t("generate.beacon_transport")} icon={<Network className="size-4" />}>
+      <ConfigSection title={t("generate.beacon_transport")} icon={Network} tone="info">
         <div className="space-y-3">
           <div className="grid grid-cols-3 gap-1.5">
             {visibleBeaconTransports(showExperimental).map((tr) => {
@@ -271,7 +271,7 @@ export default function ConnectionPanel({
       </ConfigSection>
 
       {/* ── Profile ── */}
-      <ConfigSection title={t("generate.malleable_profile")} icon={<FileCode2 className="size-4" />}>
+      <ConfigSection title={t("generate.malleable_profile")} icon={FileCode2} tone="violet">
         <div className="space-y-2">
           <div className="flex gap-1.5">
             <Select value={shared.profile || "default"} onValueChange={(val) => val != null && changeProfile(val)}>
@@ -316,7 +316,7 @@ export default function ConnectionPanel({
       </ConfigSection>
 
       {/* ── Timing ── */}
-      <ConfigSection title={t("generate.connection_timing")} icon={<Timer className="size-4" />}>
+      <ConfigSection title={t("generate.connection_timing")} icon={Timer} tone="warning">
         <div className="grid grid-cols-2 gap-2">
           <div>
             <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">{t("generate.heartbeat_sec")}</span>
@@ -331,7 +331,7 @@ export default function ConnectionPanel({
       </ConfigSection>
 
       {/* ── Keys & OPSEC ── */}
-      <ConfigSection title={t("generate.connection_keys")} icon={<KeyRound className="size-4" />}>
+      <ConfigSection title={t("generate.connection_keys")} icon={KeyRound} tone="success">
         <div className="space-y-3">
           <div>
             <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">{t("generate.user_agent")}</span>

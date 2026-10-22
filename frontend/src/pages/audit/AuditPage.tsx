@@ -4,9 +4,11 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 import { downloadText } from "@/lib/download";
+import { enumLabel } from "@/lib/utils";
 import { PageContainer } from "@/components/ui/page-container";
 import { useI18n } from "@/lib/i18n";
 import { Card } from "@/components/ui/card";
+import { PageToolbar } from "@/components/ui/page-toolbar";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataTable } from "@/components/ui/data-table";
@@ -171,11 +173,12 @@ export default function AuditPage() {
         </Card>
       </div>
 
-      <Card className="p-(--card-spacing)">
-        <div className="flex flex-wrap items-center gap-3">
+      <PageToolbar sticky>
           <Select value={actionFilter || "all"} onValueChange={(v) => setActionFilter(v === "all" || !v ? "" : v)}>
             <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder={t("audit.all_actions")} />
+              <SelectValue>
+                {(value) => (value === "all" ? t("audit.all_actions") : enumLabel(t, "audit", String(value ?? "")))}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("audit.all_actions")}</SelectItem>
@@ -189,7 +192,9 @@ export default function AuditPage() {
           </Select>
           <Select value={userFilter || "all"} onValueChange={(v) => setUserFilter(v === "all" || !v ? "" : v)}>
             <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder={t("audit.all_users")} />
+              <SelectValue>
+                {(value) => (value === "all" ? t("audit.all_users") : String(value ?? ""))}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("audit.all_users")}</SelectItem>
@@ -205,8 +210,7 @@ export default function AuditPage() {
           <Button variant="outline" onClick={resetFilters}>
             {t("audit.reset")}
           </Button>
-        </div>
-      </Card>
+      </PageToolbar>
 
       <Card className="overflow-hidden">
         <DataTable<AuditLog>

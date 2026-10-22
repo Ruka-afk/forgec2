@@ -1,10 +1,13 @@
 
 import type { ComponentType, ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { PageSpinner } from "@/components/ui/spinner";
 import { DataError } from "@/components/ui/data-state";
 import { EmptyState } from "@/components/ui/empty-state";
+import { isFlushPath } from "@/lib/layout";
 import { useI18n } from "@/lib/i18n";
 
 interface PageContainerProps {
@@ -13,6 +16,8 @@ interface PageContainerProps {
   subtitle?: ReactNode;
   eyebrow?: ReactNode;
   icon?: ReactNode;
+  /** Secondary inline metadata rendered next to the subtitle (e.g. status). */
+  meta?: ReactNode;
   /** Header actions (buttons, menus). Rendered in the PageHeader. */
   actions?: ReactNode;
   children?: ReactNode;
@@ -43,6 +48,19 @@ interface PageContainerProps {
 }
 
 /**
+ * Router context is optional: dialogs and unit tests render pages standalone.
+ * `useLocation` throws outside a <Router>, so treat that as "no pathname"
+ * (no breadcrumb, no flush layout) instead of failing the whole page.
+ */
+function useOptionalPathname(): string | null {
+  try {
+    return useLocation().pathname;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Standard page shell: content-width wrapper + entrance animation + optional
  * header and loading/error/empty states. Replaces the duplicated wrapper div
  * and PageHeader scaffolding repeated across ~70 pages.
@@ -52,6 +70,7 @@ export function PageContainer({
   subtitle,
   eyebrow,
   icon,
+  meta,
   actions,
   children,
   className,
@@ -72,6 +91,9 @@ export function PageContainer({
   onRetry,
 }: PageContainerProps) {
   const { t } = useI18n();
+  // null means "outside a Router" (standalone render), so skip the breadcrumb.
+  const pathname = useOptionalPathname();
+  const breadcrumb = !pathname || isFlushPath(pathname) ? null : <Breadcrumb />;
   const body = loading ? (
     loadingSkeleton ?? <PageSpinner />
   ) : error ? (
@@ -91,13 +113,14 @@ export function PageContainer({
   const content = aside ? (
     <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[minmax(0,1fr)_20rem] xl:gap-6">
       <div className="min-w-0">{body}</div>
-      <aside className="min-w-0 xl:sticky xl:top-[calc(var(--shell-breadcrumb-height)+1rem)] xl:self-start">{aside}</aside>
+      <aside className="min-w-0 xl:sticky xl:top-4 xl:self-start">{aside}</aside>
     </div>
   ) : body;
   return (
     <div
+      data-slot="page-container"
       className={cn(
-        "flex min-h-0 w-full flex-col gap-5 sm:gap-6",
+        "flex min-h-0 w-full flex-col gap-4 sm:gap-5",
         !embedded && "animate-fade-slide-up",
         !embedded && variant === "standard" && "mx-auto max-w-(--content-standard)",
         !embedded && variant === "wide" && "mx-auto max-w-(--content-wide)",
@@ -106,24 +129,26 @@ export function PageContainer({
         !hasHeader && contentClassName,
       )}
     >
-      {hasHeader && (
-        <PageHeader title={title} subtitle={subtitle} eyebrow={eyebrow} icon={icon}>
+      {hasHeader ? (
+        <PageHeader title={title} subtitle={subtitle} eyebrow={eyebrow} icon={icon} meta={meta} breadcrumb={breadcrumb}>
           {actions}
         </PageHeader>
-      )}
+      ) : breadcrumb ? (
+        <div className="min-w-0">{breadcrumb}</div>
+      ) : null}
       {toolbar && (
         <div
           className={cn(
             "min-w-0",
             stickyHeader &&
-              "sticky top-[calc(var(--shell-breadcrumb-height)+0.5rem)] z-20 -mx-1 rounded-xl bg-background/95 p-1 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:-mx-2 sm:p-2",
+              "sticky top-0 z-20 -mx-1 rounded-xl bg-background/95 py-1 backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:-mx-2 sm:py-2",
           )}
         >
           {toolbar}
         </div>
       )}
       {hasHeader ? (
-        <div className={cn("flex min-h-0 flex-1 flex-col gap-5 sm:gap-6", variant === "workspace" && "gap-0", contentClassName)}>{content}</div>
+        <div className={cn("flex min-h-0 flex-1 flex-col gap-4 sm:gap-5", variant === "workspace" && "gap-0", contentClassName)}>{content}</div>
       ) : (
         content
       )}

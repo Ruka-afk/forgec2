@@ -186,12 +186,11 @@ func TestHandlePackerBundle_AppliesTransformations(t *testing.T) {
 }
 
 // The import section of Go-built binaries (the worst realistic case) has
-// limited trailing zero slack: one new import fits, two do not. The endpoint
-// must fail loudly instead of silently dropping the request.
-// TestHandlePackerBundle_OverflowGrowsSection upgrades the old fail-loudly
-// contract: import demand beyond existing slack now grows the host section
-// (raw+virtual, aligned) and the bundle succeeds with both DLLs present.
-func TestHandlePackerBundle_OverflowFailsLoudly(t *testing.T) {
+// limited trailing zero slack: one new import fits, two may not. The endpoint
+// must satisfy the request instead of silently dropping imports; the payload
+// layer either relocates the descriptor array into safe padding or appends a
+// new section, so the file length may stay the same.
+func TestHandlePackerBundle_OverflowUsesSafeFallback(t *testing.T) {
 	s, _ := packerTestServer(t)
 	pe := buildTestPEFixture(t)
 
@@ -204,7 +203,7 @@ func TestHandlePackerBundle_OverflowFailsLoudly(t *testing.T) {
 	})
 	s.handlePackerBundle(c)
 	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 after section growth, got %d; body=%s", w.Code, w.Body.String())
+		t.Fatalf("expected 200 after import fallback, got %d; body=%s", w.Code, w.Body.String())
 	}
 	var resp struct {
 		Data string `json:"data"`
@@ -216,11 +215,17 @@ func TestHandlePackerBundle_OverflowFailsLoudly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode bundle: %v", err)
 	}
-	// Growth signature: the bundled image extends past the original fixture
-	// (aligned zeros added to the import host section). Injection correctness
-	// itself is covered exhaustively in internal/payload tests.
-	if len(out) <= len(pe) {
-		t.Fatalf("expected section growth to extend image: in=%d out=%d", len(pe), len(out))
+	// Relocation can reuse existing section padding without resizing, while
+	// the new-section fallback appends; neither may shrink the image. Both
+	// requested DLL names must be present. Injection correctness itself is
+	// covered exhaustively in internal/payload tests.
+	if len(out) < len(pe) {
+		t.Fatalf("bundle shrank the image: in=%d out=%d", len(pe), len(out))
+	}
+	for _, want := range []string{"advapi32.dll\x00", "user32.dll\x00"} {
+		if !bytes.Contains(out, []byte(want)) {
+			t.Fatalf("bundle output missing %q", want)
+		}
 	}
 }
 

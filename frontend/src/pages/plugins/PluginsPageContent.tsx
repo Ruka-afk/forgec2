@@ -13,6 +13,7 @@ import { DataState } from "@/components/ui/data-state";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
+import { PageToolbar } from "@/components/ui/page-toolbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -268,13 +269,9 @@ export default function PluginsPage() {
         </div>
       </>}>
 
-      <Card className="p-(--card-spacing) mb-4 shadow-sm hover:shadow-md transition-shadow duration-200">
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex-1">
-            <SearchInput value={search} onChange={handleSearchChange} placeholder={t("plugins.search_ph")} className="max-w-md" label={t("common.search")} />
-          </div>
-        </div>
-      </Card>
+      <PageToolbar sticky>
+          <SearchInput value={search} onChange={handleSearchChange} placeholder={t("plugins.search_ph")} className="max-w-md" label={t("common.search")} />
+      </PageToolbar>
 
       <div className="flex flex-wrap gap-2 mb-4">
         {PLUGIN_CATEGORIES.map((cat) => {

@@ -5,7 +5,9 @@ import (
 	"encoding/binary"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 // testPEOptions lets a test tune the minimal PE fixture without duplicating
@@ -170,6 +172,40 @@ func TestValidatePEAcceptsValid(t *testing.T) {
 				t.Fatalf("valid PE rejected by extended validation: %v", err)
 			}
 		})
+	}
+}
+
+func TestValidatePERejectsOverlappingSections(t *testing.T) {
+	data := makePE(t, 0x8664, true)
+	_, _, sectionTable := peHeaderOffsets(t, data)
+	binary.LittleEndian.PutUint16(data[testPEElfanew+6:], 2) // NumberOfSections
+	second := sectionTable + 40
+	copy(data[second:second+8], ".data\x00\x00\x00")
+	binary.LittleEndian.PutUint32(data[second+8:], 0x200)         // VirtualSize
+	binary.LittleEndian.PutUint32(data[second+12:], testPETextVA) // same VA as .text
+	binary.LittleEndian.PutUint32(data[second+16:], 0)            // SizeOfRawData
+	binary.LittleEndian.PutUint32(data[second+20:], 0)            // PointerToRawData
+	binary.LittleEndian.PutUint32(data[second+36:], 0xC0000040)   // data|read|write
+
+	path := writeTestPE(t, data)
+	err := validatePE(path, 0x8664)
+	if err == nil || !strings.Contains(err.Error(), "overlap") {
+		t.Fatalf("overlapping sections: err = %v, want an overlap error", err)
+	}
+}
+
+func TestGenerateTimestampRandomIsPlausible(t *testing.T) {
+	floor := time.Date(2019, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
+	ceiling := time.Now().Unix()
+	for i := 0; i < 32; i++ {
+		ts, err := GenerateTimestamp(TSRandom, "")
+		if err != nil {
+			t.Fatalf("GenerateTimestamp(random): %v", err)
+		}
+		if int64(ts) < floor || int64(ts) > ceiling {
+			t.Fatalf("random timestamp %d (%s) outside [%d, %d)",
+				ts, time.Unix(int64(ts), 0).UTC().Format(time.RFC3339), floor, ceiling)
+		}
 	}
 }
 

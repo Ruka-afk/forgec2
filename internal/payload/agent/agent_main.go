@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -16,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/forgec2/forgec2/pkg/peimage"
 )
 
 func init() {
@@ -320,34 +321,48 @@ func rejectCleartextRedirect(req *http.Request, via []*http.Request) error {
 	return nil
 }
 
+// verifySelfIntegrityData mirrors the build-time digest exactly: the embedded
+// hash is zeroed, then pkg/peimage computes the PE-aware digest (checksum and
+// security directory omitted, certificate table excluded) or the whole-file
+// digest for ELF/Mach-O. The embedded hash must occur exactly once, so a
+// duplicated marker cannot hide a tampered region.
+func verifySelfIntegrityData(data []byte, expected string) error {
+	if len(expected) != 64 {
+		return fmt.Errorf("self-check digest has %d chars, want 64", len(expected))
+	}
+	needle := []byte(expected)
+	if count := bytes.Count(data, needle); count != 1 {
+		return fmt.Errorf("self-check digest found %d times in image, want exactly 1", count)
+	}
+	idx := bytes.Index(data, needle)
+	calc := append([]byte(nil), data...)
+	for i := idx; i < idx+len(needle); i++ {
+		calc[i] = 0
+	}
+	sum, err := peimage.Digest(calc)
+	if err != nil {
+		return err
+	}
+	if actual := hex.EncodeToString(sum); actual != expected {
+		return fmt.Errorf("self-check digest mismatch")
+	}
+	return nil
+}
+
 func verifySelfIntegrity() {
 	exePath, err := os.Executable()
 	if err != nil {
-		return
+		os.Exit(1)
 	}
 	exePath, err = filepath.EvalSymlinks(exePath)
 	if err != nil {
-		return
+		os.Exit(1)
 	}
 	data, err := os.ReadFile(exePath)
 	if err != nil {
-		return
+		os.Exit(1)
 	}
-	// The expected hash is of the binary EXCLUDING the embedded self-hash
-	// string itself (which the builder patches in after hashing). Locate the
-	// embedded hash region, zero it, and hash the rest so a tampered binary
-	// (any change outside that region) fails verification.
-	calc := make([]byte, len(data))
-	copy(calc, data)
-	needle := []byte(SelfCheckSHA256Str)
-	if idx := bytes.Index(calc, needle); idx >= 0 {
-		for i := idx; i < idx+len(needle) && i < len(calc); i++ {
-			calc[i] = 0
-		}
-	}
-	h := sha256.Sum256(calc)
-	actual := hex.EncodeToString(h[:])
-	if actual != SelfCheckSHA256Str {
+	if err := verifySelfIntegrityData(data, SelfCheckSHA256Str); err != nil {
 		os.Exit(1)
 	}
 }

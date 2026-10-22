@@ -50,7 +50,7 @@ function applyFocusFromStore() {
 // Sheet is an overlay, so it never offsets TopBar/content even while open.
 export function selectSidebarWidth(state: AppStore): number {
   if (state.isMobile) return 0;
-  return state.sidebarCollapsed ? 64 : 224;
+  return state.sidebarCollapsed ? 64 : 232;
 }
 
 const STATS_REFRESH_DEBOUNCE_MS = 800;

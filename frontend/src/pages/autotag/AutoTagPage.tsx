@@ -294,7 +294,7 @@ export default function AutoTagPage() {
       ) : (
         <div className="space-y-2">
           {rules.map((rule) => (
-            <Card key={rule.id} className="p-4 hover:shadow-lg dark:hover:shadow-xl transition-shadow">
+            <Card key={rule.id} className="p-4 hover:shadow-md transition-shadow">
               <div className="flex items-center gap-4">
                 <Switch checked={rule.enabled} onCheckedChange={() => handleToggle(rule.id)} aria-label={t("autotag.toggle_rule")} />
                 <div className="flex-1 min-w-0">

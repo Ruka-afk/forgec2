@@ -15,6 +15,7 @@ import { StatCard } from "@/components/ui/animated-stat-card";
 import { toast } from "sonner";
 
 import { Card } from "@/components/ui/card";
+import { SectionCard } from "@/components/ui/section-card";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -166,7 +167,7 @@ export default function CampaignPageContent() {
                 <TableRow><TableCell colSpan={5} className="py-10"><DataError message={t("campaign.list_unreadable", { message: listError })} onRetry={() => { void loadCampaigns(); }} /></TableCell></TableRow>
               )}
               {!listError && campaigns.length === 0 && (
-                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-16 sm:py-20"><EmptyState icon={ListTodo} title={t("campaign.empty")} message={t("campaign.subtitle")} /></TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-10 sm:py-12"><EmptyState icon={ListTodo} title={t("campaign.empty")} message={t("campaign.subtitle")} /></TableCell></TableRow>
               )}
               {campaigns.map((c) => (
                 <TableRow key={c.id} className="cursor-pointer transition-colors"
@@ -357,15 +358,20 @@ function CampaignDetailView({
           </div>
 
           {/* Kill Chain Phase Progress Bar */}
-<Card className="mb-6 shadow-sm hover:shadow-md transition-shadow duration-200">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold">{t("campaign.kill_chain")}</h3>
-              <Button variant="ghost" size="sm" onClick={() => setShowTimeline(!showTimeline)}>
-                {showTimeline ? <ListChecks className="size-4 mr-1" /> : <Clock className="size-4 mr-1" />}
-                {showTimeline ? t("campaign.kill_chain") : t("campaign.timeline")}
-              </Button>
-            </div>
-
+<SectionCard
+  title={t("campaign.kill_chain")}
+  icon={ListTodo}
+  tone="primary"
+  headerAccent
+  className="mb-6"
+  action={
+    <Button variant="ghost" size="sm" onClick={() => setShowTimeline(!showTimeline)}>
+      {showTimeline ? <ListChecks className="size-4 mr-1" /> : <Clock className="size-4 mr-1" />}
+      {showTimeline ? t("campaign.kill_chain") : t("campaign.timeline")}
+    </Button>
+  }
+>
+            <div className="p-(--card-spacing)">
             {!showTimeline ? (
               mitreError && !mitreData ? (
                 // An unreadable MITRE read must not render as the all-pending
@@ -385,14 +391,13 @@ function CampaignDetailView({
                       const isCompleted = found?.status === "completed";
                       const isPending = !found || found.task_count === 0;
                       return (
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
+                      <button
+                        type="button"
                         key={phase}
                         onClick={() => handlePhaseClick(phase)}
-                        className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all cursor-pointer min-w-[80px] h-auto ${
+                        className={`flex w-[84px] shrink-0 flex-col items-center gap-1 rounded-lg p-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
                           expandedPhase === phase ? "ring-2 ring-primary" : ""
-                        } ${isCompleted ? "bg-success/15" : isPending ? "" : "bg-warning/15"}`}
+                        } ${isCompleted ? "bg-success/15" : isPending ? "hover:bg-muted/50" : "bg-warning/15"}`}
                         aria-label={phase}
                         title={phase}
                       >
@@ -401,13 +406,13 @@ function CampaignDetailView({
                           }`}>
                             {isCompleted ? <Check className="size-4" /> : isPending ? "" : <Play className="size-4" />}
                           </div>
-                          <span className={`text-micro-sm text-center leading-tight ${isCompleted ? "text-success-ink font-medium" : isPending ? "text-muted-foreground" : "text-warning-ink"}`}>
-                            {phase.split(" ").slice(0, 2).join("\n")}
+                          <span className={`line-clamp-2 h-8 whitespace-normal text-micro-sm text-center leading-tight ${isCompleted ? "text-success-ink font-medium" : isPending ? "text-muted-foreground" : "text-warning-ink"}`}>
+                            {phase}
                           </span>
                           {found && (
                             <span className="text-micro text-muted-foreground">{found.task_count}</span>
                           )}
-                          </Button>
+                          </button>
                       );
                     })}
                   </div>
@@ -457,14 +462,18 @@ function CampaignDetailView({
                 )}
               </div>
             )}
-          </Card>
+            </div>
+          </SectionCard>
 
           {/* Kill Chain Template Executor */}
-<Card className="mb-6 shadow-sm hover:shadow-md transition-shadow duration-200">
-            <h3 className="text-lg font-semibold mb-3">
-              <Zap className="size-4" />
-              {t("campaign.templates")}
-            </h3>
+<SectionCard
+  title={t("campaign.templates")}
+  icon={Zap}
+  tone="warning"
+  headerAccent
+  className="mb-6"
+>
+            <div className="p-(--card-spacing)">
             {templatesError && templates.length === 0 ? (
               // An unreadable template list must not render as an empty
               // selector: that looks like "no templates exist", not a failed
@@ -511,11 +520,18 @@ function CampaignDetailView({
                 </div>
               </div>
             )}
-          </Card>
+            </div>
+          </SectionCard>
 
           {/* Phase Timeline (legacy) */}
-<Card className="mb-6 shadow-sm hover:shadow-md transition-shadow duration-200">
-            <h3 className="text-lg font-semibold mb-3">{t("campaign.timeline")}</h3>
+<SectionCard
+  title={t("campaign.timeline")}
+  icon={Clock}
+  tone="info"
+  headerAccent
+  className="mb-6"
+>
+            <div className="p-(--card-spacing)">
             {stats.phase_timeline.length === 0 ? (
               <p className="text-muted-foreground">{t("campaign.empty_timeline")}</p>
             ) : (
@@ -531,10 +547,16 @@ function CampaignDetailView({
                 ))}
               </div>
             )}
-          </Card>
+            </div>
+          </SectionCard>
 
-          <Card>
-            <h3 className="text-lg font-semibold mb-3">{t("campaign.agent_breakdown")}</h3>
+          <SectionCard
+            title={t("campaign.agent_breakdown")}
+            icon={ListChecks}
+            tone="success"
+            headerAccent
+          >
+            <div className="p-(--card-spacing)">
             {stats.agent_breakdown.length === 0 ? (
               <p className="text-muted-foreground">{t("campaign.empty_agents")}</p>
             ) : (
@@ -567,7 +589,8 @@ function CampaignDetailView({
                 </TableBody>
               </Table>
             )}
-          </Card>
+            </div>
+          </SectionCard>
         </>
       ) : statsError ? (
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-destructive/10 rounded-lg border border-destructive/20">

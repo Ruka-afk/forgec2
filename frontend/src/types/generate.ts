@@ -163,14 +163,26 @@ export type BinaryVariant = "exe" | "dll";
 export type UnixVariant = "linux" | "macos";
 export type StagerVariant = "windows" | "linux";
 
+export type BuildSignatureStatus = "valid" | "untrusted_root" | "invalid" | "unsigned";
+
+/** Signature classification returned with a completed Windows EXE/DLL build. */
+export interface BuildSignature {
+  status: BuildSignatureStatus;
+  signer?: string;
+  issuer?: string;
+  error?: string;
+}
+
 export interface GenerateResult {
   error?: string;
   success?: boolean;
+  signature?: BuildSignature;
 }
 
 export interface GenerateState {
   busy: boolean;
   result: ReactNode;
+  signature?: BuildSignature;
 }
 
 export interface PS1Result extends GenerateResult {

@@ -31,6 +31,14 @@ type BuildJob struct {
 	CreatedAt   time.Time
 	StartedAt   time.Time
 	CompletedAt time.Time
+
+	// Authenticode classification for a direct Windows EXE/DLL output. Empty
+	// when the build is not a direct Windows binary (ZIP/LNK bundles and other
+	// platforms are deliberately not inspected).
+	SignatureStatus string
+	SignatureSigner string
+	SignatureIssuer string
+	SignatureError  string
 }
 
 // startBuildJob creates a build job, stores it, and returns its ID.
@@ -59,8 +67,15 @@ func (s *Server) startBuildJobWithProfile(platform, format, c2URL string, listen
 	return job
 }
 
-// completeBuildJob marks a build job as completed or failed.
+// completeBuildJob marks a build job as completed or failed. Signature
+// inspection runs before taking the jobs lock because it reads the artifact;
+// only the small result is copied into the job.
 func (s *Server) completeBuildJob(job *BuildJob, outputPath string, err error) {
+	var sig buildSignatureInfo
+	var haveSig bool
+	if err == nil {
+		sig, haveSig = inspectBuildSignature(job.Platform, job.Format, outputPath)
+	}
 	s.buildJobsMu.Lock()
 	defer s.buildJobsMu.Unlock()
 	job.CompletedAt = time.Now()
@@ -72,6 +87,12 @@ func (s *Server) completeBuildJob(job *BuildJob, outputPath string, err error) {
 		job.Status = "completed"
 		job.Phase = "completed"
 		job.Output = outputPath
+		if haveSig {
+			job.SignatureStatus = sig.Status
+			job.SignatureSigner = sig.Signer
+			job.SignatureIssuer = sig.Issuer
+			job.SignatureError = sig.Error
+		}
 	}
 }
 
@@ -149,6 +170,14 @@ func (s *Server) handleBuildStatus(c *gin.Context) {
 	if job.Status == "completed" {
 		resp["download_url"] = fmt.Sprintf("/generate/builds/%s/download", job.ID)
 		resp["completed_at"] = job.CompletedAt
+		if job.SignatureStatus != "" {
+			resp["signature_status"] = job.SignatureStatus
+			resp["signature_signer"] = job.SignatureSigner
+			resp["signature_issuer"] = job.SignatureIssuer
+			if job.SignatureError != "" {
+				resp["signature_error"] = job.SignatureError
+			}
+		}
 	} else if job.Status == "failed" {
 		resp["error"] = job.Error
 		resp["completed_at"] = job.CompletedAt
@@ -211,6 +240,14 @@ func (s *Server) buildJobSnapshots() []gin.H {
 		}
 		if j.Error != "" {
 			entry["error"] = j.Error
+		}
+		if j.SignatureStatus != "" {
+			entry["signature_status"] = j.SignatureStatus
+			entry["signature_signer"] = j.SignatureSigner
+			entry["signature_issuer"] = j.SignatureIssuer
+			if j.SignatureError != "" {
+				entry["signature_error"] = j.SignatureError
+			}
 		}
 		if !j.StartedAt.IsZero() {
 			entry["started_at"] = j.StartedAt
@@ -277,6 +314,14 @@ func (s *Server) runBuildAndUpdateJob(job *BuildJob, buildFn func() (string, err
 	}
 	if job.Error != "" {
 		event["error"] = job.Error
+	}
+	if job.SignatureStatus != "" {
+		event["signature_status"] = job.SignatureStatus
+		event["signature_signer"] = job.SignatureSigner
+		event["signature_issuer"] = job.SignatureIssuer
+		if job.SignatureError != "" {
+			event["signature_error"] = job.SignatureError
+		}
 	}
 	if !job.CompletedAt.IsZero() {
 		event["completed_at"] = job.CompletedAt

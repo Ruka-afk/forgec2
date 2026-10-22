@@ -136,7 +136,11 @@ export default function TrafficPage({ embedded = false }: { embedded?: boolean }
             {t("traffic.auto_scroll")}
           </Label>
           <Select value={sourceIpFilter || "__all"} onValueChange={v => setSourceIpFilter(v === "__all" ? "" : v ?? "")}>
-            <SelectTrigger className="w-full"><SelectValue placeholder={t("traffic.all_ip")} /></SelectTrigger>
+            <SelectTrigger className="w-full">
+              <SelectValue>
+                {(value) => (value === "__all" ? t("traffic.all_ip") : String(value ?? ""))}
+              </SelectValue>
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="__all">{t("traffic.all_ip")}</SelectItem>
               {sourceIps.map(ip => (

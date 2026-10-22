@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 )
@@ -326,6 +327,12 @@ func validatePEWith(path string, exp peExpect) error {
 		return fmt.Errorf("PE SizeOfHeaders 0x%x is not file-aligned (0x%x)", sizeOfHeaders, fileAlign)
 	}
 
+	type sectionRange struct {
+		name string
+		va   uint64
+		end  uint64
+	}
+	var sectionRanges []sectionRange
 	entryInSection := false
 	imageEnd := uint64(sizeOfHeaders)
 	for _, s := range f.Sections {
@@ -348,9 +355,26 @@ func validatePEWith(path string, exp peExpect) error {
 			return fmt.Errorf("section %q virtual range [0x%x,0x%x) exceeds SizeOfImage 0x%x",
 				s.Name, s.VirtualAddress, uint64(s.VirtualAddress)+vsize, sizeOfImage)
 		}
+		// The loader maps whole section-alignment units. Two sections may not
+		// occupy the same page even when their raw VirtualSize fields don't
+		// overlap, or the second section's data silently replaces the first.
+		mapped := (vsize + uint64(sectionAlign) - 1) / uint64(sectionAlign) * uint64(sectionAlign)
+		sectionRanges = append(sectionRanges, sectionRange{
+			name: s.Name,
+			va:   uint64(s.VirtualAddress),
+			end:  uint64(s.VirtualAddress) + mapped,
+		})
 		if entry != 0 && uint64(entry) >= uint64(s.VirtualAddress) &&
 			uint64(entry) < uint64(s.VirtualAddress)+vsize {
 			entryInSection = true
+		}
+	}
+	sort.Slice(sectionRanges, func(i, j int) bool { return sectionRanges[i].va < sectionRanges[j].va })
+	for i := 1; i < len(sectionRanges); i++ {
+		prev, cur := sectionRanges[i-1], sectionRanges[i]
+		if cur.va < prev.end {
+			return fmt.Errorf("PE sections %q [0x%x,0x%x) and %q [0x%x,0x%x) overlap in virtual memory",
+				prev.name, prev.va, prev.end, cur.name, cur.va, cur.end)
 		}
 	}
 	if entry == 0 {
@@ -362,6 +386,14 @@ func validatePEWith(path string, exp peExpect) error {
 	}
 	if imageEnd > fileSize {
 		return fmt.Errorf("PE image ends at 0x%x, past the file (%d bytes)", imageEnd, fileSize)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if err := validatePEImports(data); err != nil {
+		return fmt.Errorf("PE import table: %w", err)
 	}
 
 	if len(dataDirectories) <= pe.IMAGE_DIRECTORY_ENTRY_SECURITY {
@@ -380,10 +412,6 @@ func validatePEWith(path string, exp peExpect) error {
 		if secEnd > fileSize {
 			return fmt.Errorf("certificate table [0x%x,0x%x) is outside the file (%d bytes)",
 				security.VirtualAddress, secEnd, fileSize)
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
 		}
 		if err := validateCertificateTable(data, security); err != nil {
 			return err

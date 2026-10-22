@@ -170,7 +170,7 @@ export default function BloodHoundPage() {
   return (
     <PageContainer title={t("bloodhound.title")} subtitle={t("bloodhound.subtitle")}>
 
-      <Card className="px-4 sm:px-5 hover:shadow-lg dark:hover:shadow-xl transition-shadow">
+      <Card className="px-4 sm:px-5 hover:shadow-md transition-shadow">
         <div className="flex items-center gap-x-3 mb-5">
           <IconBadge icon={statusError ? CircleAlert : binaryStatus.uploaded ? CheckCircle : CircleAlert} color={statusError ? "warning" : binaryStatus.uploaded ? "success" : "warning"} size="lg" />
           <div>
@@ -201,7 +201,7 @@ export default function BloodHoundPage() {
         </div>
       </Card>
 
-      <Card className="px-4 sm:px-5 hover:shadow-lg dark:hover:shadow-xl transition-shadow">
+      <Card className="px-4 sm:px-5 hover:shadow-md transition-shadow">
         <div className="flex items-center gap-x-3 mb-5">
           <IconBadge icon={PawPrint} color="primary" size="xl" />
           <div>
@@ -215,7 +215,9 @@ export default function BloodHoundPage() {
             <AgentLoadError message={agentListError} className="mb-2" />
               <Select value={selectedAgent || "placeholder"} onValueChange={(v) => setSelectedAgent(v === "placeholder" || v === null ? "" : v)}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t("bloodhound.select_agent")} />
+                  <SelectValue>
+                    {(value) => (value === "placeholder" ? t("bloodhound.select_agent") : String(value ?? ""))}
+                  </SelectValue>
                 </SelectTrigger>
               <SelectContent>
                 <SelectItem value="placeholder">{t("bloodhound.select_agent")}</SelectItem>
@@ -252,7 +254,7 @@ export default function BloodHoundPage() {
         </div>
       </Card>
 
-      <Card className="px-0 mb-0 hover:shadow-lg dark:hover:shadow-xl transition-shadow">
+      <Card className="px-0 mb-0 hover:shadow-md transition-shadow">
         <div className="flex items-center justify-between px-4 py-3 sm:px-5 sm:py-3.5 border-b border-border">
           <div className="flex items-center gap-3">
             <div className="size-8 bg-secondary rounded-lg flex items-center justify-center">

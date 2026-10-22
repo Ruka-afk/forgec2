@@ -311,10 +311,10 @@ func runGoModTidy(goCmd, workDir string, win7 bool) error {
 // When obfuscate is requested, garble is REQUIRED: falling back to a plain
 // build would silently produce an un-obfuscated implant (a false security
 // promise), so a missing/broken garble fails the build instead.
-func buildAgentBinary(goCmd, workDir, ldflags, outPath string, obfuscate bool, goos, goarch, configBlob, sConfigKey string, win7 bool) error {
+func buildAgentBinary(goCmd, workDir, ldflags, outPath string, obfuscate bool, goos, goarch, configBlob, sConfigKey string, selfCheck, win7 bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), buildCompileTimeout)
 	defer cancel()
-	if err := writeConfigInjectFile(workDir, configBlob, sConfigKey); err != nil {
+	if err := writeConfigInjectFile(workDir, configBlob, sConfigKey, selfCheck); err != nil {
 		return fmt.Errorf("write config inject file: %w", err)
 	}
 	tags := wintunBuildTags(goos, goarch, workDir)

@@ -8,10 +8,11 @@ import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { PageSpinner } from "@/components/ui/spinner";
 import { Card } from "@/components/ui/card";
+import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Activity, Plug } from "lucide-react";
+import { Activity, Info, Plug, Radio } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DataError } from "@/components/ui/data-state";
 import { POLL } from "@/lib/polling";
@@ -28,7 +29,7 @@ import {
 } from "@/lib/listener-health";
 import { HealthSparkline } from "@/components/ui/health-sparkline";
 import { StatusIndicator } from "@/components/ui/status-indicator";
-import { formatTime } from "@/lib/utils";
+import { formatTime, isZeroTime } from "@/lib/utils";
 
 interface ListenerDetail {
   ID?: string;
@@ -153,7 +154,7 @@ export default function ListenerDetailPage() {
   const port = listener.port ?? 8080;
   const isEnabled = listener.enabled === true;
   const notes = listener.notes || "-";
-  const createdAt = listener.created_at || "-";
+  const createdAt = formatTime(listener.created_at);
 
   return (
     <PageContainer title={name} subtitle={`${scheme}://${host}:${port}`}>
@@ -170,7 +171,7 @@ export default function ListenerDetailPage() {
                 label={healthLabel}
                 size="sm"
               />
-              {health.last_probe && (
+              {health.last_probe && !isZeroTime(health.last_probe) && (
                 <span className="font-mono text-micro-sm">
                   {formatTime(health.last_probe)}
                 </span>
@@ -188,8 +189,13 @@ export default function ListenerDetailPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-1">
-          <Card className="p-(--card-spacing)">
-            <h3 className="font-semibold mb-4 text-foreground">{t("listener.info_title")}</h3>
+          <SectionCard
+            title={t("listener.info_title")}
+            icon={Info}
+            tone="muted"
+            headerAccent
+          >
+            <div className="p-(--card-spacing)">
             <div className="space-y-3 text-sm">
               <div><span className="text-muted-foreground">{t("listener.scheme")}</span> <span className="text-foreground">{scheme}</span></div>
               <div><span className="text-muted-foreground">{t("listener.address")}</span> <span className="text-foreground">{host}:{port}</span></div>
@@ -218,7 +224,8 @@ export default function ListenerDetailPage() {
             <div className="mt-6 flex gap-2">
                <Button render={<Link to={`/payload-generator?listener_id=${id}`} />} className="flex-1">{t("listener.generate_implant")}</Button>
             </div>
-          </Card>
+            </div>
+          </SectionCard>
         </div>
 
         <div className="lg:col-span-2">
@@ -240,12 +247,19 @@ export default function ListenerDetailPage() {
       </div>
 
       <div className="mt-8">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-foreground">{t("listener.agents_using")} ({stats.total})</h2>
-          <Link to="/beacons" className="text-sm text-primary hover:text-primary transition-colors">{t("listener.view_all_agents")}</Link>
-        </div>
-
-        <Card className="overflow-hidden">
+        <SectionCard
+          title={t("listener.agents_using")}
+          icon={Radio}
+          tone="info"
+          count={stats.total}
+          headerAccent
+          action={
+            <Link to="/beacons" className="text-sm text-primary hover:underline transition-colors">
+              {t("listener.view_all_agents")}
+            </Link>
+          }
+        >
+          <div className="p-(--card-spacing)">
           <Table>
             <TableHeader>
               <TableRow>
@@ -267,7 +281,7 @@ export default function ListenerDetailPage() {
                       <TableCell className="py-3 px-6 font-medium text-foreground">{a.hostname || "-"}</TableCell>
                       <TableCell className="py-3 px-4 font-mono text-xs text-muted-foreground">{a.ip || "-"}</TableCell>
                       <TableCell className="py-3 px-4 text-xs text-muted-foreground">{a.os || "-"}/{a.arch || "-"}</TableCell>
-                      <TableCell className="py-3 px-4 text-xs text-muted-foreground">{a.last_seen || "-"}</TableCell>
+                      <TableCell className="py-3 px-4 text-xs text-muted-foreground">{formatTime(a.last_seen)}</TableCell>
                       <TableCell className="py-3 px-4 text-center">
                         {status === "online" ? (
                           <Badge variant="default">{t("listener.online")}</Badge>
@@ -288,7 +302,8 @@ export default function ListenerDetailPage() {
               )}
             </TableBody>
           </Table>
-        </Card>
+          </div>
+        </SectionCard>
       </div>
     </PageContainer>
   );

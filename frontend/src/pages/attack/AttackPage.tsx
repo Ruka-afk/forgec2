@@ -9,11 +9,12 @@ import { useAgentList } from "@/lib/hooks/useAgentList";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { POLL } from "@/lib/polling";
 import { Card } from "@/components/ui/card";
+import { SectionCard } from "@/components/ui/section-card";
 import { Banner } from "@/components/ui/banner";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Check, CheckCircle, ChevronDown, CircleX, Zap, AlertTriangle } from "lucide-react";
+import { Check, CheckCircle, ChevronDown, CircleX, Grid3x3, Zap, AlertTriangle } from "lucide-react";
 import { DataError } from "@/components/ui/data-state";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
@@ -154,7 +155,9 @@ export default function AttackPage() {
     <PageContainer title={t("attack.title")} subtitle={t("attack.subtitle")} actions={<>
         <Select value={selectedAgent || "all"} onValueChange={(v) => setSelectedAgent(v === "all" ? "" : v ?? "")}>
           <SelectTrigger className="max-w-[250px]">
-            <SelectValue placeholder={t("attack.all_agents")} />
+            <SelectValue>
+              {(value) => (value === "all" ? t("attack.all_agents") : String(value ?? ""))}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("attack.all_agents")}</SelectItem>
@@ -344,17 +347,16 @@ function PhaseCoverageCard() {
   const maxCoverage = Math.max(...phases.map((p) => p.campaigns_covered), 1);
 
   return (
-    <Card className="p-(--card-spacing)">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h3 className="text-lg font-semibold text-foreground">
-            <Zap className="size-4" />{t("attack.kill_chain_title")}
-          </h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {t("attack.kill_chain_subtitle")}
-          </p>
-        </div>
-      </div>
+    <SectionCard
+      title={t("attack.kill_chain_title")}
+      icon={Zap}
+      tone="warning"
+      headerAccent
+    >
+      <div className="p-(--card-spacing)">
+      <p className="text-xs text-muted-foreground mb-3">
+        {t("attack.kill_chain_subtitle")}
+      </p>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
         {KILL_CHAIN_PHASES.map((phase) => {
           const found = phases.find((p) => p.phase === phase);
@@ -388,7 +390,8 @@ function PhaseCoverageCard() {
           );
         })}
       </div>
-    </Card>
+      </div>
+    </SectionCard>
   );
 }
 
@@ -451,9 +454,12 @@ function UsageHeatmapCard() {
   (data?.cells || []).forEach((c) => lookup.set(`${c.date}|${c.tactic}`, c.count));
 
   return (
-    <Card>
-      <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2 flex-wrap">
-        <h3 className="text-sm font-semibold text-foreground">{t("attack.heatmap_title")}</h3>
+    <SectionCard
+      title={t("attack.heatmap_title")}
+      icon={Grid3x3}
+      tone="info"
+      headerAccent
+      action={
         <Select value={range} onValueChange={(v) => v && setRange(v)}>
           <SelectTrigger className="w-28" aria-label={t("attack.heatmap_range")}>
             <SelectValue />
@@ -464,8 +470,9 @@ function UsageHeatmapCard() {
             <SelectItem value="90d">90d</SelectItem>
           </SelectContent>
         </Select>
-      </div>
-      <div className="p-4">
+      }
+    >
+      <div className="p-(--card-spacing)">
         {loading ? (
           <PageSpinner />
         ) : error && !data ? (
@@ -526,6 +533,6 @@ function UsageHeatmapCard() {
           </>
         )}
       </div>
-    </Card>
+    </SectionCard>
   );
 }

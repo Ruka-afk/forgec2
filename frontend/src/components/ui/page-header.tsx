@@ -1,23 +1,29 @@
 
 import { cn } from "@/lib/utils";
 
-export function PageHeader({ title, subtitle, eyebrow, icon, meta, children, className }: {
+export function PageHeader({ title, subtitle, eyebrow, icon, meta, breadcrumb, children, className }: {
   title: React.ReactNode;
   subtitle?: React.ReactNode;
   eyebrow?: React.ReactNode;
   icon?: React.ReactNode;
   meta?: React.ReactNode;
+  /** Route trail rendered above the title; replaces the old shell breadcrumb bar. */
+  breadcrumb?: React.ReactNode;
   children?: React.ReactNode;
   className?: string;
 }) {
   return (
-    <div className={cn(
-      "relative flex flex-col gap-4 border-b border-border/75 pb-4 before:absolute before:bottom-[-1px] before:left-0 before:h-0.5 before:w-12 before:rounded-full before:bg-primary sm:flex-row sm:items-end sm:justify-between sm:pb-5",
-      className,
-    )}>
+    <div
+      data-slot="page-header"
+      className={cn(
+        "relative flex flex-col gap-4 border-b border-border/70 pb-4 sm:flex-row sm:items-start sm:justify-between sm:pb-5",
+        className,
+      )}
+    >
       <div className="flex min-w-0 max-w-full items-center gap-x-3.5">
-        {icon && <div className="icon-well size-10 border border-primary/15 bg-primary/8 text-primary shadow-sm">{icon}</div>}
+        {icon && <div className="icon-well size-10 border border-border/80 bg-muted/45 text-foreground">{icon}</div>}
         <div className="min-w-0">
+          {breadcrumb && <div className="mb-1.5 min-w-0">{breadcrumb}</div>}
           {eyebrow !== undefined && eyebrow !== null && (
             <div className="mono-eyebrow text-muted-foreground mb-1">{eyebrow}</div>
           )}
@@ -29,7 +35,7 @@ export function PageHeader({ title, subtitle, eyebrow, icon, meta, children, cla
           </div>
         </div>
       </div>
-      {children && <div className="flex w-full max-w-full min-w-0 shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:justify-end sm:pb-0.5">{children}</div>}
+      {children && <div className="flex w-full max-w-full min-w-0 shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:justify-end sm:pt-1">{children}</div>}
     </div>
   );
 }

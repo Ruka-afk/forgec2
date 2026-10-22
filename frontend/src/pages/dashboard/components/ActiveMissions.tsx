@@ -11,8 +11,10 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusIndicator } from "@/components/ui/status-indicator";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { CardHeader } from "@/components/ui/card-header";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { Target } from "lucide-react";
 
 interface Mission {
@@ -83,14 +85,8 @@ export default function ActiveMissions({ className = "" }: { className?: string 
   const active = missions.slice(0, MAX_MISSIONS);
 
   return (
-    <Card className={className}>
-      <CardHeader className="px-5 py-3.5 border-b border-border flex-row items-center justify-between">
-        <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <Target className="size-4 text-primary" aria-hidden="true" />
-          {t("dashboard.missions")}
-        </CardTitle>
-        <Badge variant={active.length > 0 ? "success" : "secondary"}>{active.length}</Badge>
-      </CardHeader>
+    <Card className={cn("gap-0 overflow-hidden py-0", className)}>
+      <CardHeader icon={Target} title={t("dashboard.missions")} count={active.length} />
       {error ? (
         <div className="p-(--card-spacing)">
           <ErrorState title={t("common.error")} message={error} />

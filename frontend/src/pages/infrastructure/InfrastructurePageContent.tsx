@@ -12,7 +12,8 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { Spinner } from "@/components/ui/spinner";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { CardHeader } from "@/components/ui/card-header";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -155,11 +156,13 @@ export default function InfrastructurePage() {
         </TabsList>
 
         <TabsContent value="config" className="mt-0">
-          <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
-            <CardHeader className="px-(--card-spacing) py-(--card-spacing) border-b">
-              <div className="size-8 bg-primary/10 dark:bg-primary/20 rounded-lg flex items-center justify-center text-primary"><Plug className="size-4" /></div>
-              <div><CardTitle>{t("infra.select")} Listener</CardTitle><CardDescription>{t("infra.select_listener_hint")}</CardDescription></div>
-            </CardHeader>
+          <Card className="gap-0 overflow-hidden py-0 shadow-sm hover:shadow-md transition-shadow duration-200">
+            <CardHeader
+              icon={Plug}
+              tone="primary"
+              title={<>{t("infra.select")} Listener</>}
+              description={t("infra.select_listener_hint")}
+            />
             <CardContent className="p-(--card-spacing)">
               <Select value={selectedListener} onValueChange={(v) => setSelectedListener(v ?? "")}>
                 <SelectTrigger className="max-w-md">
@@ -180,11 +183,13 @@ export default function InfrastructurePage() {
             </CardContent>
           </Card>
 
-          <Card className="overflow-hidden">
-            <CardHeader className="px-(--card-spacing) py-(--card-spacing) border-b">
-              <div className="size-8 bg-success/15 rounded-lg flex items-center justify-center text-success-ink"><Globe className="size-4" /></div>
-              <div><CardTitle>{t("infra.domain_params")}</CardTitle><CardDescription>{t("infra.domain_desc")}</CardDescription></div>
-            </CardHeader>
+          <Card className="gap-0 overflow-hidden py-0">
+            <CardHeader
+              icon={Globe}
+              tone="success"
+              title={t("infra.domain_params")}
+              description={t("infra.domain_desc")}
+            />
             <CardContent className="p-(--card-spacing) space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -219,11 +224,13 @@ export default function InfrastructurePage() {
             </CardContent>
           </Card>
 
-          <Card className="overflow-hidden">
-            <CardHeader className="px-(--card-spacing) py-(--card-spacing) border-b">
-              <div className="size-8 bg-warning/15 rounded-lg flex items-center justify-center text-warning-ink"><FileUp className="size-4" /></div>
-              <div><CardTitle>{t("infra.generate_config")}</CardTitle><CardDescription>{t("infra.generate_desc")}</CardDescription></div>
-            </CardHeader>
+          <Card className="gap-0 overflow-hidden py-0">
+            <CardHeader
+              icon={FileUp}
+              tone="warning"
+              title={t("infra.generate_config")}
+              description={t("infra.generate_desc")}
+            />
             <CardContent className="p-(--card-spacing)">
               <div className="flex flex-wrap gap-2 mb-4">
                 <Button onClick={() => generateConfig("nginx")} className="bg-success hover:bg-success text-success-foreground">
@@ -260,14 +267,18 @@ export default function InfrastructurePage() {
         <TabsContent value="redirectors" className="mt-0">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2">
-              <Card className="overflow-hidden">
-                <CardHeader className="px-(--card-spacing) py-(--card-spacing) border-b">
-                  <div className="size-8 bg-primary/10 dark:bg-primary/20 rounded-lg flex items-center justify-center text-primary"><Share2 className="size-4" /></div>
-                  <div><CardTitle>{t("infra.redirectors")}</CardTitle><CardDescription>{t("infra.redirectors_desc")}</CardDescription></div>
-                  <Button onClick={() => { setEditingRd(null); setRdName(""); setRdHost(""); setRdType("nginx"); setRdSSHUser("root"); setRdSSHPort(22); setRdSSHKey(""); setRdSSHPassword(""); setRdConfig(""); }} className="ml-auto">
-                    <Plus className="size-4" /> {t("infra.add_redirector")}
-                  </Button>
-                </CardHeader>
+              <Card className="gap-0 overflow-hidden py-0">
+                <CardHeader
+                  icon={Share2}
+                  tone="primary"
+                  title={t("infra.redirectors")}
+                  description={t("infra.redirectors_desc")}
+                  action={
+                    <Button onClick={() => { setEditingRd(null); setRdName(""); setRdHost(""); setRdType("nginx"); setRdSSHUser("root"); setRdSSHPort(22); setRdSSHKey(""); setRdSSHPassword(""); setRdConfig(""); }}>
+                      <Plus className="size-4" /> {t("infra.add_redirector")}
+                    </Button>
+                  }
+                />
                 <CardContent className="p-(--card-spacing)">
                   {redirectors.length === 0 ? (
                       <EmptyState icon={Share2} title={t("infra.no_redirectors")} message={t("infra.no_redirectors_hint")} />
@@ -319,11 +330,12 @@ export default function InfrastructurePage() {
             </div>
 
             <div>
-              <Card className="overflow-hidden">
-                <CardHeader className="px-(--card-spacing) py-(--card-spacing) border-b">
-                  <div className="size-8 bg-success/15 rounded-lg flex items-center justify-center text-success-ink"><Server className="size-4" /></div>
-                  <div><CardTitle>{editingRd ? t("infra.edit_redirector") : t("infra.new_redirector")}</CardTitle></div>
-                </CardHeader>
+              <Card className="gap-0 overflow-hidden py-0">
+                <CardHeader
+                  icon={Server}
+                  tone="success"
+                  title={editingRd ? t("infra.edit_redirector") : t("infra.new_redirector")}
+                />
                 <CardContent className="p-(--card-spacing) space-y-4">
                   <div>
                     <Label className="text-xs">{t("common.name")}</Label>
@@ -437,11 +449,13 @@ export default function InfrastructurePage() {
         </TabsContent>
 
         <TabsContent value="acme" className="mt-0">
-        <Card className="overflow-hidden">
-          <CardHeader className="px-(--card-spacing) py-(--card-spacing) border-b">
-            <div className="size-8 bg-info/15 rounded-lg flex items-center justify-center text-info-ink"><Award className="size-4" /></div>
-            <div><CardTitle>{t("infra.acme_title")}</CardTitle><CardDescription>{t("infra.acme_desc")}</CardDescription></div>
-          </CardHeader>
+        <Card className="gap-0 overflow-hidden py-0">
+          <CardHeader
+            icon={Award}
+            tone="info"
+            title={t("infra.acme_title")}
+            description={t("infra.acme_desc")}
+          />
           <CardContent className="p-(--card-spacing) space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
@@ -477,11 +491,13 @@ export default function InfrastructurePage() {
       </TabsContent>
 
       <TabsContent value="export" className="mt-0">
-        <Card className="overflow-hidden">
-          <CardHeader className="px-(--card-spacing) py-(--card-spacing) border-b">
-            <div className="size-8 bg-primary/10 rounded-lg flex items-center justify-center text-primary"><FileUp className="size-4" /></div>
-            <div><CardTitle>{t("infra.c2_profile_export")}</CardTitle><CardDescription>{t("infra.c2_profile_export_desc")}</CardDescription></div>
-          </CardHeader>
+        <Card className="gap-0 overflow-hidden py-0">
+          <CardHeader
+            icon={FileUp}
+            tone="primary"
+            title={t("infra.c2_profile_export")}
+            description={t("infra.c2_profile_export_desc")}
+          />
           <CardContent className="p-(--card-spacing) space-y-4">
             <div className="mb-4">
               <Label className="text-xs mb-2 block">{t("infra.export_format")}</Label>

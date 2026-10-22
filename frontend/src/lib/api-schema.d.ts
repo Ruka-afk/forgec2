@@ -9084,7 +9084,8 @@ export interface paths {
         /** Agent process list */
         get: operations["get__api_agents_id_processes"];
         put?: never;
-        post?: never;
+        /** Queue a fresh agent process snapshot */
+        post: operations["post__api_agents_id_processes"];
         delete?: never;
         options?: never;
         head?: never;
@@ -23240,6 +23241,26 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    post__api_agents_id_processes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Process collection task queued */
             200: {
                 headers: {
                     [name: string]: unknown;

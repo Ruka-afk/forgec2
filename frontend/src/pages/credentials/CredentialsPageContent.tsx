@@ -10,6 +10,7 @@ import { useForm } from "@/lib/hooks/useForm";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { FieldError } from "@/components/ui/field-error";
 import { PageContainer } from "@/components/ui/page-container";
+import { PageToolbar } from "@/components/ui/page-toolbar";
 import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Pagination } from "@/components/ui/pagination";
 import { DataState } from "@/components/ui/data-state";
@@ -27,7 +28,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
-import { Download, Filter, Lock, Plus, Tag, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Download, Lock, Plus, RefreshCw, Tag, ShieldCheck, AlertTriangle } from "lucide-react";
 import { CRED_TYPES, TYPE_BADGE_VARIANT, type VaultEntry } from "./components/types";
 import { useCredentialsData } from "./components/useCredentialsData";
 import { CredentialRow } from "./components/CredentialRow";
@@ -43,8 +44,8 @@ export default function CredentialsPage() {
   const { data, loading, error, reload, loadData } = useCredentialsData();
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
-  const [confirmedFilter, setConfirmedFilter] = useState("");
-  const [lifecycleFilter, setLifecycleFilter] = useState("");
+  const [confirmedFilter, setConfirmedFilter] = useState("all");
+  const [lifecycleFilter, setLifecycleFilter] = useState("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -359,9 +360,9 @@ export default function CredentialsPage() {
 
   const handleSearchChange = (value: string) => { setSearchQuery(value); setPage(1); };
   const handleTypeFilterChange = (value: string | null) => { setTypeFilter(value ?? ""); setPage(1); };
-  const handleConfirmedFilterChange = (value: string | null) => { setConfirmedFilter(value ?? ""); setPage(1); };
-  const handleLifecycleFilterChange = (value: string | null) => { setLifecycleFilter(value ?? ""); setPage(1); };
-  const handleClearFilters = () => { setSearchQuery(""); setTypeFilter("all"); setConfirmedFilter(""); setLifecycleFilter(""); setPage(1); };
+  const handleConfirmedFilterChange = (value: string | null) => { setConfirmedFilter(value ?? "all"); setPage(1); };
+  const handleLifecycleFilterChange = (value: string | null) => { setLifecycleFilter(value ?? "all"); setPage(1); };
+  const handleClearFilters = () => { setSearchQuery(""); setTypeFilter("all"); setConfirmedFilter("all"); setLifecycleFilter("all"); setPage(1); };
 
   const stats = useMemo(() => ({
     total: data?.VaultCount || 0,
@@ -436,75 +437,16 @@ export default function CredentialsPage() {
         </Card>
       </div>
 
-      <Card className="p-(--card-spacing)">
-        <div className="flex flex-wrap items-center gap-3">
-          <SearchInput
-            value={searchQuery}
-            onChange={handleSearchChange}
-            onClear={() => { setSearchQuery(""); setPage(1); }}
-            placeholder={t("cred.search_placeholder")}
-            className="flex-1 min-w-[200px]"
-            label={t("common.search")}
-          />
-          <Select value={typeFilter} onValueChange={handleTypeFilterChange}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CRED_TYPES.map(ct => (
-                <SelectItem key={ct} value={ct}>{ct === "all" ? t("cred.filter_all_types") : ct.charAt(0).toUpperCase() + ct.slice(1)}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={confirmedFilter} onValueChange={handleConfirmedFilterChange}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="">{t("cred.filter_all_status")}</SelectItem>
-              <SelectItem value="true">{t("cred.filter_confirmed")}</SelectItem>
-              <SelectItem value="false">{t("cred.filter_unconfirmed")}</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={lifecycleFilter} onValueChange={handleLifecycleFilterChange}>
-            <SelectTrigger className="w-[130px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="">{t("cred.filter_all_lifecycle")}</SelectItem>
-              <SelectItem value="fresh">{t("cred.lifecycle_fresh")}</SelectItem>
-              <SelectItem value="verified">{t("cred.lifecycle_verified")}</SelectItem>
-              <SelectItem value="used">{t("cred.lifecycle_used")}</SelectItem>
-              <SelectItem value="stale">{t("cred.lifecycle_stale")}</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button
-            onClick={() => reload()}
-            size="lg"
-          >
-            <Filter className="size-4" />{t("cred.filter")}
-          </Button>
-          <Button
-            onClick={handleClearFilters}
-            variant="outline"
-            size="lg"
-          >
-            {t("cred.clear")}
-          </Button>
-          {selectedIds.size > 0 && (
-            <Button
-              onClick={() => setShowBatchModal(true)}
-              size="lg"
-              className="gap-x-2"
-            >
+      <PageToolbar
+        sticky
+        primary={selectedIds.size > 0 ? (
+          <>
+            <Button onClick={() => setShowBatchModal(true)} className="gap-x-2">
               <Tag className="size-4" />
               <span>{t("cred.batch_tags")} ({selectedIds.size})</span>
             </Button>
-          )}
-          {selectedIds.size > 0 && (
             <Button
               onClick={handleBatchVerify}
-              size="lg"
               variant="secondary"
               disabled={verifying}
               className="gap-x-2"
@@ -512,9 +454,84 @@ export default function CredentialsPage() {
               <ShieldCheck className={`size-4 ${verifying ? "animate-pulse" : ""}`} />
               <span>{verifying ? t("cred.verifying") : `${t("cred.batch_verify")} (${selectedIds.size})`}</span>
             </Button>
-          )}
-        </div>
-      </Card>
+          </>
+        ) : undefined}
+      >
+        <SearchInput
+          value={searchQuery}
+          onChange={handleSearchChange}
+          onClear={() => { setSearchQuery(""); setPage(1); }}
+          placeholder={t("cred.search_placeholder")}
+          className="w-full sm:max-w-xs"
+          label={t("common.search")}
+        />
+        <Select value={typeFilter} onValueChange={handleTypeFilterChange}>
+          <SelectTrigger className="w-full sm:w-[140px]" aria-label={t("cred.col_type")}>
+            <SelectValue>
+              {(value) => (!value || value === "all")
+                ? t("cred.filter_all_types")
+                : String(value).charAt(0).toUpperCase() + String(value).slice(1)}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {CRED_TYPES.map(ct => (
+              <SelectItem key={ct} value={ct}>{ct === "all" ? t("cred.filter_all_types") : ct.charAt(0).toUpperCase() + ct.slice(1)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={confirmedFilter} onValueChange={handleConfirmedFilterChange}>
+          <SelectTrigger className="w-full sm:w-[140px]" aria-label={t("cred.col_confirmed")}>
+            <SelectValue>
+              {(value) => value === "true"
+                ? t("cred.filter_confirmed")
+                : value === "false"
+                  ? t("cred.filter_unconfirmed")
+                  : t("cred.filter_all_status")}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("cred.filter_all_status")}</SelectItem>
+            <SelectItem value="true">{t("cred.filter_confirmed")}</SelectItem>
+            <SelectItem value="false">{t("cred.filter_unconfirmed")}</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={lifecycleFilter} onValueChange={handleLifecycleFilterChange}>
+          <SelectTrigger className="w-full sm:w-[150px]" aria-label={t("cred.filter_all_lifecycle")}>
+            <SelectValue>
+              {(value) => {
+                switch (value) {
+                  case "fresh": return t("cred.lifecycle_fresh");
+                  case "verified": return t("cred.lifecycle_verified");
+                  case "used": return t("cred.lifecycle_used");
+                  case "stale": return t("cred.lifecycle_stale");
+                  default: return t("cred.filter_all_lifecycle");
+                }
+              }}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("cred.filter_all_lifecycle")}</SelectItem>
+            <SelectItem value="fresh">{t("cred.lifecycle_fresh")}</SelectItem>
+            <SelectItem value="verified">{t("cred.lifecycle_verified")}</SelectItem>
+            <SelectItem value="used">{t("cred.lifecycle_used")}</SelectItem>
+            <SelectItem value="stale">{t("cred.lifecycle_stale")}</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => reload()}
+          aria-label={t("common.refresh")}
+          title={t("common.refresh")}
+        >
+          <RefreshCw className="size-4" />
+        </Button>
+        {(searchQuery || typeFilter !== "all" || confirmedFilter !== "all" || lifecycleFilter !== "all") && (
+          <Button variant="ghost" onClick={handleClearFilters}>
+            {t("cred.clear")}
+          </Button>
+        )}
+      </PageToolbar>
 
       {data?.AllTags && data.AllTags.length > 0 && (
         <Card className="p-(--card-spacing)">

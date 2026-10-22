@@ -1,10 +1,12 @@
 package payload
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 )
 
@@ -147,12 +149,20 @@ func BuiltinTemplates() []ArtifactTemplate {
 func GenerateTimestamp(opt TimestampOption, custom string) (uint32, error) {
 	switch opt {
 	case TSRandom:
-		max := big.NewInt(4102444800)
-		n, err := rand.Int(rand.Reader, max)
+		// Linker timestamps are build times, not arbitrary 32-bit values. A
+		// value in the future (the old 2019..2100 range) or one older than
+		// this ecosystem is an obvious fingerprint, so pick a plausible past
+		// day and leave a small margin for timezone/clock skew.
+		const floor = int64(1546300800) // 2019-01-01T00:00:00Z
+		ceiling := time.Now().Add(-24 * time.Hour).Unix()
+		if ceiling <= floor {
+			return uint32(floor), nil
+		}
+		n, err := rand.Int(rand.Reader, big.NewInt(ceiling-floor+1))
 		if err != nil {
 			return 0, err
 		}
-		return uint32(n.Int64()), nil
+		return uint32(floor + n.Int64()), nil
 	case TSKeep:
 		return 0, nil
 	case TSCustom:
@@ -180,25 +190,28 @@ func ApplyTimestamp(data []byte, ts uint32) {
 	}
 }
 
-// ApplyPESectionNames rewrites the section header names of a PE image.
+// ApplyPESectionNames rewrites the section header names of a PE image. It
+// matches sections by their resolved name (.text, .data, .rdata, .reloc)
+// rather than by table index: the Go linker does not emit every section in
+// every binary, and a hardcoded index would rename .pdata or .tls instead.
 // The section table starts after the optional header, whose size must be read
 // from IMAGE_FILE_HEADER (a hardcoded offset silently fails on PE32+ images).
 func ApplyPESectionNames(data []byte, sections PESectionConfig) {
 	if len(data) < 0x100 || data[0] != 'M' || data[1] != 'Z' {
 		return
 	}
-	peOffset := int(data[0x3C]) | int(data[0x3D])<<8
+	peOffset := int(binary.LittleEndian.Uint32(data[0x3C:0x40]))
 	if peOffset+24 >= len(data) {
 		return
 	}
 	if data[peOffset] != 'P' || data[peOffset+1] != 'E' {
 		return
 	}
-	numSections := int(data[peOffset+6]) | int(data[peOffset+7])<<8
+	numSections := int(binary.LittleEndian.Uint16(data[peOffset+6 : peOffset+8]))
 	if numSections <= 0 || numSections > 96 {
 		return
 	}
-	sizeOptHeader := int(data[peOffset+20]) | int(data[peOffset+21])<<8
+	sizeOptHeader := int(binary.LittleEndian.Uint16(data[peOffset+20 : peOffset+22]))
 	if sizeOptHeader == 0 {
 		return
 	}
@@ -206,21 +219,73 @@ func ApplyPESectionNames(data []byte, sections PESectionConfig) {
 	if sectionOffset+40*numSections > len(data) {
 		return
 	}
-	names := []string{sections.Text, sections.Data, sections.Rdata, sections.Reloc}
-	max := numSections
-	if len(names) < max {
-		max = len(names)
+	byName := map[string]string{
+		".text":  sections.Text,
+		".data":  sections.Data,
+		".rdata": sections.Rdata,
+		".reloc": sections.Reloc,
 	}
-	for i := 0; i < max; i++ {
-		name := names[i]
-		if name == "" {
+	for i := 0; i < numSections; i++ {
+		off := sectionOffset + i*40
+		resolved := peSectionName(data, peOffset, off)
+		name, ok := byName[strings.ToLower(resolved)]
+		if !ok || name == "" {
 			continue
 		}
-		off := sectionOffset + i*40
 		b := make([]byte, 8)
 		copy(b, name)
 		copy(data[off:off+8], b)
+		// Only the first section of a given name is renamed; duplicate
+		// .text/.data sections are unusual but must not all collapse to the
+		// same configured name.
+		delete(byName, strings.ToLower(resolved))
 	}
+}
+
+// peSectionName resolves a section header name, following the COFF long-name
+// convention (/nnn -> offset into the string table after the symbol table).
+// The Go linker and garble both emit long names this way when they randomize
+// sections, so reading only the 8-byte field would defeat name-based matching.
+func peSectionName(data []byte, peOffset, hdrOff int) string {
+	raw := data[hdrOff : hdrOff+8]
+	if raw[0] != '/' {
+		return strings.TrimRight(string(raw), "\x00 ")
+	}
+	n := 0
+	digits := 0
+	for i := 1; i < 8; i++ {
+		if raw[i] < '0' || raw[i] > '9' {
+			break
+		}
+		n = n*10 + int(raw[i]-'0')
+		digits++
+	}
+	if digits == 0 {
+		return strings.TrimRight(string(raw), "\x00 ")
+	}
+	symPtr := int(binary.LittleEndian.Uint32(data[peOffset+12 : peOffset+16]))
+	numSym := int(binary.LittleEndian.Uint32(data[peOffset+16 : peOffset+20]))
+	if symPtr <= 0 || symPtr > len(data) {
+		return strings.TrimRight(string(raw), "\x00 ")
+	}
+	strOff := symPtr + 18*numSym
+	if strOff < symPtr || strOff+4 > len(data) {
+		return strings.TrimRight(string(raw), "\x00 ")
+	}
+	strSize := int(binary.LittleEndian.Uint32(data[strOff : strOff+4]))
+	if strSize < 4 || strOff+strSize > len(data) || n < 4 || n >= strSize {
+		return strings.TrimRight(string(raw), "\x00 ")
+	}
+	start := strOff + n
+	end := strOff + strSize
+	if start >= end {
+		return strings.TrimRight(string(raw), "\x00 ")
+	}
+	b := data[start:end]
+	if i := bytes.IndexByte(b, 0); i >= 0 {
+		b = b[:i]
+	}
+	return string(b)
 }
 
 // (AddBenignImports lives in artifact_imports.go)

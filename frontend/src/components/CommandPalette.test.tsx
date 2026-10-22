@@ -64,10 +64,9 @@ describe("CommandPalette", () => {
     fireEvent.change(input, { target: { value: "report" } });
     expect(screen.getByText("nav.report")).toBeTruthy();
     expect(screen.queryByText("nav.dashboard")).toBeNull();
-    // "bloodhound" is deliberately hidden from discovery
-    // (navigation.ts discoverable: false) — the palette must not surface it.
+    // Every routed page is discoverable now (lab/admin entries included).
     fireEvent.change(input, { target: { value: "bloodhound" } });
-    expect(screen.queryByText("nav.bloodhound")).toBeNull();
+    expect(screen.getByText("nav.bloodhound")).toBeTruthy();
     fireEvent.change(input, { target: { value: "kerberoast" } });
     expect(screen.getByText(/no results/i)).toBeTruthy();
   });

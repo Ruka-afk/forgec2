@@ -9802,6 +9802,20 @@ paths:
       responses:
         '200':
           description: OK
+    post:
+      tags: [Agents]
+      summary: Queue a fresh agent process snapshot
+      operationId: post__api_agents_id_processes
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Process collection task queued
   /api/agents/{id}/process-tree:
     get:
       tags: [Agents]

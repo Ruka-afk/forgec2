@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CopyButton } from "@/components/ui/copy-button";
-import type { BinaryForm, UnixForm, PS1Form, StagerForm, ShellcodeForm, DonutForm, BinaryVariant, UnixVariant, StagerVariant, AgentModuleInfo } from "@/types/generate";
+import type { BinaryForm, UnixForm, PS1Form, StagerForm, ShellcodeForm, DonutForm, BinaryVariant, UnixVariant, StagerVariant, AgentModuleInfo, BuildSignature } from "@/types/generate";
 import { AppWindow, Apple, Binary, CheckCircle2, Disc, Download, HardDrive, Info, Package, PackageOpen, Puzzle, Terminal, Wand2 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -103,6 +103,7 @@ interface BinaryPanelProps {
   setForm: React.Dispatch<React.SetStateAction<BinaryForm>>;
   busy: boolean;
   result: ReactNode;
+  signature?: BuildSignature;
   onGenerate: () => void;
   canGenerate?: boolean;
   agentModules?: AgentModuleInfo[];
@@ -113,7 +114,7 @@ const VARIANT_CONFIG: Record<BinaryVariant, { tint: string; icon: ReactNode; tit
   dll: { tint: "bg-destructive/10 text-destructive-ink", icon: <Puzzle className="size-5" />, titleKey: "generate.panel.dll_title", subtitleKey: "generate.panel.dll_subtitle", btnKey: "generate.panel.generate_dll", showP2P: false },
 };
 
-export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setForm, busy, result, onGenerate, canGenerate = true, agentModules }: BinaryPanelProps) {
+export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setForm, busy, result, signature, onGenerate, canGenerate = true, agentModules }: BinaryPanelProps) {
   const { t } = useI18n();
   const cfg = VARIANT_CONFIG[variant];
   const id = `binary-${variant}`;
@@ -129,7 +130,7 @@ export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setF
           <Button type="button" onClick={onGenerate} disabled={busy || !canGenerate} title={!canGenerate ? t("generate.toast.select_listener_first") : undefined} className={BTN_CLASS}>
             {busy ? <><Spinner /> {t("generate.panel.generating")}</> : <><Download className="size-4" /> {t(cfg.btnKey)}</>}
           </Button>
-          <BuildResult busy={busy} result={result} />
+          <BuildResult busy={busy} result={result} signature={signature} />
         </>
       }
     >
@@ -279,10 +280,10 @@ export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setF
       </div>
       <AdvancedSection title={t("generate.panel.pe_options") || "PE Tweaks"}>
         <div className="grid grid-cols-2 gap-2">
-          <div><FieldLabel>Timestamp</FieldLabel><Select value={form.pe_timestamp || "zero"} onValueChange={(val) => val != null && setForm({ ...form, pe_timestamp: val })}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="zero">Zero (OPSEC)</SelectItem><SelectItem value="random">Random</SelectItem><SelectItem value="keep">Keep Go</SelectItem></SelectContent></Select></div>
-          <div><FieldLabel>Section names</FieldLabel><Select value={form.pe_sections || "default"} onValueChange={(val) => val != null && setForm({ ...form, pe_sections: val })}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="default">Default</SelectItem><SelectItem value="random">Random</SelectItem></SelectContent></Select></div>
-          <div><FieldLabel>Benign imports</FieldLabel><Select value={form.pe_imports || "none"} onValueChange={(val) => val != null && setForm({ ...form, pe_imports: val })}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem><SelectItem value="kernel32+user32">kernel32+user32</SelectItem></SelectContent></Select></div>
-          <div><FieldLabel>Manifest</FieldLabel><Select value={form.pe_manifest || "default"} onValueChange={(val) => val != null && setForm({ ...form, pe_manifest: val })}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="default">Default Go</SelectItem><SelectItem value="blend">Blend (dpiAware+Win10)</SelectItem></SelectContent></Select></div>
+          <div><FieldLabel>Timestamp</FieldLabel><Select value={form.pe_timestamp || "zero"} onValueChange={(val) => val != null && setForm({ ...form, pe_timestamp: val })}><SelectTrigger className="w-full"><SelectValue>{(v) => (v === "zero" ? "Zero (OPSEC)" : v === "random" ? "Random" : v === "keep" ? "Keep Go" : String(v ?? ""))}</SelectValue></SelectTrigger><SelectContent><SelectItem value="zero">Zero (OPSEC)</SelectItem><SelectItem value="random">Random</SelectItem><SelectItem value="keep">Keep Go</SelectItem></SelectContent></Select></div>
+          <div><FieldLabel>Section names</FieldLabel><Select value={form.pe_sections || "default"} onValueChange={(val) => val != null && setForm({ ...form, pe_sections: val })}><SelectTrigger className="w-full"><SelectValue>{(v) => (v === "default" ? "Default" : v === "random" ? "Random" : String(v ?? ""))}</SelectValue></SelectTrigger><SelectContent><SelectItem value="default">Default</SelectItem><SelectItem value="random">Random</SelectItem></SelectContent></Select></div>
+          <div><FieldLabel>Benign imports</FieldLabel><Select value={form.pe_imports || "none"} onValueChange={(val) => val != null && setForm({ ...form, pe_imports: val })}><SelectTrigger className="w-full"><SelectValue>{(v) => (v === "none" ? "None" : String(v ?? ""))}</SelectValue></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem><SelectItem value="kernel32+user32">kernel32+user32</SelectItem></SelectContent></Select></div>
+          <div><FieldLabel>Manifest</FieldLabel><Select value={form.pe_manifest || "default"} onValueChange={(val) => val != null && setForm({ ...form, pe_manifest: val })}><SelectTrigger className="w-full"><SelectValue>{(v) => (v === "default" ? "Default Go" : v === "blend" ? "Blend (dpiAware+Win10)" : String(v ?? ""))}</SelectValue></SelectTrigger><SelectContent><SelectItem value="default">Default Go</SelectItem><SelectItem value="blend">Blend (dpiAware+Win10)</SelectItem></SelectContent></Select></div>
         </div>
       </AdvancedSection>
       <AdvancedSection title={t("generate.panel.signing") || "Authenticode Signing"}>

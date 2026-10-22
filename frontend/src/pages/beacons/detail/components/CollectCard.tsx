@@ -1,11 +1,16 @@
 import { memo, type ReactNode } from "react";
 import { Card } from "@/components/ui/card";
+import { CardHeader } from "@/components/ui/card-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { CopyButton } from "@/components/ui/copy-button";
+import type { Hue } from "@/lib/ui/statusStyles";
+import type { LucideIcon } from "lucide-react";
 
 interface CollectCardProps {
   title: string;
-  icon: ReactNode;
+  icon: LucideIcon;
+  /** Accent hue for the header icon. */
+  tone?: Hue;
   /** Buttons / badges rendered at the right of the header. */
   headerRight?: ReactNode;
   /** Extra controls rendered above the result area (inputs, textareas…). */
@@ -36,6 +41,7 @@ interface CollectCardProps {
 export default memo(function CollectCard({
   title,
   icon,
+  tone,
   headerRight,
   children,
   emptyIcon,
@@ -48,14 +54,8 @@ export default memo(function CollectCard({
   resultMaxHeight = "max-h-72",
 }: CollectCardProps) {
   return (
-    <Card className="mb-4 overflow-hidden">
-      <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <span className="text-primary">{icon}</span>
-          {title}
-        </h3>
-        {headerRight && <span className="ml-auto flex items-center gap-2">{headerRight}</span>}
-      </div>
+    <Card className="mb-4 gap-0 overflow-hidden py-0">
+      <CardHeader icon={icon} tone={tone} title={title} action={headerRight} />
       <div className="space-y-3 p-3">
         {children}
         {resultOverride ?? (result === null ? (

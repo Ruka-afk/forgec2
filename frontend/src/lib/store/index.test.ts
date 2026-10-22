@@ -7,7 +7,7 @@ function state(overrides: Partial<ReturnType<typeof useAppStore.getState>>) {
 
 describe("selectSidebarWidth", () => {
   it("uses the configured desktop sidebar width", () => {
-    expect(selectSidebarWidth(state({ isMobile: false, sidebarCollapsed: false }))).toBe(224);
+    expect(selectSidebarWidth(state({ isMobile: false, sidebarCollapsed: false }))).toBe(232);
     expect(selectSidebarWidth(state({ isMobile: false, sidebarCollapsed: true }))).toBe(64);
   });
 

@@ -75,7 +75,8 @@ export default memo(function ReconSection({ agentId, online }: ReconSectionProps
   return (
     <CollectCard
       title={t("agents.recon_title")}
-      icon={<Radar className="size-3.5" />}
+      icon={Radar}
+      tone="primary"
       emptyIcon={Radar}
       emptyTitle={t("agents.recon_empty_title")}
       emptyHint={t("agents.recon_empty_hint")}

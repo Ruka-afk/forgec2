@@ -332,7 +332,7 @@ export default function SettingsPage() {
         <ErrorState title={t("common.denied_title")} message={t("common.denied_desc")} />
       </PageContainer>
     }>
-    <PageContainer variant="wide" title={t("settings.title")} subtitle={t("settings.subtitle")}>
+    <PageContainer variant="standard" title={t("settings.title")} subtitle={t("settings.subtitle")}>
 
       {settingsLoaded && settingsError && (
         <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-ink">
@@ -390,7 +390,7 @@ export default function SettingsPage() {
           </aside>
 
           <div className="min-w-0">
-            <div className="sticky top-[calc(var(--shell-breadcrumb-height)+0.5rem)] z-20 mb-4 rounded-xl border border-border/80 bg-background/95 p-2 shadow-sm backdrop-blur lg:hidden">
+            <div className="sticky top-0 z-20 mb-4 rounded-xl border border-border/80 bg-background/95 p-2 shadow-sm backdrop-blur lg:hidden">
               <Select value={activeSection} onValueChange={(value) => { if (typeof value === "string") handleSectionChange(value); }}>
                 <SelectTrigger className="min-h-11 w-full bg-card" aria-label={t("settings.sidebar_header")}>
                   <SelectValue />
@@ -412,7 +412,7 @@ export default function SettingsPage() {
               <span className="shrink-0 font-mono text-[10px] text-muted-foreground">{activeSectionIndex + 1}/{sections.length}</span>
             </div>
 
-            <div className="mx-auto max-w-5xl space-y-6">
+            <div className="space-y-6">
         <TabsContent value="appearance" className="mt-0"><AppearanceSection theme={theme} onApplyTheme={handleApplyTheme} language={language} onSetLanguage={handleSetLanguage} /></TabsContent>
               <TabsContent value="security" className="mt-0">
                 <SecuritySection

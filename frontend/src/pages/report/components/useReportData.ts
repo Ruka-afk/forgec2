@@ -2,11 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { normalizeListEnvelope } from "@/lib/envelope";
+import { normalizeListEnvelope, firstArray } from "@/lib/envelope";
 import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { POLL } from "@/lib/polling";
 import {
+  aggregateTaskStats,
   computeDateRange,
   type AgentRow,
   type CredRow,
@@ -14,6 +15,7 @@ import {
   type ListenerRow,
   type ReportHistoryRow,
   type ReportStats,
+  type ReportTaskRow,
   type TaskStatRow,
 } from "./types";
 
@@ -36,14 +38,35 @@ export function useReportData() {
     error: overviewError,
     refresh: refreshOverview,
   } = useApiResource<ReportStats>({
-    fetcher: async () => api.get<ReportStats>(paths.report.overview),
+    // "/report" is the HTML page route (answering JSON with that page's own
+    // context, not these counters). The dashboard API is the authoritative
+    // source of the summary numbers shown above the tabs.
+    fetcher: async () => {
+      const d = await api.get<{
+        total_agents?: number;
+        online_agents?: number;
+        total_tasks?: number;
+        completed_tasks?: number;
+        failed_tasks?: number;
+        total_creds?: number;
+        total_audits?: number;
+        total_listeners?: number;
+      }>(paths.dashboard.v1);
+      return {
+        total_agents: d?.total_agents ?? 0,
+        online_agents: d?.online_agents ?? 0,
+        total_tasks: d?.total_tasks ?? 0,
+        success_tasks: d?.completed_tasks ?? 0,
+        failed_tasks: d?.failed_tasks ?? 0,
+        total_creds: d?.total_creds ?? 0,
+        total_audits: d?.total_audits ?? 0,
+        total_listeners: d?.total_listeners ?? 0,
+      };
+    },
     pollMs: POLL.report,
     toastThrottleMs: POLL.toastThrottleLong,
     errorMessage: t("report.toast.load_overview_failed"),
   });
-  // A failed overview must not read as a clean bill of health: every figure
-  // below is derived from it.
-  const stats = overviewError ? null : (statsData ?? null);
 
   const dateRef = useRef({ datePreset, customStart, customEnd });
   dateRef.current = { datePreset, customStart, customEnd };
@@ -91,11 +114,18 @@ export function useReportData() {
         if (r.status === "rejected") failedSections.push(sectionNames[i]);
       });
       return {
-        agents: value(agentsResp)?.agents || [],
-        taskStats: value(tasksResp)?.stats || [],
-        creds: value(credsResp)?.credentials || [],
-        listeners: value(netResp)?.listeners || [],
-        findings: value(findResp)?.findings || [],
+        // `firstArray` tolerates both `null` and an unexpected object shape;
+        // a null list used to reach `.map` and blank the page behind the
+        // error boundary.
+        agents: firstArray(value(agentsResp), ["agents", "Agents"]) as AgentRow[],
+        // The section API returns raw task rows; the Tasks tab renders one row
+        // per task type. `stats` is a single aggregate object, not a list.
+        taskStats: aggregateTaskStats(
+          firstArray(value(tasksResp), ["tasks", "Tasks"]) as ReportTaskRow[],
+        ),
+        creds: firstArray(value(credsResp), ["credentials", "Credentials"]) as CredRow[],
+        listeners: firstArray(value(netResp), ["listeners", "Listeners"]) as ListenerRow[],
+        findings: firstArray(value(findResp), ["findings", "Findings"]) as FindingRow[],
         partial: failedSections.length > 0,
         failedSections,
       };
@@ -132,6 +162,19 @@ export function useReportData() {
   const creds = preview?.creds ?? [];
   const listeners = preview?.listeners ?? [];
   const findings = preview?.findings ?? [];
+  // A failed overview must not read as a clean bill of health: every figure
+  // below is derived from it. Findings are synthesized by the section API
+  // (credentials + failed tasks), so their counts come from the preview.
+  const stats = overviewError
+    ? null
+    : statsData
+      ? {
+          ...statsData,
+          total_findings: findings.length,
+          critical_findings: findings.filter((f) => f.severity === "critical").length,
+          high_findings: findings.filter((f) => f.severity === "high").length,
+        }
+      : null;
   // One or more preview sections failed: the data is incomplete, which the
   // page must state rather than rendering empty tabs as fact.
   const previewPartial = preview?.partial ?? false;

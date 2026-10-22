@@ -98,6 +98,89 @@ func VerifyPESignature(peBytes []byte) error {
 	return nil
 }
 
+// PESignatureStatus is the operator-facing classification of an embedded
+// Authenticode signature. Trust is separate from cryptographic validity: a
+// self-signed signature verifies cryptographically but has no trusted root.
+type PESignatureStatus string
+
+const (
+	PESignatureUnsigned      PESignatureStatus = "unsigned"
+	PESignatureValid         PESignatureStatus = "valid"
+	PESignatureUntrustedRoot PESignatureStatus = "untrusted_root"
+	PESignatureInvalid       PESignatureStatus = "invalid"
+)
+
+// PESignatureReport describes an Authenticode signature for build status/API
+// output. SignerSubject and SignerIssuer are distinguished names; they are
+// equal for a self-signed certificate.
+type PESignatureReport struct {
+	Status        PESignatureStatus `json:"status"`
+	SignerSubject string            `json:"signer_subject,omitempty"`
+	SignerIssuer  string            `json:"signer_issuer,omitempty"`
+	SigningTime   time.Time         `json:"signing_time,omitempty"`
+	Error         string            `json:"error,omitempty"`
+}
+
+// ClassifyPESignature reports whether a PE is unsigned, carries a valid
+// signature chaining to a trusted root, carries a cryptographically valid
+// signature with an untrusted root (including self-signed), or is invalid.
+//
+// roots may be nil to use the host trust store; tests pass an explicit pool to
+// exercise the trusted path without modifying the host. Signature
+// cryptographic validation is performed first, so an invalid/tampered image is
+// never reported as merely untrusted. Non-Windows targets do not call this.
+func ClassifyPESignature(peBytes []byte, roots *x509.CertPool) PESignatureReport {
+	report := PESignatureReport{Status: PESignatureInvalid}
+	info, err := InspectPESignature(peBytes)
+	if err != nil {
+		if errors.Is(err, ErrPENotSigned) {
+			report.Status = PESignatureUnsigned
+			return report
+		}
+		report.Error = err.Error()
+		return report
+	}
+	report.SignerSubject = info.Signer.Subject.String()
+	report.SignerIssuer = info.Signer.Issuer.String()
+	report.SigningTime = info.SigningTime
+
+	if err := VerifyPESignature(peBytes); err != nil {
+		report.Error = err.Error()
+		return report
+	}
+	if roots == nil {
+		systemRoots, err := x509.SystemCertPool()
+		if err != nil {
+			report.Status = PESignatureUntrustedRoot
+			report.Error = "system certificate pool unavailable: " + err.Error()
+			return report
+		}
+		roots = systemRoots
+	}
+	intermediates := x509.NewCertPool()
+	for _, cert := range info.Chain {
+		if cert != nil && !bytes.Equal(cert.Raw, info.Signer.Raw) {
+			intermediates.AddCert(cert)
+		}
+	}
+	if _, err := info.Signer.Verify(x509.VerifyOptions{
+		Roots:         roots,
+		Intermediates: intermediates,
+		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageCodeSigning},
+	}); err != nil {
+		var unknown x509.UnknownAuthorityError
+		if errors.As(err, &unknown) {
+			report.Status = PESignatureUntrustedRoot
+		} else {
+			report.Status = PESignatureInvalid
+		}
+		report.Error = err.Error()
+		return report
+	}
+	report.Status = PESignatureValid
+	return report
+}
+
 func parsePESignature(peBytes []byte) (*parsedPESignature, error) {
 	_, secDirOff, err := peSecurityFields(peBytes)
 	if err != nil {

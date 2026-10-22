@@ -49,7 +49,8 @@ export default memo(function QuickShellSection({
     <SectionCard
       className="mb-4"
       title={t("agents.detail_quick_shell")}
-      icon={<Terminal className="size-3.5" />}
+      icon={Terminal}
+      tone="primary"
       collapsible
       defaultOpen={expanded}
       onOpenChange={onExpandedChange}

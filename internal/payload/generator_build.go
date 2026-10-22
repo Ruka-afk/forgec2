@@ -82,14 +82,6 @@ func ValidateImplantBuild(goos, format string, cfg *ImplantConfig) error {
 	if cfg.SelfCheck && format == "dll" {
 		return fmt.Errorf("self_check is not supported for DLL builds: os.Executable() resolves to the host process, not the DLL")
 	}
-	// Signing appends the certificate table and rewrites the PE checksum after
-	// the self-check placeholder is patched, so the embedded digest no longer
-	// covers the delivered bytes. PE-aware digest patching needs a follow-up;
-	// reject the combination instead of shipping an implant that exits at
-	// startup.
-	if cfg.SelfCheck && cfg.CodeSigningEnabled() {
-		return fmt.Errorf("self_check and Authenticode signing cannot be combined: the signature rewrites bytes covered by the integrity hash")
-	}
 	if cfg.CodeSigningEnabled() {
 		switch strings.ToLower(strings.TrimSpace(cfg.SignMode)) {
 		case "self", "pfx", "pem":

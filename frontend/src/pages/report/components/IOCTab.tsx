@@ -96,7 +96,9 @@ export default function IOCTab() {
           </Select>
           <Select value={typeFilter || "all"} onValueChange={(v) => setTypeFilter(v === "all" ? "" : (v ?? ""))}>
             <SelectTrigger className="w-32" aria-label={t("report.ioc_type")}>
-              <SelectValue />
+              <SelectValue>
+                {(value) => (value === "all" ? t("builds.filter_all") : String(value ?? ""))}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("builds.filter_all")}</SelectItem>

@@ -165,7 +165,9 @@ export default function NtlmPage() {
         <Label className="text-xs mb-1.5">{t("ntlm.target_agent")}</Label>
         <Select value={selectedAgent || "none"} onValueChange={(v) => setSelectedAgent(v === "none" ? "" : v ?? "")}>
           <SelectTrigger className="max-w-md">
-            <SelectValue placeholder={t("ntlm.select_agent_placeholder")} />
+            <SelectValue>
+              {(value) => (value === "none" ? t("ntlm.select_agent_placeholder") : String(value ?? ""))}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="none">{t("ntlm.select_agent_placeholder")}</SelectItem>

@@ -50,7 +50,8 @@ export default memo(function KeyloggerSection({ agentId, online }: KeyloggerSect
   return (
     <CollectCard
       title={t("agents.keylog_title")}
-      icon={<Keyboard className="size-3.5" />}
+      icon={Keyboard}
+      tone="info"
       headerRight={
         <>
           {active !== null && (

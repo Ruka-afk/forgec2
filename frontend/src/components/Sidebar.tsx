@@ -16,7 +16,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Shield, ChevronDown, LayoutGrid, Settings, Search, X } from "lucide-react";
-import { sidebarNavSections, filterNavByPermissions } from "@/lib/navigation";
+import { NAV_SECTIONS, sidebarNavSections, filterNavByPermissions } from "@/lib/navigation";
 import { prefetchRoute } from "@/lib/route-prefetch";
 import type { PermissionKey } from "@/lib/permission-keys";
 import {
@@ -65,19 +65,19 @@ const SidebarLogo = memo(function SidebarLogo({
   collapseLabel: string;
 }) {
   return (
-    <div className={`border-b border-border flex items-center ${collapsed ? 'justify-center px-0 py-2' : 'px-3 py-2.5'}`}>
+    <div className={`border-b border-border/70 flex items-center ${collapsed ? 'justify-center px-0 py-2' : 'px-3 py-2.5'}`}>
       <Button variant="ghost" onClick={onToggle}
-        className={`flex items-center gap-x-2.5 hover:opacity-80 transition-all duration-200 ${collapsed ? 'justify-center w-full' : ''}`}
+        className={`flex items-center gap-x-2.5 hover:bg-muted/60 transition-colors duration-200 ${collapsed ? 'justify-center w-full' : ''}`}
         aria-label={collapsed ? expandLabel : collapseLabel}
         aria-expanded={!collapsed}>
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary shadow-sm ring-1 ring-primary/20">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary shadow-none ring-1 ring-primary/20">
           <Shield className="size-4 text-primary-foreground" />
         </div>
         {!collapsed && (
           <div className="text-left leading-tight">
             <span className="font-bold text-xs tracking-tight text-foreground font-mono">Forge</span>
-            <span className="font-bold text-xs tracking-tight text-primary font-mono">C2</span>
-            <div className="mono-eyebrow text-muted-foreground">net · ops</div>
+            <span className="font-bold text-xs tracking-tight text-muted-foreground font-mono">C2</span>
+            <div className="mono-eyebrow text-muted-foreground/80">net · ops</div>
           </div>
         )}
       </Button>
@@ -120,13 +120,15 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
     <nav className={collapsed ? 'flex flex-col items-center gap-1' : 'space-y-0.5 text-sm'}>
       {filteredSections.map((section, idx) => (
         <div key={section.titleKey} className={collapsed ? 'w-full' : ''}>
+          {collapsed && idx > 0 && <div className="mx-auto my-1 h-px w-6 bg-border/70" aria-hidden="true" />}
           {!collapsed && (
             <Button
               variant="ghost"
               size="sm"
               onClick={() => { if (!section.pinned) toggleSection(section.titleKey); }}
               disabled={section.pinned}
-              className={`w-full min-h-9 flex items-center gap-x-1 px-2 pt-1 pb-0.5 cursor-pointer select-none transition-colors hover:text-foreground justify-start disabled:opacity-100 disabled:cursor-default ${idx > 0 ? 'mt-2.5 border-t border-border/40 pt-2.5' : ''}`}
+              aria-expanded={section.pinned ? undefined : (searching ? true : !!sections[section.titleKey])}
+              className={`w-full min-h-8 flex items-center gap-x-1.5 px-2 py-1 cursor-pointer select-none justify-start text-muted-foreground transition-colors hover:text-foreground aria-expanded:bg-transparent disabled:opacity-100 disabled:cursor-default ${idx > 0 ? 'mt-2 border-t-border/50 pt-2' : ''}`}
             >
               {!section.pinned && (
                 <ChevronDown className={`size-3 text-muted-foreground transition-transform duration-200 ${(searching || sections[section.titleKey]) ? '' : '-rotate-90'}`} />
@@ -148,10 +150,11 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
                 onMouseEnter={() => prefetchRoute(item.href)}
                 onFocus={() => prefetchRoute(item.href)}
                 aria-current={isActive(item.href) ? "page" : undefined}
+                aria-label={collapsed ? t(item.labelKey) : undefined}
                 className={`flex items-center gap-x-2.5 rounded-lg transition-colors duration-150 ${collapsed ? 'group relative' : ''}
                   ${collapsed ? 'justify-center px-0 py-2 mx-auto size-10' : 'min-h-9 px-2 py-1.5'}
                   ${isActive(item.href)
-                    ? 'nav-item-active bg-primary/12 font-medium text-primary'
+                    ? 'nav-item-active bg-primary/10 font-medium text-primary'
                     : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}`}
               >
                 <span className="relative inline-flex">
@@ -275,6 +278,21 @@ const stats = useAppStore((s) => s.stats);
   const unreadNotifications = useAppStore((s) => s.unreadNotifications);
 
   useEffect(() => { Promise.resolve().then(() => setSections(getSavedSections())); }, []);
+
+  // Keep the active workstream visible when the route changes (Ctrl+K, deep
+  // link, breadcrumb) instead of leaving its section collapsed.
+  useEffect(() => {
+    const active = NAV_SECTIONS.find((section) =>
+      section.items.some((item) => pathname === item.href || pathname.startsWith(item.href + "/")),
+    );
+    if (!active) return;
+    setSections((prev) => {
+      if (prev[active.titleKey]) return prev;
+      const next = { ...prev, [active.titleKey]: true };
+      saveSectionState(next);
+      return next;
+    });
+  }, [pathname]);
 
   const collapsed = sidebarCollapsed;
 

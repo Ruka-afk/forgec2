@@ -1,6 +1,8 @@
 package payload
 
 import (
+	"bytes"
+	"debug/pe"
 	"encoding/binary"
 	"os"
 	"os/exec"
@@ -92,6 +94,9 @@ func TestDebugAddBenignImportsGoBinary(t *testing.T) {
 	// the imported descriptor + one additional benign import. Excess demand
 	// must produce an explicit error, not silent silence.
 	data := buildDebugGoEXE(t)
+	if err := validatePEImports(data); err != nil {
+		t.Fatalf("original Go PE imports do not validate: %v", err)
+	}
 	before := parseImportViewForTest(t, data)
 	descBefore := before.descCount
 	out2, err := AddBenignImports(data, []string{"user32.dll"})
@@ -112,14 +117,31 @@ func TestDebugAddBenignImportsGoBinary(t *testing.T) {
 	if after.descCount != descBefore+1 {
 		t.Fatalf("descCount = %d, want %d", after.descCount, descBefore+1)
 	}
+	if err := validatePEImports(out2); err != nil {
+		t.Fatalf("single-import injection does not validate: %v", err)
+	}
+	origPE, err := pe.NewFile(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("original Go PE: %v", err)
+	}
+	defer origPE.Close()
+	injPE, err := pe.NewFile(bytes.NewReader(out2))
+	if err != nil {
+		t.Fatalf("injected Go PE no longer parses: %v", err)
+	}
+	if injPE.PointerToSymbolTable != origPE.PointerToSymbolTable {
+		t.Fatalf("PointerToSymbolTable changed from 0x%x to 0x%x",
+			origPE.PointerToSymbolTable, injPE.PointerToSymbolTable)
+	}
+	injPE.Close()
 
 	excess := buildDebugGoEXE(t)
-	// Ten benign imports exceed any realistic padding, but the growth
-	// fallback satisfies even that demand — assert success AND that key DLLs
-	// landed in the import table.
+	// Ten benign imports exceed the .idata padding, so this exercises the
+	// new-section fallback. Appending must leave existing raw offsets and the
+	// COFF symbol-table pointer untouched; the old growth path corrupted both.
 	out3, err := AddBenignImports(excess, []string{"user32.dll", "ws2_32.dll", "bcrypt.dll", "shell32.dll", "wininet.dll", "advapi32.dll", "ole32.dll", "crypt32.dll", "winmm.dll", "version.dll"})
 	if err != nil {
-		t.Fatalf("growth fallback should satisfy heavy demand: %v", err)
+		t.Fatalf("new-section fallback should satisfy heavy demand: %v", err)
 	}
 	grown := parseImportViewForTest(t, out3)
 	for _, want := range []string{"user32.dll", "ws2_32.dll", "bcrypt.dll", "winmm.dll"} {
@@ -130,8 +152,33 @@ func TestDebugAddBenignImportsGoBinary(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Fatalf("%s missing after growth injection; imports = %v", want, grown.importedDLLs())
+			t.Fatalf("%s missing after section injection; imports = %v", want, grown.importedDLLs())
 		}
+	}
+	if err := validatePEImports(out3); err != nil {
+		t.Fatalf("multi-import injection does not validate: %v", err)
+	}
+	origPE2, err := pe.NewFile(bytes.NewReader(excess))
+	if err != nil {
+		t.Fatalf("original heavy-demand Go PE: %v", err)
+	}
+	defer origPE2.Close()
+	grownPE, err := pe.NewFile(bytes.NewReader(out3))
+	if err != nil {
+		t.Fatalf("extended Go PE no longer parses: %v", err)
+	}
+	defer grownPE.Close()
+	if grownPE.PointerToSymbolTable != origPE2.PointerToSymbolTable {
+		t.Fatalf("PointerToSymbolTable changed from 0x%x to 0x%x",
+			origPE2.PointerToSymbolTable, grownPE.PointerToSymbolTable)
+	}
+	if len(grownPE.Sections) != len(origPE2.Sections)+1 {
+		t.Fatalf("section count = %d, want %d (new import section)",
+			len(grownPE.Sections), len(origPE2.Sections)+1)
+	}
+	if len(grownPE.Sections) > 0 && grownPE.Sections[len(grownPE.Sections)-1].Name != importSectionName {
+		t.Fatalf("last section = %q, want %q",
+			grownPE.Sections[len(grownPE.Sections)-1].Name, importSectionName)
 	}
 }
 

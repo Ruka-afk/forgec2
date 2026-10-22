@@ -164,7 +164,7 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := buildAgentBinaryDLL(goCmd, tmpDir, ldflags, buildPath, cfg.Obfuscate, "windows", goarch, blob, sKey, cfg.Win7Compat); err != nil {
+	if err := buildAgentBinaryDLL(goCmd, tmpDir, ldflags, buildPath, cfg.Obfuscate, "windows", goarch, blob, sKey, cfg.SelfCheck, cfg.Win7Compat); err != nil {
 		return "", err
 	}
 
@@ -207,8 +207,8 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 
 // buildAgentBinaryDLL runs `go build -buildmode=c-shared` with CGO_ENABLED=1.
 // It checks for cross-compiler availability on non-Windows hosts.
-func buildAgentBinaryDLL(goCmd, workDir, ldflags, outPath string, obfuscate bool, goos, goarch, configBlob, sConfigKey string, win7 bool) error {
-	if err := writeConfigInjectFile(workDir, configBlob, sConfigKey); err != nil {
+func buildAgentBinaryDLL(goCmd, workDir, ldflags, outPath string, obfuscate bool, goos, goarch, configBlob, sConfigKey string, selfCheck, win7 bool) error {
+	if err := writeConfigInjectFile(workDir, configBlob, sConfigKey, selfCheck); err != nil {
 		return fmt.Errorf("write config inject file: %w", err)
 	}
 	if obfuscate {

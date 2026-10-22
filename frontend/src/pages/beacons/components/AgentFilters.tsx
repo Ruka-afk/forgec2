@@ -35,7 +35,7 @@ export function AgentFilters({
 }: AgentFiltersProps) {
   const { t } = useI18n();
   return (
-    <PageToolbar>
+    <PageToolbar sticky>
       <div className="flex flex-col gap-3 sm:flex-row">
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-1 sm:flex-wrap">
           <SearchInput

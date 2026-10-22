@@ -31,10 +31,10 @@ func TestValidateImplantBuildPreflight(t *testing.T) {
 		{name: "selfcheck dll rejected", goos: "windows", format: "dll", mutate: func(c *ImplantConfig) {
 			c.SelfCheck = true
 		}, wantErr: true},
-		{name: "selfcheck sign conflict", goos: "windows", format: "exe", mutate: func(c *ImplantConfig) {
+		{name: "selfcheck with signing", goos: "windows", format: "exe", mutate: func(c *ImplantConfig) {
 			c.SelfCheck = true
 			c.SignMode = "self"
-		}, wantErr: true},
+		}},
 		{name: "sign self exe", goos: "windows", format: "exe", mutate: func(c *ImplantConfig) { c.SignMode = "self" }},
 		{name: "sign self dll", goos: "windows", format: "dll", mutate: func(c *ImplantConfig) { c.SignMode = "self" }},
 		{name: "sign non-windows", goos: "linux", format: "elf", mutate: func(c *ImplantConfig) { c.SignMode = "self" }, wantErr: true},

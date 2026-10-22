@@ -69,7 +69,8 @@ export default memo(function RegistrySection({ agentId, online }: RegistrySectio
     <>
       <CollectCard
         title={t("agents.registry_title")}
-        icon={<Database className="size-3.5" />}
+        icon={Database}
+        tone="violet"
         emptyIcon={Database}
         emptyTitle={t("agents.registry_empty_title")}
         emptyHint={t("agents.registry_empty_hint")}

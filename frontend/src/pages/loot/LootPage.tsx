@@ -10,6 +10,7 @@ import { formatTime } from "@/lib/utils";
 import { safeHref, safeImageSrc } from "@/lib/safeUrl";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
+import { PageToolbar } from "@/components/ui/page-toolbar";
 import { Pagination } from "@/components/ui/pagination";
 import { StatusBadge } from "@/components/ui/status-indicator";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -198,28 +199,57 @@ export default function LootPage() {
       title={t("loot.page_title")}
       subtitle={t("loot.subtitle")}
       actions={
-        <div className="flex items-center gap-2 flex-wrap">
-          <Select value={agentFilter || "all"} onValueChange={(v) => { setAgentFilter(v === "all" ? "" : v ?? ""); setSelectedItems(new Set()); setScreenshotPage(1); setKeylogPage(1); setDownloadPage(1); }}>
-            <SelectTrigger className="w-full sm:w-48" aria-label={t("loot.filter_agent_aria")}><SelectValue placeholder={t("loot.all_agents")} /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("loot.all_agents")}</SelectItem>
-              {allAgents.map(a => <SelectItem key={a} value={a}>{a.substring(0, 12)}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Button onClick={() => exportAll("json")} className="gap-1">
-            <FileUp aria-hidden="true" className="size-4" /> {t("loot.export_json")}
-          </Button>
+        <>
           <Button variant="outline" onClick={() => exportAll("csv")} className="gap-1">
-            <FileUp aria-hidden="true" className="size-4" /> {t("loot.export_csv")}
+            <FileUp aria-hidden="true" className="size-4" />
+            <span className="hidden sm:inline">{t("loot.export_csv")}</span>
+          </Button>
+          <Button onClick={() => exportAll("json")} className="gap-1">
+            <FileUp aria-hidden="true" className="size-4" />
+            <span>{t("loot.export_json")}</span>
           </Button>
           {selectedItems.size > 0 && (
             <Button variant="destructive" onClick={deleteSelected} className="gap-1">
               <Trash2 aria-hidden="true" className="size-4" /> {t("loot.delete_selected", { count: selectedItems.size })}
             </Button>
           )}
-        </div>
+        </>
       }
     >
+
+      {allAgents.length > 0 && (
+        <PageToolbar sticky>
+          <Select value={agentFilter || "all"} onValueChange={(v) => {
+            setAgentFilter(v === "all" ? "" : v ?? "");
+            setSelectedItems(new Set());
+            setScreenshotPage(1);
+            setKeylogPage(1);
+            setDownloadPage(1);
+          }}>
+            <SelectTrigger className="w-full sm:w-56" aria-label={t("loot.filter_agent_aria")}>
+              <SelectValue>
+                {(value) => (value === "all" ? t("loot.all_agents") : String(value ?? ""))}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("loot.all_agents")}</SelectItem>
+              {allAgents.map(a => <SelectItem key={a} value={a}>{a.substring(0, 12)}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {agentFilter && (
+            <Button variant="ghost" size="sm" onClick={() => {
+              setAgentFilter("");
+              setSelectedItems(new Set());
+              setScreenshotPage(1);
+              setKeylogPage(1);
+              setDownloadPage(1);
+            }}>
+              <X className="size-4" aria-hidden="true" />
+              <span>{t("common.clear")}</span>
+            </Button>
+          )}
+        </PageToolbar>
+      )}
 
       <DataState
         loading={loading}

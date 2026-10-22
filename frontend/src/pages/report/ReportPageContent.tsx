@@ -70,7 +70,7 @@ export default function ReportPage() {
     htmlExportUrl,
   } = useReportData();
 
-  const totalCreds = useMemo(() => creds.reduce((s, c) => s + (c.count ?? 0), 0), [creds]);
+  const totalCreds = useMemo(() => creds.reduce((s, c) => s + (c.count ?? 1), 0), [creds]);
 
   const SECTIONS = [
     { key: "overview", label: t("report.sec_overview"), icon: <PieChart className="size-5" /> },

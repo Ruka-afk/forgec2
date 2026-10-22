@@ -21,7 +21,7 @@ import { paths } from "@/lib/api-paths";
 import { firstArray, firstNumber } from "@/lib/envelope";
 import { errorText } from "@/lib/errors";
 import { csvCell } from "@/lib/csv";
-import { formatTime } from "@/lib/utils";
+import { enumLabel, formatTime } from "@/lib/utils";
 import { useVirtualWindow } from "@/lib/hooks/useVirtualWindow";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { useDebounce } from "@/lib/hooks/useDebounce";
@@ -464,7 +464,9 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
         </div>
       )}
 
-      <PageToolbar>
+      {/* Embedded in the Events page, whose tab rail is already sticky: a
+          second sticky layer would slide under the rail. */}
+      <PageToolbar sticky={!embedded}>
         <div className="flex flex-col sm:flex-row gap-3 sm:flex-wrap sm:items-center">
           <SearchInput
             id="task-search"
@@ -477,7 +479,13 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
           />
           <Select value={statusFilter || "all"} onValueChange={(val) => { setStatusFilter(val === "all" ? "" : val ?? ""); setPage(1); }}>
             <SelectTrigger aria-label={t("tasks.status_filter")}>
-              <SelectValue />
+              <SelectValue>
+                {(value) => {
+                  if (value === "all") return t("tasks.all_status");
+                  if (value === "pending_approval") return t("tasks.approval_pending");
+                  return enumLabel(t, "tasks", String(value ?? ""));
+                }}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("tasks.all_status")}</SelectItem>
@@ -490,7 +498,9 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
           </Select>
           <Select value={agentFilter || "all"} onValueChange={(val) => { setAgentFilter(val === "all" ? "" : val ?? ""); setPage(1); }}>
             <SelectTrigger aria-label={t("tasks.agent_filter")} className="min-w-[150px]">
-              <SelectValue />
+              <SelectValue>
+                {(value) => (value === "all" ? t("tasks.all_agents") : String(value ?? ""))}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("tasks.all_agents")}</SelectItem>
@@ -502,7 +512,9 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
           <AgentLoadError message={agentListError} />
           <Select value={typeFilter || "all"} onValueChange={(val) => { setTypeFilter(val === "all" ? "" : val ?? ""); setPage(1); }}>
             <SelectTrigger aria-label={t("tasks.type_filter")}>
-              <SelectValue />
+              <SelectValue>
+                {(value) => (value === "all" ? t("tasks.all_types") : String(value ?? ""))}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("tasks.all_types")}</SelectItem>
@@ -517,7 +529,9 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
           </Select>
           <Select value={claimedFilter || "all"} onValueChange={(val) => { setClaimedFilter(val === "all" ? "" : val ?? ""); setPage(1); }}>
             <SelectTrigger aria-label={t("tasks.claimed_filter")} className="min-w-[140px]">
-              <SelectValue />
+              <SelectValue>
+                {(value) => (value === "all" ? t("tasks.claimed_all") : t("tasks.claimed_mine"))}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("tasks.claimed_all")}</SelectItem>

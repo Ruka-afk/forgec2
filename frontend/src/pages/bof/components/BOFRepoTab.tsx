@@ -148,7 +148,7 @@ export default function BOFRepoTab({ repoItems, loading, error, onRetry, onImpor
           {filteredItems.map((item, i) => {
             const href = itemUrl(item);
             return (
-              <Card key={item.id || item.name || String(i)} className="p-(--card-spacing) hover:shadow-lg dark:hover:shadow-xl transition-shadow">
+              <Card key={item.id || item.name || String(i)} className="p-(--card-spacing) hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <IconBadge icon={Layers} color="primary" size="lg" />

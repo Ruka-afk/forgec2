@@ -1,7 +1,26 @@
 import { describe, it, expect } from "vitest";
-import { computeDateRange, severityColor } from "./types";
+import { aggregateTaskStats, computeDateRange, severityColor } from "./types";
 
 describe("report helpers", () => {
+  it("aggregateTaskStats groups raw task rows by type", () => {
+    const stats = aggregateTaskStats([
+      { type: "shell", status: "completed" },
+      { type: "shell", status: "failed" },
+      { type: "shell", status: "pending" },
+      { type: "upload", status: "completed" },
+      {},
+    ]);
+    expect(stats).toEqual([
+      { type: "shell", total: 3, success: 1, failed: 1, success_rate: 33 },
+      { type: "upload", total: 1, success: 1, failed: 0, success_rate: 100 },
+      { type: "unknown", total: 1, success: 0, failed: 0, success_rate: 0 },
+    ]);
+  });
+
+  it("aggregateTaskStats tolerates an empty list", () => {
+    expect(aggregateTaskStats([])).toEqual([]);
+  });
+
   it("severityColor maps known levels", () => {
     expect(severityColor("critical")).toMatch(/destructive/);
     expect(severityColor("high")).toMatch(/warning/);

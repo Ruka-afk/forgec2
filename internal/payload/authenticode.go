@@ -39,6 +39,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/forgec2/forgec2/pkg/peimage"
 )
 
 const (
@@ -329,38 +331,10 @@ func selfSignedCodeCert(organization string) (*x509.Certificate, *rsa.PrivateKey
 // ── PE plumbing ────────────────────────────────────────────────────────────
 
 // peSecurityFields locates the two optional-header regions excluded from the
-// Authenticode digest: the checksum field and the security directory entry.
+// Authenticode digest. The parser lives in pkg/peimage so the agent's runtime
+// self-check uses the exact same offsets as the signer.
 func peSecurityFields(data []byte) (checksumOff, secDirOff int, err error) {
-	if len(data) < 0x40 || data[0] != 'M' || data[1] != 'Z' {
-		return 0, 0, errors.New("not a PE image (missing MZ header)")
-	}
-	peOff := int(binary.LittleEndian.Uint32(data[0x3C:0x40]))
-	if peOff <= 0 || peOff+24 > len(data) {
-		return 0, 0, errors.New("not a PE image (truncated header)")
-	}
-	if string(data[peOff:peOff+4]) != "PE\x00\x00" {
-		return 0, 0, errors.New("not a PE image (missing PE signature)")
-	}
-	opt := peOff + 24
-	if opt+2 > len(data) {
-		return 0, 0, errors.New("not a PE image (truncated optional header)")
-	}
-	magic := binary.LittleEndian.Uint16(data[opt:])
-	var ddOff int
-	switch magic {
-	case 0x10B: // PE32
-		ddOff = opt + 0x60
-	case 0x20B: // PE32+
-		ddOff = opt + 0x70
-	default:
-		return 0, 0, fmt.Errorf("unsupported optional header magic 0x%04X", magic)
-	}
-	checksumOff = opt + 64
-	secDirOff = ddOff + 4*8 // data directory index 4 = IMAGE_DIRECTORY_ENTRY_SECURITY
-	if secDirOff+8 > len(data) {
-		return 0, 0, errors.New("PE image truncated before security directory")
-	}
-	return checksumOff, secDirOff, nil
+	return peimage.SecurityFields(data)
 }
 
 // AuthenticodeDigest computes the SHA-256 message digest WinVerifyTrust
@@ -372,22 +346,10 @@ func peSecurityFields(data []byte) (checksumOff, secDirOff int, err error) {
 // those two fields removed; on a signed image it reproduces exactly the digest
 // that was signed.
 func AuthenticodeDigest(data []byte) ([]byte, error) {
-	checksumOff, secDirOff, err := peSecurityFields(data)
-	if err != nil {
-		return nil, err
+	if !peimage.IsPE(data) {
+		return nil, errors.New("not a PE image (missing MZ header)")
 	}
-	end := len(data)
-	if tableOff := int(binary.LittleEndian.Uint32(data[secDirOff:])); tableOff > 0 && tableOff <= len(data) {
-		end = tableOff
-	}
-	if checksumOff+4 > secDirOff || secDirOff+8 > end {
-		return nil, errors.New("PE security fields overlap or are truncated")
-	}
-	h := sha256.New()
-	h.Write(data[:checksumOff])
-	h.Write(data[checksumOff+4 : secDirOff])
-	h.Write(data[secDirOff+8 : end])
-	return h.Sum(nil), nil
+	return peimage.Digest(data)
 }
 
 // computePEChecksum implements the standard PE optional-header checksum

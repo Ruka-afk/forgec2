@@ -4,6 +4,7 @@ import { RefreshCw, ShieldAlert, Monitor, Package, Network, Clock } from "lucide
 import { api, pollTask } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { errorText } from "@/lib/errors";
+import { formatTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
@@ -276,8 +277,9 @@ export function HostInfoCard({ agentId, online }: { agentId: string; online: boo
   return (
     <SectionCard
       title={t("hostinfo.title")}
-      icon={<ShieldAlert className="size-4 text-primary" />}
-      description={report ? `${report.platform} · ${report.collected_at}` : undefined}
+      icon={ShieldAlert}
+      tone="warning"
+      description={report ? `${report.platform} · ${formatTime(report.collected_at)}` : undefined}
       headerAccent
       collapsible
       defaultOpen={false}
@@ -309,6 +311,7 @@ export function HostInfoCard({ agentId, online }: { agentId: string; online: boo
         </div>
       }
     >
+      <div className="space-y-4 p-(--card-spacing)">
       {!online && <p className="text-xs text-muted-foreground">{t("hostinfo.offline_hint")}</p>}
       {online && !report && !busy && !error && (
         <p className="text-xs text-muted-foreground">{t("hostinfo.hint")}</p>
@@ -327,6 +330,7 @@ export function HostInfoCard({ agentId, online }: { agentId: string; online: boo
           ))}
         </div>
       )}
+      </div>
     </SectionCard>
   );
 }

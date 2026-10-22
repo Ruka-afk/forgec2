@@ -10,6 +10,7 @@ import { Permission } from "@/components/ui/permission";
 import { StatCard } from "@/components/ui/animated-stat-card";
 import { StatusBadge } from "@/components/ui/status-indicator";
 import { PageContainer } from "@/components/ui/page-container";
+import { PageToolbar } from "@/components/ui/page-toolbar";
 import { IconBadge } from "@/components/ui/icon-badge";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { useErrorToast } from "@/lib/hooks/useErrorToast";
@@ -404,24 +405,21 @@ export default function UsersPage() {
       </PageContainer>
     }>
       <PageContainer title={t("users.title")} icon={<Users className="size-4" />} subtitle={t("users.subtitle")} actions={<>
-        <div className="flex items-center gap-2 flex-wrap">
-          <SearchInput value={search} onChange={setSearch} placeholder={t("users.search_placeholder")} className="w-40 sm:w-48" label={t("common.search")} />
-          {canManageUsers && (
-            <Button onClick={() => setShowAdd(true)}>
-              <Plus className="size-4" /> {t("users.add_user")}
-            </Button>
-          )}
-        </div>
+        {canManageUsers && (
+          <Button onClick={() => setShowAdd(true)}>
+            <Plus className="size-4" /> {t("users.add_user")}
+          </Button>
+        )}
       </>}>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatCard label={t("users.stat_total")} value={totalUsers} color="indigo" style={{ animationDelay: "0ms" }} className="opacity-0 animate-fade-slide-up" />
         <StatCard label={t("users.stat_admins")} value={adminCount} color="indigo" style={{ animationDelay: "40ms" }} className="opacity-0 animate-fade-slide-up" />
         <StatCard label={t("users.stat_users")} value={userCount} color="blue" style={{ animationDelay: "80ms" }} className="opacity-0 animate-fade-slide-up" />
         <StatCard label={t("users.stat_active")} value={activeCount} color="emerald" style={{ animationDelay: "120ms" }} className="opacity-0 animate-fade-slide-up" />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="p-4 shadow-sm hover:shadow-md transition-shadow duration-200">
           <div className="flex items-center gap-2 mb-2">
             <Crown className="size-4" />
@@ -448,11 +446,22 @@ export default function UsersPage() {
         </Card>
       </div>
 
-      <div className="mb-4 flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-        <div className="text-xs text-muted-foreground">
-          {t("users.showing", { filtered: String(filtered.length), total: String(totalUsers) })}
-        </div>
-      </div>
+      <PageToolbar
+        sticky
+        primary={
+          <span className="text-xs text-muted-foreground" aria-live="polite">
+            {t("users.showing", { filtered: String(filtered.length), total: String(totalUsers) })}
+          </span>
+        }
+      >
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder={t("users.search_placeholder")}
+          className="w-full sm:max-w-xs"
+          label={t("common.search")}
+        />
+      </PageToolbar>
 
       <Card className="overflow-hidden">
         <DataTable<User>

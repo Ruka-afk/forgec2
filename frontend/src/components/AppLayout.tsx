@@ -10,13 +10,12 @@ import ScrollToTop from "@/components/ScrollToTop";
 import CommandPalette from "@/components/CommandPalette";
 import GlobalInteractDock from "@/components/GlobalInteractDock";
 import TelemetryCollector from "@/components/TelemetryCollector";
-import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { useLocation } from "react-router-dom";
 import { useAppStore, selectSidebarWidth } from "@/lib/store";
 import { useI18n } from "@/lib/i18n";
 import { getPageTitleKey } from "@/lib/navigation";
 import { startIdleRoutePrefetch } from "@/lib/route-prefetch";
-import { isFlushPath, showBreadcrumbBar } from "@/lib/layout";
+import { isFlushPath } from "@/lib/layout";
 import { cn } from "@/lib/utils";
 import { useWS } from "@/lib/wsContext";
 
@@ -31,7 +30,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const sidebarWidth = useAppStore(selectSidebarWidth);
   const flush = isFlushPath(pathname);
-  const crumbs = showBreadcrumbBar(pathname, focusMode);
 
   const prevWidthRef = useRef<number>(typeof window !== "undefined" ? window.innerWidth : 1920);
 
@@ -119,19 +117,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             flush ? "overflow-hidden" : "overflow-y-auto scroll-smooth",
           )}
         >
-          {crumbs && (
-            <div className="sticky top-0 z-20 flex h-(--shell-breadcrumb-height) shrink-0 items-center border-b border-border/70 bg-card/90 shadow-sm backdrop-blur-xl">
-              <div className="mx-auto w-full max-w-(--content-wide) px-4 sm:px-6 lg:px-8">
-                <Breadcrumb />
-              </div>
-            </div>
-          )}
           <div
             className={cn(
               "mx-auto flex w-full min-h-0 flex-col",
               flush
                 ? "max-w-none flex-1 px-0 py-0"
-                : "max-w-(--content-wide) gap-4 px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-7",
+                : "max-w-(--content-wide) gap-4 px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6",
             )}
           >
             {!flush && (

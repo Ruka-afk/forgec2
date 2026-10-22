@@ -232,7 +232,9 @@ export default function PrivescPage() {
             </Label>
             <Select value={selectedAgent || "placeholder"} onValueChange={(v) => setSelectedAgent(v === "placeholder" ? "" : v ?? "")}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder={t("privesc.select_target_implant")} />
+                <SelectValue>
+                  {(value) => (value === "placeholder" ? t("privesc.select_target_implant") : String(value ?? ""))}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {agents.map((a) => {

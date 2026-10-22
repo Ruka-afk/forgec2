@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { enumLabel } from "@/lib/utils";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { POLL } from "@/lib/polling";
 import { toast } from "sonner";
@@ -11,6 +12,7 @@ import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Pagination } from "@/components/ui/pagination";
 import { DataState } from "@/components/ui/data-state";
 import { Card } from "@/components/ui/card";
+import { PageToolbar } from "@/components/ui/page-toolbar";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -152,17 +154,26 @@ export default function NotificationsPage({ embedded = false }: { embedded?: boo
         </div>
       )}
 
-      <Card className="p-(--card-spacing) mb-4">
-        <div className="flex flex-wrap gap-3">
+      {/* Embedded in the Events page, whose tab rail is already sticky: a
+          second sticky layer would slide under the rail. */}
+      <PageToolbar sticky={!embedded}>
           <Select value={typeFilter || "all"} onValueChange={(v) => { setTypeFilter(v === "all" ? "" : v ?? ""); setPage(1); }}>
-            <SelectTrigger className="w-full sm:w-48" aria-label={t("notifications.a11y_filter_type")}><SelectValue placeholder={t("notifications.all_types")} /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-48" aria-label={t("notifications.a11y_filter_type")}>
+              <SelectValue>
+                {(value) => (value === "all" ? t("notifications.all_types") : String(value ?? "").replace("_", " "))}
+              </SelectValue>
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("notifications.all_types")}</SelectItem>
               {NOTIF_TYPES.map((tp) => <SelectItem key={tp} value={tp}>{tp.replace("_", " ")}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={severityFilter || "all"} onValueChange={(v) => { setSeverityFilter(v === "all" ? "" : v ?? ""); setPage(1); }}>
-            <SelectTrigger className="w-full sm:w-48" aria-label={t("notifications.a11y_filter_severity")}><SelectValue placeholder={t("notifications.all_severity")} /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-48" aria-label={t("notifications.a11y_filter_severity")}>
+              <SelectValue>
+                {(value) => (value === "all" ? t("notifications.all_severity") : enumLabel(t, "notifications", String(value ?? "")))}
+              </SelectValue>
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("notifications.all_severity")}</SelectItem>
               <SelectItem value="success">{t("notifications.success")}</SelectItem>
@@ -172,15 +183,20 @@ export default function NotificationsPage({ embedded = false }: { embedded?: boo
             </SelectContent>
           </Select>
           <Select value={readFilter || "all"} onValueChange={(v) => { setReadFilter(v === "all" ? "" : v ?? ""); setPage(1); }}>
-            <SelectTrigger className="w-full sm:w-48" aria-label={t("notifications.a11y_filter_status")}><SelectValue placeholder={t("notifications.all_status")} /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-48" aria-label={t("notifications.a11y_filter_status")}>
+              <SelectValue>
+                {(value) => (value === "all"
+                  ? t("notifications.all_status")
+                  : value === "true" ? t("notifications.read") : t("notifications.unread"))}
+              </SelectValue>
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("notifications.all_status")}</SelectItem>
               <SelectItem value="false">{t("notifications.unread")}</SelectItem>
               <SelectItem value="true">{t("notifications.read")}</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-      </Card>
+      </PageToolbar>
 
       <Card className="overflow-hidden">
         <DataState loading={loading} error={error} onRetry={loadNotifications} empty={!loading && !error && notifications.length === 0} emptyIcon={BellOff} emptyTitle={t("notifications.empty")} emptyMessage={t("notifications.empty_hint")} loadingSkeleton={

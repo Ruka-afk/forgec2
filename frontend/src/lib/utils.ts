@@ -1,6 +1,28 @@
 import { clsx, type ClassValue } from "clsx"
-import { twMerge } from "tailwind-merge"
+import { extendTailwindMerge } from "tailwind-merge"
 import { formatDateTime, formatTimeOnly } from "./intl"
+
+// tailwind-merge only knows the stock `text-*` sizes. globals.css adds a
+// dense-console ramp (`text-compact`, `text-micro`, …) that it otherwise
+// classifies as a text colour, so it would delete a colour sitting in the same
+// className — e.g. `bg-primary text-primary-foreground text-compact` lost the
+// foreground and rendered dark-on-dark.
+const twMerge = extendTailwindMerge({
+  extend: {
+    classGroups: {
+      "font-size": [
+        "text-micro",
+        "text-micro-sm",
+        "text-xs-sm",
+        "text-compact",
+        "text-page-title",
+        "text-section",
+        "text-stat-value",
+        "text-prose",
+      ],
+    },
+  },
+})
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -11,6 +33,15 @@ export function formatTime(iso?: string | null): string {
   const d = new Date(iso)
   if (isNaN(d.getTime())) return '—'
   return formatDateTime(d)
+}
+
+/** True for Go's zero time (`0001-01-01T00:00:00Z`) and other placeholders.
+ *  Rendering them produced "1/1/1, 8:05:43 AM" — a date that never happened. */
+export function isZeroTime(iso?: string | null): boolean {
+  if (!iso) return true
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return true
+  return d.getUTCFullYear() <= 1
 }
 
 /** Local wall-clock time for "last update" indicators. */
@@ -37,6 +68,9 @@ export function timeAgo(
   if (!iso) return t?.("time.ago.unknown") ?? "—"
   const d = new Date(iso)
   if (isNaN(d.getTime())) return t?.("time.ago.unknown") ?? "—"
+  // Go's zero time is a placeholder, not a moment in time: without this it
+  // rendered as "20873d ago".
+  if (d.getUTCFullYear() <= 1) return t?.("time.ago.unknown") ?? "—"
   const seconds = Math.floor((Date.now() - d.getTime()) / 1000)
   if (seconds < 60) return t?.("time.ago.seconds", { n: seconds }) ?? `${seconds}s ago`
   const minutes = Math.floor(seconds / 60)

@@ -6,12 +6,13 @@ import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { formatTime } from "@/lib/utils";
 import { ChartCard } from "@/components/ChartCard";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { CardHeader } from "@/components/ui/card-header";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusIndicator } from "@/components/ui/status-indicator";
-import { AlertTriangle, Calendar, Cpu, Globe, Inbox, Key, PieChart, Route, Shield } from "lucide-react";
+import { AlertTriangle, Calendar, Cpu, Globe, Inbox, Key, ListChecks, PieChart, Route, Shield } from "lucide-react";
 import type { DashboardStats } from "@/types/agent";
 
 const LazyHeatmapGrid = React.lazy(() => import("../charts/heatmap-grid"));
@@ -73,13 +74,14 @@ function AuditStrip() {
   }, []);
   if (logs.length === 0) return null;
   return (
-    <Card className="overflow-hidden mb-4">
-      <CardHeader className="px-5 py-3 border-b border-border">
-        <CardTitle className="text-sm font-semibold text-foreground">
-          <Shield className="size-4" />{t("dashboard.recent_audit")}
-        </CardTitle>
-        <Link to="/audit" className="text-xs text-primary hover:underline">{t("dashboard.view_all")}</Link>
-      </CardHeader>
+    <Card className="gap-0 overflow-hidden py-0 mb-4">
+      <CardHeader
+        icon={Shield}
+        title={t("dashboard.recent_audit")}
+        action={
+          <Link to="/audit" className="text-xs text-primary hover:underline">{t("dashboard.view_all")}</Link>
+        }
+      />
       <div className="divide-y divide-border">
         {logs.map((log, i) => (
           <div key={i} className="flex items-center justify-between px-5 py-2.5 text-xs">
@@ -131,10 +133,8 @@ export default function AnalyticsView({
         </div>
       </Suspense>
 
-      <Card className="overflow-hidden">
-        <CardHeader className="px-5 py-3.5 border-b border-border">
-          <CardTitle className="text-sm font-semibold text-foreground">{t("dashboard.recent_tasks")}</CardTitle>
-        </CardHeader>
+      <Card className="gap-0 overflow-hidden py-0">
+        <CardHeader icon={ListChecks} title={t("dashboard.recent_tasks")} />
         <div className="divide-y divide-border">
           {stats === null ? (
             <div className="p-(--card-spacing) space-y-2">

@@ -61,7 +61,8 @@ export default memo(function ScreenTriggerSection({ agentId, online }: ScreenTri
   return (
     <CollectCard
       title={t("agents.trigger_title")}
-      icon={<Crosshair className="size-3.5" />}
+      icon={Crosshair}
+      tone="warning"
       headerRight={
         <>
           {watching !== null && (

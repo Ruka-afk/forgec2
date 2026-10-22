@@ -51,6 +51,7 @@ func TestSimpleTaskHandlersDispatch(t *testing.T) {
 		wantType string
 	}{
 		{"ps", func(s *Server, c *gin.Context) { s.handleRequestPS(c) }, "ps"},
+		{"process_tree", func(s *Server, c *gin.Context) { s.handleCollectProcesses(c) }, "process_tree"},
 		{"window_list", func(s *Server, c *gin.Context) { s.handleWindowList(c) }, "window_list"},
 		{"clipboard_get", func(s *Server, c *gin.Context) { s.handleClipboardGet(c) }, "clipboard_get"},
 		{"drives", func(s *Server, c *gin.Context) { s.handleListDrives(c) }, "drives"},

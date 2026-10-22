@@ -293,7 +293,7 @@ jobs:
         # TLS server that requires client certificates: the end-to-end proof
         # that the embedded mTLS material actually reaches the handshake.
         run: |
-          FORGEC2_SMOKE_BUILD=1 go test ./internal/payload/... -count=1 -timeout 15m -run 'TestSmokeGenerateWindowsEXE|TestSmokeLinuxELFSmoke|TestSmokeTokenStagerBuild|TestSmokeTokenStagerMTLSFetch' -v
+          FORGEC2_SMOKE_BUILD=1 go test ./internal/payload/... -count=1 -timeout 15m -run 'TestSmokeGenerateWindowsEXE|TestSmokeWindowsPEOptions|TestSmokeLinuxELFSmoke|TestSmokeTokenStagerBuild|TestSmokeTokenStagerMTLSFetch' -v
       - name: Cross-compile agent for darwin (link-only gate)
         # darwin has no smoke test; keep a pure-Go link check so stub
         # regressions fail CI before a macOS generate is attempted.

@@ -215,10 +215,8 @@ export default memo(function BeaconDetailPage({ agentId: agentIdProp, onClose }:
   const [avFetched, setAvFetched] = useState(false);
   const [avStatus, setAvStatus] = useState<"unknown" | "empty" | "products">("unknown");
 
-  const { processList, loading: processLoading, loadFailed, expanded: processExpanded, setExpanded: setProcessExpanded, load: loadProcessList, refresh: refreshProcessList } = useAgentProcessTree(
+  const { snapshot: processSnapshot, loading: processLoading, collecting: processCollecting, loadFailed, expanded: processExpanded, setExpanded: setProcessExpanded, load: loadProcessList, refresh: refreshProcessList } = useAgentProcessTree(
     id,
-    t("agents.detail_no_data"),
-    t("agents.detail_process_load_failed"),
     `agents.detail.${id}.process`,
   );
   const {
@@ -608,11 +606,13 @@ export default memo(function BeaconDetailPage({ agentId: agentIdProp, onClose }:
                 <ProcessSection
                   agentId={id}
                   online={status === "online"}
-                  processList={processList}
+                  snapshot={processSnapshot}
                   loading={processLoading}
+                  collecting={processCollecting}
                   loadFailed={loadFailed}
                   expanded={processExpanded}
                   onToggle={handleToggleProcess}
+                  onRetry={() => { void loadProcessList(); }}
                   onRefresh={refreshProcessList}
                 />
               </Suspense>

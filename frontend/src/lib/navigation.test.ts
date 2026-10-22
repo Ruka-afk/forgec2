@@ -29,56 +29,36 @@ describe("navigation single source", () => {
     }
   });
 
-  it("sections are non-empty and preserve sidebar order groups", () => {
+  it("sections are non-empty and follow the operator workstream order", () => {
     expect(NAV_SECTIONS.map((s) => s.titleKey)).toEqual([
       "operations",
       "build-deploy",
-      "post-exploitation",
-      "intel-analysis",
+      "toolbox",
+      "intelligence",
+      "reporting",
+      "administration",
       "lab",
-      "system",
     ]);
     for (const section of NAV_SECTIONS) {
       expect(section.items.length).toBeGreaterThan(0);
     }
   });
 
-  it("keeps lab and system out of the sidebar but reachable for titles", () => {
+  it("surfaces every routed page in the sidebar, including lab and admin tooling", () => {
     const hrefs = sidebarNavSections().flatMap((s) => s.items.map((i) => i.href));
-    expect(hrefs).not.toContain("/phishing");
-    expect(hrefs).not.toContain("/circuit-breaker");
-    expect(hrefs).not.toContain("/users");
-    expect(hrefs).not.toContain("/tags");
-    expect(NAV_BY_HREF["/phishing"]).toBe("nav.phishing");
-    expect(NAV_BY_HREF["/users"]).toBe("nav.users");
-    expect(hrefs).not.toContain("/lateral");
-    expect(hrefs).not.toContain("/campaign");
-    expect(hrefs).toContain("/automation");
-    expect(hrefs).not.toContain("/bof");
-    expect(hrefs).toContain("/plugins");
-    expect(hrefs).toContain("/asset-management");
-    expect(NAV_BY_HREF["/lateral"]).toBe("nav.lateral");
-    expect(NAV_BY_HREF["/campaign"]).toBe("nav.campaign");
-  });
-
-  it("keeps retired or high-risk tools addressable without advertising them", () => {
-    const hidden = [
-      "/phishing", "/ntlm", "/bof", "/macros",
-      "/privilege-escalation", "/pivoting", "/lateral", "/chat", "/domain-fronting",
-      "/tags", "/groups", "/autotag",
-      "/traffic",
-      // NOTE: "/password-spray" was removed from this list when the page was
-      // merged into the Toolkit spray tab: unlike the entries above (hidden
-      // but still routed), its route no longer exists, so there is nothing
-      // to keep addressable. The form lives at /toolkit (spray tab).
-    ];
-    const sidebarHrefs = sidebarNavSections().flatMap((s) => s.items.map((i) => i.href));
-    const paletteItems = NAV_ITEMS.filter((item) => item.discoverable !== false).map((item) => item.href);
-    for (const href of hidden) {
-      expect(sidebarHrefs).not.toContain(href);
-      expect(paletteItems).not.toContain(href);
+    for (const item of NAV_ITEMS) {
+      expect(hrefs).toContain(item.href);
+    }
+    // Previously command-palette-only surfaces are now first-class nav entries.
+    for (const href of ["/phishing", "/ntlm", "/users", "/tags", "/traffic", "/bloodhound"]) {
+      expect(hrefs).toContain(href);
       expect(NAV_BY_HREF[href]).toBeTruthy();
     }
+  });
+
+  it("keeps every page discoverable in the command palette", () => {
+    const paletteItems = NAV_ITEMS.filter((item) => item.discoverable !== false).map((item) => item.href);
+    expect(paletteItems).toEqual(NAV_ITEMS.map((item) => item.href));
   });
 
   it("does not advertise merged routes as sidebar destinations", () => {
@@ -114,9 +94,12 @@ describe("navigation single source", () => {
       expect(primary.items.some((i) => i.badge === "notifications")).toBe(true);
     });
 
-  it("keeps settings reachable but outside the scrolling sidebar sections", () => {
-    const hrefs = sidebarNavSections().flatMap((s) => s.items.map((i) => i.href));
-    expect(hrefs).not.toContain("/settings");
+  it("keeps administration destinations grouped instead of palette-only", () => {
+    const admin = NAV_SECTIONS.find((s) => s.titleKey === "administration");
+    const hrefs = (admin?.items ?? []).map((i) => i.href);
+    expect(hrefs).toEqual(
+      expect.arrayContaining(["/settings", "/users", "/roles", "/tags", "/groups", "/autotag", "/audit"]),
+    );
     expect(NAV_BY_HREF["/settings"]).toBe("nav.settings");
   });
 });

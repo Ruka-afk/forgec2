@@ -295,7 +295,7 @@ export default function ListenersPageContent() {
         <Card interactive className="p-(--card-spacing)"><StatTile label={t("listeners.dns")} value={loading ? "…" : dnsCount} icon={<Radio className="size-5" />} /></Card>
       </MetricGrid>
 
-      <PageToolbar>
+      <PageToolbar sticky>
         <div className="flex gap-2">
           <Select value={typeFilter} onValueChange={(val) => setTypeFilter(typeof val === "string" ? val : "")}>
             <SelectTrigger className="flex-1 sm:w-40">

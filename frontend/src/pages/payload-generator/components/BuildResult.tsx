@@ -4,7 +4,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { useI18n } from "@/lib/i18n";
-import { CheckCircle2, Loader2, XCircle } from "lucide-react";
+import type { BuildSignature } from "@/types/generate";
+import { CheckCircle2, Loader2, ShieldAlert, ShieldCheck, ShieldOff, ShieldX, XCircle } from "lucide-react";
 
 /**
  * Every panel stores "" in state.result on success (the one-liner panel uses
@@ -19,10 +20,61 @@ function isErrorString(result: ReactNode): boolean {
 }
 
 /**
- * BuildResult — unified in-card build feedback:
- * busy → compiling strip with progress · result → success/error alert.
+ * BuildSignatureBadge — Authenticode classification for a completed direct
+ * Windows EXE/DLL. Self-signed certificates are intentionally shown as
+ * untrusted rather than "valid": Windows will still display Unknown Publisher.
  */
-export function BuildResult({ busy, result }: { busy?: boolean; result?: ReactNode }) {
+export function BuildSignatureBadge({ signature }: { signature?: BuildSignature }) {
+  const { t } = useI18n();
+  if (!signature) return null;
+  const selfSigned = !!signature.signer && signature.signer === signature.issuer;
+  let variant: "success" | "warning" | "destructive" | "outline" = "outline";
+  let Icon = ShieldOff;
+  let label: string;
+  switch (signature.status) {
+    case "valid":
+      variant = "success";
+      Icon = ShieldCheck;
+      label = t("generate.signature.valid");
+      break;
+    case "untrusted_root":
+      variant = "warning";
+      Icon = ShieldAlert;
+      label = selfSigned ? t("generate.signature.self_signed") : t("generate.signature.untrusted_root");
+      break;
+    case "invalid":
+      variant = "destructive";
+      Icon = ShieldX;
+      label = t("generate.signature.invalid");
+      break;
+    default:
+      label = t("generate.signature.unsigned");
+      break;
+  }
+  const signerLabel = signature.signer
+    ? t("generate.signature.signer", { name: signature.signer })
+    : undefined;
+  const detail = [signerLabel, signature.error].filter(Boolean).join("\n") || undefined;
+  return (
+    <div className="mt-3 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+      <Badge variant={variant} className="gap-1 rounded-full px-2.5 py-1 text-xs shadow-sm" title={detail}>
+        <Icon className="size-3.5" /> {label}
+      </Badge>
+      {signerLabel && (
+        <span className="min-w-0 max-w-full truncate text-xs text-muted-foreground" title={detail}>
+          {signerLabel}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * BuildResult — unified in-card build feedback:
+ * busy → compiling strip with progress · result → success/error alert, plus
+ * the Authenticode classification for Windows EXE/DLL builds.
+ */
+export function BuildResult({ busy, result, signature }: { busy?: boolean; result?: ReactNode; signature?: BuildSignature }) {
   const { t } = useI18n();
   if (busy) {
     return (
@@ -37,13 +89,18 @@ export function BuildResult({ busy, result }: { busy?: boolean; result?: ReactNo
       </div>
     );
   }
-  if (!result) return null;
+  if (!result && !signature) return null;
   return (
-    <Alert variant={isErrorString(result) ? "destructive" : "default"} className="mt-3 rounded-xl shadow-sm">
-      <AlertDescription>
-        <pre className="max-h-48 overflow-y-auto font-mono text-xs leading-5 whitespace-pre-wrap [scrollbar-width:thin]">{result}</pre>
-      </AlertDescription>
-    </Alert>
+    <>
+      {result && (
+        <Alert variant={isErrorString(result) ? "destructive" : "default"} className="mt-3 rounded-xl shadow-sm">
+          <AlertDescription>
+            <pre className="max-h-48 overflow-y-auto font-mono text-xs leading-5 whitespace-pre-wrap [scrollbar-width:thin]">{result}</pre>
+          </AlertDescription>
+        </Alert>
+      )}
+      <BuildSignatureBadge signature={signature} />
+    </>
   );
 }
 

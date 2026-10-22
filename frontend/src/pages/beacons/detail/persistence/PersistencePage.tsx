@@ -11,12 +11,11 @@ import { useMutation } from "@/lib/hooks/useMutation";
 
 import { Spinner, PageSpinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
-import { Card } from "@/components/ui/card";
+import { SectionCard } from "@/components/ui/section-card";
 import { Banner } from "@/components/ui/banner";
 import { PageContainer } from "@/components/ui/page-container";
 import { DataError } from "@/components/ui/data-state";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { CalendarCheck, Cog, Boxes, FolderOpen, Puzzle, Server, Settings } from "lucide-react";
 import { Bug, Info, Link as LinkIcon, ListChecks, Plug, RotateCw, Trash2 } from "lucide-react";
 
@@ -228,32 +227,23 @@ export default function AgentPersistencePage() {
   }
 
   return (
-    <PageContainer>
-      <Card className="p-(--card-spacing) mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="size-14 rounded-lg bg-primary/15 flex items-center justify-center">
-              <LinkIcon className="size-4" aria-hidden="true" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold text-foreground">{hostname}</h1>
-                <span className={`size-2.5 rounded-full ${statusColor}`}></span>
-                <span className="text-xs font-medium text-muted-foreground">{agentStatus.toUpperCase()}</span>
-              </div>
-              <p className="text-sm text-muted-foreground mt-1">{t("agents.persistence_title")}</p>
-            </div>
-          </div>
-          <Button
-            onClick={() => void runList(++listRunRef.current)}
-            size="sm"
-            className="flex items-center gap-1.5"
-          >
-            {listLoading ? <Spinner size="sm" /> : <RotateCw className="size-4" aria-hidden="true" />}{" "}
-            {t("agents.persistence_refresh_list")}
-          </Button>
-        </div>
-      </Card>
+    <PageContainer
+      title={hostname}
+      subtitle={t("agents.persistence_title")}
+      icon={<LinkIcon className="size-5" aria-hidden="true" />}
+      meta={
+        <span className="inline-flex items-center gap-1.5">
+          <span className={`size-2 rounded-full ${statusColor}`} aria-hidden="true" />
+          {agentStatus.toUpperCase()}
+        </span>
+      }
+      actions={
+        <Button onClick={() => void runList(++listRunRef.current)} size="sm" className="gap-1.5">
+          {listLoading ? <Spinner size="sm" /> : <RotateCw className="size-4" aria-hidden="true" />}
+          {t("agents.persistence_refresh_list")}
+        </Button>
+      }
+    >
 
       <Banner tone="warning" className="items-start mb-4">
         <div className="font-semibold">{t("agents.persistence_honesty_title")}</div>
@@ -261,12 +251,13 @@ export default function AgentPersistencePage() {
       </Banner>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <Card className="p-(--card-spacing)">
-          <div className="flex items-center gap-2 mb-4">
-            <Plug className="size-4" aria-hidden="true" />
-            <h3 className="text-sm font-semibold text-foreground">{t("agents.persistence_install")}</h3>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <SectionCard
+          title={t("agents.persistence_install")}
+          icon={Plug}
+          tone="primary"
+          headerAccent
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-(--card-spacing)">
             {PERSISTENCE_METHODS.map((method) => {
               const quality = persistenceMethodQuality(method.key) ?? "hardened";
               const versionBlocked = implantBlocksDest(agent.version, quality);
@@ -295,16 +286,16 @@ export default function AgentPersistencePage() {
               );
             })}
           </div>
-        </Card>
+        </SectionCard>
 
-        <Card className="p-(--card-spacing)">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <ListChecks className="size-4" aria-hidden="true" />
-              <h3 className="text-sm font-semibold text-foreground">{t("agents.persistence_installed")} <span className="text-xs font-normal text-muted-foreground">(queued)</span></h3>
-            </div>
-            <Badge variant="secondary" className="text-micro-sm">{queuedMethods.length}</Badge>
-          </div>
+        <SectionCard
+          title={<>{t("agents.persistence_installed")} <span className="text-xs font-normal text-muted-foreground">(queued)</span></>}
+          icon={ListChecks}
+          tone="info"
+          count={queuedMethods.length}
+          headerAccent
+        >
+          <div className="p-(--card-spacing)">
           {queuedMethods.length === 0 ? (
             <div className="text-center py-8">
               <Info className="size-4 mb-2" />
@@ -361,7 +352,8 @@ export default function AgentPersistencePage() {
               </div>
             )
           )}
-        </Card>
+          </div>
+        </SectionCard>
       </div>
       {confirmDialog.modal}
     </PageContainer>

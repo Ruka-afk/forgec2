@@ -1,7 +1,27 @@
 import { memo } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Download, Grip, History, Layers, ListChecks, ListOrdered, Pause, Play, Plus, RefreshCw } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Download,
+  Grip,
+  History,
+  Layers,
+  ListChecks,
+  ListOrdered,
+  MoreHorizontal,
+  Pause,
+  Play,
+  Plus,
+  RefreshCw,
+} from "lucide-react";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;
 
@@ -22,7 +42,11 @@ interface AgentsToolbarProps {
   onRefresh: () => void;
 }
 
-/** PageContainer action buttons for the agents list. */
+/**
+ * Page actions for the agents list. One primary action plus an overflow menu:
+ * the header used to render eight same-weight buttons, which buried the
+ * Generate Payload entry point.
+ */
 export default memo(function AgentsToolbar({
   t, bulkMode, onToggleBulk, showResults, onToggleResults,
   exporting, onExport, autoRefresh, onToggleAutoRefresh,
@@ -31,86 +55,56 @@ export default memo(function AgentsToolbar({
   return (
     <>
       <Button
-        variant="outline"
-        onClick={onToggleBulk}
-        aria-label={t("agents.bulk_ops")}
-        className={`h-9 sm:h-10 px-3 rounded-lg gap-2 min-w-[2.75rem] min-h-[2.75rem] transition-all ${
-          bulkMode
-            ? "bg-primary text-primary-foreground border-primary hover:bg-primary/80"
-            : "text-muted-foreground"
-        }`}
+        variant="ghost"
+        size="icon"
+        onClick={onRefresh}
+        aria-label={t("agents.refresh")}
+        title={t("agents.refresh")}
       >
-        <ListChecks className="size-4" />
-        <span className="hidden sm:inline text-sm">{t("agents.bulk_ops")}</span>
+        <RefreshCw className="size-4" />
       </Button>
       <Button
-        variant="outline"
-        onClick={onToggleResults}
-        className={`h-9 sm:h-10 px-3 rounded-lg gap-2 min-w-[2.75rem] min-h-[2.75rem] transition-all ${
-          showResults
-            ? "bg-primary text-primary-foreground border-primary hover:bg-primary/80"
-            : "text-muted-foreground"
-        }`}
-        title={t("agents.bulk_results_title")}
-      >
-        <History className="size-4" />
-        <span className="hidden sm:inline text-sm">{t("agents.results")}</span>
-      </Button>
-      <Button
-        variant="outline"
-        onClick={onExport}
-        disabled={exporting}
-        className="h-9 sm:h-10 px-3 rounded-lg gap-2 min-w-[2.75rem] min-h-[2.75rem]"
-        title={t("agents.export_csv_title")}
-      >
-        <Download className="size-4" />
-        <span className="hidden sm:inline text-foreground text-sm">{t("agents.export")}</span>
-      </Button>
-      <Button
-        variant="outline"
+        variant={autoRefresh ? "secondary" : "ghost"}
+        size="icon"
         onClick={onToggleAutoRefresh}
-        className={`h-9 sm:h-10 px-3 rounded-lg gap-2 min-w-[2.75rem] min-h-[2.75rem] transition-all ${
-          autoRefresh
-            ? "bg-success border-success text-white hover:bg-success/10"
-            : "text-muted-foreground"
-        }`}
+        aria-pressed={autoRefresh}
+        aria-label={autoRefresh ? t("agents.auto_refresh_on") : t("agents.auto_refresh_off")}
         title={autoRefresh ? t("agents.auto_refresh_on") : t("agents.auto_refresh_off")}
       >
         {autoRefresh ? <Pause className="size-4" /> : <Play className="size-4" />}
-        <span className="hidden sm:inline text-sm">{autoRefresh ? t("agents.live") : t("agents.auto")}</span>
       </Button>
-      <Button
-        variant="outline"
-        onClick={onToggleView}
-        className="hidden h-9 min-h-[2.75rem] min-w-[2.75rem] gap-2 rounded-lg px-3 sm:inline-flex sm:h-10"
-        title={effectiveViewMode === "table" ? t("agents.switch_grid") : t("agents.switch_table")}
-      >
-        {effectiveViewMode === "table" ? <Grip className="size-4" /> : <ListOrdered className="size-4" />}
-      </Button>
-      {effectiveViewMode === "table" && (
-      <Button
-        variant="outline"
-        onClick={onToggleGroupByHost}
-        aria-pressed={groupByHost}
-        title={t("agents.group_by_host")}
-        className={`hidden h-9 min-h-[2.75rem] min-w-[2.75rem] gap-2 rounded-lg px-3 sm:inline-flex sm:h-10 transition-all ${
-          groupByHost
-            ? "bg-primary text-primary-foreground border-primary hover:bg-primary/80"
-            : "text-muted-foreground"
-        }`}
-      >
-        <Layers className="size-4" />
-      </Button>
-      )}
-      <Button
-        variant="outline"
-        onClick={onRefresh}
-        aria-label={t("agents.refresh")}
-        className="h-9 sm:h-10 px-3 rounded-lg gap-2 min-w-[2.75rem] min-h-[2.75rem]"
-      >
-        <RefreshCw className="size-4" />
-        <span className="hidden sm:inline text-foreground text-sm">{t("agents.refresh")}</span>
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button variant="outline" aria-label={t("common.more")}>
+              <MoreHorizontal className="size-4" />
+              <span className="hidden sm:inline">{t("common.more")}</span>
+            </Button>
+          }
+        />
+        <DropdownMenuContent className="w-56">
+          <DropdownMenuCheckboxItem checked={bulkMode} onCheckedChange={() => onToggleBulk()}>
+            <ListChecks className="size-4" /> {t("agents.bulk_ops")}
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem checked={showResults} onCheckedChange={() => onToggleResults()}>
+            <History className="size-4" /> {t("agents.results")}
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuItem disabled={exporting} onClick={onExport}>
+            <Download className="size-4" /> {t("agents.export")}
+            <span className="ml-auto text-micro text-muted-foreground">CSV</span>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={onToggleView}>
+            {effectiveViewMode === "table" ? <Grip className="size-4" /> : <ListOrdered className="size-4" />}
+            {effectiveViewMode === "table" ? t("agents.switch_grid") : t("agents.switch_table")}
+          </DropdownMenuItem>
+          {effectiveViewMode === "table" && (
+            <DropdownMenuCheckboxItem checked={groupByHost} onCheckedChange={() => onToggleGroupByHost()}>
+              <Layers className="size-4" /> {t("agents.group_by_host")}
+            </DropdownMenuCheckboxItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
       <Button render={<Link to="/payload-generator" />}>
         <Plus className="size-4" />
         <span className="hidden sm:inline">{t("agents.generate_implant")}</span>

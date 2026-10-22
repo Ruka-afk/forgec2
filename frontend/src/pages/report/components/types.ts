@@ -30,6 +30,15 @@ export interface TaskStatRow {
   success_rate?: number;
 }
 
+export interface ReportTaskRow {
+  id?: string;
+  agent?: string;
+  type?: string;
+  command?: string;
+  status?: string;
+  created?: string;
+}
+
 export interface CredRow {
   type?: string;
   count?: number;
@@ -62,6 +71,27 @@ export interface ReportHistoryRow {
   created_at?: string;
   sections?: string[];
   size?: string;
+}
+
+/**
+ * The section API returns raw task rows (id/type/status/...), while the Tasks
+ * tab renders one row per task type. Aggregating here keeps the page from
+ * treating the response's `stats` object (single aggregate) as a list.
+ */
+export function aggregateTaskStats(tasks: ReportTaskRow[]): TaskStatRow[] {
+  const byType = new Map<string, TaskStatRow>();
+  for (const task of tasks) {
+    const type = task.type || "unknown";
+    const row = byType.get(type) ?? { type, total: 0, success: 0, failed: 0 };
+    row.total = (row.total ?? 0) + 1;
+    if (task.status === "completed") row.success = (row.success ?? 0) + 1;
+    else if (task.status === "failed" || task.status === "error") row.failed = (row.failed ?? 0) + 1;
+    byType.set(type, row);
+  }
+  return Array.from(byType.values()).map((row) => ({
+    ...row,
+    success_rate: row.total ? Math.round(((row.success ?? 0) / row.total) * 100) : 0,
+  }));
 }
 
 export function severityColor(s: string): string {

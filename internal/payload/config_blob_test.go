@@ -186,6 +186,7 @@ func TestBuildLdflagsUsesSingleConfigBlob(t *testing.T) {
 		Interval:  10,
 		Jitter:    20,
 		BeaconKey: "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
+		SelfCheck: true,
 	}
 
 	ldflags, blob, sConfigKey := buildLdflags(cfg, profile, "windows")
@@ -198,6 +199,12 @@ func TestBuildLdflagsUsesSingleConfigBlob(t *testing.T) {
 	}
 	if containsString(ldflags, `-X "main.SConfigKey=`) {
 		t.Fatalf("SConfigKey must not be on the build argv: %s", ldflags)
+	}
+	// The self-check placeholder must also stay off the argv: with -X, Go
+	// records the value in the build info section, producing a second copy
+	// that patchSelfCheckHash cannot distinguish from the real variable.
+	if containsString(ldflags, `-X "main.SelfCheckSHA256Str=`) || containsString(ldflags, selfCheckPlaceholder) {
+		t.Fatalf("SelfCheckSHA256Str must not be on the build argv: %s", ldflags)
 	}
 	if blob == "" || sConfigKey == "" {
 		t.Fatalf("buildLdflags returned empty blob/key: blob=%q sKey=%q", blob, sConfigKey)
@@ -227,7 +234,7 @@ func TestBuildLdflagsUsesSingleConfigBlob(t *testing.T) {
 // (and never the build argv).
 func TestWriteConfigInjectFile(t *testing.T) {
 	dir := t.TempDir()
-	if err := writeConfigInjectFile(dir, "BASE64BLOB==", "ab:cd"); err != nil {
+	if err := writeConfigInjectFile(dir, "BASE64BLOB==", "ab:cd", true); err != nil {
 		t.Fatalf("writeConfigInjectFile: %v", err)
 	}
 	// Filename is randomized per build (aa_*_inject.go, always sorting before
@@ -253,13 +260,34 @@ func TestWriteConfigInjectFile(t *testing.T) {
 	if !strings.Contains(src, `SConfigKey = "ab:cd"`) {
 		t.Errorf("inject file missing SConfigKey assignment: %s", src)
 	}
-	// Empty secrets must be a no-op (no file written, defaults stand).
+	if !strings.Contains(src, `SelfCheckSHA256Str = "`+selfCheckPlaceholder+`"`) {
+		t.Errorf("inject file missing self-check placeholder assignment: %s", src)
+	}
+	// Empty secrets and no self-check must be a no-op (no file written,
+	// defaults stand).
 	emptyDir := t.TempDir()
-	if err := writeConfigInjectFile(emptyDir, "", ""); err != nil {
+	if err := writeConfigInjectFile(emptyDir, "", "", false); err != nil {
 		t.Fatalf("writeConfigInjectFile(empty): %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(emptyDir, "aa_config_inject.go")); err == nil {
 		t.Errorf("empty secrets should not write an inject file")
+	}
+	// Self-check alone still needs the generated file: the placeholder must
+	// come from source, never from -X.
+	selfDir := t.TempDir()
+	if err := writeConfigInjectFile(selfDir, "", "", true); err != nil {
+		t.Fatalf("writeConfigInjectFile(self-check): %v", err)
+	}
+	selfMatches, err := filepath.Glob(filepath.Join(selfDir, "aa_*_inject.go"))
+	if err != nil || len(selfMatches) != 1 {
+		t.Fatalf("expected exactly one self-check inject file, got %v (err=%v)", selfMatches, err)
+	}
+	selfSrc, err := os.ReadFile(selfMatches[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(selfSrc), `SelfCheckSHA256Str = "`+selfCheckPlaceholder+`"`) {
+		t.Errorf("self-check-only inject file missing placeholder: %s", selfSrc)
 	}
 }
 

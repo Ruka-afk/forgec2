@@ -11,8 +11,8 @@ import { DataError } from "@/components/ui/data-state";
 import { StatCard } from "@/components/ui/animated-stat-card";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { toast } from "sonner";
-import { formatTime } from "@/lib/utils";
-import { Card, CardContent } from "@/components/ui/card";
+import { formatTime, isZeroTime } from "@/lib/utils";
+import { SectionCard } from "@/components/ui/section-card";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,7 +74,14 @@ export default function CircuitBreakerPage() {
         api.get<{ events?: BreakerEvent[] }>(paths.circuitBreaker.events),
       ]);
       return {
-        listeners: (detData.listeners || []) as ListenerDetail[],
+        // Go encodes an empty slice as null; a null `fail_reasons` makes the
+        // `l.fail_reasons.length` reads below throw and blanks the whole page.
+        // An unprobed listener carries Go's zero time, which formats as year 1.
+        listeners: (detData.listeners || []).map((l) => ({
+          ...l,
+          fail_reasons: l.fail_reasons ?? [],
+          last_probe: isZeroTime(l.last_probe) ? "" : l.last_probe,
+        })) as ListenerDetail[],
         config: cfgData as Partial<BreakerConfig>,
         events: (evtData.events || []) as BreakerEvent[],
       };
@@ -167,14 +174,17 @@ export default function CircuitBreakerPage() {
           <StatCard label={t("cb.check_interval")} value={`${config.health_check_seconds}s`} color="indigo" icon={<Gauge className="size-4" />} sub={t("cb.probes_every", { seconds: config.health_check_seconds })} />
         </div>
 
-        <Card>
-          <CardContent>
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-sm font-semibold text-foreground">{t("cb.monitored_listeners")}</span>
-              <Button variant="ghost" size="sm" onClick={() => { setConfigForm(config); setShowConfigModal(true); }}>
-                <SlidersHorizontal className="size-4" />{t("cb.config")}
-              </Button>
-            </div>
+        <SectionCard
+          title={t("cb.monitored_listeners")}
+          icon={Activity}
+          tone="info"
+          action={
+            <Button variant="ghost" size="sm" onClick={() => { setConfigForm(config); setShowConfigModal(true); }}>
+              <SlidersHorizontal className="size-4" />{t("cb.config")}
+            </Button>
+          }
+        >
+          <div className="p-(--card-spacing)">
             <Table>
             <TableHeader>
               <TableRow>
@@ -248,16 +258,20 @@ export default function CircuitBreakerPage() {
               })}
             </TableBody>
           </Table>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionCard>
 
         {/* Fail Reasons */}
-        {listeners.some(l => l.fail_reasons.length > 0) && (
-          <Card className="p-(--card-spacing)">
-            <h3 className="text-sm font-semibold text-foreground mb-3">{t("cb.recent_failures")}</h3>
-            <div className="space-y-2 max-h-48 overflow-y-auto">
-              {listeners.filter(l => l.fail_reasons.length > 0).map(l => (
-              l.fail_reasons.map((reason, idx) => (
+        {listeners.some(l => (l.fail_reasons?.length ?? 0) > 0) && (
+          <SectionCard
+            title={t("cb.recent_failures")}
+            icon={AlertCircle}
+            tone="destructive"
+            headerAccent
+          >
+            <div className="space-y-2 max-h-48 overflow-y-auto p-(--card-spacing)">
+              {listeners.filter(l => (l.fail_reasons?.length ?? 0) > 0).map(l => (
+              (l.fail_reasons ?? []).map((reason, idx) => (
                 <div key={`${l.target}-${idx}`} className="flex items-start gap-2 p-3 bg-muted border border-border rounded-lg">
                   <AlertCircle className="size-4" />
                   <div className="min-w-0">
@@ -267,14 +281,16 @@ export default function CircuitBreakerPage() {
                 </div>
               ))))}
             </div>
-          </Card>
+          </SectionCard>
         )}
 
-        <Card className="p-(--card-spacing)">
-          <h3 className="text-sm font-semibold text-foreground mb-3">
-            <History className="size-4" />
-            {t("cb.state_history")}
-          </h3>
+        <SectionCard
+          title={t("cb.state_history")}
+          icon={History}
+          tone="muted"
+          headerAccent
+        >
+          <div className="p-(--card-spacing)">
           {events.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-6">{t("cb.no_events")}</p>
           ) : (
@@ -301,7 +317,8 @@ export default function CircuitBreakerPage() {
               ))}
              </div>
           )}
-        </Card>
+          </div>
+        </SectionCard>
       </PageContainer>
 
       <Dialog open={showConfigModal} onOpenChange={setShowConfigModal}>

@@ -18,7 +18,7 @@ export function EmptyState({ icon, title, message, action, className, compact = 
   // establish a…") instead of wrapping it, on every table-backed page.
   if (compact) {
     return (
-      <div className={cn("flex flex-col items-center justify-center gap-1.5 whitespace-normal py-8 text-center", className)}>
+      <div className={cn("flex flex-col items-center justify-center gap-1.5 whitespace-normal py-6 text-center", className)}>
         <IconComponent className="size-5 text-muted-foreground/70" aria-hidden="true" />
         <p className="text-compact font-medium text-muted-foreground">{title}</p>
         {message && <p className="max-w-xs text-balance text-xs text-muted-foreground/80">{message}</p>}
@@ -27,12 +27,15 @@ export function EmptyState({ icon, title, message, action, className, compact = 
     );
   }
   return (
-    <div role="status" className={cn("flex min-h-40 flex-col items-center justify-center whitespace-normal py-12 text-center animate-fade-in sm:py-16 md:py-20", className)}>
-      <div className="mb-5 flex size-14 items-center justify-center rounded-lg bg-muted/80 shadow-sm ring-1 ring-border/50" aria-hidden="true">
-        <IconComponent className="size-8 text-muted-foreground/85" aria-hidden="true" />
+    // Dense-console sizing: the full-page empty state used to reserve ~240px
+    // (min-h-40 + md:py-20), which turned every empty panel into a wall of
+    // whitespace on the dashboard and in card bodies.
+    <div role="status" className={cn("flex min-h-28 flex-col items-center justify-center whitespace-normal py-8 text-center animate-fade-in sm:py-10 md:py-12", className)}>
+      <div className="mb-3 flex size-11 items-center justify-center rounded-lg bg-muted/80 shadow-sm ring-1 ring-border/50" aria-hidden="true">
+        <IconComponent className="size-6 text-muted-foreground/85" aria-hidden="true" />
       </div>
-      <p className="mb-1.5 text-sm font-semibold text-foreground">{title}</p>
-      {message && <p className="mb-5 max-w-sm text-balance text-compact leading-relaxed text-muted-foreground">{message}</p>}
+      <p className="mb-1 text-sm font-semibold text-foreground">{title}</p>
+      {message && <p className="mb-3 max-w-sm text-balance text-compact leading-relaxed text-muted-foreground">{message}</p>}
       {action && <div>{action}</div>}
     </div>
   );

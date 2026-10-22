@@ -8,7 +8,7 @@ import { errorText } from "@/lib/errors";
 import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { useWS } from "@/lib/wsContext";
 import { PageContainer } from "@/components/ui/page-container";
-import { Card } from "@/components/ui/card";
+import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -313,11 +313,13 @@ export default function MacrosPageContent() {
     >
       {modal}
       {/* ── Macro library ─────────────────────────────────────────── */}
-      <Card>
-        <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-foreground">{t("macros.library")}</h3>
-          <Badge variant="secondary">{macroCount}</Badge>
-        </div>
+      <SectionCard
+        title={t("macros.library")}
+        icon={ListOrdered}
+        tone="primary"
+        count={macroCount}
+        headerAccent
+      >
         {loading ? (
           <div className="py-12 text-center"><Spinner /></div>
         ) : macros.length === 0 ? (
@@ -366,14 +368,18 @@ export default function MacrosPageContent() {
             })}
           </div>
         )}
-      </Card>
+      </SectionCard>
 
       {/* ── Run history ───────────────────────────────────────────── */}
-      <Card>
-        <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-foreground">{t("macros.runs_title")}</h3>
+      <SectionCard
+        title={t("macros.runs_title")}
+        icon={Play}
+        tone="success"
+        headerAccent
+        action={
           <Button variant="ghost" size="xs" onClick={() => void loadRuns()}>{t("common.refresh")}</Button>
-        </div>
+        }
+      >
         {runsLoading ? (
           <div className="space-y-2 p-5">
             {[1, 2, 3].map((i) => (
@@ -416,7 +422,7 @@ export default function MacrosPageContent() {
             ))}
           </div>
         )}
-      </Card>
+      </SectionCard>
 
       {/* ── Editor dialog ─────────────────────────────────────────── */}
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>

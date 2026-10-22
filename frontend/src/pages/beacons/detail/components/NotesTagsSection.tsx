@@ -43,7 +43,8 @@ export default memo(function NotesTagsSection({
     <SectionCard
       className="mb-4"
       title={t("agents.detail_notes_tags")}
-      icon={<Tag className="size-3.5" />}
+      icon={Tag}
+      tone="info"
       action={!editing ? (
         <Button variant="ghost" size="sm" onClick={onStartEdit} className="text-xs h-auto p-0 text-primary hover:bg-transparent gap-1.5">
           <Pencil className="size-4" /> {t("agents.detail_edit")}

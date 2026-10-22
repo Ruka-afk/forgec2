@@ -96,7 +96,7 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := buildAgentBinary(goCmd, tmpDir, ldflags, buildPath, cfg.Obfuscate, "windows", goarch, blob, sKey, cfg.Win7Compat); err != nil {
+	if err := buildAgentBinary(goCmd, tmpDir, ldflags, buildPath, cfg.Obfuscate, "windows", goarch, blob, sKey, cfg.SelfCheck, cfg.Win7Compat); err != nil {
 		return "", err
 	}
 
@@ -112,7 +112,9 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 	}
 
 	// Self-integrity: embed the SHA-256 of the finalized binary (must run after
-	// stripping so the hash matches what the agent reads at runtime).
+	// stripping so the hash matches what the agent reads at runtime). For PE
+	// this also pads the image to 8 bytes, so the later certificate table does
+	// not introduce bytes the digest never covered.
 	if cfg.SelfCheck {
 		if err := patchSelfCheckHash(buildPath); err != nil {
 			return "", err
@@ -120,8 +122,9 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 	}
 
 	// Authenticode signing runs on the final bytes: after UPX (which rewrites
-	// the image) and after self-check (which is rejected in combination with
-	// signing). Validation below therefore covers exactly what is delivered.
+	// the image) and after self-check (whose PE-aware digest ignores the
+	// checksum, security directory and certificate table that signing changes).
+	// Validation below therefore covers exactly what is delivered.
 	if err := signPEIfRequested(buildPath, cfg); err != nil {
 		return "", err
 	}
@@ -314,7 +317,7 @@ func GenerateLinuxELF(cfg ImplantConfig, outputDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := buildAgentBinary(goCmd, tmpDir, ldflags, buildPath, cfg.Obfuscate, "linux", goarch, blob, sKey, cfg.Win7Compat); err != nil {
+	if err := buildAgentBinary(goCmd, tmpDir, ldflags, buildPath, cfg.Obfuscate, "linux", goarch, blob, sKey, cfg.SelfCheck, cfg.Win7Compat); err != nil {
 		return "", err
 	}
 
@@ -401,7 +404,7 @@ func GenerateMacOS(cfg ImplantConfig, outputDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := buildAgentBinary(goCmd, tmpDir, ldflags, buildPath, cfg.Obfuscate, "darwin", goarch, blob, sKey, cfg.Win7Compat); err != nil {
+	if err := buildAgentBinary(goCmd, tmpDir, ldflags, buildPath, cfg.Obfuscate, "darwin", goarch, blob, sKey, cfg.SelfCheck, cfg.Win7Compat); err != nil {
 		return "", err
 	}
 

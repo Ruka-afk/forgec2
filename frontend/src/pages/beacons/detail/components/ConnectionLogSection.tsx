@@ -15,7 +15,7 @@ export default memo(function ConnectionLogSection({ logs }: ConnectionLogSection
   if (logs.length === 0) return null;
 
   return (
-    <SectionCard className="mb-4" title={t("agents.detail_connection_log")} icon={<History className="size-3.5" />}>
+    <SectionCard className="mb-4" title={t("agents.detail_connection_log")} icon={History} tone="muted">
       <div className="max-h-64 overflow-y-auto">
         <div className="divide-y divide-border">
           {logs.map((log, i) => (

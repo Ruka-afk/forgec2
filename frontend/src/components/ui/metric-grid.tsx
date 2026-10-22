@@ -10,5 +10,17 @@ const columns = {
 } as const;
 
 export function MetricGrid({ children, count = 4, className }: { children: ReactNode; count?: keyof typeof columns; className?: string }) {
-  return <div data-slot="metric-grid" className={cn("grid gap-3 sm:gap-4", columns[count], className)}>{children}</div>;
+  return (
+    <div
+      data-slot="metric-grid"
+      className={cn(
+        "grid gap-3 sm:gap-4",
+        columns[count],
+        count === 5 && "[&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
 }

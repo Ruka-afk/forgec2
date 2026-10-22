@@ -16,7 +16,7 @@ export default function EventsPageContent() {
   return (
     <PageContainer title={t("events.title")} subtitle={t("events.subtitle")}>
       <Tabs value={tab} onValueChange={(v) => { if (v && (EVENTS_TABS as readonly string[]).includes(v)) setTab(v as EventsTab); }}>
-        <TabsList>
+        <TabsList className="sticky top-0 z-20 bg-muted">
           <TabsTrigger value="stream" className="gap-1.5"><Activity className="size-3.5" />{t("events.tab_stream")}</TabsTrigger>
           <TabsTrigger value="tasks" className="gap-1.5"><ListTodo className="size-3.5" />{t("events.tab_tasks")}</TabsTrigger>
           <TabsTrigger value="alerts" className="gap-1.5"><Bell className="size-3.5" />{t("events.tab_alerts")}</TabsTrigger>

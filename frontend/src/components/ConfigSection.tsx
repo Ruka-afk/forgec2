@@ -1,7 +1,10 @@
 
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { CardHeader } from "@/components/ui/card-header";
+import type { Hue } from "@/lib/ui/statusStyles";
+import type { LucideIcon } from "lucide-react";
 
 /**
  * F6 blueprint — grouped settings/management section card (title + optional
@@ -11,6 +14,7 @@ export function ConfigSection({
   title,
   description,
   icon,
+  tone,
   actions,
   children,
   footer,
@@ -19,7 +23,9 @@ export function ConfigSection({
 }: {
   title: ReactNode;
   description?: ReactNode;
-  icon?: ReactNode;
+  icon?: LucideIcon;
+  /** Accent hue for the header icon. */
+  tone?: Hue;
   actions?: ReactNode;
   children?: ReactNode;
   footer?: ReactNode;
@@ -27,22 +33,9 @@ export function ConfigSection({
   bodyClassName?: string;
 }) {
   return (
-    <Card className={cn("shadow-1", className)}>
-      <CardHeader className="border-b">
-        <div className="flex items-start gap-3">
-          {icon && (
-            <div className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/10">
-              {icon}
-            </div>
-          )}
-          <div>
-            <CardTitle className="text-sm">{title}</CardTitle>
-            {description && <CardDescription className="mt-0.5 text-xs leading-relaxed">{description}</CardDescription>}
-          </div>
-        </div>
-        {actions && <CardAction>{actions}</CardAction>}
-      </CardHeader>
-      {children && <CardContent className={cn("py-4", bodyClassName)}>{children}</CardContent>}
+    <Card className={cn("gap-0 overflow-hidden py-0 shadow-1", className)}>
+      <CardHeader icon={icon} tone={tone} title={title} description={description} action={actions} />
+      {children && <CardContent className={cn("p-(--card-spacing)", bodyClassName)}>{children}</CardContent>}
       {footer && <CardFooter className="justify-between">{footer}</CardFooter>}
     </Card>
   );

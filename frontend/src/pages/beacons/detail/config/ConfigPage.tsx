@@ -7,7 +7,7 @@ import { useI18n } from "@/lib/i18n";
 
 import { Spinner, PageSpinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
-import { Card } from "@/components/ui/card";
+import { SectionCard } from "@/components/ui/section-card";
 import { PageContainer } from "@/components/ui/page-container";
 import { DataError } from "@/components/ui/data-state";
 import { Button } from "@/components/ui/button";
@@ -190,10 +190,14 @@ export default function AgentConfigPage() {
         </div>
       )}
 
-      <Card className="p-(--card-spacing) bg-primary/[0.04]">
-        <h3 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
-          <SlidersHorizontal className="size-4" /> {t("agents.config_hot_config")}
-        </h3>
+      <SectionCard
+        title={t("agents.config_hot_config")}
+        icon={SlidersHorizontal}
+        tone="primary"
+        headerAccent
+        className="bg-primary/[0.04]"
+      >
+        <div className="p-(--card-spacing)">
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
           <div>
@@ -334,12 +338,16 @@ export default function AgentConfigPage() {
             <RotateCcw className="size-4" /> {t("agents.config_reset_all")}
           </Button>
         </div>
-      </Card>
+        </div>
+      </SectionCard>
 
-      <Card className="p-(--card-spacing)">
-        <h3 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
-          <Info className="size-4" /> {t("agents.config_current_config")}
-        </h3>
+      <SectionCard
+        title={t("agents.config_current_config")}
+        icon={Info}
+        tone="muted"
+        headerAccent
+      >
+        <div className="p-(--card-spacing)">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="p-3 bg-card border border-border rounded-lg">
             <div className="text-xs text-muted-foreground mb-1">{t("agents.config_sleep_seconds")}</div>
@@ -376,7 +384,8 @@ export default function AgentConfigPage() {
             )}
           </div>
         </div>
-      </Card>
+        </div>
+      </SectionCard>
     </PageContainer>
   );
 }

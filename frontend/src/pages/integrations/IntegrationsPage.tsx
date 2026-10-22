@@ -12,6 +12,7 @@ import { ErrorState } from "@/components/ui/error-state";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
+import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -209,9 +210,15 @@ export default function IntegrationsPage() {
             )}
           </div>
 
-          <Card className="p-(--card-spacing) mb-6">
-            <h3 className="text-sm font-semibold text-foreground m-0">{t("integrations.save_title")}</h3>
-            <p className="text-xs text-muted-foreground mt-1 mb-3">{t("integrations.save_desc")}</p>
+          <SectionCard
+            title={t("integrations.save_title")}
+            icon={Plug}
+            tone="primary"
+            headerAccent
+            className="mb-6"
+          >
+            <div className="p-(--card-spacing)">
+            <p className="text-xs text-muted-foreground mb-3">{t("integrations.save_desc")}</p>
             <div className="space-y-2">
               <div className="flex flex-col sm:flex-row gap-2">
                 <Select value={formType} onValueChange={(v) => setFormType(v ?? "slack")}>
@@ -252,18 +259,25 @@ export default function IntegrationsPage() {
                 {t("integrations.save_btn")}
               </Button>
             </div>
-          </Card>
+            </div>
+          </SectionCard>
 
-          <Card className="p-(--card-spacing)">
-            <h3 className="text-sm font-semibold text-foreground m-0">{t("integrations.test_title")}</h3>
-            <p className="text-xs text-muted-foreground mt-1 mb-0">{t("integrations.test_desc")}</p>
+          <SectionCard
+            title={t("integrations.test_title")}
+            icon={Send}
+            tone="info"
+            headerAccent
+          >
+            <div className="p-(--card-spacing)">
+            <p className="text-xs text-muted-foreground">{t("integrations.test_desc")}</p>
             <div className="mt-3 flex items-center gap-3">
               <Button variant="outline" onClick={testNotification}>{t("integrations.send_test")}</Button>
               {testResult && (
                 <span className="text-xs text-muted-foreground">{testResult}</span>
               )}
             </div>
-          </Card>
+            </div>
+          </SectionCard>
         </>
       )}
       {modal}

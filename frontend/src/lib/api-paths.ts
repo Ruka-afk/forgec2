@@ -35,6 +35,8 @@ export const paths = {
     screenshots: (id: string, query = "") =>
       query ? `/api/agents/${id}/screenshots?${query}` : `/api/agents/${id}/screenshots`,
     processTree: (id: string) => `/api/agents/${id}/process-tree`,
+    /** POST queue a fresh process snapshot (write permission). */
+    collectProcesses: (id: string) => `/api/agents/${id}/processes`,
     /** GET current frame (json). Pass "" for no query string. */
     screenshot: (id: string, query: string | null = "format=json") =>
       query ? `/agents/${id}/screenshot?${query}` : `/agents/${id}/screenshot`,

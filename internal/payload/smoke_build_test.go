@@ -3,10 +3,13 @@ package payload
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/forgec2/forgec2/pkg/peimage"
 )
 
 // Smoke test: generate a real Windows agent with the config-blob ldflags to
@@ -248,9 +251,11 @@ func TestSmokeSelfCheck(t *testing.T) {
 		name string
 		fn   func(ImplantConfig, string) (string, error)
 		arch string
+		sign bool
 	}{
-		{"windows", GenerateWindowsEXE, "amd64"},
-		{"linux", GenerateLinuxELF, "amd64"},
+		{"windows", GenerateWindowsEXE, "amd64", false},
+		{"windows-signed", GenerateWindowsEXE, "amd64", true},
+		{"linux", GenerateLinuxELF, "amd64", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := ImplantConfig{
@@ -266,16 +271,70 @@ func TestSmokeSelfCheck(t *testing.T) {
 				Architecture:    tc.arch,
 				SelfCheck:       true,
 			}
+			if tc.sign {
+				cfg.SignMode = "self"
+				cfg.SignOrg = "Self Check Test"
+			}
 			path, err := tc.fn(cfg, t.TempDir())
 			if err != nil {
 				t.Fatalf("self-check build failed: %v", err)
 			}
-			if fi, err := os.Stat(path); err != nil || fi.Size() == 0 {
+			fi, err := os.Stat(path)
+			if err != nil || fi.Size() == 0 {
 				t.Fatalf("self-check output missing or empty: %v", err)
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertEmbeddedSelfCheckDigest(t, data)
+			if tc.sign {
+				if err := VerifyPESignature(data); err != nil {
+					t.Fatalf("signed self-check artifact failed signature verification: %v", err)
+				}
+				report := ClassifyPESignature(data, nil)
+				if report.Status != PESignatureUntrustedRoot {
+					t.Fatalf("self-signed artifact status = %q, want %q", report.Status, PESignatureUntrustedRoot)
+				}
 			}
 			t.Logf("built %s size=%d", filepath.Base(path), fileSize(path))
 		})
 	}
+}
+
+// assertEmbeddedSelfCheckDigest reconstructs the runtime self-check: find the
+// embedded 64-char hex digest, zero it, hash with the shared PE-aware digest,
+// and require the result to equal the embedded value. This catches build/runtime
+// drift (especially after Authenticode signing appends the certificate table).
+func assertEmbeddedSelfCheckDigest(t *testing.T, data []byte) {
+	t.Helper()
+	for i := 0; i+64 <= len(data); i++ {
+		candidate := string(data[i : i+64])
+		if !isLowerHex64(candidate) {
+			continue
+		}
+		calc := append([]byte(nil), data...)
+		for j := i; j < i+64; j++ {
+			calc[j] = 0
+		}
+		sum, err := peimage.Digest(calc)
+		if err == nil && hex.EncodeToString(sum) == candidate {
+			return
+		}
+	}
+	t.Fatal("embedded self-check digest not found or does not match the runtime reconstruction")
+}
+
+func isLowerHex64(s string) bool {
+	if len(s) != 64 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if !((s[i] >= '0' && s[i] <= '9') || (s[i] >= 'a' && s[i] <= 'f')) {
+			return false
+		}
+	}
+	return true
 }
 
 // TestSmokeObfuscatedBuild verifies the garble path end-to-end (obfuscate=true)

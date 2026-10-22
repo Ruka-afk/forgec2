@@ -10,7 +10,7 @@ describe("mergeSidebarSections", () => {
     const merged = mergeSidebarSections({ lab: true, operations: false });
     expect(merged.lab).toBe(true);
     expect(merged.operations).toBe(false);
-    expect(merged["intel-analysis"]).toBe(false);
+    expect(merged["intelligence"]).toBe(true);
   });
 
   it("ignores unknown keys from legacy storage", () => {
@@ -27,7 +27,7 @@ describe("mergeSidebarSections", () => {
     const merged = mergeSidebarSections(old);
     expect(merged.operations).toBe(false);
     expect(merged.lab).toBe(false);
-    expect(merged.system).toBe(false);
+    expect(merged.administration).toBe(false);
     expect(merged["build-deploy"]).toBe(true);
   });
 });

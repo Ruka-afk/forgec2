@@ -96,7 +96,7 @@ export function PluginCard({ plugin, actionState, onInstall, onUninstall, onDele
   const catInfo = PLUGIN_CATEGORIES.find((c) => c.key === cat);
 
   return (
-    <Card className="p-(--card-spacing) hover:shadow-lg dark:hover:shadow-xl transition-all group">
+    <Card className="p-(--card-spacing) hover:shadow-md transition-all group">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
 <IconBadge icon={Puzzle} color="primary" size="xl" className="dark:bg-primary/20" />
@@ -194,7 +194,7 @@ export function PluginListItem({ plugin, actionState, onInstall, onUninstall, on
   const catInfo = PLUGIN_CATEGORIES.find((c) => c.key === cat);
 
   return (
-    <Card className="p-(--card-spacing) hover:shadow-lg dark:hover:shadow-xl transition-all">
+    <Card className="p-(--card-spacing) hover:shadow-md transition-all">
       <div className="flex items-center gap-4">
 <IconBadge icon={Puzzle} color="primary" size="xl" className="dark:bg-primary/20" />
         <div className="flex-1 min-w-0">

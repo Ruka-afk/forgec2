@@ -20,8 +20,21 @@ export const createStatsSlice: StateCreator<AppStore, [], [], StatsSlice> = (set
     if (statsInFlight) return statsInFlight;
     statsInFlight = (async () => {
       try {
-        const stats = await api.get<DashboardStats>(paths.dashboard.v1);
-        set({ stats, statsError: undefined });
+        // `total_listeners` from the dashboard API counts every row in the
+        // listeners table (deployment-global), while the Listeners page shows
+        // the tenant-scoped list. Reading the scoped total here keeps the
+        // sidebar badge equal to the number the operator can see and manage.
+        const [stats, listeners] = await Promise.all([
+          api.get<DashboardStats>(paths.dashboard.v1),
+          api
+            .get<{ total?: number }>(`${paths.listeners.list}?page=1&page_size=1`, { unwrap: false })
+            .catch(() => undefined),
+        ]);
+        const scoped = typeof listeners?.total === "number" ? listeners.total : undefined;
+        set({
+          stats: scoped === undefined ? stats : { ...stats, total_listeners: scoped },
+          statsError: undefined,
+        });
       } catch (e) {
         if (process.env.NODE_ENV === "development") logger.error("fetchStats failed", e);
         set({ statsError: e instanceof Error ? e.message : "" });

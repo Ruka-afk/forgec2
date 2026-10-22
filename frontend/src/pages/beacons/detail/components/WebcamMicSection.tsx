@@ -184,7 +184,8 @@ export default memo(function WebcamMicSection({ agentId, online }: WebcamMicSect
   return (
     <CollectCard
       title={t("agents.media_title")}
-      icon={<Camera className="size-3.5" />}
+      icon={Camera}
+      tone="info"
       emptyIcon={Camera}
       emptyTitle={t("agents.media_empty_title")}
       emptyHint={t("agents.media_empty_hint")}

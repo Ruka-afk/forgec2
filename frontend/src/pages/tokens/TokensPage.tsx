@@ -8,7 +8,8 @@ import { paths } from "@/lib/api-paths";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { PageContainer } from "@/components/ui/page-container";
 import { formatTime } from "@/lib/utils";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { PageToolbar } from "@/components/ui/page-toolbar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -198,12 +199,12 @@ export default function TokensPage() {
       }
     >
 
-      <Card className="mb-4">
-        <CardContent className="p-(--card-spacing)">
-          <div className="flex flex-col sm:flex-row gap-3">
+      <PageToolbar sticky>
             <Select value={integrityFilter || "all"} onValueChange={(v) => setIntegrityFilter(v === "all" ? "" : v ?? "")}>
               <SelectTrigger className="w-full sm:w-48" aria-label={t("tokens.integrity_filter")}>
-                <SelectValue placeholder={t("tokens.all_integrity")} />
+                <SelectValue>
+                  {(value) => (value === "all" ? t("tokens.all_integrity") : String(value ?? ""))}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t("tokens.all_integrity")}</SelectItem>
@@ -215,7 +216,9 @@ export default function TokensPage() {
             </Select>
             <Select value={sourceFilter || "all"} onValueChange={(v) => setSourceFilter(v === "all" ? "" : v ?? "")}>
               <SelectTrigger className="w-full sm:w-48" aria-label={t("tokens.source_filter")}>
-                <SelectValue placeholder={t("tokens.all_sources")} />
+                <SelectValue>
+                  {(value) => (value === "all" ? t("tokens.all_sources") : String(value ?? ""))}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t("tokens.all_sources")}</SelectItem>
@@ -223,9 +226,7 @@ export default function TokensPage() {
                 <SelectItem value="make_token">make_token</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-        </CardContent>
-      </Card>
+      </PageToolbar>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         {["System", "High", "Medium", "Low"].map((level) => {

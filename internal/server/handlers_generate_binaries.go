@@ -296,11 +296,6 @@ func (s *Server) parseBinaryForm(c *gin.Context) (*binaryGenForm, bool) {
 		respondError(c, http.StatusUnprocessableEntity, "sign_mode=pem requires sign_cert_pem and sign_key_pem")
 		return nil, false
 	}
-	if form.SelfCheck && form.SignMode != "" {
-		respondError(c, http.StatusUnprocessableEntity, "self_check and Authenticode signing cannot be combined: the signature rewrites bytes covered by the integrity hash")
-		return nil, false
-	}
-
 	// Agent module selection: comma-separated catalogue names, empty = every
 	// module. Validated at the API boundary so a typo answers 400 instead of
 	// surfacing as a build error (or, worse, silently narrowing the payload).

@@ -11,6 +11,7 @@ import { PageSpinner } from "@/components/ui/spinner";
 import { StatCard } from "@/components/ui/animated-stat-card";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Card, CardContent } from "@/components/ui/card";
+import { SectionCard } from "@/components/ui/section-card";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -205,12 +206,13 @@ export default function DnsPage() {
       </Card>
 
       {/* Protocol Details Card */}
-      <Card className="p-(--card-spacing)">
-        <h3 className="text-sm font-semibold text-foreground mb-3">
-          <Settings className="size-4 inline mr-1.5" />
-          {t("dns.how_title")}
-        </h3>
-        <div className="space-y-2 max-h-64 overflow-y-auto">
+      <SectionCard
+        title={t("dns.how_title")}
+        icon={Settings}
+        tone="muted"
+        headerAccent
+      >
+        <div className="space-y-2 max-h-64 overflow-y-auto p-(--card-spacing)">
           <div className="flex items-start gap-3 p-3 bg-muted border border-border rounded-lg">
             <ArrowDown className="size-4 text-emerald-500 mt-0.5 shrink-0" />
             <div className="min-w-0">
@@ -226,7 +228,7 @@ export default function DnsPage() {
             </div>
           </div>
         </div>
-      </Card>
+      </SectionCard>
     </PageContainer>
   );
 }

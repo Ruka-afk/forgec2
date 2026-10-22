@@ -60,7 +60,8 @@ export default memo(function ClipboardSection({ agentId, online }: ClipboardSect
   return (
     <CollectCard
       title={t("agents.clipboard_title")}
-      icon={<Clipboard className="size-3.5" />}
+      icon={Clipboard}
+      tone="info"
       headerRight={
         <Button size="sm" disabled={!online || busy !== null} onClick={() => void handleGet()}>
           {busy === "get" ? (

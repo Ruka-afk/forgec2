@@ -112,7 +112,11 @@ try {
     Write-Host "==> Restarting server..." -ForegroundColor Cyan
     cmd /c "taskkill /f /im forgec2-server.exe >nul 2>&1"
     Start-Sleep -Seconds 1
-    $p = Start-Process -WindowStyle Hidden -FilePath ".\forgec2-server.exe" -ArgumentList "-config config.yaml" -PassThru
+    # Redirect the child's stdout/stderr to files: with the default
+    # inheritance the server keeps the parent's console handles open, and the
+    # caller (CI job, or an agent shell) blocks until the process exits.
+    if (-not (Test-Path "logs")) { New-Item -ItemType Directory -Path "logs" | Out-Null }
+    $p = Start-Process -WindowStyle Hidden -FilePath ".\forgec2-server.exe" -ArgumentList "-config config.yaml" -PassThru -RedirectStandardOutput "logs\stdout.log" -RedirectStandardError "logs\stderr.log"
 
     # 5. Health check (port is overridable via $env:FORGEC2_PORT to match server.port).
     # Retried like CI (30x1s): the server needs time for migrations + listener
