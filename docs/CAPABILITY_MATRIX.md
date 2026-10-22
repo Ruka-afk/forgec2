@@ -1,6 +1,6 @@
 # ForgeC2 Capability Matrix
 
-> Status of implant tasks / transports as of **v2.6.2**.
+> Status of implant tasks / transports as of **v2.7.0**.
 > Quality: **Core** (production) · **Hardened** (usable OPSEC) · **Scripted** (PS/external) · **Experimental** · **Stub** (Windows-only or incomplete).  
 > Command inventory: generate with `node scripts/gen-command-reference.mjs` → `docs/COMMAND_REFERENCE.md`.  
 > Task inventory markers + version stamp: `node scripts/gen-capability-matrix.mjs` (CI `--check`; source `VERSION`).  

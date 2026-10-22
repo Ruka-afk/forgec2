@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Release notes can no longer be cut off by GitHub's 125,000-character body limit: the 2.7.0 changelog section alone is ~125k, so the published page ended mid-sentence. The generator keeps whole lines under a 60k budget and closes with a link to `CHANGELOG.md`, while the one-click instructions, the archive list and the raw binary list stay at the top, above the truncation point.
+- The CycloneDX SBOM is really attached now: `forgec2-server-linux-amd64.sbom.json` was generated after `upload-artifact`, so it never reached the release although the notes announced it. The step runs before the upload (the artifact glob carries it), and the one-click assembler filters `.sbom.json` out of its `forgec2-server-<os>-<arch>*` match, which could otherwise have packed the SBOM as the server binary.
+- The release notes' signature hint showed the signing command (`go run ./cmd/sign-release <file.sha256>`), which needs the private seed and fails for an operator; it now shows `go run ./cmd/sign-release -verify -key <pubkey> <file.sha256>` and points at the published key in `docs/DEPLOY.md`.
+- `docs/CAPABILITY_MATRIX.md` follows `VERSION` again: the 2.7.0 bump left its stamp at v2.6.2, which failed the CI docs-freshness gate.
+
 ## [2.7.0] - 2026-10-22
 
 ### Added

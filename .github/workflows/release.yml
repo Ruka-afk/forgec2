@@ -96,17 +96,20 @@ jobs:
             echo "RELEASE_SIGNING_KEY unset (non-tag run): skipping detached signature for $bin.sha256"
           fi
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: forgec2-server-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: forgec2-server-${{ matrix.goos }}-${{ matrix.goarch }}*
-
+      # The SBOM must exist before the upload step: the artifact glob below is
+      # what carries it to create-release, and it used to be generated
+      # afterwards, so the release announced an SBOM it never shipped.
       - name: Generate SBOM (CycloneDX, Go modules)
         if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
         run: |
           go run github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.9.0 \
             mod -licenses -output forgec2-server-linux-amd64.sbom.json .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: forgec2-server-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: forgec2-server-${{ matrix.goos }}-${{ matrix.goarch }}*
 
       - name: Attest build provenance
         if: startsWith(github.ref, 'refs/tags/v')
@@ -143,10 +146,11 @@ jobs:
           mkdir -p "$stage"
 
           # Exactly one binary per artifact; checksum/signature siblings are
-          # filtered out so a second match cannot slip into the archive.
+          # filtered out so a second match cannot slip into the archive — and
+          # the SBOM lives in the same artifact, so it must be named here too.
           src="$(find incoming -maxdepth 1 -type f \
             -name 'forgec2-server-${{ matrix.goos }}-${{ matrix.goarch }}*' \
-            | grep -vE '\.sha256$|\.sig$' | head -n1)"
+            | grep -vE '\.sha256$|\.sig$|\.sbom\.json$' | head -n1)"
           test -n "$src"
 
           cp config.example.yaml LICENSE packaging/QUICKSTART.txt "$stage/"
@@ -217,6 +221,20 @@ jobs:
           # Fail closed: an empty section would otherwise publish a release whose
           # "Changelog" heading is followed by nothing.
           test -s changelog-section.md || { echo "CHANGELOG.md has no section for $version" >&2; exit 1; }
+          # GitHub truncates a release body past 125,000 characters, and a busy
+          # release can reach that on its own (2.7.0's section is ~125k, cut
+          # mid-sentence on the published page). Keep whole lines under a 60k
+          # budget and link to the file for the remainder.
+          if [ "$(wc -c < changelog-section.md)" -gt 60000 ]; then
+            awk '{ n += length($0) + 1; if (n > 60000) exit; print }' \
+              changelog-section.md > changelog-section.cut
+            {
+              cat changelog-section.cut
+              echo ""
+              echo "_Truncated at 60k characters: the full section is in_"
+              echo "[CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md)."
+            } > changelog-section.md
+          fi
 
           {
             echo "## ForgeC2 Server ${{ github.ref_name }}"
@@ -246,9 +264,10 @@ jobs:
             ls forgec2-server-* 2>/dev/null | grep -vE '\.sha256$|\.sig$|sbom' | sed 's/^/- /'
             echo ""
             echo "Every binary and archive ships a \`.sha256\` checksum and a detached"
-            echo "Ed25519 \`.sig\` over that checksum (verify with"
-            echo "\`go run ./cmd/sign-release <file.sha256>\`). A CycloneDX SBOM is"
-            echo "attached as \`forgec2-server-linux-amd64.sbom.json\`."
+            echo "Ed25519 \`.sig\` over that checksum. Verify a download with"
+            echo "\`go run ./cmd/sign-release -verify -key \$PUBKEY <file.sha256>\`"
+            echo "(the public key is published in \`docs/DEPLOY.md\`). A CycloneDX"
+            echo "SBOM is attached as \`forgec2-server-linux-amd64.sbom.json\`."
             echo ""
             echo "### Changelog"
             echo ""
