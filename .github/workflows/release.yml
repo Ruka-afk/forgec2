@@ -83,7 +83,12 @@ jobs:
           # a .sig — fail closed so keyed servers can always verify. Manual
           # workflow_dispatch without a secret still skips (dev-only).
           if [ -n "${RELEASE_SIGNING_KEY:-}" ]; then
-            go run ./cmd/sign-release "$bin.sha256"
+            # Sign with the runner's own toolchain: this job exports
+            # GOOS/GOARCH for the cross-compile, and a `go run` that honours
+            # them produces a Windows PE that Linux cannot execute
+            # ("exec format error"). GOHOSTOS/GOHOSTARCH ignore the env.
+            GOOS="$(go env GOHOSTOS)" GOARCH="$(go env GOHOSTARCH)" \
+              go run ./cmd/sign-release "$bin.sha256"
           elif [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
             echo "RELEASE_SIGNING_KEY secret is required for tag releases" >&2
             exit 1
@@ -170,7 +175,8 @@ jobs:
           # Same trust anchor as the raw binaries: a detached Ed25519 signature
           # over the checksum file. Tag releases fail closed without a key.
           if [ -n "${RELEASE_SIGNING_KEY:-}" ]; then
-            go run ./cmd/sign-release "$out.sha256"
+            GOOS="$(go env GOHOSTOS)" GOARCH="$(go env GOHOSTARCH)" \
+              go run ./cmd/sign-release "$out.sha256"
           elif [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
             echo "RELEASE_SIGNING_KEY secret is required for tag releases" >&2
             exit 1
