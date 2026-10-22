@@ -89,6 +89,16 @@ export default defineConfig(({ command }) => {
     assetsDir: "assets",
     target: "es2020",
     chunkSizeWarningLimit: 500,
+    // Safari 16 (2022) is the CSS floor. It matters for reproducibility,
+    // not for support: lightningcss downgrades the oklch() palette to lab()
+    // for browsers that only speak lab, and prints the converted numbers with
+    // a platform-dependent precision (36.4219 on Windows, 36.422 on Linux).
+    // One byte changes the CSS file's hash, which changes the name of every
+    // chunk importing it and of every HTML page referencing it - the
+    // committed bundle could then never match the CI's Linux build (424
+    // diffs). With oklch supported natively there is no downgrade to print,
+    // so the CSS is byte-identical on every platform.
+    cssTarget: "safari16",
     rolldownOptions: {
       output: {
         manualChunks(id) {
