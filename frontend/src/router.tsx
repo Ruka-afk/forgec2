@@ -42,7 +42,7 @@ const BeaconRemoteDesktopPage = lazyPage(() => import("@/pages/beacons/detail/re
 const BeaconScreenPage = lazyPage(() => import("@/pages/beacons/detail/screen/ScreenPage"));
 const BeaconShellPage = lazyPage(() => import("@/pages/beacons/detail/shell/ShellPage"));
 const BeaconTokenPage = lazyPage(() => import("@/pages/beacons/detail/token/TokenPage"));
-const BeaconTrafficPage = lazyPage(() => import("@/pages/beacons/detail/traffic/TrafficPage"));
+const BeaconTrafficPage = lazyPage(() => import("@/pages/beacons/detail/traffic/BeaconTrafficPage"));
 const ListenerDetailPage = lazyPage(() => import("@/pages/listeners/detail/ListenerDetailPage"));
 
 type MainRoute =
