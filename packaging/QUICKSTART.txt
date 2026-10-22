@@ -1,0 +1,61 @@
+ForgeC2 - one-click start
+=========================
+
+This archive contains a single self-contained server binary. The web console is
+embedded: no Node.js, no Go toolchain and no external database are required.
+
+
+Windows (amd64 / arm64)
+-----------------------
+1. Unzip the archive anywhere, e.g. C:\forgec2.
+2. Double-click start.cmd.
+3. The first start
+     - creates config.yaml from config.example.yaml,
+     - prints a "DEFAULT ADMIN CREDENTIALS" banner with the generated password
+       for the "admin" user,
+     - serves the console on https://127.0.0.1:8000/ (self-signed certificate:
+       accept the browser warning once).
+4. Log in as "admin", then change the password immediately.
+
+Windows SmartScreen may flag the unsigned binary: "More info" -> "Run anyway".
+Verify the download first (below) if you do not trust the transport.
+
+
+Linux (amd64 / arm64)
+---------------------
+1. tar xzf forgec2-v*-linux-*.tar.gz && cd forgec2-v*-linux-*
+2. ./start.sh
+3. The first start creates config.yaml, prints the generated "admin" password
+   and serves the console on https://127.0.0.1:8000/.
+
+
+Both platforms
+--------------
+- Data (SQLite database + uploads) lives under data/ next to the binary.
+  Back up that directory; deleting it resets the server.
+- logs/forgec2.log carries the structured log. The generated admin password is
+  printed once, on first boot, to the console (not to a browser-visible page).
+- The console listens on 0.0.0.0 by default, so it is reachable from another
+  host. A browser on another host must also be allowed: add its hostname to
+  server.allowed_origins in config.yaml, otherwise the API calls are refused as
+  cross-origin. Set server.host: 127.0.0.1 to keep the console local-only.
+- The SOCKS relay and remote port forwarding stay bound to 127.0.0.1
+  (server.socks_listen_host) unless you change that too.
+- Stop with Ctrl+C (Windows) or Ctrl+C in the terminal (Linux); the server
+  shuts down gracefully.
+- Upgrades: stop the server, replace the binary (or unpack the next archive
+  over it), keep config.yaml and data/, start again. Back up data/ first.
+
+
+Verifying the download
+----------------------
+Every release ships a .sha256 next to the archive, plus a detached Ed25519
+.signature (.sig) when the release key is configured:
+
+  Linux:   sha256sum -c forgec2-vX.Y.Z-linux-amd64.tar.gz.sha256
+  Windows: Get-FileHash .\forgec2-vX.Y.Z-windows-amd64.zip -Algorithm SHA256
+
+Compare the hash against the .sha256 file. If the server's config carries
+crypto.update_signing_key, hot updates additionally verify the detached .sig.
+
+Docs: https://github.com/r0si/forgec2/blob/main/docs/DEPLOY.md

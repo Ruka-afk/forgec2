@@ -40,6 +40,42 @@ Useful flags: `--skip-checks` (skip the frontend gates), `--skip-frontend`
 (backend-only change), `--no-start` (build only), `--no-rollback`,
 `--port`, `--timeout`.
 
+## Prebuilt downloads — one-click start
+
+Every `v*` tag publishes two kinds of asset:
+
+| Asset | Use |
+| --- | --- |
+| `forgec2-v<version>-windows-<arch>.zip` | unzip, double-click `start.cmd` |
+| `forgec2-v<version>-linux-<arch>.tar.gz` | `tar xzf … && cd … && ./start.sh` |
+| `forgec2-server-<os>-<arch>[.exe]` | the raw binary, for Docker images and your own packaging |
+
+The archives carry the embedded-console binary (renamed to `forgec2-server` /
+`forgec2-server.exe`), `config.example.yaml`, `LICENSE`, `QUICKSTART.txt` and
+the launcher. The launcher creates `config.yaml` on first run, prints the
+console URL, and the server prints the generated `admin` password in the same
+window. Nothing else has to be installed: no Node.js, no Go, no database
+server.
+
+Both the raw binaries and the archives ship a `.sha256` plus a detached
+Ed25519 `.sig` over that checksum:
+
+```bash
+sha256sum -c forgec2-v2.7.0-linux-amd64.tar.gz.sha256
+# Detached Ed25519 signature over that checksum file (no secret needed):
+go run ./cmd/sign-release -verify \
+  -key 2583e905edf1b67be9caaf0f7fe4efc402b8456c68fd458a4fb21a9083318d52 \
+  forgec2-v2.7.0-linux-amd64.tar.gz.sha256
+```
+
+Release signing public key (set it as `crypto.update_signing_key` to require
+signatures on hot updates; `crypto.require_release_signature: true` makes an
+unverifiable update fail closed):
+
+```
+2583e905edf1b67be9caaf0f7fe4efc402b8456c68fd458a4fb21a9083318d52
+```
+
 ## Option A — Linux, Docker (recommended, SQLite, zero-config)
 
 ```bash

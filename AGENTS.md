@@ -107,6 +107,15 @@ Manual equivalent when a step has to be isolated:
    needs its hostname in `server.allowed_origins`, otherwise the API refuses it as cross-origin — the
    server logs a startup warning for a wildcard bind with an empty list.
 
+## Releasing
+Push a `v*` tag. `.github/workflows/release.yml` cross-compiles linux/windows × amd64/arm64, then
+publishes both the raw binaries and the one-click archives `forgec2-v<version>-<os>-<arch>.zip|tar.gz`
+(embedded-console binary, `start.cmd`/`start.sh`, `config.example.yaml`, `QUICKSTART.txt`), each with a
+`.sha256` and — when `RELEASE_SIGNING_KEY` is set — an Ed25519 `.sig`. Tag builds fail closed without
+that secret (`go run ./cmd/sign-release -gen` prints the seed + the public key for
+`crypto.update_signing_key`). The release notes lift the `## [<version>]` section from `CHANGELOG.md`;
+keep that heading in sync with `VERSION` or the job fails.
+
 ## Misc
 - `scripts/setup-dev.sh` generates `config.yaml` (port 8000).
 - `scripts/gitleaks-pre-commit.sh` runs a gitleaks scan pre-commit.

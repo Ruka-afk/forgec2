@@ -46,6 +46,8 @@ Thumbs.db
 *.err
 *.tmp
 *.txt
+# The release archives ship this one: the operator-facing quickstart.
+!packaging/QUICKSTART.txt
 !README.md
 # The lint debt ceiling is checked in on purpose (see scripts/check-lint-debt.sh).
 !scripts/lint-backlog.txt
