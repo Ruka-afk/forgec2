@@ -6,10 +6,10 @@ import { Card } from "@/components/ui/card";
 import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { SafeImg } from "@/components/ui/safe-img";
 import { AlertTriangle, Check, CheckCircle, Key, Lock, QrCode, RotateCw, Save, Shield, X } from "lucide-react";
+import { Field } from "@/components/ui/field";
 
 export default function SecuritySection({
   data, passwordForm, setPasswordForm, totpStatus, totpStatusError, onReloadTOTP, totpSecret, totpQR, totpBackupCodes,
@@ -53,19 +53,16 @@ export default function SecuritySection({
         <div>
           <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2"><Key className="size-4" />{t("settings.security.change_password")}</h3>
           <form onSubmit={onChangePassword} className="max-w-md space-y-4">
-            <div>
-              <Label htmlFor="sec-current-pw" className="mb-1.5">{t("settings.security.current_password")}</Label>
+            <Field label={t("settings.security.current_password")} htmlFor="sec-current-pw">
               <Input id="sec-current-pw" type="password" value={passwordForm.current} onChange={(e) => setPasswordForm({ ...passwordForm, current: e.target.value })} />
-            </div>
+            </Field>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <Label htmlFor="sec-new-pw" className="mb-1.5">{t("settings.security.new_password")}</Label>
+              <Field label={t("settings.security.new_password")} htmlFor="sec-new-pw">
                 <Input id="sec-new-pw" type="password" minLength={8} value={passwordForm.next} onChange={(e) => setPasswordForm({ ...passwordForm, next: e.target.value })} />
-              </div>
-              <div>
-                <Label htmlFor="sec-confirm-pw" className="mb-1.5">{t("settings.security.confirm_password")}</Label>
+              </Field>
+              <Field label={t("settings.security.confirm_password")} htmlFor="sec-confirm-pw">
                 <Input id="sec-confirm-pw" type="password" minLength={8} value={passwordForm.confirm} onChange={(e) => setPasswordForm({ ...passwordForm, confirm: e.target.value })} />
-              </div>
+              </Field>
             </div>
             <Button type="submit" size="lg" disabled={saving} className="px-6 text-sm font-medium transition-colors disabled:opacity-50">
               <Save className="size-4" />{t("settings.security.change_password")}
@@ -180,4 +177,3 @@ export default function SecuritySection({
     </Card>
   );
 }
-

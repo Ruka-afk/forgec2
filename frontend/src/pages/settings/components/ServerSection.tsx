@@ -3,11 +3,11 @@ import { Card } from "@/components/ui/card";
 import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Toggle from "./Toggle";
 import { Info, Lock, Save, Server, Unlock } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { Field } from "@/components/ui/field";
 
 export default function ServerSection({
   data, form, setForm, saving, onSave, settingsLoaded,
@@ -26,14 +26,12 @@ export default function ServerSection({
       <div className="p-(--card-spacing)">
         <form onSubmit={onSave} className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <Label htmlFor="server-http-port" className="block mb-1.5">{t("settings.server.http_port")}</Label>
+            <Field label={t("settings.server.http_port")} htmlFor="server-http-port">
               <Input id="server-http-port" type="number" defaultValue={data.server_port} readOnly className="bg-muted cursor-not-allowed text-muted-foreground" />
-            </div>
-            <div>
-              <Label htmlFor="server-listen-address" className="block mb-1.5">{t("settings.server.listen_address")}</Label>
+            </Field>
+            <Field label={t("settings.server.listen_address")} htmlFor="server-listen-address">
               <Input id="server-listen-address" type="text" defaultValue={data.server_address ?? ""} readOnly className="bg-muted cursor-not-allowed text-muted-foreground font-mono" />
-            </div>
+            </Field>
             <div>
               <span className="block text-xs text-muted-foreground mb-1.5">{t("settings.server.log_level")}</span>
               <Select value={form.log_level} onValueChange={(v) => v && setForm({ ...form, log_level: v })}>
@@ -70,25 +68,21 @@ export default function ServerSection({
                 <span className="text-sm text-muted-foreground">{form.tcp_enabled ? t("settings.server.enabled") : t("settings.server.disabled")}</span>
               </div>
             </div>
-            <div>
-              <Label htmlFor="server-tcp-address" className="block mb-1.5">{t("settings.server.tcp_address")}</Label>
+            <Field label={t("settings.server.tcp_address")} htmlFor="server-tcp-address">
               <Input id="server-tcp-address" type="text" placeholder="0.0.0.0:4444" value={form.tcp_addr} onChange={(e) => setForm({ ...form, tcp_addr: e.target.value })} className="font-mono" />
-            </div>
+            </Field>
           </div>
           <div className="border-t border-border pt-4 mt-2">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <Label htmlFor="server-offline-threshold" className="block mb-1.5">{t("settings.server.offline_threshold")}</Label>
+              <Field label={t("settings.server.offline_threshold")} htmlFor="server-offline-threshold">
                 <Input id="server-offline-threshold" type="number" min={5} max={3600} value={form.offline_threshold} onChange={(e) => setForm({ ...form, offline_threshold: Number(e.target.value) })} />
-              </div>
-              <div>
-                <Label htmlFor="server-session-timeout" className="block mb-1.5">{t("settings.server.session_timeout")}</Label>
+              </Field>
+              <Field label={t("settings.server.session_timeout")} htmlFor="server-session-timeout">
                 <Input id="server-session-timeout" type="number" min={1} max={720} value={form.session_max_age} onChange={(e) => setForm({ ...form, session_max_age: Number(e.target.value) })} />
-              </div>
-              <div>
-                <Label htmlFor="server-cleanup-retention" className="block mb-1.5">{t("settings.server.cleanup_retention")}</Label>
+              </Field>
+              <Field label={t("settings.server.cleanup_retention")} htmlFor="server-cleanup-retention">
                 <Input id="server-cleanup-retention" type="number" min={1} max={365} value={form.cleanup_retention} onChange={(e) => setForm({ ...form, cleanup_retention: Number(e.target.value) })} />
-              </div>
+              </Field>
             </div>
           </div>
           <div className="flex items-center gap-3">

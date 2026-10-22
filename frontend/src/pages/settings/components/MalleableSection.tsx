@@ -3,11 +3,11 @@ import { Card } from "@/components/ui/card";
 import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import Toggle from "./Toggle";
 import { AlertTriangle, Save, Shield } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { Field } from "@/components/ui/field";
 
 export default function MalleableSection({
   form, setForm, saving, onSave, settingsLoaded,
@@ -30,14 +30,12 @@ export default function MalleableSection({
             <span className="text-xs text-muted-foreground">{t("settings.malleable.override_hint")}</span>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <Label htmlFor="malleable-http-status-code" className="block mb-1.5">{t("settings.malleable.http_status_code")}</Label>
+            <Field label={t("settings.malleable.http_status_code")} htmlFor="malleable-http-status-code">
               <Input id="malleable-http-status-code" type="number" min={100} max={599} value={form.status_code} onChange={(e) => setForm({ ...form, status_code: Number(e.target.value) })}  />
-            </div>
-            <div>
-              <Label htmlFor="malleable-content-type" className="block mb-1.5">{t("settings.malleable.content_type")}</Label>
+            </Field>
+            <Field label={t("settings.malleable.content_type")} htmlFor="malleable-content-type">
               <Input id="malleable-content-type" type="text" placeholder="application/json" value={form.content_type} onChange={(e) => setForm({ ...form, content_type: e.target.value })} className="font-mono" />
-            </div>
+            </Field>
           </div>
           <div>
             <span className="block text-xs text-muted-foreground mb-1.5">{t("settings.malleable.custom_headers")}</span>

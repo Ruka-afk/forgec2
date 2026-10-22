@@ -67,6 +67,18 @@ function check(file) {
       report(file, i + 1, "space-y.custom-property", "space-y-(--…)", "Tailwind v4 emits no rule for space-y with a custom property - use gap-(--page-gap) on a flex column");
     }
   });
+
+  // Rule 4: the label's typography belongs to the Label primitive. The tag can
+  // span lines, so this pass reads the whole file.
+  const labelRe = /<Label(\s[^>]*?)className="([^"]*)"/g;
+  let m;
+  while ((m = labelRe.exec(src)) !== null) {
+    const owned = m[2].split(/\s+/).filter((t) => ["text-xs", "font-medium", "text-muted-foreground"].includes(t));
+    if (owned.length) {
+      const line = src.slice(0, m.index).split("\n").length;
+      report(file, line, "label.typography", owned.join(" "), "the Label primitive owns the label typography - keep only the layout classes");
+    }
+  }
 }
 
 walk(ROOT);

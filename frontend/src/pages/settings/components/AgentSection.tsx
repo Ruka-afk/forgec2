@@ -3,10 +3,10 @@ import { Card } from "@/components/ui/card";
 import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import Toggle from "./Toggle";
 import { Bot, Save } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { Field } from "@/components/ui/field";
 
 export default function AgentSection({
   form, setForm, saving, onSave, settingsLoaded,
@@ -24,15 +24,13 @@ export default function AgentSection({
       <div className="p-(--card-spacing)">
         <form onSubmit={onSave} className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <div>
-              <Label htmlFor="agent-heartbeat-interval" className="block mb-1.5">{t("settings.agent.heartbeat_interval")}</Label>
+            <Field label={t("settings.agent.heartbeat_interval")} htmlFor="agent-heartbeat-interval">
               <Input id="agent-heartbeat-interval" type="number" min={0} max={300} value={form.interval} onChange={(e) => setForm({ ...form, interval: Number(e.target.value) })}  />
               <p className="text-micro-sm text-muted-foreground mt-1">{t("settings.agent.heartbeat_hint")}</p>
-            </div>
-            <div>
-              <Label htmlFor="agent-jitter" className="block mb-1.5">{t("settings.agent.jitter")}</Label>
+            </Field>
+            <Field label={t("settings.agent.jitter")} htmlFor="agent-jitter">
               <Input id="agent-jitter" type="number" min={0} max={100} value={form.jitter} onChange={(e) => setForm({ ...form, jitter: Number(e.target.value) })}  />
-            </div>
+            </Field>
             <div>
               <span className="block text-xs text-muted-foreground mb-1.5">{t("settings.agent.skip_tls")}</span>
               <div className="h-11 flex items-center gap-3">
@@ -41,26 +39,22 @@ export default function AgentSection({
               </div>
             </div>
           </div>
-          <div>
-              <Label htmlFor="agent-user-agent" className="block mb-1.5">{t("settings.agent.user_agent")}</Label>
+          <Field label={t("settings.agent.user_agent")} htmlFor="agent-user-agent">
               <Input id="agent-user-agent" type="text" value={form.user_agent} onChange={(e) => setForm({ ...form, user_agent: e.target.value })} className="font-mono" />
-          </div>
+          </Field>
           <div className="border-t pt-4">
             <h3 className="text-sm font-medium text-muted-foreground mb-3">{t("settings.agent.working_hours")}</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <div>
-                <Label htmlFor="agent-working-start" className="block mb-1.5">{t("settings.agent.working_start")}</Label>
+              <Field label={t("settings.agent.working_start")} htmlFor="agent-working-start">
                 <Input id="agent-working-start" type="time" value={form.working_start} onChange={(e) => setForm({ ...form, working_start: e.target.value })}  />
-              </div>
-              <div>
-                <Label htmlFor="agent-working-end" className="block mb-1.5">{t("settings.agent.working_end")}</Label>
+              </Field>
+              <Field label={t("settings.agent.working_end")} htmlFor="agent-working-end">
                 <Input id="agent-working-end" type="time" value={form.working_end} onChange={(e) => setForm({ ...form, working_end: e.target.value })}  />
-              </div>
-              <div>
-                <Label htmlFor="agent-working-tz" className="block mb-1.5">{t("settings.agent.timezone")}</Label>
+              </Field>
+              <Field label={t("settings.agent.timezone")} htmlFor="agent-working-tz">
                 <Input id="agent-working-tz" type="text" placeholder="UTC" value={form.working_tz} onChange={(e) => setForm({ ...form, working_tz: e.target.value })} className="font-mono" />
                 <p className="text-micro-sm text-muted-foreground mt-1">{t("settings.agent.tz_hint")}</p>
-              </div>
+              </Field>
             </div>
             <p className="text-micro-sm text-muted-foreground mt-2">{t("settings.agent.working_hint")}</p>
           </div>

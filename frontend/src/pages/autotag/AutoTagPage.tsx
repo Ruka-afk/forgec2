@@ -26,6 +26,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Pencil, Play, Plus, Trash2, Wand2, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { Field } from "@/components/ui/field";
 
 interface AgentTag {
   id: string;
@@ -196,12 +197,10 @@ export default function AutoTagPage() {
           </DialogHeader>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <Label htmlFor="autotag-name" className="mb-1.5">{t("autotag.name")}</Label>
+            <Field label={t("autotag.name")} htmlFor="autotag-name">
               <Input id="autotag-name" value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
-            <div>
-              <Label htmlFor="autotag-tag" className="mb-1.5">{t("autotag.tag")}</Label>
+            </Field>
+            <Field label={t("autotag.tag")} htmlFor="autotag-tag">
               <Select value={tagId} onValueChange={(v) => setTagId(v ?? "")}>
                 <SelectTrigger id="autotag-tag" className="w-full">
                   <SelectValue placeholder={t("autotag.select_tag")} />
@@ -212,11 +211,10 @@ export default function AutoTagPage() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label htmlFor="autotag-priority" className="mb-1.5">{t("autotag.priority")}</Label>
+            </Field>
+            <Field label={t("autotag.priority")} htmlFor="autotag-priority">
               <Input id="autotag-priority" type="number" value={priority} onChange={(e) => setPriority(parseInt(e.target.value) || 0)} />
-            </div>
+            </Field>
           </div>
 
           <div>

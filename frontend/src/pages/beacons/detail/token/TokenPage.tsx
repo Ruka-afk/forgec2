@@ -23,6 +23,7 @@ import { useConfirm } from "@/lib/hooks/useConfirm";
 import { useMutation } from "@/lib/hooks/useMutation";
 import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { formatTime } from "@/lib/utils";
+import { Field } from "@/components/ui/field";
 
 interface Token {
   id?: number;
@@ -404,8 +405,7 @@ export default function AgentTokenPage() {
           <h2 className="text-sm font-semibold text-foreground mb-3">            <User className="size-4" />{t("agents.token_steal")}
           </h2>
           <form onSubmit={handleStealToken} className="space-y-3">
-            <div>
-              <Label htmlFor="steal-pid" className="block mb-1.5">{t("agents.token_pid")}</Label>
+            <Field label={t("agents.token_pid")} htmlFor="steal-pid">
               <Select value={stealPid} onValueChange={(v) => setStealPid(v ?? "")} disabled={!!processError}>
                 <SelectTrigger id="steal-pid" className="w-full">
                   <SelectValue placeholder={processError ? t("agents.token_processes_unreadable") : t("agents.token_steal")} />
@@ -423,7 +423,7 @@ export default function AgentTokenPage() {
                   <Button type="button" onClick={() => { void loadProcesses(); }} size="xs" variant="outline">{t("common.try_again")}</Button>
                 </div>
               )}
-            </div>
+            </Field>
             <Button type="submit" disabled={!stealPid || activeAction === "steal"} className="w-full" variant="default">
               {activeAction === "steal" ? <><Spinner size="sm" />{t("agents.token_stealing")}</> : <><User className="size-4" />{t("agents.token_steal")}</>}
             </Button>
@@ -437,14 +437,12 @@ export default function AgentTokenPage() {
               <Label htmlFor="make-user" className="block mb-1.5">{t("agents.token_username")} <span className="text-destructive-ink">*</span></Label>
               <Input id="make-user" type="text" value={makeUser} onChange={(e) => setMakeUser(e.target.value)} placeholder={t("agents.token_username")} />
             </div>
-            <div>
-              <Label htmlFor="make-domain" className="block mb-1.5">{t("agents.token_domain")}</Label>
+            <Field label={t("agents.token_domain")} htmlFor="make-domain">
               <Input id="make-domain" type="text" value={makeDomain} onChange={(e) => setMakeDomain(e.target.value)} placeholder={t("agents.token_domain")} />
-            </div>
-            <div>
-              <Label htmlFor="make-pass" className="block mb-1.5">{t("agents.token_password")}</Label>
+            </Field>
+            <Field label={t("agents.token_password")} htmlFor="make-pass">
               <Input id="make-pass" type="password" value={makePass} onChange={(e) => setMakePass(e.target.value)} placeholder={t("agents.token_password")} />
-            </div>
+            </Field>
             <Button type="submit" disabled={!makeUser || activeAction === "make"} className="w-full" variant="default">
               {activeAction === "make" ? <><Spinner size="sm" />{t("agents.token_creating")}</> : <><Plus className="size-4" />{t("agents.token_make")}</>}
             </Button>
