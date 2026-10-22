@@ -721,7 +721,7 @@ export default function FilesMediaPanel({ t, agentId, rootPath, onReveal }: File
       ) : null}
 
       <Dialog open={!!playback} onOpenChange={(open) => { if (!open) setPlayback(null); }}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent size="full">
           <DialogHeader>
             <DialogTitle className="flex min-w-0 items-center gap-2">
               {playback?.hit.category === "video" ? <Video className="size-4" /> : <Music className="size-4" />}

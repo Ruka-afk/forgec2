@@ -118,7 +118,7 @@ export default function CampaignPageContent() {
       </Banner>
 
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>{t("campaign.dialog_create")}</DialogTitle>
           </DialogHeader>

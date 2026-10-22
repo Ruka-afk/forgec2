@@ -426,7 +426,7 @@ export default function MacrosPageContent() {
 
       {/* ── Editor dialog ─────────────────────────────────────────── */}
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent size="2xl" className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId != null ? t("macros.edit_title") : t("macros.create_title")}</DialogTitle>
           </DialogHeader>
@@ -513,7 +513,7 @@ export default function MacrosPageContent() {
 
       {/* ── Run dialog ────────────────────────────────────────────── */}
       <Dialog open={!!runTarget} onOpenChange={(open) => { if (!open) setRunTarget(null); }}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent size="lg">
           <DialogHeader>
             <DialogTitle>{t("macros.run_title", { name: runTarget?.name || "" })}</DialogTitle>
           </DialogHeader>
@@ -565,7 +565,7 @@ export default function MacrosPageContent() {
 
       {/* ── Run log detail ────────────────────────────────────────── */}
       <Dialog open={!!detailRun} onOpenChange={(open) => { if (!open) setDetailRun(null); }}>
-        <DialogContent className="sm:max-w-xl max-h-[80vh] overflow-y-auto">
+        <DialogContent size="xl" className="max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {detailRun?.macro_name} · <span className="font-mono text-sm">{detailRun?.agent_id}</span>

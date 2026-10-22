@@ -170,6 +170,12 @@
   --page-pad-x: 1rem;
   --page-pad-y: 1rem;
   --page-gap: 1rem;
+  /* The dialog's own padding. The footer band cancels it with the same
+     token, so the two can never drift apart. */
+  --dialog-padding: 1.25rem;
+  /* The dialog footer's band, resolved opaque so a pinned footer never lets
+     the scrolled form show through it. */
+  --dialog-footer-bg: color-mix(in oklch, var(--muted) 40%, var(--popover));
 
   --content-standard: 80rem;
   --content-wide: 96rem;

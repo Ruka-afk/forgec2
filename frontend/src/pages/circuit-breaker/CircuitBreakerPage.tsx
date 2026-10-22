@@ -322,7 +322,7 @@ export default function CircuitBreakerPage() {
       </PageContainer>
 
       <Dialog open={showConfigModal} onOpenChange={setShowConfigModal}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>{t("cb.config_title")}</DialogTitle>
           </DialogHeader>

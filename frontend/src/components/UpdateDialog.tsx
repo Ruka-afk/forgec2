@@ -173,7 +173,7 @@ export function UpdateDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="sm:max-w-md" aria-live="polite">
+      <DialogContent size="md" aria-live="polite">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ArrowUpCircle className="size-4 text-info-ink" />

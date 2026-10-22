@@ -120,7 +120,7 @@ export function AIAssistBar({ sessionId, disabled, onInsertPrompt }: AIAssistBar
         </Button>
       </div>
       <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
-        <DialogContent className="sm:max-w-lg" aria-live="polite">
+        <DialogContent size="lg" aria-live="polite">
           <DialogHeader>
             <DialogTitle>{t("ai.review_title")}</DialogTitle>
             <DialogDescription>

@@ -15,7 +15,7 @@ export function BatchSleepModal({ agentCount, interval, onIntervalChange, jitter
   const { t } = useI18n();
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent showCloseButton={false} className="sm:max-w-sm">
+      <DialogContent size="sm" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>{t("agents.set_sleep_params")}</DialogTitle>
         </DialogHeader>

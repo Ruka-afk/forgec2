@@ -197,7 +197,7 @@ export default function TagsPage() {
       </DataState>
 
       <Dialog open={!!modal} onOpenChange={() => setModal(null)}>
-        <DialogContent>
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>{modal?.mode === "create" ? t("tags.dialog_create") : t("tags.dialog_edit")}</DialogTitle>
           </DialogHeader>

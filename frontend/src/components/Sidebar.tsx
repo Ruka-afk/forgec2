@@ -394,8 +394,8 @@ const stats = useAppStore((s) => s.stats);
   if (isMobile) {
     return (
       <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-        <SheetContent side="left" showCloseButton={false}
-          className="w-72 border-r border-border bg-sidebar/95 p-0 backdrop-blur-xl">
+        <SheetContent side="left" size="xs" showCloseButton={false}
+          className="border-r border-border bg-sidebar/95 p-0 backdrop-blur-xl">
           <SheetTitle className="sr-only">{t("a11y.navigation")}</SheetTitle>
           <div className="flex flex-col h-full">
             {navContent}

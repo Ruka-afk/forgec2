@@ -75,7 +75,7 @@ function NLQueryDialog() {
       <Button variant="secondary" size="sm" onClick={() => setOpen(true)} className="gap-1.5">
         <MessageSquareText className="size-4 text-primary" />{t("ai.nl_button")}
       </Button>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+      <DialogContent size="2xl" className="max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="size-4 text-primary" />{t("ai.nl_title")}

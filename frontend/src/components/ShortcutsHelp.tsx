@@ -26,7 +26,7 @@ function ShortcutsHelpPanel({ open, onOpenChange }: { open: boolean; onOpenChang
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg" aria-label={t("a11y.shortcuts")}>
+      <DialogContent size="lg" aria-label={t("a11y.shortcuts")}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Keyboard aria-hidden="true" className="size-4" />

@@ -94,7 +94,7 @@ export default function ListenerModal({
 
   return (
     <Dialog open={show} onOpenChange={onClose}>
-      <DialogContent>
+      <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>{t("generate.listener_new")}</DialogTitle>
         </DialogHeader>

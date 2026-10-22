@@ -47,7 +47,7 @@ export function ConfirmModal({ open, title, message, confirmText, cancelText, da
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onCancel()}>
-      <DialogContent>
+      <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>

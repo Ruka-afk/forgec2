@@ -63,7 +63,7 @@ export default memo(function AgentScreenshots({
 
       {lightboxOpen && (
         <Dialog open={true} onOpenChange={onCloseLightbox}>
-          <DialogContent className="max-w-5xl bg-transparent border-0 p-0 shadow-none" showCloseButton={false}>
+          <DialogContent size="full" className="bg-transparent border-0 p-0 shadow-none" showCloseButton={false}>
             <div className="relative mx-auto max-w-[92vw] max-h-[88vh]">
               <Button variant="ghost" size="icon-lg" onClick={onPrevLightbox} className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 text-white backdrop-blur-sm" disabled={lightboxIdx === 0} aria-label={t("agents.screenshots_prev")}><ChevronLeft className="size-4" /></Button>
               <SafeImg src={`/screenshots/${agentId}/${screenshots[lightboxIdx!]}`} alt={`${t("agents.screen_alt_full")} ${lightboxIdx! + 1}/${screenshots.length}`} className="max-w-full max-h-[82vh] object-contain rounded-2xl border border-white/10 shadow-2xl" loading="lazy" />

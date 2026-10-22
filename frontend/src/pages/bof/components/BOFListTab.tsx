@@ -148,7 +148,7 @@ export default function BOFListTab({ files, loading, onUpload, onDelete, onRun, 
       </Card>
 
       <Dialog open={showUpload} onOpenChange={setShowUpload}>
-        <DialogContent>
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>{t("bof.upload_title")}</DialogTitle>
           </DialogHeader>
@@ -207,7 +207,7 @@ export default function BOFListTab({ files, loading, onUpload, onDelete, onRun, 
       </Dialog>
 
       <Dialog open={showRun} onOpenChange={setShowRun}>
-        <DialogContent>
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>{t("bof.execute_title")}</DialogTitle>
           </DialogHeader>
@@ -241,7 +241,7 @@ export default function BOFListTab({ files, loading, onUpload, onDelete, onRun, 
       </Dialog>
 
       <Dialog open={!!showInfo} onOpenChange={() => setShowInfo(null)}>
-        <DialogContent>
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>{t("bof.info_title")}</DialogTitle>
           </DialogHeader>
@@ -273,7 +273,7 @@ export default function BOFListTab({ files, loading, onUpload, onDelete, onRun, 
       </Dialog>
 
       <Dialog open={!!editTarget} onOpenChange={() => setEditTarget(null)}>
-        <DialogContent>
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>{t("bof.edit_title")}</DialogTitle>
           </DialogHeader>

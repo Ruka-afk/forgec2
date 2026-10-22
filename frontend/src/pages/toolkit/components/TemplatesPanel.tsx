@@ -264,7 +264,7 @@ export default function TemplatesPanel({
       )}
 
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent size="lg">
           <DialogHeader>
             <DialogTitle>{editingId != null ? t("templates.edit_title") : t("templates.create_title")}</DialogTitle>
           </DialogHeader>

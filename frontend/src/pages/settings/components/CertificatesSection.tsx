@@ -196,7 +196,7 @@ export default function CertificatesSection({
       </div>
 
       <Dialog open={showRegenDialog} onOpenChange={(v) => { if (v) setShowRegenDialog(true); }}>
-        <DialogContent showCloseButton={false}>
+        <DialogContent size="md" showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>{t("settings.certificates.confirm_regen_title")}</DialogTitle>
           </DialogHeader>

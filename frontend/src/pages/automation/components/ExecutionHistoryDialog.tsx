@@ -121,7 +121,7 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
 
   return (
     <Dialog open={workflowId !== null} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-y-auto">
+      <DialogContent size="2xl" className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <History className="size-4" /> Execution History

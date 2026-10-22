@@ -144,7 +144,7 @@ export default function GroupsPage() {
         </Card>
       </DataState>
       <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>{editGroup ? t("groups.dialog_edit") : t("groups.dialog_create")}</DialogTitle>
           </DialogHeader>

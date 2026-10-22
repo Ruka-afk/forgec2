@@ -120,7 +120,7 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
 
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
-      <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+      <DialogContent size="2xl" className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editWf ? t("workflows.dialog_edit") : t("workflows.dialog_create")}</DialogTitle>
         </DialogHeader>

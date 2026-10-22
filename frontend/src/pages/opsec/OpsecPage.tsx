@@ -429,7 +429,7 @@ export default function OpsecPage() {
       </PageContainer>
 
       <Dialog open={showRuleModal} onOpenChange={setShowRuleModal}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent size="lg">
           <DialogHeader>
             <DialogTitle>{editingRule ? t("opsec.dialog_edit") : t("opsec.dialog_create")}</DialogTitle>
           </DialogHeader>

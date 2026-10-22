@@ -230,7 +230,7 @@ export default function ChainPage() {
 
           {/* Parent Selection Dialog */}
           <Dialog open={showModal} onOpenChange={setShowModal}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent size="md">
               <DialogHeader>
                 <DialogTitle>{t("chain.set_proxy_parent")}</DialogTitle>
               </DialogHeader>

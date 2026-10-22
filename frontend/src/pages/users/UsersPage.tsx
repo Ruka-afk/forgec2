@@ -480,7 +480,7 @@ export default function UsersPage() {
       </Card>
 
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>{t("users.add_user")}</DialogTitle>
           </DialogHeader>
@@ -516,7 +516,7 @@ export default function UsersPage() {
       </Dialog>
 
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>{t("users.edit_title")}</DialogTitle>
           </DialogHeader>
@@ -553,7 +553,7 @@ export default function UsersPage() {
       </Dialog>
 
       <Dialog open={showPasswordModal} onOpenChange={setShowPasswordModal}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent size="sm">
           <DialogHeader>
             <DialogTitle>{t("users.password_title")}</DialogTitle>
           </DialogHeader>
@@ -571,7 +571,7 @@ export default function UsersPage() {
         </DialogContent>
       </Dialog>
       <Dialog open={!!sessionsUser} onOpenChange={(v) => { if (!v) { setSessionsUser(null); setSessions([]); } }}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent size="2xl">
           <DialogHeader>
             <DialogTitle>{t("users.sessions_title")}</DialogTitle>
             {sessionsUser?.username && <p className="text-xs text-muted-foreground">{t("users.sessions_subtitle", { name: sessionsUser.username })}</p>}

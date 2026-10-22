@@ -27,7 +27,7 @@ export function ReviewsModal({ plugin, reviews, open, onOpenChange, onPost }: { 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
+      <DialogContent size="md" className="max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t("plugins.reviews_title")} {plugin.name}</DialogTitle>
         </DialogHeader>
@@ -258,7 +258,7 @@ export function PluginDetailModal({ plugin, open, onOpenChange }: {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-0">
+      <DialogContent size="2xl" className="max-h-[85vh] overflow-hidden flex flex-col p-0">
         <DialogHeader className="px-6 py-4 border-b border-border">
           <div className="flex items-center gap-3">
 <IconBadge icon={Puzzle} color="primary" size="xl" className="dark:bg-primary/20" />

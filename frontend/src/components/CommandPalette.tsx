@@ -187,9 +187,9 @@ export default function CommandPalette() {
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) close(); }}>
-      <DialogContent
+      <DialogContent size="xl"
         showCloseButton={false}
-        className="top-[18vh] translate-y-0 sm:max-w-xl gap-0 overflow-hidden p-0"
+        className="top-[18vh] translate-y-0 gap-0 overflow-hidden p-0"
         aria-label={t("palette.title")}
       >
         <DialogTitle className="sr-only">{t("palette.title")}</DialogTitle>

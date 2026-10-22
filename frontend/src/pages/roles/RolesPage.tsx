@@ -133,7 +133,7 @@ export default function RolesPage() {
         </>}>
 
         <Dialog open={showCreate} onOpenChange={setShowCreate}>
-          <DialogContent>
+          <DialogContent size="md">
             <DialogHeader>
               <DialogTitle>{t("roles.create_title")}</DialogTitle>
             </DialogHeader>

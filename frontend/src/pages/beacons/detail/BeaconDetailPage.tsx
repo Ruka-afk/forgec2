@@ -729,7 +729,7 @@ export default memo(function BeaconDetailPage({ agentId: agentIdProp, onClose }:
       <ConfirmModal open={confirmUninstall} title={t("agents.uninstall_agent")} message={t("agents.uninstall_msg")} confirmText={t("agents.uninstall")} danger onConfirm={async () => { if (await runUninstallAgent()) setConfirmUninstall(false); }} onCancel={() => setConfirmUninstall(false)} />
       {confirmKillDate && (
         <Dialog open={confirmKillDate} onOpenChange={(v) => !v && setConfirmKillDate(false)}>
-          <DialogContent className="w-80 gap-0">
+          <DialogContent size="md" className="w-80 gap-0">
             <DialogHeader>
               <DialogTitle>{t("agents.detail_set_kill_date")}</DialogTitle>
             </DialogHeader>
@@ -745,7 +745,7 @@ export default memo(function BeaconDetailPage({ agentId: agentIdProp, onClose }:
       <ConfirmModal open={confirmClearKillDate} title={t("agents.detail_clear_kill_date")} message={t("agents.detail_clear_kill_date_msg")} confirmText={t("agents.detail_clear")} danger onConfirm={async () => { if (await runClearKillDate()) setConfirmClearKillDate(false); }} onCancel={() => setConfirmClearKillDate(false)} />
       {confirmMigrate && (
         <Dialog open={confirmMigrate} onOpenChange={(v) => !v && setConfirmMigrate(false)}>
-          <DialogContent className="w-96 gap-0">
+          <DialogContent size="md" className="w-96 gap-0">
             <DialogHeader>
               <DialogTitle>{t("agents.migrate_agent")}</DialogTitle>
             </DialogHeader>

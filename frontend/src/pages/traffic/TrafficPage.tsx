@@ -148,7 +148,7 @@ export default function TrafficPage({ embedded = false }: { embedded?: boolean }
               ))}
             </SelectContent>
           </Select>
-          <Button onClick={loadTraffic} size="lg" className="">
+          <Button onClick={loadTraffic} size="lg">
             <RefreshCw className="size-4" />
             <span>{t("traffic.refresh")}</span>
           </Button>

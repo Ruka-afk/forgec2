@@ -303,7 +303,7 @@ export default function PluginsPage() {
       {detailPlugin && <PluginDetailModal plugin={detailPlugin} open={!!detailPlugin} onOpenChange={(open) => { if (!open) setDetailPlugin(null); }} />}
 
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>{t("plugins.create_title")}</DialogTitle>
           </DialogHeader>
@@ -327,7 +327,7 @@ export default function PluginsPage() {
       </Dialog>
 
       <Dialog open={showImport} onOpenChange={setShowImport}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>{t("plugins.import_title")}</DialogTitle>
           </DialogHeader>
@@ -347,7 +347,7 @@ export default function PluginsPage() {
       </Dialog>
 
       <Dialog open={showExecute} onOpenChange={(open) => { setShowExecute(open); if (open) loadExecuteAgents(); }}>
-        <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogContent size="lg" className="max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t("plugins.execute_title")} {executePlugin?.Name || executePlugin?.name}</DialogTitle>
           </DialogHeader>

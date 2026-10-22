@@ -38,13 +38,31 @@ function DialogOverlay({
   )
 }
 
+/**
+ * The dialog width scale. One place, six steps: a dialog declares its size
+ * instead of writing `max-w-*` into its className (72 call sites used nine
+ * different widths, from `sm` to `5xl`, plus one raw `w-[95vw]`).
+ */
+const DIALOG_SIZES = {
+  sm: "sm:max-w-sm",
+  md: "sm:max-w-md",
+  lg: "sm:max-w-lg",
+  xl: "sm:max-w-xl",
+  "2xl": "sm:max-w-2xl",
+  full: "sm:max-w-[min(96vw,96rem)]",
+} as const;
+
+export type DialogSize = keyof typeof DIALOG_SIZES;
+
 function DialogContent({
   className,
   children,
   showCloseButton = true,
+  size = "md",
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
+  size?: DialogSize
 }) {
   const { t } = useI18n();
   return (
@@ -53,7 +71,8 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overscroll-contain overflow-y-auto rounded-lg border border-border/80 bg-popover p-5 text-sm text-popover-foreground shadow-xl ring-1 ring-foreground/8 scrollbar-thin duration-200 outline-none sm:max-h-[calc(100dvh-3rem)] sm:max-w-md data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overscroll-contain overflow-y-auto rounded-lg border border-border/80 bg-popover p-(--dialog-padding) text-sm text-popover-foreground shadow-xl ring-1 ring-foreground/8 scrollbar-thin duration-200 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          DIALOG_SIZES[size],
           className
         )}
         {...props}
@@ -65,7 +84,7 @@ function DialogContent({
             render={
               <Button
                 variant="ghost"
-                className="absolute top-2 right-2 min-w-[44px] min-h-[44px]"
+                className="absolute top-2 right-2 z-2 min-w-[44px] min-h-[44px]"
                 size="icon"
               />
             }
@@ -79,11 +98,33 @@ function DialogContent({
   )
 }
 
+/**
+ * The scrolling region of a dialog. Without it the whole popup scrolls and
+ * the title scrolls away with the form; with it the header and the footer
+ * stay put and only the body moves.
+ */
+function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="dialog-body"
+      className={cn("min-h-0 flex-1 overflow-y-auto", className)}
+      {...props}
+    />
+  )
+}
+
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-2", className)}
+      className={cn(
+        // Pinned while a long form scrolls: the title must not scroll away.
+        // The pseudo-element covers the popup's own padding above the band,
+        // so no sliver of the form shows above it - without the negative
+        // margin, which would pull the following content up under the title.
+        "relative sticky top-0 z-1 flex flex-col gap-2 bg-popover pt-(--dialog-padding) before:absolute before:inset-x-0 before:-top-(--dialog-padding) before:h-(--dialog-padding) before:bg-popover before:content-['']",
+        className
+      )}
       {...props}
     />
   )
@@ -102,7 +143,11 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        "-mx-5 -mb-5 flex flex-col-reverse gap-2 rounded-b-lg border-t bg-muted/40 p-4 sm:flex-row sm:justify-end",
+        // The negative margins cancel the popup's own padding, so the footer
+        // band reaches the popup's edges. Both sides read the same token, so
+        // they cannot drift apart. The band is pinned: the actions stay
+        // reachable while a long form scrolls under them.
+        "sticky bottom-0 z-1 -mx-(--dialog-padding) -mb-(--dialog-padding) flex flex-col-reverse gap-2 rounded-b-lg border-t bg-(--dialog-footer-bg) p-4 sm:flex-row sm:justify-end",
         className
       )}
       {...props}
@@ -148,6 +193,7 @@ function DialogDescription({
 
 export {
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,

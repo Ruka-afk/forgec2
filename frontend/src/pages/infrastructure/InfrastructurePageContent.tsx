@@ -391,7 +391,7 @@ export default function InfrastructurePage() {
           </div>
 
           <Dialog open={showGenModal} onOpenChange={setShowGenModal}>
-            <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto p-6">
+            <DialogContent size="2xl" className="max-h-[85vh] overflow-y-auto p-6">
               <DialogHeader>
                 <DialogTitle>{t("infra.deploy_redirector_title")}</DialogTitle>
               </DialogHeader>

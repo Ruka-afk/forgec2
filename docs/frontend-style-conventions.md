@@ -92,6 +92,20 @@
 - 次要列随视口逐级让位（`max-md:hidden` / `max-lg:hidden` /
   `max-xl:hidden` / `max-2xl:hidden`），不要只在 `sm` 以下隐藏。
 
+### 4.4 对话框与抽屉
+
+- 对话框宽度用 `size` 属性：`sm` / `md`（默认）/ `lg` / `xl` / `2xl` /
+  `full`。**禁止**在 `DialogContent` 的 `className` 里写 `max-w-*` 或
+  `w-[..vw]`（72 处曾散落 9 种宽度 + 1 个裸 vw）。
+- 对话框内距是令牌 `--dialog-padding`；页脚的负边距用同一个令牌抵消它，
+  因此两者不会各自漂移。页脚底色 `--dialog-footer-bg` 为不透明解析，
+  固定后不会透出下方表单。
+- 长表单的标题栏与操作栏固定（`DialogHeader` / `DialogFooter` 自带
+  `sticky`），表单在两者之间滚动；标题栏用伪元素盖住弹窗自身的上内边距，
+  **不要**给标题栏加负外边距（那会把下方内容拉到标题底下）。
+- 抽屉宽度用 `SheetContent` 的 `size`：`xs` / `sm` / `md` / `lg` / `xl` /
+  `full`（仅左右侧栏生效）。
+
 ## 5. 颜色 / 圆角 / 阴影
 
 - 颜色一律 token（`--primary`、`--chart-*`…）；裸 hex 由门禁拦截（豁免清单见

@@ -24,7 +24,7 @@ export function WebhookDialog({ open, onOpenChange, webhookForm, setWebhookForm,
   const { t } = useI18n();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>{t("auto.new_webhook_dialog")}</DialogTitle>
         </DialogHeader>

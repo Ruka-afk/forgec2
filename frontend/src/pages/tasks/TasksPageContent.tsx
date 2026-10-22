@@ -999,7 +999,7 @@ function TaskDetailModal({ task, onClose, getAgentName, getStatusBadge, getTypeB
   const { t } = useI18n();
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
+      <DialogContent size="2xl" className="max-h-[85vh] flex flex-col">
         <DialogHeader>
           <div className="flex items-center gap-3">
             {getTypeBadge(task.type)}

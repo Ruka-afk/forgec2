@@ -85,7 +85,7 @@ export function PendingAIIntents({ activeSessionId }: { activeSessionId: number 
         </Button>
       </div>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-lg" aria-live="polite">
+        <DialogContent size="lg" aria-live="polite">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ShieldCheck className="size-4 text-warning-ink" />

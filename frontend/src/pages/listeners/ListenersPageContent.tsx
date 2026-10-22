@@ -459,7 +459,7 @@ export default function ListenersPageContent() {
       </div>
 
       <Dialog open={showCreate} onOpenChange={(open) => { setShowCreate(open); if (open) resetCreate(); }}>
-        <DialogContent>
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>{t("listeners.create_dialog_title")}</DialogTitle>
           </DialogHeader>
@@ -545,7 +545,7 @@ export default function ListenersPageContent() {
       </Dialog>
 
       <Dialog open={showEdit} onOpenChange={(open) => { setShowEdit(open); if (!open) setEditingListener(null); }}>
-        <DialogContent>
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>{t("listeners.edit_dialog_title")}</DialogTitle>
           </DialogHeader>

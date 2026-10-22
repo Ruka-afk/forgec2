@@ -255,7 +255,7 @@ export default function ApiKeysSection() {
 
       {/* Create dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent size="md">
           <DialogHeader><DialogTitle>{t("settings.apikeys.create_title")}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div>
@@ -308,7 +308,7 @@ export default function ApiKeysSection() {
 
       {/* One-time plaintext display */}
       <Dialog open={!!createdKey} onOpenChange={(open) => { if (!open) setCreatedKey(null); }}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent size="lg">
           <DialogHeader><DialogTitle>{t("settings.apikeys.created_title")}</DialogTitle></DialogHeader>
           <Banner tone="warning" className="text-xs">{t("settings.apikeys.created_warning")}</Banner>
           <div className="flex items-center gap-2">

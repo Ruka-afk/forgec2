@@ -78,7 +78,7 @@ export default memo(function FilesDialogs(props: FilesDialogsProps) {
   return (
     <>
       <Dialog open={showUsb} onOpenChange={setShowUsb}>
-        <DialogContent className="max-w-lg">
+        <DialogContent size="lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Usb className="size-4" />
@@ -96,7 +96,7 @@ export default memo(function FilesDialogs(props: FilesDialogsProps) {
       </Dialog>
 
       <Dialog open={showDrives} onOpenChange={setShowDrives}>
-        <DialogContent className="max-w-lg">
+        <DialogContent size="lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <HardDrive className="size-4" />
@@ -114,7 +114,7 @@ export default memo(function FilesDialogs(props: FilesDialogsProps) {
       </Dialog>
 
       <Dialog open={showUpload} onOpenChange={(open) => { if (!uploading) setShowUpload(open); }}>
-        <DialogContent className="max-w-md">
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CloudUpload className="size-4" />
@@ -173,7 +173,7 @@ export default memo(function FilesDialogs(props: FilesDialogsProps) {
       </Dialog>
 
       <Dialog open={showMkdir} onOpenChange={setShowMkdir}>
-        <DialogContent className="max-w-md">
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FolderPlus className="size-4" />
@@ -204,7 +204,7 @@ export default memo(function FilesDialogs(props: FilesDialogsProps) {
       </Dialog>
 
       <Dialog open={renameTarget !== null} onOpenChange={(open) => { if (!open) setRenameTarget(null); }}>
-        <DialogContent className="max-w-md">
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Pencil className="size-4" />
@@ -235,7 +235,7 @@ export default memo(function FilesDialogs(props: FilesDialogsProps) {
       </Dialog>
 
       <Dialog open={chmodTarget !== null} onOpenChange={(open) => { if (!open) setChmodTarget(null); }}>
-        <DialogContent className="max-w-md">
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Lock className="size-4" />
@@ -267,7 +267,7 @@ export default memo(function FilesDialogs(props: FilesDialogsProps) {
       </Dialog>
 
       <Dialog open={showPreview && !!previewContent} onOpenChange={setShowPreview}>
-        <DialogContent className="flex max-h-[80vh] max-w-3xl flex-col">
+        <DialogContent size="2xl" className="flex max-h-[80vh] flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between gap-2">
               <span className="flex items-center gap-2">

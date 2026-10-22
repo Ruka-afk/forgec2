@@ -100,7 +100,7 @@ export function AIPlaybookDialog({ onSaved }: { onSaved: () => void }) {
       </Button>
 
       <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setDraft(null); setGoal(""); setGenerating(false); } }}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+      <DialogContent size="2xl" className="max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Wand2 className="size-4 text-primary" />{t("ai.pb_title")}

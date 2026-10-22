@@ -570,7 +570,7 @@ export default function ReportPage() {
       </Tabs>
 
       <Dialog open={!!stepUp} onOpenChange={(open) => { if (!open) setStepUp(null); }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent size="sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ShieldCheck className="size-4 shrink-0" />{t("report.stepup_title")}
@@ -596,7 +596,7 @@ export default function ReportPage() {
       </Dialog>
 
       <Dialog open={!!viewingReport} onOpenChange={(open) => { if (!open) setViewingReport(null); }}>
-        <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+        <DialogContent size="2xl" className="max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 truncate">
               <Wand2 className="size-4 shrink-0" />{viewingReport?.name}

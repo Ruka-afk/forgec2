@@ -620,7 +620,7 @@ export default function CredentialsPage() {
       </Card>
 
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent size="lg">
           <DialogHeader>
             <DialogTitle>{t("cred.add_title")}</DialogTitle>
           </DialogHeader>
@@ -720,7 +720,7 @@ export default function CredentialsPage() {
       </Dialog>
 
       <Dialog open={showEditModal} onOpenChange={(open) => { if (!open) { setShowEditModal(false); setEditTarget(null); } }}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent size="lg">
           <DialogHeader>
             <DialogTitle>{t("cred.edit_title")}</DialogTitle>
           </DialogHeader>
@@ -805,7 +805,7 @@ export default function CredentialsPage() {
       </Dialog>
 
       <Dialog open={showBatchModal} onOpenChange={setShowBatchModal}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>{t("cred.batch_title")}</DialogTitle>
           </DialogHeader>

@@ -53,7 +53,7 @@ export function BulkCommandModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent showCloseButton={false}>
+      <DialogContent size="md" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>{t("agents.execute_command")}</DialogTitle>
         </DialogHeader>

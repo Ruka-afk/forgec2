@@ -15,7 +15,7 @@ export function NotesEditModal({
   const { t } = useI18n();
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent showCloseButton={false}>
+      <DialogContent size="md" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>{t("agents.edit_notes")}</DialogTitle>
         </DialogHeader>

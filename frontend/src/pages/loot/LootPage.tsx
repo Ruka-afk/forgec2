@@ -473,7 +473,7 @@ export default function LootPage() {
 
       {lbCurrent && (
         <Dialog open={true} onOpenChange={() => setLbIndex(-1)}>
-          <DialogContent className="max-w-5xl bg-transparent border-0 p-0" showCloseButton={false}>
+          <DialogContent size="full" className="bg-transparent border-0 p-0" showCloseButton={false}>
             <div className="absolute top-4 right-4 flex gap-2 z-10">
               <a href={safeHref(lbUrl)} download className="inline-flex items-center gap-1">
                 <Button variant="secondary" className="gap-1"><Download aria-hidden="true" className="size-4" />{t("common.download")}</Button>

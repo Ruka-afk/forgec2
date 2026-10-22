@@ -315,7 +315,7 @@ export default function AuditPage() {
       </Card>
 
       <Dialog open={!!selectedLog} onOpenChange={() => setSelectedLog(null)}>
-        <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogContent size="lg" className="max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t("audit.detail_title")}</DialogTitle>
           </DialogHeader>

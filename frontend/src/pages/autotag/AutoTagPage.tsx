@@ -190,7 +190,7 @@ export default function AutoTagPage() {
       
 
       <Dialog open={showForm} onOpenChange={(open) => { if (!open) { setShowForm(false); resetForm(); } }}>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent size="xl">
           <DialogHeader>
             <DialogTitle>{editingId ? t("autotag.edit_rule") : t("autotag.new_rule")}</DialogTitle>
           </DialogHeader>

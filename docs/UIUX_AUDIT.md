@@ -2026,11 +2026,27 @@ layout audit enforces it — it now reports an overflowing table as a
 violation unless one of its cells is sticky, and the run is green
 (45 routes × 4 viewports, 0 violations).
 
-### Backlog (U9.4 → U9.7)
+### L7 · Nine dialog widths and a footer wired to the wrong padding
+
+72 `DialogContent` instances spread over nine widths — `sm` 4, `md` 18+16
+(the default), `lg` 14, `xl` 3, `2xl` 8, `3xl` 4, `4xl` 2, `5xl` 2 — plus
+one raw `w-[95vw]`, each written as a `max-w-*` class inside the call
+site's `className`. The footer's negative margins were hard-wired to the
+popup's `p-5`, so the two could only be changed together by hand. And the
+title of a long form scrolled away with the form, while the action buttons
+at the bottom of the popup did the same.
+
+**Fixed**: the dialog declares its size (`sm` / `md` / `lg` / `xl` / `2xl` /
+`full`) through one prop; the widths live in one table in the primitive. The
+popup's padding is a token (`--dialog-padding`) and the footer band cancels
+it with the same token, resolved opaque so a pinned band never lets the
+form show through it. The header and the footer now pin while the form
+scrolls under them, and the sheets got the same size scale.
+
+### Backlog (U9.5 → U9.7)
 
 | Batch | Defect | Evidence |
 | --- | --- | --- |
-| U9.4 | Dialogs: 72 `DialogContent` instances across nine widths (`default` 16, `md` 18, `lg` 14, `2xl` 8, `3xl` 4, `sm` 4, `xl` 3, `4xl` 2, `5xl` 2) plus one raw `w-[95vw]`; the footer's negative margins are hard-wired to the popup's `p-5` | measured in the harness above |
 | U9.5 | Detail pages (beacon: 15 sections, listener, campaign, report, circuit breaker) and the four workspace surfaces (shell / files / screen / remote desktop) each grow their own chrome | page-by-page review |
 | U9.6 | Density mode changes the type ramp and the table cell padding only — not the card padding, the page gap or the control heights | `[data-density="compact"]` in `globals.css` |
 | U9.7 | No layout gate: the defects above are all reachable by a single class name | — |

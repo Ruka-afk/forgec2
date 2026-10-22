@@ -24,7 +24,7 @@ export function AlertRuleDialog({ open, onOpenChange, alertRuleForm, setAlertRul
   const { t } = useI18n();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>{t("auto.new_alert_rule")}</DialogTitle>
         </DialogHeader>

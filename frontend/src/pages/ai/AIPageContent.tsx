@@ -1239,7 +1239,7 @@ export default function AIPage() {
       </div>
 
       <Dialog open={!!renameTarget} onOpenChange={() => setRenameTarget(null)}>
-        <DialogContent>
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>{t("ai.rename")}</DialogTitle>
           </DialogHeader>

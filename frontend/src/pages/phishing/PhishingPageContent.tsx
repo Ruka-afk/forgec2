@@ -289,7 +289,7 @@ export default function PhishingPageContent() {
           setShowTplForm(open);
           if (!open) setEditTplId(null);
         }}>
-          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" showCloseButton={false}>
+          <DialogContent size="2xl" className="max-h-[90vh] overflow-y-auto" showCloseButton={false}>
             <DialogHeader>
               <DialogTitle>{editTplId ? t("phishing.dialog_edit_template") : t("phishing.dialog_new_template")}</DialogTitle>
             </DialogHeader>
@@ -400,7 +400,7 @@ export default function PhishingPageContent() {
           </Card>
         )}
         <Dialog open={showCampForm} onOpenChange={setShowCampForm}>
-          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" showCloseButton={false}>
+          <DialogContent size="2xl" className="max-h-[90vh] overflow-y-auto" showCloseButton={false}>
             <DialogHeader>
               <DialogTitle>{t("phishing.new_campaign")}</DialogTitle>
             </DialogHeader>
