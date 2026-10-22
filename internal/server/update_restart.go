@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -396,7 +395,7 @@ func renderUnixRestartScript(p restartPlan) string {
 	b.WriteString("fi\n")
 	// The outcome is recorded before the previous build is started again: the
 	// server that comes back reads it and reports it in the audit trail.
-	b.WriteString("Write-Last 'rolled_back' 'the new server did not report a healthy boot'\n")
+	b.WriteString("write_last rolled_back \"the new server did not report a healthy boot\"\n")
 	fmt.Fprintf(&b, "\"$EXE\"%s >/dev/null 2>&1 &\n", unixArgSuffix(p.Args))
 	b.WriteString("cleanup\n")
 	b.WriteString("rm -f \"$0\" 2>/dev/null\n")
@@ -575,16 +574,4 @@ func windowsQuoteArg(arg string) string {
 // quotePs renders a value as a PowerShell single-quoted string.
 func quotePs(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
-}
-
-// quoteCmdArg renders a value as a cmd.exe argument. It is used for the
-// paths the restarter embeds in a cmd context.
-func quoteCmdArg(value string) string {
-	escaped := strings.ReplaceAll(value, "%", "%%")
-	return `"` + strings.ReplaceAll(escaped, `"`, `""`) + `"`
-}
-
-// formatPID renders a process id for the generated scripts.
-func formatPID(pid int) string {
-	return strconv.Itoa(pid)
 }

@@ -198,15 +198,24 @@ func TestRestartScriptRollsBackWhenTheNewBuildNeverComesUp(t *testing.T) {
 	if !strings.Contains(unix, `mv -f "$PREV" "$EXE"`) {
 		t.Fatalf("the unix script cannot restore the backup:\n%s", unix)
 	}
-	if !strings.Contains(unix, "rolled_back") {
+	if !strings.Contains(unix, "write_last rolled_back") {
 		t.Fatalf("the unix script does not record the rollback:\n%s", unix)
+	}
+	// The two scripts are written side by side; a PowerShell command in the
+	// POSIX script fails at runtime ("Write-Last: not found") and silently
+	// skips the rollback report.
+	if strings.Contains(unix, "Write-Last") {
+		t.Fatalf("the unix script contains a PowerShell command:\n%s", unix)
 	}
 	win := renderWindowsRestartScript(plan)
 	if !strings.Contains(win, "Move-Item -LiteralPath $Prev -Destination $Exe") {
 		t.Fatalf("the windows script cannot restore the backup:\n%s", win)
 	}
-	if !strings.Contains(win, "rolled_back") {
+	if !strings.Contains(win, "Write-Last 'rolled_back'") {
 		t.Fatalf("the windows script does not record the rollback:\n%s", win)
+	}
+	if strings.Contains(win, "write_last") {
+		t.Fatalf("the windows script contains a POSIX command:\n%s", win)
 	}
 }
 

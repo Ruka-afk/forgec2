@@ -665,7 +665,7 @@ func (s *Server) performHotUpdate(latest string) error {
 		os.Remove(pendingPath)
 		return fail(err)
 	}
-	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+	if err := os.WriteFile(scriptPath, []byte(script), 0o600); err != nil {
 		os.Remove(newPath)
 		os.Remove(pendingPath)
 		return fail(fmt.Errorf("create restart script: %w", err))
