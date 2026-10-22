@@ -21,7 +21,7 @@ interface ScreenGalleryProps {
 /** Still-mode thumbnail gallery (hidden in video mode). */
 export default memo(function ScreenGallery({ t, agentId, gallery, onOpen, onActivate, onDownload }: ScreenGalleryProps) {
   return (
-    <Card className="flex min-h-48 flex-1 flex-col p-4">
+    <Card className="flex min-h-48 flex-1 flex-col p-(--card-spacing)">
       <div className="mb-3 flex shrink-0 items-center justify-between">
         <div className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           <Images className="size-3.5" aria-hidden="true" />

@@ -100,7 +100,7 @@ export default memo(function AgentStatsGrid({
 
   return (
     <div className={`grid grid-cols-1 ${rail ? "gap-3" : "lg:grid-cols-2 gap-3"} mb-4`}>
-      <Card className="p-4 gap-0 overflow-hidden">
+      <Card className="p-(--card-spacing) gap-0 overflow-hidden">
         <div className="text-micro-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3"><Cpu className="size-3.5" />{t("agents.stats_system")}</div>
         <div className="space-y-2.5">
         <InfoRow label={t("agents.stats_agent_id")} value={agentID || "\u2014"} mono copyValue={agentID || undefined} copyLabel={t("agents.stats_agent_id")} isSelect />
@@ -115,7 +115,7 @@ export default memo(function AgentStatsGrid({
         <InfoRow label={t("agents.stats_listener")} value={agent.listener_id ? `#${agent.listener_id}` : "\u2014"} />
         </div>
       </Card>
-      <Card className="p-4 gap-0 overflow-hidden">
+      <Card className="p-(--card-spacing) gap-0 overflow-hidden">
         <div className="text-micro-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3"><Radio className="size-3.5" />{t("agents.stats_beacon")}</div>
         <div className="space-y-2.5">
         <InfoRow label={t("agents.stats_sleep")} value={interval > 0 ? `${interval}s` : "0s"} />

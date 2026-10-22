@@ -271,7 +271,7 @@ export default function AutoTagPage() {
       {loading ? (
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
-            <Card key={i} className="p-4">
+            <Card key={i} className="p-(--card-spacing)">
               <div className="flex items-center gap-4">
                 <Skeleton className="w-8 h-5 rounded-full" />
                 <div className="flex-1">
@@ -294,7 +294,7 @@ export default function AutoTagPage() {
       ) : (
         <div className="space-y-2">
           {rules.map((rule) => (
-            <Card key={rule.id} className="p-4 hover:shadow-md transition-shadow">
+            <Card key={rule.id} className="p-(--card-spacing) hover:shadow-md transition-shadow">
               <div className="flex items-center gap-4">
                 <Switch checked={rule.enabled} onCheckedChange={() => handleToggle(rule.id)} aria-label={t("autotag.toggle_rule")} />
                 <div className="flex-1 min-w-0">

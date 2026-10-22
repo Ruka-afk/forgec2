@@ -258,7 +258,7 @@ export default function ReportPage() {
       <Tabs value={activeSection} onValueChange={setActiveSection} orientation="vertical">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
           <div className="lg:col-span-1">
-            <Card className="p-2 sticky lg:top-[96px]">
+            <Card className="p-(--card-spacing) sticky lg:top-[96px]">
               <TabsList variant="sidebar" className="gap-1">
                 {SECTIONS.map((s) => (
                   <TabsTrigger key={s.key} value={s.key}

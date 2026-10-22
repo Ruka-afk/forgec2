@@ -159,7 +159,7 @@ export default function RolesPage() {
             <EmptyState title={t("roles.empty")} />
           )}
           {roles.map((role) => (
-            <Card key={role.id} interactive className="p-4">
+            <Card key={role.id} interactive className="p-(--card-spacing)">
               {editRole?.id === role.id ? (
                 <div className="space-y-3">
                   <Input aria-label={t("roles.a11y_name")} value={editRole.name}
@@ -212,7 +212,7 @@ function RolesLoadingSkeleton() {
   return (
     <div className="grid gap-4" aria-busy="true">
       {Array.from({ length: 3 }).map((_, i) => (
-        <Card key={i} className="p-4">
+        <Card key={i} className="p-(--card-spacing)">
           <div className="flex items-start justify-between">
             <div className="space-y-2">
               <Skeleton className="h-5 w-36" />

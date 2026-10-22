@@ -234,7 +234,7 @@ export default function OpsecPage() {
             <TableHeader>
               <TableRow className="text-left text-xs text-muted-foreground border-b border-border">
                 <TableHead className="px-4 py-3 font-medium">{t("opsec.col_name")}</TableHead>
-                <TableHead className="px-4 py-3 font-medium">{t("opsec.col_desc")}</TableHead>
+                <TableHead className="max-sm:hidden px-4 py-3 font-medium">{t("opsec.col_desc")}</TableHead>
                 <TableHead className="px-4 py-3 font-medium">{t("opsec.col_risk")}</TableHead>
                 <TableHead className="px-4 py-3 font-medium">{t("opsec.col_action")}</TableHead>
                 <TableHead className="px-4 py-3 font-medium text-right">{t("opsec.col_actions")}</TableHead>
@@ -257,7 +257,7 @@ export default function OpsecPage() {
                     <TableCell className="px-4 py-3">
                       <code className="font-semibold text-foreground">{rule.name}</code>
                     </TableCell>
-                    <TableCell className="px-4 py-3 text-muted-foreground">{rule.description}</TableCell>
+                    <TableCell className="max-sm:hidden px-4 py-3 text-muted-foreground">{rule.description}</TableCell>
                     <TableCell className="px-4 py-3">
                       <span className={cn("inline-flex px-2 py-0.5 rounded-lg text-xs font-medium", risk.cls)}>{risk.label}</span>
                     </TableCell>

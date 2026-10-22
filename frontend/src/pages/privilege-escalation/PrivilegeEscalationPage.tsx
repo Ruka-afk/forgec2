@@ -199,19 +199,19 @@ export default function PrivescPage() {
       </Banner>
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-        <Card interactive className="p-4">
+        <Card interactive className="p-(--card-spacing)">
           <StatTile label={t("privesc.stat_total_checks")} value={totalChecks} tone="primary" />
         </Card>
-        <Card interactive className="p-4">
+        <Card interactive className="p-(--card-spacing)">
           <StatTile label={t("privesc.stat_critical")} value={criticalCount} tone="destructive" />
         </Card>
-        <Card interactive className="p-4">
+        <Card interactive className="p-(--card-spacing)">
           <StatTile label={t("privesc.stat_high")} value={highCount} tone="warning" />
         </Card>
-        <Card interactive className="p-4">
+        <Card interactive className="p-(--card-spacing)">
           <StatTile label={t("privesc.stat_medium")} value={mediumCount} tone="warning" />
         </Card>
-        <Card interactive className="p-4">
+        <Card interactive className="p-(--card-spacing)">
           <StatTile label={t("privesc.stat_low")} value={lowCount} tone="primary" />
         </Card>
       </div>

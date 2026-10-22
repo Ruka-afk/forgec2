@@ -400,7 +400,7 @@ export default function AgentTokenPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="p-5">
+        <Card className="p-(--card-spacing)">
           <h2 className="text-sm font-semibold text-foreground mb-3">            <User className="size-4" />{t("agents.token_steal")}
           </h2>
           <form onSubmit={handleStealToken} className="space-y-3">
@@ -430,7 +430,7 @@ export default function AgentTokenPage() {
           </form>
         </Card>
 
-        <Card className="p-5">          <h2 className="text-sm font-semibold text-foreground mb-3">            <PlusCircle className="size-4" />{t("agents.token_make")}
+        <Card className="p-(--card-spacing)">          <h2 className="text-sm font-semibold text-foreground mb-3">            <PlusCircle className="size-4" />{t("agents.token_make")}
           </h2>
           <form onSubmit={handleMakeToken} className="space-y-3">
             <div>
@@ -449,7 +449,7 @@ export default function AgentTokenPage() {
               {activeAction === "make" ? <><Spinner size="sm" />{t("agents.token_creating")}</> : <><Plus className="size-4" />{t("agents.token_make")}</>}
             </Button>
           </form>
-        </Card>        <Card className="p-5">
+        </Card>        <Card className="p-(--card-spacing)">
           <h2 className="text-sm font-semibold text-foreground mb-3">
             <RotateCcw className="size-4" />{t("agents.token_quick_actions")}          </h2>
           <div className="space-y-3">

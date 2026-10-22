@@ -403,6 +403,31 @@ body::before {
   background: var(--surface-hover);
 }
 
+/* A wide table pins its action column. Without it the operator's primary
+   actions scroll out of sight — the Listeners table clipped "Copy / Edit /
+   Stop / Delete" by 144px even on a 1440px screen. The pinned cell paints
+   the row's own surface (stripe, hover) so the columns sliding underneath
+   never show through it. */
+[data-slot="table-head"].sticky-end,
+[data-slot="table-cell"].sticky-end {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  box-shadow: -1px 0 0 0 color-mix(in oklch, var(--border) 70%, transparent);
+}
+[data-slot="table-head"].sticky-end {
+  background-color: var(--table-header);
+}
+[data-slot="table-cell"].sticky-end {
+  background-color: var(--sticky-cell-bg, var(--card));
+}
+[data-slot="table-body"] > [data-slot="table-row"]:nth-child(even) {
+  --sticky-cell-bg: var(--table-stripe);
+}
+[data-slot="table-body"] > [data-slot="table-row"]:hover {
+  --sticky-cell-bg: var(--surface-hover);
+}
+
 /* Keep native form controls visually consistent with the shadcn controls and
    make keyboard focus obvious without changing component-level sizing. */
 input:not([type="checkbox"]):not([type="radio"]),

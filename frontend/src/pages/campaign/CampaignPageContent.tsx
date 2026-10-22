@@ -158,7 +158,7 @@ export default function CampaignPageContent() {
                 <TableHead className="py-3 px-4 sm:py-3.5 sm:px-5">{t("campaign.col_name")}</TableHead>
                 <TableHead className="py-3 px-4 sm:py-3.5 sm:px-5">{t("campaign.col_status")}</TableHead>
                 <TableHead className="py-3 px-4 sm:py-3.5 sm:px-5">{t("campaign.col_agents")}</TableHead>
-                <TableHead className="py-3 px-4 sm:py-3.5 sm:px-5">{t("campaign.col_created")}</TableHead>
+                <TableHead className="max-sm:hidden py-3 px-4 sm:py-3.5 sm:px-5">{t("campaign.col_created")}</TableHead>
                 <TableHead className="text-right py-3 px-4 sm:py-3.5 sm:px-5">{t("campaign.col_actions")}</TableHead>
               </TableRow>
             </TableHeader>
@@ -179,7 +179,7 @@ export default function CampaignPageContent() {
                     <StatusBadge status={c.status} label={t(`campaign.status_${c.status}`)} />
                   </TableCell>
                   <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5 text-muted-foreground">{c.agents?.length || 0}</TableCell>
-                  <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5 text-muted-foreground text-sm">{formatTime(c.created_at)}</TableCell>
+                  <TableCell className="max-sm:hidden py-3 px-4 sm:py-3.5 sm:px-5 text-muted-foreground text-sm">{formatTime(c.created_at)}</TableCell>
                   <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5 text-right">
                     <Button variant="ghost" size="icon-xs" className="text-destructive-ink"
                       onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }} aria-label={t("campaign.a11y_delete")}>

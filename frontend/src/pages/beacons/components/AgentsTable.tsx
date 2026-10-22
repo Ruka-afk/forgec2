@@ -139,7 +139,7 @@ export default memo(function AgentsTable(props: AgentsTableProps) {
         tabIndex={0}
         className={agentVirtualized ? "content-auto overscroll-contain overflow-auto max-h-[min(70vh,720px)] scrollbar-thin" : "content-auto overscroll-contain overflow-auto scrollbar-thin"}
       >
-      <Table className="text-sm min-w-[850px]">
+      <Table className="text-sm min-w-[640px] xl:min-w-[850px]">
         <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90 border-b border-border">
           <TableRow className="hover:bg-transparent">
             <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5 w-10">
@@ -171,7 +171,7 @@ export default memo(function AgentsTable(props: AgentsTableProps) {
             <TableHead className="text-right py-3 px-3 sm:py-3.5 sm:px-4 max-sm:hidden">{t("agents.col_jitter")}</TableHead>
             )}
             {visibleCols.status && sortableHead("status", "agents.col_status")}
-            <TableHead className="text-right py-3 px-4 sm:py-3.5 sm:px-5">{t("agents.col_actions")}</TableHead>
+            <TableHead className="sticky-end text-right py-3 px-4 sm:py-3.5 sm:px-5">{t("agents.col_actions")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody className="divide-y divide-border">

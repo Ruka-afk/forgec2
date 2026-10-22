@@ -395,7 +395,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
       </Tabs>
 
       {resultB64 && (
-        <Card className="mt-4 p-4 border-success/30 bg-success/5">
+        <Card className="mt-4 p-(--card-spacing) border-success/30 bg-success/5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <IconBadge icon={CheckCircle} color="success" size="xl" />

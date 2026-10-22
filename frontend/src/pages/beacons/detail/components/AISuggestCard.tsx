@@ -80,7 +80,7 @@ export function AISuggestCard({ agentId, online }: { agentId: string; online: bo
   };
 
   return (
-    <Card className="p-4 mb-4">
+    <Card className="p-(--card-spacing) mb-4">
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-semibold text-foreground flex items-center gap-2">
           <Sparkles className="size-4 text-primary" />{t("ai.suggest_title")}

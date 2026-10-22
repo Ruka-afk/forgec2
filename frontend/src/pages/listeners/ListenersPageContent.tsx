@@ -342,14 +342,14 @@ export default function ListenersPageContent() {
           <TableHeader className="bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90 sticky top-0 z-10 border-b border-border">
             <TableRow className="hover:bg-transparent">
               <TableHead className="text-left py-3 px-4 sm:py-4 sm:px-6 font-medium text-muted-foreground min-w-[120px]">{t("listeners.col_name")}</TableHead>
-              <TableHead className="max-sm:hidden text-left py-3 px-3 sm:py-4 sm:px-4 font-medium text-muted-foreground min-w-[80px]">{t("listeners.col_type")}</TableHead>
-              <TableHead className="max-sm:hidden text-left py-3 px-3 sm:py-4 sm:px-4 font-medium text-muted-foreground min-w-[100px]">{t("listeners.col_tags")}</TableHead>
-              <TableHead className="max-sm:hidden text-left py-3 px-3 sm:py-4 sm:px-4 font-medium text-muted-foreground min-w-[160px]">{t("listeners.col_address")}</TableHead>
-              <TableHead className="max-sm:hidden text-left py-3 px-3 sm:py-4 sm:px-4 font-medium text-muted-foreground min-w-[60px]">{t("listeners.col_agents")}</TableHead>
+              <TableHead className="max-lg:hidden text-left py-3 px-3 sm:py-4 sm:px-4 font-medium text-muted-foreground min-w-[80px]">{t("listeners.col_type")}</TableHead>
+              <TableHead className="max-lg:hidden text-left py-3 px-3 sm:py-4 sm:px-4 font-medium text-muted-foreground min-w-[100px]">{t("listeners.col_tags")}</TableHead>
+              <TableHead className="max-md:hidden text-left py-3 px-3 sm:py-4 sm:px-4 font-medium text-muted-foreground min-w-[160px]">{t("listeners.col_address")}</TableHead>
+              <TableHead className="max-lg:hidden text-left py-3 px-3 sm:py-4 sm:px-4 font-medium text-muted-foreground min-w-[60px]">{t("listeners.col_agents")}</TableHead>
               <TableHead className="text-left py-3 px-3 sm:py-4 sm:px-4 font-medium text-muted-foreground min-w-[80px]">{t("listeners.col_status")}</TableHead>
               <TableHead className="text-left py-3 px-3 sm:py-4 sm:px-4 font-medium text-muted-foreground min-w-[120px]">{t("listeners.col_health")}</TableHead>
-              <TableHead className="max-sm:hidden text-left py-3 px-3 sm:py-4 sm:px-4 font-medium text-muted-foreground min-w-[120px]">{t("listeners.col_notes")}</TableHead>
-              <TableHead className="text-right py-3 px-4 sm:py-4 sm:px-6 font-medium text-muted-foreground min-w-[200px]">{t("listeners.col_actions")}</TableHead>
+              <TableHead className="max-2xl:hidden text-left py-3 px-3 sm:py-4 sm:px-4 font-medium text-muted-foreground min-w-[120px]">{t("listeners.col_notes")}</TableHead>
+              <TableHead className="sticky-end text-right py-3 px-4 sm:py-4 sm:px-6 font-medium text-muted-foreground min-w-[160px]">{t("listeners.col_actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody className="divide-y divide-border">
@@ -357,13 +357,13 @@ export default function ListenersPageContent() {
               [1, 2, 3, 4, 5].map(i => (
                 <TableRow key={i}>
                   <TableCell className="py-3 px-4 sm:py-4 sm:px-6"><Skeleton className="h-4 w-24" /></TableCell>
-                  <TableCell className="max-sm:hidden py-3 px-3 sm:py-4 sm:px-4"><Skeleton className="h-4 w-14" /></TableCell>
-                  <TableCell className="max-sm:hidden py-3 px-3 sm:py-4 sm:px-4"><Skeleton className="h-4 w-20" /></TableCell>
-                  <TableCell className="max-sm:hidden py-3 px-3 sm:py-4 sm:px-4"><Skeleton className="h-4 w-32" /></TableCell>
-                  <TableCell className="max-sm:hidden py-3 px-3 sm:py-4 sm:px-4"><Skeleton className="h-4 w-16" /></TableCell>
+                  <TableCell className="max-lg:hidden py-3 px-3 sm:py-4 sm:px-4"><Skeleton className="h-4 w-14" /></TableCell>
+                  <TableCell className="max-lg:hidden py-3 px-3 sm:py-4 sm:px-4"><Skeleton className="h-4 w-20" /></TableCell>
+                  <TableCell className="max-md:hidden py-3 px-3 sm:py-4 sm:px-4"><Skeleton className="h-4 w-32" /></TableCell>
+                  <TableCell className="max-lg:hidden py-3 px-3 sm:py-4 sm:px-4"><Skeleton className="h-4 w-16" /></TableCell>
                   <TableCell className="py-3 px-3 sm:py-4 sm:px-4"><Skeleton className="h-4 w-20" /></TableCell>
                   <TableCell className="py-3 px-3 sm:py-4 sm:px-4"><Skeleton className="h-4 w-24" /></TableCell>
-                  <TableCell className="py-3 px-4 sm:py-4 sm:px-6 text-right"><div className="flex items-center justify-end gap-1 sm:gap-2"><Skeleton className="h-8 w-20 rounded-lg" /><Skeleton className="h-8 w-20 rounded-lg" /><Skeleton className="h-8 w-20 rounded-lg" /><Skeleton className="h-8 w-20 rounded-lg" /></div></TableCell>
+                  <TableCell className="sticky-end py-3 px-4 sm:py-4 sm:px-6 text-right"><div className="flex items-center justify-end gap-1 sm:gap-2"><Skeleton className="h-8 w-20 rounded-lg" /><Skeleton className="h-8 w-20 rounded-lg" /><Skeleton className="h-8 w-20 rounded-lg" /><Skeleton className="h-8 w-20 rounded-lg" /></div></TableCell>
                 </TableRow>
               ))
             ) : filtered.length > 0 ? (
@@ -382,18 +382,18 @@ export default function ListenersPageContent() {
                 return (
                   <TableRow key={id} className="hover:bg-muted/50 transition-colors">
                     <TableCell className="py-3 px-4 sm:py-4 sm:px-6 font-medium"><Link to={`/listeners/${id}`} className="text-primary hover:underline">{name}</Link></TableCell>
-                    <TableCell className="max-sm:hidden py-3 px-3 sm:py-4 sm:px-4">
+                  <TableCell className="max-lg:hidden py-3 px-3 sm:py-4 sm:px-4">
                       <Badge variant={type === "http" ? "outline" : "success"} className="text-xs-sm font-medium">{type}</Badge>
                     </TableCell>
-                    <TableCell className="max-sm:hidden py-3 px-3 sm:py-4 sm:px-4">
+                    <TableCell className="max-lg:hidden py-3 px-3 sm:py-4 sm:px-4">
                       <div className="flex flex-wrap gap-1">
                         {tagList.length > 0 ? tagList.map((tag) => (
                           <Badge key={tag} variant="secondary" className="text-micro-sm font-medium">{tag}</Badge>
                         )) : <span className="text-xs text-muted-foreground">-</span>}
                       </div>
                     </TableCell>
-                    <TableCell className="max-sm:hidden py-3 px-3 sm:py-4 sm:px-4 font-mono text-xs text-muted-foreground">{scheme}://{host}:{port}</TableCell>
-                    <TableCell className="max-sm:hidden py-3 px-3 sm:py-4 sm:px-4 text-center">
+                    <TableCell className="max-md:hidden py-3 px-3 sm:py-4 sm:px-4 font-mono text-xs text-muted-foreground">{scheme}://{host}:{port}</TableCell>
+                    <TableCell className="max-lg:hidden py-3 px-3 sm:py-4 sm:px-4 text-center">
                       <span className="text-xs font-mono text-muted-foreground">{agentCountError ? t("status.unknown") : (agentCountMap[id] ?? 0)}</span>
                     </TableCell>
                     <TableCell className="py-3 px-3 sm:py-4 sm:px-4">
@@ -406,8 +406,8 @@ export default function ListenersPageContent() {
                         onReset={health ? () => void resetHealth(id) : undefined}
                       />
                     </TableCell>
-                    <TableCell className="max-sm:hidden py-3 px-3 sm:py-4 sm:px-4 text-xs text-muted-foreground max-w-[150px] truncate">{notes}</TableCell>
-                     <TableCell className="py-3 px-4 sm:py-4 sm:px-6 text-right">
+                    <TableCell className="max-2xl:hidden py-3 px-3 sm:py-4 sm:px-4 text-xs text-muted-foreground max-w-[150px] truncate">{notes}</TableCell>
+                     <TableCell className="sticky-end py-3 px-4 sm:py-4 sm:px-6 text-right">
                        <div className="flex items-center justify-end gap-1 sm:gap-2">
                          <CopyButton
                             text={`${scheme}://${host}:${port}`}

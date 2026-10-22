@@ -28,7 +28,7 @@ export default memo(function FilesFindPanel({
   huntDownload, setHuntDownload, findFiles, huntFiles, navigateTo, setSelectedFile,
 }: FilesFindPanelProps) {
   return (
-    <Card className="mb-4 p-4">
+    <Card className="mb-4 p-(--card-spacing)">
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
         <Search className="size-4" />
         {t("agents.files_search_files")}

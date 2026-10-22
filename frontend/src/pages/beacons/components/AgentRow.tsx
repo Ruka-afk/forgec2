@@ -259,7 +259,7 @@ export const AgentRow = memo(function AgentRow({
         <StatusBadge status={status} variant="dot" size="sm" pulse={status === "online"} />
       </TableCell>
       )}
-      <TableCell className="py-1 px-2 text-right">
+      <TableCell className="sticky-end py-1 px-2 text-right">
         <div className="flex items-center justify-end gap-0.5">
           {tags && tags.length > 0 && (
             <span className="hidden xl:inline-flex items-center gap-1 mr-1">

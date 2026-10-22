@@ -142,7 +142,7 @@ export default function PasswordSprayPanel({ selectedAgent }: { selectedAgent: s
   return (
     <>
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="p-6 space-y-4">
+        <Card className="p-(--card-spacing) space-y-4">
           <h3 className="text-lg font-semibold flex items-center gap-2">
             <Shield className="size-5 text-primary" />
             {t("spray.config_title")}
@@ -221,7 +221,7 @@ export default function PasswordSprayPanel({ selectedAgent }: { selectedAgent: s
           </Button>
         </Card>
 
-        <Card className="p-6 space-y-4">
+        <Card className="p-(--card-spacing) space-y-4">
           <h3 className="text-lg font-semibold">{t("spray.results_title")}</h3>
 
           {!lastResult ? (

@@ -184,7 +184,7 @@ export default function FilesScanPanel({ t, agentId, rootPath, onReveal }: Files
 
   return (
     <div className="space-y-3">
-      <Card className="p-3 sm:p-4">
+      <Card className="p-(--card-spacing)">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-sm font-medium">
@@ -333,14 +333,14 @@ export default function FilesScanPanel({ t, agentId, rootPath, onReveal }: Files
       {error ? <DataError message={error} /> : null}
 
       {scanning ? (
-        <Card className="flex min-h-32 items-center justify-center gap-3 p-6 text-sm text-muted-foreground">
+        <Card className="flex min-h-32 items-center justify-center gap-3 p-(--card-spacing) text-sm text-muted-foreground">
           <Spinner size="sm" />
           {t("agents.files_scan_running")}
         </Card>
       ) : null}
 
       {!scanning && !result && !error ? (
-        <Card className="border-dashed p-6 text-center text-sm text-muted-foreground">
+        <Card className="border-dashed p-(--card-spacing) text-center text-sm text-muted-foreground">
           {t("agents.files_scan_ready")}
         </Card>
       ) : null}

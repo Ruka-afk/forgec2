@@ -37,7 +37,7 @@ export default memo(function ScreenControls({
   triggerMatch, setTriggerMatch, triggerOn, onTriggerStart, onTriggerStop, resolution,
 }: ScreenControlsProps) {
   return (
-    <Card className="shrink-0 p-4">
+    <Card className="shrink-0 p-(--card-spacing)">
       <div className="mb-3 flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         <span>{t("agents.screen_controls")}</span>
         <span className={`flex items-center gap-1.5 font-normal normal-case ${monitoring ? "text-success-ink" : "text-muted-foreground"}`}>

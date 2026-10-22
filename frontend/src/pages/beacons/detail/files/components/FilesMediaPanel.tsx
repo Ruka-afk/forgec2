@@ -392,7 +392,7 @@ export default function FilesMediaPanel({ t, agentId, rootPath, onReveal }: File
 
   return (
     <div className="space-y-3">
-      <Card className="p-3 sm:p-4">
+      <Card className="p-(--card-spacing)">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-sm font-medium">
@@ -523,7 +523,7 @@ export default function FilesMediaPanel({ t, agentId, rootPath, onReveal }: File
       {error ? <DataError message={error} /> : null}
 
       {preparing ? (
-        <Card className="space-y-2 p-3">
+        <Card className="space-y-2 p-(--card-spacing)">
           <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
             <span className="flex min-w-0 items-center gap-2">
               <Spinner size="xs" />
@@ -538,14 +538,14 @@ export default function FilesMediaPanel({ t, agentId, rootPath, onReveal }: File
       ) : null}
 
       {searching ? (
-        <Card className="flex min-h-32 items-center justify-center gap-3 p-6 text-sm text-muted-foreground">
+        <Card className="flex min-h-32 items-center justify-center gap-3 p-(--card-spacing) text-sm text-muted-foreground">
           <Spinner size="sm" />
           {t("agents.files_media_searching")}
         </Card>
       ) : null}
 
       {!searching && !result && !error ? (
-        <Card className="border-dashed p-6 text-center text-sm text-muted-foreground">
+        <Card className="border-dashed p-(--card-spacing) text-center text-sm text-muted-foreground">
           {t("agents.files_media_ready")}
         </Card>
       ) : null}

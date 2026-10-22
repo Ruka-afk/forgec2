@@ -151,7 +151,7 @@ export function WorkflowsTab() {
       >
         <div className="flex flex-col gap-3">
           {workflows.map(w => (
-            <Card key={w.id} className="p-4">
+            <Card key={w.id} className="p-(--card-spacing)">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
                    <StatusDot tone={w.enabled ? "success" : "muted"} size="sm" />

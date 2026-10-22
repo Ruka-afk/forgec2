@@ -261,7 +261,7 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
         {loading ? (
           <div className="space-y-2">
             {[1, 2].map(i => (
-              <Card key={i} className="p-4"><Skeleton className="h-12 w-full" /></Card>
+              <Card key={i} className="p-(--card-spacing)"><Skeleton className="h-12 w-full" /></Card>
             ))}
           </div>
         ) : tasks.length === 0 ? (

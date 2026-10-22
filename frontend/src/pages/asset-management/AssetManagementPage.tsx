@@ -64,7 +64,7 @@ export default function AssetOrganizationPage() {
         {visibleTools.map((tool) => {
           const Icon = tool.icon;
           return (
-            <Card key={tool.href} className="group flex min-h-44 flex-col justify-between border-border/70 p-5 transition-colors hover:border-primary/50 hover:bg-muted/20">
+            <Card key={tool.href} className="group flex min-h-44 flex-col justify-between border-border/70 p-(--card-spacing) transition-colors hover:border-primary/50 hover:bg-muted/20">
               <div>
                 <div className={`mb-4 flex size-10 items-center justify-center rounded-xl ${tool.tone}`}>
                   <Icon className="size-5" aria-hidden="true" />

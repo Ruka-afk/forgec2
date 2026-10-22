@@ -262,7 +262,7 @@ export default function FilesPage() {
       )}
 
       {pullName && pullProgress && (
-        <Card className="p-3">
+        <Card className="p-(--card-spacing)">
           <div className="mb-1 flex justify-between text-xs text-muted-foreground">
             <span>{t("agents.files_pulling", { filename: pullName })}</span>
             <span className="font-mono">
@@ -278,7 +278,7 @@ export default function FilesPage() {
       )}
 
       {uploading && !showUpload && (
-        <Card className="p-3">
+        <Card className="p-(--card-spacing)">
           <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
             <span>{t("agents.files_uploading")} {uploadProgress}%</span>
             <Button variant="ghost" size="sm" onClick={cancelUpload}>
@@ -290,7 +290,7 @@ export default function FilesPage() {
       )}
 
       {batchBusy && batchProgress && (
-        <Card className="p-3">
+        <Card className="p-(--card-spacing)">
           <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
             <span className="font-mono">{t("agents.files_selected", { n: `${batchProgress.done}/${batchProgress.total}` })} — {batchProgress.current}</span>
             <Button variant="ghost" size="sm" onClick={cancelBatch}>

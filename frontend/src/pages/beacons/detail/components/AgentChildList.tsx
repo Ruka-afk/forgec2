@@ -16,7 +16,7 @@ export default memo(function AgentChildList({ childAgents }: AgentChildListProps
   if (childAgents.length === 0) return null;
 
   return (
-    <Card className="p-5 mb-5">
+    <Card className="p-(--card-spacing) mb-5">
       <div className="text-xs-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3.5">
         <GitBranch className="size-3.5 inline mr-1" aria-hidden="true" />
         {t("agents.detail_child_agents")} ({childAgents.length})

@@ -60,7 +60,7 @@ export default memo(function FilesTable(props: FilesTableProps) {
   return (
     <>
       {selected.size > 0 && (
-        <Card className="flex flex-wrap items-center gap-2 p-3">
+        <Card className="flex flex-wrap items-center gap-2 p-(--card-spacing)">
           <span className="text-xs text-muted-foreground">{t("agents.files_selected", { n: selected.size })}</span>
           <Button variant="secondary" size="sm" disabled={batchBusy} onClick={onBatchPull}>
             <Download className="size-4" /> {t("agents.files_pull_selected")}

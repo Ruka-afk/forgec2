@@ -420,7 +420,7 @@ export default function UsersPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="p-4 shadow-sm hover:shadow-md transition-shadow duration-200">
+        <Card className="p-(--card-spacing) shadow-sm hover:shadow-md transition-shadow duration-200">
           <div className="flex items-center gap-2 mb-2">
             <Crown className="size-4" />
             <span className="text-sm font-semibold text-primary dark:text-primary">{t("users.role_admin")}</span>
@@ -432,7 +432,7 @@ export default function UsersPage() {
             <li className="flex items-start gap-1.5"><Check className="size-4" />{t("users.admin_desc_4")}</li>
           </ul>
         </Card>
-        <Card className="p-4 shadow-sm hover:shadow-md transition-shadow duration-200">
+        <Card className="p-(--card-spacing) shadow-sm hover:shadow-md transition-shadow duration-200">
           <div className="flex items-center gap-2 mb-2">
             <UserIcon className="size-4" />
             <span className="text-sm font-semibold text-info-ink">{t("users.role_user")}</span>

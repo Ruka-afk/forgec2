@@ -438,7 +438,7 @@ export default function AgentsPageContent() {
       {effectiveViewMode === "grid" && loading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 p-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <Card key={`gskel-${i}`} className="p-4 space-y-3">
+            <Card key={`gskel-${i}`} className="p-(--card-spacing) space-y-3">
               <div className="flex items-center gap-2.5">
                 <Skeleton className="size-10 rounded-xl" />
                 <div className="space-y-1.5 flex-1"><Skeleton className="h-4 w-24" /><Skeleton className="h-3 w-16" /></div>

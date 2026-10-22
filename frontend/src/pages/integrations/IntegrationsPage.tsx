@@ -178,12 +178,12 @@ export default function IntegrationsPage() {
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 mb-6">
             {integrations.length === 0 ? (
-              <Card className="col-span-full p-12 text-center">
+              <Card className="col-span-full p-(--card-spacing) text-center">
                 <EmptyState icon={Plug} title={t("integrations.empty_title")} message={t("integrations.empty_desc")} />
               </Card>
             ) : (
               integrations.map((intg, i) => (
-                <Card key={intg.id ?? `ro-${i}`} className="p-3.5 flex items-center gap-3">
+                <Card key={intg.id ?? `ro-${i}`} className="p-(--card-spacing) flex items-center gap-3">
                   <div className="size-10 flex items-center justify-center rounded-xl bg-secondary ring-1 ring-border/50 text-primary">{getIcon(intg.type)}</div>
                   <div className="flex-1 flex flex-col min-w-0">
                     <span className="text-sm font-semibold text-foreground">{intg.name}</span>

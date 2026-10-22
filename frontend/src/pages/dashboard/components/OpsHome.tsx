@@ -7,6 +7,7 @@ import { timeAgo } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ListRow } from "@/components/ui/list-row";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge, StatusIndicator } from "@/components/ui/status-indicator";
 import { StatTile } from "@/components/ui/stat-tile";
@@ -56,7 +57,7 @@ function QuickLaunch() {
   ];
   return (
     <SectionCard title={t("dashboard.quick_actions")}>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4">
+      <div className="grid grid-cols-2 gap-3 p-(--card-spacing) sm:grid-cols-3">
         {actions.map((a) => (
           <Button key={a.href} variant="outline" render={<Link to={a.href} />}
             className="h-auto flex-col gap-2 py-4 hover:border-primary hover:bg-primary/5">
@@ -101,9 +102,9 @@ export default memo(function OpsHome() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <Panel title={t("dashboard.sessions")} href="/beacons" linkLabel={t("dashboard.view_all")} count={agents.length}>
           {loading ? (
-            <div className="p-4 space-y-2"><Skeleton className="h-8" /><Skeleton className="h-8" /><Skeleton className="h-8" /></div>
+            <div className="space-y-2 p-(--card-spacing)"><Skeleton className="h-8" /><Skeleton className="h-8" /><Skeleton className="h-8" /></div>
           ) : agents.length === 0 ? (
-            <div className="p-5"><EmptyState icon={Bug} title={t("dashboard.no_sessions")} /></div>
+            <div className="p-(--card-spacing)"><EmptyState icon={Bug} title={t("dashboard.no_sessions")} /></div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border">
               <div>
@@ -111,16 +112,14 @@ export default memo(function OpsHome() {
                 {sessions.online.length === 0 ? (
                   <p className="px-4 py-3 text-xs text-muted-foreground">{t("dashboard.no_sessions")}</p>
                 ) : sessions.online.map((a) => (
-                  <Link key={a.id} to={`/beacons/${a.id}`} className="flex items-center justify-between gap-2 px-4 py-2 hover:bg-secondary/50">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <StatusBadge status="online" variant="dotOnly" size="sm" />
-                        <span className="truncate font-mono text-sm">{a.hostname || a.id}</span>
-                      </div>
-                      <div className="truncate text-micro-sm text-muted-foreground">{a.username}{a.ip ? ` · ${a.ip}` : ""}</div>
-                    </div>
-                    <span className="shrink-0 text-micro-sm text-muted-foreground">{timeAgo(a.last_seen, t)}</span>
-                  </Link>
+                  <ListRow
+                    key={a.id}
+                    to={`/beacons/${a.id}`}
+                    leading={<StatusBadge status="online" variant="dotOnly" size="sm" />}
+                    title={<span className="truncate font-mono text-sm">{a.hostname || a.id}</span>}
+                    subtitle={`${a.username}${a.ip ? ` · ${a.ip}` : ""}`}
+                    meta={timeAgo(a.last_seen, t)}
+                  />
                 ))}
               </div>
               <div>
@@ -128,16 +127,14 @@ export default memo(function OpsHome() {
                 {sessions.dropped.length === 0 ? (
                   <p className="px-4 py-3 text-xs text-muted-foreground">{t("dashboard.no_sessions")}</p>
                 ) : sessions.dropped.map((a) => (
-                  <Link key={a.id} to={`/beacons/${a.id}`} className="flex items-center justify-between gap-2 px-4 py-2 hover:bg-secondary/50">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <StatusBadge status={a.status} variant="dotOnly" size="sm" />
-                        <span className="truncate font-mono text-sm">{a.hostname || a.id}</span>
-                      </div>
-                      <div className="truncate text-micro-sm text-muted-foreground">{a.username}{a.ip ? ` · ${a.ip}` : ""}</div>
-                    </div>
-                    <span className="shrink-0 text-micro-sm text-muted-foreground">{timeAgo(a.last_seen, t)}</span>
-                  </Link>
+                  <ListRow
+                    key={a.id}
+                    to={`/beacons/${a.id}`}
+                    leading={<StatusBadge status={a.status} variant="dotOnly" size="sm" />}
+                    title={<span className="truncate font-mono text-sm">{a.hostname || a.id}</span>}
+                    subtitle={`${a.username}${a.ip ? ` · ${a.ip}` : ""}`}
+                    meta={timeAgo(a.last_seen, t)}
+                  />
                 ))}
               </div>
             </div>
@@ -146,28 +143,29 @@ export default memo(function OpsHome() {
 
         <Panel title={t("dashboard.listener_health")} href="/listeners" linkLabel={t("dashboard.view_all")} count={healthUnknown ? undefined : unhealthy.length}>
           {loading ? (
-            <div className="p-4 space-y-2"><Skeleton className="h-8" /><Skeleton className="h-8" /></div>
+            <div className="space-y-2 p-(--card-spacing)"><Skeleton className="h-8" /><Skeleton className="h-8" /></div>
           ) : healthUnknown ? (
-            <div className="p-5"><EmptyState icon={AlertTriangle} title={t("dashboard.health_unknown")} message={t("dashboard.health_unknown_hint")} /></div>
+            <div className="p-(--card-spacing)"><EmptyState icon={AlertTriangle} title={t("dashboard.health_unknown")} message={t("dashboard.health_unknown_hint")} /></div>
           ) : unhealthy.length === 0 ? (
-            <div className="p-5"><EmptyState icon={Radio} title={t("dashboard.no_unhealthy_listeners")} /></div>
+            <div className="p-(--card-spacing)"><EmptyState icon={Radio} title={t("dashboard.no_unhealthy_listeners")} /></div>
           ) : (
             <div className="divide-y divide-border">
               {unhealthy.map((h) => (
-                <Link key={h.target} to={`/listeners/${h.target}`} className="flex items-center justify-between gap-2 px-4 py-2.5 hover:bg-secondary/50">
-                  <div className="min-w-0">
+                <ListRow
+                  key={h.target}
+                  to={`/listeners/${h.target}`}
+                  title={
                     <StatusIndicator
                       status={healthIndicatorStatus(h.status)}
                       variant="dot"
                       label={translateHealthStatus(t, h.status)}
                       pulse={h.status === "burned"}
                     />
-                    <div className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
-                      {h.scheme || "http"}://{h.host}:{h.port}
-                    </div>
-                  </div>
-                  <span className="font-mono text-xs text-destructive-ink">{h.consecutive_fails ?? 0}</span>
-                </Link>
+                  }
+                  subtitle={<span className="font-mono text-xs">{h.scheme || "http"}://{h.host}:{h.port}</span>}
+                  meta={h.consecutive_fails ?? 0}
+                  metaClassName="font-mono text-xs text-destructive-ink"
+                />
               ))}
             </div>
           )}
@@ -175,32 +173,32 @@ export default memo(function OpsHome() {
 
         <Panel title={t("dashboard.attention")} href="/events?tab=tasks" linkLabel={t("dashboard.view_all")} count={attention.length}>
           {loading ? (
-            <div className="p-4 space-y-2"><Skeleton className="h-8" /><Skeleton className="h-8" /></div>
+            <div className="space-y-2 p-(--card-spacing)"><Skeleton className="h-8" /><Skeleton className="h-8" /></div>
           ) : attention.length === 0 ? (
-            <div className="p-5"><EmptyState icon={ListChecks} title={t("dashboard.no_attention")} /></div>
+            <div className="p-(--card-spacing)"><EmptyState icon={ListChecks} title={t("dashboard.no_attention")} /></div>
           ) : (
             <div className="divide-y divide-border">
               {attention.map((task) => (
-                <Link
+                <ListRow
                   key={task.id}
                   to={`/events?tab=tasks&agent_id=${encodeURIComponent(task.agent_id || "")}`}
-                  className="flex items-center justify-between gap-2 px-4 py-2.5 hover:bg-secondary/50"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <StatusIndicator
-                        status={task.status}
-                        variant="dotOnly"
-                        size="sm"
-                        ariaLabel={task.status}
-                      />
+                  leading={
+                    <StatusIndicator
+                      status={task.status}
+                      variant="dotOnly"
+                      size="sm"
+                      ariaLabel={task.status}
+                    />
+                  }
+                  title={
+                    <>
                       <span className="font-mono text-xs">{task.type}</span>
                       <span className="truncate text-xs text-muted-foreground">{task.command}</span>
-                    </div>
-                    <div className="truncate text-micro-sm text-muted-foreground">{task.agent_id}</div>
-                  </div>
-                  <span className="shrink-0 text-micro-sm text-muted-foreground">{timeAgo(task.created_at, t)}</span>
-                </Link>
+                    </>
+                  }
+                  subtitle={task.agent_id}
+                  meta={timeAgo(task.created_at, t)}
+                />
               ))}
             </div>
           )}
@@ -208,27 +206,23 @@ export default memo(function OpsHome() {
 
         <Panel title={t("dashboard.loot_inbox")} href="/loot" linkLabel={t("dashboard.view_all")} count={lootItems.length}>
           {loading ? (
-            <div className="p-4 space-y-2"><Skeleton className="h-8" /><Skeleton className="h-8" /></div>
+            <div className="space-y-2 p-(--card-spacing)"><Skeleton className="h-8" /><Skeleton className="h-8" /></div>
           ) : lootItems.length === 0 ? (
-            <div className="p-5"><EmptyState icon={Archive} title={t("dashboard.no_loot")} /></div>
+            <div className="p-(--card-spacing)"><EmptyState icon={Archive} title={t("dashboard.no_loot")} /></div>
           ) : (
             <div className="divide-y divide-border">
               {lootItems.map((item) => (
-                <Link
+                <ListRow
                   key={item.id}
                   to={`/loot?tab=${LOOT_TAB[item.kind]}`}
-                  className="flex items-center justify-between gap-2 px-4 py-2.5 hover:bg-secondary/50"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="text-micro-sm">
-                        {item.kind === "screenshot" ? t("dashboard.loot_screenshot") : item.kind === "keylog" ? t("dashboard.loot_keylog") : t("dashboard.loot_download")}
-                      </Badge>
-                      <span className="truncate text-xs">{item.label}</span>
-                    </div>
-                  </div>
-                  <span className="shrink-0 text-micro-sm text-muted-foreground">{timeAgo(item.created_at, t)}</span>
-                </Link>
+                  leading={
+                    <Badge variant="secondary" className="text-micro-sm">
+                      {item.kind === "screenshot" ? t("dashboard.loot_screenshot") : item.kind === "keylog" ? t("dashboard.loot_keylog") : t("dashboard.loot_download")}
+                    </Badge>
+                  }
+                  title={<span className="truncate text-xs">{item.label}</span>}
+                  meta={timeAgo(item.created_at, t)}
+                />
               ))}
             </div>
           )}
@@ -258,27 +252,27 @@ const DashboardStatTiles = memo(function DashboardStatTiles({ loading, healthUnk
   return (
     <MetricGrid count={5}>
       <Link to="/beacons">
-        <Card interactive className="p-4 hover:ring-1 hover:ring-primary/20">
+        <Card interactive className="p-(--card-spacing) hover:ring-1 hover:ring-primary/20">
           <StatTile label={t("dashboard.beacons")} value={loading && !stats ? "…" : `${online}/${total}`} sub={online === total && total > 0 ? t("dashboard.all_online") : t("dashboard.online_suffix")} tone="success" icon={<Radio className="size-5" />} trend={total > 0 ? <span className="inline-flex items-center gap-1"><span className="size-1.5 rounded-full bg-success animate-pulse" />{t("dashboard.live_agents")}</span> : undefined} />
         </Card>
       </Link>
       <Link to="/events?tab=tasks">
-        <Card interactive className="p-4 hover:ring-1 hover:ring-primary/20">
+        <Card interactive className="p-(--card-spacing) hover:ring-1 hover:ring-primary/20">
           <StatTile label={t("dashboard.pending_tasks_label")} value={loading && !stats ? "…" : pending} tone={pending > 0 ? "warning" : "muted"} icon={<Clock className="size-5" />} trend={totalTasks > 0 ? `${Math.round((pending/totalTasks)*100)}% ${t("dashboard.queue_share")}` : undefined} />
         </Card>
       </Link>
       <Link to="/events?tab=tasks">
-        <Card interactive className="p-4 hover:ring-1 hover:ring-primary/20">
+        <Card interactive className="p-(--card-spacing) hover:ring-1 hover:ring-primary/20">
           <StatTile label={t("dashboard.failed_tasks")} value={loading && !stats ? "…" : failed} tone={failed > 0 ? "destructive" : "muted"} icon={<Bug className="size-5" />} trend={failed > 0 ? t("dashboard.needs_attention") : t("dashboard.all_clear")} />
         </Card>
       </Link>
       <Link to="/listeners">
-        <Card interactive className="p-4 hover:ring-1 hover:ring-primary/20">
+        <Card interactive className="p-(--card-spacing) hover:ring-1 hover:ring-primary/20">
           <StatTile label={t("dashboard.unhealthy_count")} value={loading || healthUnknown ? "…" : unhealthyCount} tone={healthUnknown ? "muted" : unhealthyCount > 0 ? "destructive" : "success"} icon={<Radio className="size-5" />} trend={healthUnknown ? t("dashboard.health_unknown") : unhealthyCount === 0 ? t("dashboard.all_healthy") : undefined} />
         </Card>
       </Link>
       <Link to="/loot">
-        <Card interactive className="p-4 hover:ring-1 hover:ring-primary/20">
+        <Card interactive className="p-(--card-spacing) hover:ring-1 hover:ring-primary/20">
           <StatTile label={t("dashboard.loot_inbox")} value={loading ? "…" : lootCount} sub={t("dashboard.loot_recent")} tone={lootCount > 0 ? "info" : "muted"} icon={<Archive className="size-5" />} />
         </Card>
       </Link>

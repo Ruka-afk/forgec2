@@ -188,12 +188,12 @@ export default function CircuitBreakerPage() {
             <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>ID</TableHead>
+                <TableHead className="max-sm:hidden">ID</TableHead>
                 <TableHead>{t("cb.col_target")}</TableHead>
                 <TableHead>{t("cb.col_status")}</TableHead>
-                <TableHead>{t("cb.col_fails")}</TableHead>
-                <TableHead>{t("cb.col_last_probe")}</TableHead>
-                <TableHead className="text-right">{t("cb.col_controls")}</TableHead>
+                <TableHead className="max-sm:hidden">{t("cb.col_fails")}</TableHead>
+                <TableHead className="max-sm:hidden">{t("cb.col_last_probe")}</TableHead>
+                <TableHead className="sticky-end text-right">{t("cb.col_controls")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -205,7 +205,7 @@ export default function CircuitBreakerPage() {
                 const idStr = l.target;
                 return (
                   <TableRow key={idStr} className="hover:bg-muted transition-colors">
-                    <TableCell className="px-4 py-3">
+                    <TableCell className="max-sm:hidden px-4 py-3">
                       <code className="font-semibold text-foreground">{idStr}</code>
                     </TableCell>
                     <TableCell className="px-4 py-3">
@@ -219,15 +219,15 @@ export default function CircuitBreakerPage() {
                         pulse={l.status === "burned"}
                       />
                     </TableCell>
-                    <TableCell className="px-4 py-3">
+                    <TableCell className="max-sm:hidden px-4 py-3">
                       <span className={`text-xs font-medium ${l.consecutive_fails >= 3 ? "text-destructive-ink" : l.consecutive_fails > 0 ? "text-warning-ink" : "text-muted-foreground"}`}>
                         {l.consecutive_fails}
                       </span>
                     </TableCell>
-                    <TableCell className="px-4 py-3 text-xs text-muted-foreground">
+                    <TableCell className="max-sm:hidden px-4 py-3 text-xs text-muted-foreground">
                       {l.last_probe ? formatTime(l.last_probe) : t("cb.never")}
                     </TableCell>
-                    <TableCell className="px-4 py-3 text-right">
+                    <TableCell className="sticky-end px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <Tooltip>
                           <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => handleReset(idStr)} aria-label={t("circuit_breaker.reset_healthy")} />}>

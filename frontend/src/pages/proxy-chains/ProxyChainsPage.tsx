@@ -316,7 +316,7 @@ export default function ChainPage() {
 
       {/* Action Message */}
       {actionMsg && (
-        <Card className="p-4 mb-6 flex items-center justify-between">
+        <Card className="p-(--card-spacing) mb-6 flex items-center justify-between">
           <span className="text-sm text-foreground">{actionMsg}</span>
           <Button variant="ghost" size="sm" onClick={() => setActionMsg(null)}>
             <X className="size-4" />

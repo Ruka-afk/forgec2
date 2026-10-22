@@ -227,7 +227,7 @@ export default function ToolkitPage() {
         <TabsContent value="commands">
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
         <div className="xl:col-span-3 flex flex-col gap-(--page-gap)">
-          <Card className="p-4">
+          <Card className="p-(--card-spacing)">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-warning-ink text-sm font-bold">!</span>
               <span className="text-xs font-semibold text-muted-foreground">{t("toolkit.quick_actions")}</span>
@@ -277,7 +277,7 @@ export default function ToolkitPage() {
 
         <div className="flex flex-col gap-(--page-gap)">
           {agentInfo && (
-            <Card className="p-4 text-xs space-y-1">
+            <Card className="p-(--card-spacing) text-xs space-y-1">
               <div className="font-semibold text-muted-foreground mb-2">{t("toolkit.agent_info")}</div>
               <div>Host: {String(agentInfo.hostname || "-")}</div>
               <div>IP: {String(agentInfo.ip || "-")}</div>

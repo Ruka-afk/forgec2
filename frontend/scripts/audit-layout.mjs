@@ -60,7 +60,17 @@ const measure = () => {
   for (let i = 1; i < kids.length; i++) {
     gaps.push(Math.round(kids[i].getBoundingClientRect().top - kids[i - 1].getBoundingClientRect().bottom));
   }
-  const tables = Array.from(document.querySelectorAll('[data-slot="table-container"]'));
+  const tables = Array.from(document.querySelectorAll('[data-slot="table-container"]')).map((t) => {
+    const cells = Array.from(t.querySelectorAll('[data-slot="table-cell"], [data-slot="table-head"]'));
+    return {
+      overflowX: t.scrollWidth - t.clientWidth,
+      // A table that scrolls horizontally is acceptable when it pins a
+      // column (the operator's actions stay reachable either way). The
+      // header counts: a pinned head implies a pinned column, and the head
+      // renders even when the table is empty.
+      pinned: cells.some((c) => getComputedStyle(c).position === "sticky"),
+    };
+  });
   return {
     pageOverflowX: doc.scrollWidth - doc.clientWidth,
     contentWidth: pc ? Math.round(pc.getBoundingClientRect().width) : null,
@@ -68,8 +78,9 @@ const measure = () => {
     blockGaps: gaps,
     toolbarTop: toolbar ? Math.round(toolbar.getBoundingClientRect().top) : null,
     toolbarSticky: toolbar ? getComputedStyle(toolbar).position : null,
-    tableOverflowX: tables.reduce((sum, t) => sum + Math.max(0, t.scrollWidth - t.clientWidth), 0),
+    tableOverflowX: tables.reduce((sum, t) => sum + Math.max(0, t.overflowX), 0),
     tableCount: tables.length,
+    tablePinned: tables.every((t) => t.overflowX <= 0 || t.pinned),
     scrollHeight: main ? main.scrollHeight : null,
     clientHeight: main ? main.clientHeight : null,
   };
@@ -117,7 +128,9 @@ for (const vp of VIEWPORTS) {
     };
     const problems = [];
     if (row.pageOverflowX > 1) problems.push(`page overflows by ${row.pageOverflowX}px`);
-    if (row.tableOverflowX > 0) problems.push(`table overflows by ${row.tableOverflowX}px`);
+    if (row.tableOverflowX > 0 && !row.tablePinned) {
+      problems.push(`table overflows by ${row.tableOverflowX}px without a pinned action column`);
+    }
     // A row that started pinned and is no longer pinned has a sticky bug.
     if (after && before.toolbarTop != null && before.toolbarTop < 120 && after.top != null && after.top > 120) {
       problems.push(`filter row unpinned (${before.toolbarTop} → ${after.top})`);
@@ -127,7 +140,7 @@ for (const vp of VIEWPORTS) {
     console.log(
       `${problems.length ? "FAIL" : " ok "} ${vp.name.padStart(4)} ${route.padEnd(14)} ` +
       `w=${String(row.contentWidth).padStart(4)} gap=${row.rowGap} ` +
-      `pageOv=${row.pageOverflowX} tblOv=${row.tableOverflowX}/${row.tableCount} ` +
+      `pageOv=${row.pageOverflowX} tblOv=${row.tableOverflowX}/${row.tableCount}${row.tablePinned ? "" : " (unpinned)"} ` +
       `row=${row.toolbarTop ?? "-"}/${row.toolbarTopAfterScroll ?? "-"}` +
       (problems.length ? `  ← ${problems.join("; ")}` : ""),
     );

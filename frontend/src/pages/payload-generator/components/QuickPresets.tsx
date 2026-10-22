@@ -50,7 +50,7 @@ export default React.memo(function QuickPresets({ onApply }: QuickPresetsProps) 
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {PRESETS.map((p) => (
-          <Card key={p.key} className="group relative overflow-hidden p-4 transition-all duration-200 hover:-translate-y-px hover:border-primary/20 hover:shadow-md">
+          <Card key={p.key} className="group relative overflow-hidden p-(--card-spacing) transition-all duration-200 hover:-translate-y-px hover:border-primary/20 hover:shadow-md">
             <Button
               type="button"
               variant="ghost"

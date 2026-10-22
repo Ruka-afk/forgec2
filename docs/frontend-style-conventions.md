@@ -77,6 +77,21 @@
   父盒顶边锁死为 0（父盒顶边即筛选条顶边），永远无法吸顶——这正是
   Dashboard 的视图切换条此前随页面滚走的原因。
 
+### 4.3 卡片内距与列表行
+
+- 卡片内距只有一个值：`--card-spacing`（16px，≥640px 为 20px）。
+  `<Card className="p-4">` 这类硬编码一律改成 `p-(--card-spacing)`；
+  贴边表格卡保留 `p-0`。
+- 列表行用 `components/ui/list-row.tsx`（左侧槽 + 两行文字 + 右侧槽 +
+  共享 hover 面），不要在页面里复制 `flex items-center justify-between
+  gap-2 px-4 py-2 hover:bg-secondary/50`。
+- 宽表格必须钉住操作列：给末列的 `TableHead` / `TableCell` 加
+  `sticky-end`。该类把单元格粘在右边缘，并绘制行自身底色（斑马纹/hover），
+  滚动时列从下方穿过也不会透出。**横向溢出的表格若未钉住任何列，视为
+  布局违约**（`scripts/audit-layout.mjs` 门禁）。
+- 次要列随视口逐级让位（`max-md:hidden` / `max-lg:hidden` /
+  `max-xl:hidden` / `max-2xl:hidden`），不要只在 `sm` 以下隐藏。
+
 ## 5. 颜色 / 圆角 / 阴影
 
 - 颜色一律 token（`--primary`、`--chart-*`…）；裸 hex 由门禁拦截（豁免清单见

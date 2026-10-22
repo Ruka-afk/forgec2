@@ -159,7 +159,7 @@ export default function TrafficPage({ embedded = false }: { embedded?: boolean }
         </div>
       </>}>
 
-      <Card className="p-4 shadow-sm hover:shadow-md transition-shadow duration-200">
+      <Card className="p-(--card-spacing) shadow-sm hover:shadow-md transition-shadow duration-200">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5">
           <StatTile centered label={t("traffic.total_requests")} value={totalRequests} tone="primary" />
           <StatTile centered label={t("traffic.beacons")} value={beacons} tone="violet" />

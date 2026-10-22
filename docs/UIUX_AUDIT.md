@@ -1993,12 +1993,43 @@ reserves the top bar's height overflowed the viewport by exactly one bar.
 
 **Fixed**: a `<div>` with `min-h-full`.
 
-### Backlog (U9.2 → U9.7)
+### L5 · Cards had no interior padding contract
+
+`Card` derives its padding from `--card-spacing` (16 px, 20 px from 640 px),
+but 62 call sites overrode it with a hard-coded step — `p-3`, `p-4`, `p-5`,
+`p-6`, `p-3.5`, `p-3 sm:p-4` — so a card's interior was 12, 16, 20 or 24 px
+depending on which page it sat on. `SectionCard` made it worse: it renders
+its body unpadded, so every consumer padded by hand.
+
+**Fixed**: 62 paddings now read `p-(--card-spacing)` (the flush cards —
+`p-0` — keep their edge-to-edge table). The dashboard's five hand-copied
+list rows became one `ListRow` primitive (leading slot, two-line text, right
+slot) on the shared hover surface.
+
+### L6 · The operator's actions were scrolled out of sight
+
+A table that is wider than its container scrolls sideways, and the last
+column — the one with the buttons — went with it. The Listeners table
+clipped "Copy / Edit / Stop / Delete" by **144 px on a 1440 px screen**;
+below 1024 px the whole action column was gone.
+
+**Fixed**: the action column pins. A new `sticky-end` slot keeps the cell
+glued to the right edge and paints the row's own surface (stripe, hover) so
+the columns sliding underneath never show through it. Secondary columns now
+step out with the viewport instead of only below 640 px (Listeners: type /
+tags / agents below 1024 px, address below 768 px, notes below 1536 px;
+Beacons: a 850 px floor became 640 px until 1280 px; Circuit Breaker, Campaign
+and OPSEC each drop one column on phones).
+
+**Contract**: a table that scrolls horizontally must pin a column. The
+layout audit enforces it — it now reports an overflowing table as a
+violation unless one of its cells is sticky, and the run is green
+(45 routes × 4 viewports, 0 violations).
+
+### Backlog (U9.4 → U9.7)
 
 | Batch | Defect | Evidence |
 | --- | --- | --- |
-| U9.2 | Cards have no interior padding contract: `SectionCard` renders its body unpadded, so 61 `Card` call sites set their own (`p-3` 10 / `p-4` 40 / `p-5` 5 / `p-6` 6) while the primitive already derives `--card-spacing`; the dashboard copies one list row five times | grep over `pages/**` + `components/**` |
-| U9.3 | Narrow screens: tables scroll horizontally inside their own container — Listeners overflows by 219 px at 390, 568 px at 768, 560 px at 1024, 144 px at 1440; Beacons by 269 px at 1024. `hidden md:table-cell` is used once in the whole app | measured in the harness above |
 | U9.4 | Dialogs: 72 `DialogContent` instances across nine widths (`default` 16, `md` 18, `lg` 14, `2xl` 8, `3xl` 4, `sm` 4, `xl` 3, `4xl` 2, `5xl` 2) plus one raw `w-[95vw]`; the footer's negative margins are hard-wired to the popup's `p-5` | measured in the harness above |
 | U9.5 | Detail pages (beacon: 15 sections, listener, campaign, report, circuit breaker) and the four workspace surfaces (shell / files / screen / remote desktop) each grow their own chrome | page-by-page review |
 | U9.6 | Density mode changes the type ramp and the table cell padding only — not the card padding, the page gap or the control heights | `[data-density="compact"]` in `globals.css` |

@@ -63,7 +63,7 @@ export function AgentBulkBar({
       )}
 
       {showResults && (
-        <Card className="p-4 mb-4 gap-0">
+        <Card className="p-(--card-spacing) mb-4 gap-0">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-foreground"><History className="size-4" />{t("agents.recent_bulk_ops")}</h3>
             <Button variant="ghost" size="icon-xs" onClick={() => setShowResults(false)} aria-label={t("common.close")}><X className="size-4" /></Button>
