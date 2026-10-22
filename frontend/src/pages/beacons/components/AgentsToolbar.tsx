@@ -55,6 +55,20 @@ export default memo(function AgentsToolbar({
   return (
     <>
       <Button
+        variant="outline"
+        onClick={onToggleBulk}
+        aria-pressed={bulkMode}
+        aria-label={t("agents.bulk_ops")}
+        className={`h-(--control-height-lg) px-3 rounded-lg gap-2 min-w-[2.75rem] min-h-[2.75rem] transition-all ${
+          bulkMode
+            ? "bg-primary text-primary-foreground border-primary hover:bg-primary/80"
+            : "text-muted-foreground"
+        }`}
+      >
+        <ListChecks className="size-4" />
+        <span className="hidden sm:inline text-sm">{t("agents.bulk_ops")}</span>
+      </Button>
+      <Button
         variant="ghost"
         size="icon"
         onClick={onRefresh}
@@ -83,9 +97,6 @@ export default memo(function AgentsToolbar({
           }
         />
         <DropdownMenuContent className="w-56">
-          <DropdownMenuCheckboxItem checked={bulkMode} onCheckedChange={() => onToggleBulk()}>
-            <ListChecks className="size-4" /> {t("agents.bulk_ops")}
-          </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem checked={showResults} onCheckedChange={() => onToggleResults()}>
             <History className="size-4" /> {t("agents.results")}
           </DropdownMenuCheckboxItem>
