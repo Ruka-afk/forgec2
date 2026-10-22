@@ -3,11 +3,11 @@ package server
 import (
 	"context"
 	"crypto/rand"
-	"crypto/tls"
 	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -577,6 +577,11 @@ func (s *Server) Run() error {
 	}
 
 	s.httpServer = s.newHTTPServer(addr)
+	// Bind explicitly so a failed bind is reported here, and so the boot
+	// marker below is written only once the port is actually ours. ServeTLS
+	// (not a hand-built tls.Listener) is required: it installs the HTTP/2
+	// handler the TLS profile advertises through ALPN, and a listener that
+	// advertises h2 but speaks HTTP/1.1 fails every browser and curl request.
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", addr, err)
@@ -586,13 +591,24 @@ func (s *Server) Run() error {
 			_ = ln.Close()
 			return err
 		}
-		// Empty cert/key paths: the certificate comes from GetCertificate
-		// (hot-reloadable loader), not from files read once at startup.
-		ln = tls.NewListener(ln, s.httpServer.TLSConfig)
 	}
 	// The port is bound and the routes are up: a hot update that installed
 	// this build is serving now. Tell the restarter, otherwise it would
 	// roll back a perfectly healthy boot.
 	s.markUpdateBootOK()
-	return s.httpServer.Serve(ln)
+	return s.serve(s.httpServer, ln)
+}
+
+// serve accepts connections on the already-bound listener. TLS goes through
+// ServeTLS, never a hand-built tls.Listener: ServeTLS is what installs the
+// HTTP/2 handler, and the rotating TLS profile advertises h2 in ALPN. A
+// listener that advertises h2 while speaking HTTP/1.1 accepts the handshake
+// and then fails every request, which looks like a dead server to a browser.
+func (s *Server) serve(srv *http.Server, ln net.Listener) error {
+	if s.cfg.Server.TLSEnabled {
+		// Empty cert/key paths: the certificate comes from GetCertificate
+		// (hot-reloadable loader), not from files read once at startup.
+		return srv.ServeTLS(ln, "", "")
+	}
+	return srv.Serve(ln)
 }
