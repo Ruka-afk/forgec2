@@ -319,7 +319,7 @@ export default memo(function ProcessSection({
 
   return (
     <SectionCard
-      className="mb-4"
+      className="mb-(--page-gap)"
       title={t("agents.detail_process_list")}
       icon={Terminal}
       tone="muted"

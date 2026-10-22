@@ -93,7 +93,7 @@ export default memo(function TimelineSection({ agentId, online }: { agentId: str
   };
 
   return (
-    <Card className="mb-4 gap-0">
+    <Card className="mb-(--page-gap) gap-0">
       <div className="px-4 py-3 border-b border-border flex items-center justify-between">
         <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
           <History className="size-3.5" />{t("agents.timeline_title")}

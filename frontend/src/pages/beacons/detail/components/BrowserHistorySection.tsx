@@ -66,7 +66,7 @@ export default memo(function BrowserHistorySection({ agentId, online }: BrowserH
   };
 
   return (
-    <Card className="mb-4 overflow-hidden">
+    <Card className="mb-(--page-gap) overflow-hidden">
       <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <History className="size-3.5 text-primary" />

@@ -41,7 +41,7 @@ export default memo(function NotesTagsSection({
 
   return (
     <SectionCard
-      className="mb-4"
+      className="mb-(--page-gap)"
       title={t("agents.detail_notes_tags")}
       icon={Tag}
       tone="info"

@@ -32,7 +32,7 @@ export default memo(function AgentScreenshots({
 
   return (
     <>
-      <Card className="mb-4 overflow-hidden border-border/70 bg-card/90 shadow-sm">
+      <Card className="mb-(--page-gap) overflow-hidden border-border/70 bg-card/90 shadow-sm">
         <div className="h-1 w-full bg-gradient-to-r from-primary via-chart-2 to-chart-1" />
         <div className="px-4 py-3 border-b border-border/70 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><Camera className="size-3.5 text-primary" />{t("agents.screenshots_title")} <span className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-micro-sm font-normal text-muted-foreground">({screenshots.length})</span></h3>

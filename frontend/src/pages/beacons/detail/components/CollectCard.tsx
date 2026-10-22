@@ -54,7 +54,7 @@ export default memo(function CollectCard({
   resultMaxHeight = "max-h-72",
 }: CollectCardProps) {
   return (
-    <Card className="mb-4 gap-0 overflow-hidden py-0">
+    <Card className="mb-(--page-gap) gap-0 overflow-hidden py-0">
       <CardHeader icon={icon} tone={tone} title={title} action={headerRight} />
       <div className="space-y-3 p-3">
         {children}

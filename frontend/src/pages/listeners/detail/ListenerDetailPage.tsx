@@ -158,7 +158,7 @@ export default function ListenerDetailPage() {
 
   return (
     <PageContainer title={name} subtitle={`${scheme}://${host}:${port}`}>
-      <div className="flex items-center gap-x-4 mb-6">
+      <div className="flex items-center gap-x-4">
         <div>
 
         </div>

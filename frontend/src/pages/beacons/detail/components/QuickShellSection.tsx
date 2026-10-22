@@ -47,7 +47,7 @@ export default memo(function QuickShellSection({
 
   return (
     <SectionCard
-      className="mb-4"
+      className="mb-(--page-gap)"
       title={t("agents.detail_quick_shell")}
       icon={Terminal}
       tone="primary"

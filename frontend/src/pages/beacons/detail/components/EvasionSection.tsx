@@ -53,7 +53,7 @@ export default memo(function EvasionSection({ agentId, online }: EvasionSectionP
   };
 
   return (
-    <Card className="mb-4 gap-0">
+    <Card className="mb-(--page-gap) gap-0">
       <div className="px-4 py-3 border-b border-border">
         <h3 className="text-sm font-semibold text-foreground"><Shield className="size-3.5" />{t("agents.evasion_title")}</h3>
       </div>

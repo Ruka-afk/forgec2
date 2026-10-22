@@ -138,7 +138,7 @@ export default memo(function InjectSection({ agentId, online, osType }: InjectSe
   };
 
   return (
-    <Card className="mb-4 gap-0">
+    <Card className="mb-(--page-gap) gap-0">
       <div className="px-4 py-3 border-b border-border">
         <h3 className="text-sm font-semibold text-foreground"><Syringe className="size-3.5" />{t("agents.inject_title")}</h3>
       </div>

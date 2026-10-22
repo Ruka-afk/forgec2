@@ -192,7 +192,7 @@ export default memo(function AgentTaskList({
 
   if (tasks.length === 0) {
     return (
-      <Card className="mb-4 overflow-hidden border-border/70 bg-card/90 shadow-sm">
+      <Card className="mb-(--page-gap) overflow-hidden border-border/70 bg-card/90 shadow-sm">
         <div className="h-1 w-full bg-gradient-to-r from-primary via-chart-2 to-chart-1" />
         <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-border/70">
           <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><ListChecks className="size-3.5 text-primary" />{t("agents.tasklist_recent")}</h3>
@@ -204,7 +204,7 @@ export default memo(function AgentTaskList({
   }
 
   return (
-    <Card className="mb-4 overflow-hidden border-border/70 bg-card/90 shadow-sm">
+    <Card className="mb-(--page-gap) overflow-hidden border-border/70 bg-card/90 shadow-sm">
       <div className="h-1 w-full bg-gradient-to-r from-primary via-chart-2 to-chart-1" />
       <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-border/70">
         <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><ListChecks className="size-3.5 text-primary" />{t("agents.tasklist_recent")}</h3>
