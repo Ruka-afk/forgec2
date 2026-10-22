@@ -13,6 +13,7 @@ import (
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/payload"
+	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
@@ -642,6 +643,13 @@ func (s *Server) handleListAgents(c *gin.Context) {
 type agentListItem struct {
 	db.Implant
 	TaskStats *db.TaskStats `json:"taskStats,omitempty"`
+	// ProtocolOutdated flags an agent that speaks a protocol version the
+	// server would refuse (or a version that is on its way out). The agent
+	// has to be rebuilt - the console shows the badge.
+	ProtocolOutdated bool `json:"protocol_outdated"`
+	// ProtocolCurrent is the version the server speaks, so the console does
+	// not have to know it.
+	ProtocolCurrent uint `json:"protocol_current"`
 }
 
 func parseAgentListPage(c *gin.Context) (page, pageSize int) {
@@ -677,7 +685,12 @@ func (s *Server) writeAgentListJSON(c *gin.Context) {
 	stats := computeTaskStats(s.db, ids)
 	resp := make([]agentListItem, len(agents))
 	for i, a := range agents {
-		resp[i] = agentListItem{Implant: a, TaskStats: stats[a.ID]}
+		resp[i] = agentListItem{
+			Implant:          a,
+			TaskStats:        stats[a.ID],
+			ProtocolOutdated: protocol.IsOutdated(a.ProtocolVersion),
+			ProtocolCurrent:  protocol.CurrentProtocolVersion,
+		}
 	}
 	out := gin.H{
 		"success":   true,

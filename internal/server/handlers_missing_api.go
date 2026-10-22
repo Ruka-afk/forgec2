@@ -14,6 +14,7 @@ import (
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/payload"
+	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
 )
 
@@ -60,6 +61,15 @@ func (s *Server) handleAPISettings(c *gin.Context) {
 		slog.Error("Failed to count audit logs", "err", err)
 	}
 
+	// Agents that speak a protocol version the server would refuse: they
+	// never check in, so this is where the operator finds out.
+	var outdatedProtocolAgents int64
+	if err := s.db.Model(&db.Implant{}).
+		Where("protocol_version > 0 AND protocol_version <> ?", protocol.CurrentProtocolVersion).
+		Count(&outdatedProtocolAgents).Error; err != nil {
+		slog.Error("Failed to count agents on an outdated protocol", "err", err)
+	}
+
 	var dbSize int64
 	if fi, err := os.Stat(s.cfg.Database.Path); err == nil {
 		dbSize = fi.Size()
@@ -73,32 +83,35 @@ func (s *Server) handleAPISettings(c *gin.Context) {
 		"success": true,
 		"data": gin.H{
 			"server": gin.H{
-				"port":              s.cfg.Server.Port,
-				"host":              s.cfg.Server.Host,
-				"tls_enabled":       s.cfg.Server.TLSEnabled,
-				"tcp_enabled":       s.cfg.Server.TCPEnabled,
-				"tcp_addr":          s.cfg.Server.TCPAddr,
-				"log_level":         s.cfg.Logging.Level,
-				"offline_threshold": s.cfg.Server.OfflineThreshold,
-				"session_max_age":   s.cfg.Server.SessionMaxAgeHours,
-				"cleanup_retention": s.cfg.Server.CleanupRetentionDays,
-				"total_agents":      totalAgents,
-				"online_agents":     onlineAgents,
-				"total_listeners":   totalListeners,
-				"total_credentials": totalCreds,
-				"total_tokens":      totalTokens,
-				"total_audits":      totalAudits,
-				"database_size":     dbSize,
-				"database_path":     "***",
-				"data_dir":          "***",
-				"uptime":            uptime.String(),
-				"go_version":        runtime.Version(),
-				"goos":              runtime.GOOS,
-				"goarch":            runtime.GOARCH,
-				"goroutines":        runtime.NumGoroutine(),
-				"alloc_mem":         int64(m.Alloc),
-				"total_alloc_mem":   int64(m.TotalAlloc),
-				"num_cpu":           runtime.NumCPU(),
+				"port":                     s.cfg.Server.Port,
+				"host":                     s.cfg.Server.Host,
+				"tls_enabled":              s.cfg.Server.TLSEnabled,
+				"tcp_enabled":              s.cfg.Server.TCPEnabled,
+				"tcp_addr":                 s.cfg.Server.TCPAddr,
+				"log_level":                s.cfg.Logging.Level,
+				"offline_threshold":        s.cfg.Server.OfflineThreshold,
+				"session_max_age":          s.cfg.Server.SessionMaxAgeHours,
+				"cleanup_retention":        s.cfg.Server.CleanupRetentionDays,
+				"total_agents":             totalAgents,
+				"online_agents":            onlineAgents,
+				"total_listeners":          totalListeners,
+				"total_credentials":        totalCreds,
+				"total_tokens":             totalTokens,
+				"total_audits":             totalAudits,
+				"database_size":            dbSize,
+				"database_path":            "***",
+				"data_dir":                 "***",
+				"uptime":                   uptime.String(),
+				"go_version":               runtime.Version(),
+				"goos":                     runtime.GOOS,
+				"goarch":                   runtime.GOARCH,
+				"goroutines":               runtime.NumGoroutine(),
+				"alloc_mem":                int64(m.Alloc),
+				"total_alloc_mem":          int64(m.TotalAlloc),
+				"num_cpu":                  runtime.NumCPU(),
+				"protocol_version":         protocol.CurrentProtocolVersion,
+				"protocol_compat_window":   s.protocolCompatWindow(),
+				"protocol_outdated_agents": outdatedProtocolAgents,
 			},
 			"agent": gin.H{
 				"default_interval": s.cfg.Implant.DefaultInterval,

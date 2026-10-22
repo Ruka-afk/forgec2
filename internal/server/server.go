@@ -216,6 +216,12 @@ type Server struct {
 	beaconDedupCache map[string]time.Time
 	beaconDedupSweep time.Time
 
+	// Protocol negotiation notices: agentID → when the agent was last told
+	// about its protocol version. Keeps a beaconing agent from writing the
+	// same notice to the audit log on every check-in.
+	protocolNoticeMu sync.Mutex
+	protocolNotices  map[string]time.Time
+
 	// Per-agent seq flood lockout (agentID → unlock time). Set by acceptSeq
 	// when a frame sequence jump exceeds the hard cap; guards the replay
 	// window against a key-holding actor replay-flooding a valid frame.

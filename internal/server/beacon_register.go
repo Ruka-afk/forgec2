@@ -385,6 +385,13 @@ func (s *Server) handleBeacon(c *gin.Context) {
 	var respBytes []byte
 	if kind == frameEncrypted {
 		resp := s.processBeacon(req, publicIP)
+		// A protocol refusal is answered with the reason: the agent has to
+		// learn that it is too old (or that the server is), otherwise it
+		// retries in silence and the operator only sees "offline".
+		if resp.ProtocolRejected {
+			respondError(c, http.StatusUpgradeRequired, resp.ProtocolRejectionReason)
+			return
+		}
 		if s.sessionManager.NeedsRekey(req.UUID, BeaconSessionRekeyMessages) {
 			resp.Rekey = true
 		}

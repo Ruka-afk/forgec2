@@ -1107,6 +1107,7 @@ export const zh: Record<string, string> = {
     "agents.version_unknown": "未知",
     "agents.version_unknown_dest": "该后渗透动作需要 Beacon 上报版本 — 重新生成或等下次回连",
     "agents.version_unknown_hint": "该 Beacon 未上报版本。若新任务失败，请重新生成。",
+    "agents.protocol_outdated_hint": "该 Agent 使用协议 v{version}，而服务端为 v{current}。需重建该 Agent 才能恢复服务。",
     "agents.windows": "Windows",
     "ai.allow_execute": "允许 AI 在 Beacon 上执行命令",
     "ai.allow_execute_warn": "注意：助手将可在你的 Beacon 上运行命令。默认关闭。",
@@ -2005,6 +2006,7 @@ export const zh: Record<string, string> = {
     "dashboard.sessions_dropped": "掉线",
     "dashboard.sessions_online": "在线",
     "dashboard.subtitle_ops": "谁刚上线、哪条线烧了、什么任务挂了、刚进了什么。",
+    "dashboard.protocol_outdated": "协议过期：{n}",
     "dashboard.unhealthy_count": "异常",
     "dashboard.view_analytics": "统计",
     "dashboard.view_ops": "作战",
@@ -4007,6 +4009,9 @@ export const zh: Record<string, string> = {
     "settings.about.memory_alloc": "当前内存分配",
     "settings.about.openapi_yaml": "OpenAPI YAML",
     "settings.about.platform": "平台",
+    "settings.about.protocol": "协议版本",
+    "settings.about.protocol_outdated": "{n} 个 Beacon 使用了服务端已不再提供的协议版本",
+    "settings.about.protocol_outdated_hint": "兼容窗口当前可服务 {window} 个旧版本。重建这些 Beacon 即可恢复服务。",
 
 
     "settings.about.total_alloc": "累计内存分配",

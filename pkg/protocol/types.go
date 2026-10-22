@@ -2,19 +2,8 @@ package protocol
 
 // CurrentProtocolVersion is the supported protocol version.
 // Increment when making breaking changes to the wire format.
+// The version history and the compatibility rules live in version.go.
 const CurrentProtocolVersion uint = 2
-
-// Protocol v2 (breaking change over v1):
-//   - envelopes carry a monotonic per-agent sequence number (seq) and a
-//     Unix timestamp (ts); the server enforces a sliding replay window and
-//     persists last_seq per implant.
-//   - the shared beacon key is no longer transmitted on the wire. It is only
-//     used to derive a per-agent registration key (HKDF) that authenticates
-//     the one-time registration handshake which binds the agent identity
-//     public key (id_pub).
-//   - after registration, session keys are derived from X25519 key agreement
-//     using the agent identity key, so the server can re-establish a session
-//     from the persisted identity public key after a restart.
 
 // BeaconRequest is sent by agent to server on each check-in.
 type BeaconRequest struct {
@@ -96,14 +85,18 @@ type TaskResult struct {
 
 // BeaconResponse is sent by server to agent in reply to a check-in.
 type BeaconResponse struct {
-	Tasks           []Task        `json:"tasks"`
-	ProtocolVersion uint          `json:"pv,omitempty"`
-	Seq             uint64        `json:"seq,omitempty"`
-	RegOK           bool          `json:"reg_ok,omitempty"`
-	Rekey           bool          `json:"rekey,omitempty"`
-	SocksFrames     []SocksFrame  `json:"socks_frames,omitempty"`
-	SocksFastMode   bool          `json:"socks_fast,omitempty"`
-	Relayed         []RelayedTask `json:"relayed,omitempty"`
+	Tasks           []Task `json:"tasks"`
+	ProtocolVersion uint   `json:"pv,omitempty"`
+	// ProtocolDeprecated tells the agent that the server is serving it on a
+	// version that is on its way out: the beacon still works, but the agent
+	// has to be rebuilt before the compatibility window closes.
+	ProtocolDeprecated bool          `json:"pv_deprecated,omitempty"`
+	Seq                uint64        `json:"seq,omitempty"`
+	RegOK              bool          `json:"reg_ok,omitempty"`
+	Rekey              bool          `json:"rekey,omitempty"`
+	SocksFrames        []SocksFrame  `json:"socks_frames,omitempty"`
+	SocksFastMode      bool          `json:"socks_fast,omitempty"`
+	Relayed            []RelayedTask `json:"relayed,omitempty"`
 	// RelayedFrames carries opaque response envelopes destined for P2P children.
 	// The parent forwards each envelope verbatim to the matching child.
 	RelayedReplies []RelayedReply `json:"relayed_replies,omitempty"`

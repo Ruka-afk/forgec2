@@ -287,11 +287,17 @@ func (s *Server) processBeaconWithBudget(req beaconRequest, publicIP string, fra
 		return beaconResponse{}
 	}
 
-	// Reject agents with protocol versions below minimum supported
-	if req.ProtocolVersion != protocol.CurrentProtocolVersion {
-		slog.Warn("Agent protocol version mismatch, rejecting",
-			"agent_id", req.UUID, "agent_pv", req.ProtocolVersion, "expected_pv", protocol.CurrentProtocolVersion)
-		return beaconResponse{}
+	// Protocol negotiation: the server speaks the current version and, inside
+	// the compatibility window, the compatible older ones. A refusal is
+	// explained, counted and audited instead of silently dropping the
+	// beacon, so an agent that cannot check in shows up as "protocol
+	// mismatch" rather than "offline".
+	decision := s.negotiateProtocol(req.UUID, req.ProtocolVersion)
+	if !decision.Serve {
+		return beaconResponse{
+			ProtocolRejected:        true,
+			ProtocolRejectionReason: protocolRejectionMessage(decision),
+		}
 	}
 
 	agent, _ := s.processAgentRegistration(req, publicIP, now)
@@ -354,11 +360,12 @@ func (s *Server) processBeaconWithBudget(req beaconRequest, publicIP string, fra
 		}
 	}
 	resp := beaconResponse{
-		Tasks:           s.fetchPendingTasks(req.UUID, taskLimit),
-		Relayed:         s.fetchRelayedChildTasks(req.UUID),
-		RelayedReplies:  relayedReplies,
-		ProtocolVersion: protocol.CurrentProtocolVersion,
-		LastSeq:         s.currentLastSeq(req.UUID),
+		Tasks:              s.fetchPendingTasks(req.UUID, taskLimit),
+		Relayed:            s.fetchRelayedChildTasks(req.UUID),
+		RelayedReplies:     relayedReplies,
+		ProtocolVersion:    protocol.CurrentProtocolVersion,
+		ProtocolDeprecated: decision.Level == protocol.SupportDeprecated,
+		LastSeq:            s.currentLastSeq(req.UUID),
 	}
 
 	// Online config refresh: deliver the operator's live network config when it

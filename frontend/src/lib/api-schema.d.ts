@@ -10848,6 +10848,26 @@ export interface components {
             pending_tasks?: number;
             failed_tasks?: number;
             total_listeners?: number;
+            /** @description The wire protocol version the server speaks */
+            protocol_version?: number;
+            /** @description How many older protocol versions the server still serves (0 = only the current one) */
+            protocol_compat_window?: number;
+            /** @description Agents that speak a protocol version the server would refuse */
+            protocol_outdated_agents?: number;
+            /** @description The protocol negotiation state (current version, window, version history) */
+            protocol?: {
+                current_version?: number;
+                compat_window?: number;
+                versions?: {
+                    version?: number;
+                    deprecated?: boolean;
+                    server_compatible?: boolean;
+                    since?: string;
+                    note?: string;
+                    /** @enum {string} */
+                    status?: "current" | "served" | "window_closed" | "incompatible";
+                }[];
+            };
         };
         User: {
             id?: number;
@@ -10902,6 +10922,12 @@ export interface components {
             current_interval?: number;
             /** @description Jitter percentage */
             current_jitter?: number;
+            /** @description Wire protocol version the agent speaks (0 = not reported yet) */
+            protocol_version?: number;
+            /** @description The agent speaks a protocol version the server would refuse - rebuild it */
+            protocol_outdated?: boolean;
+            /** @description The wire protocol version the server speaks */
+            protocol_current?: number;
             /** Format: date-time */
             created_at?: string;
             /** Format: date-time */

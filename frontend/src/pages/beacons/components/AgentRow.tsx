@@ -238,6 +238,21 @@ export const AgentRow = memo(function AgentRow({
         ) : (
           <span className="text-warning-ink" title={t("agents.version_unknown_hint")}>{t("agents.version_unknown")}</span>
         )}
+        {beacon.protocol_outdated && (
+          <Tooltip>
+            <TooltipTrigger render={
+              <Badge variant="warning" className="ml-1.5 font-mono">
+                PV{beacon.protocol_version}
+              </Badge>
+            } />
+            <TooltipContent>
+              {t("agents.protocol_outdated_hint", {
+                version: beacon.protocol_version ?? 0,
+                current: beacon.protocol_current ?? 0,
+              })}
+            </TooltipContent>
+          </Tooltip>
+        )}
       </TableCell>
       )}
       {visibleCols.sleep && (

@@ -14,6 +14,12 @@ export interface AgentBase {
   tags: string;
   listener_id: string;
   version: string;
+  /** The wire protocol version the agent speaks (0 = not reported yet). */
+  protocol_version: number;
+  /** The agent speaks a protocol version the server would refuse - rebuild it. */
+  protocol_outdated: boolean;
+  /** The wire protocol version the server speaks. */
+  protocol_current: number;
   pid: number;
   process_name: string;
   integrity: string;
@@ -104,5 +110,11 @@ export interface DashboardStats {
   pending_count: number;
   online_users: number;
   server_version: string;
+  /** The wire protocol version the server speaks. */
+  protocol_version?: number;
+  /** How many older protocol versions the server still serves. */
+  protocol_compat_window?: number;
+  /** Agents that speak a protocol version the server would refuse. */
+  protocol_outdated_agents?: number;
   recent_tasks: { status: TaskStatus; type: string; command: string; created_at: string }[];
 }

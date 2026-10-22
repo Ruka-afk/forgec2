@@ -13,6 +13,12 @@ export interface SettingsData {
   default_skip_tls?: boolean;
   default_ua?: string;
   server_version?: string;
+  /** The wire protocol version the server speaks. */
+  protocol_version?: number;
+  /** How many older protocol versions the server still serves (0 = only the current one). */
+  protocol_compat_window?: number;
+  /** Agents that speak a protocol version the server would refuse. */
+  protocol_outdated_agents?: number;
   uptime?: string;
   go_version?: string;
   goos?: string;

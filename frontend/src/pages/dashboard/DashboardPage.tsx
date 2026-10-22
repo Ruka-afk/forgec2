@@ -72,6 +72,11 @@ export default function DashboardPage() {
               v{stats.server_version}
             </Badge>
           )}
+          {(stats?.protocol_outdated_agents ?? 0) > 0 && (
+            <Badge variant="warning" className="px-2.5 py-1 text-xs font-mono">
+              {t("dashboard.protocol_outdated", { n: stats?.protocol_outdated_agents ?? 0 })}
+            </Badge>
+          )}
         </PageToolbar>
       }
     >

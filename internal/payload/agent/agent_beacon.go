@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -404,6 +405,10 @@ func doBeacon() {
 		// keeps a long-running beacon on the current C2 endpoints, sleep values
 		// and malleable profile without re-registering.
 		applyServerNetworkConfig(resp.NetworkConfig)
+		// Protocol negotiation: the server tells the implant which version it
+		// speaks. A deprecated version still works, but the implant has to be
+		// rebuilt before the compatibility window closes for it.
+		noteServerProtocolVersion(resp.ProtocolVersion, resp.ProtocolDeprecated)
 		// The reply decrypted, so the server processed this frame: the results
 		// carried by it no longer need to stay in the crash-recovery spool.
 		clearInflightResults()
@@ -470,5 +475,32 @@ func doBeacon() {
 
 	for _, task := range resp.Tasks {
 		enqueueTask(task)
+	}
+}
+
+// protocolVersionNoticeShown keeps the protocol notice to one line per
+// implant process.
+var protocolVersionNoticeShown atomic.Bool
+
+// noteServerProtocolVersion reports a protocol mismatch between the implant
+// and the server. The implant speaks the version it was built with; the
+// server answers with the version it speaks. An implant that is served on a
+// deprecated version still works, but it has to be rebuilt before the
+// compatibility window closes for it.
+func noteServerProtocolVersion(serverVersion uint, deprecated bool) {
+	if serverVersion == 0 {
+		return
+	}
+	switch {
+	case serverVersion < CurrentProtocolVersion:
+		if !protocolVersionNoticeShown.Swap(true) {
+			fmt.Printf("[!] The server speaks protocol v%d but this implant speaks v%d - upgrade the server\n",
+				serverVersion, CurrentProtocolVersion)
+		}
+	case deprecated:
+		if !protocolVersionNoticeShown.Swap(true) {
+			fmt.Printf("[!] The server serves this implant on protocol v%d, which is deprecated - rebuild the implant\n",
+				CurrentProtocolVersion)
+		}
 	}
 }

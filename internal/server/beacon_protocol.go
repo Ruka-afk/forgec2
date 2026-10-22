@@ -93,9 +93,20 @@ type relayedTask struct {
 type beaconResponse struct {
 	Tasks           []task `json:"tasks"`
 	ProtocolVersion uint   `json:"pv,omitempty"`
-	Seq             uint64 `json:"seq,omitempty"`
-	RegOK           bool   `json:"reg_ok,omitempty"`
-	Rekey           bool   `json:"rekey,omitempty"`
+	// ProtocolDeprecated tells an agent that the server is serving it on a
+	// version that is on its way out: it still works, but the agent has to
+	// be rebuilt before the compatibility window closes. Set only when the
+	// agent speaks a deprecated version.
+	ProtocolDeprecated bool `json:"pv_deprecated,omitempty"`
+	// ProtocolRejected marks a beacon the server refused because the agent's
+	// protocol version is not served. The reason travels back with the
+	// response so the agent (and the operator's log) can say why instead of
+	// retrying in silence. Server-internal: it never reaches the wire.
+	ProtocolRejected        bool   `json:"-"`
+	ProtocolRejectionReason string `json:"-"`
+	Seq                     uint64 `json:"seq,omitempty"`
+	RegOK                   bool   `json:"reg_ok,omitempty"`
+	Rekey                   bool   `json:"rekey,omitempty"`
 	// LastSeq is the server's current accepted sequence for this agent. On a
 	// successful beacon it lets the agent fast-forward if it ever drifted
 	// behind; in a replay-rejection it is returned (MAC-signed) so a desynced

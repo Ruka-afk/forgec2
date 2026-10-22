@@ -339,6 +339,19 @@ type Config struct {
 		// MaxSessions caps concurrent live sessions (0 = 32).
 		MaxSessions int `yaml:"max_sessions"`
 	} `yaml:"webrtc"`
+
+	// Protocol governs the wire-protocol negotiation between the server and
+	// the agents. The compatibility window decides how many protocol
+	// versions older than the current one the server still serves, so a
+	// protocol change can be rolled out gradually - or an old version can be
+	// cut off immediately.
+	Protocol struct {
+		// CompatWindow is how many protocol versions older than the current
+		// one the server still serves (0 = only the current version). The
+		// window never serves a version whose envelope changed
+		// incompatibly.
+		CompatWindow int `yaml:"compat_window"`
+	} `yaml:"protocol"`
 }
 
 // DefaultConfig returns sensible defaults
@@ -346,7 +359,7 @@ func DefaultConfig() *Config {
 	cfg := &Config{}
 	cfg.Server.Port = 8000
 	cfg.Server.Host = "127.0.0.1" // change to "0.0.0.0" for production access
-	cfg.Server.TLSEnabled = true  // self-signed cert auto-generated on first run
+	cfg.Server.TLSEnabled = true // self-signed cert auto-generated on first run
 	cfg.Server.RequireTLSForAuth = true
 	cfg.Server.TCPEnabled = false
 	cfg.Server.TCPAddr = ""
@@ -495,6 +508,11 @@ func DefaultConfig() *Config {
 	// Listener defaults
 	cfg.Listeners.H2C.Enabled = false
 	cfg.Listeners.H2C.Addr = ":8081"
+
+	// Serve the previous protocol version for one release so a protocol
+	// change does not black out the deployed agents overnight. Set
+	// protocol.compat_window to 0 to serve only the current version.
+	cfg.Protocol.CompatWindow = 1
 
 	return cfg
 }
@@ -921,6 +939,12 @@ func (c *Config) Validate() error {
 	}
 	if c.Server.CleanupRetentionDays < 0 {
 		errs = append(errs, errors.New("server.cleanup_retention_days must be >= 0"))
+	}
+	if c.Protocol.CompatWindow < 0 {
+		errs = append(errs, errors.New("protocol.compat_window must be >= 0 (0 = serve only the current protocol version)"))
+	}
+	if c.Protocol.CompatWindow > 16 {
+		errs = append(errs, errors.New("protocol.compat_window must be <= 16"))
 	}
 	if c.Server.CleanupRetentionDays > 3650 {
 		errs = append(errs, errors.New("server.cleanup_retention_days must be <= 3650 (10 years)"))

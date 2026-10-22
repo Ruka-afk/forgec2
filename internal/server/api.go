@@ -424,26 +424,46 @@ func (s *Server) apiDashboardStats(c *gin.Context) {
 		}
 	}
 
+	// Protocol summary: which wire protocol the server speaks, how wide the
+	// compatibility window is, and how many deployed agents still speak a
+	// version the server would refuse. An agent on an outdated version never
+	// shows up in the agent list as "offline" without a reason - this count
+	// is where the operator sees the fleet-wide picture.
+	var outdatedAgents int64
+	outdatedQuery := s.db.WithContext(c.Request.Context()).Model(&db.Implant{}).
+		Where("protocol_version > 0 AND protocol_version <> ?", protocol.CurrentProtocolVersion)
+	if tid != 0 {
+		outdatedQuery = outdatedQuery.Where("tenant_id = ?", tid)
+	}
+	if err := outdatedQuery.Count(&outdatedAgents).Error; err != nil {
+		handleQueryError(c, err, "API: failed to count agents on an outdated protocol")
+		return
+	}
+
 	stats := gin.H{
-		"total_agents":    ac.Total,
-		"online_agents":   ac.Online,
-		"today_tasks":     tc.Today,
-		"pending_tasks":   tc.Pending,
-		"failed_tasks":    tc.Failed,
-		"total_tasks":     tc.Total,
-		"total_creds":     totalCreds,
-		"total_tokens":    totalTokens,
-		"total_listeners": totalListeners,
-		"total_audits":    totalAudits,
-		"online_count":    ac.Online,
-		"stale_count":     ac.Stale,
-		"offline_count":   ac.Offline,
-		"listener_count":  totalListeners,
-		"pending_count":   tc.Pending,
-		"online_users":    onlineUsers,
-		"completed_tasks": tc.Completed,
-		"server_version":  ServerVersion,
-		"recent_tasks":    recentTasks,
+		"total_agents":             ac.Total,
+		"online_agents":            ac.Online,
+		"today_tasks":              tc.Today,
+		"pending_tasks":            tc.Pending,
+		"failed_tasks":             tc.Failed,
+		"total_tasks":              tc.Total,
+		"total_creds":              totalCreds,
+		"total_tokens":             totalTokens,
+		"total_listeners":          totalListeners,
+		"total_audits":             totalAudits,
+		"online_count":             ac.Online,
+		"stale_count":              ac.Stale,
+		"offline_count":            ac.Offline,
+		"listener_count":           totalListeners,
+		"pending_count":            tc.Pending,
+		"online_users":             onlineUsers,
+		"completed_tasks":          tc.Completed,
+		"server_version":           ServerVersion,
+		"protocol_version":         protocol.CurrentProtocolVersion,
+		"protocol_compat_window":   s.protocolCompatWindow(),
+		"protocol_outdated_agents": outdatedAgents,
+		"protocol":                 s.protocolState(),
+		"recent_tasks":             recentTasks,
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": stats})

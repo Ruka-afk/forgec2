@@ -11338,6 +11338,41 @@ components:
           type: integer
         total_listeners:
           type: integer
+        protocol_version:
+          type: integer
+          description: The wire protocol version the server speaks
+        protocol_compat_window:
+          type: integer
+          description: How many older protocol versions the server still serves (0 = only the current one)
+        protocol_outdated_agents:
+          type: integer
+          description: Agents that speak a protocol version the server would refuse
+        protocol:
+          type: object
+          description: The protocol negotiation state (current version, window, version history)
+          properties:
+            current_version:
+              type: integer
+            compat_window:
+              type: integer
+            versions:
+              type: array
+              items:
+                type: object
+                properties:
+                  version:
+                    type: integer
+                  deprecated:
+                    type: boolean
+                  server_compatible:
+                    type: boolean
+                  since:
+                    type: string
+                  note:
+                    type: string
+                  status:
+                    type: string
+                    enum: [current, served, window_closed, incompatible]
 
     User:
       type: object
@@ -11427,6 +11462,15 @@ components:
         current_jitter:
           type: integer
           description: Jitter percentage
+        protocol_version:
+          type: integer
+          description: Wire protocol version the agent speaks (0 = not reported yet)
+        protocol_outdated:
+          type: boolean
+          description: The agent speaks a protocol version the server would refuse - rebuild it
+        protocol_current:
+          type: integer
+          description: The wire protocol version the server speaks
         created_at:
           type: string
           format: date-time

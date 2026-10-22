@@ -1107,6 +1107,7 @@ export const en: Record<string, string> = {
     "agents.version_unknown": "unknown",
     "agents.version_unknown_dest": "This dest action needs a reported beacon version — regenerate or wait for the next check-in",
     "agents.version_unknown_hint": "This beacon did not report a build version. Regenerate if new task types fail.",
+    "agents.protocol_outdated_hint": "This agent speaks protocol v{version}; the server speaks v{current}. Rebuild the agent to bring it back into service.",
     "agents.windows": "Windows",
     "ai.allow_execute": "Allow AI to execute commands on beacons",
     "ai.allow_execute_warn": "Warning: the assistant can run commands on your beacons. Off by default.",
@@ -2005,6 +2006,7 @@ export const en: Record<string, string> = {
     "dashboard.sessions_dropped": "Dropped",
     "dashboard.sessions_online": "Online",
     "dashboard.subtitle_ops": "Who checked in, what burned, what failed, what just landed.",
+    "dashboard.protocol_outdated": "PV outdated: {n}",
     "dashboard.unhealthy_count": "Unhealthy",
     "dashboard.view_analytics": "Analytics",
     "dashboard.view_ops": "Ops",
@@ -3959,6 +3961,9 @@ export const en: Record<string, string> = {
     "settings.about.memory_alloc": "Memory Alloc",
     "settings.about.openapi_yaml": "OpenAPI YAML",
     "settings.about.platform": "Platform",
+    "settings.about.protocol": "Protocol",
+    "settings.about.protocol_outdated": "{n} beacon(s) speak a protocol version this server no longer serves",
+    "settings.about.protocol_outdated_hint": "The compatibility window serves {window} older version(s). Rebuild those beacons to bring them back into service.",
 
 
     "settings.about.total_alloc": "Total Alloc",

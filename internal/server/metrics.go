@@ -39,6 +39,14 @@ type MetricsCollector struct {
 	// sustained climb means either an attack or a NAT/fleet sharing one IP
 	// that needs rate_limit.beacon raised.
 	BeaconRateLimitedTotal prometheus.Counter
+	// BeaconProtocolRejectedTotal counts beacons refused because the agent's
+	// protocol version is not served (too_old / too_new). A climb means
+	// deployed agents need a rebuild - or the server is behind.
+	BeaconProtocolRejectedTotal *prometheus.CounterVec
+	// BeaconProtocolDeprecatedTotal counts beacons served on a protocol
+	// version inside the compatibility window. It is a rate, not an agent
+	// count: the console lists the agents that need a rebuild.
+	BeaconProtocolDeprecatedTotal prometheus.Counter
 }
 
 func NewMetricsCollector(s *Server) *MetricsCollector {
@@ -148,6 +156,14 @@ func NewMetricsCollector(s *Server) *MetricsCollector {
 			Name: "forgec2_beacon_rate_limited_total",
 			Help: "Total beacon requests rejected with 429 by the per-IP beacon rate limiter.",
 		}),
+		BeaconProtocolRejectedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "forgec2_beacon_protocol_rejected_total",
+			Help: "Total beacons refused because the agent's protocol version is not served, by reason (too_old, too_new).",
+		}, []string{"reason"}),
+		BeaconProtocolDeprecatedTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "forgec2_beacon_protocol_deprecated_total",
+			Help: "Total beacons served on a protocol version inside the compatibility window (the agents still need a rebuild).",
+		}),
 	}
 }
 
@@ -178,6 +194,8 @@ func (mc *MetricsCollector) Register(reg prometheus.Registerer) {
 		mc.BackupFailuresTotal,
 		mc.BackupSuccessTotal,
 		mc.BeaconRateLimitedTotal,
+		mc.BeaconProtocolRejectedTotal,
+		mc.BeaconProtocolDeprecatedTotal,
 	}
 	for _, c := range collectors {
 		err := reg.Register(c)
