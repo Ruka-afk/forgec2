@@ -2043,6 +2043,32 @@ it with the same token, resolved opaque so a pinned band never lets the
 form show through it. The header and the footer now pin while the form
 scrolls under them, and the sheets got the same size scale.
 
+### L8 · The bundle was not the same bundle on every platform
+
+Not a layout defect, but it blocked the layout program: the embedded bundle
+built on a Windows workstation could never match the CI's Linux build (424
+diffs — every file in the export), so the webdist gate could not be green
+and every layout change had to be shipped with a bundle the CI rejected.
+
+Two causes, one hiding the other. The visible one: `lightningcss`
+downgrades the `oklch()` palette to `lab()` for browsers that only speak
+`lab` and prints the converted numbers with a platform-dependent precision
+(36.4219 on Windows, 36.422 on Linux; -0.635922 against -0.635982 for the
+same amber). One byte changes the CSS file's hash, which changes the name
+of every chunk that imports it and of every HTML page that references it —
+the whole export shifts. The one underneath: `pages/traffic` and
+`pages/beacons/detail/traffic` both had a module named `TrafficPage`, so
+the bundler disambiguated the chunk names from the module path, and the
+two platforms spell the path differently.
+
+**Fixed**: the CSS target is Safari 16, which speaks `oklch()` natively, so
+the downgrade is never emitted and the CSS is byte-identical everywhere (and
+25 kB smaller); the beacon detail page is `BeaconTrafficPage` like its
+siblings. A Linux export of a commit and a Windows build of it now agree on
+all 346 file names and on every byte. `webdist-export.yml` renders the
+bundle on ubuntu and uploads it as an artifact, so the committed bundle can
+be refreshed from a Linux host the same way the Linux visual baselines are.
+
 ### Backlog (U9.5 → U9.7)
 
 | Batch | Defect | Evidence |
