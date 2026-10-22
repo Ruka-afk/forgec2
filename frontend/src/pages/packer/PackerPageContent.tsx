@@ -182,7 +182,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
       <PageContainer embedded={embedded} title={!embedded ? t("packer.title") : undefined} subtitle={!embedded ? t("packer.subtitle") : undefined}>
 
       <Tabs defaultValue="artifact">
-        <TabsList>
+        <TabsList sticky>
           <TabsTrigger value="artifact" className="gap-2">
             <Wrench className="size-4" />{t("packer.tab_artifact")}
           </TabsTrigger>

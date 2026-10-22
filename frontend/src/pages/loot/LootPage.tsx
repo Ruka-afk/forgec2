@@ -264,7 +264,7 @@ export default function LootPage() {
         }
       >
       <Tabs value={curTab} onValueChange={(v) => { setActiveTab(v as LootTab); setSelectedItems(new Set()); setScreenshotPage(1); setKeylogPage(1); setDownloadPage(1); }}>
-        <TabsList>
+        <TabsList sticky>
           {tabs.map(tab => (
             <TabsTrigger key={tab.key} value={tab.key} className="gap-2">
               {tab.icon}

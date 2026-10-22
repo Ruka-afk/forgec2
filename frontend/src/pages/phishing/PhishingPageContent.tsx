@@ -510,7 +510,7 @@ export default function PhishingPageContent() {
 
       {/* Tabs */}
       <Tabs defaultValue="templates">
-        <TabsList>
+        <TabsList sticky>
           {tabs.map((tab) => (
             <TabsTrigger key={tab.key} value={tab.key} className="gap-1.5">
               {tab.icon}

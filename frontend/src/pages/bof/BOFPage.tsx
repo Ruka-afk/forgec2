@@ -119,7 +119,7 @@ export default function BOFPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-        <TabsList>
+        <TabsList sticky>
           {[
             { key: "bof", Icon: Box, label: t("bof.tab_files") },
             { key: "exec", Icon: Terminal, label: t("bof.tab_exec") },

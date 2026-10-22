@@ -151,7 +151,7 @@ export default function NtlmPage() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)}>
-        <TabsList>
+        <TabsList sticky>
           {tabs.map((tab) => (
             <TabsTrigger key={tab.key} value={tab.key} className="gap-2">
               {tab.icon}

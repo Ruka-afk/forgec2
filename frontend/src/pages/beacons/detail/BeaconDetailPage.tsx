@@ -567,7 +567,7 @@ export default memo(function BeaconDetailPage({ agentId: agentIdProp, onClose }:
         {/* ── Main column: tabbed live sections ── */}
         <div className="min-w-0">
           <Tabs value={activeTab} onValueChange={handleTabChange}>
-            <TabsList aria-label={t("agents.detail_tabs_aria")}>
+            <TabsList sticky aria-label={t("agents.detail_tabs_aria")}>
               {AGENT_DETAIL_TABS.map((tab, i) => (
                 <TabsTrigger key={tab.id} value={tab.id} title={`${i + 1}`}>
                   {t(tab.labelKey)}

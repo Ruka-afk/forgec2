@@ -148,7 +148,7 @@ export default function PivotingPageContent() {
       )}
 
       <Tabs defaultValue="relay">
-        <TabsList>
+        <TabsList sticky>
           {[
             { key: "relay", label: t("pivoting.tab_relay"), Icon: Radio },
             { key: "local", label: t("pivoting.tab_local"), Icon: Network },

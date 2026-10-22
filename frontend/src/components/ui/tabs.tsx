@@ -8,9 +8,11 @@ function Tabs({ className, ...props }: TabsPrimitive.Root.Props) {
 
 type TabsListProps = TabsPrimitive.List.Props & {
   variant?: "toolbar" | "sidebar"
+  /** Pin the rail under the top bar while the panel scrolls. */
+  sticky?: boolean
 }
 
-function TabsList({ className, variant = "toolbar", ...props }: TabsListProps) {
+function TabsList({ className, variant = "toolbar", sticky = false, ...props }: TabsListProps) {
   return (
     <TabsPrimitive.List
       data-slot="tabs-list"
@@ -18,6 +20,11 @@ function TabsList({ className, variant = "toolbar", ...props }: TabsListProps) {
         variant === "sidebar"
           ? "flex h-auto min-h-0 w-full flex-col items-stretch gap-1 overflow-visible border-0 bg-transparent p-0 text-muted-foreground shadow-none"
           : "inline-flex h-auto min-h-11 max-w-full items-center justify-start gap-1 overflow-x-auto rounded-lg border border-border/70 bg-muted/50 p-0.5 text-muted-foreground shadow-none scrollbar-thin sm:h-9 sm:min-h-0 sm:p-1",
+        // The rail keeps its own surface; the band behind it hides whatever
+        // scrolls underneath (the pseudo-element, not a second background on
+        // the rail itself, so the pill still reads as a pill).
+        sticky &&
+          "sticky top-0 z-10 before:absolute before:inset-x-0 before:-inset-x-2 before:-inset-y-1 before:bg-background/95 before:backdrop-blur before:supports-[backdrop-filter]:before:bg-background/85 before:-z-10 before:content-['']",
         className
       )}
       {...props}
