@@ -165,6 +165,14 @@ type Server struct {
 	ctx            context.Context
 	ctxCancel      context.CancelFunc
 	wg             sync.WaitGroup
+	// updateWg tracks the hot-update goroutine. It is deliberately separate
+	// from wg: the update ends by shutting the server down, and a worker
+	// that waits for the waitgroup it belongs to can never be released.
+	updateWg sync.WaitGroup
+	// fastStop makes the shutdown cut in-flight requests instead of
+	// draining them. The hot update uses it: the process is about to be
+	// replaced, so a graceful drain would only add downtime.
+	fastStop atomic.Bool
 
 	// Extra listeners started dynamically via the UI (create listener).
 	// Each entry is keyed by "scheme://host:port".

@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/buildinfo"
 	"gopkg.in/yaml.v3"
 )
 
@@ -392,7 +393,12 @@ func DefaultConfig() *Config {
 	cfg.Server.CleanupRetentionDays = 30
 	cfg.Server.RegSecretOrphanTTLHours = 168
 	cfg.Server.AuditRetentionDays = 365
-	cfg.Server.UpdateCheckRepo = "forgec2/forgec2"
+	// The default release source is the repository that actually publishes the
+	// releases (build-stamped so a fork points at its own). A hard-coded
+	// placeholder here silently disabled every update check: the GitHub API
+	// answers 404 for an unknown repository and the checker treated that as
+	// "no new release".
+	cfg.Server.UpdateCheckRepo = buildinfo.Repo
 	cfg.Server.UpdateCheckEnabled = false // update checks phone home to api.github.com — opt-in only
 	cfg.Server.EnableMetrics = false
 	cfg.Server.SocksListenHost = "127.0.0.1"

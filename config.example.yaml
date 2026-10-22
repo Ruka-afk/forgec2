@@ -38,8 +38,12 @@ server:
   #   use with: curl --cert op.crt --key op.key https://teamserver:8000/api/...
   cookie_domain: ""
   beacon_key: ""
-  # Egress hygiene: update checks phone home to api.github.com �?opt-in only.
+  # Egress hygiene: update checks phone home to api.github.com - opt-in only.
   update_check_enabled: false
+  # Repository the update checker polls (owner/name). Defaults to the
+  # repository the binary was built from; point it at your own mirror when
+  # you publish your own releases.
+  update_check_repo: r0si/forgec2
   tcp_enabled: false
   dns_enabled: false
   grpc_enabled: false

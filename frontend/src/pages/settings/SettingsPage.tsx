@@ -253,10 +253,17 @@ export default function SettingsPage() {
 
   const handleCheckUpdate = async () => {
     try {
-      const d = await api.get<{ update_available?: boolean; latest_version?: string; download_url?: string }>(paths.updateCheck);
+      const d = await api.get<{
+        update_available?: boolean; latest_version?: string; download_url?: string;
+        check_ok?: boolean; check_error?: string;
+      }>(paths.updateCheck);
       if (d.update_available && d.latest_version) {
         toast.success(t("settings.toast.update_new", { version: String(d.latest_version) }));
         openUpdateDialog({ latest: String(d.latest_version), downloadUrl: d.download_url });
+      } else if (d.check_ok === false) {
+        // The check itself failed: saying "you are up to date" would hide
+        // the update that is waiting to be found.
+        toast.error(d.check_error ? String(d.check_error) : t("settings.toast.update_failed"));
       } else {
         toast.success(t("settings.toast.update_latest"));
       }

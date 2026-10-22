@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useWS } from "@/lib/wsContext";
 import { useI18n } from "@/lib/i18n";
+import { usePermissions } from "@/lib/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ArrowUpCircle, X } from "lucide-react";
@@ -15,8 +16,13 @@ const DISMISS_KEY = "forgec2_update_dismissed";
 export default function UpdateBanner({ currentVersion }: { currentVersion?: string }) {
   const { subscribe } = useWS();
   const { t } = useI18n();
+  const { role } = usePermissions();
   const [info, setInfo] = useState<{ latest: string; downloadUrl?: string } | null>(null);
   const [dismissed, setDismissed] = useState(false);
+  // The hot update endpoint is admin-only. Offering the button to every
+  // operator only produced a 403, so the banner keeps the release link and
+  // leaves the installation to an administrator.
+  const isAdmin = (role || "").toLowerCase() === "admin";
 
   useEffect(() => {
     try {
@@ -43,11 +49,15 @@ export default function UpdateBanner({ currentVersion }: { currentVersion?: stri
           downloadUrl: safeHref(msg.download_url),
         });
         setDismissed(false);
-        // Push window: open the update dialog for the new version.
-        openUpdateDialog({ latest, downloadUrl: safeHref(msg.download_url) ?? undefined });
+        // Push window: open the update dialog for the new version. Only an
+        // administrator can install it, so the dialog stays closed for the
+        // others.
+        if (isAdmin) {
+          openUpdateDialog({ latest, downloadUrl: safeHref(msg.download_url) ?? undefined });
+        }
       }
     });
-  }, [subscribe, t]);
+  }, [subscribe, t, isAdmin]);
 
   if (!info || dismissed) return null;
 
@@ -72,14 +82,20 @@ export default function UpdateBanner({ currentVersion }: { currentVersion?: stri
         </span>
       </div>
       <div className="flex items-center gap-3 shrink-0 ml-3">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-info-ink underline-offset-2 hover:underline hidden sm:inline-flex"
-          onClick={() => openUpdateDialog({ latest: info.latest, downloadUrl: info.downloadUrl ?? undefined })}
-        >
-          {t("update_banner.update_now")}
-        </Button>
+        {isAdmin ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-info-ink underline-offset-2 hover:underline hidden sm:inline-flex"
+            onClick={() => openUpdateDialog({ latest: info.latest, downloadUrl: info.downloadUrl ?? undefined })}
+          >
+            {t("update_banner.update_now")}
+          </Button>
+        ) : (
+          <span className="hidden sm:inline text-xs text-muted-foreground">
+            {t("update_banner.admin_only")}
+          </span>
+        )}
         <a
           href={downloadHref}
           target="_blank"

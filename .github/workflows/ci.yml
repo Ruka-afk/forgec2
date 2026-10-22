@@ -93,6 +93,14 @@ jobs:
           go build -ldflags "-X github.com/forgec2/forgec2/internal/server.ServerVersion=ci-test" -o forgec2-version-check ./cmd/server
           test "$(./forgec2-version-check -version)" = "ci-test"
           rm -f forgec2-version-check
+      - name: Release repo stamp check (ldflags must reach the binary)
+        run: |
+          # The update checker polls the repository stamped here. A build that
+          # loses the stamp silently checks a wrong (or no) repository and
+          # reports "up to date" forever.
+          go build -ldflags "-X github.com/forgec2/forgec2/internal/buildinfo.Repo=ci/stamp-check" -o forgec2-repo-check ./cmd/server
+          grep -qa "ci/stamp-check" forgec2-repo-check
+          rm -f forgec2-repo-check
       - name: API smoke (unauth + default admin)
         run: |
           # Fresh DB. config.example.yaml leaves auth.default_password empty

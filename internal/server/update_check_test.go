@@ -63,6 +63,10 @@ func stubReleaseAPI(t *testing.T) {
 // drainUpdateWorkers waits for background workers spawned by the update
 // handlers, bounded so a stalled fetch cannot wedge the suite. A timeout here
 // is itself a failure: it means a worker outlived the test that started it.
+//
+// The hot-update goroutine lives in updateWg (it must not be part of the
+// server's own waitgroup: it ends by shutting the server down), so both are
+// drained here.
 func drainUpdateWorkers(t *testing.T) {
 	t.Helper()
 	done := make(chan struct{})
@@ -70,6 +74,7 @@ func drainUpdateWorkers(t *testing.T) {
 		defer close(done)
 		for _, s := range updateTestServers {
 			s.wg.Wait()
+			s.updateWg.Wait()
 		}
 	}()
 	select {
@@ -555,6 +560,7 @@ func TestHandleCheckVersionReportsUpToDate(t *testing.T) {
 	s.updateState.mu.Lock()
 	s.updateState.Available = true
 	s.updateState.LatestVersion = "v2.6.1"
+	s.updateState.CheckOK = true
 	s.updateState.mu.Unlock()
 
 	c, w := updateCtx()
@@ -568,6 +574,9 @@ func TestHandleCheckVersionReportsUpToDate(t *testing.T) {
 	}
 	if body["current_version"] != "2.6.2" {
 		t.Fatalf("current_version = %v", body["current_version"])
+	}
+	if body["check_ok"] != true {
+		t.Fatalf("check_ok = %v, want true after a successful check", body["check_ok"])
 	}
 
 	// A newer release must flip the verdict.
@@ -585,6 +594,62 @@ func TestHandleCheckVersionReportsUpToDate(t *testing.T) {
 	}
 	if newer["download_url"] != "https://github.com/acme/forgec2/releases/tag/v2.7.0" {
 		t.Fatalf("download_url = %v", newer["download_url"])
+	}
+}
+
+// TestHandleCheckVersionNeverClaimsUpToDateAfterAFailedCheck pins the rule
+// that made every update invisible: a failed check (wrong repository, rate
+// limit, no network) used to report "you are up to date", because the verdict
+// was derived from the availability flag alone.
+func TestHandleCheckVersionNeverClaimsUpToDateAfterAFailedCheck(t *testing.T) {
+	s := newUpdateTestServer(t)
+	setServerVersion(t, "2.6.2")
+
+	s.updateState.mu.Lock()
+	s.updateState.LatestVersion = "v2.9.0"
+	s.updateState.Available = false
+	s.updateState.CheckOK = false
+	s.updateState.Error = `github api: repository "forgec2/forgec2" does not exist`
+	s.updateState.mu.Unlock()
+
+	c, w := updateCtx()
+	s.handleCheckVersion(c)
+	var body map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body["is_latest"] != false {
+		t.Fatalf("is_latest = %v after a failed check, want false", body["is_latest"])
+	}
+	if body["check_ok"] != false {
+		t.Fatalf("check_ok = %v after a failed check, want false", body["check_ok"])
+	}
+	if body["check_state"] != "error" {
+		t.Fatalf("check_state = %v, want error", body["check_state"])
+	}
+	if body["check_error"] == nil {
+		t.Fatal("the failed check did not surface its error")
+	}
+}
+
+// TestHandleHotUpdateRefusesASecondConcurrentUpdate proves the hot-update
+// guard: a second request while one is running is refused instead of
+// starting a second download and a second restarter against the same binary.
+func TestHandleHotUpdateRefusesASecondConcurrentUpdate(t *testing.T) {
+	s := newUpdateTestServer(t)
+	setServerVersion(t, "2.6.2")
+	stubReleaseAPI(t)
+
+	s.updateState.mu.Lock()
+	s.updateState.Available = true
+	s.updateState.LatestVersion = "v99.0.0"
+	s.updateState.InFlight = true
+	s.updateState.mu.Unlock()
+
+	c, w := updateCtx()
+	s.handleHotUpdate(c)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status = %d body = %s, want 409", w.Code, w.Body.String())
 	}
 }
 
@@ -681,6 +746,145 @@ func TestHandleHotUpdateAcceptsNewerVersionAndAudits(t *testing.T) {
 	}
 	if !entry.Success {
 		t.Fatal("audit entry not marked successful")
+	}
+}
+
+// ── Version check semantics ──────────────────────────────────────────────────
+
+// stubReleaseAssets points the release-assets endpoint at a local server that
+// serves the given asset list.
+func stubReleaseAssets(t *testing.T, assets []GitHubAsset) {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		body, err := json.Marshal(GitHubReleaseFull{
+			TagName: "v9.9.9",
+			Assets:  assets,
+		})
+		if err != nil {
+			t.Errorf("encode release: %v", err)
+			return
+		}
+		_, _ = w.Write(body)
+	}))
+	previous := releaseAssetsURLFmt
+	releaseAssetsURLFmt = srv.URL + "/repos/%s/releases/tags/%s"
+	t.Cleanup(func() {
+		drainUpdateWorkers(t)
+		releaseAssetsURLFmt = previous
+		srv.Close()
+	})
+}
+
+// stubGitHubAPI points the version-check and repository endpoints at a local
+// server. releaseStatus is the status the releases endpoint answers with,
+// repoStatus the one the repository probe answers with.
+func stubGitHubAPI(t *testing.T, releaseStatus int, repoStatus int, releaseBody string) {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/releases/") {
+			w.WriteHeader(releaseStatus)
+			if releaseBody != "" {
+				_, _ = w.Write([]byte(releaseBody))
+			}
+			return
+		}
+		w.WriteHeader(repoStatus)
+		if repoStatus == http.StatusOK {
+			_, _ = w.Write([]byte(`{"full_name":"acme/forgec2"}`))
+		}
+	}))
+	previousCheck, previousRepo := updateCheckURLFmt, releaseRepoURLFmt
+	updateCheckURLFmt = srv.URL + "/repos/%s/releases/latest"
+	releaseRepoURLFmt = srv.URL + "/repos/%s"
+	t.Cleanup(func() {
+		updateCheckURLFmt, releaseRepoURLFmt = previousCheck, previousRepo
+		srv.Close()
+	})
+}
+
+// TestFetchLatestVersionReportsAMissingRepository proves a mistyped
+// repository is reported as an error. It used to answer 404, which was read
+// as "no new release": the server claimed to be up to date and every update
+// stayed invisible.
+func TestFetchLatestVersionReportsAMissingRepository(t *testing.T) {
+	stubGitHubAPI(t, http.StatusNotFound, http.StatusNotFound, "")
+
+	_, err := fetchLatestVersion("acme/nope")
+	if err == nil {
+		t.Fatal("a missing repository reported success")
+	}
+	if !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("error = %q, want it to name the missing repository", err)
+	}
+}
+
+// TestFetchLatestVersionAcceptsARepositoryWithoutReleases proves an existing
+// repository without any release is not an error.
+func TestFetchLatestVersionAcceptsARepositoryWithoutReleases(t *testing.T) {
+	stubGitHubAPI(t, http.StatusNotFound, http.StatusOK, "")
+
+	version, err := fetchLatestVersion("acme/forgec2")
+	if err != nil {
+		t.Fatalf("fetchLatestVersion: %v", err)
+	}
+	if version != "" {
+		t.Fatalf("version = %q, want an empty version", version)
+	}
+}
+
+// TestFetchLatestVersionReturnsThePublishedTag proves the happy path.
+func TestFetchLatestVersionReturnsThePublishedTag(t *testing.T) {
+	stubGitHubAPI(t, http.StatusOK, http.StatusOK, `{"tag_name":"v2.7.1"}`)
+
+	version, err := fetchLatestVersion("acme/forgec2")
+	if err != nil {
+		t.Fatalf("fetchLatestVersion: %v", err)
+	}
+	if version != "v2.7.1" {
+		t.Fatalf("version = %q", version)
+	}
+}
+
+// TestPerformHotUpdateRefusesAReleaseWithoutThisPlatform proves the hot
+// update refuses a release that carries no binary for the running platform
+// and leaves the installation untouched.
+func TestPerformHotUpdateRefusesAReleaseWithoutThisPlatform(t *testing.T) {
+	stubReleaseAssets(t, []GitHubAsset{
+		{Name: "forgec2-server-plan9-amd64"},
+		{Name: "forgec2-server-plan9-amd64.sha256"},
+	})
+
+	s := newUpdateTestServer(t)
+	err := s.performHotUpdate("v9.9.9")
+	if err == nil {
+		t.Fatal("a release without this platform was installed")
+	}
+	if !strings.Contains(err.Error(), "no ") && !strings.Contains(err.Error(), "server binary") {
+		t.Fatalf("error = %q, want it to explain the missing binary", err)
+	}
+	s.updateState.mu.RLock()
+	stage := s.updateState.Stage
+	s.updateState.mu.RUnlock()
+	if stage != updateStageFailed {
+		t.Fatalf("stage = %q, want failed", stage)
+	}
+}
+
+// TestPerformHotUpdateRefusesAReleaseWithoutAChecksum proves the checksum
+// must belong to the selected binary: a release without one is refused
+// instead of installing an unverified binary.
+func TestPerformHotUpdateRefusesAReleaseWithoutAChecksum(t *testing.T) {
+	stubReleaseAssets(t, []GitHubAsset{
+		{Name: canonicalBinaryName(runtime.GOOS, runtime.GOARCH)},
+	})
+
+	s := newUpdateTestServer(t)
+	err := s.performHotUpdate("v9.9.9")
+	if err == nil {
+		t.Fatal("a release without a checksum was installed")
+	}
+	if !strings.Contains(err.Error(), "checksum") {
+		t.Fatalf("error = %q, want it to name the missing checksum", err)
 	}
 }
 

@@ -3,9 +3,11 @@ package server
 import (
 	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"net"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -79,31 +81,40 @@ func (s *Server) shutdown() {
 	s.stopAllRPortFwd()
 	s.closeAllLPortFwd()
 	if s.httpServer != nil {
-		// Wait briefly for in-flight requests to drain before forced shutdown
-		done := make(chan struct{})
-		if s.inFlight == nil {
-			// A partially initialized server can own an HTTP server before the
-			// request tracker is installed. Treat that state as having no
-			// tracked requests instead of panicking during shutdown.
-			close(done)
+		if s.fastStop.Load() {
+			// The hot update replaces this process: cut the connections
+			// instead of draining them, a graceful drain would only add
+			// downtime to an already planned restart.
+			if err := s.httpServer.Close(); err != nil {
+				slog.Error("HTTP server close error", "err", err)
+			}
 		} else {
-			s.wg.Add(1)
-			go func() {
-				defer s.wg.Done()
-				s.inFlight.Wait()
+			// Wait briefly for in-flight requests to drain before forced shutdown
+			done := make(chan struct{})
+			if s.inFlight == nil {
+				// A partially initialized server can own an HTTP server before the
+				// request tracker is installed. Treat that state as having no
+				// tracked requests instead of panicking during shutdown.
 				close(done)
-			}()
-		}
-		select {
-		case <-done:
-			slog.Info("All in-flight requests completed")
-		case <-time.After(InFlightDrainTimeout):
-			slog.Warn("Timed out waiting for in-flight requests, proceeding with shutdown")
-		}
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), GracefulShutdownTimeout)
-		defer cancel()
-		if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
-			slog.Error("HTTP server shutdown error", "err", err)
+			} else {
+				s.wg.Add(1)
+				go func() {
+					defer s.wg.Done()
+					s.inFlight.Wait()
+					close(done)
+				}()
+			}
+			select {
+			case <-done:
+				slog.Info("All in-flight requests completed")
+			case <-time.After(InFlightDrainTimeout):
+				slog.Warn("Timed out waiting for in-flight requests, proceeding with shutdown")
+			}
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), GracefulShutdownTimeout)
+			defer cancel()
+			if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
+				slog.Error("HTTP server shutdown error", "err", err)
+			}
 		}
 	}
 
@@ -566,13 +577,22 @@ func (s *Server) Run() error {
 	}
 
 	s.httpServer = s.newHTTPServer(addr)
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("listen on %s: %w", addr, err)
+	}
 	if s.cfg.Server.TLSEnabled {
 		if err := s.configureTLS(s.httpServer); err != nil {
+			_ = ln.Close()
 			return err
 		}
 		// Empty cert/key paths: the certificate comes from GetCertificate
 		// (hot-reloadable loader), not from files read once at startup.
-		return s.httpServer.ListenAndServeTLS("", "")
+		ln = tls.NewListener(ln, s.httpServer.TLSConfig)
 	}
-	return s.httpServer.ListenAndServe()
+	// The port is bound and the routes are up: a hot update that installed
+	// this build is serving now. Tell the restarter, otherwise it would
+	// roll back a perfectly healthy boot.
+	s.markUpdateBootOK()
+	return s.httpServer.Serve(ln)
 }

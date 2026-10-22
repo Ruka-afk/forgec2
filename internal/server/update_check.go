@@ -10,9 +10,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"regexp"
+	"runtime"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -25,16 +24,18 @@ import (
 // defaultUpdateCheckURLFmt is the GitHub releases API format for ForgeC2
 const defaultUpdateCheckURLFmt = "https://api.github.com/repos/%s/releases/latest"
 const defaultReleaseAssetsURLFmt = "https://api.github.com/repos/%s/releases/tags/%s"
+const defaultReleaseRepoURLFmt = "https://api.github.com/repos/%s"
 
 // Hot-update stages for progress reporting.
 const (
-	updateStageIdle        = "idle"
-	updateStageChecking    = "checking"
-	updateStageDownloading = "downloading"
-	updateStageVerifying   = "verifying"
-	updateStageRestarting  = "restarting"
-	updateStageFailed      = "failed"
-	updateStageDone        = "done"
+	updateStageIdle         = "idle"
+	updateStageChecking     = "checking"
+	updateStageDownloading  = "downloading"
+	updateStageVerifying    = "verifying"
+	updateStageSnapshotting = "snapshotting"
+	updateStageRestarting   = "restarting"
+	updateStageFailed       = "failed"
+	updateStageDone         = "done"
 )
 
 // updateCheckState holds the latest version check result plus the
@@ -45,6 +46,15 @@ type updateCheckState struct {
 	CheckedAt     time.Time
 	Available     bool
 	Error         string
+	// CheckOK records whether the last check completed. A failed check must
+	// never read as "you are up to date": the previous implementation derived
+	// that verdict from Available alone, so a network error or a wrong
+	// repository silently hid every available update.
+	CheckOK bool
+	// InFlight marks a running hot update. A second request while one is in
+	// flight is refused instead of starting a second download and a second
+	// restarter against the same binary.
+	InFlight bool
 	// Hot-update progress machine (idle until POST /hot-update).
 	Stage           string
 	Progress        int
@@ -120,13 +130,16 @@ func (s *Server) initUpdateChecker() {
 			initialDelay.Stop()
 			return
 		}
-		ticker := time.NewTicker(UpdateCheckInterval)
-		defer ticker.Stop()
 		for {
+			// Jitter the interval so a fleet of servers that booted together
+			// does not hit api.github.com in lockstep.
+			wait := UpdateCheckInterval + time.Duration(time.Now().UnixNano()%int64(UpdateCheckJitter))
+			timer := time.NewTimer(wait)
 			select {
-			case <-ticker.C:
+			case <-timer.C:
 				s.checkForUpdate()
 			case <-s.ctx.Done():
+				timer.Stop()
 				return
 			}
 		}
@@ -141,12 +154,14 @@ func (s *Server) checkForUpdate() {
 	if err != nil {
 		s.updateState.Error = err.Error()
 		s.updateState.Available = false
+		s.updateState.CheckOK = false
 		slog.Debug("Update check failed", "err", err)
 		s.updateState.mu.Unlock()
 		return
 	}
 	s.updateState.LatestVersion = latest
 	s.updateState.Error = ""
+	s.updateState.CheckOK = true
 	s.updateState.mu.Unlock()
 
 	if latest == "" {
@@ -166,9 +181,15 @@ func (s *Server) checkForUpdate() {
 	}
 }
 
-// fetchLatestVersion calls the GitHub API and returns the latest tag
+// fetchLatestVersion calls the GitHub API and returns the latest tag.
+//
+// A 404 from the releases endpoint is ambiguous: it means either "this
+// repository has no releases yet" or "this repository does not exist". The
+// second case used to be reported as "no new release", which is how a
+// mistyped repository silently disabled every update check. The repository
+// endpoint disambiguates the two.
 func fetchLatestVersion(repo string) (string, error) {
-	url := fmt.Sprintf(defaultUpdateCheckURLFmt, repo)
+	url := fmt.Sprintf(updateCheckURLFmt, repo)
 	client := ssrfSafeClient(&http.Client{Timeout: GitHubAPITimeout})
 
 	backoff := []time.Duration{time.Second, 3 * time.Second}
@@ -198,6 +219,17 @@ func fetchLatestVersion(repo string) (string, error) {
 		}
 
 		if resp.StatusCode == http.StatusNotFound {
+			// The releases endpoint answers 404 both for "no releases yet"
+			// and for "no such repository". Probe the repository so a
+			// mistyped update_check_repo is reported instead of silently
+			// reading as "you are up to date".
+			exists, probeErr := releaseRepoExists(repo)
+			if probeErr != nil {
+				return "", probeErr
+			}
+			if !exists {
+				return "", fmt.Errorf("github api: repository %q does not exist (check server.update_check_repo)", repo)
+			}
 			return "", nil
 		}
 		if resp.StatusCode != http.StatusOK {
@@ -294,12 +326,29 @@ func (s *Server) handleCheckVersion(c *gin.Context) {
 	available := s.updateState.Available
 	checkedAt := s.updateState.CheckedAt
 	errStr := s.updateState.Error
+	checkOK := s.updateState.CheckOK
 	s.updateState.mu.RUnlock()
+
+	// "is_latest" may only be claimed when a check actually ran and failed to
+	// find anything newer. Without the CheckOK guard a failed check (wrong
+	// repository, rate limit, no network) reported the server as up to date
+	// and every available update stayed invisible.
+	isLatest := false
+	switch {
+	case !checkOK:
+		isLatest = false
+	case latest == "":
+		isLatest = true
+	default:
+		isLatest = compareVersions(ServerVersion, latest) >= 0
+	}
 
 	resp := gin.H{
 		"current_version": ServerVersion,
-		"is_latest":       !available || compareVersions(ServerVersion, latest) >= 0,
+		"is_latest":       isLatest,
 		"checked_at":      checkedAt,
+		"check_ok":        checkOK,
+		"check_state":     updateCheckStateName(checkOK, errStr),
 	}
 	if latest != "" {
 		resp["latest_version"] = latest
@@ -313,19 +362,39 @@ func (s *Server) handleCheckVersion(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// updateCheckStateName describes the state of the last version check.
+func updateCheckStateName(checkOK bool, errStr string) string {
+	switch {
+	case checkOK:
+		return "ok"
+	case errStr != "":
+		return "error"
+	default:
+		return "unknown"
+	}
+}
+
 // handleHotUpdate triggers a self-update: downloads the latest release binary and restarts
 func (s *Server) handleHotUpdate(c *gin.Context) {
-	s.updateState.mu.RLock()
+	s.updateState.mu.Lock()
+	if s.updateState.InFlight {
+		s.updateState.mu.Unlock()
+		respondError(c, http.StatusConflict, "A hot update is already running")
+		return
+	}
 	latest := s.updateState.LatestVersion
 	available := s.updateState.Available
-	s.updateState.mu.RUnlock()
+	s.updateState.InFlight = true
+	s.updateState.mu.Unlock()
 
 	if !available || latest == "" {
+		s.clearUpdateInFlight()
 		respondError(c, http.StatusBadRequest, "No updates available")
 		return
 	}
 
 	if compareVersions(latest, ServerVersion) <= 0 {
+		s.clearUpdateInFlight()
 		respondError(c, http.StatusBadRequest, "Already up to date")
 		return
 	}
@@ -335,12 +404,12 @@ func (s *Server) handleHotUpdate(c *gin.Context) {
 	// Trigger async hot-update; progress follows via WS update_progress
 	// and GET /api/update-progress (the process restarts on success).
 	s.setUpdateProgress(updateStageDownloading, 0, 0, 0, latest, "")
-	// wg-tracked so shutdown drains an in-flight replacement instead of
-	// exiting halfway through swapping the binary. Stop() bounds the wait
-	// with WorkerDrainTimeout, so a slow download cannot wedge shutdown.
-	s.wg.Add(1)
+	// The update goroutine is tracked by updateWg and not by wg: it ends by
+	// shutting this process down, and a worker that waits for the waitgroup
+	// it belongs to can never be released.
+	s.updateWg.Add(1)
 	go func() {
-		defer s.wg.Done()
+		defer s.updateWg.Done()
 		defer func() {
 			if r := recover(); r != nil {
 				slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))
@@ -359,103 +428,146 @@ func (s *Server) handleHotUpdate(c *gin.Context) {
 	})
 }
 
+// clearUpdateInFlight releases the hot-update guard so a failed attempt can
+// be retried.
+func (s *Server) clearUpdateInFlight() {
+	s.updateState.mu.Lock()
+	s.updateState.InFlight = false
+	s.updateState.mu.Unlock()
+}
+
 // handleUpdateProgress returns the hot-update state machine for polling
 // fallback (WS disconnects, page refreshes mid-download).
 func (s *Server) handleUpdateProgress(c *gin.Context) {
 	s.updateState.mu.RLock()
-	defer s.updateState.mu.RUnlock()
+	stage := s.updateState.Stage
+	percent := s.updateState.Progress
+	downloaded := s.updateState.DownloadedBytes
+	total := s.updateState.TotalBytes
+	version := s.updateState.TargetVersion
+	lastErr := s.updateState.LastError
+	updatedAt := s.updateState.UpdatedAt
+	s.updateState.mu.RUnlock()
 
-	c.JSON(http.StatusOK, gin.H{
-		"stage":      s.updateState.Stage,
-		"percent":    s.updateState.Progress,
-		"downloaded": s.updateState.DownloadedBytes,
-		"total":      s.updateState.TotalBytes,
-		"version":    s.updateState.TargetVersion,
-		"error":      s.updateState.LastError,
-		"updated_at": s.updateState.UpdatedAt,
-	})
+	resp := gin.H{
+		"stage":      stage,
+		"percent":    percent,
+		"downloaded": downloaded,
+		"total":      total,
+		"version":    version,
+		"error":      lastErr,
+		"updated_at": updatedAt,
+	}
+	if last := s.lastUpdateResult(); last != nil {
+		resp["last_result"] = last
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// lastUpdateResult returns the outcome of the last update attempt, if the
+// restarter recorded one.
+func (s *Server) lastUpdateResult() *updateLastResult {
+	exePath, err := os.Executable()
+	if err != nil {
+		return nil
+	}
+	if exePath, err = filepath.Abs(exePath); err != nil {
+		return nil
+	}
+	res, err := readUpdateLast(filepath.Join(updateStateDir(exePath), updateLastFile))
+	if err != nil {
+		return nil
+	}
+	return res
 }
 
 // performHotUpdate downloads the latest binary, replaces itself, and restarts.
 // Progress is reported through setUpdateProgress (WS + GET /api/update-progress).
+//
+// The swap itself is performed by a generated restarter (see update_restart.go):
+// a running process cannot replace its own image on Windows, and the new
+// build must be able to report back whether it came up. The restarter waits
+// for this process to exit, installs the new binary, starts it with the
+// original command line and rolls back when the new build never reports a
+// healthy boot.
 func (s *Server) performHotUpdate(latest string) error {
 	fail := func(err error) error {
 		s.setUpdateProgress(updateStageFailed, 0, 0, 0, latest, err.Error())
+		s.clearUpdateInFlight()
 		return err
 	}
 	s.setUpdateProgress(updateStageDownloading, 0, 0, 0, latest, "")
+
 	assets, err := fetchReleaseAssets(s.cfg.Server.UpdateCheckRepo, latest)
 	if err != nil {
 		return fail(fmt.Errorf("fetch release assets: %w", err))
 	}
 
-	// Find a matching binary for this platform
-	binName := "server.exe"
-	ext := ".exe"
-	var downloadURL string
-	var checksumURL string
-	safeBinRe := regexp.MustCompile(`[^a-zA-Z0-9._-]`)
-	for _, a := range assets {
-		name := strings.ToLower(a.Name)
-		if strings.HasSuffix(name, ext) && (strings.Contains(name, "windows") || strings.Contains(name, "amd64") || strings.Contains(name, "x64")) {
-			downloadURL = a.BrowserDownloadURL
-			binName = safeBinRe.ReplaceAllString(a.Name, "_")
-			break
-		}
+	// Pick the binary that matches THIS platform. Matching on the asset name
+	// is the only safe way: the release carries one binary per platform plus
+	// bundles, SBOMs and checksum files, and the wrong pick is a binary that
+	// cannot even start.
+	binaryAsset, err := selectBinaryAsset(assets, runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		return fail(err)
 	}
-	if downloadURL == "" {
-		// fallback: just take any .exe
-		for _, a := range assets {
-			if strings.HasSuffix(strings.ToLower(a.Name), ext) {
-				downloadURL = a.BrowserDownloadURL
-				binName = safeBinRe.ReplaceAllString(a.Name, "_")
-				break
-			}
-		}
+	// The checksum must belong to that binary, not to whichever ".sha256"
+	// happens to be listed first.
+	checksumAsset, ok := findAssetByName(assets, binaryAsset.Name+".sha256")
+	if !ok {
+		return fail(fmt.Errorf("release has no checksum file for %s", binaryAsset.Name))
 	}
-	// Find a checksum file for integrity verification. A release without one
-	// is refused below: self-replacing the service binary from an unsigned
-	// release is not an option, even when the operator explicitly updates.
-	for _, a := range assets {
-		name := strings.ToLower(a.Name)
-		if strings.HasSuffix(name, ".sha256") || strings.HasSuffix(name, ".checksum") {
-			checksumURL = a.BrowserDownloadURL
-			break
-		}
-	}
-	if checksumURL == "" {
-		return fail(fmt.Errorf("release has no checksum file; refusing unsigned hot update"))
-	}
-	if downloadURL == "" {
-		return fail(fmt.Errorf("no matching binary found in release assets"))
-	}
+	slog.Info("Hot update: selected release asset", "asset", binaryAsset.Name, "platform", runtime.GOOS+"/"+runtime.GOARCH)
 
 	exePath, err := os.Executable()
 	if err != nil {
-		return fmt.Errorf("get executable path: %w", err)
+		return fail(fmt.Errorf("get executable path: %w", err))
 	}
 	exePath, err = filepath.Abs(exePath)
 	if err != nil {
-		return fmt.Errorf("resolve absolute path: %w", err)
+		return fail(fmt.Errorf("resolve absolute path: %w", err))
+	}
+	updateDir := updateStateDir(exePath)
+	if err := os.MkdirAll(updateDir, 0o700); err != nil {
+		return fail(fmt.Errorf("create update directory: %w", err))
+	}
+	if err := ensureDirWritable(updateDir); err != nil {
+		return fail(err)
 	}
 
-	// Download to a temp file in the same directory
-	tmpPath := filepath.Join(filepath.Dir(exePath), ".update."+binName)
-	if err := s.downloadUpdateFile(downloadURL, tmpPath, latest); err != nil {
+	// A second server instance sharing this directory must not swap the
+	// binary underneath the first one.
+	releaseLock, err := acquireUpdateLock(updateDir)
+	if err != nil {
+		return fail(err)
+	}
+	defer releaseLock()
+
+	newPath := filepath.Join(updateDir, updateNewFile)
+	partPath := newPath + ".part"
+	os.Remove(partPath)
+	os.Remove(newPath)
+
+	// Download to a staging file first: a half-written binary must never be
+	// mistaken for a complete one.
+	if err := s.downloadUpdateFile(binaryAsset.BrowserDownloadURL, partPath, latest); err != nil {
+		os.Remove(partPath)
 		return fail(fmt.Errorf("download binary: %w", err))
 	}
-
-	// Verify the downloaded file is valid
-	if fi, err := os.Stat(tmpPath); err != nil || fi.Size() == 0 {
-		os.Remove(tmpPath)
+	if fi, statErr := os.Stat(partPath); statErr != nil || fi.Size() == 0 {
+		os.Remove(partPath)
 		return fail(fmt.Errorf("downloaded binary is invalid"))
 	}
+	if err := os.Rename(partPath, newPath); err != nil {
+		os.Remove(partPath)
+		return fail(fmt.Errorf("stage downloaded binary: %w", err))
+	}
 
-	// Verify SHA-256 checksum (mandatory: see above).
+	// Verify the downloaded file before it can replace the running binary.
 	s.setUpdateProgress(updateStageVerifying, 100, 0, 0, latest, "")
-	checksumData, _, err := fetchChecksumFile(checksumURL, tmpPath)
+	checksumData, _, err := fetchChecksumFile(checksumAsset.BrowserDownloadURL, binaryAsset.Name)
 	if err != nil {
-		os.Remove(tmpPath)
+		os.Remove(newPath)
 		return fail(fmt.Errorf("fetch checksum file: %w", err))
 	}
 	// Release signature (Ed25519 over the exact checksum-file bytes) when
@@ -467,58 +579,96 @@ func (s *Server) performHotUpdate(latest string) error {
 	requireSig := s.cfg.Crypto.RequireReleaseSignature
 	s.configMu.RUnlock()
 	if strings.TrimSpace(signingKey) != "" {
-		sig, err := fetchReleaseSignature(checksumURL)
+		sig, err := fetchReleaseSignature(checksumAsset.BrowserDownloadURL)
 		if err != nil {
-			os.Remove(tmpPath)
+			os.Remove(newPath)
 			return fail(fmt.Errorf("release signature unavailable: %w", err))
 		}
 		if err := verifyReleaseSignature(checksumData, string(sig), signingKey); err != nil {
-			os.Remove(tmpPath)
+			os.Remove(newPath)
 			return fail(fmt.Errorf("release signature rejected: %w", err))
 		}
 		slog.Info("Hot update: release signature verified")
 	} else if requireSig {
-		os.Remove(tmpPath)
+		os.Remove(newPath)
 		return fail(fmt.Errorf("hot update refused: crypto.require_release_signature is set but crypto.update_signing_key is empty"))
 	} else {
 		slog.Warn("Hot update without release signature: set crypto.update_signing_key (and crypto.require_release_signature=true) to require signed releases")
 	}
-	if err := verifyChecksumBytes(tmpPath, checksumData, binName); err != nil {
-		os.Remove(tmpPath)
+	if err := verifyChecksumBytes(newPath, checksumData, binaryAsset.Name); err != nil {
+		os.Remove(newPath)
 		return fail(fmt.Errorf("checksum verification failed: %w", err))
 	}
-	slog.Info("Hot update: checksum verified")
+	slog.Info("Hot update: checksum verified", "asset", binaryAsset.Name)
 
-	// Create a restart script
-	var scriptPath string
-	var args []string
-	if ext == ".exe" {
-		scriptPath = filepath.Join(filepath.Dir(exePath), ".restart.bat")
-		script := fmt.Sprintf(`@echo off
-timeout /t 3 /nobreak >nul
-copy /Y %s %s >nul
-del %s
-start "" %s
-`, quoteCmd(tmpPath), quoteCmd(exePath), quoteCmd(tmpPath), quoteCmd(exePath))
-		if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
-			os.Remove(tmpPath)
-			return fail(fmt.Errorf("create restart script: %w", err))
-		}
-		args = []string{"cmd", "/c", scriptPath}
-	} else {
-		// Unix-like: shell script
-		scriptPath = filepath.Join(filepath.Dir(exePath), ".restart.sh")
-		script := fmt.Sprintf(`#!/bin/sh
-sleep 3
-mv -f %s %s
-rm -f %s
-exec %s "$@"
-`, quoteSh(tmpPath), quoteSh(exePath), quoteSh(tmpPath), quoteSh(exePath))
-		if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
-			os.Remove(tmpPath)
-			return fail(fmt.Errorf("create restart script: %w", err))
-		}
-		args = []string{"/bin/sh", scriptPath}
+	// Snapshot the database so a rollback can also undo a schema migration.
+	dbPath, dbBackup := s.snapshotDatabaseForUpdate(updateDir)
+	if dbBackup != "" {
+		s.setUpdateProgress(updateStageSnapshotting, 100, 0, 0, latest, "")
+	}
+
+	workDir, err := os.Getwd()
+	if err != nil {
+		workDir = filepath.Dir(exePath)
+	}
+
+	prevPath := filepath.Join(updateDir, updatePrevFile)
+	pendingPath := filepath.Join(updateDir, updatePendingFile)
+	okPath := filepath.Join(updateDir, updateOKFile)
+	lastPath := filepath.Join(updateDir, updateLastFile)
+	lockPath := filepath.Join(updateDir, updateLockFile)
+
+	scriptName := updateScriptUnix
+	if runtime.GOOS == "windows" {
+		scriptName = updateScriptWin
+	}
+	scriptPath := filepath.Join(updateDir, scriptName)
+
+	pending := &updatePending{
+		From:      ServerVersion,
+		To:        latest,
+		PID:       os.Getpid(),
+		StartedAt: time.Now(),
+		Exe:       exePath,
+		New:       newPath,
+		Prev:      prevPath,
+		WorkDir:   workDir,
+		Args:      os.Args[1:],
+		DBPath:    dbPath,
+		DBBackup:  dbBackup,
+		Script:    scriptPath,
+	}
+	if err := writeUpdatePending(pendingPath, pending); err != nil {
+		os.Remove(newPath)
+		return fail(err)
+	}
+
+	plan := restartPlan{
+		Exe:      exePath,
+		New:      newPath,
+		Prev:     prevPath,
+		Pending:  pendingPath,
+		OK:       okPath,
+		Last:     lastPath,
+		Lock:     lockPath,
+		WorkDir:  workDir,
+		Args:     os.Args[1:],
+		OldPID:   os.Getpid(),
+		Target:   latest,
+		Script:   scriptPath,
+		DBPath:   dbPath,
+		DBBackup: dbBackup,
+	}
+	script, err := renderRestartScript(runtime.GOOS, plan)
+	if err != nil {
+		os.Remove(newPath)
+		os.Remove(pendingPath)
+		return fail(err)
+	}
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		os.Remove(newPath)
+		os.Remove(pendingPath)
+		return fail(fmt.Errorf("create restart script: %w", err))
 	}
 
 	payload := map[string]interface{}{
@@ -526,28 +676,107 @@ exec %s "$@"
 		"message": "Server is hot-reloading and restarting...",
 		"version": latest,
 	}
-	msg, ok := marshalJSONSafe(payload)
-	if !ok {
-		return nil
+	if msg, ok := marshalJSONSafe(payload); ok {
+		s.broadcastToClients(msg)
 	}
-	s.broadcastToClients(msg)
 
-	slog.Info("Starting hot update, server will restart", "version", latest)
+	slog.Info("Hot update: restarting into the new build", "version", latest, "script", scriptPath)
 	s.setUpdateProgress(updateStageRestarting, 100, 0, 0, latest, "")
 
-	// Start the restart script and exit
-	cmd := exec.Command(args[0], args[1:]...)
+	cmd, err := restartCommand(scriptPath)
+	if err != nil {
+		os.Remove(newPath)
+		os.Remove(pendingPath)
+		return fail(err)
+	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	detachCommand(cmd)
 	if err := cmd.Start(); err != nil {
+		os.Remove(newPath)
+		os.Remove(pendingPath)
 		return fail(fmt.Errorf("start restart script: %w", err))
 	}
 
-	// Graceful shutdown after a brief delay for the script to start
-	time.Sleep(GracefulShutdownDelay)
-	s.ctxCancel()
-	s.wg.Wait()
+	// Replace this process. The restarter takes over as soon as the old
+	// process is gone: it waits for this PID, installs the new binary and
+	// starts it with the original command line.
+	s.fastStop.Store(true)
+	s.Shutdown()
+	os.Exit(0)
 	return nil
+}
+
+// ensureDirWritable proves the update directory accepts writes before the
+// download starts: a read-only install directory must fail early, not after
+// a full download.
+func ensureDirWritable(dir string) error {
+	probe, err := os.CreateTemp(dir, ".probe-*")
+	if err != nil {
+		return fmt.Errorf("update directory %s is not writable: %w", dir, err)
+	}
+	name := probe.Name()
+	probe.Close()
+	os.Remove(name)
+	return nil
+}
+
+// acquireUpdateLock takes the cross-process update lock. A lock left behind
+// by a crashed run is reclaimed once it is older than the staleness window.
+func acquireUpdateLock(dir string) (func(), error) {
+	lockPath := filepath.Join(dir, updateLockFile)
+	for attempt := 0; attempt < 2; attempt++ {
+		f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if err == nil {
+			fmt.Fprintf(f, "pid=%d\nat=%s\n", os.Getpid(), time.Now().UTC().Format(time.RFC3339))
+			f.Close()
+			return func() { os.Remove(lockPath) }, nil
+		}
+		if !os.IsExist(err) {
+			return nil, fmt.Errorf("create update lock: %w", err)
+		}
+		fi, statErr := os.Stat(lockPath)
+		if statErr != nil {
+			continue // vanished between the two calls: retry
+		}
+		if time.Since(fi.ModTime()) > updateLockStaleAfter {
+			os.Remove(lockPath)
+			continue
+		}
+		return nil, fmt.Errorf("another hot update is already running (lock: %s)", lockPath)
+	}
+	return nil, fmt.Errorf("could not acquire the update lock: %s", lockPath)
+}
+
+// snapshotDatabaseForUpdate copies the SQLite database next to the update
+// markers so a rollback can also undo a schema migration. It returns the
+// database path and the snapshot path; an empty snapshot means the database
+// was not snapshotted (unsupported driver or a failed copy).
+func (s *Server) snapshotDatabaseForUpdate(dir string) (string, string) {
+	if s.cfg == nil || s.db == nil {
+		return "", ""
+	}
+	driver := strings.ToLower(strings.TrimSpace(s.cfg.Database.Driver))
+	if driver != "" && driver != "sqlite" {
+		return "", ""
+	}
+	dbPath := strings.TrimSpace(s.cfg.Database.Path)
+	if dbPath == "" {
+		return "", ""
+	}
+	abs, err := filepath.Abs(dbPath)
+	if err != nil {
+		return "", ""
+	}
+	backup := filepath.Join(dir, "prev.db")
+	os.Remove(backup)
+	if err := s.db.Exec("VACUUM INTO ?", backup).Error; err != nil {
+		slog.Warn("Hot update: database snapshot failed; a rollback keeps the current database", "err", err)
+		os.Remove(backup)
+		return "", ""
+	}
+	slog.Info("Hot update: database snapshot taken", "path", backup)
+	return abs, backup
 }
 
 // quoteCmd wraps a path in double quotes with cmd.exe escaping (`"` -> `""`).
@@ -564,6 +793,42 @@ func quoteSh(p string) string {
 // const, so tests can point it at a local httptest server; the hot-update path
 // is otherwise a live network call that made the suite both slow and flaky.
 var releaseAssetsURLFmt = defaultReleaseAssetsURLFmt
+
+// updateCheckURLFmt and releaseRepoURLFmt are vars for the same reason: the
+// version check and the repository probe must be testable without touching
+// api.github.com.
+var (
+	updateCheckURLFmt = defaultUpdateCheckURLFmt
+	releaseRepoURLFmt = defaultReleaseRepoURLFmt
+)
+
+// releaseRepoExists reports whether the configured repository is reachable.
+// It is only consulted when the releases endpoint answers 404, so it costs
+// one request per failed check and never runs on the happy path.
+func releaseRepoExists(repo string) (bool, error) {
+	url := fmt.Sprintf(releaseRepoURLFmt, repo)
+	client := ssrfSafeClient(&http.Client{Timeout: GitHubAPITimeout})
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return false, fmt.Errorf("create repository request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "ForgeC2/"+ServerVersion)
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("github api: %w", err)
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4*1024))
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return true, nil
+	case http.StatusNotFound:
+		return false, nil
+	default:
+		return false, fmt.Errorf("github api status %d while probing repository %q", resp.StatusCode, repo)
+	}
+}
 
 // fetchReleaseAssets gets the asset list for a given tag
 func fetchReleaseAssets(repo, tag string) ([]GitHubAsset, error) {
@@ -702,27 +967,17 @@ func (s *Server) broadcastUpdateNotification(latest string) {
 // handleRefreshUpdateCheck forces a fresh update check and returns the result
 func (s *Server) handleRefreshUpdateCheck(c *gin.Context) {
 	s.checkForUpdate()
-
-	s.updateState.mu.RLock()
-	defer s.updateState.mu.RUnlock()
-
-	resp := gin.H{
-		"current_version":  ServerVersion,
-		"checked_at":       s.updateState.CheckedAt,
-		"update_available": s.updateState.Available,
-	}
-	if s.updateState.Available {
-		resp["latest_version"] = s.updateState.LatestVersion
-		resp["download_url"] = s.releaseURL(s.updateState.LatestVersion)
-	}
-	if s.updateState.Error != "" {
-		resp["check_error"] = s.updateState.Error
-	}
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusOK, s.updateCheckResponse())
 }
 
 // handleUpdateCheck returns the current update check status as JSON
 func (s *Server) handleUpdateCheck(c *gin.Context) {
+	c.JSON(http.StatusOK, s.updateCheckResponse())
+}
+
+// updateCheckResponse builds the status payload the update-check endpoints
+// share.
+func (s *Server) updateCheckResponse() gin.H {
 	s.updateState.mu.RLock()
 	defer s.updateState.mu.RUnlock()
 
@@ -730,6 +985,8 @@ func (s *Server) handleUpdateCheck(c *gin.Context) {
 		"current_version":  ServerVersion,
 		"checked_at":       s.updateState.CheckedAt,
 		"update_available": s.updateState.Available,
+		"check_ok":         s.updateState.CheckOK,
+		"check_state":      updateCheckStateName(s.updateState.CheckOK, s.updateState.Error),
 	}
 	if s.updateState.Available {
 		resp["latest_version"] = s.updateState.LatestVersion
@@ -738,7 +995,7 @@ func (s *Server) handleUpdateCheck(c *gin.Context) {
 	if s.updateState.Error != "" {
 		resp["check_error"] = s.updateState.Error
 	}
-	c.JSON(http.StatusOK, resp)
+	return resp
 }
 
 // fetchChecksumFile downloads the checksum file (capped) and derives the
@@ -755,6 +1012,9 @@ func fetchChecksumFile(checksumURL, binaryPath string) ([]byte, string, error) {
 		return nil, "", fmt.Errorf("download checksum: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("download checksum: status %d", resp.StatusCode)
+	}
 	checksumData, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	if err != nil {
 		return nil, "", fmt.Errorf("read checksum: %w", err)

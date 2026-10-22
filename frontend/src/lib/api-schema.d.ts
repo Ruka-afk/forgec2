@@ -10808,6 +10808,57 @@ export interface components {
             /** Format: date-time */
             updated_at?: string;
         };
+        /** @description Result of the background version check */
+        UpdateCheckStatus: {
+            current_version?: string;
+            /** Format: date-time */
+            checked_at?: string;
+            update_available?: boolean;
+            /** @description False when the last check failed - the update state is then unknown, not "up to date" */
+            check_ok?: boolean;
+            /** @enum {string} */
+            check_state?: "ok" | "error" | "unknown";
+            latest_version?: string;
+            download_url?: string;
+            check_error?: string;
+        };
+        /** @description Version comparison shown in the console */
+        UpdateVersionInfo: {
+            current_version?: string;
+            /** @description True only when a check succeeded and no newer release exists */
+            is_latest?: boolean;
+            check_ok?: boolean;
+            /** @enum {string} */
+            check_state?: "ok" | "error" | "unknown";
+            /** Format: date-time */
+            checked_at?: string;
+            latest_version?: string;
+            download_url?: string;
+            check_error?: string;
+        };
+        /** @description Hot-update progress state */
+        UpdateProgress: {
+            /** @enum {string} */
+            stage?: "idle" | "checking" | "downloading" | "verifying" | "snapshotting" | "restarting" | "failed" | "done";
+            percent?: number;
+            /** Format: int64 */
+            downloaded?: number;
+            /** Format: int64 */
+            total?: number;
+            version?: string;
+            error?: string;
+            /** Format: date-time */
+            updated_at?: string;
+            /** @description Outcome of the last update attempt */
+            last_result?: {
+                /** @enum {string} */
+                status?: "success" | "failed" | "rolled_back" | "interrupted";
+                version?: string;
+                /** Format: date-time */
+                at?: string;
+                error?: string;
+            };
+        };
         ModulesListResponse: {
             success: boolean;
             modules: components["schemas"]["ModuleInfo"][];
@@ -17720,7 +17771,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["UpdateCheckStatus"];
+                };
             };
         };
     };
@@ -17738,7 +17791,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["UpdateVersionInfo"];
+                };
             };
         };
     };
@@ -17756,7 +17811,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["UpdateCheckStatus"];
+                };
             };
         };
     };
@@ -17771,6 +17828,13 @@ export interface operations {
         responses: {
             /** @description OK */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A hot update is already running */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -25730,7 +25794,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["UpdateProgress"];
+                };
             };
         };
     };

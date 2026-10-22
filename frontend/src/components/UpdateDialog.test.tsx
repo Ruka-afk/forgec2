@@ -11,6 +11,18 @@ vi.mock("@/lib/wsContext", () => ({
   useWS: () => ({ subscribe: () => () => {} }),
 }));
 
+const { mockRole } = vi.hoisted(() => ({ mockRole: { current: "admin" } }));
+
+vi.mock("@/lib/hooks/usePermissions", () => ({
+  usePermissions: () => ({
+    permissions: [],
+    role: mockRole.current,
+    can: () => true,
+    canAny: () => true,
+    canAll: () => true,
+  }),
+}));
+
 vi.mock("@/lib/i18n", () => ({
   getLocale: () => "en",
   useI18n: () => ({ t: (key: string, params?: Record<string, unknown>) => {
@@ -33,12 +45,21 @@ function openDialog() {
 describe("UpdateDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockRole.current = "admin";
   });
 
   it("opens on event and shows version comparison", async () => {
     openDialog();
     expect(await screen.findByText("update_dialog.title")).toBeTruthy();
     expect(screen.getByText("v9.9.9")).toBeTruthy();
+  });
+
+  it("hides the install button from non-administrators", async () => {
+    mockRole.current = "operator";
+    openDialog();
+    await screen.findByText("update_dialog.title");
+    expect(screen.queryByText("update_dialog.update_now")).toBeNull();
+    expect(screen.getByText("update_dialog.admin_only")).toBeTruthy();
   });
 
   it("starts hot update and shows progress", async () => {

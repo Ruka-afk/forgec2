@@ -4,6 +4,7 @@ import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { useWS } from "@/lib/wsContext";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { usePermissions } from "@/lib/hooks/usePermissions";
 import { formatBytes } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { AlertTriangle, ArrowUpCircle, RotateCw } from "lucide-react";
+import { toast } from "sonner";
 
 interface UpdateDialogInfo {
   latest: string;
@@ -36,6 +38,13 @@ interface ProgressState {
 /** Custom event to open the dialog from anywhere: `openUpdateDialog(info)`. */
 export const OPEN_UPDATE_DIALOG = "forgec2:open-update-dialog";
 
+/**
+ * Session flag set right before the page reloads after a hot update, so the
+ * reloaded console can tell the operator that the new build is the one they
+ * are looking at now.
+ */
+const UPDATED_FLAG = "forgec2:updated-to";
+
 export function openUpdateDialog(info: UpdateDialogInfo) {
   window.dispatchEvent(new CustomEvent<UpdateDialogInfo>(OPEN_UPDATE_DIALOG, { detail: info }));
 }
@@ -43,18 +52,40 @@ export function openUpdateDialog(info: UpdateDialogInfo) {
 export function UpdateDialog() {
   const { t } = useI18n();
   const { subscribe } = useWS();
+  const { role } = usePermissions();
   const [open, setOpen] = useState(false);
   const [info, setInfo] = useState<UpdateDialogInfo | null>(null);
   const [phase, setPhase] = useState<Phase>("confirm");
   const [progress, setProgress] = useState<ProgressState>({ stage: "idle", percent: 0, downloaded: 0, total: 0 });
   const [polling, setPolling] = useState(false);
+  // True once the health probe has seen the server go away: the operator
+  // gets a "waiting for the server" hint instead of a plain "restarting".
+  const [waiting, setWaiting] = useState(false);
   const pollInFlightRef = useRef(false);
+  // The hot update endpoint is admin-only: offering the button to every
+  // operator only produced a 403.
+  const isAdmin = (role || "").toLowerCase() === "admin";
 
   const stopPolling = useCallback(() => {
     setPolling(false);
   }, []);
 
   useEffect(() => () => stopPolling(), [stopPolling]);
+
+  // After the reload that follows a hot update, report the new version.
+  useEffect(() => {
+    let updated: string | null = null;
+    try {
+      updated = sessionStorage.getItem(UPDATED_FLAG);
+      if (updated) sessionStorage.removeItem(UPDATED_FLAG);
+    } catch {
+      // Session storage is optional; without it the operator simply does not
+      // get the confirmation toast.
+    }
+    if (updated) {
+      toast.success(t("update_dialog.updated_toast", { version: updated }));
+    }
+  }, [t]);
 
   // Open requests from banner / settings / notifications.
   useEffect(() => {
@@ -127,6 +158,35 @@ export function UpdateDialog() {
 
   useVisibleInterval(() => { void pollProgress(); }, polling ? 3000 : 0);
 
+  // The server replaces itself during a hot update: wait until it answers
+  // again and reload the console, otherwise the operator is left staring at
+  // a dialog that never finishes.
+  useEffect(() => {
+    if (phase !== "restarting") return;
+    let cancelled = false;
+    const probe = async () => {
+      try {
+        const res = await fetch("/health", { cache: "no-store" });
+        if (!res.ok || cancelled) return;
+        try {
+          sessionStorage.setItem(UPDATED_FLAG, info?.latest || "");
+        } catch {
+          // The flag is a nicety; the reload happens either way.
+        }
+        window.location.reload();
+      } catch {
+        // The server is still down: keep waiting.
+        if (!cancelled) setWaiting(true);
+      }
+    };
+    const timer = window.setInterval(() => { void probe(); }, 2000);
+    void probe();
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [phase, info?.latest]);
+
   const startPolling = useCallback(() => {
     setPolling(true);
   }, []);
@@ -158,6 +218,8 @@ export function UpdateDialog() {
         return t("update_dialog.downloading");
       case "verifying":
         return t("update_dialog.verifying");
+      case "snapshotting":
+        return t("update_dialog.snapshotting");
       case "restarting":
         return t("update_dialog.restarting");
       case "failed":
@@ -190,6 +252,9 @@ export function UpdateDialog() {
         {phase === "confirm" && (
           <div className="space-y-3 text-sm">
             <p className="text-muted-foreground">{t("update_dialog.confirm_hint")}</p>
+            {!isAdmin && (
+              <p className="text-warning-ink">{t("update_dialog.admin_only")}</p>
+            )}
             {info?.downloadUrl && (
               <a href={info.downloadUrl} target="_blank" rel="noopener noreferrer"
                 className="text-sm text-info-ink underline-offset-2 hover:underline">
@@ -226,7 +291,9 @@ export function UpdateDialog() {
               </p>
             )}
             {phase === "restarting" && (
-              <p className="text-sm text-muted-foreground">{t("update_dialog.restarting_hint")}</p>
+              <p className="text-sm text-muted-foreground">
+                {waiting ? t("update_dialog.waiting_for_server") : t("update_dialog.restarting_hint")}
+              </p>
             )}
           </div>
         )}
@@ -237,9 +304,11 @@ export function UpdateDialog() {
               <Button variant="ghost" onClick={() => setOpen(false)}>
                 {t("update_dialog.later")}
               </Button>
-              <Button onClick={() => void startUpdate()}>
-                {t("update_dialog.update_now")}
-              </Button>
+              {isAdmin && (
+                <Button onClick={() => void startUpdate()}>
+                  {t("update_dialog.update_now")}
+                </Button>
+              )}
             </>
           )}
           {phase === "running" && (

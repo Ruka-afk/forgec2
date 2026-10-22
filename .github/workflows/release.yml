@@ -67,7 +67,10 @@ jobs:
           ext=""
           if [ "${{ matrix.goos }}" = "windows" ]; then ext=".exe"; fi
           bin="forgec2-server-${{ matrix.goos }}-${{ matrix.goarch }}${ext}"
-          go build -ldflags "-X github.com/forgec2/forgec2/internal/server.ServerVersion=${{ github.ref_name }}" -o "$bin" ./cmd/server
+          # The release repository is stamped into the binary so the update
+          # checker polls the repository that actually publishes the releases
+          # (a fork tags its own releases and must not point at upstream).
+          go build -ldflags "-X github.com/forgec2/forgec2/internal/server.ServerVersion=${{ github.ref_name }} -X github.com/forgec2/forgec2/internal/buildinfo.Repo=${{ github.repository }}" -o "$bin" ./cmd/server
           # Fail the job if the tag didn't make it into the binary.
           # (Windows/arm64 binaries can't execute on this runner — same
           # ldflags line builds them, and linux/amd64 proves the wiring.)

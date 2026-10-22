@@ -170,6 +170,74 @@ own CA, or raise their floor to TLS 1.3 — see
 [`docs/LISTENER_TLS.md`](LISTENER_TLS.md) for the merge rules and the
 client-certificate path for implants.
 
+## Hot update (from the console)
+
+The console can replace the running server with a newer release. It is opt-in
+because it phones home to `api.github.com`:
+
+```yaml
+# config.yaml
+server:
+  update_check_enabled: true
+  update_check_repo: r0si/forgec2   # defaults to the repository the binary was built from
+```
+
+With the check enabled, Settings → *Check for updates* (or the banner) offers
+the new release, and an administrator can install it from the dialog. The
+update:
+
+1. picks the asset that matches the running platform
+   (`forgec2-server-<os>-<arch>[.exe]`) — a release that carries no binary for
+   this platform, or an ambiguous one, is refused;
+2. downloads it into `<install dir>/.update/`, verifies the SHA-256 published
+   next to it (and the detached Ed25519 signature when
+   `crypto.update_signing_key` is set), and snapshots the SQLite database;
+3. hands over to a generated restarter that waits for the old process to
+   exit, installs the new binary and starts it **with the original command
+   line and working directory**;
+4. rolls back: if the new build does not report a healthy boot within 60
+   seconds, the previous binary (and the database snapshot) is restored and
+   the old build is started again.
+
+The outcome is audited (`hot_update_result`) and readable at
+`GET /api/update-progress` under `last_result`
+(`success` / `failed` / `rolled_back` / `interrupted`).
+
+### Manual upgrade (and the escape hatch)
+
+The hot update needs a working installation; to replace the binary by hand:
+
+```powershell
+# Windows
+$env:V = "v2.7.1"
+curl.exe -L -o forgec2-server.exe.new "https://github.com/r0si/forgec2/releases/download/$env:V/forgec2-server-windows-amd64.exe"
+# verify against the published checksum before swapping:
+curl.exe -L -o server.sha256 "https://github.com/r0si/forgec2/releases/download/$env:V/forgec2-server-windows-amd64.exe.sha256"
+Get-FileHash forgec2-server.exe.new -Algorithm SHA256   # compare with server.sha256
+taskkill /f /im forgec2-server.exe
+Move-Item -Force forgec2-server.exe forgec2-server.exe.prev
+Move-Item -Force forgec2-server.exe.new forgec2-server.exe
+.\forgec2-server.exe -config config.yaml
+```
+
+```bash
+# Linux
+V=v2.7.1
+curl -LO "https://github.com/r0si/forgec2/releases/download/$V/forgec2-server-linux-amd64"
+sha256sum -c "forgec2-server-linux-amd64.sha256" 2>/dev/null || curl -LO "https://github.com/r0si/forgec2/releases/download/$V/forgec2-server-linux-amd64.sha256"
+sha256sum -c forgec2-server-linux-amd64.sha256
+mv forgec2-server forgec2-server.prev && mv forgec2-server-linux-amd64 forgec2-server
+./forgec2-server -config config.yaml
+```
+
+`scripts/deploy.ps1` / `scripts/deploy.sh` do the same thing from a source
+checkout, with a health check and an automatic rollback to the `.prev` binary.
+
+> **Upgrading from 2.7.0**: the hot update in 2.7.0 could not select the right
+> asset and never restarted the server, so 2.7.0 cannot update itself. Update
+> **once by hand** (above), and every later release can be installed from the
+> console.
+
 ## Cut a release (maintainers)
 
 ```bash

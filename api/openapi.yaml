@@ -5650,6 +5650,10 @@ paths:
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateCheckStatus'
 
   /api/update-check/version:
     get:
@@ -5661,6 +5665,10 @@ paths:
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateVersionInfo'
 
   /api/update-check/refresh:
     post:
@@ -5672,6 +5680,10 @@ paths:
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateCheckStatus'
 
   /api/update-check/hot-update:
     post:
@@ -5683,6 +5695,8 @@ paths:
       responses:
         '200':
           description: OK
+        '409':
+          description: A hot update is already running
 
   /redirectors:
     get:
@@ -11054,7 +11068,12 @@ paths:
       operationId: getUpdateProgress
       security: [{SessionCookie: []}]
       responses:
-        '200': {description: Update progress}
+        '200':
+          description: Update progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateProgress'
   /config/reload-status:
     get:
       tags: [Ops]
@@ -11262,6 +11281,91 @@ components:
         updated_at:
           type: string
           format: date-time
+
+    UpdateCheckStatus:
+      type: object
+      description: Result of the background version check
+      properties:
+        current_version:
+          type: string
+        checked_at:
+          type: string
+          format: date-time
+        update_available:
+          type: boolean
+        check_ok:
+          type: boolean
+          description: False when the last check failed - the update state is then unknown, not "up to date"
+        check_state:
+          type: string
+          enum: [ok, error, unknown]
+        latest_version:
+          type: string
+        download_url:
+          type: string
+        check_error:
+          type: string
+
+    UpdateVersionInfo:
+      type: object
+      description: Version comparison shown in the console
+      properties:
+        current_version:
+          type: string
+        is_latest:
+          type: boolean
+          description: True only when a check succeeded and no newer release exists
+        check_ok:
+          type: boolean
+        check_state:
+          type: string
+          enum: [ok, error, unknown]
+        checked_at:
+          type: string
+          format: date-time
+        latest_version:
+          type: string
+        download_url:
+          type: string
+        check_error:
+          type: string
+
+    UpdateProgress:
+      type: object
+      description: Hot-update progress state
+      properties:
+        stage:
+          type: string
+          enum: [idle, checking, downloading, verifying, snapshotting, restarting, failed, done]
+        percent:
+          type: integer
+        downloaded:
+          type: integer
+          format: int64
+        total:
+          type: integer
+          format: int64
+        version:
+          type: string
+        error:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+        last_result:
+          type: object
+          description: Outcome of the last update attempt
+          properties:
+            status:
+              type: string
+              enum: [success, failed, rolled_back, interrupted]
+            version:
+              type: string
+            at:
+              type: string
+              format: date-time
+            error:
+              type: string
 
     ModulesListResponse:
       type: object

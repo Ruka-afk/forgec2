@@ -204,10 +204,23 @@ const (
 	WebhookDeliveryTimeout    = 15 * time.Second
 	UpdateCheckInitialDelay   = 10 * time.Second
 	UpdateCheckInterval       = 1 * time.Hour
-	GitHubAPITimeout          = 15 * time.Second
-	GracefulShutdownDelay     = 500 * time.Millisecond
-	UpdateDownloadTimeout     = 5 * time.Minute
-	ChecksumDownloadTimeout   = 30 * time.Second
+	// UpdateCheckJitter spreads the background checks so a fleet of servers
+	// that booted together does not hit api.github.com in lockstep.
+	UpdateCheckJitter       = 5 * time.Minute
+	GitHubAPITimeout        = 15 * time.Second
+	GracefulShutdownDelay   = 500 * time.Millisecond
+	UpdateDownloadTimeout   = 5 * time.Minute
+	ChecksumDownloadTimeout = 30 * time.Second
+	// updateRestartDeadlineSeconds bounds how long the generated restarter
+	// waits for the old process to exit and for the new build to report a
+	// healthy boot before it rolls back.
+	updateRestartDeadlineSeconds = 60
+	// updateLockStaleAfter is how long a leftover update lock is honoured
+	// before a new attempt reclaims it.
+	updateLockStaleAfter = 30 * time.Minute
+	// updateResultWaitTimeout bounds how long a freshly started server waits
+	// for the restarter to publish the outcome of the update it just booted.
+	updateResultWaitTimeout   = 30 * time.Second
 	CBCheckInterval           = 60 * time.Second
 	CBDialTimeout             = 5 * time.Second
 	CBHealthCheckTimeout      = 5 * time.Second
