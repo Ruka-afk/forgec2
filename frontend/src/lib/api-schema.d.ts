@@ -10371,6 +10371,142 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{id}/files/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Scan a directory on the agent for secrets and sensitive files */
+        post: operations["agentFileScan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{id}/files/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Search files on the agent by name, size or modification date */
+        post: operations["agentFileSearch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{id}/files/thumb": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request thumbnails for image files on the agent */
+        post: operations["agentFileThumb"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{id}/files/thumb/{thumb}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch a previously requested file thumbnail */
+        get: operations["agentFileThumbGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{id}/webrtc/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a WebRTC remote-desktop session for the agent */
+        post: operations["agentWebRTCStart"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{id}/webrtc/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop the WebRTC remote-desktop session of the agent */
+        post: operations["agentWebRTCStop"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ws/rd/operator": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Operator side WebRTC signalling channel for a remote-desktop session */
+        get: operations["rdOperatorSignal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ws/rd/agent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Agent side WebRTC signalling channel for a remote-desktop session */
+        get: operations["rdAgentSignal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/credentials/batch/verify": {
         parameters: {
             query?: never;
@@ -25204,6 +25340,238 @@ export interface operations {
         responses: {
             /** @description Task dispatched with the task id in task_id */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    agentFileScan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    path: string;
+                    pattern?: string;
+                    command?: string;
+                    rules?: string;
+                    include_hidden?: boolean;
+                    max_depth?: number;
+                    max_files?: number;
+                    /** Format: int64 */
+                    max_file_bytes?: number;
+                    /** Format: int64 */
+                    max_total_bytes?: number;
+                    max_findings?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Task dispatched with the task id in task_id */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    agentFileSearch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    path: string;
+                    pattern?: string;
+                    command?: string;
+                    categories?: string;
+                    /** Format: int64 */
+                    min_size?: number;
+                    /** Format: int64 */
+                    max_size?: number;
+                    modified_after?: string;
+                    modified_before?: string;
+                    include_hidden?: boolean;
+                    max_depth?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Task dispatched with the task id in task_id */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    agentFileThumb: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    paths?: string[];
+                    path?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Task dispatched with the task id in task_id */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    agentFileThumbGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                thumb: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thumbnail image bytes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thumbnail not found or not visible to this tenant */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    agentWebRTCStart: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session id */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Agent not visible to this tenant */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Agent offline or a still-image screen monitor is active */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    agentWebRTCStop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session stopped */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Agent not visible to this tenant */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    rdOperatorSignal: {
+        parameters: {
+            query: {
+                session: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Switching protocols to the signalling channel */
+            101: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    rdAgentSignal: {
+        parameters: {
+            query: {
+                session: string;
+                token: string;
+                agent: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Switching protocols to the signalling channel */
+            101: {
                 headers: {
                     [name: string]: unknown;
                 };

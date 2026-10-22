@@ -72,5 +72,15 @@
 # down to the pure gosec backlog: 70 (win, carrying the +1 CI observation
 # headroom as before) and 71 (lin); errcheck 0/0, staticcheck 0/0, and the
 # mechanical linters stay zero on both targets.
-windows=71
-linux=71
+# Batch O (2026-10): the Authenticode/PE batch left nine findings behind, four
+# of them mechanical (the gate requires zero): the dead Cobalt Strike v1
+# parser in internal/malleable/cs_import.go (csBlocks, parseCSBlocks,
+# handleCSLine, parseCSStatement, splitQuoted) and the unused
+# malleableParseCSFallback in internal/payload/generator_profile.go are gone;
+# the ineffectual wantClass initialization in the ELF validator is now a
+# declared variable, and the two capitalized Authenticode error strings are
+# lower-cased (ST1005). Both targets are down to the pure gosec backlog:
+# 67 (win) and 68 (lin), with the windows number carrying the +1 CI
+# observation headroom as before.
+windows=68
+linux=68

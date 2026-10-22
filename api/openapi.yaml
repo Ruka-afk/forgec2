@@ -10878,6 +10878,140 @@ paths:
                 mode: {type: string}
       responses:
         '200': {description: Task dispatched with the task id in task_id}
+  /agents/{id}/files/scan:
+    post:
+      tags: [Files]
+      summary: Scan a directory on the agent for secrets and sensitive files
+      operationId: agentFileScan
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path: {type: string}
+                pattern: {type: string}
+                command: {type: string}
+                rules: {type: string}
+                include_hidden: {type: boolean}
+                max_depth: {type: integer}
+                max_files: {type: integer}
+                max_file_bytes: {type: integer, format: int64}
+                max_total_bytes: {type: integer, format: int64}
+                max_findings: {type: integer}
+      responses:
+        '200': {description: Task dispatched with the task id in task_id}
+  /agents/{id}/files/search:
+    post:
+      tags: [Files]
+      summary: Search files on the agent by name, size or modification date
+      operationId: agentFileSearch
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path: {type: string}
+                pattern: {type: string}
+                command: {type: string}
+                categories: {type: string}
+                min_size: {type: integer, format: int64}
+                max_size: {type: integer, format: int64}
+                modified_after: {type: string}
+                modified_before: {type: string}
+                include_hidden: {type: boolean}
+                max_depth: {type: integer}
+      responses:
+        '200': {description: Task dispatched with the task id in task_id}
+  /agents/{id}/files/thumb:
+    post:
+      tags: [Files]
+      summary: Request thumbnails for image files on the agent
+      operationId: agentFileThumb
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                paths:
+                  type: array
+                  items: {type: string}
+                path: {type: string}
+      responses:
+        '200': {description: Task dispatched with the task id in task_id}
+  /agents/{id}/files/thumb/{thumb}:
+    get:
+      tags: [Files]
+      summary: Fetch a previously requested file thumbnail
+      operationId: agentFileThumbGet
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+        - {name: thumb, in: path, required: true, schema: {type: string}}
+      responses:
+        '200': {description: Thumbnail image bytes}
+        '404': {description: Thumbnail not found or not visible to this tenant}
+  /agents/{id}/webrtc/start:
+    post:
+      tags: [Agents]
+      summary: Start a WebRTC remote-desktop session for the agent
+      operationId: agentWebRTCStart
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '200': {description: Session id, ICE configuration and TURN credentials}
+        '404': {description: Agent not visible to this tenant}
+        '409': {description: Agent offline or a still-image screen monitor is active}
+  /agents/{id}/webrtc/stop:
+    post:
+      tags: [Agents]
+      summary: Stop the WebRTC remote-desktop session of the agent
+      operationId: agentWebRTCStop
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '200': {description: Session stopped}
+        '404': {description: Agent not visible to this tenant}
+  /ws/rd/operator:
+    get:
+      tags: [RemoteDesktop]
+      summary: Operator side WebRTC signalling channel for a remote-desktop session
+      operationId: rdOperatorSignal
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: session, in: query, required: true, schema: {type: string}}
+      responses:
+        '101': {description: Switching protocols to the signalling channel}
+  /ws/rd/agent:
+    get:
+      tags: [RemoteDesktop]
+      summary: Agent side WebRTC signalling channel for a remote-desktop session
+      operationId: rdAgentSignal
+      security: [{AgentToken: []}]
+      parameters:
+        - {name: session, in: query, required: true, schema: {type: string}}
+        - {name: token, in: query, required: true, schema: {type: string}}
+        - {name: agent, in: query, required: true, schema: {type: string}}
+      responses:
+        '101': {description: Switching protocols to the signalling channel}
   /credentials/batch/verify:
     post:
       tags: [Credentials]
@@ -11027,6 +11161,11 @@ components:
       in: cookie
       name: forgec2_session
       description: Session cookie obtained from login endpoint
+    AgentToken:
+      type: apiKey
+      in: query
+      name: token
+      description: Per-session agent token handed out when the WebRTC session starts
 
   schemas:
 

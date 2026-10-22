@@ -89,10 +89,10 @@ func ValidateImplantBuild(goos, format string, cfg *ImplantConfig) error {
 			return fmt.Errorf("unsupported sign_mode %q (use self, pfx or pem)", cfg.SignMode)
 		}
 		if goos != "windows" {
-			return fmt.Errorf("Authenticode signing is only supported for Windows targets")
+			return fmt.Errorf("authenticode signing is only supported for Windows targets")
 		}
 		if format != "exe" && format != "dll" {
-			return fmt.Errorf("Authenticode signing is only supported for Windows EXE and DLL builds (requested %s)", format)
+			return fmt.Errorf("authenticode signing is only supported for Windows EXE and DLL builds (requested %s)", format)
 		}
 		if err := validateSigningMaterial(*cfg); err != nil {
 			return err
@@ -127,7 +127,7 @@ func validateELF(path, goarch string) error {
 		return fmt.Errorf("unsupported ELF version %d", data[6])
 	}
 
-	wantClass := byte(2)
+	var wantClass byte
 	switch normalizeArch(goarch) {
 	case "arm":
 		wantClass = 1

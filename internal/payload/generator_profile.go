@@ -656,12 +656,6 @@ func malleableMigrateFallback(raw []byte, fallback string) (*malleable.ProfileV2
 	return malleable.MigrateProfileJSON(raw, fallback)
 }
 
-func malleableParseCSFallback(text string) (*malleable.ProfileV2, error) {
-	name := "imported"
-	// Try to extract set name-like first line? CS profiles rarely carry a name; keep generic.
-	return malleable.ParseCSFull(name, text)
-}
-
 func saveMalleableV2(dataDir string, v2 *malleable.ProfileV2) (MalleableProfile, error) {
 	if v2 == nil {
 		return MalleableProfile{}, fmt.Errorf("profile is empty")
