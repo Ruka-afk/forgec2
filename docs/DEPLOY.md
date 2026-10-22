@@ -65,7 +65,7 @@ curl -fsS https://127.0.0.1:8000/health
 
 ```bash
 # from the GitHub Release page for your version:
-curl -LO https://github.com/Ruka-afk/forgec2/releases/download/vX.Y.Z/forgec2-server-linux-amd64
+curl -LO https://github.com/r0si/forgec2/releases/download/vX.Y.Z/forgec2-server-linux-amd64
 chmod +x forgec2-server-linux-amd64
 cp config.example.yaml config.yaml
 ./forgec2-server-linux-amd64 -config config.yaml

@@ -46,7 +46,7 @@ gh release create vX.Y.Z `
 
 ## GitHub Release (API fallback)
 
-If `gh` unavailable, use GitHub API `POST /repos/Ruka-afk/forgec2/releases` then upload asset to `uploads.github.com`.
+If `gh` unavailable, use GitHub API `POST /repos/r0si/forgec2/releases` then upload asset to `uploads.github.com`.
 
 ## Release notes template
 
@@ -66,6 +66,6 @@ go build -o forgec2-server.exe ./cmd/server/
 
 ## Verify
 
-- Tag visible at https://github.com/Ruka-afk/forgec2/tags
+- Tag visible at https://github.com/r0si/forgec2/tags
 - Release page has `forgec2-server.exe` download
 - CI badge green on `main`

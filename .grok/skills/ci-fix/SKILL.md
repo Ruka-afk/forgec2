@@ -47,4 +47,4 @@ go build ./cmd/server/
 
 ## Badge
 
-README: `![CI](https://github.com/Ruka-afk/forgec2/actions/workflows/ci.yml/badge.svg)`
+README: `![CI](https://github.com/r0si/forgec2/actions/workflows/ci.yml/badge.svg)`

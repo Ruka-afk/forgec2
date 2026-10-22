@@ -2,8 +2,8 @@
 
 > 为现代红队铸造的命令与控制平台。
 
-[![CI](https://github.com/Ruka-afk/forgec2/actions/workflows/ci.yml/badge.svg)](https://github.com/Ruka-afk/forgec2/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/Ruka-afk/forgec2)](https://github.com/Ruka-afk/forgec2/releases)
+[![CI](https://github.com/r0si/forgec2/actions/workflows/ci.yml/badge.svg)](https://github.com/r0si/forgec2/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/r0si/forgec2)](https://github.com/r0si/forgec2/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **中文** · [English](README.en.md)
@@ -47,7 +47,7 @@ chmod +x forgec2-server-linux-amd64
 ### 自己构建
 
 ```bash
-git clone https://github.com/Ruka-afk/forgec2.git && cd forgec2
+git clone https://github.com/r0si/forgec2.git && cd forgec2
 
 # 需要 Go 1.26+（toolchain go1.26.9）和 Node.js 20.19+
 powershell -File scripts/build-embedded.ps1   # 前端 → 内嵌 → 二进制

@@ -2,8 +2,8 @@
 
 > Command and control, forged for the modern red team.
 
-[![CI](https://github.com/Ruka-afk/forgec2/actions/workflows/ci.yml/badge.svg)](https://github.com/Ruka-afk/forgec2/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/Ruka-afk/forgec2)](https://github.com/Ruka-afk/forgec2/releases)
+[![CI](https://github.com/r0si/forgec2/actions/workflows/ci.yml/badge.svg)](https://github.com/r0si/forgec2/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/r0si/forgec2)](https://github.com/r0si/forgec2/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 [中文](README.md) · **English**
@@ -47,7 +47,7 @@ Open `http://localhost:8000` — on first boot the server prints a freshly gener
 ### Build it yourself
 
 ```bash
-git clone https://github.com/Ruka-afk/forgec2.git && cd forgec2
+git clone https://github.com/r0si/forgec2.git && cd forgec2
 
 # requires Go 1.26+ (toolchain go1.26.9) and Node.js 20.19+
 powershell -File scripts/build-embedded.ps1   # frontend → embedded → binary
