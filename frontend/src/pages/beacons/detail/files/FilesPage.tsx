@@ -161,7 +161,7 @@ export default function FilesPage() {
   };
 
   return (
-    <PageContainer className="h-full gap-3 px-4 py-3 sm:px-6">
+    <PageContainer className="h-full gap-(--page-gap) px-(--page-pad-x) py-(--page-pad-y)">
       {osError && (
         <DataError
           message={osError}

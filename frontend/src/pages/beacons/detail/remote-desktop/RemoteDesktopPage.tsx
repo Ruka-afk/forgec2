@@ -17,7 +17,7 @@ export default function RemoteDesktopPage() {
   const rdp = useRemoteDesktop(id);
 
   return (
-    <PageContainer className="h-full gap-3 px-4 py-3 sm:px-6">
+    <PageContainer className="h-full gap-(--page-gap) px-(--page-pad-x) py-(--page-pad-y)">
       <Banner tone="warning" icon={<TriangleAlert className="size-4" />} className="items-start">
         <div className="font-semibold">{t("agents.rdp_experimental_title")}</div>
         <div className="text-xs text-muted-foreground">{t("agents.rdp_experimental_desc")}</div>

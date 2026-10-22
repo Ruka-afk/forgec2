@@ -1874,46 +1874,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/plugins/load-failures": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List plugin load failures
-         * @description Return sanitized diagnostics for plugin packages rejected during the latest scan
-         */
-        get: operations["listPluginLoadFailures"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/plugins/load-failures/retry": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Recheck failed plugins
-         * @description Re-verify plugin packages rejected during the latest scan without changing trust policy
-         */
-        post: operations["retryPluginLoadFailures"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/plugins/{id}/toggle": {
         parameters: {
             query?: never;
@@ -14070,59 +14030,6 @@ export interface operations {
                     "application/json": components["schemas"]["Plugin"];
                 };
             };
-        };
-    };
-    listPluginLoadFailures: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Plugin load failure diagnostics */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        success: boolean;
-                        count: number;
-                        data: {
-                            name: string;
-                            reason: string;
-                        }[];
-                    };
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-        };
-    };
-    retryPluginLoadFailures: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Retry result */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        success: boolean;
-                        retried: number;
-                        remaining: number;
-                    };
-                };
-            };
-            401: components["responses"]["Unauthorized"];
         };
     };
     togglePlugin: {

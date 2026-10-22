@@ -535,7 +535,7 @@ export default memo(function BeaconDetailPage({ agentId: agentIdProp, onClose }:
   return wrap(
     <PageContainer className="relative" embedded={embedded}>
       {loadError && (
-        <Banner tone="destructive" className="mb-3" action={<Button variant="ghost" size="sm" onClick={() => loadDetail()}>{t("agents.detail_retry")}</Button>}>
+        <Banner tone="destructive" action={<Button variant="ghost" size="sm" onClick={() => loadDetail()}>{t("agents.detail_retry")}</Button>}>
           {t("agents.detail_load_error_msg")}
         </Banner>
       )}
@@ -559,14 +559,14 @@ export default memo(function BeaconDetailPage({ agentId: agentIdProp, onClose }:
       {agent.kill_date && (() => {
             const kd = new Date(agent.kill_date);
             const days = Math.ceil((kd.getTime() - Date.now()) / 86400000);
-            if (days <= 7 && days >= 0) return <Banner tone={days <= 2 ? "destructive" : "warning"} className="mb-4">{t("agents.detail_kill_date_countdown").replace("{days}", String(days))}</Banner>;
-            if (days < 0) return <Banner tone="destructive" className="mb-4">{t("agents.detail_kill_date_expired")}</Banner>;
+            if (days <= 7 && days >= 0) return <Banner tone={days <= 2 ? "destructive" : "warning"}>{t("agents.detail_kill_date_countdown").replace("{days}", String(days))}</Banner>;
+            if (days < 0) return <Banner tone="destructive">{t("agents.detail_kill_date_expired")}</Banner>;
             return null;
           })()}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         {/* ── Main column: tabbed live sections ── */}
         <div className="min-w-0">
-          <Tabs value={activeTab} onValueChange={handleTabChange} className="mb-4">
+          <Tabs value={activeTab} onValueChange={handleTabChange}>
             <TabsList aria-label={t("agents.detail_tabs_aria")}>
               {AGENT_DETAIL_TABS.map((tab, i) => (
                 <TabsTrigger key={tab.id} value={tab.id} title={`${i + 1}`}>
@@ -661,7 +661,7 @@ export default memo(function BeaconDetailPage({ agentId: agentIdProp, onClose }:
         </div>
 
         {/* ── Right rail: reference + quick controls ── */}
-        <div className="min-w-0 lg:sticky lg:top-12 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-0.5">
+        <div className="min-w-0 lg:sticky lg:top-2 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:pr-0.5">
           <AISuggestCard agentId={id} online={status === "online"} />
           <AgentStatsGrid
             agent={agent as Partial<AgentDetailExt>}

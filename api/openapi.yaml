@@ -2853,66 +2853,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Plugin'
 
-  /api/plugins/load-failures:
-    get:
-      tags: [Plugins]
-      summary: List plugin load failures
-      description: Return sanitized diagnostics for plugin packages rejected during the latest scan
-      operationId: listPluginLoadFailures
-      security:
-        - SessionCookie: []
-      responses:
-        '200':
-          description: Plugin load failure diagnostics
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [success, data, count]
-                properties:
-                  success:
-                    type: boolean
-                  count:
-                    type: integer
-                  data:
-                    type: array
-                    items:
-                      type: object
-                      required: [name, reason]
-                      properties:
-                        name:
-                          type: string
-                        reason:
-                          type: string
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
-  /api/plugins/load-failures/retry:
-    post:
-      tags: [Plugins]
-      summary: Recheck failed plugins
-      description: Re-verify plugin packages rejected during the latest scan without changing trust policy
-      operationId: retryPluginLoadFailures
-      security:
-        - SessionCookie: []
-      responses:
-        '200':
-          description: Retry result
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [success, retried, remaining]
-                properties:
-                  success:
-                    type: boolean
-                  retried:
-                    type: integer
-                  remaining:
-                    type: integer
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
   /api/plugins/{id}/toggle:
     post:
       tags: [Plugins]

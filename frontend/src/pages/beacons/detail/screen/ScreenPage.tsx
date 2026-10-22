@@ -23,7 +23,7 @@ export default function ScreenPage() {
   const monitor = useScreenMonitor(id, { interval, quality, autoRefresh, t });
 
   return (
-    <PageContainer variant="workspace" className="h-full px-4 py-3 sm:px-6">
+    <PageContainer variant="workspace" className="h-full px-(--page-pad-x) py-(--page-pad-y)">
       <div className="flex h-full min-h-0 flex-col">
         <ScreenToolbar
           t={t}
