@@ -15,8 +15,14 @@ import (
 )
 
 type ConfigReloader struct {
-	cfg      *config.Config
-	path     string
+	cfg  *config.Config
+	path string
+	// liveMu is the server's configMu: r.cfg aliases the live s.cfg pointer,
+	// so diffConfig must hold it while reading — settings saves now mutate
+	// that struct under the write lock, and the manual reload endpoint makes
+	// this path reachable from an operator request. Nil in standalone tests
+	// that never wire a server.
+	liveMu   *sync.RWMutex
 	watcher  *fsnotify.Watcher
 	mu       sync.Mutex
 	running  bool
@@ -29,6 +35,22 @@ func NewConfigReloader(cfg *config.Config, path string, onReload func(*config.Co
 		path:     path,
 		onReload: onReload,
 	}
+}
+
+// TrackLiveConfig tells the reloader which lock guards the live config the
+// reloader's r.cfg aliases (the server's configMu before the first reload
+// re-points it). diffConfig reads r.cfg, so it must hold that lock for
+// reading; settings saves mutate the same struct under the write lock.
+func (r *ConfigReloader) TrackLiveConfig(mu *sync.RWMutex) {
+	r.liveMu = mu
+}
+
+func (r *ConfigReloader) diff(newCfg *config.Config) (hotReloadable, staticOnly []string) {
+	if r.liveMu != nil {
+		r.liveMu.RLock()
+		defer r.liveMu.RUnlock()
+	}
+	return diffConfig(r.cfg, newCfg)
 }
 
 func (r *ConfigReloader) Start() error {
@@ -172,7 +194,7 @@ func (r *ConfigReloader) reload() {
 		return
 	}
 
-	changed, staticOnly := diffConfig(r.cfg, newCfg)
+	changed, staticOnly := r.diff(newCfg)
 	if len(changed) == 0 && len(staticOnly) == 0 {
 		slog.Info("Config file changed but no values differ, skipping reload")
 		return
@@ -211,7 +233,7 @@ func (r *ConfigReloader) Reload() error {
 		return fmt.Errorf("config validation failed: %w", err)
 	}
 
-	changed, staticOnly := diffConfig(r.cfg, newCfg)
+	changed, staticOnly := r.diff(newCfg)
 	if len(staticOnly) > 0 {
 		return fmt.Errorf("config has non-hot-reloadable fields that require restart: %s", strings.Join(staticOnly, ", "))
 	}

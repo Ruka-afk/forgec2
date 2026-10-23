@@ -16,6 +16,8 @@ import (
 // (shorter windows would silently destroy the tamper chain investigators
 // rely on). Zero value (bare test configs) means default.
 func (s *Server) auditRetentionDays() int {
+	s.configMu.RLock()
+	defer s.configMu.RUnlock()
 	v := DefaultAuditRetentionDays
 	if s.cfg != nil {
 		v = s.cfg.Server.AuditRetentionDays
@@ -32,6 +34,8 @@ func (s *Server) auditRetentionDays() int {
 // taskRetentionDays floors terminal-task auto-deletion at 90 days so a
 // default 30-day ops retention cannot eat forensic task history.
 func (s *Server) taskRetentionDays() int {
+	s.configMu.RLock()
+	defer s.configMu.RUnlock()
 	v := s.cfg.Server.CleanupRetentionDays
 	if v < 1 {
 		v = DefaultCleanupRetentionDays
@@ -42,12 +46,21 @@ func (s *Server) taskRetentionDays() int {
 	return v
 }
 
+// cleanupRetentionDays reads the ops retention window under the config lock
+// (the settings save mutates it). Zero/negative falls back to the default.
+func (s *Server) cleanupRetentionDays() int {
+	s.configMu.RLock()
+	defer s.configMu.RUnlock()
+	v := s.cfg.Server.CleanupRetentionDays
+	if v < 1 {
+		return DefaultCleanupRetentionDays
+	}
+	return v
+}
+
 // cleanupOldData removes old completed/failed tasks and old files (screenshots + uploads) to prevent bloat
 func (s *Server) cleanupOldData() {
-	retention := s.cfg.Server.CleanupRetentionDays
-	if retention < 1 {
-		retention = DefaultCleanupRetentionDays
-	}
+	retention := s.cleanupRetentionDays()
 	cutoff := time.Now().AddDate(0, 0, -retention)
 
 	// delete old tasks (floored at 90 days regardless of ops retention).
@@ -246,9 +259,14 @@ func (s *Server) cleanupStaleMapEntries() {
 // misconfigured server drowned in its own diagnostic.
 const offlineThresholdWarnGap = time.Minute
 
-func (s *Server) offlineThreshold() time.Duration {
+// offlineThresholdSecLocked reads the configured threshold. The caller MUST
+// hold s.configMu (read or write). Keeping the raw read separate from the
+// locking wrappers means the composed getters (staleThreshold,
+// offlineThresholdFor) take the lock exactly once: nested RLock calls would
+// deadlock the moment a writer queued between the two acquisitions.
+func (s *Server) offlineThresholdSecLocked() int {
 	if s.cfg == nil {
-		return time.Duration(DefaultOfflineThresholdSec) * time.Second
+		return DefaultOfflineThresholdSec
 	}
 	d := s.cfg.Server.OfflineThreshold
 	if d < 1 {
@@ -261,11 +279,21 @@ func (s *Server) offlineThreshold() time.Duration {
 		}
 		d = DefaultOfflineThresholdSec
 	}
+	return d
+}
+
+func (s *Server) offlineThreshold() time.Duration {
+	s.configMu.RLock()
+	d := s.offlineThresholdSecLocked()
+	s.configMu.RUnlock()
 	return time.Duration(d) * time.Second
 }
 
 func (s *Server) staleThreshold() time.Duration {
-	return s.offlineThreshold() * StaleThresholdMultiplier
+	s.configMu.RLock()
+	d := s.offlineThresholdSecLocked()
+	s.configMu.RUnlock()
+	return time.Duration(d) * StaleThresholdMultiplier
 }
 
 // offlineThresholdFor scales the static offline threshold by the agent's own
@@ -273,7 +301,9 @@ func (s *Server) staleThreshold() time.Duration {
 // online/stale/offline between check-ins. Floor is the static threshold so
 // chatty agents keep tight detection.
 func (s *Server) offlineThresholdFor(a db.Implant) time.Duration {
-	base := s.offlineThreshold()
+	s.configMu.RLock()
+	base := time.Duration(s.offlineThresholdSecLocked()) * time.Second
+	s.configMu.RUnlock()
 	if a.CurrentInterval > 0 {
 		// 3x interval covers the beacon plus jitter and one missed cycle.
 		if d := 3 * time.Duration(a.CurrentInterval) * time.Second; d > base {
@@ -338,10 +368,7 @@ func (s *Server) cleanupGhostAgents() {
 		}
 	}
 
-	retention := s.cfg.Server.CleanupRetentionDays
-	if retention < 1 {
-		retention = DefaultCleanupRetentionDays
-	}
+	retention := s.cleanupRetentionDays()
 	offlineCutoff := time.Now().AddDate(0, 0, -retention)
 	var stale []db.Implant
 	if err := s.db.Where("last_seen < ?", offlineCutoff).Limit(500).Find(&stale).Error; err != nil {

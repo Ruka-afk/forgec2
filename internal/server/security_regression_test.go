@@ -116,7 +116,10 @@ func TestValidateAndSaveConfig_RejectsInvalid(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequest(http.MethodPost, "/save", nil)
-	if s.validateAndSaveConfig(c, "test") {
+	s.configMu.Lock()
+	ok := s.validateAndSaveConfigLocked(c, "test")
+	s.configMu.Unlock()
+	if ok {
 		t.Fatal("validateAndSaveConfig accepted an invalid config")
 	}
 	if w.Code != http.StatusBadRequest {
@@ -130,7 +133,10 @@ func TestValidateAndSaveConfig_RejectsInvalid(t *testing.T) {
 	w = httptest.NewRecorder()
 	c, _ = gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequest(http.MethodPost, "/save", nil)
-	if !s.validateAndSaveConfig(c, "test") {
+	s.configMu.Lock()
+	ok = s.validateAndSaveConfigLocked(c, "test")
+	s.configMu.Unlock()
+	if !ok {
 		t.Fatal("validateAndSaveConfig rejected a valid config")
 	}
 	if w.Code != http.StatusOK {

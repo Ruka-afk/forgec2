@@ -819,6 +819,9 @@ func (s *Server) InitOptimizations(configPath string) {
 
 		slog.Info("Config reload applied successfully")
 	})
+	// r.cfg aliases s.cfg until the first reload re-points it, so diffConfig
+	// must read it under the same lock the settings saves now write under.
+	s.configReloader.TrackLiveConfig(&s.configMu)
 	if err := s.configReloader.Start(); err != nil {
 		slog.Warn("Failed to start config reloader", "error", err)
 	}

@@ -71,7 +71,36 @@ func (s *Server) handleAPISettings(c *gin.Context) {
 	}
 
 	var dbSize int64
-	if fi, err := os.Stat(s.cfg.Database.Path); err == nil {
+	s.configMu.RLock()
+	dbPath := s.cfg.Database.Path
+	// One snapshot: every field below is mutated by the settings save
+	// handlers (or the config reloader) under the write lock, so reading
+	// them here unlocked was a data race and could pair a torn mix of old
+	// and new values in one response.
+	cfgSnap := struct {
+		port, offlineThreshold, sessionMaxAge, cleanupRetention int
+		host, tcpAddr, logLevel                                 string
+		tlsEnabled, tcpEnabled                                  bool
+		defaultInterval, defaultJitter                          int
+		defaultSkipTLS                                          bool
+		defaultUA                                               string
+	}{
+		port:             s.cfg.Server.Port,
+		host:             s.cfg.Server.Host,
+		tlsEnabled:       s.cfg.Server.TLSEnabled,
+		tcpEnabled:       s.cfg.Server.TCPEnabled,
+		tcpAddr:          s.cfg.Server.TCPAddr,
+		logLevel:         s.cfg.Logging.Level,
+		offlineThreshold: s.cfg.Server.OfflineThreshold,
+		sessionMaxAge:    s.cfg.Server.SessionMaxAgeHours,
+		cleanupRetention: s.cfg.Server.CleanupRetentionDays,
+		defaultInterval:  s.cfg.Implant.DefaultInterval,
+		defaultJitter:    s.cfg.Implant.DefaultJitter,
+		defaultSkipTLS:   s.cfg.Implant.DefaultSkipTLS,
+		defaultUA:        s.cfg.Implant.DefaultUA,
+	}
+	s.configMu.RUnlock()
+	if fi, err := os.Stat(dbPath); err == nil {
 		dbSize = fi.Size()
 	}
 
@@ -83,15 +112,15 @@ func (s *Server) handleAPISettings(c *gin.Context) {
 		"success": true,
 		"data": gin.H{
 			"server": gin.H{
-				"port":                     s.cfg.Server.Port,
-				"host":                     s.cfg.Server.Host,
-				"tls_enabled":              s.cfg.Server.TLSEnabled,
-				"tcp_enabled":              s.cfg.Server.TCPEnabled,
-				"tcp_addr":                 s.cfg.Server.TCPAddr,
-				"log_level":                s.cfg.Logging.Level,
-				"offline_threshold":        s.cfg.Server.OfflineThreshold,
-				"session_max_age":          s.cfg.Server.SessionMaxAgeHours,
-				"cleanup_retention":        s.cfg.Server.CleanupRetentionDays,
+				"port":                     cfgSnap.port,
+				"host":                     cfgSnap.host,
+				"tls_enabled":              cfgSnap.tlsEnabled,
+				"tcp_enabled":              cfgSnap.tcpEnabled,
+				"tcp_addr":                 cfgSnap.tcpAddr,
+				"log_level":                cfgSnap.logLevel,
+				"offline_threshold":        cfgSnap.offlineThreshold,
+				"session_max_age":          cfgSnap.sessionMaxAge,
+				"cleanup_retention":        cfgSnap.cleanupRetention,
 				"total_agents":             totalAgents,
 				"online_agents":            onlineAgents,
 				"total_listeners":          totalListeners,
@@ -114,10 +143,10 @@ func (s *Server) handleAPISettings(c *gin.Context) {
 				"protocol_outdated_agents": outdatedProtocolAgents,
 			},
 			"agent": gin.H{
-				"default_interval": s.cfg.Implant.DefaultInterval,
-				"default_jitter":   s.cfg.Implant.DefaultJitter,
-				"default_skip_tls": s.cfg.Implant.DefaultSkipTLS,
-				"default_ua":       s.cfg.Implant.DefaultUA,
+				"default_interval": cfgSnap.defaultInterval,
+				"default_jitter":   cfgSnap.defaultJitter,
+				"default_skip_tls": cfgSnap.defaultSkipTLS,
+				"default_ua":       cfgSnap.defaultUA,
 			},
 		},
 	})
@@ -449,10 +478,7 @@ func (s *Server) handlePackerArtifact(c *gin.Context) {
 // ── Settings Maintenance Purge ────────────────────────────────────────
 
 func (s *Server) handleSettingsMaintenancePurge(c *gin.Context) {
-	retentionDays := s.cfg.Server.CleanupRetentionDays
-	if retentionDays <= 0 {
-		retentionDays = 90
-	}
+	retentionDays := s.cleanupRetentionDays()
 	cutoff := time.Now().AddDate(0, 0, -retentionDays)
 
 	type purgeResult struct {

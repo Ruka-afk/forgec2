@@ -34,6 +34,69 @@ func (s *Server) handleSettingsPage(c *gin.Context) {
 		TotalSocks     int64
 		TotalListeners int64
 	}
+
+	// One read window: every s.cfg field this page renders is copied under
+	// configMu.RLock, so the page shows a coherent snapshot and the beacon /
+	// reloader paths that hold the write lock cannot tear a value mid-render
+	// (notably the Malleable header maps, which used to be handed to the
+	// template by reference while a save replaced them).
+	s.configMu.RLock()
+	cfgSnap := struct {
+		dbPath, jwtSecret, certFile                    string
+		defaultInterval, defaultJitter                 int
+		defaultSkipTLS                                 bool
+		defaultUA, workingStart, workingEnd, workingTZ string
+		serverPort                                     int
+		serverHost                                     string
+		tlsEnabled, tcpEnabled                         bool
+		tcpAddr, logLevel                              string
+		offlineThreshold, sessionMaxAge, cleanupRet    int
+		malEnabled                                     bool
+		malStatus                                      int
+		malCT, malPrepend, malAppend                   string
+		malReqPrepend, malReqAppend                    string
+		malHeaders, malReqHeaders                      map[string]string
+	}{
+		dbPath:           s.cfg.Database.Path,
+		jwtSecret:        s.cfg.Server.JWTSecret,
+		certFile:         s.cfg.Server.CertFile,
+		defaultInterval:  s.cfg.Implant.DefaultInterval,
+		defaultJitter:    s.cfg.Implant.DefaultJitter,
+		defaultSkipTLS:   s.cfg.Implant.DefaultSkipTLS,
+		defaultUA:        s.cfg.Implant.DefaultUA,
+		workingStart:     s.cfg.Implant.DefaultWorkingStart,
+		workingEnd:       s.cfg.Implant.DefaultWorkingEnd,
+		workingTZ:        s.cfg.Implant.DefaultWorkingTZ,
+		serverPort:       s.cfg.Server.Port,
+		serverHost:       s.cfg.Server.Host,
+		tlsEnabled:       s.cfg.Server.TLSEnabled,
+		tcpEnabled:       s.cfg.Server.TCPEnabled,
+		tcpAddr:          s.cfg.Server.TCPAddr,
+		logLevel:         s.cfg.Logging.Level,
+		offlineThreshold: s.cfg.Server.OfflineThreshold,
+		sessionMaxAge:    s.cfg.Server.SessionMaxAgeHours,
+		cleanupRet:       s.cfg.Server.CleanupRetentionDays,
+		malEnabled:       s.cfg.Malleable.Enabled,
+		malStatus:        s.cfg.Malleable.StatusCode,
+		malCT:            s.cfg.Malleable.ContentType,
+		malPrepend:       s.cfg.Malleable.Prepend,
+		malAppend:        s.cfg.Malleable.Append,
+		malReqPrepend:    s.cfg.Malleable.RequestPrepend,
+		malReqAppend:     s.cfg.Malleable.RequestAppend,
+		malHeaders:       s.cfg.Malleable.Headers,
+		malReqHeaders:    s.cfg.Malleable.RequestHeaders,
+	}
+	// Copied out so the template never reads a map the next save could replace.
+	malHeaders := make(map[string]string, len(cfgSnap.malHeaders))
+	for k, v := range cfgSnap.malHeaders {
+		malHeaders[k] = v
+	}
+	malReqHeaders := make(map[string]string, len(cfgSnap.malReqHeaders))
+	for k, v := range cfgSnap.malReqHeaders {
+		malReqHeaders[k] = v
+	}
+	s.configMu.RUnlock()
+
 	var counts settingsCounts
 	offlineCutoff := time.Now().Add(-s.offlineThreshold())
 	s.db.Raw(`
@@ -51,7 +114,7 @@ func (s *Server) handleSettingsPage(c *gin.Context) {
 	`, offlineCutoff).Scan(&counts)
 
 	var dbSize int64
-	if fi, err := os.Stat(s.cfg.Database.Path); err == nil {
+	if fi, err := os.Stat(cfgSnap.dbPath); err == nil {
 		dbSize = fi.Size()
 	}
 
@@ -59,9 +122,8 @@ func (s *Server) handleSettingsPage(c *gin.Context) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
-	jwtSecret := s.cfg.Server.JWTSecret
 	jwtMasked := ""
-	if len(jwtSecret) > 0 {
+	if len(cfgSnap.jwtSecret) > 0 {
 		jwtMasked = "****"
 	}
 
@@ -99,17 +161,17 @@ func (s *Server) handleSettingsPage(c *gin.Context) {
 		"CurrentUserId":           currentUserID,
 		"ProfileInfo":             profileInfo,
 		"TotalUsers":              totalUsers,
-		"DefaultInterval":         s.cfg.Implant.DefaultInterval,
-		"DefaultJitter":           s.cfg.Implant.DefaultJitter,
-		"DefaultSkipTLS":          s.cfg.Implant.DefaultSkipTLS,
-		"DefaultUA":               s.cfg.Implant.DefaultUA,
-		"ServerPort":              s.cfg.Server.Port,
-		"ServerHost":              s.cfg.Server.Host,
-		"TLSEnabled":              s.cfg.Server.TLSEnabled,
-		"TCPEnabled":              s.cfg.Server.TCPEnabled,
-		"TCPAddr":                 s.cfg.Server.TCPAddr,
-		"LogLevel":                s.cfg.Logging.Level,
-		"ServerAddress":           fmt.Sprintf("%s:%d", s.cfg.Server.Host, s.cfg.Server.Port),
+		"DefaultInterval":         cfgSnap.defaultInterval,
+		"DefaultJitter":           cfgSnap.defaultJitter,
+		"DefaultSkipTLS":          cfgSnap.defaultSkipTLS,
+		"DefaultUA":               cfgSnap.defaultUA,
+		"ServerPort":              cfgSnap.serverPort,
+		"ServerHost":              cfgSnap.serverHost,
+		"TLSEnabled":              cfgSnap.tlsEnabled,
+		"TCPEnabled":              cfgSnap.tcpEnabled,
+		"TCPAddr":                 cfgSnap.tcpAddr,
+		"LogLevel":                cfgSnap.logLevel,
+		"ServerAddress":           fmt.Sprintf("%s:%d", cfgSnap.serverHost, cfgSnap.serverPort),
 		"DatabasePath":            "***",
 		"DatabaseSize":            dbSize,
 		"DataDir":                 "***",
@@ -132,27 +194,27 @@ func (s *Server) handleSettingsPage(c *gin.Context) {
 		"NumCPU":                  runtime.NumCPU(),
 		"GOOS":                    runtime.GOOS,
 		"GOARCH":                  runtime.GOARCH,
-		"OfflineThreshold":        s.cfg.Server.OfflineThreshold,
-		"SessionMaxAge":           s.cfg.Server.SessionMaxAgeHours,
-		"CleanupRetention":        s.cfg.Server.CleanupRetentionDays,
-		"MalleableEnabled":        s.cfg.Malleable.Enabled,
-		"MalleableStatus":         s.cfg.Malleable.StatusCode,
-		"MalleableCT":             s.cfg.Malleable.ContentType,
-		"MalleableHeaders":        s.cfg.Malleable.Headers,
-		"MalleablePrepend":        s.cfg.Malleable.Prepend,
-		"MalleableAppend":         s.cfg.Malleable.Append,
-		"MalleableRequestPrepend": s.cfg.Malleable.RequestPrepend,
-		"MalleableRequestAppend":  s.cfg.Malleable.RequestAppend,
-		"MalleableRequestHeaders": s.cfg.Malleable.RequestHeaders,
-		"WorkingStart":            s.cfg.Implant.DefaultWorkingStart,
-		"WorkingEnd":              s.cfg.Implant.DefaultWorkingEnd,
-		"WorkingTZ":               s.cfg.Implant.DefaultWorkingTZ,
+		"OfflineThreshold":        cfgSnap.offlineThreshold,
+		"SessionMaxAge":           cfgSnap.sessionMaxAge,
+		"CleanupRetention":        cfgSnap.cleanupRet,
+		"MalleableEnabled":        cfgSnap.malEnabled,
+		"MalleableStatus":         cfgSnap.malStatus,
+		"MalleableCT":             cfgSnap.malCT,
+		"MalleableHeaders":        malHeaders,
+		"MalleablePrepend":        cfgSnap.malPrepend,
+		"MalleableAppend":         cfgSnap.malAppend,
+		"MalleableRequestPrepend": cfgSnap.malReqPrepend,
+		"MalleableRequestAppend":  cfgSnap.malReqAppend,
+		"MalleableRequestHeaders": malReqHeaders,
+		"WorkingStart":            cfgSnap.workingStart,
+		"WorkingEnd":              cfgSnap.workingEnd,
+		"WorkingTZ":               cfgSnap.workingTZ,
 	}
 	for k, v := range stats {
 		data[k] = v
 	}
 
-	certPath := s.cfg.Server.CertFile
+	certPath := cfgSnap.certFile
 	if certPath == "" {
 		certPath = "data/certs/server.crt"
 	}
@@ -172,9 +234,13 @@ func (s *Server) handleSettingsPage(c *gin.Context) {
 	s.renderPageOrJSON(c, data)
 }
 
-// validateAndSaveConfig validates the running config before persisting it so an
-// invalid value entered via the UI cannot be written to disk and break startup.
-func (s *Server) validateAndSaveConfig(c *gin.Context, action string) bool {
+// validateAndSaveConfigLocked validates the running config before persisting
+// it so an invalid value entered via the UI cannot be written to disk and
+// break startup. The caller MUST hold s.configMu for writing: the mutation,
+// the validation and the save then form one atomic window, and the file
+// watcher's reload (which takes the same lock) can never observe a
+// half-applied form of the operator's edit.
+func (s *Server) validateAndSaveConfigLocked(c *gin.Context, action string) bool {
 	if err := s.cfg.Validate(); err != nil {
 		slog.Warn("Config validation failed before save", "action", action, "err", err)
 		respondError(c, http.StatusBadRequest, "Config validation failed")
@@ -200,6 +266,7 @@ func (s *Server) handleSaveAgentConfig(c *gin.Context) {
 	workingEnd := c.PostForm("working_end")
 	workingTZ := c.PostForm("working_tz")
 
+	s.configMu.Lock()
 	if interval != "" {
 		var intInterval int
 		if _, err := fmt.Sscanf(interval, "%d", &intInterval); err == nil && intInterval >= 0 {
@@ -216,6 +283,7 @@ func (s *Server) handleSaveAgentConfig(c *gin.Context) {
 
 	if userAgent != "" {
 		if len(userAgent) > 256 || !isPrintableASCII(userAgent) {
+			s.configMu.Unlock()
 			respondError(c, http.StatusBadRequest, "Invalid user agent")
 			return
 		}
@@ -228,11 +296,14 @@ func (s *Server) handleSaveAgentConfig(c *gin.Context) {
 	s.cfg.Implant.DefaultWorkingEnd = workingEnd
 	s.cfg.Implant.DefaultWorkingTZ = workingTZ
 
-	if !s.validateAndSaveConfig(c, "agent_config") {
+	if !s.validateAndSaveConfigLocked(c, "agent_config") {
+		s.configMu.Unlock()
 		return
 	}
+	intervalOut, jitterOut, skipOut := s.cfg.Implant.DefaultInterval, s.cfg.Implant.DefaultJitter, s.cfg.Implant.DefaultSkipTLS
+	s.configMu.Unlock()
 
-	slog.Info("Agent config updated", "interval", s.cfg.Implant.DefaultInterval, "jitter", s.cfg.Implant.DefaultJitter, "skip_tls", s.cfg.Implant.DefaultSkipTLS)
+	slog.Info("Agent config updated", "interval", intervalOut, "jitter", jitterOut, "skip_tls", skipOut)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Agent configuration saved successfully"})
 }
 
@@ -367,6 +438,7 @@ func (s *Server) handleSaveServerConfig(c *gin.Context) {
 	sessionMaxAge := c.PostForm("session_max_age")
 	cleanupRetention := c.PostForm("cleanup_retention")
 
+	s.configMu.Lock()
 	validLevels := map[string]bool{"debug": true, "info": true, "warn": true, "error": true}
 	if logLevel != "" && validLevels[logLevel] {
 		s.cfg.Logging.Level = logLevel
@@ -398,15 +470,19 @@ func (s *Server) handleSaveServerConfig(c *gin.Context) {
 		}
 	}
 
-	if !s.validateAndSaveConfig(c, "server_config") {
+	if !s.validateAndSaveConfigLocked(c, "server_config") {
+		s.configMu.Unlock()
 		return
 	}
+	levelOut, tcpOut := s.cfg.Logging.Level, s.cfg.Server.TCPEnabled
+	s.configMu.Unlock()
 
-	slog.Info("Server config updated", "log_level", s.cfg.Logging.Level, "tcp_enabled", s.cfg.Server.TCPEnabled)
+	slog.Info("Server config updated", "log_level", levelOut, "tcp_enabled", tcpOut)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Server configuration saved"})
 }
 
 func (s *Server) handleSaveMalleableProfile(c *gin.Context) {
+	s.configMu.Lock()
 	s.cfg.Malleable.Enabled = c.PostForm("enabled") == "true"
 	if sc := c.PostForm("status_code"); sc != "" {
 		if v, err := strconv.Atoi(sc); err == nil && v >= MinHTTPStatusCode && v <= MaxHTTPStatusCode {
@@ -461,11 +537,14 @@ func (s *Server) handleSaveMalleableProfile(c *gin.Context) {
 		}
 	}
 
-	if !s.validateAndSaveConfig(c, "malleable_profile") {
+	if !s.validateAndSaveConfigLocked(c, "malleable_profile") {
+		s.configMu.Unlock()
 		return
 	}
+	enabledOut, statusOut := s.cfg.Malleable.Enabled, s.cfg.Malleable.StatusCode
+	s.configMu.Unlock()
 
-	slog.Info("Malleable profile saved", "enabled", s.cfg.Malleable.Enabled, "status_code", s.cfg.Malleable.StatusCode)
+	slog.Info("Malleable profile saved", "enabled", enabledOut, "status_code", statusOut)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Malleable C2 profile saved"})
 }
 
@@ -530,14 +609,20 @@ func (s *Server) handleRegenerateJWT(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "Failed to generate JWT secret")
 		return
 	}
+	s.configMu.Lock()
 	s.cfg.Server.JWTSecret = hex.EncodeToString(b)
-	if !s.validateAndSaveConfig(c, "regenerate_jwt") {
+	if !s.validateAndSaveConfigLocked(c, "regenerate_jwt") {
+		s.configMu.Unlock()
 		return
 	}
+	// InitJWTSecret reads (and, for a short/empty secret, rewrites) the live
+	// config, so it runs inside the same lock window as the rotation.
 	if err := middleware.InitJWTSecret(s.cfg, s.configPath); err != nil {
+		s.configMu.Unlock()
 		respondError(c, http.StatusInternalServerError, "Failed to reinitialize JWT secret")
 		return
 	}
+	s.configMu.Unlock()
 
 	slog.Info("JWT secret regenerated (independent encryption keys left untouched)")
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "JWT secret regenerated successfully"})
