@@ -4,9 +4,9 @@
 
 | Version | Supported |
 |---------|-----------|
-| 2.6.x   | Yes       |
-| 2.5.x   | Yes       |
-| < 2.5   | No        |
+| 2.7.x   | Yes       |
+| 2.6.x   | Security fixes only |
+| < 2.6   | No        |
 
 ## Reporting a Vulnerability
 
@@ -14,7 +14,10 @@ If you discover a security vulnerability in ForgeC2, please report it responsibl
 
 **Do not** open public GitHub issues for security vulnerabilities.
 
-Instead, email security details to: **security@forgec2.dev** (or the maintainer's private contact).
+Use GitHub's private advisory form:
+<https://github.com/r0si/forgec2/security/advisories/new>
+
+Alternatively, email security details to: **security@forgec2.dev** (or the maintainer's private contact).
 
 ### What to include
 

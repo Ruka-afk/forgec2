@@ -59,7 +59,7 @@ forgec2/
 │   ├── DEPLOY.md / TRANSPORT_E2E.md / LISTENER_TLS.md / REMOTE_DESKTOP.md / CAPACITY.md
 ├── .github/workflows/          # ci.yml（gofmt/vet/test/OpenAPI）+ release.yml
 ├── docker-compose.yml / Dockerfile / config.yaml / go.mod / Makefile
-└── README.md / README.en.md / ARCHITECTURE.md / SECURITY.md / AGENTS.md
+└── README.md / README.zh.md / ARCHITECTURE.md / SECURITY.md / AGENTS.md
 ```
 
 **目录原则**

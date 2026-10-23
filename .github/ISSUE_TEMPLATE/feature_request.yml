@@ -1,0 +1,62 @@
+name: Feature request
+description: Suggest a capability, a transport, an integration or a workflow improvement.
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For open-ended ideas and "how do I..." questions, use
+        [Discussions](https://github.com/r0si/forgec2/discussions) instead — issues
+        are for concrete, actionable proposals.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the engagement or operator workflow that is currently awkward.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should ForgeC2 do? UI mockups, API shapes and config keys are welcome.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Payload generation
+        - Transports / listeners / P2P
+        - Implant task (new or improved)
+        - Web console / UX
+        - API / plugins / scripting
+        - AI assistant
+        - Deployment / operations
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Existing workarounds, other tools, or why the obvious approach does not fit.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and discussions for this idea.
+          required: true
+        - label: This is a capability request, not a security vulnerability report.
+          required: true

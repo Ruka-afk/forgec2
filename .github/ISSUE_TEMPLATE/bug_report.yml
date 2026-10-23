@@ -1,0 +1,113 @@
+name: Bug report
+description: Something in the console, the API, the agent or a payload build is broken.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a report.
+
+        **Do not report security vulnerabilities here.** Use the
+        [private advisory form](https://github.com/r0si/forgec2/security/advisories/new)
+        instead — see [SECURITY.md](https://github.com/r0si/forgec2/blob/main/SECURITY.md).
+
+        Before filing, please search existing issues and check that you are on the
+        latest release.
+
+  - type: input
+    id: version
+    attributes:
+      label: ForgeC2 version
+      description: Shown under Settings → About, or in the `forgec2-server -version` output.
+      placeholder: "2.7.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options:
+        - One-click archive (start.cmd / start.sh)
+        - Docker Compose
+        - Built from source
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Server platform
+      options:
+        - Windows amd64
+        - Windows arm64
+        - Linux amd64
+        - Linux arm64
+        - macOS (built from source)
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Web console
+        - REST API / OpenAPI
+        - Beacon check-in or listener
+        - Payload generation or build
+        - AI assistant
+        - Plugin or scripting
+        - Deployment / upgrade / hot update
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did you get instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest sequence that reproduces it. Screenshots help.
+      placeholder: |
+        1. Start the server with ...
+        2. Open Settings → ...
+        3. Click ...
+        4. See error ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: |
+        `logs/forgec2.log` and the browser console. Redact beacon keys, JWT secrets,
+        API keys, hostnames and anything else sensitive.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: I am on the latest release (or `main`).
+          required: true
+        - label: I removed secrets and sensitive data from logs and screenshots.
+          required: true
+        - label: This is not a security vulnerability (those go through the private advisory form).
+          required: true

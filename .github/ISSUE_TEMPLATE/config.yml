@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and open-ended ideas
+    url: https://github.com/r0si/forgec2/discussions
+    about: Ask for help, share a setup or discuss a half-formed idea.
+  - name: Security vulnerability
+    url: https://github.com/r0si/forgec2/security/advisories/new
+    about: Report privately. Never open a public issue for a vulnerability.
+  - name: Plugin authoring guide
+    url: https://github.com/r0si/forgec2/blob/main/docs/PLUGIN_AUTHORING.md
+    about: Manifest schema, tiers, signing and the local validation commands.
