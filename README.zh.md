@@ -4,9 +4,12 @@
 
 [![CI](https://github.com/r0si/forgec2/actions/workflows/ci.yml/badge.svg)](https://github.com/r0si/forgec2/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/r0si/forgec2)](https://github.com/r0si/forgec2/releases)
-[![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)](go.mod)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Downloads](https://img.shields.io/github/downloads/r0si/forgec2/total)](https://github.com/r0si/forgec2/releases)
+[![Stars](https://img.shields.io/github/stars/r0si/forgec2)](https://github.com/r0si/forgec2/stargazers)
+[![Contributors](https://img.shields.io/github/contributors/r0si/forgec2)](https://github.com/r0si/forgec2/graphs/contributors)
+[![Last commit](https://img.shields.io/github/last-commit/r0si/forgec2)](https://github.com/r0si/forgec2/commits/main)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)](go.mod)
 
 [English](README.md) · **中文** · [快速开始](#快速开始) · [截图](#截图) · [文档](#文档)
 
