@@ -182,8 +182,14 @@ func (s *Server) syncSIEM() error {
 }
 
 func (s *Server) syncLogLevel() error {
-	if !SetLogLevel(s.cfg.Logging.Level) {
-		return fmt.Errorf("unknown logging.level %q, keeping previous", s.cfg.Logging.Level)
+	// Apply hooks run after the reloader released configMu (CopyFrom window),
+	// so read the level under the lock like every other request path: a
+	// settings save can mutate it concurrently.
+	s.configMu.RLock()
+	level := s.cfg.Logging.Level
+	s.configMu.RUnlock()
+	if !SetLogLevel(level) {
+		return fmt.Errorf("unknown logging.level %q, keeping previous", level)
 	}
 	return nil
 }

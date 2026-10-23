@@ -750,15 +750,18 @@ func (s *Server) handleGetAgentConfig(c *gin.Context) {
 		return
 	}
 
-	sleep := s.cfg.Implant.DefaultInterval
+	s.configMu.RLock()
+	defInterval, defJitter, defUA := s.cfg.Implant.DefaultInterval, s.cfg.Implant.DefaultJitter, s.cfg.Implant.DefaultUA
+	s.configMu.RUnlock()
+	sleep := defInterval
 	if agent.CurrentInterval > 0 {
 		sleep = agent.CurrentInterval
 	}
-	jitter := s.cfg.Implant.DefaultJitter
+	jitter := defJitter
 	if agent.CurrentJitter > 0 {
 		jitter = agent.CurrentJitter
 	}
-	ua := s.cfg.Implant.DefaultUA
+	ua := defUA
 
 	var pendingTask db.Task
 	hasPending := false

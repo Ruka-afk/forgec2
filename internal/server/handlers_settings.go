@@ -666,6 +666,12 @@ func (s *Server) handleDownloadConfig(c *gin.Context) {
 	// v2 fleet beacon key, SSH password, extc2 API token) — none may leak via
 	// the admin "Download Config" endpoint (S2). Keep this list in sync with
 	// config.go's secret fields.
+	//
+	// The snapshot runs under the config read lock: JWT regeneration mutates
+	// Server.JWTSecret under the write lock, and a torn read here would put a
+	// half-old/half-new value in the redaction list — leaking the real secret
+	// into the download.
+	s.configMu.RLock()
 	secrets := []string{
 		s.cfg.Server.JWTSecret,
 		s.cfg.Server.BeaconKey,
@@ -683,6 +689,7 @@ func (s *Server) handleDownloadConfig(c *gin.Context) {
 		s.cfg.Crypto.BackupKey,
 		s.cfg.RateLimit.ExtC2.APIToken,
 	}
+	s.configMu.RUnlock()
 	for _, secret := range secrets {
 		if secret != "" {
 			redacted = strings.ReplaceAll(redacted, secret, "****")
@@ -690,6 +697,15 @@ func (s *Server) handleDownloadConfig(c *gin.Context) {
 	}
 	c.Header("Content-Disposition", "attachment; filename=config.yaml")
 	c.Data(http.StatusOK, "application/x-yaml", []byte(redacted))
+}
+
+// authConfigured reports whether a bootstrap admin password hash exists. The
+// field is rewritten by a hot config reload under the write lock, so this
+// reads it under the read lock.
+func (s *Server) authConfigured() bool {
+	s.configMu.RLock()
+	defer s.configMu.RUnlock()
+	return s.cfg != nil && s.cfg.Auth.PasswordHash != ""
 }
 
 func (s *Server) handleAuditLogPage(c *gin.Context) {
@@ -702,7 +718,7 @@ func (s *Server) handleAuditLogPage(c *gin.Context) {
 	data := gin.H{
 		"Title":     "ForgeC2 - Security Audit",
 		"ActiveNav": "audit",
-		"Online":    s.cfg.Auth.PasswordHash != "",
+		"Online":    s.authConfigured(),
 		"UserList":  users,
 	}
 	for k, v := range stats {
@@ -874,6 +890,9 @@ func isPrintableASCII(s string) bool {
 }
 
 func (s *Server) validatePasswordComplexity(password string) error {
+	// The policy is mutated by a hot config reload (CopyFrom under the write
+	// lock), so read it under the read lock. Callers hold no config lock.
+	s.configMu.RLock()
 	policy := &s.cfg.PasswordPolicy
 	minLen := 8
 	requireUpper := true
@@ -889,6 +908,7 @@ func (s *Server) validatePasswordComplexity(password string) error {
 		requireDigit = policy.RequireDigit
 		requireSymbol = policy.RequireSymbol
 	}
+	s.configMu.RUnlock()
 	if len(password) < minLen {
 		return fmt.Errorf("password must be at least %d characters", minLen)
 	}

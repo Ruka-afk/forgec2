@@ -154,13 +154,16 @@ func listenerOverlapsMainAddr(host string, port int, mainHost string, mainPort i
 // startTCPListener starts a raw TCP transport listener for agents using Protocol=tcp.
 // Uses length-prefixed JSON (4-byte BE len + JSON) for BeaconRequest / BeaconResponse.
 func (s *Server) startTCPListener() {
-	ln, err := net.Listen("tcp", s.cfg.Server.TCPAddr)
+	s.configMu.RLock()
+	addr := s.cfg.Server.TCPAddr
+	s.configMu.RUnlock()
+	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		slog.Error("Failed to start TCP listener", "addr", s.cfg.Server.TCPAddr, "err", err)
+		slog.Error("Failed to start TCP listener", "addr", addr, "err", err)
 		return
 	}
 	s.tcpLn = ln
-	slog.Info("TCP transport layer listening", "addr", s.cfg.Server.TCPAddr)
+	slog.Info("TCP transport layer listening", "addr", addr)
 
 	for {
 		conn, err := ln.Accept()
@@ -169,7 +172,12 @@ func (s *Server) startTCPListener() {
 			case <-s.ctx.Done():
 				return
 			default:
-				slog.Error("TCP accept error", "addr", s.cfg.Server.TCPAddr, "err", err)
+				// Logged from the captured address: the socket is bound to
+				// it for its whole life, and the settings page can rewrite
+				// cfg.Server.TCPAddr concurrently (server.tcp is static in
+				// the reload contract, so the running listener keeps the
+				// old one).
+				slog.Error("TCP accept error", "addr", addr, "err", err)
 				continue
 			}
 		}

@@ -389,13 +389,16 @@ func (s *Server) handleGeneratePage(c *gin.Context) {
 	}
 
 	stats := s.getNavStats(c)
+	s.configMu.RLock()
+	defInt, defJitter, defUA, defSkipTLS := s.cfg.Implant.DefaultInterval, s.cfg.Implant.DefaultJitter, s.cfg.Implant.DefaultUA, s.cfg.Implant.DefaultSkipTLS
+	s.configMu.RUnlock()
 	data := gin.H{
 		"Title":              "ForgeC2 - Generate Agent",
 		"ActiveNav":          "generate",
-		"DefaultInt":         s.cfg.Implant.DefaultInterval,
-		"DefaultJitter":      s.cfg.Implant.DefaultJitter,
-		"DefaultUA":          s.cfg.Implant.DefaultUA,
-		"DefaultSkipTLS":     s.cfg.Implant.DefaultSkipTLS,
+		"DefaultInt":         defInt,
+		"DefaultJitter":      defJitter,
+		"DefaultUA":          defUA,
+		"DefaultSkipTLS":     defSkipTLS,
 		"Listeners":          listeners,
 		"ProfilePresetsJSON": template.JS(strings.ReplaceAll(string(presetsJSON), "</script>", "<\\/script>")),
 	}

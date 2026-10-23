@@ -170,8 +170,15 @@ func (s *Server) SetStaticFS(staticFS fs.FS) {
 
 // malleableEnabled reports whether a malleable C2 profile is active (its GET
 // URIs must never be shadowed by the SPA fallback). Nil-safe for tests.
+// Runs on every static-asset request, so it takes the same read lock the
+// malleable save uses — an unlocked read here raced the settings write.
 func (s *Server) malleableEnabled() bool {
-	return s.cfg != nil && s.cfg.Malleable.Enabled
+	if s == nil || s.cfg == nil {
+		return false
+	}
+	s.configMu.RLock()
+	defer s.configMu.RUnlock()
+	return s.cfg.Malleable.Enabled
 }
 
 // spaAssetExists reports whether the raw static FS holds a real file at path
