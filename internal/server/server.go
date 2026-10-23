@@ -52,7 +52,11 @@ type Server struct {
 	tunEngine      *tunEngine
 	startTime      time.Time
 
-	dnsListener           *DNSBeaconListener
+	dnsListener *DNSBeaconListener
+	// dnsListenerMu guards the dnsListener pointer: the status poll, the
+	// start/stop handlers and shutdown read and swap it concurrently, and an
+	// unguarded read raced a start (a half-visible pointer) or a stop.
+	dnsListenerMu         sync.Mutex
 	icmpListener          *ICMPBeaconListener
 	grpcListener          *GRPCListener
 	sshListener           *SSHBeaconListener

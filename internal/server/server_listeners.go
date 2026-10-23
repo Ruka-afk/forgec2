@@ -359,15 +359,18 @@ func (s *Server) startExtraDNSListener(key string) error {
 		return fmt.Errorf("DNS listener record not found for domain %s: %w", key[6:], err)
 	}
 	addr := l.DNSListenAddr
+	s.configMu.RLock()
+	fallbackAddr, obscure := s.cfg.Server.DNSAddr, s.cfg.Server.DNSObscure
+	s.configMu.RUnlock()
 	if addr == "" {
-		addr = s.cfg.Server.DNSAddr
+		addr = fallbackAddr
 	}
 	if addr == "" {
 		addr = ":53"
 	}
 
 	dl := NewDNSBeaconListener(l.DNSDomain, l.Host, l.ID, addr)
-	dl.SetObscure(s.cfg.Server.DNSObscure)
+	dl.SetObscure(obscure)
 	dl.SetHandler(s.makeBeaconHandler("dns"))
 
 	// Start() binds synchronously and returns the bind error — calling it in

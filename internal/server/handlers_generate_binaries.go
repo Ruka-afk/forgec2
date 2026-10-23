@@ -414,6 +414,7 @@ func (s *Server) buildImplantConfig(form *binaryGenForm) (payload.ImplantConfig,
 	// wired into builds.
 	s.configMu.RLock()
 	defWorkStart, defWorkEnd, defWorkTZ := s.cfg.Implant.DefaultWorkingStart, s.cfg.Implant.DefaultWorkingEnd, s.cfg.Implant.DefaultWorkingTZ
+	dnsObscure := s.cfg != nil && s.cfg.Server.DNSObscure
 	s.configMu.RUnlock()
 
 	var err error
@@ -473,7 +474,7 @@ func (s *Server) buildImplantConfig(form *binaryGenForm) (payload.ImplantConfig,
 		ExpiryDate:            form.ExpiryDate,
 		SelfCheck:             form.SelfCheck,
 		ContentLengthJitter:   form.ContentLengthJitter,
-		DNSObscure:            s.cfg != nil && s.cfg.Server.DNSObscure,
+		DNSObscure:            dnsObscure,
 		IconB64:               form.IconB64,
 		IconPreset:            form.IconPreset,
 		FileDescription:       form.FileDescription,

@@ -48,9 +48,12 @@ func (s *Server) shutdown() {
 	if s.icmpListener != nil {
 		s.icmpListener.Close()
 	}
-	if s.dnsListener != nil {
+	s.dnsListenerMu.Lock()
+	dnsLn := s.dnsListener
+	s.dnsListenerMu.Unlock()
+	if dnsLn != nil {
 		slog.Info("Shutting down DNS listener")
-		s.dnsListener.Close()
+		dnsLn.Close()
 	}
 	if s.grpcListener != nil {
 		slog.Info("Shutting down gRPC listener")
@@ -454,18 +457,23 @@ func (s *Server) Run() error {
 	}
 
 	// Start DNS C2 listener if enabled
-	if s.cfg.Server.DNSEnabled && s.cfg.Server.DNSDomain != "" {
-		dl := NewDNSBeaconListener(s.cfg.Server.DNSDomain, s.cfg.Server.Host, 0, s.cfg.Server.DNSAddr)
-		dl.SetObscure(s.cfg.Server.DNSObscure)
+	s.configMu.RLock()
+	dnsEnabled, dnsDomain, dnsAddr, dnsHost, dnsObscure := s.cfg.Server.DNSEnabled, s.cfg.Server.DNSDomain, s.cfg.Server.DNSAddr, s.cfg.Server.Host, s.cfg.Server.DNSObscure
+	s.configMu.RUnlock()
+	if dnsEnabled && dnsDomain != "" {
+		dl := NewDNSBeaconListener(dnsDomain, dnsHost, 0, dnsAddr)
+		dl.SetObscure(dnsObscure)
 		dl.SetHandler(s.makeBeaconHandler("dns"))
+		s.dnsListenerMu.Lock()
 		s.dnsListener = dl
+		s.dnsListenerMu.Unlock()
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
 			// Start() binds synchronously before returning; surface bind
 			// failures instead of logging "starting" with a dead listener.
 			if err := dl.Start(); err != nil {
-				slog.Error("DNS C2 listener failed to start", "domain", s.cfg.Server.DNSDomain, "addr", s.cfg.Server.DNSAddr, "err", err)
+				slog.Error("DNS C2 listener failed to start", "domain", dnsDomain, "addr", dnsAddr, "err", err)
 			}
 		}()
 	}

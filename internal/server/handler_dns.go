@@ -29,14 +29,19 @@ type dnsStatusResponse struct {
 }
 
 func (s *Server) handleDNSStatus(c *gin.Context) {
+	s.configMu.RLock()
 	resp := dnsStatusResponse{
 		Running: false,
 		Domain:  s.cfg.Server.DNSDomain,
 		Addr:    s.cfg.Server.DNSAddr,
 		AgentIP: s.cfg.Server.Host,
 	}
+	s.configMu.RUnlock()
 
-	if dl := s.dnsListener; dl != nil {
+	s.dnsListenerMu.Lock()
+	dl := s.dnsListener
+	s.dnsListenerMu.Unlock()
+	if dl != nil {
 		resp.Running = dl.IsRunning()
 		resp.Domain = dl.Domain
 		resp.Addr = dl.Addr
@@ -47,6 +52,14 @@ func (s *Server) handleDNSStatus(c *gin.Context) {
 }
 
 func (s *Server) handleDNSStart(c *gin.Context) {
+	// The whole check -> bind -> publish sequence runs under dnsListenerMu:
+	// two concurrent starts used to both pass the running check and both
+	// bind, leaking one socket (the second assignment overwrote the first).
+	// Start() binds synchronously, so the hold is short and operator-only.
+	// Lock order is dnsListenerMu -> configMu; no path takes them nested in
+	// the other direction.
+	s.dnsListenerMu.Lock()
+	defer s.dnsListenerMu.Unlock()
 	if s.dnsListener != nil && s.dnsListener.IsRunning() {
 		c.JSON(http.StatusOK, gin.H{"status": "already_running"})
 		return
@@ -60,6 +73,7 @@ func (s *Server) handleDNSStart(c *gin.Context) {
 	}
 	_ = c.ShouldBindJSON(&req)
 
+	s.configMu.Lock()
 	domain := req.Domain
 	if domain == "" {
 		domain = s.cfg.Server.DNSDomain
@@ -71,16 +85,16 @@ func (s *Server) handleDNSStart(c *gin.Context) {
 	if addr == "" {
 		addr = ":53"
 	}
-	s.cfg.Lock()
 	if domain != "" {
 		s.cfg.Server.DNSDomain = domain
 	}
 	s.cfg.Server.DNSAddr = addr
 	s.cfg.Server.DNSEnabled = true
-	s.cfg.Unlock()
+	host, obscure := s.cfg.Server.Host, s.cfg.Server.DNSObscure
+	s.configMu.Unlock()
 
-	dl := NewDNSBeaconListener(domain, s.cfg.Server.Host, 0, addr)
-	dl.SetObscure(s.cfg.Server.DNSObscure)
+	dl := NewDNSBeaconListener(domain, host, 0, addr)
+	dl.SetObscure(obscure)
 	dl.SetHandler(s.makeBeaconHandler("dns"))
 
 	if err := dl.Start(); err != nil {
@@ -92,12 +106,15 @@ func (s *Server) handleDNSStart(c *gin.Context) {
 }
 
 func (s *Server) handleDNSStop(c *gin.Context) {
-	if s.dnsListener == nil || !s.dnsListener.IsRunning() {
+	s.dnsListenerMu.Lock()
+	defer s.dnsListenerMu.Unlock()
+	dl := s.dnsListener
+	if dl == nil || !dl.IsRunning() {
 		c.JSON(http.StatusOK, gin.H{"status": "not_running"})
 		return
 	}
 
-	if err := s.dnsListener.Stop(); err != nil {
+	if err := dl.Stop(); err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "DNS"))
 		return
 	}
