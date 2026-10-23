@@ -39,12 +39,52 @@ var roeAlwaysAllowed = map[string]bool{
 	"set_sleep": true, "help": true, "hostinfo": true,
 }
 
+// roeConfig is an immutable snapshot of the Rules-of-Engagement gate.
+//
+// The RoE section is hot-reloadable (diffConfig's "roe" token), and a reload
+// swaps the whole struct under configMu's write lock. These checks read it on
+// every task-creation path, so an unlocked read was a data race — and this is
+// a security boundary: a torn read of a slice header could evaluate a target
+// against a half-old/half-new allow list and let a denied IP through.
+//
+// The slices are shared by reference and that is safe: CopyFrom replaces the
+// headers, it never writes a live backing array, so a snapshot keeps reading
+// the generation it captured.
+type roeConfig struct {
+	enabled      bool
+	deny         []string
+	allow        []string
+	denyDomains  []string
+	allowDomains []string
+}
+
+// roeConfig reads the gate under the config read lock.
+func (s *Server) roeConfig() roeConfig {
+	s.configMu.RLock()
+	defer s.configMu.RUnlock()
+	return s.roeConfigLocked()
+}
+
+// roeConfigLocked reads the gate. The caller MUST hold s.configMu.
+func (s *Server) roeConfigLocked() roeConfig {
+	if s.cfg == nil {
+		return roeConfig{}
+	}
+	return roeConfig{
+		enabled:      s.cfg.Roe.Enabled,
+		deny:         s.cfg.Roe.DenyCIDRs,
+		allow:        s.cfg.Roe.AllowCIDRs,
+		denyDomains:  s.cfg.Roe.DenyDomains,
+		allowDomains: s.cfg.Roe.AllowDomains,
+	}
+}
+
 // checkRoE is the Rules-of-Engagement gate for creation paths that do not
 // already hold the agent row: it resolves the row, then hands off to
 // checkRoELoaded. Batch paths that loaded the agents up front call
 // checkRoELoaded directly to avoid one point SELECT per agent.
 func (s *Server) checkRoE(agentID, taskType, command, data, path string) error {
-	if s.cfg == nil || !s.cfg.Roe.Enabled {
+	if !s.roeConfig().enabled {
 		return nil
 	}
 	if roeAlwaysAllowed[taskType] {
@@ -65,17 +105,18 @@ func (s *Server) checkRoE(agentID, taskType, command, data, path string) error {
 // empty strings parse to nil and are skipped, so a zero-valued agent (row
 // not found) is equivalent to the not-found case in checkRoE.
 func (s *Server) checkRoELoaded(agent db.Implant, taskType, command, data, path string) error {
-	if s.cfg == nil || !s.cfg.Roe.Enabled {
+	roe := s.roeConfig()
+	if !roe.enabled {
 		return nil
 	}
 	if roeAlwaysAllowed[taskType] {
 		return nil
 	}
 
-	deny := parseCIDRs(s.cfg.Roe.DenyCIDRs)
-	allow := parseCIDRs(s.cfg.Roe.AllowCIDRs)
-	denyDomains := normalizeDomains(s.cfg.Roe.DenyDomains)
-	allowDomains := normalizeDomains(s.cfg.Roe.AllowDomains)
+	deny := parseCIDRs(roe.deny)
+	allow := parseCIDRs(roe.allow)
+	denyDomains := normalizeDomains(roe.denyDomains)
+	allowDomains := normalizeDomains(roe.allowDomains)
 
 	for _, ipStr := range []string{agent.PublicIP, agent.IP} {
 		ip := net.ParseIP(strings.TrimSpace(ipStr))
@@ -189,10 +230,15 @@ func cidrContains(nets []net.IPNet, ip net.IP) bool {
 }
 
 func (s *Server) queueAutoRecon(agent db.Implant) {
-	if s.cfg == nil {
-		return
+	s.configMu.RLock()
+	var types []string
+	if s.cfg != nil {
+		types = s.cfg.Server.AutoRecon
 	}
-	types := s.cfg.Server.AutoRecon
+	s.configMu.RUnlock()
+	// server.auto_recon is hot-reloadable; CopyFrom replaces the slice
+	// header under the write lock, so read it locked and iterate the
+	// snapshot (the backing array is never written in place).
 	if len(types) == 0 {
 		return
 	}
