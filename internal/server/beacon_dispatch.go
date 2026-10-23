@@ -94,7 +94,13 @@ func (s *Server) fetchPendingTasks(uuid string, limits ...int) []task {
 		slog.Error("Failed to claim pending tasks", "agent_id", uuid, "error", err)
 	}
 
-	slog.Info("Beacon fetching pending tasks", "agent_id", uuid, "pending_count", len(claimedTasks))
+	// Steady-state (nothing claimed) is Debug; a dispatch that hands work to
+	// an implant stays at Info so the operator log shows command delivery.
+	if len(claimedTasks) > 0 {
+		slog.Info("Beacon fetching pending tasks", "agent_id", uuid, "pending_count", len(claimedTasks))
+	} else {
+		slog.Debug("Beacon fetching pending tasks", "agent_id", uuid, "pending_count", 0)
+	}
 
 	tasks := make([]task, len(claimedTasks))
 	for i, t := range claimedTasks {

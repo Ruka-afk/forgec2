@@ -312,8 +312,15 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 				Data:      map[string]interface{}{"new": false, "reconnected": true, "prev_status": prevStatus, "ip": agent.IP},
 			})
 			s.fireAgentConnectHook(agent, false, now)
+			// Status transitions stay at Info; the steady-state check-in does
+			// not. The beacon path runs once per implant per sleep window, so
+			// an unconditional Info line here floods the log at ~5k lines/s on
+			// a single loaded core and buries the transition operators
+			// actually read. The audit/event rows above still record it.
+			slog.Info("Beacon processed", "agent_id", req.UUID, "last_seen", now, "status", "online", "prev_status", prevStatus)
+		} else {
+			slog.Debug("Beacon processed", "agent_id", req.UUID, "last_seen", now, "status", "online", "prev_status", prevStatus)
 		}
-		slog.Info("Beacon processed", "agent_id", req.UUID, "last_seen", now, "status", "online", "prev_status", prevStatus)
 	}
 
 	return agent, isNewAgent

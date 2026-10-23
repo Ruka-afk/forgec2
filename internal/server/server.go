@@ -72,6 +72,11 @@ type Server struct {
 	// remoteInputLimiter throttles remote desktop input events per
 	// (operator, agent). Value type: zero value works on bare test servers.
 	remoteInputLimiter fixedWindowLimiter
+	// offlineWarnAt is the unix-nanos of the last "OfflineThreshold is
+	// invalid" warning; the getter runs per beacon and per poll, so the warn
+	// is rate-limited (see offlineThreshold). Zero value works on bare test
+	// servers.
+	offlineWarnAt atomic.Int64
 
 	// WebRTC live desktop hub (Pion sessions + embedded TURN). Lazily created
 	// so bare test servers and operators who leave webrtc.enabled=false do not

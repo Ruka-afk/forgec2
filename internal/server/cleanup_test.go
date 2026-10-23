@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"log/slog"
 	"path/filepath"
 	"testing"
@@ -129,5 +130,33 @@ func TestSystemMetricsCreatedAtIndexApplied(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("expected idx_system_metrics_created_at index to exist")
+	}
+}
+
+// TestOfflineThresholdWarnIsRateLimited pins the log-volume fix: the getter
+// runs on every agent list, dashboard poll, metrics scrape and status
+// recompute, so an unthrottled Warn drowned a misconfigured server in its own
+// diagnostic (thousands of lines per minute). One warning per gap, and the
+// default is still returned.
+func TestOfflineThresholdWarnIsRateLimited(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	cfg := &config.Config{}
+	cfg.Server.OfflineThreshold = 0 // invalid → warn path
+	s := &Server{cfg: cfg}
+
+	const calls = 5000
+	for i := 0; i < calls; i++ {
+		if got := s.offlineThreshold(); got != time.Duration(DefaultOfflineThresholdSec)*time.Second {
+			t.Fatalf("offlineThreshold() = %v, want the default", got)
+		}
+	}
+
+	warns := bytes.Count(buf.Bytes(), []byte("OfflineThreshold is invalid"))
+	if warns != 1 {
+		t.Fatalf("got %d warnings across %d calls, want exactly 1 (throttled)", warns, calls)
 	}
 }

@@ -4,6 +4,13 @@ All notable changes to ForgeC2 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Performance
+
+- The beacon hot path no longer writes the log: at default `info` level a steady-state fleet produced **three INFO lines per check-in** ("Beacon processed", "Beacon fetching pending tasks", and — per returned result — "Processing task result"), which at the measured ~1,840 idle check-ins/s/core is ≈5.5k lines/s of pure noise that buries the events operators actually read and burns disk on long campaigns. Steady-state check-ins and zero-task dispatches now log at `Debug`; status transitions (offline→online, which already emit the WS broadcast, the event row and the connect hook), task deliveries (`pending_count > 0`) and task results keep their `Info` line. The idle check-in benchmark now emits zero INFO lines per iteration (measured), while the task-delivery benchmark still logs exactly one dispatch line per delivery.
+- `offlineThreshold()` warned "OfflineThreshold is invalid, using default" on **every call** — the getter runs per agent list, per dashboard poll, per metrics scrape and per status recompute, so one misconfigured value drowned the server in its own diagnostic (measured: thousands of warns during a single benchmark run). The warning is now rate-limited to one per minute per server instance (CAS-guarded so concurrent beacons cannot stampede), pinned by `TestOfflineThresholdWarnIsRateLimited` (5,000 calls → exactly 1 warning, default still returned).
+
 ## [2.7.1] - 2026-10-23
 
 ### Upgrade note

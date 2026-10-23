@@ -240,13 +240,25 @@ func (s *Server) cleanupStaleMapEntries() {
 	}
 }
 
+// offlineThresholdWarnGap throttles the invalid-threshold warning. The getter
+// runs on every agent list, dashboard poll, metrics scrape and status
+// recompute, so an unthrottled Warn emitted one line per call — a
+// misconfigured server drowned in its own diagnostic.
+const offlineThresholdWarnGap = time.Minute
+
 func (s *Server) offlineThreshold() time.Duration {
 	if s.cfg == nil {
 		return time.Duration(DefaultOfflineThresholdSec) * time.Second
 	}
 	d := s.cfg.Server.OfflineThreshold
 	if d < 1 {
-		slog.Warn("OfflineThreshold is invalid, using default", "configured", d, "default", DefaultOfflineThresholdSec)
+		// Zero value works on bare test servers; CAS keeps exactly one writer
+		// warning per gap across concurrent beacons and polls.
+		now := time.Now().UnixNano()
+		last := s.offlineWarnAt.Load()
+		if now-last >= int64(offlineThresholdWarnGap) && s.offlineWarnAt.CompareAndSwap(last, now) {
+			slog.Warn("OfflineThreshold is invalid, using default", "configured", d, "default", DefaultOfflineThresholdSec)
+		}
 		d = DefaultOfflineThresholdSec
 	}
 	return time.Duration(d) * time.Second
