@@ -520,9 +520,9 @@ func (s *Server) handlePurgeAuditLogs(c *gin.Context) {
 }
 
 func (s *Server) handleRegenerateJWT(c *gin.Context) {
-	// All storage keys (loot/ExtC2/TOTP/backup/CSRF) are independent of the
-	// JWT secret, so rotating the JWT cannot invalidate FC2ENC:/FC2EXT:/TOTP
-	// ciphertext — no data re-encryption is required.
+	// All storage keys (loot/ExtC2/backup/CSRF and the credential key) are
+	// independent of the JWT secret, so rotating the JWT cannot invalidate
+	// FC2ENC:/FC2EXT: ciphertext — no data re-encryption is required.
 
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
@@ -577,7 +577,7 @@ func (s *Server) handleDownloadConfig(c *gin.Context) {
 	}
 	redacted := string(data)
 	// Exhaustive list of every secret material in config.yaml. The server
-	// holds the crown-jewel keys (loot/TOTP/CSRF/ExtC2/backup encryption, the
+	// holds the crown-jewel keys (loot/credential/CSRF/ExtC2/backup encryption, the
 	// v2 fleet beacon key, SSH password, extc2 API token) — none may leak via
 	// the admin "Download Config" endpoint (S2). Keep this list in sync with
 	// config.go's secret fields.

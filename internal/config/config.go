@@ -178,7 +178,7 @@ type Config struct {
 		LootKey                 string `yaml:"loot_key"`                   // REQUIRED: 32-byte hex key for AES-256-GCM loot encryption (independent of the JWT secret)
 		ExtC2Key                string `yaml:"extc2_key"`                  // REQUIRED: 32-byte hex key for AES-256-GCM ExtC2 channel encryption (independent)
 		BackupKey               string `yaml:"backup_key"`                 // REQUIRED: 32-byte hex key for encrypted .fbk backups (independent)
-		TotpKey                 string `yaml:"totp_key"`                   // REQUIRED: 32-byte hex key for TOTP secrets / SMTP / SSH-redirector credentials (independent)
+		TotpKey                 string `yaml:"totp_key"`                   // REQUIRED: 32-byte hex key for SMTP / SSH-redirector credentials (independent; name kept for compatibility)
 		CsrfKey                 string `yaml:"csrf_key"`                   // REQUIRED: 32-byte hex key for CSRF token binding (independent)
 		MaxDecryptedPayloadSize int    `yaml:"max_decrypted_payload_size"` // max bytes for decrypted beacon body (0 = default 10MB)
 		UpdateSigningKey        string `yaml:"update_signing_key"`         // OPTIONAL: 32-byte hex Ed25519 pubkey; when set, hot updates require a detached "<checksum>.sig" release signature (empty = checksum-only + warning unless require_release_signature)
@@ -593,7 +593,7 @@ func isWeakDefaultPassword(s string) bool {
 }
 
 // EnsureStorageKeys generates any missing independent storage key
-// (loot/extc2/backup/totp/csrf) and persists the config when possible.
+// (loot/extc2/backup/credential/csrf) and persists the config when possible.
 // Auto-generation previously happened only when the config file was missing,
 // so the documented "cp config.example.yaml config.yaml" path produced a
 // config that failed Validate() with five "key is required" errors. Keys
@@ -609,7 +609,7 @@ func (c *Config) EnsureStorageKeys() error {
 		{"loot key", &c.Crypto.LootKey},
 		{"ExtC2 key", &c.Crypto.ExtC2Key},
 		{"backup key", &c.Crypto.BackupKey},
-		{"TOTP key", &c.Crypto.TotpKey},
+		{"credential key", &c.Crypto.TotpKey},
 		{"CSRF key", &c.Crypto.CsrfKey},
 	}
 	changed := false
@@ -688,7 +688,7 @@ func Load(path string) (*Config, error) {
 				return nil, err
 			}
 			// Fresh deployment: mint independent random storage keys now so
-			// loot/ExtC2/backup/TOTP/CSRF primitives are cryptographically
+			// loot/ExtC2/backup/credential/CSRF primitives are cryptographically
 			// isolated from the JWT secret (a JWT compromise must not decrypt
 			// credentials, backups, or bind CSRF tokens).
 			for _, gen := range []struct {
@@ -699,7 +699,7 @@ func Load(path string) (*Config, error) {
 				{&cfg.Crypto.LootKey, "loot key"},
 				{&cfg.Crypto.ExtC2Key, "ExtC2 key"},
 				{&cfg.Crypto.BackupKey, "backup key"},
-				{&cfg.Crypto.TotpKey, "TOTP key"},
+				{&cfg.Crypto.TotpKey, "credential key"},
 				{&cfg.Crypto.CsrfKey, "CSRF key"},
 				{&cfg.Server.BeaconKey, "beacon key"},
 			} {
@@ -787,7 +787,7 @@ func Load(path string) (*Config, error) {
 		cfg.Crypto.BackupKey = envBackupKey
 	}
 
-	// Env override for TOTP key (takes precedence over config file)
+	// Env override for the credential key (takes precedence over config file)
 	if envTotpKey := os.Getenv("FORGEC2_TOTP_KEY"); envTotpKey != "" {
 		cfg.Crypto.TotpKey = envTotpKey
 	}
@@ -1196,7 +1196,7 @@ func (c *Config) Validate() error {
 		{"crypto.loot_key", c.Crypto.LootKey},     // loot credentials (FC2ENC:)
 		{"crypto.extc2_key", c.Crypto.ExtC2Key},   // ExtC2 channel (FC2EXT:)
 		{"crypto.backup_key", c.Crypto.BackupKey}, // .fbk backups
-		{"crypto.totp_key", c.Crypto.TotpKey},     // TOTP secrets / SMTP / SSH redirector credentials
+		{"crypto.totp_key", c.Crypto.TotpKey},     // SMTP / SSH redirector credentials
 		{"crypto.csrf_key", c.Crypto.CsrfKey},     // CSRF token binding
 	}
 	for _, k := range cryptoKeys {

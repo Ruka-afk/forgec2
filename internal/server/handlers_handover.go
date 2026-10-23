@@ -20,7 +20,7 @@ import (
 // and has_password/has_hash markers only; the live vault stays the source of
 // truth for reusable secrets. GET /api/handover/export?days=30
 func (s *Server) handleHandoverExport(c *gin.Context) {
-	if !s.requireExportStepUp(c, "handover_export", "system") {
+	if !s.requireExportScope(c, "handover_export", "system") {
 		return
 	}
 	days := atoiDefault(c.Query("days"), 30)

@@ -74,9 +74,9 @@ func TestCreateAPIKeyValidation(t *testing.T) {
 	}
 }
 
-// TestExportStepUpAPIKeyScopes proves API-key callers need bulk_export for
+// TestExportScopeAPIKeyScopes proves API-key callers need bulk_export for
 // bulk exports, while legacy full keys stay exempt.
-func TestExportStepUpAPIKeyScopes(t *testing.T) {
+func TestExportScopeAPIKeyScopes(t *testing.T) {
 	s := mustTenantServer(t)
 
 	keyed := func(scopes map[string]bool) (*gin.Context, *httptest.ResponseRecorder) {

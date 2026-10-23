@@ -412,7 +412,7 @@ func shouldLogAction(path string) bool {
 		"/api/config",
 		// Sensitive writes previously missing from the prefix whitelist.
 		"/users/",           // add/edit/toggle/password/force-logout/session revoke
-		"/settings/",        // password, malleable, backup/restore, JWT, TOTP, certs
+		"/settings/",        // password, malleable, backup/restore, JWT, certs
 		"/api/listeners",    // listener create/update/enable/disable/delete
 		"/api/api-keys",     // API key create/revoke/rotate
 		"/api/scripts",      // script save/delete/execute

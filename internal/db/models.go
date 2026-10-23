@@ -61,8 +61,8 @@ const (
 	PermAIConfigure        = "ai.configure"
 	PermAIKnowledgeManage  = "ai.knowledge.manage"
 	// PermBulkExport gates bulk secret exports (credential/task/handover/
-	// report bundles) for API-key callers. Session operators use TOTP
-	// step-up instead; the scope exists so automation keys must opt in.
+	// report bundles) for API-key callers. The scope exists so automation
+	// keys must opt in; interactive session callers pass.
 	PermBulkExport = "bulk_export"
 )
 
@@ -667,18 +667,6 @@ func (r *Redirector) BeforeUpdate(tx *gorm.DB) error {
 	return encryptField(&r.SSHPassword)
 }
 
-func (u *User) BeforeCreate(tx *gorm.DB) error {
-	return encryptField(&u.TOTPSecret)
-}
-
-func (u *User) AfterFind(tx *gorm.DB) error {
-	return decryptField(&u.TOTPSecret)
-}
-
-func (u *User) BeforeUpdate(tx *gorm.DB) error {
-	return encryptField(&u.TOTPSecret)
-}
-
 // TokenEntry records a stolen/created Windows token for an agent.
 // It is the "Token Vault" -- persisted for replay across sessions.
 type TokenEntry struct {
@@ -730,7 +718,6 @@ type User struct {
 	LastActivity        time.Time `json:"last_activity"`   // last page request or API call
 	ForceLogoutAt       time.Time `json:"force_logout_at"` // set by admin to invalidate all sessions
 	LoginAttempts       int       `json:"-"`
-	TOTPSecret          string    `json:"-"` // TOTP secret for 2FA, empty means 2FA disabled
 	CreatedAt           time.Time `gorm:"index" json:"created_at"`
 	UpdatedAt           time.Time `json:"updated_at"`
 }
@@ -1977,17 +1964,6 @@ type AgentStatusEvent struct {
 }
 
 func (AgentStatusEvent) TableName() string { return "agent_status_events" }
-
-type BackupCode struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	UserID    uint      `gorm:"index;not null" json:"user_id"`
-	CodeHash  string    `gorm:"size:128;not null" json:"-"`
-	Used      bool      `gorm:"default:false" json:"used"`
-	UsedAt    time.Time `json:"used_at"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-func (BackupCode) TableName() string { return "backup_codes" }
 
 type UserSession struct {
 	ID                uint      `gorm:"primaryKey" json:"id"`

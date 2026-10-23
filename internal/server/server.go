@@ -307,10 +307,6 @@ type Server struct {
 	agentStatusCooldown   map[string]time.Time
 	agentStatusCooldownMu sync.Mutex
 
-	// Pending TOTP setup state (between generate and enable), keyed by userID
-	pendingTOTP   map[uint]*pendingTOTPState
-	pendingTOTPMu sync.Mutex
-
 	// Reusable HTTP clients with connection pooling
 	httpClient     *http.Client
 	httpClientLong *http.Client

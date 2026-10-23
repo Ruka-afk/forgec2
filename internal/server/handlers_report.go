@@ -725,7 +725,7 @@ func (s *Server) handleAPIGetReportHistory(c *gin.Context) {
 // what it actually returns: a printable HTML report an operator can save to
 // PDF via the browser.
 func (s *Server) handleAPIExportReportHTML(c *gin.Context) {
-	if !s.requireExportStepUp(c, "report_export", "report") {
+	if !s.requireExportScope(c, "report_export", "report") {
 		return
 	}
 	startDate, endDate, err := parseReportDates(c)
@@ -792,12 +792,11 @@ func (s *Server) handleAPIGetGeneratedReport(c *gin.Context) {
 // it that button 404s, because handleAPIGetGeneratedReport is a JSON read and
 // there was no file endpoint for a single stored report.
 //
-// Step-up is enforced here for the same reason it guards the bulk export: the
-// body is the entire report. The frontend passes the code as ?totp_code=, which
-// requireExportStepUp accepts via exportTOTPQuery.
+// Bulk exports still go through requireExportScope so API-key callers must
+// hold the bulk_export scope.
 // GET /api/report/generated/:id/download
 func (s *Server) handleAPIExportGeneratedReport(c *gin.Context) {
-	if !s.requireExportStepUp(c, "report_export", "report") {
+	if !s.requireExportScope(c, "report_export", "report") {
 		return
 	}
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)

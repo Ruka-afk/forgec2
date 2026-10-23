@@ -19,7 +19,6 @@ import TelemetryCollector from "@/components/TelemetryCollector";
 type LoginFormValues = {
   username: string;
   password: string;
-  totpCode: string;
   rememberMe: boolean;
 };
 
@@ -35,7 +34,6 @@ function LoginForm() {
       z.object({
         username: z.string().min(1, t("login.username_required")),
         password: z.string().min(1, t("login.password_required")),
-        totpCode: z.string().regex(/^[0-9]{0,6}$/, t("login.totp_invalid")),
         rememberMe: z.boolean(),
       }),
     [t],
@@ -51,14 +49,13 @@ function LoginForm() {
     handleSubmit,
     setFieldValue,
   } = useForm<LoginFormValues>({
-    initialValues: { username: "", password: "", totpCode: "", rememberMe: false },
+    initialValues: { username: "", password: "", rememberMe: false },
     schema: loginSchema,
     onSubmit: async (vals) => {
       setError("");
       const params = new URLSearchParams();
       params.append("username", vals.username);
       params.append("password", vals.password);
-      if (vals.totpCode) params.append("totp_code", vals.totpCode);
       if (vals.rememberMe) params.append("remember_me", "on");
 
       try {
@@ -217,33 +214,6 @@ function LoginForm() {
               </div>
               {touched.password && errors.password && (
                 <p id="login-password-error" role="alert" className="text-xs text-destructive-ink mt-1">{errors.password}</p>
-              )}
-            </div>
-
-            <div>
-              <Label htmlFor="login-totp" className="mb-2 block text-sm text-foreground">
-                {t("login.totp")} <span className="text-muted-foreground">({t("login.totp_optional")})</span>
-              </Label>
-              <div className="relative group">
-                <Shield className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" aria-hidden="true" />
-                <Input
-                  id="login-totp"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  pattern="[0-9]{6}"
-                  value={values.totpCode}
-                  onChange={handleChange("totpCode")}
-                  onBlur={handleBlur("totpCode")}
-                  placeholder="000000"
-                  className="h-11 pl-9 font-mono tracking-(--tracking-wide) text-center transition-colors"
-                  aria-invalid={!!(touched.totpCode && errors.totpCode)}
-                  aria-describedby={errors.totpCode ? "login-totp-error" : undefined}
-                />
-              </div>
-              {touched.totpCode && errors.totpCode && (
-                <p id="login-totp-error" role="alert" className="text-xs text-destructive-ink mt-1">{errors.totpCode}</p>
               )}
             </div>
 

@@ -362,7 +362,8 @@ func sanitizeFilename(name string) string {
 
 // keyHexTo32 decodes a 64-character hex key string into 32 raw key bytes.
 // There is intentionally NO fallback derivation: credentials must be bound to
-// an explicit independent key (crypto.totp_key), never to the JWT secret.
+// an explicit independent key (crypto.totp_key, the credential key), never to
+// the JWT secret.
 func keyHexTo32(keyHex string) ([]byte, error) {
 	if len(keyHex) != 64 {
 		return nil, fmt.Errorf("key must be a 64-character hex string (32 bytes), got %d chars", len(keyHex))

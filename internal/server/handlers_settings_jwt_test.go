@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -84,62 +83,6 @@ func TestHandleRegenerateJWT_IndependentKeysSurviveRotation(t *testing.T) {
 	plain, err := crypto.DecryptLoot(cred.Password)
 	if err != nil || plain != "credential-value" {
 		t.Fatalf("credential unreadable after rotation: plain=%q err=%v", plain, err)
-	}
-}
-
-func TestHandleRegenerateJWT_LeavesTOTPSecretsUntouched(t *testing.T) {
-	database := testutil.SetupTestDB(t)
-	cfg := config.DefaultConfig()
-	setServerTestKeys(cfg)
-	cfg.Server.JWTSecret = "old-jwt-secret-that-is-32-bytes-ok!!"
-	s := newJWTTestServer(t, database, cfg)
-	s.configPath = t.TempDir() + "/config.yaml"
-
-	crypto.InitLootEncryption(cfg.Crypto.LootKey)
-
-	// Seed 510 users with TOTP secrets encrypted under the dedicated totp_key.
-	const total = 510
-	for i := 0; i < total; i++ {
-		u := db.User{
-			Username:     "user-" + strconv.Itoa(i),
-			PasswordHash: "hash",
-			Role:         "operator",
-		}
-		enc, err := encryptSecret("secret-value-"+strconv.Itoa(i), cfg.Crypto.TotpKey)
-		if err != nil {
-			t.Fatalf("encryptSecret: %v", err)
-		}
-		u.TOTPSecret = enc
-		if err := database.Create(&u).Error; err != nil {
-			t.Fatalf("seed user %d: %v", i, err)
-		}
-	}
-
-	oldSecret := cfg.Server.JWTSecret
-	w, c := jwtPostContext()
-	s.handleRegenerateJWT(c)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
-	}
-	if s.cfg.Server.JWTSecret == oldSecret {
-		t.Fatal("JWT secret did not rotate")
-	}
-
-	// TOTP secrets use the independent totp_key: they must be decryptable
-	// with that key both before and after the JWT rotation.
-	var users []db.User
-	if err := database.Find(&users).Error; err != nil {
-		t.Fatalf("find users: %v", err)
-	}
-	for _, u := range users {
-		plain, err := decryptSecret(u.TOTPSecret, cfg.Crypto.TotpKey)
-		if err != nil {
-			t.Fatalf("user %s TOTP not decryptable with totp_key: %v", u.Username, err)
-		}
-		if !strings.HasPrefix(plain, "secret-value-") {
-			t.Fatalf("user %s: unexpected plaintext %q", u.Username, plain)
-		}
 	}
 }
 

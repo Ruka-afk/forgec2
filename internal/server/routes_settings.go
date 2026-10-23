@@ -35,7 +35,7 @@ func (s *Server) registerSettingsRoutes(auth *gin.RouterGroup) {
 		// into implants and enforced at hot-update time.
 		settingsWrite.POST("/settings/db/vacuum", s.handleDBVacuum)
 		settingsWrite.POST("/settings/db/backup", s.handleDBBackup)
-		// The raw database contains every secret (users, TOTP, API-key hashes,
+		// The raw database contains every secret (users, API-key hashes,
 		// encrypted creds) and restore swaps the live DB — admin only.
 		settingsWrite.GET("/settings/db/backups", middleware.RequireRole(db.RoleAdmin), s.handleDBBackupList)
 		settingsWrite.GET("/settings/db/backups/download", middleware.RequireRole(db.RoleAdmin), s.handleDBBackupDownload)
@@ -54,10 +54,6 @@ func (s *Server) registerSettingsRoutes(auth *gin.RouterGroup) {
 		settingsWrite.POST("/admin/killswitch", middleware.RequireRole(db.RoleAdmin), s.handleKillSwitch)
 		settingsWrite.GET("/admin/killswitch/status", middleware.RequireRole(db.RoleAdmin), s.handleKillSwitchStatus)
 
-		settingsWrite.POST("/settings/totp/generate", s.handleTOTPGenerate)
-		settingsWrite.POST("/settings/totp/enable", s.handleTOTPEnable)
-		settingsWrite.POST("/settings/totp/disable", s.handleTOTPDisable)
-
 		settingsWrite.GET("/settings/certs", s.handleGetCertInfo)
 		settingsWrite.POST("/settings/certs/regenerate", s.handleRegenerateCert)
 		settingsWrite.POST("/settings/certs/upload", s.handleUploadCert)
@@ -66,10 +62,8 @@ func (s *Server) registerSettingsRoutes(auth *gin.RouterGroup) {
 		settingsWrite.DELETE("/api/modules/:name", s.handleModulesDelete)
 	}
 
-	auth.GET("/settings/totp/status", s.handleTOTPStatus)
 	auth.GET("/api/me", s.handleGetCurrentUser)
 	auth.POST("/api/auth/extend", s.handleExtendSession)
-	auth.GET("/settings/totp/backup-codes/count", s.handleBackupCodeCount)
 
 	auth.GET("/translations", s.handleTranslationsPage)
 	auth.GET("/api/translations", s.handleGetTranslations)

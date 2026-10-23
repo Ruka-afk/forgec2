@@ -180,7 +180,7 @@ C2 基础设施本身就是高价值目标，所以发布链路的目标是“�
 | `ai.provider` / `api_key` / `model` | AI 助手后端 |
 | `rate_limit.login.*` | 登录爆破防护 |
 
-各类密钥（JWT、beacon key、loot/ext-c2/backup/TOTP/CSRF key）都在首次启动时
+各类密钥（JWT、beacon key、loot/ext-c2/backup/credential/CSRF key）都在首次启动时
 生成，并以 `0600` 权限写回同一个文件。
 
 ## 文档

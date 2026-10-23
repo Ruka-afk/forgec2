@@ -50,7 +50,7 @@ if [ ! -f config.yaml ]; then
   LOOT_KEY=$(gen_hex_key)
   EXTC2_KEY=$(gen_hex_key)
   BACKUP_KEY=$(gen_hex_key)
-  TOTP_KEY=$(gen_hex_key)
+  CREDENTIAL_KEY=$(gen_hex_key)
   CSRF_KEY=$(gen_hex_key)
   cat > config.yaml <<EOF
 server:
@@ -82,7 +82,7 @@ crypto:
   loot_key: "$LOOT_KEY"
   extc2_key: "$EXTC2_KEY"
   backup_key: "$BACKUP_KEY"
-  totp_key: "$TOTP_KEY"
+  totp_key: "$CREDENTIAL_KEY"
   csrf_key: "$CSRF_KEY"
 
 logging:

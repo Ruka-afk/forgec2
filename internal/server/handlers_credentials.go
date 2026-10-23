@@ -955,7 +955,7 @@ func checkExportRateLimit(ip string) bool {
 }
 
 func (s *Server) handleExportCredentials(c *gin.Context) {
-	if !s.requireExportStepUp(c, "credential_export", "credential") {
+	if !s.requireExportScope(c, "credential_export", "credential") {
 		return
 	}
 	if !checkExportRateLimit(c.ClientIP()) {

@@ -36,7 +36,6 @@ export interface SettingsData {
   num_cpu?: number;
   data_dir?: string;
   jwt_masked?: string;
-  totp_enabled?: string;
   malleable_enabled?: boolean;
   malleable_status?: number;
   malleable_ct?: string;

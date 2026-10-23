@@ -11,7 +11,6 @@ import (
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/plugin"
 	"github.com/forgec2/forgec2/internal/server/middleware"
-	"github.com/forgec2/forgec2/internal/server/totp"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -61,8 +60,6 @@ func (s *Server) handleLogin(c *gin.Context) {
 
 	username := c.PostForm("username")
 	password := c.PostForm("password")
-	totpCode := c.PostForm("totp_code")
-	backupCode := c.PostForm("backup_code")
 	rememberMe := c.PostForm("remember_me") == "on"
 	clientIP := c.ClientIP()
 
@@ -161,86 +158,8 @@ func (s *Server) handleLogin(c *gin.Context) {
 	}
 
 	s.configMu.RLock()
-	totpKey := s.cfg.Crypto.TotpKey
 	sessionMaxAgeHours := s.cfg.Server.SessionMaxAgeHours
 	s.configMu.RUnlock()
-
-	if user.TOTPSecret != "" {
-		if totpCode != "" {
-			decryptedSecret, err := decryptSecret(user.TOTPSecret, totpKey)
-			if err != nil {
-				slog.Error("Failed to decrypt TOTP secret", "username", username, "err", err)
-				s.renderLoginError(c, "2FA configuration error")
-				return
-			}
-			if !totp.VerifyCode(decryptedSecret, totpCode) {
-				slog.Warn("Login failed: invalid 2FA code", "username", username, "ip", c.ClientIP())
-				s.LogAuditRecord(c, "login_failed", "auth", username, "Invalid 2FA code", false, nil)
-				if locked, retryAfter := s.recordLoginFailure(clientIP, username); locked {
-					s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter))
-					return
-				}
-				if locked, retryAfter := s.recordAccountLoginFailure(username, clientIP); locked {
-					s.renderLoginError(c, fmt.Sprintf("Account temporarily locked. Try again in %d seconds.", retryAfter))
-					return
-				}
-				s.renderLoginError(c, "Invalid username or password")
-				return
-			}
-		} else if backupCode != "" {
-			var codes []db.BackupCode
-			if err := s.db.Where("user_id = ? AND used = false", user.ID).Find(&codes).Error; err != nil || len(codes) == 0 {
-				slog.Warn("Login failed: no unused backup codes", "username", username, "ip", c.ClientIP())
-				s.LogAuditRecord(c, "login_failed", "auth", username, "No unused backup codes", false, nil)
-				if locked, retryAfter := s.recordLoginFailure(clientIP, username); locked {
-					s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter))
-					return
-				}
-				s.renderLoginError(c, "Invalid username or password")
-				return
-			}
-			matched := false
-			for _, bc := range codes {
-				if totp.VerifyBackupCode(bc.CodeHash, backupCode) {
-					result := s.db.Model(&db.BackupCode{}).
-						Where("id = ? AND used = ?", bc.ID, false).
-						Updates(map[string]interface{}{"used": true, "used_at": time.Now()})
-					if result.Error != nil {
-						slog.Error("Failed to mark backup code as used", "code_id", bc.ID, "err", result.Error)
-						s.renderLoginError(c, "Authentication error")
-						return
-					}
-					if result.RowsAffected == 0 {
-						slog.Warn("Backup code already used (race condition)", "code_id", bc.ID, "username", username)
-						s.recordLoginFailure(clientIP, username)
-						s.renderLoginError(c, "Invalid username or password")
-						return
-					}
-					matched = true
-					break
-				}
-			}
-			if !matched {
-				slog.Warn("Login failed: invalid backup code", "username", username, "ip", c.ClientIP())
-				s.LogAuditRecord(c, "login_failed", "auth", username, "Invalid backup code", false, nil)
-				if locked, retryAfter := s.recordLoginFailure(clientIP, username); locked {
-					s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter))
-					return
-				}
-				if locked, retryAfter := s.recordAccountLoginFailure(username, clientIP); locked {
-					s.renderLoginError(c, fmt.Sprintf("Account temporarily locked. Try again in %d seconds.", retryAfter))
-					return
-				}
-				s.renderLoginError(c, "Invalid username or password")
-				return
-			}
-			slog.Info("Login via backup code", "username", username, "ip", c.ClientIP())
-			s.LogAuditRecord(c, "login_backup_code", "auth", username, "Login via backup code", true, nil)
-		} else {
-			s.renderLoginError(c, "Two-factor authentication required")
-			return
-		}
-	}
 
 	token, err := middleware.GenerateToken(user, rememberMe, sessionMaxAgeHours)
 	if err != nil {

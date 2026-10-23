@@ -3,14 +3,12 @@
 interface LoginErrorBody {
   error?: string;
   message?: string;
-  require_totp?: boolean;
-  require_2fa?: boolean;
 }
 
 /**
  * Whether a fetch Response from POST /login indicates successful authentication.
  * Success: 302/303 redirect, or opaque redirect (status 0) under redirect:"manual".
- * Never treat generic 2xx as success (avoids swallowing 2FA challenges / error HTML).
+ * Never treat generic 2xx as success (avoids swallowing error HTML).
  */
 export function isLoginSuccessResponse(res: Pick<Response, "status" | "type" | "ok">): boolean {
   if (res.status === 302 || res.status === 303 || res.status === 307) return true;
@@ -23,9 +21,6 @@ export function isLoginSuccessResponse(res: Pick<Response, "status" | "type" | "
 export function parseLoginErrorBody(data: unknown): string | null {
   if (!data || typeof data !== "object") return null;
   const o = data as LoginErrorBody;
-  if (o.require_totp || o.require_2fa) {
-    return o.error || o.message || "Two-factor authentication required";
-  }
   if (typeof o.error === "string" && o.error) return o.error;
   if (typeof o.message === "string" && o.message) return o.message;
   return null;

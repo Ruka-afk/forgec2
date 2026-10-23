@@ -17,7 +17,6 @@ func TestShouldLogActionSensitiveWrites(t *testing.T) {
 		"/settings/db/backup",
 		"/settings/db/restore",
 		"/settings/jwt/regenerate",
-		"/settings/totp/enable",
 		"/api/listeners",
 		"/api/listeners/3/disable",
 		"/api/api-keys",

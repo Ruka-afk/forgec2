@@ -185,7 +185,7 @@ Everything lives in one YAML file — [config.example.yaml](config.example.yaml)
 | `ai.provider` / `api_key` / `model` | AI assistant backend |
 | `rate_limit.login.*` | Auth brute-force protection |
 
-Secrets (JWT, beacon key, loot/ext-c2/backup/TOTP/CSRF keys) are generated on
+Secrets (JWT, beacon key, loot/ext-c2/backup/credential/CSRF keys) are generated on
 first boot and stored in the same file with `0600` permissions.
 
 ## Documentation

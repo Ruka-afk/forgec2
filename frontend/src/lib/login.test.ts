@@ -31,11 +31,6 @@ describe("parseLoginErrorBody", () => {
     );
   });
 
-  it("surfaces 2FA required", () => {
-    expect(parseLoginErrorBody({ require_totp: true })).toBe("Two-factor authentication required");
-    expect(parseLoginErrorBody({ require_2fa: true, error: "2FA needed" })).toBe("2FA needed");
-  });
-
   it("returns null for empty body", () => {
     expect(parseLoginErrorBody(null)).toBeNull();
     expect(parseLoginErrorBody({})).toBeNull();

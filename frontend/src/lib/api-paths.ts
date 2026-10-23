@@ -246,10 +246,6 @@ export const paths = {
     notificationRouteTest: (id: string | number) => `/api/notification-routes/${id}/test`,
     beaconKey: "/settings/beacon-key",
     reloadStatus: "/config/reload-status",
-    totpStatus: "/settings/totp/status",
-    totpGenerate: "/settings/totp/generate",
-    totpEnable: "/settings/totp/enable",
-    totpDisable: "/settings/totp/disable",
     killSwitch: "/admin/killswitch",
     killSwitchStatus: "/admin/killswitch/status",
   },
@@ -399,9 +395,10 @@ export const paths = {
     findings: (query = "") => (query ? `/api/report/findings?${query}` : "/api/report/findings"),
     history: "/api/report/history",
     generated: (id: string | number) => `/api/report/generated/${id}`,
-    // Served by handleAPIExportGeneratedReport, which enforces the same TOTP
-    // step-up as the bulk export. The old /report/:id/download?format= path had
-    // no backend route at all, so the Report page's download button 404'd.
+    // Served by handleAPIExportGeneratedReport, which applies the same bulk
+    // export scope gate as the other export endpoints. The old
+    // /report/:id/download?format= path had no backend route at all, so the
+    // Report page's download button 404'd.
     download: (id: string | number) => `/api/report/generated/${encodeURIComponent(String(id))}/download`,
     generate: "/api/report/generate",
     one: (id: string) => `/api/report/${id}`,

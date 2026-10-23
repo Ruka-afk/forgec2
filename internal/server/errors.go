@@ -25,9 +25,6 @@ const (
 	ErrAccountLocked        ErrorCode = 40130
 	ErrCSRFMismatch         ErrorCode = 40310
 	ErrPermissionDenied     ErrorCode = 40320
-	ErrTOTPRequired         ErrorCode = 40140
-	ErrTOTPInvalid          ErrorCode = 40150
-	ErrBackupCodeExhausted  ErrorCode = 40160
 	ErrPasswordComplexity   ErrorCode = 40010
 	ErrPasswordHistory      ErrorCode = 40020
 	ErrPayloadTooLarge      ErrorCode = 40030
@@ -67,9 +64,6 @@ var errorCodeStatus = map[ErrorCode]int{
 	ErrAccountLocked:        http.StatusUnauthorized,
 	ErrCSRFMismatch:         http.StatusForbidden,
 	ErrPermissionDenied:     http.StatusForbidden,
-	ErrTOTPRequired:         http.StatusUnauthorized,
-	ErrTOTPInvalid:          http.StatusUnauthorized,
-	ErrBackupCodeExhausted:  http.StatusUnauthorized,
 	ErrPasswordComplexity:   http.StatusBadRequest,
 	ErrPasswordHistory:      http.StatusBadRequest,
 	ErrPayloadTooLarge:      http.StatusRequestEntityTooLarge,

@@ -56,7 +56,7 @@ func TestCredentialExportFailsLoudly(t *testing.T) {
 	crypto.InitExtC2Encryption("0123456789abcdef0123456789abcdef")
 	s := &Server{db: testutil.SetupTestDB(t), cfg: &config.Config{}}
 
-	// requireExportStepUp needs an operator identity; seed one.
+	// requireExportScope needs an operator identity; seed one.
 	if err := s.db.Create(&db.User{Username: "exp-admin", Role: "admin", IsActive: true, TenantID: 0}).Error; err != nil {
 		t.Fatalf("seed user: %v", err)
 	}

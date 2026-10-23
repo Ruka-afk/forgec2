@@ -52,7 +52,7 @@ func TestEnsureStorageKeysFillsMissingAndPersists(t *testing.T) {
 }
 
 // TestEnsureStorageKeysIsIdempotent proves a second call neither rotates keys
-// nor duplicates work — stable keys are what keep FC2ENC:/TOTP data readable.
+// nor duplicates work — stable keys are what keep FC2ENC: data readable.
 func TestEnsureStorageKeysIsIdempotent(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")

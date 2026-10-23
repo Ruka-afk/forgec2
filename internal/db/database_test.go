@@ -53,7 +53,6 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		&Redirector{},
 		&AgentLock{},
 		&ExtC2Channel{},
-		&BackupCode{},
 		&SIEMRule{},
 		&KillSwitch{},
 	)

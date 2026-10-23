@@ -100,7 +100,7 @@ func (s *Server) registerDebugRoutes(auth *gin.RouterGroup) {
 	auth.GET("/metrics", middleware.RequirePermission(db.PermSettingsRead), s.gatedMetricsHandler())
 	// The /debug/pprof/* subtree was removed. It had no consumer (openapi
 	// omitted it by design, no script or test hit it) and it dumps process
-	// memory, which includes the JWT secret, the loot/extc2/totp keys and
+	// memory, which includes the JWT secret, the loot/extc2/credential keys and
 	// decrypted credentials. Investigate performance locally with
 	// `go test -cpuprofile` / `go tool pprof` instead of over HTTP.
 }

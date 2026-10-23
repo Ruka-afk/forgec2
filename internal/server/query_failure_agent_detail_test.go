@@ -95,15 +95,6 @@ func TestCollabAgents_QueryFailureIsNotAnEmptyList(t *testing.T) {
 	})
 }
 
-// TestBackupCodeCount_QueryFailureIsNotZero proves a failed backup-code
-// count answers 500: a zero reads as "no recovery codes left".
-func TestBackupCodeCount_QueryFailureIsNotZero(t *testing.T) {
-	assertQueryFailureIs500(t, "backup code count", "/api/2fa/backup-codes/count", func(s *Server, c *gin.Context) {
-		c.Set("user_id", uint(1))
-		s.handleBackupCodeCount(c)
-	})
-}
-
 // TestListWebhooks_QueryFailureIsNotAnEmptyList proves a failed webhook
 // read answers 500: an empty 200 reads as "alerting is disabled".
 func TestListWebhooks_QueryFailureIsNotAnEmptyList(t *testing.T) {

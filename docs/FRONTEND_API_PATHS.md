@@ -52,7 +52,7 @@ Source of truth: `frontend/src/lib/api-paths.ts`.
 | BOF / BloodHound | `paths.bof.*` / `paths.bloodhound.*` |
 | Chat / Circuit breaker | `paths.chat.*` / `paths.circuitBreaker.*` |
 | Autotag / Domain front / Mesh | `paths.autotag.*` / `paths.domainFront.*` / `paths.mesh.*` |
-| Settings mutations | `paths.settings.agent` / `server` / `malleable` / `certs*` / `sync*` / `totp*` / `siem*` |
+| Settings mutations | `paths.settings.agent` / `server` / `malleable` / `certs*` / `sync*` / `siem*` |
 | Roles / Tags | `paths.roles.*` / `paths.tags.list` |
 
 **Goal:** application source should not call `api.*( "/…")` with string literals — only via `paths.*` (tests may use stubs).

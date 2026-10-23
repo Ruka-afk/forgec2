@@ -1150,86 +1150,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/settings/totp/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * TOTP status
-         * @description Check if 2FA is enabled for current user
-         */
-        get: operations["getTOTPStatus"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/settings/totp/generate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Generate TOTP secret
-         * @description Generate a new TOTP secret for 2FA setup
-         */
-        post: operations["generateTOTP"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/settings/totp/enable": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Enable TOTP
-         * @description Enable two-factor authentication
-         */
-        post: operations["enableTOTP"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/settings/totp/disable": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Disable TOTP
-         * @description Disable two-factor authentication
-         */
-        post: operations["disableTOTP"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/audit": {
         parameters: {
             query?: never;
@@ -3577,23 +3497,6 @@ export interface paths {
         };
         /** Download DB backup */
         get: operations["dbBackupsDownload"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/settings/totp/backup-codes/count": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Backup codes remaining count */
-        get: operations["totpBackupCount"];
         put?: never;
         post?: never;
         delete?: never;
@@ -11498,8 +11401,6 @@ export interface operations {
                      * @example admin
                      */
                     password: string;
-                    /** @description Two-factor authentication code (if enabled) */
-                    totp_code?: string;
                     /**
                      * @description Remember me option
                      * @enum {string}
@@ -13128,108 +13029,6 @@ export interface operations {
                 };
                 content: {
                     "application/x-yaml": string;
-                };
-            };
-        };
-    };
-    getTOTPStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description TOTP status */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        success?: boolean;
-                        totp_enabled?: boolean;
-                    };
-                };
-            };
-        };
-    };
-    generateTOTP: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description TOTP secret generated */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        success?: boolean;
-                        secret?: string;
-                        qr_url?: string;
-                        backup_codes?: string[];
-                    };
-                };
-            };
-        };
-    };
-    enableTOTP: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/x-www-form-urlencoded": {
-                    secret: string;
-                    code: string;
-                };
-            };
-        };
-        responses: {
-            /** @description 2FA enabled */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SuccessResponse"];
-                };
-            };
-        };
-    };
-    disableTOTP: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/x-www-form-urlencoded": {
-                    /** Format: password */
-                    password: string;
-                };
-            };
-        };
-        responses: {
-            /** @description 2FA disabled */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SuccessResponse"];
                 };
             };
         };
@@ -16367,24 +16166,6 @@ export interface operations {
         };
     };
     dbBackupsDownload: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    totpBackupCount: {
         parameters: {
             query?: never;
             header?: never;

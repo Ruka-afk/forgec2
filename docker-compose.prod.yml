@@ -5,7 +5,7 @@
 #
 # Secrets required (set in .env — see .env.example):
 #   FORGEC2_JWT_SECRET   32+ byte random hex (openssl rand -hex 32)
-# Storage keys (loot/extc2/backup/totp/csrf) should be set explicitly rather
+# Storage keys (loot/extc2/backup/credential/csrf) should be set explicitly rather
 # than left to first-run auto-generation so backups/restores stay portable.
 
 services:

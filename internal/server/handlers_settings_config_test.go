@@ -16,7 +16,7 @@ import (
 
 // TestDownloadConfigRedactsSecrets ensures the admin "Download Config"
 // endpoint redacts every crown-jewel secret, not just a hand-picked subset
-// (S2): loot/TOTP/CSRF/ExtC2/backup keys, v2 beacon key, SSH password, and
+// (S2): loot/credential/CSRF/ExtC2/backup keys, v2 beacon key, SSH password, and
 // the extc2 API token must never appear in cleartext.
 func TestDownloadConfigRedactsSecrets(t *testing.T) {
 	gin.SetMode(gin.TestMode)

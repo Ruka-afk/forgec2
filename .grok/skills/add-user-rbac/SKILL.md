@@ -1,6 +1,6 @@
 ---
 name: add-user-rbac
-description: Extend ForgeC2 user management and RBAC (roles, TOTP, permissions). Use for users, roles, TOTP, RBAC, or /add-user-rbac.
+description: Extend ForgeC2 user management and RBAC (roles, permissions). Use for users, roles, RBAC, or /add-user-rbac.
 license: MIT
 compatibility: grok
 metadata:
@@ -10,18 +10,17 @@ metadata:
 
 ## When to use
 
-Add users, roles, permission checks, or TOTP 2FA flows.
+Add users, roles, or permission checks.
 
 ## Key files
 
 | File | Role |
 |------|------|
 | `handlers_users.go` | User CRUD |
-| `handlers_auth.go` | Login, TOTP, password change, settings |
+| `handlers_auth.go` | Login, password change, session |
 | `middleware/auth.go` | JWT, session, role extraction |
 | `internal/db/models.go` | `User` model |
 | `templates/users.html` | Admin user management |
-| `templates/settings.html` | TOTP setup |
 
 ## Roles
 
@@ -44,14 +43,7 @@ if role != "admin" && role != "operator" {
 }
 ```
 
-## TOTP flow
-
-- `handleTOTPGenerate` → QR secret
-- `handleTOTPEnable` / `handleTOTPDisable`
-- Login verifies TOTP when enabled on user
-
 ## Verify
 
 - Create user with `viewer` → write endpoints return 403
-- TOTP enable → login requires code
 - Password change updates bcrypt hash in config/DB

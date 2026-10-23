@@ -22,8 +22,7 @@ static audit on 2026-09-24 — re-verify a file before editing it.
   last native `alert()` is gone (enforced by `check:native-dialogs`)
 - Credential vault + Builds: a WebSocket refresh no longer replaces loaded rows
   with skeletons, and a failed refresh no longer blanks them
-- Settings: an unread kill-switch status is no longer shown as "Safe", and a
-  failed TOTP status query is no longer shown as "2FA disabled"
+- Settings: an unread kill-switch status is no longer shown as "Safe"
 - campaign: the detail panel no longer spins forever when the stats request fails
 - Mimikatz module availability is a tri-state (`true | false | null` = unknown,
   see `ModuleAvailability` in `lib/cred-quality.ts`). A failed module-list query

@@ -12,8 +12,8 @@ ForgeC2 is a single-binary C2 framework with an embedded Vite-built web console.
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐  │
 │  │ Auth     │  │ Agent    │  │ Task     │  │ Plugin │  │
 │  │ (JWT/    │  │ Manager  │  │ Queue    │  │ Runtime│  │
-│  │ TOTP/    │  │          │  │          │  │ (goja) │  │
-│  │ RBAC)    │  │          │  │          │  │        │  │
+│  │ RBAC/    │  │          │  │          │  │ (goja) │  │
+│  │ Session) │  │          │  │          │  │        │  │
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └───┬────┘  │
 │       │              │              │            │       │
 │  ┌────┴──────────────┴──────────────┴────────────┴────┐  │

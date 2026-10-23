@@ -85,7 +85,7 @@ curl -k https://127.0.0.1:8000/health   # {"status":"ok",...}
 ```
 
 Secrets (JWT, beacon key, TLS cert) auto-generate on first run. Missing storage
-keys (`crypto.loot_key` / `extc2_key` / `backup_key` / `totp_key` / `csrf_key`)
+keys (`crypto.loot_key` / `extc2_key` / `backup_key` / `credential_key` / `csrf_key`)
 are generated at startup and written back to `config.yaml`, so the example
 config is a working first start; set them explicitly (or via `FORGEC2_*` env)
 when the config file is mounted read-only. Data persists in the

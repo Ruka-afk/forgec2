@@ -162,15 +162,6 @@ var schemaMigrations = []*gormigrate.Migration{
 		},
 	},
 	{
-		ID: "2025-07-25-add-backup-codes",
-		Migrate: func(tx *gorm.DB) error {
-			return tx.AutoMigrate(&BackupCode{})
-		},
-		Rollback: func(tx *gorm.DB) error {
-			return tx.Migrator().DropTable("backup_codes")
-		},
-	},
-	{
 		ID: "2025-07-25-add-user-sessions",
 		Migrate: func(tx *gorm.DB) error {
 			return tx.AutoMigrate(&UserSession{})

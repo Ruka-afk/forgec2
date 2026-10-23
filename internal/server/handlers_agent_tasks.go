@@ -128,7 +128,7 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 // uses, (b) preloads just the agent hostname, (c) streams rows to the response
 // instead of buffering, and (d) honours ?limit= capped at ExportTaskLimit.
 func (s *Server) handleExportTasks(c *gin.Context) {
-	if !s.requireExportStepUp(c, "task_export", "task") {
+	if !s.requireExportScope(c, "task_export", "task") {
 		return
 	}
 	limit := ExportTaskLimit

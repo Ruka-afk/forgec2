@@ -18,7 +18,6 @@ import { SearchInput } from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Bell, Bot, Cpu, Database, FileCode, Lock, Palette, Server, Shield, Wrench, Archive, Radio, AlertTriangle, ScanSearch, SearchX } from "lucide-react";
-import { useTOTP } from "./components/useTOTP";
 import { useSettingsData } from "./components/useSettingsData";
 import AppearanceSection from "./components/AppearanceSection";
 import SecuritySection from "./components/SecuritySection";
@@ -106,14 +105,6 @@ export default function SettingsPage() {
     window.addEventListener("hashchange", syncFromHash);
     return () => window.removeEventListener("hashchange", syncFromHash);
   }, []);
-
-  const {
-    totpStatus, totpStatusError, reloadTotpStatus, totpSecret, totpQR, totpBackupCodes,
-    totpCode, setTotpCode, showTotpSetup,
-    totpEnablePassword, setTotpEnablePassword,
-    totpDisablePassword, setTotpDisablePassword, totpDisableCode, setTotpDisableCode,
-    handleGenerateTOTP, handleEnableTOTP, handleDisableTOTP, totpSaving,
-  } = useTOTP(t, activeSection);
 
   const { mutate: saveAgent, isPending: savingAgent } = useMutation({
     fn: async (e: React.FormEvent) => {
@@ -275,7 +266,7 @@ export default function SettingsPage() {
   // per-action mutations instead of a hand-rolled setSaving.
   const saving =
     savingAgent || savingServer || savingMalleable || savingPassword || savingJwt ||
-    savingVacuum || savingBackup || savingPurge || totpSaving;
+    savingVacuum || savingBackup || savingPurge;
 
   if (loading) return <PageContainer title={t("settings.title")} subtitle={t("settings.subtitle")}><PageSpinner /></PageContainer>;
 
@@ -424,14 +415,7 @@ export default function SettingsPage() {
               <TabsContent value="security" className="mt-0">
                 <SecuritySection
                   data={data} passwordForm={passwordForm} setPasswordForm={setPasswordForm}
-                  totpStatus={totpStatus} totpStatusError={totpStatusError} onReloadTOTP={() => { void reloadTotpStatus(); }}
-                  totpSecret={totpSecret} totpQR={totpQR} totpBackupCodes={totpBackupCodes}
-                  totpCode={totpCode} setTotpCode={setTotpCode} showTotpSetup={showTotpSetup}
-                  totpEnablePassword={totpEnablePassword} setTotpEnablePassword={setTotpEnablePassword}
-                  totpDisablePassword={totpDisablePassword} setTotpDisablePassword={setTotpDisablePassword}
-                  totpDisableCode={totpDisableCode} setTotpDisableCode={setTotpDisableCode}
                   saving={saving} onChangePassword={handleChangePassword} onRegenerateJWT={handleRegenerateJWT}
-                  onGenerateTOTP={handleGenerateTOTP} onEnableTOTP={handleEnableTOTP} onDisableTOTP={handleDisableTOTP}
                 />
                 <div className="mt-4"><ApiKeysSection /></div>
               </TabsContent>
