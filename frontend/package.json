@@ -36,7 +36,7 @@
     "gen:openapi": "openapi-typescript ../api/openapi.yaml -o src/lib/api-schema.d.ts",
     "gen:permissions": "node scripts/gen-permissions.mjs",
     "check": "npx concurrently -n css,tokens,contrast,aria,i18n,paths,dialogs,openapi,perms,layout,webdist,bundle,readme \"npm:check:css\" \"npm:check:tokens\" \"npm:check:contrast\" \"npm:check:aria\" \"npm:check:i18n\" \"npm:check:paths\" \"npm:check:native-dialogs\" \"npm:check:openapi-types\" \"npm:check:permissions\" \"npm:check:layout\" \"npm:check:webdist\" \"npm:check:bundle\" \"npm:check:readme\"",
-    "check:pre": "npx concurrently -n css,tokens,i18n,paths,dialogs,openapi,perms,layout \"npm:check:css\" \"npm:check:tokens\" \"npm:check:i18n\" \"npm:check:paths\" \"npm:check:native-dialogs\" \"npm:check:openapi-types\" \"npm:check:permissions\" \"npm:check:layout\"",
+    "check:pre": "npx concurrently -n css,tokens,i18n,paths,dialogs,openapi,perms,layout,readme \"npm:check:css\" \"npm:check:tokens\" \"npm:check:i18n\" \"npm:check:paths\" \"npm:check:native-dialogs\" \"npm:check:openapi-types\" \"npm:check:permissions\" \"npm:check:layout\" \"npm:check:readme\"",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run check",
     "check:audit": "node scripts/check-audit.mjs"
   },

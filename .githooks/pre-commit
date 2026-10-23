@@ -4,6 +4,6 @@
 # everyday commits stay under a minute. Full suite always runs in CI.
 set -e
 ROOT=$(git rev-parse --show-toplevel)
-echo "==> frontend fast checks (lint + css/tokens/i18n/paths/openapi/perms)"
+echo "==> frontend fast checks (lint + css/tokens/i18n/paths/openapi/perms/layout/readme)"
 npm --prefix "$ROOT/frontend" run lint
 npm --prefix "$ROOT/frontend" run check:pre

@@ -469,10 +469,10 @@ jobs:
           node ../scripts/gen-capability-matrix.mjs --check
       - run: npx tsc --noEmit
       - run: npm run lint
-      # 7 static checks run concurrently via the bundled `check:pre` script
-      # (package.json) instead of 7 sequential CI steps; `check:bundle` and the
+      # 9 static checks run concurrently via the bundled `check:pre` script
+      # (package.json) instead of 9 sequential CI steps; `check:bundle` and the
       # post-build webdist freshness check stay separate to preserve granularity.
-      - name: Static checks (css/tokens/i18n/paths/dialogs/openapi/perms, concurrent)
+      - name: Static checks (css/tokens/i18n/paths/dialogs/openapi/perms/layout/readme, concurrent)
         run: npm run check:pre
       - run: npm test
       # Ratcheting floor: today 14.91% of statements in src/ (8473/56846).
