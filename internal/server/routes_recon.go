@@ -118,4 +118,4 @@ func (s *Server) gatedMetricsHandler() gin.HandlerFunc {
 	}
 }
 
-// registerSettingsRoutes registers settings, 2FA, i18n routes.
+// registerSettingsRoutes registers settings and i18n routes.
