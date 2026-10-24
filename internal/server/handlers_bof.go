@@ -131,7 +131,7 @@ func (s *Server) handleBOFDelete(c *gin.Context) {
 	}
 	slog.Info("BOF deleted", "name", bof.Name, "id", bofID)
 	s.LogAuditRecord(c, "bof_delete", "bof", "", fmt.Sprintf("Deleted BOF: %s", bof.Name), true, nil)
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleBOFDownload(c *gin.Context) {

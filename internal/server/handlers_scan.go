@@ -231,7 +231,7 @@ func (s *Server) handleProcessScanResult(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // handleExportScanResults exports scan results as CSV

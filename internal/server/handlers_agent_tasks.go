@@ -205,5 +205,5 @@ func (s *Server) apiBulkTaskStatus(c *gin.Context) {
 	for i := range tasks {
 		result[tasks[i].ID] = tasks[i]
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": result})
+	respond(c, result)
 }

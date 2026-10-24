@@ -205,7 +205,7 @@ func (s *Server) handleAIIntentsList(c *gin.Context) {
 			visible = append(visible, intent)
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": visible})
+	respond(c, visible)
 }
 
 func (s *Server) findApprovableAIIntent(c *gin.Context) (db.AIExecutionIntent, aiPrincipal, bool) {

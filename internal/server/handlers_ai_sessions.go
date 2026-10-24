@@ -345,7 +345,7 @@ func (s *Server) handleAISessionsUpdate(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to reload session")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": session})
+	respond(c, session)
 }
 
 // handleAISessionsDelete deletes an AI chat session and its messages.
@@ -395,5 +395,5 @@ func (s *Server) handleAISessionsDelete(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "ai_session_delete", "ai", "", "Deleted AI chat session", true, nil)
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }

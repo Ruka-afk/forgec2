@@ -642,7 +642,7 @@ func (s *Server) handleAIRunsGet(c *gin.Context) {
 	if !ok {
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": run})
+	respond(c, run)
 }
 
 func (s *Server) handleAIRunsList(c *gin.Context) {
@@ -663,7 +663,7 @@ func (s *Server) handleAIRunsList(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to list AI runs")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": runs})
+	respond(c, runs)
 }
 
 func aiRunTerminal(status string) bool {
@@ -766,7 +766,7 @@ func (s *Server) handleAIRunCancel(c *gin.Context) {
 		return
 	}
 	if aiRunTerminal(run.Status) {
-		c.JSON(http.StatusOK, gin.H{"success": true, "data": run})
+		respond(c, run)
 		return
 	}
 	if s.aiRuns != nil {
@@ -781,7 +781,7 @@ func (s *Server) handleAIRunCancel(c *gin.Context) {
 	})
 	s.LogAuditRecord(c, "ai_run_cancel", "ai_run", run.ID, "Cancelled AI run", true, nil)
 	_ = principal
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) initializeAIRuns() {

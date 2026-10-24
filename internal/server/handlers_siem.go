@@ -146,7 +146,7 @@ func (s *Server) handleDeleteSIEMRule(c *gin.Context) {
 	}
 	s.reloadSIEMRules()
 	s.LogAuditRecord(c, "siem_rule_delete", "siem", rule.Name, "SIEM correlation rule deleted", true, nil)
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) reloadSIEMRules() {

@@ -186,7 +186,7 @@ func (s *Server) handleListAPIKeys(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": resp})
+	respond(c, resp)
 }
 
 func (s *Server) handleRevokeAPIKey(c *gin.Context) {

@@ -611,7 +611,7 @@ func (s *Server) handleDeleteListener(c *gin.Context) {
 	}
 	s.broadcastListenerUpdate("deleted", &l)
 	s.LogAuditRecord(c, "listener_delete", "listener", id, l.Name+" "+l.Scheme, true, nil)
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleEnableListener(c *gin.Context) {

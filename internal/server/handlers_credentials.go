@@ -1112,7 +1112,7 @@ func (s *Server) handleDeleteCredential(c *gin.Context) {
 		"action": "deleted",
 		"id":     id,
 	})
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleUpdateCredential(c *gin.Context) {
@@ -1156,7 +1156,7 @@ func (s *Server) handleUpdateCredential(c *gin.Context) {
 		"id":       cred.ID,
 		"agent_id": cred.AgentID,
 	})
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // handleBatchVerifyCredentials queues cred_check tasks for the selected vault
@@ -1456,5 +1456,5 @@ func (s *Server) apiRecordUsage(c *gin.Context) {
 		"id":       cred.ID,
 		"agent_id": cred.AgentID,
 	})
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }

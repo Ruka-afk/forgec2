@@ -198,7 +198,7 @@ func (s *Server) handleSaveAutomationRule(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Rule operation"))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": rule})
+	respond(c, rule)
 }
 
 // loadAutomationRuleScoped reads one rule from the automation cache and
@@ -237,7 +237,7 @@ func (s *Server) handleUpdateAutomationRule(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Rule operation"))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": rule})
+	respond(c, rule)
 }
 
 func (s *Server) handleDeleteAutomationRule(c *gin.Context) {
@@ -250,7 +250,7 @@ func (s *Server) handleDeleteAutomationRule(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Rule operation"))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleToggleAutomationRule(c *gin.Context) {
@@ -265,7 +265,7 @@ func (s *Server) handleToggleAutomationRule(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Rule operation"))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleListWebhooks(c *gin.Context) {
@@ -296,7 +296,7 @@ func (s *Server) handleCreateWebhook(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create webhook")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": wh})
+	respond(c, wh)
 }
 
 func (s *Server) handleDeleteWebhook(c *gin.Context) {
@@ -316,7 +316,7 @@ func (s *Server) handleDeleteWebhook(c *gin.Context) {
 		respondError(c, http.StatusNotFound, "webhook not found")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleTestWebhook(c *gin.Context) {
@@ -378,7 +378,7 @@ func (s *Server) handlePluginList(c *gin.Context) {
 
 	s.marketplace.BatchEnrichPlugins(plugins)
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": plugins})
+	respond(c, plugins)
 }
 
 func (s *Server) handlePluginToggle(c *gin.Context) {
@@ -440,7 +440,7 @@ func (s *Server) handlePluginDelete(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to delete plugin")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handlePluginCreate(c *gin.Context) {
@@ -454,7 +454,7 @@ func (s *Server) handlePluginCreate(c *gin.Context) {
 		return
 	}
 	s.tryRegisterPluginFromDisk(p.Name)
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": p})
+	respond(c, p)
 }
 
 func (s *Server) handlePluginsPage(c *gin.Context) {
@@ -468,7 +468,7 @@ func (s *Server) handlePluginGet(c *gin.Context) {
 		respondError(c, http.StatusNotFound, "plugin not found")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": plugin})
+	respond(c, plugin)
 }
 
 func (s *Server) handlePluginRating(c *gin.Context) {
@@ -484,7 +484,7 @@ func (s *Server) handlePluginRating(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Plugin operation"))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": summary})
+	respond(c, summary)
 }
 
 func (s *Server) handlePluginReviews(c *gin.Context) {
@@ -500,7 +500,7 @@ func (s *Server) handlePluginReviews(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Plugin operation"))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": reviews})
+	respond(c, reviews)
 }
 
 func (s *Server) handlePluginAddReview(c *gin.Context) {
@@ -529,7 +529,7 @@ func (s *Server) handlePluginAddReview(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Plugin operation"))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // handlePluginRate submits a rating for a plugin.
@@ -562,7 +562,7 @@ func (s *Server) handlePluginRate(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Plugin operation"))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handlePluginDependencies(c *gin.Context) {
@@ -578,7 +578,7 @@ func (s *Server) handlePluginDependencies(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Plugin operation"))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": deps})
+	respond(c, deps)
 }
 
 func (s *Server) handlePluginUpdateStatus(c *gin.Context) {
@@ -624,7 +624,7 @@ func (s *Server) handlePluginUpdate(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, sanitizeError(err, "Plugin operation"))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handlePluginExport(c *gin.Context) {
@@ -676,12 +676,12 @@ func (s *Server) handlePluginImport(c *gin.Context) {
 		return
 	}
 	s.tryRegisterPluginFromDisk(plugin.Name)
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": plugin})
+	respond(c, plugin)
 }
 
 func (s *Server) handlePluginCheckUpdates(c *gin.Context) {
 	s.marketplace.CheckAllUpdates()
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handlePluginUpdateSummary(c *gin.Context) {
@@ -725,7 +725,7 @@ func (s *Server) handleBOFRepoIndex(c *gin.Context) {
 		{Name: "Rafael BOF", URL: "https://github.com/outflanknl/CS-Remote-OPs-BOF", Description: "Outflank BOF collection"},
 		{Name: "Encode BOF", URL: "https://github.com/anthemtotheego/BOFs", Description: "Anthem BOF collection"},
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": repos})
+	respond(c, repos)
 }
 
 func (s *Server) handleBOFRepoImport(c *gin.Context) {
@@ -824,5 +824,5 @@ func (s *Server) handleBOFRepoRate(c *gin.Context) {
 	bofRatingsMu.Lock()
 	bofRatings[itemID] = req.Rating
 	bofRatingsMu.Unlock()
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }

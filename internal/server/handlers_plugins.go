@@ -346,7 +346,7 @@ func (s *Server) handlePluginEnable(c *gin.Context) {
 		slog.Error("Failed to persist plugin enable", "plugin", p.Name, "err", err)
 	}
 	s.LogAuditRecord(c, "plugin_enable", "plugin", p.Name, "enabled plugin", true, nil)
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handlePluginDisable(c *gin.Context) {
@@ -363,7 +363,7 @@ func (s *Server) handlePluginDisable(c *gin.Context) {
 		slog.Error("Failed to persist plugin disable", "plugin", p.Name, "err", err)
 	}
 	s.LogAuditRecord(c, "plugin_disable", "plugin", p.Name, "disabled plugin", true, nil)
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // pluginManifest extracts the manifest from an external plugin wrapper.

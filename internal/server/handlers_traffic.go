@@ -1,7 +1,6 @@
 package server
 
 import (
-	"net/http"
 	"sync"
 	"time"
 
@@ -200,5 +199,5 @@ func (s *Server) handleTrafficPage(c *gin.Context) {
 
 func (s *Server) handleTrafficData(c *gin.Context) {
 	logs := s.trafficLog.recent(200)
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": logs})
+	respond(c, logs)
 }

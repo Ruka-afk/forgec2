@@ -102,5 +102,5 @@ func (s *Server) handleDeleteSavedView(c *gin.Context) {
 		respondError(c, http.StatusNotFound, "view not found")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }

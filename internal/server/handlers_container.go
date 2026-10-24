@@ -74,7 +74,7 @@ func detectContainer() containerInfo {
 // GET /api/container/status
 func (s *Server) handleContainerStatus(c *gin.Context) {
 	info := detectContainer()
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": info})
+	respond(c, info)
 }
 
 // handleContainerAgents returns agents that are running inside containers.

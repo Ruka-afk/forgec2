@@ -75,7 +75,7 @@ func (s *Server) handleDeleteTemplate(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // handleGetTemplatesByCategory returns templates by category
@@ -116,7 +116,7 @@ func (s *Server) handleUpdateTemplate(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to update template")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // handleListTemplatesJSON returns all templates as JSON

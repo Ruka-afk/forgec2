@@ -103,7 +103,7 @@ func (s *Server) handleAIProfilesList(c *gin.Context) {
 		}
 		views = append(views, view)
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": views})
+	respond(c, views)
 }
 
 type aiProfileInput struct {
@@ -281,7 +281,7 @@ func (s *Server) handleAIProfileDelete(c *gin.Context) {
 		return
 	}
 	s.LogOperatorAction(c, OperatorAction{Action: "ai_profile_delete", Resource: "ai_profile", TargetID: fmt.Sprint(profile.ID), RiskLevel: "high", Details: profile.Name})
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleAIProfileTest(c *gin.Context) {

@@ -153,7 +153,7 @@ func (s *Server) handleUpdateMacro(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "macro_update", "macro", id, req.Name, true, nil)
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleDeleteMacro(c *gin.Context) {
@@ -168,7 +168,7 @@ func (s *Server) handleDeleteMacro(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "macro_delete", "macro", id, "", true, nil)
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleListMacroRuns(c *gin.Context) {
@@ -206,7 +206,7 @@ func (s *Server) handleStopMacroRun(c *gin.Context) {
 	}
 	s.broadcastOperatorEvent(map[string]interface{}{"type": "macro_update", "run_id": id, "status": "stopped"})
 	s.LogAuditRecord(c, "macro_stop", "macro", id, "", true, nil)
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 type macroRunRequest struct {

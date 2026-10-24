@@ -89,7 +89,7 @@ func (s *Server) handleCancelOneShotTask(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "oneshot_cancel", "agent", id, "", true, nil)
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // recoverClaimedOneShotTasks returns claims left behind by an interrupted

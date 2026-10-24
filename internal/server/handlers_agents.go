@@ -386,7 +386,7 @@ func (s *Server) handleUpdateNote(c *gin.Context) {
 	}
 	s.LogAuditRecord(c, "update_notes", "agent", id, "notes/tags updated", true, nil)
 	s.broadcastAgentDataUpdate(id, updates)
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleDeleteAgent(c *gin.Context) {
@@ -406,7 +406,7 @@ func (s *Server) handleDeleteAgent(c *gin.Context) {
 		return
 	}
 	slog.Warn("Agent deleted", "agent_id", id)
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // deleteAgentRecordTx deletes an agent and all of its dependent rows within the

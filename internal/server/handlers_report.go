@@ -838,7 +838,7 @@ func (s *Server) handleAPIDeleteReport(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to delete report")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // buildReportData constructs a gin.H report matching the format expected by generateHTMLReport

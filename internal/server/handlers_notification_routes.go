@@ -337,7 +337,7 @@ func (s *Server) handleUpdateNotificationRoute(c *gin.Context) {
 		return
 	}
 	if len(updates) == 0 {
-		c.JSON(http.StatusOK, gin.H{"success": true})
+		respond(c, gin.H{})
 		return
 	}
 	if err := s.db.Model(&db.NotificationRoute{}).Where("id = ?", id).Updates(updates).Error; err != nil {
@@ -345,7 +345,7 @@ func (s *Server) handleUpdateNotificationRoute(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "notification_route_update", "settings", id, "", true, nil)
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleDeleteNotificationRoute(c *gin.Context) {
@@ -360,7 +360,7 @@ func (s *Server) handleDeleteNotificationRoute(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "notification_route_delete", "settings", id, "", true, nil)
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // handleTestNotificationRoute sends a test message through the configured
@@ -382,5 +382,5 @@ func (s *Server) handleTestNotificationRoute(c *gin.Context) {
 		respondError(c, http.StatusBadGateway, "notification delivery failed")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }

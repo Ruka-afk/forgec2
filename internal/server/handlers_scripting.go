@@ -70,7 +70,7 @@ func (s *Server) handleAPIGetScripts(c *gin.Context) {
 		handleQueryError(c, err, "Failed to list scripts")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": scripts})
+	respond(c, scripts)
 }
 
 func (s *Server) handleAPISaveScript(c *gin.Context) {
@@ -133,7 +133,7 @@ func (s *Server) handleAPISaveScript(c *gin.Context) {
 		LastRun:     row.LastRun,
 	}
 	s.LogAuditRecord(c, "save_script", "scripting", script.ID, "Script saved: "+req.Name, true, nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": script})
+	respond(c, script)
 }
 
 func (s *Server) handleAPIDeleteScript(c *gin.Context) {
@@ -157,7 +157,7 @@ func (s *Server) handleAPIDeleteScript(c *gin.Context) {
 	}
 	scripting.GetEngine().UnloadScript(row.Name)
 	s.LogAuditRecord(c, "delete_script", "scripting", id, "Script deleted", true, nil)
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleAPIExecuteScript(c *gin.Context) {

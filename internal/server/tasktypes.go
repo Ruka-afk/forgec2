@@ -1,8 +1,6 @@
 package server
 
 import (
-	"net/http"
-
 	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
 )
@@ -166,5 +164,5 @@ func getTaskTypeInfo(t string) (TaskTypeInfo, bool) {
 
 // apiListTaskTypes returns the full task type registry for frontend consumption.
 func (s *Server) apiListTaskTypes(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": GetRegisteredTaskTypes()})
+	respond(c, GetRegisteredTaskTypes())
 }

@@ -166,7 +166,7 @@ func (s *Server) handleDeleteExtC2Config(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "extc2_config_delete", "extc2", channel.ChannelID, fmt.Sprintf("Deleted %s External C2 config", channel.Type), true, nil)
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) restoreExtC2Channels() {

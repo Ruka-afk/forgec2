@@ -371,7 +371,7 @@ func (s *Server) handleCookieProxyStop(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "cookie_proxy_stop", "agent", id, "", true, nil)
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleCookieProxyStatus(c *gin.Context) {

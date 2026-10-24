@@ -246,7 +246,7 @@ func (s *Server) handleDBBackupList(c *gin.Context) {
 		return backups[i].ModTime > backups[j].ModTime
 	})
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": backups})
+	respond(c, backups)
 }
 
 // requireSQLiteDB rejects SQLite-only maintenance endpoints when the server

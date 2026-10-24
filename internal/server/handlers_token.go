@@ -237,7 +237,7 @@ func (s *Server) handleTokenDrop(c *gin.Context) {
 	}
 
 	s.LogAuditRecord(c, "token_drop", "agent", id, fmt.Sprintf("dropped token entry %s", tokenIDStr), true, nil)
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // handleTokenImpersonate re-activates a saved token (re-steal from same pid)
@@ -395,7 +395,7 @@ func (s *Server) handleTokenNoteUpdate(c *gin.Context) {
 		respondError(c, http.StatusNotFound, "token not found")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€

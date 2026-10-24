@@ -165,7 +165,7 @@ func (s *Server) handleAIAttachmentsList(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to list attachments")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": attachments})
+	respond(c, attachments)
 }
 
 func (s *Server) handleAIAttachmentDelete(c *gin.Context) {
@@ -183,7 +183,7 @@ func (s *Server) handleAIAttachmentDelete(c *gin.Context) {
 		respondError(c, http.StatusNotFound, "attachment not found")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleAIKnowledgeCollectionsList(c *gin.Context) {
@@ -197,7 +197,7 @@ func (s *Server) handleAIKnowledgeCollectionsList(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to list knowledge collections")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": collections})
+	respond(c, collections)
 }
 
 func (s *Server) handleAIKnowledgeCollectionCreate(c *gin.Context) {
@@ -279,7 +279,7 @@ func (s *Server) handleAIKnowledgeCollectionDelete(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to delete knowledge collection")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleAIKnowledgeSourcesList(c *gin.Context) {
@@ -298,7 +298,7 @@ func (s *Server) handleAIKnowledgeSourcesList(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to list knowledge sources")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": sources})
+	respond(c, sources)
 }
 
 func (s *Server) handleAIKnowledgeSourceDelete(c *gin.Context) {
@@ -334,7 +334,7 @@ func (s *Server) handleAIKnowledgeSourceDelete(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to delete knowledge source")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func splitAIKnowledge(content string) []string {
@@ -582,7 +582,7 @@ func (s *Server) handleAIKnowledgeSearch(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "knowledge search failed")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": results})
+	respond(c, results)
 }
 
 func (s *Server) executeAIKnowledgeSearchTool(reqCtx *aiReqCtx, argsJSON string) string {
