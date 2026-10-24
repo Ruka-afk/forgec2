@@ -183,7 +183,7 @@ func (s *Server) handleIntegrationsCreate(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "create_integration", "integration", strconv.FormatUint(uint64(wh.ID), 10), req.Name, true, nil)
-	respond(c, gin.H{"success": true, "integration": integrationToMap(wh)})
+	respond(c, gin.H{"integration": integrationToMap(wh)})
 }
 
 func (s *Server) handleIntegrationsUpdate(c *gin.Context) {
@@ -262,7 +262,7 @@ func (s *Server) handleIntegrationsUpdate(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "update_integration", "integration", id, wh.Name, true, nil)
-	respond(c, gin.H{"success": true, "integration": integrationToMap(wh)})
+	respond(c, gin.H{"integration": integrationToMap(wh)})
 }
 
 func (s *Server) handleIntegrationsDelete(c *gin.Context) {
@@ -275,7 +275,7 @@ func (s *Server) handleIntegrationsDelete(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "delete_integration", "integration", id, "", true, nil)
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleIntegrationsToggle(c *gin.Context) {
@@ -293,7 +293,7 @@ func (s *Server) handleIntegrationsToggle(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Integration"))
 		return
 	}
-	respond(c, gin.H{"success": true, "integration": integrationToMap(wh)})
+	respond(c, gin.H{"integration": integrationToMap(wh)})
 }
 
 // handleActiveMalleable and GET /integrations/malleable were removed. The

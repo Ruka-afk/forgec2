@@ -304,9 +304,7 @@ func TestGroupCRUDAndAggregation(t *testing.T) {
 	var payload struct {
 		ID string `json:"id"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
+	unmarshalData(t, w.Body.Bytes(), &payload)
 	if payload.ID == "" {
 		t.Fatal("create returned no group id")
 	}
@@ -341,9 +339,7 @@ func TestGroupCRUDAndAggregation(t *testing.T) {
 			ChildCount int    `json:"child_count"`
 		} `json:"groups"`
 	}
-	if err := json.Unmarshal(w2.Body.Bytes(), &listed); err != nil {
-		t.Fatalf("decode list: %v", err)
-	}
+	unmarshalData(t, w2.Body.Bytes(), &listed)
 	var found bool
 	for _, g := range listed.Groups {
 		if g.Name == "parent" {
@@ -422,9 +418,7 @@ func TestWorkflowListAndUpdateRoundTrip(t *testing.T) {
 		Page      int           `json:"page"`
 		PageSize  int           `json:"page_size"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
+	unmarshalData(t, w.Body.Bytes(), &payload)
 	if payload.Total != 1 || len(payload.Workflows) != 1 {
 		t.Fatalf("list = %+v, want the seeded workflow with total 1", payload)
 	}

@@ -106,7 +106,7 @@ func (s *Server) handleAutoTagDelete(c *gin.Context) {
 		respondError(c, http.StatusNotFound, "rule not found")
 		return
 	}
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // handleAutoTagApply evaluates all enabled rules against current agents.

@@ -44,7 +44,7 @@ func (s *Server) handleAPIWorkflowsToggle(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to update workflow")
 		return
 	}
-	respond(c, gin.H{"success": true, "enabled": wf.Enabled})
+	respond(c, gin.H{"enabled": wf.Enabled})
 	s.LogAuditRecord(c, "workflow_toggle", "workflow", wf.ID, fmt.Sprintf("Workflow %s", map[bool]string{true: "enabled", false: "disabled"}[wf.Enabled]), true, nil)
 }
 
@@ -59,7 +59,7 @@ func (s *Server) handleAPIWorkflowsExecute(c *gin.Context) {
 	switch wf.ScopeType {
 	case "tags", "groups", "agents":
 		if wf.ScopeIDs == "" {
-			respond(c, gin.H{"success": true, "task_count": 0, "agents_count": 0})
+			respond(c, gin.H{"task_count": 0, "agents_count": 0})
 			return
 		}
 		var ids []string
@@ -101,7 +101,7 @@ func (s *Server) handleAPIWorkflowsExecute(c *gin.Context) {
 		return
 	}
 
-	respond(c, gin.H{"success": true, "task_count": taskCount, "agents_count": agentsCount})
+	respond(c, gin.H{"task_count": taskCount, "agents_count": agentsCount})
 	s.LogAuditRecord(c, "workflow_execute", "workflow", wf.ID, fmt.Sprintf("Executed workflow on %d agent(s), created %d task(s)", agentsCount, taskCount), true, nil)
 }
 
@@ -153,7 +153,7 @@ func (s *Server) handleAPICreateWorkflow(c *gin.Context) {
 			slog.Error("Failed to create workflow step", "workflow_id", wf.ID, "step", i+1, "error", err)
 		}
 	}
-	respond(c, gin.H{"success": true, "id": wf.ID})
+	respond(c, gin.H{"id": wf.ID})
 }
 
 func (s *Server) handleAPIUpdateWorkflow(c *gin.Context) {
@@ -213,7 +213,7 @@ func (s *Server) handleAPIUpdateWorkflow(c *gin.Context) {
 			}
 		}
 	}
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // executionSummary is one grouped workflow run (derived from execution_logs).
@@ -357,7 +357,7 @@ func (s *Server) handleAPIDeleteWorkflow(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "delete_workflow", "workflow", id, "Workflow deleted", true, nil)
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleAPIGroups(c *gin.Context) {
@@ -453,7 +453,7 @@ func (s *Server) handleAPICreateGroup(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Workflow operation"))
 		return
 	}
-	respond(c, gin.H{"success": true, "id": group.ID})
+	respond(c, gin.H{"id": group.ID})
 }
 
 func (s *Server) handleAPIUpdateGroup(c *gin.Context) {
@@ -487,7 +487,7 @@ func (s *Server) handleAPIUpdateGroup(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to update group")
 		return
 	}
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleAPIDeleteGroup(c *gin.Context) {
@@ -518,5 +518,5 @@ func (s *Server) handleAPIDeleteGroup(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "delete_group", "group", id, "Agent group deleted", true, nil)
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }

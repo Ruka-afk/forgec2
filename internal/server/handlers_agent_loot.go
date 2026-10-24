@@ -233,5 +233,5 @@ func (s *Server) handleLootBulkDelete(c *gin.Context) {
 			}
 		}
 	}
-	respond(c, gin.H{"success": true, "deleted": deleted})
+	respond(c, gin.H{"deleted": deleted})
 }

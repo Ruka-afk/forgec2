@@ -377,7 +377,7 @@ func (s *Server) handleDeleteProfile(c *gin.Context) {
 		respondError(c, http.StatusNotFound, sanitizeError(err, "Profile deletion"))
 		return
 	}
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleGeneratePage(c *gin.Context) {

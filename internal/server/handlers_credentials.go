@@ -1074,7 +1074,7 @@ func (s *Server) handleGetCredential(c *gin.Context) {
 	cred.Notes = decryptCredNotes(cred.Notes)
 	s.LogAuditRecord(c, "credential_view", "credential", cred.AgentID,
 		"viewed credential id="+c.Param("cred_id")+" (domain="+cred.Domain+", user="+cred.Username+")", true, nil)
-	respondSuccess(c, cred)
+	respond(c, cred)
 }
 
 func (s *Server) handleDeleteCredential(c *gin.Context) {

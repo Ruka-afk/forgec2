@@ -38,8 +38,9 @@ export default function BOFRepoTab({ repoItems, loading, error, onRetry, onImpor
     if (!importUrl.trim()) return;
     setImportStatus({ loading: true, message: t("bof.importing"), success: false });
     const result = await onImportUrl(importUrl, importName || undefined);
-    setImportStatus({ loading: false, message: result.message, success: result.success });
-    if (result.success) {
+    const ok = result.success !== false;
+    setImportStatus({ loading: false, message: result.message, success: ok });
+    if (ok) {
       setImportUrl("");
       setImportName("");
     }

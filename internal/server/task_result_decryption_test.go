@@ -169,9 +169,7 @@ func TestPrivescResultsAreDecrypted(t *testing.T) {
 			Result string `json:"result"`
 		} `json:"results"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
+	unmarshalData(t, w.Body.Bytes(), &payload)
 	if len(payload.Results) != 1 {
 		t.Fatalf("results length = %d, want 1", len(payload.Results))
 	}

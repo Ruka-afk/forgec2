@@ -98,7 +98,7 @@ func (s *Server) handleAPICircuitBreakerSaveConfig(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to save config")
 		return
 	}
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleAPICircuitBreakerReset(c *gin.Context) {
@@ -135,7 +135,7 @@ func (s *Server) handleAPICircuitBreakerReset(c *gin.Context) {
 		slog.Error("Failed to record circuit breaker event", "err", err)
 	}
 	s.LogAuditRecord(c, "circuit_breaker_reset", "listener", listenerID, "Circuit breaker reset for listener", true, nil)
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleAPICircuitBreakerToggle(c *gin.Context) {
@@ -193,5 +193,5 @@ func (s *Server) handleAPICircuitBreakerToggle(c *gin.Context) {
 	}).Error; err != nil {
 		slog.Error("Failed to record circuit breaker event", "err", err)
 	}
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }

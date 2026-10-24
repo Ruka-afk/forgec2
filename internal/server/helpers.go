@@ -24,14 +24,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// respond sends a JSON 200 response with the given payload.
+// respond sends the canonical success envelope:
+//
+//	{"success": true, "data": <payload>}
+//
+// Every JSON 200 body from this server uses this shape (errors use
+// respondError's {"success": false, "error": "..."}). Pass a plain payload,
+// never gin.H{"success": true, ...}: that would nest a second envelope, and
+// TestSuccessEnvelope pins the single-wrap contract.
 func respond(c *gin.Context, data interface{}) {
-	c.JSON(http.StatusOK, data)
-}
-
-// respondSuccess wraps data in the standard success envelope: {success: true, data: ...}.
-// Use this for all list/detail endpoints to ensure a consistent API response format.
-func respondSuccess(c *gin.Context, data interface{}) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": data})
 }
 

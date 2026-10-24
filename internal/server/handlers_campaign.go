@@ -37,7 +37,7 @@ func (s *Server) handleCampaignsList(c *gin.Context) {
 		handleQueryError(c, err, "Failed to list campaigns")
 		return
 	}
-	respond(c, gin.H{"success": true, "data": campaigns})
+	respond(c, campaigns)
 }
 
 // handleCampaignGet returns a single campaign with aggregated stats.
@@ -95,7 +95,7 @@ func (s *Server) handleCampaignCreate(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create campaign")
 		return
 	}
-	respond(c, gin.H{"success": true, "id": campaign.ID, "campaign": campaign})
+	respond(c, gin.H{"id": campaign.ID, "campaign": campaign})
 }
 
 // handleCampaignUpdate updates a campaign (e.g. status).
@@ -129,7 +129,7 @@ func (s *Server) handleCampaignUpdate(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to update campaign")
 		return
 	}
-	respond(c, gin.H{"success": true, "campaign": campaign})
+	respond(c, gin.H{"campaign": campaign})
 }
 
 // handleCampaignDelete deletes a campaign and its agent associations.
@@ -145,7 +145,7 @@ func (s *Server) handleCampaignDelete(c *gin.Context) {
 		respondError(c, http.StatusNotFound, "campaign not found")
 		return
 	}
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // handleCampaignMitre returns the MITRE ATT&CK status for a campaign.
@@ -203,14 +203,11 @@ func (s *Server) handleCampaignMitre(c *gin.Context) {
 		})
 	}
 
-	respond(c, gin.H{
-		"success": true,
-		"data": map[string]interface{}{
-			"campaign_id":   campaign.ID,
-			"campaign_name": campaign.Name,
-			"phases":        phases,
-			"timeline":      buildPhaseTimeline(tasks),
-		},
+	respond(c, map[string]interface{}{
+		"campaign_id":   campaign.ID,
+		"campaign_name": campaign.Name,
+		"phases":        phases,
+		"timeline":      buildPhaseTimeline(tasks),
 	})
 }
 
@@ -402,7 +399,6 @@ func (s *Server) handleCampaignKillChain(c *gin.Context) {
 		fmt.Sprintf("seeded %d tasks from template %s across %d agents (%d skipped at the pending ceiling)",
 			len(tasks), tpl.Name, len(agents), skippedAgents), true, nil)
 	respond(c, gin.H{
-		"success":        true,
 		"campaign_id":    id,
 		"template":       tpl.Name,
 		"tasks_created":  len(tasks),
@@ -414,7 +410,7 @@ func (s *Server) handleCampaignKillChain(c *gin.Context) {
 // handleMitreTemplates returns the built-in kill chain templates.
 // GET /mitre/templates
 func (s *Server) handleMitreTemplates(c *gin.Context) {
-	respond(c, gin.H{"success": true, "data": builtinKillChainTemplates()})
+	respond(c, builtinKillChainTemplates())
 }
 
 // handleMitreTimeline returns the phase timeline for a campaign (or all tasks).
@@ -448,7 +444,7 @@ func (s *Server) handleMitreTimeline(c *gin.Context) {
 		}
 	}
 
-	respond(c, gin.H{"success": true, "data": buildPhaseTimeline(tasks)})
+	respond(c, buildPhaseTimeline(tasks))
 }
 
 func computeCampaignStats(agents []db.Implant, tasks []db.Task) map[string]interface{} {

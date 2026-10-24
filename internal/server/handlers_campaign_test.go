@@ -75,14 +75,11 @@ func TestCampaignKillChainSeedsTasks(t *testing.T) {
 		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
 	}
 	var resp struct {
-		Success      bool `json:"success"`
-		TasksCreated int  `json:"tasks_created"`
-		Agents       int  `json:"agents"`
+		TasksCreated int `json:"tasks_created"`
+		Agents       int `json:"agents"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatal(err)
-	}
-	if !resp.Success || resp.TasksCreated != 14 || resp.Agents != 2 {
+	unmarshalData(t, w.Body.Bytes(), &resp)
+	if resp.TasksCreated != 14 || resp.Agents != 2 {
 		t.Fatalf("unexpected response: %+v", resp)
 	}
 
@@ -309,9 +306,7 @@ func TestCampaignCreateStampsTenant(t *testing.T) {
 		ID       string      `json:"id"`
 		Campaign db.Campaign `json:"campaign"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
-		t.Fatalf("decode: %v (%s)", err, w.Body.String())
-	}
+	unmarshalData(t, w.Body.Bytes(), &body)
 	if body.ID == "" {
 		t.Fatal("create returned no id")
 	}
@@ -357,9 +352,7 @@ func TestCampaignKillChainStampsTenantAndCreator(t *testing.T) {
 		AgentsSkipped int    `json:"agents_skipped"`
 		Template      string `json:"template"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
-		t.Fatalf("decode: %v (%s)", err, w.Body.String())
-	}
+	unmarshalData(t, w.Body.Bytes(), &body)
 	if body.Template != "Stealth Operations" || body.Agents != 1 {
 		t.Fatalf("response = %+v", body)
 	}

@@ -305,7 +305,7 @@ func (s *Server) handleListAgentScreenshots(c *gin.Context) {
 	if end > len(screenshots) {
 		end = len(screenshots)
 	}
-	respondSuccess(c, gin.H{
+	respond(c, gin.H{
 		"screenshots": screenshots[start:end],
 		"total":       len(screenshots),
 		"page":        p.Page,
@@ -715,7 +715,7 @@ func (s *Server) handleListUnlinkedAgents(c *gin.Context) {
 		handleQueryError(c, err, "Failed to list unlinked agents")
 		return
 	}
-	respondSuccess(c, agents)
+	respond(c, agents)
 }
 
 // handleToggleAgentTrust toggles the trusted status of an agent.
@@ -738,7 +738,7 @@ func (s *Server) handleToggleAgentTrust(c *gin.Context) {
 		return
 	}
 	slog.Info("Agent trust toggled", "agent_id", id, "trusted", newTrusted)
-	respond(c, gin.H{"success": true, "trusted": newTrusted})
+	respond(c, gin.H{"trusted": newTrusted})
 }
 
 // handleGetAgentConfig returns the effective config for a specific agent.
@@ -772,13 +772,10 @@ func (s *Server) handleGetAgentConfig(c *gin.Context) {
 	}
 
 	respond(c, gin.H{
-		"success": true,
-		"data": gin.H{
-			"agent_id":        id,
-			"effective":       gin.H{"sleep": sleep, "jitter": jitter, "user_agent": ua, "headers": nil, "beacon_uri": "/beacon", "method": "POST"},
-			"has_pending":     hasPending,
-			"pending_task_id": pendingTaskID,
-		},
+		"agent_id":        id,
+		"effective":       gin.H{"sleep": sleep, "jitter": jitter, "user_agent": ua, "headers": nil, "beacon_uri": "/beacon", "method": "POST"},
+		"has_pending":     hasPending,
+		"pending_task_id": pendingTaskID,
 	})
 }
 

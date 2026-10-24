@@ -45,13 +45,22 @@ func setPostJSON(t *testing.T, c *gin.Context, body map[string]any) {
 	c.Request.Header.Set("Content-Type", "application/json")
 }
 
+// respondJSON decodes a success response into its data payload: every JSON
+// 200 body is {"success": true, "data": ...} (respond wraps exactly once), so
+// the payload map is what handlers' assertions are about.
 func respondJSON(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
 	t.Helper()
-	var m map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &m); err != nil {
+	var env struct {
+		Success bool           `json:"success"`
+		Data    map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
 		t.Fatalf("handler did not return JSON: %v; body=%s", err, w.Body.String())
 	}
-	return m
+	if !env.Success {
+		t.Fatalf("handler returned success=false: body=%s", w.Body.String())
+	}
+	return env.Data
 }
 
 func TestHandlePackerTemplates_OnlyImplementedTemplates(t *testing.T) {
@@ -205,13 +214,12 @@ func TestHandlePackerBundle_OverflowUsesSafeFallback(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 after import fallback, got %d; body=%s", w.Code, w.Body.String())
 	}
-	var resp struct {
-		Data string `json:"data"`
+	m := respondJSON(t, w)
+	data, _ := m["data"].(string)
+	if data == "" {
+		t.Fatal("bundle response missing data")
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil || resp.Data == "" {
-		t.Fatalf("bundle response missing data: %v", err)
-	}
-	out, err := base64.StdEncoding.DecodeString(resp.Data)
+	out, err := base64.StdEncoding.DecodeString(data)
 	if err != nil {
 		t.Fatalf("decode bundle: %v", err)
 	}

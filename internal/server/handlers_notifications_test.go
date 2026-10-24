@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -45,9 +44,7 @@ func TestHandleListNotifications_Contract(t *testing.T) {
 		Notifications []db.Notification `json:"notifications"`
 		Total         int64             `json:"total"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
-	}
+	unmarshalData(t, w.Body.Bytes(), &resp)
 	if resp.Total != 2 {
 		t.Fatalf("total = %d, want 2", resp.Total)
 	}
@@ -69,9 +66,7 @@ func TestHandleListNotifications_FilterUnread(t *testing.T) {
 	var resp struct {
 		Total int64 `json:"total"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("invalid json: %v", err)
-	}
+	unmarshalData(t, w.Body.Bytes(), &resp)
 	if resp.Total != 1 {
 		t.Fatalf("unread total = %d, want 1", resp.Total)
 	}

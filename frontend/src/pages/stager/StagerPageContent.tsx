@@ -67,10 +67,13 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
 
   const { data, loading, error, refresh: loadData } = useApiResource<{ tokens: StagerToken[]; listeners: Listener[] }>({
     fetcher: async () => {
-      const res = await api.get<{ success: boolean; data: StagerToken[] }>("/stager/tokens");
+      // api.get already unwraps the {success, data} envelope, so this is the
+      // token array itself. Reading `res.success` here always yielded
+      // undefined, which silently rendered an empty token list.
+      const tokens = await api.get<StagerToken[]>("/stager/tokens");
       const lres = await api.get<unknown>(paths.listeners.list);
       const list = Array.isArray(lres) ? (lres as Listener[]) : (((lres as Record<string, unknown>)?.data as Listener[]) || ((lres as Record<string, unknown>)?.listeners as Listener[]) || []);
-      return { tokens: res.success ? res.data : [], listeners: list };
+      return { tokens: Array.isArray(tokens) ? tokens : [], listeners: list };
     },
     toastThrottleMs: POLL.toastThrottle,
     errorMessage: t("stager.toast.create_failed"),

@@ -58,7 +58,7 @@ func (s *Server) handleMarkNotificationRead(c *gin.Context) {
 		respondError(c, http.StatusNotFound, "notification not found")
 		return
 	}
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // handleMarkAllNotificationsRead marks all unread notifications as read.
@@ -68,7 +68,7 @@ func (s *Server) handleMarkAllNotificationsRead(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Notification operation"))
 		return
 	}
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // handleDeleteNotification deletes a single notification.
@@ -84,7 +84,7 @@ func (s *Server) handleDeleteNotification(c *gin.Context) {
 		respondError(c, http.StatusNotFound, "notification not found")
 		return
 	}
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // handleClearAllNotifications deletes all notifications (admin only).
@@ -97,5 +97,5 @@ func (s *Server) handleClearAllNotifications(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Notification operation"))
 		return
 	}
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }

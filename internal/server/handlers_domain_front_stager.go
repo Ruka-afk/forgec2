@@ -284,7 +284,7 @@ func (s *Server) handleAPIStagerTokens(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Domain front operation"))
 		return
 	}
-	respond(c, gin.H{"success": true, "data": tokens})
+	respond(c, tokens)
 }
 
 type stagerRegisterRequest struct {
@@ -392,7 +392,7 @@ func (s *Server) handleAPIStagerDelete(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "delete_stager_token", "stager_token", id, "Stager token deleted", true, nil)
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleAPITokenRevert(c *gin.Context) {
@@ -403,5 +403,5 @@ func (s *Server) handleAPITokenRevert(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "token_revert_all", "system", "", fmt.Sprintf("revoked %d active token(s)", result.RowsAffected), true, nil)
-	respond(c, gin.H{"success": true, "revoked": result.RowsAffected})
+	respond(c, gin.H{"revoked": result.RowsAffected})
 }

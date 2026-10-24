@@ -89,7 +89,7 @@ func (s *Server) handleOpsecRuleCreate(c *gin.Context) {
 	}
 
 	s.LogAuditRecord(c, "opsec_rule_create", "opsec_rule", req.Name, fmt.Sprintf("Created OPSEC rule: %s (risk=%d, action=%d)", req.Name, req.RiskLevel, req.Action), true, nil)
-	respond(c, gin.H{"success": true, "rule": rule})
+	respond(c, gin.H{"rule": rule})
 }
 
 // handleOpsecRuleDelete removes an OPSEC rule by name.
@@ -113,7 +113,7 @@ func (s *Server) handleOpsecRuleDelete(c *gin.Context) {
 	}
 
 	s.LogAuditRecord(c, "opsec_rule_delete", "opsec_rule", name, fmt.Sprintf("Deleted OPSEC rule: %s", name), true, nil)
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // handleOpsecRulesList returns all persisted OPSEC rules.

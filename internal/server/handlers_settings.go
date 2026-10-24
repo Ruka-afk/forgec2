@@ -774,16 +774,16 @@ func (s *Server) handleGetSettingsWebhooks(c *gin.Context) {
 	var cfg db.ServerConfig
 	s.db.Where("key = ?", "notification_targets").First(&cfg)
 	if cfg.Value == "" {
-		respond(c, gin.H{"data": gin.H{"notifications": []interface{}{}}})
+		respond(c, gin.H{"notifications": []interface{}{}})
 		return
 	}
 	var targets []interface{}
 	if err := json.Unmarshal([]byte(cfg.Value), &targets); err != nil {
 		slog.Error("Failed to parse stored notification targets", "err", err)
-		respond(c, gin.H{"data": gin.H{"notifications": []interface{}{}}})
+		respond(c, gin.H{"notifications": []interface{}{}})
 		return
 	}
-	respond(c, gin.H{"data": gin.H{"notifications": targets}})
+	respond(c, gin.H{"notifications": targets})
 }
 
 func (s *Server) handleSaveSettingsWebhooks(c *gin.Context) {
@@ -804,7 +804,7 @@ func (s *Server) handleSaveSettingsWebhooks(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Notification config"))
 		return
 	}
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleTestSettingsWebhook(c *gin.Context) {
@@ -838,7 +838,7 @@ func (s *Server) handleTestSettingsWebhook(c *gin.Context) {
 			respondError(c, http.StatusInternalServerError, sanitizeError(err, "Email test"))
 			return
 		}
-		respond(c, gin.H{"success": true, "message": "Test email sent successfully"})
+		respond(c, gin.H{"message": "Test email sent successfully"})
 		return
 	}
 
@@ -874,7 +874,7 @@ func (s *Server) handleTestSettingsWebhook(c *gin.Context) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		respond(c, gin.H{"success": true})
+		respond(c, gin.H{})
 	} else {
 		respondError(c, http.StatusBadGateway, fmt.Sprintf("upstream returned HTTP %d", resp.StatusCode))
 	}

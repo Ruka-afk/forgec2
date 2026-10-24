@@ -8,7 +8,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/json"
 	"math/big"
 	"net"
 	"net/http"
@@ -581,9 +580,7 @@ func TestHandleAPICircuitBreakerDetail(t *testing.T) {
 			FailReasons      []string `json:"fail_reasons"`
 		} `json:"listeners"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
-		t.Fatalf("decode: %v (%s)", err, w.Body.String())
-	}
+	unmarshalData(t, w.Body.Bytes(), &body)
 	if len(body.Listeners) != 1 {
 		t.Fatalf("got %d listeners, want 1", len(body.Listeners))
 	}
@@ -629,9 +626,7 @@ func TestHandleAPICircuitBreakerConfigRoundTrip(t *testing.T) {
 		t.Fatalf("status = %d", w.Code)
 	}
 	var cfg map[string]interface{}
-	if err := json.Unmarshal(w.Body.Bytes(), &cfg); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
+	unmarshalData(t, w.Body.Bytes(), &cfg)
 	if _, ok := cfg["failure_threshold"]; !ok {
 		t.Fatalf("config payload missing fields: %v", cfg)
 	}
@@ -654,9 +649,7 @@ func TestHandleAPICircuitBreakerConfigRoundTrip(t *testing.T) {
 	c3, w3 := cbCtx(http.MethodGet, "", "")
 	s.handleAPICircuitBreakerConfig(c3)
 	var reread map[string]interface{}
-	if err := json.Unmarshal(w3.Body.Bytes(), &reread); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
+	unmarshalData(t, w3.Body.Bytes(), &reread)
 	if reread["failure_threshold"] != float64(7) {
 		t.Fatalf("reloaded failure_threshold = %v, want 7", reread["failure_threshold"])
 	}
@@ -708,9 +701,7 @@ func TestHandleAPICircuitBreakerEventsOrdersNewestFirst(t *testing.T) {
 	var body struct {
 		Events []db.CircuitBreakerEvent `json:"events"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
+	unmarshalData(t, w.Body.Bytes(), &body)
 	if len(body.Events) != 3 {
 		t.Fatalf("got %d events, want 3", len(body.Events))
 	}

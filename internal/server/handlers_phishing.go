@@ -23,7 +23,7 @@ func (s *Server) handleAPIPhishingTemplates(c *gin.Context) {
 		handleQueryError(c, err, "Failed to list phishing templates")
 		return
 	}
-	respond(c, gin.H{"data": templates})
+	respond(c, templates)
 }
 
 func (s *Server) handleAPIPhishingCampaigns(c *gin.Context) {
@@ -33,7 +33,7 @@ func (s *Server) handleAPIPhishingCampaigns(c *gin.Context) {
 		handleQueryError(c, err, "Failed to list phishing campaigns")
 		return
 	}
-	respond(c, gin.H{"data": campaigns})
+	respond(c, campaigns)
 }
 
 func (s *Server) handleAPIPhishingCaptures(c *gin.Context) {
@@ -76,7 +76,7 @@ func (s *Server) handleAPIPhishingCaptures(c *gin.Context) {
 			CreatedAt: e.CreatedAt.Format(time.RFC3339),
 		})
 	}
-	respond(c, gin.H{"data": captures})
+	respond(c, captures)
 }
 
 func (s *Server) handleAPICreatePhishingTemplate(c *gin.Context) {
@@ -114,7 +114,7 @@ func (s *Server) handleAPICreatePhishingTemplate(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Phishing operation"))
 		return
 	}
-	respond(c, gin.H{"success": true, "id": tpl.ID})
+	respond(c, gin.H{"id": tpl.ID})
 }
 
 func (s *Server) handleAPIUpdatePhishingTemplate(c *gin.Context) {
@@ -158,7 +158,7 @@ func (s *Server) handleAPIUpdatePhishingTemplate(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to update phishing template")
 		return
 	}
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleAPIDeletePhishingTemplate(c *gin.Context) {
@@ -168,7 +168,7 @@ func (s *Server) handleAPIDeletePhishingTemplate(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "delete_phishing_template", "phishing_template", id, "Phishing template deleted", true, nil)
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleAPICreatePhishingCampaign(c *gin.Context) {
@@ -217,7 +217,7 @@ func (s *Server) handleAPICreatePhishingCampaign(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Phishing operation"))
 		return
 	}
-	respond(c, gin.H{"success": true, "id": camp.ID})
+	respond(c, gin.H{"id": camp.ID})
 }
 
 func parsePhishingTargets(raw string) []string {
@@ -417,7 +417,6 @@ func (s *Server) handleAPILaunchPhishingCampaign(c *gin.Context) {
 	s.LogAuditRecord(c, "launch_phishing_campaign", "phishing_campaign", id,
 		fmt.Sprintf("queued %d recipients via %s", len(targets), camp.SMTPHost), true, nil)
 	respond(c, gin.H{
-		"success": true,
 		"queued":  len(targets),
 		"message": fmt.Sprintf("Campaign launched. Queued %d emails for SMTP delivery.", len(targets)),
 	})
@@ -508,7 +507,7 @@ func (s *Server) handleAPIStopPhishingCampaign(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Phishing operation"))
 		return
 	}
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleAPIDeletePhishingCampaign(c *gin.Context) {
@@ -518,7 +517,7 @@ func (s *Server) handleAPIDeletePhishingCampaign(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "delete_phishing_campaign", "phishing_campaign", id, "Phishing campaign deleted", true, nil)
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // Public landing page for credential capture (no auth).

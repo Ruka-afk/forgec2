@@ -251,7 +251,7 @@ func (s *Server) handleMitrePhases(c *gin.Context) {
 		})
 	}
 
-	respond(c, gin.H{"success": true, "data": phases})
+	respond(c, phases)
 }
 
 // mitreTaskTacticIndex maps every task type in attackTacticMap to its tactic
@@ -368,14 +368,11 @@ func (s *Server) handleMitreHeatmap(c *gin.Context) {
 	}
 
 	respond(c, gin.H{
-		"success": true,
-		"data": gin.H{
-			"days":        dayKeys,
-			"tactics":     tacticOrder,
-			"cells":       cells,
-			"range":       rangeParam,
-			"total_tasks": sumCounts(merged),
-		},
+		"days":        dayKeys,
+		"tactics":     tacticOrder,
+		"cells":       cells,
+		"range":       rangeParam,
+		"total_tasks": sumCounts(merged),
 	})
 }
 

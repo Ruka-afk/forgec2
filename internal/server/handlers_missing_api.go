@@ -109,45 +109,42 @@ func (s *Server) handleAPISettings(c *gin.Context) {
 	runtime.ReadMemStats(&m)
 
 	respond(c, gin.H{
-		"success": true,
-		"data": gin.H{
-			"server": gin.H{
-				"port":                     cfgSnap.port,
-				"host":                     cfgSnap.host,
-				"tls_enabled":              cfgSnap.tlsEnabled,
-				"tcp_enabled":              cfgSnap.tcpEnabled,
-				"tcp_addr":                 cfgSnap.tcpAddr,
-				"log_level":                cfgSnap.logLevel,
-				"offline_threshold":        cfgSnap.offlineThreshold,
-				"session_max_age":          cfgSnap.sessionMaxAge,
-				"cleanup_retention":        cfgSnap.cleanupRetention,
-				"total_agents":             totalAgents,
-				"online_agents":            onlineAgents,
-				"total_listeners":          totalListeners,
-				"total_credentials":        totalCreds,
-				"total_tokens":             totalTokens,
-				"total_audits":             totalAudits,
-				"database_size":            dbSize,
-				"database_path":            "***",
-				"data_dir":                 "***",
-				"uptime":                   uptime.String(),
-				"go_version":               runtime.Version(),
-				"goos":                     runtime.GOOS,
-				"goarch":                   runtime.GOARCH,
-				"goroutines":               runtime.NumGoroutine(),
-				"alloc_mem":                int64(m.Alloc),
-				"total_alloc_mem":          int64(m.TotalAlloc),
-				"num_cpu":                  runtime.NumCPU(),
-				"protocol_version":         protocol.CurrentProtocolVersion,
-				"protocol_compat_window":   s.protocolCompatWindow(),
-				"protocol_outdated_agents": outdatedProtocolAgents,
-			},
-			"agent": gin.H{
-				"default_interval": cfgSnap.defaultInterval,
-				"default_jitter":   cfgSnap.defaultJitter,
-				"default_skip_tls": cfgSnap.defaultSkipTLS,
-				"default_ua":       cfgSnap.defaultUA,
-			},
+		"server": gin.H{
+			"port":                     cfgSnap.port,
+			"host":                     cfgSnap.host,
+			"tls_enabled":              cfgSnap.tlsEnabled,
+			"tcp_enabled":              cfgSnap.tcpEnabled,
+			"tcp_addr":                 cfgSnap.tcpAddr,
+			"log_level":                cfgSnap.logLevel,
+			"offline_threshold":        cfgSnap.offlineThreshold,
+			"session_max_age":          cfgSnap.sessionMaxAge,
+			"cleanup_retention":        cfgSnap.cleanupRetention,
+			"total_agents":             totalAgents,
+			"online_agents":            onlineAgents,
+			"total_listeners":          totalListeners,
+			"total_credentials":        totalCreds,
+			"total_tokens":             totalTokens,
+			"total_audits":             totalAudits,
+			"database_size":            dbSize,
+			"database_path":            "***",
+			"data_dir":                 "***",
+			"uptime":                   uptime.String(),
+			"go_version":               runtime.Version(),
+			"goos":                     runtime.GOOS,
+			"goarch":                   runtime.GOARCH,
+			"goroutines":               runtime.NumGoroutine(),
+			"alloc_mem":                int64(m.Alloc),
+			"total_alloc_mem":          int64(m.TotalAlloc),
+			"num_cpu":                  runtime.NumCPU(),
+			"protocol_version":         protocol.CurrentProtocolVersion,
+			"protocol_compat_window":   s.protocolCompatWindow(),
+			"protocol_outdated_agents": outdatedProtocolAgents,
+		},
+		"agent": gin.H{
+			"default_interval": cfgSnap.defaultInterval,
+			"default_jitter":   cfgSnap.defaultJitter,
+			"default_skip_tls": cfgSnap.defaultSkipTLS,
+			"default_ua":       cfgSnap.defaultUA,
 		},
 	})
 }
@@ -188,7 +185,7 @@ func (s *Server) handleAPIMeshTopology(c *gin.Context) {
 	for _, e := range edges {
 		edgeList = append(edgeList, topoEdge{From: e[0], To: e[1]})
 	}
-	respond(c, gin.H{"success": true, "nodes": nodes, "edges": edgeList})
+	respond(c, gin.H{"nodes": nodes, "edges": edgeList})
 }
 
 func (s *Server) handleAPITranslationsStats(c *gin.Context) {
@@ -395,7 +392,7 @@ func (s *Server) handleAPISendChatMessage(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Chat message"))
 		return
 	}
-	respond(c, gin.H{"success": true, "id": msg.ID})
+	respond(c, gin.H{"id": msg.ID})
 }
 
 func (s *Server) handleDownloadBuild(c *gin.Context) {
@@ -433,7 +430,7 @@ func (s *Server) handleConfigReload(c *gin.Context) {
 	}
 
 	s.LogAuditRecord(c, "config_reload", "system", "", "Configuration reloaded from disk", true, nil)
-	respond(c, gin.H{"success": true, "message": "configuration reloaded"})
+	respond(c, gin.H{"message": "configuration reloaded"})
 }
 
 func (s *Server) handlePackerArtifact(c *gin.Context) {
@@ -468,7 +465,7 @@ func (s *Server) handlePackerArtifact(c *gin.Context) {
 	}
 
 	s.LogAuditRecord(c, "packer_build_artifact", "packer", "", fmt.Sprintf("Built %s artifact (%d bytes)", filename, len(artifact)), true, nil)
-	c.JSON(http.StatusOK, gin.H{
+	respond(c, gin.H{
 		"data":     base64.StdEncoding.EncodeToString(artifact),
 		"filename": filename,
 		"size":     len(artifact),
@@ -511,7 +508,7 @@ func (s *Server) handleSettingsMaintenancePurge(c *gin.Context) {
 	}
 
 	s.LogAuditRecord(c, "maintenance_purge", "system", "", fmt.Sprintf("Purged data older than %d days (forensic tables excluded)", retentionDays), true, nil)
-	respond(c, gin.H{"success": true, "retention_days": retentionDays, "purged": results, "excluded": []string{"audit_logs", "opsec_history", "circuit_breaker_events"}})
+	respond(c, gin.H{"retention_days": retentionDays, "purged": results, "excluded": []string{"audit_logs", "opsec_history", "circuit_breaker_events"}})
 }
 
 // ── Agent Chain ──────────────────────────────────────────────────────
@@ -566,7 +563,7 @@ func (s *Server) handleAgentChainSet(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "agent_chain_set", "agents", agentID, fmt.Sprintf("Parent set to %s", req.ParentID), true, nil)
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleAgentChainClear(c *gin.Context) {
@@ -584,7 +581,7 @@ func (s *Server) handleAgentChainClear(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "agent_chain_clear", "agents", agentID, "Chain cleared", true, nil)
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // ── Mesh Route ───────────────────────────────────────────────────────
@@ -619,7 +616,7 @@ func (s *Server) handleMeshRoute(c *gin.Context) {
 		handleQueryError(c, err, "Failed to query mesh route")
 		return
 	}
-	respond(c, gin.H{"success": true, "peers": peers})
+	respond(c, gin.H{"peers": peers})
 }
 
 func (s *Server) handlePackerBundle(c *gin.Context) {
@@ -704,7 +701,7 @@ func (s *Server) handlePackerBundle(c *gin.Context) {
 	}
 
 	s.LogAuditRecord(c, "packer_bundle", "packer", "", fmt.Sprintf("Bundled payload (%d bytes)", len(artifact)), true, nil)
-	c.JSON(http.StatusOK, gin.H{
+	respond(c, gin.H{
 		"data": base64.StdEncoding.EncodeToString(artifact),
 		"size": len(artifact),
 	})

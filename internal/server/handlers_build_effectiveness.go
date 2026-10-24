@@ -113,15 +113,12 @@ func (s *Server) handleBuildEffectiveness(c *gin.Context) {
 	s.db.Table("build_logs").Where("status = ? AND created_at >= ?", "failed", since).Count(&failedCount)
 
 	respond(c, gin.H{
-		"success": true,
-		"data": gin.H{
-			"builds":          buildRows,
-			"window_hours":    windowHours,
-			"total_success":   successCount,
-			"total_failed":    failedCount,
-			"deployed_builds": totalDeployed,
-			"online_now":      totalOnline,
-		},
+		"builds":          buildRows,
+		"window_hours":    windowHours,
+		"total_success":   successCount,
+		"total_failed":    failedCount,
+		"deployed_builds": totalDeployed,
+		"online_now":      totalOnline,
 	})
 }
 

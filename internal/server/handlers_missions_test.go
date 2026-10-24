@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -62,9 +61,7 @@ func TestHandleActiveMissions(t *testing.T) {
 			Transferred int64  `json:"transferred"`
 		} `json:"missions"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
-	}
+	unmarshalData(t, w.Body.Bytes(), &resp)
 	if len(resp.Missions) != 2 {
 		t.Fatalf("expected 2 active missions (pending+running), got %d", len(resp.Missions))
 	}

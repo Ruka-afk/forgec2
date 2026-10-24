@@ -291,7 +291,7 @@ func (s *Server) handlePrivescRun(c *gin.Context) {
 	}
 	s.LogAuditRecord(c, "privesc_check", "agent", req.AgentID,
 		fmt.Sprintf("Privesc check task created (type: %s)", req.CheckType), true, nil)
-	respond(c, gin.H{"success": true, "task_id": task.ID})
+	respond(c, gin.H{"task_id": task.ID})
 }
 
 // handlePrivescExecute was removed 2026-10: privesc_execute was never a

@@ -65,9 +65,7 @@ func TestHandleGetOpsLog_WithData(t *testing.T) {
 	var resp struct {
 		History []db.OpsecHistory `json:"history"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
-	}
+	unmarshalData(t, w.Body.Bytes(), &resp)
 	if len(resp.History) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(resp.History))
 	}

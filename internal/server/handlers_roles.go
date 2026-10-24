@@ -67,7 +67,7 @@ func (s *Server) handleRolesList(c *gin.Context) {
 			UpdatedAt:   r.UpdatedAt.Format(time.RFC3339),
 		})
 	}
-	respond(c, gin.H{"success": true, "data": out})
+	respond(c, out)
 }
 
 // handleRolesCreate creates a new custom role (admin only).
@@ -94,7 +94,7 @@ func (s *Server) handleRolesCreate(c *gin.Context) {
 		respondErrorSafe(c, http.StatusBadRequest, err, "")
 		return
 	}
-	respond(c, gin.H{"success": true, "data": newRole})
+	respond(c, newRole)
 }
 
 // handleRolesUpdate updates an existing custom role (admin only).
@@ -122,7 +122,7 @@ func (s *Server) handleRolesUpdate(c *gin.Context) {
 		respondErrorSafe(c, http.StatusBadRequest, err, "")
 		return
 	}
-	respond(c, gin.H{"success": true, "data": existingRole})
+	respond(c, existingRole)
 }
 
 // handleRolesDelete deletes a custom role (admin only, cannot delete builtin roles).
@@ -144,5 +144,5 @@ func (s *Server) handleRolesDelete(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Role"))
 		return
 	}
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }

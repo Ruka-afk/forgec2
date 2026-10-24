@@ -69,7 +69,7 @@ func (s *Server) handleModulesList(c *gin.Context) {
 	dir := s.modulesDir()
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		respond(c, gin.H{"success": true, "modules": []any{}})
+		respond(c, gin.H{"modules": []any{}})
 		return
 	}
 	type modInfo struct {
@@ -93,7 +93,6 @@ func (s *Server) handleModulesList(c *gin.Context) {
 		})
 	}
 	respond(c, gin.H{
-		"success": true,
 		"modules": list,
 		"hint":    "Upload Invoke-Mimikatz.ps1 here. Mimikatz tasks will auto-attach it to the implant (no remote IEX).",
 	})
@@ -129,7 +128,7 @@ func (s *Server) handleModulesUpload(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "upload_module", "module", safe, fmt.Sprintf("%d bytes", len(data)), true, nil)
-	respond(c, gin.H{"success": true, "name": safe, "size": len(data)})
+	respond(c, gin.H{"name": safe, "size": len(data)})
 }
 
 func (s *Server) handleModulesDelete(c *gin.Context) {
@@ -151,7 +150,7 @@ func (s *Server) handleModulesDelete(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "delete_module", "module", safe, "", true, nil)
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // handleModulesDeploy uploads a stored module onto an agent via the upload task.

@@ -89,7 +89,7 @@ func (s *Server) handleRedirectorList(c *gin.Context) {
 	for _, rd := range items {
 		views = append(views, makeRedirectorView(rd))
 	}
-	respond(c, gin.H{"success": true, "data": views, "total": len(views)})
+	respond(c, gin.H{"redirectors": views, "total": len(views)})
 }
 
 // handleRedirectorCreate adds a new redirector.
@@ -143,7 +143,7 @@ func (s *Server) handleRedirectorCreate(c *gin.Context) {
 		return
 	}
 	s.syncRedirectorProbe(&rd)
-	respond(c, gin.H{"success": true, "id": rd.ID})
+	respond(c, gin.H{"id": rd.ID})
 }
 
 // handleRedirectorUpdate edits an existing redirector.
@@ -204,7 +204,7 @@ func (s *Server) handleRedirectorUpdate(c *gin.Context) {
 		return
 	}
 	s.syncRedirectorProbe(&rd)
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // handleRedirectorDelete removes a redirector.
@@ -230,7 +230,7 @@ func (s *Server) handleRedirectorDelete(c *gin.Context) {
 		respondError(c, http.StatusNotFound, "redirector not found")
 		return
 	}
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // resolveDeployTarget maps an operator-supplied host/port onto a redirector the
@@ -284,7 +284,7 @@ func (s *Server) handleRedirectorTestSSH(c *gin.Context) {
 	conn.Close()
 	s.LogAuditRecord(c, "redirector_test_ssh", "redirector", req.Host,
 		fmt.Sprintf("SSH endpoint reachable on port %d", req.Port), true, nil)
-	respond(c, gin.H{"success": true, "reachable": true, "message": "SSH endpoint reachable"})
+	respond(c, gin.H{"reachable": true, "message": "SSH endpoint reachable"})
 }
 
 // validateRedirectorDomain bounds the values interpolated into the generated
@@ -391,7 +391,7 @@ backend c2_nodes
 	default:
 		config = "# unknown redirector type: " + rdType
 	}
-	respond(c, gin.H{"success": true, "config": config, "type": rdType})
+	respond(c, gin.H{"config": config, "type": rdType})
 }
 
 // handleRedirectorDeploySSH best-effort deploy: verifies reachability and
@@ -455,7 +455,6 @@ func (s *Server) handleRedirectorDeploySSH(c *gin.Context) {
 	s.LogAuditRecord(c, "redirector_deploy_ssh", "redirector", fmt.Sprint(rd.ID),
 		fmt.Sprintf("Redirector %s reachable on port %d; config returned for manual push", rd.Host, req.Port), true, nil)
 	respond(c, gin.H{
-		"success": true,
 		"message": "Redirector reachable. Push the generated config via your SSH client.",
 		"config":  req.Config,
 	})

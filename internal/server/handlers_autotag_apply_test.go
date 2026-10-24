@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -54,9 +53,7 @@ func TestAutoTagApplyBatchesAssignments(t *testing.T) {
 		Applied int  `json:"applied"`
 		Capped  bool `json:"capped"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
+	unmarshalData(t, w.Body.Bytes(), &resp)
 	if resp.Applied != 3 || resp.Capped {
 		t.Fatalf("applied=%d capped=%v, want 3/false", resp.Applied, resp.Capped)
 	}

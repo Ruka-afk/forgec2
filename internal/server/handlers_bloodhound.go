@@ -118,7 +118,7 @@ func (s *Server) handleBloodHoundDelete(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to delete bloodhound result")
 		return
 	}
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // handleBloodHoundUpload accepts a manually uploaded SharpHound ZIP.
@@ -150,7 +150,7 @@ func (s *Server) handleBloodHoundUpload(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to save bloodhound result")
 		return
 	}
-	respond(c, gin.H{"success": true, "id": result.ID})
+	respond(c, gin.H{"id": result.ID})
 }
 
 // handleBloodHoundResult ingests a collection result POSTed back by an agent.
@@ -217,5 +217,5 @@ func (s *Server) handleBloodHoundResult(c *gin.Context) {
 		}
 	}
 
-	respond(c, gin.H{"success": true, "id": result.ID})
+	respond(c, gin.H{"id": result.ID})
 }

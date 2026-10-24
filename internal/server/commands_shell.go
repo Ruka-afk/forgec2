@@ -221,7 +221,7 @@ func (s *Server) handleGetAgentTasks(c *gin.Context) {
 		return
 	}
 
-	respondSuccess(c, gin.H{
+	respond(c, gin.H{
 		"tasks":     tasks,
 		"total":     total,
 		"page":      p.Page,
@@ -275,7 +275,7 @@ func (s *Server) handleGetTaskStatus(c *gin.Context) {
 	}
 	task = taskForOperator(task)
 
-	respondSuccess(c, gin.H{
+	respond(c, gin.H{
 		"id":         task.ID,
 		"status":     task.Status,
 		"result":     task.Result,
@@ -347,5 +347,5 @@ func (s *Server) handleBatchTaskStatus(c *gin.Context) {
 			Error:  t.Error,
 		}
 	}
-	respondSuccess(c, gin.H{"tasks": results, "total": len(results)})
+	respond(c, gin.H{"tasks": results, "total": len(results)})
 }

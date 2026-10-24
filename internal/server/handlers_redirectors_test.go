@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -132,16 +131,14 @@ func TestRedirectorListNeverReturnsSSHCredentials(t *testing.T) {
 	}
 
 	var payload struct {
-		Data  []redirectorView `json:"data"`
-		Total int              `json:"total"`
+		Redirectors []redirectorView `json:"redirectors"`
+		Total       int              `json:"total"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("decode: %v (%s)", err, body)
+	unmarshalData(t, w.Body.Bytes(), &payload)
+	if payload.Total != 1 || len(payload.Redirectors) != 1 {
+		t.Fatalf("redirectors = %+v total = %d, want the caller's single redirector", payload.Redirectors, payload.Total)
 	}
-	if payload.Total != 1 || len(payload.Data) != 1 {
-		t.Fatalf("data = %+v total = %d, want the caller's single redirector", payload.Data, payload.Total)
-	}
-	entry := payload.Data[0]
+	entry := payload.Redirectors[0]
 	if entry.Host != "10.0.0.5" || entry.Name != "mine" {
 		t.Fatalf("entry = %+v", entry)
 	}
@@ -214,9 +211,7 @@ func TestRedirectorListIsTenantScoped(t *testing.T) {
 	var global struct {
 		Total int `json:"total"`
 	}
-	if err := json.Unmarshal(w2.Body.Bytes(), &global); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
+	unmarshalData(t, w2.Body.Bytes(), &global)
 	if global.Total != 3 {
 		t.Fatalf("unscoped operator sees %d redirectors, want all 3", global.Total)
 	}
@@ -236,9 +231,7 @@ func TestRedirectorCreateStampsCallerTenant(t *testing.T) {
 	var created struct {
 		ID uint `json:"id"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
-		t.Fatalf("decode: %v (%s)", err, w.Body.String())
-	}
+	unmarshalData(t, w.Body.Bytes(), &created)
 	var stored db.Redirector
 	if err := s.db.First(&stored, "id = ?", created.ID).Error; err != nil {
 		t.Fatalf("reload: %v", err)

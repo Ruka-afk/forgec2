@@ -155,7 +155,7 @@ func (s *Server) handleCollabLock(c *gin.Context) {
 	}
 
 	s.broadcastCollabEvent("agent_locked", id, username)
-	respond(c, gin.H{"success": true, "expires_at": expiry.UTC().Format(time.RFC3339)})
+	respond(c, gin.H{"expires_at": expiry.UTC().Format(time.RFC3339)})
 }
 
 // handleCollabUnlock releases a collaboration lock on an agent.
@@ -173,7 +173,7 @@ func (s *Server) handleCollabUnlock(c *gin.Context) {
 
 	var existing db.AgentLock
 	if err := s.db.Where("agent_id = ?", id).First(&existing).Error; err != nil {
-		respond(c, gin.H{"success": true, "already_unlocked": true})
+		respond(c, gin.H{"already_unlocked": true})
 		return
 	}
 	if holder, live := lockHolderOf(&existing, time.Now()); live && holder != username {
@@ -189,7 +189,7 @@ func (s *Server) handleCollabUnlock(c *gin.Context) {
 		return
 	}
 	s.broadcastCollabEvent("agent_unlocked", id, username)
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // handleCollabClaimTask claims a task for the current operator. Operator
@@ -220,7 +220,7 @@ func (s *Server) handleCollabClaimTask(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to claim task")
 		return
 	}
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // handleCollabReleaseTask releases a previously claimed task. Only the
@@ -240,7 +240,7 @@ func (s *Server) handleCollabReleaseTask(c *gin.Context) {
 	}
 	username := s.currentUsername(c)
 	if task.OperatorClaimedBy == "" {
-		respond(c, gin.H{"success": true, "already_released": true})
+		respond(c, gin.H{"already_released": true})
 		return
 	}
 	if task.OperatorClaimedBy != username {
@@ -256,7 +256,7 @@ func (s *Server) handleCollabReleaseTask(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to release task")
 		return
 	}
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 // batchLockedByOther returns agentID -> holder for live locks held by

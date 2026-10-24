@@ -43,7 +43,7 @@ func (s *Server) handleAPITagList(c *gin.Context) {
 	if err := s.db.Order("name asc").Find(&tags).Error; err != nil {
 		slog.Error("Failed to list tags", "err", err)
 	}
-	respondSuccess(c, tags)
+	respond(c, tags)
 }
 
 func (s *Server) handleAPITagCreate(c *gin.Context) {
@@ -82,7 +82,7 @@ func (s *Server) handleAPITagCreate(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "tag_create", "tag", tag.ID, "Tag "+tag.Name+" created", true, nil)
-	respond(c, gin.H{"success": true, "tag": tag})
+	respond(c, gin.H{"tag": tag})
 }
 
 func (s *Server) handleAPITagUpdate(c *gin.Context) {
@@ -123,7 +123,7 @@ func (s *Server) handleAPITagUpdate(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "tag_update", "tag", tag.ID, "Tag "+tag.Name+" updated", true, nil)
-	respond(c, gin.H{"success": true, "tag": tag})
+	respond(c, gin.H{"tag": tag})
 }
 
 func (s *Server) handleAPITagDelete(c *gin.Context) {
@@ -141,7 +141,7 @@ func (s *Server) handleAPITagDelete(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "tag_delete", "tag", id, "Tag "+tag.Name+" deleted", true, nil)
-	respond(c, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleAgentTags(c *gin.Context) {
@@ -154,7 +154,7 @@ func (s *Server) handleAgentTags(c *gin.Context) {
 		Find(&tags).Error; err != nil {
 		slog.Error("Failed to load agent tags", "agent_id", id, "err", err)
 	}
-	respondSuccess(c, gin.H{"tags": tags})
+	respond(c, gin.H{"tags": tags})
 }
 
 // handleBatchAgentTags returns tags for multiple agents in a single request,
@@ -192,5 +192,5 @@ func (s *Server) handleBatchAgentTags(c *gin.Context) {
 		})
 	}
 
-	respondSuccess(c, tagsByAgent)
+	respond(c, tagsByAgent)
 }

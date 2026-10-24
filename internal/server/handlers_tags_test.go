@@ -167,9 +167,7 @@ func TestHandleAPITagCreate_AcceptsValidInput(t *testing.T) {
 			Color string `json:"color"`
 		} `json:"tag"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
-	}
+	unmarshalData(t, w.Body.Bytes(), &resp)
 	if resp.Tag.Name != "valid-tag" || resp.Tag.Color != "#a1B2c3" {
 		t.Fatalf("unexpected tag: %+v", resp.Tag)
 	}
