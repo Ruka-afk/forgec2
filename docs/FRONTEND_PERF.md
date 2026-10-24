@@ -182,8 +182,33 @@ console.log(/vendor-baseui-forms/.test(h) ? 'FAIL: forms preloaded' : 'OK: forms
   usually hide. Do not "fix" this by preloading routes back into the shell.
 - A cold `/login` visit pays one extra round trip for the lazy login chunk; the
   401 prewarm covers the common expired-session path, not a first-ever visit.
-- The entry chunk still carries the full i18n dictionaries (~33% of the entry
-  chunk is the `en` dictionary); splitting them is tracked separately.
+- The entry chunk still carries the full `en` i18n dictionary. **Re-measured
+  2026-10-24**: the critical path is **1030.8 kB across 13 chunks** against the
+  1090 kB budget (5.4% headroom), and the dictionary is no longer in the entry
+  chunk — it now lands in `utils-*.js` (**242.7 kB**, the largest single chunk
+  on the critical path; `en.ts` is 268.9 kB of source). The rest of the path is
+  vendor-baseui 208.1, vendor-react 202.4, entry 115.1, vendor-router 91.5,
+  vendor-icons 66.4, vendor-misc 39.6, vendor-sonner 32.8, wsContext 29.3 and
+  four sub-2 kB chunks. Total bundle is 4.54 MB across 199 files (5.50 MB
+  budget).
+
+  Splitting the dictionary is the one change big enough to matter here (it
+  would take the path to roughly 790 kB). It is **not** a mechanical split: `t()`
+  is synchronous, so the split needs a small **bootstrap dictionary** (shell,
+  nav, login, common, a11y, error text) loaded synchronously plus the full `en`
+  dictionary fetched like `zh` already is and merged into the lookup. The
+  failure mode to avoid is a visible frame of raw key names on whichever route
+  renders before the async dictionary resolves — that means either
+  route-level awaiting or a bootstrap set proved complete for first paint,
+  verified with `e2e` and refreshed win32 **and** Linux visual baselines
+  (a missing key changes rendered text, not just pixels). Until that is built
+  and verified, leaving it tracked is safer than a partially loaded dictionary.
+
+- Race-suite runtime (2026-10-24): `go test -race ./internal/server/...` takes
+  **670–855 s** on this machine against the CI job's `-timeout 20m`. That is
+  enough margin today, but it is the tightest job in the pipeline; if it grows
+  further, split the race job per package before raising the timeout.
+
 - `frontend/e2e/layout.spec.ts` win32 visual baselines were re-captured
   2026-10 (13 of 32 had drifted by a few percent of pixels — fonts/rasterizer,
   not content); the Linux set CI enforces was already current and is
