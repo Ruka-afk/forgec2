@@ -304,7 +304,7 @@ func (s *Server) handleSaveAgentConfig(c *gin.Context) {
 	s.configMu.Unlock()
 
 	slog.Info("Agent config updated", "interval", intervalOut, "jitter", jitterOut, "skip_tls", skipOut)
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Agent configuration saved successfully"})
+	respond(c, gin.H{"message": "Agent configuration saved successfully"})
 }
 
 // consumePasswordChangeSlot claims the caller's password-change cooldown. It
@@ -427,7 +427,7 @@ func (s *Server) handleChangePassword(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleSaveServerConfig(c *gin.Context) {
@@ -478,7 +478,7 @@ func (s *Server) handleSaveServerConfig(c *gin.Context) {
 	s.configMu.Unlock()
 
 	slog.Info("Server config updated", "log_level", levelOut, "tcp_enabled", tcpOut)
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Server configuration saved"})
+	respond(c, gin.H{"message": "Server configuration saved"})
 }
 
 func (s *Server) handleSaveMalleableProfile(c *gin.Context) {
@@ -545,7 +545,7 @@ func (s *Server) handleSaveMalleableProfile(c *gin.Context) {
 	s.configMu.Unlock()
 
 	slog.Info("Malleable profile saved", "enabled", enabledOut, "status_code", statusOut)
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Malleable C2 profile saved"})
+	respond(c, gin.H{"message": "Malleable C2 profile saved"})
 }
 
 func (s *Server) handlePurgeTasks(c *gin.Context) {
@@ -569,7 +569,7 @@ func (s *Server) handlePurgeTasks(c *gin.Context) {
 		return
 	}
 	slog.Info("Purged old tasks", "count", result.RowsAffected, "older_than_days", days)
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("Purged %d old tasks", result.RowsAffected)})
+	respond(c, gin.H{"message": fmt.Sprintf("Purged %d old tasks", result.RowsAffected)})
 }
 
 func (s *Server) handlePurgeAuditLogs(c *gin.Context) {
@@ -595,7 +595,7 @@ func (s *Server) handlePurgeAuditLogs(c *gin.Context) {
 		return
 	}
 	slog.Info("Purged old audit logs", "count", result.RowsAffected, "older_than_days", days)
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("Purged %d old audit logs", result.RowsAffected)})
+	respond(c, gin.H{"message": fmt.Sprintf("Purged %d old audit logs", result.RowsAffected)})
 }
 
 func (s *Server) handleRegenerateJWT(c *gin.Context) {
@@ -625,7 +625,7 @@ func (s *Server) handleRegenerateJWT(c *gin.Context) {
 	s.configMu.Unlock()
 
 	slog.Info("JWT secret regenerated (independent encryption keys left untouched)")
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "JWT secret regenerated successfully"})
+	respond(c, gin.H{"message": "JWT secret regenerated successfully"})
 }
 
 func (s *Server) handleDBVacuum(c *gin.Context) {
@@ -646,7 +646,7 @@ func (s *Server) handleDBVacuum(c *gin.Context) {
 		slog.Error("Failed to query database size after vacuum", "err", err)
 	}
 	slog.Info("Database vacuum completed")
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Database vacuum completed", "size": dbSize})
+	respond(c, gin.H{"message": "Database vacuum completed", "size": dbSize})
 }
 
 func (s *Server) handleDownloadConfig(c *gin.Context) {
@@ -761,12 +761,9 @@ func (s *Server) handleGetAuditLogs(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"logs":  logs,
-			"total": total,
-		},
+	respond(c, gin.H{
+		"logs":  logs,
+		"total": total,
 	})
 }
 

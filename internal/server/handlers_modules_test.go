@@ -94,12 +94,7 @@ func TestHandleModulesDeploy_JSON(t *testing.T) {
 		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
 	}
 	var resp map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("json: %v", err)
-	}
-	if resp["success"] != true {
-		t.Fatalf("expected success: %s", w.Body.String())
-	}
+	unmarshalData(t, w.Body.Bytes(), &resp)
 	if _, ok := resp["task_id"]; !ok {
 		t.Fatalf("missing task_id: %s", w.Body.String())
 	}

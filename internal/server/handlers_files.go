@@ -56,8 +56,7 @@ func (s *Server) handleListDir(c *gin.Context) {
 	}
 
 	slog.Info("Directory list requested", "agent_id", id, "path", path)
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
+	respond(c, gin.H{
 		"task_id": task.ID,
 		"queued":  true,
 		"kind":    "ls_task",
@@ -373,7 +372,7 @@ func (s *Server) handleUploadFile(c *gin.Context) {
 	s.LogAuditRecord(c, "file_upload_push", "agent", id, targetPath, true, nil)
 
 	slog.Info("File push requested", "agent_id", id, "path", targetPath, "chunks", len(taskIDs))
-	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": taskIDs[0], "task_ids": taskIDs, "chunks": len(taskIDs), "kind": "file_push", "queued": true})
+	respond(c, gin.H{"task_id": taskIDs[0], "task_ids": taskIDs, "chunks": len(taskIDs), "kind": "file_push", "queued": true})
 }
 
 // handleFileExfilGet serves a file the implant already exfiltrated into data/uploads/:id/.

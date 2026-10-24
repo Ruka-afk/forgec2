@@ -536,7 +536,7 @@ func (s *Server) dispatchTask(c *gin.Context, task *db.Task, auditAction, detail
 	}
 	s.LogAuditRecord(c, auditAction, "agent", task.AgentID, details, true, nil)
 	s.broadcastTaskUpdate(task.AgentID, *task)
-	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
+	respond(c, gin.H{"task_id": task.ID})
 }
 
 // flippedSet re-reads which of ids now carry status. It lets sweep passes

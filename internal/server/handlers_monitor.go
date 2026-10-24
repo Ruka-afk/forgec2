@@ -431,7 +431,7 @@ func (s *Server) handleGetSystemMetrics(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, resp)
+	respond(c, resp)
 }
 
 func (s *Server) handleGetMetricsHistory(c *gin.Context) {
@@ -441,7 +441,7 @@ func (s *Server) handleGetMetricsHistory(c *gin.Context) {
 	}
 
 	history := s.monitorCollector.GetMetricsHistory()
-	c.JSON(http.StatusOK, gin.H{"data": history})
+	respond(c, history)
 }
 
 // loadAlertRuleScoped resolves an alert rule within the caller's tenant. Rules
@@ -486,7 +486,7 @@ func (s *Server) handleGetAlerts(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"alerts": alerts})
+	respond(c, gin.H{"alerts": alerts})
 }
 
 func (s *Server) handleGetAlertStats(c *gin.Context) {
@@ -526,7 +526,7 @@ func (s *Server) handleGetAlertStats(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, stats)
+	respond(c, stats)
 }
 
 func (s *Server) handleGetAlertRules(c *gin.Context) {
@@ -543,7 +543,7 @@ func (s *Server) handleGetAlertRules(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "Failed to query alert rules")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"rules": rules, "total": total, "page": p.Page, "page_size": p.PageSize})
+	respond(c, gin.H{"rules": rules, "total": total, "page": p.Page, "page_size": p.PageSize})
 }
 
 func (s *Server) handleCreateAlertRule(c *gin.Context) {
@@ -604,7 +604,7 @@ func (s *Server) handleCreateAlertRule(c *gin.Context) {
 		rule.Enabled = false
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "rule": rule})
+	respond(c, gin.H{"rule": rule})
 }
 
 func (s *Server) handleUpdateAlertRule(c *gin.Context) {
@@ -643,7 +643,7 @@ func (s *Server) handleUpdateAlertRule(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "rule": rule})
+	respond(c, gin.H{"rule": rule})
 }
 
 func (s *Server) handleDeleteAlertRule(c *gin.Context) {
@@ -664,7 +664,7 @@ func (s *Server) handleDeleteAlertRule(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	respond(c, gin.H{})
 }
 
 func (s *Server) handleAcknowledgeAlert(c *gin.Context) {
@@ -683,7 +683,7 @@ func (s *Server) handleAcknowledgeAlert(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "alert": alert})
+	respond(c, gin.H{"alert": alert})
 }
 
 func (s *Server) handleResolveAlert(c *gin.Context) {
@@ -702,7 +702,7 @@ func (s *Server) handleResolveAlert(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "alert": alert})
+	respond(c, gin.H{"alert": alert})
 }
 
 func (s *Server) handleGetAgentStatus(c *gin.Context) {
@@ -746,7 +746,7 @@ func (s *Server) handleGetAgentStatus(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, stats)
+	respond(c, stats)
 }
 
 func (s *Server) TriggerAlertForEvent(evt Event) {
@@ -898,8 +898,7 @@ func (s *Server) handleStartScreenMonitor(c *gin.Context) {
 	s.ensureScreenMonitorMapsLocked()
 	if _, active := s.screenMonitorImplants[monitorKey]; active {
 		s.screenMonitorMu.Unlock()
-		c.JSON(http.StatusOK, gin.H{
-			"success":        true,
+		respond(c, gin.H{
 			"active":         true,
 			"already_active": true,
 			"message":        "Screen stream is already active",
@@ -942,8 +941,7 @@ func (s *Server) handleStartScreenMonitor(c *gin.Context) {
 
 	s.LogAuditRecord(c, "screen_monitor_start", "agent", id, "Started screen monitoring", true, nil)
 	slog.Info("Screen monitoring started", "agent_id", id, "task_id", task.ID)
-	c.JSON(http.StatusOK, gin.H{
-		"success":  true,
+	respond(c, gin.H{
 		"active":   true,
 		"task_id":  task.ID,
 		"interval": intervalSeconds,
@@ -985,8 +983,7 @@ func (s *Server) handleStopScreenMonitor(c *gin.Context) {
 	s.ensureScreenMonitorMapsLocked()
 	if _, active := s.screenMonitorImplants[monitorKey]; !active {
 		s.screenMonitorMu.Unlock()
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
+		respond(c, gin.H{
 			"active":  false,
 			"message": "Screen stream is already stopped",
 		})
@@ -1016,7 +1013,7 @@ func (s *Server) handleStopScreenMonitor(c *gin.Context) {
 
 	s.LogAuditRecord(c, "screen_monitor_stop", "agent", id, "Stopped screen monitoring", true, nil)
 	slog.Info("Screen monitoring stopped", "agent_id", id)
-	c.JSON(http.StatusOK, gin.H{"success": true, "active": false, "task_id": stopTask.ID})
+	respond(c, gin.H{"active": false, "task_id": stopTask.ID})
 }
 
 func (s *Server) IsScreenMonitoring(agentID string) bool {
@@ -1143,7 +1140,7 @@ func (s *Server) handleAgentRemoteInput(c *gin.Context) {
 
 	s.LogAuditRecord(c, "remote_input", "agent", id, fmt.Sprintf("Remote input: %s", req.Type), true, nil)
 	s.broadcastTaskUpdate(id, *task)
-	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID, "message": "remote input queued"})
+	respond(c, gin.H{"task_id": task.ID, "message": "remote input queued"})
 }
 
 func (s *Server) handleScreenFrame(c *gin.Context) {
@@ -1168,7 +1165,7 @@ func (s *Server) handleScreenFrame(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"ok": true})
+	respond(c, gin.H{"ok": true})
 }
 
 // handleGetRekeyStats reports crypto session rekey activity across live

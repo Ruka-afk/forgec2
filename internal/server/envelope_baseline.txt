@@ -32,7 +32,7 @@ handlers_ai_tools_policy.go 3
 handlers_apikeys.go 4
 handlers_approvals.go 2
 handlers_auth.go 2
-handlers_automation.go 27
+handlers_automation.go 25
 handlers_backup.go 6
 handlers_bof.go 6
 handlers_browser_creds.go 3
@@ -42,7 +42,6 @@ handlers_credentials.go 7
 handlers_cookie_proxy.go 4
 handlers_dashboard.go 8
 handlers_emergency.go 5
-handlers_files.go 2
 handlers_generate_binaries.go 6
 handlers_generate_delivery.go 1
 handlers_generate_one_liners.go 2
@@ -53,7 +52,6 @@ handlers_ioc.go 1
 handlers_lateral.go 3
 handlers_listeners.go 7
 handlers_macros.go 7
-handlers_monitor.go 17
 handlers_notification_routes.go 6
 handlers_ntlm.go 2
 handlers_opsec.go 3
@@ -67,7 +65,6 @@ handlers_scan.go 3
 handlers_scheduler.go 3
 handlers_scripting.go 5
 handlers_sessions.go 3
-handlers_settings.go 9
 handlers_siem.go 5
 handlers_socks_relay.go 5
 handlers_templates.go 5
@@ -80,7 +77,7 @@ handlers_traffic_profile.go 4
 handlers_tun.go 2
 handlers_users.go 7
 helpers.go 1
-api.go 10
+api.go 5
 ai_chat.go 2
 build_jobs.go 2
 commands_evasion.go 1
@@ -92,7 +89,6 @@ handler_dns.go 5
 remote_desktop.go 1
 render_api.go 1
 server_http.go 1
-task_dispatch.go 1
 tasktypes.go 1
 update_check.go 4
 webrtc.go 4

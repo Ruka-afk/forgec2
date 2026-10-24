@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -93,9 +92,7 @@ func TestAlertRuleListIsTenantScoped(t *testing.T) {
 		Rules []db.AlertRule `json:"rules"`
 		Total int64          `json:"total"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
-		t.Fatalf("decode: %v (%s)", err, w.Body.String())
-	}
+	unmarshalData(t, w.Body.Bytes(), &body)
 	if body.Total != 1 || len(body.Rules) != 1 || body.Rules[0].Name != "mine" {
 		t.Fatalf("rules = %+v total = %d, want only the caller's own rule", body.Rules, body.Total)
 	}
@@ -106,9 +103,7 @@ func TestAlertRuleListIsTenantScoped(t *testing.T) {
 	var global struct {
 		Total int64 `json:"total"`
 	}
-	if err := json.Unmarshal(w2.Body.Bytes(), &global); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
+	unmarshalData(t, w2.Body.Bytes(), &global)
 	if global.Total != 3 {
 		t.Fatalf("unscoped operator sees %d rules, want all 3", global.Total)
 	}
@@ -130,9 +125,7 @@ func TestAlertRuleCreateStampsCallerTenant(t *testing.T) {
 	var created struct {
 		Rule db.AlertRule `json:"rule"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
-		t.Fatalf("decode: %v (%s)", err, w.Body.String())
-	}
+	unmarshalData(t, w.Body.Bytes(), &created)
 	if created.Rule.ID == 4242 {
 		t.Fatal("client-supplied id was honoured")
 	}
@@ -422,9 +415,7 @@ func TestAlertStatsAreTenantScoped(t *testing.T) {
 		Warning  int64 `json:"warning"`
 		Info     int64 `json:"info"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &stats); err != nil {
-		t.Fatalf("decode: %v (%s)", err, w.Body.String())
-	}
+	unmarshalData(t, w.Body.Bytes(), &stats)
 	// Only tenant 1's two still-active alerts; the resolved one and both of
 	// tenant 2's alerts must be excluded.
 	if stats.Active != 2 || stats.Critical != 1 || stats.Warning != 1 || stats.Info != 0 {
@@ -437,9 +428,7 @@ func TestAlertStatsAreTenantScoped(t *testing.T) {
 	var global struct {
 		Active int64 `json:"active"`
 	}
-	if err := json.Unmarshal(w2.Body.Bytes(), &global); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
+	unmarshalData(t, w2.Body.Bytes(), &global)
 	if global.Active != 4 {
 		t.Fatalf("unscoped active = %d, want 4", global.Active)
 	}

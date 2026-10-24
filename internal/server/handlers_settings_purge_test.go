@@ -355,9 +355,7 @@ func TestHandleGetAgentStatus(t *testing.T) {
 		Stale   int64 `json:"stale"`
 		Offline int64 `json:"offline"`
 	}
-	if err := jsonUnmarshal(w.Body.Bytes(), &stats); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
+	unmarshalData(t, w.Body.Bytes(), &stats)
 	if stats.Total != 3 || stats.Online != 1 || stats.Stale != 1 || stats.Offline != 1 {
 		t.Fatalf("stats = %+v, want total=3 online=1 stale=1 offline=1", stats)
 	}

@@ -93,16 +93,22 @@ func assertStatus(t *testing.T, w *httptest.ResponseRecorder, want int) {
 	}
 }
 
+// assertSuccessJSON decodes a success response into its data payload. Every
+// JSON 200 body is {"success": true, "data": ...} (respond wraps once), so the
+// payload map is what handler assertions are about.
 func assertSuccessJSON(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
 	t.Helper()
-	var m map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &m); err != nil {
+	var env struct {
+		Success bool           `json:"success"`
+		Data    map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
 		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
 	}
-	if v, ok := m["success"]; !ok || v != true {
+	if !env.Success {
 		t.Fatalf("expected success=true, got %s", w.Body.String())
 	}
-	return m
+	return env.Data
 }
 
 // ---------------------------------------------------------------------------

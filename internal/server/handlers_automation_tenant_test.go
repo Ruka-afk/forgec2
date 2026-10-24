@@ -2,7 +2,6 @@ package server
 
 import (
 	"bytes"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -250,12 +249,10 @@ func automationCtx(s *Server, t *testing.T, method, body string) (*gin.Context, 
 func decodeAutomationList(t *testing.T, w *httptest.ResponseRecorder) []map[string]interface{} {
 	t.Helper()
 	var resp struct {
-		Data []map[string]interface{} `json:"data"`
+		Rules []map[string]interface{} `json:"rules"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode list: %v body=%s", err, w.Body.String())
-	}
-	return resp.Data
+	unmarshalData(t, w.Body.Bytes(), &resp)
+	return resp.Rules
 }
 
 // TestAutomationRuleListScoped proves the rules API hides foreign rows.

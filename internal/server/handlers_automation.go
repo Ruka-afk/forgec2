@@ -174,7 +174,10 @@ func (s *Server) handleListAutomationRules(c *gin.Context) {
 			TenantID:   dr.TenantID,
 		})
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": rules, "total": total, "page": p.Page, "page_size": p.PageSize})
+	// Keyed "rules" (not "data"): the UI reads `rules ?? data` off the unwrapped
+	// payload, and an unwrapped array has neither key — which is why this list
+	// rendered empty before.
+	respond(c, gin.H{"rules": rules, "total": total, "page": p.Page, "page_size": p.PageSize})
 }
 
 func (s *Server) handleSaveAutomationRule(c *gin.Context) {
@@ -273,7 +276,7 @@ func (s *Server) handleListWebhooks(c *gin.Context) {
 		handleQueryError(c, err, "Failed to list webhooks")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": webhooks})
+	respond(c, gin.H{"webhooks": webhooks})
 }
 
 func (s *Server) handleCreateWebhook(c *gin.Context) {

@@ -213,12 +213,9 @@ func TestHandleCredCheck(t *testing.T) {
 		t.Fatalf("dispatch: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	var resp struct {
-		Success bool `json:"success"`
-		TaskID  uint `json:"task_id"`
+		TaskID uint `json:"task_id"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil || !resp.Success {
-		t.Fatalf("invalid dispatch response: %v; body=%s", err, w.Body.String())
-	}
+	unmarshalData(t, w.Body.Bytes(), &resp)
 
 	var task db.Task
 	if err := s.db.First(&task, resp.TaskID).Error; err != nil {

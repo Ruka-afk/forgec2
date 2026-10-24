@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -142,9 +141,7 @@ func TestAPIHealthReportsBackupFreshness(t *testing.T) {
 	var body struct {
 		Backup map[string]any `json:"backup"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
-		t.Fatalf("decode: %v body=%s", err, w.Body.String())
-	}
+	unmarshalData(t, w.Body.Bytes(), &body)
 	if _, ok := body.Backup["age_seconds"]; !ok {
 		t.Fatalf("health response lacks backup freshness: %s", w.Body.String())
 	}
@@ -161,9 +158,7 @@ func TestAPIHealthReportsBackupFreshness(t *testing.T) {
 	var body2 struct {
 		Backup map[string]any `json:"backup"`
 	}
-	if err := json.Unmarshal(w2.Body.Bytes(), &body2); err != nil {
-		t.Fatalf("decode 2: %v", err)
-	}
+	unmarshalData(t, w2.Body.Bytes(), &body2)
 	if enabled, ok := body2.Backup["enabled"].(bool); !ok || enabled {
 		t.Fatalf("expected backup.enabled=false, got %v", body2.Backup)
 	}

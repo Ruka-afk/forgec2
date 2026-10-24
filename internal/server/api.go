@@ -71,7 +71,7 @@ func (s *Server) apiGetAgent(c *gin.Context) {
 		respondError(c, http.StatusNotFound, "agent not found")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": agent})
+	respond(c, agent)
 }
 
 func (s *Server) apiDeleteAgent(c *gin.Context) {
@@ -131,6 +131,10 @@ func (s *Server) apiListTasks(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "database error")
 		return
 	}
+	// Documented REST v1 list shape: {"success": true, "data": [...], "total": n}
+	// (api/openapi.yaml). The sibling total is part of the published scripting
+	// contract, so these list endpoints stay off respond()'s payload wrapping;
+	// single-object endpoints above use respond() and are byte-identical.
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": tasks, "total": len(tasks)})
 }
 
@@ -160,7 +164,7 @@ func (s *Server) apiGetTask(c *gin.Context) {
 			return
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": task})
+	respond(c, task)
 }
 
 func (s *Server) apiCreateTask(c *gin.Context) {
@@ -213,7 +217,7 @@ func (s *Server) apiCreateTask(c *gin.Context) {
 
 	s.broadcastTaskUpdate(req.AgentID, *task)
 	slog.Info("Task created via API", "task_id", task.ID, "agent_id", task.AgentID, "type", task.Type)
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": task})
+	respond(c, task)
 }
 
 // ── REST API: Credentials ──
@@ -466,7 +470,7 @@ func (s *Server) apiDashboardStats(c *gin.Context) {
 		"recent_tasks":             recentTasks,
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": stats})
+	respond(c, stats)
 }
 
 // ── REST API: Audit Logs ──
@@ -557,7 +561,7 @@ func (s *Server) apiHealth(c *gin.Context) {
 		health["audit_queue_depth"] = 0
 	}
 
-	c.JSON(http.StatusOK, health)
+	respond(c, health)
 }
 
 // registerAPIRoutes registers all REST API routes under the given group
