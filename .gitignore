@@ -15,6 +15,10 @@ reset-password.exe
 # ForgeC2 specific
 data/
 config.yaml
+# Per-run config variants (config.audit.yaml, config.e2e.yaml, config.local.yaml,
+# ...) are copies of the live config and carry real secrets (jwt_secret,
+# crypto keys, beacon key). Only the shipped example may be committed.
+config.*.yaml
 !config.example.yaml
 
 # Go
