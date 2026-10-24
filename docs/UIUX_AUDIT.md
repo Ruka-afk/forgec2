@@ -2073,6 +2073,11 @@ be refreshed from a Linux host the same way the Linux visual baselines are.
 
 | Batch | Defect | Evidence |
 | --- | --- | --- |
-| U9.5 | Detail pages (beacon: 15 sections, listener, campaign, report, circuit breaker) and the four workspace surfaces (shell / files / screen / remote desktop) each grow their own chrome | page-by-page review |
-| U9.6 | Density mode changes the type ramp and the table cell padding only — not the card padding, the page gap or the control heights | `[data-density="compact"]` in `globals.css` |
-| U9.7 | No layout gate: the defects above are all reachable by a single class name | — |
+| U9.5 | Detail pages (beacon: 15 sections, listener, campaign, report, circuit breaker) and the four workspace surfaces (shell / files / screen / remote desktop) each grow their own chrome | page-by-page review — still open |
+| U9.6 (landed 2026-10-24) | ~~Density mode changes the type ramp and the table cell padding only~~ | `globals.css`'s `[data-density="compact"]` now also drives `--page-pad-y` / `--page-gap` / `--control-height*` and `[data-slot="card"]` spacing, consumed by `AppLayout`, `page-container`, `button`, `input` and the table primitives |
+| U9.7 (landed 2026-10-24) | ~~No layout gate~~ | `scripts/check-layout.mjs` enforces the contract (wired as `check:layout` in `npm run check`; `audit:layout` for the report-only walk) |
+
+The two "landed" rows were verified against the code, not just the batch notes:
+the density tokens have real consumers outside `globals.css`, and the layout
+gate fails on a deliberately broken class (see `check-layout.mjs --list`).
+

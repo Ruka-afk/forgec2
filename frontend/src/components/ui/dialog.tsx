@@ -52,7 +52,7 @@ const DIALOG_SIZES = {
   full: "sm:max-w-[min(96vw,96rem)]",
 } as const;
 
-export type DialogSize = keyof typeof DIALOG_SIZES;
+type DialogSize = keyof typeof DIALOG_SIZES;
 
 function DialogContent({
   className,

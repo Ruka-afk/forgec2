@@ -45,7 +45,7 @@ const SHEET_SIZES = {
   full: "w-full",
 } as const;
 
-export type SheetSize = keyof typeof SHEET_SIZES;
+type SheetSize = keyof typeof SHEET_SIZES;
 
 function SheetContent({
   className,

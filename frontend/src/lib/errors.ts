@@ -99,7 +99,7 @@ export function normalizeError(err: unknown): NormalizedError {
   return { kind: "unknown", retryable: false, message: raw };
 }
 
-export type ErrorTextFn = (key: string, params?: Record<string, string | number>) => string;
+type ErrorTextFn = (key: string, params?: Record<string, string | number>) => string;
 
 /**
  * Resolve the operator-facing text for a normalized error: a mapped locale key

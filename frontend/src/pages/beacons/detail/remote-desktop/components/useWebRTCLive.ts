@@ -13,7 +13,7 @@ import { useI18n } from "@/lib/i18n";
  * optional WebRTC module (or without ffmpeg) can fall back to JPEG frames.
  */
 
-export type LiveStatus = "idle" | "connecting" | "connected" | "error";
+type LiveStatus = "idle" | "connecting" | "connected" | "error";
 
 export interface LivePreset {
   value: "720p" | "1080p";

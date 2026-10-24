@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
 
-export interface ListRowProps {
+interface ListRowProps {
   /** Internal route; without it the row renders as a plain container. */
   to?: string;
   /** Left slot rendered before the title (status dot, badge, icon). */

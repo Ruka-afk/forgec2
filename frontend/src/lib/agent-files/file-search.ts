@@ -34,7 +34,7 @@ export interface FileSearchResult {
   elapsedMs: number;
 }
 
-export interface FileSearchParams {
+interface FileSearchParams {
   root: string;
   pattern: string;
   categories: FileSearchCategory[];

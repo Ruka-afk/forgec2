@@ -19,14 +19,14 @@ export interface ProcessRow {
   depth: number;
 }
 
-export type ProcessListingFormat = "tree" | "c-ps" | "ps" | "powershell" | "table" | "generic";
+type ProcessListingFormat = "tree" | "c-ps" | "ps" | "powershell" | "table" | "generic";
 
-export interface ProcessTreeNode extends ProcessRow {
+interface ProcessTreeNode extends ProcessRow {
   children: ProcessTreeNode[];
   depth: number;
 }
 
-export interface ParsedProcessSnapshot {
+interface ParsedProcessSnapshot {
   rows: ProcessRow[];
   roots: ProcessTreeNode[];
   format: ProcessListingFormat;
@@ -79,7 +79,7 @@ export function parsePsRows(text: string, cap = 200): PsRow[] {
 }
 
 /** Parse every process listing shape the Go and C implants can return. */
-export function parseProcessRows(text: string, cap = 0): ProcessRow[] {
+function parseProcessRows(text: string, cap = 0): ProcessRow[] {
   return parseProcessSnapshot(text, cap).rows;
 }
 

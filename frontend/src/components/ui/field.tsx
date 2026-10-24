@@ -8,7 +8,7 @@ export function fieldErrorId(controlId: string): string {
   return `${controlId}-error`;
 }
 
-export interface FieldProps {
+interface FieldProps {
   /** The field's label. */
   label: ReactNode;
   /** Marks the field required; the label renders the marker. */
