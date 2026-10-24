@@ -50,10 +50,14 @@ func operatorIPAllowed(allowlist []string, clientIP string) bool {
 // rotate). Failures leave the pool nil, and verification then fails closed.
 func (s *Server) loadOperatorCAPool() {
 	s.operatorCALoadOnce.Do(func() {
+		// Runs once, but possibly from a request path (lazy init), so the
+		// config read needs the same lock a reload takes.
+		s.configMu.RLock()
 		path := ""
 		if s.cfg != nil {
 			path = s.cfg.Server.OperatorClientCAFile
 		}
+		s.configMu.RUnlock()
 		if path == "" {
 			return
 		}
@@ -124,10 +128,14 @@ func (s *Server) operatorPlaneGuardExcept(exempt ...string) gin.HandlerFunc {
 		}
 		var allowlist []string
 		var mtls bool
+		// Runs on every operator request: snapshot under the read lock, since
+		// a settings save rewrites these fields under the write lock.
+		s.configMu.RLock()
 		if s.cfg != nil {
 			allowlist = s.cfg.Server.OperatorAllowedCIDRs
 			mtls = s.cfg.Server.OperatorMTLS
 		}
+		s.configMu.RUnlock()
 		if len(allowlist) > 0 && !operatorIPAllowed(allowlist, c.ClientIP()) {
 			slog.Warn("Operator plane denied by IP allowlist", "ip", c.ClientIP(), "path", c.Request.URL.Path)
 			c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "operator access denied from this network"})

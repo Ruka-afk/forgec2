@@ -96,9 +96,10 @@ func (s *Server) handleACMECertProvision(c *gin.Context) {
 		return
 	}
 
-	dataDir := filepath.Join(s.cfg.Server.DataDir, "certs", safeDomain)
+	dataDirRoot := s.rawDataDir()
+	dataDir := filepath.Join(dataDirRoot, "certs", safeDomain)
 	resolvedDir := filepath.Clean(dataDir)
-	baseDir := filepath.Clean(filepath.Join(s.cfg.Server.DataDir, "certs"))
+	baseDir := filepath.Clean(filepath.Join(dataDirRoot, "certs"))
 	if !strings.HasPrefix(resolvedDir, baseDir+string(os.PathSeparator)) && resolvedDir != baseDir {
 		respondError(c, http.StatusBadRequest, "invalid domain")
 		return
@@ -158,7 +159,9 @@ func (s *Server) handleACMECertProvision(c *gin.Context) {
 func (s *Server) handleProfileExport(c *gin.Context) {
 	format := c.DefaultQuery("format", "json")
 
-	profile := s.cfg.Malleable
+	s.configMu.RLock()
+	profile := s.cfg.Malleable // struct copy: the header maps are replaced, not mutated in place
+	s.configMu.RUnlock()
 
 	var content string
 	switch format {

@@ -63,7 +63,7 @@ func validatePprofAddr(addr string) error {
 // startPprof binds the opt-in profiling listener. Failures abort startup: a
 // profile that silently is not there when an incident happens is worse than a
 // server that refuses to boot with a clear error.
-func (s *Server) startPprof() error {
+func (s *Server) startPprof() error { // config-lock: boot listener start, no reload can overlap yet
 	addr := strings.TrimSpace(s.cfg.Server.PprofAddr)
 	if addr == "" {
 		return nil

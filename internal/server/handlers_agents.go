@@ -264,7 +264,7 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 }
 
 func (s *Server) listAgentScreenshots(agentID string) ([]string, error) {
-	screenshotDir := filepath.Join(s.cfg.Server.DataDir, "screenshots", agentID)
+	screenshotDir := filepath.Join(s.rawDataDir(), "screenshots", agentID)
 	files, err := os.ReadDir(screenshotDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -482,7 +482,7 @@ func (s *Server) deleteAgentRecord(id string) bool {
 	// lportfwdTargets carry the (now deleted) agent's dial target and the
 	// sockets would linger until process exit otherwise.
 	s.cleanupLPortFwdForAgent(id)
-	screenshotsDir := safeJoin(filepath.Join(s.cfg.Server.DataDir, "screenshots"), id)
+	screenshotsDir := safeJoin(filepath.Join(s.rawDataDir(), "screenshots"), id)
 	if screenshotsDir != "" {
 		if err := os.RemoveAll(screenshotsDir); err != nil {
 			slog.Warn("Failed to remove agent screenshots", "agent_id", id, "err", err)

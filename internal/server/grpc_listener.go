@@ -173,7 +173,7 @@ func (s *grpcBeaconServer) Beacon(stream c2pb.C2Service_BeaconServer) error {
 
 // startGRPCListener registers the gRPC listener in server startup.
 // When TLS is enabled and cert/key exist, serves grpcs://; otherwise plain grpc:// (lab).
-func (s *Server) startGRPCListener() {
+func (s *Server) startGRPCListener() { // config-lock: boot listener start, no reload can overlap yet
 	addr := s.cfg.Server.GRPCAddr
 	listener := NewGRPCListener(addr)
 	if s.cfg.Server.TLSEnabled && s.cfg.Server.CertFile != "" && s.cfg.Server.KeyFile != "" {

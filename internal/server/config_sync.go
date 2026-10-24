@@ -121,9 +121,16 @@ type reloadOutcome struct {
 
 // --- Apply hooks (all idempotent) ---
 
+// Apply hooks run on the reload goroutine *after* the CopyFrom window closed,
+// so each one snapshots the fields it needs under the read lock: a settings
+// save can rewrite the same sections concurrently.
+
 func (s *Server) syncCryptoKeys() error {
-	crypto.InitLootEncryption(s.cfg.Crypto.LootKey)
-	crypto.InitExtC2Encryption(s.cfg.Crypto.ExtC2Key)
+	s.configMu.RLock()
+	lootKey, extc2Key := s.cfg.Crypto.LootKey, s.cfg.Crypto.ExtC2Key
+	s.configMu.RUnlock()
+	crypto.InitLootEncryption(lootKey)
+	crypto.InitExtC2Encryption(extc2Key)
 	return nil
 }
 
@@ -143,7 +150,10 @@ func (s *Server) syncJWTSecret() error {
 // unreadable, so already-deployed implants fail auth until regenerated —
 // rotation is intentionally disruptive and always audited.
 func (s *Server) syncRegSecrets() error {
-	master, err := hex.DecodeString(s.cfg.Server.BeaconKey)
+	s.configMu.RLock()
+	beaconKey := s.cfg.Server.BeaconKey
+	s.configMu.RUnlock()
+	master, err := hex.DecodeString(beaconKey)
 	if err != nil || len(master) == 0 {
 		return fmt.Errorf("invalid server.beacon_key, keeping previous store")
 	}
@@ -153,31 +163,39 @@ func (s *Server) syncRegSecrets() error {
 }
 
 func (s *Server) syncRateLimiters() error {
+	s.configMu.RLock()
+	beaconLimit, beaconWindow := s.cfg.RateLimit.Beacon.Limit, s.cfg.RateLimit.Beacon.Window
+	apiCapacity, apiRate := s.cfg.RateLimit.API.Capacity, s.cfg.RateLimit.API.Rate
+	apiWhitelist := s.cfg.RateLimit.API.Whitelist
+	s.configMu.RUnlock()
 	if s.rateLimiter != nil {
-		s.rateLimiter.SetLimits(s.cfg.RateLimit.Beacon.Limit, time.Duration(s.cfg.RateLimit.Beacon.Window)*time.Second)
+		s.rateLimiter.SetLimits(beaconLimit, time.Duration(beaconWindow)*time.Second)
 	}
 	if s.apiRateLimiter != nil {
-		s.apiRateLimiter.SetCapacityRate(s.cfg.RateLimit.API.Capacity, s.cfg.RateLimit.API.Rate)
-		s.apiRateLimiter.SetWhitelist(s.cfg.RateLimit.API.Whitelist)
+		s.apiRateLimiter.SetCapacityRate(apiCapacity, apiRate)
+		s.apiRateLimiter.SetWhitelist(apiWhitelist)
 	}
 	return nil
 }
 
 func (s *Server) syncSIEM() error {
-	if !s.cfg.SIEM.Enabled || s.cfg.SIEM.URL == "" {
+	s.configMu.RLock()
+	enabled, url, token, actions := s.cfg.SIEM.Enabled, s.cfg.SIEM.URL, s.cfg.SIEM.Token, s.cfg.SIEM.Actions
+	s.configMu.RUnlock()
+	if !enabled || url == "" {
 		if s.siem != nil {
 			s.siem.UpdateConfig(false, "", "", "")
 		}
 		return nil
 	}
 	if s.siem == nil {
-		s.siem = NewSIEMWebhook(s, s.cfg.SIEM.URL, s.cfg.SIEM.Token, s.cfg.SIEM.Actions)
+		s.siem = NewSIEMWebhook(s, url, token, actions)
 		if s.siem != nil {
 			s.siem.ReloadRules()
 		}
 		return nil
 	}
-	s.siem.UpdateConfig(true, s.cfg.SIEM.URL, s.cfg.SIEM.Token, s.cfg.SIEM.Actions)
+	s.siem.UpdateConfig(true, url, token, actions)
 	return nil
 }
 
@@ -198,11 +216,14 @@ func (s *Server) syncTrustedProxies() error {
 	if s.router == nil {
 		return nil
 	}
-	if len(s.cfg.Server.TrustedProxies) > 0 {
-		if err := s.router.SetTrustedProxies(s.cfg.Server.TrustedProxies); err != nil {
+	s.configMu.RLock()
+	proxies := append([]string(nil), s.cfg.Server.TrustedProxies...)
+	s.configMu.RUnlock()
+	if len(proxies) > 0 {
+		if err := s.router.SetTrustedProxies(proxies); err != nil {
 			return fmt.Errorf("invalid trusted_proxies: %w", err)
 		}
-		middleware.SetTrustedProxyIPs(s.cfg.Server.TrustedProxies)
+		middleware.SetTrustedProxyIPs(proxies)
 	} else {
 		_ = s.router.SetTrustedProxies(nil) // nil never errors: only a CIDR list can fail validation
 		middleware.SetTrustedProxyIPs(nil)
@@ -211,8 +232,11 @@ func (s *Server) syncTrustedProxies() error {
 }
 
 func (s *Server) syncPasswordPolicy() error {
-	if s.cfg.PasswordPolicy.BcryptCost > 0 {
-		middleware.SetBcryptCost(s.cfg.PasswordPolicy.BcryptCost)
+	s.configMu.RLock()
+	bcryptCost := s.cfg.PasswordPolicy.BcryptCost
+	s.configMu.RUnlock()
+	if bcryptCost > 0 {
+		middleware.SetBcryptCost(bcryptCost)
 	}
 	return nil
 }
@@ -225,26 +249,30 @@ func (s *Server) syncDBPool() error {
 	if err != nil {
 		return err
 	}
+	s.configMu.RLock()
+	driver := s.cfg.Database.Driver
+	maxOpen, maxIdle, maxLifetime := s.cfg.Server.DBMaxOpenConns, s.cfg.Server.DBMaxIdleConns, s.cfg.Server.DBConnMaxLifetime
+	s.configMu.RUnlock()
 	// SQLite is a single-writer database: a pool larger than 1 only
 	// manufactures SQLITE_BUSY contention under beacon load. Clamp here so a
 	// hot-reloaded postgres-oriented template cannot break it at runtime.
-	if s.cfg.Database.Driver == "sqlite" || s.cfg.Database.Driver == "" {
-		if s.cfg.Server.DBMaxOpenConns > 1 {
+	if driver == "sqlite" || driver == "" {
+		if maxOpen > 1 {
 			slog.Warn("Refusing to raise sqlite connection pool above 1 (single writer)",
-				"requested", s.cfg.Server.DBMaxOpenConns)
+				"requested", maxOpen)
 		}
 		sqlDB.SetMaxOpenConns(1)
 		sqlDB.SetMaxIdleConns(1)
 		return nil
 	}
-	if s.cfg.Server.DBMaxOpenConns > 0 {
-		sqlDB.SetMaxOpenConns(s.cfg.Server.DBMaxOpenConns)
+	if maxOpen > 0 {
+		sqlDB.SetMaxOpenConns(maxOpen)
 	}
-	if s.cfg.Server.DBMaxIdleConns > 0 {
-		sqlDB.SetMaxIdleConns(s.cfg.Server.DBMaxIdleConns)
+	if maxIdle > 0 {
+		sqlDB.SetMaxIdleConns(maxIdle)
 	}
-	if s.cfg.Server.DBConnMaxLifetime > 0 {
-		sqlDB.SetConnMaxLifetime(s.cfg.Server.DBConnMaxLifetime)
+	if maxLifetime > 0 {
+		sqlDB.SetConnMaxLifetime(maxLifetime)
 	}
 	return nil
 }

@@ -105,9 +105,12 @@ func (s *Server) cleanupOldData() {
 
 	// Periodic SQLite maintenance: VACUUM and ANALYZE to prevent bloat and
 	// keep query planner statistics fresh. Only runs if the DB is SQLite.
+	s.configMu.RLock()
+	dbDriver := s.cfg.Database.Driver
+	s.configMu.RUnlock()
 	if sqlDB, err := s.db.DB(); err == nil {
 		if err := sqlDB.Ping(); err == nil {
-			dbName := s.cfg.Database.Driver
+			dbName := dbDriver
 			if dbName == "" || dbName == "sqlite" {
 				s.wg.Add(1)
 				go func() {
@@ -130,7 +133,9 @@ func (s *Server) cleanupOldData() {
 
 	s.cleanupGhostAgents()
 
+	s.configMu.RLock()
 	dataDir := s.cfg.Server.DataDir
+	s.configMu.RUnlock()
 	if dataDir == "" {
 		dataDir = "data"
 	}
@@ -264,7 +269,7 @@ const offlineThresholdWarnGap = time.Minute
 // locking wrappers means the composed getters (staleThreshold,
 // offlineThresholdFor) take the lock exactly once: nested RLock calls would
 // deadlock the moment a writer queued between the two acquisitions.
-func (s *Server) offlineThresholdSecLocked() int {
+func (s *Server) offlineThresholdSecLocked() int { // config-lock: caller holds the read or write lock
 	if s.cfg == nil {
 		return DefaultOfflineThresholdSec
 	}

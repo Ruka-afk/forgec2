@@ -91,7 +91,9 @@ func (s *Server) handleIntegrationsList(c *gin.Context) {
 	}
 
 	// Surface Slack from server config if present and not already stored
+	s.configMu.RLock()
 	slackCfg := s.cfg.Integrations.Slack
+	s.configMu.RUnlock()
 	if slackCfg.Enabled || slackCfg.BotToken != "" {
 		found := false
 		for _, it := range integrations {

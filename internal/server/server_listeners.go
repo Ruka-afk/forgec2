@@ -38,7 +38,10 @@ func (s *Server) startExtraListenersFromDB() {
 		// port race and then fails the main bind with "address already in use".
 		if scheme == "http" || scheme == "https" || scheme == "tcp" || scheme == "tls" {
 			addr := l.Host + ":" + itoa(l.Port)
-			if listenerOverlapsMainAddr(l.Host, l.Port, s.cfg.Server.Host, s.cfg.Server.Port) {
+			s.configMu.RLock()
+			mainHost, mainPort := s.cfg.Server.Host, s.cfg.Server.Port
+			s.configMu.RUnlock()
+			if listenerOverlapsMainAddr(l.Host, l.Port, mainHost, mainPort) {
 				slog.Debug("Skipping extra listener — matches main server address", "key", key, "addr", addr)
 				continue
 			}
@@ -271,7 +274,10 @@ func (s *Server) startExtraTCPListener(key, scheme string, o listenerTLSOverride
 	var ln net.Listener
 	var err error
 	if scheme == "tls" {
-		cert, certErr := tls.LoadX509KeyPair(s.cfg.Server.CertFile, s.cfg.Server.KeyFile)
+		s.configMu.RLock()
+		certFile, keyFile := s.cfg.Server.CertFile, s.cfg.Server.KeyFile
+		s.configMu.RUnlock()
+		cert, certErr := tls.LoadX509KeyPair(certFile, keyFile)
 		if certErr != nil {
 			return fmt.Errorf("loading TLS cert for extra TCP listener: %w", certErr)
 		}

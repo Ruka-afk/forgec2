@@ -66,7 +66,7 @@ func (s *Server) roeConfig() roeConfig {
 }
 
 // roeConfigLocked reads the gate. The caller MUST hold s.configMu.
-func (s *Server) roeConfigLocked() roeConfig {
+func (s *Server) roeConfigLocked() roeConfig { // config-lock: caller holds the read or write lock
 	if s.cfg == nil {
 		return roeConfig{}
 	}

@@ -422,7 +422,10 @@ func (s *Server) registerTransientArtifact(path string) {
 
 // extractAgentsDir returns the absolute path to the agents output directory.
 func (s *Server) extractAgentsDir() string {
-	agentsDir := filepath.Join(s.cfg.Server.DataDir, "agents")
+	s.configMu.RLock()
+	dataDir := s.cfg.Server.DataDir
+	s.configMu.RUnlock()
+	agentsDir := filepath.Join(dataDir, "agents")
 	if !filepath.IsAbs(agentsDir) {
 		if abs, err := filepath.Abs(agentsDir); err == nil {
 			agentsDir = abs

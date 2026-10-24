@@ -148,7 +148,10 @@ func (s *Server) initUpdateChecker() {
 
 // checkForUpdate fetches the latest version and broadcasts if newer
 func (s *Server) checkForUpdate() {
-	latest, err := fetchLatestVersion(s.cfg.Server.UpdateCheckRepo)
+	s.configMu.RLock()
+	repo := s.cfg.Server.UpdateCheckRepo
+	s.configMu.RUnlock()
+	latest, err := fetchLatestVersion(repo)
 	s.updateState.mu.Lock()
 	s.updateState.CheckedAt = time.Now()
 	if err != nil {
@@ -756,11 +759,13 @@ func (s *Server) snapshotDatabaseForUpdate(dir string) (string, string) {
 	if s.cfg == nil || s.db == nil {
 		return "", ""
 	}
+	s.configMu.RLock()
 	driver := strings.ToLower(strings.TrimSpace(s.cfg.Database.Driver))
+	dbPath := strings.TrimSpace(s.cfg.Database.Path)
+	s.configMu.RUnlock()
 	if driver != "" && driver != "sqlite" {
 		return "", ""
 	}
-	dbPath := strings.TrimSpace(s.cfg.Database.Path)
 	if dbPath == "" {
 		return "", ""
 	}
@@ -945,7 +950,10 @@ func (s *Server) downloadUpdateFile(url, dest, version string) error {
 
 // releaseURL returns the GitHub release page URL for a given version
 func (s *Server) releaseURL(version string) string {
-	return fmt.Sprintf("https://github.com/%s/releases/tag/%s", s.cfg.Server.UpdateCheckRepo, version)
+	s.configMu.RLock()
+	repo := s.cfg.Server.UpdateCheckRepo
+	s.configMu.RUnlock()
+	return fmt.Sprintf("https://github.com/%s/releases/tag/%s", repo, version)
 }
 
 // broadcastUpdateNotification sends a new-version alert via WebSocket

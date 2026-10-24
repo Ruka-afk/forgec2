@@ -113,7 +113,10 @@ func (s *Server) handleRedirectorCreate(c *gin.Context) {
 		req.SSHPort = DefaultSSHPort
 	}
 
-	encPassword, err := encryptSecret(req.SSHPassword, s.cfg.Crypto.TotpKey)
+	s.configMu.RLock()
+	credKey := s.cfg.Crypto.TotpKey
+	s.configMu.RUnlock()
+	encPassword, err := encryptSecret(req.SSHPassword, credKey)
 	if err != nil {
 		// Never fall through to an empty SSHPassword: encryptSecret returns an
 		// empty string when the key is bad, and writing that over the stored
@@ -180,7 +183,10 @@ func (s *Server) handleRedirectorUpdate(c *gin.Context) {
 		rd.SSHKey = req.SSHKey
 	}
 	if req.SSHPassword != "" {
-		encPassword, err := encryptSecret(req.SSHPassword, s.cfg.Crypto.TotpKey)
+		s.configMu.RLock()
+		credKey := s.cfg.Crypto.TotpKey
+		s.configMu.RUnlock()
+		encPassword, err := encryptSecret(req.SSHPassword, credKey)
 		if err != nil {
 			// An empty result on a bad key would wipe the stored credential, so
 			// refuse instead of reporting a success that destroyed it.

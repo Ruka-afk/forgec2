@@ -81,13 +81,20 @@ func loadClientCAPool(path string) (*x509.CertPool, error) {
 // caller gets an error - failing the listener start is the only safe answer,
 // serving without the requested check is not.
 func (s *Server) effectiveClientAuth(o listenerTLSOverrides) (bool, *x509.CertPool, error) {
-	require := o.RequireClientCert || (s.cfg != nil && s.cfg.Server.RequireClientCert)
+	s.configMu.RLock()
+	serverRequire, serverCA := false, ""
+	if s.cfg != nil {
+		serverRequire = s.cfg.Server.RequireClientCert
+		serverCA = strings.TrimSpace(s.cfg.Server.ClientCAFile)
+	}
+	s.configMu.RUnlock()
+	require := o.RequireClientCert || serverRequire
 	if !require {
 		return false, nil, nil
 	}
 	caFile := strings.TrimSpace(o.ClientCAFile)
-	if caFile == "" && s.cfg != nil {
-		caFile = strings.TrimSpace(s.cfg.Server.ClientCAFile)
+	if caFile == "" {
+		caFile = serverCA
 	}
 	if caFile == "" {
 		return false, nil, fmt.Errorf("client certificates are required but no client CA is configured (listener client_ca_file or server.client_ca_file)")
@@ -108,7 +115,10 @@ func (s *Server) listenerRequiresClientCert(l *db.Listener) bool {
 	if l != nil && l.RequireClientCert {
 		return true
 	}
-	return s.cfg != nil && s.cfg.Server.RequireClientCert
+	s.configMu.RLock()
+	required := s.cfg != nil && s.cfg.Server.RequireClientCert
+	s.configMu.RUnlock()
+	return required
 }
 
 // validateListenerTLSShape rejects TLS knobs that cannot be honoured, at the
@@ -132,8 +142,16 @@ func (s *Server) validateListenerTLSShape(scheme string, o listenerTLSOverrides)
 			return err
 		}
 	}
-	if o.RequireClientCert && o.ClientCAFile == "" && (s.cfg == nil || strings.TrimSpace(s.cfg.Server.ClientCAFile) == "") {
-		return fmt.Errorf("require_client_cert needs a client CA: set client_ca_file on the listener or server.client_ca_file")
+	if o.RequireClientCert && o.ClientCAFile == "" {
+		s.configMu.RLock()
+		serverCA := ""
+		if s.cfg != nil {
+			serverCA = strings.TrimSpace(s.cfg.Server.ClientCAFile)
+		}
+		s.configMu.RUnlock()
+		if serverCA == "" {
+			return fmt.Errorf("require_client_cert needs a client CA: set client_ca_file on the listener or server.client_ca_file")
+		}
 	}
 	return nil
 }

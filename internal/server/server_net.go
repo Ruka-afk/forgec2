@@ -268,7 +268,7 @@ func (s *Server) handleTCPConnection(conn net.Conn) {
 // Payloads must fit within the link MTU (the agent caps sends at 16MiB but
 // real-world UDP is limited by Path MTU — large results should use a
 // connection-oriented transport).
-func (s *Server) startUDPListener() {
+func (s *Server) startUDPListener() { // config-lock: boot listener start, no reload can overlap yet
 	pc, err := net.ListenPacket("udp", s.cfg.Server.UDPAddr)
 	if err != nil {
 		slog.Error("Failed to start UDP listener", "addr", s.cfg.Server.UDPAddr, "err", err)

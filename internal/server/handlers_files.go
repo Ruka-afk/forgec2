@@ -390,7 +390,7 @@ func (s *Server) handleFileExfilGet(c *gin.Context) {
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
-	dataDir := s.cfg.Server.DataDir
+	dataDir := s.rawDataDir()
 	if dataDir == "" {
 		dataDir = "data"
 	}

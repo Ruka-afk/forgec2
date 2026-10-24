@@ -15,7 +15,9 @@ import (
 )
 
 func (s *Server) handleGetCertInfo(c *gin.Context) {
+	s.configMu.RLock()
 	certPath := s.cfg.Server.CertFile
+	s.configMu.RUnlock()
 	if certPath == "" {
 		certPath = "data/certs/server.crt"
 	}
@@ -52,11 +54,13 @@ func (s *Server) handleGetCertInfo(c *gin.Context) {
 }
 
 func (s *Server) handleRegenerateCert(c *gin.Context) {
-	certPath := s.cfg.Server.CertFile
+	s.configMu.RLock()
+	certPath, keyPathCfg := s.cfg.Server.CertFile, s.cfg.Server.KeyFile
+	s.configMu.RUnlock()
 	if certPath == "" {
 		certPath = "data/certs/server.crt"
 	}
-	keyPath := s.cfg.Server.KeyFile
+	keyPath := keyPathCfg
 	if keyPath == "" {
 		keyPath = filepath.Join(filepath.Dir(certPath), "server.key")
 	}
@@ -164,14 +168,16 @@ func (s *Server) handleUploadCert(c *gin.Context) {
 		return
 	}
 
-	certPath := s.cfg.Server.CertFile
+	s.configMu.RLock()
+	certPath, keyPathCfg := s.cfg.Server.CertFile, s.cfg.Server.KeyFile
+	s.configMu.RUnlock()
 	if certPath == "" {
 		certPath = "data/certs/server.crt"
 	}
 	// Honor an explicit key_file: deriving the key next to the certificate
 	// silently ignored the configured path and paired the new certificate
 	// with whatever key still lived at server.key_file.
-	keyPath := s.cfg.Server.KeyFile
+	keyPath := keyPathCfg
 	if keyPath == "" {
 		keyPath = filepath.Join(filepath.Dir(certPath), "server.key")
 	}

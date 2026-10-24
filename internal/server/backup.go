@@ -529,7 +529,10 @@ func decryptBackupData(encryptedData []byte, key []byte) ([]byte, error) {
 // cryptographically independent of other secrets. Backups created by older
 // versions that re-used the derived key can no longer be restored.
 func (s *Server) backupKeyHex() string {
-	return s.cfg.Crypto.BackupKey
+	s.configMu.RLock()
+	key := s.cfg.Crypto.BackupKey
+	s.configMu.RUnlock()
+	return key
 }
 
 // backupKey decodes backupKeyHex into the 32 raw key bytes used for .fbk

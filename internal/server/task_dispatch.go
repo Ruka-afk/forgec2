@@ -431,7 +431,10 @@ func clampSetSleepCommand(command string) (string, error) {
 // this keeps the single-task and bulk/batch paths consistent so the two-man
 // rule cannot be bypassed through the batch endpoint.
 func (s *Server) resolveInitialTaskStatus(taskType string) string {
-	if s.cfg != nil && s.cfg.Security.RequireApproval {
+	s.configMu.RLock()
+	requireApproval := s.cfg != nil && s.cfg.Security.RequireApproval
+	s.configMu.RUnlock()
+	if requireApproval {
 		if info, ok := getTaskTypeInfo(taskType); ok && info.RequiresApproval {
 			return TaskStatusPendingApproval
 		}

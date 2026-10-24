@@ -49,7 +49,7 @@ func (s *Server) handleGetAgentScreenshot(c *gin.Context) {
 		return
 	}
 
-	screenshotBase := filepath.Join(s.cfg.Server.DataDir, "screenshots")
+	screenshotBase := filepath.Join(s.rawDataDir(), "screenshots")
 	screenshotDir := safeJoin(screenshotBase, id)
 	if screenshotDir == "" {
 		respondError(c, http.StatusBadRequest, "invalid agent id")

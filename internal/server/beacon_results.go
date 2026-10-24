@@ -138,7 +138,7 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			continue
 		}
 		if r.Type == "screen_trigger" && r.Output != "" {
-			s.writeScreenshotFile(s.cfg.Server.DataDir, uuid, r.TaskID, r.Output)
+			s.writeScreenshotFile(s.rawDataDir(), uuid, r.TaskID, r.Output)
 			s.BroadcastScreenshot(uuid, r.Output)
 			continue
 		}
@@ -260,7 +260,7 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			// active. Continuous screen_frame messages remain memory-only, so this
 			// does not turn a live stream into unbounded disk retention.
 			task.Result = r.Output
-			s.saveScreenshot(s.cfg.Server.DataDir, uuid, task.ID, r.Output)
+			s.saveScreenshot(s.rawDataDir(), uuid, task.ID, r.Output)
 			if s.IsScreenMonitoring(uuid) {
 				s.BroadcastScreenshot(uuid, r.Output)
 			}

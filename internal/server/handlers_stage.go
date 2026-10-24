@@ -53,7 +53,7 @@ func (s *Server) handleServeStage(c *gin.Context) {
 		return
 	}
 
-	dataDir := s.cfg.Server.DataDir
+	dataDir := s.rawDataDir()
 	if dataDir == "" {
 		dataDir = "data"
 	}
@@ -120,7 +120,7 @@ func (s *Server) buildStage2Blob(tok *db.StagerToken) error {
 	unlock := s.stageBuildLock(tok.Token)
 	defer unlock()
 
-	dataDir := s.cfg.Server.DataDir
+	dataDir := s.rawDataDir()
 	if dataDir == "" {
 		dataDir = "data"
 	}
@@ -171,7 +171,7 @@ func (s *Server) buildStage2Blob(tok *db.StagerToken) error {
 		RegSecret:    regSecretB64,
 	}
 
-	agentsDir := s.cfg.Server.DataDir
+	agentsDir := s.rawDataDir()
 	if agentsDir == "" {
 		agentsDir = "data"
 	}

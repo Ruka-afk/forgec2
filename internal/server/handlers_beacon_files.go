@@ -13,7 +13,7 @@ import (
 // saveFileChunk writes a base64-encoded file chunk to disk for upload/download
 // results. Returns true if the caller should skip normal task-result processing.
 func saveFileChunk(s *Server, uuid string, task *db.Task, r taskResult, logPrefix string, resultPrefix string) bool {
-	uploadBase := safeJoin(filepath.Join(s.cfg.Server.DataDir, "uploads"), uuid)
+	uploadBase := safeJoin(filepath.Join(s.rawDataDir(), "uploads"), uuid)
 	if uploadBase == "" {
 		slog.Error("Invalid agent ID for upload path", "agent_id", uuid)
 		task.Result = "ERROR: invalid agent id"

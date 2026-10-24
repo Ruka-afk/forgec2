@@ -40,7 +40,10 @@ func isSQLiteFile(br *bufio.Reader) bool {
 }
 
 func (s *Server) backupDir() string {
-	return filepath.Join(s.cfg.Server.DataDir, "backups")
+	s.configMu.RLock()
+	dataDir := s.cfg.Server.DataDir
+	s.configMu.RUnlock()
+	return filepath.Join(dataDir, "backups")
 }
 
 // removeStaleDBArtifacts deletes WAL/SHM sidecar files that belonged to the
@@ -270,7 +273,10 @@ func (s *Server) handleDBBackup(c *gin.Context) {
 	if !s.requireSQLiteDB(c) {
 		return
 	}
-	if _, err := os.Stat(s.cfg.Database.Path); err != nil {
+	s.configMu.RLock()
+	dbFile := s.cfg.Database.Path
+	s.configMu.RUnlock()
+	if _, err := os.Stat(dbFile); err != nil {
 		respondError(c, http.StatusInternalServerError, "database file not found")
 		return
 	}
@@ -406,7 +412,9 @@ func (s *Server) handleRestoreFromUpload(c *gin.Context) {
 		return
 	}
 
+	s.configMu.RLock()
 	dbPath := s.cfg.Database.Path
+	s.configMu.RUnlock()
 	if err := writeRestoredDB(src, dbPath); err != nil {
 		slog.Error("Database restore from upload failed", "error", err)
 		respondError(c, http.StatusInternalServerError, "restore failed")
@@ -499,7 +507,9 @@ func (s *Server) handleRestoreFromFile(c *gin.Context) {
 		return
 	}
 
+	s.configMu.RLock()
 	dbPath := s.cfg.Database.Path
+	s.configMu.RUnlock()
 	if err := writeRestoredDB(src, dbPath); err != nil {
 		slog.Error("Database restore from backup failed", "error", err)
 		respondError(c, http.StatusInternalServerError, "restore failed")

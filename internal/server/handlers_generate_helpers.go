@@ -202,10 +202,28 @@ func (s *Server) getListeners() []db.Listener {
 }
 
 func (s *Server) implantDataDir() string {
-	if s.cfg.Server.DataDir != "" {
-		return s.cfg.Server.DataDir
+	// CopyFrom rewrites Server.DataDir under the config write lock, so read it
+	// under the read lock (the helper is called from request paths).
+	s.configMu.RLock()
+	dir := s.cfg.Server.DataDir
+	s.configMu.RUnlock()
+	if dir != "" {
+		return dir
 	}
 	return "data"
+}
+
+// rawDataDir returns Server.DataDir exactly as configured (no "data" default)
+// under the config read lock. Call sites that apply their own empty-value
+// defaulting use this instead of touching the field, which is rewritten by a
+// hot reload under the write lock.
+func (s *Server) rawDataDir() string {
+	s.configMu.RLock()
+	defer s.configMu.RUnlock()
+	if s.cfg == nil {
+		return ""
+	}
+	return s.cfg.Server.DataDir
 }
 
 // cleanupOldPayloads removes hosted payloads older than HostedPayloadTTL.
@@ -213,7 +231,7 @@ func (s *Server) implantDataDir() string {
 // http.ServeContent, so interrupted downloads can resume with curl -C - while
 // the payload is retained.
 func (s *Server) cleanupOldPayloads() {
-	payloadsDir := filepath.Join(s.cfg.Server.DataDir, "payloads")
+	payloadsDir := filepath.Join(s.rawDataDir(), "payloads")
 	entries, err := os.ReadDir(payloadsDir)
 	if err != nil {
 		return

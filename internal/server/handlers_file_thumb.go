@@ -175,7 +175,9 @@ func validFileThumbID(id string) bool {
 }
 
 func (s *Server) fileThumbBase(agentID string) string {
+	s.configMu.RLock()
 	dataDir := s.cfg.Server.DataDir
+	s.configMu.RUnlock()
 	if dataDir == "" {
 		dataDir = "data"
 	}
@@ -280,8 +282,9 @@ func (s *Server) saveFileThumb(agentID string, data []byte) (string, error) {
 // cleanupOldThumbs bounds the thumbnail cache by age. It is called by the same
 // periodic cleanup loop as hosted payloads; a failed walk is best-effort.
 func (s *Server) cleanupOldThumbs() {
-	base := filepath.Join(s.cfg.Server.DataDir, fileThumbCacheDirName)
-	if s.cfg.Server.DataDir == "" {
+	dataDir := s.rawDataDir()
+	base := filepath.Join(dataDir, fileThumbCacheDirName)
+	if dataDir == "" {
 		base = filepath.Join("data", fileThumbCacheDirName)
 	}
 	cutoff := time.Now().Add(-fileThumbTTL)

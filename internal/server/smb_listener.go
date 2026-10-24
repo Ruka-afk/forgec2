@@ -22,7 +22,7 @@ func defaultSMBListen(addr string) (net.Listener, error) {
 	return net.Listen("unix", addr)
 }
 
-func (s *Server) startSMBListener() {
+func (s *Server) startSMBListener() { // config-lock: boot listener start, no reload can overlap yet
 	listenAddr := s.cfg.Server.SMBPipe
 	if listenAddr == "" {
 		slog.Warn("SMB listener: no pipe/addr configured")

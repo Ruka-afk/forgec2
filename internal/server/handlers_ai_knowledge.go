@@ -396,9 +396,12 @@ func aiSearchTerms(text string) []string {
 }
 
 func (s *Server) blindAIKnowledgeTokens(text string) string {
-	key, err := hex.DecodeString(strings.TrimSpace(s.cfg.Crypto.LootKey))
+	s.configMu.RLock()
+	lootKey := s.cfg.Crypto.LootKey
+	s.configMu.RUnlock()
+	key, err := hex.DecodeString(strings.TrimSpace(lootKey))
 	if err != nil || len(key) == 0 {
-		key = []byte(s.cfg.Crypto.LootKey)
+		key = []byte(lootKey)
 	}
 	tokens := make([]string, 0)
 	for _, term := range aiSearchTerms(text) {

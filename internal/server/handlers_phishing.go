@@ -192,7 +192,10 @@ func (s *Server) handleAPICreatePhishingCampaign(c *gin.Context) {
 	if req.SMTPPort == 0 {
 		req.SMTPPort = 587
 	}
-	encryptedPass, err := encryptSecret(req.SMTPPass, s.cfg.Crypto.TotpKey)
+	s.configMu.RLock()
+	credKey := s.cfg.Crypto.TotpKey
+	s.configMu.RUnlock()
+	encryptedPass, err := encryptSecret(req.SMTPPass, credKey)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to encrypt SMTP password")
 		return
@@ -264,15 +267,17 @@ func phishingToken() string {
 }
 
 func (s *Server) phishingBaseURL() string {
+	s.configMu.RLock()
+	tlsEnabled, host, port := s.cfg.Server.TLSEnabled, s.cfg.Server.Host, s.cfg.Server.Port
+	s.configMu.RUnlock()
 	scheme := "http"
-	if s.cfg.Server.TLSEnabled {
+	if tlsEnabled {
 		scheme = "https"
 	}
-	host := s.cfg.Server.Host
 	if host == "" || host == "0.0.0.0" {
 		host = "127.0.0.1"
 	}
-	return fmt.Sprintf("%s://%s:%d", scheme, host, s.cfg.Server.Port)
+	return fmt.Sprintf("%s://%s:%d", scheme, host, port)
 }
 
 func renderPhishingBody(body, email, token, landingURL string) string {
@@ -375,7 +380,10 @@ func (s *Server) handleAPILaunchPhishingCampaign(c *gin.Context) {
 		return
 	}
 
-	smtpPass, err := decryptSecret(camp.SMTPPass, s.cfg.Crypto.TotpKey)
+	s.configMu.RLock()
+	credKey := s.cfg.Crypto.TotpKey
+	s.configMu.RUnlock()
+	smtpPass, err := decryptSecret(camp.SMTPPass, credKey)
 	if err != nil {
 		// fallback: treat as plaintext for legacy rows
 		smtpPass = camp.SMTPPass

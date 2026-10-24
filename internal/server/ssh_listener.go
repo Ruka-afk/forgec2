@@ -395,15 +395,18 @@ func loadOrGenerateSSHHostKey(path string) (ssh.Signer, error) {
 
 // newSSHListenerConfig builds the listener parameters from server config.
 func (s *Server) newSSHListenerConfig(addr string) (SSHListenerConfig, error) {
-	hostKey, err := loadOrGenerateSSHHostKey(s.cfg.Server.SSHHostKey)
+	s.configMu.RLock()
+	hostKeyPath, user, password, keyAuth := s.cfg.Server.SSHHostKey, s.cfg.Server.SSHUser, s.cfg.Server.SSHPassword, s.cfg.Server.SSHKeyAuth
+	s.configMu.RUnlock()
+	hostKey, err := loadOrGenerateSSHHostKey(hostKeyPath)
 	if err != nil {
 		return SSHListenerConfig{}, err
 	}
 	return SSHListenerConfig{
 		Addr:     addr,
-		User:     s.cfg.Server.SSHUser,
-		Password: s.cfg.Server.SSHPassword,
-		KeyAuth:  s.cfg.Server.SSHKeyAuth,
+		User:     user,
+		Password: password,
+		KeyAuth:  keyAuth,
 		HostKey:  hostKey,
 	}, nil
 }

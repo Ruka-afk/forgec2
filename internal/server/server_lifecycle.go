@@ -612,7 +612,7 @@ func (s *Server) Run() error {
 // HTTP/2 handler, and the rotating TLS profile advertises h2 in ALPN. A
 // listener that advertises h2 while speaking HTTP/1.1 accepts the handshake
 // and then fails every request, which looks like a dead server to a browser.
-func (s *Server) serve(srv *http.Server, ln net.Listener) error {
+func (s *Server) serve(srv *http.Server, ln net.Listener) error { // config-lock: boot, decides TLS before the first request
 	if s.cfg.Server.TLSEnabled {
 		// Empty cert/key paths: the certificate comes from GetCertificate
 		// (hot-reloadable loader), not from files read once at startup.

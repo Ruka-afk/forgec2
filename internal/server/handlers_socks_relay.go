@@ -145,8 +145,8 @@ func (e *socksRelayEngine) startSession(s *Server, agentID string, port int) (in
 	}
 
 	listenHost := "127.0.0.1"
-	if s.cfg != nil && s.cfg.Server.SocksListenHost != "" {
-		listenHost = s.cfg.Server.SocksListenHost
+	if h := listenHostMsg(s); h != "" {
+		listenHost = h
 	}
 	addr := fmt.Sprintf("%s:%d", listenHost, port)
 	ln, err := net.Listen("tcp", addr)
@@ -1042,8 +1042,14 @@ func parseOperatorUDPHeader(b []byte) (dst string, payload []byte, err error) {
 }
 
 func listenHostMsg(s *Server) string {
-	if s != nil && s.cfg != nil && s.cfg.Server.SocksListenHost != "" {
-		return s.cfg.Server.SocksListenHost
+	if s == nil || s.cfg == nil {
+		return "127.0.0.1"
+	}
+	s.configMu.RLock()
+	host := s.cfg.Server.SocksListenHost
+	s.configMu.RUnlock()
+	if host != "" {
+		return host
 	}
 	return "127.0.0.1"
 }

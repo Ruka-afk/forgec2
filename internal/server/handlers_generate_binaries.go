@@ -520,7 +520,9 @@ func (s *Server) loadSSHHostPublicKeyB64() string {
 	if s == nil || s.cfg == nil {
 		return ""
 	}
+	s.configMu.RLock()
 	path := s.cfg.Server.SSHHostKey
+	s.configMu.RUnlock()
 	if path == "" {
 		return ""
 	}

@@ -226,7 +226,7 @@ func (s *Server) configureTLS(srv *http.Server) error {
 // without the requested check. A configuration that cannot be honoured returns
 // an error so the caller can fail the listener start instead of serving a
 // weaker posture.
-func (s *Server) configureTLSWith(srv *http.Server, o listenerTLSOverrides) error {
+func (s *Server) configureTLSWith(srv *http.Server, o listenerTLSOverrides) error { // config-lock: boot, TLS is configured before serving
 	floor, ok := minTLSVersionFloor(o.MinTLSVersion)
 	if !ok {
 		return fmt.Errorf("invalid min_tls_version %q", o.MinTLSVersion)

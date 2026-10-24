@@ -162,7 +162,7 @@ type screenshotMod struct {
 }
 
 func (s *Server) listScreenshotModTimes(agentID string) []screenshotMod {
-	dir := safeJoin(filepath.Join(s.cfg.Server.DataDir, "screenshots"), agentID)
+	dir := safeJoin(filepath.Join(s.rawDataDir(), "screenshots"), agentID)
 	if dir == "" {
 		return nil
 	}

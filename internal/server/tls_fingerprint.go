@@ -269,7 +269,7 @@ func (tfm *TLSFingerprintManager) Snapshot(base *tls.Config) *tls.Config {
 	return wrapped
 }
 
-func (s *Server) initTLSFingerprint() {
+func (s *Server) initTLSFingerprint() { // config-lock: boot, the fingerprint manager is built before serving
 	if s.cfg.TLSFingerprint.JARMEnabled || s.cfg.TLSFingerprint.JA3Enabled {
 		rotateInterval := s.cfg.TLSFingerprint.JA3Rotate
 		if rotateInterval == "" {

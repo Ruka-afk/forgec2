@@ -253,7 +253,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 		RegSecret:       regSecretB64,
 	}
 
-	agentsDir := filepath.Join(s.cfg.Server.DataDir, "agents")
+	agentsDir := filepath.Join(s.rawDataDir(), "agents")
 	if !filepath.IsAbs(agentsDir) {
 		if abs, err := filepath.Abs(agentsDir); err == nil {
 			agentsDir = abs
@@ -293,7 +293,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 	}
 
 	// Copy the payload to the hosted payloads directory for download
-	payloadsDir := filepath.Join(s.cfg.Server.DataDir, "payloads")
+	payloadsDir := filepath.Join(s.rawDataDir(), "payloads")
 	if err := os.MkdirAll(payloadsDir, 0750); err != nil {
 		s.logBuild(format, "oneliner", form.C2URL, form.ListenerID, filename, "failed", "build error", "")
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Payload generation"))
@@ -371,8 +371,9 @@ func (s *Server) handleServePayload(c *gin.Context) {
 		return
 	}
 
-	payloadPath := filepath.Join(s.cfg.Server.DataDir, "payloads", payloadID, filename)
-	allowedDir := filepath.Join(s.cfg.Server.DataDir, "payloads")
+	dataDir := s.rawDataDir()
+	payloadPath := filepath.Join(dataDir, "payloads", payloadID, filename)
+	allowedDir := filepath.Join(dataDir, "payloads")
 	if err := validateFilePath(payloadPath, allowedDir); err != nil {
 		c.String(http.StatusForbidden, "forbidden")
 		return

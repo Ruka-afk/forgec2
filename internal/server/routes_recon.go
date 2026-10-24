@@ -109,7 +109,10 @@ func (s *Server) registerDebugRoutes(auth *gin.RouterGroup) {
 func (s *Server) gatedMetricsHandler() gin.HandlerFunc {
 	inner := metricsPromHandler()
 	return func(c *gin.Context) {
-		if !s.cfg.Server.EnableMetrics {
+		s.configMu.RLock()
+		enabled := s.cfg.Server.EnableMetrics
+		s.configMu.RUnlock()
+		if !enabled {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "metrics disabled"})
 			c.Abort()
 			return

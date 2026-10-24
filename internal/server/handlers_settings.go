@@ -240,7 +240,7 @@ func (s *Server) handleSettingsPage(c *gin.Context) {
 // the validation and the save then form one atomic window, and the file
 // watcher's reload (which takes the same lock) can never observe a
 // half-applied form of the operator's edit.
-func (s *Server) validateAndSaveConfigLocked(c *gin.Context, action string) bool {
+func (s *Server) validateAndSaveConfigLocked(c *gin.Context, action string) bool { // config-lock: caller holds the write lock
 	if err := s.cfg.Validate(); err != nil {
 		slog.Warn("Config validation failed before save", "action", action, "err", err)
 		respondError(c, http.StatusBadRequest, "Config validation failed")

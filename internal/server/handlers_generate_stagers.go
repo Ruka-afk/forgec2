@@ -164,7 +164,7 @@ func (s *Server) generateTokenStager(goos string, form *stagerGenerateForm) (str
 		return "", fmt.Errorf("register stage token: %w", err)
 	}
 
-	dataDir := s.cfg.Server.DataDir
+	dataDir := s.rawDataDir()
 	if dataDir == "" {
 		dataDir = "data"
 	}
@@ -275,7 +275,7 @@ func (s *Server) handleGenerateStager(c *gin.Context) {
 
 	s.logStagerBuild("windows", form, "success", stagerPath)
 	s.registerTransientArtifact(stagerPath)
-	agentsDir := filepath.Join(s.cfg.Server.DataDir, "agents")
+	agentsDir := filepath.Join(s.rawDataDir(), "agents")
 	serveFileSafe(c, stagerPath, agentsDir, filepath.Base(stagerPath))
 }
 
@@ -297,7 +297,7 @@ func (s *Server) handleGenerateStagerLinux(c *gin.Context) {
 
 	s.logStagerBuild("linux", form, "success", stagerPath)
 	s.registerTransientArtifact(stagerPath)
-	agentsDir := filepath.Join(s.cfg.Server.DataDir, "agents")
+	agentsDir := filepath.Join(s.rawDataDir(), "agents")
 	serveFileSafe(c, stagerPath, agentsDir, filepath.Base(stagerPath))
 }
 

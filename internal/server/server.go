@@ -374,7 +374,7 @@ type BulkResult struct {
 
 const maxBulkHistory = 50
 
-func New(cfg *config.Config, database *gorm.DB) *Server {
+func New(cfg *config.Config, database *gorm.DB) *Server { // config-lock: constructor, no reloader or HTTP server yet
 	payload.SetConfiguredGoProxy(cfg.Implant.GoProxy)
 	gin.SetMode(gin.ReleaseMode)
 
@@ -873,7 +873,7 @@ func (s *Server) InitOptimizations(configPath string) {
 	}
 }
 
-func (s *Server) SetupRoutes() {
+func (s *Server) SetupRoutes() { // config-lock: boot, before the listener serves
 	// Request logging middleware
 	s.router.Use(middleware.RequestLogger())
 

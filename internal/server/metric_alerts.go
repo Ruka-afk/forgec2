@@ -64,7 +64,11 @@ func (e *metricAlertEngine) evaluate(s *Server) []metricAlertHit {
 	if s == nil || s.metrics == nil || s.cfg == nil {
 		return nil
 	}
-	mon := &s.cfg.Monitoring
+	// evaluate runs on the alert ticker, concurrently with a config reload:
+	// take a struct copy under the read lock and read the copy.
+	s.configMu.RLock()
+	mon := s.cfg.Monitoring
+	s.configMu.RUnlock()
 
 	total := gaugeValue(s.metrics.AgentsTotal)
 	online := gaugeValue(s.metrics.AgentsOnline)
@@ -171,7 +175,7 @@ func (s *Server) evaluateTaskFailureRate(cfg *config.Config) (metricAlertHit, bo
 
 // startMetricAlertLoop launches the periodic evaluator when the bridge is
 // enabled and a metrics collector exists. Called from the server lifecycle.
-func (s *Server) startMetricAlertLoop() {
+func (s *Server) startMetricAlertLoop() { // config-lock: boot, all cfg reads captured before the ticker goroutine starts
 	if s.cfg == nil || !s.cfg.Monitoring.AlertsEnabled || s.metrics == nil {
 		return
 	}

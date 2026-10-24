@@ -15,7 +15,10 @@ import (
 const moduleMaxBytes = 20 << 20 // 20 MB
 
 func (s *Server) modulesDir() string {
-	dir := filepath.Join(s.cfg.Server.DataDir, "modules")
+	s.configMu.RLock()
+	dataDir := s.cfg.Server.DataDir
+	s.configMu.RUnlock()
+	dir := filepath.Join(dataDir, "modules")
 	_ = os.MkdirAll(dir, 0750)
 	return dir
 }

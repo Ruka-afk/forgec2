@@ -59,6 +59,8 @@ func newLootTask(t db.Task) lootTaskDTO {
 }
 
 func lootDataDir(s *Server) string {
+	s.configMu.RLock()
+	defer s.configMu.RUnlock()
 	if s.cfg != nil && s.cfg.Server.DataDir != "" {
 		return s.cfg.Server.DataDir
 	}

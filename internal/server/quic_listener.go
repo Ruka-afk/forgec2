@@ -209,10 +209,16 @@ func (l *QUICBeaconListener) Addr() string {
 }
 
 func (s *Server) quicTLSConfig() (*tls.Config, error) {
-	if s.cfg == nil || s.cfg.Server.CertFile == "" || s.cfg.Server.KeyFile == "" {
+	s.configMu.RLock()
+	certFile, keyFile := "", ""
+	if s.cfg != nil {
+		certFile, keyFile = s.cfg.Server.CertFile, s.cfg.Server.KeyFile
+	}
+	s.configMu.RUnlock()
+	if certFile == "" || keyFile == "" {
 		return nil, fmt.Errorf("QUIC requires TLS cert/key (server.cert_file / key_file)")
 	}
-	cert, err := tls.LoadX509KeyPair(s.cfg.Server.CertFile, s.cfg.Server.KeyFile)
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +229,7 @@ func (s *Server) quicTLSConfig() (*tls.Config, error) {
 	}, nil
 }
 
-func (s *Server) startQUICListener() {
+func (s *Server) startQUICListener() { // config-lock: boot listener start, no reload can overlap yet
 	tlsCfg, err := s.quicTLSConfig()
 	if err != nil {
 		slog.Error("QUIC listener TLS", "err", err)

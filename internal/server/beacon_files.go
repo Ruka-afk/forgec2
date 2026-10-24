@@ -73,7 +73,7 @@ func (s *Server) handleServeScreenshot(c *gin.Context) {
 		return
 	}
 
-	screenshotRoot := filepath.Clean(filepath.Join(s.cfg.Server.DataDir, "screenshots"))
+	screenshotRoot := filepath.Clean(filepath.Join(s.rawDataDir(), "screenshots"))
 	requested := safeJoin(safeJoin(screenshotRoot, agentID), filename)
 	if requested == "" {
 		c.String(http.StatusBadRequest, "invalid path")

@@ -239,7 +239,13 @@ func (s *Server) cleanupLPortFwdForAgent(agentID string) {
 // lportFwdAllowed reports whether the lportfwd kill switch permits task
 // creation. A nil config (some tests) defaults to allowed.
 func (s *Server) lportFwdAllowed() bool {
-	return s.cfg == nil || s.cfg.Server.LPortFwdEnabled
+	if s.cfg == nil {
+		return true
+	}
+	s.configMu.RLock()
+	allowed := s.cfg.Server.LPortFwdEnabled
+	s.configMu.RUnlock()
+	return allowed
 }
 
 // isSafeLPortFwdHost rejects dial targets that can never be legitimate:

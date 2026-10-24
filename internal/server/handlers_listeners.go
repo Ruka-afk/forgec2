@@ -177,7 +177,10 @@ func (s *Server) startListenerForRecord(l *db.Listener, context string) bool {
 		key = scheme + "://" + addr
 
 		// Skip if this is the main server address (already served)
-		mainAddr := s.cfg.Server.Host + ":" + itoa(s.cfg.Server.Port)
+		s.configMu.RLock()
+		mainHost, mainPort := s.cfg.Server.Host, s.cfg.Server.Port
+		s.configMu.RUnlock()
+		mainAddr := mainHost + ":" + itoa(mainPort)
 		if addr == mainAddr && (scheme == "http" || scheme == "https") {
 			slog.Debug("Listener matches main server address, no extra listener needed",
 				"key", key, "context", context)

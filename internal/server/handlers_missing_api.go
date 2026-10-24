@@ -448,7 +448,7 @@ func (s *Server) handlePackerArtifact(c *gin.Context) {
 		return
 	}
 
-	dataDir := s.cfg.Server.DataDir
+	dataDir := s.rawDataDir()
 	if !filepath.IsAbs(dataDir) {
 		if abs, err := filepath.Abs(dataDir); err == nil {
 			dataDir = abs

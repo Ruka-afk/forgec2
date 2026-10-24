@@ -227,7 +227,10 @@ func (s *Server) handleHandoverExport(c *gin.Context) {
 	// ── AI engagement memory ──
 	// Engagement notes are operator-global memory: only legacy operators
 	// see them; scoped operators get a bundle limited to their tenant.
-	if notes := s.cfg.AI.EngagementNotes; notes != "" && s.currentTenantID(c) == 0 {
+	s.configMu.RLock()
+	notes := s.cfg.AI.EngagementNotes
+	s.configMu.RUnlock()
+	if notes != "" && s.currentTenantID(c) == 0 {
 		addJSON("engagement_notes.txt", map[string]interface{}{"notes": notes})
 	}
 
