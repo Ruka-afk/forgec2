@@ -350,7 +350,7 @@ func (s *Server) handleTestWebhook(c *gin.Context) {
 		respondError(c, http.StatusBadGateway, sanitizeError(err, "Webhook delivery"))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "webhook test delivered"})
+	respond(c, gin.H{"message": "webhook test delivered"})
 }
 
 func (s *Server) handlePluginList(c *gin.Context) {
@@ -406,7 +406,7 @@ func (s *Server) handlePluginToggle(c *gin.Context) {
 			slog.Error("Automation: failed to set plugin enabled state", "plugin_name", p.Name, "enabled", p.Enabled, "error", err)
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "enabled": p.Enabled})
+	respond(c, gin.H{"enabled": p.Enabled})
 }
 
 func (s *Server) handlePluginDelete(c *gin.Context) {
@@ -601,7 +601,7 @@ func (s *Server) handlePluginUpdateStatus(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
+	respond(c, gin.H{
 		"plugin_id":        status.PluginID,
 		"latest_version":   status.LatestVersion,
 		"current_version":  plugin.Version,
@@ -609,7 +609,7 @@ func (s *Server) handlePluginUpdateStatus(c *gin.Context) {
 		"update_url":       status.UpdateURL,
 		"release_notes":    status.ReleaseNotes,
 		"last_checked_at":  status.LastCheckedAt,
-	}})
+	})
 }
 
 func (s *Server) handlePluginUpdate(c *gin.Context) {
@@ -705,8 +705,7 @@ func (s *Server) handlePluginUpdateSummary(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":         true,
+	respond(c, gin.H{
 		"available_count": availableCount,
 		"total_plugins":   len(plugins),
 		"last_checked":    lastChecked,
@@ -788,8 +787,7 @@ func (s *Server) handleBOFRepoImport(c *gin.Context) {
 	}
 
 	s.LogAuditRecord(c, "bof_import", "bof", "", fmt.Sprintf("BOF imported: %s (%d bytes) from %s", name, len(data), req.URL), true, nil)
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
+	respond(c, gin.H{
 		"message": fmt.Sprintf("Imported %s (%d bytes)", name, len(data)),
 		"bof_id":  bof.ID,
 	})

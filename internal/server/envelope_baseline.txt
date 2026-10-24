@@ -39,7 +39,6 @@ handlers_ai_tools_policy.go 2
 handlers_apikeys.go 3
 handlers_approvals.go 2
 handlers_auth.go 2
-handlers_automation.go 5
 handlers_backup.go 5
 handlers_bof.go 5
 handlers_browser_creds.go 3
